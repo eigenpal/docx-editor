@@ -61,6 +61,8 @@ export interface ImeDeletionContext {
   previousParagraph(paragraphId: string): string | undefined;
   /** False while an input method may still be correcting the browser's selection. */
   readonly browserSelectionTrusted: boolean;
+  /** Whether the painted DOM shows the model's revision, not a paint deferred behind it. */
+  readonly paintCurrent: boolean;
 }
 
 function samePosition(a: SemanticPosition, b: SemanticPosition): boolean {
@@ -81,6 +83,24 @@ function stepsBetween(
   if (start.paragraphId === end.paragraphId) return end.offset - start.offset;
   if (context.previousParagraph(end.paragraphId) !== start.paragraphId) return null;
   return context.textOf(start.paragraphId).length - start.offset + 1 + end.offset;
+}
+
+/**
+ * The characters the range paints, or null when it cannot be read. Model offsets also count
+ * what never paints — a hidden run, a struck revision a resolved view hides — and the keyboard
+ * cannot have meant those: it names what it was shown.
+ */
+function paintedLength(range: StaticRange): number | null {
+  const doc = range.startContainer.ownerDocument;
+  if (!doc) return null;
+  try {
+    const live = doc.createRange();
+    live.setStart(range.startContainer, range.startOffset);
+    live.setEnd(range.endContainer, range.endOffset);
+    return live.toString().length;
+  } catch {
+    return null;
+  }
 }
 
 /** The range ordered start-first, whichever way the user extended it. */
@@ -113,10 +133,20 @@ export function imeDeletionPlan(
     shown !== null && samePosition(shown.anchor, shown.head) && samePosition(shown.head, anchor);
   if (samePosition(anchor, selection.head) || atBrowserCaret) {
     const steps = stepsBetween(start, end, context);
-    if (steps === null || steps < 1) return ONE_STEP;
-    return { kind: 'steps', count: Math.min(steps, MAX_IME_DELETION_STEPS) };
+    const painted = paintedLength(range);
+    if (steps === null || painted === null) return ONE_STEP;
+    // A break paints nothing; it is the one step a join takes.
+    const shownSteps = painted + (start.paragraphId === end.paragraphId ? 0 : 1);
+    const count = Math.min(steps, shownSteps, MAX_IME_DELETION_STEPS);
+    return count < 1 ? ONE_STEP : { kind: 'steps', count };
   }
-  if (context.browserSelectionTrusted && shown && !samePosition(shown.anchor, shown.head)) {
+  // A selection read from a paint behind the model names offsets that have since moved.
+  if (
+    context.browserSelectionTrusted &&
+    context.paintCurrent &&
+    shown &&
+    !samePosition(shown.anchor, shown.head)
+  ) {
     if (selectionsEqual(ordered(shown, start), { anchor: start, head: end }))
       return { kind: 'selection', selection: shown };
   }
@@ -153,6 +183,8 @@ export function createInputMethodLane(deps: {
   paragraphOrder(): readonly string[];
   /** The document's edit clock. */
   revision(): number;
+  /** Whether the painted DOM shows the model's revision. */
+  paintCurrent(): boolean;
   render(notifyChange: boolean): void;
   readonly timers: HostTimers;
   readonly sync: Pick<SurfaceSelectionSync, 'browserSelectionTrusted' | 'noteInputMethodEdit'>;
@@ -178,6 +210,7 @@ export function createInputMethodLane(deps: {
               return order[order.indexOf(id) - 1];
             },
             browserSelectionTrusted: deps.sync.browserSelectionTrusted(),
+            paintCurrent: deps.paintCurrent(),
           },
           direction
         ),

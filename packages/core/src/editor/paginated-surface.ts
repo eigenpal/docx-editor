@@ -6077,6 +6077,7 @@ export function mountPaginatedSurface(
     textOf,
     paragraphOrder,
     revision: () => session.packageRevision(),
+    paintCurrent: () => deferredPublishRender === null && !commitPaintOwed,
     render,
     timers,
     sync: selectionSync,

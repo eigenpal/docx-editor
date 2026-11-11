@@ -317,10 +317,12 @@ export function paintParagraphEndFurniture(
     readonly revisionStyles?: RevisionStyleContext;
     readonly revisionMarkup?: ResolvedRevisionMarkup;
     readonly revisionKindColors?: boolean;
+    /** A paint with no editing identity: nothing reads its text through an input method. */
+    readonly unbound?: boolean;
   },
   scale: number
 ): void {
-  appendParagraphBoundary(document, fragment, lineElements);
+  if (!ctx.unbound) appendParagraphBoundary(document, fragment, lineElements);
   const rtl = paragraphIsRtl(fragment.props);
   // Furniture stories (headers, footers, text boxes) never break a page or end a section.
   const breaks =

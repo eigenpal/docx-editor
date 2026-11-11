@@ -189,7 +189,7 @@ describe('a deletion names its characters', () => {
       deleteEvent(
         container,
         'deleteContentBackward',
-        at(container, first!, 5),
+        at(container, first!, 2),
         at(container, last!, 0)
       );
       const ids = surface.session.paragraphIds();
@@ -209,6 +209,18 @@ describe('a deletion names its characters', () => {
       document.getSelection()!.collapse(node, inner);
       deleteEvent(container, 'deleteContentBackward', at(container, id!, 7), at(container, id!, 9));
       expect(textOf(surface, id!)).toBe('Hello wor');
+    });
+  });
+
+  test('characters that never paint do not add steps', () => {
+    // A hidden run lies between the two painted characters: the keyboard named one character.
+    const body =
+      '<w:p><w:r><w:t>a</w:t></w:r><w:r><w:rPr><w:vanish/></w:rPr><w:t>HIDDEN</w:t></w:r>' +
+      '<w:r><w:t>b</w:t></w:r></w:p>';
+    withSurface(body, (surface, container, [id]) => {
+      caretAt(surface, id!, 7);
+      deleteEvent(container, 'deleteContentBackward', at(container, id!, 0), at(container, id!, 7));
+      expect(textOf(surface, id!)).toHaveLength(7);
     });
   });
 

@@ -16,6 +16,7 @@
 // style. Nothing here derives geometry, so the layout records remain the only answer to
 // where anything is; this only decides WHICH characters the user gestured over.
 
+import { PARAGRAPH_BOUNDARY_CLASS } from '../output/semantic-paragraph-boundary.ts';
 import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core/layout';
 
 /** A painted span carries the source range it was laid out from. */
@@ -310,7 +311,7 @@ export function positionFromDomPoint(
   // The paragraph-end line break painted for the browser's text services stands where the
   // terminator does, so it resolves the same way.
   const seat = nearestElement?.closest<HTMLElement>(
-    '.docx-terminator-seat, .docx-paragraph-boundary'
+    `.docx-terminator-seat, .${PARAGRAPH_BOUNDARY_CLASS}`
   );
   if (seat?.querySelector('.docx-line-break-mark') && seat.parentElement) {
     // The line's logical last run, in the paragraph its last run paints (a join line paints

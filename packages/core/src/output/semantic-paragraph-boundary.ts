@@ -21,8 +21,8 @@ export const PARAGRAPH_BOUNDARY_CLASS = 'docx-paragraph-boundary';
 
 /**
  * Append the paragraph-end line break to the last painted line of `fragment`, when the
- * fragment holds the paragraph end and the line does not already end in one. An empty line
- * paints its own `<br>` composition anchor, which the iterator reads the same way.
+ * fragment holds the paragraph end and that line paints text. An empty line paints its own
+ * `<br>` composition anchor instead, which the iterator reads the same way.
  */
 export function appendParagraphBoundary(
   document: Document,

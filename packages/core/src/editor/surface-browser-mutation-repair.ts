@@ -4,7 +4,8 @@
 // Every `beforeinput` the surface handles is prevented, and its edit applied to the model.
 // Prevention does not always hold: a deletion an input method makes through the platform's
 // text service (on Android, `InputConnection.deleteSurroundingText`) is applied to the DOM by
-// Chromium even so, and an input the page cannot cancel always is. The page then shows the model's edit AND the browser's: two
+// Chromium even so. (Typed text needs no repair: it commits on a later task, and that paint
+// rebuilds the paragraph the browser wrote into.) The page then shows the model's edit AND the browser's: two
 // characters gone for one Backspace, every later span's text out of step with its
 // `data-start`, and the browser's caret where its own deletion left it.
 //
@@ -33,8 +34,8 @@ export interface BrowserMutationRepairDeps {
 export interface BrowserMutationRepair {
   /**
    * Call after a handled `beforeinput`: watch for the browser applying it anyway. Only a
-   * deletion, or an input the page could not cancel, is watched; a prevented keystroke on a
-   * desktop browser never reaches the DOM and costs no observer.
+   * deletion is watched: a deletion commits at once, so a repaint restores it, while typed
+   * text is still queued and a repaint now would hide it until the queue lands.
    */
   watch(event: InputEvent): void;
   /** Stop watching: a composition starts. */
@@ -63,7 +64,7 @@ export function createBrowserMutationRepair(
   return {
     watch(event) {
       stop();
-      if (event.cancelable && !event.inputType.startsWith('delete')) return;
+      if (!event.inputType.startsWith('delete')) return;
       const win = hostWindowOf(deps.pagesLayer);
       if (typeof win.MutationObserver !== 'function') return;
       // Started AFTER the handler's own commit and paint, so only the browser's edit is seen.

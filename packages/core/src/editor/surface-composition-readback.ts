@@ -156,8 +156,12 @@ export function snapshotPaintedSpans(
     const start = modelStartOf(element, paragraphId);
     if (start === null) continue;
     const end = modelEndOf(element, start, start + (element.textContent ?? '').length);
-    // The line, not the parent: Chromium also removes a link wrapper it emptied.
-    const holder = element.closest<HTMLElement>('.docx-line') ?? element.parentElement;
+    // The fragment, not the parent or the line: Chromium also removes a link wrapper it
+    // emptied, and a line it merged into the one before. A repaint replaces the fragment.
+    const holder =
+      element.closest<HTMLElement>('.docx-paragraph-fragment') ??
+      element.closest<HTMLElement>('.docx-line') ??
+      element.parentElement;
     spans.push({ element, holder, key: `${start}:${end}` });
   }
   return spans;
@@ -174,9 +178,9 @@ export interface PaintedSpanSnapshot {
 /**
  * The model ranges (`start:end`) whose snapshotted span the browser has since removed.
  *
- * Only a span taken out of a holder that is still on the page counts. A repaint mid-
- * composition (a collaborator's edit) replaces the holder too, and a span lost that way says
- * nothing about what the input method deleted.
+ * Only a span taken out of a paragraph fragment that is still on the page counts. A repaint
+ * mid-composition (a collaborator's edit) replaces the fragment too, and a span lost that way
+ * says nothing about what the input method deleted.
  */
 export function erasedSpanRanges(snapshot: readonly PaintedSpanSnapshot[]): ReadonlySet<string> {
   const erased = new Set<string>();
