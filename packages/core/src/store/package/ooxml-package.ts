@@ -18,6 +18,7 @@
 // One deliberate tolerance: a content-type record with malformed MIME syntax is ignored
 // (treated as absent) unless it decides the type of a part the document needs.
 
+import { contentTypeExportPackage } from './content-type-export.ts';
 import { textboxFallbackExportPackageSteps } from './textbox-fallback-export.ts';
 import { readOoxmlPartSteps } from './ooxml-part-steps.ts';
 import {
@@ -666,7 +667,9 @@ export function* writeOoxmlPackageSteps(
 ): Generator<void, Uint8Array> {
   // Concurrent note property writes can leave a repeated element in shared state; the saved
   // file keeps the first copy, which is the one every reader uses.
-  const cleaned = commentExportPackage(withoutDuplicateNoteProperties(pkg));
+  const cleaned = commentExportPackage(
+    contentTypeExportPackage(withoutDuplicateNoteProperties(pkg))
+  );
   // Revision ids are made unique before the text box fallbacks re-sync, so a fallback copies
   // the ids its choice saves with.
   const exported = yield* textboxFallbackExportPackageSteps(
