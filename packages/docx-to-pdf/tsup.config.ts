@@ -1,6 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'tsup';
 import { withDeclarations } from '../../scripts/build-declarations.mjs';
 import { addLicenseHeaders } from '../../scripts/license-banner.mjs';
+const { version } = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8')
+) as { version: string };
 export default defineConfig(
   withDeclarations(import.meta.url, {
     // Every script in dist/ opens with the license header.
@@ -15,6 +19,8 @@ export default defineConfig(
     },
     clean: true,
     metafile: true,
+    // The PDF Producer names the release that wrote the file.
+    define: { __DOCX_TO_PDF_VERSION__: JSON.stringify(version) },
     external: [/^@docx-editor\.dev\//, 'pdf-lib', 'fontkit'],
   })
 );

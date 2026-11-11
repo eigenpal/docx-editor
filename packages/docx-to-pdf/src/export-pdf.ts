@@ -22,6 +22,16 @@ import {
   type PdfExportResult,
 } from './types.ts';
 
+declare const __DOCX_TO_PDF_VERSION__: string | undefined;
+
+/**
+ * The PDF `Producer`. It names the exact converter release, so a PDF from a bug report shows
+ * which version wrote it. The build inlines the version; a run from source says `source`.
+ */
+export const PDF_PRODUCER = `EigenPal docx-editor.dev ${
+  typeof __DOCX_TO_PDF_VERSION__ === 'string' ? __DOCX_TO_PDF_VERSION__ : 'source'
+}`;
+
 /** Convert DOCX bytes. Disposes its session after success or failure. @public */
 export async function exportPdf(
   source: Uint8Array,
@@ -104,7 +114,7 @@ async function renderSession(
   work.allowPages(layout.pages.length);
   reportFontDiagnostics(session.fontResolution, work);
   const doc = await PDFDocument.create({ updateMetadata: false });
-  doc.setProducer('docx-editor.dev');
+  doc.setProducer(PDF_PRODUCER);
   doc.setCreator('docx-editor.dev');
   const date = new Date('2020-01-01T00:00:00Z');
   doc.setCreationDate(date);
