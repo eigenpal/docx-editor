@@ -237,6 +237,15 @@ test('a positioned spaced table holds its closing gap, so its last band fills it
   expect(region!.box.y + region!.box.height).toBeCloseTo(last.y + last.height + 10, 6);
 });
 
+test('a bottom-aligned positioned spaced table puts its closing gap, not its last row, on the margin', () => {
+  // Measured: the outer box, gap included, ends on the bottom margin.
+  const position = '<w:tblpPr w:vertAnchor="margin" w:horzAnchor="margin" w:tblpYSpec="bottom"/>';
+  const [table] = layoutTable({ tblPr: position + SPACING + shd('D9E2F3') });
+  const last = table!.rows.at(-1)!.box;
+  expect(table!.box.y + table!.box.height).toBeCloseTo(400, 6);
+  expect(last.y + last.height).toBeCloseTo(390, 6);
+});
+
 test('a nested spaced table broken between rows closes each page with the gap too', () => {
   const inner = (rows: number) =>
     '<w:tbl><w:tblPr><w:tblW w:w="3000" w:type="dxa"/>' +

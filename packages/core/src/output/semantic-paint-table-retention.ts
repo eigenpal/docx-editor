@@ -73,8 +73,11 @@ export interface TableRepaint extends ParagraphReflowPaint {
   cell(cell: TableCellFragmentRecord, rowBox: LayoutBox): HTMLElement;
   /** A nested table receives its previous element, so it can be reused in turn. */
   block(block: BlockFragmentRecord, previous?: HTMLElement): HTMLElement;
-  /** Fresh layers painted under the rows, such as gap shading; they replace the old ones. */
-  readonly leading?: readonly HTMLElement[];
+  /**
+   * Layers painted under the rows, such as gap shading; they replace the old ones. Called only
+   * once reuse is accepted, so a refusal paints nothing and leaves the element as it was.
+   */
+  leading?(): readonly HTMLElement[];
 }
 
 const TABLE_GEOMETRY: ReadonlySet<string> = new Set(['rows', 'box', 'columnEdges']);
@@ -335,7 +338,7 @@ export function reflowTableFragment(
   if (before.box.y !== fragment.box.y) style.top = `${fragment.box.y * scale}px`;
   if (before.box.width !== fragment.box.width) style.width = `${fragment.box.width * scale}px`;
   if (before.box.height !== fragment.box.height) style.height = `${fragment.box.height * scale}px`;
-  reconcileChildren(element, [...(repaint.leading ?? []), ...rows.values()], 0);
+  reconcileChildren(element, [...(repaint.leading?.() ?? []), ...rows.values()], 0);
   tables.set(element, { fragment, rows });
   return element;
 }

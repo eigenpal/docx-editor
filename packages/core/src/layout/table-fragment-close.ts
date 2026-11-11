@@ -30,6 +30,8 @@ export interface TableFragmentClose {
   readonly left: number;
   readonly top: number;
   readonly bottom: number;
+  /** The bottom of the frame this fragment fills: a page break closes its gap no lower. */
+  readonly frameBottom: number;
   /**
    * The cell-spacing gap below the fragment's last row: at the table's end, as pagination
    * placed it. Absent at a page break, where the frame closes with the same gap as far as
@@ -95,7 +97,7 @@ export function closeTableFragmentRows(input: TableFragmentClose): {
     fragmentClosingGapPt(
       structure.cellSpacingPt,
       sourceRows.at(-1),
-      input.bottom - lastBottom,
+      input.frameBottom - lastBottom,
       last.hasContinuation
     );
   const fragment = annotateTableFragmentGeometry(

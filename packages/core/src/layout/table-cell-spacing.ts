@@ -111,17 +111,20 @@ export function fragmentClosingGapPt(
 }
 
 /**
- * Move `flow` past the gap a spaced table closes below its last row, no further than its
- * content box, and return the gap placed: the fragment box holds that much below the row.
- * A positioned table leaves the flow alone and holds the whole gap.
+ * Move `flow` past the gap a spaced table closes below its last row, no further than
+ * `frameBottom`, the bottom of the frame the table fills, and return the gap placed: the
+ * fragment box holds that much below the row.
  */
 export function placeClosingCellSpacing(
-  flow: { cursorY: number; contentHeight(): number },
+  flow: { cursorY: number },
   structure: Parameters<typeof closingCellSpacingPt>[0],
-  positioned = false
+  frameBottom: number
 ): number {
-  const room = positioned ? Infinity : flow.contentHeight() - flow.cursorY;
-  const gap = fragmentClosingGapPt(structure.cellSpacingPt, structure.rows.at(-1), room);
-  if (!positioned) flow.cursorY += gap;
+  const gap = fragmentClosingGapPt(
+    structure.cellSpacingPt,
+    structure.rows.at(-1),
+    frameBottom - flow.cursorY
+  );
+  flow.cursorY += gap;
   return gap;
 }

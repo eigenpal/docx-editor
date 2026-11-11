@@ -1817,11 +1817,10 @@ function paintTableFragment(
 ): HTMLElement {
   // Rows, cells and cell paragraphs whose paint inputs are unchanged, or moved only, are kept.
   // Gap bands are cut around every cell of the fragment; a band that paints the same is kept.
-  const bands = paintTableSpacingShading(document, fragment, ctx.scale, previous);
   const retained =
     previous &&
     reflowTableFragment(previous, fragment, {
-      leading: bands,
+      leading: () => paintTableSpacingShading(document, fragment, ctx.scale, previous),
       scale: ctx.scale,
       showParagraphMarks: ctx.showParagraphMarks === true,
       row: (row) => paintTableRow(document, row, fragment, ctx),
@@ -1837,12 +1836,10 @@ function paintTableFragment(
   const scale = ctx.scale;
   const element = positioned(document, 'div', fragment.box, scale);
   element.className = 'docx-table-fragment layout-table';
-  // A refused reflow leaves `previous` as it was: the fresh element paints its own bands.
-  const freshBands = previous ? paintTableSpacingShading(document, fragment, scale) : bands;
   element.dataset.tableId = fragment.tableId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
   element.style.overflow = 'visible';
-  element.append(...freshBands);
+  element.append(...paintTableSpacingShading(document, fragment, scale));
   const rows = new Map<TableRowFragmentRecord, HTMLElement>();
   for (const row of fragment.rows) {
     const painted = paintTableRow(document, row, fragment, ctx);
