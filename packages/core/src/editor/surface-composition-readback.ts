@@ -65,7 +65,7 @@ interface PaintedPiece {
  * paragraph carries the attribute on its own fragment, and the body content box carries it
  * whenever a header is open.
  */
-const PAINTED_FURNITURE =
+export const PAINTED_FURNITURE =
   '[data-docx-marker],[data-docx-tab-leader],[aria-hidden="true"],[contenteditable="false"],[data-drawing-node-id]';
 
 /** A `data-end` is only believed when it is a plausible model end for its own start. */

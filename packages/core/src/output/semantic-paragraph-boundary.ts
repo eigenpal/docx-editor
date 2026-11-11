@@ -11,10 +11,13 @@
 // It is furniture, and inert to everything else: zero size, no pointer events, hidden from
 // assistive technology, outside `contenteditable`, and marked `data-docx-marker`, which the
 // composition readback skips and the selection reader resolves to the line's end (see
-// `positionFromDomPoint`). It is placed at the line's origin, so a line moved in place keeps it
-// where it belongs, and it changes no measurement: layout never reads the DOM.
+// `positionFromDomPoint`). It sits where the paragraph mark would, at the line's end, so a
+// browser that hit-tests a touch onto it puts the caret where it resolves. It changes no
+// measurement: layout never reads the DOM.
 
+import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import type { ParagraphFragmentRecord } from '../layout/semantic-records.ts';
+import { lineTerminatorEdge } from './semantic-paragraph-marks.ts';
 
 /** The class the selection reader resolves to the end of the line holding it. */
 export const PARAGRAPH_BOUNDARY_CLASS = 'docx-paragraph-boundary';
@@ -27,7 +30,8 @@ export const PARAGRAPH_BOUNDARY_CLASS = 'docx-paragraph-boundary';
 export function appendParagraphBoundary(
   document: Document,
   fragment: ParagraphFragmentRecord,
-  lineElements: readonly HTMLElement[]
+  lineElements: readonly HTMLElement[],
+  scale: number
 ): void {
   if (!fragment.paragraphEnd) return;
   const last = fragment.lines[fragment.lines.length - 1];
@@ -40,7 +44,7 @@ export function appendParagraphBoundary(
   boundary.setAttribute('contenteditable', 'false');
   const style = boundary.style;
   style.position = 'absolute';
-  style.left = '0';
+  style.left = `${(lineTerminatorEdge(last, paragraphIsRtl(fragment.props)).x - last.contentX) * scale}px`;
   style.top = '0';
   style.width = '0';
   style.height = '0';

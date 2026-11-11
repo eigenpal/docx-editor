@@ -768,6 +768,9 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
         !gestureSinceInputMethodEdit &&
         domSelectionTouchesPages(pagesLayer, hostDocument().getSelection())
       ) {
+        // With a paint still owed, the model's offsets do not address these spans yet; that
+        // paint writes the model selection back itself.
+        if (modelMoved) return;
         const reported = semanticSelectionFromDom(pagesLayer, hostDocument().getSelection());
         if (reported === null || !selectionsEqual(reported, deps.selection())) mirrorToDom();
         return;

@@ -224,6 +224,18 @@ describe('a deletion names its characters', () => {
     });
   });
 
+  test('a range the browser shows selected deletes as that selection', () => {
+    // A keyboard selected a word and deleted it before the selection reached the model.
+    withSurface(p('Hello world'), (surface, container, [id]) => {
+      caretAt(surface, id!, 11);
+      const from = at(container, id!, 0);
+      const to = at(container, id!, 5);
+      document.getSelection()!.setBaseAndExtent(from.node, from.offset, to.node, to.offset);
+      deleteEvent(container, 'deleteContentBackward', from, to);
+      expect(textOf(surface, id!)).toBe(' world');
+    });
+  });
+
   test('a long range is bounded, and stops when nothing is left to delete', () => {
     withSurface(p('abc'), (surface, container, [id]) => {
       caretAt(surface, id!, 3);
@@ -378,6 +390,8 @@ describe('paragraph ends for the browser text services', () => {
       }
       const owner = boundaries[0]!.closest<HTMLElement>('[data-paragraph-id]')!;
       expect(owner.dataset.paragraphId).toBe(ids[0]);
+      // Where the paragraph mark would sit: at the end of the text, not the line origin.
+      expect(parseFloat((boundaries[0] as HTMLElement).style.left)).toBeGreaterThan(0);
     });
   });
 

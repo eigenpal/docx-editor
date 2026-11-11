@@ -31,6 +31,7 @@ import {
   semanticSelectionFromDom,
 } from './dom-selection.ts';
 import type { HostTimers } from './host-realm.ts';
+import { PAINTED_FURNITURE } from './surface-composition-readback.ts';
 import {
   createBrowserMutationRepair,
   type BrowserMutationRepair,
@@ -85,22 +86,40 @@ function stepsBetween(
   return context.textOf(start.paragraphId).length - start.offset + 1 + end.offset;
 }
 
+/** `NodeFilter.SHOW_TEXT`, as a number: the constructor belongs to whichever window. */
+const SHOW_TEXT = 0x4;
+
 /**
- * The characters the range paints, or null when it cannot be read. Model offsets also count
- * what never paints — a hidden run, a struck revision a resolved view hides — and the keyboard
- * cannot have meant those: it names what it was shown.
+ * The document characters the range paints, or null when it cannot be read. Model offsets
+ * also count what never paints — a hidden run, a struck revision a resolved view hides — and
+ * the keyboard cannot have meant those: it names what it was shown. Furniture glyphs inside
+ * the range (a tab leader's dots, a picture's label) are not document characters either.
  */
 function paintedLength(range: StaticRange): number | null {
   const doc = range.startContainer.ownerDocument;
   if (!doc) return null;
+  let live: Range;
   try {
-    const live = doc.createRange();
+    live = doc.createRange();
     live.setStart(range.startContainer, range.startOffset);
     live.setEnd(range.endContainer, range.endOffset);
-    return live.toString().length;
   } catch {
     return null;
   }
+  const common = live.commonAncestorContainer;
+  const scope = common.nodeType === Node.ELEMENT_NODE ? common : common.parentNode;
+  if (!scope) return null;
+  const walker = doc.createTreeWalker(scope, SHOW_TEXT);
+  let length = 0;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!live.intersectsNode(node)) continue;
+    if (node.parentElement?.closest(PAINTED_FURNITURE)) continue;
+    const text = node as Text;
+    const from = node === live.startContainer ? live.startOffset : 0;
+    const to = node === live.endContainer ? live.endOffset : text.data.length;
+    length += Math.max(0, to - from);
+  }
+  return length;
 }
 
 /** The range ordered start-first, whichever way the user extended it. */
@@ -131,7 +150,17 @@ export function imeDeletionPlan(
   const shown = semanticSelectionFromDom(root, root.ownerDocument.getSelection());
   const atBrowserCaret =
     shown !== null && samePosition(shown.anchor, shown.head) && samePosition(shown.head, anchor);
-  if (samePosition(anchor, selection.head) || atBrowserCaret) {
+  // The browser can select the range it is about to delete before it says so: it is then the
+  // browser's selection, and still the keyboard's batched presses.
+  const rangeShown =
+    shown !== null &&
+    !samePosition(shown.anchor, shown.head) &&
+    selectionsEqual(ordered(shown, start), { anchor: start, head: end });
+  if (
+    samePosition(anchor, selection.head) ||
+    atBrowserCaret ||
+    (rangeShown && !context.paintCurrent)
+  ) {
     const steps = stepsBetween(start, end, context);
     const painted = paintedLength(range);
     if (steps === null || painted === null) return ONE_STEP;
@@ -141,15 +170,8 @@ export function imeDeletionPlan(
     return count < 1 ? ONE_STEP : { kind: 'steps', count };
   }
   // A selection read from a paint behind the model names offsets that have since moved.
-  if (
-    context.browserSelectionTrusted &&
-    context.paintCurrent &&
-    shown &&
-    !samePosition(shown.anchor, shown.head)
-  ) {
-    if (selectionsEqual(ordered(shown, start), { anchor: start, head: end }))
-      return { kind: 'selection', selection: shown };
-  }
+  if (rangeShown && context.browserSelectionTrusted && context.paintCurrent)
+    return { kind: 'selection', selection: shown! };
   return ONE_STEP;
 }
 

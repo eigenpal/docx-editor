@@ -322,7 +322,7 @@ export function paintParagraphEndFurniture(
   },
   scale: number
 ): void {
-  if (!ctx.unbound) appendParagraphBoundary(document, fragment, lineElements);
+  if (!ctx.unbound) appendParagraphBoundary(document, fragment, lineElements, scale);
   const rtl = paragraphIsRtl(fragment.props);
   // Furniture stories (headers, footers, text boxes) never break a page or end a section.
   const breaks =

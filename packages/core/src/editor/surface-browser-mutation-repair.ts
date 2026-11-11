@@ -91,10 +91,10 @@ export function createBrowserMutationRepair(
     if ((event as InputEvent).isComposing) return;
     if (records.length === 0) return;
     // Only the sheets the browser touched are rebuilt; the rest keep their paint.
-    discardRetainedPaintOf(
-      deps.pagesLayer,
-      records.map((record) => record.target)
-    );
+    const touched = records.map((record) => record.target).filter((node) => node.isConnected);
+    // Every target gone: the edit was at the browser's caret, so that sheet is the one.
+    const caret = deps.pagesLayer.ownerDocument.getSelection()?.anchorNode;
+    discardRetainedPaintOf(deps.pagesLayer, touched.length > 0 || !caret ? touched : [caret]);
     deps.render(false);
     // The browser's caret, and the input method's correction of it, are on their way.
     deps.sync.noteInputMethodEdit();
