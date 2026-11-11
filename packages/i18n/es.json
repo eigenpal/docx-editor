@@ -70,6 +70,7 @@
     "chartDrawing": "Esto es un gráfico. Puede eliminarlo, pero no editarlo como una imagen.",
     "chartFrame": "Esto es un gráfico. Puede cambiar su tamaño, posición, ajuste del texto y texto alternativo.",
     "diagramFrame": "Esto es un diagrama. Puede cambiar su tamaño, posición, ajuste del texto y texto alternativo.",
+    "diagramRescale": "No se puede cambiar el tamaño de este diagrama. Su dibujo guardado está compartido con otro diagrama o no se puede escalar a ese tamaño.",
     "chartClipboard": "Un gráfico solo se puede copiar, cortar o pegar por sí solo, no junto con otro contenido.",
     "chartClipboardStale": "El gráfico copiado ya no está disponible. Vuelva a copiar el gráfico.",
     "nothingToUndo": "No hay nada que deshacer",

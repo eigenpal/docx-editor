@@ -6,7 +6,11 @@
 import type { OoxmlPart } from '../package/ooxml-tree.ts';
 import type { StoryScope, TreePackageStore } from './tree-package-store.ts';
 import { transactPackageImage, type ImageIntentResult } from './tree-package-images.ts';
-import { diagramDrawingOf, stageDiagramRescale } from './tree-op-diagram-drawing.ts';
+import {
+  DIAGRAM_RESCALE_REFUSAL,
+  diagramDrawingOf,
+  stageDiagramRescale,
+} from './tree-op-diagram-drawing.ts';
 import type { DrawingTreeDocOp } from './tree-op-types.ts';
 
 /** Whether `ops` resize a diagram of `part`, so they need {@link applyDrawingFrameOps}. */
@@ -26,10 +30,16 @@ export function applyDrawingFrameOps(
   const first = ops.find((op) => 'drawingNodeId' in op);
   if (!first || !('drawingNodeId' in first)) return { ok: false, reason: 'invalidArgs' };
   // The id the unit reports, as the image lanes do; every op still names its own drawing.
-  return transactPackageImage(store, scope, (ctx, owner) => {
+  let refused = false;
+  const outcome = transactPackageImage(store, scope, (ctx, owner) => {
     for (const op of ops) {
-      if (!stageDiagramRescale(ctx, owner, op) || !ctx.apply(op)) return null;
+      if (!stageDiagramRescale(ctx, owner, op)) {
+        refused = true;
+        return null;
+      }
+      if (!ctx.apply(op)) return null;
     }
     return first.drawingNodeId;
   });
+  return refused ? { ok: false, reason: 'invalidArgs', detail: DIAGRAM_RESCALE_REFUSAL } : outcome;
 }

@@ -1053,6 +1053,7 @@
     "chartDrawing": "Bu bir grafik. Silebilirsiniz ancak resim olarak düzenleyemezsiniz.",
     "chartFrame": "Bu bir grafik. Boyutunu, konumunu, metin kaydırmasını ve alternatif metnini değiştirebilirsiniz.",
     "diagramFrame": "Bu bir diyagram. Boyutunu, konumunu, metin kaydırmasını ve alternatif metnini değiştirebilirsiniz.",
+    "diagramRescale": "Bu diyagram yeniden boyutlandırılamaz. Kaydedilmiş çizimi başka bir diyagramla paylaşılıyor veya bu boyuta ölçeklenemiyor.",
     "chartClipboard": "Bir grafik yalnızca tek başına kopyalanabilir, kesilebilir veya yapıştırılabilir; başka içerikle birlikte olamaz.",
     "chartClipboardStale": "Kopyalanan grafik artık kullanılamıyor. Grafiği yeniden kopyalayın.",
     "nothingToUndo": "Geri alınacak bir şey yok",

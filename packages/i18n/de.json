@@ -1053,6 +1053,7 @@
     "chartDrawing": "Dies ist ein Diagramm. Sie können es löschen, aber nicht wie ein Bild bearbeiten.",
     "chartFrame": "Dies ist ein Diagramm. Sie können Größe, Position, Textumbruch und Alternativtext ändern.",
     "diagramFrame": "Dies ist ein Schaubild. Sie können Größe, Position, Textumbruch und Alternativtext ändern.",
+    "diagramRescale": "Die Größe dieses Schaubilds kann nicht geändert werden. Seine gespeicherte Zeichnung wird geteilt oder lässt sich nicht auf diese Größe skalieren.",
     "chartClipboard": "Ein Diagramm kann nur allein kopiert, ausgeschnitten oder eingefügt werden, nicht zusammen mit anderen Inhalten.",
     "chartClipboardStale": "Das kopierte Diagramm ist nicht mehr verfügbar. Kopieren Sie das Diagramm erneut.",
     "nothingToUndo": "Es gibt nichts rückgängig zu machen",

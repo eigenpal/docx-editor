@@ -42,6 +42,7 @@ import {
   DEFAULT_DRAWING_PROJECTION_LIMITS,
   DEFAULT_SUPPORTED_MC_REQUIRES,
   projectDrawing,
+  type DrawingLocks,
   type DrawingProjection,
   type ImageWrapTarget,
 } from '../store/package/drawing-projection.ts';
@@ -259,10 +260,10 @@ function intrinsicOf(record: SelectedDrawingRecord): SelectedImageState['intrins
 
 function capabilityFlags(
   projection: DrawingProjection,
-  chart: ChartGate
+  chart: ChartGate,
+  gateLocks: DrawingLocks
 ): Pick<SelectedImageState, 'canResize' | 'canMove' | 'canChangeWrap' | 'canCrop'> {
-  const locks =
-    chart === 'locked' ? { resize: true, move: true, changeAspect: true } : projection.locks;
+  const locks = chart === 'locked' ? { resize: true, move: true, changeAspect: true } : gateLocks;
   // An inline text box flows with its line: it resizes in place but is never dragged.
   const fixed = projection.kind === 'inline' && projection.textboxStory !== null;
   return Object.freeze({
@@ -329,7 +330,7 @@ export function selectedImageStateOf(surface: PaginatedSurface | null): Selected
     hidden: projection.hidden,
     resourceStatus: record.resource.kind,
     intrinsic: intrinsicOf(record),
-    ...capabilityFlags(projection, chart),
+    ...capabilityFlags(projection, chart, locks),
   });
 }
 
@@ -1179,12 +1180,13 @@ export interface SelectedDrawingOverlayTarget {
 function overlayCapabilityFlags(
   record: SelectedDrawingRecord,
   projection: DrawingProjection | null,
-  chart: ChartGate
+  chart: ChartGate,
+  locks: DrawingLocks
 ): Pick<SelectedDrawingOverlayTarget, 'canResize' | 'canMove' | 'aspectLocked'> {
   if (!projection || projection.hidden || !imageCommandsReach(record, chart)) {
     return Object.freeze({ canResize: false, canMove: false, aspectLocked: true });
   }
-  const caps = capabilityFlags(projection, chart);
+  const caps = capabilityFlags(projection, chart, locks);
   return Object.freeze({
     canResize: caps.canResize,
     canMove: caps.canMove,
@@ -1235,7 +1237,7 @@ export function selectedDrawingOverlayTargetOf(
   const shapeSelectable = gate !== null && !gate.locks.select;
   if (!shapeSelectable && scope.kind !== 'frame') return null;
   const caps = shapeSelectable
-    ? overlayCapabilityFlags(record, projection, gate.chart)
+    ? overlayCapabilityFlags(record, projection, gate.chart, gate.locks)
     : { canResize: false, canMove: false, aspectLocked: true };
   // The MODE, on top of the drawing's own OOXML locks. Without it a viewing-mode reader got
   // eight resize handles, a `move` cursor and a live drag preview that auto-scrolled the

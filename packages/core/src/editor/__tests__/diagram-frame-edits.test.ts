@@ -2,9 +2,11 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, describe, expect, test } from 'bun:test';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { canMoveInlineImage, moveInlineImage } from '../inline-image-drag.ts';
 import { DIAGRAM_FRAME_REASON } from '../image-state-rules.ts';
+import { DIAGRAM_RESCALE_REFUSAL } from '../../store/store/tree-op-diagram-drawing.ts';
 import { findNode } from '../../store/package/ooxml-edit.ts';
 import type { OoxmlElement, OoxmlNode } from '../../store/package/ooxml-tree.ts';
 import { paragraphContainingNode } from '../../store/store/tree-op-nodes.ts';
@@ -123,6 +125,42 @@ describe('diagram frame edits', () => {
     });
     expect(result.ok).toBe(true);
     expect(sizes(editor)).toEqual({ frame: ['4000000', '2000000'], shape: ['2000000', '1000000'] });
+  });
+
+  test('a resize past the coordinate range refuses with the rescale reason', () => {
+    const editor = mount(smartArtDocx({ shapes: SHAPES, extent: [1, 1], leadingParagraphs: 1 }));
+    select(editor);
+    for (const hyperlink of [undefined, 'https://example.com/']) {
+      const result = editor.exec({
+        type: 'setImageProperties',
+        widthEmu: 100_000_000,
+        heightEmu: 100_000_000,
+        ...(hyperlink ? { hyperlink } : {}),
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.reason).toBe(DIAGRAM_RESCALE_REFUSAL);
+    }
+    expect(sizes(editor).frame).toEqual(['1', '1']);
+  });
+
+  test('a diagram whose saved drawing another diagram shares cannot resize', () => {
+    const files = unzipSync(smartArtDocx({ shapes: SHAPES, extent: EXTENT, leadingParagraphs: 1 }));
+    const xml = strFromU8(files['word/document.xml']!);
+    const paragraph = /<w:p><w:r><w:drawing>.*?<\/w:drawing><\/w:r><\/w:p>/.exec(xml)![0];
+    files['word/document.xml'] = strToU8(xml.replace(paragraph, paragraph + paragraph));
+    const editor = mount(zipSync(files));
+    select(editor);
+    const image = editor.snapshot().image!;
+    expect({ canResize: image.canResize, canMove: image.canMove }).toEqual({
+      canResize: false,
+      canMove: true,
+    });
+    const result = editor.exec({
+      type: 'setImageProperties',
+      widthEmu: 1_000_000,
+      heightEmu: 500_000,
+    });
+    expect(result.ok).toBe(false);
   });
 
   test('picture-only commands refuse with the diagram reason', () => {

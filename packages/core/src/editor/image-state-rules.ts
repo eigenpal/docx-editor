@@ -14,6 +14,7 @@ import type { DrawingLocks, DrawingProjection } from '../store/package/drawing-p
 import { chartDrawingOf, chartFrameEdit } from '../store/store/tree-op-chart-drawing.ts';
 import { chartDrawingLocks } from '../store/store/tree-op-drawings.ts';
 import { diagramDrawingOf } from '../store/store/tree-op-diagram-drawing.ts';
+import { diagramDrawingPartShared } from '../store/package/diagram-frame.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { partOfNodeId } from './surface-scope.ts';
 
@@ -56,7 +57,16 @@ export function drawingGate(
   projection: DrawingProjection
 ): { readonly chart: ChartGate; readonly locks: DrawingLocks } {
   const part = partOfNodeId(surface.session, drawingNodeId) ?? surface.session.part();
-  if (diagramDrawingOf(part, drawingNodeId)) return { chart: 'frame', locks: projection.locks };
+  const diagram = diagramDrawingOf(part, drawingNodeId);
+  if (diagram) {
+    // A saved drawing that another diagram shares cannot rescale, so the frame cannot resize.
+    const pkg = surface.session.currentPackage();
+    const shared = diagramDrawingPartShared(pkg, part.name, diagram);
+    return {
+      chart: 'frame',
+      locks: shared ? { ...projection.locks, resize: true } : projection.locks,
+    };
+  }
   const target = chartDrawingOf(part, drawingNodeId);
   if (!target) return { chart: 'none', locks: projection.locks };
   return {

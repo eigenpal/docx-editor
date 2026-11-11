@@ -58,6 +58,7 @@
     "chartDrawing": "This is a chart. You can delete it, but you can't edit it as a picture.",
     "chartFrame": "This is a chart. You can change its size, position, wrapping, and alt text.",
     "diagramFrame": "This is a diagram. You can change its size, position, wrapping, and alt text.",
+    "diagramRescale": "This diagram can't be resized. Its saved drawing is shared with another diagram or can't scale to that size.",
     "chartClipboard": "A chart can be copied, cut, or pasted only on its own, not with other content.",
     "chartClipboardStale": "The copied chart is no longer available. Copy the chart again.",
     "invalidValue": "This value is not valid for the command",

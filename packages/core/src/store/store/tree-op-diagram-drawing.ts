@@ -13,6 +13,13 @@ import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.t
 import type { TransactionContext } from './tree-store.ts';
 import type { DrawingTreeDocOp } from './tree-op-types.ts';
 
+/**
+ * The refusal of a diagram resize whose saved drawing another diagram shares, or would leave
+ * the DrawingML coordinate range. Adapters translate it through `DISABLED_REASON_KEYS`.
+ */
+export const DIAGRAM_RESCALE_REFUSAL =
+  'this diagram cannot be resized: its saved drawing is shared or cannot scale to that size';
+
 /** The drawing operations that change only a diagram's frame, never its graphic. */
 export const DIAGRAM_FRAME_EDITS: ReadonlySet<string> = new Set([
   'resizeDrawing',

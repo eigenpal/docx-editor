@@ -163,24 +163,43 @@ export function scaleDiagramDrawing(
   return outOfRange ? null : scaled;
 }
 
-/** How many diagram drawings in the package resolve to the saved drawing part `name`. */
-function drawingPartUses(pkg: OoxmlPackage, name: string): number {
-  let uses = 0;
+const DRAWING_PART_USES = new WeakMap<OoxmlPackage, ReadonlyMap<string, number>>();
+
+/**
+ * How many diagram drawings resolve to each saved drawing part. One walk of the story parts
+ * per package: the package is immutable, so the counts stay valid for it.
+ */
+function drawingPartUses(pkg: OoxmlPackage): ReadonlyMap<string, number> {
+  const cached = DRAWING_PART_USES.get(pkg);
+  if (cached) return cached;
+  const uses = new Map<string, number>();
   for (const [partName, part] of pkg.parts) {
+    if (part.root.namespaceUri !== WML_NAMESPACE_URI) continue;
     const resolve = createDiagramPartResolver(pkg, partName);
     const walk = (node: OoxmlNode): void => {
-      if (node.kind === 'textValue' || uses > 1) return;
+      if (node.kind === 'textValue') return;
       const relIds = diagramRelIds(node);
       if (relIds) {
-        if (resolve(relIds)?.drawingPartName === name) uses += 1;
+        const name = resolve(relIds)?.drawingPartName;
+        if (name) uses.set(name, (uses.get(name) ?? 0) + 1);
         return;
       }
       for (const child of node.children) walk(child);
     };
-    if (part.root.namespaceUri === WML_NAMESPACE_URI) walk(part.root);
-    if (uses > 1) break;
+    walk(part.root);
   }
+  DRAWING_PART_USES.set(pkg, uses);
   return uses;
+}
+
+/** Whether another diagram shares the saved drawing part of this diagram drawing. */
+export function diagramDrawingPartShared(
+  pkg: OoxmlPackage,
+  ownerPart: string,
+  drawing: OoxmlElement
+): boolean {
+  const name = diagramDrawingPartName(pkg, ownerPart, drawing);
+  return name !== null && (drawingPartUses(pkg).get(name) ?? 0) > 1;
 }
 
 /**
@@ -201,7 +220,7 @@ export function withRescaledDiagramDrawing(
   const name = diagramDrawingPartName(pkg, ownerPart, drawing);
   const part = name ? pkg.parts.get(name) : undefined;
   if (!part || !name) return pkg;
-  if (drawingPartUses(pkg, name) > 1) return null;
+  if ((drawingPartUses(pkg).get(name) ?? 0) > 1) return null;
   const root = scaleDiagramDrawing(part.root, to.cx / from.cx, to.cy / from.cy);
   if (!root) return null;
   if (root === part.root) return pkg;
