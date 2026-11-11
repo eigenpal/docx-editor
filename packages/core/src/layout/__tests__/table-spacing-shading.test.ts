@@ -304,7 +304,7 @@ test('a nested spaced table broken between rows closes each page with the gap to
   }
 });
 
-test('a table broken between rows closes each page with the gap, as the page holds it', () => {
+test('a table broken between rows closes each page with the spacing, and its end with the gap', () => {
   const rows = Array.from(
     { length: 12 },
     (_, i) => `<w:tr>${cell(`r${i}`)}${cell(`r${i}`)}</w:tr>`
@@ -314,8 +314,10 @@ test('a table broken between rows closes each page with the gap, as the page hol
   for (const fragment of fragments) {
     const last = fragment.rows.at(-1)!.box;
     const extra = fragment.box.y + fragment.box.height - (last.y + last.height);
-    // The full 10pt gap, or what is left of the page below the last row.
-    expect(extra).toBeCloseTo(Math.min(10, 150 - (last.y + last.height)), 6);
+    // With no frame, a page break leaves the 5pt spacing; the table's end the 10pt gap. A row
+    // that ends a page keeps that room, so the page always holds it.
+    expect(extra).toBeCloseTo(fragment === fragments.at(-1) ? 10 : 5, 6);
+    expect(fragment.box.y + fragment.box.height).toBeLessThanOrEqual(150 + 1e-6);
     const band = tableSpacingShadingRegions(fragment).at(-1)!;
     expect(band.box.y + band.box.height).toBeCloseTo(fragment.box.y + fragment.box.height, 6);
   }

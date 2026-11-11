@@ -25,7 +25,7 @@ import {
   type CellPlaceCursor,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
-import { placeClosingCellSpacing } from './table-cell-spacing.ts';
+import { continuationFrameTopPt, placeClosingCellSpacing } from './table-cell-spacing.ts';
 import { vMergePlanFor } from './table-vmerge-plan.ts';
 import {
   closingEdgePt,
@@ -362,6 +362,7 @@ export function* paginateTableInFlowSteps(
     // See placeHeaderGroup: the new fragment opens at the advanced cursor, which is the
     // column region top on a shared sheet and 0 only when a fresh page was opened.
     fragmentTop = flow.cursorY;
+    flow.cursorY += continuationFrameTopPt(structure);
     clearance?.clearPending(repeat && headerRows.length > 0 ? headerGroupHeight : 0);
     if (repeat) placeHeaderGroup(true, admitsBodyAfter);
     // A fragment opens with only its repeat, so no rows here means the repeat was left out.

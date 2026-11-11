@@ -131,7 +131,79 @@ test('a framed table broken across pages draws its frame around each fragment', 
     const last = fragment.rows.at(-1)!.cells[0]!.box;
     expect(last.y + last.height).toBeLessThanOrEqual(fragment.box.y + fragment.box.height - 3);
   }
-  // Only the table's first row opens below the top rule's double width.
+  // Only the table's first row opens below the top rule's double width. At the break the
+  // rows sit `s + bw` from the frame on either side.
   expect(fragments[0]!.rows[0]!.cells[0]!.box.y - fragments[0]!.box.y).toBeCloseTo(16, 6);
-  expect(fragments[1]!.rows[0]!.cells[0]!.box.y - fragments[1]!.box.y).toBeCloseTo(10, 6);
+  expect(fragments[1]!.rows[0]!.cells[0]!.box.y - fragments[1]!.box.y).toBeCloseTo(8, 6);
+  const first = fragments[0]!;
+  const end = first.rows.at(-1)!.cells[0]!.box;
+  expect(first.box.y + first.box.height - (end.y + end.height)).toBeCloseTo(8, 6);
+});
+
+test('without a frame a page break leaves the spacing alone between the rows and the edge', () => {
+  const rows = Array.from({ length: 12 }, (_, index) => row(`r${index}`, `r${index}`));
+  const fragments = layoutTable(SPACING, rows, 150);
+  expect(fragments[1]!.rows[0]!.cells[0]!.box.y - fragments[1]!.box.y).toBeCloseTo(5, 6);
+});
+
+test('a row that would end the page moves on when its closing gap and frame do not fit', () => {
+  const framed = SPACING + `<w:tblBorders>${OUTER}</w:tblBorders>`;
+  const rows = [row('a', 'b'), row('c', 'd'), row('e', 'f')];
+  const [whole] = layoutTable(framed, rows);
+  const cellBottom = (index: number) => {
+    const { y, height } = whole!.rows[index]!.cells[0]!.box;
+    return y + height;
+  };
+  const rowsPerFragment = (pageHeight: number) =>
+    layoutTable(framed, rows, pageHeight).map((fragment) => fragment.rows.length);
+  // The last row closes with `2s + 2bw`.
+  expect(whole!.box.height).toBeCloseTo(cellBottom(2) + 16, 6);
+  expect(rowsPerFragment(cellBottom(2) + 16.01)[0]).toBe(3);
+  expect(rowsPerFragment(cellBottom(2) + 15.9)[0]).toBe(2);
+  // A row that ends a page closes with `s + bw`.
+  expect(rowsPerFragment(cellBottom(1) + 8.01)[0]).toBe(2);
+  expect(rowsPerFragment(cellBottom(1) + 7.9)[0]).toBe(1);
+});
+
+test('an exact-height row opens the gap and the frame inside its height', () => {
+  const exact = (...texts: string[]) =>
+    '<w:tr><w:trPr><w:trHeight w:val="400" w:hRule="exact"/></w:trPr>' +
+    `${texts.map((text) => cell(text)).join('')}</w:tr>`;
+  const [first] = layoutTable(SPACING + `<w:tblBorders>${OUTER}</w:tblBorders>`, [
+    exact('x', 'y'),
+    row('c', 'd'),
+  ]);
+  expect(first!.rows[0]!.box.height).toBeCloseTo(20, 6);
+  expect(box(first!, 0, 0)).toEqual([14.5, 16, 102]);
+  expect(first!.rows[0]!.cells[0]!.box.height).toBeCloseTo(4, 6);
+  expect(first!.rows[1]!.cells[0]!.box.y).toBeCloseTo(30, 6);
+  // Below the first row the height counts from the middle of the gap above the cells.
+  const [middle] = layoutTable(SPACING, [row('a', 'b'), exact('x', 'y'), row('e', 'f')]);
+  const exactRow = middle!.rows[1]!;
+  expect(exactRow.box.height).toBeCloseTo(25, 6);
+  expect(exactRow.cells[0]!.box.y - exactRow.box.y).toBeCloseTo(10, 6);
+  expect(exactRow.cells[0]!.box.height).toBeCloseTo(15, 6);
+});
+
+test("a row exception's side borders draw beside that row and move its cells in", () => {
+  const sides = edge('left', 24, '00B050') + edge('right', 24, '00B050');
+  const exception =
+    `<w:tr><w:tblPrEx><w:tblBorders>${sides}</w:tblBorders></w:tblPrEx>` +
+    `${cell('c')}${cell('d')}</w:tr>`;
+  const [table] = layoutTable(SPACING, [row('a', 'b'), exception, row('e', 'f')]);
+  expect(box(table!, 0, 0)).toEqual([10, 10, 105]);
+  const target = table!.rows[1]!.cells;
+  expect([target[0]!.box.x, target[0]!.box.width]).toEqual([13, 102]);
+  expect(target[1]!.box.x + target[1]!.box.width).toBeCloseTo(227, 6);
+  const strokes = spacedTableFrameBorders(table!)!.strokes!;
+  const { y, height } = target[0]!.box;
+  // Centred on the table's edges, from `s` above the row's cells to `s` below.
+  expect(strokes.map((stroke) => [stroke.side, stroke.x, stroke.width])).toEqual([
+    ['left', -1.5, 3],
+    ['right', 238.5, 3],
+  ]);
+  for (const stroke of strokes) {
+    expect(stroke.y).toBeCloseTo(y - 5, 6);
+    expect(stroke.height).toBeCloseTo(height + 10, 6);
+  }
 });

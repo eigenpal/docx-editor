@@ -371,11 +371,8 @@ export function finalizeTableRows(
   return expanded.map((row, rowIndex) => ({
     ...row,
     cells: row.cells.map((cell, cellIndex) => {
-      const borders = resolved[rowIndex]![cellIndex]!;
-      if (cell.paintInert || cell.vMergeContinue) {
-        return { ...cell, borders: {}, paintInert: true };
-      }
-      return { ...cell, borders };
+      if (paintsNothing(cell)) return inertCell(cell);
+      return { ...cell, borders: resolved[rowIndex]![cellIndex]! };
     }),
   }));
 }
@@ -387,7 +384,7 @@ function withSeparatedCellBorders(
   return rows.map((row) => ({
     ...row,
     cells: row.cells.map((cell) => {
-      if (cell.paintInert || cell.vMergeContinue) return { ...cell, borders: {}, paintInert: true };
+      if (paintsNothing(cell)) return inertCell(cell);
       const authored = authoredById.get(cell.id);
       const sides = authored?.contentBorders ?? authored?.borders;
       const { width, height } = cell.box;
@@ -397,6 +394,18 @@ function withSeparatedCellBorders(
     }),
   }));
 }
+
+type FragmentCell = TableRowFragmentRecord['cells'][number];
+
+/** A merged-over or continued cell: it keeps its box but paints no borders of its own. */
+const paintsNothing = (cell: FragmentCell): boolean =>
+  cell.paintInert === true || cell.vMergeContinue === true;
+
+const inertCell = (cell: FragmentCell): FragmentCell => ({
+  ...cell,
+  borders: {},
+  paintInert: true,
+});
 
 /** A row fragment whose rest continues on the next page: the head of a split row. */
 export function splitHead(record: TableRowFragmentRecord): TableRowFragmentRecord {

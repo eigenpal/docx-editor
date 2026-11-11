@@ -476,7 +476,7 @@ function doubleMetricsOf(
   return computeDoubleBorderMetricsPt(edge.widthPt);
 }
 
-function cssStyleForEdge(style: TableBorderStyle): 'solid' | 'dashed' | 'dotted' {
+export function cssStyleForEdge(style: TableBorderStyle): 'solid' | 'dashed' | 'dotted' {
   if (style === 'dashed') return 'dashed';
   if (style === 'dotted') return 'dotted';
   return 'solid';

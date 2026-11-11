@@ -763,23 +763,37 @@ export interface TableSpacingShading {
 /**
  * The frame of a table with `w:tblCellSpacing`: its outer borders, drawn once around each
  * fragment, and how far they move the outer cells in beyond the spacing gap, in points.
- * `topPt` applies above the table's first row and `bottomPt` below its last; both are 0 on
- * every other row. Shared by the rows of one table (`table-spacing-frame.ts`).
+ * Shared by the rows of one table, one record for each position (`table-spacing-frame.ts`).
  */
 export interface TableSpacingFrame {
+  /** The cell spacing `s`: the gap between neighbouring cells is twice this. */
+  readonly spacingPt: number;
   /** Extra space between the table's left edge and its first cells. */
   readonly leftPt: number;
   /** Extra space between the table's last cells and its right edge. */
   readonly rightPt: number;
-  /** Extra space above the table's first row; 0 on every other row. */
+  /** Extra space above the table's first row. */
   readonly topPt: number;
-  /** Extra space below the table's last row; 0 on every other row. */
+  /** Extra space below the table's last row. */
   readonly bottomPt: number;
+  /**
+   * Extra space between the frame and the first row of a fragment that continues the table
+   * from an earlier page. Negative when the rows sit closer to the frame than the gap.
+   */
+  readonly breakTopPt: number;
+  /** The same below the last row of a fragment that the table continues after. */
+  readonly breakBottomPt: number;
+  /** This row opens the table, so `topPt` applies above it. */
+  readonly first?: true;
+  /** This row closes the table, so `bottomPt` applies below it. */
+  readonly last?: true;
   /** The table's outer borders, which draw the frame. */
   readonly borders: Pick<
     import('./table-borders.ts').TableBorderBox,
     'top' | 'left' | 'bottom' | 'right'
   >;
+  /** A row's `w:tblPrEx` side borders, drawn beside that row only, centred on the edge. */
+  readonly rowBorders?: Pick<import('./table-borders.ts').TableBorderBox, 'left' | 'right'>;
 }
 
 /**

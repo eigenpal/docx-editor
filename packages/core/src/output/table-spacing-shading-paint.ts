@@ -90,10 +90,13 @@ export function paintTableSpacingShading(
   return bands;
 }
 
+/** Each painted frame's borders and size, so a repaint that changes neither keeps it. */
+const frameKeys = new WeakMap<Element, string>();
+
 /**
  * The layers a spaced table paints under its rows: the gap bands, then the frame its outer
- * borders draw around the fragment (`table-spacing-frame.ts`). Bands of `previous` that paint
- * the same are reused; the frame is one element, painted fresh.
+ * borders draw around the fragment (`table-spacing-frame.ts`). Layers of `previous` that
+ * paint the same are reused.
  */
 export function paintTableSpacingLayers(
   document: Document,
@@ -104,6 +107,14 @@ export function paintTableSpacingLayers(
   const layers = paintTableSpacingShading(document, fragment, scale, previous);
   const borders = spacedTableFrameBorders(fragment);
   if (!borders) return layers;
+  const width = `${fragment.box.width * scale}px`;
+  const height = `${fragment.box.height * scale}px`;
+  const key = `${width}|${height}|${JSON.stringify(borders.strokes)}`;
+  const kept = previousFrame(previous);
+  if (kept && frameKeys.get(kept) === key) {
+    layers.push(kept);
+    return layers;
+  }
   const frame = document.createElement('div');
   frame.className = TABLE_SPACING_FRAME_CLASS;
   // Selection-inert like the gap bands: no caret or range endpoint lands in it.
@@ -113,10 +124,20 @@ export function paintTableSpacingLayers(
   style.position = 'absolute';
   style.left = '0px';
   style.top = '0px';
-  style.width = `${fragment.box.width * scale}px`;
-  style.height = `${fragment.box.height * scale}px`;
+  style.width = width;
+  style.height = height;
   style.pointerEvents = 'none';
   applyCellBorders(document, frame, borders, scale);
+  frameKeys.set(frame, key);
   layers.push(frame);
   return layers;
+}
+
+/** The frame among the leading layers of `previous`, which come first in it. */
+function previousFrame(previous: HTMLElement | undefined): HTMLElement | undefined {
+  for (const child of previous?.children ?? []) {
+    if (child.classList.contains(TABLE_SPACING_FRAME_CLASS)) return child as HTMLElement;
+    if (!child.classList.contains(TABLE_SPACING_SHADING_CLASS)) return undefined;
+  }
+  return undefined;
 }

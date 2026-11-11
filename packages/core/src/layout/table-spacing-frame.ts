@@ -12,12 +12,20 @@
 //   `2s + 0.5 × bw - cb` in from its right edge, and `2s + 2 × bw - cb` below its top and
 //   above its bottom. Neighbouring cell boxes stay `2s` apart; a cell's border lies inside
 //   its box, so a row grows by its cells' top and bottom borders.
+// - At a page break the frame closes and reopens on each page, and the rows on either side
+//   sit `s + bw` from it. A row that ends a page reserves that room, and the table's last
+//   row its full closing gap, or moves to the next page.
+// - An exact-height row opens the gap and the frame inside its height. Below the first row
+//   the height counts from the middle of the gap above the row's cells.
+// - A row's `w:tblPrEx` side borders draw beside that row only, centred on the table's
+//   edges, from `s` above its cells to `s` below; its outer cells move in by their width.
 //
 // The insets use the table-level inside borders. A cell whose own `w:tcBorders` differ from
 // them takes its own box at the same place.
 
 import {
   borderExtentPt,
+  cssStyleForEdge,
   publishFromIntervals,
   type CellBorderBox,
   type RawInterval,
@@ -47,28 +55,59 @@ export function withSpacingFrame(
   const insideV = borderExtentPt(borders.insideV);
   // The total gap at an edge never goes below zero.
   const inset = (extra: number) => Math.max(-gap, extra);
-  const leftPt = inset(1.5 * outer('left') - insideV);
-  const rightPt = inset(0.5 * outer('right') - insideV);
-  const topPt = inset(2 * outer('top') - insideH);
-  const bottomPt = inset(2 * outer('bottom') - insideH);
   const { top, left, bottom, right } = borders;
-  const middle: TableSpacingFrame = {
-    leftPt,
-    rightPt,
-    topPt: 0,
-    bottomPt: 0,
+  const base: TableSpacingFrame = {
+    spacingPt: cellSpacingPt,
+    leftPt: inset(1.5 * outer('left') - insideV),
+    rightPt: inset(0.5 * outer('right') - insideV),
+    topPt: inset(2 * outer('top') - insideH),
+    bottomPt: inset(2 * outer('bottom') - insideH),
+    // At a page break the rows sit the spacing plus the rule from the frame: less than the
+    // gap when the rule is thinner than the spacing.
+    breakTopPt: outer('top') - cellSpacingPt,
+    breakBottomPt: outer('bottom') - cellSpacingPt,
     borders: { top, left, bottom, right },
   };
-  const first: TableSpacingFrame = { ...middle, topPt };
-  const last: TableSpacingFrame = { ...middle, bottomPt };
-  const only: TableSpacingFrame = { ...first, bottomPt };
+  const shared = new Map<string, TableSpacingFrame>();
   const end = rows.length - 1;
   return rows.map((row, index) => {
-    const spacingFrame =
-      index === 0 ? (index === end ? only : first) : index === end ? last : middle;
+    const exception = rowException(row);
+    const key = `${index === 0 ? 'f' : ''}${index === end ? 'l' : ''}`;
+    let spacingFrame = exception ? undefined : shared.get(key);
+    if (!spacingFrame) {
+      spacingFrame = {
+        ...base,
+        ...(index === 0 ? { first: true as const } : {}),
+        ...(index === end ? { last: true as const } : {}),
+        ...(exception ? withRowBorders(base, exception) : {}),
+      };
+      if (!exception) shared.set(key, spacingFrame);
+    }
     // The copy keeps the row's memoized facts: none of them reads the frame.
     return shareRowFacts(row, { ...row, spacingFrame });
   });
+}
+
+/** A row's `w:tblPrEx` side borders, when it states any. */
+function rowException(row: SemanticTableRow): Pick<TableBorderBox, 'left' | 'right'> | undefined {
+  const own = row.cells[0]?.rowTableBorders;
+  if (!own || (own.left.state !== 'edge' && own.right.state !== 'edge')) return undefined;
+  return { left: own.left, right: own.right };
+}
+
+/**
+ * A row exception's side borders sit centred on the table's edges beside that row, and move
+ * its outer cells in by their width.
+ */
+function withRowBorders(
+  base: TableSpacingFrame,
+  sides: Pick<TableBorderBox, 'left' | 'right'>
+): Pick<TableSpacingFrame, 'leftPt' | 'rightPt' | 'rowBorders'> {
+  return {
+    leftPt: base.leftPt + borderExtentPt(sides.left),
+    rightPt: base.rightPt + borderExtentPt(sides.right),
+    rowBorders: sides,
+  };
 }
 
 /** A separated cell's border box, drawn whole inside its `width` × `height` box. */
@@ -90,8 +129,41 @@ export function spacedTableFrameBorders(
 ): ResolvedCellBorders | undefined {
   const frame = fragment.rows[0]?.spacingFrame;
   if (!frame) return undefined;
-  const framed = publishSeparatedBox(frame.borders, fragment.box.width, fragment.box.height);
-  return framed.strokes ? framed : undefined;
+  const { box } = fragment;
+  const framed = publishSeparatedBox(frame.borders, box.width, box.height);
+  const strokes = [...(framed.strokes ?? [])];
+  // A row's own side borders run from the spacing above its cells to the spacing below.
+  for (const row of fragment.rows) {
+    const sides = row.spacingFrame?.rowBorders;
+    if (!sides || row.cells.length === 0) continue;
+    const s = row.spacingFrame!.spacingPt;
+    let top = Infinity;
+    let bottom = -Infinity;
+    for (const cell of row.cells) {
+      top = Math.min(top, cell.box.y);
+      bottom = Math.max(bottom, cell.box.y + cell.box.height);
+    }
+    const y = top - s - box.y;
+    const height = bottom - top + 2 * s;
+    for (const [side, edge] of [
+      ['left', sides.left],
+      ['right', sides.right],
+    ] as const) {
+      if (edge.state !== 'edge') continue;
+      const width = borderExtentPt(edge);
+      strokes.push({
+        side,
+        role: 'edge',
+        color: edge.color,
+        cssStyle: cssStyleForEdge(edge.style),
+        x: (side === 'left' ? 0 : box.width) - width / 2,
+        y,
+        width,
+        height,
+      });
+    }
+  }
+  return strokes.length > 0 ? { ...framed, strokes } : undefined;
 }
 
 /**

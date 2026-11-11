@@ -4863,8 +4863,14 @@ export type TableRowHeightRule = 'auto' | 'atLeast' | 'exact';
 export interface TableSpacingFrame {
     readonly borders: Pick<TableBorderBox, 'top' | 'left' | 'bottom' | 'right'>;
     readonly bottomPt: number;
+    readonly breakBottomPt: number;
+    readonly breakTopPt: number;
+    readonly first?: true;
+    readonly last?: true;
     readonly leftPt: number;
     readonly rightPt: number;
+    readonly rowBorders?: Pick<TableBorderBox, 'left' | 'right'>;
+    readonly spacingPt: number;
     readonly topPt: number;
 }
 

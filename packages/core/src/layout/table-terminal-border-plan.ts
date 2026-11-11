@@ -5,6 +5,7 @@ import {
   exactTerminalBorderPt,
   repeatYieldsToTerminalRule,
 } from './table-exact-terminal-border.ts';
+import { fragmentClosingGapPt } from './table-cell-spacing.ts';
 import { lastRowContentDeps } from './table-fragment-content-insets.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import { readOnlyBreakCache } from './paragraph-cache-peek.ts';
@@ -74,7 +75,14 @@ export function closingEdgePt(
   heightOf: (row: SemanticTableRow, top: number) => number
 ): number {
   const room = at.bottom - at.top - naturalHeight;
-  if (room < -0.001 || room > CLOSING_EDGE_BAND_PT) return 0;
+  if (room < -0.001) return 0;
+  // A spaced table's cells draw their borders inside their boxes. A row that ends the page
+  // closes the fragment with the gap and the frame instead, which must fit above the bottom.
+  if (at.structure.cellSpacingPt > 0) {
+    const gap = fragmentClosingGapPt(at.structure.cellSpacingPt, at.row, Infinity);
+    return gap > room + 0.001 ? gap : 0;
+  }
+  if (room > CLOSING_EDGE_BAND_PT) return 0;
   if (at.row.height.rule === 'exact')
     return exactClosingRulePt(at, naturalHeight, room, next, nextDeps, heightOf);
   const measured = measureTerminalRow(at.structure, at.row, at.left, at.top, at.bottom, at.deps);

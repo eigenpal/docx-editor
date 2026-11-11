@@ -19,7 +19,7 @@ export interface CellSpacingGeometry {
 }
 
 /** How far a spaced table's frame moves its outer cells in (`table-spacing-frame.ts`). */
-export type SpacedTableFrame = Pick<TableSpacingFrame, 'leftPt' | 'rightPt' | 'topPt' | 'bottomPt'>;
+export type SpacedTableFrame = Omit<TableSpacingFrame, 'borders' | 'rowBorders'>;
 
 /** The gap between neighbouring cells, and a cell and the table edge: twice the spacing. */
 export function cellSpacingGapPt(spacingPt: number): number {
@@ -83,18 +83,31 @@ export function spacedCellWidths(structure: SpacedTable): readonly number[] {
 }
 
 /**
- * The gap above a row's cells: twice the spacing, and the frame above the table's first row
- * unless the row continues on a later page. An exact-height row keeps its authored height
- * and opens none.
+ * The gap above a row's cells: twice the spacing and, above the table's first row unless it
+ * continues or repeats on a later page, the frame. An exact-height row opens it too, inside
+ * its height.
  */
 export function rowOpeningGapPt(
-  row: { readonly height: { readonly rule: string }; readonly spacingFrame?: SpacedTableFrame },
+  row: { readonly spacingFrame?: SpacedTableFrame },
   spacingPt: number,
   continued = false
 ): number {
   const gap = cellSpacingGapPt(spacingPt);
-  if (gap === 0 || row.height.rule === 'exact') return 0;
-  return Math.max(0, gap + (continued ? 0 : (row.spacingFrame?.topPt ?? 0)));
+  if (gap === 0) return 0;
+  const frame = row.spacingFrame;
+  return Math.max(0, gap + (frame?.first && !continued ? frame.topPt : 0));
+}
+
+/**
+ * How much taller than authored an exact-height row of a spaced table lays out: a row below
+ * the first measures its height from the middle of the gap above its cells, which starts
+ * that much below the row's top here.
+ */
+export function exactSpacingExtensionPt(
+  row: { readonly spacingFrame?: SpacedTableFrame },
+  spacingPt: number
+): number {
+  return cellSpacingGapPt(spacingPt) > 0 && !row.spacingFrame?.first ? spacingPt : 0;
 }
 
 /** Column widths whose cells, once `gaps` come out of their total, have the widths given. */
@@ -121,32 +134,27 @@ export function sumCols(cols: readonly number[], from: number, to: number): numb
 
 /**
  * The gap a fragment of a spaced table closes below its last row, `lastRow`: twice the
- * spacing and, below the table's last row, its frame; none below an exact-height row, which
- * keeps its authored height, and no more than `roomPt`. Every fragment that ends between
- * rows closes this way, at a page break as at the table's end; a row split across pages
- * (`splitRow`) closes with none.
+ * spacing and the frame, which is wider below the table's last row than at a page break; no
+ * more than `roomPt`. A row split across pages (`splitRow`) closes with none.
  */
 export function fragmentClosingGapPt(
   cellSpacingPt: number,
-  lastRow:
-    | { readonly height: { readonly rule: string }; readonly spacingFrame?: SpacedTableFrame }
-    | undefined,
+  lastRow: { readonly spacingFrame?: SpacedTableFrame } | undefined,
   roomPt: number,
   splitRow = false
 ): number {
-  if (splitRow || !lastRow || lastRow.height.rule === 'exact') return 0;
+  if (splitRow || !lastRow) return 0;
   const gap = cellSpacingGapPt(cellSpacingPt);
   if (gap === 0) return 0;
-  return Math.max(0, Math.min(gap + (lastRow.spacingFrame?.bottomPt ?? 0), roomPt));
+  const frame = lastRow.spacingFrame;
+  const extra = frame ? (frame.last ? frame.bottomPt : frame.breakBottomPt) : 0;
+  return Math.max(0, Math.min(gap + extra, roomPt));
 }
 
 /** The gap a whole table leaves below its last row, with no bound below it. */
 export function closingCellSpacingPt(structure: {
   readonly cellSpacingPt: number;
-  readonly rows: readonly {
-    readonly height: { readonly rule: string };
-    readonly spacingFrame?: SpacedTableFrame;
-  }[];
+  readonly rows: readonly { readonly spacingFrame?: SpacedTableFrame }[];
 }): number {
   return fragmentClosingGapPt(structure.cellSpacingPt, structure.rows.at(-1), Infinity);
 }
@@ -162,4 +170,14 @@ export function placeClosingCellSpacing(
   frameBottom: number
 ): void {
   flow.cursorY = Math.min(flow.cursorY + closingCellSpacingPt(structure), frameBottom);
+}
+
+/**
+ * The extra space a continuation fragment of a spaced table opens below its frame's top
+ * rule, beyond the gap above its first row.
+ */
+export function continuationFrameTopPt(structure: {
+  readonly rows: readonly { readonly spacingFrame?: SpacedTableFrame }[];
+}): number {
+  return structure.rows[0]?.spacingFrame?.breakTopPt ?? 0;
 }

@@ -136,6 +136,39 @@ test("a spaced table's outer borders paint one inert frame over the gap fill, un
     expect(/192, 0, 0|C00000/i.test(cell.outerHTML)).toBe(false);
 });
 
+test('typing in a framed spaced table keeps the frame until the table changes size', () => {
+  const outer = ['top', 'left', 'bottom', 'right']
+    .map((side) => `<w:${side} w:val="single" w:sz="24" w:color="C00000"/>`)
+    .join('');
+  const tblPr = SPACING + `<w:tblBorders>${outer}</w:tblBorders><w:tblLayout w:type="fixed"/>`;
+  const part = load(table([row('Row0'), row('Row1')], tblPr));
+  const session = createLayoutSession();
+  const cache = createParagraphLayoutCache();
+  const container = document.createElement('div');
+  paintSemanticLayout(container, lay(part, 15, { session, cache }), { scale: 1 });
+  const frameOf = () => container.querySelector('.docx-table-fragment > .docx-table-spacing-frame');
+  const before = frameOf();
+  expect(before).not.toBeNull();
+  const node = part.root.children
+    .find((n) => n.kind === 'body')!
+    .children.find((n) => n.kind === 'table')! as OoxmlElement;
+  const id = readTableStructure(node, 310, 0)!.rows[1]!.cells[0]!.blocks[0]!.id;
+  const edit = (from: typeof part, text: string) => {
+    const op = applyTreeOp(from, { op: 'insertText', paragraphId: id, offset: 0, text });
+    if (!op.ok) throw Error(op.reason);
+    paintSemanticLayout(container, lay(op.part, 15, { session, cache }), { scale: 1 });
+    return op.part;
+  };
+  const typed = edit(part, 'X');
+  expect(frameOf() === before).toBe(true);
+  // Wrapping text makes the table taller, so the frame is painted again.
+  const wrapped = edit(typed, ' and a few more words that wrap');
+  expect(frameOf() === before).toBe(false);
+  const cold = document.createElement('div');
+  paintSemanticLayout(cold, lay(wrapped), { scale: 1 });
+  expect(container.innerHTML).toBe(cold.innerHTML);
+});
+
 test('a spaced table without outer borders paints no frame', () => {
   const fragment = paint(SPACING + SHADED).querySelector<HTMLElement>('.docx-table-fragment')!;
   expect(fragment.querySelector('.docx-table-spacing-frame')).toBeNull();
