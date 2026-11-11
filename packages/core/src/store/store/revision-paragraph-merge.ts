@@ -1,6 +1,7 @@
 import { isContentControl } from '../package/content-control-walk.ts';
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '../package/ooxml-tree.ts';
 import { tableChildren } from './revision-table-children.ts';
+import { storyEndsWithTable } from '../package/ooxml-story-end-repair.ts';
 import { isInertMarker } from './revision-marker-content.ts';
 import { ooxmlTreesEqual } from '../package/ooxml-serialize.ts';
 import { contentWithText, editedProperties } from './tree-op-content-controls.ts';
@@ -128,6 +129,8 @@ export function mergeRevisionParagraphs(
   let carried: OoxmlNode[] = [];
   /** The first paragraph of a run of joined ones: the joined paragraph keeps its identity. */
   let carrier: OoxmlElement | null = null;
+  /** Paragraphs this pass drops or joins on, for the story-end check of the ones after them. */
+  const dropped = new Set<string>();
   for (const [index, node] of children.entries()) {
     if (node.kind === 'paragraph') {
       // A paragraph the decision emptied and whose mark it removed, with no paragraph to join,
@@ -140,14 +143,17 @@ export function mergeRevisionParagraphs(
         blocks.length > 1 &&
         node.children.every((child) => properties(child) || emptyRun(child)) &&
         ((DROPS_LAST_PARAGRAPH.has(container) &&
-          !endsAfterTable(children, index) &&
+          !(container === 'txbxContent' && keepsStoryEnd(children, dropped, node.id)) &&
           // A custom XML block every paragraph of which goes keeps its last one here, so the
           // block around it goes whole rather than staying hollow.
           (container !== 'customXml' || keepsAParagraph)) ||
           index < lastTextAt)
-      )
+      ) {
+        dropped.add(node.id);
         continue;
+      }
       if (marks.has(node.id) && sources.has(node.id)) {
+        dropped.add(node.id);
         // A dropped paragraph only adds to the carried content; the one that keeps its mark
         // is built once, so a long run of joins stays linear.
         for (const child of node.children) if (!properties(child)) carried.push(child);
@@ -382,15 +388,14 @@ const NO_PARAGRAPHS: ReadonlyMap<string, boolean> = new Map();
 const DROPS_LAST_PARAGRAPH: ReadonlySet<string> = new Set(['txbxContent', 'customXml']);
 
 /**
- * Whether the paragraph at `index` is the last block of `children` and follows a table. It
- * stays: a story ends with a paragraph after a table (`ooxml-story-end-repair.ts`).
+ * Whether a text box keeps paragraph `id`: dropping it with the ones this pass already
+ * dropped would leave the story ending with a table (`ooxml-story-end-repair.ts`).
  */
-function endsAfterTable(children: readonly OoxmlNode[], index: number): boolean {
-  const isBlock = (node: OoxmlNode) => node.kind === 'paragraph' || node.kind === 'table';
-  if (children.slice(index + 1).some(isBlock)) return false;
-  for (let at = index - 1; at >= 0; at -= 1)
-    if (isBlock(children[at]!)) return children[at]!.kind === 'table';
-  return false;
+function keepsStoryEnd(children: readonly OoxmlNode[], dropped: Set<string>, id: string): boolean {
+  dropped.add(id);
+  const ends = storyEndsWithTable(children, dropped) && !storyEndsWithTable(children);
+  dropped.delete(id);
+  return ends;
 }
 
 /** A child a joined paragraph carries that is content: not properties, a marker, or empty. */

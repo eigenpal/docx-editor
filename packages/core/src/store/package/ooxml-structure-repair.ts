@@ -35,7 +35,7 @@ import {
 import { attributesFitKind, isEmptyMarker, repairedRun } from './ooxml-run-repair.ts';
 import { WML_NAMESPACE_URI, validKnownKind } from './ooxml-shared.ts';
 import {
-  isWml as isWmlNamed,
+  isWmlNamed,
   storyEndsWithParagraph,
   withStoryEndParagraph,
 } from './ooxml-story-end-repair.ts';

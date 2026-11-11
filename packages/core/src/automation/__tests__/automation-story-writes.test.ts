@@ -329,6 +329,16 @@ describe('replacing a whole story', () => {
     expect(savedMainXml(host)).not.toContain('<w:tbl>');
   });
 
+  test('keeps the paragraph after a final control that holds a table', () => {
+    const host = open(docx(p('before') + sdt(table(row(cell(p('One')))))));
+    const body = bodyOf(host);
+    const response = host.execute({
+      operations: [{ op: 'replaceSpan', span: { body }, text: 'new' }],
+    });
+    expect(response.ok).toBe(true);
+    expect(savedMainXml(host)).toMatch(/<\/w:sdt><w:p[ />]/);
+  });
+
   test('is one claim on every paragraph in the story, so a second edit in the batch is refused', () => {
     const host = open(docx(p('alpha') + p('beta')));
     const body = bodyOf(host);

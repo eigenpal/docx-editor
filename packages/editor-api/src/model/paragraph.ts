@@ -468,7 +468,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
    * restores the paragraph.
    *
    * A body, note, or text box that ends with a table keeps the empty paragraph after it: deleting
-   * that paragraph refuses with `NotSupported` (`edit.operation-unsupported`). Clear it instead.
+   * that paragraph without tracking refuses with `NotSupported` (`edit.operation-unsupported`).
+   * Clear it instead.
    *
    * A tracked deletion refuses with `NotSupported` for the last paragraph of a story, table
    * cell, or content control; a paragraph directly before a table or block content control; a

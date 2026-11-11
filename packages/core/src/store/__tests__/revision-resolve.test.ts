@@ -500,6 +500,33 @@ describe('accept-all and reject-all', () => {
   });
 });
 
+describe('a text box that ends with a table', () => {
+  test('accepting a deleted last paragraph keeps one paragraph after the table', () => {
+    const mark = `<w:pPr><w:rPr><w:del w:id="1" w:author="QA" w:date="${QA.date}"/></w:rPr></w:pPr>`;
+    const table = (inner: string) =>
+      `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>${inner}</w:tc></w:tr></w:tbl>`;
+    for (const block of [
+      table(`<w:p>${run('cell')}</w:p>`),
+      `<w:sdt><w:sdtPr/><w:sdtContent>${table(`<w:p>${run('cell')}</w:p>`)}</w:sdtContent></w:sdt>`,
+    ]) {
+      const part = load(
+        '<w:p><w:r><w:pict xmlns:v="urn:schemas-microsoft-com:vml"><v:shape><v:textbox><w:txbxContent>' +
+          `<w:p>${run('top')}</w:p>${block}<w:p>${mark}</w:p><w:p>${mark}</w:p>` +
+          '</w:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p>'
+      );
+      let box = '';
+      const visit = (node: OoxmlNode) => {
+        if (node.kind === 'textValue') return;
+        if (node.localName === 'txbxContent') box = node.id;
+        node.children.forEach(visit);
+      };
+      visit(part.root);
+      const out = xml(apply(part, { op: 'acceptAllRevisions', scopeRootId: box }));
+      expect(out).toMatch(/<\/w:(tbl|sdt)><w:p[ />][\s\S]*<\/w:txbxContent>/);
+    }
+  });
+});
+
 describe('a move recorded on the paragraph mark', () => {
   // `EG_ParaRPrTrackChanges` is `ins? del? moveFrom? moveTo?`. When a whole paragraph moves
   // with tracking on, Word records it on the MARK: `w:moveFrom` on the copy the paragraph

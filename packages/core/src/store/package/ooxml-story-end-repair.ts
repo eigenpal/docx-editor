@@ -24,7 +24,7 @@ const MAX_WRAPPER_DEPTH = 32;
 const STORY_END_SUFFIX = '~end';
 
 /** Whether `node` is the WML element `localName`. */
-export const isWml = (node: OoxmlNode, localName: string): node is OoxmlElement =>
+export const isWmlNamed = (node: OoxmlNode, localName: string): node is OoxmlElement =>
   node.kind !== 'textValue' &&
   node.namespaceUri === WML_NAMESPACE_URI &&
   node.localName === localName;
@@ -40,19 +40,19 @@ type Removed = ReadonlySet<string>;
 const NONE: Removed = new Set();
 
 const isWrapper = (node: OoxmlNode): node is OoxmlElement =>
-  isWml(node, 'sdt') || isWml(node, 'customXml');
+  isWmlNamed(node, 'sdt') || isWmlNamed(node, 'customXml');
 
 /** The blocks of a block wrapper: a control's content, or a custom XML element's children. */
 function wrappedBlocks(wrapper: OoxmlElement): readonly OoxmlNode[] {
   if (wrapper.localName === 'customXml') return wrapper.children;
-  for (const child of wrapper.children) if (isWml(child, 'sdtContent')) return child.children;
+  for (const child of wrapper.children) if (isWmlNamed(child, 'sdtContent')) return child.children;
   return [];
 }
 
 /** Whether `node` is or holds a story block that is not removed. An empty wrapper holds none. */
 function holdsBlock(node: OoxmlNode, depth: number, removed: Removed): boolean {
   if (node.kind === 'textValue' || removed.has(node.id)) return false;
-  if (isWml(node, 'p') || isWml(node, 'tbl') || isWml(node, 'altChunk')) return true;
+  if (isWmlNamed(node, 'p') || isWmlNamed(node, 'tbl') || isWmlNamed(node, 'altChunk')) return true;
   if (!isWrapper(node) || depth >= MAX_WRAPPER_DEPTH) return false;
   return wrappedBlocks(node).some((child) => holdsBlock(child, depth + 1, removed));
 }
@@ -71,7 +71,7 @@ function lastBlockIndex(children: readonly OoxmlNode[], depth: number, removed: 
 /** Whether the block `node` is, or ends with, a table, through block wrappers. */
 function blockEndsWithTable(node: OoxmlNode | undefined, depth: number, removed: Removed): boolean {
   if (!node || node.kind === 'textValue') return false;
-  if (isWml(node, 'tbl')) return true;
+  if (isWmlNamed(node, 'tbl')) return true;
   if (!isWrapper(node)) return false;
   const blocks = wrappedBlocks(node);
   return blockEndsWithTable(blocks[lastBlockIndex(blocks, depth + 1, removed)], depth + 1, removed);
@@ -150,7 +150,7 @@ export function withoutStoryEndParagraph(pkg: OoxmlPackage): OoxmlPackage {
   const part = pkg.parts.get(pkg.mainDocumentPart);
   if (!part) return pkg;
   for (const body of part.root.children) {
-    if (!isWml(body, 'body')) continue;
+    if (!isWmlNamed(body, 'body')) continue;
     const index = lastBlockIndex(body.children, 0, NONE);
     const last = body.children[index];
     if (!last || last.kind !== 'paragraph' || !last.id.endsWith(STORY_END_SUFFIX)) return pkg;
