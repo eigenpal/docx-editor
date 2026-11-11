@@ -2,9 +2,9 @@
 // (paginated-surface seam).
 //
 // Every `beforeinput` the surface handles is prevented, and its edit applied to the model.
-// Prevention does not always hold: an edit an input method makes through the platform's text
-// service (on Android, `InputConnection.deleteSurroundingText` or `commitText`) is applied to
-// the DOM by Chromium even so. The page then shows the model's edit AND the browser's: two
+// Prevention does not always hold: a deletion an input method makes through the platform's
+// text service (on Android, `InputConnection.deleteSurroundingText`) is applied to the DOM by
+// Chromium even so, and an input the page cannot cancel always is. The page then shows the model's edit AND the browser's: two
 // characters gone for one Backspace, every later span's text out of step with its
 // `data-start`, and the browser's caret where its own deletion left it.
 //
@@ -15,14 +15,19 @@
 // already been applied once, and the browser's copy of it is the duplicate.
 
 import { discardRetainedPaintOf } from '../output/semantic-paint.ts';
-import { hostWindowOf } from './host-realm.ts';
+import { hostWindowOf, type HostTimers } from './host-realm.ts';
 import type { SurfaceSelectionSync } from './surface-selection-sync.ts';
 
 export interface BrowserMutationRepairDeps {
   readonly pagesLayer: HTMLElement;
-  /** The surface's render: paints whatever retained paint was forgotten. */
-  render(): void;
-  readonly sync: Pick<SurfaceSelectionSync, 'mirrorToDom' | 'noteInputMethodEdit'>;
+  /**
+   * The surface's render, which paints whatever retained paint was forgotten and writes the
+   * model selection back. Called with `false`: nothing about the document or selection moved.
+   */
+  render(notifyChange: boolean): void;
+  /** The surface's timers, which follow it into whatever window it moves to. */
+  readonly timers: HostTimers;
+  readonly sync: Pick<SurfaceSelectionSync, 'noteInputMethodEdit'>;
 }
 
 export interface BrowserMutationRepair {
@@ -50,7 +55,7 @@ export function createBrowserMutationRepair(
     observer?.disconnect();
     observer = null;
     delivered = [];
-    if (timer !== null) hostWindowOf(deps.pagesLayer).clearTimeout(timer);
+    deps.timers.clearTimeout(timer);
     timer = null;
   }
 
@@ -69,7 +74,7 @@ export function createBrowserMutationRepair(
       // A prevented edit fires no `input`. The browser applies an edit within the task that
       // dispatched `beforeinput`, so the next task ends the watch before any later paint of
       // the surface's own could be mistaken for the browser's.
-      timer = win.setTimeout(stop, 0);
+      timer = deps.timers.setTimeout(stop, 0);
     },
     stop,
     destroy() {
@@ -89,8 +94,7 @@ export function createBrowserMutationRepair(
       deps.pagesLayer,
       records.map((record) => record.target)
     );
-    deps.render();
-    deps.sync.mirrorToDom();
+    deps.render(false);
     // The browser's caret, and the input method's correction of it, are on their way.
     deps.sync.noteInputMethodEdit();
   }

@@ -16,7 +16,7 @@ import { selectionsEqual, spanSearchRoots } from './dom-selection.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import { collapsedAt } from './surface-selection-ops.ts';
 import { paintedTextIn } from './surface-composition-readback.ts';
-import { runDeletionSteps, type ImeDeletionPlan } from './surface-ime-deletion.ts';
+import type { ImeDeletionPlan } from './surface-ime-deletion.ts';
 import { historyShortcutOf } from './history-shortcut.ts';
 import {
   moveByTabInTable,
@@ -544,6 +544,8 @@ export function createBeforeInputHandler(
       event: InputEvent,
       direction: 'backward' | 'forward'
     ) => ImeDeletionPlan;
+    /** Run that many steps, stopping at one that changes nothing. Without it, all run. */
+    readonly runDeletionSteps?: (count: number, step: () => void) => void;
     /** A deletion arrived as `beforeinput`: from an input method, never from the keymap. */
     readonly onInputMethodDeletion?: () => void;
   }
@@ -555,7 +557,9 @@ export function createBeforeInputHandler(
       surface.setSelection(plan.selection);
       step.call(surface);
     } else {
-      runDeletionSteps(surface, plan.count, () => step.call(surface));
+      const run = () => step.call(surface);
+      if (hooks.runDeletionSteps) hooks.runDeletionSteps(plan.count, run);
+      else for (let index = 0; index < plan.count; index += 1) run();
     }
     hooks.onInputMethodDeletion?.();
   };

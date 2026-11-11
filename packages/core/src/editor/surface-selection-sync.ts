@@ -25,7 +25,6 @@ import {
   pageIndexOfNode,
   selectionsEqual,
   semanticSelectionFromDom,
-  spanSearchRoots,
 } from './dom-selection.ts';
 import {
   erasedSpanRanges,
@@ -580,6 +579,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   function noteUserSelectionGesture(event: Event): void {
     if (event.type.startsWith('pointer') && (event as PointerEvent).button !== 0) return;
     userSelectionGesture = true;
+    gestureSinceInputMethodEdit = true;
   }
 
   /**
@@ -590,6 +590,12 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   let browserSelectionFixup = false;
   /** Until when (on `deps.now()`) a gesture-less selection change may be an IME correction. */
   let inputMethodEchoUntil = Number.NEGATIVE_INFINITY;
+  /**
+   * Whether a pointer or `selectstart` gesture began since the last input method edit. Kept
+   * apart from `userSelectionGesture`, which every mirror spends: a tap whose `selectionchange`
+   * arrives after a repaint is still the user's.
+   */
+  let gestureSinceInputMethodEdit = false;
   const inputMethodEchoing = (): boolean => deps.now() < inputMethodEchoUntil;
 
   function mirrorToDom(claim = false): void {
@@ -708,6 +714,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
 
     noteInputMethodEdit() {
       inputMethodEchoUntil = deps.now() + INPUT_METHOD_ECHO_MS;
+      gestureSinceInputMethodEdit = false;
     },
 
     noteKeyDown(event) {
@@ -758,6 +765,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       if (
         inputMethodEchoing() &&
         !userSelectionGesture &&
+        !gestureSinceInputMethodEdit &&
         domSelectionTouchesPages(pagesLayer, hostDocument().getSelection())
       ) {
         const reported = semanticSelectionFromDom(pagesLayer, hostDocument().getSelection());
@@ -801,7 +809,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
         controlId === undefined ? null : { offset: selection.head.offset, controlId };
       composingSpans = composingAcrossParagraphs
         ? []
-        : snapshotPaintedSpans(spanSearchRoots(pagesLayer), composingParagraph);
+        : snapshotPaintedSpans(pagesLayer, composingParagraph);
       session.beginComposition(deps.storyScope());
     },
 

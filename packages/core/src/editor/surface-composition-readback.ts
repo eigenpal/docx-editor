@@ -147,20 +147,18 @@ function spanPiece(
  * the model brought the word back.
  */
 export function snapshotPaintedSpans(
-  roots: readonly Element[],
+  root: Element,
   paragraphId: string
 ): readonly PaintedSpanSnapshot[] {
   const spans: PaintedSpanSnapshot[] = [];
-  for (const root of roots) {
-    for (const candidate of paragraphElements(root, paragraphId, '[data-start]')) {
-      const element = candidate as HTMLElement;
-      const start = modelStartOf(element, paragraphId);
-      if (start === null) continue;
-      const end = modelEndOf(element, start, start + (element.textContent ?? '').length);
-      // The line, not the parent: Chromium also removes a link wrapper it emptied.
-      const holder = element.closest<HTMLElement>('.docx-line') ?? element.parentElement;
-      spans.push({ element, holder, key: `${start}:${end}` });
-    }
+  for (const candidate of paragraphElements(root, paragraphId, '[data-start]')) {
+    const element = candidate as HTMLElement;
+    const start = modelStartOf(element, paragraphId);
+    if (start === null) continue;
+    const end = modelEndOf(element, start, start + (element.textContent ?? '').length);
+    // The line, not the parent: Chromium also removes a link wrapper it emptied.
+    const holder = element.closest<HTMLElement>('.docx-line') ?? element.parentElement;
+    spans.push({ element, holder, key: `${start}:${end}` });
   }
   return spans;
 }

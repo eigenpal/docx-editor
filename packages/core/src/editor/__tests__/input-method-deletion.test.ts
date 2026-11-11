@@ -181,6 +181,37 @@ describe('a deletion names its characters', () => {
     });
   });
 
+  test('a range across more than one break, or into another story, deletes one step', () => {
+    // Only the break between neighbouring paragraphs is a count the story order vouches for.
+    // Painted between two body paragraphs can be a footer and a header.
+    withSurface(p('First') + p('Middle') + p('Last'), (surface, container, [first, , last]) => {
+      caretAt(surface, last!, 0);
+      deleteEvent(
+        container,
+        'deleteContentBackward',
+        at(container, first!, 5),
+        at(container, last!, 0)
+      );
+      const ids = surface.session.paragraphIds();
+      expect(ids).toHaveLength(2);
+      expect(textOf(surface, ids[0]!)).toBe('First');
+      expect(textOf(surface, ids[1]!)).toBe('MiddleLast');
+    });
+  });
+
+  test('a range at the browser caret of a paint behind the model still counts', () => {
+    // The paint is a commit behind: the browser's caret, and the range, sit at the older
+    // offsets. Their distance is the count; the model caret is where it applies.
+    withSurface(p('Hello world'), (surface, container, [id]) => {
+      caretAt(surface, id!, 11);
+      // Synchronously after the model's own selection write, so it is not adopted.
+      const [node, inner] = domPoint(container, id!, 9);
+      document.getSelection()!.collapse(node, inner);
+      deleteEvent(container, 'deleteContentBackward', at(container, id!, 7), at(container, id!, 9));
+      expect(textOf(surface, id!)).toBe('Hello wor');
+    });
+  });
+
   test('a long range is bounded, and stops when nothing is left to delete', () => {
     withSurface(p('abc'), (surface, container, [id]) => {
       caretAt(surface, id!, 3);
