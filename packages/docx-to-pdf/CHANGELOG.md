@@ -1,5 +1,12 @@
 # @docx-editor.dev/docx-to-pdf
 
+## 2.37.0
+
+### Patch Changes
+
+- 7d619fe: Fix exported PDFs that printed some characters as empty boxes when the document used more than one font. The PDF `Producer` now names the converter version.
+- Updated dependencies: @docx-editor.dev/core@2.37.0, @docx-editor.dev/fonts-cjk@2.37.0, @docx-editor.dev/fonts@2.37.0, @docx-editor.dev/pro@2.37.0
+
 ## 2.36.0
 
 ### Patch Changes
