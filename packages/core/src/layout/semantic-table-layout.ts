@@ -1299,8 +1299,11 @@ export function layoutRowFragmentBounded(
       ? exactTerminalBorderPt(row, deps)
       : 0;
   // The same spacing opens a gap above each row's cells, so content starts that much lower.
-  const opening =
-    isHeaderRepeat || deps.opensTableBreak ? 'break' : isContinuation ? 'remainder' : 'start';
+  const opening = isContinuation
+    ? 'remainder'
+    : isHeaderRepeat || deps.opensTableBreak
+      ? 'break'
+      : 'start';
   const rowGapPt = rowOpeningGapPt(row, cellSpacingPt, opening);
   const deferredRowAnchors: DeferredRowAnchor[] = [];
   // Exact rows clip to their authored box; never flow past it even when the page allows more.

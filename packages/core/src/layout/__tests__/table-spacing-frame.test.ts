@@ -10,6 +10,7 @@ import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.
 import { spacedTableFrameBorders } from '../table-spacing-frame.ts';
 import { tableSpacingShadingRegions } from '../table-spacing-shading.ts';
 import type { TableFragmentRecord } from '../semantic-records.ts';
+import { lay, load } from './table-row-keep-fixtures.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const SPACING = '<w:tblCellSpacing w:w="100" w:type="dxa"/>';
@@ -268,7 +269,35 @@ test("a split row's parts close and reopen with the frame's room", () => {
   for (const fragment of fragments) expect(closingRoom(fragment)).toBeCloseTo(16, 6);
   // Its rest keeps the first row's opening, which is wider than `s + bw`.
   for (const fragment of fragments) expect(cellTop(fragment)).toBeCloseTo(16, 6);
-  // A middle row's rest opens `s + bw` below the frame, more than its own `2s`.
+  // A middle row's rest keeps its own `2s`, which is wider than `s + bw` here; a whole row
+  // opening the page takes `s + bw`.
   const [, rest] = layoutTable(FRAMED, [row('a', 'b'), tallRow(20), row('e', 'f')], 150);
-  expect(cellTop(rest!)).toBeCloseTo(8, 6);
+  expect(cellTop(rest!)).toBeCloseTo(10, 6);
+  const wide =
+    SPACING + `<w:tblBorders>${OUTER.replaceAll('w:sz="24"', 'w:sz="64"')}</w:tblBorders>`;
+  const [, thick] = layoutTable(wide, [row('a', 'b'), tallRow(20), row('e', 'f')], 150);
+  // With 8pt rules `s + bw` = 13 is the wider one.
+  expect(cellTop(thick!)).toBeCloseTo(13, 6);
+});
+
+test('an authored header row that would end the page keeps its closing room too', () => {
+  const hp = (text: string) =>
+    '<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="280" w:lineRule="exact"/></w:pPr>' +
+    `<w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const tr = (text: string, header = false) =>
+    `<w:tr>${header ? '<w:trPr><w:tblHeader/></w:trPr>' : ''}${cell(text)}${cell('x')}</w:tr>`;
+  const borders = `<w:tblBorders>${OUTER}${edge('insideH', 12, '0070C0')}</w:tblBorders>`;
+  // Before mode 15 the header row stays on its page while the body rows move on.
+  for (let pre = 0; pre <= 60; pre += 1) {
+    const xml =
+      Array.from({ length: pre }, (_, i) => hp(`p${i}`)).join('') +
+      `<w:tbl><w:tblPr><w:tblW w:w="4800" w:type="dxa"/>${SPACING}${borders}</w:tblPr>` +
+      '<w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="2400"/></w:tblGrid>' +
+      `${tr('h', true)}${tr('a')}${tr('b')}</w:tbl>${hp('end')}`;
+    const fragments = lay(load(xml), 14).pages.flatMap((page) =>
+      page.fragments.filter((f): f is TableFragmentRecord => f.kind === 'table')
+    );
+    for (const fragment of fragments.slice(0, -1))
+      expect(closingRoom(fragment)).toBeGreaterThanOrEqual(8 - 1e-6);
+  }
 });

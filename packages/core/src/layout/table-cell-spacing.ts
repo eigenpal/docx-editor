@@ -91,9 +91,9 @@ export type SpacedRowOpening = 'start' | 'break' | 'remainder';
 
 /**
  * The gap above a row's cells: twice the spacing and, above the table's first row, the frame.
- * At a page break the rows sit the spacing plus the frame's rule from it instead; the rest
- * of a split row keeps its own gap when that is wider. An exact-height row opens it inside
- * its height.
+ * A whole row or header repeat that opens a page break sits the spacing plus the frame's rule
+ * from it instead. The rest of a split row keeps its own gap, or that, whichever is wider.
+ * An exact-height row opens the gap inside its height.
  */
 export function rowOpeningGapPt(
   row: { readonly spacingFrame?: SpacedTableFrame },
@@ -168,11 +168,11 @@ export function fragmentClosingGapPt(
  */
 export function closingReservePt(
   cellSpacingPt: number,
-  row: { readonly spacingFrame?: SpacedTableFrame },
+  row: { readonly spacingFrame?: SpacedTableFrame } | undefined,
   pageBandPt: number
 ): number {
   const closing = fragmentClosingGapPt(cellSpacingPt, row, Infinity);
-  if (closing === 0) return 0;
+  if (closing === 0 || !row) return 0;
   return closing + rowOpeningGapPt(row, cellSpacingPt) < pageBandPt / 2 ? closing : 0;
 }
 

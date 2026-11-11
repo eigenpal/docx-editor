@@ -159,6 +159,7 @@ export function* paginateTableInFlowSteps(
     if (row.isHeader) headerRows.push(row);
     else break;
   }
+  closingReserve = closingReservePt(structure.cellSpacingPt, headerRows.at(-1), pageBottom());
   // A merge inside the header rows is planned where the group is about to be placed, and the
   // same plan places it (`table-header-vmerge.ts`); a repeat at a kept top reuses both.
   const headers = createFlowHeaderReuse({
@@ -278,7 +279,6 @@ export function* paginateTableInFlowSteps(
     admitsBodyAfter?: (bodyTop: number) => boolean
   ): void => {
     if (headerRows.length === 0) return;
-
     const candidate = asRepeat ? prepareRepeat?.() : undefined;
     if (candidate === null) return;
     const planAt = (): HeaderGroupPlan | undefined =>
