@@ -12,9 +12,15 @@
 // the table's own `w:tblPr`, then the row exception. A stated `auto` fill clears the layers
 // below it; `nil` leaves them showing.
 
-import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
-import { statedShadingFill } from './ooxml-shading.ts';
-import type { LayoutBox, TableFragmentRecord, TableSpacingShading } from './semantic-records.ts';
+import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import { wmlChildNamed } from '../store/store/tree-op-table-shared.ts';
+import { cascadedShadingFill } from './table-cell-shading.ts';
+import type {
+  LayoutBox,
+  TableFragmentRecord,
+  TableRowFragmentRecord,
+  TableSpacingShading,
+} from './semantic-records.ts';
 
 /** One filled band of a table fragment: `box` minus the cell boxes in `holes`. */
 export interface TableSpacingShadingRegion {
@@ -26,67 +32,31 @@ export interface TableSpacingShadingRegion {
   readonly holes: readonly LayoutBox[];
 }
 
-function shd(node: OoxmlElement | undefined): OoxmlElement | undefined {
-  if (!node) return undefined;
-  for (const child of node.children) {
-    if (
-      child.kind !== 'textValue' &&
-      child.namespaceUri === WML_NAMESPACE_URI &&
-      child.localName === 'shd'
-    )
-      return child;
-  }
-  return undefined;
-}
-
-function tblPrEx(row: OoxmlElement): OoxmlElement | undefined {
-  for (const child of row.children) {
-    if (
-      child.kind !== 'textValue' &&
-      child.namespaceUri === WML_NAMESPACE_URI &&
-      child.localName === 'tblPrEx'
-    )
-      return child;
-  }
-  return undefined;
-}
-
-/** Each layer's stated fill over the ones before it, or undefined when none paints a colour. */
-function cascade(layers: readonly (OoxmlElement | undefined)[]): string | undefined {
-  let fill: string | null | undefined;
-  for (const layer of layers) {
-    const stated = statedShadingFill(shd(layer));
-    if (stated !== undefined) fill = stated;
-  }
-  return fill ?? undefined;
-}
-
 /**
  * The spacing fill of each row, keyed by row id. Empty when the table has no cell spacing,
- * because then no gap shows the fill. `rowNodes` are the authored `w:tr` elements; the
- * closing gap goes to the last of `rowIds`, the rows the table lays out.
+ * because then no gap shows the fill. `rowNodes` are the authored `w:tr` elements the table
+ * lays out, in order; the closing gap goes to the last of them.
  */
 export function rowSpacingShading(input: {
   readonly stylePropertyNodes: readonly OoxmlElement[];
   readonly tableProperties: OoxmlElement | undefined;
   readonly rowNodes: readonly OoxmlElement[];
-  readonly rowIds: readonly string[];
   readonly cellSpacingPt: number;
+  /** The gap between neighbouring cells, and a cell and the table edge: twice the spacing. */
+  readonly gapPt: number;
   readonly closingPt: number;
 }): ReadonlyMap<string, TableSpacingShading> {
   const shading = new Map<string, TableSpacingShading>();
-  if (!(input.cellSpacingPt > 0) || input.rowIds.length === 0) return shading;
+  if (!(input.cellSpacingPt > 0)) return shading;
   const layers = [...input.stylePropertyNodes, input.tableProperties];
-  const tableFill = cascade(layers);
-  const lastId = input.rowIds.at(-1);
+  const tableFill = cascadedShadingFill(layers);
+  const last = input.rowNodes.at(-1);
   for (const node of input.rowNodes) {
-    const exception = tblPrEx(node);
-    const fill = exception ? cascade([...layers, exception]) : tableFill;
+    const exception = wmlChildNamed(node, 'tblPrEx');
+    const fill = exception ? cascadedShadingFill([...layers, exception]) : tableFill;
     if (fill === undefined) continue;
-    shading.set(
-      node.id,
-      node.id === lastId && input.closingPt > 0 ? { fill, closingPt: input.closingPt } : { fill }
-    );
+    const closing = node === last && input.closingPt > 0 ? { closingPt: input.closingPt } : {};
+    shading.set(node.id, { fill, gapPt: input.gapPt, ...closing });
   }
   return shading;
 }
@@ -100,10 +70,11 @@ function clip(box: LayoutBox, to: LayoutBox): LayoutBox | null {
 }
 
 /**
- * The bands a table fragment fills, one per shaded row: the row box, extended by the closing
- * gap below the table's last row, less every cell box that reaches into it. A cell merged
- * down from an earlier row stays a hole in each row it crosses. Bounded by the fragment's
- * cells: each cell is tested only against the rows it can reach.
+ * The bands a table fragment fills, one per shaded row, less every cell box that reaches into
+ * it. A band runs from the row's first cell to its last, with the gap on each side, so cells
+ * skipped by `w:gridBefore` or `w:gridAfter` take no fill. Below the table's last row it adds
+ * the closing gap. A cell merged down from an earlier row stays a hole in each row it
+ * crosses. Each cell is tested only against the rows it can reach.
  */
 export function tableSpacingShadingRegions(
   fragment: Pick<TableFragmentRecord, 'rows'>
@@ -114,19 +85,12 @@ export function tableSpacingShadingRegions(
     const cells: LayoutBox[] = [];
     for (const cell of row.cells) if (!cell.paintInert) cells.push(cell.box);
     const shading = row.spacingShading;
-    if (shading) {
-      const closing = row.hasContinuation ? 0 : (shading.closingPt ?? 0);
-      const box = { ...row.box, height: row.box.height + closing };
+    const band = shading && rowBand(row, shading);
+    if (shading && band) {
       const holes: LayoutBox[] = [];
-      for (const cell of open) {
-        const hole = clip(cell, box);
-        if (hole) holes.push(hole);
-      }
-      for (const cell of cells) {
-        const hole = clip(cell, box);
-        if (hole) holes.push(hole);
-      }
-      regions.push({ fill: shading.fill, box, holes });
+      for (const cell of open) addHole(holes, clip(cell, band));
+      for (const cell of cells) addHole(holes, clip(cell, band));
+      regions.push({ fill: shading.fill, box: band, holes });
     }
     // Only a cell that reaches below its row can cover a later one.
     const rowBottom = row.box.y + row.box.height;
@@ -134,4 +98,50 @@ export function tableSpacingShadingRegions(
     for (const cell of cells) if (cell.y + cell.height > rowBottom + 0.001) open.push(cell);
   }
   return regions;
+}
+
+function rowBand(row: TableRowFragmentRecord, shading: TableSpacingShading): LayoutBox | null {
+  if (row.cells.length === 0) return null;
+  let left = Infinity;
+  let right = -Infinity;
+  for (const { box } of row.cells) {
+    left = Math.min(left, box.x);
+    right = Math.max(right, box.x + box.width);
+  }
+  const closing = row.hasContinuation ? 0 : (shading.closingPt ?? 0);
+  const height = row.box.height + Math.max(0, closing);
+  return clip(
+    { x: left - shading.gapPt, y: row.box.y, width: right - left + 2 * shading.gapPt, height },
+    { ...row.box, height }
+  );
+}
+
+/**
+ * Even-odd filling needs holes that never overlap. Cells do not overlap, so a hole that does
+ * is a layout defect: the part already cut stays cut, and the overlapping hole is dropped
+ * rather than turned back into fill.
+ */
+function addHole(holes: LayoutBox[], hole: LayoutBox | null): void {
+  if (!hole) return;
+  for (const other of holes) if (clip(hole, other)) return;
+  holes.push(hole);
+}
+
+/**
+ * `rows` with the last row's closing gap cut to what fits above `bottom`: layout closes the
+ * table there, so the band never paints into the margin below a page or past a nested
+ * table's cell. Returns `rows` itself when nothing changes.
+ */
+export function withPlacedClosingGap<Row extends TableRowFragmentRecord>(
+  rows: readonly Row[],
+  bottom: number
+): readonly Row[] {
+  const last = rows.at(-1);
+  const closing = last?.spacingShading?.closingPt;
+  if (!last || closing === undefined || last.hasContinuation) return rows;
+  const room = Math.max(0, bottom - (last.box.y + last.box.height));
+  if (closing <= room + 0.001) return rows;
+  const { closingPt: _dropped, ...shading } = last.spacingShading!;
+  const placed = room > 0.001 ? { ...shading, closingPt: room } : shading;
+  return [...rows.slice(0, -1), { ...last, spacingShading: placed }];
 }

@@ -9,6 +9,9 @@ import type { TableFragmentRecord } from '../layout/semantic-records.ts';
 
 const HEX = /^[0-9A-Fa-f]{6}$/;
 
+/** Class of a gap band; table retention replaces these leading layers on every repaint. */
+export const TABLE_SPACING_SHADING_CLASS = 'docx-table-spacing-shading';
+
 /** Fixed-point numbers keep the clip path short and free of exponent notation. */
 const px = (value: number): string => String(Math.round(value * 100) / 100);
 
@@ -24,7 +27,7 @@ export function paintTableSpacingShading(
     if (!HEX.test(region.fill)) continue;
     const { box } = region;
     const band = document.createElement('div');
-    band.className = 'docx-table-spacing-shading';
+    band.className = TABLE_SPACING_SHADING_CLASS;
     band.setAttribute('aria-hidden', 'true');
     const style = band.style;
     style.position = 'absolute';

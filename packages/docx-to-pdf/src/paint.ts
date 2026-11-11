@@ -231,9 +231,10 @@ function decorations(
         out.push(rule(border.box, border.edge.color, style, x, y, pageHeight(page)));
       }
     } else {
-      // The table's own fill shows in the cell-spacing gaps: each band less its cells.
+      // The table's own fill shows in the cell-spacing gaps: each band less its cells. Off
+      // the paint grid, so a hole matches its cell exactly and leaves no strip of fill inside.
       for (const { fill, box, holes } of tableSpacingShadingRegions(block)) {
-        const paths = [box, ...holes].map((r) => rect(r, x, y, pageHeight(page), true));
+        const paths = [box, ...holes].map((r) => rect(r, x, y, pageHeight(page)));
         out.push(`${color(fill)} rg ${paths.join(' ')} f*`);
       }
       // Complete the backgrounds before drawing shared borders. Later cells and

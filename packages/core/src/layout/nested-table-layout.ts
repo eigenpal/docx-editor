@@ -25,6 +25,7 @@ import type { TableFragmentRecord, TableRowFragmentRecord } from './semantic-rec
 import type { SemanticTableRow } from './semantic-table.ts';
 import { initialCellCursors, type NestedTableCursor } from './table-cell-cursor.ts';
 import { closingCellSpacingPt } from './table-cell-spacing.ts';
+import { withPlacedClosingGap } from './table-spacing-shading.ts';
 
 /**
  * A nested table inside a cell. Ordinary rows continue at row boundaries, and a row that does
@@ -241,17 +242,22 @@ export function emitNestedTable(
   if (rawRows.length === 0 || y > maxBottom + 0.001) return { fragment: null, bottom: top };
   if (nextRowIndex >= structure.rows.length)
     y = Math.min(y + closingCellSpacingPt(structure), Math.max(y, maxBottom));
-  const rows = finalizeTableRows(
-    rawRows,
-    structure,
-    sourceRows,
-    deps.borderOwnershipBudget,
-    deps.vMergeResolveBudget,
-    undefined,
-    undefined,
-    undefined,
-    occurrenceInsets
-  );
+  const rows = [
+    ...withPlacedClosingGap(
+      finalizeTableRows(
+        rawRows,
+        structure,
+        sourceRows,
+        deps.borderOwnershipBudget,
+        deps.vMergeResolveBudget,
+        undefined,
+        undefined,
+        undefined,
+        occurrenceInsets
+      ),
+      y
+    ),
+  ];
   for (const pending of nestedDeferred) {
     for (const row of rows) {
       const hostsParagraph = row.cells.some((cell) =>

@@ -5,6 +5,7 @@ import type {
   TableFragmentRecord,
   TableRowFragmentRecord,
 } from '../layout/semantic-records.ts';
+import { TABLE_SPACING_SHADING_CLASS } from './table-spacing-shading-paint.ts';
 import type { ResolvedCellBorders, TableBorderStrokeRecord } from '../layout/table-borders.ts';
 import {
   moveRelativeBox,
@@ -73,6 +74,8 @@ export interface TableRepaint extends ParagraphReflowPaint {
   cell(cell: TableCellFragmentRecord, rowBox: LayoutBox): HTMLElement;
   /** A nested table receives its previous element, so it can be reused in turn. */
   block(block: BlockFragmentRecord, previous?: HTMLElement): HTMLElement;
+  /** Fresh layers painted under the rows, such as gap shading; they replace the old ones. */
+  readonly leading?: readonly HTMLElement[];
 }
 
 const TABLE_GEOMETRY: ReadonlySet<string> = new Set(['rows', 'box', 'columnEdges']);
@@ -332,7 +335,11 @@ export function reflowTableFragment(
   if (before.box.y !== fragment.box.y) style.top = `${fragment.box.y * scale}px`;
   if (before.box.width !== fragment.box.width) style.width = `${fragment.box.width * scale}px`;
   if (before.box.height !== fragment.box.height) style.height = `${fragment.box.height * scale}px`;
-  reconcileChildren(element, [...rows.values()], 0);
+  const leading = repaint.leading ?? [];
+  while (element.firstElementChild?.classList.contains(TABLE_SPACING_SHADING_CLASS))
+    element.firstElementChild.remove();
+  element.prepend(...leading);
+  reconcileChildren(element, [...rows.values()], leading.length);
   tables.set(element, { fragment, rows });
   return element;
 }

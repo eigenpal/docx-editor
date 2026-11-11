@@ -36,6 +36,16 @@ export function cellShading(
     if (format) layers.push(childNamed(format, 'tcPr'));
   }
   layers.push(cellProperties);
+  return cascadedShadingFill(layers);
+}
+
+/**
+ * The fill of property containers (`w:tcPr`, `w:tblPr`, `w:tblPrEx`), base first: each
+ * one's stated `w:shd` over the ones before it, or undefined when none paints a colour.
+ */
+export function cascadedShadingFill(
+  layers: readonly (OoxmlElement | undefined)[]
+): string | undefined {
   let fill: string | null | undefined;
   for (const layer of layers) {
     const stated = statedShadingFill(layer && childNamed(layer, 'shd'));

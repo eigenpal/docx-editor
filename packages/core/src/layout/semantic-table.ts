@@ -110,7 +110,7 @@ import { conditionalTypesFor, readTableLook } from './table-conditional-formats.
 import { cellShading } from './table-cell-shading.ts';
 import { rowSpacingShading } from './table-spacing-shading.ts';
 import type { TableSpacingShading } from './semantic-records.ts';
-import { closingCellSpacingPt } from './table-cell-spacing.ts';
+import { cellSpacingGapPt, closingCellSpacingPt } from './table-cell-spacing.ts';
 import {
   wmlAttributeValue as attributeValue,
   wmlChildNamed as childNamed,
@@ -948,7 +948,7 @@ function readTableStructureUncached(
     contentOffset === undefined ? autoWidthOuterRulePt(contentRows, sideRuleShape) : 0;
   const spacingShading = rowSpacingShading({
     ...{ stylePropertyNodes: tableStyle.tablePropertyNodes, tableProperties: tblPr },
-    ...{ rowNodes: plans.map((plan) => plan.node), rowIds: rows.map((row) => row.id) },
+    ...{ rowNodes: plans.map((plan) => plan.node), gapPt: cellSpacingGapPt(cellSpacingPt) },
     ...{ cellSpacingPt, closingPt: closingCellSpacingPt({ cellSpacingPt, rows }) },
   });
   return {

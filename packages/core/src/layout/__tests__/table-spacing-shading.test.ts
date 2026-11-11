@@ -163,3 +163,58 @@ test('a row split across pages closes the gap only below its last part', () => {
   expect(heights.slice(0, -1).every((extra) => extra === 0)).toBe(true);
   expect(heights.at(-1)).toBeCloseTo(10, 6);
 });
+
+test('a row band covers its own cells only, not columns skipped by gridBefore', () => {
+  const [table] = layoutTable({
+    tblPr: SPACING + shd('D9E2F3'),
+    rows: [
+      `<w:tr>${cell('a')}${cell('b')}</w:tr>`,
+      `<w:tr><w:trPr><w:gridBefore w:val="1"/><w:wBefore w:w="2000" w:type="dxa"/></w:trPr>${cell('c')}</w:tr>`,
+    ],
+  });
+  const [full, short] = tableSpacingShadingRegions(table!);
+  expect(full!.box).toEqual(table!.rows[0]!.box);
+  const own = table!.rows[1]!.cells[0]!.box;
+  // The band starts one gap before the row's only cell and ends at the table edge.
+  expect(short!.box.x).toBeCloseTo(own.x - 10, 6);
+  expect(short!.box.x + short!.box.width).toBeCloseTo(
+    table!.rows[1]!.box.x + table!.rows[1]!.box.width,
+    6
+  );
+});
+
+test('the closing gap never paints past the room below the last row', () => {
+  const [first] = layoutTable({ tblPr: SPACING + shd('D9E2F3') });
+  const rowBottom = first!.rows[0]!.box.y + first!.rows[0]!.box.height;
+  // A page that ends 4pt below the row leaves 4pt of the 10pt closing gap.
+  const [table] = layoutTable({ tblPr: SPACING + shd('D9E2F3'), pageHeight: rowBottom + 4 });
+  const [region] = tableSpacingShadingRegions(table!);
+  expect(region!.box.y + region!.box.height).toBeCloseTo(rowBottom + 4, 6);
+});
+
+test('overlapping holes never turn back into fill', () => {
+  const box = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
+  const cellAt = (id: string, b: ReturnType<typeof box>) =>
+    ({
+      id,
+      box: b,
+      gridColumn: 0,
+      gridSpan: 1,
+      vMergeContinue: false,
+      rowSpan: 1,
+      blocks: [],
+    }) as never;
+  const rows = [
+    {
+      id: 'r',
+      rowIndex: 0,
+      isHeaderRow: false,
+      isHeaderRepeat: false,
+      spacingShading: { fill: 'D9E2F3', gapPt: 10 },
+      box: box(0, 0, 100, 40),
+      cells: [cellAt('a', box(10, 10, 50, 20)), cellAt('b', box(40, 10, 50, 20))],
+    },
+  ] as TableRowFragmentRecord[];
+  const [region] = tableSpacingShadingRegions({ rows });
+  expect(region!.holes).toEqual([box(10, 10, 50, 20)]);
+});

@@ -2,9 +2,14 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { expect, test } from 'bun:test';
-import { readOoxmlPart } from '@docx-editor.dev/core/store';
+import { readOoxmlPart, type OoxmlElement } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '@docx-editor.dev/core/layout';
 import { paintSemanticLayout } from '../semantic-paint.ts';
+import { applyTreeOp } from '../../store/store/tree-ops.ts';
+import { createLayoutSession } from '../../layout/layout-session.ts';
+import { createParagraphLayoutCache } from '../../layout/layout-cache.ts';
+import { readTableStructure } from '../../layout/semantic-table.ts';
+import { load, lay, row, table } from '../../layout/__tests__/table-row-keep-fixtures.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -54,4 +59,39 @@ test('a table without spacing paints no band, and its unshaded cells stay unshad
   expect(container.querySelector('.docx-table-spacing-shading')).toBeNull();
   for (const cell of container.querySelectorAll<HTMLElement>('.docx-table-cell'))
     expect(cell.style.backgroundColor).toBe('');
+});
+
+test('typing in a shaded spaced table keeps row elements and rebuilds the bands', () => {
+  const part = load(
+    table(
+      Array.from({ length: 6 }, (_, i) => row(`Row${i}`)),
+      SPACING + SHADED
+    )
+  );
+  const session = createLayoutSession();
+  const cache = createParagraphLayoutCache();
+  const container = document.createElement('div');
+  paintSemanticLayout(container, lay(part, 15, { session, cache }), { scale: 1 });
+  const rowsBefore = Array.from(container.querySelectorAll('.docx-table-row'));
+  const bandsBefore = Array.from(container.querySelectorAll('.docx-table-spacing-shading'));
+  expect(bandsBefore).toHaveLength(6);
+  const node = part.root.children
+    .find((n) => n.kind === 'body')!
+    .children.find((n) => n.kind === 'table')! as OoxmlElement;
+  const id = readTableStructure(node, 310, 0)!.rows[2]!.cells[0]!.blocks[0]!.id;
+  const op = applyTreeOp(part, { op: 'insertText', paragraphId: id, offset: 0, text: 'X' });
+  if (!op.ok) throw Error(op.reason);
+  paintSemanticLayout(container, lay(op.part, 15, { session, cache }), { scale: 1 });
+  const rowsAfter = Array.from(container.querySelectorAll('.docx-table-row'));
+  expect(rowsAfter[0]).toBe(rowsBefore[0]);
+  expect(rowsAfter[5]).toBe(rowsBefore[5]);
+  const fragment = container.querySelector('.docx-table-fragment')!;
+  const bandsAfter = Array.from(fragment.querySelectorAll(':scope > .docx-table-spacing-shading'));
+  expect(bandsAfter).toHaveLength(6);
+  expect(bandsAfter.some((band) => bandsBefore.includes(band))).toBe(false);
+  // The bands stay the leading layer, under every row.
+  expect(Array.from(fragment.children).slice(0, 6)).toEqual(bandsAfter);
+  const cold = document.createElement('div');
+  paintSemanticLayout(cold, lay(op.part), { scale: 1 });
+  expect(container.innerHTML).toBe(cold.innerHTML);
 });

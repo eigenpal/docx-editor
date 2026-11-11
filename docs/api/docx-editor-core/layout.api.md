@@ -4858,6 +4858,7 @@ export type TableRowHeightRule = 'auto' | 'atLeast' | 'exact';
 export interface TableSpacingShading {
     readonly closingPt?: number;
     readonly fill: string;
+    readonly gapPt: number;
 }
 
 // @public

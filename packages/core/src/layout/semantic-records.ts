@@ -750,7 +750,12 @@ export interface TableRowFragmentRecord {
 export interface TableSpacingShading {
   /** Validated `RRGGBB` fill. */
   readonly fill: string;
-  /** The gap the table closes below this row, in points, when it is the table's last row. */
+  /** The gap on each side of the row's cells, in points. */
+  readonly gapPt: number;
+  /**
+   * The gap the table closes below this row, in points, when it is the table's last row:
+   * no more than the room left below the row where it was placed.
+   */
   readonly closingPt?: number;
 }
 

@@ -5,6 +5,7 @@
 // Split out of `table-flow-pagination.ts`, which decides where rows go. This module only turns
 // the rows of a fragment that has ended into the record that gets painted.
 
+import { withPlacedClosingGap } from './table-spacing-shading.ts';
 import { finalizeTableRows, type TableFlowDeps } from './semantic-table-layout.ts';
 import { isSettledPreviousRow } from './table-row-placement-reuse.ts';
 import { fragmentCloseDeps, refreshTerminalRow } from './table-flow-row-state.ts';
@@ -81,6 +82,7 @@ export function closeTableFragmentRows(input: TableFragmentClose): {
     )
   );
   if (fragmentCarry) finalized = fragmentCarry.finish(finalized);
+  finalized = [...withPlacedClosingGap(finalized, input.bottom)];
   const last = finalized[finalized.length - 1]!;
   const fragment = annotateTableFragmentGeometry(
     {
