@@ -33,6 +33,8 @@ const MIN_FONT_SIZE = 100;
 const MAX_FONT_SIZE = 400_000;
 /** Text run properties whose `sz` sets a font size. */
 const RUN_PROPERTIES = new Set(['rPr', 'defRPr', 'endParaRPr']);
+/** The `ST_Coordinate` bound: a scaled position or size past it is not valid DrawingML. */
+const MAX_COORDINATE = 27_273_042_316_900;
 
 /** The `wp:inline` or `wp:anchor` of a `w:drawing`, or null. */
 function anchorOf(drawing: OoxmlElement): OoxmlElement | null {
@@ -81,20 +83,25 @@ export function diagramDrawingPartName(
   return createDiagramPartResolver(pkg, ownerPart)(relIds)?.drawingPartName ?? null;
 }
 
+/** The attributes with each named coordinate scaled, or null when one leaves `ST_Coordinate`. */
 function scaledAttributes(
   attributes: readonly OoxmlAttribute[],
   scales: Readonly<Record<string, number>>
-): readonly OoxmlAttribute[] {
+): readonly OoxmlAttribute[] | null {
   let changed = false;
+  let outOfRange = false;
   const next = attributes.map((attribute) => {
     if (attribute.kind !== 'genericExtension' || attribute.namespaceUri !== '') return attribute;
     const scale = scales[attribute.localName];
     if (scale === undefined || !/^-?\d{1,15}$/.test(attribute.value)) return attribute;
-    const value = String(Math.round(Number(attribute.value) * scale));
-    if (value === attribute.value) return attribute;
+    const scaled = Math.round(Number(attribute.value) * scale);
+    if (!Number.isSafeInteger(scaled) || Math.abs(scaled) > MAX_COORDINATE) outOfRange = true;
+    const value = String(scaled);
+    if (outOfRange || value === attribute.value) return attribute;
     changed = true;
     return { ...attribute, value };
   });
+  if (outOfRange) return null;
   return changed ? next : attributes;
 }
 
@@ -115,16 +122,23 @@ function scaledFontSize(attributes: readonly OoxmlAttribute[], scale: number) {
 
 /**
  * `drawing` (a `dsp:drawing` root) laid out for a frame `sx` times as wide and `sy` times as
- * tall. Node ids stay, so the write is one edit of the part.
+ * tall, or null when a scaled position or size would leave the `ST_Coordinate` range. Node ids
+ * stay, so the write is one edit of the part.
  */
-export function scaleDiagramDrawing(drawing: OoxmlElement, sx: number, sy: number): OoxmlElement {
+export function scaleDiagramDrawing(
+  drawing: OoxmlElement,
+  sx: number,
+  sy: number
+): OoxmlElement | null {
   if (sx === 1 && sy === 1) return drawing;
+  if (!(Number.isFinite(sx) && Number.isFinite(sy) && sx > 0 && sy > 0)) return null;
   const text = Math.min(sx, sy);
   const position = { x: sx, y: sy };
   const size = { cx: sx, cy: sy };
+  let outOfRange = false;
   const walk = (node: OoxmlNode, inTransform: boolean): OoxmlNode => {
-    if (node.kind === 'textValue') return node;
-    let attributes = node.attributes;
+    if (node.kind === 'textValue' || outOfRange) return node;
+    let attributes: readonly OoxmlAttribute[] | null = node.attributes;
     if (inTransform && node.namespaceUri === A) {
       if (node.localName === 'off' || node.localName === 'chOff')
         attributes = scaledAttributes(attributes, position);
@@ -132,6 +146,10 @@ export function scaleDiagramDrawing(drawing: OoxmlElement, sx: number, sy: numbe
         attributes = scaledAttributes(attributes, size);
     } else if (node.namespaceUri === A && RUN_PROPERTIES.has(node.localName)) {
       attributes = scaledFontSize(attributes, text);
+    }
+    if (!attributes) {
+      outOfRange = true;
+      return node;
     }
     const transform =
       (node.namespaceUri === A && node.localName === 'xfrm') ||
@@ -141,12 +159,35 @@ export function scaleDiagramDrawing(drawing: OoxmlElement, sx: number, sy: numbe
       attributes === node.attributes && children.every((kid, i) => kid === node.children[i]);
     return same ? node : ({ ...node, attributes, children } as OoxmlElement);
   };
-  return walk(drawing, false) as OoxmlElement;
+  const scaled = walk(drawing, false) as OoxmlElement;
+  return outOfRange ? null : scaled;
+}
+
+/** How many diagram drawings in the package resolve to the saved drawing part `name`. */
+function drawingPartUses(pkg: OoxmlPackage, name: string): number {
+  let uses = 0;
+  for (const [partName, part] of pkg.parts) {
+    const resolve = createDiagramPartResolver(pkg, partName);
+    const walk = (node: OoxmlNode): void => {
+      if (node.kind === 'textValue' || uses > 1) return;
+      const relIds = diagramRelIds(node);
+      if (relIds) {
+        if (resolve(relIds)?.drawingPartName === name) uses += 1;
+        return;
+      }
+      for (const child of node.children) walk(child);
+    };
+    if (part.root.namespaceUri === WML_NAMESPACE_URI) walk(part.root);
+    if (uses > 1) break;
+  }
+  return uses;
 }
 
 /**
  * The package with the saved drawing of a diagram rescaled from frame `from` to frame `to`.
- * Unchanged when the diagram has no saved drawing part, or a size is not positive.
+ * Unchanged when the diagram has no saved drawing part, or a size is not positive. Null, a
+ * refusal, when another diagram shares the saved drawing part, which the rescale would
+ * distort, or when a scaled value would leave the `ST_Coordinate` range.
  */
 export function withRescaledDiagramDrawing(
   pkg: OoxmlPackage,
@@ -159,8 +200,10 @@ export function withRescaledDiagramDrawing(
   if (from.cx === to.cx && from.cy === to.cy) return pkg;
   const name = diagramDrawingPartName(pkg, ownerPart, drawing);
   const part = name ? pkg.parts.get(name) : undefined;
-  if (!part) return pkg;
+  if (!part || !name) return pkg;
+  if (drawingPartUses(pkg, name) > 1) return null;
   const root = scaleDiagramDrawing(part.root, to.cx / from.cx, to.cy / from.cy);
+  if (!root) return null;
   if (root === part.root) return pkg;
   const replaced = replaceNode(part, part.root.id, root);
   return replaced.ok ? withPart(pkg, replaced.part) : null;

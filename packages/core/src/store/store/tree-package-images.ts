@@ -1,3 +1,4 @@
+import { stageDiagramRescale } from './tree-op-diagram-drawing.ts';
 import { drawingAtomProjection } from '../package/drawing-atom-projection.ts';
 // Package-wide image intents: insert, replace, delete, external embed (task 12).
 //
@@ -794,7 +795,8 @@ export function applyImagePropertiesIntent(
     }
 
     for (const op of input.ops) {
-      if (!ctx.apply(op)) return null;
+      // A diagram resize also rescales the diagram's saved drawing part.
+      if (!stageDiagramRescale(ctx, owner, op) || !ctx.apply(op)) return null;
     }
 
     if (

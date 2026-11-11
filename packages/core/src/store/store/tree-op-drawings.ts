@@ -832,7 +832,8 @@ export function setDocPrHyperlinkRelationship(
         namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
         localName: 'hlinkClick',
         prefix: 'a',
-        namespaceBindings: [],
+        // Declared here: a story often binds `a:` only on `a:graphic`, which docPr precedes.
+        namespaceBindings: [{ prefix: 'a', namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI }],
         attributes: [relAttr('id', relationshipId)],
         children: [],
       } as OoxmlElement);

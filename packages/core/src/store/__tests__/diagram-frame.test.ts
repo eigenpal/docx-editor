@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { readOoxmlPackage, type OoxmlPackage } from '../package/ooxml-package.ts';
 import {
   diagramDrawingPartName,
@@ -105,5 +106,27 @@ describe('diagram frame', () => {
         cy: 1,
       })
     ).toBe(bare);
+  });
+
+  test('refuses a rescale that would leave the coordinate range', () => {
+    const pkg = open(smartArtDocx({ shapes: SHAPES, extent: [1, 1] }));
+    const root = pkg.parts.get('/word/diagrams/drawing1.xml')!.root;
+    expect(scaleDiagramDrawing(root, 100_000_000, 100_000_000)).toBeNull();
+    const drawing = diagramDrawing(pkg);
+    const to = { cx: 100_000_000, cy: 100_000_000 };
+    const from = { cx: 1, cy: 1 };
+    expect(withRescaledDiagramDrawing(pkg, '/word/document.xml', drawing, from, to)).toBeNull();
+  });
+
+  test('refuses a rescale of a drawing part that two diagrams share', () => {
+    const files = unzipSync(smartArtDocx({ shapes: SHAPES, extent: [2_000_000, 1_000_000] }));
+    const xml = strFromU8(files['word/document.xml']!);
+    const paragraph = /<w:p><w:r><w:drawing>.*?<\/w:drawing><\/w:r><\/w:p>/.exec(xml)![0];
+    files['word/document.xml'] = strToU8(xml.replace(paragraph, paragraph + paragraph));
+    const pkg = open(zipSync(files));
+    const from = { cx: 2_000_000, cy: 1_000_000 };
+    const to = { cx: 1_000_000, cy: 500_000 };
+    const drawing = diagramDrawing(pkg);
+    expect(withRescaledDiagramDrawing(pkg, '/word/document.xml', drawing, from, to)).toBeNull();
   });
 });

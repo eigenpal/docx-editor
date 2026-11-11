@@ -112,6 +112,19 @@ describe('diagram frame edits', () => {
     expect(sizes(reopened)).toEqual({ frame: ['1000000', '500000'], shape: ['500000', '250000'] });
   });
 
+  test('a resize sent with a hyperlink also rescales the saved drawing', () => {
+    const editor = mount();
+    select(editor);
+    const result = editor.exec({
+      type: 'setImageProperties',
+      widthEmu: 4_000_000,
+      heightEmu: 2_000_000,
+      hyperlink: 'https://example.com/',
+    });
+    expect(result.ok).toBe(true);
+    expect(sizes(editor)).toEqual({ frame: ['4000000', '2000000'], shape: ['2000000', '1000000'] });
+  });
+
   test('picture-only commands refuse with the diagram reason', () => {
     const editor = mount();
     select(editor);
