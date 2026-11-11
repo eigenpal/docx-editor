@@ -307,7 +307,11 @@ export function positionFromDomPoint(
   // A float's wrap jump spacer is mid-line as well: it is the gap between the content before
   // and after it, so it resolves as the line's child index on that side of it. A terminator
   // mark's seat stands after the line's content, so it resolves as the line's end.
-  const seat = nearestElement?.closest<HTMLElement>('.docx-terminator-seat');
+  // The paragraph-end line break painted for the browser's text services stands where the
+  // terminator does, so it resolves the same way.
+  const seat = nearestElement?.closest<HTMLElement>(
+    '.docx-terminator-seat, .docx-paragraph-boundary'
+  );
   if (seat?.querySelector('.docx-line-break-mark') && seat.parentElement) {
     // The line's logical last run, in the paragraph its last run paints (a join line paints
     // two), and not a run of a text box drawn in it. The break's own run starts at the

@@ -201,6 +201,8 @@ import {
   discardRetainedPaint,
   paintSemanticLayoutWithAuthorSlots,
 } from '../output/semantic-paint.ts';
+import { createBrowserMutationRepair } from './surface-browser-mutation-repair.ts';
+import { inputMethodDeletionHooks } from './surface-ime-deletion.ts';
 // By module path: the roster walk is an engine internal, not part of the output barrel's
 // public surface. See the note there.
 import {
@@ -5824,6 +5826,7 @@ export function mountPaginatedSurface(
         pagesLayer.removeEventListener('cut', onCut as EventListener);
         pagesLayer.removeEventListener('paste', onPaste as EventListener);
         pagesLayer.removeEventListener('compositionstart', onCompositionStart);
+        mutationRepair.destroy();
         pagesLayer.removeEventListener('compositionend', onCompositionEnd);
         viewportBinding?.destroy();
         hostListeners.clear();
@@ -5956,6 +5959,7 @@ export function mountPaginatedSurface(
   // own mandatory adoption, which would skip it: the #383 lane choice would
   // again be made from a selection the user no longer has.
   const onCompositionStart: typeof selectionSync.onCompositionStart = (...args) => {
+    mutationRepair.stop();
     selectionSync.adoptBeforeInput();
     flushToPaint();
     selectionSync.onCompositionStart(...args);
@@ -6058,6 +6062,7 @@ export function mountPaginatedSurface(
     () => (partOfNodeId(session, selection.head.paragraphId) ?? session.part()).root
   );
   const onKeyDown = (event: KeyboardEvent): void => {
+    selectionSync.noteKeyDown(event);
     directionChord.keydown(event);
     if (legacyDropdownInteraction?.keydown(event)) return;
     // The browser may have moved its caret without delivering the queued `selectionchange`
@@ -6077,10 +6082,19 @@ export function mountPaginatedSurface(
       selectionSync.mirrorToDom();
       selectionSync.noteBrowserSelectionFixup();
     },
+    ...inputMethodDeletionHooks({
+      root: pagesLayer,
+      selection: () => selection,
+      textOf,
+      sync: selectionSync,
+    }),
   });
+  // An input method's edit can reach the DOM though its `beforeinput` was prevented and applied.
+  const mutationRepair = createBrowserMutationRepair({ pagesLayer, render, sync: selectionSync });
   const onBeforeInput = (event: InputEvent): void => {
     selectionSync.adoptBeforeInput();
     dispatchBeforeInput(event);
+    if (!selectionSync.isComposing()) mutationRepair.watch(event);
   };
 
   const { onDrawingPointerGesture, onDrawingKeyGesture } = createDrawingGestures({

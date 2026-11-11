@@ -2103,6 +2103,15 @@ export function discardRetainedPaint(container: HTMLElement): void {
   retainedPaints.delete(container);
 }
 
+/** Forget only the pages holding `nodes` (all of them when no page does): see above. */
+export function discardRetainedPaintOf(container: HTMLElement, nodes: readonly Node[]): void {
+  const retained = retainedPaints.get(container);
+  if (!retained) return;
+  const pages = retained.pages.filter((page) => !nodes.some((node) => page.element.contains(node)));
+  if (pages.length === retained.pages.length) retainedPaints.delete(container);
+  else retainedPaints.set(container, { ...retained, pages });
+}
+
 function sameBox(left: PageRecord['box'], right: PageRecord['box']): boolean {
   return (
     left.x === right.x &&

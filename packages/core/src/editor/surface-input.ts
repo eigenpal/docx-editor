@@ -16,6 +16,7 @@ import { selectionsEqual, spanSearchRoots } from './dom-selection.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import { collapsedAt } from './surface-selection-ops.ts';
 import { paintedTextIn } from './surface-composition-readback.ts';
+import { runDeletionSteps, type ImeDeletionPlan } from './surface-ime-deletion.ts';
 import { historyShortcutOf } from './history-shortcut.ts';
 import {
   moveByTabInTable,
@@ -534,8 +535,30 @@ export function createBeforeInputHandler(
      * selection and treats the queued echo as the browser's, not the user's.
      */
     readonly onBrowserSelectionFixup?: () => void;
+    /**
+     * How a `deleteContentBackward` / `deleteContentForward` event deletes: the steps its
+     * target range names at the caret, or a range the browser shows selected. Without it,
+     * each event is one step. See surface-ime-deletion.ts.
+     */
+    readonly deletionPlan?: (
+      event: InputEvent,
+      direction: 'backward' | 'forward'
+    ) => ImeDeletionPlan;
+    /** A deletion arrived as `beforeinput`: from an input method, never from the keymap. */
+    readonly onInputMethodDeletion?: () => void;
   }
 ): (event: InputEvent) => void {
+  const deleteBy = (event: InputEvent, direction: 'backward' | 'forward'): void => {
+    const step = direction === 'backward' ? surface.deleteBackward : surface.deleteForward;
+    const plan = hooks.deletionPlan?.(event, direction) ?? { kind: 'steps', count: 1 };
+    if (plan.kind === 'selection') {
+      surface.setSelection(plan.selection);
+      step.call(surface);
+    } else {
+      runDeletionSteps(surface, plan.count, () => step.call(surface));
+    }
+    hooks.onInputMethodDeletion?.();
+  };
   return (event: InputEvent): void => {
     // PREVENTED FIRST, dispatched second.
     //
@@ -574,19 +597,21 @@ export function createBeforeInputHandler(
       return;
     }
     if (event.inputType === 'deleteContentBackward') {
-      surface.deleteBackward();
+      deleteBy(event, 'backward');
       return;
     }
     if (event.inputType === 'deleteWordBackward') {
       surface.deleteWordBackward();
+      hooks.onInputMethodDeletion?.();
       return;
     }
     if (event.inputType === 'deleteContentForward') {
-      surface.deleteForward();
+      deleteBy(event, 'forward');
       return;
     }
     if (event.inputType === 'deleteWordForward') {
       surface.deleteWordForward();
+      hooks.onInputMethodDeletion?.();
       return;
     }
     if (event.inputType === 'insertLineBreak') {
@@ -721,10 +746,11 @@ export function paintedTextOf(
   pagesLayer: HTMLElement,
   paragraphId: string,
   modelText: string,
-  anchor: Node | null = null
+  anchor: Node | null = null,
+  erased?: ReadonlySet<string>
 ): string | null {
   for (const root of spanSearchRoots(pagesLayer)) {
-    const painted = paintedTextIn(root, paragraphId, modelText, anchor);
+    const painted = paintedTextIn(root, paragraphId, modelText, anchor, erased);
     if (painted !== null) return painted;
   }
   return null;
