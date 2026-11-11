@@ -337,9 +337,21 @@ export function reflowTableFragment(
   if (before.box.width !== fragment.box.width) style.width = `${fragment.box.width * scale}px`;
   if (before.box.height !== fragment.box.height) style.height = `${fragment.box.height * scale}px`;
   const leading = repaint.leading ?? [];
-  while (element.firstElementChild?.classList.contains(TABLE_SPACING_SHADING_CLASS))
-    element.firstElementChild.remove();
-  if (leading.length > 0) element.prepend(...leading);
+  const current: Element[] = [];
+  for (const child of element.children) {
+    if (!child.classList.contains(TABLE_SPACING_SHADING_CLASS)) break;
+    current.push(child);
+  }
+  // Bands that paint the same come back as the same elements, so most repaints move nothing.
+  if (current.length !== leading.length || current.some((child, i) => child !== leading[i])) {
+    for (const child of current) if (!leading.includes(child as HTMLElement)) child.remove();
+    // In order, before the rows; a band already in place stays where it is.
+    let anchor: Element | null = element.firstElementChild;
+    for (const band of leading) {
+      if (band === anchor) anchor = anchor.nextElementSibling;
+      else element.insertBefore(band, anchor);
+    }
+  }
   reconcileChildren(element, [...rows.values()], leading.length);
   tables.set(element, { fragment, rows });
   return element;

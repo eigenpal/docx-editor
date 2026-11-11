@@ -82,8 +82,9 @@ test('with cell spacing every row shows the table fill in its gaps, cells exclud
   });
   expect(table!.rows[0]!.cells.map((c) => c.shading)).toEqual([undefined, 'FFE699']);
   expect(fills(table!.rows)).toEqual(['D9E2F3', 'D9E2F3']);
-  // 100 twips of spacing is a 10pt gap; the table closes it below the last row.
-  expect(table!.rows.map((row) => row.spacingShading?.closingPt)).toEqual([undefined, 10]);
+  // 100 twips of spacing is a 10pt gap; the table closes it below the last row, inside its box.
+  const lastRow = table!.rows[1]!.box;
+  expect(table!.box.y + table!.box.height).toBeCloseTo(lastRow.y + lastRow.height + 10, 6);
   const regions = tableSpacingShadingRegions(table!);
   expect(regions).toHaveLength(2);
   const [first, last] = regions;
@@ -192,7 +193,7 @@ test('the closing gap never paints past the room below the last row', () => {
   expect(region!.box.y + region!.box.height).toBeCloseTo(rowBottom + 4, 6);
 });
 
-test('overlapping holes never turn back into fill', () => {
+test('a cell overlapping one merged down from above never turns back into fill', () => {
   const box = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
   const cellAt = (id: string, b: ReturnType<typeof box>) =>
     ({
@@ -204,17 +205,23 @@ test('overlapping holes never turn back into fill', () => {
       rowSpan: 1,
       blocks: [],
     }) as never;
+  const shaded = { fill: 'D9E2F3', gapPt: 10 };
   const rows = [
+    // A defective layout: the merged cell of the first row reaches into a cell of the second.
     {
-      id: 'r',
-      rowIndex: 0,
-      isHeaderRow: false,
-      isHeaderRepeat: false,
-      spacingShading: { fill: 'D9E2F3', gapPt: 10 },
-      box: box(0, 0, 100, 40),
-      cells: [cellAt('a', box(10, 10, 50, 20)), cellAt('b', box(40, 10, 50, 20))],
+      ...{ id: 'r0', rowIndex: 0, isHeaderRow: false, isHeaderRepeat: false },
+      spacingShading: shaded,
+      box: box(0, 0, 100, 30),
+      cells: [cellAt('m', box(10, 10, 50, 60))],
+    },
+    {
+      ...{ id: 'r1', rowIndex: 1, isHeaderRow: false, isHeaderRepeat: false },
+      spacingShading: shaded,
+      box: box(0, 30, 100, 40),
+      cells: [cellAt('b', box(40, 40, 50, 20))],
     },
   ] as TableRowFragmentRecord[];
-  const [region] = tableSpacingShadingRegions({ rows });
-  expect(region!.holes).toEqual([box(10, 10, 50, 20)]);
+  const [, second] = tableSpacingShadingRegions({ rows, box: box(0, 0, 100, 70) });
+  // The second band starts one gap before its own cell, so the merged hole is cut there.
+  expect(second!.holes).toEqual([box(30, 30, 30, 40)]);
 });

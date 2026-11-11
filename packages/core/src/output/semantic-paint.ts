@@ -1816,8 +1816,8 @@ function paintTableFragment(
   previous?: HTMLElement
 ): HTMLElement {
   // Rows, cells and cell paragraphs whose paint inputs are unchanged, or moved only, are kept.
-  // Gap bands are cut around every cell of the fragment: cheap, so they are always rebuilt.
-  const bands = paintTableSpacingShading(document, fragment, ctx.scale);
+  // Gap bands are cut around every cell of the fragment; a band that paints the same is kept.
+  const bands = paintTableSpacingShading(document, fragment, ctx.scale, previous);
   const retained =
     previous &&
     reflowTableFragment(previous, fragment, {

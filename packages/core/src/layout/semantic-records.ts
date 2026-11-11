@@ -746,17 +746,16 @@ export interface TableRowFragmentRecord {
   readonly box: LayoutBox;
 }
 
-/** What a spaced row paints in its gaps: never inside a cell, whose own fill stands. */
+/**
+ * What a spaced row paints in its gaps: never inside a cell, whose own fill stands. Below the
+ * table's last row the band runs on to the bottom of the fragment box, which holds the gap
+ * the table closes there.
+ */
 export interface TableSpacingShading {
   /** Validated `RRGGBB` fill. */
   readonly fill: string;
   /** The gap on each side of the row's cells, in points. */
   readonly gapPt: number;
-  /**
-   * The gap the table closes below this row, in points, when it is the table's last row:
-   * no more than the room left below the row where it was placed.
-   */
-  readonly closingPt?: number;
 }
 
 /**

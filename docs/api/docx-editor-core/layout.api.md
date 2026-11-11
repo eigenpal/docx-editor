@@ -4856,7 +4856,6 @@ export type TableRowHeightRule = 'auto' | 'atLeast' | 'exact';
 
 // @public
 export interface TableSpacingShading {
-    readonly closingPt?: number;
     readonly fill: string;
     readonly gapPt: number;
 }
@@ -4869,7 +4868,7 @@ export interface TableSpacingShadingRegion {
 }
 
 // @public
-export function tableSpacingShadingRegions(fragment: Pick<TableFragmentRecord, 'rows'>): readonly TableSpacingShadingRegion[];
+export function tableSpacingShadingRegions(fragment: Pick<TableFragmentRecord, 'rows' | 'box'>): readonly TableSpacingShadingRegion[];
 
 // @public
 export interface TabStop {

@@ -61,37 +61,50 @@ test('a table without spacing paints no band, and its unshaded cells stay unshad
     expect(cell.style.backgroundColor).toBe('');
 });
 
-test('typing in a shaded spaced table keeps row elements and rebuilds the bands', () => {
+test('typing in a shaded spaced table keeps rows, and bands that paint the same', () => {
   const part = load(
     table(
       Array.from({ length: 6 }, (_, i) => row(`Row${i}`)),
-      SPACING + SHADED
+      // Fixed, so wrapping text grows its own row and leaves the column widths alone.
+      SPACING + SHADED + '<w:tblLayout w:type="fixed"/>'
     )
   );
   const session = createLayoutSession();
   const cache = createParagraphLayoutCache();
   const container = document.createElement('div');
   paintSemanticLayout(container, lay(part, 15, { session, cache }), { scale: 1 });
+  const bandsOf = () => {
+    const fragment = container.querySelector('.docx-table-fragment')!;
+    const bands = Array.from(fragment.querySelectorAll(':scope > .docx-table-spacing-shading'));
+    // The bands stay the leading layer, under every row.
+    bands.forEach((band, index) => expect(fragment.children[index] === band).toBe(true));
+    return bands;
+  };
+  // Identity only: a deep comparison of DOM nodes walks the whole document.
+  const same = (a: Element[], b: Element[]) => a.map((element, index) => element === b[index]);
   const rowsBefore = Array.from(container.querySelectorAll('.docx-table-row'));
-  const bandsBefore = Array.from(container.querySelectorAll('.docx-table-spacing-shading'));
+  const bandsBefore = bandsOf();
   expect(bandsBefore).toHaveLength(6);
   const node = part.root.children
     .find((n) => n.kind === 'body')!
     .children.find((n) => n.kind === 'table')! as OoxmlElement;
   const id = readTableStructure(node, 310, 0)!.rows[2]!.cells[0]!.blocks[0]!.id;
-  const op = applyTreeOp(part, { op: 'insertText', paragraphId: id, offset: 0, text: 'X' });
-  if (!op.ok) throw Error(op.reason);
-  paintSemanticLayout(container, lay(op.part, 15, { session, cache }), { scale: 1 });
+  const edit = (from: typeof part, text: string) => {
+    const op = applyTreeOp(from, { op: 'insertText', paragraphId: id, offset: 0, text });
+    if (!op.ok) throw Error(op.reason);
+    paintSemanticLayout(container, lay(op.part, 15, { session, cache }), { scale: 1 });
+    return op.part;
+  };
+  // One letter changes no geometry: every row and every band element stays.
+  const typed = edit(part, 'X');
   const rowsAfter = Array.from(container.querySelectorAll('.docx-table-row'));
-  expect(rowsAfter[0]).toBe(rowsBefore[0]);
-  expect(rowsAfter[5]).toBe(rowsBefore[5]);
-  const fragment = container.querySelector('.docx-table-fragment')!;
-  const bandsAfter = Array.from(fragment.querySelectorAll(':scope > .docx-table-spacing-shading'));
-  expect(bandsAfter).toHaveLength(6);
-  expect(bandsAfter.some((band) => bandsBefore.includes(band))).toBe(false);
-  // The bands stay the leading layer, under every row.
-  expect(Array.from(fragment.children).slice(0, 6)).toEqual(bandsAfter);
+  expect(rowsAfter[0] === rowsBefore[0] && rowsAfter[5] === rowsBefore[5]).toBe(true);
+  expect(same(bandsOf(), bandsBefore)).toEqual([true, true, true, true, true, true]);
+  // Text that wraps grows its row: the bands above it stay, its own band and those below move.
+  const wrapped = edit(typed, ' and a few more words');
+  const bandsWrapped = bandsOf();
+  expect(same(bandsWrapped, bandsBefore).slice(0, 3)).toEqual([true, true, false]);
   const cold = document.createElement('div');
-  paintSemanticLayout(cold, lay(op.part), { scale: 1 });
+  paintSemanticLayout(cold, lay(wrapped), { scale: 1 });
   expect(container.innerHTML).toBe(cold.innerHTML);
 });
