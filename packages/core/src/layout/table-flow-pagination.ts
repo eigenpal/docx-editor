@@ -25,7 +25,7 @@ import {
   type CellPlaceCursor,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
-import { closingCellSpacingPt, placeClosingCellSpacing } from './table-cell-spacing.ts';
+import { placeClosingCellSpacing } from './table-cell-spacing.ts';
 import { vMergePlanFor } from './table-vmerge-plan.ts';
 import {
   closingEdgePt,
@@ -229,7 +229,7 @@ export function* paginateTableInFlowSteps(
     if (deps.cellContentInsets) occurrenceInsets.set(record, deps.cellContentInsets);
   };
   let wrapsBeside = false;
-  const closeTableFragment = (closingPt = 0): void => {
+  const closeTableFragment = (closingPt?: number): void => {
     bandTop = 0;
     firstFragmentBottom = undefined;
     // Every close is a break or the table's end: rows past it are on another sheet. The end
@@ -984,10 +984,10 @@ export function* paginateTableInFlowSteps(
       breakForContinuation(admitsRepeatedHeaders);
     }
   }
-  const closingPt = placeClosingCellSpacing(flow, structure);
+  const closingPt = placeClosingCellSpacing(flow, structure, outOfFlow);
   const broken = pinnedBreak !== undefined || (textFlow && fragmentIndex > 0);
   wrapsBeside = broken && fragmentIndex > 0 && textTable.leavesPassage(structure, flow, tableLeft);
-  closeTableFragment(outOfFlow ? closingCellSpacingPt(structure) : closingPt);
+  closeTableFragment(closingPt);
   if (outOfFlow) flow.cursorY = bodyCursorY;
   else if (broken)
     flow.cursorY = textTable.resumeAfterBreak(structure, flow, wrapsBeside, fragmentTop);

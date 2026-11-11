@@ -4860,14 +4860,14 @@ export interface TableSpacingShading {
     readonly gapPt: number;
 }
 
-// @public
+// @internal
 export interface TableSpacingShadingRegion {
     readonly box: LayoutBox;
     readonly fill: string;
     readonly holes: readonly LayoutBox[];
 }
 
-// @public
+// @internal
 export function tableSpacingShadingRegions(fragment: Pick<TableFragmentRecord, 'rows' | 'box'>): readonly TableSpacingShadingRegion[];
 
 // @public

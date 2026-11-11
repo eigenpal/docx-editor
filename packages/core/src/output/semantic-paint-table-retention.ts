@@ -5,7 +5,6 @@ import type {
   TableFragmentRecord,
   TableRowFragmentRecord,
 } from '../layout/semantic-records.ts';
-import { TABLE_SPACING_SHADING_CLASS } from './table-spacing-shading-paint.ts';
 import type { ResolvedCellBorders, TableBorderStrokeRecord } from '../layout/table-borders.ts';
 import {
   moveRelativeBox,
@@ -336,24 +335,7 @@ export function reflowTableFragment(
   if (before.box.y !== fragment.box.y) style.top = `${fragment.box.y * scale}px`;
   if (before.box.width !== fragment.box.width) style.width = `${fragment.box.width * scale}px`;
   if (before.box.height !== fragment.box.height) style.height = `${fragment.box.height * scale}px`;
-  const leading = repaint.leading ?? [];
-  const current: Element[] = [];
-  for (const child of element.children) {
-    if (!child.classList.contains(TABLE_SPACING_SHADING_CLASS)) break;
-    current.push(child);
-  }
-  // Bands that paint the same come back as the same elements, so most repaints move nothing.
-  if (current.length !== leading.length || current.some((child, i) => child !== leading[i])) {
-    const kept = new Set<Element>(leading);
-    for (const child of current) if (!kept.has(child)) child.remove();
-    // In order, before the rows; a band already in place stays where it is.
-    let anchor: Element | null = element.firstElementChild;
-    for (const band of leading) {
-      if (band === anchor) anchor = anchor.nextElementSibling;
-      else element.insertBefore(band, anchor);
-    }
-  }
-  reconcileChildren(element, [...rows.values()], leading.length);
+  reconcileChildren(element, [...(repaint.leading ?? []), ...rows.values()], 0);
   tables.set(element, { fragment, rows });
   return element;
 }

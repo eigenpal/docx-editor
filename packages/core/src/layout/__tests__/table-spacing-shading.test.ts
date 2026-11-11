@@ -1,7 +1,8 @@
 // Table-level shading (`w:tblPr/w:shd`) shows only in the cell-spacing gaps. Measured on
 // reference renderings in compatibility modes 14 and 15: an unshaded cell of a shaded table
-// paints white with or without spacing, the gaps take the table's fill, a cell's own fill
-// paints over it, and a row's `w:tblPrEx` fill replaces the table's around that row.
+// shows what lies behind the table, with or without spacing; the gaps take the table's fill,
+// the closing gap below the last row and at each page break included; a cell's own fill
+// paints over it; and a row's `w:tblPrEx` fill replaces the table's around that row.
 
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
@@ -234,4 +235,21 @@ test('a positioned spaced table holds its closing gap, so its last band fills it
   expect(table!.box.y + table!.box.height).toBeCloseTo(last.y + last.height + 10, 6);
   const [region] = tableSpacingShadingRegions(table!);
   expect(region!.box.y + region!.box.height).toBeCloseTo(last.y + last.height + 10, 6);
+});
+
+test('a table broken between rows closes each page with the gap, as the page holds it', () => {
+  const rows = Array.from(
+    { length: 12 },
+    (_, i) => `<w:tr>${cell(`r${i}`)}${cell(`r${i}`)}</w:tr>`
+  );
+  const fragments = layoutTable({ tblPr: SPACING + shd('D9E2F3'), rows, pageHeight: 150 });
+  expect(fragments.length).toBeGreaterThan(1);
+  for (const fragment of fragments) {
+    const last = fragment.rows.at(-1)!.box;
+    const extra = fragment.box.y + fragment.box.height - (last.y + last.height);
+    // The full 10pt gap, or what is left of the page below the last row.
+    expect(extra).toBeCloseTo(Math.min(10, 150 - (last.y + last.height)), 6);
+    const band = tableSpacingShadingRegions(fragment).at(-1)!;
+    expect(band.box.y + band.box.height).toBeCloseTo(fragment.box.y + fragment.box.height, 6);
+  }
 });

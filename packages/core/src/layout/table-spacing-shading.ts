@@ -18,7 +18,8 @@ import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { wmlChildNamed } from '../store/store/tree-op-table-shared.ts';
 import { cascadedShadingFill } from './table-cell-shading.ts';
 import { cellSpacingGapPt } from './table-cell-spacing.ts';
-import { clipParagraphBox } from './paragraph-frame-clip.ts';
+import { clipParagraphBox as clip } from './paragraph-frame-clip.ts';
+import { shareRowFacts } from './table-row-facts.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
 import type {
   LayoutBox,
@@ -27,7 +28,7 @@ import type {
   TableSpacingShading,
 } from './semantic-records.ts';
 
-/** One filled band of a table fragment: `box` minus the cell boxes in `holes`. */
+/** One filled band of a table fragment: `box` minus the cell boxes in `holes`. @internal */
 export interface TableSpacingShadingRegion {
   /** Validated `RRGGBB` fill. */
   readonly fill: string;
@@ -55,19 +56,21 @@ export function withRowSpacingShading(
   const layers = [...input.stylePropertyNodes, input.tableProperties];
   const tableFill = cascadedShadingFill(layers);
   const gapPt = cellSpacingGapPt(cellSpacingPt);
+  // One record for each fill, shared by its rows: most tables have one fill throughout.
+  const shadings = new Map<string, TableSpacingShading>();
   let shaded = false;
   const result = rows.map((row, index) => {
     const exception = input.rowNodes[index] && wmlChildNamed(input.rowNodes[index], 'tblPrEx');
     const fill = exception ? cascadedShadingFill([...layers, exception]) : tableFill;
     if (fill === undefined) return row;
+    let spacingShading = shadings.get(fill);
+    if (!spacingShading) shadings.set(fill, (spacingShading = { fill, gapPt }));
     shaded = true;
-    return { ...row, spacingShading: { fill, gapPt } };
+    // The copy keeps the row's memoized facts: it changes nothing they read.
+    return shareRowFacts(row, { ...row, spacingShading });
   });
   return shaded ? result : rows;
 }
-
-/** `box` cut to `to`, or null when nothing is left. */
-const clip = (box: LayoutBox, to: LayoutBox): LayoutBox | null => clipParagraphBox(box, to);
 
 /**
  * The bands a table fragment fills, one per shaded row, less every cell box that reaches into
@@ -75,7 +78,9 @@ const clip = (box: LayoutBox, to: LayoutBox): LayoutBox | null => clipParagraphB
  * skipped by `w:gridBefore` or `w:gridAfter` take no fill. The last row's band runs on to the
  * bottom of the fragment box, which holds the gap the table closes below its last row. A cell
  * merged down from an earlier row stays a hole in each row it crosses. Each cell is tested
- * only against the rows it can reach.
+ * only against the rows it can reach. Shared by the editor and PDF painters.
+ *
+ * @internal
  */
 export function tableSpacingShadingRegions(
   fragment: Pick<TableFragmentRecord, 'rows' | 'box'>
