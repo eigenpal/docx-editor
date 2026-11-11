@@ -18,6 +18,8 @@
  *   of the same name. Every `w:tblGrid` after the first stays generic.
  * - A paragraph written straight into a row is the first paragraph of the next cell. One after
  *   the last cell shows nowhere, and stays generic where it stands.
+ * - A body, note or text box that ends with a table ends with an empty paragraph after it
+ *   (`ooxml-story-end-repair.ts`).
  * - Text in a `w:t` or `w:delText` loses its leading and trailing white space, and a tab in it
  *   is a space, unless `xml:space="preserve"` is on the element itself or on the part's root.
  *   A line break in any text is a space.
@@ -32,6 +34,7 @@ import {
 } from './ooxml-property-order.ts';
 import { attributesFitKind, isEmptyMarker, repairedRun } from './ooxml-run-repair.ts';
 import { WML_NAMESPACE_URI, validKnownKind } from './ooxml-shared.ts';
+import { storyEndsWithParagraph, withStoryEndParagraph } from './ooxml-story-end-repair.ts';
 import { displayedText, ownXmlSpace } from './ooxml-text-space.ts';
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 
@@ -137,6 +140,7 @@ export function repairedChildren(
   // and the fingerprint all hold the order a save writes. The test is the serializer's, by
   // name: a `w:rPr` under `w:ins` in math stays generic yet still saves in order.
   out = repairedPropertyChildren(opened.name.namespaceUri, opened.name.localName, out);
+  if (storyEndsWithParagraph(kind, opened.name)) return withStoryEndParagraph(out);
   if (kind === 'paragraph') return paragraphChildren(out, id);
   if (kind === 'table') return tableChildren(out);
   if (kind === 'tableRow') return rowChildren(out);

@@ -210,7 +210,8 @@ describe('#190 composition at offset 0 of an empty paragraph', () => {
       caretAt(surface, id, 0);
       compose(container, (scope) => composeIntoLine(scope, id, COMPOSED));
       expect(surface.state().lastRejection).toBeNull();
-      expect(surface.session.bodyText()).toBe(COMPOSED);
+      // The body ends with a table, so it reads an empty paragraph after it.
+      expect(surface.session.bodyText()).toBe(`${COMPOSED}\n`);
     });
   });
 

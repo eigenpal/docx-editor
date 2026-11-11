@@ -96,7 +96,7 @@ await runtime.run(async (context) => {
 | `Paragraph.delete()` | Deletes the paragraph, or proposes deleting it while tracking. |
 | `Range.clear()`, `Range.delete()` | Deletes the range content. |
 
-Cross-cell boundaries, pending revisions, and protected or preserved structures refuse atomically. With `TrackMineOnly`, whole-body replacement with `Body.insertText(text, 'Replace')` fails with `NotSupported` and `edit.tracked-operation-unsupported`; replace a range inside the body instead. In browser suggesting mode, `Body.clear()` and `Body.insertText(text, 'Replace')` on a body with a table fail with `NotSupported` and `edit.tracked-structure-unsupported`, even with runtime tracking off.
+Cross-cell boundaries, pending revisions, and protected or preserved structures refuse atomically. A body, note, or text box that ends with a table has an empty paragraph after the table. `Paragraph.delete()` on that paragraph fails with `NotSupported` and `edit.operation-unsupported`; call `Paragraph.clear()` instead. With `TrackMineOnly`, whole-body replacement with `Body.insertText(text, 'Replace')` fails with `NotSupported` and `edit.tracked-operation-unsupported`; replace a range inside the body instead. In browser suggesting mode, `Body.clear()` and `Body.insertText(text, 'Replace')` on a body with a table fail with `NotSupported` and `edit.tracked-structure-unsupported`, even with runtime tracking off.
 
 For tracked deletion, see [Propose removing paragraphs](/docs/2.x/editor-api/revisions#propose-removing-paragraphs).
 

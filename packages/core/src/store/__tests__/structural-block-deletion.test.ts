@@ -139,8 +139,25 @@ describe('deleteBlock refuses what it would break', () => {
   });
 
   test('removing the last table would leave no paragraph at all', () => {
-    const part = load(TABLE);
+    // A header keeps a final table as written; a body would read a paragraph after it.
+    const read = readOoxmlPart(`<w:hdr xmlns:w="${W}">${TABLE}</w:hdr>`, {
+      name: '/word/header1.xml',
+      contentType: 'app/xml',
+    });
+    if (!read.ok) throw new Error(read.reason);
+    const part = read.part;
     expect(refusal(part, findByKind(part, 'table'))).toBe('block-required');
+  });
+
+  test('the paragraph after a table that ends the body stays, read or authored', () => {
+    const read = load(`${PARAGRAPH('before')}${TABLE}`);
+    expect(refusal(read, idsOfKind(read, 'paragraph').at(-1)!)).toBe('story-end-paragraph');
+    const authored = load(BODY);
+    expect(refusal(authored, idsOfKind(authored, 'paragraph').at(-1)!)).toBe('story-end-paragraph');
+    // The table itself may go: the paragraph then ends the body on its own.
+    expect(
+      applyTreeOp(authored, { op: 'deleteBlock', blockId: findByKind(authored, 'table') }).ok
+    ).toBe(true);
   });
 
   test('a paragraph carrying a section mark stays', () => {

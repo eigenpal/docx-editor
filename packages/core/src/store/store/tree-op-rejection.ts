@@ -43,6 +43,11 @@ export type TreeOpRejection =
   | 'not-a-block'
   | 'block-required'
   | 'carries-section-mark'
+  /**
+   * The removal would leave a body, note or text box ending with a table. Such a story ends
+   * with a paragraph after the table, as a cell does (`ooxml-story-end-repair.ts`).
+   */
+  | 'story-end-paragraph'
   /** The transaction named a part the package does not hold. */
   | 'unknown-part'
   /**

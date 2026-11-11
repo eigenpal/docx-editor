@@ -612,7 +612,7 @@ describe('table row pagination (tiny page)', () => {
     expect(result.pages.length).toBeGreaterThan(1);
     assertNoContentOverflow(result);
     const texts = documentOrder(result).map((id) => paragraphTextFromLayout(result, id));
-    expect(texts).toEqual(Array.from({ length: 30 }, (_, i) => `P${i}`));
+    expect(texts).toEqual([...Array.from({ length: 30 }, (_, i) => `P${i}`), '']);
     // Continuation row records share the authored row id.
     const bodyRows = allTableFragments(result).flatMap((fragment) =>
       fragment.rows.filter((row) => !row.isHeaderRepeat)
@@ -811,7 +811,7 @@ describe('table row pagination (tiny page)', () => {
     // Mode 15: before it the repeat stays (`table-repeat-splittable-row.test.ts`).
     const result = layoutTiny(part, undefined, 15);
     assertNoContentOverflow(result);
-    expect(result.pages).toHaveLength(2);
+    expect(result.pages).toHaveLength(3); // The last holds the body's final empty paragraph.
     const rows = allTableFragments(result).flatMap((fragment) => fragment.rows);
     expect(rows.map(rowCellText)).toEqual(['HEAD', 'body']);
     expect(rows.some((row) => row.isHeaderRepeat)).toBe(false);
@@ -839,7 +839,7 @@ describe('table row pagination (tiny page)', () => {
   test('a later atomic row suppresses a repeat that would leave it no usable page', () => {
     const result = layoutTiny(atomicAfterRepeat(), undefined, 15);
     assertNoContentOverflow(result);
-    expect(result.pages).toHaveLength(2);
+    expect(result.pages).toHaveLength(3); // The last holds the body's final empty paragraph.
     const rows = allTableFragments(result).flatMap((fragment) => fragment.rows);
     expect(rows.map(rowCellText)).toEqual(['HEAD', 'first', 'atomic']);
     expect(rows.some((row) => row.isHeaderRepeat)).toBe(false);
@@ -847,7 +847,7 @@ describe('table row pagination (tiny page)', () => {
   test('before mode 15, a later atomic row keeps the repeat and runs past the margin', () => {
     const result = layoutTiny(atomicAfterRepeat(), undefined, 14);
     const second = allTableFragments(result)[1]!;
-    expect([result.pages.length, ...second.rows.map(rowCellText)]).toEqual([2, 'HEAD', 'atomic']);
+    expect([result.pages.length, ...second.rows.map(rowCellText)]).toEqual([3, 'HEAD', 'atomic']);
     expect(second.rows[0]!.isHeaderRepeat).toBe(true);
     // The 20pt repeat and the whole 65pt exact row end at 85, past the 80pt content box.
     expect(second.rows[1]!.box.y + second.rows[1]!.box.height).toBeCloseTo(85, 6);
@@ -873,7 +873,7 @@ describe('table row pagination (tiny page)', () => {
       'HEAD',
       'nested-0',
       'nested-1',
-      ...Array.from({ length: 8 }, (_, index) => `tail-${index}`),
+      ...Array.from({ length: 8 }, (_, index) => `tail-${index}`).concat(''),
     ]);
   });
 

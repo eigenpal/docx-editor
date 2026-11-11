@@ -163,7 +163,7 @@ describe('inserting text at a position', () => {
     host.execute({
       operations: [{ op: 'insertText', at: { paragraph: cells[1]!, offset: 3 }, text: '!' }],
     });
-    expect(paragraphTexts(host, body)).toEqual(['One', 'Two!']);
+    expect(paragraphTexts(host, body)).toEqual(['One', 'Two!', '']);
   });
 
   test('survives save and reopen', () => {
@@ -318,17 +318,15 @@ describe('replacing a whole story', () => {
     expect(savedMainXml(host)).toContain('<w:sdt>');
   });
 
-  test('refuses a story with no paragraph of its own rather than deleting the only one there is', () => {
-    // A `w:body` whose every block is a table is markup Word does not author — it always keeps a
-    // paragraph after a final table — and emptying it would need a paragraph created at the top
-    // level, which is not in this slice's op vocabulary. Refused whole, with the document intact.
+  test('removes a table that ends the story and keeps the empty paragraph read after it', () => {
     const host = open(docx(table(row(cell(p('One'))))));
     const body = bodyOf(host);
     const response = host.execute({
       operations: [{ op: 'replaceSpan', span: { body }, text: '' }],
     });
-    expect(refusal(response)).toBe('invalid-offset');
-    expect(paragraphTexts(host, body)).toEqual(['One']);
+    expect(response.ok).toBe(true);
+    expect(paragraphTexts(host, body)).toEqual(['']);
+    expect(savedMainXml(host)).not.toContain('<w:tbl>');
   });
 
   test('is one claim on every paragraph in the story, so a second edit in the batch is refused', () => {
@@ -381,7 +379,7 @@ describe('replacing a span that is not the whole story', () => {
     });
     // The canonical mutation path refuses the join; half a deletion is not an outcome.
     expect(refusal(response)).toBe('transaction-refused');
-    expect(paragraphTexts(host, body)).toEqual(['One', 'Two']);
+    expect(paragraphTexts(host, body)).toEqual(['One', 'Two', '']);
   });
 
   test('survives save and reopen', () => {
@@ -485,7 +483,7 @@ describe('inserting a paragraph', () => {
         { op: 'insertParagraph', anchor: { paragraph: cells[0]! }, where: 'after', text: 'More' },
       ],
     });
-    expect(paragraphTexts(host, body)).toEqual(['One', 'More', 'Two']);
+    expect(paragraphTexts(host, body)).toEqual(['One', 'More', 'Two', '']);
   });
 
   test('gets the identity a document writes for itself', () => {
@@ -721,7 +719,7 @@ describe('deleting a paragraph', () => {
     const list = paragraphsOf(host, body);
     const response = host.execute({ operations: [{ op: 'deleteParagraph', paragraph: list[0]! }] });
     expect(refusal(response)).toBe('transaction-refused');
-    expect(paragraphTexts(host, body)).toEqual(['One']);
+    expect(paragraphTexts(host, body)).toEqual(['One', '']);
   });
 
   test('survives save and reopen', () => {

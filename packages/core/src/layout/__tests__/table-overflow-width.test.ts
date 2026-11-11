@@ -53,17 +53,16 @@ for (const layout of ['fixed', 'autofit']) {
       // table with no indent and no table style keeps its outer edge on the text column.
       expect(table.box.x).toBeCloseTo(alignment === 'right' ? x + 0.5 : x, 6);
       expect(table.rows[0]!.cells.map((c) => c.box.width)).toEqual([250.75, 259.55]);
-      const lines = linesOf(result);
+      // The cell's lines; the empty paragraph the body reads after the table comes last.
+      const lines = linesOf(result).slice(0, -1);
       expect(lines).toHaveLength(2);
       expect(lines[0]!.spans.map((s) => s.text).join('')).toBe(text);
       const first = lines[0]!;
       const hit = hitTestPage(
         result,
         0,
-        {
-          x: page.contentBox.x + first.contentX + 2,
-          y: page.contentBox.y + first.box.y + first.box.height / 2,
-        },
+        // Content coordinates, the space the line boxes use.
+        { x: first.contentX + 2, y: first.box.y + first.box.height / 2 },
         { measurer }
       );
       expect(hit?.position?.paragraphId).toBe(first.range.paragraphId);

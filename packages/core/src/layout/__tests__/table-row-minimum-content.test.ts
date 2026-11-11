@@ -140,6 +140,7 @@ test('a continued row keeps the authored minimum on its final fragment', () => {
     'Cell 0',
     'Cell 1',
     'Cell 2',
+    '',
   ]);
 });
 

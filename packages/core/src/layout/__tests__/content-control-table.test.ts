@@ -247,6 +247,7 @@ describe('a cell inside a content control is laid out as a cell', () => {
 });
 
 describe('the paragraphs inside a controlled row or cell stay addressable', () => {
+  // Each body here ends with its table, so the empty paragraph read after it comes last.
   const addressable = (part: OoxmlPart): string[] => {
     const body = bodyStoryRoot(part);
     return (body ? storyParagraphs(body) : []).map((paragraph) => {
@@ -276,7 +277,7 @@ describe('the paragraphs inside a controlled row or cell stay addressable', () =
         sdt('row', `<w:tr>${cell('controlled')}</w:tr>`) +
         `</w:tbl>`
     );
-    expect(addressable(part)).toEqual(['plain', 'controlled']);
+    expect(addressable(part)).toEqual(['plain', 'controlled', '']);
   });
 
   test('a controlled cell contributes its paragraphs to the story', () => {
@@ -285,7 +286,7 @@ describe('the paragraphs inside a controlled row or cell stay addressable', () =
         `<w:tr>${cell('plain')}${sdt('cell', cell('controlled'))}</w:tr>` +
         `</w:tbl>`
     );
-    expect(addressable(part)).toEqual(['plain', 'controlled']);
+    expect(addressable(part)).toEqual(['plain', 'controlled', '']);
   });
 
   test('a controlled cell holding a nested table contributes those too', () => {
@@ -297,6 +298,6 @@ describe('the paragraphs inside a controlled row or cell stay addressable', () =
         `</w:tc></w:sdtContent></w:sdt>` +
         `</w:tr></w:tbl>`
     );
-    expect(addressable(part)).toEqual(['inner', 'after']);
+    expect(addressable(part)).toEqual(['inner', 'after', '']);
   });
 });
