@@ -11,10 +11,17 @@
  * it takes a line. A table cell is not repaired either, since such a file is not opened at all.
  */
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import type { OoxmlPackage } from './ooxml-package.ts';
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 
-/** Wrappers whose children are the story's blocks. Deeper nesting stays as written. */
-const MAX_WRAPPER_DEPTH = 8;
+/**
+ * Wrapper nesting a story walk follows: `MAX_CONTENT_CONTROL_NESTING`, as deep as content
+ * controls are read. The tree read runs this module, so it cannot import that one.
+ */
+const MAX_WRAPPER_DEPTH = 32;
+
+/** The id suffix of the paragraph the read adds after a final table. */
+const STORY_END_SUFFIX = '~end';
 
 /** Whether `node` is the WML element `localName`. */
 export const isWml = (node: OoxmlNode, localName: string): node is OoxmlElement =>
@@ -28,46 +35,57 @@ const STORY_NAMES: ReadonlySet<string> = new Set(['body', 'footnote', 'endnote',
 /** Elements a story block can sit in without leaving the story's own block sequence. */
 const WRAPPER_NAMES: ReadonlySet<string> = new Set(['sdt', 'sdtContent', 'customXml']);
 
-/** A block-level element: one that ends a story when nothing else follows it. */
-const isBlock = (node: OoxmlNode): node is OoxmlElement =>
-  isWml(node, 'p') ||
-  isWml(node, 'tbl') ||
-  isWml(node, 'sdt') ||
-  isWml(node, 'customXml') ||
-  isWml(node, 'altChunk');
+/** Node ids a removal takes away. */
+type Removed = ReadonlySet<string>;
+const NONE: Removed = new Set();
 
-/** The children holding a wrapper's blocks: `w:sdtContent` for a control, else its own. */
-function wrappedBlocks(wrapper: OoxmlElement): readonly OoxmlNode[] | undefined {
+const isWrapper = (node: OoxmlNode): node is OoxmlElement =>
+  isWml(node, 'sdt') || isWml(node, 'customXml');
+
+/** The blocks of a block wrapper: a control's content, or a custom XML element's children. */
+function wrappedBlocks(wrapper: OoxmlElement): readonly OoxmlNode[] {
   if (wrapper.localName === 'customXml') return wrapper.children;
   for (const child of wrapper.children) if (isWml(child, 'sdtContent')) return child.children;
-  return undefined;
+  return [];
 }
 
-/** The index of the last block of `children` other than `without`, or -1. */
-function lastBlockIndex(children: readonly OoxmlNode[], without?: string): number {
+/** Whether `node` is or holds a story block that is not removed. An empty wrapper holds none. */
+function holdsBlock(node: OoxmlNode, depth: number, removed: Removed): boolean {
+  if (node.kind === 'textValue' || removed.has(node.id)) return false;
+  if (isWml(node, 'p') || isWml(node, 'tbl') || isWml(node, 'altChunk')) return true;
+  if (!isWrapper(node) || depth >= MAX_WRAPPER_DEPTH) return false;
+  return wrappedBlocks(node).some((child) => holdsBlock(child, depth + 1, removed));
+}
+
+/** Whether `node` is or holds a story block, so it can end a story. */
+export const holdsStoryBlock = (node: OoxmlNode): boolean => holdsBlock(node, 0, NONE);
+
+/** The index of the last block of `children` that is not removed, or -1. */
+function lastBlockIndex(children: readonly OoxmlNode[], depth: number, removed: Removed): number {
   for (let index = children.length - 1; index >= 0; index -= 1) {
-    const child = children[index]!;
-    if (isBlock(child) && child.id !== without) return index;
+    if (holdsBlock(children[index]!, depth, removed)) return index;
   }
   return -1;
 }
 
-/** Whether the last block of `children`, through block wrappers, is a table. */
-function endsWithTable(children: readonly OoxmlNode[], depth: number, without?: string): boolean {
-  const last = children[lastBlockIndex(children, without)];
-  if (!last || last.kind === 'textValue') return false;
-  if (isWml(last, 'tbl')) return true;
-  if (depth >= MAX_WRAPPER_DEPTH || isWml(last, 'p') || isWml(last, 'altChunk')) return false;
-  const blocks = wrappedBlocks(last);
-  return blocks !== undefined && endsWithTable(blocks, depth + 1, without);
+/** Whether the block `node` is, or ends with, a table, through block wrappers. */
+function blockEndsWithTable(node: OoxmlNode | undefined, depth: number, removed: Removed): boolean {
+  if (!node || node.kind === 'textValue') return false;
+  if (isWml(node, 'tbl')) return true;
+  if (!isWrapper(node)) return false;
+  const blocks = wrappedBlocks(node);
+  return blockEndsWithTable(blocks[lastBlockIndex(blocks, depth + 1, removed)], depth + 1, removed);
 }
 
 /**
  * Whether the story blocks `children` end with a table, through block wrappers. With
- * `without`, the answer is for the same blocks once the node with that id is gone.
+ * `removed`, the answer is for the same blocks once the nodes with those ids are gone.
  */
-export function storyEndsWithTable(children: readonly OoxmlNode[], without?: string): boolean {
-  return endsWithTable(children, 0, without);
+export function storyEndsWithTable(
+  children: readonly OoxmlNode[],
+  removed: Removed = NONE
+): boolean {
+  return blockEndsWithTable(children[lastBlockIndex(children, 0, removed)], 0, removed);
 }
 
 /** Whether the element `name` is a story that must end with a paragraph. */
@@ -79,19 +97,21 @@ export function storyEndsWithParagraph(name: {
 }
 
 /**
- * Whether removing the node `nodeId` leaves a story that ends with a paragraph ending with a
- * table instead. The node may sit in block wrappers at the end of the story. A story that
- * already ends with a table, for example after a merge from another participant, is not
- * refused, so editing it can go on.
+ * Whether removing the nodes `nodeIds` leaves a story that ends with a paragraph ending with
+ * a table instead. The nodes share the story of the first one, possibly in block wrappers at
+ * its end. A story that already ends with a table, for example after a merge from another
+ * participant, is not refused, so editing it can go on.
  */
 export function removalEndsStoryWithTable(
-  nodeId: string,
+  nodeIds: string | readonly string[],
   parentOf: (id: string) => OoxmlElement | null
 ): boolean {
-  let parent = parentOf(nodeId);
+  const removed: Removed = new Set(typeof nodeIds === 'string' ? [nodeIds] : nodeIds);
+  const [first] = removed;
+  let parent = first === undefined ? null : parentOf(first);
   for (let step = 0; parent && step <= 2 * MAX_WRAPPER_DEPTH; step += 1) {
     if (storyEndsWithParagraph(parent)) {
-      return !storyEndsWithTable(parent.children) && storyEndsWithTable(parent.children, nodeId);
+      return !storyEndsWithTable(parent.children) && storyEndsWithTable(parent.children, removed);
     }
     if (parent.namespaceUri !== WML_NAMESPACE_URI || !WRAPPER_NAMES.has(parent.localName)) {
       return false;
@@ -106,11 +126,11 @@ export function removalEndsStoryWithTable(
  * that block is, or ends with, a table. The same children when nothing is missing.
  */
 export function withStoryEndParagraph(children: readonly OoxmlNode[]): readonly OoxmlNode[] {
-  if (!storyEndsWithTable(children)) return children;
-  const index = lastBlockIndex(children);
-  const last = children[index] as OoxmlElement;
+  const index = lastBlockIndex(children, 0, NONE);
+  const last = children[index];
+  if (!last || last.kind === 'textValue' || !blockEndsWithTable(last, 0, NONE)) return children;
   const paragraph = {
-    id: `${last.id}~end`,
+    id: `${last.id}${STORY_END_SUFFIX}`,
     kind: 'paragraph',
     namespaceUri: WML_NAMESPACE_URI,
     localName: 'p',
@@ -120,4 +140,28 @@ export function withStoryEndParagraph(children: readonly OoxmlNode[]): readonly 
     children: [],
   } as OoxmlNode;
   return [...children.slice(0, index + 1), paragraph, ...children.slice(index + 1)];
+}
+
+/**
+ * `pkg` without the paragraph its read added after a table that ends the main body. A
+ * clipboard fragment is a run of blocks, not a story: a table copied alone pastes alone.
+ */
+export function withoutStoryEndParagraph(pkg: OoxmlPackage): OoxmlPackage {
+  const part = pkg.parts.get(pkg.mainDocumentPart);
+  if (!part) return pkg;
+  for (const body of part.root.children) {
+    if (!isWml(body, 'body')) continue;
+    const index = lastBlockIndex(body.children, 0, NONE);
+    const last = body.children[index];
+    if (!last || last.kind !== 'paragraph' || !last.id.endsWith(STORY_END_SUFFIX)) return pkg;
+    const children = body.children.filter((_, at) => at !== index);
+    const root = {
+      ...part.root,
+      children: part.root.children.map((child) => (child === body ? { ...body, children } : child)),
+    } as OoxmlElement;
+    const parts = new Map(pkg.parts);
+    parts.set(pkg.mainDocumentPart, { ...part, root });
+    return { ...pkg, parts };
+  }
+  return pkg;
 }

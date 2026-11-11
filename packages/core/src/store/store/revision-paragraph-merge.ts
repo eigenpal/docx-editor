@@ -140,6 +140,7 @@ export function mergeRevisionParagraphs(
         blocks.length > 1 &&
         node.children.every((child) => properties(child) || emptyRun(child)) &&
         ((DROPS_LAST_PARAGRAPH.has(container) &&
+          !endsAfterTable(children, index) &&
           // A custom XML block every paragraph of which goes keeps its last one here, so the
           // block around it goes whole rather than staying hollow.
           (container !== 'customXml' || keepsAParagraph)) ||
@@ -379,6 +380,18 @@ const NO_PARAGRAPHS: ReadonlyMap<string, boolean> = new Map();
 
 /** Containers whose emptied last paragraph goes with its content. */
 const DROPS_LAST_PARAGRAPH: ReadonlySet<string> = new Set(['txbxContent', 'customXml']);
+
+/**
+ * Whether the paragraph at `index` is the last block of `children` and follows a table. It
+ * stays: a story ends with a paragraph after a table (`ooxml-story-end-repair.ts`).
+ */
+function endsAfterTable(children: readonly OoxmlNode[], index: number): boolean {
+  const isBlock = (node: OoxmlNode) => node.kind === 'paragraph' || node.kind === 'table';
+  if (children.slice(index + 1).some(isBlock)) return false;
+  for (let at = index - 1; at >= 0; at -= 1)
+    if (isBlock(children[at]!)) return children[at]!.kind === 'table';
+  return false;
+}
 
 /** A child a joined paragraph carries that is content: not properties, a marker, or empty. */
 const bringsContent = (node: OoxmlNode) =>

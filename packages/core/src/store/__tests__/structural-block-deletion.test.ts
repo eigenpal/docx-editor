@@ -171,6 +171,14 @@ describe('deleteBlock refuses what it would break', () => {
       applyTreeOp(trailing, { op: 'removeContentControl', controlId, keepContent });
     expect(removed(false)).toMatchObject({ ok: false, reason: 'story-end-paragraph' });
     expect(removed(true).ok).toBe(true);
+    // A control left empty, or holding only markers, does not end the story.
+    const only = load(`${PARAGRAPH('before')}${TABLE}${sdt(PARAGRAPH('in'))}`);
+    expect(refusal(only, idsOfKind(only, 'paragraph').at(-1)!)).toBe('story-end-paragraph');
+    const marks = load(`${PARAGRAPH('a')}${TABLE}${sdt('<w:bookmarkStart w:id="1" w:name="m"/>')}`);
+    // The read adds the paragraph after the table, before the marker-only control.
+    expect(idsOfKind(marks, 'paragraph')).toHaveLength(6);
+    const last = idsOfKind(marks, 'paragraph').at(-1)!;
+    expect(refusal(marks, last)).toBe('story-end-paragraph');
   });
 
   test('a paragraph carrying a section mark stays', () => {

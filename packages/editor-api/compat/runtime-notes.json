@@ -669,7 +669,7 @@
   },
   "Word.ContentControl#delete": {
     "status": "partial",
-    "notes": "With keepContent=true removes the wrapper while preserving its contents; false removes both. Protected, bound, or unsupported control structures refuse atomically. Inserting a control or paragraph inside a control and deleting that control with keepContent=false in one batch refuses with ConflictingChanges before writing. Deleting nested controls in one batch succeeds."
+    "notes": "With keepContent=true removes the wrapper while preserving its contents; false removes both. Protected, bound, or unsupported control structures refuse atomically. A block control that follows a table at the end of a body, note, or text box refuses keepContent=false with NotSupported (edit.operation-unsupported), because the story keeps a paragraph after the table. Inserting a control or paragraph inside a control and deleting that control with keepContent=false in one batch refuses with ConflictingChanges before writing. Deleting nested controls in one batch succeeds."
   },
   "Word.ContentControl#cannotEdit": {
     "status": "partial",

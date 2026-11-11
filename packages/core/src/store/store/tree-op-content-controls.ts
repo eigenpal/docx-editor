@@ -53,7 +53,7 @@ import {
 } from '../package/ooxml-edit.ts';
 import { W14_NAMESPACE_URI, WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import { isValidXmlText } from '../package/sinks.ts';
-import { removalEndsStoryWithTable } from '../package/ooxml-story-end-repair.ts';
+import { holdsStoryBlock, removalEndsStoryWithTable } from '../package/ooxml-story-end-repair.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import {
   TEXT_DEPS,
@@ -1665,8 +1665,11 @@ export function applyRemoveContentControl(
   const content = contentControlContentNodeOf(control);
   const kept = op.keepContent && content ? [...content.children] : [];
   // A story that ends with a paragraph keeps it: a whole control after a final table goes only
-  // with its content kept (`ooxml-story-end-repair.ts`).
-  if (kept.length === 0 && removalEndsStoryWithTable(control.id, (id) => parentNodeOf(part, id))) {
+  // with block content kept (`ooxml-story-end-repair.ts`).
+  if (
+    !kept.some(holdsStoryBlock) &&
+    removalEndsStoryWithTable(control.id, (id) => parentNodeOf(part, id))
+  ) {
     return { ok: false, reason: 'story-end-paragraph' };
   }
   const children = owner.children.flatMap((child) => (child.id === control.id ? kept : [child]));
