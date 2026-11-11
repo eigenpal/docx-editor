@@ -181,9 +181,8 @@ describe('a deletion names its characters', () => {
     });
   });
 
-  test('a range across more than one break, or into another story, deletes one step', () => {
-    // Only the break between neighbouring paragraphs is a count the story order vouches for.
-    // Painted between two body paragraphs can be a footer and a header.
+  test('a range across several breaks deletes every break and character it names', () => {
+    // Followed back through the story order: a held Backspace through whole paragraphs.
     withSurface(p('First') + p('Middle') + p('Last'), (surface, container, [first, , last]) => {
       caretAt(surface, last!, 0);
       deleteEvent(
@@ -193,9 +192,23 @@ describe('a deletion names its characters', () => {
         at(container, last!, 0)
       );
       const ids = surface.session.paragraphIds();
-      expect(ids).toHaveLength(2);
-      expect(textOf(surface, ids[0]!)).toBe('First');
-      expect(textOf(surface, ids[1]!)).toBe('MiddleLast');
+      expect(ids).toHaveLength(1);
+      expect(textOf(surface, ids[0]!)).toBe('FiLast');
+    });
+  });
+
+  test('an empty paragraph in the range is one more break', () => {
+    withSurface(p('First') + '<w:p/>' + p('Last'), (surface, container, [first, , last]) => {
+      caretAt(surface, last!, 0);
+      deleteEvent(
+        container,
+        'deleteContentBackward',
+        at(container, first!, 5),
+        at(container, last!, 0)
+      );
+      const ids = surface.session.paragraphIds();
+      expect(ids).toHaveLength(1);
+      expect(textOf(surface, ids[0]!)).toBe('FirstLast');
     });
   });
 

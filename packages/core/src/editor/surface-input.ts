@@ -558,8 +558,9 @@ export function createBeforeInputHandler(
       step.call(surface);
     } else {
       const run = () => step.call(surface);
+      // Without the hook, one step: the planner that counts is the same lane that runs them.
       if (hooks.runDeletionSteps) hooks.runDeletionSteps(plan.count, run);
-      else for (let index = 0; index < plan.count; index += 1) run();
+      else run();
     }
     hooks.onInputMethodDeletion?.();
   };

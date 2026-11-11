@@ -722,7 +722,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
         inputMethodEchoUntil = Number.NEGATIVE_INFINITY;
     },
 
-    browserSelectionTrusted: () => !inputMethodEchoing(),
+    browserSelectionTrusted: () => !inputMethodEchoing() || gestureSinceInputMethodEdit,
 
     onSelectionChange: (): void => {
       // Ignore the echo of our own write, and anything happening outside the pages. The flag

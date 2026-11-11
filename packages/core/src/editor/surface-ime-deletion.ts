@@ -62,7 +62,7 @@ export interface ImeDeletionContext {
   previousParagraph(paragraphId: string): string | undefined;
   /** False while an input method may still be correcting the browser's selection. */
   readonly browserSelectionTrusted: boolean;
-  /** Whether the painted DOM shows the model's revision, not a paint deferred behind it. */
+  /** Whether the painted DOM shows the model's revision, with no typing still queued. */
   readonly paintCurrent: boolean;
 }
 
@@ -70,11 +70,14 @@ function samePosition(a: SemanticPosition, b: SemanticPosition): boolean {
   return a.paragraphId === b.paragraphId && a.offset === b.offset;
 }
 
+/** The most paragraph breaks one range is followed back through, in story order. */
+const MAX_BREAKS = 64;
+
 /**
- * How many single steps `[start, end)` holds: one per UTF-16 unit, the unit one Backspace
- * removes, and one for the break between two NEIGHBOURING paragraphs, which one Backspace
- * joins. Anything wider — two breaks, a range into a header or a note — is not a count the
- * story order can vouch for, and is not counted.
+ * How many single steps `[start, end)` holds in the model: one per UTF-16 unit, the unit one
+ * Backspace removes, and one per paragraph break between them, which one Backspace joins. The
+ * paragraphs are followed back through the story order, so a range whose start is not in the
+ * same story before its end (a header painted between two pages, a note) is not counted.
  */
 function stepsBetween(
   start: SemanticPosition,
@@ -82,18 +85,30 @@ function stepsBetween(
   context: ImeDeletionContext
 ): number | null {
   if (start.paragraphId === end.paragraphId) return end.offset - start.offset;
-  if (context.previousParagraph(end.paragraphId) !== start.paragraphId) return null;
-  return context.textOf(start.paragraphId).length - start.offset + 1 + end.offset;
+  let steps = end.offset;
+  let paragraph = end.paragraphId;
+  for (let breaks = 0; breaks < MAX_BREAKS; breaks += 1) {
+    const previous = context.previousParagraph(paragraph);
+    if (previous === undefined) return null;
+    steps += 1;
+    if (previous === start.paragraphId)
+      return steps + context.textOf(previous).length - start.offset;
+    steps += context.textOf(previous).length;
+    paragraph = previous;
+  }
+  return null;
 }
 
-/** `NodeFilter.SHOW_TEXT`, as a number: the constructor belongs to whichever window. */
-const SHOW_TEXT = 0x4;
+/** `NodeFilter.SHOW_ELEMENT | SHOW_TEXT`, as a number: the constructor is per window. */
+const SHOW_ELEMENT_AND_TEXT = 0x1 | 0x4;
 
 /**
  * The document characters the range paints, or null when it cannot be read. Model offsets
  * also count what never paints — a hidden run, a struck revision a resolved view hides — and
  * the keyboard cannot have meant those: it names what it was shown. Furniture glyphs inside
- * the range (a tab leader's dots, a picture's label) are not document characters either.
+ * the range (a tab leader's dots, a picture's label) are not document characters either. A
+ * painted line break is: a paragraph end (and an empty paragraph's line) paints one `<br>`,
+ * and a break a resolved view merged away paints none.
  */
 function paintedLength(range: StaticRange): number | null {
   const doc = range.startContainer.ownerDocument;
@@ -109,10 +124,14 @@ function paintedLength(range: StaticRange): number | null {
   const common = live.commonAncestorContainer;
   const scope = common.nodeType === Node.ELEMENT_NODE ? common : common.parentNode;
   if (!scope) return null;
-  const walker = doc.createTreeWalker(scope, SHOW_TEXT);
+  const walker = doc.createTreeWalker(scope, SHOW_ELEMENT_AND_TEXT);
   let length = 0;
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     if (!live.intersectsNode(node)) continue;
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      if ((node as Element).localName === 'br') length += 1;
+      continue;
+    }
     if (node.parentElement?.closest(PAINTED_FURNITURE)) continue;
     const text = node as Text;
     const from = node === live.startContainer ? live.startOffset : 0;
@@ -150,26 +169,21 @@ export function imeDeletionPlan(
   const shown = semanticSelectionFromDom(root, root.ownerDocument.getSelection());
   const atBrowserCaret =
     shown !== null && samePosition(shown.anchor, shown.head) && samePosition(shown.head, anchor);
-  // The browser can select the range it is about to delete before it says so: it is then the
-  // browser's selection, and still the keyboard's batched presses.
+  if (samePosition(anchor, selection.head) || atBrowserCaret) {
+    const steps = stepsBetween(start, end, context);
+    const painted = paintedLength(range);
+    if (steps === null || painted === null) return ONE_STEP;
+    const count = Math.min(steps, painted, MAX_IME_DELETION_STEPS);
+    return count < 1 ? ONE_STEP : { kind: 'steps', count };
+  }
+  // A selection read from a paint behind the model names offsets that have since moved.
+  // The browser can select the range it deletes before it says so, and a keyboard can select a
+  // word to delete it. Either way it is the browser's selection. Read from a paint behind the
+  // model, or ahead of typing still queued, its offsets would name the wrong characters.
   const rangeShown =
     shown !== null &&
     !samePosition(shown.anchor, shown.head) &&
     selectionsEqual(ordered(shown, start), { anchor: start, head: end });
-  if (
-    samePosition(anchor, selection.head) ||
-    atBrowserCaret ||
-    (rangeShown && !context.paintCurrent)
-  ) {
-    const steps = stepsBetween(start, end, context);
-    const painted = paintedLength(range);
-    if (steps === null || painted === null) return ONE_STEP;
-    // A break paints nothing; it is the one step a join takes.
-    const shownSteps = painted + (start.paragraphId === end.paragraphId ? 0 : 1);
-    const count = Math.min(steps, shownSteps, MAX_IME_DELETION_STEPS);
-    return count < 1 ? ONE_STEP : { kind: 'steps', count };
-  }
-  // A selection read from a paint behind the model names offsets that have since moved.
   if (rangeShown && context.browserSelectionTrusted && context.paintCurrent)
     return { kind: 'selection', selection: shown! };
   return ONE_STEP;
@@ -205,8 +219,13 @@ export function createInputMethodLane(deps: {
   paragraphOrder(): readonly string[];
   /** The document's edit clock. */
   revision(): number;
-  /** Whether the painted DOM shows the model's revision. */
+  /** Whether the painted DOM shows the model's revision, with no typing still queued. */
   paintCurrent(): boolean;
+  /**
+   * Land any paint the deletion deferred, so the next event of a held Backspace maps its
+   * range through a page that shows the model.
+   */
+  flushToPaint(): void;
   render(notifyChange: boolean): void;
   readonly timers: HostTimers;
   readonly sync: Pick<SurfaceSelectionSync, 'browserSelectionTrusted' | 'noteInputMethodEdit'>;
@@ -238,7 +257,10 @@ export function createInputMethodLane(deps: {
         ),
       runDeletionSteps: (count, step) =>
         runDeletionSteps(deps.revision, deps.selection, count, step),
-      onInputMethodDeletion: () => deps.sync.noteInputMethodEdit(),
+      onInputMethodDeletion: () => {
+        deps.flushToPaint();
+        deps.sync.noteInputMethodEdit();
+      },
     },
     repair: createBrowserMutationRepair(deps),
   };
