@@ -30,11 +30,21 @@ export function insertParityChart(editor: DocxEditorInstance, type: string): voi
  * value is a DOM property in both adapters).
  */
 export function normalizeChartPaneMarkup(html: string): string {
-  return html
+  return withoutComments(html)
     .replace(/\s(id|for|aria-describedby|aria-controls|value|checked|selected)="[^"]*"/g, '')
     .replace(/\sdata-v-[a-z0-9]+(="[^"]*")?/g, '')
-    .replace(/<!--[^]*?-->/g, '')
     .replace(/>\s+</g, '><')
     .replace(/="(true|false)"/g, '="$1"')
     .trim();
+}
+
+/** Removes HTML comments, repeating until none remain so a removal cannot form a new one. */
+function withoutComments(html: string): string {
+  let previous: string;
+  let current = html;
+  do {
+    previous = current;
+    current = current.replace(/<!--[^]*?-->/g, '');
+  } while (current !== previous);
+  return current;
 }

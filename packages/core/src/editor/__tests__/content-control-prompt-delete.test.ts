@@ -113,6 +113,17 @@ async function savedXml(editor: ReturnType<typeof mount>): Promise<string> {
 }
 const struck = (xml: string) => xml.match(/<w:delText[^>]*>[^<]*<\/w:delText>/g) ?? [];
 
+/** Removes markup tags, repeating until none remain so a removal cannot form a new tag. */
+function stripTags(xml: string): string {
+  let previous: string;
+  let current = xml;
+  do {
+    previous = current;
+    current = current.replace(/<[^>]+>/g, '');
+  } while (current !== previous);
+  return current;
+}
+
 const presses: readonly [string, number, (surface: PaginatedSurface) => void][] = [
   ['Delete at the start of the prompt', 2, (surface) => surface.deleteForward()],
   ['Backspace at the end of the prompt', 27, (surface) => surface.deleteBackward()],
@@ -338,7 +349,7 @@ test('in suggesting mode a cut over part of a prompt proposes the control with t
   surface.deleteSelection();
   const xml = await savedXml(editor);
   expect(xml).toMatch(/<w:del [^>]*>(?:(?!<\/w:del>).)*<w:sdt>/);
-  expect(struck(xml).map((each) => each.replace(/<[^>]+>/g, ''))).toEqual(['A ', PROMPT]);
+  expect(struck(xml).map(stripTags)).toEqual(['A ', PROMPT]);
 });
 
 test('a scripted deletion inside a prompt is applied, not dropped', () => {

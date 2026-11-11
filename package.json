@@ -187,7 +187,7 @@
     "autoprefixer": "^10.6.2",
     "class-variance-authority": "^0.7.0",
     "cssnano": "^9.9.0",
-    "fast-xml-parser": "5.11.2",
+    "fast-xml-parser": "5.12.0",
     "fflate": "^0.8.3",
     "husky": "^9.1.7",
     "jszip": "^3.10.2",

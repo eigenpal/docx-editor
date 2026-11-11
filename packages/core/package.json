@@ -111,7 +111,7 @@
     "@docx-editor.dev/i18n": "^2.36.0",
     "bidi-js": "1.1.0",
     "emf-converter": "4.28.0",
-    "fast-xml-parser": "^5.10.1",
+    "fast-xml-parser": "^5.12.0",
     "fflate": "^0.8.2",
     "harfbuzzjs": "1.6.4",
     "prosemirror-commands": "^1.7.1",
