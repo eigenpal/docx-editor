@@ -70,9 +70,6 @@ Set `content`, then call `context.sync()` to commit the replacement. The same pr
 ```ts
 await runtime.run(async (context) => {
   const comment = context.document.comments.getFirst();
-  comment.load(['authorName', 'content']);
-  await context.sync();
-
   comment.content = 'The payment deadline is 30 days.';
   await context.sync();
 

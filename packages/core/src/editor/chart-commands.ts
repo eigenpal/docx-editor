@@ -14,7 +14,7 @@ import type {
 } from '../contracts/chart.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
-import { chartTargetIn } from '../store/store/tree-package-charts.ts';
+import { chartContentRefusal, chartTargetIn } from '../store/store/tree-package-charts.ts';
 import {
   chartDataEdit,
   chartEditable,
@@ -87,12 +87,18 @@ export function createChartStateCache(): (
     }
     const data = chartEditable(chart.target);
     const format = readChartFormatOf(chart.target);
+    const blocked = chartContentRefusal(
+      surface!.session.currentPackage(),
+      chart.target.ownerPart,
+      chart.drawingNodeId
+    );
+    const reason = chartContentReason(blocked);
     const next: SelectedChartState = {
       drawingNodeId: chart.drawingNodeId,
-      editable: data.editable,
-      ...(data.reason ? { reason: data.reason } : {}),
-      formattable: format.ok,
-      ...(format.ok ? {} : { formatReason: format.reason }),
+      editable: !blocked && data.editable,
+      ...(reason || data.reason ? { reason: reason ?? data.reason } : {}),
+      formattable: !blocked && format.ok,
+      ...(reason ? { formatReason: reason } : format.ok ? {} : { formatReason: format.reason }),
       version,
     };
     if (
@@ -130,6 +136,34 @@ export function chartFormatOf(
 }
 
 const english = createT(en);
+
+function chartContentReason(reason: string | null): string | null {
+  if (reason === 'locked') return 'this content is locked';
+  if (reason === 'bound') return 'this content is bound to data and cannot change';
+  return null;
+}
+
+/** Keep command availability aligned with the package write's content protection. */
+export function chartCommandContentRefusal(
+  surface: PaginatedSurface,
+  command: EditorCommand
+): Exclude<ExecResult, { ok: true }> | null {
+  if (!isChartCommand(command) || command.type === 'insertChart') return null;
+  const chart = selectedChart(surface, command.drawingNodeId);
+  if (!chart) return null;
+  const blocked = chartContentRefusal(
+    surface.session.currentPackage(),
+    chart.target.ownerPart,
+    chart.drawingNodeId
+  );
+  return blocked
+    ? {
+        ok: false,
+        code: blocked === 'locked' ? 'locked' : 'unsupported',
+        reason: chartContentReason(blocked)!,
+      }
+    : null;
+}
 
 /** A translation, or the English one when the host has none for `key`. */
 function translated(
@@ -171,8 +205,15 @@ function resultOf(
   const reason = outcome.detail ?? outcome.reason;
   return {
     ok: false,
-    code: reason.startsWith('chart.errors.') ? 'invalidArgs' : 'unsupported',
-    reason: reason || surface.state().lastRejection || 'the chart edit was refused',
+    code:
+      reason === 'locked'
+        ? 'locked'
+        : reason.startsWith('chart.errors.')
+          ? 'invalidArgs'
+          : 'unsupported',
+    reason:
+      chartContentReason(reason) ??
+      (reason || surface.state().lastRejection || 'the chart edit was refused'),
   };
 }
 

@@ -33,6 +33,7 @@ import { classifyCommand } from './docx-editor-support.ts';
 import { NO_COPIED_FORMATTING } from './surface-format-painter-contract.ts';
 import { gateImageCommand, resolveSelectedDrawingRecord } from './docx-editor-images.ts';
 import { chartTargetIn } from '../store/store/tree-package-charts.ts';
+import { chartCommandContentRefusal } from './chart-commands.ts';
 
 /** Whether a command may run, and the engine's own refusal when it may not. */
 export type CommandGate =
@@ -355,6 +356,8 @@ export function gateCommand(
   }
   const protection = support.mutating ? commandProtectionRefusal(command, surface) : null;
   if (protection) return { ok: false, refusal: protection };
+  const chartProtection = chartCommandContentRefusal(surface, command);
+  if (chartProtection) return { ok: false, refusal: chartProtection };
   const locked = contentLockFormatRefusal(command, surface, contentLockPolicyFor(surface));
   if (locked) return { ok: false, refusal: locked };
   const paragraphLocked = paragraphFormatLockRefusal(

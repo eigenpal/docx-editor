@@ -768,7 +768,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'premium',
     docsLink: '/docs/2.x/guides/charts',
     notes:
-      'You can insert seven chart types, resize, move, and wrap them, and edit their data and format in the Chart pane. The drawing module paints charts and requires the EigenPal Pro License. You can copy and paste one chart within the page; external data loading is unavailable.',
+      'Insert charts and edit their data, format, size, position, and wrapping through commands or the Chart pane. The drawing module paints charts and requires the EigenPal Pro License. Content locks and data bindings prevent chart edits; clipboard transfer stays within one browser page.',
   },
   {
     id: 'images.newer-charts',

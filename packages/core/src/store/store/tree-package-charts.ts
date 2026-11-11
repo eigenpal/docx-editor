@@ -27,6 +27,19 @@ import { ChartRefusal } from '../package/chart-edit/tree.ts';
 import type { OoxmlDrawingNode, OoxmlElement } from '../package/ooxml-tree.ts';
 import type { TreeDocOp } from './tree-op-types.ts';
 import type { ChartType, NewChartData } from '../package/chart-edit/types.ts';
+import { effectiveContentLockAt, isBoundAt } from './tree-op-nodes.ts';
+
+/** Chart part writes must respect the control that owns their drawing. */
+export function chartContentRefusal(
+  pkg: OoxmlPackage,
+  ownerPart: string,
+  drawingNodeId: string
+): 'locked' | 'bound' | null {
+  const part = pkg.parts.get(ownerPart);
+  if (!part) return null;
+  if (effectiveContentLockAt(part, drawingNodeId).content) return 'locked';
+  return isBoundAt(part, drawingNodeId) ? 'bound' : null;
+}
 
 /** The result of a chart lane: the store's result, or a chart refusal key. */
 export type ChartIntentResult =
@@ -138,6 +151,11 @@ export function editChart(
         const pkg = store.currentPackage();
         const target = chartTargetIn(pkg, owner, drawingNodeId);
         if (!target) throw new ChartRefusal('chart.errors.noChart');
+        const blocked = chartContentRefusal(pkg, owner, drawingNodeId);
+        if (blocked) {
+          refusal = { ok: false, reason: blocked };
+          return null;
+        }
         const change = edit(pkg, target);
         let next = withChartSpace(pkg, target.part, change.chartSpace);
         if (change.workbook)

@@ -2,7 +2,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import { CHART_TYPES } from '../../store/package/chart-edit/type.ts';
@@ -243,3 +243,74 @@ describe('chart commands', () => {
     expect(chartPaneAvailable(null)).toBe(false);
   });
 });
+
+for (const [properties, blocked] of [
+  ['<w:lock w:val="contentLocked"/>', true],
+  ['<w:lock w:val="sdtContentLocked"/>', true],
+  [
+    '<w:dataBinding w:storeItemID="{11111111-1111-1111-1111-111111111111}" w:xpath="/chart"/>',
+    true,
+  ],
+  ['<w:lock w:val="sdtLocked"/>', false],
+] as const) {
+  test(`chart edits respect control properties: ${properties}`, async () => {
+    const source = mount();
+    expect(source.exec({ type: 'insertChart', chartType: 'columnClustered' }).ok).toBe(true);
+    const entries = unzipSync(new Uint8Array(await source.save()));
+    source.destroy();
+    const xml = strFromU8(entries['word/document.xml']!);
+    entries['word/document.xml'] = strToU8(
+      xml.replace(
+        /(<w:p[ >][\s\S]*?<\/w:p>)/,
+        `<w:sdt><w:sdtPr>${properties}</w:sdtPr><w:sdtContent>$1</w:sdtContent></w:sdt>`
+      )
+    );
+    const editor = mount(zipSync(entries));
+    try {
+      const surface = editor.surface!;
+      const paragraphId = surface.session.paragraphIds()[0]!;
+      const drawingId = surface.session.part().root.children.flatMap(function walk(node): string[] {
+        if (node.kind === 'textValue') return [];
+        return [...(node.kind === 'drawing' ? [node.id] : []), ...node.children.flatMap(walk)];
+      })[0]!;
+      expect(drawingId).toBeDefined();
+      surface.selectDrawing(drawingId, paragraphId);
+      expect(editor.snapshot().chart).toMatchObject({ editable: !blocked, formattable: !blocked });
+      if (blocked) {
+        const before = surface.session.currentPackage();
+        let called = false;
+        expect(
+          surface.editChart(drawingId, (_pkg, target) => {
+            called = true;
+            return { chartSpace: target.chartSpace };
+          }).ok
+        ).toBe(false);
+        expect(called).toBe(false);
+        expect(surface.session.currentPackage()).toBe(before);
+      }
+      const read = editor.query({ type: 'chartData', drawingNodeId: drawingId });
+      if (!read.ok) throw new Error(read.reason);
+      const commands: Parameters<typeof editor.exec>[0][] = [
+        { type: 'setChartFormat', drawingNodeId: drawingId, format: { title: 'Changed' } },
+        { type: 'setChartColor', drawingNodeId: drawingId, index: 0, color: '#FF0000' },
+        { type: 'setChartType', drawingNodeId: drawingId, chartType: 'line' },
+        {
+          type: 'setChartData',
+          drawingNodeId: drawingId,
+          data: {
+            ...read.data,
+            series: read.data.series.map((series) => ({ ...series, name: 'Changed' })),
+          },
+        },
+      ];
+      for (const command of commands) {
+        const before = surface.session.currentPackage();
+        expect(editor.can(command).ok).toBe(!blocked);
+        expect(editor.exec(command).ok).toBe(!blocked);
+        if (blocked) expect(surface.session.currentPackage()).toBe(before);
+      }
+    } finally {
+      editor.destroy();
+    }
+  });
+}
