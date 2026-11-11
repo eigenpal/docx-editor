@@ -701,7 +701,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
     const ops: TreeDocOp[] = [];
     // Reading order, so the text lands in the first paragraph the story still has.
-    const kept: string[] = (keeper ? [keeper.id] : [...survivors]).sort(
+    const kept: string[] = [...(keeper ? [keeper.id] : []), ...survivors].sort(
       (a, b) => reads.indexOf(a) - reads.indexOf(b)
     );
     const target = kept[0] as string;

@@ -123,14 +123,18 @@ export function removalEndsStoryWithTable(
 
 /**
  * `children` of a story, with an empty paragraph right after the block that ends it when
- * that block is, or ends with, a table. The same children when nothing is missing.
+ * that block is, or ends with, a table. The same children when nothing is missing. An edit
+ * passes the new paragraph's `id`; a read derives it from the block before.
  */
-export function withStoryEndParagraph(children: readonly OoxmlNode[]): readonly OoxmlNode[] {
+export function withStoryEndParagraph(
+  children: readonly OoxmlNode[],
+  id?: () => string
+): readonly OoxmlNode[] {
   const index = lastBlockIndex(children, 0, NONE);
   const last = children[index];
   if (!last || last.kind === 'textValue' || !blockEndsWithTable(last, 0, NONE)) return children;
   const paragraph = {
-    id: `${last.id}${STORY_END_SUFFIX}`,
+    id: id ? id() : `${last.id}${STORY_END_SUFFIX}`,
     kind: 'paragraph',
     namespaceUri: WML_NAMESPACE_URI,
     localName: 'p',

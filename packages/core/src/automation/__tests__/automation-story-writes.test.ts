@@ -337,6 +337,8 @@ describe('replacing a whole story', () => {
     });
     expect(response.ok).toBe(true);
     expect(savedMainXml(host)).toMatch(/<\/w:sdt><w:p[ />]/);
+    // The cell is cleared and holds the text; the paragraph after the control stays empty.
+    expect(paragraphTexts(host, body)).toEqual(['new', '']);
   });
 
   test('is one claim on every paragraph in the story, so a second edit in the batch is refused', () => {

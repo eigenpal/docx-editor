@@ -1,7 +1,11 @@
 import { isContentControl } from '../package/content-control-walk.ts';
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '../package/ooxml-tree.ts';
 import { tableChildren } from './revision-table-children.ts';
-import { storyEndsWithTable } from '../package/ooxml-story-end-repair.ts';
+import {
+  storyEndsWithParagraph,
+  storyEndsWithTable,
+  withStoryEndParagraph,
+} from '../package/ooxml-story-end-repair.ts';
 import { isInertMarker } from './revision-marker-content.ts';
 import { ooxmlTreesEqual } from '../package/ooxml-serialize.ts';
 import { contentWithText, editedProperties } from './tree-op-content-controls.ts';
@@ -92,8 +96,25 @@ function replaceIn(node: OoxmlNode, target: OoxmlElement): OoxmlNode {
     : node;
 }
 
-/** Merge after rebuilding: a removed table/row cannot receive or swallow carried text. */
+/**
+ * Merge after rebuilding: a removed table/row cannot receive or swallow carried text. A
+ * decision never leaves a body, note, or text box ending with a table: the story then gets an
+ * empty paragraph after it, as a read gives it (`ooxml-story-end-repair.ts`).
+ */
 export function mergeRevisionParagraphs(
+  children: OoxmlNode[],
+  marks: ReadonlySet<string>,
+  mint: () => string,
+  cell = false,
+  container = '',
+  keepsFirst: ReadonlyMap<string, boolean> = NO_PARAGRAPHS
+): OoxmlNode[] {
+  const merged = mergedParagraphs(children, marks, mint, cell, container, keepsFirst);
+  const story = storyEndsWithParagraph({ namespaceUri: WML_NAMESPACE_URI, localName: container });
+  return story && storyEndsWithTable(merged) ? [...withStoryEndParagraph(merged, mint)] : merged;
+}
+
+function mergedParagraphs(
   children: OoxmlNode[],
   marks: ReadonlySet<string>,
   mint: () => string,

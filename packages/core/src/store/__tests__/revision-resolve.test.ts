@@ -6,6 +6,7 @@
 // removing their markup and reporting success.
 
 import { describe, expect, test } from 'bun:test';
+import { storyEndsWithTable } from '../package/ooxml-story-end-repair.ts';
 import {
   applyTreeOp,
   readOoxmlPart,
@@ -525,6 +526,31 @@ describe('a text box that ends with a table', () => {
       expect(out).toMatch(/<\/w:(tbl|sdt)><w:p[ />][\s\S]*<\/w:txbxContent>/);
     }
   });
+});
+
+describe('a body that a decision would leave ending with a table', () => {
+  const mark = `<w:pPr><w:rPr><w:del w:id="1" w:author="QA" w:date="${QA.date}"/></w:rPr></w:pPr>`;
+  const table =
+    '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
+    `<w:tr><w:tc><w:p>${run('cell')}</w:p></w:tc></w:tr></w:tbl>`;
+  test.each([
+    [
+      'custom XML',
+      `<w:p/><w:customXml><w:p>${run('A')}</w:p>${table}<w:p>${mark}</w:p></w:customXml>`,
+    ],
+    [
+      'marker control',
+      `${table}<w:p>${mark}</w:p><w:sdt><w:sdtPr/><w:sdtContent><w:bookmarkStart w:id="1" w:name="m"/></w:sdtContent></w:sdt>`,
+    ],
+  ])(
+    'accepting a deleted paragraph after a table in a %s keeps a paragraph after it',
+    (_, body) => {
+      const part = load(body);
+      const out = apply(part, { op: 'acceptAllRevisions' });
+      const story = out.root.children[0]!;
+      expect(story.kind !== 'textValue' && storyEndsWithTable(story.children)).toBe(false);
+    }
+  );
 });
 
 describe('a move recorded on the paragraph mark', () => {
