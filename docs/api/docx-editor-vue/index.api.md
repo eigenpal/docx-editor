@@ -2544,7 +2544,7 @@ export const ContextMenuSplitCell: {
 export const ContextMenuStart: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<{}> & Readonly<{}>, () => VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
-    }>[] | undefined, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {}, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
+    }>[], {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {}, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
         B: {};
         C: {};
         D: {};
@@ -2553,13 +2553,13 @@ export const ContextMenuStart: {
         P: {};
     }, Readonly<{}> & Readonly<{}>, () => VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
-    }>[] | undefined, {}, {}, {}, {}>;
+    }>[], {}, {}, {}, {}>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<{}> & Readonly<{}>, () => VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
-}>[] | undefined, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
+}>[], {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxRowPlacement: 'start';
 };
 

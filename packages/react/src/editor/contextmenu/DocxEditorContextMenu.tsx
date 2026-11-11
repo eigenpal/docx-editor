@@ -29,7 +29,8 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
-import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
+import { warnPackagedRowInStart, warnUnmatchedHiddenRow } from '../menu/menu-warnings';
+import { isDevelopment } from '../../lib/is-development';
 import { contextMenuRowId } from './row-alias';
 import { isDocumentContextMenuTarget } from './menu-target';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
@@ -318,9 +319,26 @@ function rowOfChild(child: ReactNode): string | null {
  */
 function startPlacedChild(child: ReactNode): boolean {
   if (!isValidElement(child)) return false;
+  if (unwrapFragment(child, (inner) => (startPlacedChild(inner) ? 'start' : null)) === 'start') {
+    return true;
+  }
   const type = child.type as { docxRowPlacement?: unknown };
   if (typeof type !== 'function' && typeof type !== 'object') return false;
   return type.docxRowPlacement === 'start';
+}
+
+/** Warn about packaged rows inside `Start`, which render again in their default place. */
+function warnPackagedRowsIn(startRows: readonly ReactNode[]): void {
+  if (!isDevelopment()) return;
+  for (const start of startRows) {
+    if (!isValidElement(start)) continue;
+    const props = start.props as { children?: ReactNode };
+    for (const inner of Children.toArray(props.children)) {
+      if (startPlacedChild(inner)) warnPackagedRowsIn([inner]);
+      const id = rowOfChild(inner);
+      if (id !== null) warnPackagedRowInStart(id);
+    }
+  }
 }
 
 /**
@@ -370,6 +388,9 @@ export function DocxEditorContextMenu({
     () => contextMenuDefaultSet(tableContextVisible, tocId !== null),
     [tableContextVisible, tocId]
   );
+  // `preset={false}` renders children as written, so Start stays where the host put it.
+  const startRows = preset ? Children.toArray(children).filter(startPlacedChild) : [];
+  warnPackagedRowsIn(startRows);
   // Placement is measured AFTER the panel renders — its size depends on the rows the host
   // composed — so the first paint is at the raw anchor and the flip lands in a layout
   // effect, before the browser paints.
@@ -599,10 +620,12 @@ export function DocxEditorContextMenu({
                 }
               }}
             >
-              {Children.toArray(children).filter(startPlacedChild)}
+              {startRows}
               {mergeArrangement({
                 entries: defaultSet,
-                children: Children.toArray(children).filter((child) => !startPlacedChild(child)),
+                children: preset
+                  ? Children.toArray(children).filter((child) => !startPlacedChild(child))
+                  : children,
                 preset,
                 keyOfEntry: (entry) => entry.id,
                 keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),

@@ -36,7 +36,8 @@ import {
   MenuSubmenu,
   menuItemSlotIdOfVNode,
 } from '../menu/parts';
-import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
+import { warnPackagedRowInStart, warnUnmatchedHiddenRow } from '../menu/menu-warnings';
+import { isDevelopment } from '../../lib/is-development';
 import { contextMenuRowId } from './row-alias';
 import { isDocumentContextMenuTarget } from './menu-target';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
@@ -288,6 +289,19 @@ function startPlacedChild(child: unknown): boolean {
   return type.docxRowPlacement === 'start';
 }
 
+/** Warn about packaged rows inside `Start`, which render again in their default place. */
+function warnPackagedRowsIn(startRows: readonly VNode[]): void {
+  if (!isDevelopment()) return;
+  for (const start of startRows) {
+    const slots = start.children as { default?: () => unknown } | unknown[] | null;
+    const inner = Array.isArray(slots) ? slots : slots?.default?.();
+    for (const child of flattenChildren(inner)) {
+      const id = rowOfChild(child);
+      if (id !== null) warnPackagedRowInStart(id);
+    }
+  }
+}
+
 function scrollerFor(anchor: HTMLElement | null): HTMLElement | null {
   return anchor?.closest<HTMLElement>('.docx-editor__scroll-container') ?? null;
 }
@@ -491,6 +505,7 @@ export const DocxEditorContextMenu = defineComponent({
 
       const children = flattenChildren(slots.default?.() ?? []);
       const startRows = children.filter(startPlacedChild);
+      if (props.preset !== false) warnPackagedRowsIn(startRows);
       const restChildren = children.filter((child) => !startPlacedChild(child));
 
       const rows =

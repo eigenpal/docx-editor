@@ -70,13 +70,15 @@ Group rows with `Group`, `Separator`, and `Submenu`.
 
 Host rows render after the default rows. To put rows above them, wrap the rows in `ContextMenu.Start`. Use it for rows about the item under the pointer, such as spelling suggestions. Read that item with `useContextMenuTarget()`.
 
+`ContextMenu.Start` must be a direct child of `ContextMenu`. A component that returns `ContextMenu.Start` renders at the end, so put your component, such as `Suggestions` below, inside `Start` instead. `Start` adds a separator after its rows. With `preset={false}`, it stays where you write it.
+
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
 <DocxEditor.ContextMenu>
   <DocxEditor.ContextMenu.Start>
-    <DocxEditor.ContextMenu.Item label="receive" onSelect={replaceWord} />
+    <Suggestions />
   </DocxEditor.ContextMenu.Start>
 </DocxEditor.ContextMenu>
 ```
@@ -87,7 +89,7 @@ Host rows render after the default rows. To put rows above them, wrap the rows i
 ```vue
 <DocxEditor.ContextMenu>
   <DocxEditor.ContextMenu.Start>
-    <DocxEditor.ContextMenu.Item label="receive" @select="replaceWord" />
+    <Suggestions />
   </DocxEditor.ContextMenu.Start>
 </DocxEditor.ContextMenu>
 ```
