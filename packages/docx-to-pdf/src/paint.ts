@@ -962,7 +962,8 @@ export async function paint(
     );
     sheet?.paintText(pages[i]!);
   }
-  for (const face of text.faces.values()) await face.finish(work);
+  const subsetTags = new Set<string>();
+  for (const face of text.faces.values()) await face.finish(work, subsetTags);
   if (includeComments) comments(doc, pages, layout, work);
   const shown = places && pane.commentsWithBalloons(layout, authorSlots);
   places?.forEach((place, i) => pane.placeOnSheet(pages[i]!, place, shown!));

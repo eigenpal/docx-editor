@@ -3,6 +3,7 @@ Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
+import { createHash } from 'node:crypto';
 import { create as openFont, type FontkitFont } from 'fontkit';
 import { PDFDocument, PDFName, PDFString, type PDFRef } from 'pdf-lib';
 import type { ExportAdmittedFontFace } from '@docx-editor.dev/core/export';
@@ -11,8 +12,13 @@ import { fontEmbeddingDecision } from './pdf-font-embedding.ts';
 import { strikeMetrics } from './font-metrics.ts';
 import { flateStream, hex, unicodeHex, Work } from './context.ts';
 
-function cmap(body: string, type: 1 | 2): string {
-  return `/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> def\n/CMapName /Docx${type} def\n/CMapType ${type} def\n1 begincodespacerange\n<0000> <ffff>\nendcodespacerange\n${body}\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend`;
+/**
+ * A CMap program. `name` must be unique to the face: a printer that converts the PDF to
+ * PostScript registers each CMap as a named resource, and a later font whose CMap repeats
+ * the name decodes its text through the first font's CMap instead.
+ */
+function cmap(body: string, type: 1 | 2, name: string): string {
+  return `/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> def\n/CMapName /${name} def\n/CMapType ${type} def\n1 begincodespacerange\n<0000> <ffff>\nendcodespacerange\n${body}\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend`;
 }
 function groups(rows: readonly string[], operator: string): string {
   const out: string[] = [];
@@ -21,6 +27,27 @@ function groups(rows: readonly string[], operator: string): string {
     out.push(`${slice.length} begin${operator}\n${slice.join('\n')}\nend${operator}`);
   }
   return out.join('\n');
+}
+/**
+ * The six-letter subset tag. It comes from the subset's own bytes, so fonts in PDFs that are
+ * later merged or printed in one job are unlikely to share a font or CMap name. `used` holds
+ * the tags already in this file: a repeat takes the next 6-byte window of the digest, then a
+ * counter, so tags in one file never repeat.
+ */
+function subsetTag(bytes: Uint8Array, name: string, used: Set<string>): string {
+  const digest = createHash('sha256').update(name).update(bytes).digest();
+  for (let attempt = 0; ; attempt += 1) {
+    const source =
+      attempt * 6 + 6 <= digest.length
+        ? digest.subarray(attempt * 6, attempt * 6 + 6)
+        : createHash('sha256').update(digest).update(String(attempt)).digest();
+    let tag = '';
+    for (let i = 0; i < 6; i += 1) tag += String.fromCharCode(65 + (source[i]! % 26));
+    if (!used.has(tag)) {
+      used.add(tag);
+      return tag;
+    }
+  }
 }
 /** One admitted face. Character codes are distinct from subset glyph IDs. */
 export class EmbeddedFace {
@@ -201,20 +228,21 @@ export class EmbeddedFace {
     // tiny per-glyph difference accumulate across a run with no adjustment to absorb it.
     return Math.round(width * 1e5) / 1e5;
   }
-  async finish(work: Work): Promise<void> {
+  /** `subsetTags` holds the subset tags already used in this PDF; see {@link subsetTag}. */
+  async finish(work: Work, subsetTags: Set<string> = new Set()): Promise<void> {
     if (this.colorLayers) return;
     await work.yield();
     const bytes = this.encodeSubset();
     work.check();
     const cff = bytes[0] === 1 && bytes[1] === 0;
     const ctx = this.doc.context;
-    const prefix = Number(this.name.slice(1))
-      .toString(26)
-      .padStart(6, '0')
-      .split('')
-      .map((c) => String.fromCharCode(65 + parseInt(c, 26)))
-      .join('');
+    const prefix = subsetTag(bytes, this.name, subsetTags);
     const base = PDFName.of(`${prefix}+DocxFont`);
+    const cidSystemInfo = {
+      Registry: PDFString.of('Adobe'),
+      Ordering: PDFString.of('Identity'),
+      Supplement: 0,
+    };
     const file = ctx.register(
       flateStream(ctx, bytes, cff ? { Subtype: 'CIDFontType0C' } : { Length1: bytes.length })
     );
@@ -246,17 +274,14 @@ export class EmbeddedFace {
         // strings. `PDFHexString.fromText` writes UTF-16BE behind a BOM, and a consumer that
         // compares these as bytes, which Acrobat and PDF/A checkers do, cannot match the
         // CIDFont to its CMap and drops it.
-        CIDSystemInfo: {
-          Registry: PDFString.of('Adobe'),
-          Ordering: PDFString.of('Identity'),
-          Supplement: 0,
-        },
+        CIDSystemInfo: cidSystemInfo,
         FontDescriptor: descriptor,
         DW: 0,
         W: widths,
         ...(cff ? {} : { CIDToGIDMap: 'Identity' }),
       })
     );
+    const encodingName = `${prefix}-DocxEncoding`;
     const encoding = ctx.register(
       flateStream(
         ctx,
@@ -265,8 +290,10 @@ export class EmbeddedFace {
             this.rows.map((row, i) => `<${hex(i + 1)}> ${row.cid}`),
             'cidchar'
           ),
-          1
-        )
+          1,
+          encodingName
+        ),
+        { Type: 'CMap', CMapName: encodingName, CIDSystemInfo: cidSystemInfo }
       )
     );
     // Only glyphs with text are written as text; glyphs without are filled as outlines by the
@@ -274,7 +301,9 @@ export class EmbeddedFace {
     const mappings = this.rows.flatMap((row, i) =>
       row.text ? [`<${hex(i + 1)}> <${unicodeHex(row.text)}>`] : []
     );
-    const unicode = ctx.register(flateStream(ctx, cmap(groups(mappings, 'bfchar'), 2)));
+    const unicode = ctx.register(
+      flateStream(ctx, cmap(groups(mappings, 'bfchar'), 2, `${prefix}-DocxUnicode`))
+    );
     ctx.assign(
       this.ref,
       ctx.obj({
