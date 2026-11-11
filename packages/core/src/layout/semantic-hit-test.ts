@@ -306,7 +306,7 @@ export function hitTestPage(
  * Whether a point lies in the box of a text line: on its words, past its end, or in an empty
  * paragraph's line. Table cells count their own lines.
  */
-function pointInTextLine(blocks: readonly BlockFragmentRecord[], point: HitPoint): boolean {
+export function pointInTextLine(blocks: readonly BlockFragmentRecord[], point: HitPoint): boolean {
   for (const block of blocks) {
     if (block.kind === 'paragraph') {
       if (!contains(paragraphContentBounds(block), point)) continue;

@@ -12,6 +12,7 @@ import {
 } from 'vue';
 import {
   beginInlineImageDrag,
+  drawingFramePressGoesToText,
   passDrawingFramePressToText,
   canMoveInlineImage,
   captureImageMutationPreconditions,
@@ -162,8 +163,11 @@ export const ImageSelectionOverlay = defineComponent({
           const drawingId = element
             ?.closest<HTMLElement>('[data-drawing-node-id]')
             ?.getAttribute('data-drawing-node-id');
-          focusRequestedForDrawingRef.value = drawingId ?? null;
-          if (drawingId && drawingId === target.value?.id) {
+          // A press the frame hands to the text leaves the keyboard with the editor.
+          const instance = editorRef.value;
+          const toText = !!instance && drawingFramePressGoesToText(instance, event);
+          focusRequestedForDrawingRef.value = toText ? null : (drawingId ?? null);
+          if (drawingId && drawingId === target.value?.id && !toText) {
             queueMicrotask(() => overlayRef.value?.focus({ preventScroll: true }));
           }
         };

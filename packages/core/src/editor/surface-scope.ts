@@ -34,6 +34,7 @@ import {
   hitTestFragments,
   hitTestPage,
   pageAtY,
+  pointInTextLine,
   type SemanticHit,
 } from '../layout/semantic-hit-test.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
@@ -283,7 +284,14 @@ export function hitTestStoryAtLocalPoint(
   local: { readonly x: number; readonly y: number },
   options: { readonly measurer?: TextMeasurer } = {}
 ): SemanticHit | null {
-  return hitTestFragments(layout, pageIndex, story.fragments, local, options);
+  // The story's own drawings, as the body's: in front first, then the text, and a drawing
+  // behind the text only outside every line of it.
+  const drawings = story.anchoredDrawings;
+  const front = hitAnchoredDrawingAtPoint(drawings, local, pageIndex, true);
+  if (front) return front;
+  const text = hitTestFragments(layout, pageIndex, story.fragments, local, options);
+  if (text && (text.onGlyphs || pointInTextLine(story.fragments, local))) return text;
+  return hitAnchoredDrawingAtPoint(drawings, local, pageIndex) ?? text;
 }
 
 /**

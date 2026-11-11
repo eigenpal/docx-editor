@@ -20,6 +20,9 @@ const EMU_PER_POINT = 12_700;
 export function vectorShapeHit(drawing: Drawing, point: Point): boolean | null {
   const shape = drawing.vectorShape;
   if (!shape || drawing.textboxStory || drawing.resource.kind === 'ready') return null;
+  // A picture's outline projects as a stroke-only shape; the picture keeps its whole frame,
+  // whatever its resource state. A legacy VML drawing and a group of pictures do too.
+  if (drawing.placeholderGraphicKind === null || drawing.groupPicture) return null;
   const content = drawing.geometry.contentBounds;
   const { cx, cy } = shape.extentEmu;
   const sx = cx > 0 ? content.width / cx : 0;

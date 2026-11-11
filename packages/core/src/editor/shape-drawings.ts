@@ -17,6 +17,8 @@ export function isShapeDrawing(
   record: InlineDrawingRecord | AnchoredDrawingRecord | null
 ): boolean {
   if (!record?.vectorShape || record.textboxStory || record.chart) return false;
+  // A picture (its outline projects as a shape) and a legacy VML drawing name no graphic kind.
+  if (record.placeholderGraphicKind === null || record.groupPicture) return false;
   if (record.resource.kind === 'ready' || record.placeholderGraphicKind === 'chart') return false;
   const part = partOfNodeId(surface.session, record.drawingNodeId) ?? surface.session.part();
   const node = findNode(part, record.drawingNodeId);

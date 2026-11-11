@@ -136,7 +136,10 @@ export function documentBytes(body: string, header?: string): Uint8Array {
     ...(header
       ? {
           'word/header1.xml': strToU8(
-            `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>${header}</w:t></w:r></w:p></w:hdr>`
+            // Plain text is the header's one paragraph; markup is its body as given.
+            `<w:hdr xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}">` +
+              (header.startsWith('<') ? header : `<w:p><w:r><w:t>${header}</w:t></w:r></w:p>`) +
+              '</w:hdr>'
           ),
         }
       : {}),

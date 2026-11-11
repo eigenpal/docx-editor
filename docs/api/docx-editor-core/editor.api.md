@@ -2073,6 +2073,9 @@ export const DRAWING_REL_FROM_H: readonly string[];
 export const DRAWING_REL_FROM_V: readonly string[];
 
 // @public
+export function drawingFramePressGoesToText(editor: Editor, event: PointerEvent): boolean;
+
+// @public
 export type DrawingGraphicKind = 'picture' | 'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
 
 // @public

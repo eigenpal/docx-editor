@@ -12,6 +12,7 @@ import {
 import { createPortal } from 'react-dom';
 import {
   beginInlineImageDrag,
+  drawingFramePressGoesToText,
   passDrawingFramePressToText,
   canMoveInlineImage,
   captureImageMutationPreconditions,
@@ -143,14 +144,16 @@ export function ImageSelectionOverlay({
       const drawingId = element
         ?.closest<HTMLElement>('[data-drawing-node-id]')
         ?.getAttribute('data-drawing-node-id');
-      focusRequestedForDrawingRef.current = drawingId ?? null;
-      if (drawingId && drawingId === target?.id) {
+      // A press the frame hands to the text leaves the keyboard with the editor.
+      const toText = !!editor && drawingFramePressGoesToText(editor, event);
+      focusRequestedForDrawingRef.current = toText ? null : (drawingId ?? null);
+      if (drawingId && drawingId === target?.id && !toText) {
         queueMicrotask(() => overlayRef.current?.focus({ preventScroll: true }));
       }
     };
     container.addEventListener('pointerdown', onPointerDown, { capture: true });
     return () => container.removeEventListener('pointerdown', onPointerDown, { capture: true });
-  }, [containerRef, target?.id]);
+  }, [containerRef, editor, target?.id]);
 
   useEffect(() => {
     if (!editor) {

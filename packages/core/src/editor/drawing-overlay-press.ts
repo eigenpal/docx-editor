@@ -22,12 +22,7 @@ const TAP_PASS_THROUGH_MS = 800;
  */
 export function passDrawingFramePressToText(editor: Editor, event: PointerEvent): boolean {
   const surface = (editor as DocxEditorInstance).surface;
-  if (!surface || event.button !== 0 || event.shiftKey) return false;
-  const record = resolveSelectedDrawingRecord(surface);
-  if (!record || record.kind !== 'anchoredDrawing' || !record.behindDocument) return false;
-  const point = surface.pointAt(event.clientX, event.clientY);
-  // Off the body text, as in a page margin, or where the drawing wins the hit: a move.
-  if (!point || point.hit.drawing?.drawingNodeId === record.drawingNodeId) return false;
+  if (!surface || !drawingFramePressGoesToText(editor, event)) return false;
   const frame = isElementNode(event.target) ? event.target : null;
   if (!frame) return false;
   if (event.pointerType === 'touch') {
@@ -67,6 +62,22 @@ export function passDrawingFramePressToText(editor: Editor, event: PointerEvent)
     })
   );
   return true;
+}
+
+/**
+ * Whether a press on the selected drawing's frame belongs to the text under it, without acting
+ * on it: the drawing sits behind the text and the press lands in a line of text. Adapters read
+ * it to leave the keyboard with the editor for such a press.
+ * @public
+ */
+export function drawingFramePressGoesToText(editor: Editor, event: PointerEvent): boolean {
+  const surface = (editor as DocxEditorInstance).surface;
+  if (!surface || event.button !== 0 || event.shiftKey) return false;
+  const record = resolveSelectedDrawingRecord(surface);
+  if (!record || record.kind !== 'anchoredDrawing' || !record.behindDocument) return false;
+  const point = surface.pointAt(event.clientX, event.clientY);
+  // Off the body text, as in a page margin, or where the drawing wins the hit: a move.
+  return !!point && point.hit.drawing?.drawingNodeId !== record.drawingNodeId;
 }
 
 /** Let the rest of this tap (its compatibility mouse events and click) pass the frame. */

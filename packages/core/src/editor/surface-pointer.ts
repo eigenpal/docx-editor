@@ -21,6 +21,7 @@ import { pressTakenByTextbox } from './surface-drawing-gestures.ts';
 import { MULTI_CLICK_MS, MULTI_CLICK_SLOP_PX } from './surface-multi-click.ts';
 import {
   contentControlAtPoint,
+  findDrawingOverlayFrameInLayout,
   hitTestFragments,
   hitTestPage,
   pageAtY,
@@ -887,11 +888,14 @@ export function createPointerController(
     gestureDocument.addEventListener('pointercancel', onPointerUp);
 
     const count = clicks();
-    // A repeated press on a picture or a chart keeps the object selected: it never selects
-    // the word or the paragraph beside it. A text box takes its double press elsewhere.
+    // A repeated press on a picture or a chart keeps it selected, never the word beside it. The
+    // hit decides, not the painted box: inside a shape with no fill is text. A text box takes
+    // its double press elsewhere.
+    const painted = target?.closest('[data-drawing-node-id]')?.getAttribute('data-drawing-node-id');
+    const placed = painted != null && findDrawingOverlayFrameInLayout(layout, painted) != null;
     const onObject =
-      target?.closest('[data-drawing-node-id]') != null &&
-      target.closest('.docx-drawing-textbox') == null;
+      (hit.drawing != null || (painted != null && !placed)) &&
+      target?.closest('.docx-drawing-textbox') == null;
     const granularity =
       event.shiftKey || onObject ? 'character' : GRANULARITIES[(count - 1) % GRANULARITIES.length]!;
 
