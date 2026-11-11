@@ -1,12 +1,12 @@
 ---
 title: 'Charts'
-description: 'Insert DOCX charts and edit their type, elements, colors, and data with commands, the toolbar, and the Chart pane.'
+description: 'Insert and edit DOCX charts through editor commands or the React and Vue Chart pane.'
 category: 'Guides'
 ---
 
-A chart in a DOCX file is a drawing that points at a chart part and an embedded workbook. The editor inserts charts at the caret and edits the type, elements, colors, and data of a selected chart. Each change is one undo step.
+Insert charts at the caret, then edit their type, elements, colors, and data. Each change is one undo step.
 
-The `@docx-editor.dev/pro/drawing` module paints charts and requires the EigenPal Pro License. Without it, the editor still inserts and edits charts, and a chart shows a placeholder.
+The `@docx-editor.dev/pro/drawing` module paints charts and requires the EigenPal Pro License. Without it, chart insertion and editing remain available, but charts show placeholders.
 
 ## Insert a chart
 
@@ -29,7 +29,7 @@ editor.exec({
 });
 ```
 
-The **Insert** menu and the `DocxEditor.Toolbar.ChartInsert` dropdown offer column, bar, line, area, pie, doughnut, and scatter charts. The command also accepts the stacked, percent-stacked, marker, radar, and scatter-with-lines types.
+Use **Insert** > **Chart** or `DocxEditor.Toolbar.ChartInsert` for column, bar, line, area, pie, doughnut, and scatter charts. The command also accepts stacked, percent-stacked, marker, radar, and scatter-with-lines types.
 
 ## Edit a chart
 
@@ -37,7 +37,7 @@ Each edit applies to the selected chart, or to the chart drawing that `drawingNo
 
 | Command | Purpose |
 | --- | --- |
-| `setChartData` | Replaces the categories and series. Series keep their formatting. |
+| `setChartData` | Replaces categories and series. Preserve `source` values to retain their formatting. |
 | `setChartType` | Changes the chart type. Undo restores colors or axis titles that the new type drops. |
 | `setChartFormat` | Sets the title, legend, data labels, axes, gridlines, and axis titles. |
 | `setChartColor` | Sets the color of one series, or of one point of a pie or doughnut chart. |
@@ -61,21 +61,21 @@ editor.exec({ type: 'setChartFormat', format: { title: 'Sales', legend: 'right' 
 editor.exec({ type: 'setChartColor', index: 0, color: { theme: 'accent2', shift: 40 } });
 ```
 
-A color is `#RRGGBB`, a theme color such as `{ theme: 'accent1' }`, or `null` for the automatic color. A positive `shift` makes a theme color lighter by that percent, and a negative one makes it darker.
+Use `#RRGGBB`, a theme color such as `{ theme: 'accent1' }`, or `null` for automatic color. Positive `shift` values lighten the theme color by that percentage; negative values darken it.
 
-A refused edit returns a translation key in `reason`, such as `chart.errors.noAxes`. The editor refuses chart edits in suggesting mode and in a document open for viewing.
+A refused edit returns `reason`, which can contain a translation key such as `chart.errors.noAxes`. Use `localizeDisabledReason` from `@docx-editor.dev/i18n` to display it. The editor refuses chart edits in suggesting mode and in a document open for viewing.
 
 ## Resize, move, and wrap a chart
 
-A selected chart shows resize handles. You can resize it, change its wrap, and set its alternative text, as you do for a picture. To move a chart freely, change its wrap from **In Line with Text** first, then drag it. When you drop a floating chart on another paragraph of the same page, that paragraph becomes its anchor, so the text wraps around the chart. A locked anchor, or a position relative to a line or a character, keeps its paragraph.
+Select a chart to resize it, change its wrapping, or set alternative text. For free movement, change **In Line with Text** to another wrapping mode, then drag. Dropping a floating chart onto another body paragraph on the same page moves its anchor there. Locked anchors and positions relative to lines or characters keep their paragraph.
 
-The picture commands `resizeDrawing`, `positionDrawing`, `setDrawingWrap`, and `setDrawingMetadata` apply to charts. The editor refuses commands that change the chart graphic, such as crop, replace, and rotate. A chart that the file stores with an alternate picture refuses frame edits too, because the two copies must keep the same frame.
+The drawing operations `resizeDrawing`, `positionDrawing`, `setDrawingWrap`, and `setDrawingMetadata` support chart frames. Crop, replace, and rotate are unsupported. Charts with alternate pictures also refuse frame edits because both representations must stay aligned.
 
 ## Copy and paste a chart
 
-To copy a chart, select it and press Ctrl+C or Command+C, or use **Copy** in the context menu. Cut works the same way and removes the chart. A paste inserts an independent copy of the chart, with its own chart part and embedded workbook, and selects it. A paste replaces selected text.
+Select a chart, then use **Copy** or **Cut** in its context menu. Keyboard shortcuts also work. Pasting replaces selected text and selects an independent chart copy with its own parts and embedded workbook.
 
-The `copy`, `cut`, and `paste` commands do the same. The clipboard holds the chart's name as text and a reference to the copy, so you can paste the chart only in an editor on the same page. A selection of a chart with other content refuses to copy. The editor refuses a chart paste in suggesting mode and in a document open for viewing.
+The `copy`, `cut`, and `paste` commands provide the same behavior. Chart clipboard data works only between editors on the same browser page. Copying a chart together with other content is unsupported. Chart paste refuses in viewing and suggesting modes.
 
 ## Show the Chart pane
 
@@ -84,6 +84,9 @@ The Chart pane shows the type, elements, colors, and data of the selected chart.
 `DocxEditor.SidePanel` holds the pane. **Insert** > **Chart** asks the host to show the panel without moving the focus. **Edit chart** and a double-click on a chart move the focus into it. Listen for these requests with `usePaneRequest`:
 
 ```tsx
+import { useState } from 'react';
+import { DocxEditor, usePaneRequest } from '@docx-editor.dev/react';
+
 function ChartSidePanel() {
   const [open, setOpen] = useState(false);
   usePaneRequest((request) => {
@@ -93,18 +96,20 @@ function ChartSidePanel() {
 }
 ```
 
-Render the component inside `DocxEditor.Root`, beside `DocxEditor.Viewport`. **Edit chart** shows in the toolbar and the context menu only while a side panel, a Chart pane, or a `usePaneRequest` listener is mounted. In Vue, use `DocxEditorSidePanel` and the `usePaneRequest` composable in the same way. Use `DocxEditor.ChartPane` to place the pane in your own layout.
+Render this component inside `DocxEditor.Root`, beside `DocxEditor.Viewport`. Mount a side panel, Chart pane, or `usePaneRequest` listener to enable the **Edit chart** action. Vue uses `DocxEditorSidePanel` and the `usePaneRequest` composable. Use `DocxEditor.ChartPane` to place the pane in your own layout.
 
 ## Build your own chart pane
 
-To replace the packaged pane, build a component with `useSelectedChart` and pass it to `DocxEditor.SidePanel` as its children. The hook returns the selected chart, its `data` and `format`, whether each can change, and the reason when it cannot. It edits the chart that it shows in two ways:
+Build your component with `useSelectedChart`, then pass it as children to `DocxEditor.SidePanel`. The hook returns the selected chart, its `data` and `format`, and editing availability with disabled reasons. Use these methods to edit that chart:
 
 - `execute` takes the chart commands of `editor.exec`, without `drawingNodeId`.
 - `editData` applies one checked data change, as the packaged pane does. Text that is not a number for a value refuses with a reason.
 
-The following sample changes the chart type and the first value:
+The following sample changes the chart type and displays refused edits:
 
 ```tsx
+import { useState } from 'react';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import {
   CHART_TYPE_CHOICES,
   DocxEditor,
@@ -117,7 +122,8 @@ import {
 function MyChartPane() {
   const { t } = useTranslation();
   const chart = useSelectedChart();
-  if (!chart.chart || !chart.data || !chart.format) return <p>Select a chart.</p>;
+  const [error, setError] = useState<string | null>(null);
+  if (!chart.chart || !chart.format) return <p>Select a chart.</p>;
   return (
     <>
       <select
@@ -125,24 +131,24 @@ function MyChartPane() {
         value={chart.format.type ?? ''}
         disabled={!chart.canEditFormat}
         title={chart.formatDisabledReason ?? undefined}
-        onChange={(e) =>
-          chart.execute({ type: 'setChartType', chartType: e.target.value as ChartType })
-        }
+        onChange={(event) => {
+          const result = chart.execute({
+            type: 'setChartType',
+            chartType: event.target.value as ChartType,
+          });
+          setError(result.ok ? null : localizeDisabledReason(result.reason, t));
+        }}
       >
+        <option value="" disabled>
+          Unsupported chart type
+        </option>
         {CHART_TYPE_CHOICES.map((type) => (
           <option key={type} value={type}>
             {t(chartTypeLabelKey(type))}
           </option>
         ))}
       </select>
-      <input
-        aria-label="First value"
-        defaultValue={String(chart.data.series[0]?.values[0] ?? '')}
-        disabled={!chart.canEditData}
-        onBlur={(e) =>
-          chart.editData({ type: 'value', series: 0, category: 0, text: e.target.value })
-        }
-      />
+      {error && <p role="alert">{error}</p>}
     </>
   );
 }
@@ -152,12 +158,14 @@ function MyChartPane() {
 </DocxEditor.SidePanel>;
 ```
 
-`format.type` is null for a chart type that the editor does not write. Each edit is one undo step. A refusal returns `{ ok: false, code, reason }`, as `editor.exec` does. The disabled reasons are translated, and viewing and suggesting turn the edits off. When **Edit chart** or a double-click asks for the focus, the side panel moves it to the first field of your pane.
+`format.type` is null for a chart type that the editor does not write. Each edit is one undo step. A refusal returns `{ ok: false, code, reason }`, as `editor.exec` does. The disabled reasons are translated, and viewing and suggesting turn the edits off. **Edit chart** and double-click move focus to your pane's first field.
 
 In Vue, `useSelectedChart` returns the same fields as computed refs, and you pass the pane in the default slot of `DocxEditorSidePanel`. Both adapters export the chart types, `CHART_TYPE_CHOICES`, and `chartTypeLabelKey`.
 
 ## Limits
 
+- Content locks and data bindings prevent chart data and formatting edits. Removal-only locks still allow these edits.
+
 - The editor edits the data of charts with one plot and one level of categories. Other charts keep their data, and the pane says why.
-- The editor writes chart values to the chart part and the embedded workbook. A chart linked to an external workbook stops updating from the link.
+- Data edits update chart values and supported embedded workbooks. Unsupported workbooks retain their bytes; inspect `data.workbook` before editing. External workbook links stop updating after data edits.
 - Charts insert inline. Collaboration peers receive chart inserts, edits, resizes, and moves.

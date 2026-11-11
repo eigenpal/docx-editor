@@ -157,7 +157,9 @@ Comment items include these fields:
 
 ## Edit comments and replies
 
-The default React and Vue cards show a three-dot actions menu for comments and replies. The **Edit** action appears only for your own comments. Set the editor's comment author to the same nonempty author name stored on the comment. The host supplies this author metadata; it does not authenticate the user. Your application must authenticate users and control document access. Viewing mode disables editing. Resolved threads remain editable and keep their resolved state.
+The React and Vue cards provide an actions menu for comments and replies. **Edit** appears when the editor's comment author matches the comment's nonempty author name. This metadata does not authenticate users. Your application must authenticate users and control document access.
+
+Viewing mode disables editing. Resolved threads remain editable and keep their resolved state.
 
 1. Open **Comment actions** or **Reply actions**, then select **Edit**.
 2. Change the text. Press Enter to add a line.

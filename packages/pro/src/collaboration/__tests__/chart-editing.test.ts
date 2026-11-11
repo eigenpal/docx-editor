@@ -11,7 +11,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { expect, test } from 'bun:test';
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import {
   canonicalOoxmlFingerprint,
@@ -53,7 +53,7 @@ function fixture(): Uint8Array {
 }
 const FIXTURE = fixture();
 
-async function peer(name: string, host?: { ydoc: Y.Doc }) {
+async function peer(name: string, host?: { ydoc: Y.Doc }, bytes = FIXTURE) {
   const ydoc = new Y.Doc(),
     awareness = new Awareness(ydoc);
   if (host) Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(host.ydoc));
@@ -62,7 +62,7 @@ async function peer(name: string, host?: { ydoc: Y.Doc }) {
     awareness,
     documentId: 'chart-editing',
     identity: { actorId: name, name },
-    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: FIXTURE },
+    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: bytes },
   });
   const container = document.createElement('div');
   document.body.append(container);
@@ -375,6 +375,62 @@ test('a copied chart pastes in both editors, converges, and undoes', async () =>
     await converged(a, b);
     for (const client of [a, b]) expect(chartCount(client)).toBe(2);
   } finally {
+    a.destroy();
+    b.destroy();
+  }
+});
+
+test('locked chart edits stay refused across peers, history, and reconnect', async () => {
+  const seed = await peer('Seed');
+  caretAt(seed, 0, 5);
+  expect(seed.editor.exec({ type: 'insertChart', chartType: 'columnClustered' }).ok).toBe(true);
+  const entries = unzipSync(new Uint8Array(await seed.editor.save()));
+  seed.destroy();
+  entries['word/document.xml'] = strToU8(
+    strFromU8(entries['word/document.xml']!).replace(
+      /(<w:p[ >][\s\S]*?<\/w:p>)/,
+      '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>$1</w:sdtContent></w:sdt>'
+    )
+  );
+  const a = await peer('Alice', undefined, zipSync(entries));
+  const b = await peer('Bob', a);
+  let rejoined: Peer | undefined;
+  try {
+    const title = format(a).title;
+    for (const client of [a, b]) {
+      const before = client.editor.surface!.session.currentPackage();
+      expect(
+        client.editor.exec({
+          type: 'setChartFormat',
+          drawingNodeId: chartId(client),
+          format: { title: 'Blocked' },
+        }).ok
+      ).toBe(false);
+      expect(client.editor.surface!.session.currentPackage()).toBe(before);
+    }
+    caretAt(b, 1, 0);
+    expect(b.editor.exec({ type: 'insertText', text: 'Allowed ' }).ok).toBe(true);
+    sync(a, b);
+    await converged(a, b);
+    expect(format(a).title).toBe(title);
+    expect(b.editor.exec({ type: 'undo' }).ok).toBe(true);
+    sync(a, b);
+    await converged(a, b);
+    expect(b.editor.exec({ type: 'redo' }).ok).toBe(true);
+    sync(a, b);
+    await converged(a, b);
+    rejoined = await peer('Rejoined', a);
+    await converged(a, rejoined);
+    expect(format(rejoined).title).toBe(title);
+    expect(
+      rejoined.editor.exec({
+        type: 'setChartType',
+        drawingNodeId: chartId(rejoined),
+        chartType: 'pie',
+      }).ok
+    ).toBe(false);
+  } finally {
+    rejoined?.destroy();
     a.destroy();
     b.destroy();
   }

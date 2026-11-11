@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': minor
 ---
 
-Edit your own comments and replies through the actions menu or the `content` API property, with undo, redo, and collaboration support.
+Edit your own comments and replies through the actions menu or `content` property. Edits support undo, redo, and collaboration.

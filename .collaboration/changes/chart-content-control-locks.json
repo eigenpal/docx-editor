@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Chart part edits bypassed content-control locks and data bindings.",
+  "after": "Chart data and formatting edits refuse inside content-locked or data-bound controls. Chart controls show disabled reasons.",
+  "reason": "The change restricts local writes and leaves shared operations and formats unchanged. Existing chart operations still synchronize.",
+  "tests": [
+    "packages/core/src/editor/__tests__/chart-commands.test.ts",
+    "packages/pro/src/collaboration/__tests__/chart-editing.test.ts"
+  ],
+  "changeset": "chart-content-control-locks",
+  "migration": null
+}
