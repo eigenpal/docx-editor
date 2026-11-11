@@ -56,12 +56,13 @@ describe('word-features — images lane honesty', () => {
     expect(svg.notes?.toLowerCase()).toContain('insert');
   });
 
-  test('unsupported non-picture payloads are preserved inertly, not claimed as supported', () => {
+  test('shapes report frame editing, read-only geometry, and placeholders', () => {
     const row = feature('images.shapes');
-    expect(row.editing).toBe('none');
+    expect(row.editing).toBe('partial');
     expect(row.rendering).toBe('partial');
     expect(row.roundTrip).toBe('preserved');
-    expect(row.notes?.toLowerCase()).toMatch(/placeholder|preserv|generic|inert/);
+    expect(row.notes).toMatch(/read-only/);
+    expect(row.notes?.toLowerCase()).toMatch(/placeholder/);
   });
 
   test('diagrams report frame editing and read-only content', () => {

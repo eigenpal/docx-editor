@@ -266,8 +266,13 @@ function capabilityFlags(
   const locks = chart === 'locked' ? { resize: true, move: true, changeAspect: true } : gateLocks;
   // An inline text box flows with its line: it resizes in place but is never dragged.
   const fixed = projection.kind === 'inline' && projection.textboxStory !== null;
+  // A DrawingML shape, line or group keeps its size in its own geometry too
+  // (`SHAPE_FRAME_EDITS`). A legacy VML shape keeps it in `style` alone, so it resizes.
+  const legacy = !!(projection.legacyGraphic || projection.textArt || projection.horizontalRule);
+  const shape =
+    chart === 'none' && projection.picture === null && !projection.textboxStory && !legacy;
   return Object.freeze({
-    canResize: !locks.resize && !projection.hidden,
+    canResize: !shape && !locks.resize && !projection.hidden,
     canMove: !fixed && !locks.move && !projection.hidden,
     canChangeWrap:
       (chart === 'frame' || (chart === 'none' && projection.picture !== null)) &&
@@ -288,13 +293,14 @@ function wrapOf(record: SelectedDrawingRecord): ImageWrapTarget {
 }
 
 /**
- * Image commands reach pictures, text boxes, charts (drawn, by their fallback, or as a
- * placeholder) and diagrams (`chart` is not `none`); the overlay offers handles on the same
- * gate. A chart or a diagram selects as an object.
+ * Image commands reach pictures, text boxes, shapes, lines and groups (`vectorShape`), charts
+ * (drawn, by their fallback, or as a placeholder) and diagrams (`chart` is not `none`); the
+ * overlay offers handles on the same gate. A chart or a diagram selects as an object.
  */
 const imageCommandsReach = (record: SelectedDrawingRecord, chart: ChartGate): boolean =>
   record.placeholderGraphicKind === null ||
   !!record.textboxStory ||
+  !!record.vectorShape ||
   record.placeholderGraphicKind === 'chart' ||
   !!record.chart ||
   chart !== 'none';

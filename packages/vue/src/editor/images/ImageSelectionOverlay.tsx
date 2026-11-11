@@ -12,6 +12,7 @@ import {
 } from 'vue';
 import {
   beginInlineImageDrag,
+  passDrawingFramePressToText,
   canMoveInlineImage,
   captureImageMutationPreconditions,
   computeMovedImagePosition,
@@ -636,6 +637,8 @@ export const ImageSelectionOverlay = defineComponent({
                 if (instance && openChartPaneFor(instance, current.id)) event.preventDefault();
               }}
               onPointerdown={(event: PointerEvent) => {
+                // Over text in front of a drawing behind it, the text takes the press.
+                if (passDrawingFramePressToText(editor, event)) return;
                 if (showInlineMove && beginInlineImageDrag(editor, event, current.id)) return;
                 guardToolbarMousedown(event as unknown as MouseEvent);
                 if (!showMove || !current.position) return;

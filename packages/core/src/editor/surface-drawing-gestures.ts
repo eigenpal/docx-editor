@@ -1,7 +1,7 @@
 import type { DrawingSelectionIntent } from './paginated-surface.ts';
 import type { PaginatedSurface } from './paginated-surface.ts';
 import type { createTextboxEditing } from './surface-textbox-editing.ts';
-import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
+import { resolveSelectedDrawingRecord, selectedImageStateOf } from './docx-editor-images.ts';
 import { textboxDrawingOnPage } from '../layout/textbox-drawing-records.ts';
 import { isElementNode, isInputEvent, isKeyboardEvent, isPointerEvent } from './host-realm.ts';
 import { MULTI_CLICK_MS, MULTI_CLICK_SLOP_PX } from './surface-multi-click.ts';
@@ -45,6 +45,11 @@ export function createDrawingGestures(deps: {
   textbox(): ReturnType<typeof createTextboxEditing> | null;
   intent(): DrawingSelectionIntent;
   setIntent(intent: DrawingSelectionIntent): void;
+  /** The body drawing behind the text a press at a client point reaches, if any. */
+  behindDrawingAt(
+    clientX: number,
+    clientY: number
+  ): { readonly drawingNodeId: string; readonly paragraphId: string } | null;
 }) {
   /** The last press, for telling a double press: a pointer press carries no click count. */
   let lastPress: { time: number; x: number; y: number } | null = null;
@@ -69,6 +74,11 @@ export function createDrawingGestures(deps: {
     deps.setIntent({ kind: 'pointer', drawingNodeId });
     return true;
   };
+  /** The behind-text drawing a press reaches where no text lies under it, if any. */
+  const behindDrawingAt = (event: Event) =>
+    isPointerEvent(event) && !event.shiftKey
+      ? deps.behindDrawingAt(event.clientX, event.clientY)
+      : null;
   return {
     onDrawingPointerGesture(event: Event): void {
       if (isPointerEvent(event) && event.button !== 0) return;
@@ -101,6 +111,18 @@ export function createDrawingGestures(deps: {
         // A textbox can extend outside the body column. Its border selects its anchor,
         // even when ordinary text hit testing would land on a nearby body paragraph.
         if (drawing && selectObject(drawingId, drawing.paragraphId)) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          return;
+        }
+      }
+      // A drawing behind the text paints under it, so the press reaches the text layer. Where
+      // no glyph lies under the press, the drawing takes it, as hit testing decides.
+      // One the selection model refuses (hidden, select-locked) leaves the press to the text.
+      const behind = !editingTextbox && !drawingId ? behindDrawingAt(event) : null;
+      if (behind && selectObject(behind.drawingNodeId, behind.paragraphId)) {
+        if (selectedImageStateOf(deps.surface)) {
+          deps.surface.focus();
           event.preventDefault();
           event.stopImmediatePropagation();
           return;

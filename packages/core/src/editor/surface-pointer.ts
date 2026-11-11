@@ -1,4 +1,4 @@
-import { surfacePointAt } from './surface-point.ts';
+import { behindDrawingAt, surfacePointAt } from './surface-point.ts';
 // Pointer gestures over the painted pages.
 //
 // The surface owns this rather than each host, so React, Vue and a plain page get identical
@@ -190,6 +190,8 @@ export interface SurfacePointHit {
 
 export interface PointerController {
   pointAt(clientX: number, clientY: number): SurfacePointHit | null;
+  /** The body drawing behind the text a press there reaches (`behindDrawingAt`). */
+  behindDrawingAt(clientX: number, clientY: number): ReturnType<typeof behindDrawingAt>;
   /**
    * True while a gesture owns the selection.
    *
@@ -1082,6 +1084,7 @@ export function createPointerController(
 
   return {
     pointAt: (x, y) => surfacePointAt(host, x, y),
+    behindDrawingAt: (x, y) => behindDrawingAt(host, x, y),
     dragging: () => gesture !== null,
     cancelGesture: endGesture,
     destroy() {

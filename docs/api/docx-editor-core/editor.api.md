@@ -3671,6 +3671,9 @@ export function parseIsoDate(value: string): Date | null;
 // @public
 export function partOfNodeId(session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'> & Partial<Pick<TreeDocxSessionView, 'storyParts'>>, nodeId: string | undefined): OoxmlPart | null;
 
+// @public
+export function passDrawingFramePressToText(editor: Editor, event: PointerEvent): boolean;
+
 // @internal
 export function placeSubmenu(row: {
     readonly left: number;

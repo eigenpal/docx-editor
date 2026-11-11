@@ -6088,6 +6088,7 @@ export function mountPaginatedSurface(
     textbox: () => textboxEditing,
     intent: () => drawingIntent,
     setIntent: (intent) => setDrawingIntent(intent, true),
+    behindDrawingAt: (x, y) => pointer?.behindDrawingAt(x, y) ?? null,
   });
   pagesLayer.addEventListener('pointerdown', onDrawingPointerGesture, { capture: true });
   pagesLayer.addEventListener('keydown', onDrawingKeyGesture, { capture: true });

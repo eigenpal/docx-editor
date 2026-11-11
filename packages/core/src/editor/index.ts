@@ -838,3 +838,4 @@ export type {
   EditorHostDragEvent,
 } from '../contracts/editor-drop.ts';
 export { canMoveInlineImage, beginInlineImageDrag } from './inline-image-drag.ts';
+export { passDrawingFramePressToText } from './drawing-overlay-press.ts';

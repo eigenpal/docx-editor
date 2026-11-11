@@ -12,6 +12,7 @@ import {
 import { createPortal } from 'react-dom';
 import {
   beginInlineImageDrag,
+  passDrawingFramePressToText,
   canMoveInlineImage,
   captureImageMutationPreconditions,
   computeMovedImagePosition,
@@ -602,6 +603,8 @@ export function ImageSelectionOverlay({
             if (editor && openChartPaneFor(editor, active.id)) event.preventDefault();
           }}
           onPointerDown={(event) => {
+            // Over text in front of a drawing behind it, the text takes the press.
+            if (passDrawingFramePressToText(editor, event.nativeEvent)) return;
             if (showInlineMove && beginInlineImageDrag(editor, event.nativeEvent, active.id))
               return;
             guardToolbarMousedown(event);

@@ -958,10 +958,11 @@ function readFrameLocks(node: OoxmlElement | null): DrawingLocksInput {
   };
 }
 
-function mergeLocks(anchorLocked: boolean, frame: DrawingLocksInput): DrawingLocks {
-  if (anchorLocked) {
-    return Object.freeze({ select: true, move: true, resize: true, changeAspect: true });
-  }
+/**
+ * The drawing's locks, from `a:graphicFrameLocks`. `wp:anchor/@locked` (20.4.2.3) fixes only
+ * the anchor paragraph: the drawing still selects, moves on its page and resizes.
+ */
+function frameLocks(frame: DrawingLocksInput): DrawingLocks {
   return Object.freeze({
     select: frame.select ?? false,
     move: frame.move ?? false,
@@ -1466,7 +1467,7 @@ export function projectDrawingWithState(
           localName: 'cNvGraphicFramePr',
         })
       : null);
-  const locks = mergeLocks(anchorFlag('locked') ?? false, readFrameLocks(framePr));
+  const locks = frameLocks(readFrameLocks(framePr));
   const pictureResult = projectPicture(anchor, state, ctx, namespaceScope, compatibilityMode);
   if (pictureResult.diagnostic) state.diagnostics.push(pictureResult.diagnostic);
   if (state.refused) {

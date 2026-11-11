@@ -79,3 +79,37 @@ export function surfacePointAt(
     return null;
   return { hit, x: origin.x + hit.caret.x, y: origin.y + hit.caret.y };
 }
+
+/**
+ * The body drawing behind the text that a press at a client point reaches, as the body's own
+ * hit test resolves it: where no glyph lies under the point, page margins included. Null in
+ * a note or a header or footer, over a front drawing, and over a read-only position.
+ */
+export function behindDrawingAt(
+  host: PointerHost,
+  clientX: number,
+  clientY: number
+): NonNullable<SemanticHit['drawing']> | null {
+  if (!Number.isFinite(clientX) || !Number.isFinite(clientY) || !host.pagesLayer.isConnected)
+    return null;
+  if (host.activeNote?.() || host.activeHeaderFooter?.()) return null;
+  const layout = host.layout();
+  const rect = host.pagesLayer.getBoundingClientRect();
+  const scale = host.scale() || 1;
+  const sheet = { x: (clientX - rect.left) / scale, y: (clientY - rect.top) / scale };
+  const index = pageAtY(layout, sheet.y);
+  const page = layout.pages[index];
+  if (!page?.anchoredDrawings?.some((drawing) => drawing.behindDocument)) return null;
+  const x = sheet.x - host.pageOffsetX(index);
+  const box = page.box;
+  if (x < box.x || x >= box.x + box.width || sheet.y < box.y || sheet.y >= box.y + box.height)
+    return null;
+  if (findNoteAtSheetPoint({ ...layout, pages: [page] }, sheet, host.pageOffsetX)) return null;
+  const options = host.measurer() ? { measurer: host.measurer()! } : {};
+  const point = { x: x - page.contentBox.x, y: sheet.y - page.contentBox.y };
+  const hit = hitTestPage(layout, index, point, options);
+  const drawing = hit?.drawing;
+  if (!drawing || host.isReadOnlyPosition?.(hit.position)) return null;
+  const record = page.anchoredDrawings.find((d) => d.drawingNodeId === drawing.drawingNodeId);
+  return record?.behindDocument ? drawing : null;
+}

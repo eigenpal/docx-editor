@@ -615,21 +615,27 @@ function pictureHit(drawing: InlineDrawingRecord, x: number, y: number): LineOff
   };
 }
 
+/**
+ * How far, in points, a press reaches from the middle of a drawing that is thinner than
+ * twice this on an axis, such as a straight line: it has no area of its own to press.
+ */
+const THIN_DRAWING_REACH = 3;
+
 function hitBoundsContainDrawing(
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
   point: HitPoint
 ): boolean {
   if (drawing.accessibility.hidden) return false;
   const box = drawing.hitBounds;
-  if (
-    point.x < box.x ||
-    point.x >= box.x + box.width ||
-    point.y < box.y ||
-    point.y >= box.y + box.height
-  ) {
-    return false;
-  }
-  return pointInDrawingClip(point.x, point.y, drawing.geometry);
+  const thinX = box.width < THIN_DRAWING_REACH * 2;
+  const thinY = box.height < THIN_DRAWING_REACH * 2;
+  const x = thinX ? box.x + box.width / 2 - THIN_DRAWING_REACH : box.x;
+  const y = thinY ? box.y + box.height / 2 - THIN_DRAWING_REACH : box.y;
+  const width = thinX ? THIN_DRAWING_REACH * 2 : box.width;
+  const height = thinY ? THIN_DRAWING_REACH * 2 : box.height;
+  if (point.x < x || point.x >= x + width || point.y < y || point.y >= y + height) return false;
+  // A thin drawing's clip is its own thin box, so the reach alone decides.
+  return thinX || thinY || pointInDrawingClip(point.x, point.y, drawing.geometry);
 }
 
 /**

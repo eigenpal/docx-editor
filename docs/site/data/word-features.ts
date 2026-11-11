@@ -681,13 +681,13 @@ export const wordFeatures: WordFeature[] = [
     id: 'images.shapes',
     name: 'Drawing shapes & geometry',
     category: 'images',
-    editing: 'none',
+    editing: 'partial',
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Preset shapes and supported custom shapes display with fills, outlines, and outer shadows. Shapes and grouped text remain read-only; additional effects require the drawing module. Unsupported shapes or groups show a placeholder and retain their text wrap area.',
+      'Preset shapes and supported custom shapes display with fills, outlines, and outer shadows. You can select, move, and delete shapes, lines, and groups; resizing and shape text stay read-only. Additional effects require the drawing module, and unsupported shapes show a placeholder.',
   },
   {
     id: 'images.legacy-vml',

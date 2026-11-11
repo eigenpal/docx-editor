@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A drawing with wp:anchor/@locked refused selection and every frame edit. Plain shapes, lines and groups took no frame edits, and drawings behind the text took no press.",
+  "after": "wp:anchor/@locked fixes only the anchor paragraph. Shapes, lines and groups move, delete and take alt text through the existing drawing operations, and a press behind the text selects the drawing where no text lies.",
+  "reason": "The change admits the existing positionDrawing, deleteDrawing and setDrawingMetadata operations for more drawings and changes pointer routing. Peers exchange the resulting node edits, and node shapes, text offsets and serialization do not change, so released clients apply them as before.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-shape-selection.test.ts",
+    "packages/core/src/editor/__tests__/shape-selection.test.ts",
+    "packages/core/src/store/__tests__/tree-drawing-shape-ops.test.ts"
+  ],
+  "changeset": "select-shapes",
+  "migration": null
+}
