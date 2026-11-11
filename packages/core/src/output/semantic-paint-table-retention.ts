@@ -79,7 +79,8 @@ export interface TableRepaint extends ParagraphReflowPaint {
 }
 
 const TABLE_GEOMETRY: ReadonlySet<string> = new Set(['rows', 'box', 'columnEdges']);
-const ROW_GEOMETRY: ReadonlySet<string> = new Set(['box', 'cells']);
+// The gap bands paint from `spacingShading` as the fragment's leading layers, not the row.
+const ROW_GEOMETRY: ReadonlySet<string> = new Set(['box', 'cells', 'spacingShading']);
 const CELL_GEOMETRY: ReadonlySet<string> = new Set(['box', 'blocks', 'borders']);
 // Paint draws the per-side edges and the stroke records; edge segments are not painted.
 const BORDER_GEOMETRY: ReadonlySet<string> = new Set(['strokes', 'edgeSegments']);
@@ -338,7 +339,7 @@ export function reflowTableFragment(
   const leading = repaint.leading ?? [];
   while (element.firstElementChild?.classList.contains(TABLE_SPACING_SHADING_CLASS))
     element.firstElementChild.remove();
-  element.prepend(...leading);
+  if (leading.length > 0) element.prepend(...leading);
   reconcileChildren(element, [...rows.values()], leading.length);
   tables.set(element, { fragment, rows });
   return element;

@@ -82,7 +82,7 @@ export function closeTableFragmentRows(input: TableFragmentClose): {
     )
   );
   if (fragmentCarry) finalized = fragmentCarry.finish(finalized);
-  finalized = [...withPlacedClosingGap(finalized, input.bottom)];
+  finalized = withPlacedClosingGap(finalized, input.bottom);
   const last = finalized[finalized.length - 1]!;
   const fragment = annotateTableFragmentGeometry(
     {

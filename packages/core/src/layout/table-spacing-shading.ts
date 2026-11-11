@@ -4,7 +4,7 @@
 // covers it: in the `w:tblCellSpacing` gaps between cells and between the cells and the table
 // edge. A cell without a fill of its own does not take it, so with no cell spacing the table
 // fill shows nowhere. Reference renderings agree on each of these in compatibility modes 14
-// and 15: an unshaded cell paints white over a shaded table, with or without spacing; the
+// and 15, and in a file that states no compatibility mode: an unshaded cell paints white over a shaded table, with or without spacing; the
 // gaps of a spaced table take the fill; a cell's own fill paints over it; and a row's
 // `w:tblPrEx` fill replaces the table's around that row's cells.
 //
@@ -15,6 +15,8 @@
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { wmlChildNamed } from '../store/store/tree-op-table-shared.ts';
 import { cascadedShadingFill } from './table-cell-shading.ts';
+import { cellSpacingGapPt, closingCellSpacingPt } from './table-cell-spacing.ts';
+import type { SemanticTableRow } from './semantic-table.ts';
 import type {
   LayoutBox,
   TableFragmentRecord,
@@ -33,32 +35,39 @@ export interface TableSpacingShadingRegion {
 }
 
 /**
- * The spacing fill of each row, keyed by row id. Empty when the table has no cell spacing,
- * because then no gap shows the fill. `rowNodes` are the authored `w:tr` elements the table
- * lays out, in order; the closing gap goes to the last of them.
+ * `rows` with the gap fill each one shows, or `rows` itself when the table has no cell
+ * spacing: then no gap shows the fill. `rowNodes` are the authored `w:tr` elements of `rows`,
+ * in order; the closing gap goes to the last of them.
  */
-export function rowSpacingShading(input: {
-  readonly stylePropertyNodes: readonly OoxmlElement[];
-  readonly tableProperties: OoxmlElement | undefined;
-  readonly rowNodes: readonly OoxmlElement[];
-  readonly cellSpacingPt: number;
-  /** The gap between neighbouring cells, and a cell and the table edge: twice the spacing. */
-  readonly gapPt: number;
-  readonly closingPt: number;
-}): ReadonlyMap<string, TableSpacingShading> {
-  const shading = new Map<string, TableSpacingShading>();
-  if (!(input.cellSpacingPt > 0)) return shading;
+export function withRowSpacingShading(
+  rows: readonly SemanticTableRow[],
+  input: {
+    readonly stylePropertyNodes: readonly OoxmlElement[];
+    readonly tableProperties: OoxmlElement | undefined;
+    readonly rowNodes: readonly OoxmlElement[];
+    readonly cellSpacingPt: number;
+  }
+): readonly SemanticTableRow[] {
+  const { cellSpacingPt } = input;
+  if (!(cellSpacingPt > 0)) return rows;
   const layers = [...input.stylePropertyNodes, input.tableProperties];
   const tableFill = cascadedShadingFill(layers);
-  const last = input.rowNodes.at(-1);
+  const gapPt = cellSpacingGapPt(cellSpacingPt);
+  const closingPt = closingCellSpacingPt({ cellSpacingPt, rows });
+  const fills = new Map<string, string>();
   for (const node of input.rowNodes) {
     const exception = wmlChildNamed(node, 'tblPrEx');
     const fill = exception ? cascadedShadingFill([...layers, exception]) : tableFill;
-    if (fill === undefined) continue;
-    const closing = node === last && input.closingPt > 0 ? { closingPt: input.closingPt } : {};
-    shading.set(node.id, { fill, gapPt: input.gapPt, ...closing });
+    if (fill !== undefined) fills.set(node.id, fill);
   }
-  return shading;
+  if (fills.size === 0) return rows;
+  const lastId = input.rowNodes.at(-1)?.id;
+  return rows.map((row) => {
+    const fill = fills.get(row.id);
+    if (fill === undefined) return row;
+    const closing = row.id === lastId && closingPt > 0 ? { closingPt } : {};
+    return { ...row, spacingShading: { fill, gapPt, ...closing } };
+  });
 }
 
 function clip(box: LayoutBox, to: LayoutBox): LayoutBox | null {
@@ -80,6 +89,7 @@ export function tableSpacingShadingRegions(
   fragment: Pick<TableFragmentRecord, 'rows'>
 ): readonly TableSpacingShadingRegion[] {
   const regions: TableSpacingShadingRegion[] = [];
+  if (!fragment.rows.some((row) => row.spacingShading)) return regions;
   let open: LayoutBox[] = [];
   for (const row of fragment.rows) {
     const cells: LayoutBox[] = [];
@@ -133,9 +143,9 @@ function addHole(holes: LayoutBox[], hole: LayoutBox | null): void {
  * table's cell. Returns `rows` itself when nothing changes.
  */
 export function withPlacedClosingGap<Row extends TableRowFragmentRecord>(
-  rows: readonly Row[],
+  rows: Row[],
   bottom: number
-): readonly Row[] {
+): Row[] {
   const last = rows.at(-1);
   const closing = last?.spacingShading?.closingPt;
   if (!last || closing === undefined || last.hasContinuation) return rows;

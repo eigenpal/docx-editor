@@ -108,9 +108,8 @@ import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
 import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 import { conditionalTypesFor, readTableLook } from './table-conditional-formats.ts';
 import { cellShading } from './table-cell-shading.ts';
-import { rowSpacingShading } from './table-spacing-shading.ts';
+import { withRowSpacingShading } from './table-spacing-shading.ts';
 import type { TableSpacingShading } from './semantic-records.ts';
-import { cellSpacingGapPt, closingCellSpacingPt } from './table-cell-spacing.ts';
 import {
   wmlAttributeValue as attributeValue,
   wmlChildNamed as childNamed,
@@ -946,24 +945,21 @@ function readTableStructureUncached(
     contentOffset ?? sideRules.outerRuleOffsetPt ?? placement.bidiRuleShiftPt;
   const autoOuterRulePt =
     contentOffset === undefined ? autoWidthOuterRulePt(contentRows, sideRuleShape) : 0;
-  const spacingShading = rowSpacingShading({
-    ...{ stylePropertyNodes: tableStyle.tablePropertyNodes, tableProperties: tblPr },
-    ...{ rowNodes: plans.map((plan) => plan.node), gapPt: cellSpacingGapPt(cellSpacingPt) },
-    ...{ cellSpacingPt, closingPt: closingCellSpacingPt({ cellSpacingPt, rows }) },
+  const shadedRows = withRowSpacingShading(contentRows, {
+    stylePropertyNodes: tableStyle.tablePropertyNodes,
+    tableProperties: tblPr,
+    rowNodes: plans.map((plan) => plan.node),
+    cellSpacingPt,
   });
   return {
     ...(bidiVisual ? { bidiVisual: true as const } : {}),
     columnWidthsPt: bidiVisual ? [...columnWidthsPt].reverse() : columnWidthsPt,
     rows:
-      legacyWidth === undefined && spacingShading.size === 0
-        ? contentRows
-        : contentRows.map((row) => ({
+      legacyWidth === undefined
+        ? shadedRows
+        : shadedRows.map((row) => ({
             ...row,
-            ...(spacingShading.has(row.id) ? { spacingShading: spacingShading.get(row.id) } : {}),
-            cells:
-              legacyWidth === undefined
-                ? row.cells
-                : row.cells.map((cell) => ({ ...cell, legacyContentAlignment: true as const })),
+            cells: row.cells.map((cell) => ({ ...cell, legacyContentAlignment: true as const })),
           })),
     ...(legacyWidth === undefined ? {} : { legacyContentAlignment: true as const }),
     ...(legacy?.trailingOuterEdge ? { legacyTrailingOuterEdge: true as const } : {}),
