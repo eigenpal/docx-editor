@@ -237,6 +237,20 @@ test('a positioned spaced table holds its closing gap, so its last band fills it
   expect(region!.box.y + region!.box.height).toBeCloseTo(last.y + last.height + 10, 6);
 });
 
+test("the last row's own fill shades the closing gap, and a cleared one leaves it blank", () => {
+  // Measured: the closing gap below the table belongs to the last row's band.
+  const lastRow = (fill: string) =>
+    `<w:tr><w:tblPrEx>${shd(fill)}</w:tblPrEx>${cell('c')}${cell('d')}</w:tr>`;
+  const first = `<w:tr>${cell('a')}${cell('b')}</w:tr>`;
+  const shaded = layoutTable({ tblPr: SPACING + shd('D9E2F3'), rows: [first, lastRow('FFC000')] });
+  const regions = tableSpacingShadingRegions(shaded[0]!);
+  expect(regions.map((region) => region.fill)).toEqual(['D9E2F3', 'FFC000']);
+  const box = shaded[0]!.box;
+  expect(regions[1]!.box.y + regions[1]!.box.height).toBeCloseTo(box.y + box.height, 6);
+  const cleared = layoutTable({ tblPr: SPACING + shd('D9E2F3'), rows: [first, lastRow('auto')] });
+  expect(tableSpacingShadingRegions(cleared[0]!).map((region) => region.fill)).toEqual(['D9E2F3']);
+});
+
 test('a bottom-aligned positioned spaced table puts its closing gap, not its last row, on the margin', () => {
   // Measured: the outer box, gap included, ends on the bottom margin.
   const position = '<w:tblpPr w:vertAnchor="margin" w:horzAnchor="margin" w:tblpYSpec="bottom"/>';

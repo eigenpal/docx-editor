@@ -83,22 +83,10 @@ export function sumCols(cols: readonly number[], from: number, to: number): numb
 }
 
 /**
- * The cell-spacing gap a table leaves below its last row. Each row opens the same gap above
- * its cells; an exact-height row keeps its authored height and opens none.
- */
-export function closingCellSpacingPt(structure: {
-  readonly cellSpacingPt: number;
-  readonly rows: readonly { readonly height: { readonly rule: string } }[];
-}): number {
-  const last = structure.rows.at(-1);
-  return last && last.height.rule !== 'exact' ? cellSpacingGapPt(structure.cellSpacingPt) : 0;
-}
-
-/**
  * The gap a fragment of a spaced table closes below its last row, `lastRow`: twice the
- * spacing, none below an exact-height row, and no more than `roomPt`. Every fragment that
- * ends between rows closes this way, at a page break as at the table's end; a row split
- * across pages (`splitRow`) closes with none.
+ * spacing, none below an exact-height row, which keeps its authored height, and no more than
+ * `roomPt`. Every fragment that ends between rows closes this way, at a page break as at the
+ * table's end; a row split across pages (`splitRow`) closes with none.
  */
 export function fragmentClosingGapPt(
   cellSpacingPt: number,
@@ -106,25 +94,27 @@ export function fragmentClosingGapPt(
   roomPt: number,
   splitRow = false
 ): number {
-  if (splitRow || !lastRow) return 0;
-  return Math.max(0, Math.min(closingCellSpacingPt({ cellSpacingPt, rows: [lastRow] }), roomPt));
+  if (splitRow || !lastRow || lastRow.height.rule === 'exact') return 0;
+  return Math.max(0, Math.min(cellSpacingGapPt(cellSpacingPt), roomPt));
+}
+
+/** The gap a whole table leaves below its last row, with no bound below it. */
+export function closingCellSpacingPt(structure: {
+  readonly cellSpacingPt: number;
+  readonly rows: readonly { readonly height: { readonly rule: string } }[];
+}): number {
+  return fragmentClosingGapPt(structure.cellSpacingPt, structure.rows.at(-1), Infinity);
 }
 
 /**
- * Move `flow` past the gap a spaced table closes below its last row, no further than
- * `frameBottom`, the bottom of the frame the table fills, and return the gap placed: the
- * fragment box holds that much below the row.
+ * Move `flow` past the gap a spaced table closes below its last row, no lower than
+ * `frameBottom`, the bottom of the frame the table fills. A cursor already past that bottom
+ * comes back to it.
  */
 export function placeClosingCellSpacing(
   flow: { cursorY: number },
   structure: Parameters<typeof closingCellSpacingPt>[0],
   frameBottom: number
-): number {
-  const gap = fragmentClosingGapPt(
-    structure.cellSpacingPt,
-    structure.rows.at(-1),
-    frameBottom - flow.cursorY
-  );
-  flow.cursorY += gap;
-  return gap;
+): void {
+  flow.cursorY = Math.min(flow.cursorY + closingCellSpacingPt(structure), frameBottom);
 }

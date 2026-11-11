@@ -228,7 +228,7 @@ export function* paginateTableInFlowSteps(
     if (deps.cellContentInsets) occurrenceInsets.set(record, deps.cellContentInsets);
   };
   let wrapsBeside = false;
-  const closeTableFragment = (closingPt?: number): void => {
+  const closeTableFragment = (): void => {
     const frameBottom = contentHeight();
     bandTop = 0;
     firstFragmentBottom = undefined;
@@ -250,7 +250,6 @@ export function* paginateTableInFlowSteps(
       top: fragmentTop,
       bottom: contentHeight(),
       frameBottom,
-      closingPt,
       deps: tableDeps,
       carry,
       fragmentCarry: fragmentCarry.current,
@@ -985,10 +984,10 @@ export function* paginateTableInFlowSteps(
       breakForContinuation(admitsRepeatedHeaders);
     }
   }
-  const closingPt = placeClosingCellSpacing(flow, structure, contentHeight());
+  placeClosingCellSpacing(flow, structure, contentHeight());
   const broken = pinnedBreak !== undefined || (textFlow && fragmentIndex > 0);
   wrapsBeside = broken && fragmentIndex > 0 && textTable.leavesPassage(structure, flow, tableLeft);
-  closeTableFragment(closingPt);
+  closeTableFragment();
   if (outOfFlow) flow.cursorY = bodyCursorY;
   else if (broken)
     flow.cursorY = textTable.resumeAfterBreak(structure, flow, wrapsBeside, fragmentTop);
