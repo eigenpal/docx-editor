@@ -1,8 +1,12 @@
 // A package rebuilt from a collaboration room has an up-to-date content type index, but the
 // [Content_Types].xml bytes it was seeded with. Export writes back only the Overrides that
-// differ from the index. Malformed, duplicate and orphan records, and extension content, stay
-// as authored.
-import { buildTolerantContentTypeIndex, type OverrideRecord } from './content-types.ts';
+// differ from the index, updating a declaration in place under its authored spelling.
+// Records the index ignores, and extension content, stay as authored.
+import {
+  buildTolerantContentTypeIndex,
+  overrideKeyOf,
+  type OverrideRecord,
+} from './content-types.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { contentTypesPartBytes, withContentTypeOverrides } from './package-edit.ts';
 import { partNameKey } from './opc-names.ts';
@@ -52,34 +56,48 @@ export function contentTypeExportPackage(pkg: OoxmlPackage): OoxmlPackage {
     if (authored.index.overrides.get(key) !== type) changed.push([names.get(key) ?? key, type]);
   }
   if (removed.size === 0 && changed.length === 0) return pkg;
-  // Remove only declarations that the authored index recognizes. Invalid declarations
-  // absent from that index stay inert, as they do in an ordinary open/save cycle.
-  const prune = (node: OoxmlNode): OoxmlNode => {
+  // Match both the normalized name and the type the authored index kept. Ignored records
+  // stay inert; update recognized declarations in place to keep their authored spelling.
+  const recognizedKey = (node: OoxmlNode): string | null => {
+    if (node.kind === 'textValue' || node.namespaceUri !== NS || node.localName !== 'Override')
+      return null;
+    const name = attribute(node, 'PartName');
+    const type = attribute(node, 'ContentType');
+    const key = name === undefined ? null : overrideKeyOf(name);
+    return key !== null && type !== undefined && authored.index.overrides.get(key) === type
+      ? key
+      : null;
+  };
+  const reconcile = (node: OoxmlNode): OoxmlNode => {
     if (node.kind === 'textValue') return node;
+    const key = recognizedKey(node);
+    const type = key === null ? undefined : pkg.contentTypes.overrides.get(key);
     const children = node.children
       .filter((child) => {
-        if (
-          child.kind === 'textValue' ||
-          child.namespaceUri !== NS ||
-          child.localName !== 'Override'
-        )
-          return true;
-        const name = attribute(child, 'PartName');
-        return name === undefined || !removed.has(partNameKey(name));
+        const key = recognizedKey(child);
+        return key === null || !removed.has(key);
       })
-      .map(prune);
-    return { ...node, children } as OoxmlNode;
+      .map(reconcile);
+    const attributes =
+      type === undefined
+        ? node.attributes
+        : node.attributes.map((a) =>
+            a.namespaceUri === '' && a.localName === 'ContentType' ? { ...a, value: type } : a
+          );
+    return { ...node, attributes, children } as OoxmlNode;
   };
-  let next = pkg;
-  if (removed.size > 0) {
-    const root = prune(parsed.part.root);
-    if (root.kind === 'textValue') return pkg;
-    const partBytes = new Map(pkg.partBytes);
-    partBytes.set(
-      entry.storageKey,
-      new TextEncoder().encode(serializeOoxmlPart({ ...parsed.part, root }))
-    );
-    next = { ...pkg, partBytes };
-  }
-  return runWithoutJournalCapture(() => withContentTypeOverrides(next, changed));
+  const root = reconcile(parsed.part.root);
+  if (root.kind === 'textValue') return pkg;
+  const partBytes = new Map(pkg.partBytes);
+  partBytes.set(
+    entry.storageKey,
+    new TextEncoder().encode(serializeOoxmlPart({ ...parsed.part, root }))
+  );
+  const next = { ...pkg, partBytes };
+  return runWithoutJournalCapture(() =>
+    withContentTypeOverrides(
+      next,
+      changed.filter(([name]) => !authored.index.overrides.has(partNameKey(name)))
+    )
+  );
 }
