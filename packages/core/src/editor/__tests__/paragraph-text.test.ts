@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { textboxDocx } from './textbox-editing-fixture.ts';
 import { docx } from './paginated-surface-fixtures.ts';
-import { mountAnchorEditor } from './scroll-to-anchor-fixture.ts';
+import { storyParityDocx } from './story-parity-fixture.ts';
+import { mountAnchorEditor, replacePart } from './scroll-to-anchor-fixture.ts';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -24,44 +26,92 @@ function blockOf(editor: ReturnType<typeof mount>, word: string): string {
 }
 
 describe('getParagraphText', () => {
-  test('returns the text in the offsets setHighlights takes', () => {
-    const editor = mount(
-      p(
-        run('Page '),
-        '<w:fldSimple w:instr="PAGE">' + run('1') + '</w:fldSimple>',
-        run(' 😀 recieve')
-      )
-    );
-    const paragraph = editor.getParagraphText(blockOf(editor, 'recieve'))!;
-    const start = paragraph.text.indexOf('recieve');
+  test.each(['atomic', 'editable'] as const)(
+    'uses %s field offsets for highlights',
+    (fieldResults) => {
+      const mounted = mountAnchorEditor(
+        docx(
+          p(
+            run('Date '),
+            '<w:fldSimple w:instr="DATE">' + run('11 November') + '</w:fldSimple>',
+            run(' 😀 recieve')
+          )
+        ),
+        { fieldResults }
+      );
+      cleanups.push(mounted.destroy);
+      const editor = mounted.editor;
+      const paragraph = editor.getParagraphText(blockOf(editor, 'recieve'))!;
+      expect(paragraph.text).toBe(
+        fieldResults === 'editable' ? 'Date 11 November 😀 recieve' : 'Date \uFFFC 😀 recieve'
+      );
+      expect(paragraph.keptText).toBe(paragraph.text);
+      expect(editor.getParagraphs()[0]).toBe(paragraph);
+      expect(
+        editor.setHighlights('spelling', [
+          {
+            blockId: paragraph.blockId,
+            start: paragraph.text.indexOf('recieve'),
+            length: 7,
+            expectedText: 'recieve',
+          },
+        ])
+      ).toEqual({ applied: 1, unavailable: 0 });
+    }
+  );
 
-    expect(
-      editor.setHighlights('spelling', [
-        { blockId: paragraph.blockId, start, length: 7, expectedText: 'recieve' },
-      ])
-    ).toEqual({ applied: 1, unavailable: 0 });
+  test.each(['del', 'moveFrom'])(
+    'maps kept text across %s without marking deleted characters',
+    (kind) => {
+      const editor = mount(
+        p(
+          run('😀 rec'),
+          `<w:${kind} w:id="1" ${byReviewer}><w:r><w:delText>ie</w:delText></w:r></w:${kind}>`,
+          `<w:ins w:id="2" ${byReviewer}>${run('ei')}</w:ins>`,
+          run('ve')
+        )
+      );
+      const paragraph = editor.getParagraphText(blockOf(editor, 'rec'))!;
+      expect(paragraph.text).toBe('😀 recieeive');
+      expect(paragraph.keptText).toBe('😀 receive');
+      expect(paragraph.keptSpans).toEqual([
+        { start: 0, length: 6, keptStart: 0 },
+        { start: 8, length: 4, keptStart: 6 },
+      ]);
+      expect(
+        editor.setHighlights(
+          'kept',
+          paragraph.keptSpans.map(({ start, length }) => ({
+            blockId: paragraph.blockId,
+            start,
+            length,
+            expectedText: paragraph.text.slice(start, start + length),
+          }))
+        )
+      ).toEqual({ applied: 2, unavailable: 0 });
+      expect(
+        paragraph.keptSpans
+          .map(({ start, length }) => paragraph.text.slice(start, start + length))
+          .join('')
+      ).toBe(paragraph.keptText);
+    }
+  );
+
+  test.each(['', 'Plain text'])('maps an unchanged paragraph: %s', (text) => {
+    const editor = mount(p(run(text)));
+    const [paragraph] = editor.getParagraphs();
+    expect(paragraph?.keptText).toBe(text);
+    expect(paragraph?.keptSpans).toEqual(
+      text ? [{ start: 0, length: text.length, keptStart: 0 }] : []
+    );
   });
 
-  test('reports tracked deletions as spans of the text', () => {
-    const editor = mount(
-      p(
-        run('Keep '),
-        `<w:del w:id="1" ${byReviewer}><w:r><w:delText xml:space="preserve">teh </w:delText></w:r></w:del>`,
-        run('notes')
-      )
-    );
-
-    expect(editor.getParagraphText(blockOf(editor, 'notes'))).toEqual({
-      blockId: blockOf(editor, 'notes'),
-      text: 'Keep teh notes',
-      deletions: [{ start: 5, length: 4 }],
-    });
-  });
-
-  test('returns no deletions for a paragraph without tracked deletions', () => {
-    const editor = mount(p(run('Plain text')));
-
-    expect(editor.getParagraphText(blockOf(editor, 'Plain'))?.deletions).toEqual([]);
+  test.each(['', 'kept'])('maps leading, adjacent and trailing deletions around %s', (kept) => {
+    const deleted = `<w:del w:id="1" ${byReviewer}><w:r><w:delText>x</w:delText></w:r></w:del>`;
+    const editor = mount(p(deleted, deleted, run(kept), deleted));
+    const [paragraph] = editor.getParagraphs();
+    expect(paragraph?.keptText).toBe(kept);
+    expect(paragraph?.keptSpans).toEqual(kept ? [{ start: 2, length: 4, keptStart: 0 }] : []);
   });
 
   test('returns null for an id the document does not hold', () => {
@@ -71,26 +121,88 @@ describe('getParagraphText', () => {
   });
 });
 
-describe('getPaintedParagraphs', () => {
-  const lines = Array.from({ length: 400 }, (_, index) => p(run(`Line ${index}.`))).join('');
-
-  test('returns the paragraphs on the painted pages, in order', () => {
-    const editor = mount(lines);
-
-    const texts = editor.getPaintedParagraphs().map((paragraph) => paragraph.text);
-
-    expect(texts[0]).toBe('Line 0.');
-    expect(texts).not.toContain('Line 399.');
-    expect(texts).toEqual(
-      [...texts].sort((a, b) => Number(a.slice(5, -1)) - Number(b.slice(5, -1)))
-    );
+describe('getParagraphs', () => {
+  test('reads every paragraph before its page is painted, in model order', () => {
+    const lines = Array.from({ length: 400 }, (_, index) => `Line ${index}.`);
+    const editor = mount(lines.map((text) => p(run(text))).join(''));
+    const paragraphs = editor.getParagraphs();
+    expect(paragraphs.map(({ text }) => text)).toEqual(lines);
+    editor.scrollToBlock(paragraphs[399]!.blockId);
+    expect(editor.getParagraphs()).toBe(paragraphs);
   });
 
-  test('includes a page once it is painted', () => {
-    const editor = mount(lines);
+  test('reuses unchanged paragraphs across edits, undo and redo', () => {
+    const editor = mount(p(run('First')) + p(run('Second')));
+    const before = editor.getParagraphs();
+    const match = editor.findMatches('First')[0]!;
+    expect(editor.exec({ type: 'replaceMatch', match, text: 'Changed' }).ok).toBe(true);
+    const after = editor.getParagraphs();
+    expect(after[0]?.keptText).toBe('Changed');
+    expect(after[0]).not.toBe(before[0]);
+    expect(after[1]).toBe(before[1]);
+    expect(Object.isFrozen(after)).toBe(true);
+    expect(Object.isFrozen(after[0])).toBe(true);
+    expect(Object.isFrozen(after[0]!.keptSpans)).toBe(true);
+    expect(Object.isFrozen(after[0]!.keptSpans[0])).toBe(true);
+    expect(editor.getParagraphText(after[0]!.blockId)).toBe(after[0]);
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    expect(editor.getParagraphs()[0]?.keptText).toBe('First');
+    expect(editor.exec({ type: 'redo' }).ok).toBe(true);
+    expect(editor.getParagraphs()[0]?.keptText).toBe('Changed');
+  });
 
-    editor.scrollToBlock(blockOf(editor, 'Line 399.'));
+  test('reads headers, footers and notes once, independent of the active story', () => {
+    const mounted = mountAnchorEditor(storyParityDocx());
+    cleanups.push(mounted.destroy);
+    const paragraphs = mounted.editor.getParagraphs();
+    const alpha = paragraphs.filter(({ text }) => text === 'Alpha');
+    expect(alpha).toHaveLength(5);
+    expect(new Set(paragraphs.map(({ blockId }) => blockId)).size).toBe(paragraphs.length);
+    for (const paragraph of alpha) {
+      expect(mounted.editor.getParagraphText(paragraph.blockId)).toBe(paragraph);
+      expect(
+        mounted.editor.setHighlights('story', [
+          { blockId: paragraph.blockId, start: 0, length: 5, expectedText: 'Alpha' },
+        ])
+      ).toEqual({ applied: 1, unavailable: 0 });
+    }
+    expect(paragraphs).toHaveLength(26);
+  });
 
-    expect(editor.getPaintedParagraphs().map((paragraph) => paragraph.text)).toContain('Line 399.');
+  test('includes table cells and the active text-box copy once', () => {
+    const boxText = '<w:txbxContent>' + p(run('boxed needle')) + '</w:txbxContent>';
+    const bytes = replacePart(textboxDocx(), 'word/document.xml', (xml) =>
+      xml
+        .replace(
+          '<mc:Fallback><w:pict/></mc:Fallback>',
+          '<mc:Fallback><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml"><v:textbox>' +
+            boxText +
+            '</v:textbox></v:shape></w:pict></mc:Fallback>'
+        )
+        .replace(
+          '</w:body>',
+          '<w:tbl><w:tr><w:tc>' + p(run('Cell')) + '</w:tc></w:tr></w:tbl></w:body>'
+        )
+    );
+    const mounted = mountAnchorEditor(bytes);
+    cleanups.push(mounted.destroy);
+    const paragraphs = mounted.editor.getParagraphs();
+    expect(paragraphs.map(({ text }) => text)).toEqual(['body', '\uFFFC', 'boxed needle', 'Cell']);
+    const boxed = paragraphs[2]!;
+    expect(mounted.editor.getParagraphText(boxed.blockId)).toBe(boxed);
+    expect(
+      mounted.editor.setHighlights('box', [
+        { blockId: boxed.blockId, start: 0, length: boxed.text.length, expectedText: boxed.text },
+      ])
+    ).toEqual({ applied: 1, unavailable: 0 });
+  });
+
+  test('reloads paragraphs even when node ids repeat', async () => {
+    const editor = mount(p(run('Before')));
+    const [before] = editor.getParagraphs();
+    await editor.load(docx(p(run('After'))));
+    const [after] = editor.getParagraphs();
+    expect(after?.text).toBe('After');
+    expect(after).not.toBe(before);
   });
 });

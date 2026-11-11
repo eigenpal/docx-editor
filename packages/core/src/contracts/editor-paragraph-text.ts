@@ -1,50 +1,40 @@
-// Paragraph text for hosts that compute their own ranges: the read half of `setHighlights()`.
-
-/** A run of characters in a paragraph's text. @public */
-export interface TextSpan {
-  /** UTF-16 offset of the first character. */
+/** A continuous kept-text span mapped to model offsets. @public */
+export interface ParagraphTextSpan {
+  /** UTF-16 offset in `ParagraphText.text`. */
   readonly start: number;
-  /** Number of UTF-16 code units. */
+  /** Number of UTF-16 code units in both texts. */
   readonly length: number;
+  /** UTF-16 offset in `ParagraphText.keptText`. */
+  readonly keptStart: number;
 }
 
-/**
- * One paragraph's text in the offsets that `findMatches()` returns and `setHighlights()` takes.
- * A range computed from `text` passes to `setHighlights()` without conversion. @public
- */
+/** Immutable paragraph text and offsets for `setHighlights()`. @public */
 export interface ParagraphText {
-  /** The paragraph: `HighlightRange.blockId`. IDs belong to the open document. */
+  /** The paragraph's `HighlightRange.blockId`, scoped to the open document. */
   readonly blockId: string;
-  /** Model text. Tracked deletions are included, and a field counts as one character. */
+  /** Model text, including tracked deletions, in the editor's configured `fieldResults` offsets. */
   readonly text: string;
-  /** Tracked deletions in `text`, in order. Skip them to read the text the document keeps. */
-  readonly deletions: readonly TextSpan[];
+  /** Text without tracked deletions or move-from revisions. Insertions are included. */
+  readonly keptText: string;
+  /** Ordered spans mapping `keptText` to `text`. Split ranges at gaps to avoid marking deleted text. */
+  readonly keptSpans: readonly ParagraphTextSpan[];
 }
 
-/** Read paragraph text to compute your own highlight ranges, such as spelling marks. @public */
+/** Read paragraph text to compute highlight ranges, such as spelling marks. @public */
 export interface EditorParagraphText {
   /**
-   * One paragraph's text, or `null` when the open document has no paragraph with that id.
-   *
-   * @example
-   * ```ts
-   * const paragraph = editor.getParagraphText(match.blockId);
-   * ```
+   * One paragraph's text, or `null` if the open document has no paragraph with that id.
+   * Returns the same object while the underlying paragraph node is unchanged.
    * @public
    */
   getParagraphText(blockId: string): ParagraphText | null;
   /**
-   * The text of each paragraph on the painted pages, in page order.
-   *
-   * The editor paints only the pages near the viewport, so the result changes as the reader
-   * scrolls. Read it again after a `change` event and after the painted pages change. Body
-   * text, tables, headers, footers, notes, and anchored text boxes are included.
-   *
-   * @example
-   * ```ts
-   * for (const { blockId, text } of editor.getPaintedParagraphs()) check(blockId, text);
-   * ```
+   * Paragraphs across document stories, including pages that have not been painted.
+   * Includes body text, tables, content controls, headers, footers, notes and supported text boxes.
+   * Body comes first, then other story parts; paragraphs follow model order within each story.
+   * Text-box paragraphs follow their host paragraph. Repeated headers and footers appear once.
+   * Read again after a `change` event. Unchanged paragraph nodes retain their result objects.
    * @public
    */
-  getPaintedParagraphs(): readonly ParagraphText[];
+  getParagraphs(): readonly ParagraphText[];
 }

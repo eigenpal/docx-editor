@@ -57,21 +57,29 @@ A function source runs again after each document change, so the marks follow the
 
 ## Highlight ranges that you compute
 
-To mark ranges that `findMatches()` cannot find, such as misspelled words, read the paragraph text. `editor.getPaintedParagraphs()` returns the text of each paragraph on the painted pages. `editor.getParagraphText(blockId)` returns one paragraph. The offsets in `text` are the offsets that `setHighlights()` takes.
+Call `editor.getParagraphs()` to read paragraphs across document stories, including pages that have not been painted. Call `editor.getParagraphText(blockId)` to read one. Body text, tables, content controls, headers, footers, notes and supported text boxes are included. Repeated headers and footers appear once.
+
+Check `keptText` for spelling. It excludes tracked deletions and move-from revisions, while retaining insertions. The `keptSpans` map gives the model offsets that `setHighlights()` takes. A word spanning a deletion needs a separate highlight for each kept span.
 
 ```ts
 import type { Editor, HighlightRange } from '@docx-editor.dev/core';
 
 function misspelledRanges(editor: Editor, isMisspelled: (word: string) => boolean) {
   const ranges: HighlightRange[] = [];
-  for (const { blockId, text, deletions } of editor.getPaintedParagraphs()) {
-    for (const word of text.matchAll(/\p{L}+/gu)) {
-      const start = word.index;
-      const deleted = deletions.some(
-        (span) => start >= span.start && start < span.start + span.length
-      );
-      if (!deleted && isMisspelled(word[0])) {
-        ranges.push({ blockId, start, length: word[0].length, expectedText: word[0] });
+  for (const { blockId, text, keptText, keptSpans } of editor.getParagraphs()) {
+    for (const word of keptText.matchAll(/\p{L}+/gu)) {
+      if (!isMisspelled(word[0])) continue;
+      for (const span of keptSpans) {
+        const from = Math.max(word.index, span.keptStart);
+        const to = Math.min(word.index + word[0].length, span.keptStart + span.length);
+        if (from >= to) continue;
+        const start = span.start + from - span.keptStart;
+        ranges.push({
+          blockId,
+          start,
+          length: to - from,
+          expectedText: text.slice(start, start + to - from),
+        });
       }
     }
   }
@@ -79,7 +87,9 @@ function misspelledRanges(editor: Editor, isMisspelled: (word: string) => boolea
 }
 ```
 
-`text` includes tracked deletions. Use `deletions` to skip them. A field counts as one character. The painted pages change as the reader scrolls, so read the paragraphs again then.
+All offsets use UTF-16 code units and match the editor's `fieldResults` setting. In the default mode, each field is one U+FFFC character in both texts, including hyperlink fields. With `fieldResults: 'editable'`, supported saved field results appear as text.
+
+Read again after a `change` event. Results are immutable, and unchanged paragraph nodes return the same objects. Hosts can cache checks by object identity. Scrolling does not require another check. For asynchronous checks, confirm the paragraph object is still current before setting highlights.
 
 ## Configure a highlight set
 

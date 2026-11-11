@@ -50,7 +50,11 @@ export type {
   HighlightResult,
 } from './editor-highlights.ts';
 import type { EditorParagraphText } from './editor-paragraph-text.ts';
-export type { EditorParagraphText, ParagraphText, TextSpan } from './editor-paragraph-text.ts';
+export type {
+  EditorParagraphText,
+  ParagraphText,
+  ParagraphTextSpan,
+} from './editor-paragraph-text.ts';
 import type { EditorReviewHits } from './editor-review-hits.ts';
 import type { ReviewItemQuery } from './editor-review-query.ts';
 export type { ReviewItemQuery } from './editor-review-query.ts';

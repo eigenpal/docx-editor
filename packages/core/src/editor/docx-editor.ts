@@ -2517,8 +2517,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     ...zoomFacadeMembers(zoomLane, () => surface),
     ...highlights.members,
     ...createReviewItemsAt({ frame: highlights.frame, placements: reviewPlacements }),
-    ...createParagraphTextReads({ surface: () => surface, frame: highlights.frame }),
-
+    ...createParagraphTextReads({ surface: () => surface, fieldResults: fieldScope.mode }),
     ...createEditorPointMembers(
       () => surface,
       () => !!container && !destroyed

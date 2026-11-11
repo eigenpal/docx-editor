@@ -628,7 +628,7 @@ export type {
   ReviewItemHit,
   ScrollPlacement,
   ScrollToAnchorOptions,
-  TextSpan,
+  ParagraphTextSpan,
   HistoryGroup,
   HistoryGroupOptions,
   CommentTextOptions,

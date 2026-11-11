@@ -3663,6 +3663,21 @@ export interface ParagraphTabStop {
 }
 
 // @public
+export interface ParagraphText {
+    readonly blockId: string;
+    readonly keptSpans: readonly ParagraphTextSpan[];
+    readonly keptText: string;
+    readonly text: string;
+}
+
+// @public
+export interface ParagraphTextSpan {
+    readonly keptStart: number;
+    readonly length: number;
+    readonly start: number;
+}
+
+// @public
 export function parseChartValue(text: string): number | null | undefined;
 
 // @public
