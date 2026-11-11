@@ -1,5 +1,29 @@
 # @docx-editor.dev/core
 
+## 2.37.0
+
+### Minor Changes
+
+- 98c0537: Insert and edit charts through React, Vue, or editor commands. Resize, move, wrap, copy, and paste charts.
+- 6ed6c40: Edit your own comments and replies through the actions menu or `content` property. Edits support undo, redo, and collaboration.
+- 329587e: Resize, move, wrap, and delete DrawingML diagrams, and drag inline charts like inline images. A diagram resize scales its saved drawing to the new frame.
+- 9eef508: Add image drops and inline image movement with destination previews, refusal messages, edge scrolling, and custom drop handling. Fixes #1136
+- b19ea8f: Preserve content-control prompts during partial selection typing and rich paste. Add insertion bias for tabs, breaks, images, and charts.
+- c5b12fb: Add `textRendering` to the canvas measurement context and align painted text with unhinted glyph advances. Canvas-measured text can change line and page breaks in Chromium on Linux.
+
+### Patch Changes
+
+- 32042df: Fix character spacing in distributed paragraphs with balanced space widths.
+- 6eb82e6: Reduce browser startup work with native font hashing and remove unused JavaScript from consumer bundles.
+- 67f463b: Respect content-control locks and data bindings when editing chart data and formatting.
+- a095122: Speed up chart paste in documents with many parts.
+- 5dc9dac: Synthesize bold text when an embedded bold font contains regular outlines.
+- 6642951: Update `fast-xml-parser` to 5.12.0, which stops quadratic CPU use on unterminated stop-node tags.
+- 13f0855: Preserve balanced space widths beside East Asian text and in repeated spaces, including justified lines.
+- 329587e: Fix adding a hyperlink to a picture whose DrawingML namespace is declared on its graphic.
+- 2294aa0: Delete and Backspace select content-control prompts before removing the control. Copy and cut include the complete prompt.
+- Updated dependencies: @docx-editor.dev/i18n@2.37.0
+
 ## 2.36.0
 
 ### Minor Changes
