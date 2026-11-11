@@ -45,6 +45,7 @@ import {
   type AnchoredDrawingRecord,
   type DrawingAnchorFrameContext,
 } from './drawing-layout.ts';
+import { authoredRowFields } from './table-row-record-fields.ts';
 import {
   cellSpacingGapPt,
   cellSpacingGeometry,
@@ -1617,11 +1618,7 @@ export function layoutRowFragmentBounded(
   return {
     record: {
       id: row.id,
-      ...(row.revisionKind ? { revisionKind: row.revisionKind } : {}),
-      ...(row.revisionId !== undefined ? { revisionId: row.revisionId } : {}),
-      ...(row.revisionAuthor !== undefined ? { revisionAuthor: row.revisionAuthor } : {}),
-      ...(row.revisionDate !== undefined ? { revisionDate: row.revisionDate } : {}),
-      ...(row.changeSites ? { changeSites: row.changeSites } : {}),
+      ...authoredRowFields(row),
       rowIndex: 0,
       isHeaderRow: row.isHeader,
       isHeaderRepeat,

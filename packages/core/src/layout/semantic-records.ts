@@ -740,8 +740,18 @@ export interface TableRowFragmentRecord {
   readonly hasContinuation?: boolean;
   /** True for a `w:cantSplit` or exact-height row: it stays whole where a page holds it. */
   readonly placesWhole?: boolean;
+  /** The table fill this row shows in its cell-spacing gaps; see `table-spacing-shading.ts`. */
+  readonly spacingShading?: TableSpacingShading;
   readonly cells: readonly TableCellFragmentRecord[];
   readonly box: LayoutBox;
+}
+
+/** What a spaced row paints in its gaps: never inside a cell, whose own fill stands. */
+export interface TableSpacingShading {
+  /** Validated `RRGGBB` fill. */
+  readonly fill: string;
+  /** The gap the table closes below this row, in points, when it is the table's last row. */
+  readonly closingPt?: number;
 }
 
 /**
