@@ -948,7 +948,7 @@ function readTableStructureUncached(
   const shadedRows = withRowSpacingShading(contentRows, {
     stylePropertyNodes: tableStyle.tablePropertyNodes,
     tableProperties: tblPr,
-    rowNodes: plans.map((plan) => plan.node),
+    rowNodeAt: (index) => plans[index]?.node,
     cellSpacingPt,
   });
   return {

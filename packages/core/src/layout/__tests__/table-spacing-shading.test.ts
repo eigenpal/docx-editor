@@ -237,6 +237,33 @@ test('a positioned spaced table holds its closing gap, so its last band fills it
   expect(region!.box.y + region!.box.height).toBeCloseTo(last.y + last.height + 10, 6);
 });
 
+test('a nested spaced table broken between rows closes each page with the gap too', () => {
+  const inner = (rows: number) =>
+    '<w:tbl><w:tblPr><w:tblW w:w="3000" w:type="dxa"/>' +
+    SPACING +
+    shd('D9E2F3') +
+    '</w:tblPr><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid>' +
+    Array.from({ length: rows }, (_, i) => `<w:tr>${cell(`n${i}`)}</w:tr>`).join('') +
+    '</w:tbl><w:p/>';
+  const outer = `<w:tr><w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>${inner(12)}</w:tc></w:tr>`;
+  const fragments = layoutTable({ rows: [outer], pageHeight: 150 });
+  const nested = fragments.flatMap((fragment) =>
+    fragment.rows.flatMap((row) =>
+      row.cells.flatMap((c) =>
+        c.blocks.filter((block): block is TableFragmentRecord => block.kind === 'table')
+      )
+    )
+  );
+  expect(nested.length).toBeGreaterThan(1);
+  for (const fragment of nested) {
+    const last = fragment.rows.at(-1)!.box;
+    const extra = fragment.box.y + fragment.box.height - (last.y + last.height);
+    expect(extra).toBeGreaterThan(0);
+    const band = tableSpacingShadingRegions(fragment).at(-1)!;
+    expect(band.box.y + band.box.height).toBeCloseTo(fragment.box.y + fragment.box.height, 6);
+  }
+});
+
 test('a table broken between rows closes each page with the gap, as the page holds it', () => {
   const rows = Array.from(
     { length: 12 },

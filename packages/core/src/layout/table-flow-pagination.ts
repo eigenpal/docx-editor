@@ -230,6 +230,7 @@ export function* paginateTableInFlowSteps(
   };
   let wrapsBeside = false;
   const closeTableFragment = (closingPt?: number): void => {
+    const bottom = contentHeight();
     bandTop = 0;
     firstFragmentBottom = undefined;
     // Every close is a break or the table's end: rows past it are on another sheet. The end
@@ -248,7 +249,7 @@ export function* paginateTableInFlowSteps(
       occurrenceInsets,
       left: tableLeft,
       top: fragmentTop,
-      bottom: contentHeight(),
+      bottom,
       closingPt,
       deps: tableDeps,
       carry,

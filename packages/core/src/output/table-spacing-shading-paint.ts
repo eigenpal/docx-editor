@@ -5,9 +5,8 @@
 // fill and every unshaded cell keeps showing the page behind it.
 
 import { tableSpacingShadingRegions } from '../layout/table-spacing-shading.ts';
+import { resolveStrictHexFill } from '../layout/ooxml-shading.ts';
 import type { TableFragmentRecord } from '../layout/semantic-records.ts';
-
-const HEX = /^[0-9A-Fa-f]{6}$/;
 
 /** Class of a gap band: the leading layers of a table fragment, under its rows. */
 export const TABLE_SPACING_SHADING_CLASS = 'docx-table-spacing-shading';
@@ -42,7 +41,7 @@ export function paintTableSpacingShading(
   const bands: HTMLElement[] = [];
   for (const region of tableSpacingShadingRegions(fragment)) {
     // Validated at the sink again, like every other file-derived colour.
-    if (!HEX.test(region.fill)) continue;
+    if (resolveStrictHexFill(region.fill) === undefined) continue;
     const { box } = region;
     let clip = '';
     if (region.holes.length > 0) {

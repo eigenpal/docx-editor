@@ -6,7 +6,7 @@
 // the rows of a fragment that has ended into the record that gets painted.
 
 import { finalizeTableRows, type TableFlowDeps } from './semantic-table-layout.ts';
-import { closingCellSpacingPt } from './table-cell-spacing.ts';
+import { fragmentClosingGapPt } from './table-cell-spacing.ts';
 import { isSettledPreviousRow } from './table-row-placement-reuse.ts';
 import { fragmentCloseDeps, refreshTerminalRow } from './table-flow-row-state.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
@@ -90,16 +90,14 @@ export function closeTableFragmentRows(input: TableFragmentClose): {
   if (fragmentCarry) finalized = fragmentCarry.finish(finalized);
   const last = finalized[finalized.length - 1]!;
   const lastBottom = last.box.y + last.box.height;
-  const closingPt = last.hasContinuation
-    ? 0
-    : Math.max(
-        0,
-        input.closingPt ??
-          Math.min(
-            closingCellSpacingPt({ cellSpacingPt: structure.cellSpacingPt, rows: sourceRows }),
-            input.bottom - lastBottom
-          )
-      );
+  const closingPt =
+    input.closingPt ??
+    fragmentClosingGapPt(
+      structure.cellSpacingPt,
+      sourceRows.at(-1),
+      input.bottom - lastBottom,
+      last.hasContinuation
+    );
   const fragment = annotateTableFragmentGeometry(
     {
       kind: 'table',

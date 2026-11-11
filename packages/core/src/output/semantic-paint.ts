@@ -1837,10 +1837,12 @@ function paintTableFragment(
   const scale = ctx.scale;
   const element = positioned(document, 'div', fragment.box, scale);
   element.className = 'docx-table-fragment layout-table';
+  // A refused reflow leaves `previous` as it was: the fresh element paints its own bands.
+  const freshBands = previous ? paintTableSpacingShading(document, fragment, scale) : bands;
   element.dataset.tableId = fragment.tableId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
   element.style.overflow = 'visible';
-  element.append(...bands);
+  element.append(...freshBands);
   const rows = new Map<TableRowFragmentRecord, HTMLElement>();
   for (const row of fragment.rows) {
     const painted = paintTableRow(document, row, fragment, ctx);

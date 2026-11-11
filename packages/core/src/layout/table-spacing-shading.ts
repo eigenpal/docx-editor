@@ -40,14 +40,15 @@ export interface TableSpacingShadingRegion {
 
 /**
  * `rows` with the gap fill each one shows, or `rows` itself when the table has no cell
- * spacing: then no gap shows the fill. `rowNodes[i]` is the authored `w:tr` of `rows[i]`.
+ * spacing: then no gap shows the fill.
  */
 export function withRowSpacingShading(
   rows: readonly SemanticTableRow[],
   input: {
     readonly stylePropertyNodes: readonly OoxmlElement[];
     readonly tableProperties: OoxmlElement | undefined;
-    readonly rowNodes: readonly OoxmlElement[];
+    /** The authored `w:tr` of `rows[index]`. */
+    readonly rowNodeAt: (index: number) => OoxmlElement | undefined;
     readonly cellSpacingPt: number;
   }
 ): readonly SemanticTableRow[] {
@@ -60,7 +61,8 @@ export function withRowSpacingShading(
   const shadings = new Map<string, TableSpacingShading>();
   let shaded = false;
   const result = rows.map((row, index) => {
-    const exception = input.rowNodes[index] && wmlChildNamed(input.rowNodes[index], 'tblPrEx');
+    const node = input.rowNodeAt(index);
+    const exception = node && wmlChildNamed(node, 'tblPrEx');
     const fill = exception ? cascadedShadingFill([...layers, exception]) : tableFill;
     if (fill === undefined) return row;
     let spacingShading = shadings.get(fill);
