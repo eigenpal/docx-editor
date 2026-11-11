@@ -299,7 +299,7 @@ export interface SemanticTableRow {
   /** `w:trPr/w:trHeight` — auto / atLeast floor / exact (clipped) row height. */
   readonly height: TableRowHeight;
   readonly cells: readonly SemanticTableCell[];
-  /** `w:tblPr/w:shd`, or the row's `w:tblPrEx` one, in a spaced table's gaps. */
+  /** The table's fill (its style, `w:tblPr`, then this row's `w:tblPrEx`) in spaced gaps. */
   readonly spacingShading?: TableSpacingShading;
 }
 

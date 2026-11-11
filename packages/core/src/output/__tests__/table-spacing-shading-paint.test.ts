@@ -101,10 +101,11 @@ test('typing in a shaded spaced table keeps rows, and bands that paint the same'
   const rowsAfter = Array.from(container.querySelectorAll('.docx-table-row'));
   expect(rowsAfter[0] === rowsBefore[0] && rowsAfter[5] === rowsBefore[5]).toBe(true);
   expect(same(bandsOf(), bandsBefore)).toEqual([true, true, true, true, true, true]);
-  // Text that wraps grows its row: the bands above it stay, its own band and those below move.
+  // Text that wraps grows its row: only its own band is new; the bands below it only move.
   const wrapped = edit(typed, ' and a few more words');
   const bandsWrapped = bandsOf();
-  expect(same(bandsWrapped, bandsBefore).slice(0, 3)).toEqual([true, true, false]);
+  expect(same(bandsWrapped, bandsBefore).slice(0, 2)).toEqual([true, true]);
+  expect(bandsWrapped.filter((band) => !bandsBefore.includes(band))).toHaveLength(1);
   const cold = document.createElement('div');
   paintSemanticLayout(cold, lay(wrapped), { scale: 1 });
   expect(container.innerHTML).toBe(cold.innerHTML);

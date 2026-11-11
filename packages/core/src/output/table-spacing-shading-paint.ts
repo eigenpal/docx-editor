@@ -12,7 +12,7 @@ const HEX = /^[0-9A-Fa-f]{6}$/;
 /** Class of a gap band: the leading layers of a table fragment, under its rows. */
 export const TABLE_SPACING_SHADING_CLASS = 'docx-table-spacing-shading';
 
-/** Each painted band's styles, so a repaint that changes nothing keeps the element. */
+/** Each painted band's styles but its top, so a repaint that only moves it keeps the element. */
 const bandStyles = new WeakMap<Element, string>();
 
 /** Fixed-point numbers keep the clip path short and free of exponent notation. */
@@ -29,11 +29,15 @@ export function paintTableSpacingShading(
   scale: number,
   previous?: HTMLElement
 ): HTMLElement[] {
-  const reusable = new Map<string, Element>();
+  // Keyed by everything but the top, so a row that grows only moves the bands below it.
+  const reusable = new Map<string, HTMLElement[]>();
   for (const child of previous?.children ?? []) {
     if (!child.classList.contains(TABLE_SPACING_SHADING_CLASS)) break;
     const key = bandStyles.get(child);
-    if (key !== undefined && !reusable.has(key)) reusable.set(key, child);
+    if (key === undefined) continue;
+    const same = reusable.get(key);
+    if (same) same.push(child as HTMLElement);
+    else reusable.set(key, [child as HTMLElement]);
   }
   const bands: HTMLElement[] = [];
   for (const region of tableSpacingShadingRegions(fragment)) {
@@ -55,11 +59,11 @@ export function paintTableSpacingShading(
     const top = `${(box.y - fragment.box.y) * scale}px`;
     const width = `${box.width * scale}px`;
     const height = `${box.height * scale}px`;
-    const key = [region.fill, left, top, width, height, clip].join('|');
-    const kept = reusable.get(key);
+    const key = [region.fill, left, width, height, clip].join('|');
+    const kept = reusable.get(key)?.shift();
     if (kept) {
-      reusable.delete(key);
-      bands.push(kept as HTMLElement);
+      if (kept.style.top !== top) kept.style.top = top;
+      bands.push(kept);
       continue;
     }
     const band = document.createElement('div');

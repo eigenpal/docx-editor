@@ -93,3 +93,16 @@ export function closingCellSpacingPt(structure: {
   const last = structure.rows.at(-1);
   return last && last.height.rule !== 'exact' ? cellSpacingGapPt(structure.cellSpacingPt) : 0;
 }
+
+/**
+ * Move `flow` past the gap a spaced table closes below its last row, no further than its
+ * content box, and return the gap placed: the fragment box holds that much below the row.
+ */
+export function placeClosingCellSpacing(
+  flow: { cursorY: number; contentHeight(): number },
+  structure: Parameters<typeof closingCellSpacingPt>[0]
+): number {
+  const top = flow.cursorY;
+  flow.cursorY = Math.min(top + closingCellSpacingPt(structure), flow.contentHeight());
+  return flow.cursorY - top;
+}

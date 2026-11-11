@@ -344,7 +344,8 @@ export function reflowTableFragment(
   }
   // Bands that paint the same come back as the same elements, so most repaints move nothing.
   if (current.length !== leading.length || current.some((child, i) => child !== leading[i])) {
-    for (const child of current) if (!leading.includes(child as HTMLElement)) child.remove();
+    const kept = new Set<Element>(leading);
+    for (const child of current) if (!kept.has(child)) child.remove();
     // In order, before the rows; a band already in place stays where it is.
     let anchor: Element | null = element.firstElementChild;
     for (const band of leading) {
