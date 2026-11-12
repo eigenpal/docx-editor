@@ -39,7 +39,7 @@ Each result has two texts:
 
 `keptSpans` maps `keptText` to `text`. A word that crosses a tracked deletion needs one highlight for each kept span.
 
-The following source checks each paragraph once. An unchanged paragraph returns the same object, so the cache skips it after the first check.
+The following module, `spelling-source.ts`, checks each paragraph once. An unchanged paragraph returns the same object, so the cache skips it after the first check.
 
 ```ts
 import type { Editor, HighlightRange, ParagraphText } from '@docx-editor.dev/core';
@@ -83,11 +83,14 @@ Pass the source to `useHighlights`. It runs again after each document change.
 
 ```vue
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useHighlights } from '@docx-editor.dev/vue';
 import { spellingSource } from './spelling-source';
 
 const props = defineProps<{ isMisspelled: (word: string) => boolean }>();
-useHighlights('spelling', spellingSource(props.isMisspelled), { className: 'spelling-error' });
+// Create the source again only when the checker changes, so its cache survives updates.
+const source = computed(() => spellingSource(props.isMisspelled));
+useHighlights('spelling', source, { className: 'spelling-error' });
 </script>
 ```
 

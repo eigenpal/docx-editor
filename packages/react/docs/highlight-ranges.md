@@ -36,7 +36,7 @@ Each result has two texts:
 
 `keptSpans` maps `keptText` to `text`. A word that crosses a tracked deletion needs one highlight for each kept span.
 
-The following source checks each paragraph once. An unchanged paragraph returns the same object, so the cache skips it after the first check.
+The following module, `spelling-source.ts`, checks each paragraph once. An unchanged paragraph returns the same object, so the cache skips it after the first check.
 
 ```ts
 import type { Editor, HighlightRange, ParagraphText } from '@docx-editor.dev/core';

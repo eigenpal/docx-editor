@@ -46,8 +46,8 @@ function readParagraph(
       if (segment.end - segment.start !== 1) continue;
       const hyphen = hyphenTextOf(segment.node);
       if (hyphen === OPTIONAL_HYPHEN_TEXT) gaps.push(segment);
-      else if (hyphen === NON_BREAKING_HYPHEN_TEXT) shown.set(segment.start, '‑');
-      else if (isSymbolElement(segment.node)) shown.set(segment.start, '￼');
+      else if (hyphen === NON_BREAKING_HYPHEN_TEXT) shown.set(segment.start, '\u2011');
+      else if (isSymbolElement(segment.node)) shown.set(segment.start, '\uFFFC');
     }
     gaps.sort((a, b) => a.start - b.start);
     const keptSpans: ParagraphTextSpan[] = [];

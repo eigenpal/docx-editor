@@ -110,7 +110,7 @@ describe('getParagraphText', () => {
     );
     const [paragraph] = editor.getParagraphs();
     expect(paragraph?.text).toBe('co\u001foperate well\u001eknown (');
-    expect(paragraph?.keptText).toBe('cooperate well‑known ￼');
+    expect(paragraph?.keptText).toBe('cooperate well\u2011known \uFFFC');
     expect(paragraph?.keptSpans).toEqual([
       { start: 0, length: 2, keptStart: 0 },
       { start: 3, length: 20, keptStart: 2 },
