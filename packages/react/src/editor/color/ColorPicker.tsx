@@ -330,6 +330,11 @@ function ColorPickerGrid(): ReactElement {
 export interface ColorPickerContentProps extends HTMLAttributes<HTMLDivElement> {
   /** Whether the default content shows the hex field. Default true. */
   hexInput?: boolean;
+  /**
+   * Renders the grid in place, inside a popup the host already owns (a toolbar panel), instead
+   * of as a popover under the trigger.
+   */
+  inline?: boolean;
   /** Replaces the default content: `NoColor`, the grid, and `HexInput`. */
   children?: ReactNode;
 }
@@ -337,6 +342,7 @@ export interface ColorPickerContentProps extends HTMLAttributes<HTMLDivElement> 
 /** The grid popover. It renders only while the picker is open. */
 function ColorPickerContent({
   hexInput = true,
+  inline = false,
   className,
   children,
   onKeyDown,
@@ -363,7 +369,7 @@ function ColorPickerContent({
       ref={panel}
       id={context.contentId}
       role="group"
-      className={`docx-color-picker__content docx-chart-pane__grid${className ? ` ${className}` : ''}`}
+      className={`docx-color-picker__content${inline ? ' docx-color-picker__content--inline' : ' docx-chart-pane__grid'}${className ? ` ${className}` : ''}`}
       onKeyDown={(event) => {
         onKeyDown?.(event);
         if (event.defaultPrevented) return;
@@ -403,3 +409,41 @@ export const ColorPicker = {
   NoColor: ColorPickerNoColor,
   HexInput: ColorPickerHexInput,
 };
+
+/** Props for `ColorPickerPanel`. @internal */
+export interface ColorPickerPanelProps {
+  /** The current colour, `RRGGBB`, or null. */
+  readonly current: string | null;
+  /** Called with the picked colour as `RRGGBB`: a theme pick resolves to the colour it paints. */
+  readonly apply: (hex: string) => void;
+  /** Called by Escape, to close the popup that holds the panel. */
+  readonly onClose: () => void;
+}
+
+/**
+ * The shared grid inside a popup the host owns, for a target that keeps only `RRGGBB` (a table
+ * border or shading): theme colours with tints and shades, standard colours, and a hex field.
+ * @internal
+ */
+export function ColorPickerPanel({ current, apply, onClose }: ColorPickerPanelProps): ReactElement {
+  const editor = useDocxEditor();
+  const hexes = documentThemeHexes(editor?.getDocumentThemeColors());
+  const value =
+    current && /^[0-9A-Fa-f]{6}$/.test(current) ? (`#${current.toUpperCase()}` as ColorPick) : null;
+  return (
+    <ColorPickerRoot
+      value={value}
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      noColor={false}
+      themeHexes={hexes}
+      onPick={(pick) => {
+        if (pick !== 'none') apply(colorPickHex(pick, hexes).slice(1));
+      }}
+    >
+      <ColorPickerContent inline />
+    </ColorPickerRoot>
+  );
+}

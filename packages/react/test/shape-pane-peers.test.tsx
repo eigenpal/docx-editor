@@ -238,7 +238,9 @@ test('a dash syncs to the other peer; slot commands on a shape the other peer de
   await update(() => selectParityShape(left.editor()));
   await update(() => selectParityShape(right.editor()));
   // The dash part in the pane writes the dash, and the other peer reads it back.
-  const dash = left.panel().querySelector<HTMLSelectElement>('[data-slot="shape.outlineDash"] select')!;
+  const dash = left
+    .panel()
+    .querySelector<HTMLSelectElement>('[data-slot="shape.outlineDash"] select')!;
   await update(() => fireEvent.change(dash, { target: { value: 'sysDash' } }));
   expect(right.editor().snapshot().image?.shapeFormat?.outline.dash).toBe('sysDash');
   expect(await xml(right.editor())).toContain('<a:prstDash val="sysDash"/>');

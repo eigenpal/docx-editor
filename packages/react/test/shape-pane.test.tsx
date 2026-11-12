@@ -138,7 +138,9 @@ test('the side panel swaps to the pane; keyboard picks, typed fields, undo, and 
   });
 
   // Outline: 3pt blue from the hex field and the width field, each one undo step.
-  const outlineButton = panel.querySelectorAll<HTMLButtonElement>('.docx-color-picker__trigger')[1]!;
+  const outlineButton = panel.querySelectorAll<HTMLButtonElement>(
+    '.docx-color-picker__trigger'
+  )[1]!;
   await act(async () => outlineButton.click());
   await flush();
   const outlineHex = panel.querySelector<HTMLInputElement>('.docx-color-picker__hex input')!;

@@ -94,9 +94,7 @@ test('shape parts in a host toolbar: compact fill, dash, and width apply and fol
   expect(document.activeElement).toBe(trigger);
   await act(async () => trigger.click());
   await flush();
-  await act(async () =>
-    bar.querySelector<HTMLButtonElement>('[data-pick="accent6"]')!.click()
-  );
+  await act(async () => bar.querySelector<HTMLButtonElement>('[data-pick="accent6"]')!.click());
   await flush();
   expect(editor().snapshot().image?.shapeFormat?.fill.theme).toEqual({
     name: 'accent6',
@@ -227,7 +225,12 @@ test('the default toolbar shows the contextual shape and chart groups for a sele
   await act(async () => selectParityShape(editor()));
   await flush();
   expect(slots()).toEqual(
-    expect.arrayContaining(['shape.fill', 'shape.outlineColor', 'shape.outlineWidth', 'shape.outlineDash'])
+    expect.arrayContaining([
+      'shape.fill',
+      'shape.outlineColor',
+      'shape.outlineWidth',
+      'shape.outlineDash',
+    ])
   );
   expect(slots()).not.toContain('shape.fillTransparency');
 });
