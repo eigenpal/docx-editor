@@ -95,7 +95,7 @@ function OpenedBy() {
   const anchor = useContextMenuAnchor();
   const target = useContextMenuTarget();
   seen.push({ trigger: anchor?.trigger ?? null, target });
-  return null;
+  return <span data-opened-by="">{anchor?.trigger ?? 'closed'}</span>;
 }
 
 function mount(): ReturnType<typeof render> {
@@ -166,6 +166,17 @@ test('a right-click opens at the pointer and names its target', () => {
   expect(Number.parseFloat(panel.style.top)).toBe(260);
   expect(seen.at(-1)?.trigger).toBe('pointer');
   expect(seen.at(-1)?.target).not.toBeNull();
+});
+
+test('a row that stays mounted follows a keyboard reopen of an open menu', async () => {
+  const view = mount();
+  await placeCaret(4);
+  open(view, { button: 2, clientX: 420, clientY: 260 });
+  const row = () => view.container.querySelector('[data-opened-by]')!.textContent;
+  expect(row()).toBe('pointer');
+  const panel = open(view, { button: -1, clientX: 0, clientY: 0 });
+  expect(row()).toBe('keyboard');
+  expect(Number.parseFloat(panel.style.left)).toBeCloseTo(editor!.getCaretRect()!.left, 5);
 });
 
 test('a keyboard-opened menu with no painted caret opens at the document corner', async () => {

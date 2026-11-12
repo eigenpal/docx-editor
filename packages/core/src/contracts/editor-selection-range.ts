@@ -33,7 +33,11 @@ export interface EditorSelectionRange {
    * A caret with no range has `head` equal to `anchor`.
    */
   readonly head: SemanticPosition;
-  /** The story that holds both positions: the body, a header or footer, a note, or a text box. */
+  /**
+   * The open story that holds both positions: the body, a header or footer, a note, or a text
+   * box. A text box opens only for editing, so in viewing mode a selection inside one names
+   * the story around the box.
+   */
   readonly scope: ViewScope;
 }
 

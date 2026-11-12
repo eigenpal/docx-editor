@@ -25,7 +25,7 @@ import { NOTHING_TO_COPY_FORMATTING, NOTHING_TO_PAINT } from './surface-format-p
 import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import { storyScopeOfNodeId } from './surface-scope.ts';
-import { enterTextboxForSelection } from './review-story-entry.ts';
+import { openTextboxForSelection, textboxSelectionRefusal } from './review-story-entry.ts';
 import type { StoryScope } from '@docx-editor.dev/core/store';
 import { paragraphFragmentsOfBlocks } from '@docx-editor.dev/core/layout';
 import {
@@ -609,10 +609,11 @@ export function execEditorCommand(
       if ('range' in command && isSurfaceSelection(command.range)) {
         // Open the story the range is in first, as the anchor form below does: a header,
         // footer or note range selected from the body would otherwise strand the caret.
+        const boxRefusal = textboxSelectionRefusal(mounted, command.range);
+        if (boxRefusal) return { ok: false, code: 'unsupported', reason: boxRefusal };
         const entered = enterStoryForSelection(mounted, command.range);
         if (!entered.ok) return entered;
-        const boxed = enterTextboxForSelection(mounted, command.range);
-        if (!boxed.ok) return boxed;
+        openTextboxForSelection(mounted, command.range);
         mounted.setSelection(command.range);
         mounted.revealPosition(command.range.head, { block: 'centerIfNeeded' });
         // Selection is not document state: nothing to save changed.

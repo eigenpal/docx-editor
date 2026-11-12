@@ -78,8 +78,9 @@ const OpenedBy = defineComponent({
   setup() {
     const anchor = useContextMenuAnchor();
     const target = useContextMenuTarget();
-    seen.push({ trigger: anchor?.trigger ?? null, target });
-    return () => null;
+    seen.push({ trigger: anchor.value?.trigger ?? null, target });
+    // Rendered, so a test can see the row follow a reopen without remounting.
+    return () => h('span', { 'data-opened-by': '' }, anchor.value?.trigger ?? 'closed');
   },
 });
 
@@ -166,6 +167,22 @@ test('a right-click opens at the pointer and names its target', async () => {
   expect(Number.parseFloat(panel.style.top)).toBe(260);
   expect(seen.at(-1)?.trigger).toBe('pointer');
   expect(seen.at(-1)?.target).not.toBeNull();
+});
+
+test('a row that stays mounted follows a keyboard reopen of an open menu', async () => {
+  const container = await mount();
+  await placeCaret(4);
+  await open(container, { button: 2, clientX: 420, clientY: 260 });
+  const row = () => container.querySelector('[data-opened-by]')!.textContent;
+  expect(row()).toBe('pointer');
+  const mounts = seen.length;
+  const panel = await open(container, KEYBOARD);
+  expect(seen.length).toBe(mounts);
+  expect(row()).toBe('keyboard');
+  expect(Number.parseFloat(panel.style.left)).toBeCloseTo(
+    editorRef!.value!.getCaretRect()!.left,
+    5
+  );
 });
 
 test('a keyboard-opened menu with no painted caret opens at the document corner', async () => {

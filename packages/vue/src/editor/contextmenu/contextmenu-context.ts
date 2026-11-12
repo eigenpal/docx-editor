@@ -1,4 +1,4 @@
-import { inject, unref, type InjectionKey, type MaybeRef } from 'vue';
+import { computed, inject, unref, type ComputedRef, type InjectionKey, type MaybeRef } from 'vue';
 
 /**
  * Where the panel opened, in client coordinates, and how it was opened.
@@ -64,11 +64,12 @@ export function useContextMenuTarget(): HTMLElement | null {
  * Where the open menu is anchored and how it was opened, or null while the menu is closed.
  *
  * Rows in `ContextMenu.Start` read `trigger` to tell a right-click from a keyboard open,
- * which acts on the caret rather than on a pointer target.
+ * which acts on the caret rather than on a pointer target. The ref follows the menu, so a
+ * row that stays mounted while the menu opens again reads the new anchor.
  *
  * @public
  */
-export function useContextMenuAnchor(): ContextMenuAnchor | null {
-  const ctx = unref(inject(ContextMenuContext, fallback));
-  return ctx?.anchor ?? null;
+export function useContextMenuAnchor(): ComputedRef<ContextMenuAnchor | null> {
+  const context = inject(ContextMenuContext, fallback);
+  return computed(() => unref(context)?.anchor ?? null);
 }

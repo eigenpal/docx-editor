@@ -159,7 +159,7 @@ The caret goes to the start of the paragraph or the matched text.
 
 ## Read the selection and the caret
 
-Call `getSelectionRange()` to read the selection as two positions. Each position has a `paragraphId` and an `offset`. The `paragraphId` value matches `TextMatch.blockId` and `HighlightRange.blockId`. Offsets count UTF-16 code units in the units that `TextMatch.start` and `HighlightRange.start` use. `head` is the caret, and `anchor` is where the selection started. `scope` names the story that holds the selection.
+Call `getSelectionRange()` to read the selection as two positions. Each position has a `paragraphId` and an `offset`. The `paragraphId` value matches `TextMatch.blockId` and `HighlightRange.blockId`. Offsets count UTF-16 code units in the units that `TextMatch.start` and `HighlightRange.start` use. `head` is the caret, and `anchor` is where the selection started. `scope` names the open story that holds the selection. In viewing mode, text boxes do not open, so a selection in a text box names the story around it.
 
 The method returns `null` before a document opens, while a picture or another drawing is selected, and while table cells are selected as a block. The selection stays readable after focus moves to your own controls. Edits before the caret, including edits from other participants in a collaboration session, move the offset.
 

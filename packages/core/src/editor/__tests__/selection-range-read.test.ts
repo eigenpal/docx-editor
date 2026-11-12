@@ -188,6 +188,45 @@ describe('getSelectionRange', () => {
     expect(split).toMatchObject({ ok: false, code: 'unsupported' });
   });
 
+  test('a text box range round-trips in viewing mode without opening the box', () => {
+    const { editor } = mount(textboxDocx());
+    const match = editor.findMatches('boxed needle')[0]!;
+    expect(editor.setEditingMode('viewing').ok).toBe(true);
+    caretAt(editor, match.blockId, match.start + 2);
+    const range = editor.getSelectionRange();
+    // A box opens only for editing, so the scope stays on the story around it.
+    expect(range).toEqual({
+      anchor: { paragraphId: match.blockId, offset: match.start + 2 },
+      head: { paragraphId: match.blockId, offset: match.start + 2 },
+      scope: { kind: 'body' },
+    });
+    const body = editor.findMatches('body')[0]!;
+    caretAt(editor, body.blockId, body.start);
+    expect(editor.exec({ type: 'setSelection', range: range! }).ok).toBe(true);
+    expect(editor.getSelectionRange()).toEqual(range);
+    // Back in editing mode, the same range opens the box.
+    expect(editor.setEditingMode('editing').ok).toBe(true);
+    expect(editor.exec({ type: 'setSelection', range: range! }).ok).toBe(true);
+    expect(editor.getSelectionRange()?.scope).toEqual(match.scope!);
+  });
+
+  test('a refused range does not open the story it names', () => {
+    const { editor } = mount(textboxDocx(true));
+    const match = editor.findMatches('boxed needle')[0]!;
+    expect(match.scope).toMatchObject({ kind: 'frame', owner: { kind: 'headerFooter' } });
+    expect(editor.getActiveScope()).toEqual({ kind: 'body' });
+    const host = (match.scope as { hostParagraphId: string }).hostParagraphId;
+    const result = editor.exec({
+      type: 'setSelection',
+      range: {
+        anchor: { paragraphId: host, offset: 0 },
+        head: { paragraphId: match.blockId, offset: match.start },
+      },
+    });
+    expect(result).toMatchObject({ ok: false, code: 'unsupported' });
+    expect(editor.getActiveScope()).toEqual({ kind: 'body' });
+  });
+
   test('is null with no document, a cell block, or a selected drawing', () => {
     const empty = createDocxEditor({});
     cleanups.push(() => empty.destroy());

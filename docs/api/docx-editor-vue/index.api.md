@@ -9395,7 +9395,7 @@ export interface UseContentControlWidgetResult {
 }
 
 // @public
-export function useContextMenuAnchor(): ContextMenuAnchor | null;
+export function useContextMenuAnchor(): ComputedRef<ContextMenuAnchor | null>;
 
 // @public
 export function useContextMenuTarget(): HTMLElement | null;

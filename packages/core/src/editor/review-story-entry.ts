@@ -127,22 +127,37 @@ export function openBodyStoryOf(surface: PaginatedSurface, position: SemanticPos
 }
 
 /**
- * Open or leave the text box a selection is in, once the story around it is open.
+ * Why a selection cannot be installed because of the text boxes it touches, or null.
  *
- * A selection inside a box was installed with the box closed: the caret sat in the box's
- * paragraph while the scope stayed on the story behind it. Both endpoints must be in the same
- * box, or both outside any box, for the same reason two stories are refused.
+ * Both endpoints must be in the same box, or both outside any box, for the same reason two
+ * stories are refused. Asked BEFORE anything opens, so a refused selection changes nothing.
  */
-export function enterTextboxForSelection(
+export function textboxSelectionRefusal(
   surface: PaginatedSurface,
   selection: { readonly anchor: SemanticPosition; readonly head: SemanticPosition }
-): { ok: true; changed: false } | { ok: false; code: 'unsupported'; reason: string } {
+): string | null {
   const part = partOfNodeId(surface.session, selection.head.paragraphId);
   const box = part ? textboxScopeOfParagraph(part, selection.head.paragraphId) : null;
   const anchorBox = part ? textboxScopeOfParagraph(part, selection.anchor.paragraphId) : null;
-  if ((box?.id ?? null) !== (anchorBox?.id ?? null)) {
-    return { ok: false, code: 'unsupported', reason: 'a selection cannot span two stories' };
-  }
+  return (box?.id ?? null) === (anchorBox?.id ?? null)
+    ? null
+    : 'a selection cannot span two stories';
+}
+
+/**
+ * Open or leave the text box a selection is in, once the story around it is open.
+ *
+ * A selection inside a box was installed with the box closed: the caret sat in the box's
+ * paragraph while the scope stayed on the story behind it. A box that cannot open, because
+ * the document is open for viewing or the box takes no caret, leaves the scope on the story
+ * around it, and the selection is still installed, so a read-only selection keeps working.
+ */
+export function openTextboxForSelection(
+  surface: PaginatedSurface,
+  selection: { readonly head: SemanticPosition }
+): void {
+  const part = partOfNodeId(surface.session, selection.head.paragraphId);
+  const box = part ? textboxScopeOfParagraph(part, selection.head.paragraphId) : null;
   const active = surface.activeScope();
   const owner =
     active.kind === 'headerFooter'
@@ -153,10 +168,8 @@ export function enterTextboxForSelection(
   if (!box) {
     // Leave an open box for the story it sits in.
     if (active.kind === 'frame') surface.setActiveScope(owner ?? { kind: 'body' });
-    return { ok: true, changed: false };
+    return;
   }
-  if (active.kind === 'frame' && active.id === box.id) return { ok: true, changed: false };
-  return surface.setActiveScope(owner ? { ...box, owner } : box)
-    ? { ok: true, changed: false }
-    : { ok: false, code: 'unsupported', reason: 'that text box could not be opened' };
+  if (active.kind === 'frame' && active.id === box.id) return;
+  surface.setActiveScope(owner ? { ...box, owner } : box);
 }
