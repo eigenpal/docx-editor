@@ -341,7 +341,10 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
   let previousText: Parameters<typeof automaticSpacing>[3];
   const cjkBreaks = cjkAutofitBreaks(pieces, layoutInputs, measurer, styleCascade);
   const hyphenates =
-    styleCascade?.autoHyphenation === true && !paragraphSuppressesAutoHyphens(layoutInputs.props);
+    styleCascade?.autoHyphenation === true &&
+    hasCompatibilityRule(context.compatibilityMode, 'autofitMinimumHyphenatesWords') &&
+    !paragraphSuppressesAutoHyphens(layoutInputs.props);
+  const keepCapitals = styleCascade?.doNotHyphenateCaps === true;
   const { left, right, firstLine, hanging } = layoutInputs.indent;
   const tabs = withDefaultTabInterval(layoutInputs.tabStops, context.defaultTabStopPt);
   // Tab stops count from the leading indent, which is the right one in right-to-left text.
@@ -471,7 +474,10 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
       continue;
     }
     let from = 0;
-    for (const to of hyphenates ? withHyphenationCuts(piece.text, boundaries) : boundaries) {
+    const hyphenation = hyphenates
+      ? withHyphenationCuts(piece.text, boundaries, keepCapitals)
+      : undefined;
+    for (const to of hyphenation?.cuts ?? boundaries) {
       const candidate = piece.text.slice(from, to);
       from = to;
       if (candidate.length === 0) continue;
@@ -496,6 +502,8 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
       }
       if (ink.length === candidate.length) segment += measure(candidate);
       else if (ink.length > 0) segment += measure(candidate) - measure(candidate.slice(ink.length));
+      // A fragment that ends at a hyphenation point carries its hyphen.
+      if (hyphenation?.hyphens.has(to)) segment += measure('-');
       // A space or a dash ends the segment, including a dash that ends its run; a plain run
       // seam does not.
       if (

@@ -4517,6 +4517,8 @@ export interface StyleCascadeTable {
     // (undocumented)
     readonly docDefaultsRun: readonly OoxmlProperty[];
     readonly doNotBreakWrappedTables?: true;
+    // @internal
+    readonly doNotHyphenateCaps?: true;
     readonly fixedParagraphSpacing?: true;
     readonly ignoreIndentAsNumberingTabStop?: true;
     readonly noColumnBalance?: true;
