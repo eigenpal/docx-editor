@@ -24,6 +24,7 @@ import {
   deletePackageComments,
   normalizeParagraphIdentity,
   readOoxmlPackage,
+  partNameKey,
   relsPartNameFor,
   relationshipsOf,
   resolveContentTypeOf,
@@ -448,6 +449,34 @@ function expectExtendedOnPeer(peer: Peer, done: boolean): void {
   const states = threadStateOfPart(pkg.parts.get(extendedName)!);
   expect([...states.values()].some((state) => state.done === done)).toBe(true);
 }
+
+describe('exporting comments created in a room', () => {
+  for (const withReply of [false, true]) {
+    test(`first comment exports content types and reseeds${withReply ? ' with a reply' : ''}`, async () => {
+      const { alice, bob } = await pair(EMPTY);
+      const commentId = addCommentOn(alice, 0, 'first remark', 'Alice');
+      if (withReply) replyOn(bob, commentId, 0, 'first reply');
+      expectConverged(alice, bob);
+      for (const peer of [alice, bob]) {
+        const bytes = readCollaborationDocument(peer.ydoc);
+        const saved = readOoxmlPackage(bytes);
+        if (!saved.ok) throw new Error(saved.reason);
+        expect(saved.package.contentTypes.overrides.get(partNameKey(COMMENTS_PART))).toBe(
+          COMMENTS_TYPE
+        );
+        if (withReply) {
+          expect(
+            saved.package.contentTypes.overrides.get(partNameKey(COMMENTS_EXTENDED_PART))
+          ).toBe(COMMENTS_EXTENDED_TYPE);
+        }
+        const fresh = await createPeer(bytes, 'fresh');
+        expect(setPackageCommentResolved(fresh.store, commentId, true).ok).toBe(true);
+        fresh.port.flushPendingJournals();
+        expectExtendedOnPeer(fresh, true);
+      }
+    });
+  }
+});
 
 describe('replying to a comment replicates the reply record and thread part', () => {
   test('a receiving peer gets the reply body, markers, and commentsExtended.xml', async () => {

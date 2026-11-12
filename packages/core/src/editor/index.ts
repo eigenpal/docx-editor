@@ -58,7 +58,13 @@ export {
 export { deferFonts } from '../layout/defer-fonts.ts';
 export { blankDocumentBytes, type BlankDocumentOptions } from './blank-document.ts';
 export { keepScrollAtInlineEnd } from './scroll-inline-end.ts';
-export { placeSubmenu, submenuKeys } from './submenu-placement.ts';
+export {
+  placeContextMenu,
+  placeSubmenu,
+  revealMenuItem,
+  showInTopLayer,
+  submenuKeys,
+} from './submenu-placement.ts';
 export { hostDirectionOf, observeHostDirection } from './host-direction.ts';
 export { clipboardDropLandsText, clipboardPasteLandsContent } from './clipboard-file-lane.ts';
 export {

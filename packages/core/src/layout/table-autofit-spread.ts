@@ -9,7 +9,7 @@ import {
 import { columnsAroundCells, spacedCellWidths, spacingGapsPt } from './table-cell-spacing.ts';
 import type { AutofitColumnContent } from './table-autofit-column-content.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
-import { contentAlignedReachPt } from './table-origin.ts';
+import { contentAlignedReachPt, leadingIndentPt as tableIndentPt } from './table-origin.ts';
 
 /**
  * The cell's horizontal insets after widening. A narrow table may share its grid lines or
@@ -162,13 +162,21 @@ const WIDTH_EPSILON_PT = 0.01;
 
 /**
  * A nested fixed table's columns once they give way to fit the cell's room: each down to its
- * own content, measured as cells with any spacing gaps outside them.
+ * own content, measured as cells with any spacing gaps outside them. The table paints no wider
+ * than the cell that holds it, after its indent; a percentage above 100 extends it past the
+ * cell instead.
  */
 export function fixedNestedWidths(
   structure: SemanticTableStructure,
-  roomPt: number,
+  contentWidthPt: number,
   minimumsOf: () => readonly number[]
 ): readonly number[] {
+  const { tableWidth } = structure;
+  const overflow =
+    tableWidth.type === 'pct' && tableWidth.value > 100
+      ? (contentWidthPt * tableWidth.value) / 100
+      : 0;
+  const roomPt = Math.max(0, contentWidthPt - Math.max(0, tableIndentPt(structure)), overflow);
   const columns = structure.columnWidthsPt;
   let total = 0;
   for (const width of columns) total += width;

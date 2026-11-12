@@ -100,7 +100,8 @@ export function spanAdjustedMinimums(
     if (columns.length < 2) continue;
     let held = 0;
     for (const column of columns) held += Math.max(widths[column]!, raised[column]!);
-    if (span.minimum <= held + EPSILON_PT) continue;
+    // Exact: a span short by a rounding hair still breaks its text inside the cell.
+    if (span.minimum <= held) continue;
     const weightOf = (column: number): number =>
       Math.max(widths[column]!, raised[column]!) + Math.max(maximums[column]!, raised[column]!);
     const pinned = new Set<number>();

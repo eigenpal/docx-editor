@@ -132,7 +132,8 @@ test('rows outside the replayed shape are refused, each by its first reason', ()
     ['height', [tc(p('a'), 'center')], '<w:trHeight w:val="300" w:hRule="exact"/>'],
     ['cell', [tc(p('one') + p('two'), 'center')], ''],
     ['cell', [tc(p('a', '<w:pBdr><w:top w:val="single" w:sz="8"/></w:pBdr>'), 'center')], ''],
-    ['cell', [tc(p('wraps across more than one line here'), 'center')], ''],
+    // A lone cell spans the whole 300pt table: the grid columns it leaves take no width.
+    ['cell', [tc(p('wraps across more than one line here '.repeat(4)), 'center')], ''],
   ];
   for (const [reason, cells, height] of cases) {
     const structure = structureOf([tr(cells, height)]);

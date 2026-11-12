@@ -4120,6 +4120,7 @@ export interface SemanticTableStructure {
     // (undocumented)
     readonly rows: readonly SemanticTableRow[];
     readonly sharedGridLinesHold?: true;
+    readonly statedColumnWidthsPt?: readonly number[];
     readonly tableBorders: TableBorderBox;
     readonly tableWidth: PreferredWidth;
     readonly textBox?: true;
@@ -4506,6 +4507,8 @@ export interface StrikeoutStrokePt {
 // @public
 export interface StyleCascadeTable {
     readonly adjustLineHeightInTable?: true;
+    // @internal
+    readonly autoHyphenation?: true;
     readonly cacheToken: string;
     readonly defaultCharacterStyleId: string | null;
     readonly defaultParagraphStyleId: string | null;
@@ -4520,6 +4523,8 @@ export interface StyleCascadeTable {
     // (undocumented)
     readonly docDefaultsRun: readonly OoxmlProperty[];
     readonly doNotBreakWrappedTables?: true;
+    // @internal
+    readonly doNotHyphenateCaps?: true;
     readonly fixedParagraphSpacing?: true;
     readonly ignoreIndentAsNumberingTabStop?: true;
     readonly noColumnBalance?: true;

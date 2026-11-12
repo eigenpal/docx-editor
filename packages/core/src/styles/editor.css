@@ -7778,7 +7778,8 @@ p.docx-review__refused {
    * wrapper's mouseleave, and close the submenu the user was moving toward. Visual
    * separation comes from the card's own border and shadow. */
   margin-inline-start: 0;
-  min-width: 240px;
+  min-width: min(240px, calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
 }
 
 /* The third-level reviewer list can be long. Keep the hierarchy anchored to its source,
@@ -7894,17 +7895,27 @@ p.docx-review__refused {
  * card holding `.docx-menubar__item` rows — the same object the menu bar drops under a
  * trigger — so a row means the same thing in both places and the disabled treatment has
  * one definition. What this block adds is only what differs: the panel is placed in client
- * space by the component rather than relative to a trigger, and it sits above the dialogs
- * and dropdowns (z-index 40) because it is opened ON them as often as on the page. */
+ * space by the component rather than relative to a trigger, and it opens in the top layer
+ * (`popover="manual"`), so a host header or a docked pane with its own stacking context
+ * cannot paint over it. The `z-index` is the fallback where the popover API is missing. */
 .docx-editor .docx-contextmenu,
 .docx-contextmenu {
   z-index: var(--doc-z-context);
-  min-width: 240px;
-  /* A menu longer than the window scrolls rather than overflowing it. The flip in
-   * `DocxEditorContextMenu` clamps the panel to the top inset when it cannot fit; without
-   * a max height and a scroller, the rows below the fold would be unreachable. */
+  /* Never wider than the window less both insets: a narrow window keeps the right edge in
+   * view. The component sets the exact cap from the window it measured. */
+  min-width: min(240px, calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
+  /* A menu longer than the window scrolls rather than overflowing it. The component sets
+   * the exact cap from the window it measured; this is the value before it does. */
   max-height: calc(100vh - 16px);
   overflow-y: auto;
+}
+
+/* The popover defaults center the panel in the viewport (`inset: 0; margin: auto`). The
+ * component places it at the pointer through `left` and `top` instead. */
+.docx-contextmenu[popover] {
+  inset: auto;
+  margin: 0;
 }
 
 /* The panel is `position: fixed`, so it renders OUTSIDE the `.docx-editor` cascade's usual
@@ -7922,6 +7933,15 @@ p.docx-review__refused {
 .docx-contextmenu .docx-menubar__item {
   gap: 12px;
   width: 100%;
+}
+
+/* `ContextMenu.Start` ends with a separator, and host rows can bring their own, so a
+ * separator with nothing above it, nothing below it, or another separator before it is
+ * hidden rather than drawn as a stray or doubled rule. */
+.docx-contextmenu > .docx-toolbar__menu-separator:first-child,
+.docx-contextmenu > .docx-toolbar__menu-separator:last-child,
+.docx-contextmenu > .docx-toolbar__menu-separator + .docx-toolbar__menu-separator {
+  display: none;
 }
 
 .docx-contextmenu__table-align {

@@ -407,7 +407,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The editor preserves document hyphenation settings but does not hyphenate automatically. An optional hyphen permits a line break and appears at that line end. U+00AD displays as a hyphen without permitting a break.',
+      'The editor preserves document hyphenation settings but does not hyphenate automatically. In compatibility mode 15, autofit table columns size for hyphenated words, but those words break without a hyphen. An optional hyphen permits a line break and appears at that line end.',
   },
 
   // --- Lists & numbering -------------------------------------------------

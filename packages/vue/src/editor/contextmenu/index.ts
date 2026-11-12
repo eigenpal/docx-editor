@@ -34,6 +34,7 @@ export {
   TOC_CONTEXT_ROWS,
   type ContextMenuCommandProps,
   type ContextMenuItemProps,
+  type ContextMenuStartProps,
   type ContextMenuTableRowProps,
 } from './parts';
 export {
@@ -43,3 +44,4 @@ export {
   type ContextMenuAnchor,
   type ContextMenuContextValue,
 } from './contextmenu-context';
+export { ContextMenuStart } from './start';

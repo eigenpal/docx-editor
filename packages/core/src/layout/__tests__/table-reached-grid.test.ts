@@ -66,7 +66,34 @@ test('columns another row reaches stay, and the short row ends early', () => {
   expect(short![0]).toEqual(long![0]!);
 });
 
-test('legacy modes keep the authored grid', () => {
-  const [[only]] = rows(`<w:tr>${cell(dxa(3000))}</w:tr>`, { mode: 14 });
-  expect(only![1]).toBeLessThan(150);
+test('legacy modes drop unreached grid columns too', () => {
+  for (const mode of [11, 14]) {
+    expect(rows(`<w:tr>${cell(dxa(3000))}</w:tr>`, { mode })).toEqual([[[141, 150]]]);
+  }
+});
+
+test('leading columns that every row skips take no width', () => {
+  const before = '<w:trPr><w:gridBefore w:val="1"/><w:wBefore w:w="1684" w:type="dxa"/></w:trPr>';
+  const cells = [1868, 1747, 4781].map((w) => cell(dxa(w), 'c')).join('');
+  const table = rows(`<w:tr>${before}${cells}</w:tr><w:tr>${before}${cells}</w:tr>`, {
+    grid: GRID,
+  });
+  // 1868 + 1747 + 4781 twips, centered in the 432pt column.
+  for (const row of table) {
+    expect(row.map(([, width]) => width)).toEqual([93.4, 87.4, 239.1]);
+    expect(row[0]![0]).toBe(6.1);
+  }
+});
+
+test('a row that skips more than the others keeps its own skipped width', () => {
+  const skip = (n: number, w: number) =>
+    `<w:trPr><w:gridBefore w:val="${n}"/><w:wBefore w:w="${w}" w:type="dxa"/></w:trPr>`;
+  const c = (w: number) => cell(dxa(w), 'c');
+  const [first, second] = rows(
+    `<w:tr>${skip(1, 1684)}${c(1868)}${c(1747)}${c(2000)}</w:tr>` +
+      `<w:tr>${skip(2, 3552)}${c(1747)}${c(2000)}</w:tr>`,
+    { grid: [1684, 1868, 1747, 2000] }
+  );
+  // The second row's skip keeps its stated 3552 twips over the one column left of it.
+  expect(second![0]![0] - first![0]![0]).toBeCloseTo(177.6, 1);
 });

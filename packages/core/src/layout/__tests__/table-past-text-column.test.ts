@@ -77,12 +77,14 @@ test('a table no wider than the column fits its content into the column', () => 
   expect(width(table(9000, ['A'.repeat(120)]))).toBeCloseTo(451.3, 0);
 });
 
-test('a fixed-layout table keeps its grid', () => {
+test('a fixed-layout table stretches its grid to its width too', () => {
+  // Measured: a fixed 475pt grid under 490pt and 550pt widths lays out at those widths.
   const fixed = table(10000, ['A'.repeat(120)], { tblPr: '<w:tblLayout w:type="fixed"/>' });
-  expect(width(fixed)).toBeCloseTo(489.7, 0);
+  expect(width(fixed)).toBeCloseTo(500, 0);
 });
 
-test('a nested table keeps its grid', () => {
+test('a nested table stretches its grid to its width past the cell', () => {
+  // Measured: a 144pt nested grid under a 350pt width in a 300pt cell lays out at 350pt.
   const inner = table(10000, ['A'.repeat(120)]);
   const outer =
     '<w:tbl><w:tblPr><w:tblW w:w="6000" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr>' +
@@ -91,7 +93,7 @@ test('a nested table keeps its grid', () => {
   const layout = lay(outer);
   const cell = (layout.pages[0]!.fragments.find((f) => f.kind === 'table') as any).rows[0].cells[0];
   const nested = cell.blocks.find((block: { kind: string }) => block.kind === 'table');
-  expect(nested.box.width).toBeCloseTo(489.7, 0);
+  expect(nested.box.width).toBeCloseTo(500, 0);
 });
 
 test('the rule starts just past the column, whatever the indent', () => {

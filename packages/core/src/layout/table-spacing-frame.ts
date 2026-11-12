@@ -44,7 +44,7 @@ import { computeDoubleBorderMetricsPt } from './border-metrics.ts';
  * The width of the band a rule draws against its edge. A double rule draws its whole band
  * there, not the half a shared, centred rule takes from each side (`borderExtentPt`).
  */
-function bandPt(edge: TableBorderSide | undefined): number {
+export function outerBandPt(edge: TableBorderSide | undefined): number {
   if (edge?.state === 'edge' && edge.style === 'double')
     return computeDoubleBorderMetricsPt(edge.widthPt).extentPt;
   return borderExtentPt(edge);
@@ -61,9 +61,9 @@ export function withSpacingFrame(
 ): readonly SemanticTableRow[] {
   const gap = cellSpacingGapPt(cellSpacingPt);
   if (gap === 0 || rows.length === 0) return rows;
-  const outer = (side: 'top' | 'left' | 'bottom' | 'right') => bandPt(borders[side]);
-  const insideH = bandPt(borders.insideH);
-  const insideV = bandPt(borders.insideV);
+  const outer = (side: 'top' | 'left' | 'bottom' | 'right') => outerBandPt(borders[side]);
+  const insideH = outerBandPt(borders.insideH);
+  const insideV = outerBandPt(borders.insideV);
   // The total gap at an edge never goes below zero.
   const inset = (extra: number) => Math.max(-gap, extra);
   const { top, left, bottom, right } = borders;
@@ -115,8 +115,8 @@ function withRowBorders(
   sides: Pick<TableBorderBox, 'left' | 'right'>
 ): Pick<TableSpacingFrame, 'leftPt' | 'rightPt' | 'rowBorders'> {
   return {
-    leftPt: base.leftPt + bandPt(sides.left),
-    rightPt: base.rightPt + bandPt(sides.right),
+    leftPt: base.leftPt + outerBandPt(sides.left),
+    rightPt: base.rightPt + outerBandPt(sides.right),
     rowBorders: sides,
   };
 }
@@ -161,7 +161,7 @@ export function spacedTableFrameBorders(
       ['right', sides.right],
     ] as const) {
       if (edge.state !== 'edge') continue;
-      const width = bandPt(edge);
+      const width = outerBandPt(edge);
       strokes.push({
         side,
         role: 'edge',
