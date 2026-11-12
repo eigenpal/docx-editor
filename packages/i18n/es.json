@@ -78,7 +78,9 @@
     "outermostLevel": "La selección ya está en el nivel más externo",
     "cannotIndentFurther": "No se puede aumentar más la sangría de la selección",
     "noGoToView": "Ir a no está disponible aquí",
-    "noBookmarkDialog": "No se pueden agregar marcadores aquí"
+    "noBookmarkDialog": "No se pueden agregar marcadores aquí",
+    "groupMemberMove": "Una forma dentro de un grupo no se mueve, cambia de tamaño ni se elimina por sí sola. Presione Esc para seleccionar el grupo.",
+    "groupMemberProperties": "Una forma dentro de un grupo toma el ajuste, el texto alternativo y las propiedades del grupo. Presione Esc para seleccionar el grupo."
   },
   "toolbar": {
     "ariaLabel": "Barra de formato",
@@ -1360,6 +1362,55 @@
       "unsupported": "El editor no admite este cambio en el gráfico.",
       "invalidValue": "El gráfico no puede usar este valor.",
       "suggesting": "Los gráficos no se pueden cambiar mientras sugiere ediciones. Cambie a Edición para modificar este gráfico."
+    }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "Este tipo de forma antiguo no tiene ajuste de transparencia.",
+      "noShape": "Seleccione una forma, un cuadro de texto o una línea.",
+      "noSolidFill": "La forma no tiene un relleno sólido. Elija primero un color de relleno.",
+      "outOfRange": "El valor está fuera del intervalo.",
+      "staleSelection": "La selección cambió. Vuelva a seleccionar la forma.",
+      "mixedFill": "Las formas de este grupo tienen rellenos distintos. Elige un color para aplicarlo a todas."
+    },
+    "formatShape": "Formato de forma…",
+    "pane": {
+      "close": "Cerrar el panel Formato de forma",
+      "emptyBody": "Seleccione una forma, un cuadro de texto o una línea en el documento para darle formato.",
+      "emptyTitle": "No hay ninguna forma seleccionada",
+      "errors": {
+        "color": "Escriba un color como #RRGGBB o como nombre de color.",
+        "noSolidFill": "Elija primero un color de relleno.",
+        "transparency": "Escriba un número de 0 a 100.",
+        "width": "Escriba un grosor de 0,25 a 1584 puntos."
+      },
+      "fill": "Relleno",
+      "fillColor": "Color de relleno",
+      "fillHex": "Color hexadecimal del relleno",
+      "fillTypes": {
+        "gradient": "Degradado",
+        "mixed": "Mixto",
+        "none": "Sin relleno",
+        "pattern": "Trama",
+        "picture": "Imagen",
+        "solid": "Sólido"
+      },
+      "hexHelp": "Escriba #RRGGBB o el nombre de un color y presione Entrar.",
+      "mixedOutline": "Las formas de este grupo tienen contornos distintos.",
+      "noFill": "Sin relleno",
+      "noOutline": "Sin línea",
+      "openFillColors": "Elegir un color de relleno",
+      "openOutlineColors": "Elegir un color de contorno",
+      "otherWidth": "Otro grosor",
+      "outline": "Contorno",
+      "outlineColor": "Color de contorno",
+      "outlineHex": "Color hexadecimal del contorno",
+      "readOnlyFill": "Tipo de relleno: {fill}. Elija un color o Sin relleno para reemplazarlo.",
+      "title": "Formato de forma",
+      "transparency": "Transparencia (%)",
+      "width": "Grosor (pt)",
+      "widthPoints": "{value} pt",
+      "widthPreset": "Grosor predefinido"
     }
   }
 }

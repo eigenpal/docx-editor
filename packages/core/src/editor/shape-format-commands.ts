@@ -11,12 +11,20 @@ import type {
   SetShapeFillCommand,
   SetShapeOutlineCommand,
 } from '../contracts/editor.ts';
-import { validateShapeFormat } from '../store/store/tree-op-shape-format.ts';
-import type { DrawingTreeDocOp, TreeOpRejection } from '../store/store/tree-op-types.ts';
+import type { ShapeColorValue } from '../contracts/editor-shape-format.ts';
+import { themeColorElement, validateShapeFormat } from '../store/store/tree-op-shape-format.ts';
+import type {
+  DrawingTreeDocOp,
+  ShapeThemeColorInput,
+  TreeOpRejection,
+} from '../store/store/tree-op-types.ts';
+import { resolveColorNode } from '../store/package/drawing-shape-color.ts';
+import { createPackageShapeThemeResolvers } from '../store/package/theme-color-resolution.ts';
 import { commandProtectionRefusal } from './command-protection.ts';
 import { selectedImageStateOf } from './docx-editor-images.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { partOfNodeId } from './surface-scope.ts';
+import { CHART_THEME_SLOTS, chartThemeHexes } from './chart-pane.ts';
 import { shapeColorHex } from '../store/package/shape-format.ts';
 
 type ShapeFormatCommand = Extract<EditorCommand, { type: 'setShapeFill' | 'setShapeOutline' }>;
@@ -33,7 +41,48 @@ function hexOf(color: unknown): string | undefined {
   return typeof color === 'string' ? (shapeColorHex(color) ?? color) : String(color);
 }
 
-function fillOf(command: SetShapeFillCommand): SetShapeFormatOp['fill'] | Refusal {
+/** Resolves a theme colour to the `RRGGBB` it shows in this document, or null. */
+type ThemeHex = (theme: ShapeThemeColorInput) => string | null;
+
+/** The default theme, by slot name, for a document that has no theme part. */
+const DEFAULT_THEME = new Map<string, string | null>(
+  CHART_THEME_SLOTS.map((slot, index) => [slot, chartThemeHexes(undefined)[index] ?? null])
+);
+
+/** `RRGGBB` of a theme colour, with its tint or shade, through `resolveSchemeColor`. */
+function themeHexOf(
+  theme: ShapeThemeColorInput,
+  resolveSchemeColor: (scheme: string) => string | null
+): string | null {
+  const hex = resolveColorNode(themeColorElement(theme), resolveSchemeColor)?.hex;
+  return hex ? hex.toUpperCase() : null;
+}
+
+/**
+ * The op fields of a command colour: `color` alone for `RRGGBB`, or the theme reference with
+ * the `RRGGBB` it resolves to, which a VML copy writes. A document with no theme colours takes
+ * the `RRGGBB` of the default theme, because a reference there would resolve to nothing. A
+ * theme name that is not a slot keeps an invalid colour, so the op refuses it.
+ */
+function colorFields(
+  color: ShapeColorValue | undefined,
+  themeHex: ThemeHex
+): { color?: string; theme?: ShapeThemeColorInput } {
+  if (color === undefined) return {};
+  if (typeof color !== 'object' || color === null) return { color: hexOf(color) };
+  const theme: ShapeThemeColorInput = {
+    name: color.theme,
+    ...(color.shift !== undefined ? { shift: color.shift } : {}),
+  };
+  const hex = themeHex(theme);
+  if (hex) return { color: hex, theme };
+  return { color: themeHexOf(theme, (slot) => DEFAULT_THEME.get(slot) ?? null) ?? '' };
+}
+
+function fillOf(
+  command: SetShapeFillCommand,
+  themeHex: ThemeHex
+): SetShapeFormatOp['fill'] | Refusal {
   const { visible, color, transparency } = command;
   if (visible === undefined && color === undefined && transparency === undefined)
     return {
@@ -48,16 +97,19 @@ function fillOf(command: SetShapeFillCommand): SetShapeFormatOp['fill'] | Refusa
   }
   return {
     type: 'solid',
-    ...(color !== undefined ? { color: hexOf(color) } : {}),
+    ...colorFields(color, themeHex),
     ...(transparency !== undefined ? { transparency } : {}),
   };
 }
 
-function outlineOf(command: SetShapeOutlineCommand): SetShapeFormatOp['outline'] {
+function outlineOf(
+  command: SetShapeOutlineCommand,
+  themeHex: ThemeHex
+): SetShapeFormatOp['outline'] {
   const { visible, color, widthPt } = command;
   return {
     ...(visible !== undefined ? { visible } : {}),
-    ...(color !== undefined ? { color: hexOf(color) } : {}),
+    ...colorFields(color, themeHex),
     ...(widthPt !== undefined ? { widthPt } : {}),
   };
 }
@@ -90,13 +142,24 @@ function planCommand(command: ShapeFormatCommand, surface: PaginatedSurface | nu
     return { ok: false, code: 'notFound', reason: 'stale drawing selection' } as const;
   if (!selected.shapeFormat) return refusalOf('not-a-shape-drawing');
   let op: SetShapeFormatOp;
+  const themeHex: ThemeHex = (theme) =>
+    themeHexOf(
+      theme,
+      createPackageShapeThemeResolvers(surface.session.currentPackage()).resolveSchemeColor
+    );
   if (command.type === 'setShapeFill') {
-    const fill = fillOf(command);
+    const fill = fillOf(command, themeHex);
     if (fill && 'ok' in fill) return fill;
     op = { op: 'setShapeFormat', drawingNodeId: selected.id, fill };
   } else {
-    op = { op: 'setShapeFormat', drawingNodeId: selected.id, outline: outlineOf(command) };
+    op = {
+      op: 'setShapeFormat',
+      drawingNodeId: selected.id,
+      outline: outlineOf(command, themeHex),
+    };
   }
+  // A shape selected inside the group takes the edit alone.
+  if (selected.memberId) op = { ...op, shapeNodeId: selected.memberId };
   const part = partOfNodeId(surface.session, selected.id) ?? surface.session.part();
   const rejection = validateShapeFormat(part, op);
   return rejection ? refusalOf(rejection) : op;

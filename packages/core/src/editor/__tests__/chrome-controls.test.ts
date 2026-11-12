@@ -115,6 +115,7 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'image.insert',
   'image.properties',
   'image.editChart',
+  'image.formatShape',
   'image.wrap',
   'image.altText',
   'table.insert',
@@ -337,7 +338,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(84);
+    expect(chromeControlCount()).toBe(85);
   });
 
   test('the table group is contextual and carries border, fill, merge, and split slots', () => {
@@ -362,7 +363,7 @@ describe('legacy chrome descriptor', () => {
     expect(commandForSlot('table.splitCell')).toBeNull();
   });
 
-  test('the image group carries insert, properties, editChart, wrap, and altText in order', () => {
+  test('the image group carries insert, properties, editChart, formatShape, wrap, and altText', () => {
     const image = CHROME_GROUPS.find((g) => g.id === 'image');
     expect(image).toBeDefined();
     expect(image!.contextual).toBe(true);
@@ -370,10 +371,12 @@ describe('legacy chrome descriptor', () => {
       'insert',
       'properties',
       'editChart',
+      'formatShape',
       'wrap',
       'altText',
     ]);
     expect(image!.controls.map((c) => c.state.kind)).toEqual([
+      'command',
       'command',
       'command',
       'command',

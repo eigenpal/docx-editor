@@ -169,6 +169,70 @@ describe('setShapeFormat on a DrawingML shape', () => {
     expect(xml(opaque)).toContain('<a:srgbClr val="00FF00"/>');
   });
 
+  test('a theme colour writes a:schemeClr with lumMod and lumOff, and reads back as a theme', () => {
+    const part = parse(alternate(SOLID, FALLBACK));
+    const ac = idOf(part, 'AlternateContent');
+    const clear = apply(part, {
+      op: 'setShapeFormat',
+      drawingNodeId: ac,
+      fill: { type: 'solid', transparency: 0.5 },
+    });
+    // Lighter 40%: lumMod 60000 and lumOff 40000, and the transparency stays.
+    const tint = apply(clear, {
+      op: 'setShapeFormat',
+      drawingNodeId: ac,
+      fill: { type: 'solid', color: '8FAADC', theme: { name: 'accent1', shift: 40 } },
+    });
+    expect(xml(tint)).toContain(
+      '<a:solidFill><a:schemeClr val="accent1"><a:lumMod val="60000"/><a:lumOff val="40000"/><a:alpha val="50000"/></a:schemeClr></a:solidFill>'
+    );
+    // The VML fallback takes the colour the reference resolves to.
+    expect(xml(tint)).toContain('fillcolor="#8faadc"');
+    // Darker 25%: lumMod 75000 only; the theme colour itself has no transform.
+    const shade = apply(tint, {
+      op: 'setShapeFormat',
+      drawingNodeId: ac,
+      outline: { color: '2F5597', theme: { name: 'accent1', shift: -25 } },
+    });
+    expect(xml(shade)).toContain(
+      '<a:ln w="12700"><a:solidFill><a:schemeClr val="accent1"><a:lumMod val="75000"/></a:schemeClr></a:solidFill></a:ln>'
+    );
+    const plain = apply(shade, {
+      op: 'setShapeFormat',
+      drawingNodeId: ac,
+      outline: { color: '000000', theme: { name: 'tx1' } },
+    });
+    expect(xml(plain)).toContain('<a:schemeClr val="tx1"/>');
+    const targets = shapeFormatTargets(plain, ac);
+    if (!targets) throw new Error('no targets');
+    const theme = {
+      resolveSchemeColor: (slot: string) => (slot === 'tx1' ? '000000' : '4472C4'),
+      resolveStyleMatrixReference: () => null,
+      cacheToken: 'test',
+    };
+    const format = readShapeFormat(targets, theme);
+    expect(format.fill).toMatchObject({ type: 'solid', color: '8FAADC', transparency: 0.5 });
+    expect(format.fill.theme).toEqual({ name: 'accent1', shift: 40 });
+    expect(format.outline.theme).toEqual({ name: 'tx1', shift: 0 });
+    // An RGB colour has no theme, even when it matches a theme colour.
+    expect(readShapeFormat(shapeFormatTargets(part, ac)!, theme).fill.theme).toBeUndefined();
+  });
+
+  test('a theme colour refuses a bad name, shift, or a missing resolved colour', () => {
+    const part = parse(alternate(SOLID, FALLBACK));
+    const ac = idOf(part, 'AlternateContent');
+    const refused = (fill: unknown) =>
+      applyTreeOp(part, { op: 'setShapeFormat', drawingNodeId: ac, fill } as TreeDocOp);
+    for (const fill of [
+      { type: 'solid', color: '4472C4', theme: { name: 'accent9' } },
+      { type: 'solid', color: '4472C4', theme: { name: 'accent1', shift: 101 } },
+      { type: 'solid', color: '4472C4', theme: { name: 'accent1', shift: 2.5 } },
+      { type: 'solid', theme: { name: 'accent1' } },
+      { type: 'solid', color: '', theme: { name: 'accent1' } },
+    ])
+      expect(refused(fill)).toMatchObject({ ok: false, reason: 'invalid-drawing-value' });
+  });
+
   test('an outline colour and width write a:ln and the fallback stroke', () => {
     const part = parse(alternate(SOLID, FALLBACK));
     const ac = idOf(part, 'AlternateContent');

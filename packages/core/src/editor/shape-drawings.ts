@@ -7,8 +7,10 @@ import type { DrawingProjection } from '../store/package/drawing-projection.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { partOfNodeId } from './surface-scope.ts';
+import { selectedGroupMember } from './group-member-selection.ts';
 import {
   readShapeFormat,
+  narrowedTargets,
   shapeFormatTargets,
   type ShapeFormatState,
 } from '../store/package/shape-format.ts';
@@ -49,8 +51,11 @@ export function selectedShapeFormat(
   drawingNodeId: string
 ): ShapeFormatState | null {
   const part = partOfNodeId(surface.session, drawingNodeId) ?? surface.session.part();
-  const targets = shapeFormatTargets(part, drawingNodeId);
-  if (typeof targets === 'string') return null;
+  const all = shapeFormatTargets(part, drawingNodeId);
+  if (typeof all === 'string') return null;
+  // A shape selected inside the group reads alone, as the commands then write it alone.
+  const member = selectedGroupMember(surface, drawingNodeId);
+  const targets = member ? (narrowedTargets(part, all, member) ?? all) : all;
   const theme = createPackageShapeThemeResolvers(surface.session.currentPackage());
   return Object.freeze(readShapeFormat(targets, theme));
 }

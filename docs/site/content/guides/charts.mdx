@@ -81,7 +81,7 @@ The `copy`, `cut`, and `paste` commands provide the same behavior. Chart clipboa
 
 The Chart pane shows the type, elements, colors, and data of the selected chart. Fields apply when you press Enter or leave them, and Escape restores the old value.
 
-`DocxEditor.SidePanel` holds the pane. **Insert** > **Chart** asks the host to show the panel without moving the focus. **Edit chart** and a double-click on a chart move the focus into it. Listen for these requests with `usePaneRequest`:
+`DocxEditor.SidePanel` holds the pane, and the Format shape pane for a selected shape. **Insert** > **Chart** asks the host to show the panel without moving the focus. **Edit chart** and a double-click on a chart move the focus into it. Listen for these requests with `usePaneRequest`:
 
 ```tsx
 import { useState } from 'react';
@@ -89,14 +89,12 @@ import { DocxEditor, usePaneRequest } from '@docx-editor.dev/react';
 
 function ChartSidePanel() {
   const [open, setOpen] = useState(false);
-  usePaneRequest((request) => {
-    if (request.pane === 'chart') setOpen(true);
-  });
+  usePaneRequest((request) => setOpen(true), { panes: ['chart', 'shape'] });
   return open ? <DocxEditor.SidePanel onClose={() => setOpen(false)} /> : null;
 }
 ```
 
-Render this component inside `DocxEditor.Root`, beside `DocxEditor.Viewport`. Mount a side panel, Chart pane, or `usePaneRequest` listener to enable the **Edit chart** action. Vue uses `DocxEditorSidePanel` and the `usePaneRequest` composable. Use `DocxEditor.ChartPane` to place the pane in your own layout.
+Render this component inside `DocxEditor.Root`, beside `DocxEditor.Viewport`. The `panes` option names the panes your listener shows; it defaults to `['chart']`. A pane action is enabled only while a mounted pane or listener takes that pane, and a request that no listener takes is dropped. Vue uses `DocxEditorSidePanel` and the `usePaneRequest` composable. Use `DocxEditor.ChartPane` to place the pane in your own layout.
 
 ## Build your own chart pane
 

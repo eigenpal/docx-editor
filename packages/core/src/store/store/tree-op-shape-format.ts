@@ -2,7 +2,8 @@
 //
 // The markup is what Word writes for the same edit:
 // - A solid fill is `a:solidFill/a:srgbClr`, with `a:alpha` (1000ths of a percent of opacity)
-//   for a transparency.
+//   for a transparency. A theme colour is `a:schemeClr` with `a:lumMod` and `a:lumOff` for a
+//   tint or shade; the VML copy takes the `RRGGBB` it resolves to.
 // - No fill is `a:noFill`. The fill it replaces moves to `a14:hiddenFill` in `a:extLst`, and a
 //   later solid fill without a colour brings it back.
 // - An outline is `a:ln` with `@w` in EMU and a `a:solidFill` for its colour. A hidden outline
@@ -17,7 +18,12 @@
 import { cloneWithNewIds, fromEdit } from './tree-op-nodes.ts';
 import { drawingEffect } from './tree-op-drawing-kinds.ts';
 import { createNodeIdAllocator, replaceNode, type EditOptions } from '../package/ooxml-edit.ts';
-import { chosenShapes, SHAPE_FILL_NAMES, shapeFormatTargets } from '../package/shape-format.ts';
+import {
+  chosenShapes,
+  SHAPE_FILL_NAMES,
+  SHAPE_THEME_COLOR_NAMES,
+  shapeFormatTargets,
+} from '../package/shape-format.ts';
 import { readStyleReferenceIndex } from '../package/drawing-line-properties.ts';
 import { VML } from '../package/legacy-vml-values.ts';
 import {
@@ -31,6 +37,7 @@ import type {
   DrawingTreeDocOp,
   ShapeFillInput,
   ShapeOutlineInput,
+  ShapeThemeColorInput,
   TreeOpRejection,
   TreeOpResult,
 } from './tree-op-types.ts';
@@ -60,6 +67,15 @@ const ALPHA_TRANSFORMS: ReadonlySet<string> = new Set(['alpha', 'alphaOff', 'alp
 const isHex = (value: unknown): value is string =>
   typeof value === 'string' && /^[0-9A-Fa-f]{6}$/.test(value);
 
+/** Whether a theme colour input is well formed; it always comes with its resolved `color`. */
+function themeOk(theme: ShapeThemeColorInput | undefined, color: unknown): boolean {
+  if (theme === undefined) return true;
+  if (typeof theme !== 'object' || theme === null || !isHex(color)) return false;
+  if (!SHAPE_THEME_COLOR_NAMES.has(theme.name)) return false;
+  const shift = theme.shift ?? 0;
+  return Number.isInteger(shift) && shift >= -100 && shift <= 100;
+}
+
 /** Why the op's values are refused, before the target is looked at. */
 function valueRejection(op: SetShapeFormat): TreeOpRejection | null {
   const { fill, outline } = op;
@@ -70,6 +86,7 @@ function valueRejection(op: SetShapeFormat): TreeOpRejection | null {
     if (fill.type !== 'none' && fill.type !== 'solid') return 'invalid-drawing-value';
     if (fill.type === 'solid') {
       if (fill.color !== undefined && !isHex(fill.color)) return 'invalid-drawing-value';
+      if (!themeOk(fill.theme, fill.color)) return 'invalid-drawing-value';
       const t = fill.transparency;
       if (t !== undefined && (typeof t !== 'number' || !(t >= 0 && t <= 1)))
         return 'invalid-drawing-value';
@@ -81,6 +98,7 @@ function valueRejection(op: SetShapeFormat): TreeOpRejection | null {
       return 'invalid-drawing-value';
     if (visible !== undefined && typeof visible !== 'boolean') return 'invalid-drawing-value';
     if (color !== undefined && !isHex(color)) return 'invalid-drawing-value';
+    if (!themeOk(outline.theme, color)) return 'invalid-drawing-value';
     // A colour is an outline you can see: it never goes with hiding one.
     if (color !== undefined && visible === false) return 'invalid-drawing-value';
     if (
@@ -287,6 +305,36 @@ function srgbSolid(color: string, nextId: () => string): OoxmlElement {
   return el(nextId, 'solidFill', [], [el(nextId, 'srgbClr', [attr('val', color.toUpperCase())])]);
 }
 
+/**
+ * A solid fill of `color`, or of the theme reference when `theme` is given: `a:schemeClr` with
+ * `a:lumMod` (and `a:lumOff` for a tint) in 1000ths of a percent, as the theme grid writes.
+ */
+function colorSolid(
+  color: string,
+  theme: ShapeThemeColorInput | undefined,
+  nextId: () => string
+): OoxmlElement {
+  if (!theme) return srgbSolid(color, nextId);
+  return el(nextId, 'solidFill', [], [themeColorElement(theme, nextId)]);
+}
+
+/**
+ * The `a:schemeClr` of a theme colour: `a:lumMod` (and `a:lumOff` for a tint) in 1000ths of a
+ * percent, as the theme colour grid writes them. Lighter 40% is `lumMod 60000` and
+ * `lumOff 40000`; Darker 25% is `lumMod 75000`.
+ */
+export function themeColorElement(
+  theme: ShapeThemeColorInput,
+  nextId: () => string = () => 'theme-color'
+): OoxmlElement {
+  const shift = theme.shift ?? 0;
+  const transforms: OoxmlElement[] = [];
+  if (shift !== 0)
+    transforms.push(el(nextId, 'lumMod', [attr('val', String((100 - Math.abs(shift)) * 1000))]));
+  if (shift > 0) transforms.push(el(nextId, 'lumOff', [attr('val', String(shift * 1000))]));
+  return el(nextId, 'schemeClr', [attr('val', theme.name)], transforms);
+}
+
 function formatWsp(
   wsp: OoxmlElement,
   fill: ShapeFillInput | undefined,
@@ -345,13 +393,10 @@ function formatFill(
     // A new colour keeps the transparency the shape had, as Word's colour picker does.
     const previous = current?.localName === 'solidFill' ? elements(current)[0] : undefined;
     const alpha = previous?.children.filter((t) => isA(t, ALPHA_TRANSFORMS)) ?? [];
-    const base = srgbSolid(fill.color, nextId);
+    const base = colorSolid(fill.color, fill.theme, nextId);
     const color = elements(base)[0]!;
     solid = withChildren(base, [
-      withChildren(
-        color,
-        alpha.map((t) => cloneWithNewIds(t, nextId))
-      ),
+      withChildren(color, [...color.children, ...alpha.map((t) => cloneWithNewIds(t, nextId))]),
     ]);
   } else if (current?.localName === 'grpFill') {
     // A group member that takes its group's fill gets that fill written as its own.
@@ -408,7 +453,7 @@ function formatOutline(
     }
   } else if (outline.color !== undefined || outline.visible === true) {
     let solid: OoxmlElement | null = null;
-    if (outline.color !== undefined) solid = srgbSolid(outline.color, nextId);
+    if (outline.color !== undefined) solid = colorSolid(outline.color, outline.theme, nextId);
     else if (current && current.localName !== 'noFill') solid = current;
     else
       solid =

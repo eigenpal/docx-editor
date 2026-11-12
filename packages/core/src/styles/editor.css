@@ -9836,6 +9836,76 @@ p.docx-review__refused {
   }
 }
 
+/* The Format shape pane: it reuses the Chart pane's sections, fields, and color grid. A color
+   field is a label over one button that shows the current color and its name. */
+.docx-editor .docx-shape-pane__color {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.docx-editor .docx-shape-pane__color-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--doc-text);
+  text-align: start;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.docx-editor .docx-shape-pane__color-button:where(:disabled) {
+  color: var(--doc-text-subtle);
+  cursor: default;
+}
+@media (hover: hover) and (pointer: fine) {
+  .docx-editor .docx-shape-pane__color-button:where(:hover:not(:disabled)) {
+    background: var(--doc-bg-hover);
+  }
+}
+.docx-editor .docx-shape-pane__color-button:where(:active:not(:disabled)) {
+  transform: scale(0.98);
+}
+.docx-editor .docx-shape-pane__color-button:where(:focus-visible) {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+.docx-editor .docx-shape-pane__chip {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+}
+/* No color: an empty chip crossed by one line. */
+.docx-editor .docx-shape-pane__chip:where([data-none='true']) {
+  background: linear-gradient(
+    to top right,
+    transparent calc(50% - 1px),
+    var(--doc-text-muted) calc(50% - 1px),
+    var(--doc-text-muted) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
+}
+.docx-editor .docx-shape-pane__summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .docx-editor .docx-shape-pane__color-button {
+    transform: none !important;
+  }
+}
+
 /* Comment edits stay in the card and preserve multiline text. */
 .docx-review__edit {
   display: flex;

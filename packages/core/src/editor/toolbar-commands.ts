@@ -52,6 +52,7 @@ import {
 } from './comment-draft-chrome.ts';
 import { LINK_PROBE, NO_LINK_VIEW, linkControlState, linkRequestsOf } from './link-chrome.ts';
 import { chartChromeState, chartInsertCommand, runChartControl } from './chart-chrome.ts';
+import { runShapeControl, shapeChromeState } from './shape-chrome.ts';
 
 /** Instance-only surface on the concrete facade — not part of the public `Editor` contract. */
 function surfaceOf(editor: Editor): PaginatedSurface | null {
@@ -364,7 +365,7 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
   if (isTableChromeSlot(id)) {
     return tableChromeToolbarState(editor, id);
   }
-  const chart = chartChromeState(editor, id);
+  const chart = chartChromeState(editor, id) ?? shapeChromeState(editor, id);
   if (chart) return chart;
   if (id === 'review.editingMode') {
     const mode = editor.getEditingMode?.() ?? 'editing';
@@ -791,7 +792,7 @@ export function runToolbarCommand(
   if (options?.historyGroup !== undefined && SURFACE_RUN_SLOTS.has(id)) {
     return { ok: false, code: 'unsupported', reason: `${id} does not take a history group` };
   }
-  const chartRun = runChartControl(editor, id, value);
+  const chartRun = runChartControl(editor, id, value) ?? runShapeControl(editor, id);
   if (chartRun) return chartRun;
   if (id === 'format.painter') {
     const surface = surfaceOf(editor);

@@ -506,6 +506,13 @@ export const CHROME_GROUPS = [
         state: { kind: 'command' },
       },
       {
+        // Opens the Format shape pane for the selected shape (`requestPane`).
+        id: 'formatShape',
+        labelKey: 'shape.formatShape',
+        paths: GENERATED_ICON_PATHS['format_color_fill'],
+        state: { kind: 'command' },
+      },
+      {
         id: 'wrap',
         shape: 'dropdown',
         labelKey: 'formattingBar.imageWrap',
@@ -719,6 +726,7 @@ export type ChromeSlotId =
   | 'image.insert'
   | 'image.properties'
   | 'image.editChart'
+  | 'image.formatShape'
   | 'image.wrap'
   | 'image.altText'
   | 'table.insert'
@@ -811,12 +819,14 @@ export interface FormattingBarOptions {
   readonly direction?: boolean;
   /** Whether the selected drawing is a chart, which shows `image.editChart`. */
   readonly chart?: boolean;
+  /** Whether the selected drawing has a fill or outline to set, which shows `image.formatShape`. */
+  readonly shape?: boolean;
 }
 
 /**
  * The formatting-bar groups for one editor snapshot: the default bar, the contextual `image`
- * group when a drawing is selected (with Edit chart for a chart), and the direction group when
- * `options.direction` asks.
+ * group when a drawing is selected (with Edit chart for a chart and Format shape for a shape), and
+ * the direction group when `options.direction` asks.
  * Insertion without a selection lives in the packaged Insert menu (`CHROME_MENUS`), not in
  * the bar — a host that wants a bar button places `DocxEditor.Toolbar.ImageInsert` itself.
  *
@@ -835,8 +845,11 @@ export function formattingBarChromeGroups(
   if (!image) return groups;
   const imageGroup = CHROME_GROUPS_CONFORMANCE.find((group) => group.id === 'image');
   if (!imageGroup) return groups;
-  if (options?.chart) return [...groups, imageGroup];
-  const controls = imageGroup.controls.filter((control) => control.id !== 'editChart');
+  const controls = imageGroup.controls.filter(
+    (control) =>
+      (control.id !== 'editChart' || options?.chart) &&
+      (control.id !== 'formatShape' || options?.shape)
+  );
   return [...groups, { ...imageGroup, controls }];
 }
 

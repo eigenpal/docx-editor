@@ -1062,7 +1062,9 @@
     "outermostLevel": "Pilihan sudah berada di tingkat terluar",
     "cannotIndentFurther": "Indentasi pilihan tidak dapat ditambah lagi",
     "noGoToView": "Buka tidak tersedia di sini",
-    "noBookmarkDialog": "Penanda tidak dapat ditambahkan di sini"
+    "noBookmarkDialog": "Penanda tidak dapat ditambahkan di sini",
+    "groupMemberMove": "Bentuk di dalam grup tidak dapat dipindahkan, diubah ukurannya, atau dihapus sendiri. Tekan Escape untuk memilih grup.",
+    "groupMemberProperties": "Bentuk di dalam grup mengambil pembungkusan, teks alternatif, dan propertinya dari grup. Tekan Escape untuk memilih grup."
   },
   "equationPopup": {
     "apply": "Terapkan",
@@ -1360,6 +1362,55 @@
       "unsupported": "Editor tidak mendukung perubahan bagan ini.",
       "invalidValue": "Bagan tidak dapat menggunakan nilai ini.",
       "suggesting": "Bagan tidak dapat diubah saat Anda menyarankan pengeditan. Beralihlah ke Pengeditan untuk mengubah bagan ini."
+    }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "Jenis bentuk lama ini tidak memiliki pengaturan transparansi.",
+      "noShape": "Pilih satu bentuk, kotak teks, atau garis.",
+      "noSolidFill": "Bentuk tidak memiliki isian solid. Pilih warna isian terlebih dahulu.",
+      "outOfRange": "Nilai di luar rentang.",
+      "staleSelection": "Pilihan berubah. Pilih bentuk lagi.",
+      "mixedFill": "Bentuk dalam grup ini memiliki isian berbeda. Pilih warna untuk menerapkannya ke semua."
+    },
+    "formatShape": "Format bentuk…",
+    "pane": {
+      "close": "Tutup panel Format bentuk",
+      "emptyBody": "Pilih bentuk, kotak teks, atau garis di dokumen untuk memformatnya.",
+      "emptyTitle": "Tidak ada bentuk yang dipilih",
+      "errors": {
+        "color": "Ketik warna sebagai #RRGGBB atau sebagai nama warna.",
+        "noSolidFill": "Pilih warna isian terlebih dahulu.",
+        "transparency": "Ketik angka dari 0 sampai 100.",
+        "width": "Ketik ketebalan dari 0,25 sampai 1584 poin."
+      },
+      "fill": "Isian",
+      "fillColor": "Warna isian",
+      "fillHex": "Warna heksa isian",
+      "fillTypes": {
+        "gradient": "Gradien",
+        "mixed": "Campuran",
+        "none": "Tanpa isian",
+        "pattern": "Pola",
+        "picture": "Gambar",
+        "solid": "Solid"
+      },
+      "hexHelp": "Ketik #RRGGBB atau nama warna, lalu tekan Enter.",
+      "mixedOutline": "Bentuk dalam grup ini memiliki kerangka yang berbeda.",
+      "noFill": "Tanpa isian",
+      "noOutline": "Tanpa garis",
+      "openFillColors": "Pilih warna isian",
+      "openOutlineColors": "Pilih warna kerangka",
+      "otherWidth": "Ketebalan lain",
+      "outline": "Kerangka",
+      "outlineColor": "Warna kerangka",
+      "outlineHex": "Warna heksa kerangka",
+      "readOnlyFill": "Jenis isian: {fill}. Pilih warna atau Tanpa isian untuk menggantinya.",
+      "title": "Format bentuk",
+      "transparency": "Transparansi (%)",
+      "width": "Ketebalan (pt)",
+      "widthPoints": "{value} pt",
+      "widthPreset": "Ketebalan prasetel"
     }
   }
 }

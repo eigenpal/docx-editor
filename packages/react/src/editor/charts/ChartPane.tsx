@@ -29,7 +29,7 @@ import {
   focusChartPane,
   listenPaneRequests,
   nextChartCategoryLabel,
-  takePaneRequest,
+  takePaneRequestFor,
   type ChartPaneChange,
 } from '@docx-editor.dev/core/editor';
 import type { ChartData, ChartFormatChange, ChartType } from '@docx-editor.dev/core/editor';
@@ -99,9 +99,10 @@ export function DocxEditorChartPane({ className }: DocxEditorChartPaneProps): Re
   // the request, so the pane takes a pending one when it mounts.
   useEffect(() => {
     if (!editor) return undefined;
-    if (takePaneRequest(editor)?.focus) focusChartPane(root.current);
+    if (takePaneRequestFor(editor, 'chart')?.focus) focusChartPane(root.current);
     return listenPaneRequests(editor, () => {
-      if (takePaneRequest(editor)?.focus) queueMicrotask(() => focusChartPane(root.current));
+      if (takePaneRequestFor(editor, 'chart')?.focus)
+        queueMicrotask(() => focusChartPane(root.current));
     });
   }, [editor]);
   const axesOffId = useId();

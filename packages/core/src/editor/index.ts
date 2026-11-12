@@ -18,7 +18,14 @@
 export type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 export type { FontShapingOptions } from '../layout/font-shaping-policy.ts';
 export type { TrackedChangeFilterMode, TrackedChangePredicate } from '../contracts/editor.ts';
-export type { ShapeFillState, ShapeFormatState, ShapeOutlineState } from '../contracts/editor.ts';
+export type {
+  ShapeColorValue,
+  ShapeFillState,
+  ShapeFormatState,
+  ShapeOutlineState,
+  ShapeThemeColor,
+  ShapeThemeColorName,
+} from '../contracts/editor.ts';
 export {
   createLayoutShaping,
   disposeLayoutShaping,
@@ -747,11 +754,14 @@ export {
   listenPaneRequests,
   requestPane,
   takePaneRequest,
+  takePaneRequestFor,
   openChartPaneFor,
   chartPaneAvailable,
   openChartPaneAt,
+  paneAvailable,
   type EditorPaneId,
   type PaneRequest,
+  type PaneRequestListenerOptions,
   type PaneRequestOptions,
 } from './chart-chrome.ts';
 export {
@@ -799,6 +809,40 @@ export {
   type SelectedChartCommand,
   type SelectedChartView,
 } from './selected-chart.ts';
+export {
+  openShapePane,
+  paneTitleKey,
+  selectionPane,
+  shapePaneAvailable,
+  sidePanelPane,
+} from './shape-chrome.ts';
+export {
+  SHAPE_OUTLINE_WIDTHS,
+  shapeColorPick,
+  shapeFillPick,
+  shapeOutlinePick,
+  shapeFillEditable,
+  shapeFillLabelKey,
+  shapeFillSummary,
+  shapeOutlineSummary,
+  shapeHexText,
+  shapePaneColorHex,
+  shapePaneCommand,
+  shapeSwatchCurrent,
+  shapeTransparencyText,
+  shapeWidthText,
+  type ShapePaneChange,
+  type ShapePaneError,
+  type ShapePaneResult,
+} from './shape-pane.ts';
+export {
+  editSelectedShape,
+  execSelectedShape,
+  readSelectedShape,
+  sameSelectedShape,
+  type SelectedShapeCommand,
+  type SelectedShapeView,
+} from './selected-shape.ts';
 export type { SurfaceChartOps } from './surface-chart-ops.ts';
 export type {
   ChartCopySource,
@@ -844,3 +888,4 @@ export {
   type DrawingFramePress,
   passDrawingFramePress,
 } from './drawing-overlay-press.ts';
+export { leaveGroupMember } from './group-member-selection.ts';

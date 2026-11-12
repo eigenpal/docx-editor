@@ -33,6 +33,7 @@ import { DocxEditorMenu } from '../editor/menu';
 import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/DocxEditorRulers';
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { DocxEditorChartPane, DocxEditorSidePanel } from '../editor/charts';
+import { DocxEditorShapePane } from '../editor/shapes';
 import { Navigation as DocxEditorNavigationCompound } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorWatermarkDialog } from '../editor/DocxEditorWatermark';
@@ -546,10 +547,15 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly VerticalRuler: typeof DocxEditorVerticalRuler;
   /** Context-fed heading outline over `Editor.getOutline()`. */
   readonly DocumentOutline: typeof DocxEditorDocumentOutline;
-  /** The side panel that holds the Chart pane; the host renders it to show it. */
+  /**
+   * The side panel that holds the Chart pane or the Format shape pane; the host renders it to
+   * show it.
+   */
   readonly SidePanel: typeof DocxEditorSidePanel;
   /** The Chart pane: the type, elements, colors, and data of the selected chart. */
   readonly ChartPane: typeof DocxEditorChartPane;
+  /** The Format shape pane: the fill and outline of the selected shape. */
+  readonly ShapePane: typeof DocxEditorShapePane;
   /**
    * The navigation pane — Headings and Find — with its parts as statics (`.Header`,
    * `.Close`, `.Title`, `.Tabs`, `.Tab`, `.Headings`, `.Find`, `.Toggle`). Mounted by
@@ -631,6 +637,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   DocumentOutline: DocxEditorDocumentOutline,
   SidePanel: DocxEditorSidePanel,
   ChartPane: DocxEditorChartPane,
+  ShapePane: DocxEditorShapePane,
   Navigation: DocxEditorNavigationCompound,
   ExportDialog: DocxEditorExportDialog,
   PrintDialog: DocxEditorPrintDialog,

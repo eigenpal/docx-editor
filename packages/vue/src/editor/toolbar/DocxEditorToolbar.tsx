@@ -13,6 +13,7 @@ import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import {
   chartPaneAvailable,
+  shapePaneAvailable,
   chromeSlotId,
   formattingBarChromeGroups,
   type ChromeSlotId,
@@ -226,25 +227,30 @@ function iconPart(slot: ChromeSlotId): PartLike {
 function buildDefaultGroups(
   image: EditorSnapshot['image'],
   direction: boolean,
+  panes: { readonly chart: boolean; readonly shape: boolean },
   chart: boolean
 ): readonly DefaultGroup[] {
-  return formattingBarChromeGroups(image, { direction, chart }).map((group) => {
-    if (group.id === 'alignment') {
+  // Each button shows only when a mounted pane or listener takes its own pane.
+  const shape = panes.shape && !!image?.shapeFormat;
+  return formattingBarChromeGroups(image, { direction, chart: panes.chart && chart, shape }).map(
+    (group) => {
+      if (group.id === 'alignment') {
+        return {
+          id: group.id,
+          labelKey: group.labelKey,
+          entries: [{ slot: 'alignment' as ArrangementKey, Part: ToolbarAlignment }],
+        };
+      }
       return {
         id: group.id,
         labelKey: group.labelKey,
-        entries: [{ slot: 'alignment' as ArrangementKey, Part: ToolbarAlignment }],
+        entries: group.controls.map((control) => {
+          const slot = chromeSlotId(group, control);
+          return { slot: slot as ArrangementKey, Part: SHAPED_PARTS[slot] ?? iconPart(slot) };
+        }),
       };
     }
-    return {
-      id: group.id,
-      labelKey: group.labelKey,
-      entries: group.controls.map((control) => {
-        const slot = chromeSlotId(group, control);
-        return { slot: slot as ArrangementKey, Part: SHAPED_PARTS[slot] ?? iconPart(slot) };
-      }),
-    };
-  });
+  );
 }
 
 const selectToolbarImage = (snapshot: EditorSnapshot) => snapshot.image;
@@ -397,11 +403,15 @@ const DocxEditorToolbarRoot = defineComponent({
     // A right-to-left interface language puts the paragraph direction buttons in the bar.
     const chromeDir = useChromeDir();
     const defaultGroups = computed(() =>
-      // Edit chart shows only when the host can show a chart pane.
+      // Edit chart and Format shape show only when the host can show a side panel.
       buildDefaultGroups(
         image.value,
         chromeDir.value === 'rtl',
-        chart.value && chartPaneAvailable(editorRef.value)
+        {
+          chart: chartPaneAvailable(editorRef.value),
+          shape: shapePaneAvailable(editorRef.value),
+        },
+        chart.value
       )
     );
     const defaultSlots = computed(

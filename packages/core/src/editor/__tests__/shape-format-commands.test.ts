@@ -5,7 +5,17 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { expect, test } from 'bun:test';
-import { drawingNamed, gapY, mount, pressAt, pressOn, saved } from './shape-selection-fixture.ts';
+import {
+  BODY,
+  drawingNamed,
+  gapY,
+  mount,
+  pressAt,
+  pressOn,
+  saved,
+  THEME_XML,
+} from './shape-selection-fixture.ts';
+import { editSelectedShape } from '../selected-shape.ts';
 
 test('a fill and an outline each apply as one undo step and read back', async () => {
   const { editor, container } = await mount();
@@ -41,6 +51,72 @@ test('a fill and an outline each apply as one undo step and read back', async ()
     expect(editor.getSelectedImage!()?.shapeFormat?.fill.type).toBe('none');
     expect(editor.exec({ type: 'setShapeFill', visible: true })).toMatchObject({ ok: true });
     expect(editor.getSelectedImage!()?.shapeFormat?.fill.color).toBe('FFE699');
+  } finally {
+    editor.destroy();
+    container.remove();
+  }
+});
+
+test('a theme colour writes a theme reference that reads back as a theme', async () => {
+  const { editor, container } = await mount(BODY, undefined, undefined, THEME_XML);
+  try {
+    pressAt(container, editor, 380, gapY(editor));
+    expect(
+      editor.exec({ type: 'setShapeFill', color: { theme: 'accent1', shift: 40 } })
+    ).toMatchObject({ ok: true, changed: true });
+    expect(editor.snapshot().image?.shapeFormat?.fill).toEqual({
+      type: 'solid',
+      color: '8FAADC',
+      transparency: 0,
+      theme: { name: 'accent1', shift: 40 },
+    });
+    expect(
+      editor.exec({ type: 'setShapeOutline', color: { theme: 'accent1', shift: -25 } })
+    ).toMatchObject({ ok: true });
+    const xml = await saved(editor);
+    expect(xml).toContain(
+      '<a:schemeClr val="accent1"><a:lumMod val="60000"/><a:lumOff val="40000"/></a:schemeClr>'
+    );
+    expect(xml).toContain('<a:schemeClr val="accent1"><a:lumMod val="75000"/></a:schemeClr>');
+    // A theme pick in the pane sends the theme colour; the same pick again sends nothing.
+    const image = editor.snapshot().image;
+    expect(editSelectedShape(editor, image, { type: 'fillColor', color: 'accent1' })).toMatchObject(
+      { ok: true, changed: true }
+    );
+    expect(editor.snapshot().image?.shapeFormat?.fill.theme).toEqual({ name: 'accent1', shift: 0 });
+    const now = editor.snapshot().image;
+    expect(editSelectedShape(editor, now, { type: 'fillColor', color: 'accent1' })).toEqual({
+      ok: true,
+      changed: false,
+    });
+    expect(editSelectedShape(editor, now, { type: 'fillColor', color: '#4472c4' })).toMatchObject({
+      ok: true,
+      changed: true,
+    });
+    // Typed RGB replaces the reference, so the fill is no longer named as a theme colour.
+    expect(editor.snapshot().image?.shapeFormat?.fill.theme).toBeUndefined();
+    expect(
+      editor.can({ type: 'setShapeFill', color: { theme: 'accent1', shift: 120 } })
+    ).toMatchObject({ ok: false, reason: 'the fill or outline value is out of range' });
+  } finally {
+    editor.destroy();
+    container.remove();
+  }
+});
+
+test('a theme colour in a document with no theme writes the default theme RGB', async () => {
+  const { editor, container } = await mount();
+  try {
+    pressAt(container, editor, 380, gapY(editor));
+    expect(editor.exec({ type: 'setShapeFill', color: { theme: 'accent2' } })).toMatchObject({
+      ok: true,
+    });
+    expect(editor.snapshot().image?.shapeFormat?.fill).toEqual({
+      type: 'solid',
+      color: 'ED7D31',
+      transparency: 0,
+    });
+    expect(await saved(editor)).toContain('<a:srgbClr val="ED7D31"/>');
   } finally {
     editor.destroy();
     container.remove();

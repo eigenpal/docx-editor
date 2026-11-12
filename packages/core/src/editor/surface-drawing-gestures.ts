@@ -9,6 +9,7 @@ import { findDrawingOverlayFrameInLayout } from '../layout/semantic-hit-test.ts'
 const THIN_LINE_PT = 1;
 import { isElementNode, isInputEvent, isKeyboardEvent, isPointerEvent } from './host-realm.ts';
 import { MULTI_CLICK_MS, MULTI_CLICK_SLOP_PX } from './surface-multi-click.ts';
+import { pressSelectsGroupMember, selectedGroupMember } from './group-member-selection.ts';
 
 /** Ctrl or Command with C or X, and Ctrl or Shift with Insert or Delete: copy and cut. */
 function isClipboardChord(event: KeyboardEvent): boolean {
@@ -184,6 +185,21 @@ export function createDrawingGestures(deps: {
       if (drawingId && reached && point?.hit.drawing) {
         followPage(drawingId, point.hit.drawing.paragraphId, point.hit.pageIndex);
       }
+      // A second press on a selected group selects the shape under the pointer, or the group
+      // again where no shape lies; the press then places the same anchor caret.
+      const painted = drawingId && reached ? element?.closest('[data-drawing-node-id]') : null;
+      if (
+        painted &&
+        isPointerEvent(event) &&
+        pressSelectsGroupMember(
+          deps.surface,
+          drawingId as string,
+          painted,
+          event.clientX,
+          event.clientY
+        ) !== null
+      )
+        return;
       deps.setIntent(
         drawingId && reached ? { kind: 'pointer', drawingNodeId: drawingId } : { kind: 'none' }
       );
@@ -212,7 +228,28 @@ export function createDrawingGestures(deps: {
         !event.altKey &&
         !event.ctrlKey &&
         !event.metaKey;
+      // A shape that a remote edit removed is no longer selected: the keys act on the group.
+      const stale = deps.intent();
+      if (
+        stale.kind === 'pointer' &&
+        stale.memberNodeId &&
+        !selectedGroupMember(deps.surface, stale.drawingNodeId)
+      )
+        deps.surface.selectDrawingMember(null);
       const selected = deps.intent();
+      // Escape on a shape inside a group selects the group again.
+      if (
+        isKeyboardEvent(event) &&
+        event.key === 'Escape' &&
+        !editing &&
+        selected.kind === 'pointer' &&
+        selected.memberNodeId &&
+        deps.surface.selectDrawingMember(null)
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
       if (
         plainEnter &&
         !editing &&
@@ -234,6 +271,12 @@ export function createDrawingGestures(deps: {
           (event.inputType === 'deleteContentBackward' ||
             event.inputType === 'deleteContentForward'));
       if (deleteKey && deps.intent().kind === 'pointer') {
+        // A shape inside a group does not delete on its own (`groupMemberRefusal`).
+        if (selected.kind === 'pointer' && selected.memberNodeId) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          return;
+        }
         const target = resolveSelectedDrawingRecord(deps.surface);
         if (target !== null) {
           event.preventDefault();

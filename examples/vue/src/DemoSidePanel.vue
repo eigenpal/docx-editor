@@ -48,18 +48,26 @@
       :aria-labelledby="`${uid}-tab-${shownTab}`"
     >
       <DocxEditorChartPane v-if="shownTab === 'chart'" />
+      <DocxEditorShapePane v-else-if="shownTab === 'shape'" />
       <slot v-else name="settings" />
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
-// The side panel of the demo: a card beside the pages with a Settings tab, and a Chart tab while
-// a chart is selected. The Chart tab holds the library's `DocxEditorChartPane`. Insert > Chart
-// and Edit chart ask for it through `usePaneRequest`; the pane itself moves the focus when Edit
-// chart asks for it. The React example has the same panel (`examples/vite/src/DemoSidePanel.tsx`).
+// The side panel of the demo: a card beside the pages with a Settings tab, a Chart tab while a
+// chart is selected, and a Format shape tab while a shape is selected. The tabs hold the
+// library's `DocxEditorChartPane` and `DocxEditorShapePane`. Insert > Chart, Edit chart, and
+// Format shape ask for them through `usePaneRequest`; each pane moves the focus itself when
+// asked. The React example has the same panel (`examples/vite/src/DemoSidePanel.tsx`).
 import { computed, ref, useId } from 'vue';
-import { DocxEditorChartPane, useDocxEditor, useSelectedChart } from '@docx-editor.dev/vue';
+import {
+  DocxEditorChartPane,
+  DocxEditorShapePane,
+  useDocxEditor,
+  useSelectedChart,
+  useSelectedShape,
+} from '@docx-editor.dev/vue';
 import { exampleText as t } from '../../shared/example-text';
 import {
   nextDemoTab,
@@ -73,12 +81,16 @@ const props = defineProps<{ tab: DemoPanelTab }>();
 const emit = defineEmits<{ 'update:tab': [tab: DemoPanelTab]; close: [] }>();
 
 const editor = useDocxEditor();
-// The Chart tab shows only while a chart is selected. Edit chart and Insert > Chart both leave a
-// chart selected. When the selection leaves the chart, the panel shows Settings.
+// The Chart tab shows only while a chart is selected, and the Format shape tab only while a
+// shape is selected. When the selection leaves them, the panel shows Settings.
 const selectedChart = useSelectedChart();
-const chartSelected = computed(() => selectedChart.chart.value !== null);
-const tabs = computed(() => visibleDemoTabs(chartSelected.value));
-const shownTab = computed(() => shownDemoTab(props.tab, chartSelected.value));
+const selectedShape = useSelectedShape();
+const selection = computed(() => ({
+  chart: selectedChart.chart.value !== null,
+  shape: selectedShape.format.value !== null,
+}));
+const tabs = computed(() => visibleDemoTabs(selection.value));
+const shownTab = computed(() => shownDemoTab(props.tab, selection.value));
 const uid = `demo-panel-${useId()}`;
 const tabsRef = ref<HTMLDivElement | null>(null);
 

@@ -1148,14 +1148,45 @@ export type DrawingTreeDocOp = Extract<
 >;
 
 /**
+ * A theme colour of a shape fill or outline: a slot of the document theme, lighter or darker by
+ * `shift` percent (`40` is Lighter 40%, `-25` is Darker 25%). It writes `a:schemeClr` with the
+ * `a:lumMod` and `a:lumOff` that the theme colour grid writes. @public
+ */
+export interface ShapeThemeColorInput {
+  readonly name: ShapeThemeColorName;
+  /** From -100 to 100; 0 or omitted is the theme colour itself. */
+  readonly shift?: number;
+}
+
+/** The theme colour slots a shape colour can name. @public */
+export type ShapeThemeColorName =
+  | 'bg1'
+  | 'tx1'
+  | 'bg2'
+  | 'tx2'
+  | 'accent1'
+  | 'accent2'
+  | 'accent3'
+  | 'accent4'
+  | 'accent5'
+  | 'accent6';
+
+/**
  * A shape fill to write: none, or solid. A solid fill without `color` keeps the shape's colour,
  * or brings back the one a hidden fill kept. `transparency` runs from 0 (opaque) to 1 (clear).
+ * With `theme`, the DrawingML shape takes the theme reference and `color` is the `RRGGBB` it
+ * resolves to, which a VML copy writes.
  *
  * @public
  */
 export type ShapeFillInput =
   | { readonly type: 'none' }
-  | { readonly type: 'solid'; readonly color?: string; readonly transparency?: number };
+  | {
+      readonly type: 'solid';
+      readonly color?: string;
+      readonly theme?: ShapeThemeColorInput;
+      readonly transparency?: number;
+    };
 
 /**
  * A shape outline to write. Omitted fields keep their value. `color` is `RRGGBB`; `widthPt`
@@ -1166,6 +1197,8 @@ export type ShapeFillInput =
 export interface ShapeOutlineInput {
   readonly visible?: boolean;
   readonly color?: string;
+  /** A theme reference for the DrawingML outline; `color` is then its `RRGGBB`. */
+  readonly theme?: ShapeThemeColorInput;
   readonly widthPt?: number;
 }
 

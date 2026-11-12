@@ -228,6 +228,11 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
    */
   selectDrawing(drawingNodeId: string, hostParagraphId: string): boolean;
   /**
+   * Select one shape inside the selected group, as a second press on the group does, or the
+   * group again with null. False when no group is selected or it holds no such shape.
+   */
+  selectDrawingMember(memberNodeId: string | null): boolean;
+  /**
    * Select a rectangle of table cells, or clear one with null.
    *
    * The equivalent text range is installed alongside it, so `state().selection` stays valid

@@ -62,6 +62,52 @@ export function shapeColorHex(color: string): string | null {
   return name === 'rebeccapurple' ? '663399' : (presetColorHex(name) ?? null);
 }
 
+/** The theme colour slots a shape colour can name, in theme grid order. @internal */
+export const SHAPE_THEME_COLOR_NAMES: ReadonlySet<string> = new Set([
+  'bg1',
+  'tx1',
+  'bg2',
+  'tx2',
+  'accent1',
+  'accent2',
+  'accent3',
+  'accent4',
+  'accent5',
+  'accent6',
+]);
+
+const valOf = (node: OoxmlElement): string | undefined =>
+  schemaAttributeValue(node.attributes, 'val');
+
+/**
+ * The theme colour that a colour element names, as the theme grid writes it: `a:schemeClr` with
+ * no transform but `a:lumMod`, `a:lumOff`, and opacity. Null for any other colour, so a colour
+ * that only looks like a theme colour is never called one.
+ */
+function themeColorOf(node: OoxmlElement | undefined): ShapeThemeColor | null {
+  if (!node || node.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI) return null;
+  const name = valOf(node);
+  if (node.localName !== 'schemeClr' || !name || !SHAPE_THEME_COLOR_NAMES.has(name)) return null;
+  let lumMod = 100_000;
+  let lumOff = 0;
+  for (const transform of children(node)) {
+    const value = Number(valOf(transform));
+    if (transform.localName === 'lumMod') lumMod = value;
+    else if (transform.localName === 'lumOff') lumOff = value;
+    else if (!/^alpha(Off|Mod)?$/.test(transform.localName)) return null;
+  }
+  let shift: number;
+  if (lumOff === 0) shift = (lumMod - 100_000) / 1000;
+  else if (lumMod + lumOff === 100_000) shift = lumOff / 1000;
+  else return null;
+  if (!Number.isInteger(shift) || shift < -100 || shift > 100) return null;
+  return { name: name as ShapeThemeColor['name'], shift };
+}
+
+/** The colour element of a solid fill element, if any. */
+const solidColorNode = (fill: OoxmlElement | undefined | null): OoxmlElement | undefined =>
+  fill?.localName === 'solidFill' ? children(fill)[0] : undefined;
+
 /** The fill choices of `a:spPr` (ECMA-376 `EG_FillProperties`). @internal */
 export const SHAPE_FILL_NAMES: ReadonlySet<string> = new Set([
   'noFill',
@@ -89,12 +135,34 @@ export interface ShapeFormatTargets {
   readonly groupFills: readonly (OoxmlElement | null)[];
 }
 
+/**
+ * A theme colour that a fill or outline names: a theme slot, lighter or darker by `shift`
+ * percent. @public
+ */
+export interface ShapeThemeColor {
+  readonly name:
+    | 'bg1'
+    | 'tx1'
+    | 'bg2'
+    | 'tx2'
+    | 'accent1'
+    | 'accent2'
+    | 'accent3'
+    | 'accent4'
+    | 'accent5'
+    | 'accent6';
+  /** From -100 to 100: `40` is Lighter 40%, `-25` is Darker 25%, 0 the colour itself. */
+  readonly shift: number;
+}
+
 /** The fill a read answers. @public */
 export interface ShapeFillState {
   /** `mixed` when the shapes of a group disagree. */
   readonly type: 'solid' | 'none' | 'gradient' | 'pattern' | 'picture' | 'mixed';
   /** `RRGGBB` of a solid fill, or null. */
   readonly color: string | null;
+  /** The theme colour a solid fill names, when its markup is a theme reference. */
+  readonly theme?: ShapeThemeColor;
   /** From 0 (opaque) to 1 (clear). 0 for anything but a solid fill. */
   readonly transparency: number;
 }
@@ -104,6 +172,8 @@ export interface ShapeOutlineState {
   readonly visible: boolean | null;
   /** `RRGGBB` of a visible solid outline, or null. */
   readonly color: string | null;
+  /** The theme colour a visible outline names, when its markup is a theme reference. */
+  readonly theme?: ShapeThemeColor;
   readonly widthPt: number | null;
 }
 
@@ -316,16 +386,20 @@ function wspFormat(
   const ln = paint?.ln ?? null;
   const stroke = paint?.stroke ?? (authoredFill(ln) ? null : styleColor(wsp, 'lnRef', theme));
   const width = readLineProperties(wsp, ln, theme?.resolveStyleMatrixReference);
+  const fillTheme = solid ? themeColorOf(solidColorNode(authored)) : null;
+  const lineTheme = stroke ? themeColorOf(solidColorNode(authoredFill(ln))) : null;
   return {
     fill: {
       type,
       color: solid?.hex ?? null,
       transparency: solid ? roundTransparency(solid.alpha) : 0,
+      ...(fillTheme ? { theme: fillTheme } : {}),
     },
     outline: {
       visible: stroke !== null,
       color: stroke?.hex ?? null,
       widthPt: roundPoints(width.widthEmu),
+      ...(lineTheme ? { theme: lineTheme } : {}),
     },
   };
 }
@@ -355,6 +429,7 @@ function withGroupFill(
   );
   const color = groupFill?.localName === 'solidFill' ? children(groupFill)[0] : undefined;
   const solid = color ? resolveColorNode(color, theme?.resolveSchemeColor) : null;
+  const fillTheme = solid ? themeColorOf(color) : null;
   const type: ShapeFillState['type'] = !groupFill
     ? 'none'
     : groupFill.localName === 'solidFill'
@@ -367,6 +442,7 @@ function withGroupFill(
       type,
       color: solid?.hex ?? null,
       transparency: solid ? roundTransparency(solid.alpha) : 0,
+      ...(fillTheme ? { theme: fillTheme } : {}),
     },
     outline: ownState.outline,
   };
@@ -394,18 +470,27 @@ function agreed(states: readonly ShapeFormatState[]): ShapeFormatState {
   if (!first) throw new Error('no shapes to read');
   const same = <T>(read: (state: ShapeFormatState) => T) =>
     rest.every((state) => read(state) === read(first));
+  const themeKey = (theme: ShapeThemeColor | undefined) =>
+    theme ? `${theme.name}:${theme.shift}` : '';
   const fillAgrees = same((s) => s.fill.type) && same((s) => s.fill.color);
+  const fillTheme = same((s) => themeKey(s.fill.theme)) ? first.fill.theme : undefined;
+  const outlineColor = same((s) => s.outline.color);
+  const lineTheme =
+    outlineColor && same((s) => themeKey(s.outline.theme)) ? first.outline.theme : undefined;
+  const { theme: _fill, ...fill } = first.fill;
   return {
     fill: fillAgrees
       ? {
-          ...first.fill,
+          ...fill,
           transparency: same((s) => s.fill.transparency) ? first.fill.transparency : 0,
+          ...(fillTheme ? { theme: fillTheme } : {}),
         }
       : { type: 'mixed', color: null, transparency: 0 },
     outline: {
       visible: same((s) => s.outline.visible) ? first.outline.visible : null,
-      color: same((s) => s.outline.color) ? first.outline.color : null,
+      color: outlineColor ? first.outline.color : null,
       widthPt: same((s) => s.outline.widthPt) ? first.outline.widthPt : null,
+      ...(lineTheme ? { theme: lineTheme } : {}),
     },
   };
 }

@@ -24,6 +24,8 @@ export {
   type DrawingTreeDocOp,
   type ShapeFillInput,
   type ShapeOutlineInput,
+  type ShapeThemeColorInput,
+  type ShapeThemeColorName,
   type TreeOpEffect,
   type TreeOpRejection,
   type TreeOpResult,

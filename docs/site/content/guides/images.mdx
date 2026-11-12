@@ -174,16 +174,51 @@ if (editor.can({ type: 'setImageWrapType', target: 'square' }).ok) {
 
 `snapshot().image.shapeFormat` reads the selected shape's fill and outline, or `null` for a picture. Each shape command is one undo step. Each completed drag or resize gesture is one undo step. Alternative text reads `@descr`, then `@title`. A picture with neither is decorative.
 
+## Format a shape
+
+The **Format shape** pane sets the fill and outline of the selected shape, text box, line, or group. Open it with **Format shape** on the toolbar or in the context menu. A double-click on a text box still edits its text.
+
+The pane lives in `DocxEditor.SidePanel`, which shows it while a shape is selected and shows the Chart pane while a chart is selected. Use `DocxEditor.ShapePane` to place the pane in your own layout. Vue uses `DocxEditorSidePanel` and `DocxEditorShapePane`.
+
+- **Fill**: No fill, theme colors with tints and shades, standard colors, a hex color, and transparency in percent.
+- **Outline**: No line, the same colors, a hex color, and a width from 0.25 to 6 points or any typed width.
+
+Each change is one undo step. A gradient, pattern, or picture fill shows by name; a picked color or No fill replaces it. A theme color saves as a theme reference with its tint or shade, so it follows a theme change. A hex color saves as RGB and never shows as a theme color.
+
+In a group, the first press selects the group and a fill applies to every shape in it. A second press selects the shape under the pointer, and the pane then edits that shape alone. Press Escape to select the group again. A shape inside a group does not move, resize, or delete on its own, and it takes its wrap and alt text from the group. Only a pointer selects a shape inside a group; the keyboard selects the group. The selection is local to each editor in a collaboration session.
+
+From code, pass a theme color as an object: `editor.exec({ type: 'setShapeFill', color: { theme: 'accent1', shift: 40 } })` sets Accent 1, Lighter 40%. A negative `shift` is darker.
+
+To build your own pane, use `useSelectedShape`. Its `edit` method takes the same checked changes as the packaged pane:
+
+```tsx
+function OutlineButton() {
+  const shape = useSelectedShape();
+  return (
+    <button
+      disabled={!shape.canEditOutline}
+      title={shape.outlineDisabledReason ?? undefined}
+      onClick={() => shape.edit({ type: 'outlineWidth', text: '3' })}
+    >
+      3 pt outline
+    </button>
+  );
+}
+```
+
+`shape.execute` runs `setShapeFill` or `setShapeOutline` on the shape that the hook shows. A refused change returns its reason; nothing is applied.
+
 ## Configure image controls
 
 Both adapters export the same parts. The `image` toolbar group appears when a picture is selected.
 
-| Slot               | Component or hook                                           |
-| ------------------ | ----------------------------------------------------------- |
-| `image.insert`     | `ImageInsertProvider`, `ImageInsertTrigger`                 |
-| `image.wrap`       | `ImageWrap`, `useEditorValueCommand('image.wrap')`          |
-| `image.altText`    | `ImageAltText`                                              |
-| `image.properties` | `ImagePropertiesTrigger`, `DocxEditorImagePropertiesDialog` |
+| Slot                | Component or hook                                                |
+| ------------------- | ---------------------------------------------------------------- |
+| `image.insert`      | `ImageInsertProvider`, `ImageInsertTrigger`                      |
+| `image.wrap`        | `ImageWrap`, `useEditorValueCommand('image.wrap')`               |
+| `image.altText`     | `ImageAltText`                                                   |
+| `image.properties`  | `ImagePropertiesTrigger`, `DocxEditorImagePropertiesDialog`      |
+| `image.formatShape` | `DocxEditorSidePanel`, `DocxEditorShapePane`, `useSelectedShape` |
 
 The packaged **Insert** menu has an **Image** row. Hide or move it through `DocxEditor.Menu.ImageInsert`. For layout and overrides, see [Toolbar customization](/docs/2.x/guides/toolbar) and [Customize popups](/docs/2.x/guides/customize-dialogs).
 

@@ -139,6 +139,7 @@ import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
 import { PaneRequest } from '@docx-editor.dev/core/editor';
+import { PaneRequestListenerOptions } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogFields } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogMixed } from '@docx-editor.dev/core/editor';
 import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
@@ -186,7 +187,13 @@ import { SEARCH_MATCH_LIMIT } from '@docx-editor.dev/core/editor';
 import { SectionProperties } from '@docx-editor.dev/core/editor';
 import { SelectedChartCommand } from '@docx-editor.dev/core/editor';
 import { SelectedChartState } from '@docx-editor.dev/core/editor';
+import { SelectedShapeCommand } from '@docx-editor.dev/core/editor';
 import { ShallowRef } from 'vue';
+import { SHAPE_OUTLINE_WIDTHS } from '@docx-editor.dev/core/editor';
+import { ShapeFillState } from '@docx-editor.dev/core/editor';
+import { ShapeFormatState } from '@docx-editor.dev/core/editor';
+import { ShapeOutlineState } from '@docx-editor.dev/core/editor';
+import { ShapePaneChange } from '@docx-editor.dev/core/editor';
 import { SlotsType } from 'vue';
 import { SplitCellLimits } from '@docx-editor.dev/core/editor';
 import { SupportedImageMime } from '@docx-editor.dev/core/editor';
@@ -3920,6 +3927,7 @@ export interface DocxEditorNamespace {
     readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
+    readonly ShapePane: typeof DocxEditorShapePane;
     readonly SidePanel: typeof DocxEditorSidePanel;
     readonly SplitCellDialog: typeof DocxEditorSplitCellDialog;
     // (undocumented)
@@ -5089,6 +5097,26 @@ export interface DocxEditorRulerProps {
     style?: CSSProperties;
     // (undocumented)
     unit?: 'inch' | 'cm';
+}
+
+// @public
+export const DocxEditorShapePane: vue.DefineComponent<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>> & Readonly<{}>, {
+    className: string;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorShapePaneProps {
+    className?: string;
 }
 
 // @public @deprecated (undocumented)
@@ -7437,6 +7465,8 @@ export { SelectedChartCommand }
 
 export { SelectedChartState }
 
+export { SelectedShapeCommand }
+
 // @public @deprecated (undocumented)
 export interface SelectionFormatting {
     // (undocumented)
@@ -7472,6 +7502,16 @@ export interface SelectionFormatting {
     // (undocumented)
     underline?: boolean;
 }
+
+export { SHAPE_OUTLINE_WIDTHS }
+
+export { ShapeFillState }
+
+export { ShapeFormatState }
+
+export { ShapeOutlineState }
+
+export { ShapePaneChange }
 
 // @public
 export const Slot: vue.DefineComponent<{}, () => VNode<vue.RendererNode, vue.RendererElement, {
@@ -8478,7 +8518,7 @@ export interface UsePageSetupReturn {
 }
 
 // @public
-export function usePaneRequest(listener: (request: PaneRequest) => void): void;
+export function usePaneRequest(listener: (request: PaneRequest) => void, options?: PaneRequestListenerOptions): void;
 
 // @public
 export function useParagraphDialog(): UseParagraphDialogReturn;
@@ -8566,6 +8606,24 @@ export interface UseSelectedChartReturn {
     readonly format: ComputedRef<ChartFormat | null>;
     readonly formatDisabledReason: ComputedRef<string | null>;
     readonly readReason: ComputedRef<string | null>;
+}
+
+// @public
+export function useSelectedShape(): UseSelectedShapeReturn;
+
+// @public
+export interface UseSelectedShapeReturn {
+    readonly canEditFill: ComputedRef<boolean>;
+    readonly canEditOutline: ComputedRef<boolean>;
+    readonly canEditTransparency: ComputedRef<boolean>;
+    readonly drawingNodeId: ComputedRef<string | null>;
+    readonly edit: (change: ShapePaneChange) => ExecResult;
+    readonly execute: (command: SelectedShapeCommand) => ExecResult;
+    readonly fillDisabledReason: ComputedRef<string | null>;
+    readonly format: ComputedRef<ShapeFormatState | null>;
+    readonly memberId: ComputedRef<string | null>;
+    readonly outlineDisabledReason: ComputedRef<string | null>;
+    readonly transparencyDisabledReason: ComputedRef<string | null>;
 }
 
 // @public

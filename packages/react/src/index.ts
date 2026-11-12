@@ -72,6 +72,21 @@ export {
   type DocxEditorSidePanelProps,
   type UseSelectedChartReturn,
 } from './editor/charts';
+export {
+  DocxEditorShapePane,
+  useSelectedShape,
+  type DocxEditorShapePaneProps,
+  type UseSelectedShapeReturn,
+} from './editor/shapes';
+// The shape names a custom Format shape pane needs (`useSelectedShape`).
+export { SHAPE_OUTLINE_WIDTHS } from '@docx-editor.dev/core/editor';
+export type {
+  SelectedShapeCommand,
+  ShapeFillState,
+  ShapeFormatState,
+  ShapeOutlineState,
+  ShapePaneChange,
+} from '@docx-editor.dev/core/editor';
 // The chart names a custom chart pane needs (`useSelectedChart`), so it imports from one package.
 export { CHART_TYPE_CHOICES, chartTypeLabelKey } from '@docx-editor.dev/core/editor';
 export type {

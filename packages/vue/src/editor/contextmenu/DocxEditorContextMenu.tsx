@@ -19,7 +19,9 @@ import {
   hostWindowOf,
   chartPaneAvailable,
   openChartPaneFor,
+  shapePaneAvailable,
 } from '@docx-editor.dev/core/editor';
+import { useEditorCommand } from '../useEditorCommand';
 import { useEditorState } from '../useEditorState';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { mergeArrangement } from '../merge-arrangement';
@@ -173,9 +175,44 @@ const ContextMenuEditChart = defineComponent({
   },
 });
 
+/** Format shape, on a selected shape, text box, line, or group: opens the Format shape pane. */
+const ContextMenuFormatShape = defineComponent({
+  name: 'ContextMenuFormatShape',
+  setup() {
+    const editor = useDocxEditor();
+    const menu = useMenuContext();
+    const label = useMenuLabel();
+    const shapeId = useEditorState((snapshot) =>
+      snapshot.image?.shapeFormat ? snapshot.image.id : null
+    );
+    // Enabled state and its reason come from the slot (`toolbarCommandState`), as on the toolbar.
+    const command = useEditorCommand('image.formatShape');
+    return () => {
+      const instance = editor.value;
+      const id = shapeId.value;
+      if (!instance || !id || !shapePaneAvailable(instance)) return null;
+      return (
+        <MenuRow
+          icon={chromeIcon(chromeControlForSlot('image.formatShape')?.paths) ?? undefined}
+          rowSlot="image.formatShape"
+          disabled={!command.isEnabled.value}
+          {...(command.disabledReason.value ? { title: command.disabledReason.value } : {})}
+          onSelect={() => {
+            menu.value.setOpenMenu(null);
+            command.execute();
+          }}
+        >
+          {{ default: () => label('shape.formatShape') }}
+        </MenuRow>
+      );
+    };
+  },
+});
+
 const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   { kind: 'row', id: 'field.edit', render: () => <ContextMenuEditField /> },
   { kind: 'row', id: 'image.editChart', render: () => <ContextMenuEditChart /> },
+  { kind: 'row', id: 'image.formatShape', render: () => <ContextMenuFormatShape /> },
   { kind: 'row', id: 'edit.cut', render: () => <ContextMenuCut /> },
   { kind: 'row', id: 'edit.copy', render: () => <ContextMenuCopy /> },
   { kind: 'row', id: 'edit.paste', render: () => <ContextMenuPaste /> },
