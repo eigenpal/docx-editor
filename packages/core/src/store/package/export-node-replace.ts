@@ -5,8 +5,10 @@
 // node index onto their result, and each one validates the whole part, so a repair with many
 // replacements cost the part once per replacement and left the next edit a full index rebuild.
 // This walks the part once, shares every untouched subtree by reference, never touches the live
-// index, and validates the result once.
+// index, and validates the result once. A replacement that uses a prefix its new scope binds to
+// another URI gets a local binding, as `replaceNode` gives it.
 
+import { bindConflictingPrefixes } from './edit-namespace-scope.ts';
 import {
   validateOoxmlPart,
   type OoxmlElement,
@@ -28,26 +30,32 @@ export function replaceNodesForExport(
   if (replacements.size === 0) return part;
   let found = 0;
   let tooDeep = false;
-  const visit = (node: OoxmlNode, depth: number): OoxmlNode => {
+  const visit = (node: OoxmlNode, depth: number, scope: ReadonlyMap<string, string>): OoxmlNode => {
     const replacement = replacements.get(node.id);
     if (replacement) {
       found += 1;
-      return replacement;
+      return bindConflictingPrefixes(replacement, scope);
     }
     if (node.kind === 'textValue' || node.children.length === 0) return node;
     if (depth >= MAX_DEPTH) {
       tooDeep = true;
       return node;
     }
+    let inner = scope;
+    if (node.namespaceBindings.length > 0) {
+      const own = new Map(scope);
+      for (const binding of node.namespaceBindings) own.set(binding.prefix, binding.namespaceUri);
+      inner = own;
+    }
     let children: OoxmlNode[] | null = null;
     node.children.forEach((child, index) => {
-      const next = visit(child, depth + 1);
+      const next = visit(child, depth + 1, inner);
       if (next !== child && !children) children = node.children.slice(0, index);
       if (children) children.push(next);
     });
     return children ? ({ ...node, children } as OoxmlElement) : node;
   };
-  const root = visit(part.root, 0);
+  const root = visit(part.root, 0, new Map());
   if (tooDeep || found !== replacements.size || root.kind === 'textValue') return null;
   const next: OoxmlPart = Object.freeze({ ...part, root: root as OoxmlElement });
   return validateOoxmlPart(next).ok ? next : null;
