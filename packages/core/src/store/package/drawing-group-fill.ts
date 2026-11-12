@@ -56,3 +56,17 @@ export function withResolvedGroupFill(
     children: spPr.children.map((node) => (node === own ? groupFill : node)),
   } as OoxmlElement;
 }
+
+/**
+ * Whether `spPr` says `a:grpFill` while the group fill is a gradient or a pattern. Word spans
+ * such a fill across the group box (2026-11-12 render), which per-member paint cannot match.
+ *
+ * @internal
+ */
+export function groupFillSpansMembers(
+  spPr: OoxmlElement,
+  groupFill: OoxmlElement | null | undefined
+): boolean {
+  if (groupFill?.localName !== 'gradFill' && groupFill?.localName !== 'pattFill') return false;
+  return firstFill(spPr)?.localName === 'grpFill';
+}

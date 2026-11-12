@@ -49,7 +49,7 @@ import {
   shapeRotationDegrees,
 } from './drawing-shape-geometry.ts';
 import { transformComponent } from './drawing-group-transform.ts';
-import { groupFillOf, withResolvedGroupFill } from './drawing-group-fill.ts';
+import { groupFillOf, groupFillSpansMembers, withResolvedGroupFill } from './drawing-group-fill.ts';
 import { groupPictureOutline } from './drawing-group-picture-outline.ts';
 import { readLineProperties, readStyleReferenceIndex } from './drawing-line-properties.ts';
 import {
@@ -470,7 +470,7 @@ export function projectShapeComponents(
 ): readonly VectorShapeComponent[] | null {
   if (!groupMember && hasTextbox(wsp)) return null;
   const spPr = shapeProperties(wsp);
-  if (!spPr) return null;
+  if (!spPr || groupFillSpansMembers(spPr, groupFill)) return null;
   const xfrm = findDirectChild(spPr.children, {
     namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
     localName: 'xfrm',

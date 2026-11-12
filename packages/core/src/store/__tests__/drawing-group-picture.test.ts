@@ -511,3 +511,35 @@ describe('group picture projection', () => {
     });
   }
 });
+
+describe('members that paint the group fill', () => {
+  const SOLID = '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>';
+  const GRADIENT =
+    '<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs>' +
+    '<a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs></a:gsLst><a:lin ang="0"/></a:gradFill>';
+  const filledGroup = (fill: string, members: string) =>
+    groupDrawing(members).replace('</wpg:grpSpPr>', `${fill}</wpg:grpSpPr>`);
+  const groupFillBox = () => textboxMember().replace('</a:prstGeom>', '</a:prstGeom><a:grpFill/>');
+
+  test('a text box with a:grpFill before a picture orders it, so the group refuses', () => {
+    const [projection] = projectionsOf(filledGroup(SOLID, groupFillBox() + pictureMember()));
+    expect(projection!.groupPicture).toBeNull();
+    // After the picture, the text box paints the group fill above it.
+    const [after] = projectionsOf(filledGroup(SOLID, pictureMember() + groupFillBox()));
+    expect(after!.groupPicture).not.toBeNull();
+    expect(after!.vectorShape?.components.map((c) => c.fillHex)).toEqual(['FF0000']);
+  });
+
+  test('a gradient group fill spans the group box, so its members refuse', () => {
+    // Word paints one gradient across the group box, not one per member (2026-11-12 render).
+    const bar = barMember(2100).replace(
+      '<a:solidFill><a:srgbClr val="000000"/></a:solidFill>',
+      '<a:grpFill/>'
+    );
+    expect(projectionsOf(filledGroup(GRADIENT, bar))[0]!.vectorShape).toBeNull();
+    // A text box that paints the gradient is not text alone, so its text does not render bare.
+    const [box] = projectionsOf(filledGroup(GRADIENT, groupFillBox()));
+    expect(box!.vectorShape).toBeNull();
+    expect(box!.groupTextboxes).toBeUndefined();
+  });
+});
