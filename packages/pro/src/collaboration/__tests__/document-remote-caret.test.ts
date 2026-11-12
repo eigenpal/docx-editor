@@ -466,6 +466,68 @@ describe('local caret across remote edits', () => {
     }
   });
 
+  test('typing a peer splits away and joins back while another splits it offline keeps the caret', async () => {
+    const { surface, room, ydoc, peer, harness, textOf, pause, resume, cleanup } =
+      await editorWithPeer();
+    // A second peer works offline; its updates are delivered by hand.
+    const offline = await harness.joinDetached(peer, 'offline');
+    const peerUpdates: Uint8Array[] = [];
+    peer.ydoc.on('update', (update: Uint8Array, origin: unknown) => {
+      if (origin !== 'relay') peerUpdates.push(update);
+    });
+    try {
+      const id = surface.session.paragraphIds()[0]!;
+      // "Alpha para|graph"
+      surface.setSelection({
+        anchor: { paragraphId: id, offset: 10 },
+        head: { paragraphId: id, offset: 10 },
+      });
+      pause();
+      surface.type('!');
+      // Neither peer sees the typing: one splits the paragraph and joins it back, and the
+      // other splits it at the same point offline.
+      harness.apply(peer, [
+        { op: 'splitParagraph', paragraphId: harness.paragraphIdAt(peer, 0), offset: 3 },
+      ]);
+      harness.apply(peer, [
+        {
+          op: 'joinParagraphs',
+          firstId: harness.paragraphIdAt(peer, 0),
+          secondId: harness.paragraphIdAt(peer, 1),
+        },
+      ]);
+      harness.apply(offline, [
+        { op: 'splitParagraph', paragraphId: harness.paragraphIdAt(offline, 0), offset: 3 },
+      ]);
+      expect(peerUpdates).toHaveLength(2);
+      // The split arrives first: the typing follows it, and so does the caret.
+      Y.applyUpdate(ydoc, peerUpdates[0]!, 'relay');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      // The join and the offline split arrive together. The typing follows the join back, and
+      // the offline split on into its new paragraph: the caret is carried there, beside it.
+      Y.applyUpdate(
+        ydoc,
+        Y.mergeUpdates([peerUpdates[1]!, Y.encodeStateAsUpdate(offline.ydoc)]),
+        'relay'
+      );
+      const second = surface.session.paragraphIds()[1];
+      expect(surface.session.bodyText().split('\n').slice(0, 2)).toEqual(['Alp', 'ha para!graph']);
+      expect(room.session.remoteSelectionMove?.()?.to.head).toEqual({
+        nodeId: second,
+        offset: 'ha para!'.length,
+      });
+      resume();
+      Y.applyUpdate(offline.ydoc, Y.encodeStateAsUpdate(peer.ydoc), 'relay');
+      Y.applyUpdate(peer.ydoc, Y.encodeStateAsUpdate(offline.ydoc), 'relay');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      surface.type('?');
+      expect(textOf(0)).toBe('Alp');
+      expect(textOf(1)).toBe('ha para!?graph');
+    } finally {
+      cleanup();
+    }
+  });
+
   test('typing while shared state holds back an unrelated update goes through', async () => {
     const { surface, room, ydoc, textOf, cleanup } = await editorWithPeer();
     try {
