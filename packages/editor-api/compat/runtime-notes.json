@@ -405,7 +405,7 @@
   },
   "Word.Shape#fill": {
     "status": "partial",
-    "notes": "Fills a wps shape, text box, line, every shape of a group or canvas, or a legacy VML shape. Reads resolve the shape style and theme. Pictures, charts and diagrams refuse with InvalidArgument. Writes in one sync are one fill change; with change tracking on, a write refuses, as Word records no tracked fill change. The editor commands setShapeFill and setShapeOutline apply untracked, like other drawing properties."
+    "notes": "Fills a wps shape, text box, line, every shape of a group or canvas, or a legacy VML shape. Reads resolve the shape style and theme. Pictures, charts and diagrams refuse with InvalidArgument. Writes in one sync are one fill change; with change tracking on, a write refuses, as Word records no tracked fill change. The editor commands setShapeFill and setShapeOutline apply untracked, like other drawing properties. A member that inherits its group's fill (a:grpFill) gets that fill written as its own; the group keeps its fill. In collaboration, two participants who set a transparency on one fill at once can leave two a:alpha values, and a concurrent hide and recolour can leave the VML fallback out of step with the DrawingML shape."
   },
   "Word.ShapeFill#type": {
     "status": "partial",

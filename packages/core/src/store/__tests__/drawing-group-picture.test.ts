@@ -242,7 +242,6 @@ describe('group picture projection', () => {
       ['effect graph', '<a:effectDag/>'],
       ['scene', '<a:scene3d/>'],
       ['3D shape', '<a:sp3d/>'],
-      ['group fill', '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>'],
     ]) {
       test(`${kind} group refuses unsupported ${name} without partial rendering`, () => {
         const drawing = groupDrawing(members!).replace(
@@ -257,6 +256,20 @@ describe('group picture projection', () => {
         expect(bare!.diagnostics.map((item) => item.code)).toContain('unsupported-graphic');
       });
     }
+    // A group's own fill paints nothing: only members that say `a:grpFill` paint it.
+    test(`${kind} group with a fill of its own paints its members as without it`, () => {
+      const drawing = groupDrawing(members!);
+      const filled = drawing.replace(
+        '</wpg:grpSpPr>',
+        '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></wpg:grpSpPr>'
+      );
+      const [plain] = projectionsOf(drawing);
+      const [withFill] = projectionsOf(filled);
+      expect(withFill!.vectorShape?.components ?? null).toEqual(
+        plain!.vectorShape?.components ?? null
+      );
+      expect(withFill!.groupPicture).toEqual(plain!.groupPicture);
+    });
     for (const hidden of ['1', 'true', ' true ', 'invalid']) {
       test(`${kind} group refuses hidden=${hidden}`, () => {
         const drawing = groupDrawing(members!).replace(

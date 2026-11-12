@@ -410,3 +410,24 @@ describe('setShapeFormat never invents a fill', () => {
     ).toBe('no-solid-fill');
   });
 });
+
+describe('a:grpFill paints the group fill', () => {
+  test('a member that inherits a solid group fill paints it, before and after a write', () => {
+    const groupXfrm =
+      '<a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="457200"/>' +
+      '<a:chOff x="0" y="0"/><a:chExt cx="914400" cy="457200"/></a:xfrm>';
+    const member = wsp(`${XFRM}${RECT}<a:grpFill/>`);
+    const group =
+      `<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr>${groupXfrm}` +
+      `<a:solidFill><a:srgbClr val="C00000"/></a:solidFill></wpg:grpSpPr>${member}</wpg:wgp>`;
+    let part = parse(anchor(WPG_URI, group));
+    const paint = () => projectDrawingsInPart(part)[0]?.vectorShape?.components[0];
+    expect(paint()).toMatchObject({ fillHex: 'C00000', fillAlpha: 1 });
+    part = apply(part, {
+      op: 'setShapeFormat',
+      drawingNodeId: idOf(part, 'drawing'),
+      fill: { type: 'solid', transparency: 0.25 },
+    });
+    expect(paint()).toMatchObject({ fillHex: 'C00000', fillAlpha: 0.75 });
+  });
+});

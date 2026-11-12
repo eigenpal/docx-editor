@@ -49,6 +49,7 @@ import {
   shapeRotationDegrees,
 } from './drawing-shape-geometry.ts';
 import { transformComponent } from './drawing-group-transform.ts';
+import { groupFillOf, withResolvedGroupFill } from './drawing-group-fill.ts';
 import { groupPictureOutline } from './drawing-group-picture-outline.ts';
 import { readLineProperties, readStyleReferenceIndex } from './drawing-line-properties.ts';
 import {
@@ -328,10 +329,13 @@ function authoredGradientFill(
 /** The fill and outline a `wps:wsp` paints with, from its own properties or its style. */
 function shapePaint(
   wsp: OoxmlElement,
-  spPr: OoxmlElement,
+  authoredSpPr: OoxmlElement,
   resolveSchemeColor?: ShapeSchemeColorResolver,
-  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
+  groupFill?: OoxmlElement | null
 ) {
+  // `a:grpFill` paints the fill of the nearest group that sets one.
+  const spPr = withResolvedGroupFill(authoredSpPr, groupFill);
   const authoredFill = directFill(spPr, resolveSchemeColor);
   const authoredGradient = authoredFill.present
     ? authoredGradientFill(spPr, resolveSchemeColor)
@@ -427,13 +431,20 @@ function unpaintedByDesign(wsp: OoxmlElement): boolean {
 export function isUnpaintedGroupTextbox(
   member: OoxmlElement,
   resolveSchemeColor?: ShapeSchemeColorResolver,
-  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
+  groupFill?: OoxmlElement | null
 ): boolean {
   if (member.namespaceUri !== WPS_NAMESPACE_URI || member.localName !== 'wsp') return false;
   const spPr = shapeProperties(member);
   if (!spPr || !hasTextbox(member) || !supportedGroupVisuals(member, spPr, false)) return false;
   if (!identityGroupThemeEffect(member, resolveStyleMatrixReference)) return false;
-  const paint = shapePaint(member, spPr, resolveSchemeColor, resolveStyleMatrixReference);
+  const paint = shapePaint(
+    member,
+    spPr,
+    resolveSchemeColor,
+    resolveStyleMatrixReference,
+    groupFill
+  );
   return paint.fill === null && paint.stroke === null;
 }
 
@@ -454,7 +465,8 @@ export function projectShapeComponents(
   pointBudget: { remaining: number },
   resolveSchemeColor?: ShapeSchemeColorResolver,
   resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
-  groupMember = false
+  groupMember = false,
+  groupFill: OoxmlElement | null = null
 ): readonly VectorShapeComponent[] | null {
   if (!groupMember && hasTextbox(wsp)) return null;
   const spPr = shapeProperties(wsp);
@@ -475,7 +487,8 @@ export function projectShapeComponents(
     wsp,
     spPr,
     resolveSchemeColor,
-    resolveStyleMatrixReference
+    resolveStyleMatrixReference,
+    groupFill
   );
   const line =
     stroke !== null
@@ -763,6 +776,7 @@ export function projectVectorShape(
     const scaleX = chExtX > 0 ? extent.cx / chExtX : 0;
     const scaleY = chExtY > 0 ? extent.cy / chExtY : 0;
     let childCount = 0;
+    const groupFill = groupFillOf(frame.group, null);
     for (const child of frame.group.children) {
       if (!isElement(child) || isGroupPropertyChild(child)) continue;
       childCount += 1;
@@ -792,7 +806,10 @@ export function projectVectorShape(
       });
       if (!properties || !supportedGroupVisuals(child, properties, false)) return null;
       if (!identityGroupThemeEffect(child, resolveStyleMatrixReference)) return null;
-      if (isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference)) continue;
+      if (
+        isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference, groupFill)
+      )
+        continue;
       const transform = childTransform(child);
       if (!transform) return null;
       const memberComponents = projectShapeComponents(
@@ -801,7 +818,8 @@ export function projectVectorShape(
         pointBudget,
         resolveSchemeColor,
         resolveStyleMatrixReference,
-        true
+        true,
+        groupFill
       );
       if (!memberComponents) return null;
       // A member with no fill and no outline paints nothing; the other members still paint.

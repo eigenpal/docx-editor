@@ -14,6 +14,7 @@ import { resolveColorNode, type ShapeColor } from './drawing-shape-color.ts';
 import { presetColorHex } from './drawing-preset-colors.ts';
 import { isMcAlternateContent } from './drawing-projection-walk.ts';
 import { shapePaintOf } from './drawing-shape-projection.ts';
+import { groupFillOf } from './drawing-group-fill.ts';
 import { legacyInk } from './legacy-vml-shapes.ts';
 import { children, named, VML } from './legacy-vml-values.ts';
 import { findNode, parentNodeOf } from './ooxml-edit.ts';
@@ -55,7 +56,10 @@ export function shapeColorHex(color: string): string | null {
   if (typeof color !== 'string') return null;
   const hex = /^#?([0-9A-Fa-f]{6})$/.exec(color);
   if (hex) return hex[1]!.toUpperCase();
-  return /^[A-Za-z]{3,20}$/.test(color) ? (presetColorHex(color.toLowerCase()) ?? null) : null;
+  if (!/^[A-Za-z]{3,20}$/.test(color)) return null;
+  const name = color.toLowerCase();
+  // CSS has one named colour that `ST_PresetColorVal` lacks; it stays out of preset parsing.
+  return name === 'rebeccapurple' ? '663399' : (presetColorHex(name) ?? null);
 }
 
 /** The fill choices of `a:spPr` (ECMA-376 `EG_FillProperties`). @internal */
@@ -117,14 +121,6 @@ function child(parent: OoxmlElement, namespaceUri: string, localName: string): O
   return element(parent.children.find((node) => named(node, namespaceUri, localName)));
 }
 
-/** The fill a group sets in its `grpSpPr`, `a:grpFill` taking its parent group's. */
-function containerFill(container: OoxmlElement, inherited: OoxmlElement | null) {
-  const properties = child(container, container.namespaceUri, 'grpSpPr');
-  const own = properties ? authoredFill(properties) : undefined;
-  if (!own) return null;
-  return own.localName === 'grpFill' ? inherited : own;
-}
-
 /** The `wps:wsp` shapes under a drawing's graphic data, or null for any other payload. */
 function drawingShapes(
   drawing: OoxmlElement
@@ -144,8 +140,7 @@ function drawingShapes(
         groupFills.push(fill);
         if (shapes.push(member) > MAX_SHAPES) return false;
       } else if (CONTAINERS.get(member.namespaceUri)?.has(member.localName)) {
-        if (depth >= MAX_DEPTH || !walk(member, depth + 1, containerFill(member, fill)))
-          return false;
+        if (depth >= MAX_DEPTH || !walk(member, depth + 1, groupFillOf(member, fill))) return false;
       }
     }
     return true;
