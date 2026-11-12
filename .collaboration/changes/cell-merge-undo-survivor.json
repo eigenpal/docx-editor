@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "When a peer's undo emptied this replica's concurrent deletion of a cell it merged away, the replica wrote the deletion again without the survivor cell its merge named, so a paragraph listed only in the removed cell, such as one a peer split there, showed nowhere.",
+  "after": "The replica writes the deletion again together with the survivor its own merge named, in the same undo step, and writes the survivor alone again when only the survivor was emptied, so children listed only in the removed node show in the survivor.",
+  "reason": "It writes the existing replacedBy field with the value this replica already wrote, and older clients read it as before. Shared fields, operations, and synchronization keep their meaning.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-table-merge-split.test.ts"],
+  "changeset": "cell-merge-undo-survivor",
+  "migration": null
+}
