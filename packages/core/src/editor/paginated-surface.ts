@@ -174,6 +174,7 @@ import {
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
+  paragraphTextFromLayout,
 } from '@docx-editor.dev/core/layout';
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { rangesOnPages } from '../layout/selection-rects.ts';
@@ -1529,6 +1530,10 @@ export function mountPaginatedSurface(
   /** Nonzero while `commitNow` applies its ops; see `renderPublishedLayout`. */
   let commitRunDepth = 0;
   let commitPaintOwed = false;
+  /** The layout the page shows: `currentLayout` until a paint is owed. */
+  let paintedLayout: SemanticLayout | null = null;
+  /** While an input method writes on the page, the layout it is held at; see `render`. */
+  let heldLayout: SemanticLayout | null = null;
 
   // Armed once, after the first published render: the derivations a structural edit reads
   // populate their per-node memos in idle tasks instead of inside the first Enter. An edit
@@ -2739,6 +2744,14 @@ export function mountPaginatedSurface(
       notifyChange = true;
     }
     hosting.heal();
+    // THE PAGE IS THE INPUT METHOD'S UNTIL `compositionend`. A newer layout (a collaborator's
+    // edit) would replace the nodes it is composing into; it is painted when the composition
+    // ends, and the readback carries the composed text onto it (surface-composition-rebase).
+    if (heldLayout !== null && currentLayout !== heldLayout) {
+      commitPaintOwed = true;
+      if (notifyChange) options.onChange?.(currentState());
+      return;
+    }
     // Parked: no viewport, so a paint would build every page into a holder nobody sees. State
     // still reports, and `moveTo` repaints in full.
     if (hosting.parked()) {
@@ -2760,6 +2773,7 @@ export function mountPaginatedSurface(
     const activeHf = hfScope?.getActive() ?? null;
     const contentControlChrome = contentControlChromeOptions();
     const emptyTocIds = emptyTocPlaceholderParagraphIds(session.part());
+    paintedLayout = currentLayout;
     paintSemanticLayoutWithAuthorSlots(
       pagesLayer,
       currentLayout,
@@ -3468,6 +3482,19 @@ export function mountPaginatedSurface(
     // `surface` is assigned below; a composition can only end once a caller holds it.
     replaceSelectionWith: (text) => surface.type(text),
     discardPaint: () => discardRetainedPaint(pagesLayer),
+    // A revision of -1 says "not the model's": the readback then lands the model and rebases.
+    paintedText: (paragraphId) => {
+      const shown = paintedLayout ?? currentLayout;
+      const current = shown === currentLayout && !commitPaintOwed && scheduler.pending() === null;
+      // Through the open text box's projection, as `textOf` reads: its story is only there.
+      return {
+        text: paragraphTextFromLayout(textboxEditing?.layout(shown) ?? shown, paragraphId),
+        revision: current ? session.packageRevision() : -1,
+      };
+    },
+    holdPaint: (hold) => {
+      heldLayout = hold ? (paintedLayout ?? currentLayout) : null;
+    },
   });
 
   hfScope = createHeaderFooterScopeController({
@@ -3944,6 +3971,8 @@ export function mountPaginatedSurface(
       remoteSelectionLayer.replaceChildren();
       return;
     }
+    // Drawn from `currentLayout`, which the held page does not show: the end paints it.
+    if (heldLayout !== null && currentLayout !== heldLayout) return;
     paintRemoteSelections(remoteSelectionLayer, currentLayout, collaboration.remoteSelections(), {
       scale,
       pageOffsetX: materializedExtent?.pageOffsetX,
