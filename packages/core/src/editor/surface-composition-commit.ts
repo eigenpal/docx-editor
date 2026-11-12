@@ -28,6 +28,7 @@ import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core/
 import { paintedSpanRange, semanticSelectionFromDom } from './dom-selection.ts';
 import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { HostTimers } from './host-realm.ts';
+import { runWithHistoryGroup } from './history-group-scope.ts';
 import { rebaseOffset } from './surface-composition-rebase.ts';
 
 /** How long a hidden window, which paints nothing, waits before the task runs anyway. */
@@ -234,8 +235,7 @@ export interface ComposedLaneDeps {
   hasPendingInput?(): boolean;
   /**
    * Commit with the caret landed after it. Without `publish`, the layout pass and the paint
-   * are left to the next commit's publish, so a queue of several lays out once. Binds no
-   * history group: a land is typing, never part of a command's group (`history-group-scope`).
+   * are left to the next commit's publish, so a queue of several lays out once.
    */
   commitComposed?(
     run: () => TreeApplyResult,
@@ -312,14 +312,18 @@ export function createComposedLane(
     session.beginComposition(scope);
     let refused: string | null;
     try {
-      refused = commitComposed!(
-        () => {
-          const result = deps.applyOps([...ops, ...formatOps], deps.selectionMark(), scope);
-          if (formatOps.length === 0 || !result.rejected) return result;
-          return deps.applyOps(ops, deps.selectionMark(), scope);
-        },
-        { anchor: landed, head: landed },
-        publish
+      // A land is typing: it never joins the group a command bound (`history-group-scope.ts`),
+      // whose owner a group-less binding ignores.
+      refused = runWithHistoryGroup(deps, undefined, () =>
+        commitComposed!(
+          () => {
+            const result = deps.applyOps([...ops, ...formatOps], deps.selectionMark(), scope);
+            if (formatOps.length === 0 || !result.rejected) return result;
+            return deps.applyOps(ops, deps.selectionMark(), scope);
+          },
+          { anchor: landed, head: landed },
+          publish
+        )
       );
     } finally {
       session.endComposition();

@@ -1616,11 +1616,10 @@ export function mountPaginatedSurface(
   // teardown), so the selection at flush time is the selection the first
   // buffered key saw.
   let typeBuffer = '';
-  /** Lands composed text queued before the buffer (surface-composition-commit). */
+  /** Lands composed text queued before the buffer, one land at a time (`landingGuard`). */
   let landComposedText = (): void => {};
   let typeFlushTimer: number | null = null;
   let flushingTypeBuffer = false;
-  /** A land publishes, and a host listener's flush must not land typing between syllables. */
   const landing = landingGuard();
 
   function flushTypeBuffer(): void {
@@ -1972,7 +1971,6 @@ export function mountPaginatedSurface(
    * (a prior deferred commit, an external commit, a drawing-resource invalidation can all
    * have filled it), and the `render()` below is the one report of the refusal the host
    * gets — deferring it delayed `lastRejection`, or lost it to a later commit entirely.
-   *
    * `held` defers too: a queued composed insertion the next one in the queue publishes.
    */
   function publishAfterCommit(rejected: boolean, held = false): void {
@@ -3450,13 +3448,11 @@ export function mountPaginatedSurface(
     },
     commit: (run) => commit(run),
     commitComposed: (run, next, publish) =>
-      runWithHistoryGroup(surface, undefined, () =>
-        commit(run, () => (textFormInteraction ? textFormInteraction.beforeSelect(next) : next), {
-          composed: { publish },
-        })
-      ),
+      commit(run, () => (textFormInteraction ? textFormInteraction.beforeSelect(next) : next), {
+        composed: { publish },
+      }),
     later: (task) => afterNextPaint(timers, fieldScope.wrap(landing.wrap(task))),
-    modelTextOf: (id) => paragraphTextOf(session.partFor(storyScope()) ?? session.part(), id),
+    modelTextOf: (id) => paragraphTextOf(partOfNodeId(session, id) ?? session.part(), id),
     insertOwner: () => insertOwnerOf(contentControlAtCaret()),
     compositionUsesTyping: () => typingSelectionPlan().outsidePromptId !== undefined,
     promptLanding: typedLanding,
@@ -5946,9 +5942,8 @@ export function mountPaginatedSurface(
   // The IME owns the DOM from compositionstart on; buffered plain typing must be in the
   // document before that handover, not woven into the readback. The handover is of the
   // PAINTED DOM, so a layout pass or paint a commit deferred under input pressure must land
-  // too: the readback diffs the painted text against the model, and a composition that began
-  // over a stale paint would read the missing edit back as the IME's own. The exception is
-  // the last composition's own unpainted commit, which the page shows and the readback knows.
+  // too: the readback diffs the painted text against the model, and a composition begun over
+  // a stale paint reads the missing edit back as the IME's own (but not its own last commit).
   //
   // The pending USER selection is taken up FIRST, exactly as `onKeyDown` does. The flush's
   // render mirrors the model selection into the DOM — over the user's still-unadopted range
