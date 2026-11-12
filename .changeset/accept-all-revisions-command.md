@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-The `acceptAllRevisions` and `rejectAllRevisions` editor commands now accept or reject every tracked change in the document in one undo step, instead of being refused. They require the review module.
+The `acceptAllRevisions`, `rejectAllRevisions`, `acceptRevision`, `rejectRevision`, `addComment`, `replyComment`, and `resolveComment` editor commands now run instead of being refused, and they require the review module. Tracked-changes protection now refuses every accept and reject of a tracked change while it keeps comments available.

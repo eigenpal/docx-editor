@@ -128,7 +128,7 @@ import { replaceMatchStoryRefusal } from './docx-editor-replace-match.ts';
 import { createMountHistoryGroups } from './editor-history-groups.ts';
 import { createPublishSignal } from './surface-publish-signal.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
-import { resolveDocTargetSelection } from './doc-target-resolution.ts';
+import { proposalCapabilityRefusal } from './proposal-capability.ts';
 import { createOpenScheduler } from './docx-editor-open-scheduler.ts';
 import * as preparedOpen from './docx-editor-prepared-open.ts';
 import { configSurfaceOptions } from './docx-editor-surface-config.ts';
@@ -150,7 +150,8 @@ import {
   selectedTableOf,
 } from './docx-editor-derive.ts';
 import { commentTargetRangeOf } from './docx-editor-comment-resolution.ts';
-import { createReviewWrites } from './docx-editor-review-writes.ts';
+import { createReviewWrites, type ReviewWriteDeps } from './docx-editor-review-writes.ts';
+import { createDocumentReviewCommands } from './docx-editor-document-review.ts';
 import { registerEditorAutomation } from './editor-automation-registry.ts';
 import {
   canContentControlCommand,
@@ -1812,7 +1813,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     events.emitHistoryDiagnostic,
     () => JSON.stringify(surface?.state().selection)
   );
-  const reviewWrites = createReviewWrites({
+  const reviewWriteDeps: ReviewWriteDeps = {
     reviewEnabled,
     historyGroups,
     surface: () => surface,
@@ -1825,7 +1826,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     placements: reviewPlacements,
     resolveReviewItem,
     bump,
-  });
+  };
+  const reviewWrites = createReviewWrites(reviewWriteDeps);
+  const documentReview = createDocumentReviewCommands(
+    reviewWriteDeps,
+    reviewWrites,
+    reviewCommands
+  );
   const editor: DocxEditorInstance = {
     beginHistoryGroup() {
       openScheduler.flush();
@@ -2012,11 +2019,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
       const protectionResult = protection.exec(command);
       if (protectionResult) return protectionResult;
-      // A review write binds its history group like every other grouped command.
+      // A review write binds its history group; the document vocabulary's run their methods.
       const reviewResult =
-        surface && isGroupedReviewWrite(command)
+        documentReview.exec(command, options) ??
+        (surface && isGroupedReviewWrite(command)
           ? historyGroups.run(surface, command, options, () => reviewCommands.exec(command)!)
-          : reviewCommands.exec(command);
+          : reviewCommands.exec(command));
       if (reviewResult) return reviewResult;
       if (isContentControlEditorCommand(command)) {
         // The LIVE mode, not the constructed one — see `gateModeOf`.
@@ -2079,7 +2087,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (viewCapability) return viewCapability;
       const protectionCapability = protection.can(command);
       if (protectionCapability) return protectionCapability;
-      const reviewCapability = reviewCommands.can(command);
+      const reviewCapability = documentReview.can(command) ?? reviewCommands.can(command);
       if (reviewCapability) return reviewCapability;
       if (isContentControlEditorCommand(command)) {
         return canContentControlCommand(command, surface, gateModeOf(editingMode), options);
@@ -2097,41 +2105,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         const story = replaceMatchStoryRefusal(surface!, command.match);
         if (story) return story;
       }
-      if (
-        command.type === 'proposeInsertion' ||
-        command.type === 'proposeDeletion' ||
-        command.type === 'proposeReplacement'
-      ) {
-        const writer = (command.author ?? author ?? '').trim();
-        if (!writer) {
-          return {
-            ok: false,
-            code: 'invalidArgs',
-            reason: `${command.type} requires a non-empty author`,
-          };
-        }
-        const resolved =
-          command.target === undefined
-            ? { ok: true as const, selection: surface!.state().selection }
-            : resolveDocTargetSelection(surface!, command.target);
-        if (!resolved.ok) return resolved;
-        const { anchor, head } = resolved.selection;
-        const collapsed = anchor.paragraphId === head.paragraphId && anchor.offset === head.offset;
-        // A rectangle over one empty cell mirrors a collapsed range but still covers a cell
-        // the surface replaces over, so `can` agrees — replacement only (a deletion over
-        // empty cells commits nothing), and only when no explicit target overrides it.
-        const rectangleReplacement =
-          command.type === 'proposeReplacement' &&
-          command.target === undefined &&
-          surface!.state().cellSelection !== null;
-        if (command.type !== 'proposeInsertion' && collapsed && !rectangleReplacement) {
-          return {
-            ok: false,
-            code: 'invalidArgs',
-            reason: `${command.type} needs a non-collapsed selection`,
-          };
-        }
-      }
+      const proposal = proposalCapabilityRefusal(command, surface!, author);
+      if (proposal) return proposal;
       if (isImageCommand(command) && imageCommandHasIdentityFields(command)) {
         const pre = captureImageMutationPreconditions(editor);
         if (pre) {

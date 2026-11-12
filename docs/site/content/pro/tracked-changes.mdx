@@ -190,11 +190,37 @@ Each command runs `resolveAllReviewChanges` with `scope: 'document'` and returns
 | Code | When |
 | --- | --- |
 | `unsupported` | The review module is not registered, or no change in the document can resolve. |
-| `locked` | The editor is in viewing mode, document protection allows no tracked-change decisions, or locked content holds every change. |
+| `locked` | The editor is in viewing mode, read-only, comments, or tracked-changes protection is enforced, or locked content holds every change. |
 | `bound` | Data-bound content holds every change. |
 | `notFound` | The document has no tracked changes. |
 
 A refused command writes nothing.
+
+### Comment and decide by id
+
+If you hold OOXML ids instead of review keys, run the document commands. Each one runs the matching review method, with the same gates and `historyGroup` support:
+
+| Command | Runs | Addresses |
+| --- | --- | --- |
+| `addComment` | `addComment` | The selection. A `target` is refused with `unsupported`. |
+| `replyComment` | `replyToReviewItem` | The comment whose `w:id` is `commentId`. |
+| `resolveComment` | `setCommentResolved` with `true` | The comment whose `w:id` is `commentId`. |
+| `acceptRevision`, `rejectRevision` | `acceptReviewItem`, `rejectReviewItem` | The change whose `w:id` is `id` in `part`. |
+
+```ts
+editor.exec({ type: 'replyComment', commentId: '7', text: 'Agreed.' });
+editor.exec({ type: 'acceptRevision', id: 12 });
+editor.exec({ type: 'rejectRevision', id: 3, part: 'footnote', noteId: 2 });
+```
+
+A revision `w:id` is unique only within a part. `part` defaults to `'body'`, the main document. Use `'footnote'` or `'endnote'` for a notes part, and `noteId` to name one note. Headers and footers have no `part` value; decide their changes by key.
+
+| Code | When |
+| --- | --- |
+| `notFound` | No listed comment or change has the id. Changes and comments that a reviewer filter hides are not listed. |
+| `invalidArgs` | The arguments are invalid, or the id names more than one change. Decide each change by key. |
+| `unsupported` | The review module is not registered. |
+| `locked` | The editor is in viewing mode, or protection refuses the write. Tracked-changes protection refuses every accept and reject but allows comments. |
 
 ## Read and reveal changes
 

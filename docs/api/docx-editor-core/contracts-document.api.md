@@ -211,13 +211,11 @@ export type DocEdit = {
 // @public
 export interface DocEdits {
     acceptAllRevisions: Record<never, never>;
-    // (undocumented)
     acceptRevision: {
         id: number;
         noteId?: number;
         part?: 'body' | 'footnote' | 'endnote';
     };
-    // (undocumented)
     addComment: {
         author: string;
         target: DocTarget;
@@ -299,7 +297,6 @@ export interface DocEdits {
         target: DocTarget;
     };
     rejectAllRevisions: Record<never, never>;
-    // (undocumented)
     rejectRevision: {
         id: number;
         noteId?: number;
@@ -323,13 +320,11 @@ export interface DocEdits {
         target: DocTarget;
         text: string;
     };
-    // (undocumented)
     replyComment: {
         author: string;
         commentId: string;
         text: string;
     };
-    // (undocumented)
     resolveComment: {
         commentId: string;
     };
