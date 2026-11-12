@@ -33,7 +33,10 @@ export interface TextMatch {
   readonly runOffset: number;
   /** Story containing the match. Absence means the body. */
   readonly scope?: ViewScope;
-  /** The matched text as it appears in the document. */
+  /**
+   * The matched text as it appears in the document. `selectMatch` and `replaceMatch` return
+   * `notFound` and change nothing when the match's offsets no longer hold this text.
+   */
   readonly text: string;
   /**
    * Paragraph text immediately before and after the match, bounded at the derivation

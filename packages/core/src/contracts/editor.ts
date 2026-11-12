@@ -40,7 +40,7 @@ export type {
   ScrollPlacement,
   ScrollToAnchorOptions,
 } from './editor-anchor.ts';
-import type { EditorHighlights } from './editor-highlights.ts';
+import type { EditorHighlights, HighlightRange } from './editor-highlights.ts';
 export type {
   EditorHighlights,
   HighlightHit,
@@ -443,12 +443,12 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
   ): readonly (readonly TextMatch[])[];
 
   /**
-   * Move the selection to a found match — what a find dialog's next/previous do.
-   *
-   * Separate from `findMatches` because finding is a read and selecting is a write, and
-   * a caller may want the count without moving the caret.
+   * Move the selection to a match — what a find dialog's next/previous do. Takes a
+   * {@link TextMatch} or a {@link HighlightRange} you computed, and opens the header, footer,
+   * or note that holds it. Refusals match the `replaceMatch` command's: `notFound` when the
+   * expected text moved, `invalidArgs` when `scope` names another story.
    */
-  selectMatch(match: TextMatch): ExecResult;
+  selectMatch(match: TextMatch | HighlightRange): ExecResult;
 
   /** The image at the selection, for the image toolbar and transform controls. */
   getSelectedImage(): SelectedImageState | null;
@@ -1186,23 +1186,30 @@ export interface EditorCommands
   removeTabMark: { positionTwips: number };
 
   /**
-   * Replace one found match with `text`, addressed by the {@link TextMatch} `findMatches`
-   * returns. An empty `text` deletes it. The selection and scroll position stay put. In
-   * suggesting mode it is a tracked replacement under the editor's author, refused where
-   * `proposeReplacement` would be. The match must be in the open story, not a text box.
+   * Replace one match with `text`: a {@link TextMatch}, or a {@link HighlightRange} you
+   * computed. An empty `text` deletes it. One undo step, which joins an open `historyGroup`.
+   * In suggesting mode it is a tracked replacement under the editor's author, refused where
+   * `proposeReplacement` would be. In the open story the selection and scroll stay put; a
+   * header, footer, or note that is not open opens first, caret after the replacement.
+   * Without `scope`, the story comes from `blockId`; a `scope` naming another story returns
+   * `invalidArgs`, and a text box returns `unsupported`. When the match carries expected text
+   * (`expectedText`, else `text`) that its offsets no longer hold, because an edit moved it,
+   * it returns `notFound` and changes nothing, as does an unknown `blockId`. Find it again.
    *
-   * For headless or server use, see `range.insertText(text, 'Replace')` with
-   * `document.changeTrackingMode` set to `'TrackMineOnly'` in `@docx-editor.dev/editor-api`.
+   * On a server, use `range.insertText(text, 'Replace')` from `@docx-editor.dev/editor-api`.
    *
    * @example
    * ```ts
    * const [match] = editor.findMatches('30 days', { matchCase: true });
    * if (match) editor.exec({ type: 'replaceMatch', match, text: '45 days' });
+   * const range = { blockId, start: 3, length: 5, expectedText: 'go to' };
+   * const result = editor.exec({ type: 'replaceMatch', match: range, text: 'goes to' });
+   * if (!result.ok && result.code === 'notFound') refreshSuggestions();
    * ```
    *
    * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement | Replace as a tracked change}
    */
-  replaceMatch: { match: TextMatch; text: string };
+  replaceMatch: { match: TextMatch | HighlightRange; text: string };
 
   /**
    * Replace EVERY match of `query` in one undoable step. Separate from looping

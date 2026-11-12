@@ -29,7 +29,25 @@ const fixture = zipDocument(
     '<w:p><w:r><w:t>Second paragraph.</w:t></w:r></w:p>'
 );
 
-async function peer(name: string, host?: { ydoc: Y.Doc }) {
+const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const headerFixture = zipDocument(
+  '<w:p><w:r><w:t>Body text.</w:t></w:r></w:p>' +
+    '<w:sectPr><w:headerReference w:type="default" r:id="rHeader"/></w:sectPr>',
+  {
+    overrides:
+      '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>',
+    documentRels:
+      `<Relationships xmlns="${REL_NS}">` +
+      `<Relationship Id="rHeader" Type="${R_NS}/header" Target="header1.xml"/></Relationships>`,
+    extraXml: {
+      'word/header1.xml': `<w:hdr xmlns:w="${W_NS}"><w:p><w:r><w:t>Draft header</w:t></w:r></w:p></w:hdr>`,
+    },
+  }
+);
+
+async function peer(name: string, host?: { ydoc: Y.Doc }, bytes = fixture) {
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
   if (host) Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(host.ydoc));
@@ -38,7 +56,7 @@ async function peer(name: string, host?: { ydoc: Y.Doc }) {
     awareness,
     documentId: 'replace-match',
     identity: { actorId: name, name },
-    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: fixture },
+    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: bytes },
     offlineEditing: true,
   });
   const container = document.createElement('div');
@@ -171,6 +189,74 @@ test('a peer deleting the matched text while it is replaced converges', async ()
     sync(a, b);
     await converged(a, b);
     expect(a.editor.surface!.session.bodyText()).toContain('the goods.');
+  } finally {
+    b.close();
+    a.close();
+  }
+});
+
+test('a replaceMatch made stale by a remote edit refuses on the peer that issues it', async () => {
+  const a = await peer('Alice');
+  const b = await peer('Bob', a);
+  try {
+    const [stale] = a.editor.findMatches('ships');
+    const blockId = a.editor.surface!.session.paragraphIds()[0]!;
+    const range = { blockId, start: stale!.start, length: 5, expectedText: 'ships' };
+    // Bob rewrites the start of the paragraph, which moves "ships" away from its offsets.
+    const [the] = b.editor.findMatches('The supplier');
+    expect(b.editor.exec({ type: 'replaceMatch', match: the!, text: 'A vendor' }).ok).toBe(true);
+    sync(a, b);
+    const before = a.editor.surface!.session.bodyText();
+    expect(before).toContain('A vendor ships the goods.');
+
+    for (const match of [stale!, range]) {
+      expect(a.editor.exec({ type: 'replaceMatch', match, text: 'sends' })).toMatchObject({
+        ok: false,
+        code: 'notFound',
+      });
+    }
+    expect(a.editor.surface!.session.bodyText()).toBe(before);
+    sync(a, b);
+    await converged(a, b);
+
+    // Found again, the replacement lands for both peers.
+    expect(replace(a, 'ships', 'sends')).toEqual({ ok: true, changed: true });
+    sync(a, b);
+    await converged(a, b);
+    expect(b.editor.surface!.session.bodyText()).toContain('A vendor sends the goods.');
+  } finally {
+    b.close();
+    a.close();
+  }
+});
+
+test('a header range replaced from the body synchronizes, undoes, and converges', async () => {
+  const a = await peer('Alice', undefined, headerFixture);
+  const b = await peer('Bob', a);
+  try {
+    expect(a.editor.setEditingMode('suggesting').ok).toBe(true);
+    const match = a.editor.findMatches('Draft')[0]!;
+    expect(match.scope?.kind).toBe('headerFooter');
+    const range = { blockId: match.blockId, start: match.start, length: 5, expectedText: 'Draft' };
+    expect(a.editor.getActiveScope()).toEqual({ kind: 'body' });
+    expect(a.editor.exec({ type: 'replaceMatch', match: range, text: 'Final' })).toEqual({
+      ok: true,
+      changed: true,
+    });
+    expect(a.editor.getActiveScope()).toEqual({ kind: 'headerFooter', rId: 'rHeader' });
+    sync(a, b);
+    await converged(a, b);
+    const final = (peer: Peer) =>
+      peer.editor.findMatches('Final').map((found) => found.scope?.kind ?? 'body');
+    expect(final(b)).toEqual(['headerFooter']);
+
+    // One undo step on Alice takes the tracked replacement back for both peers.
+    expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+    sync(a, b);
+    await converged(a, b);
+    expect(final(a)).toEqual([]);
+    expect(final(b)).toEqual([]);
+    expect(b.editor.findMatches('Draft header')).toHaveLength(1);
   } finally {
     b.close();
     a.close();

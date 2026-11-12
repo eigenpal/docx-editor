@@ -289,6 +289,30 @@ export function searchableTextEntry(
   return searchableText.get(paragraph);
 }
 
+/**
+ * Whether the model range `[start, end)` of `paragraph` still holds `expected`, as either its
+ * model text or the text a search reports for it. A match inside a field result covers the
+ * whole field in model offsets while its text is only the part that matched, so a range over
+ * a displayed field result also holds any text that result still shows.
+ */
+export function rangeHoldsText(
+  paragraph: OoxmlParagraphNode,
+  start: number,
+  end: number,
+  expected: string
+): boolean {
+  const model = paragraphModelTextOf(paragraph);
+  if (start < 0 || end < start || end > model.length) return false;
+  if (model.slice(start, end) === expected) return true;
+  const projected = searchableTextOf(paragraph);
+  const from = projected.projectedOffset(start);
+  const to = projected.projectedOffset(end);
+  const raw = projected.displaySlice(from, to);
+  const shown = bounded(raw, raw.length);
+  if (shown === expected || shown.slice(0, SEARCH_QUERY_MAX) === expected) return true;
+  return expected.length > 0 && to - from !== end - start && shown.includes(expected);
+}
+
 /** Bound and flatten one file-derived string on its way out of this module. */
 function bounded(raw: string, max: number): string {
   return withDisplayedHyphens(raw).replace(CONTROL_CHARS_ALL, ' ').slice(0, max);

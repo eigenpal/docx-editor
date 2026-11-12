@@ -1,8 +1,9 @@
 import type { ViewScope } from './editor-scope.ts';
 
 /**
- * One text range to mark. A `TextMatch` from `findMatches()` is a valid range, so search
- * results pass straight through. @public
+ * One text range to mark, select, or replace. A `TextMatch` from `findMatches()` is a valid
+ * range, so search results pass straight through. `selectMatch()` and the `replaceMatch`
+ * command also take a range you computed, such as a proofing result. @public
  */
 export interface HighlightRange {
   /** Paragraph that holds the range: `TextMatch.blockId`. IDs belong to the open document. */
@@ -11,12 +12,16 @@ export interface HighlightRange {
   readonly start: number;
   /** Range length in the same units. A zero length marks nothing. */
   readonly length: number;
-  /** Story that holds the paragraph. Informational; `blockId` already names the paragraph. */
+  /**
+   * Story that holds the paragraph. Optional, because `blockId` already names the paragraph.
+   * `selectMatch()` and `replaceMatch` refuse a scope that names another story.
+   */
   readonly scope?: ViewScope;
   /**
    * Model text the range must cover to paint. Set it for ranges computed outside the editor,
    * such as on a server, so a range that no longer matches the document never paints. When it
    * is omitted, a range must keep covering the text it covered when it was first set.
+   * `selectMatch()` and `replaceMatch` refuse a range whose text differs, with `notFound`.
    */
   readonly expectedText?: string;
 }

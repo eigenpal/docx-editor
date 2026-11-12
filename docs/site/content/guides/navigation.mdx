@@ -171,7 +171,27 @@ if (second) {
 
 `selectMatch()` opens a header, footer, or note when needed and does not move focus.
 
-`replaceMatch` keeps the caret, selection, and scroll position. An empty `text` deletes the match. In suggesting mode, it records a tracked deletion and insertion with one undo step, and it refuses edits that cannot be tracked.
+In the open story, `replaceMatch` keeps the caret, selection, and scroll position. An empty `text` deletes the match. In suggesting mode, it records a tracked deletion and insertion with one undo step, and it refuses edits that cannot be tracked.
+
+### Replace a computed range
+
+`selectMatch()` and `replaceMatch` also take a range that you compute, such as a result from a grammar service. A range has `blockId`, `start`, and `length`, and optionally `expectedText` and `scope`. If you omit `scope`, the editor finds the story from `blockId`.
+
+Set `expectedText` to the text the range covers. If an edit moves that text before you apply the range, the command returns `notFound` and changes nothing. A match from `findMatches()` is checked the same way against its `text`.
+
+```ts
+const result = editor.exec({
+  type: 'replaceMatch',
+  match: { blockId, start: 3, length: 5, expectedText: 'go to' },
+  text: 'goes to',
+});
+if (!result.ok && result.code === 'notFound') {
+  // The text changed after the range was computed. Check the paragraph again.
+  refreshSuggestions();
+}
+```
+
+A range in a header, footer, or note that is not open opens that story, and the caret moves after the replacement. To apply several replacements as one undo step, pass the same `historyGroup` to each call. Apply them from the end of a paragraph to the start, so that earlier offsets stay valid.
 
 ### Search from code
 
@@ -430,7 +450,7 @@ The shortcuts work only while focus is in the same editor: its pages, pane, or c
 - Search caps results at 2,000. When `truncated` is `true`, show the count as a minimum, such as `2000+`.
 - Viewing mode searches body stories only. Editing mode also searches headers, footers, notes, and text boxes.
 - Matches go stale after document changes. Search again.
-- `replaceMatch` requires the match's story to be the active one. A text-box match returns `unsupported`.
+- `replaceMatch` and `selectMatch()` return `notFound` when the text at a match changed. A `scope` that names another story returns `invalidArgs`. A text-box match returns `unsupported` from `replaceMatch`.
 - Text highlights allow 32 sets and 10,000 ranges per set. Ranges past the limit count as unavailable and do not throw. The name `search` is reserved.
 - Text highlights support the body, tables, headers, footers, notes, and text boxes in the body.
 - Highlights are not saved or shared, and they do not change selection or undo history. Give each one a text label.

@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "replaceMatch and selectMatch used a target's offsets as given and required the target's story to be open.",
+  "after": "replaceMatch and selectMatch refuse a target whose expected text moved, accept a computed range, and open the story that holds the paragraph. A stale replace refuses on the peer that issues it, and accepted replacements use the existing text operations.",
+  "reason": "No shared format fields or operations change. The commands add a read before the write and open stories through the existing entry methods, so replacements still synchronize as ordinary text operations.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-replace-match.test.ts",
+    "packages/core/src/editor/__tests__/replace-match-target.test.ts"
+  ],
+  "changeset": "replace-match-stale-range",
+  "migration": null
+}
