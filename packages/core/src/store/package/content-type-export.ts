@@ -4,6 +4,7 @@
 // Records the index ignores, and extension content, stay as authored.
 import {
   buildTolerantContentTypeIndex,
+  isValidMime,
   overrideKeyOf,
   type OverrideRecord,
 } from './content-types.ts';
@@ -51,10 +52,17 @@ export function contentTypeExportPackage(pkg: OoxmlPackage): OoxmlPackage {
   const names = new Map<string, string>();
   for (const name of pkg.partBytes.keys()) names.set(partNameKey(name), name);
   for (const name of pkg.parts.keys()) names.set(partNameKey(name), name);
-  const changed: [string, string][] = [];
+  // A shared type a peer wrote with invalid syntax is never saved: the reader drops it, and a
+  // dropped record on a required part refuses the whole file.
+  const wanted = new Map<string, string>();
   for (const [key, type] of pkg.contentTypes.overrides) {
-    if (authored.index.overrides.get(key) !== type) changed.push([names.get(key) ?? key, type]);
+    if (isValidMime(type)) wanted.set(key, type);
   }
+  // Index keys, sorted: shared index order differs between peers, and every peer must save
+  // the same bytes.
+  const changed = [...wanted.keys()]
+    .filter((key) => authored.index.overrides.get(key) !== wanted.get(key))
+    .sort();
   if (removed.size === 0 && changed.length === 0) return pkg;
   // Match both the normalized name and the type the authored index kept. Ignored records
   // stay inert; update recognized declarations in place to keep their authored spelling.
@@ -71,7 +79,7 @@ export function contentTypeExportPackage(pkg: OoxmlPackage): OoxmlPackage {
   const reconcile = (node: OoxmlNode): OoxmlNode => {
     if (node.kind === 'textValue') return node;
     const key = recognizedKey(node);
-    const type = key === null ? undefined : pkg.contentTypes.overrides.get(key);
+    const type = key === null ? undefined : wanted.get(key);
     const children = node.children
       .filter((child) => {
         const key = recognizedKey(child);
@@ -97,7 +105,9 @@ export function contentTypeExportPackage(pkg: OoxmlPackage): OoxmlPackage {
   return runWithoutJournalCapture(() =>
     withContentTypeOverrides(
       next,
-      changed.filter(([name]) => !authored.index.overrides.has(partNameKey(name)))
+      changed
+        .filter((key) => !authored.index.overrides.has(key))
+        .map((key) => [names.get(key) ?? key, wanted.get(key)!] as const)
     )
   );
 }

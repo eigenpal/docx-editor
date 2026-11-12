@@ -2,7 +2,7 @@
   "impact": "compatible",
   "fields": [],
   "before": "Exports wrote the [Content_Types].xml bytes the room was seeded with, so a part added during the session had no Override.",
-  "after": "Exports write back the Overrides that differ from the package's content type index and keep every other authored record.",
+  "after": "Exports write back the Overrides that differ from the package's content type index, in part name order, skip shared types with invalid syntax, and keep every other authored record.",
   "reason": "Only exported DOCX bytes change. Shared fields, operations, and synchronization keep their meaning.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/document-comments.test.ts",

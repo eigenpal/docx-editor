@@ -114,3 +114,28 @@ test('deleted overrides preserve ignored declarations with the same normalized n
   expect(xml).not.toContain(valid);
   for (const declaration of ignored) expect(xml).toContain(declaration);
 });
+
+test('new overrides save in the same order whatever the index order', () => {
+  const pkg = open();
+  const save = (entries: [string, string][]): string => {
+    const overrides = new Map(pkg.contentTypes.overrides);
+    for (const [name, type] of entries) overrides.set(name, type);
+    return types({ ...pkg, contentTypes: { ...pkg.contentTypes, overrides } });
+  };
+  const header: [string, string] = ['/word/header1.xml', 'application/example-header+xml'];
+  const footer: [string, string] = ['/word/footer1.xml', 'application/example-footer+xml'];
+  expect(save([header, footer])).toBe(save([footer, header]));
+});
+
+test('an index type with invalid syntax is not saved', () => {
+  const pkg = open();
+  const overrides = new Map(pkg.contentTypes.overrides);
+  overrides.set('/word/document.xml', 'not a type');
+  overrides.set('/word/new.xml', 'also not a type');
+  const next = { ...pkg, contentTypes: { ...pkg.contentTypes, overrides } };
+  const xml = types(next);
+  expect(xml).toContain(`ContentType="${MAIN}"`);
+  expect(xml).not.toContain('not a type');
+  const reopened = readOoxmlPackage(writeOoxmlPackage(next));
+  expect(reopened.ok).toBe(true);
+});
