@@ -24,7 +24,6 @@
 // them takes its own box at the same place.
 
 import {
-  borderExtentPt,
   cssStyleForEdge,
   publishFromIntervals,
   type CellBorderBox,
@@ -38,17 +37,7 @@ import { cellSpacingGapPt } from './table-cell-spacing.ts';
 import type { TableFragmentRecord, TableSpacingFrame } from './semantic-records.ts';
 import { shareRowFacts } from './table-row-facts.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
-import { computeDoubleBorderMetricsPt } from './border-metrics.ts';
-
-/**
- * The width of the band a rule draws against its edge. A double rule draws its whole band
- * there, not the half a shared, centred rule takes from each side (`borderExtentPt`).
- */
-export function outerBandPt(edge: TableBorderSide | undefined): number {
-  if (edge?.state === 'edge' && edge.style === 'double')
-    return computeDoubleBorderMetricsPt(edge.widthPt).extentPt;
-  return borderExtentPt(edge);
-}
+import { outerBandPt } from './table-spacing-band.ts';
 
 /**
  * Each row of a spaced table with its frame insets. Rows share one record per position, so

@@ -4,6 +4,11 @@ import type { SemanticTableRow } from './semantic-table.ts';
 import type { TableBorderBox } from './table-borders.ts';
 import { spacingGapsPt } from './table-cell-spacing.ts';
 import { withSpacingFrame } from './table-spacing-frame.ts';
+import {
+  spacingFrameParts,
+  type SpacingFrameInsets,
+  type SpacingFrameParts,
+} from './table-spacing-band.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 const EPSILON_PT = 0.001;
@@ -24,24 +29,15 @@ function sum(values: readonly number[]): number {
  * lay out as 39.0/111.0pt, not 37.5/112.5; with 300-twip margins as 42.9/107.1pt; and the
  * gaps of a spaced table come out the same way. Under 6000 twips the same columns grow to
  * 75/225pt. An autofit table measures each column's minimum from its content instead.
- * `proportionalPt` of the shrink, a spaced table's frame, comes out in proportion to width
- * first: equal 120pt cells under 6pt outer rules stay equal whatever their content.
  */
 export function fitColumnsAboveMinimums(
   widths: readonly number[],
   targetPt: number,
-  minimums: readonly number[],
-  proportionalPt = 0
+  minimums: readonly number[]
 ): readonly number[] {
-  let total = sum(widths);
+  const total = sum(widths);
   if (!(total > 0) || !(targetPt > 0) || Math.abs(total - targetPt) <= EPSILON_PT) return widths;
   if (targetPt > total) return widths.map((width) => (width * targetPt) / total);
-  if (proportionalPt > 0) {
-    const scale = (total - Math.min(proportionalPt, total - targetPt)) / total;
-    widths = widths.map((width) => width * scale);
-    total *= scale;
-    if (total - targetPt <= EPSILON_PT) return widths;
-  }
   const floors = widths.map((width, column) => Math.min(width, Math.max(0, minimums[column] ?? 0)));
   const slack = total - sum(floors);
   const need = total - targetPt;
@@ -69,34 +65,148 @@ export function cellMarginMinimumsPt(
   return minimums;
 }
 
-/** What a spaced table's gaps take from its width, and how much of that is its frame. */
+/** What a spaced table's gaps take from its width, and the frame parts its columns hold. */
 export interface SpacingTake {
+  /** Every gap and both frame insets. */
   readonly gapsPt: number;
-  readonly framePt: number;
+  /** The part of `gapsPt` the outer columns hold, when the table has a frame. */
+  readonly frame?: SpacingFrameParts;
+  /** Where the rows' outer cells sit, when the table has a frame. */
+  readonly edges?: RowEdgeColumns;
 }
 
-/** The width a spaced table's gaps and frame take, before its columns are resolved. */
+/**
+ * The width a spaced table's gaps and frame take, before its columns are resolved. `rows` and
+ * `borders` are in display order; a visually right-to-left table (`reversed`) resolves its
+ * columns in document order, so its first column holds the right part.
+ */
 export function spacingGapsBeforeColumns(
   rows: readonly SemanticTableRow[],
   borders: TableBorderBox,
   cellSpacingPt: number,
-  columnCount: number
+  columnCount: number,
+  reversed = false
 ): SpacingTake {
-  if (!(cellSpacingPt > 0) || columnCount < 1) return { gapsPt: 0, framePt: 0 };
+  if (!(cellSpacingPt > 0) || columnCount < 1) return { gapsPt: 0 };
   const framed = withSpacingFrame(rows.slice(0, 1), borders, cellSpacingPt);
   const gapsPt = spacingGapsPt({
     columnWidthsPt: new Array<number>(columnCount).fill(0),
     cellSpacingPt,
     rows: framed,
   });
-  return { gapsPt, framePt: spacingFramePt(framed[0]?.spacingFrame) };
+  const frame = spacingFrameParts(framed[0]?.spacingFrame);
+  if (!frame) return { gapsPt };
+  const edges = rowEdgeColumns(rows, columnCount);
+  if (!reversed) return { gapsPt, frame, edges };
+  return {
+    gapsPt,
+    frame: { ...frame, leadPt: frame.trailPt, trailPt: frame.leadPt },
+    edges: { starts: [...edges.ends].reverse(), ends: [...edges.starts].reverse() },
+  };
 }
 
-/** The part of a spaced table's gaps its frame adds: its left and right insets, if wider. */
-export function spacingFramePt(
-  frame: { readonly leftPt: number; readonly rightPt: number } | undefined
-): number {
-  return frame ? Math.max(0, frame.leftPt + frame.rightPt) : 0;
+/** The columns where some row's first cell starts and where some row's last cell ends. */
+export interface RowEdgeColumns {
+  readonly starts: readonly boolean[];
+  readonly ends: readonly boolean[];
+}
+
+/** Where each row's outer cells sit (`RowEdgeColumns`), by grid position. */
+export function rowEdgeColumns(
+  rows: readonly {
+    readonly cells: readonly { readonly gridColumn: number; readonly gridSpan: number }[];
+  }[],
+  columnCount: number
+): RowEdgeColumns {
+  const starts = new Array<boolean>(columnCount).fill(false);
+  const ends = new Array<boolean>(columnCount).fill(false);
+  for (const row of rows) {
+    let first = Infinity;
+    let end = -Infinity;
+    for (const cell of row.cells) {
+      first = Math.min(first, cell.gridColumn);
+      end = Math.max(end, cell.gridColumn + cell.gridSpan);
+    }
+    if (first < columnCount) starts[Math.max(0, first)] = true;
+    if (end > 0) ends[Math.min(columnCount, end) - 1] = true;
+  }
+  return { starts, ends };
+}
+
+/**
+ * Cell widths that total `cellTargetPt` when a spaced table's outer columns hold their frame
+ * parts: each column fits with its part (`fitColumnsAboveMinimums`), its minimum raised by
+ * that part, and then gives the part back. Without parts, the columns fit as they are.
+ *
+ * Measured in modes 0 and 15 with spacing of 2, 5 and 15pt, outer rules of 0 to 6pt on either
+ * side and inside rules of 0 to 6pt, autofit and fixed. With a 6pt left rule and 0.5pt right
+ * and inside rules: fixed 1000/2000/3000-twip cells under 6000 twips lay out as
+ * 38.5/86.4/129.6pt, not 44.6/83.0/121.2; 2000/2000 stretched to 5000 as 104.5/110; and
+ * without a table width the first cell narrows to 94.5pt. Equal 6pt rules on 1000/2000/3000
+ * lay out near 41.8/85.9/121.2.
+ *
+ * A column where a row that skips the grid columns before it (`w:gridBefore`) starts needs the
+ * left part as well, and one where a row that skips the columns after it ends needs the right
+ * part (`edges`): with a 6pt left rule, a 2000-twip middle column that opens a `w:gridBefore`
+ * row keeps 0.7pt more than in the same table without that row.
+ */
+export function fitColumnsHoldingFrame(
+  widths: readonly number[],
+  cellTargetPt: number,
+  minimums: readonly number[],
+  frame: SpacingFrameParts | undefined,
+  edges?: RowEdgeColumns,
+  /** The table has no width to keep: a raised floor widens it instead of its neighbours. */
+  growsPastTarget = false
+): readonly number[] {
+  const last = widths.length - 1;
+  if (!frame || last < 0) return fitColumnsAboveMinimums(widths, cellTargetPt, minimums);
+  const held = widths.map(
+    (_, column) => (column === 0 ? frame.leadPt : 0) + (column === last ? frame.trailPt : 0)
+  );
+  const needs = widths.map(
+    (_, column) =>
+      (column === 0 || edges?.starts[column] ? frame.leadPt : 0) +
+      (column === last || edges?.ends[column] ? frame.trailPt : 0)
+  );
+  const fitted = fitColumnsAboveMinimums(
+    widths,
+    cellTargetPt + sum(held),
+    widths.map((_, column) => Math.max(0, Math.max(0, minimums[column] ?? 0) + needs[column]!))
+  );
+  return keepCellFloors(
+    fitted.map((width, column) => width - held[column]!),
+    held.map((part) => (part === 0 ? 0 : MIN_CELL_PT)),
+    growsPastTarget ? Infinity : cellTargetPt
+  );
+}
+
+/** The narrowest cell a column holding a frame part keeps, as any derived column does. */
+const MIN_CELL_PT = 1;
+
+/**
+ * `cells` with none below its floor: a column narrower than the frame part it holds keeps
+ * its floor, and the others give the difference up in proportion to their width above theirs,
+ * as far as the total passes `targetPt`. Unmeasured; it keeps a spacer column beside a thick
+ * rule from collapsing.
+ */
+function keepCellFloors(
+  cells: readonly number[],
+  floors: readonly number[],
+  targetPt: number
+): readonly number[] {
+  let short = 0;
+  for (let column = 0; column < cells.length; column++)
+    short += Math.max(0, floors[column]! - cells[column]!);
+  if (short <= EPSILON_PT) return cells;
+  const raised = cells.map((width, column) => Math.max(width, floors[column]!));
+  const spare = raised.reduce(
+    (total, width, column) => total + Math.max(0, width - floors[column]!),
+    0
+  );
+  const give = Math.min(short, Math.max(0, sum(raised) - targetPt), spare);
+  if (!(spare > 0) || !(give > 0)) return raised;
+  return raised.map((width, column) => width - (give * (width - floors[column]!)) / spare);
 }
 
 /**
@@ -110,8 +220,13 @@ export function autofitCellsAboveMinimums(
   preferredWidths: readonly (number | undefined)[],
   cellWidths: readonly number[],
   minimums: readonly number[],
-  framePt = 0,
-  spans: readonly { readonly from: number; readonly count: number; readonly minimum: number }[] = []
+  frame?: SpacingFrameParts,
+  spans: readonly {
+    readonly from: number;
+    readonly count: number;
+    readonly minimum: number;
+  }[] = [],
+  edges?: RowEdgeColumns
 ): readonly number[] | undefined {
   if (preferredWidths.length !== cellWidths.length) return undefined;
   const preferred: number[] = [];
@@ -120,16 +235,17 @@ export function autofitCellsAboveMinimums(
     preferred.push(width);
   }
   const target = sum(cellWidths);
-  if (sum(preferred) <= target + EPSILON_PT) return undefined;
-  const cells = fitColumnsAboveMinimums(preferred, target, minimums, framePt);
+  const held = frame ? frame.leadPt + frame.trailPt : 0;
+  if (sum(preferred) <= target + held + EPSILON_PT) return undefined;
+  const cells = fitColumnsHoldingFrame(preferred, target, minimums, frame, edges);
   // Content wider than its column, or minimums past the total, widen in their own way.
   if (!cells.every((width, column) => width + EPSILON_PT >= (minimums[column] ?? 0)))
     return undefined;
   for (const span of spans) {
-    let held = 0;
+    let spanned = 0;
     for (let column = span.from; column < span.from + span.count; column++)
-      held += cells[column] ?? 0;
-    if (held + EPSILON_PT < span.minimum) return undefined;
+      spanned += cells[column] ?? 0;
+    if (spanned + EPSILON_PT < span.minimum) return undefined;
   }
   return cells;
 }
@@ -149,7 +265,10 @@ export function visualOrder(widths: readonly number[], reversed: boolean): reado
 export function autofitRefit(
   structure: {
     readonly statedColumnWidthsPt?: readonly number[];
-    readonly rows?: readonly { readonly spacingFrame?: SpacedTableFrameInsets }[];
+    readonly rows?: readonly {
+      readonly spacingFrame?: SpacingFrameInsets;
+      readonly cells: readonly { readonly gridColumn: number; readonly gridSpan: number }[];
+    }[];
   },
   content: {
     readonly preferredWidths: readonly (number | undefined)[];
@@ -176,12 +295,14 @@ export function autofitRefit(
           width === undefined ? undefined : stated[column]
         )
       : content.preferredWidths;
+  const frame = spacingFrameParts(structure.rows?.[0]?.spacingFrame);
   return autofitCellsAboveMinimums(
     preferred,
     cellWidths,
     minimums,
-    spacingFramePt(structure.rows?.[0]?.spacingFrame),
-    content.spans
+    frame,
+    content.spans,
+    frame && structure.rows ? rowEdgeColumns(structure.rows, cellWidths.length) : undefined
   );
 }
 
@@ -192,17 +313,38 @@ export function autofitRefit(
  * 11263-twip width whose content widens it to 639pt keep their stated widths.
  */
 export function unstretchedBase(
-  structure: { readonly statedColumnWidthsPt?: readonly number[] },
+  structure: {
+    readonly statedColumnWidthsPt?: readonly number[];
+    readonly rows?: readonly { readonly spacingFrame?: SpacingFrameInsets }[];
+  },
   cellWidths: readonly number[],
   widened: readonly number[],
   targetPt: number
 ): readonly number[] | undefined {
-  const stated = structure.statedColumnWidthsPt;
+  const stated = statedCellWidths(structure);
   if (!stated || stated.length !== cellWidths.length) return undefined;
   const statedPt = sum(stated);
   return statedPt < sum(cellWidths) - EPSILON_PT && sum(widened) > targetPt + EPSILON_PT
     ? stated
     : undefined;
+}
+
+/**
+ * The cell widths a spaced table's stated widths give before any fit: the outer columns'
+ * stated widths less the frame parts they hold (`fitColumnsHoldingFrame`).
+ */
+function statedCellWidths(structure: {
+  readonly statedColumnWidthsPt?: readonly number[];
+  readonly rows?: readonly { readonly spacingFrame?: SpacingFrameInsets }[];
+}): readonly number[] | undefined {
+  const stated = structure.statedColumnWidthsPt;
+  const frame = spacingFrameParts(structure.rows?.[0]?.spacingFrame);
+  if (!stated || !frame || stated.length === 0) return stated;
+  const last = stated.length - 1;
+  return stated.map(
+    (width, column) =>
+      width - (column === 0 ? frame.leadPt : 0) - (column === last ? frame.trailPt : 0)
+  );
 }
 
 /**
@@ -257,5 +399,3 @@ export function keepFirstLineWhereWidening(
     ifWidened[column] = Math.min(ifWidened[column]!, own[column] ?? ifWidened[column]!);
   }
 }
-
-type SpacedTableFrameInsets = { readonly leftPt: number; readonly rightPt: number };

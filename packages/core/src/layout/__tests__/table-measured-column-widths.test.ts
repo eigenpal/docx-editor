@@ -103,7 +103,7 @@ test('a spaced cell next to skipped grid columns sits the spacing further in', (
   expect(short[0]![1]).toBeCloseTo(full![0]![1]! - 5, 5);
 });
 
-test('a spaced frame comes out of the columns in proportion to their widths', () => {
+test('equal outer rules on equal columns leave each cell the same frame part', () => {
   const thick = ['top', 'left', 'bottom', 'right']
     .map((side) => `<w:${side} w:val="single" w:sz="48" w:space="0" w:color="000000"/>`)
     .join('');
@@ -112,7 +112,7 @@ test('a spaced frame comes out of the columns in proportion to their widths', ()
     `<w:tblBorders>${thick}</w:tblBorders>`;
   const long = `<w:tc><w:tcPr>${dxa(2400)}</w:tcPr><w:p><w:r><w:t>wwwwww</w:t></w:r></w:p></w:tc>`;
   const [[a, b]] = widths(rows([2400, 2400], tblPr, `<w:tr>${long}${cell(dxa(2400))}</w:tr>`));
-  // The 12pt frame splits evenly; only the 6pt of spacing gives way above content minimums.
+  // Each outer column holds its 6pt rule; only the 6pt of spacing gives way above minimums.
   expect(a! + b!).toBeCloseTo(222, 5);
   expect(a! - b!).toBeLessThan(6);
   expect(a!).toBeGreaterThan(b!);
