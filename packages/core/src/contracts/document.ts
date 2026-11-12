@@ -158,7 +158,28 @@ export interface DocEdits {
 
   acceptRevision: { id: number; part?: 'body' | 'footnote' | 'endnote'; noteId?: number };
   rejectRevision: { id: number; part?: 'body' | 'footnote' | 'endnote'; noteId?: number };
+  /**
+   * Accept every tracked change in the document in one undo step: the body, tables,
+   * headers, footers, notes, and text boxes. Reviewer filters do not narrow it. In the editor
+   * it runs as `resolveAllReviewChanges` with `scope: 'document'` and returns the same
+   * `revisions` result. A change that cannot be accepted, such as one in locked content, is
+   * left pending and listed in `revisions.skipped`.
+   *
+   * Requires the review module from `@docx-editor.dev/pro`; without it the command is refused
+   * with `unsupported`. Also refused with `locked` while viewing or under protection that
+   * allows no tracked-change decisions, with `notFound` when the document has no tracked
+   * changes, and, when no change can be accepted, with `locked`, `bound`, or `unsupported`
+   * for the cause. A refusal writes nothing.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#accept-or-reject-every-change | Accept or reject every change}
+   */
   acceptAllRevisions: Record<never, never>;
+  /**
+   * Reject every tracked change in the document in one undo step. The scope, gates, and
+   * result are the same as for `acceptAllRevisions`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#accept-or-reject-every-change | Accept or reject every change}
+   */
   rejectAllRevisions: Record<never, never>;
 
   /**

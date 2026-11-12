@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The acceptAllRevisions and rejectAllRevisions commands were refused as unsupported.",
+  "after": "Both commands run the existing resolveAllReviewChanges decision with document scope: the same revision operations, one atomic commit across stories, one history entry.",
+  "reason": "The commands reuse the existing bulk review planner and commit lane. Shared nodes, operation shapes, offsets, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/accept-all-revisions.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-accept-all-revisions.test.ts"
+  ],
+  "changeset": "accept-all-revisions-command",
+  "migration": null
+}

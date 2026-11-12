@@ -210,7 +210,6 @@ export type DocEdit = {
 
 // @public
 export interface DocEdits {
-    // (undocumented)
     acceptAllRevisions: Record<never, never>;
     // (undocumented)
     acceptRevision: {
@@ -299,7 +298,6 @@ export interface DocEdits {
         replaceWith: string;
         target: DocTarget;
     };
-    // (undocumented)
     rejectAllRevisions: Record<never, never>;
     // (undocumented)
     rejectRevision: {

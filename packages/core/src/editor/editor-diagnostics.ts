@@ -79,6 +79,7 @@ import { classifyCommand, unknownCommandReason } from './docx-editor-support.ts'
 
 /** Commands the facade answers itself, before the command classifier sees them. */
 const FACADE_COMMANDS: ReadonlySet<string> = new Set<EditorCommand['type']>([
+  'acceptAllRevisions',
   'insertImage',
   'openBookmarkDialog',
   'openGoTo',
@@ -88,6 +89,7 @@ const FACADE_COMMANDS: ReadonlySet<string> = new Set<EditorCommand['type']>([
   'proposeDeletion',
   'proposeInsertion',
   'proposeReplacement',
+  'rejectAllRevisions',
   'replaceImage',
   'setEditingMode',
   'setReviewDisplayMode',

@@ -18,6 +18,8 @@ import { runWithHistoryGroup } from './history-group-scope.ts';
 // view commands write nothing.
 const GROUPABLE = new Set<EditorCommand['type']>([
   'resolveAllReviewChanges',
+  'acceptAllRevisions',
+  'rejectAllRevisions',
   'setReviewChangesAuthor',
   'proposeInsertion',
   'proposeDeletion',

@@ -22,6 +22,7 @@ import {
   reviewActivationRefusal,
   reviewModelOption,
 } from './docx-editor-review-commands.ts';
+import { isGroupedReviewWrite } from './review-document-decisions.ts';
 import { canEditorViewCommand, createEditorViews } from './docx-editor-view-commands.ts';
 import { bindPopupChromeRequests } from './text-form-field-chrome.ts';
 import { completePendingSuggesting } from './opening-editing-mode.ts';
@@ -2013,8 +2014,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (protectionResult) return protectionResult;
       // A review write binds its history group like every other grouped command.
       const reviewResult =
-        surface &&
-        (command.type === 'resolveAllReviewChanges' || command.type === 'setReviewChangesAuthor')
+        surface && isGroupedReviewWrite(command)
           ? historyGroups.run(surface, command, options, () => reviewCommands.exec(command)!)
           : reviewCommands.exec(command);
       if (reviewResult) return reviewResult;
