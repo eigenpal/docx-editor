@@ -18,7 +18,6 @@ import type { ReactNode } from 'react';
 // one thing fixed positioning cannot do is the one thing that never happens.
 
 import {
-  Children,
   isValidElement,
   useCallback,
   useContext,
@@ -31,6 +30,12 @@ import {
 import type { CSSProperties, ReactElement } from 'react';
 import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
 import { contextMenuRowId } from './row-alias';
+import {
+  ContextMenuStart,
+  StartPlacementContext,
+  partitionStartRows,
+  warnPackagedRowsIn,
+} from './start';
 import { isDocumentContextMenuTarget } from './menu-target';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { ReviewRailContext, useDocxEditor } from '../context';
@@ -376,20 +381,6 @@ function rowOfChild(child: ReactNode): string | null {
 }
 
 /**
- * Whether a child asked to render ABOVE the default set.
- *
- * A component carrying `docxRowPlacement: 'start'` (a static, like `docxRow`) renders
- * before the packaged rows instead of appending after them — the shape a contextual
- * section wants: "you right-clicked one of MINE" belongs at the top, where the pointer is.
- */
-function startPlacedChild(child: ReactNode): boolean {
-  if (!isValidElement(child)) return false;
-  const type = child.type as { docxRowPlacement?: unknown };
-  if (typeof type !== 'function' && typeof type !== 'object') return false;
-  return type.docxRowPlacement === 'start';
-}
-
-/**
  * The element this menu listens on: the SCROLL CONTAINER, not the painted surface.
  *
  * The class is the one the engine itself keys on, so a page with two editors gives each
@@ -436,6 +427,9 @@ export function DocxEditorContextMenu({
     () => contextMenuDefaultSet(tableContextVisible, tocId !== null),
     [tableContextVisible, tocId]
   );
+  // `preset={false}` renders children as written, so Start stays where the host put it.
+  const placed = preset ? partitionStartRows(children) : { start: [], rest: children };
+  warnPackagedRowsIn(placed.start, rowOfChild);
   // Placement is measured AFTER the panel renders — its size depends on the rows the host
   // composed — so the first paint is at the raw anchor and the flip lands in a layout
   // effect, before the browser paints.
@@ -680,20 +674,24 @@ export function DocxEditorContextMenu({
                 revealMenuItem(panel, doc.activeElement);
               }}
             >
-              {Children.toArray(children).filter(startPlacedChild)}
-              {mergeArrangement({
-                entries: defaultSet,
-                children: Children.toArray(children).filter((child) => !startPlacedChild(child)),
-                preset,
-                keyOfEntry: (entry) => entry.id,
-                keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),
-                renderEntry: (entry) =>
-                  entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
-                onUnmatched: (id, element) => {
-                  // An unmatched override is the host's own row, unless it is hidden.
-                  if ((element.props as { hidden?: unknown }).hidden) warnUnmatchedHiddenRow(id);
-                },
-              })}
+              <StartPlacementContext.Provider value="hoisted">
+                {placed.start}
+              </StartPlacementContext.Provider>
+              <StartPlacementContext.Provider value={preset ? 'appended' : 'verbatim'}>
+                {mergeArrangement({
+                  entries: defaultSet,
+                  children: placed.rest,
+                  preset,
+                  keyOfEntry: (entry) => entry.id,
+                  keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),
+                  renderEntry: (entry) =>
+                    entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
+                  onUnmatched: (id, element) => {
+                    // An unmatched override is the host's own row, unless it is hidden.
+                    if ((element.props as { hidden?: unknown }).hidden) warnUnmatchedHiddenRow(id);
+                  },
+                })}
+              </StartPlacementContext.Provider>
             </div>
           </ContextMenuContext.Provider>
         </MenuContext.Provider>
@@ -731,6 +729,8 @@ export interface DocxEditorContextMenuNamespace {
   readonly RemoveToc: typeof ContextMenuRemoveToc;
   /** A host-owned row: no slot, no command, the host's own label and action. */
   readonly Item: typeof ContextMenuItem;
+  /** Host rows that render above the packaged rows instead of after them. */
+  readonly Start: typeof ContextMenuStart;
   /** Any chrome slot as a live row (`<ContextMenu.Slot slotId="text.bold" />`). */
   readonly Slot: typeof MenuItem;
   /** Bare row presentation, for a host building something the parts do not cover. */
@@ -763,6 +763,7 @@ export const ContextMenu: DocxEditorContextMenuNamespace = Object.assign(DocxEdi
   RefreshTocPageNumbers: ContextMenuRefreshTocPageNumbers,
   RemoveToc: ContextMenuRemoveToc,
   Item: ContextMenuItem,
+  Start: ContextMenuStart,
   Slot: MenuItem,
   Row: MenuRow,
   Group: MenuGroup,

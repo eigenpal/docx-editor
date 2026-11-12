@@ -2932,6 +2932,35 @@ export const ContextMenuSplitCell: {
     docxRow: string;
 };
 
+// @public
+export const ContextMenuStart: {
+    new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<{}> & Readonly<{}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }>[], {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {}, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
+        B: {};
+        C: {};
+        D: {};
+        Defaults: {};
+        M: {};
+        P: {};
+    }, Readonly<{}> & Readonly<{}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }>[], {}, {}, {}, {}>;
+    __isFragment?: never;
+    __isTeleport?: never;
+    __isSuspense?: never;
+} & vue.ComponentOptionsBase<Readonly<{}> & Readonly<{}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>[], {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
+    docxRowPlacement: 'start';
+};
+
+// @public
+export interface ContextMenuStartProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+}
+
 // @public (undocumented)
 export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
     // (undocumented)
@@ -4056,6 +4085,7 @@ export interface DocxEditorContextMenuNamespace {
     readonly Slot: typeof MenuItem;
     // (undocumented)
     readonly SplitCell: typeof ContextMenuSplitCell;
+    readonly Start: typeof ContextMenuStart;
     // (undocumented)
     readonly Submenu: typeof MenuSubmenu;
 }

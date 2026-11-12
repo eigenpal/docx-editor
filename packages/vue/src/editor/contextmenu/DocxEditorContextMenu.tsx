@@ -50,6 +50,12 @@ import {
 } from '../menu/parts';
 import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
 import { contextMenuRowId } from './row-alias';
+import {
+  ContextMenuStart,
+  StartPlacementRegion,
+  startPlacedChild,
+  warnPackagedRowsIn,
+} from './start';
 import { isDocumentContextMenuTarget } from './menu-target';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
@@ -356,13 +362,6 @@ function rowOfChild(child: unknown): string | null {
   return null;
 }
 
-function startPlacedChild(child: unknown): boolean {
-  if (!isVNodeElement(child)) return false;
-  const type = child.type as { docxRowPlacement?: unknown };
-  if (typeof type !== 'function' && typeof type !== 'object') return false;
-  return type.docxRowPlacement === 'start';
-}
-
 function scrollerFor(anchor: HTMLElement | null): HTMLElement | null {
   return anchor?.closest<HTMLElement>('.docx-editor__scroll-container') ?? null;
 }
@@ -581,27 +580,30 @@ export const DocxEditorContextMenu = defineComponent({
 
       const children = flattenChildren(slots.default?.() ?? []);
       const startRows = children.filter(startPlacedChild);
+      if (props.preset !== false) warnPackagedRowsIn(startRows, rowOfChild);
       const restChildren = children.filter((child) => !startPlacedChild(child));
 
       const rows =
         props.preset === false
-          ? children
+          ? [h(StartPlacementRegion, { placement: 'verbatim' }, () => children)]
           : [
-              ...startRows,
-              ...mergeArrangement({
-                entries: defaultSet.value,
-                children: restChildren,
-                preset: props.preset,
-                keyOfEntry: (entry) => entry.id,
-                keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),
-                renderEntry: (entry) =>
-                  entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
-                onUnmatched: (id, vnode) => {
-                  // An unmatched override is the host's own row, unless it is hidden.
-                  const hidden = vnode.props?.hidden;
-                  if (hidden === true || hidden === '') warnUnmatchedHiddenRow(id);
-                },
-              }),
+              h(StartPlacementRegion, { placement: 'hoisted' }, () => startRows),
+              h(StartPlacementRegion, { placement: 'appended' }, () =>
+                mergeArrangement({
+                  entries: defaultSet.value,
+                  children: restChildren,
+                  preset: props.preset,
+                  keyOfEntry: (entry) => entry.id,
+                  keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),
+                  renderEntry: (entry) =>
+                    entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
+                  onUnmatched: (id, vnode) => {
+                    // An unmatched override is the host's own row, unless it is hidden.
+                    const hidden = vnode.props?.hidden;
+                    if (hidden === true || hidden === '') warnUnmatchedHiddenRow(id);
+                  },
+                })
+              ),
             ];
 
       return h(
@@ -698,6 +700,8 @@ export interface DocxEditorContextMenuNamespace {
   readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
   readonly RemoveToc: typeof ContextMenuRemoveToc;
   readonly Item: typeof ContextMenuItem;
+  /** Host rows that render above the packaged rows instead of after them. */
+  readonly Start: typeof ContextMenuStart;
   readonly Slot: typeof MenuItem;
   readonly Row: typeof MenuRow;
   readonly Group: typeof MenuGroup;
@@ -728,6 +732,7 @@ export const ContextMenu = Object.assign(DocxEditorContextMenu, {
   RefreshTocPageNumbers: ContextMenuRefreshTocPageNumbers,
   RemoveToc: ContextMenuRemoveToc,
   Item: ContextMenuItem,
+  Start: ContextMenuStart,
   Slot: MenuItem,
   Row: MenuRow,
   Group: MenuGroup,

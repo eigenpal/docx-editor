@@ -715,3 +715,8 @@ export function ContextMenuItem({
     </MenuRow>
   );
 }
+
+/** Props for `DocxEditor.ContextMenu.Start`. @public */
+export interface ContextMenuStartProps {
+  children?: DocxEditorChildren;
+}

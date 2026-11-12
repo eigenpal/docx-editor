@@ -678,6 +678,21 @@ export const ContextMenuSplitCell: ((input: ContextMenuCommandProps) => react.JS
 };
 
 // @public
+export function ContextMenuStart(input: ContextMenuStartProps): react.JSX.Element;
+
+// @public (undocumented)
+export namespace ContextMenuStart {
+    var // (undocumented)
+    docxRowPlacement: "start";
+}
+
+// @public
+export interface ContextMenuStartProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+}
+
+// @public
 export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
     destructive?: boolean;
 }
@@ -1050,6 +1065,7 @@ export interface DocxEditorContextMenuNamespace {
     readonly Slot: typeof MenuItem;
     // (undocumented)
     readonly SplitCell: typeof ContextMenuSplitCell;
+    readonly Start: typeof ContextMenuStart;
     // (undocumented)
     readonly Submenu: typeof MenuSubmenu;
 }

@@ -7935,6 +7935,15 @@ p.docx-review__refused {
   width: 100%;
 }
 
+/* `ContextMenu.Start` ends with a separator, and host rows can bring their own, so a
+ * separator with nothing above it, nothing below it, or another separator before it is
+ * hidden rather than drawn as a stray or doubled rule. */
+.docx-contextmenu > .docx-toolbar__menu-separator:first-child,
+.docx-contextmenu > .docx-toolbar__menu-separator:last-child,
+.docx-contextmenu > .docx-toolbar__menu-separator + .docx-toolbar__menu-separator {
+  display: none;
+}
+
 .docx-contextmenu__table-align {
   padding: 6px 12px 8px;
 }
