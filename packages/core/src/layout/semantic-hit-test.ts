@@ -1314,12 +1314,22 @@ export interface DrawingOverlayFrame {
   readonly record: InlineDrawingRecord | AnchoredDrawingRecord;
 }
 
+/**
+ * Whether a drawing's painted box can carry a selection frame. A straight line has no height
+ * or no width and stays selectable: its hit test reaches past its path.
+ */
+function selectableBounds(record: InlineDrawingRecord | AnchoredDrawingRecord): boolean {
+  const { width, height } = record.paintBounds;
+  if (!(width >= 0) || !(height >= 0)) return false;
+  return (width > 0 && height > 0) || !!record.vectorShape;
+}
+
 function overlayFrameOf(
   pageIndex: number,
   record: InlineDrawingRecord | AnchoredDrawingRecord
 ): DrawingOverlayFrame | null {
   const bounds = record.paintBounds;
-  if (bounds.width <= 0 || bounds.height <= 0 || record.accessibility.hidden) return null;
+  if (!selectableBounds(record) || record.accessibility.hidden) return null;
   return Object.freeze({
     pageIndex,
     x: bounds.x,
@@ -1398,7 +1408,7 @@ export function findDrawingOverlayFrameInLayout(
       for (const drawing of story.anchoredDrawings ?? []) {
         if (drawing.drawingNodeId !== drawingNodeId) continue;
         const bounds = drawing.paintBounds;
-        if (bounds.width <= 0 || bounds.height <= 0 || drawing.accessibility.hidden) return null;
+        if (!selectableBounds(drawing) || drawing.accessibility.hidden) return null;
         // A page-relative axis resolves against the page, a story-relative one against the
         // story box, exactly as the furniture layer paints it.
         const origin = headerFooterAnchoredDrawingOrigin(drawing, story.box, page.box);

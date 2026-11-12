@@ -3,6 +3,10 @@ import type { PaginatedSurface } from './paginated-surface.ts';
 import type { createTextboxEditing } from './surface-textbox-editing.ts';
 import { resolveSelectedDrawingRecord, selectedImageStateOf } from './docx-editor-images.ts';
 import { textboxDrawingOnPage } from '../layout/textbox-drawing-records.ts';
+import { findDrawingOverlayFrameInLayout } from '../layout/semantic-hit-test.ts';
+
+/** A painted box thinner than this, in points, has no area a press can land on. */
+const THIN_LINE_PT = 1;
 import { isElementNode, isInputEvent, isKeyboardEvent, isPointerEvent } from './host-realm.ts';
 import { MULTI_CLICK_MS, MULTI_CLICK_SLOP_PX } from './surface-multi-click.ts';
 
@@ -98,6 +102,17 @@ export function createDrawingGestures(deps: {
     if (!selectedImageStateOf(deps.surface)) return;
     deps.enterStoryPage(pageIndex);
   };
+  /** The straight line in front of the text a press reaches by geometry, if any. */
+  const thinLineAt = (event: Event) => {
+    if (!isPointerEvent(event) || event.shiftKey) return null;
+    const drawing = pointOf(event)?.hit.drawing;
+    if (!drawing) return null;
+    const frame = findDrawingOverlayFrameInLayout(deps.surface.layout(), drawing.drawingNodeId);
+    const record = frame?.record;
+    if (!frame || !record?.vectorShape) return null;
+    if ('behindDocument' in record && record.behindDocument) return null;
+    return Math.min(frame.width, frame.height) < THIN_LINE_PT ? drawing : null;
+  };
   /** The behind-text drawing a press reaches where no text lies under it, if any. */
   const behindDrawingAt = (event: Event) =>
     isPointerEvent(event) && !event.shiftKey
@@ -152,6 +167,15 @@ export function createDrawingGestures(deps: {
           event.stopImmediatePropagation();
           return;
         }
+      }
+      // A straight line paints a box with no height or width, so no press lands on it: within
+      // reach of its path, the hit test that already reaches past the path selects it.
+      const line = !editingTextbox && !drawingId && !behind ? thinLineAt(event) : null;
+      if (line && selectObject(line.drawingNodeId, line.paragraphId)) {
+        deps.surface.focus();
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
       }
       // The painted box of a shape is wider than what it paints: a press beside a line, or
       // inside a shape with no fill, is on the text, as hit testing decides.
