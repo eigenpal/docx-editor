@@ -1,4 +1,4 @@
-// `ChartData`: the data editor of the selected chart (`chart.data`): the categories (or X values)
+// `ChartDataPart`: the data editor of the selected chart (`chart.data`): the categories (or X values)
 // and one card per series with its name and a value for each category. A field applies on Enter
 // or blur, and each add or remove applies at once, each as one undo step. The checks come from
 // core (`chartPaneCommand`). The Vue twin is `packages/vue/src/editor/objects/chart-data-part.tsx`.
@@ -42,7 +42,7 @@ function useRowFocus(root: { current: HTMLElement | null }) {
 }
 
 /** The categories and series of the selected chart, or why they cannot change. @public */
-export function ChartData(props: ObjectControlProps): ReactElement | null {
+export function ChartDataPart(props: ObjectControlProps): ReactElement | null {
   const { t } = useTranslation();
   const selected = useSelectedChart();
   const control = useObjectControl('chart.data');

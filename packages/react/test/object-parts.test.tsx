@@ -17,7 +17,7 @@ import { DocxEditorToolbar } from '../src/editor/toolbar/DocxEditorToolbar.tsx';
 import { usePaneRequest } from '../src/editor/panes/index.ts';
 import {
   ChartAxes,
-  ChartData,
+  ChartDataPart,
   ChartDataLabels,
   ChartLegend,
   ChartSeriesColors,
@@ -25,7 +25,7 @@ import {
   ChartTypePart,
   DocxEditorPaneSections,
   ShapeFill,
-  ShapeOutlineDash,
+  ShapeOutlineDashPart,
   ShapeOutlineWidth,
 } from '../src/editor/objects/index.ts';
 import { SHAPE_PANE_CASES, selectParityShape, shapePaneDocx } from './shape-pane-parity.ts';
@@ -64,7 +64,7 @@ test('shape parts in a host toolbar: compact fill, dash, and width apply and fol
     <div role="toolbar" aria-label="Host">
       <ShapeFill variant="compact" />
       <ShapeOutlineWidth variant="compact" />
-      <ShapeOutlineDash variant="compact" className="host-dash" />
+      <ShapeOutlineDashPart variant="compact" className="host-dash" />
     </div>
   );
   await flush();
@@ -141,7 +141,7 @@ test('chart parts in a host toolbar and a popover that answers the pane request'
       <div data-testid="drawer">
         <ChartAxes />
         <ChartSeriesColors index={0} />
-        <ChartData />
+        <ChartDataPart />
       </div>
     </>
   );

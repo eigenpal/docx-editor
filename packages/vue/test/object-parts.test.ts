@@ -14,7 +14,7 @@ import { ToolbarTableBorderColor, ToolbarTableCellFill } from '../src/editor/too
 import { usePaneRequest } from '../src/editor/panes/index';
 import {
   ChartAxes,
-  ChartData,
+  ChartDataPart,
   ChartDataLabels,
   ChartLegend,
   ChartSeriesColors,
@@ -22,7 +22,7 @@ import {
   ChartTypePart,
   DocxEditorPaneSections,
   ShapeFill,
-  ShapeOutlineDash,
+  ShapeOutlineDashPart,
   ShapeOutlineWidth,
 } from '../src/editor/objects/index';
 import { docx, flush } from './helpers/fixtures';
@@ -62,7 +62,7 @@ test('shape parts in a host toolbar: compact fill, dash, and width apply and fol
       hostBar(() => [
         h(ShapeFill, { variant: 'compact' }),
         h(ShapeOutlineWidth, { variant: 'compact' }),
-        h(ShapeOutlineDash, { variant: 'compact', className: 'host-dash' }),
+        h(ShapeOutlineDashPart, { variant: 'compact', className: 'host-dash' }),
       ]),
     shapePaneDocx(SHAPE_PANE_CASES.theme)
   );
@@ -137,7 +137,7 @@ test('chart parts in a host toolbar and a popover that answers the pane request'
       h('div', { 'data-testid': 'drawer' }, [
         h(ChartAxes),
         h(ChartSeriesColors, { index: 0 }),
-        h(ChartData),
+        h(ChartDataPart),
       ]),
     ],
     CHART_PANE_SOURCE

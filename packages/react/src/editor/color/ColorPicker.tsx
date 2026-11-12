@@ -7,7 +7,7 @@
 // `packages/vue/src/editor/color/ColorPicker.tsx` and renders the same markup.
 
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { ButtonHTMLAttributes, HTMLAttributes, ReactElement, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, HTMLAttributes, ReactElement } from 'react';
 import {
   colorPickerGrid,
   colorPickFromHexText,
@@ -53,6 +53,8 @@ function usePicker(part: string): ColorPickerContextValue {
 
 /** Props for `ColorPicker.Root`. @public */
 export interface ColorPickerRootProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> {
+  /** More class names for the element. */
+  className?: string;
   /** The current pick, `none` for No colour, or null when the target shows several colours. */
   value: ColorPickerValue;
   /** Called with the picked colour, or `none` (or `auto`) for the first button of the grid. */
@@ -152,6 +154,8 @@ function valueHex(context: ColorPickerContextValue): string | null {
 
 /** Props for `ColorPicker.Trigger`. @public */
 export interface ColorPickerTriggerProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  /** More class names for the element. */
+  className?: string;
   asChild?: boolean;
 }
 
@@ -206,6 +210,8 @@ export interface ColorPickerSwatchProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
   'value'
 > {
+  /** More class names for the element. */
+  className?: string;
   pick: ColorPick;
   /** The paint, `#RRGGBB`; default the paint of `pick` in the document's theme. */
   hex?: string;
@@ -335,11 +341,14 @@ export interface ColorPickerContentProps extends HTMLAttributes<HTMLDivElement> 
    * of as a popover under the trigger.
    */
   inline?: boolean;
-  /** Replaces the default content: `NoColor`, the grid, and `HexInput`. */
-  children?: ReactNode;
+  /** More class names for the element. */
+  className?: string;
 }
 
-/** The grid popover. It renders only while the picker is open. */
+/**
+ * The grid popover. It renders only while the picker is open. Children replace the default
+ * content: `NoColor`, the grid, and `HexInput`.
+ */
 function ColorPickerContent({
   hexInput = true,
   inline = false,

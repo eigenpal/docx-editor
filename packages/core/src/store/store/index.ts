@@ -23,6 +23,7 @@ export {
   type TreeDocOpKind,
   type DrawingTreeDocOp,
   type ShapeFillInput,
+  type ShapeOutlineDash,
   type ShapeOutlineInput,
   type ShapeThemeColorInput,
   type ShapeThemeColorName,

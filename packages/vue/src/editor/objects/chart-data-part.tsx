@@ -1,4 +1,4 @@
-// `ChartData`: the data editor of the selected chart (`chart.data`): the categories (or X values)
+// `ChartDataPart`: the data editor of the selected chart (`chart.data`): the categories (or X values)
 // and one card per series with its name and a value for each category. A field applies on Enter
 // or blur, and each add or remove applies at once, each as one undo step. The checks come from
 // core (`chartPaneCommand`). The React twin is
@@ -21,8 +21,8 @@ import { useSelectedChart } from '../charts/useSelectedChart';
 import { objectControlProps, useObjectControl } from './object-controls';
 
 /** The categories and series of the selected chart, or why they cannot change. @public */
-export const ChartData = defineComponent({
-  name: 'ChartData',
+export const ChartDataPart = defineComponent({
+  name: 'ChartDataPart',
   props: objectControlProps,
   setup(props) {
     const { t } = useTranslation();

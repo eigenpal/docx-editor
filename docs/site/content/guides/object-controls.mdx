@@ -28,6 +28,8 @@ function ShapeToolbar() {
 
 When no shape is selected, the parts are disabled and give the reason.
 
+Each part is also a named export with the same name, such as `ShapeFill` or `ChartTitle`. Three parts take a `Part` suffix, because a type has the same name: `ChartTypePart`, `ChartDataPart`, and `ShapeOutlineDashPart`.
+
 ## Use a slot without a part
 
 To render your own control, read the slot with `useObjectControl`. It returns `value`, `isActive`, `isEnabled`, `disabledReason`, `label`, and three ways to run the slot: `execute`, `apply`, and `toggle`. `apply` returns the translated refusal, or `null` when the change applied.

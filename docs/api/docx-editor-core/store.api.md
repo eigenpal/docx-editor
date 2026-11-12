@@ -5008,9 +5008,14 @@ export type ShapeFillInput = {
 };
 
 // @public
+export type ShapeOutlineDash = 'solid' | 'sysDot' | 'sysDash' | 'sysDashDot' | 'sysDashDotDot' | 'dot' | 'dash' | 'lgDash' | 'dashDot' | 'lgDashDot' | 'lgDashDotDot';
+
+// @public
 export interface ShapeOutlineInput {
     // (undocumented)
     readonly color?: string;
+    // (undocumented)
+    readonly dash?: ShapeOutlineDash;
     readonly theme?: ShapeThemeColorInput;
     // (undocumented)
     readonly visible?: boolean;

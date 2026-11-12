@@ -26,9 +26,6 @@ import {
 } from './color-picker.ts';
 import type { SelectedShapeCommand } from './selected-shape.ts';
 
-type ChartColorPick = ColorPick;
-type ChartTranslate = ColorPickerTranslate;
-
 /** The outline widths the pane offers, in points. @public */
 export const SHAPE_OUTLINE_WIDTHS: readonly number[] = [0.25, 0.5, 0.75, 1, 1.5, 2.25, 3, 4.5, 6];
 
@@ -230,10 +227,8 @@ export const shapeWidthText = (widthPt: number | null): string =>
  * Whether the grid swatch `swatchPick` is the shape's current pick `current` (from
  * `shapeFillPick` or `shapeOutlinePick`): the grid marks it as the current color. @public
  */
-export const shapeSwatchCurrent = (
-  swatchPick: ChartColorPick,
-  current: ChartColorPick | null
-): boolean => colorPickIsCurrent(swatchPick, current);
+export const shapeSwatchCurrent = (swatchPick: ColorPick, current: ColorPick | null): boolean =>
+  colorPickIsCurrent(swatchPick, current);
 
 /**
  * The grid pick of a color: its theme pick (`accent1`, `accent1:40`) when `theme` says the
@@ -245,7 +240,7 @@ export function shapeColorPick(
   color: string | null,
   _themeHexes: readonly string[],
   theme?: ShapeThemeColor
-): ChartColorPick | null {
+): ColorPick | null {
   return colorPickOf(color, theme);
 }
 
@@ -253,21 +248,21 @@ export function shapeColorPick(
 export const shapeFillPick = (
   fill: ShapeFillState,
   themeHexes: readonly string[]
-): ChartColorPick | null =>
+): ColorPick | null =>
   fill.type === 'solid' ? shapeColorPick(fill.color, themeHexes, fill.theme) : null;
 
 /** The current grid pick of an outline, or null when it is hidden or mixed. @public */
 export const shapeOutlinePick = (
   outline: ShapeOutlineState,
   themeHexes: readonly string[]
-): ChartColorPick | null =>
+): ColorPick | null =>
   outline.visible ? shapeColorPick(outline.color, themeHexes, outline.theme) : null;
 
 /** What the fill's color button says: a color name, No fill, Gradient, and so on. @public */
 export function shapeFillSummary(
   fill: ShapeFillState,
   themeHexes: readonly string[],
-  t: ChartTranslate
+  t: ColorPickerTranslate
 ): string {
   const pick = shapeFillPick(fill, themeHexes);
   return pick ? colorPickLabel(pick, t) : t(shapeFillLabelKey(fill));
@@ -277,7 +272,7 @@ export function shapeFillSummary(
 export function shapeOutlineSummary(
   outline: ShapeOutlineState,
   themeHexes: readonly string[],
-  t: ChartTranslate
+  t: ColorPickerTranslate
 ): string {
   if (outline.visible === false) return t('shape.pane.noOutline');
   const pick = shapeOutlinePick(outline, themeHexes);

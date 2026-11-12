@@ -212,6 +212,34 @@ export type ChartFormatRead = {
 export type ChartLegendPosition = 'none' | 'top' | 'bottom' | 'left' | 'right';
 
 // @public
+export type ChartPaneChange = {
+    readonly category: number;
+    readonly series: number;
+    readonly text: string;
+    readonly type: 'value';
+} | {
+    readonly series: number;
+    readonly text: string;
+    readonly type: 'seriesName';
+} | {
+    readonly category: number;
+    readonly text: string;
+    readonly type: 'label';
+} | {
+    readonly name: string;
+    readonly type: 'addSeries';
+} | {
+    readonly series: number;
+    readonly type: 'removeSeries';
+} | {
+    readonly label: string;
+    readonly type: 'addCategory';
+} | {
+    readonly category: number;
+    readonly type: 'removeCategory';
+};
+
+// @public
 export type ChartThemeColor = 'bg1' | 'tx1' | 'bg2' | 'tx2' | 'accent1' | 'accent2' | 'accent3' | 'accent4' | 'accent5' | 'accent6';
 
 // @public
@@ -716,6 +744,143 @@ export const CHROME_GROUPS: readonly [{
 }, {
     readonly contextual: true;
     readonly controls: readonly [{
+        readonly id: 'fill';
+        readonly labelKey: 'shape.pane.fillColor';
+        readonly paths: readonly string[];
+        readonly shape: 'colorSplit';
+        readonly state: {
+            readonly kind: 'value';
+        };
+        readonly swatch: '#4472c4';
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'fillTransparency';
+        readonly labelKey: 'shape.pane.transparency';
+        readonly paths: readonly string[];
+        readonly shape: 'stepper';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }, {
+        readonly id: 'outlineColor';
+        readonly labelKey: 'shape.pane.outlineColor';
+        readonly paths: readonly string[];
+        readonly shape: 'colorSplit';
+        readonly state: {
+            readonly kind: 'value';
+        };
+        readonly swatch: '#000000';
+    }, {
+        readonly id: 'outlineWidth';
+        readonly labelKey: 'shape.pane.width';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }, {
+        readonly id: 'outlineDash';
+        readonly labelKey: 'shape.pane.dash';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }];
+    readonly id: 'shape';
+    readonly labelKey: 'formattingBar.groups.shape';
+}, {
+    readonly contextual: true;
+    readonly controls: readonly [{
+        readonly id: 'type';
+        readonly labelKey: 'chart.format.type';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }, {
+        readonly id: 'title';
+        readonly labelKey: 'chart.format.titleText';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }, {
+        readonly id: 'legend';
+        readonly labelKey: 'chart.format.legend';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }, {
+        readonly id: 'dataLabels';
+        readonly labelKey: 'chart.format.dataLabels';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'axes';
+        readonly labelKey: 'chart.format.axes';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'gridlines';
+        readonly labelKey: 'chart.format.gridlines';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'categoryAxisTitle';
+        readonly labelKey: 'chart.format.categoryAxisTitle';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'valueAxisTitle';
+        readonly labelKey: 'chart.format.valueAxisTitle';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'seriesColor';
+        readonly labelKey: 'chart.format.colors';
+        readonly paths: readonly string[];
+        readonly shape: 'colorSplit';
+        readonly state: {
+            readonly kind: 'value';
+        };
+        readonly swatch: '#4472c4';
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'data';
+        readonly labelKey: 'chart.data.series';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }];
+    readonly id: 'chart';
+    readonly labelKey: 'formattingBar.groups.chart';
+}, {
+    readonly contextual: true;
+    readonly controls: readonly [{
         readonly id: 'insert';
         readonly labelKey: 'toolbar.table';
         readonly paths: readonly string[];
@@ -1081,7 +1246,7 @@ export interface ChromePrintSettings {
 }
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.compareDocuments' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.editChart' | 'image.formatShape' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'table.mergeCells' | 'table.splitCell' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.chart' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.compareDocuments' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.editChart' | 'image.formatShape' | 'image.wrap' | 'image.altText' | 'shape.fill' | 'shape.fillTransparency' | 'shape.outlineColor' | 'shape.outlineWidth' | 'shape.outlineDash' | 'chart.type' | 'chart.title' | 'chart.legend' | 'chart.dataLabels' | 'chart.axes' | 'chart.gridlines' | 'chart.categoryAxisTitle' | 'chart.valueAxisTitle' | 'chart.seriesColor' | 'chart.data' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'table.mergeCells' | 'table.splitCell' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.chart' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
 
 // @public
 export interface ClearAnchorHighlightOptions {
@@ -1145,6 +1310,12 @@ export interface CollaborationStatusDiagnostic extends DiagnosticBase {
 
 // @public
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
+
+// @public
+export type ColorPick = 'auto' | ColorPickerThemeSlot | `${ColorPickerThemeSlot}:${number}` | `#${string}`;
+
+// @public
+export type ColorPickerThemeSlot = ShapeThemeColorName;
 
 // @public
 export type ColorValue = {
@@ -3578,6 +3749,35 @@ export interface NumberingRef {
 }
 
 // @public
+export interface ObjectSlotValueMap {
+    // (undocumented)
+    'chart.axes': boolean;
+    'chart.categoryAxisTitle': string | null;
+    'chart.data': ChartPaneChange | Omit<ChartData, 'workbook'>;
+    // (undocumented)
+    'chart.dataLabels': boolean;
+    // (undocumented)
+    'chart.gridlines': boolean;
+    // (undocumented)
+    'chart.legend': ChartLegendPosition;
+    'chart.seriesColor': {
+        readonly color: ColorPick;
+        readonly index: number;
+    };
+    'chart.title': string | null;
+    // (undocumented)
+    'chart.type': ChartType;
+    // (undocumented)
+    'chart.valueAxisTitle': string | null;
+    'shape.fill': ColorPick | 'none' | (string & {});
+    'shape.fillTransparency': number;
+    'shape.outlineColor': ColorPick | 'none' | (string & {});
+    // (undocumented)
+    'shape.outlineDash': ShapeOutlineDash;
+    'shape.outlineWidth': number;
+}
+
+// @public
 export interface OoxmlExternalTarget {
     // (undocumented)
     readonly id: string;
@@ -4581,6 +4781,8 @@ export interface SetShapeFillCommand {
 export interface SetShapeOutlineCommand {
     // (undocumented)
     color?: ShapeColorValue;
+    // (undocumented)
+    dash?: ShapeOutlineDash;
     drawingNodeId?: string;
     // (undocumented)
     visible?: boolean;
@@ -4611,8 +4813,12 @@ export interface ShapeFormatState {
 }
 
 // @public
+export type ShapeOutlineDash = 'solid' | 'sysDot' | 'sysDash' | 'sysDashDot' | 'sysDashDotDot' | 'dot' | 'dash' | 'lgDash' | 'dashDot' | 'lgDashDot' | 'lgDashDotDot';
+
+// @public
 export interface ShapeOutlineState {
     readonly color: string | null;
+    readonly dash: ShapeOutlineDash | 'custom' | null;
     readonly theme?: ShapeThemeColor;
     // (undocumented)
     readonly visible: boolean | null;
@@ -4857,7 +5063,7 @@ export interface ToolbarCommandState {
 export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): ToolbarCommandState;
 
 // @public
-export interface ToolbarValueMap {
+export interface ToolbarValueMap extends ObjectSlotValueMap {
     // (undocumented)
     'font.family': string;
     // (undocumented)

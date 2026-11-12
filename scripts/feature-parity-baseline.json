@@ -43,7 +43,10 @@
     "managers/Subscribable",
     "managers/types"
   ],
-  "vueOnlyComponents": ["editor/images/index", "types"],
+  "vueOnlyComponents": [
+    "editor/images/index",
+    "types"
+  ],
   "signatureDivergence": {
     "components/DocumentOutline": {
       "propsAddedInReact": [
@@ -68,7 +71,10 @@
         "zIndex"
       ],
       "propsAddedInVue": [],
-      "emitsAddedInReact": ["close", "heading-click"],
+      "emitsAddedInReact": [
+        "close",
+        "heading-click"
+      ],
       "emitsAddedInVue": []
     },
     "components/DocxEditor/DocxEditorShell": {
@@ -145,7 +151,12 @@
     },
     "components/DocxEditor/PageIndicator": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props", "role", "style"],
+      "propsAddedInVue": [
+        "name",
+        "props",
+        "role",
+        "style"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
@@ -171,89 +182,164 @@
         "type"
       ],
       "emitsAddedInReact": [],
-      "emitsAddedInVue": ["error", "save", "state-change", "zoom-change"]
+      "emitsAddedInVue": [
+        "error",
+        "save",
+        "state-change",
+        "zoom-change"
+      ]
     },
     "components/TitleBar": {
-      "propsAddedInReact": ["children", "children", "editable", "onChange", "placeholder", "value"],
+      "propsAddedInReact": [
+        "children",
+        "children",
+        "editable",
+        "onChange",
+        "placeholder",
+        "value"
+      ],
       "propsAddedInVue": [],
-      "emitsAddedInReact": ["change"],
+      "emitsAddedInReact": [
+        "change"
+      ],
       "emitsAddedInVue": []
     },
     "components/ui/VerticalRuler": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["default", "default", "name", "props", "type", "type"],
+      "propsAddedInVue": [
+        "default",
+        "default",
+        "name",
+        "props",
+        "type",
+        "type"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "components/ui/icon-base": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorAuthorStyle": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name"],
+      "propsAddedInVue": [
+        "name"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorBookmark": {
-      "propsAddedInReact": ["showHidden", "sortBy"],
-      "propsAddedInVue": ["children", "className", "preset", "props", "style"],
+      "propsAddedInReact": [
+        "showHidden",
+        "sortBy"
+      ],
+      "propsAddedInVue": [
+        "children",
+        "className",
+        "preset",
+        "props",
+        "style"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorCompareDocumentsDialog": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
+      "propsAddedInVue": [
+        "children",
+        "className",
+        "name",
+        "preset",
+        "props",
+        "style"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorContent": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["class", "class", "inheritAttrs", "name", "props"],
+      "propsAddedInVue": [
+        "class",
+        "class",
+        "inheritAttrs",
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorContentControlWidget": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorExportDialog": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["inheritAttrs", "name", "onClose", "props"],
+      "propsAddedInVue": [
+        "inheritAttrs",
+        "name",
+        "onClose",
+        "props"
+      ],
       "emitsAddedInReact": [],
-      "emitsAddedInVue": ["close"]
+      "emitsAddedInVue": [
+        "close"
+      ]
     },
     "editor/DocxEditorFontNotice": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["class", "name", "props", "role"],
+      "propsAddedInVue": [
+        "class",
+        "name",
+        "props",
+        "role"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorInvalidTextFormFieldDialog": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name"],
+      "propsAddedInVue": [
+        "name"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorOpenFailure": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["inheritAttrs", "name", "props", "slots"],
+      "propsAddedInVue": [
+        "inheritAttrs",
+        "name",
+        "props",
+        "slots"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorOutline": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name"],
+      "propsAddedInVue": [
+        "name"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorPageNumber": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
@@ -266,13 +352,27 @@
         "pageHeightTwips",
         "pageWidthTwips"
       ],
-      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
+      "propsAddedInVue": [
+        "children",
+        "className",
+        "name",
+        "preset",
+        "props",
+        "style"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorParagraphDialog": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
+      "propsAddedInVue": [
+        "children",
+        "className",
+        "name",
+        "preset",
+        "props",
+        "style"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
@@ -294,11 +394,20 @@
         "trackMoves"
       ],
       "emitsAddedInReact": [],
-      "emitsAddedInVue": ["revision-markup-change"]
+      "emitsAddedInVue": [
+        "revision-markup-change"
+      ]
     },
     "editor/DocxEditorRevisionMarkupDialog": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
+      "propsAddedInVue": [
+        "children",
+        "className",
+        "name",
+        "preset",
+        "props",
+        "style"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
@@ -342,65 +451,112 @@
         "zoomMode"
       ],
       "propsAddedInVue": [],
-      "emitsAddedInReact": ["change", "font-error", "ready", "revision-markup-change"],
+      "emitsAddedInReact": [
+        "change",
+        "font-error",
+        "ready",
+        "revision-markup-change"
+      ],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorSplitCell": {
-      "propsAddedInReact": ["columns", "rows"],
-      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
+      "propsAddedInReact": [
+        "columns",
+        "rows"
+      ],
+      "propsAddedInVue": [
+        "children",
+        "className",
+        "name",
+        "preset",
+        "props",
+        "style"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorTextFormFieldDialog": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
+      "propsAddedInVue": [
+        "children",
+        "className",
+        "name",
+        "preset",
+        "props",
+        "style"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorUnsupportedElement": {
-      "propsAddedInReact": ["children"],
-      "propsAddedInVue": ["layout", "match", "name", "props", "slots"],
+      "propsAddedInReact": [
+        "children"
+      ],
+      "propsAddedInVue": [
+        "layout",
+        "match",
+        "name",
+        "props",
+        "slots"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorViewport": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["class", "class", "name", "props"],
+      "propsAddedInVue": [
+        "class",
+        "class",
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorWatermark": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["children", "name", "preset", "props"],
+      "propsAddedInVue": [
+        "children",
+        "name",
+        "preset",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorWindow": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["close", "default", "emits", "props", "type"],
+      "propsAddedInVue": [
+        "close",
+        "default",
+        "emits",
+        "props",
+        "type"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/charts/ChartInsert": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/charts/ChartPane": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/color/ColorPicker": {
       "propsAddedInReact": [],
       "propsAddedInVue": [
-        "className",
-        "className",
-        "className",
-        "className",
-        "className",
         "default",
         "hex",
         "hexInput",
@@ -414,38 +570,73 @@
       "emitsAddedInVue": []
     },
     "editor/content-control-widget/parts": {
-      "propsAddedInReact": ["key"],
-      "propsAddedInVue": ["class", "class", "class"],
+      "propsAddedInReact": [
+        "key"
+      ],
+      "propsAddedInVue": [
+        "class",
+        "class",
+        "class"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/images/ImageAltText": {
-      "propsAddedInReact": ["children"],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInReact": [
+        "children"
+      ],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/images/ImageInsert": {
-      "propsAddedInReact": ["children", "data", "heightPoints", "mime", "type", "widthPoints"],
-      "propsAddedInVue": ["name"],
+      "propsAddedInReact": [
+        "children",
+        "data",
+        "heightPoints",
+        "mime",
+        "type",
+        "widthPoints"
+      ],
+      "propsAddedInVue": [
+        "name"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/images/ImageInsertErrorDialog": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "onClose", "props"],
+      "propsAddedInVue": [
+        "name",
+        "onClose",
+        "props"
+      ],
       "emitsAddedInReact": [],
-      "emitsAddedInVue": ["close"]
+      "emitsAddedInVue": [
+        "close"
+      ]
     },
     "editor/images/ImageSelectionOverlay": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["containerRef", "portalRef", "scrollPort"],
+      "propsAddedInVue": [
+        "containerRef",
+        "portalRef",
+        "scrollPort"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/images/ImageWrap": {
-      "propsAddedInReact": ["children"],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInReact": [
+        "children"
+      ],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
@@ -469,13 +660,19 @@
     },
     "editor/menu/menu-help": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/menu/parts": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
@@ -495,106 +692,193 @@
         "type"
       ],
       "emitsAddedInReact": [],
-      "emitsAddedInVue": ["open-change", "tab-change"]
+      "emitsAddedInVue": [
+        "open-change",
+        "tab-change"
+      ]
     },
     "editor/navigation/parts": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props", "value"],
+      "propsAddedInVue": [
+        "name",
+        "props",
+        "value"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/note-popup-parts": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/objects/pane-sections": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/panes/SidePanel": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/shapes/ShapePane": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/toolbar/ColorSplit": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["className"],
+      "propsAddedInVue": [
+        "className"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/toolbar/DocxEditorToolbar": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/toolbar/EditingMode": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/toolbar/FontFamily": {
-      "propsAddedInReact": ["disabled", "onClick", "onMouseDown"],
-      "propsAddedInVue": ["name", "props"],
-      "emitsAddedInReact": ["click", "mouse-down"],
+      "propsAddedInReact": [
+        "disabled",
+        "onClick",
+        "onMouseDown"
+      ],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
+      "emitsAddedInReact": [
+        "click",
+        "mouse-down"
+      ],
       "emitsAddedInVue": []
     },
     "editor/toolbar/ParagraphStyle": {
-      "propsAddedInReact": ["disabled", "onClick", "onMouseDown"],
-      "propsAddedInVue": ["name", "props"],
-      "emitsAddedInReact": ["click", "mouse-down"],
+      "propsAddedInReact": [
+        "disabled",
+        "onClick",
+        "onMouseDown"
+      ],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
+      "emitsAddedInReact": [
+        "click",
+        "mouse-down"
+      ],
       "emitsAddedInVue": []
     },
     "editor/toolbar/Slot": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["class", "inheritAttrs", "name"],
+      "propsAddedInVue": [
+        "class",
+        "inheritAttrs",
+        "name"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/toolbar/TableControls": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/toolbar/ToolbarAction": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["class", "class", "emits", "name", "props"],
+      "propsAddedInVue": [
+        "class",
+        "class",
+        "emits",
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/toolbar/ToolbarButton": {
-      "propsAddedInReact": ["disabled", "onClick", "onMouseDown"],
-      "propsAddedInVue": ["class", "class", "name", "props"],
-      "emitsAddedInReact": ["click", "mouse-down"],
+      "propsAddedInReact": [
+        "disabled",
+        "onClick",
+        "onMouseDown"
+      ],
+      "propsAddedInVue": [
+        "class",
+        "class",
+        "name",
+        "props"
+      ],
+      "emitsAddedInReact": [
+        "click",
+        "mouse-down"
+      ],
       "emitsAddedInVue": []
     },
     "editor/toolbar/ToolbarOverflow": {
-      "propsAddedInReact": ["close"],
+      "propsAddedInReact": [
+        "close"
+      ],
       "propsAddedInVue": [],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/toolbar/parts": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["asChild", "class", "class", "docxSlot", "icon", "name", "props"],
+      "propsAddedInVue": [
+        "asChild",
+        "class",
+        "class",
+        "docxSlot",
+        "icon",
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/toolbar/useTableChrome": {
-      "propsAddedInReact": ["editable", "editingMode", "editor", "snapshot"],
+      "propsAddedInReact": [
+        "editable",
+        "editingMode",
+        "editor",
+        "snapshot"
+      ],
       "propsAddedInVue": [],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
@@ -636,11 +920,19 @@
         "zoomMode"
       ],
       "emitsAddedInReact": [],
-      "emitsAddedInVue": ["change", "font-error", "ready", "revision-markup-change"]
+      "emitsAddedInVue": [
+        "change",
+        "font-error",
+        "ready",
+        "revision-markup-change"
+      ]
     },
     "i18n/LocaleContext": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     }
@@ -651,11 +943,19 @@
       "vueOnly": []
     },
     "shortcuts": {
-      "reactOnly": ["'Ctrl+E'", "'Ctrl+J'", "'Ctrl+L'", "'Ctrl+R'"],
+      "reactOnly": [
+        "'Ctrl+E'",
+        "'Ctrl+J'",
+        "'Ctrl+L'",
+        "'Ctrl+R'"
+      ],
       "vueOnly": []
     },
     "sidebarKinds": {
-      "reactOnly": ["auto", "theme"],
+      "reactOnly": [
+        "auto",
+        "theme"
+      ],
       "vueOnly": []
     },
     "pluginHooks": {

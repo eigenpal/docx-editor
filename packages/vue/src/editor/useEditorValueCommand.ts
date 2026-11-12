@@ -27,9 +27,7 @@ export interface EditorValueCommandState<T extends string | number> {
  */
 export function useEditorValueCommand<
   K extends Exclude<keyof ToolbarValueMap, keyof ObjectSlotValueMap>,
->(
-  slotId: K
-): EditorValueCommandState<ToolbarValueMap[K]> {
+>(slotId: K): EditorValueCommandState<ToolbarValueMap[K]> {
   const editor = useDocxEditor();
   const { t } = useTranslation();
   const state = useEditorState(

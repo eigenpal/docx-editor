@@ -11,7 +11,7 @@ import {
   ShapeFill,
   ShapeFillTransparency,
   ShapeOutlineColor,
-  ShapeOutlineDash,
+  ShapeOutlineDashPart,
   ShapeOutlineWidth,
 } from './shape-parts';
 import {
@@ -25,7 +25,7 @@ import {
   ChartTypePart,
   ChartValueAxisTitle,
 } from './chart-parts';
-import { ChartData } from './chart-data-part';
+import { ChartDataPart } from './chart-data-part';
 
 /** The packaged part of each shape and chart slot. @public */
 export const OBJECT_SLOT_PARTS: Readonly<Record<ObjectSlotId, Component>> = {
@@ -33,7 +33,7 @@ export const OBJECT_SLOT_PARTS: Readonly<Record<ObjectSlotId, Component>> = {
   'shape.fillTransparency': ShapeFillTransparency,
   'shape.outlineColor': ShapeOutlineColor,
   'shape.outlineWidth': ShapeOutlineWidth,
-  'shape.outlineDash': ShapeOutlineDash,
+  'shape.outlineDash': ShapeOutlineDashPart,
   'chart.type': ChartTypePart,
   'chart.title': ChartTitle,
   'chart.legend': ChartLegend,
@@ -43,7 +43,7 @@ export const OBJECT_SLOT_PARTS: Readonly<Record<ObjectSlotId, Component>> = {
   'chart.categoryAxisTitle': ChartCategoryAxisTitle,
   'chart.valueAxisTitle': ChartValueAxisTitle,
   'chart.seriesColor': ChartSeriesColors,
-  'chart.data': ChartData,
+  'chart.data': ChartDataPart,
 };
 
 /** Props for `DocxEditor.PaneSections`. @public */

@@ -160,8 +160,8 @@ export const ShapeOutlineWidth = defineComponent({
 });
 
 /** The outline dash (`shape.outlineDash`): solid, dotted, or dashed. @public */
-export const ShapeOutlineDash = defineComponent({
-  name: 'ShapeOutlineDash',
+export const ShapeOutlineDashPart = defineComponent({
+  name: 'ShapeOutlineDashPart',
   props: objectControlProps,
   setup(props) {
     const { t } = useTranslation();

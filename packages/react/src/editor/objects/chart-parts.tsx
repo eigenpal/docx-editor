@@ -1,6 +1,6 @@
 // The chart parts: one exported control for each `chart.*` slot. Each works alone, in a host's
 // toolbar, popover, drawer, or pane, and `DocxEditor.ChartPane` is an arrangement of them
-// (`PANE_SECTIONS.chart`). The data editor is `ChartData` (chart-data-part.tsx). The Vue twin is
+// (`PANE_SECTIONS.chart`). The data editor is `ChartDataPart` (chart-data-part.tsx). The Vue twin is
 // `packages/vue/src/editor/objects/chart-parts.tsx`.
 
 import { useId, useState } from 'react';

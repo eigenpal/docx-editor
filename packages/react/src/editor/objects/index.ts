@@ -9,7 +9,7 @@ export {
   ShapeFill,
   ShapeFillTransparency,
   ShapeOutlineColor,
-  ShapeOutlineDash,
+  ShapeOutlineDashPart,
   ShapeOutlineWidth,
   type ShapePartProps,
 } from './shape-parts';
@@ -25,7 +25,7 @@ export {
   ChartValueAxisTitle,
   type ChartPartProps,
 } from './chart-parts';
-export { ChartData } from './chart-data-part';
+export { ChartDataPart } from './chart-data-part';
 export {
   DocxEditorPaneSections,
   OBJECT_SLOT_PARTS,

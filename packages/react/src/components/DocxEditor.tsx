@@ -572,7 +572,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   /** The outline width of the selected shape (`shape.outlineWidth`). */
   readonly ShapeOutlineWidth: typeof ObjectParts.ShapeOutlineWidth;
   /** The outline dash of the selected shape (`shape.outlineDash`). */
-  readonly ShapeOutlineDash: typeof ObjectParts.ShapeOutlineDash;
+  readonly ShapeOutlineDash: typeof ObjectParts.ShapeOutlineDashPart;
   /** The type of the selected chart (`chart.type`). */
   readonly ChartType: typeof ObjectParts.ChartTypePart;
   /** The title of the selected chart (`chart.title`). */
@@ -592,7 +592,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   /** The series (or point) colours of the selected chart (`chart.seriesColor`). */
   readonly ChartSeriesColors: typeof ObjectParts.ChartSeriesColors;
   /** The data editor of the selected chart (`chart.data`). */
-  readonly ChartData: typeof ObjectParts.ChartData;
+  readonly ChartData: typeof ObjectParts.ChartDataPart;
   /** The chart type list that inserts a chart (`insert.chart`), with `Trigger`, `Content`, `Item`. */
   readonly ChartInsert: typeof ChartInsert;
   /**
@@ -683,7 +683,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   ShapeFillTransparency: ObjectParts.ShapeFillTransparency,
   ShapeOutlineColor: ObjectParts.ShapeOutlineColor,
   ShapeOutlineWidth: ObjectParts.ShapeOutlineWidth,
-  ShapeOutlineDash: ObjectParts.ShapeOutlineDash,
+  ShapeOutlineDash: ObjectParts.ShapeOutlineDashPart,
   ChartType: ObjectParts.ChartTypePart,
   ChartTitle: ObjectParts.ChartTitle,
   ChartLegend: ObjectParts.ChartLegend,
@@ -693,7 +693,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   ChartCategoryAxisTitle: ObjectParts.ChartCategoryAxisTitle,
   ChartValueAxisTitle: ObjectParts.ChartValueAxisTitle,
   ChartSeriesColors: ObjectParts.ChartSeriesColors,
-  ChartData: ObjectParts.ChartData,
+  ChartData: ObjectParts.ChartDataPart,
   ChartInsert,
   Navigation: DocxEditorNavigationCompound,
   ExportDialog: DocxEditorExportDialog,

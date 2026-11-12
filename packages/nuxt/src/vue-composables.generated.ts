@@ -35,6 +35,7 @@ export const VUE_COMPOSABLES = [
   'useNavigationShift',
   'useNotePropertiesState',
   'useNoteScopeState',
+  'useObjectControl',
   'useOpenFailure',
   'usePageSetup',
   'usePageSetupDialog',

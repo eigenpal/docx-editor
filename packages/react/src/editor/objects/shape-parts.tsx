@@ -129,7 +129,7 @@ export function ShapeOutlineWidth(props: ShapePartProps): ReactElement | null {
 }
 
 /** The outline dash (`shape.outlineDash`): solid, dotted, or dashed. @public */
-export function ShapeOutlineDash(props: ShapePartProps): ReactElement | null {
+export function ShapeOutlineDashPart(props: ShapePartProps): ReactElement | null {
   const { t } = useTranslation();
   const translate = useChartTranslate();
   const shape = useSelectedShape();

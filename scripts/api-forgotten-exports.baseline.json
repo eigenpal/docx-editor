@@ -474,6 +474,13 @@
   "@docx-editor.dev/react": {
     "index": [
       "BookmarkDialogRoot",
+      "ColorPickerContent",
+      "ColorPickerGrid",
+      "ColorPickerHexInput",
+      "ColorPickerNoColor",
+      "ColorPickerRoot",
+      "ColorPickerSwatch",
+      "ColorPickerTrigger",
       "CompareDocumentsDialogRoot",
       "ContentControlFields",
       "ContentControlHeader",
