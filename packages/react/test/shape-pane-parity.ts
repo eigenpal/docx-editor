@@ -29,6 +29,32 @@ const shape = (fill: string) =>
   '<a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></wps:spPr>' +
   '<wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing>';
 
+/** One rectangle of a group: `x` in EMU, filled with `hex`. */
+const member = (x: number, hex: string) =>
+  '<wps:wsp><wps:cNvSpPr/><wps:spPr>' +
+  `<a:xfrm><a:off x="${x}" y="0"/><a:ext cx="914400" cy="457200"/></a:xfrm>` +
+  '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+  `<a:solidFill><a:srgbClr val="${hex}"/></a:solidFill>` +
+  '<a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></wps:spPr>' +
+  '<wps:bodyPr/></wps:wsp>';
+
+/** A group of two rectangles side by side, the drawing that a background often is. */
+export const GROUP_DRAWING = shape('')
+  .replace(
+    'xmlns:wps=',
+    'xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wps='
+  )
+  .replace(
+    /<a:graphicData uri="[^"]+">.*<\/a:graphicData>/,
+    '<a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup">' +
+      '<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm><a:off x="0" y="0"/>' +
+      '<a:ext cx="1828800" cy="457200"/><a:chOff x="0" y="0"/>' +
+      '<a:chExt cx="1828800" cy="457200"/></a:xfrm></wpg:grpSpPr>' +
+      member(0, '9DC3E6') +
+      member(914400, 'A9D18E') +
+      '</wpg:wgp></a:graphicData>'
+  );
+
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const slot = (name: string, hex: string) => `<a:${name}><a:srgbClr val="${hex}"/></a:${name}>`;
 /** The default theme colours, so a theme reference resolves as it does in a real document. */
@@ -48,12 +74,15 @@ const THEME =
   slot('folHlink', '954F72') +
   '</a:clrScheme></a:themeElements></a:theme>';
 
-/** A one-shape document with the default theme; `fill` is the shape's DrawingML fill. */
-export function shapePaneDocx(fill: string): Uint8Array {
+/**
+ * A one-shape document with the default theme; `fill` is the shape's DrawingML fill. `drawing`
+ * replaces the shape, as `GROUP_DRAWING` does.
+ */
+export function shapePaneDocx(fill: string, drawing = shape(fill)): Uint8Array {
   const document =
     `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
     '<w:p><w:r><w:t>Alpha paragraph</w:t></w:r></w:p>' +
-    `<w:p><w:r>${shape(fill)}<w:t>after</w:t></w:r></w:p>` +
+    `<w:p><w:r>${drawing}<w:t>after</w:t></w:r></w:p>` +
     '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" ' +
     'w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>';
   return zipSync({
