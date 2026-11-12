@@ -702,19 +702,22 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
         }
       : {}),
     // An upright text box moves and resizes through its `style`; a turned one, and a size the
-    // writer keeps as a percentage of a frame, stay as authored. Every other shape is read-only.
+    // writer keeps as a percentage of a frame, stay as authored. A plain vector shape selects,
+    // so its fill and outline can be edited, but keeps its frame. Every other shape is read-only.
     locks:
-      textboxStory && !style.has('rotation')
-        ? Object.freeze({
-            select: false,
-            move: !floating,
-            // `0` is the writer's "no percentage", so the absolute size is the one kept.
-            resize: ['mso-width-percent', 'mso-height-percent'].some(
-              (key) => (style.get(key) ?? '0') !== '0'
-            ),
-            changeAspect: false,
-          })
-        : Object.freeze({ select: true, move: true, resize: true, changeAspect: true }),
+      !textboxStory && !photo && vectorShape && !vectorGroup
+        ? Object.freeze({ select: false, move: true, resize: true, changeAspect: true })
+        : textboxStory && !style.has('rotation')
+          ? Object.freeze({
+              select: false,
+              move: !floating,
+              // `0` is the writer's "no percentage", so the absolute size is the one kept.
+              resize: ['mso-width-percent', 'mso-height-percent'].some(
+                (key) => (style.get(key) ?? '0') !== '0'
+              ),
+              changeAspect: false,
+            })
+          : Object.freeze({ select: true, move: true, resize: true, changeAspect: true }),
     effects:
       pictured && effects
         ? effects

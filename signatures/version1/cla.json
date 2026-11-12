@@ -323,6 +323,12 @@
       "id": 90396511,
       "signed_at": "2026-11-11T21:42:33Z",
       "pull_request_no": 1905
+    },
+    {
+      "name": "fdutrac",
+      "id": 68622691,
+      "signed_at": "2026-11-12T14:11:46Z",
+      "pull_request_no": 1908
     }
   ]
 }

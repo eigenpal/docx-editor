@@ -82,6 +82,16 @@ export function findGraphicData(anchor: OoxmlElement): OoxmlElement | null {
   return data;
 }
 
+const GROUP_PROPERTY_NAMES = new Set([
+  'xfrm',
+  'extLst',
+  'noFill',
+  'solidFill',
+  'gradFill',
+  'pattFill',
+  'grpFill',
+]);
+
 /** Refuse visibility and visual effects that grouped members cannot represent. */
 export function supportedGroupVisuals(
   owner: OoxmlElement,
@@ -104,7 +114,8 @@ export function supportedGroupVisuals(
       continue;
     }
     if (['effectDag', 'scene3d', 'sp3d'].includes(child.localName)) return false;
-    if (group && !['xfrm', 'extLst', 'noFill'].includes(child.localName)) return false;
+    // A group paints no fill of its own; the fill it sets is the one `a:grpFill` members paint.
+    if (group && !GROUP_PROPERTY_NAMES.has(child.localName)) return false;
   }
   return true;
 }

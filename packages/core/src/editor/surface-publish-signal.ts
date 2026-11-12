@@ -14,7 +14,7 @@
 
 import type { PaginatedSurface, PaginatedSurfaceState } from './paginated-surface-contract.ts';
 import type { SemanticSelection as SurfaceSelection } from '@docx-editor.dev/core/layout';
-import { drawingSelectionIntentKey } from './docx-editor-images.ts';
+import { drawingSelectionIntentKey } from './group-member-selection.ts';
 import { selectionsMatch } from './docx-editor-support.ts';
 
 /** The observable surface state one publish reported, reduced to comparable keys. */

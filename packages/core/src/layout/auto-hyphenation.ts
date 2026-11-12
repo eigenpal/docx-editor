@@ -9,6 +9,7 @@ import {
   type OoxmlElement,
   type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { isParagraphText, paragraphBreakText } from './paragraph-word-cuts.ts';
 
@@ -169,4 +170,21 @@ export function paragraphHyphenation(
       local.map((point) => point - start)
     );
   };
+}
+
+/**
+ * Hyphenation points for an autofit minimum, or `undefined` when the paragraph keeps its words
+ * whole: hyphenation is off, the mode is legacy, or the paragraph suppresses it.
+ */
+export function autofitHyphenation(
+  pieces: readonly FieldAwarePiece[],
+  props: readonly OoxmlProperty[],
+  settings: AutoHyphenationSettings | undefined,
+  { compatibilityMode }: { readonly compatibilityMode?: number }
+): ReturnType<typeof paragraphHyphenation> | undefined {
+  if (settings?.autoHyphenation !== true) return undefined;
+  if (!hasCompatibilityRule(compatibilityMode, 'autofitMinimumHyphenatesWords')) return undefined;
+  if (paragraphSuppressesAutoHyphens(props)) return undefined;
+  const hidden = (piece: FieldAwarePiece) => piece.style.hidden === true;
+  return paragraphHyphenation(pieces, hidden, settings.doNotHyphenateCaps === true);
 }

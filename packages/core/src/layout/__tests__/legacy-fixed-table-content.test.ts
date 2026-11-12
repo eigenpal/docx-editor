@@ -194,9 +194,7 @@ describe('legacy fixed table content edges', () => {
     expect(structure(document('<w:jc w:val="right"/>')).outerRuleOffsetPt).toBe(5.4);
   });
   test('table boundaries retain their prior origin', () => {
-    for (const extra of ['<w:tblCellSpacing w:w="20" w:type="dxa"/>', '<w:jc w:val="center"/>']) {
-      expect(structure(document(extra)).outerRuleOffsetPt).toBeUndefined();
-    }
+    expect(structure(document('<w:jc w:val="center"/>')).outerRuleOffsetPt).toBeUndefined();
     expect(structure(document('', '', 108, 'pct')).outerRuleOffsetPt).toBeUndefined();
     // A nested table shares its grid lines instead: half its 0.5pt rule in from the cell edge.
     expect(structure(document(), 14, 1).outerRuleOffsetPt).toBe(0.25);
@@ -213,18 +211,16 @@ describe('legacy fixed table content edges', () => {
     ])
       expect(structure(document('', cell)).outerRuleOffsetPt).toBeUndefined();
   });
-  test('incomplete row grids and different leading margins keep the original origin', () => {
+  test('different leading margins keep the original origin', () => {
     const xml = serializeOoxmlPart(document());
     const row = xml.match(/<w:tr>[\s\S]*?<\/w:tr>/)![0];
-    for (const changed of [
-      row.replace('<w:tr>', '<w:tr><w:trPr><w:gridBefore w:val="1"/></w:trPr>'),
-      row.replace('<w:tr>', '<w:tr><w:trPr><w:gridAfter w:val="1"/></w:trPr>'),
-      row.replace('</w:tcPr>', '<w:tcMar><w:left w:w="240" w:type="dxa"/></w:tcMar></w:tcPr>'),
-    ]) {
-      expect(
-        structure(part(xml.replace('</w:tbl>', changed + '</w:tbl>'))).outerRuleOffsetPt
-      ).toBeUndefined();
-    }
+    const changed = row.replace(
+      '</w:tcPr>',
+      '<w:tcMar><w:left w:w="240" w:type="dxa"/></w:tcMar></w:tcPr>'
+    );
+    expect(
+      structure(part(xml.replace('</w:tbl>', changed + '</w:tbl>'))).outerRuleOffsetPt
+    ).toBeUndefined();
   });
   test('unresolved row geometry exceptions retain the original table origin', () => {
     const xml = serializeOoxmlPart(document());

@@ -147,6 +147,8 @@ import type { DocumentProtectionState } from '../store/package/document-protecti
 import type { SupportedImageMime } from '../store/package/image-resources.ts';
 import type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 import type { ImageContext, SelectedImageState } from './editor-image-state.ts';
+import type { SetShapeFillCommand, SetShapeOutlineCommand } from './editor-shape-format.ts';
+export type * from './editor-shape-format.ts';
 import type {
   EditorChartCommands,
   EditorChartQueries,
@@ -1253,6 +1255,11 @@ export interface EditorCommands
     relativeToH?: string;
     relativeToV?: string;
   };
+
+  /** Fill of the selected shape, text box, line or group. See {@link SetShapeFillCommand}. */
+  setShapeFill: SetShapeFillCommand;
+  /** Outline of the selected shape, text box, line or group. */
+  setShapeOutline: SetShapeOutlineCommand;
 
   /** Size, alt text, crop, position, and border of the selected image, from the properties dialog. */
   setImageProperties: {

@@ -393,9 +393,19 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "editor/charts/SidePanel": {
+    "editor/color/ColorPicker": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": [
+        "container",
+        "default",
+        "hex",
+        "hexInput",
+        "inline",
+        "name",
+        "pick",
+        "props",
+        "type"
+      ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
@@ -490,6 +500,24 @@
       "emitsAddedInVue": []
     },
     "editor/note-popup-parts": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/objects/chart-parts": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["className", "hidden", "label", "variant"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/panes/SidePanel": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/shapes/ShapePane": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["name", "props"],
       "emitsAddedInReact": [],

@@ -330,7 +330,9 @@ export class ContentControl extends ModelObject implements PromisedItem {
    * Remove the control.
    *
    * `keepContent` true is Word's own "Remove content control": the wrapper goes and the text it
-   * held stays exactly where it was. False takes the content with it.
+   * held stays exactly where it was. False takes the content with it. False refuses with
+   * `NotSupported` for a block control that follows a table at the end of a body, note, or
+   * text box, because that story keeps a paragraph after the table.
    */
   delete(keepContent: boolean): void {
     const target = `${this.path.label}.delete`;

@@ -1534,7 +1534,7 @@ export interface DrawingTextDefaults {
 
 // @public
 export type DrawingTreeDocOp = Extract<TreeDocOp, {
-    readonly op: 'moveInlineDrawing' | 'insertDrawing' | 'replaceDrawingResource' | 'deleteDrawing' | 'resizeDrawing' | 'cropDrawing' | 'positionDrawing' | 'setDrawingWrap' | 'setDrawingMetadata' | 'setDrawingLocks' | 'transformDrawing';
+    readonly op: 'moveInlineDrawing' | 'insertDrawing' | 'replaceDrawingResource' | 'deleteDrawing' | 'resizeDrawing' | 'cropDrawing' | 'positionDrawing' | 'setDrawingWrap' | 'setDrawingMetadata' | 'setDrawingLocks' | 'transformDrawing' | 'setShapeFormat';
 }>;
 
 // @public
@@ -4998,6 +4998,32 @@ export interface ShapeEffectsInput {
 }
 
 // @public
+export type ShapeFillInput = {
+    readonly type: 'none';
+} | {
+    readonly color?: string;
+    readonly theme?: ShapeThemeColorInput;
+    readonly transparency?: number;
+    readonly type: 'solid';
+};
+
+// @public
+export type ShapeOutlineDash = 'solid' | 'sysDot' | 'sysDash' | 'sysDashDot' | 'sysDashDotDot' | 'dot' | 'dash' | 'lgDash' | 'dashDot' | 'lgDashDot' | 'lgDashDotDot';
+
+// @public
+export interface ShapeOutlineInput {
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly dash?: ShapeOutlineDash;
+    readonly theme?: ShapeThemeColorInput;
+    // (undocumented)
+    readonly visible?: boolean;
+    // (undocumented)
+    readonly widthPt?: number;
+}
+
+// @public
 export interface ShapeReflection {
     readonly blurEmu: number;
     readonly distanceEmu: number;
@@ -5020,6 +5046,16 @@ export interface ShapeShadow {
 
 // @internal
 export function shapeThemeCacheToken(resolveSchemeColor: (token: string) => string | null): string | undefined;
+
+// @public
+export interface ShapeThemeColorInput {
+    // (undocumented)
+    readonly name: ShapeThemeColorName;
+    readonly shift?: number;
+}
+
+// @public
+export type ShapeThemeColorName = 'bg1' | 'tx1' | 'bg2' | 'tx2' | 'accent1' | 'accent2' | 'accent3' | 'accent4' | 'accent5' | 'accent6';
 
 // @public
 export interface ShapingPort {
@@ -5360,7 +5396,7 @@ export interface TransportPort {
 }
 
 // @public
-export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setRevisionAttribution", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "insertComplexField", "insertEquation", "setFieldCode", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "moveTable", "insertParagraphBesideTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "mergeTableCells", "splitTableCell", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableProperties", "authorTable", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "setDocumentProtection", "setWatermark", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertFragment", "moveInlineDrawing", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "removeToc", "rewriteTocPageNumbers", "refreshFieldResults", "setFieldResult", "setTextFormFieldDefault", "commitTextFormField", "setLegacyCheckbox", "setLegacyDropdown", "insertBuildingBlock", "insertBookmark", "deleteBookmark"];
+export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setRevisionAttribution", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "insertComplexField", "insertEquation", "setFieldCode", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "moveTable", "insertParagraphBesideTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "mergeTableCells", "splitTableCell", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableProperties", "authorTable", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "setDocumentProtection", "setWatermark", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertFragment", "moveInlineDrawing", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "setShapeFormat", "insertToc", "replaceTocResult", "removeToc", "rewriteTocPageNumbers", "refreshFieldResults", "setFieldResult", "setTextFormFieldDefault", "commitTextFormField", "setLegacyCheckbox", "setLegacyDropdown", "insertBuildingBlock", "insertBookmark", "deleteBookmark"];
 
 // @public
 export type TreeDocOp = SetFieldCodeOp | {
@@ -5813,6 +5849,12 @@ export type TreeDocOp = SetFieldCodeOp | {
     readonly drawingNodeId: string;
     readonly op: 'transformDrawing';
 } | {
+    readonly drawingNodeId: string;
+    readonly fill?: ShapeFillInput;
+    readonly op: 'setShapeFormat';
+    readonly outline?: ShapeOutlineInput;
+    readonly shapeNodeId?: string;
+} | {
     readonly bookmarksToCreate: readonly {
         readonly name: string;
         readonly paragraphId: string;
@@ -5990,6 +6032,11 @@ export type TreeOpRejection = 'unknown-op' | 'unknown-paragraph' | 'not-a-paragr
 * fragments there are not supported yet.
 */
 | 'field-result-unsupported' | 'unknown-block' | 'not-a-block' | 'block-required' | 'carries-section-mark'
+/**
+* The removal would leave a body, note or text box ending with a table. Such a story ends
+* with a paragraph after the table, as a cell does (`ooxml-story-end-repair.ts`).
+*/
+| 'story-end-paragraph'
 /** The transaction named a part the package does not hold. */
 | 'unknown-part'
 /**
@@ -6069,6 +6116,13 @@ export type TreeOpRejection = 'unknown-op' | 'unknown-paragraph' | 'not-a-paragr
 | 'unknown-drawing'
 /** The drawing's graphic payload is not a supported picture. */
 | 'not-a-picture-drawing'
+/** The drawing holds no shape whose fill and outline can be set: a picture, chart or diagram. */
+| 'not-a-shape-drawing'
+/**
+* A fill write without a colour (a transparency, or showing a fill again) on a shape with no
+* solid fill to keep or bring back. It never invents one: the write needs a colour.
+*/
+| 'no-solid-fill'
 /** A chart in any state: only a delete applies, and it removes the whole chart. */
 | 'chart-drawing'
 /** A lock flag or `@locked` forbids this mutation. */

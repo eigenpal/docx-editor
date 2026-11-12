@@ -78,7 +78,9 @@
       "image": "Görsel",
       "table": "Tablo",
       "format": "Biçim",
-      "direction": "Metin yönü"
+      "direction": "Metin yönü",
+      "chart": "Grafik",
+      "shape": "Şekil"
     },
     "undo": "Geri al",
     "undoShortcut": "Geri al (Ctrl+Z)",
@@ -226,7 +228,11 @@
       "background2": "Arka Plan 2",
       "text1": "Metin 1",
       "text2": "Metin 2"
-    }
+    },
+    "lighterPercent": "{color}, %{percent} daha açık",
+    "darkerPercent": "{color}, %{percent} daha koyu",
+    "hexColor": "Onaltılık renk",
+    "invalidHex": "Rengi #RRGGBB olarak yazın."
   },
   "dialogs": {
     "imageProperties": {
@@ -691,7 +697,8 @@
     },
     "selection": "Seçili görüntü",
     "locked": "Bu kutu taşınamaz veya yeniden boyutlandırılamaz",
-    "textLocked": "Bu kutudaki metin düzenlenemez"
+    "textLocked": "Bu kutudaki metin düzenlenemez",
+    "selectionShape": "Seçili şekil"
   },
   "revisions": {
     "paragraphMarkInserted": "Paragraf işareti eklendi",
@@ -1061,7 +1068,9 @@
     "outermostLevel": "Seçim zaten en dış düzeyde",
     "cannotIndentFurther": "Seçimin girintisi daha fazla artırılamaz",
     "noGoToView": "Git burada kullanılamıyor",
-    "noBookmarkDialog": "Buraya yer işareti eklenemez"
+    "noBookmarkDialog": "Buraya yer işareti eklenemez",
+    "groupMemberMove": "Grup içindeki bir şekil tek başına taşınamaz, yeniden boyutlandırılamaz veya silinemez. Grubu seçmek için Esc tuşuna basın.",
+    "groupMemberProperties": "Grup içindeki bir şekil kaydırma, alternatif metin ve özelliklerini gruptan alır. Grubu seçmek için Esc tuşuna basın."
   },
   "equationPopup": {
     "apply": "Uygula",
@@ -1359,6 +1368,71 @@
       "unsupported": "Düzenleyici bu grafik değişikliğini desteklemiyor.",
       "invalidValue": "Grafik bu değeri kullanamaz.",
       "suggesting": "Düzenleme önerirken grafikler değiştirilemez. Bu grafiği değiştirmek için Düzenleme moduna geçin."
+    }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "Bu eski şekil türünün saydamlık ayarı yok.",
+      "noShape": "Bir şekil, metin kutusu veya çizgi seçin.",
+      "noSolidFill": "Şeklin düz dolgusu yok. Önce bir dolgu rengi seçin.",
+      "outOfRange": "Değer aralığın dışında.",
+      "staleSelection": "Seçim değişti. Şekli yeniden seçin.",
+      "mixedFill": "Bu gruptaki şekillerin dolguları farklı. Hepsine uygulamak için bir renk seçin."
+    },
+    "formatShape": "Şekli biçimlendir…",
+    "pane": {
+      "close": "Şekli biçimlendir bölmesini kapat",
+      "emptyBody": "Biçimlendirmek için belgede bir şekil, metin kutusu veya çizgi seçin.",
+      "emptyTitle": "Şekil seçilmedi",
+      "errors": {
+        "color": "Rengi #RRGGBB biçiminde veya renk adı olarak yazın.",
+        "noSolidFill": "Önce bir dolgu rengi seçin.",
+        "transparency": "0 ile 100 arasında bir sayı yazın.",
+        "width": "0,25 ile 1584 punto arasında bir kalınlık yazın.",
+        "dash": "Listeden bir kesik çizgi türü seçin."
+      },
+      "fill": "Dolgu",
+      "fillColor": "Dolgu rengi",
+      "fillHex": "Dolgu onaltılık rengi",
+      "fillTypes": {
+        "gradient": "Degrade",
+        "mixed": "Karışık",
+        "none": "Dolgu yok",
+        "pattern": "Desen",
+        "picture": "Resim",
+        "solid": "Düz"
+      },
+      "hexHelp": "#RRGGBB veya bir renk adı yazın, ardından Enter tuşuna basın.",
+      "mixedOutline": "Bu gruptaki şekillerin anahatları farklı.",
+      "noFill": "Dolgu yok",
+      "noOutline": "Çizgi yok",
+      "openFillColors": "Dolgu rengi seçin",
+      "openOutlineColors": "Anahat rengi seçin",
+      "otherWidth": "Diğer kalınlık",
+      "outline": "Anahat",
+      "outlineColor": "Anahat rengi",
+      "outlineHex": "Anahat onaltılık rengi",
+      "readOnlyFill": "Dolgu türü: {fill}. Değiştirmek için bir renk veya Dolgu yok seçin.",
+      "title": "Şekli biçimlendir",
+      "transparency": "Saydamlık (%)",
+      "width": "Kalınlık (pt)",
+      "widthPoints": "{value} pt",
+      "widthPreset": "Hazır kalınlık",
+      "dash": "Kesik çizgi türü",
+      "dashes": {
+        "custom": "Özel",
+        "dash": "Kesik çizgi",
+        "dashDot": "Çizgi nokta",
+        "dot": "Nokta",
+        "lgDash": "Uzun çizgi",
+        "lgDashDot": "Uzun çizgi nokta",
+        "lgDashDotDot": "Uzun çizgi nokta nokta",
+        "solid": "Düz",
+        "sysDash": "Kare nokta",
+        "sysDashDot": "Kare çizgi nokta",
+        "sysDashDotDot": "Kare çizgi nokta nokta",
+        "sysDot": "Yuvarlak nokta"
+      }
     }
   }
 }

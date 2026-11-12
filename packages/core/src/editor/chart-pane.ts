@@ -2,7 +2,7 @@
 // one command that each committed field, or each add or remove, sends: the chart's data
 // (`setChartData`), its type (`setChartType`), its elements (`setChartFormat`), and its colors
 // (`setChartColor`). The React and Vue panes render from these, so both check the same input
-// with the same keys. DOM-free, except `focusChartSwatch`, which takes the grid element.
+// with the same keys. DOM-free, except `focusChartPane`, which takes the pane element.
 
 import type { EditorCommand } from '../contracts/editor.ts';
 import type {
@@ -15,6 +15,20 @@ import type {
   ChartType,
 } from '../contracts/chart.ts';
 import { CHART_TYPES } from '../store/package/chart-edit/type.ts';
+import {
+  COLOR_PICKER_STANDARD_COLORS,
+  COLOR_PICKER_THEME_SLOTS,
+  colorPickerGrid,
+  colorPickHex,
+  colorPickLabel,
+  documentThemeHexes,
+  focusColorSwatch,
+  moveColorSwatchFocus,
+  type ColorPick,
+  type ColorPickerGrid,
+  type ColorPickerTranslate,
+  type ColorSwatch,
+} from './color-picker.ts';
 import {
   MAX_CHART_LABEL,
   MAX_CHART_POINTS,
@@ -282,86 +296,27 @@ export function chartTitleCommand(
 }
 
 // --- Colors -----------------------------------------------------------------------------------
+// The grid, the names, and the keyboard model live in `color-picker.ts` under neutral names; the
+// chart names below stay as deprecated aliases.
 
-/** The theme colors of a color list, in the order of the theme color row. @public */
-export const CHART_THEME_SLOTS: readonly ChartThemeColor[] = [
-  'bg1',
-  'tx1',
-  'bg2',
-  'tx2',
-  'accent1',
-  'accent2',
-  'accent3',
-  'accent4',
-  'accent5',
-  'accent6',
-];
+/** @deprecated Use `COLOR_PICKER_THEME_SLOTS`. @public */
+export const CHART_THEME_SLOTS: readonly ChartThemeColor[] = COLOR_PICKER_THEME_SLOTS;
 
-/** The i18n key of each theme color's name. */
-const THEME_NAME_KEYS: Readonly<Record<ChartThemeColor, string>> = {
-  bg1: 'colorPicker.theme.background1',
-  tx1: 'colorPicker.theme.text1',
-  bg2: 'colorPicker.theme.background2',
-  tx2: 'colorPicker.theme.text2',
-  accent1: 'colorPicker.theme.accent1',
-  accent2: 'colorPicker.theme.accent2',
-  accent3: 'colorPicker.theme.accent3',
-  accent4: 'colorPicker.theme.accent4',
-  accent5: 'colorPicker.theme.accent5',
-  accent6: 'colorPicker.theme.accent6',
-};
-
-/** The standard colors of the grid, with the i18n key of each name. @public */
+/** @deprecated Use `COLOR_PICKER_STANDARD_COLORS`. @public */
 export const CHART_STANDARD_COLORS: readonly { readonly hex: string; readonly nameKey: string }[] =
-  [
-    { hex: '#C00000', nameKey: 'colorPicker.colors.darkRed' },
-    { hex: '#FF0000', nameKey: 'colorPicker.colors.red' },
-    { hex: '#FFC000', nameKey: 'colorPicker.colors.orange' },
-    { hex: '#FFFF00', nameKey: 'colorPicker.colors.yellow' },
-    { hex: '#92D050', nameKey: 'colorPicker.colors.lightGreen' },
-    { hex: '#00B050', nameKey: 'colorPicker.colors.green' },
-    { hex: '#00B0F0', nameKey: 'colorPicker.colors.lightBlue' },
-    { hex: '#0070C0', nameKey: 'colorPicker.colors.blue' },
-    { hex: '#002060', nameKey: 'colorPicker.colors.darkBlue' },
-    { hex: '#7030A0', nameKey: 'colorPicker.colors.purple' },
-  ];
+  COLOR_PICKER_STANDARD_COLORS;
 
-/** Six hex digits, the only color text that reaches a swatch style. */
-const HEX6 = /^[0-9A-F]{6}$/;
-
-/** The default theme colors, for a document with no theme, in `CHART_THEME_SLOTS` order. */
-const DEFAULT_THEME_HEXES: readonly string[] = [
-  'FFFFFF',
-  '000000',
-  'E7E6E6',
-  '44546A',
-  '4472C4',
-  'ED7D31',
-  'A5A5A5',
-  'FFC000',
-  '5B9BD5',
-  '70AD47',
-];
-
-/**
- * The theme colors of a document, `RRGGBB` in `CHART_THEME_SLOTS` order, from
- * `editor.getDocumentThemeColors()`; the default theme when the document has none. @public
- */
-export function chartThemeHexes(
+/** @deprecated Use `documentThemeHexes`. @public */
+export const chartThemeHexes: (
   entries: readonly { readonly hex: string }[] | undefined
-): readonly string[] {
-  const hexes = (entries ?? []).map((entry) => entry.hex.replace(/^#/, '').toUpperCase());
-  return hexes.length === DEFAULT_THEME_HEXES.length && hexes.every((hex) => HEX6.test(hex))
-    ? hexes
-    : DEFAULT_THEME_HEXES;
-}
+) => readonly string[] = documentThemeHexes;
 
 /**
  * A color list's value: the automatic color (`auto`), a theme color, a theme tint or shade
- * (`accent1:40` is Lighter 40%, `accent1:-25` Darker 25%), or `#RRGGBB`. @public
+ * (`accent1:40` is Lighter 40%, `accent1:-25` Darker 25%), or `#RRGGBB`. The same value as
+ * `ColorPick`. @public
  */
-export type ChartColorPick =
-  'auto' | ChartThemeColor | `${ChartThemeColor}:${number}` | `#${string}`;
+export type ChartColorPick = ColorPick;
 
 /** The pick of a chart color. @public */
 export function chartColorPickOf(color: ChartColor): ChartColorPick {
@@ -399,75 +354,25 @@ export function chartColorCommand(
   return { type: 'setChartColor', drawingNodeId, index, color: chartColorOfPick(pick) };
 }
 
-/** A translator, as the adapters pass theirs. */
-/** A translator, as the adapters pass theirs to the chart helpers. @public */
-export type ChartTranslate = (key: string, params?: Record<string, string | number>) => string;
+/** @deprecated Use `ColorPickerTranslate`. @public */
+export type ChartTranslate = ColorPickerTranslate;
+
+/** The chart keys of a tint and a shade, which this older name keeps. */
+const CHART_SHIFT_KEYS: Readonly<Record<string, string>> = {
+  'colorPicker.lighterPercent': 'chart.format.colorLighter',
+  'colorPicker.darkerPercent': 'chart.format.colorDarker',
+};
 
 /**
- * The name of a pick: Automatic, a theme color with its tint or shade, a standard color by
- * name ("Purple"), or the hex code of any other color. @public
+ * The name of a pick, with the `chart.format.colorLighter` and `chart.format.colorDarker` keys
+ * for a tint or shade. @deprecated Use `colorPickLabel`. @public
  */
 export function chartColorLabel(pick: ChartColorPick, t: ChartTranslate): string {
-  if (pick === 'auto') return t('colorPicker.automatic');
-  if (pick.startsWith('#')) {
-    const standard = CHART_STANDARD_COLORS.find((c) => c.hex === pick.toUpperCase());
-    return standard ? t(standard.nameKey) : pick.toUpperCase();
-  }
-  const [theme, shift] = pick.split(':') as [ChartThemeColor, string?];
-  const name = t(THEME_NAME_KEYS[theme]);
-  const n = Number(shift ?? 0);
-  if (n > 0) return t('chart.format.colorLighter', { color: name, percent: n });
-  if (n < 0) return t('chart.format.colorDarker', { color: name, percent: -n });
-  return name;
+  return colorPickLabel(pick, (key, params) => t(CHART_SHIFT_KEYS[key] ?? key, params));
 }
 
 /**
- * `RRGGBB` of `hex` with the luminance transform that `colorXml` writes: `lumMod` of
- * `100 - |shift|` percent, and `lumOff` of `shift` percent for a tint (ECMA-376 Part 1,
- * 20.1.2.3.20 and 20.1.2.3.21), on the HSL lightness.
- */
-function shifted(hex: string, shift: number): string {
-  const [r, g, b] = [0, 2, 4].map((at) => parseInt(hex.slice(at, at + 2), 16) / 255) as [
-    number,
-    number,
-    number,
-  ];
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  const d = max - min;
-  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
-  let h = 0;
-  if (d !== 0) {
-    if (max === r) h = ((g - b) / d) % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-  }
-  const lum = Math.max(0, Math.min(1, l * (1 - Math.abs(shift) / 100) + Math.max(0, shift) / 100));
-  const c = (1 - Math.abs(2 * lum - 1)) * s;
-  const x = c * (1 - Math.abs(((((h % 6) + 6) % 6) % 2) - 1));
-  const m = lum - c / 2;
-  const sector = Math.floor(((h % 6) + 6) % 6);
-  const rgb = [
-    [c, x, 0],
-    [x, c, 0],
-    [0, c, x],
-    [0, x, c],
-    [x, 0, c],
-    [c, 0, x],
-  ][sector]!;
-  return rgb
-    .map((v) =>
-      Math.max(0, Math.min(255, Math.round((v + m) * 255)))
-        .toString(16)
-        .padStart(2, '0')
-    )
-    .join('')
-    .toUpperCase();
-}
-
-/**
- * The `#RRGGBB` that a pick paints, from the document's theme colors (`chartThemeHexes`).
+ * The `#RRGGBB` that a pick paints, from the document's theme colors (`documentThemeHexes`).
  * `auto` paints `automatic`, the series' automatic color. @public
  */
 export function chartPickHex(
@@ -476,115 +381,22 @@ export function chartPickHex(
   automatic?: ChartColor
 ): string {
   if (pick === 'auto')
-    return automatic ? chartPickHex(chartColorPickOf(automatic), themeHexes) : '#000000';
-  if (pick.startsWith('#')) {
-    const hex = pick.slice(1).toUpperCase();
-    return HEX6.test(hex) ? `#${hex}` : '#000000';
-  }
-  const [theme, shift] = pick.split(':') as [ChartThemeColor, string?];
-  const base = themeHexes[CHART_THEME_SLOTS.indexOf(theme)] ?? '000000';
-  const n = Math.max(-100, Math.min(100, Number(shift ?? 0)));
-  return `#${shifted(base, Number.isFinite(n) ? n : 0)}`;
+    return automatic ? colorPickHex(chartColorPickOf(automatic), themeHexes) : '#000000';
+  return colorPickHex(pick, themeHexes);
 }
 
-/** The tint and shade steps under one theme color, by the color's lightness. */
-function steps(hex: string): readonly number[] {
-  const channels = [0, 2, 4].map((at) => parseInt(hex.slice(at, at + 2), 16));
-  const lightness = (Math.max(...channels) + Math.min(...channels)) / 2 / 255;
-  if (lightness === 1) return [-5, -15, -25, -35, -50];
-  if (lightness === 0) return [50, 35, 25, 15, 5];
-  if (lightness >= 0.8) return [-10, -25, -50, -75, -90];
-  return [80, 60, 40, -25, -50];
-}
+/** @deprecated Use `ColorSwatch`. @public */
+export type ChartSwatch = ColorSwatch;
 
-/** One swatch of the color grid. @public */
-export interface ChartSwatch {
-  readonly pick: ChartColorPick;
-  /** The color the swatch paints, `#RRGGBB`. */
-  readonly hex: string;
-}
+/** @deprecated Use `colorPickerGrid`. @public */
+export const chartColorGrid: (themeHexes: readonly string[]) => ColorPickerGrid = colorPickerGrid;
 
-/**
- * The color grid: one row of theme colors, five rows of their tints and shades (one column per
- * theme color), and the row of standard colors. @public
- */
-export function chartColorGrid(themeHexes: readonly string[]): {
-  readonly theme: readonly (readonly ChartSwatch[])[];
-  readonly standard: readonly ChartSwatch[];
-} {
-  const base = CHART_THEME_SLOTS.map((slot) => ({
-    pick: slot as ChartColorPick,
-    hex: chartPickHex(slot, themeHexes),
-  }));
-  const ladders = CHART_THEME_SLOTS.map((_, i) => steps(themeHexes[i] ?? '000000'));
-  const variants = [0, 1, 2, 3, 4].map((row) =>
-    CHART_THEME_SLOTS.map((slot, column) => {
-      const pick = `${slot}:${ladders[column]![row]!}` as ChartColorPick;
-      return { pick, hex: chartPickHex(pick, themeHexes) };
-    })
-  );
-  const standard = CHART_STANDARD_COLORS.map((c) => ({
-    pick: c.hex as ChartColorPick,
-    hex: c.hex,
-  }));
-  return { theme: [base, ...variants], standard };
-}
+/** @deprecated Use `focusColorSwatch`. @public */
+export const focusChartSwatch: (grid: HTMLElement | null) => void = focusColorSwatch;
 
-/**
- * Focus the current swatch of an opened color grid, or its first swatch, and scroll the whole
- * grid into view. The current swatch carries `aria-pressed="true"`. @public
- */
-export function focusChartSwatch(grid: HTMLElement | null): void {
-  if (!grid) return;
-  const current =
-    grid.querySelector<HTMLElement>('[aria-pressed="true"]') ??
-    grid.querySelector<HTMLElement>('button');
-  if (current?.classList.contains('docx-chart-pane__swatch')) rovingSwatch(grid, current);
-  else rovingSwatch(grid, swatchesOf(grid)[0] ?? null);
-  current?.focus({ preventScroll: true });
-  grid.scrollIntoView?.({ block: 'nearest' });
-}
-
-/** The columns of every swatch row of the color grid. */
-const SWATCH_COLUMNS = 10;
-
-const swatchesOf = (grid: HTMLElement): HTMLElement[] => [
-  ...grid.querySelectorAll<HTMLElement>('.docx-chart-pane__swatch'),
-];
-
-/** Keep one swatch in the Tab order, so Tab leaves the grid in one step. */
-function rovingSwatch(grid: HTMLElement, active: HTMLElement | null): void {
-  for (const swatch of swatchesOf(grid)) swatch.tabIndex = swatch === active ? 0 : -1;
-}
-
-/**
- * Move the focus in an opened color grid for an arrow key, Home or End. The swatches are rows of
- * ten; Up from the first row goes to Automatic. Returns whether the key moved the focus, so the
- * caller can prevent the default action. @public
- */
-export function moveChartSwatchFocus(grid: HTMLElement | null, key: string): boolean {
-  if (!grid) return false;
-  const swatches = swatchesOf(grid);
-  const auto = grid.querySelector<HTMLElement>('.docx-chart-pane__grid-auto');
-  const active = grid.ownerDocument.activeElement;
-  const at = swatches.findIndex((swatch) => swatch === active);
-  const rtl = grid.ownerDocument.defaultView?.getComputedStyle(grid).direction === 'rtl';
-  const step = { ArrowLeft: rtl ? 1 : -1, ArrowRight: rtl ? -1 : 1 }[key];
-  let next: HTMLElement | null | undefined;
-  if (at < 0) {
-    if (active !== auto || (key !== 'ArrowDown' && key !== 'Home')) return false;
-    next = swatches[0];
-  } else if (step !== undefined) next = swatches[at + step];
-  else if (key === 'ArrowDown') next = swatches[at + SWATCH_COLUMNS];
-  else if (key === 'ArrowUp') next = at < SWATCH_COLUMNS ? auto : swatches[at - SWATCH_COLUMNS];
-  else if (key === 'Home') next = swatches[0];
-  else if (key === 'End') next = swatches[swatches.length - 1];
-  else return false;
-  if (!next) return true;
-  if (next !== auto) rovingSwatch(grid, next);
-  next.focus({ preventScroll: true });
-  return true;
-}
+/** @deprecated Use `moveColorSwatchFocus`. @public */
+export const moveChartSwatchFocus: (grid: HTMLElement | null, key: string) => boolean =
+  moveColorSwatchFocus;
 
 /** The frames that {@link focusChartPane} waits for a hidden pane to show. */
 const PANE_FOCUS_FRAMES = 3;

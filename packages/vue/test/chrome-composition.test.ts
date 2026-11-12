@@ -624,6 +624,95 @@ describe('DocxEditorContextMenu composition', () => {
     view.unmount();
   });
 
+  test('rows inside Start render above the default set', async () => {
+    const view = mountEditorTree(
+      () => [],
+      undefined,
+      () =>
+        h(ContextMenu, null, {
+          default: () => [
+            h(ContextMenu.Item, { label: 'Freeze paragraph' }),
+            h(ContextMenu.Start, null, {
+              default: () => [
+                h(ContextMenu.Item, { label: 'receive' }),
+                h(ContextMenu.Item, { label: 'relieve' }),
+              ],
+            }),
+          ],
+        })
+    );
+    await flush();
+    openContextMenu(view.container);
+    await flush();
+    const labels = [...view.container.querySelectorAll('.docx-contextmenu [role="menuitem"]')].map(
+      (row) => row.textContent ?? ''
+    );
+    expect(labels.slice(0, 2)).toEqual(['receive', 'relieve']);
+    expect(labels.at(-1)).toContain('Freeze paragraph');
+    view.unmount();
+  });
+
+  test('Start ends with a separator, and preset={false} keeps it where it is written', async () => {
+    const rowsWith = async (preset: boolean) => {
+      const view = mountEditorTree(
+        () => [],
+        undefined,
+        () =>
+          h(
+            ContextMenu,
+            { preset },
+            {
+              default: () => [
+                h(ContextMenu.Item, { label: 'first' }),
+                h(ContextMenu.Start, null, {
+                  default: () => [h(ContextMenu.Item, { label: 'second' })],
+                }),
+              ],
+            }
+          )
+      );
+      await flush();
+      openContextMenu(view.container);
+      await flush();
+      const rows = [
+        ...view.container.querySelectorAll(
+          '.docx-contextmenu [role="menuitem"], .docx-contextmenu [role="separator"]'
+        ),
+      ].map((row) => (row.getAttribute('role') === 'separator' ? '---' : (row.textContent ?? '')));
+      view.unmount();
+      return rows;
+    };
+    expect((await rowsWith(true)).slice(0, 2)).toEqual(['second', '---']);
+    expect((await rowsWith(false)).filter((row) => row !== '---')).toEqual(['first', 'second']);
+  });
+
+  test('a packaged row inside Start warns that it renders twice', async () => {
+    const original = console.warn;
+    const messages: string[] = [];
+    console.warn = (message: unknown) => {
+      messages.push(String(message));
+    };
+    try {
+      const view = mountEditorTree(
+        () => [],
+        undefined,
+        () =>
+          h(ContextMenu, null, {
+            default: () => [h(ContextMenu.Start, null, { default: () => [h(ContextMenu.Copy)] })],
+          })
+      );
+      await flush();
+      openContextMenu(view.container);
+      await flush();
+      view.unmount();
+    } finally {
+      console.warn = original;
+    }
+    expect(
+      messages.some((text) => text.includes('"edit.copy"') && text.includes('ContextMenu.Start'))
+    ).toBe(true);
+  });
+
   test('preset={false} renders composed rows verbatim', async () => {
     const view = mountEditorTree(
       () => [],

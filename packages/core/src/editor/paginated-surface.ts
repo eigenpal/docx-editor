@@ -201,6 +201,7 @@ import {
   discardRetainedPaint,
   paintSemanticLayoutWithAuthorSlots,
 } from '../output/semantic-paint.ts';
+import { createInputMethodLane } from './surface-ime-deletion.ts';
 // By module path: the roster walk is an engine internal, not part of the output barrel's
 // public surface. See the note there.
 import {
@@ -329,6 +330,8 @@ import {
   storyScopeOfNodeId,
   noteScopeIdInLayout,
 } from './surface-scope.ts';
+import { drawingSelectionIntentKey, memberIntent } from './group-member-selection.ts';
+import { RANGE_SUFFIX, bandClassFor } from './surface-review-band-class.ts';
 import { createCaretViewFollower, type CaretFollowMode } from './surface-caret-follow.ts';
 import { createInPlaceReplacement } from './surface-replace-in-place.ts';
 import {
@@ -427,8 +430,6 @@ export function mountPaginatedSurface(
   const TOC_READ_ONLY_REFUSAL = 'the table of contents is generated and read-only';
   /** Set while formatting writes its ops outside a selected table of contents. */
   let formattingOutsideToc = false;
-  /** Separates a decision's key from its per-range index. A NUL cannot occur in either. */
-  const RANGE_SUFFIX = '\u0000range\u0000';
   // The glyphs a serif Korean face lacks fall back to serif faces, in paint and measurement.
   const serifHangulFace = fontTableSerifHangulFace(session.currentPackage());
   // Editor seam creates the canvas; layout only consumes the injected context.
@@ -589,13 +590,7 @@ export function mountPaginatedSurface(
   };
   /** Move the intent and report once when it changes — the flip is observable state. */
   function setDrawingIntent(next: DrawingSelectionIntent, report: boolean): void {
-    if (
-      next.kind === drawingIntent.kind &&
-      (next.kind !== 'pointer' ||
-        (drawingIntent.kind === 'pointer' && next.drawingNodeId === drawingIntent.drawingNodeId))
-    ) {
-      return;
-    }
+    if (drawingSelectionIntentKey(next) === drawingSelectionIntentKey(drawingIntent)) return;
     drawingIntent = next;
     // Some transitions land on the exact offsets the selection already holds — a press on
     // the drawing at the untouched mount caret adopts an equal selection and publishes
@@ -693,6 +688,7 @@ export function mountPaginatedSurface(
     // The remote caret takes the commit a collaboration step makes for history, not a peer's.
     if (collaborationSession) remoteCaret.expectHistory(true);
     let result: ReturnType<DocumentSelectionHistory['step']>;
+    const member = drawingIntent.kind === 'pointer' ? drawingIntent : null;
     try {
       result = documentSelectionHistory.step(direction, () => {
         if (collaborationSession) return collaborationSession[direction]();
@@ -714,8 +710,12 @@ export function mountPaginatedSurface(
     // A chart or picture edit steps back with the object still selected, so the next undo,
     // the Chart pane, and the handles stay on it. `selectDrawing` refuses a drawing that the
     // step removed, and the caret then stays where the selection put it.
-    if (!carried && result.selection && result.drawing)
+    if (!carried && result.selection && result.drawing) {
       surface.selectDrawing(result.drawing, result.selection.head.paragraphId);
+      // A shape selected inside the group stays selected across its own undo and redo.
+      if (member?.drawingNodeId === result.drawing && member.memberNodeId)
+        surface.selectDrawingMember(member.memberNodeId);
+    }
   }
   function restoreCaretFormat(value: CaretFormatSnapshot): void {
     selectionSync.noteModelMoved();
@@ -3827,54 +3827,6 @@ export function mountPaginatedSurface(
   const remotePresenceColor = presenceColors.forAuthor;
   const declaredPresenceColor = presenceColors.declaredFor;
 
-  /** The class a band draws in, or null when this range should not be drawn at all. */
-  function bandClassFor(
-    key: string,
-    activeKeys: ReadonlySet<string>,
-    byKey: ReadonlyMap<string, ReviewItem>
-  ): string | null {
-    // A revision's key is suffixed per range when one decision covers several sites, so the
-    // active test compares the DECISION, not the site. Split on NUL, which an author name
-    // cannot contain — `#` can, and an author called `A#b` never saw their band light up.
-    const parts = key.split(RANGE_SUFFIX);
-    const decision = parts[0]!;
-    const isActive = activeKeys.has(decision);
-    if (key.startsWith('comment-')) {
-      const item = byKey.get(decision);
-      const resolved = item?.kind === 'comment' && item.resolved;
-      if (resolved && !isActive) return null;
-      return isActive
-        ? `docx-comment-band docx-comment-band--active${resolved ? ' docx-comment-band--resolved-active' : ''}`
-        : 'docx-comment-band';
-    }
-    // A custom node's band only while its card is open: the chip tint already marks the
-    // node persistently, and the comment band is the right weight for "this is the one".
-    if (key.startsWith('custom-')) {
-      return isActive ? 'docx-comment-band docx-comment-band--active' : null;
-    }
-    const item = byKey.get(decision);
-    if (!item || item.kind !== 'revision') return null;
-    // In the revision's OWN colour — green for text arriving, red for text leaving — so the
-    // band never contradicts the decoration beneath it. A REPLACEMENT is one decision in two
-    // colours: its leading ranges are the struck half, the rest is what took their place, and
-    // painting the pair one neutral grey said "something changed here" about an edit whose
-    // two halves the page is already colouring.
-    const index = parts.length > 1 ? Number(parts[1]) : 0;
-    const kindOf = (revisionKind: ReviewRevisionKind): 'delete' | 'insert' | 'other' => {
-      if (revisionKind === 'delete' || revisionKind === 'moveFrom') return 'delete';
-      if (revisionKind === 'insert' || revisionKind === 'moveTo') return 'insert';
-      if (revisionKind === 'replace' && item.replacedRangeCount !== undefined) {
-        return index < item.replacedRangeCount ? 'delete' : 'insert';
-      }
-      return 'other';
-    };
-    const kind = kindOf(item.revisionKind);
-    // Every pending change carries a band, faint until it is the open one. A tracked page
-    // with no tint at all made "which of these is selected" a question about a 1px margin
-    // bar; a page where only the active one tints made the others look resolved.
-    return `docx-revision-band docx-revision-band--${kind}${isActive ? ' docx-revision-band--active' : ''}`;
-  }
-
   let commentHighlightLayout: SemanticLayout | null = null;
   let commentHighlightActiveKey: string | undefined;
   let commentHighlightAuthors: ReadonlyMap<string, ReviewAuthorInfo> | null = null;
@@ -4453,6 +4405,9 @@ export function mountPaginatedSurface(
         const page = viewportPage(container, currentLayout, scale);
         if (page !== null) return page;
       }
+      // An open header or footer repeats on every page it heads: the caret is on the open one.
+      const furniture = hfScope?.getActive();
+      if (furniture) return furniture.pageIndex + 1;
       const caret = caretAt(editingLayout(), selection.head);
       return caret ? caret.pageIndex + 1 : 1;
     },
@@ -5033,6 +4988,9 @@ export function mountPaginatedSurface(
       documentSelectionHistory.noteSelectionAfterEdit();
       return resolveSelectedDrawingRecord(surface)?.drawingNodeId === drawingNodeId;
     },
+
+    selectDrawingMember: (memberNodeId) =>
+      memberIntent(session, drawingIntent, memberNodeId, (next) => setDrawingIntent(next, true)),
 
     revealPage(pageIndex, options) {
       // Flushed like its siblings below: a page the deferred pass creates is not findable
@@ -5824,6 +5782,7 @@ export function mountPaginatedSurface(
         pagesLayer.removeEventListener('cut', onCut as EventListener);
         pagesLayer.removeEventListener('paste', onPaste as EventListener);
         pagesLayer.removeEventListener('compositionstart', onCompositionStart);
+        inputMethod.repair.destroy();
         pagesLayer.removeEventListener('compositionend', onCompositionEnd);
         viewportBinding?.destroy();
         hostListeners.clear();
@@ -5956,6 +5915,7 @@ export function mountPaginatedSurface(
   // own mandatory adoption, which would skip it: the #383 lane choice would
   // again be made from a selection the user no longer has.
   const onCompositionStart: typeof selectionSync.onCompositionStart = (...args) => {
+    inputMethod.repair.stop();
     selectionSync.adoptBeforeInput();
     flushToPaint();
     selectionSync.onCompositionStart(...args);
@@ -6058,6 +6018,7 @@ export function mountPaginatedSurface(
     () => (partOfNodeId(session, selection.head.paragraphId) ?? session.part()).root
   );
   const onKeyDown = (event: KeyboardEvent): void => {
+    selectionSync.noteKeyDown(event);
     directionChord.keydown(event);
     if (legacyDropdownInteraction?.keydown(event)) return;
     // The browser may have moved its caret without delivering the queued `selectionchange`
@@ -6067,6 +6028,18 @@ export function mountPaginatedSurface(
     dispatchKeyDown(event);
   };
   const { onCopy, onCut, onPaste } = createClipboardHandlers(surface);
+  const inputMethod = createInputMethodLane({
+    pagesLayer,
+    selection: () => selection,
+    textOf,
+    paragraphOrder,
+    revision: () => session.packageRevision(),
+    paintCurrent: () => !deferredPublishRender && !commitPaintOwed && typeBuffer.length === 0,
+    flushToPaint,
+    render,
+    timers,
+    sync: selectionSync,
+  });
   const dispatchBeforeInput = createBeforeInputHandler(surface, {
     isComposing: () => selectionSync.isComposing(),
     insertPlainText,
@@ -6077,17 +6050,40 @@ export function mountPaginatedSurface(
       selectionSync.mirrorToDom();
       selectionSync.noteBrowserSelectionFixup();
     },
+    ...inputMethod.hooks,
   });
   const onBeforeInput = (event: InputEvent): void => {
     selectionSync.adoptBeforeInput();
     dispatchBeforeInput(event);
+    if (!selectionSync.isComposing()) inputMethod.repair.watch(event);
   };
 
+  // One header and footer entry for the pointer and the drawing presses: no scroll, unlike the
+  // programmatic entry, because the press is already on screen.
+  const storyTransitions = pointerStoryTransitions({
+    viewing: () => editingMode === 'view',
+    flush: flushPendingInputAndLayout,
+    headerFooter: () => hfScope,
+    notes: () => noteOps,
+    sectionAtPage,
+    blankHeaderFooter: () => ({
+      session,
+      layout: currentLayout,
+      sectionAtPage,
+      create: (op) => surface.applyHeaderFooterLifecycle?.(op),
+      flushLayout,
+    }),
+  });
   const { onDrawingPointerGesture, onDrawingKeyGesture } = createDrawingGestures({
     surface,
     textbox: () => textboxEditing,
     intent: () => drawingIntent,
     setIntent: (intent) => setDrawingIntent(intent, true),
+    behindDrawingAt: (x, y) => pointer?.behindDrawingAt(x, y) ?? null,
+    enterStoryPage: (pageIndex) => {
+      const active = pointerHeaderFooterState(hfScope?.getActive() ?? null);
+      if (active) storyTransitions.enterHeaderFooter?.({ ...active, pageIndex });
+    },
   });
   pagesLayer.addEventListener('pointerdown', onDrawingPointerGesture, { capture: true });
   pagesLayer.addEventListener('keydown', onDrawingKeyGesture, { capture: true });
@@ -6174,20 +6170,7 @@ export function mountPaginatedSurface(
       // gesture exactly: arm, then drag over the text that should take the formatting.
       onSelectionSettled: () => formatPainter.applyIfArmed(),
       activeHeaderFooter: () => pointerHeaderFooterState(hfOutsideBox()),
-      ...pointerStoryTransitions({
-        viewing: () => editingMode === 'view',
-        flush: flushPendingInputAndLayout,
-        headerFooter: () => hfScope,
-        notes: () => noteOps,
-        sectionAtPage,
-        blankHeaderFooter: () => ({
-          session,
-          layout: currentLayout,
-          sectionAtPage,
-          create: (op) => surface.applyHeaderFooterLifecycle?.(op),
-          flushLayout,
-        }),
-      }),
+      ...storyTransitions,
       onContentControlWidget: (controlId, kind) => openContentControlWidget(controlId, kind),
       ...(options.reviewModel ? { onChangeBarToggle: reviewView.toggleByChangeBar } : {}),
       isReadOnlyPosition: (position) => tocAtPosition(session.part(), position) !== undefined,

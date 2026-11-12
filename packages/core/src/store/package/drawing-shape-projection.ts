@@ -49,6 +49,7 @@ import {
   shapeRotationDegrees,
 } from './drawing-shape-geometry.ts';
 import { transformComponent } from './drawing-group-transform.ts';
+import { groupFillOf, groupFillSpansMembers, withResolvedGroupFill } from './drawing-group-fill.ts';
 import { groupPictureOutline } from './drawing-group-picture-outline.ts';
 import { readLineProperties, readStyleReferenceIndex } from './drawing-line-properties.ts';
 import {
@@ -328,10 +329,13 @@ function authoredGradientFill(
 /** The fill and outline a `wps:wsp` paints with, from its own properties or its style. */
 function shapePaint(
   wsp: OoxmlElement,
-  spPr: OoxmlElement,
+  authoredSpPr: OoxmlElement,
   resolveSchemeColor?: ShapeSchemeColorResolver,
-  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
+  groupFill?: OoxmlElement | null
 ) {
+  // `a:grpFill` paints the fill of the nearest group that sets one.
+  const spPr = withResolvedGroupFill(authoredSpPr, groupFill);
   const authoredFill = directFill(spPr, resolveSchemeColor);
   const authoredGradient = authoredFill.present
     ? authoredGradientFill(spPr, resolveSchemeColor)
@@ -376,6 +380,49 @@ function hasTextbox(wsp: OoxmlElement): boolean {
   return !!findDirectChild(wsp.children, { namespaceUri: WPS_NAMESPACE_URI, localName: 'txbx' });
 }
 
+/** The fill and outline colours a `wps:wsp` paints with, or null without `spPr`. @internal */
+export function shapePaintOf(
+  wsp: OoxmlElement,
+  resolveSchemeColor?: ShapeSchemeColorResolver,
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
+) {
+  const spPr = shapeProperties(wsp);
+  return spPr ? shapePaint(wsp, spPr, resolveSchemeColor, resolveStyleMatrixReference) : null;
+}
+
+const LINE_FILLS = new Set(['noFill', 'solidFill', 'gradFill', 'pattFill']);
+const SHAPE_FILLS = new Set([...LINE_FILLS, 'blipFill', 'grpFill']);
+
+/** The first DrawingML child of `parent` named in `names`. */
+function firstNamed(parent: OoxmlElement | null, names: ReadonlySet<string>) {
+  return parent?.children.find(
+    (node) =>
+      isElement(node) &&
+      node.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI &&
+      names.has(node.localName)
+  ) as OoxmlElement | undefined;
+}
+
+/**
+ * Whether a shape says it has no fill and no outline: its own `a:noFill`, or no authored paint
+ * and no style paint (`a:fillRef`, `a:lnRef` index 0).
+ */
+function unpaintedByDesign(wsp: OoxmlElement): boolean {
+  const spPr = shapeProperties(wsp);
+  if (!spPr) return false;
+  const none = (authored: OoxmlElement | undefined, reference: 'fillRef' | 'lnRef') =>
+    authored
+      ? authored.localName === 'noFill'
+      : (readStyleReferenceIndex(wsp, reference)?.index ?? 0) === 0;
+  const ln = findDirectChild(spPr.children, {
+    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+    localName: 'ln',
+  });
+  return (
+    none(firstNamed(spPr, SHAPE_FILLS), 'fillRef') && none(firstNamed(ln, LINE_FILLS), 'lnRef')
+  );
+}
+
 /**
  * Whether a group member is a text box with no fill, no outline and no unsupported visuals.
  * Its only content is its text, which a group does not lay out, so the member paints nothing
@@ -384,13 +431,20 @@ function hasTextbox(wsp: OoxmlElement): boolean {
 export function isUnpaintedGroupTextbox(
   member: OoxmlElement,
   resolveSchemeColor?: ShapeSchemeColorResolver,
-  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
+  groupFill?: OoxmlElement | null
 ): boolean {
   if (member.namespaceUri !== WPS_NAMESPACE_URI || member.localName !== 'wsp') return false;
   const spPr = shapeProperties(member);
   if (!spPr || !hasTextbox(member) || !supportedGroupVisuals(member, spPr, false)) return false;
   if (!identityGroupThemeEffect(member, resolveStyleMatrixReference)) return false;
-  const paint = shapePaint(member, spPr, resolveSchemeColor, resolveStyleMatrixReference);
+  const paint = shapePaint(
+    member,
+    spPr,
+    resolveSchemeColor,
+    resolveStyleMatrixReference,
+    groupFill
+  );
   return paint.fill === null && paint.stroke === null;
 }
 
@@ -411,11 +465,12 @@ export function projectShapeComponents(
   pointBudget: { remaining: number },
   resolveSchemeColor?: ShapeSchemeColorResolver,
   resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
-  groupMember = false
+  groupMember = false,
+  groupFill: OoxmlElement | null = null
 ): readonly VectorShapeComponent[] | null {
   if (!groupMember && hasTextbox(wsp)) return null;
   const spPr = shapeProperties(wsp);
-  if (!spPr) return null;
+  if (!spPr || groupFillSpansMembers(spPr, groupFill)) return null;
   const xfrm = findDirectChild(spPr.children, {
     namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
     localName: 'xfrm',
@@ -432,7 +487,8 @@ export function projectShapeComponents(
     wsp,
     spPr,
     resolveSchemeColor,
-    resolveStyleMatrixReference
+    resolveStyleMatrixReference,
+    groupFill
   );
   const line =
     stroke !== null
@@ -699,9 +755,14 @@ export function projectVectorShape(
       resolveStyleMatrixReference
     );
     if (!shapeComponents) return null;
-    // A custom geometry with no paths paints nothing, and it keeps its box with no components
-    // and no placeholder. Any other empty list keeps the placeholder.
-    if (shapeComponents.length === 0 && !hasPathlessCustomGeometry(shapeProperties(wsp))) {
+    // A custom geometry with no paths, or a shape that sets neither a fill nor an outline,
+    // paints nothing and keeps its box with no components and no placeholder. Any other empty
+    // list, such as a colour the theme does not resolve, keeps the placeholder.
+    if (
+      shapeComponents.length === 0 &&
+      !hasPathlessCustomGeometry(shapeProperties(wsp)) &&
+      !unpaintedByDesign(wsp)
+    ) {
       return null;
     }
     components = [...shapeComponents];
@@ -715,6 +776,7 @@ export function projectVectorShape(
     const scaleX = chExtX > 0 ? extent.cx / chExtX : 0;
     const scaleY = chExtY > 0 ? extent.cy / chExtY : 0;
     let childCount = 0;
+    const groupFill = groupFillOf(frame.group, null);
     for (const child of frame.group.children) {
       if (!isElement(child) || isGroupPropertyChild(child)) continue;
       childCount += 1;
@@ -744,7 +806,10 @@ export function projectVectorShape(
       });
       if (!properties || !supportedGroupVisuals(child, properties, false)) return null;
       if (!identityGroupThemeEffect(child, resolveStyleMatrixReference)) return null;
-      if (isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference)) continue;
+      if (
+        isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference, groupFill)
+      )
+        continue;
       const transform = childTransform(child);
       if (!transform) return null;
       const memberComponents = projectShapeComponents(
@@ -753,9 +818,10 @@ export function projectVectorShape(
         pointBudget,
         resolveSchemeColor,
         resolveStyleMatrixReference,
-        true
+        true,
+        groupFill
       );
-      if (!memberComponents?.length) return null;
+      if (!memberComponents) return null; // A member that paints nothing adds nothing.
       for (const component of memberComponents) {
         components.push(
           transformComponent(

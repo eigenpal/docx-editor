@@ -72,6 +72,48 @@ export {
   type DocxEditorSidePanelProps,
   type UseSelectedChartReturn,
 } from './editor/charts';
+export {
+  DocxEditorShapePane,
+  useSelectedShape,
+  type DocxEditorShapePaneProps,
+  type UseSelectedShapeReturn,
+} from './editor/shapes';
+export * from './editor/objects';
+export {
+  ColorPicker,
+  type ColorPickerCompound,
+  type ColorPickerContentProps,
+  type ColorPickerHexInputProps,
+  type ColorPickerNoColorProps,
+  type ColorPickerRootProps,
+  type ColorPickerSwatchProps,
+  type ColorPickerTriggerProps,
+  type ColorPickerValue,
+} from './editor/color/ColorPicker';
+// The names a host needs to place shape and chart controls of its own.
+export {
+  PANE_SECTIONS,
+  SHAPE_OUTLINE_DASHES,
+  SHAPE_OUTLINE_WIDTHS,
+  paneSections,
+} from '@docx-editor.dev/core/editor';
+export type {
+  ColorPick,
+  ObjectSlotReadValueMap,
+  ObjectSlotValueMap,
+  ObjectToggleSlotId,
+  PaneSection,
+  PaneSectionId,
+  PaneSectionIds,
+  ShapeOutlineDash,
+} from '@docx-editor.dev/core/editor';
+export type {
+  SelectedShapeCommand,
+  ShapeFillState,
+  ShapeFormatState,
+  ShapeOutlineState,
+  ShapePaneChange,
+} from '@docx-editor.dev/core/editor';
 // The chart names a custom chart pane needs (`useSelectedChart`), so it imports from one package.
 export { CHART_TYPE_CHOICES, chartTypeLabelKey } from '@docx-editor.dev/core/editor';
 export type {
@@ -243,6 +285,7 @@ export {
   ContextMenuCellVerticalAlignment,
   ContextMenuDelete,
   ContextMenuItem,
+  ContextMenuStart,
   ContextMenuPaste,
   ContextMenuPasteFormatting,
   ContextMenuPasteWithoutFormatting,
@@ -265,6 +308,7 @@ export {
   type ContextMenuCommandProps,
   type ContextMenuContextValue,
   type ContextMenuItemProps,
+  type ContextMenuStartProps,
   type ContextMenuTableRowProps,
   type DocxEditorContextMenuNamespace,
   type DocxEditorContextMenuProps,

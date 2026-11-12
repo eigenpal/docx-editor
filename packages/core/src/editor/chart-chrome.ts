@@ -13,73 +13,27 @@ import type { ToolbarCommandState } from './toolbar-commands.ts';
 import { CHART_TYPES, isChartType } from '../store/package/chart-edit/type.ts';
 import { isElementNode } from './host-realm.ts';
 import { GENERATED_ICON_PATHS } from './generated-icon-paths.ts';
+import { paneAvailable, requestPane } from './pane-requests.ts';
 
-/** A pane that the chrome can ask the host to show. @public */
-export type EditorPaneId = 'chart';
-
-/** How a pane opens. @public */
-export interface PaneRequestOptions {
-  /** Whether the keyboard focus moves into the pane. Default true. */
-  readonly focus?: boolean;
-}
-
-/** A pane request, as a listener receives it. @public */
-export interface PaneRequest {
-  readonly pane: EditorPaneId;
-  readonly focus: boolean;
-}
-
-const listeners = new WeakMap<Editor, Set<(request: PaneRequest) => void>>();
-const pending = new WeakMap<Editor, PaneRequest>();
+export {
+  listenPaneRequests,
+  paneAvailable,
+  requestPane,
+  takePaneRequest,
+  takePaneRequestFor,
+  type EditorPaneId,
+  type PaneRequest,
+  type PaneRequestListenerOptions,
+  type PaneRequestOptions,
+} from './pane-requests.ts';
 
 /**
- * Ask the host to show `pane`. A host whose layout can hide its side panel listens with
- * {@link listenPaneRequests}. Returns whether a listener took the request. @public
+ * Whether the host shows the Chart pane: a mounted side panel or Chart pane, or a
+ * `usePaneRequest` listener for it. Without one, Edit chart has nowhere to go, so the toolbar
+ * and the context menu leave it out. @public
  */
-export function requestPane(
-  editor: Editor,
-  pane: EditorPaneId,
-  options?: PaneRequestOptions
-): boolean {
-  const request: PaneRequest = { pane, focus: options?.focus ?? true };
-  // Kept until a pane takes it, so a pane that the host mounts for the request still gets it.
-  pending.set(editor, request);
-  const set = listeners.get(editor);
-  if (!set || set.size === 0) return false;
-  for (const listener of [...set]) listener(request);
-  return true;
-}
-
-/**
- * Take the last pane request that no pane has taken yet, or null. A side panel takes it when
- * it mounts and when it hears a request, to know whether to move the focus into itself.
- * @public
- */
-export function takePaneRequest(editor: Editor): PaneRequest | null {
-  const request = pending.get(editor) ?? null;
-  pending.delete(editor);
-  return request;
-}
-
-/** Listen for pane requests of one editor. Returns the function that stops listening. @public */
-export function listenPaneRequests(
-  editor: Editor,
-  listener: (request: PaneRequest) => void
-): () => void {
-  let set = listeners.get(editor);
-  if (!set) listeners.set(editor, (set = new Set()));
-  set.add(listener);
-  return () => set.delete(listener);
-}
-
-/**
- * Whether the host can show a chart pane: a mounted side panel or Chart pane, or a
- * `usePaneRequest` listener. Without one, Edit chart has nowhere to go, so the toolbar and the
- * context menu leave it out. @public
- */
-export function chartPaneAvailable(editor: Editor | null): boolean {
-  return editor !== null && (listeners.get(editor)?.size ?? 0) > 0;
-}
+export const chartPaneAvailable = (editor: Editor | null): boolean =>
+  paneAvailable(editor, 'chart');
 
 /** The chart types of the Insert > Chart list, in list order. @public */
 export const CHART_INSERT_CHOICES: readonly ChartType[] = [

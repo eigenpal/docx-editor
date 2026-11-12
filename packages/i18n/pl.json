@@ -78,7 +78,9 @@
       "image": "Obraz",
       "table": "Tabela",
       "format": "Formatowanie",
-      "direction": "Kierunek tekstu"
+      "direction": "Kierunek tekstu",
+      "chart": "Wykres",
+      "shape": "Kształt"
     },
     "undo": "Cofnij",
     "undoShortcut": "Cofnij (Ctrl+Z)",
@@ -226,7 +228,11 @@
       "background2": "Tło 2",
       "text1": "Tekst 1",
       "text2": "Tekst 2"
-    }
+    },
+    "lighterPercent": "{color}, jaśniejszy o {percent}%",
+    "darkerPercent": "{color}, ciemniejszy o {percent}%",
+    "hexColor": "Kolor szesnastkowy",
+    "invalidHex": "Wpisz kolor w postaci #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {
@@ -691,7 +697,8 @@
     },
     "selection": "Zaznaczony obraz",
     "locked": "Tego pola nie można przenieść ani zmienić jego rozmiaru",
-    "textLocked": "Tekstu w tym polu nie można edytować"
+    "textLocked": "Tekstu w tym polu nie można edytować",
+    "selectionShape": "Zaznaczony kształt"
   },
   "revisions": {
     "paragraphMarkInserted": "Wstawiono znak akapitu",
@@ -1061,7 +1068,9 @@
     "outermostLevel": "Zaznaczenie jest już na najwyższym poziomie",
     "cannotIndentFurther": "Nie można bardziej zwiększyć wcięcia zaznaczenia",
     "noGoToView": "Przejdź do jest tutaj niedostępne",
-    "noBookmarkDialog": "Nie można tutaj dodawać zakładek"
+    "noBookmarkDialog": "Nie można tutaj dodawać zakładek",
+    "groupMemberMove": "Kształtu w grupie nie można osobno przenieść, zmienić jego rozmiaru ani usunąć. Naciśnij Esc, aby zaznaczyć grupę.",
+    "groupMemberProperties": "Kształt w grupie przejmuje zawijanie, tekst alternatywny i właściwości od grupy. Naciśnij Esc, aby zaznaczyć grupę."
   },
   "equationPopup": {
     "apply": "Zastosuj",
@@ -1359,6 +1368,71 @@
       "unsupported": "Edytor nie obsługuje tej zmiany wykresu.",
       "invalidValue": "Wykres nie może użyć tej wartości.",
       "suggesting": "Nie można zmieniać wykresów podczas sugerowania zmian. Przełącz na Edytowanie, aby zmienić ten wykres."
+    }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "Ten starszy typ kształtu nie ma ustawienia przezroczystości.",
+      "noShape": "Zaznacz jeden kształt, pole tekstowe lub linię.",
+      "noSolidFill": "Kształt nie ma jednolitego wypełnienia. Najpierw wybierz kolor wypełnienia.",
+      "outOfRange": "Wartość jest poza zakresem.",
+      "staleSelection": "Zaznaczenie się zmieniło. Zaznacz kształt ponownie.",
+      "mixedFill": "Kształty w tej grupie mają różne wypełnienia. Wybierz kolor, aby ustawić go dla wszystkich."
+    },
+    "formatShape": "Formatuj kształt…",
+    "pane": {
+      "close": "Zamknij okienko Formatuj kształt",
+      "emptyBody": "Zaznacz kształt, pole tekstowe lub linię w dokumencie, aby je sformatować.",
+      "emptyTitle": "Nie zaznaczono kształtu",
+      "errors": {
+        "color": "Wpisz kolor jako #RRGGBB lub jako nazwę koloru.",
+        "noSolidFill": "Najpierw wybierz kolor wypełnienia.",
+        "transparency": "Wpisz liczbę od 0 do 100.",
+        "width": "Wpisz grubość od 0,25 do 1584 punktów.",
+        "dash": "Wybierz typ kreski z listy."
+      },
+      "fill": "Wypełnienie",
+      "fillColor": "Kolor wypełnienia",
+      "fillHex": "Kolor wypełnienia (hex)",
+      "fillTypes": {
+        "gradient": "Gradient",
+        "mixed": "Mieszane",
+        "none": "Brak wypełnienia",
+        "pattern": "Deseń",
+        "picture": "Obraz",
+        "solid": "Jednolite"
+      },
+      "hexHelp": "Wpisz #RRGGBB lub nazwę koloru, a następnie naciśnij Enter.",
+      "mixedOutline": "Kształty w tej grupie mają różne kontury.",
+      "noFill": "Brak wypełnienia",
+      "noOutline": "Brak linii",
+      "openFillColors": "Wybierz kolor wypełnienia",
+      "openOutlineColors": "Wybierz kolor konturu",
+      "otherWidth": "Inna grubość",
+      "outline": "Kontur",
+      "outlineColor": "Kolor konturu",
+      "outlineHex": "Kolor konturu (hex)",
+      "readOnlyFill": "Typ wypełnienia: {fill}. Wybierz kolor lub Brak wypełnienia, aby go zastąpić.",
+      "title": "Formatuj kształt",
+      "transparency": "Przezroczystość (%)",
+      "width": "Grubość (pkt)",
+      "widthPoints": "{value} pkt",
+      "widthPreset": "Gotowa grubość",
+      "dash": "Typ kreski",
+      "dashes": {
+        "custom": "Niestandardowa",
+        "dash": "Kreska",
+        "dashDot": "Kreska i kropka",
+        "dot": "Kropka",
+        "lgDash": "Długa kreska",
+        "lgDashDot": "Długa kreska i kropka",
+        "lgDashDotDot": "Długa kreska i dwie kropki",
+        "solid": "Ciągła",
+        "sysDash": "Kwadratowa kropka",
+        "sysDashDot": "Kwadratowa kreska i kropka",
+        "sysDashDotDot": "Kwadratowa kreska i dwie kropki",
+        "sysDot": "Okrągła kropka"
+      }
     }
   }
 }

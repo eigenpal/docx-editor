@@ -20,16 +20,18 @@ function cellLines(
   compatibilityMode?: number
 ): readonly { readonly contentX: number }[] {
   const lines: { readonly contentX: number }[] = [];
-  const walk = (fragments: readonly unknown[]): void => {
+  // Paragraphs inside cells only: the body reads an empty paragraph after its final table.
+  const walk = (fragments: readonly unknown[], inCell = false): void => {
     for (const fragment of fragments as readonly Record<string, unknown>[]) {
       if (fragment.kind === 'paragraph') {
+        if (!inCell) continue;
         for (const line of fragment.lines as readonly { contentX: number }[])
           lines.push({ contentX: line.contentX });
         continue;
       }
       for (const row of (fragment.rows ?? []) as readonly Record<string, unknown>[])
         for (const cell of (row.cells ?? []) as readonly Record<string, unknown>[])
-          walk((cell.blocks ?? []) as readonly unknown[]);
+          walk((cell.blocks ?? []) as readonly unknown[], true);
     }
   };
   walk(layout(xml, compatibilityMode).pages[0]!.fragments);

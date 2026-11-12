@@ -712,6 +712,26 @@ describe('clipboard fragment round trip', () => {
     );
   });
 
+  test('a table copied alone pastes alone, without a paragraph after it', () => {
+    // The fragment body ends with the table, so its read adds a story-end paragraph. A fragment
+    // is a run of blocks, not a story, so the paste drops that paragraph again.
+    const table =
+      '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
+      '<w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+    const fragmentBytes = zipSync(Object.fromEntries(buildPackage(table).partBytes));
+    const target = buildPackage('<w:p><w:r><w:t>hostAB</w:t></w:r></w:p>');
+    const store = openStore(target);
+    const body = () => bodyOf(store.currentPackage().parts.get(target.mainDocumentPart)!);
+    const paragraphId = paragraphIdsUnder(body())[0]!;
+    const pasted = store.applyFragmentPaste(
+      { kind: 'body' },
+      { paragraphId, offset: 4, fragmentBytes, lastMarkCovered: true }
+    );
+    expect(pasted.ok).toBe(true);
+    const blocks = body().children.filter((child) => child.kind !== 'generic');
+    expect(blocks.map((child) => child.kind)).toEqual(['paragraph', 'table', 'paragraph']);
+  });
+
   test.each(['drawingml', 'vml'])(
     'fragment %s media with a spoofed content type is dropped, not copied',
     (kind) => {

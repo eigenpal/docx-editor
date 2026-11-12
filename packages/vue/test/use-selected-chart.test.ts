@@ -7,7 +7,7 @@ import './dom-setup.ts';
 import { afterEach, expect, test } from 'bun:test';
 import { defineComponent, h } from 'vue';
 import { openChartPaneFor } from '@docx-editor.dev/core/editor';
-import { DocxEditorSidePanel } from '../src/editor/charts/SidePanel';
+import { DocxEditorSidePanel } from '../src/editor/panes/SidePanel';
 import {
   useSelectedChart,
   type UseSelectedChartReturn,

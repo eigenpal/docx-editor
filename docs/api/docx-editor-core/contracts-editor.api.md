@@ -1349,6 +1349,8 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     } | {
         range: EditorSelection;
     };
+    setShapeFill: SetShapeFillCommand;
+    setShapeOutline: SetShapeOutlineCommand;
     setTableBorders: {
         scope: 'none';
         target: TableBorderEdgeTarget;
@@ -2896,6 +2898,7 @@ export interface SelectedImageState {
     readonly kind: DrawingKind;
     // (undocumented)
     readonly locks: DrawingLocks;
+    readonly memberId?: string;
     // (undocumented)
     readonly name: string;
     // (undocumented)
@@ -2904,6 +2907,7 @@ export interface SelectedImageState {
     readonly resourceStatus: ImageResourceState['kind'];
     // (undocumented)
     readonly rotationDegrees: number;
+    readonly shapeFormat: ShapeFormatState | null;
     // (undocumented)
     readonly title: string;
     // (undocumented)
@@ -2980,6 +2984,76 @@ export type SetReviewChangesAuthorOptions = ReviewChangesAttribution & ({
     keys?: never;
     scope?: 'visible' | 'document';
 });
+
+// @public
+export interface SetShapeFillCommand {
+    // (undocumented)
+    color?: ShapeColorValue;
+    drawingNodeId?: string;
+    // (undocumented)
+    transparency?: number;
+    // (undocumented)
+    visible?: boolean;
+}
+
+// @public
+export interface SetShapeOutlineCommand {
+    // (undocumented)
+    color?: ShapeColorValue;
+    // (undocumented)
+    dash?: ShapeOutlineDash;
+    drawingNodeId?: string;
+    // (undocumented)
+    visible?: boolean;
+    // (undocumented)
+    widthPt?: number;
+}
+
+// @public
+export type ShapeColorValue = string | {
+    readonly shift?: number;
+    readonly theme: ShapeThemeColorName;
+};
+
+// @public
+export interface ShapeFillState {
+    readonly color: string | null;
+    readonly theme?: ShapeThemeColor;
+    readonly transparency: number;
+    readonly type: 'solid' | 'none' | 'gradient' | 'pattern' | 'picture' | 'mixed';
+}
+
+// @public
+export interface ShapeFormatState {
+    // (undocumented)
+    readonly fill: ShapeFillState;
+    // (undocumented)
+    readonly outline: ShapeOutlineState;
+}
+
+// @public
+export type ShapeOutlineDash = 'solid' | 'sysDot' | 'sysDash' | 'sysDashDot' | 'sysDashDotDot' | 'dot' | 'dash' | 'lgDash' | 'dashDot' | 'lgDashDot' | 'lgDashDotDot';
+
+// @public
+export interface ShapeOutlineState {
+    readonly color: string | null;
+    readonly dash?: ShapeOutlineDash | 'custom' | null;
+    readonly theme?: ShapeThemeColor;
+    // (undocumented)
+    readonly visible: boolean | null;
+    // (undocumented)
+    readonly widthPt: number | null;
+}
+
+// @public
+export interface ShapeThemeColor {
+    // (undocumented)
+    readonly name: 'bg1' | 'tx1' | 'bg2' | 'tx2' | 'accent1' | 'accent2' | 'accent3' | 'accent4' | 'accent5' | 'accent6';
+    readonly shift: number;
+}
+
+// @public
+export type ShapeThemeColorName = 'bg1' | 'tx1' | 'bg2' | 'tx2' | 'accent1' | 'accent2' | 'accent3' | 'accent4' | 'accent5' | 'accent6';
 
 // @public
 export interface StyleDefinition {

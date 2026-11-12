@@ -479,7 +479,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Insert tables and edit cell text with fixed or automatic column widths. Document settings control widths, indents, and cell spacing. Compatibility modes can change alignment and sizing.',
+      'Insert tables and edit cell text with fixed or automatic column widths. Document settings and compatibility modes control widths, indents, alignment, and cell spacing. A table that ends the document keeps an empty paragraph below it for the caret.',
   },
   {
     id: 'tables.rtl',
@@ -512,7 +512,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Both adapters let you edit cell borders and fill. Diagonal borders display, but you cannot edit or copy them through HTML. Direct table shading stays saved but does not display; use cell shading instead.',
+      'Both adapters let you edit cell borders and fill. Diagonal borders display, but you cannot edit or copy them through HTML. With cell spacing, outer borders frame the table, each cell draws its own borders, and table shading fills the gaps.',
   },
   {
     id: 'tables.merge',
@@ -681,13 +681,13 @@ export const wordFeatures: WordFeature[] = [
     id: 'images.shapes',
     name: 'Drawing shapes & geometry',
     category: 'images',
-    editing: 'none',
+    editing: 'partial',
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Preset shapes and supported custom shapes display with fills, outlines, and outer shadows. Shapes and grouped text remain read-only; additional effects require the drawing module. Unsupported shapes or groups show a placeholder and retain their text wrap area.',
+      'Preset shapes and supported custom shapes display with fills, outlines, and outer shadows. You can set solid fills and outline colors, widths, and dash types, and move or delete shapes. Resizing, shape text, and gradient or pattern fills stay read-only, and unsupported shapes show a placeholder.',
   },
   {
     id: 'images.legacy-vml',

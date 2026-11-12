@@ -207,6 +207,8 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     isContinuation: 'layout-only',
     hasContinuation: 'layout-only',
     placesWhole: 'layout-only',
+    spacingShading: 'explicitly-omitted',
+    spacingFrame: 'explicitly-omitted',
     cells: 'represented',
     box: 'layout-only',
   } satisfies Record<keyof TableRowFragmentRecord, MarkdownFieldPolicy>,

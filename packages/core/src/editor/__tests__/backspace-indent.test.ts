@@ -194,7 +194,8 @@ describe('Backspace at the start of an indented paragraph', () => {
       docx(paragraph('Before') + cell(paragraph('Cell', '<w:ind w:left="720"/>')))
     );
     backspaceAt(editor, 1);
-    expect(texts(editor)).toEqual(['Before', 'Cell']);
+    // The body ends with a table, so it reads an empty paragraph after it.
+    expect(texts(editor)).toEqual(['Before', 'Cell', '']);
     expect(properties(editor)[1]).toBe('');
   });
 
@@ -300,7 +301,7 @@ describe('lining up, and indents a press cannot remove', () => {
       )
     );
     backspaceAt(styled, 1);
-    expect(texts(styled)).toEqual(['OneTwo']);
+    expect(texts(styled)).toEqual(['OneTwo', '']);
 
     const markerless = mount(
       docx(

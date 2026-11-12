@@ -53,7 +53,7 @@ for (const revision of ['ins', 'del'] as const) {
             host.execute({ operations: [{ op: 'getParagraphs', body }] }),
             0
           );
-          expect(paragraphs).toHaveLength(5);
+          expect(paragraphs).toHaveLength(6); // The last is the body's paragraph after the table.
           const before = savedMainXml(host);
           const revisionBefore = host.revision();
           // First/later paragraphs, another cell, and a nested table share the row revision.
@@ -96,7 +96,7 @@ for (const revision of ['cellIns', 'cellDel']) {
         host.execute({ operations: [{ op: 'getParagraphs', body }] }),
         0
       );
-      for (const paragraph of paragraphs.slice(1)) {
+      for (const paragraph of paragraphs.slice(1, 3)) {
         expect(host.execute({ operations: [proposal(paragraph, 'replacement', false)] }).ok).toBe(
           false
         );
@@ -157,7 +157,8 @@ for (const revision of ['rowIns', 'rowDel', 'cellMerge', 'inlineIns'] as const) 
             host.execute({ operations: [{ op: 'getParagraphs', body }] }),
             0
           );
-          for (const paragraph of paragraphs) {
+          // A note that ends with a table reads an empty paragraph after it, outside the table.
+          for (const paragraph of revision === 'inlineIns' ? paragraphs : paragraphs.slice(0, -1)) {
             const operations: AutomationOperation[] = tracked
               ? [{ op: 'setChangeTrackingMode', mode: 'TrackMineOnly', author: 'Agent' }]
               : [];

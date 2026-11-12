@@ -275,7 +275,8 @@ for (const conditional of [false, true]) {
         (conditional ? `<w:tblStylePr w:type="firstRow">${run}</w:tblStylePr>` : run) +
         '</w:style>';
       withEditor(table(p(textRun('abc')), p(textRun('def'))), styles, (editor) => {
-        for (const [index, paragraph] of paragraphNodes(editor).entries()) {
+        // The two cell paragraphs; the empty paragraph after the table holds no text.
+        for (const [index, paragraph] of paragraphNodes(editor).slice(0, 2).entries()) {
           const surface = editor.surface!;
           surface.setSelection({
             anchor: { paragraphId: paragraph.id, offset: caret ? 3 : 0 },

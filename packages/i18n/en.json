@@ -29,6 +29,8 @@
     "noContentControl": "No content control is selected",
     "noCopiedFormatting": "Copy formatting from somewhere first",
     "noDrawing": "No image is selected",
+    "groupMemberMove": "A shape inside a group does not move, resize, or delete on its own. Press Escape to select the group.",
+    "groupMemberProperties": "A shape inside a group takes its wrap, alt text, and properties from the group. Press Escape to select the group.",
     "drawingLocked": "This image is locked",
     "commentSelection": "Select a range before adding a comment",
     "noCommentDraftView": "Comments can't be added here",
@@ -157,7 +159,9 @@
       "listFormatting": "List formatting",
       "format": "Format",
       "image": "Image",
-      "table": "Table"
+      "table": "Table",
+      "shape": "Shape",
+      "chart": "Chart"
     },
     "undo": "Undo",
     "undoShortcut": "Undo (Ctrl+Z)",
@@ -304,7 +308,11 @@
       "lightGray": "Light Gray",
       "brightGreen": "Bright Green"
     },
-    "apply": "Apply"
+    "apply": "Apply",
+    "lighterPercent": "{color}, lighter {percent}%",
+    "darkerPercent": "{color}, darker {percent}%",
+    "hexColor": "Hex color",
+    "invalidHex": "Type a color as #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {
@@ -965,6 +973,7 @@
   },
   "imageOverlay": {
     "selection": "Selected image",
+    "selectionShape": "Selected shape",
     "locked": "This box cannot be moved or resized",
     "textLocked": "The text in this box cannot be edited",
     "handle": {
@@ -1359,6 +1368,71 @@
       "unsupported": "The editor does not support this chart change.",
       "invalidValue": "The chart cannot use this value.",
       "suggesting": "Charts cannot change while you suggest edits. Switch to Editing to change this chart."
+    }
+  },
+  "shape": {
+    "formatShape": "Format shape…",
+    "pane": {
+      "title": "Format shape",
+      "close": "Close the format shape pane",
+      "emptyTitle": "No shape selected",
+      "emptyBody": "Select a shape, text box, or line in the document to format it.",
+      "fill": "Fill",
+      "outline": "Outline",
+      "noFill": "No fill",
+      "noOutline": "No line",
+      "fillColor": "Fill color",
+      "outlineColor": "Outline color",
+      "openFillColors": "Choose a fill color",
+      "openOutlineColors": "Choose an outline color",
+      "fillHex": "Fill hex color",
+      "outlineHex": "Outline hex color",
+      "hexHelp": "Type #RRGGBB or a color name, then press Enter.",
+      "transparency": "Transparency (%)",
+      "width": "Width (pt)",
+      "widthPreset": "Width preset",
+      "widthPoints": "{value} pt",
+      "otherWidth": "Other width",
+      "readOnlyFill": "Fill type: {fill}. Pick a color or No fill to replace it.",
+      "mixedOutline": "The shapes in this group have different outlines.",
+      "fillTypes": {
+        "solid": "Solid",
+        "none": "No fill",
+        "gradient": "Gradient",
+        "pattern": "Pattern",
+        "picture": "Picture",
+        "mixed": "Mixed"
+      },
+      "errors": {
+        "color": "Type a color as #RRGGBB or as a color name.",
+        "transparency": "Type a number from 0 to 100.",
+        "width": "Type a width from 0.25 to 1584 points.",
+        "noSolidFill": "Pick a fill color first.",
+        "dash": "Pick a dash type from the list."
+      },
+      "dash": "Dash type",
+      "dashes": {
+        "solid": "Solid",
+        "sysDot": "Round dot",
+        "sysDash": "Square dot",
+        "dash": "Dash",
+        "dashDot": "Dash dot",
+        "lgDash": "Long dash",
+        "lgDashDot": "Long dash dot",
+        "lgDashDotDot": "Long dash dot dot",
+        "sysDashDot": "Square dash dot",
+        "sysDashDotDot": "Square dash dot dot",
+        "dot": "Dot",
+        "custom": "Custom"
+      }
+    },
+    "errors": {
+      "noShape": "Select one shape, text box, or line.",
+      "noSolidFill": "The shape has no solid fill. Pick a fill color first.",
+      "mixedFill": "The shapes in this group have different fills. Pick a color to set them all.",
+      "legacyTransparency": "This older shape type has no transparency setting.",
+      "outOfRange": "The value is out of range.",
+      "staleSelection": "The selection changed. Select the shape again."
     }
   }
 }

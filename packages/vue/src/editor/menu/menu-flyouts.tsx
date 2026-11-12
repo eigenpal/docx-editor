@@ -68,22 +68,30 @@ export const MenuSubmenu = defineComponent({
 
     watch(
       open,
-      (isOpen) => {
+      (isOpen, _previous, onCleanup) => {
         if (!isOpen) {
           box.value = null;
           return;
         }
         const row = parentRef.value;
-        const panel = panelRef.value;
         const view = row?.ownerDocument.defaultView;
-        if (!row || !panel || !view) return;
-        // The row's inline-end side first: see the React twin.
-        box.value = placeSubmenu(
-          row.getBoundingClientRect(),
-          { width: panel.offsetWidth, height: panel.offsetHeight },
-          { width: view.innerWidth, height: view.innerHeight },
-          view.getComputedStyle(row).direction === 'rtl'
-        );
+        if (!row || !view) return;
+        const place = (): void => {
+          const panel = panelRef.value;
+          if (!panel) return;
+          // The row's inline-end side first: see the React twin.
+          box.value = placeSubmenu(
+            row.getBoundingClientRect(),
+            { width: panel.offsetWidth, height: panel.offsetHeight },
+            { width: view.innerWidth, height: view.innerHeight },
+            view.getComputedStyle(row).direction === 'rtl'
+          );
+        };
+        place();
+        // A long context menu scrolls inside itself; the panel follows its row.
+        const parentPanel = row.closest('[role="menu"]');
+        parentPanel?.addEventListener('scroll', place, { passive: true });
+        onCleanup(() => parentPanel?.removeEventListener('scroll', place));
       },
       { flush: 'post' }
     );

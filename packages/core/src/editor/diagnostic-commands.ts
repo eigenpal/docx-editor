@@ -107,6 +107,8 @@ const COMMANDS: Readonly<Record<EditorCommand['type'], true>> = {
   setReviewChangesAuthor: true,
   setReviewDisplayMode: true,
   setSelection: true,
+  setShapeFill: true,
+  setShapeOutline: true,
   setTableBorders: true,
   setTableCellVerticalAlignment: true,
   setTableProperties: true,

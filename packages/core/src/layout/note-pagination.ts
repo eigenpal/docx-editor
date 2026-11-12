@@ -15,6 +15,7 @@ import {
 import {
   noteReferenceOpeningBottom,
   paragraphNoteSplitsAllowed,
+  splitNotePageEndPt,
 } from './note-reference-opening.ts';
 import type { FootnoteAreaOptions, NoteSeparatorCache } from './note-footnote-area-options.ts';
 import {
@@ -897,6 +898,8 @@ function buildFootnoteArea(
   evictionTopPt?: number;
   /** The page holds a whole row taller than the page; its area needs no body room. */
   overRow?: boolean;
+  /** Reserve mode: the body ends here, because a note that starts on the page splits. */
+  splitEndPt?: number;
 } {
   const nextCarry: NoteCarryMap = new Map(continuationCarry);
   const pageRefs = refs.filter((ref) => ref.noteKind === 'footnote');
@@ -1012,6 +1015,7 @@ function buildFootnoteArea(
   }
 
   let evictionTopPt: number | undefined;
+  let splitEndPt: number | undefined;
   let placedBudget = Number.POSITIVE_INFINITY;
   // The page holds a whole row taller than the page: no reserve can make room below it.
   let overRow = false;
@@ -1150,6 +1154,10 @@ function buildFootnoteArea(
         stackHeight += split.headHeight;
         placedBudget = Math.min(placedBudget, refBudget);
       }
+      if (split.tail.length > 0 && split.head.length > 0 && options?.reserveBandOf && band) {
+        const end = splitNotePageEndPt(page, ref, band);
+        if (end !== undefined) splitEndPt = Math.min(splitEndPt ?? end, end);
+      }
       if (split.tail.length > 0) {
         // A note that places nothing here opens on a later page, with its mark.
         nextCarry.set(laid.scopeId, {
@@ -1196,7 +1204,7 @@ function buildFootnoteArea(
 
   // Over a whole tall row, a waiting continuation paints no separator without notes.
   if (notes.length === 0 && (continuationCarry.size === 0 || overRow)) {
-    return { area: undefined, nextCarry, evictionTopPt, overRow };
+    return { area: undefined, nextCarry, evictionTopPt, overRow, splitEndPt };
   }
 
   const sepHeight = separator.flowHeight;
@@ -1251,7 +1259,7 @@ function buildFootnoteArea(
     ...placeContinuationNotice(activeNotice, page.contentBox.x, cursorY, contentWidth),
     ...(noticeRefused ? { fallbackReason: 'note-continuation-notice-height-cap' } : {}),
   };
-  return { area, nextCarry, evictionTopPt, overRow };
+  return { area, nextCarry, evictionTopPt, overRow, splitEndPt };
 }
 
 /**
@@ -2094,7 +2102,7 @@ function computeFootnoteReservesWithPolicy(
     // floor would stably strangle every note above it on a multi-reference page.
     const carryWasEmpty = carry.size === 0;
     const reasonsBefore = reasons.length;
-    const { area, nextCarry, evictionTopPt, overRow } = buildFootnoteArea(
+    const { area, nextCarry, evictionTopPt, overRow, splitEndPt } = buildFootnoteArea(
       bodyPage,
       pageBottomRefs,
       input,
@@ -2129,7 +2137,13 @@ function computeFootnoteReservesWithPolicy(
         : 0;
     // An area over a whole row past the bottom margin cannot gain room from the body.
     const areaHeight = overRow ? 0 : (area?.box.height ?? 0);
-    const localNeeded = Math.min(Math.max(areaHeight, evictionNeed), maxArea);
+    // A note that starts here and splits ends the body at its reference: the reserve takes
+    // every point below it, and the note fills that room.
+    const splitNeed =
+      splitEndPt !== undefined
+        ? Math.max(0, bodyPage.contentBox.height - splitEndPt - RESERVE_BOUNDARY_BACKOFF_PT)
+        : 0;
+    const localNeeded = Math.min(Math.max(areaHeight, evictionNeed, splitNeed), maxArea);
     if (memo && carryWasEmpty && carry.size === 0) {
       memo.pageReserve.set(page, {
         allowOrphanDeferral,

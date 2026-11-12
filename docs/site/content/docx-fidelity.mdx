@@ -101,7 +101,7 @@ For image movement, pointer placement, accepted formats, and custom drop handler
 | Feature | Rendering and editing | Round-trip |
 | --- | --- | --- |
 | Anchored text boxes | Insert and edit text boxes in the body, headers, and footers, with collaboration support. Boxes with tables are read-only. Linked boxes, automatic sizing, and rotation can clip content or show a placeholder. | Preserved |
-| Drawing shapes | Display supported shapes with fills, outlines, and shadows. Additional effects require the [drawing module](/docs/2.x/pro/drawing); unsupported shapes show a placeholder. Shapes are read-only. | Preserved |
+| Drawing shapes | Display supported shapes with fills, outlines, and shadows. Select, move, and delete shapes, lines, and groups; resizing and shape text stay read-only. Additional effects require the [drawing module](/docs/2.x/pro/drawing). | Preserved |
 | WMF and EMF | Display as images in the editor and as vectors in PDF with the drawing module. Failed conversions show placeholders; PDF export omits them and reports an error. These images are read-only. | Full |
 | Charts | Insert [charts](/docs/2.x/guides/charts), resize, move, and wrap them, and edit their type, elements, colors, and data. The [drawing module](/docs/2.x/pro/drawing) paints them in the editor and PDF. Unsupported charts use previews or placeholders; content locks and data bindings prevent chart edits. | Preserved |
 | DrawingML diagrams | Renders the saved diagram drawing. You can resize, move, wrap, and delete a diagram, but not edit its content. A diagram without its drawing needs the drawing module. | Full |
@@ -253,6 +253,7 @@ Compact equation replacement is disabled when it cannot keep the source. The equ
 | Continuous section | Shares the previous page when page size and orientation match. Its header and footer start on the next page. |
 | Odd-page and even-page sections | Can insert an empty sheet. `NUMPAGES` counts it; `SECTIONPAGES` does not. |
 | Empty paragraph that ends a section | Ignores its own page break before and adds no blank page. Text, a tab, hidden text, or a field turns this off. |
+| Table at the end of a story | A body, note, or text box gets an empty paragraph after the table. It takes a line and can start a page. Headers and footers add none. |
 | Line grids | Automatic body lines snap to whole grid steps. Table cells snap only with `w:adjustLineHeightInTable`. Headers, footers, and text boxes do not snap. |
 | Paragraph spacing | Adjacent spacing uses the larger value. `w:doNotUseHTMLParagraphAutoSpacing` adds the values and turns off automatic spacing. |
 | Empty paragraph marks | A named character style sets their font. Direct mark properties override it. |

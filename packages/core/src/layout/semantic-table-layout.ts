@@ -45,9 +45,12 @@ import {
   type AnchoredDrawingRecord,
   type DrawingAnchorFrameContext,
 } from './drawing-layout.ts';
+import { authoredRowFields } from './table-row-record-fields.ts';
 import {
-  cellSpacingGapPt,
+  exactSpacingExtensionPt,
+  rowOpeningGapPt,
   cellSpacingGeometry,
+  spacedCellBox,
   closingCellSpacingPt,
   sumCols,
 } from './table-cell-spacing.ts';
@@ -177,27 +180,7 @@ export const MAX_TABLE_ROW_FRAGMENTS = 4096;
 /** A cell box never narrows below this, however wide a `w:tblCellSpacing` gap is stated. */
 export const MIN_CELL_BOX_PT = 1;
 
-/**
- * Why a table could not be paginated as authored.
- *
- * Each is a bound: a row taller than a page, a row that cannot be split, or a row producing more
- * fragments than the limit allows.
- */
-export type TablePaginationErrorCode =
-  'table-row-overheight' | 'table-row-split-unsupported' | 'table-row-fragment-limit';
-
-/**
- * Bounded table pagination failure. Prefer this over emitting a fragment that overflows
- * the page content box.
- */
-export class TablePaginationError extends Error {
-  readonly code: TablePaginationErrorCode;
-  constructor(code: TablePaginationErrorCode, message: string) {
-    super(message);
-    this.name = 'TablePaginationError';
-    this.code = code;
-  }
-}
+export { TablePaginationError, type TablePaginationErrorCode } from './table-pagination-error.ts';
 
 /** Coupled text-box layout and cache invalidation for a hosted-story table flow lane. */
 export interface HostedStoryFlowDeps {
@@ -212,6 +195,8 @@ export interface TableFlowDeps {
   readonly exactOpeningExtension?: { readonly row: SemanticTableRow; readonly pt: number };
   /** The current row already has the full page band (possibly below repeated headers). */
   readonly rowAtPageStart?: boolean;
+  /** A spaced table's row below its first opens a fragment the table continues in. */
+  readonly opensTableBreak?: true;
   readonly paragraphLineUnitPt?: number;
   /** Story paragraphs outside cells snap to `paragraphLineUnitPt`; see {@link withStoryLineGrid}. */
   readonly snapsStoryLines?: true;
@@ -1300,21 +1285,27 @@ export function layoutRowFragmentBounded(
   // `w:tblCellSpacing` (17.4.45) is the space on each side of every cell, so neighbouring
   // cells, and a cell and the table edge, sit twice that apart. The gaps come out of the
   // table's own width, and every column gives up its share in proportion to its width.
-  const gap = cellSpacingGeometry(cols, cellSpacingPt);
+  const gap = cellSpacingGeometry(cols, cellSpacingPt, row.spacingFrame);
   const defaultLineHeight = deps.measurer.lineMetrics(DEFAULT_RUN_STYLE).height;
   const heightRule = row.height;
   const exactHeightPt =
     heightRule.rule === 'exact'
-      ? heightRule.valuePt + exactOpeningExtensionPt(row, deps)
+      ? heightRule.valuePt +
+        exactOpeningExtensionPt(row, deps) +
+        exactSpacingExtensionPt(row, cellSpacingPt)
       : undefined;
   const atLeastHeightPt = heightRule.rule === 'atLeast' ? heightRule.valuePt : undefined;
   const terminalBorderPt =
     !isHeaderRepeat && !isContinuation && depth === 0 && cellSpacingPt === 0
       ? exactTerminalBorderPt(row, deps)
       : 0;
-  // The same spacing opens a gap above each row's cells: content starts that much lower and
-  // the table closes the gap below its last row. An exact row keeps its authored height.
-  const rowGapPt = exactHeightPt === undefined ? cellSpacingGapPt(cellSpacingPt) : 0;
+  // The same spacing opens a gap above each row's cells, so content starts that much lower.
+  const opening = isContinuation
+    ? 'remainder'
+    : isHeaderRepeat || deps.opensTableBreak
+      ? 'break'
+      : 'start';
+  const rowGapPt = rowOpeningGapPt(row, cellSpacingPt, opening);
   const deferredRowAnchors: DeferredRowAnchor[] = [];
   // Exact rows clip to their authored box; never flow past it even when the page allows more.
   const { flowMaxBottom, pageBottom } = rowFlowBounds(maxBottom, rowTop, exactHeightPt);
@@ -1366,9 +1357,12 @@ export function layoutRowFragmentBounded(
     const { gridSpan: span, gridColumn } = cell;
     const slotX = left + sumCols(cols, 0, gridColumn);
     const slotW = sumCols(cols, gridColumn, Math.min(gridColumn + span, cols.length)) || total;
-    const spaced = gap && gridColumn < cols.length ? gap : null;
-    const cellX = spaced ? left + spaced.cellLeft(gridColumn) : slotX;
-    const cellW = Math.max(spaced ? spaced.cellWidth(gridColumn, span) : slotW, MIN_CELL_BOX_PT);
+    const spaced =
+      gap && gridColumn < cols.length
+        ? spacedCellBox(gap, row.cells, gridColumn, span, cols.length)
+        : null;
+    const cellX = spaced ? left + spaced.x : slotX;
+    const cellW = Math.max(spaced ? spaced.width : slotW, MIN_CELL_BOX_PT);
     const ownInsets = endRowInsets(cell, deps, terminalBorderPt, rowTop, maxBottom, cellSpacingPt);
     const insets = rowGapPt > 0 ? { ...ownInsets, top: ownInsets.top + rowGapPt } : ownInsets;
     // Each page fragment retains the cell padding, even when its paragraph continues.
@@ -1617,11 +1611,7 @@ export function layoutRowFragmentBounded(
   return {
     record: {
       id: row.id,
-      ...(row.revisionKind ? { revisionKind: row.revisionKind } : {}),
-      ...(row.revisionId !== undefined ? { revisionId: row.revisionId } : {}),
-      ...(row.revisionAuthor !== undefined ? { revisionAuthor: row.revisionAuthor } : {}),
-      ...(row.revisionDate !== undefined ? { revisionDate: row.revisionDate } : {}),
-      ...(row.changeSites ? { changeSites: row.changeSites } : {}),
+      ...authoredRowFields(row),
       rowIndex: 0,
       isHeaderRow: row.isHeader,
       isHeaderRepeat,

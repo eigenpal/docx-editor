@@ -59,6 +59,10 @@ export const MODE_RULES = {
     'With automatic hyphenation on, an autofit column minimum lets a word break between letters; legacy modes keep each word whole',
     'ECMA-376 Part 1 §17.15.1.10 autoHyphenation'
   ),
+  autofitRefitsNestedCells: modern(
+    'A nested autofit table whose stated cell widths pass its room gives way above each column content minimum',
+    'ECMA-376 Part 1 §17.4.64 tblLayout'
+  ),
   anchorOnlyParagraphSeeding: modern(
     'Seed the pages of consecutive anchor-only paragraphs before later bands wrap earlier text',
     'ECMA-376 Part 1 §20.4.2.3 anchor'
@@ -76,7 +80,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.18.44 ST_Jc'
   ),
   fixedTableContentEdgeOrigin: legacy(
-    'A collapsed table with an absolute width aligns the content edge of its aligned outer cell with the text column; a leading alignment without a stated indent or table style keeps the outer edge',
+    'A table with an absolute width aligns the content edge of its aligned outer cell with the text column, with or without cell spacing; a leading alignment without a stated indent or table style keeps the outer edge',
     'ECMA-376 Part 1 §17.4.52 tblLayout'
   ),
   floatingTableContentOrigin: legacy(
@@ -206,10 +210,6 @@ export const MODE_RULES = {
   tableParagraphWidowControl: modern(
     'Paragraphs that split inside table cells apply widow and orphan control',
     'ECMA-376 Part 1 §17.3.1.44 widowControl'
-  ),
-  unreachedGridColumnsTakeNoWidth: modern(
-    'Trailing grid columns that no cell reaches take no width, even when a row end skip spans them',
-    'ECMA-376 Part 1 §17.4.49 tblGrid'
   ),
   vMergeTextMovesPastHeadRow: modern(
     'Merged cell text moves whole into the next row when the head row cannot hold it',

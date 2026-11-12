@@ -13,6 +13,7 @@ import {
   runObservedStoreTransaction,
 } from '../package/canonical-primitive-capture.ts';
 import { readOoxmlPackage, type OoxmlPackage } from '../package/ooxml-package.ts';
+import { withoutStoryEndParagraph } from '../package/ooxml-story-end-repair.ts';
 import { mergeFragmentIntoPackage, type FragmentMergeResult } from './clipboard-fragment-merge.ts';
 import {
   MAX_FRAGMENT_DEPTH,
@@ -112,7 +113,8 @@ export function applyFragmentPaste(
   if (!read.ok) {
     return { ok: false, reason: 'invalidArgs', detail: `fragment-read:${read.reason}` };
   }
-  const proposed = input.revision ? trackedFragment(read.package, input.revision) : read.package;
+  const blocks = withoutStoryEndParagraph(read.package);
+  const proposed = input.revision ? trackedFragment(blocks, input.revision) : blocks;
   if (!proposed) return { ok: false, reason: 'invalidArgs', detail: 'fragment-untrackable' };
   const fragment: OoxmlPackage = proposed;
 

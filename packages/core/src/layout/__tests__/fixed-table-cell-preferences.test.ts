@@ -154,7 +154,7 @@ describe('fixed tables without a stated table width', () => {
   }
 });
 
-describe('cell width replacement boundaries', () => {
+describe('cell width replacement', () => {
   const smallerCells = table([2400, 3600], [[1200, 1800]]);
   for (const scenario of [
     {
@@ -163,14 +163,16 @@ describe('cell width replacement boundaries', () => {
       widths: [120, 180],
     },
     {
+      // Measured: AutoFit replaces the grid with the stated cell widths too.
       name: 'AutoFit layout',
       xml: smallerCells.replace('w:type="fixed"', 'w:type="autofit"'),
-      widths: [120, 180],
+      widths: [60, 90],
     },
     {
+      // Only the column a cell states a width for gives up its grid width.
       name: 'an unspecified cell width',
       xml: smallerCells.replace('<w:tcW w:w="1200" w:type="dxa"/>', ''),
-      widths: [120, 180],
+      widths: [120, 90],
     },
     {
       name: 'a percentage cell width',
@@ -178,7 +180,7 @@ describe('cell width replacement boundaries', () => {
         '<w:tcW w:w="1200" w:type="dxa"/>',
         '<w:tcW w:w="5000" w:type="pct"/>'
       ),
-      widths: [120, 180],
+      widths: [120, 90],
     },
     {
       name: 'a spanning cell',
@@ -186,7 +188,7 @@ describe('cell width replacement boundaries', () => {
       widths: [300],
     },
   ]) {
-    test(`preserves existing widths with ${scenario.name}`, () => {
+    test(`resolves widths with ${scenario.name}`, () => {
       const source = readDocument(
         `<w:document xmlns:w="${W}"><w:body>${scenario.xml}</w:body></w:document>`
       );

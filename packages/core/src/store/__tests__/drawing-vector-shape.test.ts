@@ -688,7 +688,8 @@ describe('wps vector shape projection', () => {
         resolveStyleMatrixReference: () => matrix.part.root,
       }).values(),
     ][0]!;
-    expect(projection.vectorShape).toBeNull();
+    // It paints nothing, and keeps its box with no placeholder, as a shape with no paint does.
+    expect(projection.vectorShape?.components).toEqual([]);
   });
 
   test('a line style reference paints without a direct line node', () => {

@@ -2,6 +2,7 @@ import { flattenChromeMenuSlots } from './chrome-menu-slots.ts';
 import { FILE_CHROME_GROUP } from './file-chrome-controls.ts';
 import { REVIEW_CHROME_GROUP } from './review-chrome-controls.ts';
 import { INSERT_CHROME_GROUP } from './insert-chrome-controls.ts';
+import { CHART_CHROME_GROUP, SHAPE_CHROME_GROUP } from './object-chrome-controls.ts';
 import type { ChromeMenu } from './chrome-menu-entries.ts';
 // Legacy editor chrome, expressed as data (interactive-paginated-editing M6V.1).
 //
@@ -506,6 +507,13 @@ export const CHROME_GROUPS = [
         state: { kind: 'command' },
       },
       {
+        // Opens the Format shape pane for the selected shape (`requestPane`).
+        id: 'formatShape',
+        labelKey: 'shape.formatShape',
+        paths: GENERATED_ICON_PATHS['format_color_fill'],
+        state: { kind: 'command' },
+      },
+      {
         id: 'wrap',
         shape: 'dropdown',
         labelKey: 'formattingBar.imageWrap',
@@ -523,6 +531,8 @@ export const CHROME_GROUPS = [
       },
     ],
   },
+  SHAPE_CHROME_GROUP,
+  CHART_CHROME_GROUP,
   {
     id: 'table',
     labelKey: 'formattingBar.groups.table',
@@ -654,6 +664,8 @@ export type ChromeGroupId =
   | 'review'
   | 'contentControl'
   | 'image'
+  | 'shape'
+  | 'chart'
   | 'table'
   | 'paragraph'
   | 'file'
@@ -719,8 +731,24 @@ export type ChromeSlotId =
   | 'image.insert'
   | 'image.properties'
   | 'image.editChart'
+  | 'image.formatShape'
   | 'image.wrap'
   | 'image.altText'
+  | 'shape.fill'
+  | 'shape.fillTransparency'
+  | 'shape.outlineColor'
+  | 'shape.outlineWidth'
+  | 'shape.outlineDash'
+  | 'chart.type'
+  | 'chart.title'
+  | 'chart.legend'
+  | 'chart.dataLabels'
+  | 'chart.axes'
+  | 'chart.gridlines'
+  | 'chart.categoryAxisTitle'
+  | 'chart.valueAxisTitle'
+  | 'chart.seriesColor'
+  | 'chart.data'
   | 'table.insert'
   | 'table.borderTarget'
   | 'table.borderColor'
@@ -811,12 +839,24 @@ export interface FormattingBarOptions {
   readonly direction?: boolean;
   /** Whether the selected drawing is a chart, which shows `image.editChart`. */
   readonly chart?: boolean;
+  /** Whether the selected drawing has a fill or outline to set, which shows `image.formatShape`. */
+  readonly shape?: boolean;
+  /**
+   * Whether a shape with a fill or outline is selected, which appends the toolbar controls of
+   * the contextual `shape` group (fill, outline colour, width, and dash).
+   */
+  readonly shapeControls?: boolean;
+  /**
+   * Whether a chart is selected, which appends the toolbar controls of the contextual `chart`
+   * group (type, title, legend, and data labels).
+   */
+  readonly chartControls?: boolean;
 }
 
 /**
  * The formatting-bar groups for one editor snapshot: the default bar, the contextual `image`
- * group when a drawing is selected (with Edit chart for a chart), and the direction group when
- * `options.direction` asks.
+ * group when a drawing is selected (with Edit chart for a chart and Format shape for a shape), and
+ * the direction group when `options.direction` asks.
  * Insertion without a selection lives in the packaged Insert menu (`CHROME_MENUS`), not in
  * the bar — a host that wants a bar button places `DocxEditor.Toolbar.ImageInsert` itself.
  *
@@ -835,9 +875,21 @@ export function formattingBarChromeGroups(
   if (!image) return groups;
   const imageGroup = CHROME_GROUPS_CONFORMANCE.find((group) => group.id === 'image');
   if (!imageGroup) return groups;
-  if (options?.chart) return [...groups, imageGroup];
-  const controls = imageGroup.controls.filter((control) => control.id !== 'editChart');
-  return [...groups, { ...imageGroup, controls }];
+  const controls = imageGroup.controls.filter(
+    (control) =>
+      (control.id !== 'editChart' || options?.chart) &&
+      (control.id !== 'formatShape' || options?.shape)
+  );
+  // The object's own controls follow the image group, as a contextual tab would.
+  const objectGroups = CHROME_GROUPS_CONFORMANCE.filter(
+    (group) =>
+      (group.id === 'shape' && options?.shapeControls) ||
+      (group.id === 'chart' && options?.chartControls)
+  ).map((group) => ({
+    ...group,
+    controls: group.controls.filter((control) => control.defaultToolbar !== false),
+  }));
+  return [...groups, { ...imageGroup, controls }, ...objectGroups];
 }
 
 // ── The menu region above the toolbar ─────────────────────────────────────────────────

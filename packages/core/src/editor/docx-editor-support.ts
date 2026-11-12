@@ -914,6 +914,8 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         ? { supported: true, mutating: true }
         : { supported: false, code: 'invalidArgs', reason: 'unsupported transform action' };
     case 'setImagePosition':
+    case 'setShapeFill':
+    case 'setShapeOutline':
       return { supported: true, mutating: true };
     case 'setImageProperties':
       return { supported: true, mutating: true };

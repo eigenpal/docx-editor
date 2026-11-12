@@ -107,6 +107,14 @@ const INLINE_DRAWING =
   '</wp:inline></w:drawing></w:r><w:r><w:t>x</w:t></w:r></w:p>' +
   '<w:p><w:r><w:t>y</w:t></w:r></w:p><w:sectPr/>';
 
+const WPS_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+const SHAPE_DRAWING = INLINE_DRAWING.replace(
+  `<a:graphicData uri="${PIC_URI}">${PIC}</a:graphicData>`,
+  `<a:graphicData uri="${WPS_URI}"><wps:wsp xmlns:wps="${WPS_URI}"><wps:cNvSpPr/><wps:spPr>` +
+    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="4472C4"/>' +
+    '</a:solidFill></wps:spPr><wps:bodyPr/></wps:wsp></a:graphicData>'
+);
+
 const ANCHOR_DRAWING =
   '<w:p><w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" ' +
   'behindDoc="0" locked="0" relativeHeight="1" allowOverlap="1" layoutInCell="1">' +
@@ -731,6 +739,12 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
       drawingNodeId: drawingId(store),
       title: 'T',
       description: 'D',
+    })),
+    story('setShapeFormat', drawingDoc(SHAPE_DRAWING), (store) => ({
+      op: 'setShapeFormat',
+      drawingNodeId: drawingId(store),
+      fill: { type: 'none' },
+      outline: { color: 'FF0000', widthPt: 2 },
     })),
     story('setDrawingLocks', drawingDoc(INLINE_DRAWING), (store) => ({
       op: 'setDrawingLocks',

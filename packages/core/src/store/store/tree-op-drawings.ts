@@ -8,7 +8,7 @@ import {
   applyMoveInlineDrawing,
   validateMoveInlineDrawing,
 } from './tree-op-move-inline-drawing.ts';
-import { drawingAtomProjection } from '../package/drawing-atom-projection.ts';
+import { atomProjectionForEdit } from '../package/drawing-atom-choice.ts';
 // Canonical drawing mutations over the OOXML tree (typed-drawings-and-images task 11).
 //
 // Pure tree edits only — package media/relationship lifecycle stays in task 12. Each op
@@ -51,11 +51,19 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { cloneWithNewIds, fromEdit, paragraphContainingNode, TEXT_DEPS } from './tree-op-nodes.ts';
-import { drawingEffect, drawingOpImpact, isValidXmlMetadata } from './tree-op-drawing-kinds.ts';
+import {
+  drawingEffect,
+  drawingOpImpact,
+  isValidXmlMetadata,
+  SHAPE_FRAME_EDITS,
+  TEXTBOX_FRAME_EDITS,
+} from './tree-op-drawing-kinds.ts';
 import { chartDrawingOf, chartFrameEdit } from './tree-op-chart-drawing.ts';
 import { DIAGRAM_FRAME_EDITS } from './tree-op-diagram-drawing.ts';
-import { holdsDiagramGraphic } from '../package/diagram-frame.ts';
+import { holdsDiagramGraphic, holdsShapeGraphic } from '../package/diagram-frame.ts';
+import { mergedDrawingLocks, shapeLocksOf } from '../package/drawing-shape-locks.ts';
 import { holdsChartGraphic } from '../package/mc-fallback-projection.ts';
+import { applyShapeFormat, validateShapeFormat } from './tree-op-shape-format.ts';
 import {
   applyLegacyVmlGeometryOp,
   legacyVmlDrawingOp,
@@ -280,19 +288,15 @@ function readFrameLocksFromTree(anchor: OoxmlElement): DrawingLocksInput {
   };
 }
 
+/** Whether `wp:anchor/@locked` fixes the drawing's anchor paragraph. */
+export function drawingAnchorLocked(drawing: OoxmlDrawingNode): boolean {
+  const anchor = anchorRootOf(drawing);
+  return !!anchor && parseOoxmlBoolean(schemaAttributeValue(anchor.attributes, 'locked')) === true;
+}
+
+/** The drawing's frame and shape locks (`mergedDrawingLocks`). */
 function effectiveLocks(anchor: OoxmlElement): DrawingLocks {
-  const anchorLocked =
-    parseOoxmlBoolean(schemaAttributeValue(anchor.attributes, 'locked')) === true;
-  if (anchorLocked) {
-    return Object.freeze({ select: true, move: true, resize: true, changeAspect: true });
-  }
-  const frame = readFrameLocksFromTree(anchor);
-  return Object.freeze({
-    select: frame.select ?? false,
-    move: frame.move ?? false,
-    resize: frame.resize ?? false,
-    changeAspect: frame.changeAspect ?? false,
-  });
+  return mergedDrawingLocks(readFrameLocksFromTree(anchor), shapeLocksOf(anchor));
 }
 
 function lockBlocks(anchor: OoxmlElement, op: DrawingTreeDocOp['op']): TreeOpRejection | null {
@@ -315,7 +319,7 @@ export function chartDrawingLocks(chartDrawing: OoxmlElement): DrawingLocks | nu
   return anchor ? effectiveLocks(anchor) : null;
 }
 
-/** A chart's delete lock, read from its chart drawing's anchor: `@locked` or `noSelect`. */
+/** A chart's delete lock, read from its chart drawing's frame locks: `noSelect`. */
 function chartLockBlocks(chartDrawing: OoxmlElement): TreeOpRejection | null {
   const anchor = anchorRootOf(chartDrawing as OoxmlDrawingNode);
   return anchor ? lockBlocks(anchor, 'deleteDrawing') : null;
@@ -335,7 +339,7 @@ function drawingContext(
     return 'chart-drawing';
   const original = findNode(part, drawingNodeId);
   const atomProjection =
-    original?.kind === 'drawing' ? null : drawingAtomProjection(part, drawingNodeId);
+    original?.kind === 'drawing' ? null : atomProjectionForEdit(part, drawingNodeId, projectionOf);
   const resolvedId = atomProjection?.drawingNodeId ?? drawingNodeId;
   if (!isTopLevelDrawing(part, resolvedId)) {
     const node = findNode(part, drawingNodeId);
@@ -351,13 +355,8 @@ function drawingContext(
     projection.picture === null &&
     !chart &&
     !(holdsDiagramGraphic(drawing) && DIAGRAM_FRAME_EDITS.has(operation)) &&
-    !(
-      projection.textboxStory &&
-      (operation === 'resizeDrawing' ||
-        operation === 'positionDrawing' ||
-        operation === 'deleteDrawing' ||
-        operation === 'setDrawingMetadata')
-    )
+    !(projection.textboxStory && TEXTBOX_FRAME_EDITS.has(operation)) &&
+    !(holdsShapeGraphic(drawing) && SHAPE_FRAME_EDITS.has(operation))
   )
     return 'not-a-picture-drawing';
   return { drawing, anchor, projection };
@@ -411,7 +410,13 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
       // A diagram drawing keeps the parts its `dgm:relIds` name (`moveInlineDrawing`, a drag).
       const chart = holdsChartGraphic(op.drawing) || holdsDiagramGraphic(op.drawing);
       const projection = chart ? null : projectionOf(part, op.drawing);
-      if (!chart && (!projection || (projection.picture === null && !projection.textboxStory)))
+      if (
+        !chart &&
+        (!projection ||
+          (projection.picture === null &&
+            !projection.textboxStory &&
+            !holdsShapeGraphic(op.drawing)))
+      )
         return 'not-a-picture-drawing';
       // `CT_TrackChange` requires `@w:author` to attribute and resolve the proposal.
       if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
@@ -500,6 +505,8 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
       if (!ctx.projection.picture) return 'not-a-drawing';
       return lockBlocks(ctx.anchor, op.op);
     }
+    case 'setShapeFormat':
+      return validateShapeFormat(part, op);
     default: {
       const _exhaustive: never = op;
       void _exhaustive;
@@ -1568,7 +1575,10 @@ export function applyDrawingOp(
       const ctx = chart ? null : drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return { ok: false, reason: ctx };
       const targetId =
-        chart?.removeNodeId ?? (ctx!.projection.textboxStory ? op.drawingNodeId : ctx!.drawing.id);
+        chart?.removeNodeId ??
+        (ctx!.projection.textboxStory || holdsShapeGraphic(ctx!.drawing)
+          ? op.drawingNodeId
+          : ctx!.drawing.id);
       const paragraph = paragraphContainingNode(part, targetId);
       const effect: TreeOpEffect = {
         dirty: paragraph ? [paragraph.id, targetId] : [targetId],
@@ -1628,6 +1638,8 @@ export function applyDrawingOp(
       const updatedAnchor = updateTransform(ctx.anchor, ctx.projection, op.action);
       return replaceDrawingAnchor(part, ctx.drawing, updatedAnchor, op, options);
     }
+    case 'setShapeFormat':
+      return applyShapeFormat(part, op, options);
     default: {
       const _exhaustive: never = op;
       void _exhaustive;
