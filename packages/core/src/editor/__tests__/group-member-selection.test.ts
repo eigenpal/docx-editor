@@ -179,3 +179,24 @@ test('wrap, alt text, and properties refuse with their own reason; another drawi
     container.remove();
   }
 });
+
+test('undo and redo of an edit to a shape in a group keep that shape selected', async () => {
+  const { editor, container } = await mount();
+  try {
+    const group = drawingNamed(editor, 3);
+    pressOn(container, editor, group);
+    pressGroupAt(container, editor, group, 0.75);
+    const memberId = editor.snapshot().image!.memberId;
+    expect(memberId).toBeString();
+    expect(editor.exec({ type: 'setShapeFill', color: 'FF0000' })).toMatchObject({ ok: true });
+    expect(editor.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
+    expect(editor.snapshot().image?.memberId).toBe(memberId);
+    expect(editor.snapshot().image?.shapeFormat?.fill.color).toBe('A9D18E');
+    expect(editor.exec({ type: 'redo' })).toMatchObject({ ok: true, changed: true });
+    expect(editor.snapshot().image?.memberId).toBe(memberId);
+    expect(editor.snapshot().image?.shapeFormat?.fill.color).toBe('FF0000');
+  } finally {
+    editor.destroy();
+    container.remove();
+  }
+});

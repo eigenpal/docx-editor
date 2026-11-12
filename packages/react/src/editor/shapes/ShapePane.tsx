@@ -63,9 +63,11 @@ export function DocxEditorShapePane({ className }: DocxEditorShapePaneProps): Re
     );
   }, [editor]);
   // A refusal belongs to the shape it was about.
-  const [refusalShape, setRefusalShape] = useState(shape.drawingNodeId);
-  if (refusalShape !== shape.drawingNodeId) {
-    setRefusalShape(shape.drawingNodeId);
+  // Drafts and a refusal belong to the shape they were about: a group, or one shape in it.
+  const shapeKey = shape.memberId ?? shape.drawingNodeId;
+  const [refusalShape, setRefusalShape] = useState(shapeKey);
+  if (refusalShape !== shapeKey) {
+    setRefusalShape(shapeKey);
     setRefusal(null);
   }
   const classes = `docx-chart-pane docx-shape-pane${className ? ` ${className}` : ''}`;
@@ -132,7 +134,7 @@ export function DocxEditorShapePane({ className }: DocxEditorShapePaneProps): Re
           onPick={fillPick}
         />
         <ChartField
-          draftKey={drawingNodeId}
+          draftKey={shapeKey ?? drawingNodeId}
           label={t('shape.pane.fillHex')}
           visibleLabel={t('shape.pane.fillHex')}
           value={fill.type === 'solid' ? shapeHexText(fill.color) : ''}
@@ -141,7 +143,7 @@ export function DocxEditorShapePane({ className }: DocxEditorShapePaneProps): Re
           onCommit={(text) => apply({ type: 'fillColor', color: text })}
         />
         <ChartField
-          draftKey={drawingNodeId}
+          draftKey={shapeKey ?? drawingNodeId}
           label={t('shape.pane.transparency')}
           visibleLabel={t('shape.pane.transparency')}
           value={shapeTransparencyText(fill)}
@@ -179,7 +181,7 @@ export function DocxEditorShapePane({ className }: DocxEditorShapePaneProps): Re
           onPick={outlinePick}
         />
         <ChartField
-          draftKey={drawingNodeId}
+          draftKey={shapeKey ?? drawingNodeId}
           label={t('shape.pane.outlineHex')}
           visibleLabel={t('shape.pane.outlineHex')}
           value={outline.visible ? shapeHexText(outline.color) : ''}
@@ -197,7 +199,7 @@ export function DocxEditorShapePane({ className }: DocxEditorShapePaneProps): Re
             onChange={(text) => run({ type: 'outlineWidth', text })}
           />
           <ChartField
-            draftKey={drawingNodeId}
+            draftKey={shapeKey ?? drawingNodeId}
             label={t('shape.pane.width')}
             visibleLabel={t('shape.pane.width')}
             value={widthText}

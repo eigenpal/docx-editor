@@ -4,7 +4,7 @@
 // a typed field when the user presses Enter or leaves it, each as one undo step. The checks and
 // the commands come from core (`shape-pane.ts`); both panes render the same markup.
 
-import { defineComponent, nextTick, ref, watch } from 'vue';
+import { computed, defineComponent, nextTick, ref, watch } from 'vue';
 import {
   SHAPE_OUTLINE_WIDTHS,
   chartThemeHexes,
@@ -73,7 +73,9 @@ export const DocxEditorShapePane = defineComponent({
       { immediate: true }
     );
     // A refusal belongs to the shape it was about.
-    watch(shape.drawingNodeId, () => {
+    // Drafts and a refusal belong to the shape they were about: a group, or one shape in it.
+    const shapeKey = computed(() => shape.memberId.value ?? shape.drawingNodeId.value);
+    watch(shapeKey, () => {
       refusal.value = null;
     });
     /** Applies one change: null when it applied, else the translated reason. */
@@ -149,7 +151,7 @@ export const DocxEditorShapePane = defineComponent({
               onPick={fillPick}
             />
             <ChartField
-              draftKey={drawingNodeId}
+              draftKey={shapeKey.value ?? drawingNodeId}
               label={t('shape.pane.fillHex')}
               visibleLabel={t('shape.pane.fillHex')}
               value={fill.type === 'solid' ? shapeHexText(fill.color) : ''}
@@ -158,7 +160,7 @@ export const DocxEditorShapePane = defineComponent({
               onCommit={(text: string) => apply({ type: 'fillColor', color: text })}
             />
             <ChartField
-              draftKey={drawingNodeId}
+              draftKey={shapeKey.value ?? drawingNodeId}
               label={t('shape.pane.transparency')}
               visibleLabel={t('shape.pane.transparency')}
               value={shapeTransparencyText(fill)}
@@ -196,7 +198,7 @@ export const DocxEditorShapePane = defineComponent({
               onPick={outlinePick}
             />
             <ChartField
-              draftKey={drawingNodeId}
+              draftKey={shapeKey.value ?? drawingNodeId}
               label={t('shape.pane.outlineHex')}
               visibleLabel={t('shape.pane.outlineHex')}
               value={outline.visible ? shapeHexText(outline.color) : ''}
@@ -214,7 +216,7 @@ export const DocxEditorShapePane = defineComponent({
                 onChange={(text: string) => run({ type: 'outlineWidth', text })}
               />
               <ChartField
-                draftKey={drawingNodeId}
+                draftKey={shapeKey.value ?? drawingNodeId}
                 label={t('shape.pane.width')}
                 visibleLabel={t('shape.pane.width')}
                 value={widthText}

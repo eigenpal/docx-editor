@@ -22,6 +22,8 @@ import { useEditorState } from '../useEditorState';
 export interface UseSelectedShapeReturn {
   /** The drawing node id of the selected shape, text box, line, or group, or null. */
   readonly drawingNodeId: string | null;
+  /** The shape selected inside the group by a second press, or null. */
+  readonly memberId: string | null;
   /** The fill and outline, or null when no shape with a fill or outline is selected. */
   readonly format: ShapeFormatState | null;
   /** Whether `setShapeFill` can run now. */

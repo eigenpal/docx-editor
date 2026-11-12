@@ -273,6 +273,8 @@ export function selectGroupMemberAt(
   clientX: number,
   clientY: number
 ): boolean {
+  // A group that paints its fallback (or a placeholder) shows no shapes of its own to pick.
+  if (!frame.record.vectorShape) return false;
   const boxes = groupMemberBoxes(partOf(surface, drawingNodeId), drawingNodeId);
   if (!boxes || rect.width <= 0 || rect.height <= 0) return false;
   const content = frame.record.geometry.contentBounds;

@@ -330,7 +330,7 @@ import {
   storyScopeOfNodeId,
   noteScopeIdInLayout,
 } from './surface-scope.ts';
-import { memberIntent } from './group-member-selection.ts';
+import { drawingSelectionIntentKey, memberIntent } from './group-member-selection.ts';
 import { createCaretViewFollower, type CaretFollowMode } from './surface-caret-follow.ts';
 import { createInPlaceReplacement } from './surface-replace-in-place.ts';
 import {
@@ -591,15 +591,7 @@ export function mountPaginatedSurface(
   };
   /** Move the intent and report once when it changes — the flip is observable state. */
   function setDrawingIntent(next: DrawingSelectionIntent, report: boolean): void {
-    if (
-      next.kind === drawingIntent.kind &&
-      (next.kind !== 'pointer' ||
-        (drawingIntent.kind === 'pointer' &&
-          next.drawingNodeId === drawingIntent.drawingNodeId &&
-          next.memberNodeId === drawingIntent.memberNodeId))
-    ) {
-      return;
-    }
+    if (drawingSelectionIntentKey(next) === drawingSelectionIntentKey(drawingIntent)) return;
     drawingIntent = next;
     // Some transitions land on the exact offsets the selection already holds — a press on
     // the drawing at the untouched mount caret adopts an equal selection and publishes
@@ -697,6 +689,7 @@ export function mountPaginatedSurface(
     // The remote caret takes the commit a collaboration step makes for history, not a peer's.
     if (collaborationSession) remoteCaret.expectHistory(true);
     let result: ReturnType<DocumentSelectionHistory['step']>;
+    const member = drawingIntent.kind === 'pointer' ? drawingIntent : null;
     try {
       result = documentSelectionHistory.step(direction, () => {
         if (collaborationSession) return collaborationSession[direction]();
@@ -718,8 +711,12 @@ export function mountPaginatedSurface(
     // A chart or picture edit steps back with the object still selected, so the next undo,
     // the Chart pane, and the handles stay on it. `selectDrawing` refuses a drawing that the
     // step removed, and the caret then stays where the selection put it.
-    if (!carried && result.selection && result.drawing)
+    if (!carried && result.selection && result.drawing) {
       surface.selectDrawing(result.drawing, result.selection.head.paragraphId);
+      // A shape selected inside the group stays selected across its own undo and redo.
+      if (member?.drawingNodeId === result.drawing && member.memberNodeId)
+        surface.selectDrawingMember(member.memberNodeId);
+    }
   }
   function restoreCaretFormat(value: CaretFormatSnapshot): void {
     selectionSync.noteModelMoved();

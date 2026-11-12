@@ -26,6 +26,11 @@ export type SelectedShapeCommand =
 export interface SelectedShapeView {
   /** The drawing node id of the selected shape, text box, line, or group, or null. */
   readonly drawingNodeId: string | null;
+  /**
+   * The shape selected inside the group `drawingNodeId` by a second press, or null. The
+   * format and the edits then apply to that shape alone.
+   */
+  readonly memberId: string | null;
   /** The fill and outline, or null when no shape with a fill or outline is selected. */
   readonly format: ShapeFormatState | null;
   /** Whether `setShapeFill` can run now. */
@@ -48,6 +53,7 @@ const NO_SOLID_FILL_REASON = 'the shape has no solid fill to change; set a color
 
 const NO_SHAPE: SelectedShapeView = Object.freeze({
   drawingNodeId: null,
+  memberId: null,
   format: null,
   canEditFill: false,
   canEditTransparency: false,
@@ -66,6 +72,7 @@ const NO_SHAPE: SelectedShapeView = Object.freeze({
 export function sameSelectedShape(a: SelectedShapeView, b: SelectedShapeView): boolean {
   return (
     a.drawingNodeId === b.drawingNodeId &&
+    a.memberId === b.memberId &&
     (a.format === b.format || JSON.stringify(a.format) === JSON.stringify(b.format)) &&
     a.canEditFill === b.canEditFill &&
     a.canEditTransparency === b.canEditTransparency &&
@@ -116,6 +123,7 @@ export function readSelectedShape(
       : NO_SOLID_FILL_REASON);
   return {
     drawingNodeId,
+    memberId: image.memberId ?? null,
     format,
     canEditFill: fillDisabledReason === null,
     canEditTransparency: transparencyDisabledReason === null,

@@ -22,6 +22,8 @@ import { useEditorState } from '../useEditorState';
 export interface UseSelectedShapeReturn {
   /** The drawing node id of the selected shape, text box, line, or group, or null. */
   readonly drawingNodeId: ComputedRef<string | null>;
+  /** The shape selected inside the group by a second press, or null. */
+  readonly memberId: ComputedRef<string | null>;
   /** The fill and outline, or null when no shape with a fill or outline is selected. */
   readonly format: ComputedRef<ShapeFormatState | null>;
   /** Whether `setShapeFill` can run now. */
@@ -73,6 +75,7 @@ export function useSelectedShape(): UseSelectedShapeReturn {
       : { ...result, reason: localizeDisabledReason(result.reason, t) ?? result.reason };
   return {
     drawingNodeId: computed(() => view.value.drawingNodeId),
+    memberId: computed(() => view.value.memberId),
     format: computed(() => view.value.format),
     canEditFill: computed(() => view.value.canEditFill),
     canEditTransparency: computed(() => view.value.canEditTransparency),
