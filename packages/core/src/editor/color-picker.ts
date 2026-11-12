@@ -11,6 +11,7 @@
 // paint from `colorPickHex`. DOM-free, except the focus helpers, which take the grid element.
 
 import type { ShapeThemeColorName } from '../store/store/tree-op-types.ts';
+import { hostWindowOf } from './host-realm.ts';
 
 /** A theme colour slot of a picker: the same ten slots a shape or chart colour can name. @public */
 export type ColorPickerThemeSlot = ShapeThemeColorName;
@@ -296,11 +297,26 @@ function rovingSwatch(grid: HTMLElement, active: HTMLElement | null): void {
 }
 
 /**
+ * Keep an opened popover grid inside the window. The grid opens under the trigger, aligned to
+ * its end edge; when that edge leaves no room (a trigger near the start of a host toolbar), the
+ * grid takes `data-align="start"` and aligns to the start edge instead. @public
+ */
+export function alignColorPickerPopover(grid: HTMLElement | null): void {
+  if (!grid) return;
+  grid.removeAttribute('data-align');
+  const rect = grid.getBoundingClientRect();
+  const width = hostWindowOf(grid).innerWidth;
+  if (rect.left < 0 || (width > 0 && rect.right > width)) grid.setAttribute('data-align', 'start');
+}
+
+/**
  * Focus the current swatch of an opened grid (`aria-pressed="true"`), else its first button,
- * and scroll the whole grid into view. @public
+ * and scroll the whole grid into view. A popover grid first moves inside the window
+ * (`alignColorPickerPopover`). @public
  */
 export function focusColorSwatch(grid: HTMLElement | null): void {
   if (!grid) return;
+  alignColorPickerPopover(grid);
   const current =
     grid.querySelector<HTMLElement>('[aria-pressed="true"]') ??
     grid.querySelector<HTMLElement>('button');

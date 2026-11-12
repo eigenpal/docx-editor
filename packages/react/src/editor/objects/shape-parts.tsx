@@ -102,7 +102,14 @@ export function ShapeOutlineWidth(props: ShapePartProps): ReactElement | null {
       {...(props.variant === 'compact' ? {} : { label: t('shape.pane.widthPreset') })}
       slotId="shape.outlineWidth"
       options={options}
-      other={t('shape.pane.otherWidth')}
+      other={
+        // A compact list has no number box, so it names the width it cannot list.
+        props.variant === 'compact' && typeof shape.format?.outline.widthPt === 'number'
+          ? t('shape.pane.widthPoints', {
+              value: Math.round(shape.format.outline.widthPt * 100) / 100,
+            })
+          : t('shape.pane.otherWidth')
+      }
       parse={Number}
     />
   );

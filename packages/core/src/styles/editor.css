@@ -9764,6 +9764,14 @@ p.docx-review__refused {
 [dir='rtl'] .docx-editor .docx-chart-pane__grid {
   transform-origin: top left;
 }
+.docx-editor .docx-chart-pane__grid[data-align='start'] {
+  inset-inline-start: 0;
+  inset-inline-end: auto;
+  transform-origin: top left;
+}
+[dir='rtl'] .docx-editor .docx-chart-pane__grid[data-align='start'] {
+  transform-origin: top right;
+}
 @starting-style {
   .docx-editor .docx-chart-pane__grid {
     opacity: 0;

@@ -261,7 +261,8 @@ export function ChoiceControl<K extends ObjectSlotId>(
         >
           {listed ? null : (
             <option value="" disabled>
-              {props.other ?? ''}
+              {/* With nothing to show, a compact list names itself, as its label is hidden. */}
+              {control.value == null && variant === 'compact' ? label : (props.other ?? '')}
             </option>
           )}
           {props.options.map(([option, text]) => (

@@ -858,6 +858,7 @@ export {
   colorPickOf,
   colorPickTheme,
   documentThemeHexes,
+  alignColorPickerPopover,
   focusColorSwatch,
   moveColorSwatchFocus,
   type ColorPick,
