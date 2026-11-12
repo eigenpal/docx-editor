@@ -17,7 +17,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // written under (or the peer refuses the part as `invalid-qname`).
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import type { ImageDecodePort, OoxmlNode, OoxmlPackage } from '@docx-editor.dev/core/store';
+import {
+  readOoxmlPackage,
+  partNameKey,
+  type ImageDecodePort,
+  type OoxmlNode,
+  type OoxmlPackage,
+} from '@docx-editor.dev/core/store';
+import { readCollaborationDocument } from '../document-read.ts';
 import { BODY, createPeerHarness, walk, zipDocument } from './document-peer-support.ts';
 
 const PNG_1X1 = Uint8Array.from(
@@ -108,6 +115,17 @@ describe('a live image insert reaches the peer', () => {
     const joinedMedia = mediaBytes(joined);
     expect(joinedMedia).toHaveLength(1);
     expect([...joinedMedia[0]!]).toEqual([...PNG_1X1]);
+
+    for (const peer of [alice, bob]) {
+      const saved = readOoxmlPackage(readCollaborationDocument(peer.ydoc));
+      if (!saved.ok) throw new Error(saved.reason);
+      const mediaName = [...saved.package.partBytes.keys()].find((name) =>
+        name.includes('/media/')
+      )!;
+      expect(saved.package.contentTypes.overrides.get(partNameKey(mediaName))).toBe('image/png');
+      expect(saved.package.partBytes.get(mediaName)).toEqual(PNG_1X1);
+      expect(drawingCount(saved.package)).toBe(1);
+    }
 
     harness.expectConverged(alice, bob);
   });
