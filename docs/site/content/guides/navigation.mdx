@@ -70,6 +70,8 @@ With the core package, use the instance from `createDocxEditor()`. Prevent the d
 | `clearHighlights(name)` | Remove one set of text highlights, or all of them. | No |
 | `getHighlightsAt(clientX, clientY)` | Read the text highlights under a pointer position. | No |
 | `exec({ type: 'setSelection', anchor })` | Move the caret to a paragraph reference. | Yes |
+| `getSelectionRange()` | Read the selection as paragraph IDs and offsets. | No |
+| `getCaretRect()` | Read the caret position in client coordinates. | No |
 
 <DocumentNavigationDemo />
 
@@ -154,6 +156,66 @@ if (result.ok) editor.focus();
 ```
 
 The caret goes to the start of the paragraph or the matched text.
+
+## Read the selection and the caret
+
+Call `getSelectionRange()` to read the selection as two positions. Each position has a `blockId` and an `offset`, so it compares directly with `TextMatch.blockId` and `HighlightRange.blockId`. Offsets count UTF-16 code units in the units that `TextMatch.start` and `HighlightRange.start` use. `head` is the caret, and `anchor` is where the selection started. `scope` names the open story that holds the selection. In viewing mode, text boxes do not open, so a selection in a text box names the story around it.
+
+The method returns `null` before a document opens, while a picture or another drawing is selected, and while table cells are selected as a block. The selection stays readable after focus moves to your own controls. Edits before the caret, including edits from other participants in a collaboration session, move the offset.
+
+To restore a selection later, pass the result to `setSelection` unchanged. The editor opens the header, footer, note, or text box that holds the selection. `setSelection` also accepts `paragraphId`, the older name for `blockId`:
+
+```ts
+const range = editor.getSelectionRange();
+// ... the user works in a side panel ...
+if (range) editor.exec({ type: 'setSelection', range });
+```
+
+Call `getCaretRect()` to place a popover or a menu at the caret. It returns a zero-width rectangle in client coordinates, in the same shape as `DOMRect`. The rectangle comes from the document layout, so it is available while focus is elsewhere. The method returns `null` when the caret's page is not painted or the editor is not attached. Read it again after the document scrolls or the zoom changes.
+
+The following example shows a suggestions popover below the caret:
+
+```ts
+const caret = editor.getCaretRect();
+if (caret) {
+  popover.style.left = `${caret.left}px`;
+  popover.style.top = `${caret.bottom}px`;
+}
+```
+
+To react to caret moves in a component, select `selectionRange` from the editor state. The value keeps its reference until the selection moves, so other state changes do not render the component again.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useEditorState } from '@docx-editor.dev/react';
+
+function CaretOffset() {
+  const range = useEditorState((s) => s.selectionRange);
+  return <span>{range ? `Offset ${range.head.offset}` : 'No text selected'}</span>;
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { useEditorState } from '@docx-editor.dev/vue';
+
+const range = useEditorState((s) => s.selectionRange);
+</script>
+
+<template>
+  <span>{{ range ? `Offset ${range.head.offset}` : 'No text selected' }}</span>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+With the core package, read `snapshot.selectionRange` in a `selectionChange` handler.
 
 ## Search and replace text
 

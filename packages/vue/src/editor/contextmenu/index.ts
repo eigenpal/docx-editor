@@ -40,6 +40,7 @@ export {
 export {
   ContextMenuContext,
   useContextMenuContext,
+  useContextMenuAnchor,
   useContextMenuTarget,
   type ContextMenuAnchor,
   type ContextMenuContextValue,

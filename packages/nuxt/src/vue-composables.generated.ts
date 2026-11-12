@@ -9,6 +9,7 @@ export const VUE_COMPOSABLES = [
   'useContentControl',
   'useContentControlInstance',
   'useContentControlWidget',
+  'useContextMenuAnchor',
   'useContextMenuTarget',
   'useDocumentOutline',
   'useDocumentSearch',

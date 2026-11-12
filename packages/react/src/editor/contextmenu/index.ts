@@ -34,6 +34,7 @@ export {
   type ContextMenuTableRowProps,
 } from './parts';
 export {
+  useContextMenuAnchor,
   useContextMenuTarget,
   type ContextMenuAnchor,
   type ContextMenuContextValue,

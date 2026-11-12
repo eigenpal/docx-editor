@@ -902,7 +902,7 @@ export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'l
 export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.comment-author-required' | 'edit.comment-author-mismatch' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.tracked-deleted-text-only' | 'edit.tracked-foreign-revision-unsupported' | 'edit.tracked-own-pending-change' | 'edit.picture-selected' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.field-unsupported' | 'edit.field-result-unsupported' | 'edit.ooxml-unsupported' | 'edit.style-not-defined' | 'edit.no-styles-defined' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-merge-not-rectangle' | 'edit.table-split-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.preview-active' | 'edit.preview-unsupported' | 'edit.preview-composing' | 'edit.preview-diverged' | 'edit.read-after-commit' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
 
 // @public
-export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits {
+export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits, EditorSelectionReads {
     acceptReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
     addComment(text: string, options?: HistoryGroupOptions): ExecResult;
     addComment(text: string, author?: string, options?: HistoryGroupOptions): ExecResult;
@@ -996,10 +996,6 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
         readonly italic?: boolean;
         readonly styleId?: string;
         readonly underline?: boolean;
-    } | null;
-    getSelectionPlacement(): {
-        readonly anchorY: number;
-        readonly pageIndex: number;
     } | null;
     getTableCellSelection(): {
         readonly cellIds: readonly string[];
@@ -1678,10 +1674,30 @@ export type EditorScope = {
 };
 
 // @public
-export type EditorSelection = SemanticSelection | {
+export type EditorSelection = {
+    anchor: TextPosition;
+    head: TextPosition;
+} | SemanticSelection | {
     from: DocAnchor;
     to: DocAnchor;
 };
+
+// @public
+export interface EditorSelectionRange {
+    readonly anchor: TextPosition;
+    readonly head: TextPosition;
+    readonly scope: ViewScope;
+}
+
+// @public
+export interface EditorSelectionReads {
+    getCaretRect(): HighlightRect | null;
+    getSelectionPlacement(): {
+        readonly anchorY: number;
+        readonly pageIndex: number;
+    } | null;
+    getSelectionRange(): EditorSelectionRange | null;
+}
 
 // @public
 export interface EditorSnapshot {
@@ -1722,6 +1738,7 @@ export interface EditorSnapshot {
     // (undocumented)
     readonly selection: DocRange | null;
     readonly selectionCollapsed: boolean;
+    readonly selectionRange: EditorSelectionRange | null;
     readonly showBookmarks?: boolean;
     readonly showParagraphMarks?: boolean;
     // (undocumented)
@@ -3240,6 +3257,12 @@ export interface TextMatch {
     readonly scope?: ViewScope;
     readonly start: number;
     readonly text: string;
+}
+
+// @public
+export interface TextPosition {
+    readonly blockId: string;
+    readonly offset: number;
 }
 
 // @public

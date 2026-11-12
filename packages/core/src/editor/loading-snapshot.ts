@@ -23,6 +23,7 @@ export const LOADING_SNAPSHOT: EditorSnapshot = Object.freeze({
   zoom: 1,
   selection: null,
   selectionCollapsed: true,
+  selectionRange: null,
   formatting: null,
   table: null,
   tocContext: null,

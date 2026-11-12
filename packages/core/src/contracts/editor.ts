@@ -35,6 +35,8 @@ import type { EditorEvents } from './editor-events.ts';
 import type { EditorAnchorNavigation, ScrollToAnchorOptions } from './editor-anchor.ts';
 export type * from './editor-anchor.ts';
 import type { EditorHighlights, HighlightRange } from './editor-highlights.ts';
+import type { EditorSelectionRange, EditorSelectionReads } from './editor-selection-range.ts';
+export type * from './editor-selection-range.ts';
 export type * from './editor-highlights.ts';
 import type { EditorReviewHits } from './editor-review-hits.ts';
 import type { ReviewItemQuery } from './editor-review-query.ts';
@@ -274,7 +276,8 @@ export type CanResult = { ok: true } | { ok: false; code: ExecErrorCode; reason:
  * const bytesOut = await editor.save();
  * ```
  */
-export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits {
+export interface Editor
+  extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits, EditorSelectionReads {
   /**
    * Load a new document (DOCX bytes, `'blank'`, or a handle), replacing the current one.
    *
@@ -602,15 +605,6 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
   addComment(text: string, options?: HistoryGroupOptions): ExecResult;
   /** {@link addComment} with an author for this call, overriding the configured author. */
   addComment(text: string, author?: string, options?: HistoryGroupOptions): ExecResult;
-
-  /**
-   * Where a comment on the current selection would sit, in the same space as
-   * {@link ReviewItemPlacement.anchorY}, or null when nothing is selected.
-   *
-   * Published so a host can place an "add a comment" affordance beside the selected text
-   * without deriving document geometry, which is the one thing an adapter must not do.
-   */
-  getSelectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null;
 
   /**
    * Card to document: a COLLAPSED caret at the range start, and a scroll to it. `null` clears it.
@@ -1348,7 +1342,10 @@ export interface EditorCommands
   redo: Record<never, never>;
   /**
    * Move the selection. Three accepted forms, and `can()` names all three when it refuses:
-   * a collapsed paraId anchor, a range of two paraId anchors, or a semantic anchor/head pair.
+   * a collapsed paraId anchor, a range of two paraId anchors, or an anchor/head pair of
+   * text positions. A text position takes `blockId`, or the older name `paragraphId`; a
+   * position with neither, or with both naming different paragraphs, refuses `invalidArgs`.
+   * A {@link EditorSelectionRange} read passes here unchanged.
    *
    * `{ anchor }` takes a {@link DocAnchor} rather than an {@link EditorPosition} because a
    * collapsed SEMANTIC position is spelled as a range whose anchor and head are equal, which
@@ -1561,6 +1558,11 @@ export interface EditorSnapshot {
    * to produce one bit, on every tick a host's selector runs.
    */
   readonly selectionCollapsed: boolean;
+  /**
+   * The selection with offsets, as {@link EditorSelectionReads.getSelectionRange} returns it.
+   * Reference-stable while the selection does not move.
+   */
+  readonly selectionRange: EditorSelectionRange | null;
   readonly formatting: RunFormatting | null;
   readonly table: TableContext | null;
   /**

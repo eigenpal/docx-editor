@@ -20,11 +20,12 @@ import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { writeClipboardRich } from './clipboard-write.ts';
 import { hostElementOfEditor, hostWindowOf } from './host-realm.ts';
-import { MARKS, isSurfaceSelection, resolveMarkAttr } from './docx-editor-support.ts';
+import { MARKS, resolveMarkAttr, textSelectionOf } from './docx-editor-support.ts';
 import { NOTHING_TO_COPY_FORMATTING, NOTHING_TO_PAINT } from './surface-format-painter-contract.ts';
 import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import { storyScopeOfNodeId } from './surface-scope.ts';
+import { openTextboxForSelection, textboxSelectionRefusal } from './review-story-entry.ts';
 import type { StoryScope } from '@docx-editor.dev/core/store';
 import { paragraphFragmentsOfBlocks } from '@docx-editor.dev/core/layout';
 import {
@@ -605,13 +606,19 @@ export function execEditorCommand(
       // host driving the editor from its own chrome. `'centerIfNeeded'` keeps an
       // already-visible target still and centres one it has to travel to, rather than
       // stopping the moment it clears the bottom edge.
-      if ('range' in command && isSurfaceSelection(command.range)) {
+      const text = 'range' in command ? textSelectionOf(command.range) : null;
+      if (text?.kind === 'invalid') return { ok: false, code: 'invalidArgs', reason: text.reason };
+      if (text?.kind === 'ok') {
+        const range = text.selection;
         // Open the story the range is in first, as the anchor form below does: a header,
         // footer or note range selected from the body would otherwise strand the caret.
-        const entered = enterStoryForSelection(mounted, command.range);
+        const boxRefusal = textboxSelectionRefusal(mounted, range);
+        if (boxRefusal) return { ok: false, code: 'unsupported', reason: boxRefusal };
+        const entered = enterStoryForSelection(mounted, range);
         if (!entered.ok) return entered;
-        mounted.setSelection(command.range);
-        mounted.revealPosition(command.range.head, { block: 'centerIfNeeded' });
+        openTextboxForSelection(mounted, range);
+        mounted.setSelection(range);
+        mounted.revealPosition(range.head, { block: 'centerIfNeeded' });
         // Selection is not document state: nothing to save changed.
         return { ok: true, changed: false };
       }

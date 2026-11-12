@@ -36,7 +36,11 @@ import {
   partitionStartRows,
   warnPackagedRowsIn,
 } from './start';
-import { isDocumentContextMenuTarget } from './menu-target';
+import {
+  contextMenuAnchorOf,
+  isDocumentContextMenuTarget,
+  isKeyboardContextMenu,
+} from './menu-target';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { ReviewRailContext, useDocxEditor } from '../context';
 import { useAddCommentState } from '../toolbar/add-comment-state';
@@ -468,20 +472,12 @@ export function DocxEditorContextMenu({
       // Chrome in the scroller, such as the link popover, keeps the browser's own menu.
       if (!isDocumentContextMenuTarget(scroller, event.target)) return;
       event.preventDefault();
-      // A keyboard-triggered menu (Shift+F10, the Menu key) reports no pointer position.
-      // Anchoring at the window's origin would drop the panel in the corner, so it opens at
-      // the scroller's top-left instead — the best position available without a caret rect,
-      // and clamped like any other anchor below (a scrolled document puts that rect's `top`
-      // far off the top of the window).
-      const keyboard = event.button === -1 || (event.clientX === 0 && event.clientY === 0);
-      const box = scroller.getBoundingClientRect();
+      const keyboard = isKeyboardContextMenu(event);
       // The engine's own listener sits INSIDE this one and has already recorded which table
       // of contents the press landed on, so reading it here is reading it current.
       setTocId(editor?.snapshot().tocContext?.id ?? null);
       setTarget(keyboard || !isHTMLElementNode(event.target) ? null : event.target);
-      setAnchor(
-        keyboard ? { x: box.left + 16, y: box.top + 16 } : { x: event.clientX, y: event.clientY }
-      );
+      setAnchor(contextMenuAnchorOf(event, keyboard, editor, scroller));
     };
     scroller.addEventListener('contextmenu', onContextMenu);
     return () => scroller.removeEventListener('contextmenu', onContextMenu);

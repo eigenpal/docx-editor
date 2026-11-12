@@ -12,10 +12,22 @@
 
 import { createContext, useContext } from 'react';
 
-/** Where the panel opened, in client coordinates. */
+/**
+ * Where the panel opened, in client coordinates, and how it was opened.
+ *
+ * @public
+ */
 export interface ContextMenuAnchor {
+  /** Horizontal client coordinate the panel opened at, in CSS pixels. */
   readonly x: number;
+  /** Vertical client coordinate the panel opened at, in CSS pixels. */
   readonly y: number;
+  /**
+   * `pointer` for a right-click, which opens at the pointer. `keyboard` for Shift+F10 or the
+   * Menu key, which opens below the caret, or at the top-left of the document area when the
+   * caret is not on a painted page.
+   */
+  readonly trigger: 'pointer' | 'keyboard';
 }
 
 export interface ContextMenuContextValue {
@@ -42,7 +54,7 @@ export interface ContextMenuContextValue {
    * What lets a contextual row decide it applies — a custom-node chip, a painted marker —
    * without installing a second `contextmenu` listener that could disagree with the one
    * that opened the panel. Null while closed, and for keyboard-invoked opens, which have
-   * no pointer target.
+   * no pointer target: those act on the caret, which `editor.getSelectionRange()` reads.
    */
   readonly target: HTMLElement | null;
   /**
@@ -75,10 +87,23 @@ export function useContextMenuContext(): ContextMenuContextValue {
  * The element the opening right-click landed on, or null while the menu is closed.
  *
  * Public so capability packages can render contextual sections — a row that only exists
- * when the press landed on their own painted chrome — without a second listener.
+ * when the press landed on their own painted chrome — without a second listener. A menu
+ * opened from the keyboard has no target; read the caret with `editor.getSelectionRange()`.
  *
  * @public
  */
 export function useContextMenuTarget(): HTMLElement | null {
   return useContext(ContextMenuContext).target;
+}
+
+/**
+ * Where the open menu is anchored and how it was opened, or null while the menu is closed.
+ *
+ * Rows in `ContextMenu.Start` read `trigger` to tell a right-click from a keyboard open,
+ * which acts on the caret rather than on a pointer target.
+ *
+ * @public
+ */
+export function useContextMenuAnchor(): ContextMenuAnchor | null {
+  return useContext(ContextMenuContext).anchor;
 }

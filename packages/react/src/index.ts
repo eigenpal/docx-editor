@@ -303,6 +303,7 @@ export {
   ContextMenuRefreshToc,
   ContextMenuRefreshTocPageNumbers,
   ContextMenuRemoveToc,
+  useContextMenuAnchor,
   useContextMenuTarget,
   type ContextMenuAnchor,
   type ContextMenuCommandProps,
