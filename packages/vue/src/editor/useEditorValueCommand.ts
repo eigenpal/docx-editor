@@ -7,6 +7,8 @@ import {
   type ToolbarValueMap,
 } from '@docx-editor.dev/core/editor';
 import type { EditorExecOptions, ExecResult } from '@docx-editor.dev/core/contracts/editor';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
+import { useTranslation } from '../i18n';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 
@@ -23,6 +25,7 @@ export function useEditorValueCommand<K extends keyof ToolbarValueMap>(
   slotId: K
 ): EditorValueCommandState<ToolbarValueMap[K]> {
   const editor = useDocxEditor();
+  const { t } = useTranslation();
   const state = useEditorState(
     () => toolbarCommandState(editor.value, slotId),
     (a, b) =>
@@ -42,7 +45,8 @@ export function useEditorValueCommand<K extends keyof ToolbarValueMap>(
       () => (slotId === 'image.wrap' ? IMAGE_WRAP_TARGETS : []) as readonly ToolbarValueMap[K][]
     ),
     isEnabled: computed(() => state.value.enabled),
-    disabledReason: computed(() => state.value.disabledReason),
+    // Translated, as `useEditorCommand` gives it.
+    disabledReason: computed(() => localizeDisabledReason(state.value.disabledReason, t)),
   };
 }
 /** @public */

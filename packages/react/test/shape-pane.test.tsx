@@ -24,6 +24,7 @@ import { ContextMenu } from '../src/editor/contextmenu/index.ts';
 import { DocxEditorToolbar } from '../src/editor/toolbar/DocxEditorToolbar.tsx';
 import { DocxEditorChartPane } from '../src/editor/charts/ChartPane.tsx';
 import {
+  GROUP_DRAWING,
   SHAPE_PANE_CASES,
   SHAPE_PANE_MARKUP_PATH,
   normalizeShapePaneMarkup,
@@ -300,3 +301,43 @@ for (const only of ['chart', 'shape'] as const) {
     expect(formatShape !== null).toBe(only === 'shape');
   });
 }
+
+test('on a shape inside a group, the alt text button says why in the interface language', async () => {
+  let instance: DocxEditorInstance | null = null;
+  const view = render(
+    <DocxEditorRoot
+      document={shapePaneDocx('', GROUP_DRAWING)}
+      onReady={(editor) => {
+        instance = editor as DocxEditorInstance;
+      }}
+    >
+      <DocxEditorToolbar overflow={false} />
+      <DocxEditorViewport>
+        <DocxEditorContent />
+      </DocxEditorViewport>
+      <DocxEditorShapePane />
+    </DocxEditorRoot>
+  );
+  await flush();
+  await act(async () => selectParityShape(instance!));
+  await flush();
+  const frame = view.container.querySelector<HTMLElement>('.docx-image-selection-overlay__frame')!;
+  frame.getBoundingClientRect = () =>
+    ({ left: 100, top: 100, width: 192, height: 48, right: 292, bottom: 148 }) as DOMRect;
+  const at = { clientX: 120, clientY: 124, button: 0, pointerId: 1 };
+  await act(async () => {
+    frame.dispatchEvent(
+      new PointerEvent('pointerdown', { ...at, bubbles: true, cancelable: true })
+    );
+    window.dispatchEvent(new PointerEvent('pointerup', { ...at, bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  await flush();
+  expect(instance!.snapshot().image?.memberId).toBeString();
+  const alt = view.container.querySelector<HTMLElement>(
+    '.docx-toolbar [data-slot="image.altText"]'
+  )!;
+  expect(alt.getAttribute('title')).toBe(
+    'A shape inside a group takes its wrap, alt text, and properties from the group. Press Escape to select the group.'
+  );
+});
