@@ -375,6 +375,10 @@ describe('setShapeFormat never invents a fill', () => {
     expect(out).toContain('<a:srgbClr val="00B050"><a:alpha val="50000"/></a:srgbClr>');
   });
 
+  // Word renders a:grpFill members in the group's grpSpPr fill and paints no fill for the group
+  // itself (2026-11-12 render). Its Mac scripting model has no access to group members, so how
+  // Word saves a recoloured member is not probed; the write keeps the group fill and gives the
+  // member an explicit fill, as the members of a group with no grpSpPr fill already carry.
   test('a group member with a:grpFill reads the group colour and writes it as its own', () => {
     const member = wsp(`${XFRM}${RECT}<a:grpFill/>`);
     const group = (fill: string) =>
