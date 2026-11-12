@@ -5,7 +5,7 @@
 // to each character, so the 60-letter word needs 360pt when it stays whole.
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
-import { withHyphenationCuts } from '../auto-hyphenation.ts';
+import { hyphenationPoints, withHyphenationPoints } from '../auto-hyphenation.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import type { TableFragmentRecord } from '../semantic-records.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
@@ -40,7 +40,7 @@ function columnWidths(
       const pPr = index === 2 ? longCellParagraphProperties : '';
       return (
         `<w:tc><w:tcPr><w:tcW w:w="${GRID[index]}" w:type="dxa"/></w:tcPr>` +
-        `<w:p>${pPr}<w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`
+        `<w:p>${pPr}${text.startsWith('<') ? text : `<w:r><w:t>${text}</w:t></w:r>`}</w:p></w:tc>`
       );
     })
     .join('');
@@ -93,7 +93,8 @@ test('automatic hyphenation does not break a run of digits', () => {
 });
 
 const cutsOf = (text: string, boundaries: number[], keepCapitals = false) => {
-  const { cuts, hyphens } = withHyphenationCuts(text, boundaries, keepCapitals);
+  const points = hyphenationPoints(text, keepCapitals);
+  const { cuts, hyphens } = withHyphenationPoints(boundaries, points);
   return { cuts, hyphens: [...hyphens] };
 };
 
@@ -129,4 +130,20 @@ test('capital words keep their letters together and other words still take point
   expect(cutsOf('CUSTOM custom', [7, 13], true)).toEqual({ cuts: [7, 10, 13], hyphens: [10] });
   expect(cutsOf('Custom', [6], true)).toEqual({ cuts: [3, 6], hyphens: [3] });
   expect(cutsOf('CUSTOM', [6])).toEqual({ cuts: [3, 6], hyphens: [3] });
+});
+
+test('a word split across differently formatted runs keeps its hyphenation points', () => {
+  const runs = (LONG_WORD.match(/.{1,4}/g) ?? [])
+    .map(
+      (text, index) => `<w:r>${index % 2 ? '<w:rPr><w:b/></w:rPr>' : ''}<w:t>${text}</w:t></w:r>`
+    )
+    .join('');
+  expectStatedWidths(columnWidths('<w:autoHyphenation/>', runs));
+});
+
+test('decomposed accents stay with their letter and keep the word whole around them', () => {
+  const points = hyphenationPoints('de\u0301veloppement');
+  expect(points.length).toBeGreaterThan(0);
+  for (const point of points) expect('de\u0301veloppement'[point]).not.toBe('\u0301');
+  expect(hyphenationPoints('de\u0301veloppement')[0]).toBe(3);
 });

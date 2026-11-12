@@ -9,6 +9,8 @@ import {
   type OoxmlElement,
   type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
+import type { FieldAwarePiece } from './field-pieces.ts';
+import { isParagraphText, paragraphBreakText } from './paragraph-word-cuts.ts';
 
 /** The document hyphenation settings that the autofit minimum reads. @internal */
 export interface AutoHyphenationSettings {
@@ -21,10 +23,13 @@ export interface AutoHyphenationSettings {
 /** Letters of the scripts that are hyphenated with a dictionary. */
 const HYPHENATED_LETTER = /[\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}]/u;
 const LETTER = /\p{L}/u;
+/** A word continues through letters and combining marks, so text in NFD form stays one word. */
+const WORD_CHAR = /[\p{L}\p{M}]/u;
 const LOWERCASE = /\p{Ll}/u;
 
+/** `ST_OnOff`: an absent value or anything but an explicit off is on (§17.17.4). */
 function isOn(value: string | undefined): boolean {
-  return value === undefined || value === '1' || value === 'true' || value === 'on';
+  return value !== '0' && value !== 'false' && value !== 'off';
 }
 
 /** Whether a settings root turns on the `w:` toggle `localName`. The last declaration wins. */
@@ -86,6 +91,7 @@ function syllablePoints(text: string, start: number, end: number, points: number
     if (
       groupEnd >= 0 &&
       point >= groupEnd &&
+      LETTER.test(text[point]!) &&
       point >= start + LEADING_LETTERS &&
       point <= end - TRAILING_LETTERS
     )
@@ -103,17 +109,13 @@ export interface HyphenationCuts {
 }
 
 /**
- * Add hyphenation points to the break opportunities of `text`. A dictionary chooses the real
+ * Estimated hyphenation points of `text`, as offsets in it. A dictionary chooses the real
  * points. The editor has no dictionary, so it estimates them for each word of Latin, Greek or
  * Cyrillic letters: a word breaks between syllables, never inside a vowel group, and keeps
  * two letters before its first point and three after its last. With `keepCapitals`, a word
  * with no lowercase letter stays whole.
  */
-export function withHyphenationCuts(
-  text: string,
-  boundaries: readonly number[],
-  keepCapitals = false
-): HyphenationCuts {
+export function hyphenationPoints(text: string, keepCapitals = false): number[] {
   const points: number[] = [];
   for (let start = 0; start < text.length;) {
     if (!LETTER.test(text[start]!)) {
@@ -123,14 +125,48 @@ export function withHyphenationCuts(
     let end = start;
     let lower = false;
     let hyphenated = true;
-    for (; end < text.length && LETTER.test(text[end]!); end++) {
+    for (; end < text.length && WORD_CHAR.test(text[end]!); end++) {
       lower ||= LOWERCASE.test(text[end]!);
-      hyphenated &&= HYPHENATED_LETTER.test(text[end]!);
+      hyphenated &&= !LETTER.test(text[end]!) || HYPHENATED_LETTER.test(text[end]!);
     }
     if (hyphenated && (lower || !keepCapitals)) syllablePoints(text, start, end, points);
     start = end;
   }
+  return points;
+}
+
+/**
+ * Merge hyphenation `points` of one piece (offsets in it) into its break `boundaries`. A point
+ * at the piece end is a hyphen at a run seam; a point that is already a boundary adds nothing.
+ */
+export function withHyphenationPoints(
+  boundaries: readonly number[],
+  points: readonly number[]
+): HyphenationCuts {
   const existing = new Set(boundaries);
-  const hyphens = new Set(points.filter((point) => !existing.has(point)));
-  return { cuts: [...boundaries, ...hyphens].sort((a, b) => a - b), hyphens };
+  const hyphens = new Set(points.filter((point) => point > 0 && !existing.has(point)));
+  const seam = boundaries.at(-1);
+  if (seam !== undefined && points.includes(seam)) hyphens.add(seam);
+  const cuts = [...existing, ...hyphens].sort((a, b) => a - b);
+  return { cuts: [...new Set(cuts)], hyphens };
+}
+
+/** Hyphenation points of each piece, read over the paragraph text so a word can span runs. */
+export function paragraphHyphenation(
+  pieces: readonly FieldAwarePiece[],
+  skip: (piece: FieldAwarePiece) => boolean,
+  keepCapitals: boolean
+): (piece: FieldAwarePiece, boundaries: readonly number[]) => HyphenationCuts {
+  const { text, starts } = paragraphBreakText(pieces, skip);
+  const points = hyphenationPoints(text, keepCapitals);
+  return (piece, boundaries) => {
+    if (skip(piece) || !isParagraphText(piece)) return { cuts: boundaries, hyphens: new Set() };
+    const start = starts.get(piece)!;
+    const end = start + piece.text.length;
+    const local = points.filter((point) => point > start && point <= end);
+    return withHyphenationPoints(
+      boundaries,
+      local.map((point) => point - start)
+    );
+  };
 }
