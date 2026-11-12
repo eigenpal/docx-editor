@@ -6,7 +6,7 @@
 // it expects is now checked first and refused with nothing changed.
 //
 // A computed range also needs no `TextMatch` run address, and its story comes from its
-// paragraph: a header range is replaced from the body, and the active story follows it.
+// paragraph: a header range is replaced from the body without opening the header.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -283,43 +283,125 @@ describe('the story comes from the paragraph', () => {
     return match;
   };
 
-  test('a header range without scope is replaced from the body and opens the header', () => {
-    const editor = mount(storyParityDocx());
+  /** Mount inside a scroll container that records every scroll, with a caret in the body. */
+  function mountReading(): {
+    editor: DocxEditorInstance;
+    scrolls: number[];
+    caret: ReturnType<NonNullable<DocxEditorInstance['surface']>['state']>['selection'];
+    dispose(): void;
+  } {
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
+    const container = document.createElement('div');
+    scroller.append(container);
+    document.body.append(scroller);
+    Object.defineProperty(scroller, 'clientHeight', { value: 600, configurable: true });
+    Object.defineProperty(scroller, 'scrollHeight', { value: 100_000, configurable: true });
+    const scrolls: number[] = [];
+    Object.defineProperty(scroller, 'scrollTop', {
+      get: () => 0,
+      set: (next: number) => scrolls.push(next),
+      configurable: true,
+    });
+    scroller.scrollTo = ((options: ScrollToOptions) => {
+      scrolls.push(options.top ?? 0);
+    }) as HTMLElement['scrollTo'];
+    const editor = createDocxEditor({
+      container,
+      document: storyParityDocx(),
+      author: 'Grace Hopper',
+      modules: [reviewModule()],
+    });
+    const first = editor.surface!.session.paragraphIds()[0]!;
+    const position = { paragraphId: first, offset: 2 };
+    editor.surface!.setSelection({ anchor: position, head: position });
+    scrolls.length = 0;
+    return {
+      editor,
+      scrolls,
+      caret: editor.surface!.state().selection,
+      dispose() {
+        editor.destroy();
+        scroller.remove();
+      },
+    };
+  }
+
+  test('a header range is replaced from the body without opening the header', async () => {
+    const { editor, scrolls, caret, dispose } = mountReading();
     try {
       const { blockId, start, length } = findIn(editor, 'headerFooter');
-      expect(editor.getActiveScope()).toEqual({ kind: 'body' });
       const range: HighlightRange = { blockId, start, length, expectedText: 'Alpha' };
 
       expect(editor.can({ type: 'replaceMatch', match: range, text: 'Zeta' })).toEqual({
         ok: true,
       });
-      expect(editor.exec({ type: 'replaceMatch', match: range, text: 'Zeta' }).ok).toBe(true);
+      expect(editor.exec({ type: 'replaceMatch', match: range, text: 'Zeta' })).toEqual({
+        ok: true,
+        changed: true,
+      });
       expect(textOf(editor, blockId)).toBe('Zeta');
-      // The active story and the caret agree: both are in the header, after the replacement.
-      expect(editor.getActiveScope()).toEqual({ kind: 'headerFooter', rId: HEADER_R_ID });
-      const caret = { paragraphId: blockId, offset: start + 'Zeta'.length };
-      expect(editor.surface!.state().selection).toEqual({ anchor: caret, head: caret });
+      // The reader stays where they were: in the body, with the same caret and page.
+      expect(editor.getActiveScope()).toEqual({ kind: 'body' });
+      expect(editor.surface!.state().selection).toEqual(caret);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(scrolls).toEqual([]);
+      expect(editor.surface!.state().selection).toEqual(caret);
 
       editor.exec({ type: 'undo' });
       expect(textOf(editor, blockId)).toBe('Alpha');
+      expect(editor.getActiveScope()).toEqual({ kind: 'body' });
     } finally {
-      editor.destroy();
+      dispose();
     }
   });
 
-  test('a tracked header replacement from the body leaves the caret after the insertion', () => {
-    const editor = mount(storyParityDocx());
+  test('a tracked header replacement from the body keeps the body open', () => {
+    const { editor, caret, dispose } = mountReading();
     try {
       expect(editor.setEditingMode('suggesting').ok).toBe(true);
       const { blockId, start, length } = findIn(editor, 'headerFooter');
       const range: HighlightRange = { blockId, start, length, expectedText: 'Alpha' };
       expect(editor.exec({ type: 'replaceMatch', match: range, text: 'Zeta' }).ok).toBe(true);
       expect(textOf(editor, blockId)).toBe('AlphaZeta');
-      expect(editor.getActiveScope()).toEqual({ kind: 'headerFooter', rId: HEADER_R_ID });
-      const caret = { paragraphId: blockId, offset: start + 'AlphaZeta'.length };
-      expect(editor.surface!.state().selection).toEqual({ anchor: caret, head: caret });
+      expect(
+        editor.getTrackedChanges().map((change) => [change.kind, change.author, change.story])
+      ).toEqual([
+        ['delete', 'Grace Hopper', 'header'],
+        ['insert', 'Grace Hopper', 'header'],
+      ]);
+      expect(editor.getActiveScope()).toEqual({ kind: 'body' });
+      expect(editor.surface!.state().selection).toEqual(caret);
+      editor.exec({ type: 'undo' });
+      expect(textOf(editor, blockId)).toBe('Alpha');
+      expect(editor.getTrackedChanges()).toEqual([]);
     } finally {
-      editor.destroy();
+      dispose();
+    }
+  });
+
+  test('a history group joins replacements in two stories into one undo step', () => {
+    const { editor, dispose } = mountReading();
+    try {
+      const header = findIn(editor, 'headerFooter');
+      const body = editor.findMatches('Alpha').find((candidate) => !candidate.scope)!;
+      const group = editor.beginHistoryGroup();
+      const first = editor.exec(
+        { type: 'replaceMatch', match: header, text: 'Zeta' },
+        { historyGroup: group }
+      );
+      const second = editor.exec(
+        { type: 'replaceMatch', match: body, text: 'Zeta' },
+        { historyGroup: group }
+      );
+      group.end();
+      expect(first).toMatchObject({ ok: true, history: { kind: 'started' } });
+      expect(second).toMatchObject({ ok: true, history: { kind: 'extended' } });
+      editor.exec({ type: 'undo' });
+      expect(textOf(editor, header.blockId)).toBe('Alpha');
+      expect(textOf(editor, body.blockId)).toBe('Alpha');
+    } finally {
+      dispose();
     }
   });
 
@@ -337,28 +419,31 @@ describe('the story comes from the paragraph', () => {
     }
   });
 
-  test('a note range without scope opens the note', () => {
-    const editor = mount(storyParityDocx());
+  test('a note range without scope is replaced without opening the note', () => {
+    const { editor, caret, dispose } = mountReading();
     try {
       const { blockId, start, length } = findIn(editor, 'note');
+      expect(findIn(editor, 'note').scope).toEqual({ kind: 'note', id: FOOTNOTE_SCOPE_ID });
       const range: HighlightRange = { blockId, start, length, expectedText: 'Alpha' };
       expect(editor.exec({ type: 'replaceMatch', match: range, text: 'Omega' }).ok).toBe(true);
       expect(textOf(editor, blockId)).toBe('Omega');
-      expect(editor.getActiveScope()).toEqual({ kind: 'note', id: FOOTNOTE_SCOPE_ID });
+      expect(editor.getActiveScope()).toEqual({ kind: 'body' });
+      expect(editor.surface!.state().selection).toEqual(caret);
     } finally {
-      editor.destroy();
+      dispose();
     }
   });
 
-  test('a body range replaced from an open header returns to the body', () => {
+  test('a body range replaced from an open header keeps the header open', () => {
     const editor = mount(storyParityDocx());
     try {
       expect(editor.selectMatch(findIn(editor, 'headerFooter')).ok).toBe(true);
+      const selection = editor.surface!.state().selection;
       const body = editor.findMatches('Alpha').find((candidate) => !candidate.scope)!;
       expect(editor.exec({ type: 'replaceMatch', match: body, text: 'Omega' }).ok).toBe(true);
       expect(textOf(editor, body.blockId)).toBe('Omega');
-      expect(editor.getActiveScope()).toEqual({ kind: 'body' });
-      expect(editor.surface!.state().selection.head.paragraphId).toBe(body.blockId);
+      expect(editor.getActiveScope()).toEqual({ kind: 'headerFooter', rId: HEADER_R_ID });
+      expect(editor.surface!.state().selection).toEqual(selection);
     } finally {
       editor.destroy();
     }
@@ -396,7 +481,7 @@ describe('the story comes from the paragraph', () => {
     }
   });
 
-  test('a stale header range refuses before the header opens', () => {
+  test('a stale header range refuses and changes nothing', () => {
     const editor = mount(storyParityDocx());
     try {
       const { blockId, start, length } = findIn(editor, 'headerFooter');

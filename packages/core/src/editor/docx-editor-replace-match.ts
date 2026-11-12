@@ -5,22 +5,18 @@
 // moved. Suggesting records a tracked replacement under the editor's author, through the same
 // plan and store rules as a replacement typed over a selection.
 //
-// A match in a header, footer, or note that is not open opens that story first, as
-// `selectMatch` does, so the active story and the selection always agree. A match whose
-// expected text is no longer at its offsets is refused before anything opens or changes.
+// A match in a header, footer, or note that is not open is replaced there without opening it:
+// a proofing panel that fixes one word must not drop the reader into header editing. A match
+// whose expected text is no longer at its offsets is refused before anything changes.
 
+import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { EditorCommand, ExecResult, ViewScope } from '../contracts/editor.ts';
+import { isCollaborationFailureCode } from '../collaboration/failure.ts';
+import { parseNoteScopeId } from '../store/package/note-nodes.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
-import {
-  enterStoryPosition,
-  isScopedStory,
-  leaveScopeForBodyParagraph,
-} from './docx-editor-story-navigation.ts';
 import {
   isActiveStory,
   resolveTextTarget,
-  storyOpenRefusal,
-  targetParagraphText,
   textTargetArgumentRefusal,
   type TextTarget,
 } from './text-target.ts';
@@ -55,25 +51,57 @@ export function replaceMatchTarget(
       reason: 'replaceMatch does not replace text in a text box',
     };
   }
-  return storyOpenRefusal(surface, resolved.scope) ?? { ok: true, scope: resolved.scope };
+  return { ok: true, scope: resolved.scope };
+}
+
+/** The store scope of a story, for a write that does not open it. */
+function storyScopeOf(scope: ViewScope): StoryScope | null {
+  if (scope.kind === 'body') return { kind: 'body' };
+  if (scope.kind === 'headerFooter') return { kind: 'headerFooter', rId: scope.rId };
+  if (scope.kind === 'note') {
+    const parsed = parseNoteScopeId(scope.id);
+    return parsed ? { kind: 'notesPart', noteKind: parsed.noteKind } : null;
+  }
+  return null;
+}
+
+/** A refused write in a story that is not open, as a command result. */
+function writeRefusalResult(raw: string, reason: string): Refusal {
+  if (isCollaborationFailureCode(raw)) return { ok: false, code: 'unsupported', reason: raw };
+  return { ok: false, code: raw === 'locked' ? 'locked' : 'invalidArgs', reason };
 }
 
 /**
- * Put the caret after the replacement in a story the command opened. The text after the match
- * is unchanged, so the caret sits that far from the paragraph end, past the insertion and past
- * a tracked deletion that stays in the text.
+ * Replace in a story the reader is not in, without opening it. One commit, so one undo step;
+ * suggesting tracks it, as typing over the range would. The reader's selection is in the open
+ * story, so neither it nor the active story moves.
  */
-function caretAfterReplacement(
+function replaceInClosedStory(
   surface: PaginatedSurface,
-  blockId: string,
-  before: string,
-  matchEnd: number
-): void {
-  const after = targetParagraphText(surface, blockId);
-  if (after === null) return;
-  const offset = Math.min(after.length, Math.max(0, after.length - (before.length - matchEnd)));
-  const caret = { paragraphId: blockId, offset };
-  surface.setSelection({ anchor: caret, head: caret });
+  scope: ViewScope,
+  paragraphId: string,
+  start: number,
+  end: number,
+  text: string
+): ExecResult | null {
+  const story = storyScopeOf(scope);
+  if (!story) {
+    return {
+      ok: false,
+      code: 'unsupported',
+      reason: 'the story that holds the match cannot be edited',
+    };
+  }
+  // Non-null exactly when the edit is tracked: the struck text stays, the insertion follows it.
+  const landing = surface.replacementLanding(paragraphId, start, end);
+  const ops: TreeDocOp[] = [];
+  if (end > start) ops.push({ op: 'deleteText', paragraphId, start, end });
+  if (text.length > 0) ops.push({ op: 'insertText', paragraphId, offset: landing ?? start, text });
+  if (ops.length === 0) return null;
+  const outcome = surface.applyAutomationOps(() => ops, story);
+  if (!outcome.rejected) return null;
+  const raw = String(outcome.reason ?? 'replaceMatch was refused');
+  return writeRefusalResult(raw, surface.state().lastRejection ?? raw);
 }
 
 /** Run an admitted `replaceMatch`. Null when it committed or had nothing to change. */
@@ -81,34 +109,22 @@ export function execReplaceMatch(
   surface: PaginatedSurface,
   command: ReplaceMatchCommand
 ): ExecResult | null {
+  // Typing still in the buffer lands first, so the expected text is checked against it.
+  surface.flushPendingInput();
   const target = replaceMatchTarget(surface, command.match);
   if (!target.ok) return target;
   const { blockId, start, length } = command.match;
-  const { scope } = target;
-  const opens = !isActiveStory(surface, scope);
-  if (opens) {
-    // The caret goes where the match is, so the open story and the selection agree.
-    const position = { paragraphId: blockId, offset: start + length };
-    if (isScopedStory(scope)) {
-      const entered = enterStoryPosition(surface, scope, position);
-      if (!entered.ok) return entered;
-    } else {
-      leaveScopeForBodyParagraph(surface, blockId);
-      if (isActiveStory(surface, scope)) surface.setSelection({ anchor: position, head: position });
-    }
-    if (!isActiveStory(surface, scope)) {
-      return {
-        ok: false,
-        code: 'unsupported',
-        reason: 'the story that holds the match could not be opened',
-      };
-    }
+  if (!isActiveStory(surface, target.scope)) {
+    return replaceInClosedStory(
+      surface,
+      target.scope,
+      blockId,
+      start,
+      start + length,
+      command.text
+    );
   }
-  const before = opens ? targetParagraphText(surface, blockId) : null;
-  if (surface.replaceTextInPlace(blockId, start, start + length, command.text)) {
-    if (before !== null) caretAfterReplacement(surface, blockId, before, start + length);
-    return null;
-  }
+  if (surface.replaceTextInPlace(blockId, start, start + length, command.text)) return null;
   return {
     ok: false,
     code: 'invalidArgs',

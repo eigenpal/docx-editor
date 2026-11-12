@@ -445,8 +445,8 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
   /**
    * Move the selection to a match — what a find dialog's next/previous do. Takes a
    * {@link TextMatch} or a {@link HighlightRange} you computed, and opens the header, footer,
-   * or note that holds it. Refusals match the `replaceMatch` command's: `notFound` when the
-   * expected text moved, `invalidArgs` when `scope` names another story.
+   * or note that holds it, unlike `replaceMatch`, which edits a closed story in place. Refusals
+   * match: `notFound` when the expected text moved, `invalidArgs` when `scope` is wrong.
    */
   selectMatch(match: TextMatch | HighlightRange): ExecResult;
 
@@ -1189,8 +1189,8 @@ export interface EditorCommands
    * Replace one match with `text`: a {@link TextMatch}, or a {@link HighlightRange} you
    * computed. An empty `text` deletes it. One undo step, which joins an open `historyGroup`.
    * In suggesting mode it is a tracked replacement under the editor's author, refused where
-   * `proposeReplacement` would be. In the open story the selection and scroll stay put; a
-   * header, footer, or note that is not open opens first, caret after the replacement.
+   * `proposeReplacement` would be. The active story, selection, and scroll stay put: a header,
+   * footer, or note that is not open is edited in place, without opening it.
    * Without `scope`, the story comes from `blockId`; a `scope` naming another story returns
    * `invalidArgs`, and a text box returns `unsupported`. When the match carries expected text
    * (`expectedText`, else `text`) that its offsets no longer hold, because an edit moved it,

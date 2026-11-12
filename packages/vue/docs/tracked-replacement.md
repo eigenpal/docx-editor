@@ -6,7 +6,7 @@ Find text with `editor.findMatches` and replace a match with the `replaceMatch` 
 
 ## Replace text in the editor
 
-The following button proposes a replacement for the first body match. `replaceMatch` also replaces a match in a header, footer, or note, and opens that story first. It refuses text-box matches, and it returns `notFound` when the matched text changed after the search. The editor needs an `author` and `reviewModule()` in its modules, or `setEditingMode('suggesting')` refuses.
+The following button proposes a replacement for the first body match. `replaceMatch` also replaces a match in a header, footer, or note without opening that story. It refuses text-box matches, and it returns `notFound` when the matched text changed after the search. The editor needs an `author` and `reviewModule()` in its modules, or `setEditingMode('suggesting')` refuses.
 
 ```vue
 <script setup lang="ts">

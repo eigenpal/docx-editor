@@ -243,9 +243,11 @@ test('a header range replaced from the body synchronizes, undoes, and converges'
       ok: true,
       changed: true,
     });
-    expect(a.editor.getActiveScope()).toEqual({ kind: 'headerFooter', rId: 'rHeader' });
+    // The header was edited where it stands; neither peer was moved into it.
+    expect(a.editor.getActiveScope()).toEqual({ kind: 'body' });
     sync(a, b);
     await converged(a, b);
+    expect(b.editor.getActiveScope()).toEqual({ kind: 'body' });
     const final = (peer: Peer) =>
       peer.editor.findMatches('Final').map((found) => found.scope?.kind ?? 'body');
     expect(final(b)).toEqual(['headerFooter']);
@@ -257,6 +259,41 @@ test('a header range replaced from the body synchronizes, undoes, and converges'
     expect(final(a)).toEqual([]);
     expect(final(b)).toEqual([]);
     expect(b.editor.findMatches('Draft header')).toHaveLength(1);
+    expect(a.editor.getActiveScope()).toEqual({ kind: 'body' });
+    expect(b.editor.getActiveScope()).toEqual({ kind: 'body' });
+  } finally {
+    b.close();
+    a.close();
+  }
+});
+
+test('a header replace from the body converges beside body typing, with no scope change', async () => {
+  const a = await peer('Alice', undefined, headerFixture);
+  const b = await peer('Bob', a);
+  try {
+    const bodyId = b.editor.surface!.session.paragraphIds()[0]!;
+    const end = { paragraphId: bodyId, offset: 'Body text'.length };
+    b.editor.surface!.setSelection({ anchor: end, head: end });
+    const aliceCaret = a.editor.surface!.state().selection;
+    const match = a.editor.findMatches('Draft')[0]!;
+    const range = { blockId: match.blockId, start: match.start, length: 5, expectedText: 'Draft' };
+
+    expect(b.editor.exec({ type: 'insertText', text: ' here' }).ok).toBe(true);
+    expect(a.editor.exec({ type: 'replaceMatch', match: range, text: 'Final' }).ok).toBe(true);
+    expect(a.editor.surface!.state().selection).toEqual(aliceCaret);
+    sync(a, b);
+    await converged(a, b);
+    expect(b.editor.findMatches('Final header')).toHaveLength(1);
+    expect(b.editor.surface!.session.bodyText()).toContain('Body text here.');
+    for (const each of [a, b]) expect(each.editor.getActiveScope()).toEqual({ kind: 'body' });
+
+    // Alice's undo takes back only her header edit, for both peers.
+    expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+    sync(a, b);
+    await converged(a, b);
+    expect(b.editor.findMatches('Draft header')).toHaveLength(1);
+    expect(b.editor.surface!.session.bodyText()).toContain('Body text here.');
+    for (const each of [a, b]) expect(each.editor.getActiveScope()).toEqual({ kind: 'body' });
   } finally {
     b.close();
     a.close();

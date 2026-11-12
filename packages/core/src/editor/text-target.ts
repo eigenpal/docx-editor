@@ -18,7 +18,6 @@ import { findNode } from '../store/package/ooxml-edit.ts';
 import type { OoxmlParagraphNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import { isParagraph } from '../store/store/tree-op-segments.ts';
-import { paragraphModelTextOf } from '../store/store/paragraph-model-text.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { textboxScopeOfParagraph } from './review-story-entry.ts';
 import { noteScopeIdInLayout, partOfNodeId } from './surface-scope.ts';
@@ -71,12 +70,6 @@ function paragraphOfTarget(surface: PaginatedSurface, blockId: string): TargetPa
   const part = partOfNodeId(surface.session, blockId);
   const node = part ? findNode(part, blockId) : null;
   return part && isParagraph(node) ? { part, paragraph: node } : null;
-}
-
-/** The model text of the paragraph a target names, or null when no story holds it. */
-export function targetParagraphText(surface: PaginatedSurface, blockId: string): string | null {
-  const found = paragraphOfTarget(surface, blockId);
-  return found ? paragraphModelTextOf(found.paragraph) : null;
 }
 
 const NOT_IN_DOCUMENT: Refusal = Object.freeze({
@@ -212,16 +205,4 @@ export function isActiveStory(surface: PaginatedSurface, scope: ViewScope): bool
     return active.kind === 'headerFooter' && active.rId === scope.rId;
   if (scope.kind === 'note') return active.kind === 'note' && active.id === scope.id;
   return active.kind === 'frame' && active.id === scope.id;
-}
-
-/** Why a story that is not open cannot be opened by this surface, or null. */
-export function storyOpenRefusal(surface: PaginatedSurface, scope: ViewScope): Refusal | null {
-  if (isActiveStory(surface, scope)) return null;
-  const opens =
-    scope.kind === 'body' ||
-    (scope.kind === 'headerFooter' && typeof surface.enterHeaderFooter === 'function') ||
-    (scope.kind === 'note' && typeof surface.enterNote === 'function');
-  return opens
-    ? null
-    : { ok: false, code: 'unsupported', reason: 'the story that holds the match cannot be opened' };
 }

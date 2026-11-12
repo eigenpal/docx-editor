@@ -171,7 +171,7 @@ if (second) {
 
 `selectMatch()` opens a header, footer, or note when needed and does not move focus.
 
-In the open story, `replaceMatch` keeps the caret, selection, and scroll position. An empty `text` deletes the match. In suggesting mode, it records a tracked deletion and insertion with one undo step, and it refuses edits that cannot be tracked.
+`replaceMatch` keeps the active story, caret, selection, and scroll position. A caret later in the edited paragraph moves with its text. An empty `text` deletes the match. In suggesting mode, it records a tracked deletion and insertion with one undo step, and it refuses edits that cannot be tracked.
 
 ### Replace a computed range
 
@@ -191,7 +191,7 @@ if (!result.ok && result.code === 'notFound') {
 }
 ```
 
-A range in a header, footer, or note that is not open opens that story, and the caret moves after the replacement. To apply several replacements as one undo step, pass the same `historyGroup` to each call. Apply them from the end of a paragraph to the start, so that earlier offsets stay valid.
+A range in a header, footer, or note that is not open is replaced without opening that story. `selectMatch()` is a navigation command, so it opens the story that holds the range. To apply several replacements as one undo step, pass the same `historyGroup` to each call. Apply them from the end of a paragraph to the start, so that earlier offsets stay valid.
 
 ### Search from code
 
