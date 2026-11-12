@@ -467,6 +467,7 @@ describe('a row that cannot continue below its reference line', () => {
   };
 
   test('a row that cannot split keeps three lines and splits the note', () => {
+    // Reference probe cs4 (modes 0 and 15): row 5 stays whole, two note lines, row 6 moves.
     const kept = rows(8, refs, (n, spec) =>
       n === 5 ? { ...spec, trPr: '<w:cantSplit/>', first: para('R5a', 3) } : spec
     );
@@ -513,7 +514,14 @@ describe('a row that cannot continue below its reference line', () => {
     const atLeast = rows(9, refs, (n, spec) =>
       n === 5 ? { ...spec, trPr: '<w:trHeight w:val="500" w:hRule="atLeast"/>' } : spec
     );
-    const laid = layoutProbe(spacer(1) + tbl(atLeast) + TAIL, new Map([[1, 6]]));
+    // Reference probe al_m15. Mode 0 differs; see the todo below.
+    const laid = layoutProbe(
+      spacer(1) + tbl(atLeast) + TAIL,
+      new Map([[1, 6]]),
+      createLayoutSession(),
+      1,
+      15
+    );
     expect(pages(laid.layout)).toEqual([
       'R1a R1b R2a R2b R3a R3b R4a R4b R5a R5b1 | 1',
       'R6a R6b R7a R7b R8a R8b R9a R9b TAIL | 1c',
@@ -524,6 +532,10 @@ describe('a row that cannot continue below its reference line', () => {
     expect(noteLines(laid.layout, 0, 1)).toBe(4);
     expect(laid.fixedPoint).toBe(true);
   });
+
+  // Reference probe al_m0: without compatibility mode 15, the at-least row moves whole to
+  // page 2 with its whole note, and rows 6 to 8 follow it there. The engine keeps row 5.
+  test.todo('an at-least row in mode 0 moves whole with its note to the next page');
 });
 
 describe('a referencing row that splits at the page end', () => {
