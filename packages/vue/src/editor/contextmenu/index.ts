@@ -41,6 +41,7 @@ export {
   ContextMenuContext,
   useContextMenuContext,
   useContextMenuAnchor,
+  useContextMenuHighlights,
   useContextMenuTarget,
   type ContextMenuAnchor,
   type ContextMenuContextValue,

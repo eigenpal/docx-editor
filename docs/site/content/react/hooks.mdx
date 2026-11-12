@@ -161,7 +161,7 @@ The handler takes no arguments. Read the selection with `editor.getSelectionPlac
 | --- | --- |
 | `useDocumentOutline()` | `{ items, headings, selectedBlockId, goTo, isEmpty }` |
 | `useDocumentSearch(options?)` | `{ query, setQuery, find, matches, activeIndex, activeMatch, next, previous, goTo, clear, isPending, truncated, matchCase, setMatchCase, wholeWord, setWholeWord }` |
-| `useHighlights(name, source, options?)` | `{ applied, unavailable }` |
+| `useHighlights(name, source, options?)` | `UseHighlightsReturn`: `{ applied, unavailable, refresh }` |
 | `useHighlightAt(name?)` | Highlight under the pointer, or `null` |
 | `useNavigationPane(options?)` | `{ open, setOpen, toggle, tab, setTab, paneWidth, shift, overlay }` |
 | `usePaneRequest(listener, options?)` | Nothing. Calls `listener` with `{ pane, focus }` when Insert > Chart, Edit chart, or Format shape asks for a pane that `options.panes` names. `panes` defaults to `['chart']`. Answer it with any UI. See [Place shape and chart controls](/docs/2.x/guides/object-controls). |
@@ -176,7 +176,7 @@ Each outline item is `{ heading, depth }`, and `depth` counts from the shallowes
 
 #### `useHighlights`
 
-A function `source` reruns after document changes, so wrap it in `useCallback`. For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-text-ranges).
+A function `source` reruns after document changes, so wrap it in `useCallback`. If the source reads state that the editor cannot see, such as a ref, call `refresh()` after that state changes. `refresh` keeps its identity across renders. For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-text-ranges).
 
 ### Loading, fonts, and locale
 
@@ -218,6 +218,7 @@ For font origins, see [Fonts](/docs/2.x/guides/fonts). For refused opens, see [O
 | `useNotePropertiesState()` | Note numbering properties, or `null` |
 | `useContextMenuTarget()` | `HTMLElement \| null` that received the last context-menu action |
 | `useContextMenuAnchor()` | `{ x, y, trigger } \| null` where the open context menu is anchored; `trigger` is `'pointer'` or `'keyboard'` |
+| `useContextMenuHighlights(name?)` | Highlights at the opening right-click, or at the caret for a keyboard open. See [Read highlights in the context menu](/docs/2.x/recipes/highlight-ranges#read-highlights-in-the-context-menu). |
 | `useTableBorderTargetLabel()` | `string` label of the table-border target |
 | `useToolbarContext()` | `{ t, onSave }` |
 | `useToolbarLabel()` | `(key) => string` for the active scope |

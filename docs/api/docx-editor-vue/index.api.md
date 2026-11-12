@@ -9425,6 +9425,9 @@ export interface UseContentControlWidgetResult {
 export function useContextMenuAnchor(): ComputedRef<ContextMenuAnchor | null>;
 
 // @public
+export function useContextMenuHighlights<R extends HighlightRange = HighlightRange>(name?: string): Readonly<ShallowRef<readonly HighlightHit<R>[]>>;
+
+// @public
 export function useContextMenuTarget(): HTMLElement | null;
 
 // @public
@@ -9610,7 +9613,12 @@ export function useHeaderFooterState(): ShallowRef<HeaderFooterState | null>;
 export function useHighlightAt<R extends HighlightRange = HighlightRange>(name?: MaybeRefOrGetter<string>): Readonly<ShallowRef<HighlightHit<R> | null>>;
 
 // @public
-export function useHighlights(name: MaybeRefOrGetter<string>, source: MaybeRefOrGetter<HighlightSource>, options?: MaybeRefOrGetter<HighlightOptions>): ComputedRef<HighlightResult>;
+export function useHighlights(name: MaybeRefOrGetter<string>, source: MaybeRefOrGetter<HighlightSource>, options?: MaybeRefOrGetter<HighlightOptions>): ComputedRef<UseHighlightsReturn>;
+
+// @public
+export interface UseHighlightsReturn extends HighlightResult {
+    readonly refresh: () => void;
+}
 
 // @public
 export function useHistoryGroup(input: HistoryGroupBindingOptions): UseHistoryGroupReturn;

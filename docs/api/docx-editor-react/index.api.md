@@ -3826,6 +3826,9 @@ export interface UseContentControlWidgetResult {
 export function useContextMenuAnchor(): ContextMenuAnchor | null;
 
 // @public
+export function useContextMenuHighlights<R extends HighlightRange = HighlightRange>(name?: string): readonly HighlightHit<R>[];
+
+// @public
 export function useContextMenuTarget(): HTMLElement | null;
 
 // @public
@@ -3996,7 +3999,12 @@ export function useHeaderFooterState(): HeaderFooterState | null;
 export function useHighlightAt<R extends HighlightRange = HighlightRange>(name?: string): HighlightHit<R> | null;
 
 // @public
-export function useHighlights(name: string, source: HighlightSource, options?: HighlightOptions): HighlightResult;
+export function useHighlights(name: string, source: HighlightSource, options?: HighlightOptions): UseHighlightsReturn;
+
+// @public
+export interface UseHighlightsReturn extends HighlightResult {
+    readonly refresh: () => void;
+}
 
 // @public
 export function useHistoryGroup(input: HistoryGroupBindingOptions): UseHistoryGroupReturn;

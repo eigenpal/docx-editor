@@ -70,7 +70,11 @@ Group rows with `Group`, `Separator`, and `Submenu`.
 
 ## Place rows above the default rows
 
-Your rows render after the default rows. To put rows at the top of the menu, wrap them in `ContextMenu.Start`. Use it for rows about the item under the pointer, such as suggestions for the word that you right-click. To read that item, call `useContextMenuTarget()`.
+Your rows render after the default rows. To put rows at the top of the menu, wrap them in `ContextMenu.Start`. Use it for rows about the item under the pointer, such as suggestions for the word that you right-click. To read that item, call one of these hooks in a component inside `Start`:
+
+- `useContextMenuTarget()` returns the element that you right-click.
+- `useContextMenuAnchor()` returns `{ x, y, trigger }`, where the menu opened and how.
+- `useContextMenuHighlights(name?)` returns the highlights under the pointer, or at the caret for a keyboard open, topmost first. For an example, see [Read highlights in the context menu](/docs/2.x/recipes/highlight-ranges#read-highlights-in-the-context-menu).
 
 Shift+F10 and the Menu key open the menu below the caret. A menu opened from the keyboard has no target element. To tell the two cases apart, call `useContextMenuAnchor()` and check `trigger`, which is `'pointer'` or `'keyboard'`. For a keyboard open, read the caret with `editor.getSelectionRange()`, and compare `head.blockId` and `head.offset` with your own ranges. For more information, see [Read the selection and the caret](/docs/2.x/guides/navigation#read-the-selection-and-the-caret).
 

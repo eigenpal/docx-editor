@@ -61,7 +61,12 @@ export {
   useEditorHostDocument,
   type UseEditorHostDocumentReturn,
 } from './editor/useEditorHostDocument';
-export { HIGHLIGHT_REFRESH_MS, useHighlights, type HighlightSource } from './editor/useHighlights';
+export {
+  HIGHLIGHT_REFRESH_MS,
+  useHighlights,
+  type HighlightSource,
+  type UseHighlightsReturn,
+} from './editor/useHighlights';
 export { useHighlightAt } from './editor/useHighlightAt';
 export { useEditorCaret, type EditorCaret } from './editor/useEditorCaret';
 export { useEditorSnapshot } from './useEditorSnapshot';
@@ -204,6 +209,7 @@ export {
 
 export {
   useContextMenuAnchor,
+  useContextMenuHighlights,
   useContextMenuTarget,
   DocxEditorContextMenu,
   ContextMenuCopy,
