@@ -130,8 +130,9 @@ describe('setShapeFormat on a DrawingML shape', () => {
     expect(restored).not.toContain('filled=');
     // A fill moves into and out of hiding as a copy with new ids, never with its own: a room
     // keeps two file-id fills that concurrent undos leave side by side as the file's content.
+    // The shape's own fill: the outline's fill under `a:ln` stays where it is.
     const idsOf = (node: OoxmlNode, out: string[] = []): string[] => {
-      if (node.kind === 'textValue') return out;
+      if (node.kind === 'textValue' || node.localName === 'ln') return out;
       if (node.localName === 'solidFill') out.push(node.id);
       for (const child of node.children) idsOf(child, out);
       return out;
