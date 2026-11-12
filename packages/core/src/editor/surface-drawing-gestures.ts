@@ -45,6 +45,11 @@ export function createDrawingGestures(deps: {
   textbox(): ReturnType<typeof createTextboxEditing> | null;
   intent(): DrawingSelectionIntent;
   setIntent(intent: DrawingSelectionIntent): void;
+  /**
+   * Move the open header or footer's edit to another page that shows it, as a press on that
+   * page's band does: no scroll, so the page under the pointer stays put.
+   */
+  enterStoryPage(pageIndex: number): void;
   /** The body drawing behind the text a press at a client point reaches, if any. */
   behindDrawingAt(
     clientX: number,
@@ -83,14 +88,15 @@ export function createDrawingGestures(deps: {
   /**
    * An open header or footer repeats on every page it heads. A press on its drawing on another
    * page moves the edit to that page, as a press on that page's band does, so the frame shows
-   * where the press landed. A drawing the selection model refuses (select-locked) moves nothing.
+   * where the press landed. A drawing that does not select (select-locked) moves nothing.
    */
   const followPage = (drawingNodeId: string, paragraphId: string, pageIndex?: number) => {
-    const scope = deps.surface.activeScope();
-    if (scope.kind !== 'headerFooter' || pageIndex === undefined) return;
+    if (deps.surface.activeScope().kind !== 'headerFooter' || pageIndex === undefined) return;
     if (pageIndex === deps.surface.currentPage('caret') - 1) return;
+    // `selectDrawing` takes a locked drawing too; the lock applies in the selected state.
     if (!deps.surface.selectDrawing(drawingNodeId, paragraphId)) return;
-    deps.surface.enterHeaderFooter({ rId: scope.rId, pageIndex });
+    if (!selectedImageStateOf(deps.surface)) return;
+    deps.enterStoryPage(pageIndex);
   };
   /** The behind-text drawing a press reaches where no text lies under it, if any. */
   const behindDrawingAt = (event: Event) =>

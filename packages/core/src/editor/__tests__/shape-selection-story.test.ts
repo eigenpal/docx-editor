@@ -129,9 +129,17 @@ test('a header watermark reaching into the body selects while the header is open
   }
 });
 
-for (const behind of [true, false])
-  test(`a header ${behind ? 'watermark' : 'logo'} on another page selects there, header open`, async () => {
-    const watermark = pageShape(13, 150, 300, 300, 300, behind);
+for (const [behind, locked] of [
+  [true, false],
+  [false, false],
+  [true, true],
+  [false, true],
+] as const)
+  test(`a ${locked ? 'locked ' : ''}header ${behind ? 'watermark' : 'logo'} on another page`, async () => {
+    const shape = pageShape(13, 150, 300, 300, 300, behind);
+    // A drawing that does not select leaves the open header on its page.
+    const lock = '<wp:cNvGraphicFramePr><a:graphicFrameLocks noSelect="1"/></wp:cNvGraphicFramePr>';
+    const watermark = locked ? shape.replace('<wp:cNvGraphicFramePr/>', lock) : shape;
     const lines = Array.from({ length: 90 }, (_, i) => p(text(`Line ${i}`))).join('');
     const { editor, container } = await mount(
       p(text('Body')) + lines,
@@ -155,6 +163,13 @@ for (const behind of [true, false])
         ? container.querySelector<HTMLElement>('.docx-page-content')!
         : painted!;
       expect(target).toBeTruthy();
+      // The programmatic entry scrolls the band into view; a press must not move the page.
+      let programmaticEntries = 0;
+      const enter = surface.enterHeaderFooter.bind(surface);
+      surface.enterHeaderFooter = (args) => {
+        programmaticEntries += 1;
+        return enter(args);
+      };
       target.dispatchEvent(
         new PointerEvent('pointerdown', {
           bubbles: true,
@@ -166,8 +181,15 @@ for (const behind of [true, false])
         })
       );
       expect(surface.activeScope()).toMatchObject({ kind: 'headerFooter', rId: 'rIdH' });
+      expect(programmaticEntries).toBe(0);
+      if (locked) {
+        expect(editor.getSelectedImage!()).toBeNull();
+        expect(surface.currentPage('caret')).toBe(1);
+        return;
+      }
       expect(editor.getSelectedImage!()).toMatchObject({ id: record.drawingNodeId });
       // The edit moved to the page pressed, so the frame sits over that page's watermark.
+      expect(surface.currentPage('caret')).toBe(2);
       expect(selectedDrawingOverlayTargetOf(surface)?.pageIndex).toBe(1);
     } finally {
       editor.destroy();

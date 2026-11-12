@@ -6086,12 +6086,32 @@ export function mountPaginatedSurface(
     dispatchBeforeInput(event);
   };
 
+  // One header and footer entry for the pointer and the drawing presses: no scroll, unlike the
+  // programmatic entry, because the press is already on screen.
+  const storyTransitions = pointerStoryTransitions({
+    viewing: () => editingMode === 'view',
+    flush: flushPendingInputAndLayout,
+    headerFooter: () => hfScope,
+    notes: () => noteOps,
+    sectionAtPage,
+    blankHeaderFooter: () => ({
+      session,
+      layout: currentLayout,
+      sectionAtPage,
+      create: (op) => surface.applyHeaderFooterLifecycle?.(op),
+      flushLayout,
+    }),
+  });
   const { onDrawingPointerGesture, onDrawingKeyGesture } = createDrawingGestures({
     surface,
     textbox: () => textboxEditing,
     intent: () => drawingIntent,
     setIntent: (intent) => setDrawingIntent(intent, true),
     behindDrawingAt: (x, y) => pointer?.behindDrawingAt(x, y) ?? null,
+    enterStoryPage: (pageIndex) => {
+      const active = pointerHeaderFooterState(hfScope?.getActive() ?? null);
+      if (active) storyTransitions.enterHeaderFooter?.({ ...active, pageIndex });
+    },
   });
   pagesLayer.addEventListener('pointerdown', onDrawingPointerGesture, { capture: true });
   pagesLayer.addEventListener('keydown', onDrawingKeyGesture, { capture: true });
@@ -6178,20 +6198,7 @@ export function mountPaginatedSurface(
       // gesture exactly: arm, then drag over the text that should take the formatting.
       onSelectionSettled: () => formatPainter.applyIfArmed(),
       activeHeaderFooter: () => pointerHeaderFooterState(hfOutsideBox()),
-      ...pointerStoryTransitions({
-        viewing: () => editingMode === 'view',
-        flush: flushPendingInputAndLayout,
-        headerFooter: () => hfScope,
-        notes: () => noteOps,
-        sectionAtPage,
-        blankHeaderFooter: () => ({
-          session,
-          layout: currentLayout,
-          sectionAtPage,
-          create: (op) => surface.applyHeaderFooterLifecycle?.(op),
-          flushLayout,
-        }),
-      }),
+      ...storyTransitions,
       onContentControlWidget: (controlId, kind) => openContentControlWidget(controlId, kind),
       ...(options.reviewModel ? { onChangeBarToggle: reviewView.toggleByChangeBar } : {}),
       isReadOnlyPosition: (position) => tocAtPosition(session.part(), position) !== undefined,
