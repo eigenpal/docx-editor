@@ -9537,7 +9537,7 @@ p.docx-review__refused {
 }
 
 /* The pane: sections with small capital titles, labels over full-width fields. */
-.docx-editor .docx-chart-pane {
+:is(.docx-editor .docx-chart-pane, .docx-editor.docx-chart-pane) {
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -9721,7 +9721,7 @@ p.docx-review__refused {
 }
 
 /* A color: the list of choices, then a swatch that opens the color grid. */
-.docx-editor .docx-chart-pane__color {
+:is(.docx-editor .docx-chart-pane__color, .docx-editor.docx-chart-pane__color) {
   position: relative;
   display: flex;
   align-items: flex-end;
@@ -9846,7 +9846,7 @@ p.docx-review__refused {
 
 /* The Format shape pane: it reuses the Chart pane's sections, fields, and color grid. A color
    field is a label over one button that shows the current color and its name. */
-.docx-editor .docx-shape-pane__color {
+:is(.docx-editor .docx-shape-pane__color, .docx-editor.docx-shape-pane__color) {
   flex-direction: column;
   align-items: stretch;
   gap: 4px;
@@ -10049,8 +10049,17 @@ p.docx-review__refused {
 
 /* The shared colour picker and the shape and chart parts. A part is placement-free: a field
    (label over control) in a pane, popover, or drawer, or a compact control in a toolbar. */
-.docx-editor .docx-color-picker {
+:is(.docx-editor .docx-color-picker, .docx-editor.docx-color-picker) {
   position: relative;
+  font-family: var(--doc-font-ui, system-ui, sans-serif);
+  color: var(--doc-text);
+}
+/* A grid in a host container carries the scope class itself. */
+.docx-editor.docx-color-picker__content {
+  font-family: var(--doc-font-ui, system-ui, sans-serif);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--doc-text);
 }
 .docx-editor .docx-color-picker__hex {
   display: flex;
@@ -10060,12 +10069,21 @@ p.docx-review__refused {
 .docx-editor .docx-color-picker__hex .docx-dialog__input {
   width: 100%;
 }
-.docx-editor .docx-object-control--field {
+/* A part placed outside the editor carries the scope class itself, so each rule on the part's own
+   element also matches that element. */
+:is(.docx-editor .docx-object-control, .docx-editor.docx-object-control) {
+  font-family: var(--doc-font-ui, system-ui, sans-serif);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--doc-text);
+}
+:is(.docx-editor .docx-object-control--field, .docx-editor.docx-object-control--field) {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.docx-editor .docx-object-control--compact {
+:is(.docx-editor .docx-object-control--compact, .docx-editor.docx-object-control--compact) {
+  font-size: 13px;
   display: inline-flex;
   align-items: center;
   gap: 4px;

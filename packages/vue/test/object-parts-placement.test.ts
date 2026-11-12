@@ -78,6 +78,7 @@ const toolbarSlots = (root: HTMLElement, slot: string) => [
   ...root.querySelectorAll(`.docx-toolbar [data-slot="${slot}"]`),
 ];
 
+let hostClicks = 0;
 test('toolbar overrides of a shape part and a chart part: className, icon, asChild, hidden', async () => {
   const cases: readonly { name: string; shape: () => VNode; chart: () => VNode }[] = [
     {
@@ -98,7 +99,11 @@ test('toolbar overrides of a shape part and a chart part: className, icon, asChi
         ),
       chart: () =>
         h(DocxEditorChartDataLabels, { asChild: true }, () =>
-          h('button', { type: 'button', class: 'host-button' }, 'Labels')
+          h(
+            'button',
+            { type: 'button', class: 'host-button', onClick: () => hostClicks++ },
+            'Labels'
+          )
         ),
     },
     {
@@ -143,10 +148,13 @@ test('toolbar overrides of a shape part and a chart part: className, icon, asChi
       await flush();
       expect(fills[0]!.querySelector('[data-color-swatch]')).not.toBeNull();
       const labelButton = labels[0]!.querySelector<HTMLButtonElement>('.host-button')!;
+      // The child keeps its own class once, and its own handler runs once per press.
+      expect(labelButton.className.split(' ').filter((c) => c === 'host-button')).toHaveLength(1);
       expect(labelButton.getAttribute('aria-pressed')).toBe('false');
       labelButton.click();
       await flush();
       expect(labelButton.getAttribute('aria-pressed')).toBe('true');
+      expect(hostClicks).toBe(1);
     }
     unmountAll();
   }
