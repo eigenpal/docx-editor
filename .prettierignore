@@ -18,3 +18,7 @@ packages/*/LICENSE.md
 # Forgotten-export baseline — owned by `bun run api:extract`, which writes it with
 # JSON.stringify and prunes it on every local run. Reformatting would make that run rewrite it.
 scripts/api-forgotten-exports.baseline.json
+
+# Test fixtures captured from other applications, kept byte for byte: the clipboard tests
+# compare against their exact markup.
+packages/*/src/**/__tests__/fixtures/**
