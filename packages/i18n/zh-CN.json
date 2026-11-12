@@ -1062,7 +1062,9 @@
     "outermostLevel": "所选内容已位于最外层级别",
     "cannotIndentFurther": "无法再增加所选内容的缩进",
     "noGoToView": "此处无法使用定位",
-    "noBookmarkDialog": "无法在此处添加书签"
+    "noBookmarkDialog": "无法在此处添加书签",
+    "groupMemberMove": "组中的形状不能单独移动、调整大小或删除。按 Esc 选择该组。",
+    "groupMemberProperties": "组中的形状使用组的环绕方式、替代文字和属性。按 Esc 选择该组。"
   },
   "equationPopup": {
     "apply": "应用",

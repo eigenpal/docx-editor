@@ -1062,7 +1062,9 @@
     "outermostLevel": "Die Auswahl ist bereits auf der äußersten Ebene",
     "cannotIndentFurther": "Der Einzug der Auswahl kann nicht weiter vergrößert werden",
     "noGoToView": "Gehe zu ist hier nicht verfügbar",
-    "noBookmarkDialog": "Textmarken können hier nicht hinzugefügt werden"
+    "noBookmarkDialog": "Textmarken können hier nicht hinzugefügt werden",
+    "groupMemberMove": "Eine Form in einer Gruppe lässt sich nicht einzeln verschieben, skalieren oder löschen. Drücken Sie Esc, um die Gruppe auszuwählen.",
+    "groupMemberProperties": "Eine Form in einer Gruppe übernimmt Umbruch, Alternativtext und Eigenschaften von der Gruppe. Drücken Sie Esc, um die Gruppe auszuwählen."
   },
   "equationPopup": {
     "apply": "Übernehmen",

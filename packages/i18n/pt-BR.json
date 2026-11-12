@@ -1062,7 +1062,9 @@
     "outermostLevel": "A seleção já está no nível mais externo",
     "cannotIndentFurther": "Não é possível aumentar mais o recuo da seleção",
     "noGoToView": "Ir para não está disponível aqui",
-    "noBookmarkDialog": "Não é possível adicionar indicadores aqui"
+    "noBookmarkDialog": "Não é possível adicionar indicadores aqui",
+    "groupMemberMove": "Uma forma dentro de um grupo não se move, não muda de tamanho nem é excluída sozinha. Pressione Esc para selecionar o grupo.",
+    "groupMemberProperties": "Uma forma dentro de um grupo usa a quebra, o texto alternativo e as propriedades do grupo. Pressione Esc para selecionar o grupo."
   },
   "equationPopup": {
     "apply": "Aplicar",

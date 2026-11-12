@@ -50,7 +50,11 @@ export interface GroupMemberBox {
   readonly height: number;
 }
 
-/** Why an image command refuses while a shape inside a group is selected. */
+/** Why wrap, alt text, and the other drawing properties refuse on a shape inside a group. */
+export const GROUP_MEMBER_PROPERTIES_REASON =
+  'a shape inside a group takes its wrap, alt text, and properties from the group; press Escape to select the group';
+
+/** Why a move, resize, or delete refuses while a shape inside a group is selected. */
 export const GROUP_MEMBER_REASON =
   'a shape inside a group does not move, resize, or delete on its own; press Escape to select the group';
 
@@ -211,7 +215,24 @@ export function memberOverlayFields<T extends { canResize: boolean; canMove: boo
   };
 }
 
-/** The refusal of an image command while a member is selected, or null. */
+/** `setImageProperties` fields that move, resize, or crop the drawing. */
+const GEOMETRY_FIELDS = [
+  'widthEmu',
+  'heightEmu',
+  'crop',
+  'resetToNaturalSize',
+  'horizontalEmu',
+  'verticalEmu',
+  'relativeToH',
+  'relativeToV',
+] as const;
+
+/**
+ * The refusal of an image command on the selected group while a shape inside it is selected,
+ * or null. A move, resize, or delete names `GROUP_MEMBER_REASON`; wrap, alt text, and the
+ * other properties belong to the group and name `GROUP_MEMBER_PROPERTIES_REASON`. A command
+ * that names another drawing is left to the other gates.
+ */
 export function groupMemberRefusal(
   command: EditorCommand,
   surface: PaginatedSurface
@@ -219,8 +240,18 @@ export function groupMemberRefusal(
   const intent = surface.drawingSelectionIntent();
   if (intent.kind !== 'pointer' || !intent.memberNodeId || command.type === 'insertImage')
     return null;
+  const target = (command as { drawingNodeId?: unknown }).drawingNodeId;
+  if (typeof target === 'string' && target !== intent.drawingNodeId) return null;
   if (!selectedGroupMember(surface, intent.drawingNodeId)) return null;
-  return { ok: false, code: 'unsupported', reason: GROUP_MEMBER_REASON };
+  const properties =
+    command.type === 'setImageWrapType' ||
+    (command.type === 'setImageProperties' &&
+      !GEOMETRY_FIELDS.some((field) => command[field] !== undefined));
+  return {
+    ok: false,
+    code: 'unsupported',
+    reason: properties ? GROUP_MEMBER_PROPERTIES_REASON : GROUP_MEMBER_REASON,
+  };
 }
 
 /**
@@ -332,5 +363,7 @@ export function leaveGroupMember(editor: Editor): boolean {
   const surface = (editor as { surface?: PaginatedSurface | null }).surface;
   const intent = surface?.drawingSelectionIntent();
   if (!surface || intent?.kind !== 'pointer' || !intent.memberNodeId) return false;
-  return surface.selectDrawingMember(null);
+  // A shape a remote edit removed is dropped quietly; Escape then acts on the group.
+  const live = selectedGroupMember(surface, intent.drawingNodeId) !== null;
+  return surface.selectDrawingMember(null) && live;
 }

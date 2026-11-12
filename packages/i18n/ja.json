@@ -78,7 +78,9 @@
     "outermostLevel": "選択範囲はすでに最も外側のレベルです",
     "cannotIndentFurther": "選択範囲のインデントをこれ以上増やせません",
     "noGoToView": "ここではジャンプを使用できません",
-    "noBookmarkDialog": "ここにはブックマークを追加できません"
+    "noBookmarkDialog": "ここにはブックマークを追加できません",
+    "groupMemberMove": "グループ内の図形は単独で移動、サイズ変更、削除できません。Esc キーを押してグループを選択してください。",
+    "groupMemberProperties": "グループ内の図形の折り返し、代替テキスト、プロパティはグループのものです。Esc キーを押してグループを選択してください。"
   },
   "toolbar": {
     "ariaLabel": "書式設定ツールバー",

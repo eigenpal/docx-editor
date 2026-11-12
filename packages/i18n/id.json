@@ -1062,7 +1062,9 @@
     "outermostLevel": "Pilihan sudah berada di tingkat terluar",
     "cannotIndentFurther": "Indentasi pilihan tidak dapat ditambah lagi",
     "noGoToView": "Buka tidak tersedia di sini",
-    "noBookmarkDialog": "Penanda tidak dapat ditambahkan di sini"
+    "noBookmarkDialog": "Penanda tidak dapat ditambahkan di sini",
+    "groupMemberMove": "Bentuk di dalam grup tidak dapat dipindahkan, diubah ukurannya, atau dihapus sendiri. Tekan Escape untuk memilih grup.",
+    "groupMemberProperties": "Bentuk di dalam grup mengambil pembungkusan, teks alternatif, dan propertinya dari grup. Tekan Escape untuk memilih grup."
   },
   "equationPopup": {
     "apply": "Terapkan",

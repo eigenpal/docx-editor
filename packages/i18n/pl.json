@@ -1062,7 +1062,9 @@
     "outermostLevel": "Zaznaczenie jest już na najwyższym poziomie",
     "cannotIndentFurther": "Nie można bardziej zwiększyć wcięcia zaznaczenia",
     "noGoToView": "Przejdź do jest tutaj niedostępne",
-    "noBookmarkDialog": "Nie można tutaj dodawać zakładek"
+    "noBookmarkDialog": "Nie można tutaj dodawać zakładek",
+    "groupMemberMove": "Kształtu w grupie nie można osobno przenieść, zmienić jego rozmiaru ani usunąć. Naciśnij Esc, aby zaznaczyć grupę.",
+    "groupMemberProperties": "Kształt w grupie przejmuje zawijanie, tekst alternatywny i właściwości od grupy. Naciśnij Esc, aby zaznaczyć grupę."
   },
   "equationPopup": {
     "apply": "Zastosuj",

@@ -9,7 +9,7 @@ import { findDrawingOverlayFrameInLayout } from '../layout/semantic-hit-test.ts'
 const THIN_LINE_PT = 1;
 import { isElementNode, isInputEvent, isKeyboardEvent, isPointerEvent } from './host-realm.ts';
 import { MULTI_CLICK_MS, MULTI_CLICK_SLOP_PX } from './surface-multi-click.ts';
-import { pressSelectsGroupMember } from './group-member-selection.ts';
+import { pressSelectsGroupMember, selectedGroupMember } from './group-member-selection.ts';
 
 /** Ctrl or Command with C or X, and Ctrl or Shift with Insert or Delete: copy and cut. */
 function isClipboardChord(event: KeyboardEvent): boolean {
@@ -228,6 +228,14 @@ export function createDrawingGestures(deps: {
         !event.altKey &&
         !event.ctrlKey &&
         !event.metaKey;
+      // A shape that a remote edit removed is no longer selected: the keys act on the group.
+      const stale = deps.intent();
+      if (
+        stale.kind === 'pointer' &&
+        stale.memberNodeId &&
+        !selectedGroupMember(deps.surface, stale.drawingNodeId)
+      )
+        deps.surface.selectDrawingMember(null);
       const selected = deps.intent();
       // Escape on a shape inside a group selects the group again.
       if (

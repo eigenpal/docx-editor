@@ -29,6 +29,8 @@
     "noContentControl": "No content control is selected",
     "noCopiedFormatting": "Copy formatting from somewhere first",
     "noDrawing": "No image is selected",
+    "groupMemberMove": "A shape inside a group does not move, resize, or delete on its own. Press Escape to select the group.",
+    "groupMemberProperties": "A shape inside a group takes its wrap, alt text, and properties from the group. Press Escape to select the group.",
     "drawingLocked": "This image is locked",
     "commentSelection": "Select a range before adding a comment",
     "noCommentDraftView": "Comments can't be added here",

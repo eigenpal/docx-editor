@@ -1062,7 +1062,9 @@
     "outermostLevel": "La sélection est déjà au niveau le plus externe",
     "cannotIndentFurther": "Impossible d’augmenter davantage le retrait de la sélection",
     "noGoToView": "Atteindre n’est pas disponible ici",
-    "noBookmarkDialog": "Impossible d’ajouter des signets ici"
+    "noBookmarkDialog": "Impossible d’ajouter des signets ici",
+    "groupMemberMove": "Une forme dans un groupe ne se déplace pas, ne se redimensionne pas et ne se supprime pas seule. Appuyez sur Échap pour sélectionner le groupe.",
+    "groupMemberProperties": "Une forme dans un groupe prend l'habillage, le texte de remplacement et les propriétés du groupe. Appuyez sur Échap pour sélectionner le groupe."
   },
   "equationPopup": {
     "apply": "Appliquer",

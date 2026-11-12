@@ -38,6 +38,12 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'there is nothing at the selection to copy': 'disabledReason.nothingToCopyFormatting',
   'the selection has nothing to paint': 'disabledReason.nothingToPaint',
   'no drawing is selected': 'disabledReason.noDrawing',
+  // Keyed on `GROUP_MEMBER_REASON` and `GROUP_MEMBER_PROPERTIES_REASON` in the engine's
+  // `group-member-selection.ts`; the sentences must stay the same.
+  'a shape inside a group does not move, resize, or delete on its own; press Escape to select the group':
+    'disabledReason.groupMemberMove',
+  'a shape inside a group takes its wrap, alt text, and properties from the group; press Escape to select the group':
+    'disabledReason.groupMemberProperties',
   'the drawing is locked': 'disabledReason.drawingLocked',
   'a comment needs a selected range': 'disabledReason.commentSelection',
   // Keyed on `NO_COMMENT_DRAFT_VIEW` in the engine's comment draft chrome.

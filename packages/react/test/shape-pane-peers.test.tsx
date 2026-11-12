@@ -195,3 +195,28 @@ test('a second press selects a shape inside a group; the selection stays local, 
   expect(saved).toBe(await xml(right.editor()));
   expect(saved).not.toContain('<wpg:wgp>');
 });
+
+test('a remote delete of the group drops the selected shape; Delete never acts on its stale id', async () => {
+  const { left, right } = await pair(shapePaneDocx('', GROUP_DRAWING), 'shape-pane-removed');
+  await update(() => selectParityShape(left.editor()));
+  await pressFrameAt(left.container, 0.25);
+  expect(left.editor().snapshot().image?.memberId).toBeString();
+  // The right editor deletes the group: the selected shape's id no longer resolves.
+  await update(() => selectParityShape(right.editor()));
+  await update(() => right.editor().exec({ type: 'deleteImage' }));
+  expect(left.editor().snapshot().image).toBeNull();
+  // Delete on the left drops the stale shape; with no drawing selected it is a text key.
+  await update(() =>
+    left.container
+      .querySelector('.docx-pages')!
+      .dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true })
+      )
+  );
+  const intent = left.editor().surface!.drawingSelectionIntent();
+  expect(intent.kind === 'pointer' ? intent.memberNodeId : undefined).toBeUndefined();
+  // The group comes back by undo on the right; the left editor does not select the old shape.
+  await update(() => right.editor().exec({ type: 'undo' }));
+  expect(left.editor().snapshot().image?.memberId).toBeUndefined();
+  expect(await xml(left.editor())).toBe(await xml(right.editor()));
+});

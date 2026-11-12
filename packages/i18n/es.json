@@ -78,7 +78,9 @@
     "outermostLevel": "La selección ya está en el nivel más externo",
     "cannotIndentFurther": "No se puede aumentar más la sangría de la selección",
     "noGoToView": "Ir a no está disponible aquí",
-    "noBookmarkDialog": "No se pueden agregar marcadores aquí"
+    "noBookmarkDialog": "No se pueden agregar marcadores aquí",
+    "groupMemberMove": "Una forma dentro de un grupo no se mueve, cambia de tamaño ni se elimina por sí sola. Presione Esc para seleccionar el grupo.",
+    "groupMemberProperties": "Una forma dentro de un grupo toma el ajuste, el texto alternativo y las propiedades del grupo. Presione Esc para seleccionar el grupo."
   },
   "toolbar": {
     "ariaLabel": "Barra de formato",

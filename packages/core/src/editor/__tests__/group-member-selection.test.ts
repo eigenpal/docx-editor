@@ -7,7 +7,12 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { expect, test } from 'bun:test';
 import { drawingNamed, mount, pressOn, saved, SCALE } from './shape-selection-fixture.ts';
-import { GROUP_MEMBER_REASON, leaveGroupMember } from '../group-member-selection.ts';
+import {
+  GROUP_MEMBER_PROPERTIES_REASON,
+  GROUP_MEMBER_REASON,
+  leaveGroupMember,
+} from '../group-member-selection.ts';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
 import type { DocxEditorInstance } from '../docx-editor.ts';
 import type { AnchoredDrawingRecord } from '../../layout/drawing-layout.ts';
@@ -121,7 +126,7 @@ test('a second press on a group selects the shape under the pointer, and Escape 
   }
 });
 
-test('a member that a remote edit removes leaves the group selected', async () => {
+test('the surface selects only a shape that the selected group holds', async () => {
   const { editor, container } = await mount();
   try {
     const group = drawingNamed(editor, 3);
@@ -129,11 +134,46 @@ test('a member that a remote edit removes leaves the group selected', async () =
     pressGroupAt(container, editor, group, 0.25);
     const memberId = editor.snapshot().image!.memberId!;
     expect(memberId).toBeString();
-    // The surface drops a member that is not in the group any more.
+    // An id that is not a shape of the group selects nothing.
     expect(editor.surface!.selectDrawingMember('not-a-member')).toBe(false);
     expect(editor.snapshot().image?.memberId).toBe(memberId);
     expect(editor.surface!.selectDrawingMember(null)).toBe(true);
     expect(editor.snapshot().image?.memberId).toBeUndefined();
+  } finally {
+    editor.destroy();
+    container.remove();
+  }
+});
+
+test('wrap, alt text, and properties refuse with their own reason; another drawing is not refused', async () => {
+  const { editor, container } = await mount();
+  try {
+    const group = drawingNamed(editor, 3);
+    pressOn(container, editor, group);
+    pressGroupAt(container, editor, group, 0.25);
+    expect(editor.snapshot().image?.memberId).toBeString();
+    const properties = { ok: false, code: 'unsupported', reason: GROUP_MEMBER_PROPERTIES_REASON };
+    expect(editor.can({ type: 'setImageProperties', alt: 'Logo' })).toMatchObject(properties);
+    expect(editor.can({ type: 'setImageWrapType', target: 'square' })).toMatchObject(properties);
+    expect(editor.can({ type: 'setImageProperties', widthEmu: 12700 * 40 })).toMatchObject({
+      reason: GROUP_MEMBER_REASON,
+    });
+    // A command that names another drawing is not the group's: the member gate stays out.
+    const line = drawingNamed(editor, 2);
+    const other = editor.can({
+      type: 'setImageProperties',
+      drawingNodeId: line.drawingNodeId,
+      alt: 'Rule',
+    });
+    expect(other.ok ? null : other.reason).not.toBe(GROUP_MEMBER_PROPERTIES_REASON);
+    // Both reasons have catalogue keys.
+    const t = (key: string) => `t:${key}`;
+    expect(localizeDisabledReason(GROUP_MEMBER_REASON, t as never)).toBe(
+      't:disabledReason.groupMemberMove'
+    );
+    expect(localizeDisabledReason(GROUP_MEMBER_PROPERTIES_REASON, t as never)).toBe(
+      't:disabledReason.groupMemberProperties'
+    );
   } finally {
     editor.destroy();
     container.remove();

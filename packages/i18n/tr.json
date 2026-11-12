@@ -1062,7 +1062,9 @@
     "outermostLevel": "Seçim zaten en dış düzeyde",
     "cannotIndentFurther": "Seçimin girintisi daha fazla artırılamaz",
     "noGoToView": "Git burada kullanılamıyor",
-    "noBookmarkDialog": "Buraya yer işareti eklenemez"
+    "noBookmarkDialog": "Buraya yer işareti eklenemez",
+    "groupMemberMove": "Grup içindeki bir şekil tek başına taşınamaz, yeniden boyutlandırılamaz veya silinemez. Grubu seçmek için Esc tuşuna basın.",
+    "groupMemberProperties": "Grup içindeki bir şekil kaydırma, alternatif metin ve özelliklerini gruptan alır. Grubu seçmek için Esc tuşuna basın."
   },
   "equationPopup": {
     "apply": "Uygula",
