@@ -1352,7 +1352,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Load server-generated DOCX updates without replacing the editor instance, with optional change highlights. Updates preserve scroll but reset selection and undo history. Local edits, stale results, and collaborative sessions prevent replacement; this API does not compare or merge files.',
+      'Load server-generated DOCX updates without replacing the editor instance, with optional change highlights. An update can apply as one undoable edit that keeps selection and works in collaborative sessions. A reload resets selection and undo history.',
     docsLink: '/docs/2.x/guides/document-refresh',
   },
   {
