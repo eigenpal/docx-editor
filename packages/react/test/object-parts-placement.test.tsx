@@ -194,6 +194,16 @@ function RerenderingHost() {
   return (
     <div role="toolbar" aria-label="Host" data-count={count}>
       <DocxEditorShapeFill variant="compact" />
+      {/* A host picker with an inline handler and theme list: new values on every render. */}
+      <ColorPicker.Root
+        className="host-picker"
+        value="accent1"
+        themeHexes={documentThemeHexes(undefined).slice()}
+        onPick={(pick) => void pick}
+      >
+        <ColorPicker.Trigger />
+        <ColorPicker.Content />
+      </ColorPicker.Root>
     </div>
   );
 }
@@ -214,6 +224,17 @@ test('the open grid keeps the focus in the hex field across an unrelated host re
   await act(async () => bump());
   await flush();
   expect(document.activeElement).toBe(hex);
+  await act(async () => {
+    fireEvent.keyDown(hex, { key: 'Escape' });
+  });
+  const host = bar.querySelector('.host-picker')!;
+  await act(async () => host.querySelector<HTMLButtonElement>('.docx-color-picker__trigger')!.click());
+  await flush();
+  const hostHex = host.querySelector<HTMLInputElement>('.docx-color-picker__hex input')!;
+  hostHex.focus();
+  await act(async () => bump());
+  await flush();
+  expect(document.activeElement).toBe(hostHex);
 });
 
 test('Content renders in a host container through a portal, scoped, and the trigger forwards its ref', async () => {

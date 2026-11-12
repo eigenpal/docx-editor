@@ -1,5 +1,16 @@
 import { expect, test } from 'bun:test';
-import { alignColorPickerPopover, focusColorSwatch } from '../color-picker.ts';
+import { alignColorPickerPopover, colorPickHex, focusColorSwatch } from '../color-picker.ts';
+
+test('theme tints and shades use the lumMod and lumOff luminance model', () => {
+  const theme = [
+    ...['FFFFFF', '000000', 'E7E6E6', '44546A', '4472C4'],
+    ...['ED7D31', 'A5A5A5', 'FFC000', '5B9BD5', '70AD47'],
+  ];
+  // The palette values of the default theme.
+  expect(colorPickHex('accent1:80', theme)).toBe('#DAE3F3');
+  expect(colorPickHex('accent1:-25', theme)).toBe('#2F5597');
+  expect(colorPickHex('accent2:60', theme)).toBe('#F8CBAD');
+});
 
 function grid(left: number, width: number): HTMLElement {
   const element = document.createElement('div');
