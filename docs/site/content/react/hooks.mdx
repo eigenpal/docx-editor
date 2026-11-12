@@ -67,7 +67,7 @@ Pass a comparator for an object slice. Common fields include `page`, `selection`
 | `useDocxEditor()` | `DocxEditorInstance \| null` | `null` before creation and outside a root. |
 | `useEditorEvent(event, handler)` | `void` | Subscribes for the component lifetime. |
 | `useEditorSnapshot(editor)` | `number` | Revision counter for `useSyncExternalStore`. |
-| `useEditorCaret()` | `{ paragraphId, offset } \| null` | Caret for `at` parameters. |
+| `useEditorCaret()` | `{ blockId, offset } \| null` | Caret position. Also carries `paragraphId` for `at` parameters. |
 | `useEditorHostDocument()` | `Document \| null` | Document that holds the pages, also in a pop-out window. `null` on the server. |
 | `useEditorColorMode()` | `{ colorMode }` | `'light'` or `'dark'`. `'light'` outside a root. |
 

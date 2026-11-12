@@ -5,7 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // Enforced tracked-changes protection keeps every change pending: the revision decisions and
 // author changes refuse, from a server runtime and from an in-browser one, while tracked edits
-// and comments still commit.
+// and comments still commit. Read-only, comments-only, and forms protection refuse them too.
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
@@ -96,6 +96,21 @@ for (const [name, write] of Object.entries(WRITES)) {
     try {
       const before = xml(await runtime.save());
       await expect(runtime.run(write)).rejects.toMatchObject(REFUSED);
+      expect(xml(await runtime.save())).toBe(before);
+    } finally {
+      runtime.dispose();
+    }
+  });
+}
+
+for (const edit of ['readOnly', 'comments', 'forms']) {
+  test(`a server runtime refuses revision decisions under ${edit} protection`, async () => {
+    const runtime = await DocxEditor.createServer(protectedDocument(edit), { author: 'Reviewer' });
+    try {
+      const before = xml(await runtime.save());
+      for (const name of ['Document.revisions.acceptAll()', 'RevisionCollection.setAuthor()']) {
+        await expect(runtime.run(WRITES[name]!)).rejects.toMatchObject(REFUSED);
+      }
       expect(xml(await runtime.save())).toBe(before);
     } finally {
       runtime.dispose();

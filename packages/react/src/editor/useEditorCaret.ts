@@ -18,16 +18,29 @@ import { useDocxEditor } from './context';
  * @public
  */
 export interface EditorCaret {
+  /** The paragraph, as `TextPosition.blockId` and `TextMatch.blockId` name it. */
+  readonly blockId: string;
+  /**
+   * The same paragraph id as `blockId`, for `at` parameters that take `paragraphId`.
+   *
+   * @deprecated Use `blockId`.
+   */
   readonly paragraphId: string;
+  /** UTF-16 offset in the paragraph's model text. */
   readonly offset: number;
 }
 
 /** The instance-only surface, read defensively — an `Editor` need not have mounted one. */
 function caretOf(editor: Editor | null): EditorCaret | null {
   const surface = (editor as (Editor & { readonly surface?: unknown }) | null)?.surface as
-    { state(): { selection: { head?: EditorCaret } } } | null | undefined;
+    | { state(): { selection: { head?: { paragraphId?: unknown; offset?: unknown } } } }
+    | null
+    | undefined;
   const head = surface?.state?.().selection?.head;
-  return head && typeof head.paragraphId === 'string' && Number.isFinite(head.offset) ? head : null;
+  if (!head || typeof head.paragraphId !== 'string') return null;
+  const offset = head.offset;
+  if (typeof offset !== 'number' || !Number.isFinite(offset)) return null;
+  return { blockId: head.paragraphId, paragraphId: head.paragraphId, offset };
 }
 
 /**
@@ -76,5 +89,5 @@ export function useEditorCaret(): EditorCaret | null {
 }
 
 function sameCaret(a: EditorCaret, b: EditorCaret): boolean {
-  return a.paragraphId === b.paragraphId && a.offset === b.offset;
+  return a.blockId === b.blockId && a.offset === b.offset;
 }

@@ -6951,9 +6951,9 @@ export { Editor }
 
 // @public (undocumented)
 export interface EditorCaret {
-    // (undocumented)
+    readonly blockId: string;
     readonly offset: number;
-    // (undocumented)
+    // @deprecated
     readonly paragraphId: string;
 }
 

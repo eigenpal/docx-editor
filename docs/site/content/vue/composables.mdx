@@ -74,7 +74,7 @@ Templates unwrap only top-level refs:
 | `useDocxEditor()` | `ShallowRef<DocxEditorInstance \| null>` | `null` before creation and outside a root. |
 | `useEditorEvent(event, handler)` | `void` | Subscribes for the component lifetime. |
 | `useEditorSnapshot(editor)` | `Ref<number>` | Revision counter for an external store. |
-| `useEditorCaret()` | `ShallowRef<{ paragraphId, offset } \| null>` | Caret for `at` parameters. |
+| `useEditorCaret()` | `ShallowRef<{ blockId, offset } \| null>` | Caret position. Also carries `paragraphId` for `at` parameters. |
 | `useEditorHostDocument()` | `Readonly<ShallowRef<Document \| null>>` | Document that holds the pages, also in a pop-out window. `null` on the server. |
 | `useEditorColorMode()` | `{ colorMode: ComputedRef }` | `'light'` or `'dark'`. `'light'` outside a root. |
 
