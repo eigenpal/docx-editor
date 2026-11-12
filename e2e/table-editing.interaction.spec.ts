@@ -349,11 +349,10 @@ async function pickToolbarOption(page: Page, slot: string, value: string) {
     if ((await swatch.count()) > 0) {
       await swatch.click();
     } else {
-      const hexInput = root.locator('.docx-toolbar__swatch-hex');
+      // The shared colour picker applies a typed hex on Enter.
+      const hexInput = root.locator('.docx-color-picker__hex input');
       await hexInput.fill(value);
-      const apply = root.locator('.docx-toolbar__swatch-apply');
-      await expect(apply).toBeEnabled();
-      await apply.click();
+      await hexInput.press('Enter');
     }
     await expect(root.locator('[role="dialog"]')).toHaveCount(0);
     await settle(page);
