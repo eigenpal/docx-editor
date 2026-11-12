@@ -46,5 +46,3 @@ export function drawingAtomProjection(
   }
   return index.get(atomId) ?? null;
 }
-
-export { shapeChoiceDrawing } from './drawing-atom-choice.ts';

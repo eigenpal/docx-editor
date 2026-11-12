@@ -10,13 +10,16 @@ import {
   resolveRunLevelMcAtom,
 } from './drawing-projection.ts';
 import { emptyNamespaceScope, namespaceScopeForNode } from './drawing-projection-walk.ts';
+import { drawingAtomProjection } from './drawing-atom-projection.ts';
+import { findNode } from './ooxml-edit.ts';
+import type { DrawingProjection } from './drawing-projection.ts';
 import type { OoxmlDrawingNode, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 
 /** Node visits before the search gives up. */
 const MAX_VISITS = 1 << 20;
 
 /** The selected modern shape drawing of the wrapper `wrapperId`, or null. */
-export function shapeChoiceDrawing(part: OoxmlPart, wrapperId: string): OoxmlDrawingNode | null {
+function shapeChoiceDrawing(part: OoxmlPart, wrapperId: string): OoxmlDrawingNode | null {
   const stack: { node: OoxmlNode; scope: ReadonlyMap<string, string> }[] = [
     { node: part.root, scope: emptyNamespaceScope() },
   ];
@@ -34,4 +37,20 @@ export function shapeChoiceDrawing(part: OoxmlPart, wrapperId: string): OoxmlDra
       stack.push({ node: node.children[at]!, scope });
   }
   return null;
+}
+
+/**
+ * The atom projection a part-level edit acts on: the modern shape the wrapper selects when the
+ * atom, projected without the package, shows its fallback in its place.
+ */
+export function atomProjectionForEdit(
+  part: OoxmlPart,
+  atomId: string,
+  project: (part: OoxmlPart, drawing: OoxmlDrawingNode) => DrawingProjection | null
+): DrawingProjection | null {
+  const atom = drawingAtomProjection(part, atomId);
+  if (!atom || atom.drawingNodeId === atomId) return atom;
+  if (findNode(part, atom.drawingNodeId)?.kind === 'drawing') return atom;
+  const choice = shapeChoiceDrawing(part, atomId);
+  return choice ? project(part, choice) : atom;
 }
