@@ -201,6 +201,7 @@ import {
   discardRetainedPaint,
   paintSemanticLayoutWithAuthorSlots,
 } from '../output/semantic-paint.ts';
+import { createInputMethodLane } from './surface-ime-deletion.ts';
 // By module path: the roster walk is an engine internal, not part of the output barrel's
 // public surface. See the note there.
 import {
@@ -5824,6 +5825,7 @@ export function mountPaginatedSurface(
         pagesLayer.removeEventListener('cut', onCut as EventListener);
         pagesLayer.removeEventListener('paste', onPaste as EventListener);
         pagesLayer.removeEventListener('compositionstart', onCompositionStart);
+        inputMethod.repair.destroy();
         pagesLayer.removeEventListener('compositionend', onCompositionEnd);
         viewportBinding?.destroy();
         hostListeners.clear();
@@ -5956,6 +5958,7 @@ export function mountPaginatedSurface(
   // own mandatory adoption, which would skip it: the #383 lane choice would
   // again be made from a selection the user no longer has.
   const onCompositionStart: typeof selectionSync.onCompositionStart = (...args) => {
+    inputMethod.repair.stop();
     selectionSync.adoptBeforeInput();
     flushToPaint();
     selectionSync.onCompositionStart(...args);
@@ -6058,6 +6061,7 @@ export function mountPaginatedSurface(
     () => (partOfNodeId(session, selection.head.paragraphId) ?? session.part()).root
   );
   const onKeyDown = (event: KeyboardEvent): void => {
+    selectionSync.noteKeyDown(event);
     directionChord.keydown(event);
     if (legacyDropdownInteraction?.keydown(event)) return;
     // The browser may have moved its caret without delivering the queued `selectionchange`
@@ -6067,6 +6071,18 @@ export function mountPaginatedSurface(
     dispatchKeyDown(event);
   };
   const { onCopy, onCut, onPaste } = createClipboardHandlers(surface);
+  const inputMethod = createInputMethodLane({
+    pagesLayer,
+    selection: () => selection,
+    textOf,
+    paragraphOrder,
+    revision: () => session.packageRevision(),
+    paintCurrent: () => !deferredPublishRender && !commitPaintOwed && typeBuffer.length === 0,
+    flushToPaint,
+    render,
+    timers,
+    sync: selectionSync,
+  });
   const dispatchBeforeInput = createBeforeInputHandler(surface, {
     isComposing: () => selectionSync.isComposing(),
     insertPlainText,
@@ -6077,10 +6093,12 @@ export function mountPaginatedSurface(
       selectionSync.mirrorToDom();
       selectionSync.noteBrowserSelectionFixup();
     },
+    ...inputMethod.hooks,
   });
   const onBeforeInput = (event: InputEvent): void => {
     selectionSync.adoptBeforeInput();
     dispatchBeforeInput(event);
+    if (!selectionSync.isComposing()) inputMethod.repair.watch(event);
   };
 
   const { onDrawingPointerGesture, onDrawingKeyGesture } = createDrawingGestures({
