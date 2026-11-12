@@ -821,8 +821,7 @@ export function projectVectorShape(
         true,
         groupFill
       );
-      if (!memberComponents) return null;
-      // A member with no fill and no outline paints nothing; the other members still paint.
+      if (!memberComponents) return null; // A member that paints nothing adds nothing.
       for (const component of memberComponents) {
         components.push(
           transformComponent(
