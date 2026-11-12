@@ -32,7 +32,7 @@ function columnWidths(
   settingsChildren: string | null,
   longText = LONG_WORD,
   longCellParagraphProperties = '',
-  compatibilityMode = 15
+  compatibilityMode: number | null = 15
 ): number[] {
   const texts = ['1', 'Fields', longText, 'Short note'];
   const cells = texts
@@ -53,7 +53,7 @@ function columnWidths(
   const settingsRoot = settingsChildren === null ? null : settings(settingsChildren).root;
   const layout = layoutSemanticDocument(part(xml, '/word/document.xml'), 0, {
     measurer: createFixedMeasurer(6, 12),
-    compatibilityMode,
+    compatibilityMode: compatibilityMode ?? undefined,
     styleCascade: buildStyleCascadeTable(null, undefined, settingsRoot),
   });
   const table = layout.pages[0]!.fragments.find(
@@ -111,7 +111,8 @@ test('hyphenation points fall between syllables and keep the existing breaks', (
 });
 
 test('legacy compatibility modes keep a long word whole under automatic hyphenation', () => {
-  for (const mode of [11, 12, 14])
+  // A document with no compatibility mode opens in a legacy mode.
+  for (const mode of [11, 12, 14, null])
     expect(columnWidths('<w:autoHyphenation/>', LONG_WORD, '', mode)[2]!).toBeGreaterThan(360);
   expectStatedWidths(columnWidths('<w:autoHyphenation/>', LONG_WORD, '', 16));
 });
@@ -124,6 +125,21 @@ test('doNotHyphenateCaps keeps a word in capitals whole but not a capitalized wo
     columnWidths(settings + '<w:doNotHyphenateCaps w:val="0"/>', 'ABC'.repeat(20))
   );
   expectStatedWidths(columnWidths('<w:autoHyphenation/>', LONG_WORD.toUpperCase()));
+});
+
+test('doNotHyphenateCaps keeps words in caps and small caps runs whole', () => {
+  for (const tag of ['caps', 'smallCaps']) {
+    const run = `<w:r><w:rPr><w:${tag}/></w:rPr><w:t>${LONG_WORD}</w:t></w:r>`;
+    expect(columnWidths('<w:autoHyphenation/><w:doNotHyphenateCaps/>', run)[2]!).toBeGreaterThan(
+      360
+    );
+    expectStatedWidths(columnWidths('<w:autoHyphenation/>', run));
+  }
+});
+
+test('a word that mixes letters and digits still hyphenates', () => {
+  const mixed = 'abcdefghij1'.repeat(5);
+  expectStatedWidths(columnWidths('<w:autoHyphenation/><w:doNotHyphenateCaps/>', mixed));
 });
 
 test('capital words keep their letters together and other words still take points', () => {
