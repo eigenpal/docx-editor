@@ -1,4 +1,5 @@
 import { identityGroupThemeEffect } from './drawing-group-theme-effects.ts';
+import { groupFillOf } from './drawing-group-fill.ts';
 import {
   identityPictureStretch,
   supportedPictureProperties,
@@ -174,11 +175,14 @@ export function readGroupPicture(
   const members: OoxmlElement[] = [];
   let hasOtherMembers = false;
   let count = 0;
+  // A text box that says `a:grpFill` paints the group's fill, so it orders the pictures.
+  const groupFill = groupFillOf(frame.group, null);
   for (const child of frame.group.children) {
     if (!isElement(child) || isGroupPropertyChild(child)) continue;
     count += 1;
     if (count > MAX_GROUP_SHAPE_CHILDREN) return null;
-    if (isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference)) continue;
+    if (isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference, groupFill))
+      continue;
     if (child.namespaceUri === PIC_NAMESPACE_URI && child.localName === 'pic') {
       if (hasOtherMembers) return null;
       members.push(child);

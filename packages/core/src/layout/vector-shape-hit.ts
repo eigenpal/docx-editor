@@ -1,6 +1,7 @@
 // Where a press reaches a vector shape: its filled area, and its outline or path within reach.
 // A shape with no fill, a line and a connector take a press only near the path they paint, so
-// a press on text inside or beside them goes to the text.
+// a press on text inside or beside them goes to the text. A shape that paints nothing at all
+// takes a press anywhere on its frame, so it stays reachable.
 
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from './drawing-layout.ts';
 import type { VectorShapeComponent } from '../store/package/drawing-shape-projection.ts';
@@ -28,10 +29,35 @@ export function vectorShapeHit(drawing: Drawing, point: Point): boolean | null {
   const sx = cx > 0 ? content.width / cx : 0;
   const sy = cy > 0 ? content.height / cy : 0;
   const place = (p: Point): Point => ({ x: content.x + p.x * sx, y: content.y + p.y * sy });
+  // A shape that paints nothing would be out of reach: its frame takes the press instead.
+  if (!shape.components.some(paints)) return insideBox(content, point, PATH_HIT_REACH);
   for (const component of shape.components) {
     if (componentHit(component, place, point)) return true;
   }
   return false;
+}
+
+function paints(component: VectorShapeComponent): boolean {
+  return (
+    (component.fillHex !== null && component.fillAlpha > 0) ||
+    !!component.fillGradient ||
+    !!component.fillPattern ||
+    (component.strokeHex !== null && component.strokeAlpha > 0) ||
+    !!component.arrowheadsEmu?.length
+  );
+}
+
+function insideBox(
+  box: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
+  point: Point,
+  reach: number
+): boolean {
+  return (
+    point.x >= box.x - reach &&
+    point.x <= box.x + box.width + reach &&
+    point.y >= box.y - reach &&
+    point.y <= box.y + box.height + reach
+  );
 }
 
 function componentHit(

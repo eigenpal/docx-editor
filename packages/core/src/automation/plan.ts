@@ -30,7 +30,13 @@ import { isTextHyperlink } from '../store/store/tree-op-hyperlink-range.ts';
 import type { ContentControlLock } from '../store/package/content-control-nodes.ts';
 import type { PlannedOperation } from './plan-types.ts';
 export type { PlannedOperation } from './plan-types.ts';
-import { delimitedText, anchorForSection, placeable, trimmed } from './plan-read-helpers.ts';
+import {
+  delimitedText,
+  delimiterRefusal,
+  anchorForSection,
+  placeable,
+  trimmed,
+} from './plan-read-helpers.ts';
 import { planContentControlInsertion } from './plan-content-control-insert.ts';
 import { planCheckboxGlyphReplacement } from './plan-checkbox-glyph.ts';
 import { ownsInsertedControl } from './tracked-content-controls.ts';
@@ -163,10 +169,6 @@ import {
   customNodeWriteOf,
 } from './custom-node-plan.ts';
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
-
-/** Most delimiters one split accepts, and the longest each may be. Both are host input. */
-const MAX_DELIMITERS = 16;
-const MAX_DELIMITER_LENGTH = 64;
 
 /** A position in the symbolic story order. Bound to a real id after the commit. */
 interface Slot {
@@ -842,20 +844,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     trimSpacing: boolean
   ): PlannedOperation => {
     const reads = plan.reads;
-    if (!Array.isArray(delimiters) || delimiters.length === 0)
-      return refuse('unsupported-content', 'split needs at least one delimiter', 'delimiters');
-    if (delimiters.length > MAX_DELIMITERS)
-      return refuse('unsupported-content', 'too many delimiters', String(delimiters.length));
-    for (const delimiter of delimiters) {
-      if (typeof delimiter !== 'string' || delimiter.length === 0)
-        return refuse(
-          'unsupported-content',
-          'a delimiter must be a non-empty string',
-          'delimiters'
-        );
-      if (delimiter.length > MAX_DELIMITER_LENGTH)
-        return refuse('unsupported-content', 'that delimiter is too long', 'delimiters');
-    }
+    const badDelimiters = delimiterRefusal(delimiters);
+    if (badDelimiters) return badDelimiters;
     const pin = pinWrite(plan);
     if (pin) return pin;
     const conflict = claim(plan, paragraph.paragraphId);
@@ -1576,7 +1566,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       case 'getShapes':
       case 'getShape':
       case 'getShapeBody':
-        return planShapes(operation, handles, packageReads);
+      case 'getShapeFill':
+      case 'setShapeFill':
+        return planShapes(operation, handles, packageReads, (story, paragraphId) => {
+          const plan = planFor(story);
+          return pinWrite(plan) ?? claim(plan, paragraphId);
+        });
       case 'getTextRanges':
       case 'expandSpan':
       case 'getReviewedText':

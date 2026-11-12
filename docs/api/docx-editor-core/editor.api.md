@@ -4434,6 +4434,7 @@ export interface SelectedImageState {
     readonly resourceStatus: ImageResourceState['kind'];
     // (undocumented)
     readonly rotationDegrees: number;
+    readonly shapeFormat: ShapeFormatState | null;
     // (undocumented)
     readonly title: string;
     // (undocumented)
@@ -4489,6 +4490,30 @@ export interface SemanticSelection {
 
 // @internal
 export function separatorLeadingCost(separatorWidth: number, marginInlineStart: number, marginInlineEnd: number, gap: number): number;
+
+// @public
+export interface ShapeFillState {
+    readonly color: string | null;
+    readonly transparency: number;
+    readonly type: 'solid' | 'none' | 'gradient' | 'pattern' | 'picture' | 'mixed';
+}
+
+// @public
+export interface ShapeFormatState {
+    // (undocumented)
+    readonly fill: ShapeFillState;
+    // (undocumented)
+    readonly outline: ShapeOutlineState;
+}
+
+// @public
+export interface ShapeOutlineState {
+    readonly color: string | null;
+    // (undocumented)
+    readonly visible: boolean | null;
+    // (undocumented)
+    readonly widthPt: number | null;
+}
 
 // @public
 export function shiftMonth(year: number, month: number, delta: 1 | -1): {

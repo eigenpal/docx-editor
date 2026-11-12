@@ -14,6 +14,7 @@ import type {
 } from '../store/package/drawing-projection.ts';
 import type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 import type { ImageResourceState } from '../store/package/image-resources.ts';
+import type { ShapeFormatState } from '../store/package/shape-format.ts';
 
 /**
  * Canonical selected-image read model shared by {@link EditorSnapshot.image} and
@@ -60,6 +61,11 @@ export interface SelectedImageState {
   readonly canChangeWrap: boolean;
   /** Whether `setImageProperties` can crop: pictures only, never text boxes. */
   readonly canCrop: boolean;
+  /**
+   * The fill and outline of a shape, text box, line or group, which `setShapeFill` and
+   * `setShapeOutline` change. Null for a picture, a chart or a diagram.
+   */
+  readonly shapeFormat: ShapeFormatState | null;
 }
 
 /**

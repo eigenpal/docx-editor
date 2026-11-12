@@ -13,7 +13,7 @@ import { reanchorMovedDrawing } from './drawing-reanchor.ts';
 import { preserveWrapExtentOps, type WrapExtentOverrides } from './image-wrap-extent.ts';
 import { reportCommandResult } from './command-reporting.ts';
 import { chartDrawingRefusal, drawingGate, type ChartGate } from './image-state-rules.ts';
-import { isShapeDrawing, shapeKeepsGeometrySize } from './shape-drawings.ts';
+import { isShapeDrawing, selectedShapeFormat, shapeKeepsGeometrySize } from './shape-drawings.ts';
 export { imageContextEqual } from './image-state-rules.ts';
 // Selected-image derivation and image command dispatch for `createDocxEditor` (task 13).
 //
@@ -332,6 +332,7 @@ export function selectedImageStateOf(surface: PaginatedSurface | null): Selected
     resourceStatus: record.resource.kind,
     intrinsic: intrinsicOf(record),
     ...capabilityFlags(projection, chart, locks),
+    shapeFormat: chart === 'none' ? selectedShapeFormat(surface!, record.drawingNodeId) : null,
   });
 }
 

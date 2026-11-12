@@ -1556,6 +1556,7 @@ export class Shape extends ModelObject implements PromisedItem {
     // @internal (undocumented)
     static at(context: RequestContext, label: string, address: ObjectAddress): Shape;
     get body(): Body_2;
+    get fill(): ShapeFill;
     // @internal (undocumented)
     hydrateAddress(address: ObjectAddress): void;
     // @internal (undocumented)
@@ -1586,6 +1587,42 @@ export class ShapeCollection extends ItemCollection<Shape> {
     protected promised(label: string, nullable: boolean): Shape & PromisedItem;
     // @internal (undocumented)
     protected size(value: AutomationValue, label: string): number;
+}
+
+// @public
+export class ShapeFill extends ModelObject {
+    get backgroundColor(): string;
+    set backgroundColor(_value: string);
+    clear(): void;
+    get foregroundColor(): string;
+    set foregroundColor(value: string);
+    // @internal
+    static of(context: RequestContext, label: string, owner: ObjectPath, shape: () => AutomationHandle): ShapeFill;
+    // @internal
+    protected onLoad(request: ResolvedLoadOptions): void;
+    set(_properties: unknown): void;
+    setSolidColor(color: string): void;
+    get transparency(): number;
+    set transparency(value: number);
+    get type(): ShapeFillType | 'Gradient' | 'Mixed' | 'NoFill' | 'Pattern' | 'Picture' | 'Solid' | 'Texture';
+}
+
+// @public
+export enum ShapeFillType {
+    // (undocumented)
+    gradient = "Gradient",
+    // (undocumented)
+    mixed = "Mixed",
+    // (undocumented)
+    noFill = "NoFill",
+    // (undocumented)
+    pattern = "Pattern",
+    // (undocumented)
+    picture = "Picture",
+    // (undocumented)
+    solid = "Solid",
+    // (undocumented)
+    texture = "Texture"
 }
 
 // @public

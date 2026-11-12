@@ -6,6 +6,7 @@
 // The projection reads only the bounded group frame and the members' own properties; it never
 // walks a story, so the per-drawing element budget is not spent on paragraphs.
 
+import { groupFillOf } from './drawing-group-fill.ts';
 import {
   MAX_GROUP_SHAPE_CHILDREN,
   isGroupPropertyChild,
@@ -148,11 +149,14 @@ export function projectGroupTextboxes(
   const members: GroupTextboxProjection[] = [];
   let count = 0;
   let onlyUnpaintedText = true;
+  const groupFill = groupFillOf(frame.group, null);
   for (const child of frame.group.children) {
     if (!isElement(child) || isGroupPropertyChild(child)) continue;
     count += 1;
     if (count > MAX_GROUP_SHAPE_CHILDREN) return null;
-    if (!isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference)) {
+    if (
+      !isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference, groupFill)
+    ) {
       onlyUnpaintedText = false;
     }
     if (child.namespaceUri !== WPS_NAMESPACE_URI || child.localName !== 'wsp') continue;

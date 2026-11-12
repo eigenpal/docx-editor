@@ -155,6 +155,23 @@ export function imageContextEqual(
     (a.intrinsic?.pixelWidth ?? null) === (b.intrinsic?.pixelWidth ?? null) &&
     (a.intrinsic?.pixelHeight ?? null) === (b.intrinsic?.pixelHeight ?? null) &&
     (a.intrinsic?.dpiX ?? null) === (b.intrinsic?.dpiX ?? null) &&
-    (a.intrinsic?.dpiY ?? null) === (b.intrinsic?.dpiY ?? null)
+    (a.intrinsic?.dpiY ?? null) === (b.intrinsic?.dpiY ?? null) &&
+    shapeFormatEqual(a.shapeFormat, b.shapeFormat)
+  );
+}
+
+function shapeFormatEqual(
+  a: SelectedImageState['shapeFormat'],
+  b: SelectedImageState['shapeFormat']
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.fill.type === b.fill.type &&
+    a.fill.color === b.fill.color &&
+    a.fill.transparency === b.fill.transparency &&
+    a.outline.visible === b.outline.visible &&
+    a.outline.color === b.outline.color &&
+    a.outline.widthPt === b.outline.widthPt
   );
 }

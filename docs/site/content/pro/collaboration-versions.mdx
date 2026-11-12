@@ -145,7 +145,8 @@ To upgrade, export each room with the release your servers run, then follow [Upg
 | 2.17.0 | [Upgrade saved rooms](#upgrade-saved-rooms). Text-only rooms need [their earlier editor](#replace-the-experimental-text-collaboration-api). |
 | 2.18.0 to 2.27.0 | [Format 1.4.2.1 steps](#upgrade-rooms-to-format-1421) |
 | 2.28.0 to 2.31.0 | [Format 1.5.2.1 steps](#upgrade-rooms-to-format-1521) |
-| 2.32.0 or 2.33.0 | [Format 1.5.3.1 steps](#upgrade-rooms-to-format-1531) |
+| 2.32.0 or 2.33.0 | [Format 1.5.3.1 steps](#upgrade-rooms-to-format-1531), then [Format 1.5.4.1 steps](#upgrade-rooms-to-format-1541) |
+| 2.34.0 to 2.37.0 | [Format 1.5.4.1 steps](#upgrade-rooms-to-format-1541) |
 
 Refuse clients with a different format. A compatible client does not make an older room compatible.
 
@@ -176,6 +177,12 @@ In collaboration, format `docx-collaboration:1.5.3.1` applies these rules:
 - Rejecting a proposed paragraph break keeps the preceding paragraph and its text, also during a concurrent undo of that break. The surviving paragraph mark supplies the paragraph properties.
 - A proposed paragraph deletion excludes concurrent text that its author has not received. Accepting the deletion keeps that text.
 - Undoing a paragraph insertion moves other participants' text into the preceding paragraph, or into the following paragraph when none precedes it.
+
+### Upgrade rooms to format 1.5.4.1
+
+Format `docx-collaboration:1.5.4.1` lets participants edit a shape's fill and outline. When two participants write a fill or an outline of one shape at the same time, each participant shows the first one. Format `docx-collaboration:1.5.3.1` participants lack this rule and could save a shape with two fills, so they refuse these rooms. The shared schema version stays the same.
+
+Keep both server calls, and change the browser storage key. Update clients, servers, export workers, and agents together, because your connection check refuses `docx-collaboration:1.5.3.1` clients.
 
 ### Replace the experimental text collaboration API
 

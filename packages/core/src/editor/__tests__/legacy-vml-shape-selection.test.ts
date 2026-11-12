@@ -5,7 +5,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { expect, test } from 'bun:test';
-import { mount, p, text } from './shape-selection-fixture.ts';
+import { mount, p, saved, text } from './shape-selection-fixture.ts';
 
 const RECT =
   '<w:r><w:pict><v:rect xmlns:v="urn:schemas-microsoft-com:vml" id="Box" ' +
@@ -24,6 +24,22 @@ test('a standalone VML shape gives the image state and keeps its frame', async (
       canResize: false,
       canMove: false,
     });
+  } finally {
+    editor.destroy();
+    container.remove();
+  }
+});
+
+test('a standalone VML shape takes fill and outline edits', async () => {
+  const { editor, container } = await mount(p(RECT + text('Anchor words')));
+  try {
+    const record = editor.surface!.layout().pages[0]!.anchoredDrawings![0]!;
+    expect(editor.surface!.selectDrawing(record.drawingNodeId, record.paragraphId)).toBe(true);
+    expect(editor.exec({ type: 'setShapeFill', color: 'FF0000' })).toMatchObject({ ok: true });
+    expect(editor.exec({ type: 'setShapeOutline', visible: false })).toMatchObject({ ok: true });
+    const xml = await saved(editor);
+    expect(xml).toContain('fillcolor="#ff0000"');
+    expect(xml).toContain('stroked="f"');
   } finally {
     editor.destroy();
     container.remove();

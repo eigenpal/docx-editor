@@ -10,6 +10,7 @@ export function drawingOpImpact(op: DrawingTreeDocOp): ImpactClass {
     case 'setDrawingMetadata':
     case 'setDrawingLocks':
     case 'replaceDrawingResource':
+    case 'setShapeFormat':
       return 'text-local';
     case 'moveInlineDrawing':
     case 'insertDrawing':
@@ -58,7 +59,8 @@ export function isDrawingTreeDocOp(op: TreeDocOp): op is DrawingTreeDocOp {
     op.op === 'setDrawingWrap' ||
     op.op === 'setDrawingMetadata' ||
     op.op === 'setDrawingLocks' ||
-    op.op === 'transformDrawing'
+    op.op === 'transformDrawing' ||
+    op.op === 'setShapeFormat'
   );
 }
 

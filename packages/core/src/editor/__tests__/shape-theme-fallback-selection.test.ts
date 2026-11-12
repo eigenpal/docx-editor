@@ -1,5 +1,5 @@
 // A shape with a theme fill and a VML fallback, as the reference application saves it, selects
-// as a shape and takes the picture frame commands. Its paint needs the package's theme; without it the
+// as a shape and takes the shape commands. Its paint needs the package's theme; without it the
 // wrapper showed the read-only fallback, and nothing could be selected or edited.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
@@ -81,7 +81,7 @@ function themedDocument(body: string): Uint8Array {
   return zipSync(files);
 }
 
-test('a themed shape with a VML fallback selects and deletes as a shape', async () => {
+test('a themed shape with a VML fallback selects, recolours and deletes as a shape', async () => {
   const container = document.createElement('div');
   document.body.append(container);
   const editor = createDocxEditor({
@@ -102,6 +102,10 @@ test('a themed shape with a VML fallback selects and deletes as a shape', async 
     const record = onlyDrawing();
     expect(editor.surface!.selectDrawing(record.drawingNodeId, record.paragraphId)).toBe(true);
     expect(editor.getSelectedImage!()).toMatchObject({ id: record.drawingNodeId });
+    expect(editor.exec({ type: 'setShapeFill', color: 'FF0000' })).toMatchObject({ ok: true });
+    const xml = await saved(editor);
+    expect(xml).toContain('<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>');
+    expect(xml).toContain('fillcolor="#ff0000"');
     const again = onlyDrawing();
     expect(editor.surface!.selectDrawing(again.drawingNodeId, again.paragraphId)).toBe(true);
     expect(editor.exec({ type: 'deleteImage' })).toMatchObject({ ok: true });

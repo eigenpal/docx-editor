@@ -33,7 +33,9 @@ export type StructureEditKind =
   | 'control'
   | 'unwrapControl'
   | 'footnote'
-  | 'comment';
+  | 'comment'
+  | 'shapeFill'
+  | 'shapeOutline';
 
 export const STRUCTURE_WEIGHTS: Record<StructureEditKind, number> = {
   list: 3,
@@ -59,6 +61,10 @@ export const STRUCTURE_WEIGHTS: Record<StructureEditKind, number> = {
   unwrapControl: 0,
   footnote: 1,
   comment: 1,
+  // Off by default, so every existing seed draws the same numbers; the `shapeFormat` shapes
+  // turn them on.
+  shapeFill: 0,
+  shapeOutline: 0,
 };
 
 /** One id an op needs: the `index`th `localName` element, inside target `within` if given. */
@@ -232,6 +238,56 @@ export function planStructureEdit(
         },
         target
       );
+    }
+    case 'shapeFill':
+    case 'shapeOutline': {
+      const drawing = pickOf('drawing');
+      if (drawing === null) return null;
+      const targets: NodeTarget[] = [
+        { field: 'drawingNodeId', localName: 'drawing', index: drawing },
+      ];
+      // Now and then one shape of a group: the kth `wps:wsp` inside the drawing.
+      if (random() < 0.3) {
+        const shapes = elements(elements(root, 'drawing')[drawing]!, 'wsp').length;
+        if (shapes > 0)
+          targets.push({
+            field: 'shapeNodeId',
+            localName: 'wsp',
+            index: Math.floor(random() * shapes),
+            within: 0,
+          });
+      }
+      const colors = ['FF0000', '00B050', '1F3864', 'FFFFFF', '000000', 'C00000', '7030A0'];
+      const color = () => colors[Math.floor(random() * colors.length)];
+      const roll = random();
+      if (kind === 'shapeFill') {
+        const fill =
+          roll < 0.2
+            ? { type: 'none' }
+            : roll < 0.5
+              ? { type: 'solid', color: color() }
+              : roll < 0.7
+                ? { type: 'solid', transparency: Math.round(random() * 100) / 100 }
+                : roll < 0.85
+                  ? { type: 'solid' }
+                  : {
+                      type: 'solid',
+                      color: color(),
+                      transparency: Math.round(random() * 100) / 100,
+                    };
+        return node({ op: 'setShapeFormat', drawingNodeId: '', fill }, targets);
+      }
+      const outline =
+        roll < 0.2
+          ? { visible: false }
+          : roll < 0.35
+            ? { visible: true }
+            : roll < 0.6
+              ? { color: color() }
+              : roll < 0.8
+                ? { widthPt: [0.25, 0.75, 1, 2.25, 6][Math.floor(random() * 5)] }
+                : { visible: true, color: color(), widthPt: 1.5 };
+      return node({ op: 'setShapeFormat', drawingNodeId: '', outline }, targets);
     }
     case 'insertTable':
       return {

@@ -59,6 +59,14 @@ export function hydratedFont(value: AutomationValue, target: string): Automation
   return value.font;
 }
 
+export function hydratedShapeFill(
+  value: AutomationValue,
+  target: string
+): Extract<AutomationValue, { kind: 'shapeFill' }>['fill'] {
+  if (value.kind !== 'shapeFill') throw wrongShape(target);
+  return value.fill;
+}
+
 export function hydratedParagraphFormat(
   value: AutomationValue,
   target: string
