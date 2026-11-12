@@ -102,6 +102,93 @@ test('preset={false} keeps Start where it is written', () => {
   expect(rows.filter((row) => row !== '---')).toEqual(['first', 'second']);
 });
 
+test('every Start in a Fragment moves up, and the Fragment rows beside it stay below', () => {
+  const rows = rowsOf(
+    openMenu(
+      <ContextMenu t={t}>
+        <>
+          <ContextMenu.Start>
+            <ContextMenu.Item label="first" onSelect={() => {}} />
+          </ContextMenu.Start>
+          <ContextMenu.Item label="tail" onSelect={() => {}} />
+          <>
+            <ContextMenu.Start>
+              <ContextMenu.Item label="second" onSelect={() => {}} />
+            </ContextMenu.Start>
+          </>
+        </>
+      </ContextMenu>
+    )
+  );
+  expect(rows.slice(0, 4)).toEqual(['first', '---', 'second', '---']);
+  expect(rows.at(-1)).toBe('tail');
+});
+
+test('the Start separator is a direct child of the panel, where the edge rule hides it', () => {
+  const container = openMenu(
+    <ContextMenu t={t}>
+      <ContextMenu.Start>{null}</ContextMenu.Start>
+    </ContextMenu>
+  );
+  const first = container.querySelector('.docx-contextmenu')?.firstElementChild;
+  expect(first?.classList.contains('docx-toolbar__menu-separator')).toBe(true);
+});
+
+function warningsDuring(run: () => void): string[] {
+  const original = console.warn;
+  const messages: string[] = [];
+  console.warn = (message: unknown) => {
+    messages.push(String(message));
+  };
+  try {
+    run();
+  } finally {
+    console.warn = original;
+  }
+  return messages;
+}
+
+function Suggestions() {
+  return (
+    <ContextMenu.Start>
+      <ContextMenu.Item label="suggestion" onSelect={() => {}} />
+    </ContextMenu.Start>
+  );
+}
+
+test('a Start that a component returns warns, and a Start the menu hoists does not', () => {
+  const notDirect = (text: string) => text.includes('not a direct child of ContextMenu');
+  const quiet = warningsDuring(() => {
+    openMenu(
+      <ContextMenu t={t}>
+        <ContextMenu.Start>
+          <Suggestions />
+        </ContextMenu.Start>
+      </ContextMenu>
+    );
+    cleanup();
+    openMenu(
+      <ContextMenu t={t} preset={false}>
+        <Suggestions />
+      </ContextMenu>
+    );
+    cleanup();
+  });
+  expect(quiet.some(notDirect)).toBe(false);
+  let rows: string[] = [];
+  const loud = warningsDuring(() => {
+    rows = rowsOf(
+      openMenu(
+        <ContextMenu t={t}>
+          <Suggestions />
+        </ContextMenu>
+      )
+    );
+  });
+  expect(loud.some(notDirect)).toBe(true);
+  expect(rows.at(-2)).toBe('suggestion');
+});
+
 test('a packaged row inside Start warns that it renders twice', () => {
   const original = console.warn;
   const messages: string[] = [];

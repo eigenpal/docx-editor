@@ -36,6 +36,14 @@ export function warnPackagedRowInStart(id: string): void {
   );
 }
 
+/** A `ContextMenu.Start` the menu could not hoist, such as one a host component returned. */
+export function warnStartNotDirectChild(): void {
+  menuDevWarning(
+    `A ContextMenu.Start is not a direct child of ContextMenu, so it renders after the ` +
+      `default rows. Put your component inside Start instead of returning Start from it.`
+  );
+}
+
 /** A `Menu.Item` or `ContextMenu.Slot` with neither `slotId` nor `slot`, so it renders nothing. */
 export function warnMissingSlotId(): void {
   menuDevWarning('A Menu.Item or ContextMenu.Slot has no slotId, so it renders nothing.');

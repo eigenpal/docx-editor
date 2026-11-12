@@ -18,7 +18,6 @@ import type { ReactNode } from 'react';
 // one thing fixed positioning cannot do is the one thing that never happens.
 
 import {
-  Children,
   isValidElement,
   useCallback,
   useContext,
@@ -29,9 +28,14 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
-import { warnPackagedRowInStart, warnUnmatchedHiddenRow } from '../menu/menu-warnings';
-import { isDevelopment } from '../../lib/is-development';
+import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
 import { contextMenuRowId } from './row-alias';
+import {
+  ContextMenuStart,
+  StartPlacementContext,
+  partitionStartRows,
+  warnPackagedRowsIn,
+} from './start';
 import { isDocumentContextMenuTarget } from './menu-target';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { ReviewRailContext, useDocxEditor } from '../context';
@@ -73,7 +77,6 @@ import {
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
   ContextMenuItem,
-  ContextMenuStart,
   ContextMenuPaste,
   ContextMenuPasteFormatting,
   ContextMenuPasteWithoutFormatting,
@@ -311,37 +314,6 @@ function rowOfChild(child: ReactNode): string | null {
 }
 
 /**
- * Whether a child asked to render ABOVE the default set.
- *
- * `ContextMenu.Start`, or any component carrying `docxRowPlacement: 'start'` (a static, like
- * `docxRow`), renders before the packaged rows instead of appending after them — the shape a contextual
- * section wants: "you right-clicked one of MINE" belongs at the top, where the pointer is.
- */
-function startPlacedChild(child: ReactNode): boolean {
-  if (!isValidElement(child)) return false;
-  if (unwrapFragment(child, (inner) => (startPlacedChild(inner) ? 'start' : null)) === 'start') {
-    return true;
-  }
-  const type = child.type as { docxRowPlacement?: unknown };
-  if (typeof type !== 'function' && typeof type !== 'object') return false;
-  return type.docxRowPlacement === 'start';
-}
-
-/** Warn about packaged rows inside `Start`, which render again in their default place. */
-function warnPackagedRowsIn(startRows: readonly ReactNode[]): void {
-  if (!isDevelopment()) return;
-  for (const start of startRows) {
-    if (!isValidElement(start)) continue;
-    const props = start.props as { children?: ReactNode };
-    for (const inner of Children.toArray(props.children)) {
-      if (startPlacedChild(inner)) warnPackagedRowsIn([inner]);
-      const id = rowOfChild(inner);
-      if (id !== null) warnPackagedRowInStart(id);
-    }
-  }
-}
-
-/**
  * The element this menu listens on: the SCROLL CONTAINER, not the painted surface.
  *
  * The class is the one the engine itself keys on, so a page with two editors gives each
@@ -389,8 +361,8 @@ export function DocxEditorContextMenu({
     [tableContextVisible, tocId]
   );
   // `preset={false}` renders children as written, so Start stays where the host put it.
-  const startRows = preset ? Children.toArray(children).filter(startPlacedChild) : [];
-  warnPackagedRowsIn(startRows);
+  const placed = preset ? partitionStartRows(children) : { start: [], rest: children };
+  warnPackagedRowsIn(placed.start, rowOfChild);
   // Placement is measured AFTER the panel renders — its size depends on the rows the host
   // composed — so the first paint is at the raw anchor and the flip lands in a layout
   // effect, before the browser paints.
@@ -620,22 +592,24 @@ export function DocxEditorContextMenu({
                 }
               }}
             >
-              {startRows}
-              {mergeArrangement({
-                entries: defaultSet,
-                children: preset
-                  ? Children.toArray(children).filter((child) => !startPlacedChild(child))
-                  : children,
-                preset,
-                keyOfEntry: (entry) => entry.id,
-                keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),
-                renderEntry: (entry) =>
-                  entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
-                onUnmatched: (id, element) => {
-                  // An unmatched override is the host's own row, unless it is hidden.
-                  if ((element.props as { hidden?: unknown }).hidden) warnUnmatchedHiddenRow(id);
-                },
-              })}
+              <StartPlacementContext.Provider value="hoisted">
+                {placed.start}
+              </StartPlacementContext.Provider>
+              <StartPlacementContext.Provider value={preset ? 'appended' : 'verbatim'}>
+                {mergeArrangement({
+                  entries: defaultSet,
+                  children: placed.rest,
+                  preset,
+                  keyOfEntry: (entry) => entry.id,
+                  keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),
+                  renderEntry: (entry) =>
+                    entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
+                  onUnmatched: (id, element) => {
+                    // An unmatched override is the host's own row, unless it is hidden.
+                    if ((element.props as { hidden?: unknown }).hidden) warnUnmatchedHiddenRow(id);
+                  },
+                })}
+              </StartPlacementContext.Provider>
             </div>
           </ContextMenuContext.Provider>
         </MenuContext.Provider>

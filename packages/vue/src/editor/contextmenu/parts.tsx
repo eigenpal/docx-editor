@@ -5,7 +5,7 @@ import { tableChromeIconPaths, hostWindowOf, type HostWindow } from '@docx-edito
 import { useDocxEditor, useEditorContentElement } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { useEditorState } from '../useEditorState';
-import { MenuRow, MenuSeparator, menuRowSlot } from '../menu/parts';
+import { MenuRow, menuRowSlot } from '../menu/parts';
 import { useDialogHost } from '../dialog-host';
 import { useMenuLabel } from '../menu/menu-context';
 import { useContextMenuContext } from './contextmenu-context';
@@ -683,22 +683,3 @@ export const ContextMenuItem = defineComponent({
 export interface ContextMenuStartProps {
   children?: DocxEditorChildren;
 }
-
-/**
- * Host rows that render above the packaged rows instead of after them.
- *
- * Use it for rows about the item under the pointer, such as spelling suggestions for the
- * word that was right-clicked. Read that item with `useContextMenuTarget()`. It must be a
- * direct child of `DocxEditor.ContextMenu`; a component that returns it renders at the end.
- *
- * @public
- */
-export const ContextMenuStart = Object.assign(
-  defineComponent({
-    name: 'ContextMenuStart',
-    setup(_, { slots }) {
-      return () => [...(slots.default?.() ?? []), h(MenuSeparator)];
-    },
-  }),
-  { docxRowPlacement: 'start' as const }
-);

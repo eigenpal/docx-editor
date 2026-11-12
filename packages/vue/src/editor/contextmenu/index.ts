@@ -12,7 +12,6 @@ export {
   ContextMenuCellVerticalAlignment,
   ContextMenuDelete,
   ContextMenuItem,
-  ContextMenuStart,
   ContextMenuPaste,
   ContextMenuPasteFormatting,
   ContextMenuPasteWithoutFormatting,
@@ -45,3 +44,4 @@ export {
   type ContextMenuAnchor,
   type ContextMenuContextValue,
 } from './contextmenu-context';
+export { ContextMenuStart } from './start';

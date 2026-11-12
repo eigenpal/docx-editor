@@ -36,9 +36,14 @@ import {
   MenuSubmenu,
   menuItemSlotIdOfVNode,
 } from '../menu/parts';
-import { warnPackagedRowInStart, warnUnmatchedHiddenRow } from '../menu/menu-warnings';
-import { isDevelopment } from '../../lib/is-development';
+import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
 import { contextMenuRowId } from './row-alias';
+import {
+  ContextMenuStart,
+  StartPlacementRegion,
+  startPlacedChild,
+  warnPackagedRowsIn,
+} from './start';
 import { isDocumentContextMenuTarget } from './menu-target';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
@@ -58,7 +63,6 @@ import {
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
   ContextMenuItem,
-  ContextMenuStart,
   ContextMenuPaste,
   ContextMenuPasteFormatting,
   ContextMenuPasteWithoutFormatting,
@@ -282,26 +286,6 @@ function rowOfChild(child: unknown): string | null {
   return null;
 }
 
-function startPlacedChild(child: unknown): boolean {
-  if (!isVNodeElement(child)) return false;
-  const type = child.type as { docxRowPlacement?: unknown };
-  if (typeof type !== 'function' && typeof type !== 'object') return false;
-  return type.docxRowPlacement === 'start';
-}
-
-/** Warn about packaged rows inside `Start`, which render again in their default place. */
-function warnPackagedRowsIn(startRows: readonly VNode[]): void {
-  if (!isDevelopment()) return;
-  for (const start of startRows) {
-    const slots = start.children as { default?: () => unknown } | unknown[] | null;
-    const inner = Array.isArray(slots) ? slots : slots?.default?.();
-    for (const child of flattenChildren(inner)) {
-      const id = rowOfChild(child);
-      if (id !== null) warnPackagedRowInStart(id);
-    }
-  }
-}
-
 function scrollerFor(anchor: HTMLElement | null): HTMLElement | null {
   return anchor?.closest<HTMLElement>('.docx-editor__scroll-container') ?? null;
 }
@@ -505,28 +489,30 @@ export const DocxEditorContextMenu = defineComponent({
 
       const children = flattenChildren(slots.default?.() ?? []);
       const startRows = children.filter(startPlacedChild);
-      if (props.preset !== false) warnPackagedRowsIn(startRows);
+      if (props.preset !== false) warnPackagedRowsIn(startRows, rowOfChild);
       const restChildren = children.filter((child) => !startPlacedChild(child));
 
       const rows =
         props.preset === false
-          ? children
+          ? [h(StartPlacementRegion, { placement: 'verbatim' }, () => children)]
           : [
-              ...startRows,
-              ...mergeArrangement({
-                entries: defaultSet.value,
-                children: restChildren,
-                preset: props.preset,
-                keyOfEntry: (entry) => entry.id,
-                keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),
-                renderEntry: (entry) =>
-                  entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
-                onUnmatched: (id, vnode) => {
-                  // An unmatched override is the host's own row, unless it is hidden.
-                  const hidden = vnode.props?.hidden;
-                  if (hidden === true || hidden === '') warnUnmatchedHiddenRow(id);
-                },
-              }),
+              h(StartPlacementRegion, { placement: 'hoisted' }, () => startRows),
+              h(StartPlacementRegion, { placement: 'appended' }, () =>
+                mergeArrangement({
+                  entries: defaultSet.value,
+                  children: restChildren,
+                  preset: props.preset,
+                  keyOfEntry: (entry) => entry.id,
+                  keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),
+                  renderEntry: (entry) =>
+                    entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
+                  onUnmatched: (id, vnode) => {
+                    // An unmatched override is the host's own row, unless it is hidden.
+                    const hidden = vnode.props?.hidden;
+                    if (hidden === true || hidden === '') warnUnmatchedHiddenRow(id);
+                  },
+                })
+              ),
             ];
 
       return h(

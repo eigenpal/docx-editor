@@ -68,9 +68,11 @@ For slot identifiers, see [Chrome slot reference](/docs/2.x/guides/chrome-slots)
 
 Group rows with `Group`, `Separator`, and `Submenu`.
 
-Host rows render after the default rows. To put rows above them, wrap the rows in `ContextMenu.Start`. Use it for rows about the item under the pointer, such as spelling suggestions. Read that item with `useContextMenuTarget()`.
+## Place rows above the default rows
 
-`ContextMenu.Start` must be a direct child of `ContextMenu`. A component that returns `ContextMenu.Start` renders at the end, so put your component, such as `Suggestions` below, inside `Start` instead. `Start` adds a separator after its rows. With `preset={false}`, it stays where you write it.
+Your rows render after the default rows. To put rows at the top of the menu, wrap them in `ContextMenu.Start`. Use it for rows about the item under the pointer, such as suggestions for the word that you right-click. To read that item, call `useContextMenuTarget()`.
+
+`ContextMenu.Start` adds a separator after its rows. If `Start` renders no rows, the separator stays hidden. You can use more than one `Start`, and the menu shows them in written order.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -78,6 +80,7 @@ Host rows render after the default rows. To put rows above them, wrap the rows i
 ```tsx
 <DocxEditor.ContextMenu>
   <DocxEditor.ContextMenu.Start>
+    <DocxEditor.ContextMenu.Item label="Explain clause" onSelect={explainClause} />
     <Suggestions />
   </DocxEditor.ContextMenu.Start>
 </DocxEditor.ContextMenu>
@@ -89,6 +92,7 @@ Host rows render after the default rows. To put rows above them, wrap the rows i
 ```vue
 <DocxEditor.ContextMenu>
   <DocxEditor.ContextMenu.Start>
+    <DocxEditor.ContextMenu.Item label="Explain clause" @select="explainClause" />
     <Suggestions />
   </DocxEditor.ContextMenu.Start>
 </DocxEditor.ContextMenu>
@@ -96,6 +100,12 @@ Host rows render after the default rows. To put rows above them, wrap the rows i
 
 </Framework>
 </FrameworkTabs>
+
+Keep these rules in mind:
+
+- Put `ContextMenu.Start` directly inside `ContextMenu`. A Fragment around it is fine. If your own component returns `Start`, the rows render at the end of the menu, and development builds print a warning. Put your component inside `Start` instead, as `Suggestions` does in the example.
+- Put only your own rows in `Start`. A packaged row, such as `ContextMenu.Copy`, also renders in its default place, so it appears twice. Development builds print a warning.
+- With `preset={false}`, the menu renders every row in written order, so `Start` stays where you write it.
 
 ## Configure file actions
 
