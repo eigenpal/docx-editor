@@ -13,7 +13,7 @@ import { useDocxEditor } from '../src/editor/context';
 import { useEditorState } from '../src/editor/useEditorState';
 import { useEditorCommand } from '../src/editor/useEditorCommand';
 import { useEditorEvent } from '../src/editor/useEditorEvent';
-import { useEditorCaret } from '../src/editor/useEditorCaret';
+import { useEditorCaret, type EditorCaret } from '../src/editor/useEditorCaret';
 import { docxEditorFacadeListenerCount } from '../src/editor/DocxEditorRoot';
 import {
   DocxEditorAuthorStyle,
@@ -441,7 +441,7 @@ describe('DocxEditorRoot reactive props', () => {
 
 describe('useEditorCaret', () => {
   test('caret position updates after typing', async () => {
-    const positions: Array<{ paragraphId: string; offset: number } | null> = [];
+    const positions: Array<EditorCaret | null> = [];
     const Probe = defineComponent({
       setup() {
         const caret = useEditorCaret();
@@ -458,6 +458,11 @@ describe('useEditorCaret', () => {
       editor.exec({ type: 'insertText', text: '!' });
       await flush();
       expect(positions.some((pos) => pos !== null)).toBe(true);
+      const last = positions.at(-1)!;
+      const head = editor.getSelectionRange()!.head;
+      expect(last.blockId).toBe(head.blockId);
+      expect(last.paragraphId).toBe(head.blockId);
+      expect(last.offset).toBe(head.offset);
     } finally {
       app.unmount();
     }
