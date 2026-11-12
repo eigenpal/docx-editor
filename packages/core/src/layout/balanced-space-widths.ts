@@ -9,6 +9,10 @@
 // - The balanced width is half the font size when the run's East Asian face holds East Asian
 //   glyphs (Batang, Gulim, Malgun Gothic). Otherwise it is the average character width of the
 //   space's own face (OS/2 `xAvgCharWidth`), as for Times New Roman.
+// - Authored scaling (`w:w`) scales the balanced width, and the space's own character spacing
+//   (`w:spacing`) counts twice: 10 pt text with -0.4 pt spacing has 4.2 pt spaces. Faces
+//   without East Asian glyphs keep their spaces when the run scales or spaces its characters.
+// - Only spaces widen. Latin letters, digits and punctuation keep their advances.
 // - The no-break space and the tab keep their advances.
 //
 // A widened space is a piece of its own whose character spacing carries the difference, so line
@@ -26,8 +30,11 @@ import type { TextMeasurer } from './text-measurer.ts';
 /** Below this, an advance in points counts as zero. */
 const EPSILON_PT = 0.001;
 
-/** Styles of widened spaces; their spans keep the balanced width on justified lines. */
-const widenedStyles = new WeakSet<ResolvedRunStyle>();
+/**
+ * Styles of widened spaces, each to the style it widened from; their spans keep the balanced
+ * width on justified lines.
+ */
+const widenedStyles = new WeakMap<ResolvedRunStyle, ResolvedRunStyle>();
 /** No space has widened yet: lines of documents without balanced widths skip every lookup. */
 let noneWidened = true;
 
@@ -89,19 +96,47 @@ function widenedStyle(
   const known = bySlot.get(fontSlot);
   if (known !== undefined) return known;
   let result: ResolvedRunStyle | null = null;
-  // Authored letter spacing and scaling are not measured with balanced widths; keep them.
-  if (style.characterSpacingPt === 0 && style.horizontalScalePercent === 100) {
-    const face = styleForFontSlot(style, fontSlot);
-    const width = balancedSpaceWidth(face, measurer);
-    const extra = width === undefined ? 0 : width - measureDisplayText(' ', face, measurer);
-    if (Math.abs(extra) > EPSILON_PT) {
-      result = { ...style, characterSpacingPt: extra };
-      widenedStyles.add(result);
+  const face = styleForFontSlot(style, fontSlot);
+  const width = scaledBalancedSpaceWidth(face, measurer);
+  if (width !== undefined) {
+    // The widened space carries its whole difference from the unspaced glyph as spacing.
+    const unspaced = face.characterSpacingPt === 0 ? face : { ...face, characterSpacingPt: 0 };
+    const glyph = measureDisplayText(' ', unspaced, measurer);
+    const spacing = width - glyph;
+    if (Math.abs(spacing - style.characterSpacingPt) > EPSILON_PT) {
+      result = { ...style, characterSpacingPt: spacing };
+      widenedStyles.set(result, style);
       noneWidened = false;
     }
   }
   bySlot.set(fontSlot, result);
   return result;
+}
+
+/**
+ * The balanced width of one space of `face` with its authored scaling and character spacing:
+ * the balanced width scaled by `w:w`, plus twice `w:spacing`. Faces without East Asian glyphs
+ * keep their spaces when the run scales or spaces its characters; their widths were not
+ * measured.
+ */
+function scaledBalancedSpaceWidth(
+  face: ResolvedRunStyle,
+  measurer: TextMeasurer
+): number | undefined {
+  const plain = face.characterSpacingPt === 0 && face.horizontalScalePercent === 100;
+  if (!plain && !eastAsianFace(face, measurer)) return undefined;
+  const width = balancedSpaceWidth(face, measurer);
+  // Strong condensing can make the width negative, as it does for a natural spaced space.
+  if (width === undefined || plain) return width;
+  return width * (face.horizontalScalePercent / 100) + 2 * face.characterSpacingPt;
+}
+
+/**
+ * The style a widened space had before it widened, or the span's own style when it is not a
+ * widened space. Its spacing is the authored one.
+ */
+export function unwidenedStyle(style: ResolvedRunStyle): ResolvedRunStyle {
+  return (!noneWidened && widenedStyles.get(style)) || style;
 }
 
 function plainText(piece: FieldAwarePiece): boolean {

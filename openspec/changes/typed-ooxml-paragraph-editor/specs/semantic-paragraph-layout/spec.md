@@ -720,6 +720,21 @@ The balanced width SHALL use half the space's font size when its East Asian face
 - **WHEN** the space qualifies for balanced width
 - **THEN** its width uses its face's average character width
 
+### Requirement: Balanced space width follows authored scaling and spacing
+
+With an East Asian face that holds East Asian glyphs, a qualifying space's balanced width SHALL be scaled by its run's `w:w` percentage. The space's own `w:spacing` SHALL then be added twice. Character spacing on neighboring runs SHALL NOT change the width. Only U+0020 spaces SHALL widen; Latin letters, digits, and punctuation SHALL keep their advances. A face without East Asian glyphs SHALL keep its natural spaces when its run scales or spaces its characters.
+
+#### Scenario: Condensed Korean text keeps wider spaces
+
+- **GIVEN** Korean words in an East Asian face at 10 pt with `w:spacing` of -0.4 pt and balanced widths
+- **THEN** each space beside a Korean word is 4.2 pt wide
+- **AND** each Korean syllable is 9.6 pt wide
+
+#### Scenario: Scaled Korean text scales its balanced spaces
+
+- **GIVEN** Korean words in an East Asian face at 10 pt with `w:w` of 80 percent and balanced widths
+- **THEN** each space beside a Korean word is 4 pt wide
+
 ### Requirement: Balanced spaces retain their width during space stretching
 
 A justified or distributed line that stretches only spaces SHALL give those spaces one common width. Balanced spaces SHALL NOT become narrower than their balanced width. Narrower spaces SHALL receive the available slack first.
