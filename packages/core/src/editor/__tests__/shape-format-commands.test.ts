@@ -23,7 +23,7 @@ test('a fill and an outline each apply as one undo step and read back', async ()
     pressAt(container, editor, 380, gapY(editor));
     expect(editor.getSelectedImage!()?.shapeFormat).toEqual({
       fill: { type: 'solid', color: 'FFE699', transparency: 0 },
-      outline: { visible: true, color: '000000', widthPt: 1 },
+      outline: { visible: true, color: '000000', widthPt: 1, dash: 'solid' },
     });
     expect(editor.can({ type: 'setShapeFill', color: '#4472c4', transparency: 0.4 })).toEqual({
       ok: true,
@@ -37,7 +37,7 @@ test('a fill and an outline each apply as one undo step and read back', async ()
     });
     expect(editor.snapshot().image?.shapeFormat).toEqual({
       fill: { type: 'solid', color: '4472C4', transparency: 0.4 },
-      outline: { visible: true, color: 'C00000', widthPt: 3 },
+      outline: { visible: true, color: 'C00000', widthPt: 3, dash: 'solid' },
     });
     const xml = await saved(editor);
     expect(xml).toContain('<a:srgbClr val="4472C4"><a:alpha val="60000"/></a:srgbClr>');

@@ -7,11 +7,12 @@
 // - No fill is `a:noFill`. The fill it replaces moves to `a14:hiddenFill` in `a:extLst`, and a
 //   later solid fill without a colour brings it back.
 // - An outline is `a:ln` with `@w` in EMU and a `a:solidFill` for its colour. A hidden outline
-//   is `a:noFill` in `a:ln`, keeping `@w`, and its colour moves to `a14:hiddenLine`.
+//   is `a:noFill` in `a:ln`, keeping `@w`, and its colour moves to `a14:hiddenLine`. A dash is
+//   `a:prstDash` after the line fill; `solid` is written too, so a style's dash stops applying.
 // Every new element goes where the schema puts it (`CT_ShapeProperties`, `CT_LineProperties`).
 //
-// A legacy VML shape takes the VML spelling: `filled`, `fillcolor`, `stroked`, `strokecolor` and
-// `strokeweight`. A DrawingML shape whose `mc:Fallback` draws the same shapes writes them there
+// A legacy VML shape takes the VML spelling: `filled`, `fillcolor`, `stroked`, `strokecolor`,
+// `strokeweight`, and `v:stroke/@dashstyle` for a dash. A DrawingML shape whose `mc:Fallback` draws the same shapes writes them there
 // too, as Word does when it saves. VML has no transparency attribute on the shape, and Word
 // writes none to the fallback; a legacy shape refuses a transparency.
 
@@ -26,6 +27,7 @@ import {
 } from '../package/shape-format.ts';
 import { readStyleReferenceIndex } from '../package/drawing-line-properties.ts';
 import { VML } from '../package/legacy-vml-values.ts';
+import { isShapeOutlineDash } from '../package/drawing-line-dash.ts';
 import {
   DRAWINGML_MAIN_NAMESPACE_URI as A,
   type OoxmlAttribute,
@@ -61,6 +63,22 @@ const LINE_FILL_NAMES: ReadonlySet<string> = new Set([
 const BEFORE_FILL: ReadonlySet<string> = new Set(['xfrm', 'custGeom', 'prstGeom']);
 /** `CT_ShapeProperties` children that precede `a:ln`. */
 const BEFORE_LINE: ReadonlySet<string> = new Set([...BEFORE_FILL, ...SHAPE_FILL_NAMES]);
+/** `CT_LineProperties` dash children; a new dash replaces either. */
+const DASH_NAMES: ReadonlySet<string> = new Set(['prstDash', 'custDash']);
+/** The `v:stroke/@dashstyle` of each preset dash (`ST_StrokeDashStyle`), by the same pattern. */
+const VML_DASH_STYLES: Readonly<Record<string, string | null>> = {
+  solid: null,
+  sysDot: 'shortdot',
+  sysDash: 'shortdash',
+  sysDashDot: 'shortdashdot',
+  sysDashDotDot: 'shortdashdotdot',
+  dot: 'dot',
+  dash: 'dash',
+  lgDash: 'longdash',
+  dashDot: 'dashdot',
+  lgDashDot: 'longdashdot',
+  lgDashDotDot: 'longdashdotdot',
+};
 /** Color transforms that set opacity; a new transparency replaces them. */
 const ALPHA_TRANSFORMS: ReadonlySet<string> = new Set(['alpha', 'alphaOff', 'alphaMod']);
 
@@ -93,9 +111,10 @@ function valueRejection(op: SetShapeFormat): TreeOpRejection | null {
     }
   }
   if (outline !== undefined) {
-    const { visible, color, widthPt } = outline;
-    if (visible === undefined && color === undefined && widthPt === undefined)
+    const { visible, color, widthPt, dash } = outline;
+    if (visible === undefined && color === undefined && widthPt === undefined && dash === undefined)
       return 'invalid-drawing-value';
+    if (dash !== undefined && !isShapeOutlineDash(dash)) return 'invalid-drawing-value';
     if (visible !== undefined && typeof visible !== 'boolean') return 'invalid-drawing-value';
     if (color !== undefined && !isHex(color)) return 'invalid-drawing-value';
     if (!themeOk(outline.theme, color)) return 'invalid-drawing-value';
@@ -149,12 +168,13 @@ function planShapeFormat(
   for (const index of chosen) {
     const shape = targets.shapes[index]!;
     const edited = targets.legacy
-      ? formatVml(shape, op.fill, op.outline)
+      ? formatVml(shape, op.fill, op.outline, nextId)
       : formatWsp(shape, op.fill, op.outline, nextId, targets.groupFills[index] ?? null);
     if (typeof edited === 'string') return edited;
     replaced.set(shape.id, edited);
     const copy = targets.fallback?.[index];
-    if (copy) replaced.set(copy.id, formatVml(copy, op.fill, op.outline, solidColorOf(edited)));
+    if (copy)
+      replaced.set(copy.id, formatVml(copy, op.fill, op.outline, nextId, solidColorOf(edited)));
   }
   return rebuilt(targets.root, replaced) as OoxmlElement;
 }
@@ -462,6 +482,14 @@ function formatOutline(
         srgbSolid('000000', nextId);
     lnChildren = put(solid, withExtension(lnChildren, HIDDEN_LINE, null, nextId));
   }
+  if (outline.dash !== undefined) {
+    const kept = lnChildren.filter((c) => !isA(c, DASH_NAMES));
+    lnChildren = inserted(
+      kept,
+      el(nextId, 'prstDash', [attr('val', outline.dash)]),
+      LINE_FILL_NAMES
+    );
+  }
   ln = withChildren(ln, lnChildren);
   return existing
     ? children.map((c) => (c === existing ? ln : c))
@@ -515,6 +543,7 @@ function formatVml(
   shape: OoxmlElement,
   fill: ShapeFillInput | undefined,
   outline: ShapeOutlineInput | undefined,
+  nextId: () => string,
   fillColor: string | null = null
 ): OoxmlElement {
   const values = new Map<string, string | null>();
@@ -543,6 +572,43 @@ function formatVml(
       values.set('strokeweight', `${Math.round(outline.widthPt * 100) / 100}pt`);
       next = withoutOverrides(next, 'stroke', ['weight']);
     }
+    if (outline.dash !== undefined)
+      next = withDashStyle(next, VML_DASH_STYLES[outline.dash] ?? null, nextId);
   }
   return { ...next, attributes: vmlAttributes(next.attributes, values) } as OoxmlElement;
+}
+
+/**
+ * The VML shape with `v:stroke/@dashstyle` set, or removed for a solid line. A shape without a
+ * `v:stroke` gets one only for a dash; the stroke's other attributes stay.
+ */
+function withDashStyle(
+  shape: OoxmlElement,
+  style: string | null,
+  nextId: () => string
+): OoxmlElement {
+  const values = new Map([['dashstyle', style]]);
+  const isStroke = (child: OoxmlNode): child is OoxmlElement =>
+    child.kind !== 'textValue' && child.namespaceUri === VML && child.localName === 'stroke';
+  if (shape.children.some(isStroke))
+    return withChildren(
+      shape,
+      shape.children.map((child) =>
+        isStroke(child)
+          ? ({ ...child, attributes: vmlAttributes(child.attributes, values) } as OoxmlElement)
+          : child
+      )
+    );
+  if (style === null) return shape;
+  const stroke = {
+    id: nextId(),
+    kind: 'generic',
+    namespaceUri: VML,
+    localName: 'stroke',
+    prefix: 'v',
+    namespaceBindings: [],
+    attributes: [attr('dashstyle', style)],
+    children: [],
+  } as unknown as OoxmlElement;
+  return withChildren(shape, [stroke, ...shape.children]);
 }

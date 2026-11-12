@@ -96,6 +96,7 @@ export {
 
 export type {
   ShapeFillInput,
+  ShapeOutlineDash,
   ShapeOutlineInput,
   ShapeThemeColorInput,
   ShapeThemeColorName,

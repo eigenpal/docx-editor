@@ -351,8 +351,35 @@ export {
   type DocxEditorShapePaneProps,
   type UseSelectedShapeReturn,
 } from './editor/shapes';
-// The shape names a custom Format shape pane needs (`useSelectedShape`).
-export { SHAPE_OUTLINE_WIDTHS } from '@docx-editor.dev/core/editor';
+export * from './editor/objects';
+export {
+  ColorPicker,
+  type ColorPickerCompound,
+  type ColorPickerContentProps,
+  type ColorPickerHexInputProps,
+  type ColorPickerNoColorProps,
+  type ColorPickerRootProps,
+  type ColorPickerSwatchProps,
+  type ColorPickerTriggerProps,
+  type ColorPickerValue,
+} from './editor/color/ColorPicker';
+// The names a host needs to place shape and chart controls of its own.
+export {
+  PANE_SECTIONS,
+  SHAPE_OUTLINE_DASHES,
+  SHAPE_OUTLINE_WIDTHS,
+  paneSections,
+} from '@docx-editor.dev/core/editor';
+export type {
+  ColorPick,
+  ObjectSlotReadValueMap,
+  ObjectSlotValueMap,
+  ObjectToggleSlotId,
+  PaneSection,
+  PaneSectionId,
+  PaneSectionIds,
+  ShapeOutlineDash,
+} from '@docx-editor.dev/core/editor';
 export type {
   SelectedShapeCommand,
   ShapeFillState,

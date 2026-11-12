@@ -294,7 +294,7 @@ describe('setShapeFormat on a DrawingML shape', () => {
     if (typeof targets === 'string') throw new Error(targets);
     expect(readShapeFormat(targets)).toEqual({
       fill: { type: 'solid', color: 'D9E2F3', transparency: 0 },
-      outline: { visible: true, color: '000000', widthPt: 1 },
+      outline: { visible: true, color: '000000', widthPt: 1, dash: 'solid' },
     });
   });
 });
@@ -513,5 +513,78 @@ describe('a:grpFill paints the group fill', () => {
       fill: { type: 'solid', transparency: 0.25 },
     });
     expect(paint()).toMatchObject({ fillHex: 'C00000', fillAlpha: 0.75 });
+  });
+});
+
+describe('setShapeFormat writes an outline dash', () => {
+  const LINE = `${XFRM}${RECT}<a:solidFill><a:srgbClr val="D9E2F3"/></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:round/></a:ln>`;
+  const FALLBACK =
+    '<v:rect id="_x0000_s1026" style="width:72pt;height:36pt" fillcolor="#d9e2f3" strokeweight="1pt"/>';
+  const dashOf = (part: OoxmlPart) =>
+    readShapeFormat(shapeFormatTargets(part, idOf(part, 'AlternateContent')) as never).outline.dash;
+
+  test('a preset dash goes after the line fill, keeps the join, and reaches the fallback', () => {
+    const part = parse(alternate(LINE, FALLBACK));
+    const ac = idOf(part, 'AlternateContent');
+    expect(dashOf(part)).toBe('solid');
+    const dashed = apply(part, {
+      op: 'setShapeFormat',
+      drawingNodeId: ac,
+      outline: { dash: 'sysDot' },
+    });
+    const out = xml(dashed);
+    expect(between(out, '<a:ln', '</a:ln>')).toBe(
+      '<a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="sysDot"/><a:round/></a:ln>'
+    );
+    expect(out).toMatch(/<v:stroke dashstyle="shortdot"\/>/);
+    expect(dashOf(dashed)).toBe('sysDot');
+    // A second dash replaces the first; solid writes an explicit solid and drops the VML style.
+    const long = apply(dashed, {
+      op: 'setShapeFormat',
+      drawingNodeId: ac,
+      outline: { dash: 'lgDashDot' },
+    });
+    expect(xml(long).match(/prstDash/g)).toHaveLength(1);
+    expect(xml(long)).toContain('dashstyle="longdashdot"');
+    const solid = xml(
+      apply(long, { op: 'setShapeFormat', drawingNodeId: ac, outline: { dash: 'solid' } })
+    );
+    expect(solid).toContain('<a:prstDash val="solid"/>');
+    expect(solid).not.toContain('dashstyle=');
+  });
+
+  test('a custom dash reads as custom; a bad preset refuses', () => {
+    const custom = LINE.replace(
+      '<a:round/>',
+      '<a:custDash><a:ds d="200000" sp="50000"/></a:custDash>'
+    );
+    const part = parse(alternate(custom, FALLBACK));
+    expect(dashOf(part)).toBe('custom');
+    const ac = idOf(part, 'AlternateContent');
+    const out = xml(
+      apply(part, { op: 'setShapeFormat', drawingNodeId: ac, outline: { dash: 'dash' } })
+    );
+    expect(out).not.toContain('custDash');
+    expect(out).toContain('<a:prstDash val="dash"/>');
+    const result = applyTreeOp(part, {
+      op: 'setShapeFormat',
+      drawingNodeId: ac,
+      outline: { dash: 'wavy' as never },
+    });
+    expect(result).toMatchObject({ ok: false, reason: 'invalid-drawing-value' });
+  });
+
+  test('a legacy VML shape writes v:stroke dashstyle and reads it back', () => {
+    const legacy = parse(
+      '<w:pict><v:rect id="_x0000_s1030" style="width:72pt;height:36pt" strokecolor="black"><v:stroke weight="2pt"/></v:rect></w:pict>'
+    );
+    const pict = idOf(legacy, 'pict');
+    const dashed = apply(legacy, {
+      op: 'setShapeFormat',
+      drawingNodeId: pict,
+      outline: { dash: 'dash' },
+    });
+    expect(xml(dashed)).toContain('<v:stroke dashstyle="dash" weight="2pt"/>');
+    expect(readShapeFormat(shapeFormatTargets(dashed, pict) as never).outline.dash).toBe('dash');
   });
 });

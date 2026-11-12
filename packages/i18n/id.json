@@ -78,7 +78,9 @@
       "image": "Gambar",
       "table": "Tabel",
       "format": "Format",
-      "direction": "Arah teks"
+      "direction": "Arah teks",
+      "chart": "Bagan",
+      "shape": "Bentuk"
     },
     "undo": "Urungkan",
     "undoShortcut": "Urungkan (Ctrl+Z)",
@@ -226,7 +228,11 @@
       "background2": "Latar Belakang 2",
       "text1": "Teks 1",
       "text2": "Teks 2"
-    }
+    },
+    "lighterPercent": "{color}, lebih terang {percent}%",
+    "darkerPercent": "{color}, lebih gelap {percent}%",
+    "hexColor": "Warna heksadesimal",
+    "invalidHex": "Ketik warna sebagai #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {
@@ -1382,7 +1388,8 @@
         "color": "Ketik warna sebagai #RRGGBB atau sebagai nama warna.",
         "noSolidFill": "Pilih warna isian terlebih dahulu.",
         "transparency": "Ketik angka dari 0 sampai 100.",
-        "width": "Ketik ketebalan dari 0,25 sampai 1584 poin."
+        "width": "Ketik ketebalan dari 0,25 sampai 1584 poin.",
+        "dash": "Pilih jenis garis putus dari daftar."
       },
       "fill": "Isian",
       "fillColor": "Warna isian",
@@ -1410,7 +1417,22 @@
       "transparency": "Transparansi (%)",
       "width": "Ketebalan (pt)",
       "widthPoints": "{value} pt",
-      "widthPreset": "Ketebalan prasetel"
+      "widthPreset": "Ketebalan prasetel",
+      "dash": "Jenis garis putus",
+      "dashes": {
+        "custom": "Kustom",
+        "dash": "Putus-putus",
+        "dashDot": "Garis titik",
+        "dot": "Titik",
+        "lgDash": "Garis panjang",
+        "lgDashDot": "Garis panjang titik",
+        "lgDashDotDot": "Garis panjang titik titik",
+        "solid": "Padat",
+        "sysDash": "Titik persegi",
+        "sysDashDot": "Garis persegi titik",
+        "sysDashDotDot": "Garis persegi titik titik",
+        "sysDot": "Titik bulat"
+      }
     }
   }
 }

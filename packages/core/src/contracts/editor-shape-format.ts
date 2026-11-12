@@ -9,8 +9,8 @@ export type {
   ShapeOutlineState,
   ShapeThemeColor,
 } from '../store/package/shape-format.ts';
-import type { ShapeThemeColorName } from '../store/store/tree-op-types.ts';
-export type { ShapeThemeColorName } from '../store/store/tree-op-types.ts';
+import type { ShapeOutlineDash, ShapeThemeColorName } from '../store/store/tree-op-types.ts';
+export type { ShapeOutlineDash, ShapeThemeColorName } from '../store/store/tree-op-types.ts';
 
 /**
  * A colour for a shape command: `RRGGBB`, `#RRGGBB`, or a theme colour such as
@@ -45,7 +45,8 @@ export interface SetShapeFillCommand {
  * `exec({ type: 'setShapeOutline', color: '1F3864', widthPt: 2 })`. One undo step.
  *
  * `visible: false` hides the outline and keeps its colour for a later `visible: true`.
- * `widthPt` runs from 0.25 to 1584 points. Fields left out keep their value.
+ * `widthPt` runs from 0.25 to 1584 points. `dash` is a preset dash such as `'dash'` or
+ * `'sysDot'`, or `'solid'` for a plain line. Fields left out keep their value.
  *
  * @public
  */
@@ -55,4 +56,5 @@ export interface SetShapeOutlineCommand {
   visible?: boolean;
   color?: ShapeColorValue;
   widthPt?: number;
+  dash?: ShapeOutlineDash;
 }

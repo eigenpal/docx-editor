@@ -18,7 +18,7 @@ import {
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
-import { DocxEditorSidePanel } from '../src/editor/charts/SidePanel.tsx';
+import { DocxEditorSidePanel } from '../src/editor/panes/SidePanel.tsx';
 import { DocxEditorShapePane } from '../src/editor/shapes/ShapePane.tsx';
 import { ContextMenu } from '../src/editor/contextmenu/index.ts';
 import { DocxEditorToolbar } from '../src/editor/toolbar/DocxEditorToolbar.tsx';
@@ -138,11 +138,18 @@ test('the side panel swaps to the pane; keyboard picks, typed fields, undo, and 
   });
 
   // Outline: 3pt blue from the hex field and the width field, each one undo step.
-  const outlineHex = input(panel, 'Outline hex color');
+  const outlineButton = panel.querySelectorAll<HTMLButtonElement>(
+    '.docx-color-picker__trigger'
+  )[1]!;
+  await act(async () => outlineButton.click());
+  await flush();
+  const outlineHex = panel.querySelector<HTMLInputElement>('.docx-color-picker__hex input')!;
   await act(async () => {
     fireEvent.change(outlineHex, { target: { value: '#0070C0' } });
     fireEvent.keyDown(outlineHex, { key: 'Enter' });
   });
+  await flush();
+  expect(document.activeElement).toBe(outlineButton);
   const width = input(panel, 'Width (pt)');
   await act(async () => {
     fireEvent.change(width, { target: { value: '3' } });
@@ -153,6 +160,7 @@ test('the side panel swaps to the pane; keyboard picks, typed fields, undo, and 
     visible: true,
     color: '0070C0',
     widthPt: 3,
+    dash: 'solid',
   });
   expect(panel.querySelectorAll('.docx-shape-pane__color-button')[1]?.textContent).toBe('Blue');
   expect(width.value).toBe('3');
@@ -178,7 +186,7 @@ test('the side panel swaps to the pane; keyboard picks, typed fields, undo, and 
     editor().exec({ type: 'setShapeFill', color: '00B050' });
   });
   await flush();
-  expect(input(panel, 'Fill hex color').value).toBe('#00B050');
+  expect(fillButton.getAttribute('data-color')).toBe('#00B050');
   expect(fillButton.textContent).toBe('Green');
 
   // No fill from the grid; the transparency field then says why it is off.

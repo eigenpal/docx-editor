@@ -3000,6 +3000,8 @@ export interface SetShapeFillCommand {
 export interface SetShapeOutlineCommand {
     // (undocumented)
     color?: ShapeColorValue;
+    // (undocumented)
+    dash?: ShapeOutlineDash;
     drawingNodeId?: string;
     // (undocumented)
     visible?: boolean;
@@ -3030,8 +3032,12 @@ export interface ShapeFormatState {
 }
 
 // @public
+export type ShapeOutlineDash = 'solid' | 'sysDot' | 'sysDash' | 'sysDashDot' | 'sysDashDotDot' | 'dot' | 'dash' | 'lgDash' | 'dashDot' | 'lgDashDot' | 'lgDashDotDot';
+
+// @public
 export interface ShapeOutlineState {
     readonly color: string | null;
+    readonly dash?: ShapeOutlineDash | 'custom' | null;
     readonly theme?: ShapeThemeColor;
     // (undocumented)
     readonly visible: boolean | null;

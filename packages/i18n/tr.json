@@ -78,7 +78,9 @@
       "image": "Görsel",
       "table": "Tablo",
       "format": "Biçim",
-      "direction": "Metin yönü"
+      "direction": "Metin yönü",
+      "chart": "Grafik",
+      "shape": "Şekil"
     },
     "undo": "Geri al",
     "undoShortcut": "Geri al (Ctrl+Z)",
@@ -226,7 +228,11 @@
       "background2": "Arka Plan 2",
       "text1": "Metin 1",
       "text2": "Metin 2"
-    }
+    },
+    "lighterPercent": "{color}, %{percent} daha açık",
+    "darkerPercent": "{color}, %{percent} daha koyu",
+    "hexColor": "Onaltılık renk",
+    "invalidHex": "Rengi #RRGGBB olarak yazın."
   },
   "dialogs": {
     "imageProperties": {
@@ -1382,7 +1388,8 @@
         "color": "Rengi #RRGGBB biçiminde veya renk adı olarak yazın.",
         "noSolidFill": "Önce bir dolgu rengi seçin.",
         "transparency": "0 ile 100 arasında bir sayı yazın.",
-        "width": "0,25 ile 1584 punto arasında bir kalınlık yazın."
+        "width": "0,25 ile 1584 punto arasında bir kalınlık yazın.",
+        "dash": "Listeden bir kesik çizgi türü seçin."
       },
       "fill": "Dolgu",
       "fillColor": "Dolgu rengi",
@@ -1410,7 +1417,22 @@
       "transparency": "Saydamlık (%)",
       "width": "Kalınlık (pt)",
       "widthPoints": "{value} pt",
-      "widthPreset": "Hazır kalınlık"
+      "widthPreset": "Hazır kalınlık",
+      "dash": "Kesik çizgi türü",
+      "dashes": {
+        "custom": "Özel",
+        "dash": "Kesik çizgi",
+        "dashDot": "Çizgi nokta",
+        "dot": "Nokta",
+        "lgDash": "Uzun çizgi",
+        "lgDashDot": "Uzun çizgi nokta",
+        "lgDashDotDot": "Uzun çizgi nokta nokta",
+        "solid": "Düz",
+        "sysDash": "Kare nokta",
+        "sysDashDot": "Kare çizgi nokta",
+        "sysDashDotDot": "Kare çizgi nokta nokta",
+        "sysDot": "Yuvarlak nokta"
+      }
     }
   }
 }

@@ -215,6 +215,66 @@ test('two editors converge on concurrent fill and outline edits, undo, delete, r
   }
 });
 
+test('an outline dash reaches the other peer, converges, travels with undo, and survives a join', async () => {
+  const a = await peer('Alice'),
+    b = await peer('Bob', a);
+  let late: Peer | undefined;
+  const dashOf = (client: Peer) =>
+    readSelectedShape(client.editor, client.editor.snapshot().image).format?.outline.dash;
+  try {
+    select(a);
+    select(b);
+    expect(a.editor.exec({ type: 'setShapeOutline', dash: 'sysDot' })).toMatchObject({ ok: true });
+    sync(a, b);
+    select(b);
+    expect(dashOf(b)).toBe('sysDot');
+    expect(await converged(a, b)).toContain('prstDash');
+    // Concurrent dashes on one outline: one dash survives on both.
+    select(a);
+    select(b);
+    expect(a.editor.exec({ type: 'setShapeOutline', dash: 'lgDash' })).toMatchObject({ ok: true });
+    expect(b.editor.exec({ type: 'setShapeOutline', dash: 'dashDot' })).toMatchObject({ ok: true });
+    sync(a, b);
+    const spPr = await converged(a, b);
+    expect(spPr.match(/prstDash/g)).toHaveLength(1);
+    select(a);
+    select(b);
+    expect(dashOf(a)).toBe(dashOf(b));
+    // Undo and redo travel.
+    expect(b.editor.exec({ type: 'undo' })).toMatchObject({ ok: true });
+    sync(a, b);
+    await converged(a, b);
+    expect(b.editor.exec({ type: 'redo' })).toMatchObject({ ok: true });
+    sync(a, b);
+    await converged(a, b);
+    // Alice deletes the shape while Bob changes its dash; then she undoes the delete.
+    select(a);
+    select(b);
+    expect(a.editor.exec({ type: 'deleteImage' })).toMatchObject({ ok: true });
+    expect(b.editor.exec({ type: 'setShapeOutline', dash: 'solid' })).toMatchObject({ ok: true });
+    sync(a, b);
+    await converged(a, b);
+    expect(a.editor.exec({ type: 'undo' })).toMatchObject({ ok: true });
+    sync(a, b);
+    await converged(a, b);
+    // A late joiner reads the same dash.
+    select(a);
+    expect(a.editor.exec({ type: 'setShapeOutline', dash: 'sysDash' })).toMatchObject({ ok: true });
+    late = await peer('Late', a);
+    await converged(a, late);
+    select(late);
+    expect(dashOf(late)).toBe('sysDash');
+    const saved = await savedXml(late);
+    expectConsistentShape(saved);
+    // The VML fallback carries the same dash.
+    expect(saved).toContain('dashstyle="shortdash"');
+  } finally {
+    late?.destroy();
+    a.destroy();
+    b.destroy();
+  }
+});
+
 test('Format shape pane edits reach the other peer, its pane read follows, a delete empties it', async () => {
   const a = await peer('Alice'),
     b = await peer('Bob', a);
@@ -233,7 +293,12 @@ test('Format shape pane edits reach the other peer, its pane read follows, a del
     expect(edit(b, { type: 'outlineWidth', text: '3' })).toMatchObject({ ok: true });
     expect(edit(b, { type: 'outlineColor', color: '#0070C0' })).toMatchObject({ ok: true });
     sync(a, b);
-    expect(pane(a).format?.outline).toEqual({ visible: true, color: '0070C0', widthPt: 3 });
+    expect(pane(a).format?.outline).toEqual({
+      visible: true,
+      color: '0070C0',
+      widthPt: 3,
+      dash: 'solid',
+    });
     // Concurrent pane edits converge.
     expect(edit(a, { type: 'fillTransparency', text: '50' })).toMatchObject({ ok: true });
     expect(edit(b, { type: 'noFill' })).toMatchObject({ ok: true });

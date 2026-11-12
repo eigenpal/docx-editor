@@ -159,7 +159,9 @@
       "listFormatting": "Formato de lista",
       "format": "Formato",
       "image": "Imagen",
-      "table": "Tabla"
+      "table": "Tabla",
+      "chart": "Gráfico",
+      "shape": "Forma"
     },
     "undo": "Deshacer",
     "undoShortcut": "Deshacer (Ctrl+Z)",
@@ -306,7 +308,11 @@
       "lightGray": "Gris claro",
       "brightGreen": "Verde brillante"
     },
-    "apply": "Aplicar"
+    "apply": "Aplicar",
+    "lighterPercent": "{color}, {percent}% más claro",
+    "darkerPercent": "{color}, {percent}% más oscuro",
+    "hexColor": "Color hexadecimal",
+    "invalidHex": "Escriba un color como #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {
@@ -1382,7 +1388,8 @@
         "color": "Escriba un color como #RRGGBB o como nombre de color.",
         "noSolidFill": "Elija primero un color de relleno.",
         "transparency": "Escriba un número de 0 a 100.",
-        "width": "Escriba un grosor de 0,25 a 1584 puntos."
+        "width": "Escriba un grosor de 0,25 a 1584 puntos.",
+        "dash": "Elija un tipo de guion de la lista."
       },
       "fill": "Relleno",
       "fillColor": "Color de relleno",
@@ -1410,7 +1417,22 @@
       "transparency": "Transparencia (%)",
       "width": "Grosor (pt)",
       "widthPoints": "{value} pt",
-      "widthPreset": "Grosor predefinido"
+      "widthPreset": "Grosor predefinido",
+      "dash": "Tipo de guion",
+      "dashes": {
+        "custom": "Personalizado",
+        "dash": "Guion",
+        "dashDot": "Guion y punto",
+        "dot": "Punto",
+        "lgDash": "Guion largo",
+        "lgDashDot": "Guion largo y punto",
+        "lgDashDotDot": "Guion largo, punto y punto",
+        "solid": "Sólido",
+        "sysDash": "Punto cuadrado",
+        "sysDashDot": "Guion cuadrado y punto",
+        "sysDashDotDot": "Guion cuadrado, punto y punto",
+        "sysDot": "Punto redondo"
+      }
     }
   }
 }

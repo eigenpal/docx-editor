@@ -78,7 +78,9 @@
       "image": "चित्र",
       "table": "तालिका",
       "format": "प्रारूप",
-      "direction": "पाठ की दिशा"
+      "direction": "पाठ की दिशा",
+      "chart": "चार्ट",
+      "shape": "आकृति"
     },
     "undo": "पूर्ववत करें",
     "undoShortcut": "पूर्ववत करें (Ctrl+Z)",
@@ -226,7 +228,11 @@
       "background2": "पृष्ठभूमि 2",
       "text1": "पाठ 1",
       "text2": "पाठ 2"
-    }
+    },
+    "lighterPercent": "{color}, {percent}% हल्का",
+    "darkerPercent": "{color}, {percent}% गहरा",
+    "hexColor": "हेक्स रंग",
+    "invalidHex": "रंग को #RRGGBB के रूप में टाइप करें।"
   },
   "dialogs": {
     "imageProperties": {
@@ -1382,7 +1388,8 @@
         "color": "रंग को #RRGGBB या रंग नाम के रूप में टाइप करें।",
         "noSolidFill": "पहले कोई भराव रंग चुनें।",
         "transparency": "0 से 100 तक की कोई संख्या टाइप करें।",
-        "width": "0.25 से 1584 पॉइंट तक की चौड़ाई टाइप करें।"
+        "width": "0.25 से 1584 पॉइंट तक की चौड़ाई टाइप करें।",
+        "dash": "सूची से डैश प्रकार चुनें।"
       },
       "fill": "भराव",
       "fillColor": "भराव रंग",
@@ -1410,7 +1417,22 @@
       "transparency": "पारदर्शिता (%)",
       "width": "चौड़ाई (pt)",
       "widthPoints": "{value} pt",
-      "widthPreset": "पूर्वनिर्धारित चौड़ाई"
+      "widthPreset": "पूर्वनिर्धारित चौड़ाई",
+      "dash": "डैश प्रकार",
+      "dashes": {
+        "custom": "कस्टम",
+        "dash": "डैश",
+        "dashDot": "डैश डॉट",
+        "dot": "डॉट",
+        "lgDash": "लंबा डैश",
+        "lgDashDot": "लंबा डैश डॉट",
+        "lgDashDotDot": "लंबा डैश डॉट डॉट",
+        "solid": "ठोस",
+        "sysDash": "चौकोर डॉट",
+        "sysDashDot": "चौकोर डैश डॉट",
+        "sysDashDotDot": "चौकोर डैश डॉट डॉट",
+        "sysDot": "गोल डॉट"
+      }
     }
   }
 }

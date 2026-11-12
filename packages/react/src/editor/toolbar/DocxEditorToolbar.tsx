@@ -62,6 +62,7 @@ import {
   arrangeToolbarGroups,
   collapseOrder,
   TOOLBAR_COLLAPSE_ORDER,
+  orderToolbarOverflowSections,
   TOOLBAR_PINNED_GROUPS,
   toolbarGroupItems,
   toolbarHostPanelShown,
@@ -154,8 +155,11 @@ import {
   type TableCellFillNamespace,
 } from './TableControls';
 import { TableChromeProvider } from './useTableChrome';
+import { OBJECT_TOOLBAR_PARTS } from '../objects/toolbar-parts';
 import { ToolbarTableMergeCells, ToolbarTableSplitCell } from './TableCellStructure';
 import { useChromeScopeClassName } from '../color-mode-context';
+import { ScopedByAncestorContext } from '../scope-context';
+import { ObjectControlVariantContext } from '../objects/object-controls';
 import { useDocxEditor } from '../context';
 
 /** Contextual table chrome slots appended when the caret is inside a table. */
@@ -229,6 +233,8 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'image.wrap': ToolbarImageWrap,
   'insert.chart': ToolbarChartInsert,
   'image.altText': ToolbarImageAltText,
+  // The contextual shape and chart groups: the object parts in their compact form.
+  ...OBJECT_TOOLBAR_PARTS,
 };
 
 /** Shaped parts that render as a "⋯" panel row themselves. See `usePanelRow`. */
@@ -274,25 +280,29 @@ function buildDefaultGroups(
 ): readonly DefaultGroup[] {
   // Each button shows only when a mounted pane or listener takes its own pane.
   const shape = panes.shape && !!image?.shapeFormat;
-  return formattingBarChromeGroups(image, { direction, chart: panes.chart && chart, shape }).map(
-    (group) => {
-      if (group.id === 'alignment') {
-        return {
-          id: group.id,
-          labelKey: group.labelKey,
-          entries: [{ slot: 'alignment' as ArrangementKey, Part: ToolbarAlignment }],
-        };
-      }
+  const objects = { shapeControls: !!image?.shapeFormat, chartControls: chart };
+  return formattingBarChromeGroups(image, {
+    direction,
+    chart: panes.chart && chart,
+    shape,
+    ...objects,
+  }).map((group) => {
+    if (group.id === 'alignment') {
       return {
         id: group.id,
         labelKey: group.labelKey,
-        entries: group.controls.map((control) => {
-          const slot = chromeSlotId(group, control);
-          return { slot: slot as ArrangementKey, Part: SHAPED_PARTS[slot] ?? iconPart(slot) };
-        }),
+        entries: [{ slot: 'alignment' as ArrangementKey, Part: ToolbarAlignment }],
       };
     }
-  );
+    return {
+      id: group.id,
+      labelKey: group.labelKey,
+      entries: group.controls.map((control) => {
+        const slot = chromeSlotId(group, control);
+        return { slot: slot as ArrangementKey, Part: SHAPED_PARTS[slot] ?? iconPart(slot) };
+      }),
+    };
+  });
 }
 
 const selectToolbarImage = (snapshot: EditorSnapshot) => snapshot.image;
@@ -531,6 +541,8 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
       );
     }
 
+    // The selected object's own groups lead the menu, under the table controls.
+    const ordered = orderToolbarOverflowSections(sections);
     const tableOverflowed = overflow.has(TABLE_CONTEXTUAL_GROUP_ID);
     if (tableChromeVisible && tableOverflowed) {
       const rows = TABLE_CONTEXTUAL_GROUP.entries.flatMap((entry) => {
@@ -547,7 +559,7 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
         // Keep contextual controls at the top of More. Table pickers render inside the
         // panel, so their trigger must remain visible when opening one temporarily lifts
         // the panel's scroll clipping.
-        sections.unshift({
+        ordered.unshift({
           id: TABLE_CONTEXTUAL_GROUP.id,
           labelKey: TABLE_CONTEXTUAL_GROUP.labelKey,
           children: rows,
@@ -577,7 +589,7 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
             {appended}
           </div>
         ) : null}
-        {sections.length > 0 ? <ToolbarOverflow sections={sections} /> : null}
+        {ordered.length > 0 ? <ToolbarOverflow sections={ordered} /> : null}
       </>
     );
   }
@@ -607,11 +619,16 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
           // Form fields are exempt inside the guard itself.
           onMouseDown={guardToolbarMousedown}
         >
-          {includesTableChromeParts(children, preset) ? (
-            <TableChromeProvider>{content}</TableChromeProvider>
-          ) : (
-            content
-          )}
+          {/* The bar carries the scope class, and its shape and chart parts render compact. */}
+          <ScopedByAncestorContext.Provider value={true}>
+            <ObjectControlVariantContext.Provider value="compact">
+              {includesTableChromeParts(children, preset) ? (
+                <TableChromeProvider>{content}</TableChromeProvider>
+              ) : (
+                content
+              )}
+            </ObjectControlVariantContext.Provider>
+          </ScopedByAncestorContext.Provider>
         </fieldset>
       </ParagraphDialogHost>
     </ToolbarContext.Provider>

@@ -106,11 +106,12 @@ function outlineOf(
   command: SetShapeOutlineCommand,
   themeHex: ThemeHex
 ): SetShapeFormatOp['outline'] {
-  const { visible, color, widthPt } = command;
+  const { visible, color, widthPt, dash } = command;
   return {
     ...(visible !== undefined ? { visible } : {}),
     ...colorFields(color, themeHex),
     ...(widthPt !== undefined ? { widthPt } : {}),
+    ...(dash !== undefined ? { dash } : {}),
   };
 }
 

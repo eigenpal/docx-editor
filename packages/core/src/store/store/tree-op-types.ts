@@ -1189,8 +1189,26 @@ export type ShapeFillInput =
     };
 
 /**
+ * A preset outline dash (ECMA-376 Part 1, 20.1.10.48 `ST_PresetLineDashVal`). `solid` is a
+ * plain line; the `sys` presets scale with the line width in short steps. @public
+ */
+export type ShapeOutlineDash =
+  | 'solid'
+  | 'sysDot'
+  | 'sysDash'
+  | 'sysDashDot'
+  | 'sysDashDotDot'
+  | 'dot'
+  | 'dash'
+  | 'lgDash'
+  | 'dashDot'
+  | 'lgDashDot'
+  | 'lgDashDotDot';
+
+/**
  * A shape outline to write. Omitted fields keep their value. `color` is `RRGGBB`; `widthPt`
- * runs from 0.25 to 1584 points.
+ * runs from 0.25 to 1584 points; `dash` writes `a:prstDash` (and `v:stroke/@dashstyle` on a
+ * VML shape).
  *
  * @public
  */
@@ -1200,6 +1218,7 @@ export interface ShapeOutlineInput {
   /** A theme reference for the DrawingML outline; `color` is then its `RRGGBB`. */
   readonly theme?: ShapeThemeColorInput;
   readonly widthPt?: number;
+  readonly dash?: ShapeOutlineDash;
 }
 
 /** Just the `op` discriminants, for dispatch tables and validation. */

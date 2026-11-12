@@ -78,7 +78,9 @@
       "image": "图片",
       "table": "表格",
       "format": "格式",
-      "direction": "文字方向"
+      "direction": "文字方向",
+      "chart": "图表",
+      "shape": "形状"
     },
     "undo": "撤销",
     "undoShortcut": "撤销(Ctrl+Z)",
@@ -226,7 +228,11 @@
       "background2": "背景 2",
       "text1": "文字 1",
       "text2": "文字 2"
-    }
+    },
+    "lighterPercent": "{color}，浅色 {percent}%",
+    "darkerPercent": "{color}，深色 {percent}%",
+    "hexColor": "十六进制颜色",
+    "invalidHex": "请以 #RRGGBB 格式键入颜色。"
   },
   "dialogs": {
     "imageProperties": {
@@ -1382,7 +1388,8 @@
         "color": "请以 #RRGGBB 或颜色名称的形式键入颜色。",
         "noSolidFill": "请先选择填充颜色。",
         "transparency": "请键入 0 到 100 之间的数字。",
-        "width": "请键入 0.25 到 1584 磅之间的宽度。"
+        "width": "请键入 0.25 到 1584 磅之间的宽度。",
+        "dash": "请从列表中选择短划线类型。"
       },
       "fill": "填充",
       "fillColor": "填充颜色",
@@ -1410,7 +1417,22 @@
       "transparency": "透明度 (%)",
       "width": "宽度 (磅)",
       "widthPoints": "{value} 磅",
-      "widthPreset": "预设宽度"
+      "widthPreset": "预设宽度",
+      "dash": "短划线类型",
+      "dashes": {
+        "custom": "自定义",
+        "dash": "短划线",
+        "dashDot": "点划线",
+        "dot": "点",
+        "lgDash": "长划线",
+        "lgDashDot": "长划线-点",
+        "lgDashDotDot": "长划线-点-点",
+        "solid": "实线",
+        "sysDash": "方点",
+        "sysDashDot": "方点划线",
+        "sysDashDotDot": "方点双划线",
+        "sysDot": "圆点"
+      }
     }
   }
 }

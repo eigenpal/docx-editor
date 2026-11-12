@@ -159,7 +159,9 @@
       "listFormatting": "箇条書きと段落番号",
       "format": "書式",
       "image": "画像",
-      "table": "表"
+      "table": "表",
+      "chart": "グラフ",
+      "shape": "図形"
     },
     "undo": "元に戻す",
     "undoShortcut": "元に戻す (Ctrl+Z)",
@@ -306,7 +308,11 @@
       "lightGray": "薄い灰色",
       "brightGreen": "明るい緑"
     },
-    "apply": "適用"
+    "apply": "適用",
+    "lighterPercent": "{color}、{percent}% 明るく",
+    "darkerPercent": "{color}、{percent}% 暗く",
+    "hexColor": "16 進数の色",
+    "invalidHex": "色を #RRGGBB の形式で入力してください。"
   },
   "dialogs": {
     "imageProperties": {
@@ -1382,7 +1388,8 @@
         "color": "色は #RRGGBB または色名で入力してください。",
         "noSolidFill": "先に塗りつぶしの色を選択してください。",
         "transparency": "0 から 100 までの数値を入力してください。",
-        "width": "0.25 から 1584 ポイントまでの幅を入力してください。"
+        "width": "0.25 から 1584 ポイントまでの幅を入力してください。",
+        "dash": "一覧から線の種類を選択してください。"
       },
       "fill": "塗りつぶし",
       "fillColor": "塗りつぶしの色",
@@ -1410,7 +1417,22 @@
       "transparency": "透明度 (%)",
       "width": "幅 (pt)",
       "widthPoints": "{value} pt",
-      "widthPreset": "幅のプリセット"
+      "widthPreset": "幅のプリセット",
+      "dash": "実線/点線の種類",
+      "dashes": {
+        "custom": "ユーザー設定",
+        "dash": "破線",
+        "dashDot": "一点鎖線",
+        "dot": "点線",
+        "lgDash": "長破線",
+        "lgDashDot": "長一点鎖線",
+        "lgDashDotDot": "長二点鎖線",
+        "solid": "実線",
+        "sysDash": "角点線",
+        "sysDashDot": "角一点鎖線",
+        "sysDashDotDot": "角二点鎖線",
+        "sysDot": "丸点線"
+      }
     }
   }
 }

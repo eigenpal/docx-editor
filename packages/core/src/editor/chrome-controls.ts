@@ -2,6 +2,7 @@ import { flattenChromeMenuSlots } from './chrome-menu-slots.ts';
 import { FILE_CHROME_GROUP } from './file-chrome-controls.ts';
 import { REVIEW_CHROME_GROUP } from './review-chrome-controls.ts';
 import { INSERT_CHROME_GROUP } from './insert-chrome-controls.ts';
+import { CHART_CHROME_GROUP, SHAPE_CHROME_GROUP } from './object-chrome-controls.ts';
 import type { ChromeMenu } from './chrome-menu-entries.ts';
 // Legacy editor chrome, expressed as data (interactive-paginated-editing M6V.1).
 //
@@ -530,6 +531,8 @@ export const CHROME_GROUPS = [
       },
     ],
   },
+  SHAPE_CHROME_GROUP,
+  CHART_CHROME_GROUP,
   {
     id: 'table',
     labelKey: 'formattingBar.groups.table',
@@ -661,6 +664,8 @@ export type ChromeGroupId =
   | 'review'
   | 'contentControl'
   | 'image'
+  | 'shape'
+  | 'chart'
   | 'table'
   | 'paragraph'
   | 'file'
@@ -729,6 +734,21 @@ export type ChromeSlotId =
   | 'image.formatShape'
   | 'image.wrap'
   | 'image.altText'
+  | 'shape.fill'
+  | 'shape.fillTransparency'
+  | 'shape.outlineColor'
+  | 'shape.outlineWidth'
+  | 'shape.outlineDash'
+  | 'chart.type'
+  | 'chart.title'
+  | 'chart.legend'
+  | 'chart.dataLabels'
+  | 'chart.axes'
+  | 'chart.gridlines'
+  | 'chart.categoryAxisTitle'
+  | 'chart.valueAxisTitle'
+  | 'chart.seriesColor'
+  | 'chart.data'
   | 'table.insert'
   | 'table.borderTarget'
   | 'table.borderColor'
@@ -821,6 +841,16 @@ export interface FormattingBarOptions {
   readonly chart?: boolean;
   /** Whether the selected drawing has a fill or outline to set, which shows `image.formatShape`. */
   readonly shape?: boolean;
+  /**
+   * Whether a shape with a fill or outline is selected, which appends the toolbar controls of
+   * the contextual `shape` group (fill, outline colour, width, and dash).
+   */
+  readonly shapeControls?: boolean;
+  /**
+   * Whether a chart is selected, which appends the toolbar controls of the contextual `chart`
+   * group (type, title, legend, and data labels).
+   */
+  readonly chartControls?: boolean;
 }
 
 /**
@@ -850,7 +880,16 @@ export function formattingBarChromeGroups(
       (control.id !== 'editChart' || options?.chart) &&
       (control.id !== 'formatShape' || options?.shape)
   );
-  return [...groups, { ...imageGroup, controls }];
+  // The object's own controls follow the image group, as a contextual tab would.
+  const objectGroups = CHROME_GROUPS_CONFORMANCE.filter(
+    (group) =>
+      (group.id === 'shape' && options?.shapeControls) ||
+      (group.id === 'chart' && options?.chartControls)
+  ).map((group) => ({
+    ...group,
+    controls: group.controls.filter((control) => control.defaultToolbar !== false),
+  }));
+  return [...groups, { ...imageGroup, controls }, ...objectGroups];
 }
 
 // ── The menu region above the toolbar ─────────────────────────────────────────────────

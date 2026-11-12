@@ -6,8 +6,12 @@ import './dom-setup.ts';
 import { afterEach, expect, test } from 'bun:test';
 import { h } from 'vue';
 import { strFromU8, unzipSync } from 'fflate';
-import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
-import { DocxEditorSidePanel } from '../src/editor/charts/SidePanel';
+import {
+  runToolbarCommand,
+  toolbarCommandState,
+  type DocxEditorInstance,
+} from '@docx-editor.dev/core/editor';
+import { DocxEditorSidePanel } from '../src/editor/panes/SidePanel';
 import { flush } from './helpers/fixtures';
 import { mountEditorTree } from './helpers/mount';
 import { collaborationModule } from '../../pro/src/collaboration/collaboration-module';
@@ -49,6 +53,15 @@ async function mount(room: DocumentCollaborationHandle) {
     input: (label: string) =>
       panel().querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!,
     fillButton: () => panel().querySelector<HTMLButtonElement>('.docx-shape-pane__color-button')!,
+    /** The hex field of the fill grid; opens the grid first. */
+    fillHex: async () => {
+      const open = () => panel().querySelector<HTMLInputElement>('.docx-color-picker__hex input');
+      if (!open())
+        await update(() =>
+          panel().querySelector<HTMLButtonElement>('.docx-shape-pane__color-button')!.click()
+        );
+      return open()!;
+    },
   };
 }
 
@@ -92,16 +105,16 @@ test('a remote delete while the color grid is open closes the grid and empties t
 test('a remote recolor keeps a hex draft in the field, and Enter then writes the draft', async () => {
   const { left, right } = await pair(shapePaneDocx(SHAPE_PANE_CASES.solid), 'vue-pane-draft');
   await update(() => selectParityShape(left.editor()));
-  await update(() => type(left.input('Fill hex color'), '#123456', false));
+  const hex = await left.fillHex();
+  await update(() => type(hex, '#123456', false));
   await update(() => selectParityShape(right.editor()));
   await update(() => right.editor().exec({ type: 'setShapeFill', color: 'FF0000' }));
+  // The remote color shows on the button; the open grid and the typed draft stay.
   expect(left.fillButton().getAttribute('data-color')).toBe('#FF0000');
-  expect(left.input('Fill hex color').value).toBe('#123456');
-  expect(left.input('Fill hex color').getAttribute('data-draft')).toBe('true');
+  const draft = await left.fillHex();
+  expect(draft.value).toBe('#123456');
   await update(() =>
-    left
-      .input('Fill hex color')
-      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    draft.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
   );
   expect(right.editor().snapshot().image?.shapeFormat?.fill.color).toBe('123456');
   expect(await xml(left.editor())).toBe(await xml(right.editor()));
@@ -143,10 +156,11 @@ test('a second press selects a shape inside a group; the selection stays local, 
   await pressFrameAt(left.container, 0.25);
   const memberId = left.editor().snapshot().image?.memberId;
   expect(memberId).toBeString();
-  expect(left.input('Fill hex color').value).toBe('#9DC3E6');
+  expect(left.fillButton().getAttribute('data-color')).toBe('#9DC3E6');
   expect(right.editor().snapshot().image).toBeNull();
 
-  await update(() => type(left.input('Fill hex color'), '#FF0000'));
+  const hex = await left.fillHex();
+  await update(() => type(hex, '#FF0000'));
   let saved = await xml(right.editor());
   expect(saved).toContain('<a:srgbClr val="FF0000"/>');
   expect(saved).toContain('<a:srgbClr val="A9D18E"/>');
@@ -156,7 +170,7 @@ test('a second press selects a shape inside a group; the selection stays local, 
   await pressFrameAt(right.container, 0.75);
   expect(right.editor().snapshot().image?.memberId).not.toBe(memberId);
   await update(() => right.editor().exec({ type: 'setShapeFill', color: '7030A0' }));
-  expect(left.input('Fill hex color').value).toBe('#FF0000');
+  expect(left.fillButton().getAttribute('data-color')).toBe('#FF0000');
   expect(left.editor().snapshot().image?.memberId).toBe(memberId);
 
   expect(left.editor().exec({ type: 'deleteImage' })).toMatchObject({
@@ -177,4 +191,44 @@ test('a second press selects a shape inside a group; the selection stays local, 
   saved = await xml(left.editor());
   expect(saved).toBe(await xml(right.editor()));
   expect(saved).not.toContain('<wpg:wgp>');
+});
+
+test('a dash syncs to the other peer; slot commands on a shape the other peer deleted refuse', async () => {
+  const { left, right } = await pair(shapePaneDocx(SHAPE_PANE_CASES.solid), 'vue-pane-dash');
+  await update(() => selectParityShape(left.editor()));
+  await update(() => selectParityShape(right.editor()));
+  // The dash part in the pane writes the dash, and the other peer reads it back.
+  const dash = left
+    .panel()
+    .querySelector<HTMLSelectElement>('[data-slot="shape.outlineDash"] select')!;
+  await update(() => {
+    dash.value = 'sysDash';
+    dash.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(right.editor().snapshot().image?.shapeFormat?.outline.dash).toBe('sysDash');
+  expect(await xml(right.editor())).toContain('<a:prstDash val="sysDash"/>');
+  // Concurrent edits converge: a remote width and a local dash both land.
+  await update(() => {
+    runToolbarCommand(right.editor(), 'shape.outlineWidth', 4.5);
+    runToolbarCommand(left.editor(), 'shape.outlineDash', 'lgDash');
+  });
+  expect(await xml(left.editor())).toBe(await xml(right.editor()));
+  expect(left.editor().snapshot().image?.shapeFormat?.outline).toMatchObject({
+    widthPt: 4.5,
+    dash: 'lgDash',
+  });
+  // Undo takes back the local dash only.
+  await update(() => left.editor().exec({ type: 'undo' }));
+  expect(right.editor().snapshot().image?.shapeFormat?.outline).toMatchObject({
+    widthPt: 4.5,
+    dash: 'sysDash',
+  });
+  // The right peer deletes the shape: the left slots disable and a run refuses.
+  await update(() =>
+    expect(right.editor().exec({ type: 'deleteImage' })).toMatchObject({ ok: true })
+  );
+  expect(toolbarCommandState(left.editor(), 'shape.outlineDash').enabled).toBe(false);
+  expect(runToolbarCommand(left.editor(), 'shape.outlineDash', 'dot')).toMatchObject({ ok: false });
+  expect(left.panel().textContent).toContain('No shape selected');
+  expect(await xml(left.editor())).toBe(await xml(right.editor()));
 });

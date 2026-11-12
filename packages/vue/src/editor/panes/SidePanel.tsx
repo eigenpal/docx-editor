@@ -1,10 +1,11 @@
-// `DocxEditor.SidePanel`: a panel beside the pages that holds the Chart pane or the Format shape
-// pane. The host shows or hides it by rendering it, and opens it when the chrome asks
+// `DocxEditor.SidePanel`: one packaged host for the pane requests, a panel beside the pages that
+// holds the Chart pane or the Format shape pane. Any other UI can answer the same requests
+// (`usePaneRequest`). The host shows or hides it by rendering it, and opens it when the chrome asks
 // (`usePaneRequest`): Insert > Chart opens it without the focus, and Edit chart and Format shape
 // move the focus into their pane, which takes the request itself. The selection picks the pane
 // (`sidePanelPane`): a chart shows the Chart pane, a shape the Format shape pane, and otherwise
 // the pane that was asked for last stays. The React twin is
-// `packages/react/src/editor/charts/SidePanel.tsx`; both render the same markup.
+// `packages/react/src/editor/panes/SidePanel.tsx`; both render the same markup.
 
 import { defineComponent, ref, watch, type PropType } from 'vue';
 import {
@@ -22,7 +23,7 @@ import { MaterialSymbol } from '../../components/ui/Icons';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
-import { DocxEditorChartPane } from './ChartPane';
+import { DocxEditorChartPane } from '../charts/ChartPane';
 import { DocxEditorShapePane } from '../shapes/ShapePane';
 
 /** The panes the side panel shows. */
@@ -30,9 +31,30 @@ const SIDE_PANEL_PANES = { panes: ['chart', 'shape'] } as const;
 
 /**
  * Call `listener` for each request for a pane in `options.panes`: Insert > Chart and Edit chart
- * ask for `'chart'`, and Format shape asks for `'shape'`. The default is `['chart']`. A host
- * that hides its side panel shows it here. Listening for a pane makes its chrome available, so
- * list only the panes the host shows. @public
+ * ask for `'chart'`, and Format shape asks for `'shape'`. The default is `['chart']`. A request
+ * says what the user asked to see, not where: answer it with any UI, such as a popover, a
+ * drawer, a dialog, or `DocxEditor.SidePanel`, and render `DocxEditor.PaneSections` or single
+ * parts in it. Listening for a pane makes its chrome available, so list only the panes the host
+ * shows.
+ *
+ * @example
+ * ```vue
+ * <script setup lang="ts">
+ * import { ref } from 'vue';
+ * import { DocxEditor, usePaneRequest } from '@docx-editor.dev/vue';
+ *
+ * const open = ref(false);
+ * usePaneRequest(() => (open.value = true), { panes: ['chart'] });
+ * </script>
+ *
+ * <template>
+ *   <div v-if="open" role="dialog" aria-label="Chart">
+ *     <DocxEditor.PaneSections pane="chart" :sections="['type', 'elements']" />
+ *   </div>
+ * </template>
+ * ```
+ *
+ * @public
  */
 export function usePaneRequest(
   listener: (request: PaneRequest) => void,

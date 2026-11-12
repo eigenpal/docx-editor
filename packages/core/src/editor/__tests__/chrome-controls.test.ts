@@ -55,6 +55,8 @@ const EXPECTED_GROUPS = [
   'review',
   'contentControl',
   'image',
+  'shape',
+  'chart',
   'table',
   'paragraph',
   'file',
@@ -118,6 +120,21 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'image.formatShape',
   'image.wrap',
   'image.altText',
+  'shape.fill',
+  'shape.fillTransparency',
+  'shape.outlineColor',
+  'shape.outlineWidth',
+  'shape.outlineDash',
+  'chart.type',
+  'chart.title',
+  'chart.legend',
+  'chart.dataLabels',
+  'chart.axes',
+  'chart.gridlines',
+  'chart.categoryAxisTitle',
+  'chart.valueAxisTitle',
+  'chart.seriesColor',
+  'chart.data',
   'table.insert',
   'table.borderTarget',
   'table.borderColor',
@@ -187,11 +204,23 @@ describe('legacy chrome descriptor', () => {
       g.controls.filter((c) => c.state.kind === 'value').map((c) => chromeSlotId(g, c))
     );
     expect([...valueSlots].sort()).toEqual([
+      'chart.categoryAxisTitle',
+      'chart.data',
+      'chart.legend',
+      'chart.seriesColor',
+      'chart.title',
+      'chart.type',
+      'chart.valueAxisTitle',
       'font.family',
       'font.size',
       'image.altText',
       'image.wrap',
       'insert.chart',
+      'shape.fill',
+      'shape.fillTransparency',
+      'shape.outlineColor',
+      'shape.outlineDash',
+      'shape.outlineWidth',
       'styles.style',
       'table.borderColor',
       'table.borderStyle',
@@ -215,6 +244,24 @@ describe('legacy chrome descriptor', () => {
                   ? { kind: 'hex', value: 'FF0000' }
                   : { kind: 'hex', value: '000000' };
         expect(commandForSlotValue(slot, probe)).not.toBeNull();
+        continue;
+      }
+      const objectSamples: Record<string, unknown> = {
+        'chart.categoryAxisTitle': 'Month',
+        'chart.data': { kind: 'category', categories: [{ label: 'A' }], series: [] },
+        'chart.legend': 'top',
+        'chart.seriesColor': { index: 0, color: 'accent2' },
+        'chart.title': 'Sales',
+        'chart.type': 'line',
+        'chart.valueAxisTitle': 'Units',
+        'shape.fill': 'accent1:40',
+        'shape.fillTransparency': 25,
+        'shape.outlineColor': '#1F3864',
+        'shape.outlineDash': 'dash',
+        'shape.outlineWidth': 2.25,
+      };
+      if (slot in objectSamples) {
+        expect(commandForSlotValue(slot, objectSamples[slot])).not.toBeNull();
         continue;
       }
       const sample =
@@ -338,7 +385,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(85);
+    expect(chromeControlCount()).toBe(100);
   });
 
   test('the table group is contextual and carries border, fill, merge, and split slots', () => {
