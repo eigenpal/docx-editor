@@ -216,16 +216,14 @@ function projectDrawingForRecord(
   const scope = surface.storyScope();
   const part = surface.session.partFor(scope) ?? surface.session.part();
   const drawing = findNode(part, record.drawingNodeId);
+  const pkg = surface.session.currentPackage();
   if (!drawing) return null;
-  if (drawing.kind !== 'drawing') return drawingAtomProjection(part, record.drawingNodeId);
+  if (drawing.kind !== 'drawing') return drawingAtomProjection(part, record.drawingNodeId, pkg);
   return projectDrawing(drawing as import('../store/package/ooxml-tree.ts').OoxmlDrawingNode, {
     ownerPartName: record.ownerPartName,
     supportedMcRequires: DEFAULT_SUPPORTED_MC_REQUIRES,
     limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
-    resolveRelationship: createDrawingRelationshipResolver(
-      surface.session.currentPackage(),
-      record.ownerPartName
-    ),
+    resolveRelationship: createDrawingRelationshipResolver(pkg, record.ownerPartName),
   });
 }
 

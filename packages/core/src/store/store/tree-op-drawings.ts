@@ -8,7 +8,7 @@ import {
   applyMoveInlineDrawing,
   validateMoveInlineDrawing,
 } from './tree-op-move-inline-drawing.ts';
-import { drawingAtomProjection } from '../package/drawing-atom-projection.ts';
+import { drawingAtomProjection, shapeChoiceDrawing } from '../package/drawing-atom-projection.ts';
 // Canonical drawing mutations over the OOXML tree (typed-drawings-and-images task 11).
 //
 // Pure tree edits only — package media/relationship lifecycle stays in task 12. Each op
@@ -337,9 +337,15 @@ function drawingContext(
   if (chart && operation !== 'deleteDrawing' && !chartFrameEdit(chart, operation))
     return 'chart-drawing';
   const original = findNode(part, drawingNodeId);
-  const atomProjection =
+  let atomProjection =
     original?.kind === 'drawing' ? null : drawingAtomProjection(part, drawingNodeId);
-  const resolvedId = atomProjection?.drawingNodeId ?? drawingNodeId;
+  // A themed shape's atom shows its fallback here; the edit goes to the modern shape.
+  const choice =
+    atomProjection && !isTopLevelDrawing(part, atomProjection.drawingNodeId)
+      ? shapeChoiceDrawing(part, drawingNodeId)
+      : null;
+  if (choice) atomProjection = projectionOf(part, choice);
+  const resolvedId = choice?.id ?? atomProjection?.drawingNodeId ?? drawingNodeId;
   if (!isTopLevelDrawing(part, resolvedId)) {
     const node = findNode(part, drawingNodeId);
     if (!node) return 'unknown-drawing';
