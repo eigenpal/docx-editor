@@ -103,25 +103,37 @@ test('preset={false} keeps Start where it is written', () => {
 });
 
 test('every Start in a Fragment moves up, and the Fragment rows beside it stay below', () => {
-  const rows = rowsOf(
-    openMenu(
-      <ContextMenu t={t}>
-        <>
-          <ContextMenu.Start>
-            <ContextMenu.Item label="first" onSelect={() => {}} />
-          </ContextMenu.Start>
-          <ContextMenu.Item label="tail" onSelect={() => {}} />
+  const original = console.error;
+  const errors: string[] = [];
+  console.error = (message: unknown) => {
+    errors.push(String(message));
+  };
+  let rows: string[] = [];
+  try {
+    rows = rowsOf(
+      openMenu(
+        <ContextMenu t={t}>
           <>
             <ContextMenu.Start>
-              <ContextMenu.Item label="second" onSelect={() => {}} />
+              <ContextMenu.Item label="first" onSelect={() => {}} />
             </ContextMenu.Start>
+            <ContextMenu.Item label="tail" onSelect={() => {}} />
+            <>
+              <ContextMenu.Start>
+                <ContextMenu.Item label="second" onSelect={() => {}} />
+              </ContextMenu.Start>
+            </>
           </>
-        </>
-      </ContextMenu>
-    )
-  );
+        </ContextMenu>
+      )
+    );
+  } finally {
+    console.error = original;
+  }
   expect(rows.slice(0, 4)).toEqual(['first', '---', 'second', '---']);
   expect(rows.at(-1)).toBe('tail');
+  // Rows taken out of two Fragment levels keep distinct React keys.
+  expect(errors.some((text) => text.includes('same key'))).toBe(false);
 });
 
 test('the Start separator is a direct child of the panel, where the edge rule hides it', () => {

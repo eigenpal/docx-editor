@@ -6,7 +6,7 @@
 // region each child renders in through `StartPlacementContext`, so such a Start can warn in
 // development instead of landing at the bottom silently.
 
-import { Children, Fragment, createContext, isValidElement, useContext } from 'react';
+import { Children, Fragment, cloneElement, createContext, isValidElement, useContext } from 'react';
 import type { ReactNode } from 'react';
 import { isDevelopment } from '../../lib/is-development';
 import { MenuSeparator } from '../menu/parts';
@@ -78,14 +78,19 @@ export function partitionStartRows(children: ReactNode): {
 } {
   const start: ReactNode[] = [];
   const rest: ReactNode[] = [];
-  const visit = (nodes: ReactNode[]) => {
-    for (const child of nodes) {
+  // `Children.toArray` keys each level from `.0`, so a row taken out of a Fragment gets the
+  // Fragment's key as a prefix, or two levels would hand React the same key.
+  const visit = (nodes: ReactNode[], prefix: string) => {
+    for (const node of nodes) {
+      const child =
+        prefix && isValidElement(node) ? cloneElement(node, { key: `${prefix}${node.key}` }) : node;
       if (startPlacedChild(child)) start.push(child);
-      else if (holdsStart(child)) visit(fragmentChildren(child) ?? []);
-      else rest.push(child);
+      else if (holdsStart(child) && isValidElement(child)) {
+        visit(fragmentChildren(child) ?? [], `${String(child.key)}/`);
+      } else rest.push(child);
     }
   };
-  visit(Children.toArray(children));
+  visit(Children.toArray(children), '');
   return { start, rest };
 }
 
