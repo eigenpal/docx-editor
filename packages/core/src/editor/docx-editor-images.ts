@@ -17,6 +17,7 @@ import { chartDrawingRefusal, drawingGate, type ChartGate } from './image-state-
 import {
   isShapeDrawing,
   overlayFrameTurnOf,
+  shapePictureCommandRefusal,
   selectedShapeFormat,
   shapeKeepsGeometrySize,
   type OverlayFrameTurn,
@@ -628,20 +629,12 @@ export function gateImageCommand(
     }
     return null;
   }
-  const record = resolveSelectedDrawingRecord(surface);
-  const textbox = record && 'textboxStory' in record && record.textboxStory;
-  if (
-    (command.type === 'replaceImage' ||
-      command.type === 'transformImage' ||
-      (command.type === 'setImageProperties' && command.hyperlink !== undefined)) &&
-    (textbox || isShapeDrawing(surface, record))
-  ) {
-    return {
-      ok: false,
-      code: 'unsupported',
-      reason: `this operation is not supported for ${textbox ? 'textboxes' : 'shapes'}`,
-    };
-  }
+  const shapeRefusal = shapePictureCommandRefusal(
+    command,
+    surface,
+    resolveSelectedDrawingRecord(surface)
+  );
+  if (shapeRefusal) return shapeRefusal;
   if (command.type === 'replaceImage') {
     if (!(command.data instanceof Uint8Array) || command.data.byteLength === 0) {
       return { ok: false, code: 'invalidArgs', reason: 'replaceImage requires image bytes' };

@@ -1,6 +1,7 @@
 // Which selected drawings are DrawingML shapes, lines or groups: they paint their own geometry,
 // with no picture to replace, crop or transform, and their size also lives in that geometry.
 
+import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { holdsDiagramGraphic } from '../store/package/diagram-frame.ts';
 import type { DrawingProjection } from '../store/package/drawing-projection.ts';
@@ -31,6 +32,32 @@ export function isShapeDrawing(
   const part = partOfNodeId(surface.session, record.drawingNodeId) ?? surface.session.part();
   const node = findNode(part, record.drawingNodeId);
   return !node || node.kind === 'textValue' || !holdsDiagramGraphic(node);
+}
+
+/**
+ * The refusal of a picture command on a selected text box or shape, or null. A shape's turn and
+ * flips live in its own geometry and its VML fallback, as its size does, so it refuses a
+ * transform as it refuses a resize. The reason names the command.
+ */
+export function shapePictureCommandRefusal(
+  command: EditorCommand,
+  surface: PaginatedSurface,
+  record: InlineDrawingRecord | AnchoredDrawingRecord | null
+): ExecResult | null {
+  const hyperlink = command.type === 'setImageProperties' && command.hyperlink !== undefined;
+  if (command.type !== 'replaceImage' && command.type !== 'transformImage' && !hyperlink) {
+    return null;
+  }
+  const textbox = !!record && 'textboxStory' in record && !!record.textboxStory;
+  if (!textbox && !isShapeDrawing(surface, record)) return null;
+  const kind = textbox ? 'text boxes' : 'shapes';
+  const what =
+    command.type === 'transformImage'
+      ? 'rotate and flip are'
+      : command.type === 'replaceImage'
+        ? 'replacing the picture is'
+        : 'hyperlinks are';
+  return { ok: false, code: 'unsupported', reason: `${what} not supported for ${kind}` };
 }
 
 /**
