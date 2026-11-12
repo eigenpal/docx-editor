@@ -841,5 +841,5 @@ export { canMoveInlineImage, beginInlineImageDrag } from './inline-image-drag.ts
 export {
   drawingFramePressTarget,
   type DrawingFramePress,
-  passDrawingFramePressToText,
+  passDrawingFramePress,
 } from './drawing-overlay-press.ts';

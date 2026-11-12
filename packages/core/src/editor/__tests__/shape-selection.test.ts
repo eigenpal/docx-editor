@@ -8,7 +8,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { expect, test } from 'bun:test';
 import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
-import { passDrawingFramePressToText } from '../drawing-overlay-press.ts';
+import { passDrawingFramePress } from '../drawing-overlay-press.ts';
 import {
   BEHIND,
   EMU,
@@ -170,9 +170,9 @@ test('with the shape behind the text selected, a press on its frame over text pl
     // The frame an adapter paints over the drawing: off the pages, as in a portal.
     const frame = document.createElement('div');
     container.append(frame);
-    const results: ReturnType<typeof passDrawingFramePressToText>[] = [];
+    const results: ReturnType<typeof passDrawingFramePress>[] = [];
     frame.addEventListener('pointerdown', (event) =>
-      results.push(passDrawingFramePressToText(editor, event))
+      results.push(passDrawingFramePress(editor, event))
     );
     const press = (x: number, y: number) =>
       frame.dispatchEvent(

@@ -3680,7 +3680,7 @@ export function parseIsoDate(value: string): Date | null;
 export function partOfNodeId(session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'> & Partial<Pick<TreeDocxSessionView, 'storyParts'>>, nodeId: string | undefined): OoxmlPart | null;
 
 // @public
-export function passDrawingFramePressToText(editor: Editor, event: PointerEvent): DrawingFramePress;
+export function passDrawingFramePress(editor: Editor, event: PointerEvent): DrawingFramePress;
 
 // @internal
 export function placeSubmenu(row: {

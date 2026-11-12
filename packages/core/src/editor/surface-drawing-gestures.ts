@@ -49,7 +49,12 @@ export function createDrawingGestures(deps: {
   behindDrawingAt(
     clientX: number,
     clientY: number
-  ): { readonly drawingNodeId: string; readonly paragraphId: string } | null;
+  ): {
+    readonly drawingNodeId: string;
+    readonly paragraphId: string;
+    /** An open story's edit moves to this page first: the drawing is on another page. */
+    readonly enter?: { readonly rId: string; readonly pageIndex: number };
+  } | null;
 }) {
   /** The last press, for telling a double press: a pointer press carries no click count. */
   let lastPress: { time: number; x: number; y: number } | null = null;
@@ -121,6 +126,7 @@ export function createDrawingGestures(deps: {
       // no glyph lies under the press, the drawing takes it, as hit testing decides.
       // One the selection model refuses (hidden, select-locked) leaves the press to the text.
       const behind = !editingTextbox && !drawingId ? behindDrawingAt(event) : null;
+      if (behind?.enter) deps.surface.enterHeaderFooter(behind.enter);
       if (behind && selectObject(behind.drawingNodeId, behind.paragraphId)) {
         if (selectedImageStateOf(deps.surface)) {
           deps.surface.focus();

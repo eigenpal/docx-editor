@@ -8,7 +8,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { expect, test } from 'bun:test';
 import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
-import { passDrawingFramePressToText } from '../drawing-overlay-press.ts';
+import { passDrawingFramePress } from '../drawing-overlay-press.ts';
 import {
   BEHIND,
   EMU,
@@ -182,9 +182,9 @@ function frameOver(container: HTMLElement, editor: Parameters<typeof pressAt>[1]
   const frame = document.createElement('div');
   frame.className = 'docx-image-selection-overlay__frame';
   container.append(frame);
-  const results: ReturnType<typeof passDrawingFramePressToText>[] = [];
+  const results: ReturnType<typeof passDrawingFramePress>[] = [];
   frame.addEventListener('pointerdown', (event) =>
-    results.push(passDrawingFramePressToText(editor, event))
+    results.push(passDrawingFramePress(editor, event))
   );
   const page = editor.surface!.layout().pages[0]!;
   const press = (x: number, y: number, pointerType: string) => {

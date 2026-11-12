@@ -14,7 +14,7 @@ import {
   beginInlineImageDrag,
   drawingFramePressTarget,
   type DrawingFramePress,
-  passDrawingFramePressToText,
+  passDrawingFramePress,
   canMoveInlineImage,
   captureImageMutationPreconditions,
   computeMovedImagePosition,
@@ -615,7 +615,7 @@ export function ImageSelectionOverlay({
           }}
           onPointerDown={(event) => {
             // Over text in front of a drawing behind it, the text takes the press.
-            const passed = passDrawingFramePressToText(editor, event.nativeEvent);
+            const passed = passDrawingFramePress(editor, event.nativeEvent);
             if (passed !== 'frame') {
               // The forwarded press ran the capture listener again; the frame's answer wins.
               focusRequestedForDrawingRef.current = passed === 'text' ? null : passed.drawingNodeId;

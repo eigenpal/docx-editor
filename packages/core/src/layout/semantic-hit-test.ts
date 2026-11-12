@@ -1378,13 +1378,16 @@ function findDrawingInFragments(
  * Locate a drawing's painted extent on the published layout.
  *
  * Coordinates are page-content relative — the same space {@link hitTestPage} uses — so an
- * overlay can position from records without reading painted DOM geometry.
+ * overlay can position from records without reading painted DOM geometry. A header or footer
+ * drawing repeats on every page of its section; `preferPage` names the occurrence to use.
  */
 export function findDrawingOverlayFrameInLayout(
   layout: SemanticLayout,
-  drawingNodeId: string
+  drawingNodeId: string,
+  preferPage?: number
 ): DrawingOverlayFrame | null {
-  for (const page of layout.pages) {
+  const preferred = preferPage === undefined ? undefined : layout.pages[preferPage];
+  for (const page of preferred ? [preferred, ...layout.pages] : layout.pages) {
     for (const drawing of page.anchoredDrawings ?? []) {
       if (drawing.drawingNodeId === drawingNodeId) return overlayFrameOf(page.index, drawing);
     }

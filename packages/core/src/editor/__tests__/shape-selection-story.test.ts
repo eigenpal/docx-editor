@@ -5,8 +5,9 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { expect, test } from 'bun:test';
-import { drawingFramePressTarget, passDrawingFramePressToText } from '../drawing-overlay-press.ts';
+import { drawingFramePressTarget, passDrawingFramePress } from '../drawing-overlay-press.ts';
 import type { DocxEditorInstance } from '../docx-editor.ts';
+import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
 import type { AnchoredDrawingRecord } from '../../layout/drawing-layout.ts';
 import { headerFooterAnchoredDrawingOrigin } from '../../layout/header-footer-drawing-origin.ts';
 import type { HeaderFooterStoryRecord, PageRecord } from '../../layout/semantic-records.ts';
@@ -128,6 +129,39 @@ test('a header watermark reaching into the body selects while the header is open
   }
 });
 
+test('a header watermark on another page selects and keeps the header open', async () => {
+  const watermark = pageShape(13, 150, 300, 300, 300, true);
+  const lines = Array.from({ length: 90 }, (_, i) => p(text(`Line ${i}`))).join('');
+  const { editor, container } = await mount(
+    p(text('Body')) + lines,
+    `<w:p>${watermark}<w:r><w:t>Header</w:t></w:r></w:p>`
+  );
+  try {
+    const surface = editor.surface!;
+    expect(surface.enterHeaderFooter({ rId: 'rIdH', pageIndex: 0 })).toBe(true);
+    const page = surface.layout().pages[1]!;
+    const record = storyDrawing(page.header, 13);
+    const origin = headerFooterAnchoredDrawingOrigin(record, page.header!.box, page.box);
+    container.querySelector<HTMLElement>('.docx-page-content')!.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        pointerId: 1,
+        clientX: (origin.x + record.width / 2) * SCALE,
+        clientY: (origin.y + record.height / 2) * SCALE,
+      })
+    );
+    expect(surface.activeScope()).toMatchObject({ kind: 'headerFooter', rId: 'rIdH' });
+    expect(editor.getSelectedImage!()).toMatchObject({ id: record.drawingNodeId });
+    // The edit moved to the page pressed, so the frame sits over that page's watermark.
+    expect(selectedDrawingOverlayTargetOf(surface)?.pageIndex).toBe(1);
+  } finally {
+    editor.destroy();
+    container.remove();
+  }
+});
+
 test('a press on the selected frame over another drawing selects that drawing', async () => {
   // In front of the text, inside the frame of the shape behind it.
   const badge = anchor({
@@ -154,11 +188,11 @@ test('a press on the selected frame over another drawing selects that drawing', 
     container.append(frame);
     const painted = paintedOf(container, other);
     document.elementsFromPoint = () => [frame, painted];
-    let result: ReturnType<typeof passDrawingFramePressToText> | undefined;
+    let result: ReturnType<typeof passDrawingFramePress> | undefined;
     let asked: ReturnType<typeof drawingFramePressTarget> | undefined;
     frame.addEventListener('pointerdown', (event) => {
       asked = drawingFramePressTarget(editor, event);
-      result = passDrawingFramePressToText(editor, event);
+      result = passDrawingFramePress(editor, event);
     });
     frame.dispatchEvent(
       new PointerEvent('pointerdown', {

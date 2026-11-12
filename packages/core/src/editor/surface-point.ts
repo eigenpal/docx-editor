@@ -50,13 +50,12 @@ export function surfacePointAt(
     origin = { x: sheet.x - note.local.x, y: sheet.y - note.local.y };
     hit = hitTestFragments(layout, index, note.fragments, note.local, options);
   } else if (activeStory) {
-    if (index !== activeStory.pageIndex) return null;
     const binding = {
       scope: { kind: 'headerFooter' as const, rId: activeStory.rId },
       ...activeStory,
     };
     const story = findStoryAtSheetPoint(pageLayout, sheet, host.pageOffsetX);
-    if (!story || !storyMatchesBinding(story.story, binding)) {
+    if (index !== activeStory.pageIndex || !story || !storyMatchesBinding(story.story, binding)) {
       // Past the band, only the open story's own drawings answer (a watermark).
       const drawing = activeStoryDrawingAtSheetPoint(layout, binding, sheet, host.pageOffsetX);
       return drawing ? { hit: drawing, x: sheet.x, y: sheet.y } : null;
@@ -100,22 +99,33 @@ export function repeatedPressOnObject(
   return painted != null && findDrawingOverlayFrameInLayout(layout, painted) === null;
 }
 
+/** A drawing a press reaches through the text, and the page to move an open story's edit to. */
+export type BehindDrawingHit = NonNullable<SemanticHit['drawing']> & {
+  readonly enter?: { readonly rId: string; readonly pageIndex: number };
+};
+
 /**
  * The body drawing behind the text that a press at a client point reaches, as the body's own
  * hit test resolves it: outside every text line, page margins included. Null in a note, on a
  * header or footer band, over a front drawing, and over a read-only position. With a header or
  * footer open, its own drawing that the press reaches instead, past its band too (a watermark).
+ * On another page that shows the story, `enter` moves the edit there first, as its band does.
  */
 export function behindDrawingAt(
   host: PointerHost,
   clientX: number,
   clientY: number
-): NonNullable<SemanticHit['drawing']> | null {
+): BehindDrawingHit | null {
   if (!Number.isFinite(clientX) || !Number.isFinite(clientY) || !host.pagesLayer.isConnected)
     return null;
   if (host.activeNote?.()) return null;
-  if (host.activeHeaderFooter?.())
-    return surfacePointAt(host, clientX, clientY)?.hit.drawing ?? null;
+  const active = host.activeHeaderFooter?.();
+  if (active) {
+    const hit = surfacePointAt(host, clientX, clientY)?.hit;
+    if (!hit?.drawing) return null;
+    if (hit.pageIndex === active.pageIndex) return hit.drawing;
+    return { ...hit.drawing, enter: { rId: active.rId, pageIndex: hit.pageIndex } };
+  }
   const layout = host.layout();
   const rect = host.pagesLayer.getBoundingClientRect();
   const scale = host.scale() || 1;

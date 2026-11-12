@@ -1226,14 +1226,13 @@ export function selectedDrawingOverlayTargetOf(
   // place handles, stamp a drag session — so a pass still parked on the scheduler's timer must
   // land first. Nothing pending makes this a plain read.
   const layout = surface.layout();
-  const edited =
-    scope.kind === 'frame'
-      ? editedTextboxOverlayFrame(layout, scope, surface.currentPage('caret') - 1)
-      : null;
+  const page = surface.currentPage('caret') - 1;
+  const edited = scope.kind === 'frame' ? editedTextboxOverlayFrame(layout, scope, page) : null;
   const record = scope.kind === 'frame' ? edited?.record : selected;
   if (!record) return null;
   if (record.accessibility.hidden) return null;
-  const frame = edited ?? findDrawingOverlayFrameInLayout(layout, record.drawingNodeId);
+  // The page the caret is on: an open header's drawing repeats on every page it heads.
+  const frame = edited ?? findDrawingOverlayFrameInLayout(layout, record.drawingNodeId, page);
   if (!frame) return null;
   const projection = projectDrawingForRecord(surface, record);
   const gate = projection ? drawingGate(surface, record.drawingNodeId, projection) : null;

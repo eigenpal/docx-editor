@@ -14,7 +14,7 @@ export type DrawingFramePress = 'frame' | 'text' | { readonly drawingNodeId: str
 const TAP_PASS_THROUGH_MS = 800;
 
 /**
- * Hands a press on the selected drawing's frame to the text under it.
+ * Hands a press on the selected drawing's frame to the text or the drawing under it.
  *
  * A drawing behind the text paints under it, and its frame covers that text. Where the press
  * lands in a line of text, the text takes it and places the caret, as it does while the
@@ -26,14 +26,13 @@ const TAP_PASS_THROUGH_MS = 800;
  * A mouse or pen press goes on to the element under the frame. A touch press is not taken:
  * the frame lets the tap through for its duration, so the browser's own tap reaches the text.
  *
- * @returns Where the press went. On `'frame'` the frame keeps it; otherwise it starts no move,
- * and the adapter gives the keyboard to the editor (`'text'`) or to the other drawing.
+ * @returns Where the press went, never a boolean. `'frame'` (a non-empty string, so truthy)
+ * means nothing was passed: the frame keeps the press and may start a move. `'text'` or a
+ * drawing means the press was passed on: start no move, and give the keyboard to the editor
+ * (`'text'`) or to that drawing. Compare with `'frame'`; never test the result for truth.
  * @public
  */
-export function passDrawingFramePressToText(
-  editor: Editor,
-  event: PointerEvent
-): DrawingFramePress {
+export function passDrawingFramePress(editor: Editor, event: PointerEvent): DrawingFramePress {
   const surface = (editor as DocxEditorInstance).surface;
   const target = surface ? drawingFramePressTarget(editor, event) : 'frame';
   const frame = isElementNode(event.target) ? event.target : null;

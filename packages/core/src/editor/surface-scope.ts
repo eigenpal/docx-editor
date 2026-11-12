@@ -302,7 +302,8 @@ export function hitTestStoryAtLocalPoint(
 
 /**
  * The open header or footer's drawing at a sheet point, past the story band too: a watermark
- * or a logo that reaches into the body is still the open story's.
+ * or a logo that reaches into the body is still the open story's. Any page that shows the
+ * open story answers, as its band does; the hit names that page.
  */
 export function activeStoryDrawingAtSheetPoint(
   layout: SemanticLayout,
@@ -310,7 +311,7 @@ export function activeStoryDrawingAtSheetPoint(
   sheet: { readonly x: number; readonly y: number },
   pageOffsetX: (pageIndex: number) => number
 ): SemanticHit | null {
-  const page = layout.pages[active.pageIndex];
+  const page = layout.pages[pageAtY(layout, sheet.y)];
   const story = page ? storyOnPage(page, active) : undefined;
   if (!page || !story?.anchoredDrawings?.length) return null;
   const point = { x: sheet.x - pageOffsetX(page.index), y: sheet.y };

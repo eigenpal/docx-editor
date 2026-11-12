@@ -4453,6 +4453,9 @@ export function mountPaginatedSurface(
         const page = viewportPage(container, currentLayout, scale);
         if (page !== null) return page;
       }
+      // An open header or footer repeats on every page it heads: the caret is on the open one.
+      const furniture = hfScope?.getActive();
+      if (furniture) return furniture.pageIndex + 1;
       const caret = caretAt(editingLayout(), selection.head);
       return caret ? caret.pageIndex + 1 : 1;
     },
