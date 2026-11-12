@@ -71,6 +71,7 @@ import {
 import { resolveParagraphOutlineLevel } from './paragraph-outline-level.ts';
 import { paragraphMarkRunProperties } from './paragraph-mark-run.ts';
 import { legacyTableDefaultProperties } from './table-style-compatibility.ts';
+import { autoHyphenationFromSettings } from './auto-hyphenation.ts';
 import {
   findParagraphProperties,
   findRunProperties,
@@ -132,6 +133,10 @@ export interface StyleCascadeTable {
   readonly pageBreakMarkOnNextPage?: true;
   /** Explicit compatibility opt-in to the unmodified ISO table style hierarchy. */
   readonly strictTableStyleHierarchy?: boolean;
+  /** `w:autoHyphenation`: mode 15 autofit minimums let words break between letters. @internal */
+  readonly autoHyphenation?: true;
+  /** `w:doNotHyphenateCaps`: words in capitals keep whole under `autoHyphenation`. @internal */
+  readonly doNotHyphenateCaps?: true;
   readonly typography?: CjkTypographySettings;
   /**
    * Bounded fingerprint folded into layout cache producers so a different styles part cannot
@@ -471,6 +476,7 @@ export function buildStyleCascadeTable(
   const ligatureCompatibility = ligaturesEnabled ? {} : { disableOptionalLigatures: true as const };
   const strictTableHierarchy = compatibility.has('strictTableStyleHierarchy');
   const settingsCompatibility = cascadeCompatibility(compatibility);
+  const hyphenation = autoHyphenationFromSettings(settingsRoot);
   const spacing = readDistributedSpacing(stylesRoot, compatibility);
   const distribution = spacing ? { distributedSpacing: spacing } : {};
   const styles = new Map<string, StyleDefinition>();
@@ -491,8 +497,10 @@ export function buildStyleCascadeTable(
         strictTableHierarchy,
         ...settingsCompatibility,
         ...distribution,
+        ...hyphenation,
       }),
       ...settingsCompatibility,
+      ...hyphenation,
       ...ligatureCompatibility,
       ...distribution,
       strictTableStyleHierarchy: strictTableHierarchy,
@@ -548,6 +556,7 @@ export function buildStyleCascadeTable(
     ...settingsCompatibility,
     ...ligatureCompatibility,
     ...distribution,
+    ...hyphenation,
     strictTableHierarchy,
     typography,
     dR: propertiesFingerprint(defaults.run),
@@ -578,6 +587,7 @@ export function buildStyleCascadeTable(
   return {
     cacheToken,
     ...settingsCompatibility,
+    ...hyphenation,
     ...ligatureCompatibility,
     ...distribution,
     strictTableStyleHierarchy: strictTableHierarchy,

@@ -84,6 +84,7 @@ import {
 export type { AutofitColumnContent } from './table-autofit-column-content.ts';
 import { resolveCjkTypography } from './cjk-typography.ts';
 import { withoutLineEndWhitespace } from './trailing-spaces.ts';
+import { autofitHyphenation } from './auto-hyphenation.ts';
 
 /**
  * What autofit needs from layout to measure each cell the way layout paints it.
@@ -344,6 +345,7 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
   const automaticSpacing = automaticAutofitSpacing(typography, measurer);
   let previousText: Parameters<typeof automaticSpacing>[3];
   const cjkBreaks = cjkAutofitBreaks(pieces, layoutInputs, measurer, styleCascade);
+  const hyphenationOf = autofitHyphenation(pieces, layoutInputs.props, styleCascade, context);
   const { left, right, firstLine, hanging } = layoutInputs.indent;
   const tabs = withDefaultTabInterval(layoutInputs.tabStops, context.defaultTabStopPt);
   // Tab stops count from the leading indent, which is the right one in right-to-left text.
@@ -473,7 +475,8 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
       continue;
     }
     let from = 0;
-    for (const to of boundaries) {
+    const hyphenation = hyphenationOf?.(piece, boundaries);
+    for (const to of hyphenation?.cuts ?? boundaries) {
       const candidate = piece.text.slice(from, to);
       from = to;
       if (candidate.length === 0) continue;
@@ -498,11 +501,15 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
       }
       if (ink.length === candidate.length) segment += measure(candidate);
       else if (ink.length > 0) segment += measure(candidate) - measure(candidate.slice(ink.length));
+      // A fragment that ends at a hyphenation point carries its hyphen.
+      const hyphen = hyphenation?.hyphens.has(to) === true;
+      if (hyphen) segment += measure('-');
       // A space or a dash ends the segment, including a dash that ends its run; a plain run
       // seam does not.
       if (
         ink.length < candidate.length ||
         to < piece.text.length ||
+        hyphen ||
         ENDS_WITH_BREAKING_SPACE.test(candidate) ||
         candidate.endsWith(ZERO_WIDTH_SPACE)
       )

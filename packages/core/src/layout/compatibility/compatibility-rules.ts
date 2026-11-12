@@ -55,6 +55,10 @@ export const MODE_RULES = {
     'An autofit column minimum leaves out a positive first-line indent: a word too wide for the first line breaks there',
     'ECMA-376 Part 1 §17.3.1.12 ind'
   ),
+  autofitMinimumHyphenatesWords: modern(
+    'With automatic hyphenation on, an autofit column minimum lets a word break between letters; legacy modes keep each word whole',
+    'ECMA-376 Part 1 §17.15.1.10 autoHyphenation'
+  ),
   autofitRefitsNestedCells: modern(
     'A nested autofit table whose stated cell widths pass its room gives way above each column content minimum',
     'ECMA-376 Part 1 §17.4.64 tblLayout'
