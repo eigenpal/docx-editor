@@ -2281,7 +2281,16 @@ export interface ParagraphText {
     readonly blockId: string;
     readonly keptSpans: readonly ParagraphTextSpan[];
     readonly keptText: string;
+    readonly proofing: readonly ParagraphTextProofing[];
     readonly text: string;
+}
+
+// @public
+export interface ParagraphTextProofing {
+    readonly keptStart: number;
+    readonly lang: string | null;
+    readonly length: number;
+    readonly noProof: boolean;
 }
 
 // @public

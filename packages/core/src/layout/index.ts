@@ -650,6 +650,7 @@ export {
   type VerticalAlign,
 } from './run-style.ts';
 export { runBorderStrokesForLine } from './run-border-strokes.ts';
+export { createRunProofingReader, type RunProofing } from './run-proofing.ts';
 export {
   MAX_STYLE_BASED_ON_DEPTH,
   MAX_STYLE_DEFINITIONS,

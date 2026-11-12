@@ -597,6 +597,7 @@ export {
 
 export { createDocumentRefresh, DocumentRefreshError } from './document-refresh.ts';
 export { HIGHLIGHT_REFRESH_MS, watchHighlights } from './watch-highlights.ts';
+export { keptTextRanges } from './paragraph-text-ranges.ts';
 export type {
   HighlightSource,
   HighlightWatch,
@@ -645,6 +646,7 @@ export type {
   ReviewItemHit,
   ScrollPlacement,
   ScrollToAnchorOptions,
+  ParagraphTextProofing,
   ParagraphTextSpan,
   HistoryGroup,
   HistoryGroupOptions,

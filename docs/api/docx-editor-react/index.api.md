@@ -121,6 +121,7 @@ import { ImageWrapTarget } from '@docx-editor.dev/core/editor';
 import { IndentFormatting } from '@docx-editor.dev/core/contracts/editor';
 import { InvalidTextFormFieldSession } from '@docx-editor.dev/core/editor';
 import { isFontResolver } from '@docx-editor.dev/core/editor';
+import { keptTextRanges } from '@docx-editor.dev/core/editor';
 import { loadFonts } from '@docx-editor.dev/core/editor';
 import { LoadFontsRequest } from '@docx-editor.dev/core/editor';
 import { LoadFontsResult } from '@docx-editor.dev/core/editor';
@@ -150,6 +151,7 @@ import { ParagraphFormatRead } from '@docx-editor.dev/core/editor';
 import { ParagraphFormatUpdate } from '@docx-editor.dev/core/editor';
 import { ParagraphTabStop } from '@docx-editor.dev/core/editor';
 import { ParagraphText } from '@docx-editor.dev/core/contracts/editor';
+import { ParagraphTextProofing } from '@docx-editor.dev/core/contracts/editor';
 import { ParagraphTextSpan } from '@docx-editor.dev/core/contracts/editor';
 import { PX_PER_CM } from '@docx-editor.dev/core/editor';
 import { PX_PER_INCH } from '@docx-editor.dev/core/editor';
@@ -2578,6 +2580,8 @@ export function isFieldLink(link: SurfaceHyperlink): boolean;
 
 export { isFontResolver }
 
+export { keptTextRanges }
+
 // @public (undocumented)
 export interface ListState {
     // (undocumented)
@@ -3131,6 +3135,8 @@ export interface ParagraphStyleProps extends ParagraphStylePartProps {
 export { ParagraphTabStop }
 
 export { ParagraphText }
+
+export { ParagraphTextProofing }
 
 export { ParagraphTextSpan }
 

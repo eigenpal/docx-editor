@@ -703,6 +703,9 @@ export function createListCounterState(index: NumberingIndex): ListCounterState;
 // @public
 export function createParagraphLayoutCache<T>(options?: ParagraphLayoutCacheOptions): ParagraphLayoutCache<T>;
 
+// @internal
+export function createRunProofingReader(styles: StyleCascadeTable | undefined): (paragraph: OoxmlNode, run: OoxmlNode) => RunProofing;
+
 // @public
 export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasurer;
 
@@ -3595,6 +3598,13 @@ export const roundFontUnitToFixedPoint: (fontUnits: number, denominator: number,
 
 // @public
 export function runBorderStrokesForLine(line: LineRecord): readonly ParagraphBorderStrokeRecord[];
+
+// @internal
+export interface RunProofing {
+    readonly hidden: boolean;
+    readonly lang: string | null;
+    readonly noProof: boolean;
+}
 
 // @public
 export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolean;

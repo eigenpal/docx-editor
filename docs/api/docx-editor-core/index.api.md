@@ -3689,6 +3689,9 @@ export function isChromePrintShortcut(event: KeyboardEvent): boolean;
 export function isFontResolver(value: unknown): value is MarkedFontResolver;
 
 // @public
+export function keptTextRanges(paragraph: ParagraphText, from: number, to: number): HighlightRange[];
+
+// @public
 export function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult>;
 
 // @public
@@ -3943,7 +3946,16 @@ export interface ParagraphText {
     readonly blockId: string;
     readonly keptSpans: readonly ParagraphTextSpan[];
     readonly keptText: string;
+    readonly proofing: readonly ParagraphTextProofing[];
     readonly text: string;
+}
+
+// @public
+export interface ParagraphTextProofing {
+    readonly keptStart: number;
+    readonly lang: string | null;
+    readonly length: number;
+    readonly noProof: boolean;
 }
 
 // @public

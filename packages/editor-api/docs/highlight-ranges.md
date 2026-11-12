@@ -51,31 +51,31 @@ A function source runs again after each document change, so the marks follow the
 
 Call `editor.getParagraphs()` to read every paragraph, including paragraphs on pages that have not been painted. The list covers body text, tables, content controls, headers, footers, notes, and supported text boxes. Repeated headers and footers appear once. To read one paragraph, call `editor.getParagraphText(blockId)`.
 
-Each result has two texts:
+Each result has three parts:
 
-- `keptText` is the text a reader sees. Check it for spelling. It leaves out tracked deletions, move sources, and optional hyphens.
-- `text` holds the offsets that `setHighlights()` takes. It includes deleted text and placeholder characters.
+- `keptText` is the text a reader sees. Check it for spelling and grammar. It leaves out tracked deletions, move sources, hidden text, and optional hyphens. An object, such as a field, a picture, or a note reference, reads as U+FFFC, so treat U+FFFC as a word boundary.
+- `text` holds the offsets that `setHighlights()` takes. It includes deleted and hidden text.
+- `proofing` lists stretches of `keptText` with their language, such as `en-GB`, and a `noProof` flag. Skip text that has `noProof` set, and check other text in its own language.
 
-`keptSpans` maps `keptText` to `text`. A word that crosses a tracked deletion needs one highlight for each kept span.
+To convert a `keptText` range to highlight ranges, call `keptTextRanges(paragraph, from, to)`. A word that crosses a tracked deletion or hidden text gets one range for each visible part.
 
 The following module, `spelling-source.ts`, checks each paragraph once. An unchanged paragraph returns the same object, so the cache skips it after the first check.
 
 ```ts
-import type { Editor, HighlightRange, ParagraphText } from '@docx-editor.dev/core';
+import {
+  keptTextRanges,
+  type Editor,
+  type HighlightRange,
+  type ParagraphText,
+} from '@docx-editor.dev/core';
 
-/** Highlight ranges for the `keptText` range from `from` to `to`. */
-function keptRanges(paragraph: ParagraphText, from: number, to: number) {
-  const ranges: HighlightRange[] = [];
-  for (const span of paragraph.keptSpans) {
-    const keptStart = Math.max(from, span.keptStart);
-    const keptEnd = Math.min(to, span.keptStart + span.length);
-    if (keptStart >= keptEnd) continue;
-    const start = span.start + keptStart - span.keptStart;
-    const length = keptEnd - keptStart;
-    const expectedText = paragraph.text.slice(start, start + length);
-    ranges.push({ blockId: paragraph.blockId, start, length, expectedText });
-  }
-  return ranges;
+const WORD = /[\p{L}\p{M}']+/gu;
+
+/** Whether proofing tools should skip the `keptText` offset `at`. */
+function skipped(paragraph: ParagraphText, at: number): boolean {
+  return paragraph.proofing.some(
+    (part) => part.noProof && at >= part.keptStart && at < part.keptStart + part.length
+  );
 }
 
 /** A highlight source that marks each word that `isMisspelled` rejects. */
@@ -86,10 +86,10 @@ export function spellingSource(isMisspelled: (word: string) => boolean) {
       let ranges = checked.get(paragraph);
       if (!ranges) {
         ranges = [];
-        for (const word of paragraph.keptText.matchAll(/[\p{L}\p{M}']+/gu)) {
-          if (!isMisspelled(word[0])) continue;
+        for (const word of paragraph.keptText.matchAll(WORD)) {
+          if (skipped(paragraph, word.index) || !isMisspelled(word[0])) continue;
           const end = word.index + word[0].length;
-          ranges.push(...keptRanges(paragraph, word.index, end));
+          ranges.push(...keptTextRanges(paragraph, word.index, end));
         }
         checked.set(paragraph, ranges);
       }
@@ -130,9 +130,9 @@ useHighlights('spelling', source, { className: 'spelling-error' });
 </script>
 ```
 
-Offsets count UTF-16 code units and follow the editor's `fieldResults` setting. By default, each field is one U+FFFC character in both texts, including hyperlink fields. With `fieldResults: 'editable'`, supported saved field results are text. In `keptText`, a symbol character is U+FFFC and a non-breaking hyphen is U+2011. Hidden text is included.
+Offsets count UTF-16 code units and follow the editor's `fieldResults` setting. By default, each field is one U+FFFC character in both texts, including `HYPERLINK` fields. Link text in a `w:hyperlink` element is ordinary text. With `fieldResults: 'editable'`, supported saved field results are text. In `keptText`, a non-breaking hyphen is U+2011.
 
-If your checker is asynchronous, keep the paragraph object with each request. When the result arrives, compare that object with `editor.getParagraphText(paragraph.blockId)`. If they differ, the paragraph changed, so discard the result and check the new object.
+If your checker is asynchronous, keep the paragraph object with each request. When the result arrives, compare that object with `editor.getParagraphText(paragraph.blockId)`. If they differ, the paragraph changed, so discard the result and check the new object. Undo can return an earlier object, and its earlier result is still correct. Loading another document can reuse paragraph IDs, so discard pending results when you load a document.
 
 ## Configure a highlight set
 
