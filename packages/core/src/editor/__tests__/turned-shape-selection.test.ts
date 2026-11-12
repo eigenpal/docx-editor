@@ -346,23 +346,33 @@ test('a turned shape that paints nothing takes a press inside its turned frame',
   });
 });
 
-test('a turned inline header shape takes a press over the header line above it', async () => {
-  const inline =
+/** A header with a line of text above a 144 x 72pt inline rectangle turned 30 degrees. */
+const TURNED_INLINE_HEADER =
+  p(text('Header line above')) +
+  p(
     '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
-    `<wp:extent cx="${144 * EMU}" cy="${72 * EMU}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>` +
-    '<wp:docPr id="32" name="Header inline turned"/><wp:cNvGraphicFramePr/>' +
-    `<a:graphic><a:graphicData uri="${SHAPE_URI}">` +
-    graphic(144 * EMU, 72 * EMU, ' rot="1800000"', 'rect', RED) +
-    '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
-  const header = p(text('Header line above')) + p(inline + text('after'));
+      `<wp:extent cx="${144 * EMU}" cy="${72 * EMU}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>` +
+      '<wp:docPr id="32" name="Header inline turned"/><wp:cNvGraphicFramePr/>' +
+      `<a:graphic><a:graphicData uri="${SHAPE_URI}">` +
+      graphic(144 * EMU, 72 * EMU, ' rot="1800000"', 'rect', RED) +
+      '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r>' +
+      text('after')
+  );
+
+function headerInlineDrawing(editor: DocxEditorInstance) {
+  const story = editor.surface!.layout().pages[0]!.header!;
+  const drawing = story.fragments
+    .flatMap((block) => (block.kind === 'paragraph' ? block.lines : []))
+    .flatMap((line) => line.drawings ?? [])[0]!;
+  return { story, drawing };
+}
+
+test('a turned inline header shape takes a press over the header line above it', async () => {
   await withEditor(
     p(text('Body')) + FILLERS,
     (editor) => {
       const layout = editor.surface!.layout();
-      const story = layout.pages[0]!.header!;
-      const drawing = story.fragments
-        .flatMap((block) => (block.kind === 'paragraph' ? block.lines : []))
-        .flatMap((line) => line.drawings ?? [])[0]!;
+      const { story, drawing } = headerInlineDrawing(editor);
       expect(drawing.vectorShape?.rotationDegrees).toBe(30);
       const box = drawing.geometry.contentBounds;
       const point = { x: box.x + box.width / 2 - 30, y: box.y + box.height / 2 - 50 };
@@ -370,6 +380,47 @@ test('a turned inline header shape takes a press over the header line above it',
       const hit = hitTestFragments(layout, 0, story.fragments, point);
       expect(hit?.drawing?.drawingNodeId).toBe(drawing.drawingNodeId);
     },
-    header
+    TURNED_INLINE_HEADER
+  );
+});
+
+test('a press on a turned inline header shape selects it only while the header is open', async () => {
+  await withEditor(
+    p(text('Body')) + FILLERS,
+    async (editor, container) => {
+      const page = editor.surface!.layout().pages[0]!;
+      const { story, drawing } = headerInlineDrawing(editor);
+      const box = drawing.geometry.contentBounds;
+      // Story points, pressed in page-content points. Measured turned corners give the points
+      // past the band: the top corner pokes above the story, the bottom one into the body.
+      const points = {
+        centre: { x: box.x + 72, y: box.y + 36 },
+        overLineAbove: { x: box.x + 42, y: box.y - 14 },
+        aboveBand: { x: box.x + 27.64, y: box.y - 28.18 },
+        belowBand: { x: box.x + 116.36, y: box.y + 100.18 },
+      };
+      expect(story.box.y + points.aboveBand.y).toBeLessThan(story.box.y);
+      expect(story.box.y + points.belowBand.y).toBeGreaterThan(page.contentBox.y);
+      const press = async (point: { x: number; y: number }, open: boolean) => {
+        pressAt(container, editor, 0, page.contentBox.height / 2);
+        if (open) editor.exec({ type: 'editHeaderFooter', position: 'header' });
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          editor.surface!.layout();
+        }
+        pressAt(
+          container,
+          editor,
+          story.box.x - page.contentBox.x + point.x,
+          story.box.y - page.contentBox.y + point.y
+        );
+        return selectedId(editor);
+      };
+      for (const [name, point] of Object.entries(points)) {
+        expect(`${name}: ${await press(point, false)}`).toBe(`${name}: null`);
+        expect(`${name}: ${await press(point, true)}`).toBe(`${name}: ${drawing.drawingNodeId}`);
+      }
+    },
+    TURNED_INLINE_HEADER
   );
 });

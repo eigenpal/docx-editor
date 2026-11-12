@@ -354,6 +354,25 @@ function turnedInlineHit(
 }
 
 /**
+ * The turned inline shape of story-relative fragments that paints at `point`, or null. An open
+ * header or footer's turned shape can paint past the story band, where no text hit reaches.
+ */
+export function hitTestTurnedInlineDrawing(
+  layout: SemanticLayout,
+  pageIndex: number,
+  fragments: readonly BlockFragmentRecord[],
+  point: HitPoint
+): SemanticHit | null {
+  const context = {
+    layout,
+    pageIndex,
+    verticalWeight: DEFAULT_VERTICAL_WEIGHT,
+    measurer: undefined,
+  };
+  return turnedInlineHit(fragments, point, context);
+}
+
+/**
  * Whether a point lies in the box of a text line: on its words, past its end, or in an empty
  * paragraph's line. Table cells count their own lines.
  */

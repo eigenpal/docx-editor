@@ -29,6 +29,12 @@ const shape = (fill: string) =>
   '<a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></wps:spPr>' +
   '<wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing>';
 
+/** The same 144 x 36pt rectangle, turned 30 degrees clockwise. */
+export const TURNED_DRAWING = shape('<a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>').replace(
+  '<a:xfrm>',
+  '<a:xfrm rot="1800000">'
+);
+
 /** One rectangle of a group: `x` in EMU, filled with `hex`. */
 const member = (x: number, hex: string) =>
   '<wps:wsp><wps:cNvSpPr/><wps:spPr>' +

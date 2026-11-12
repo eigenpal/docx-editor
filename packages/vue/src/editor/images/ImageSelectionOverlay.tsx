@@ -643,6 +643,7 @@ export const ImageSelectionOverlay = defineComponent({
                 showMove || showInlineMove ? ' docx-editor-one-surface__overlay-control' : ''
               }`}
               data-textbox={current.textbox ? 'true' : undefined}
+              data-turned={frame.transform ? 'true' : undefined}
               // To pointer and screen reader users alike.
               title={frameLabel}
               aria-description={frameLabel}
