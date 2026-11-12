@@ -25,8 +25,10 @@ export const StartPlacementContext = createContext<StartPlacement>(null);
  * Host rows that render above the packaged rows instead of after them.
  *
  * Use it for rows about the item under the pointer, such as spelling suggestions for the
- * word that was right-clicked. Read that item with `useContextMenuTarget()`. It must be a
- * direct child of `DocxEditor.ContextMenu`; a component that returns it renders at the end.
+ * word that was right-clicked. Read that item with `useContextMenuTarget()`. A menu opened
+ * from the keyboard has no target: `useContextMenuAnchor()` reports `trigger: 'keyboard'`,
+ * and `editor.getSelectionRange()` reads the caret instead. It must be a direct child of
+ * `DocxEditor.ContextMenu`; a component that returns it renders at the end.
  *
  * @public
  */

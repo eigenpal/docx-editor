@@ -240,6 +240,7 @@ import {
   liveHostConfigSetters,
 } from './docx-editor-host-config.ts';
 import type { DocxEditorConfig, DocxEditorInstance } from './docx-editor-types.ts';
+import { createSelectionRangeRead, selectionCollapsedOf } from './selection-range-read.ts';
 export type {
   BookmarkChromeHandlers,
   DocxEditorConfig,
@@ -638,6 +639,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     container: () => container,
     flushOpen: () => openScheduler.flush(),
   });
+  const selectionRead = createSelectionRangeRead(() => surface);
 
   function mountBytes(...args: Parameters<typeof mountBytesNow>): void {
     const refreshing = refreshHost?.source !== undefined;
@@ -1334,18 +1336,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       zoom: zoomLane.zoom(),
       zoomMode: zoomLane.mode(),
       selection: selectionRangeOf(surface),
-      // Whether the selection is a CARET rather than a range.
-      //
-      // Cheap on purpose. The only way to ask this used to be
-      // `query({ type: 'selectedText' }) === ''`, which materializes the whole selected
-      // string to answer a boolean — and hosts ask it from selector functions that re-run on
-      // every tick, so a select-all on a long document allocated megabytes per tick to learn
-      // one bit. `selection` cannot carry it: `DocRange` addresses paragraphs by paraId and
-      // has no offsets, so a caret and a within-paragraph range look identical there.
-      selectionCollapsed:
-        state === null ||
-        (state.selection.anchor.paragraphId === state.selection.head.paragraphId &&
-          state.selection.anchor.offset === state.selection.head.offset),
+      selectionCollapsed: selectionCollapsedOf(state),
+      selectionRange: selectionRead.selectionRange(),
       formatting: runFormattingOf(surface),
       table: tableContextOf(surface),
       tocContext: tocContextOf(state?.contextTocId ?? null),
@@ -2515,6 +2507,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     ...zoomFacadeMembers(zoomLane, () => surface),
     ...highlights.members,
+    ...selectionRead.members,
     ...createReviewItemsAt({ frame: highlights.frame, placements: reviewPlacements }),
 
     ...createEditorPointMembers(

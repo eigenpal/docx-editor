@@ -3481,6 +3481,7 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     canInsertTable(rows: number, cols: number): boolean;
     canInsertToc(): boolean;
     canRefreshToc(tocId?: string): boolean;
+    caretClientRect(): HighlightRect | null;
     clearFormatting(): void;
     collaborationSession(): EditorCollaborationSession | null;
     commitReviewOps(run: (historyToken: symbol | undefined) => {

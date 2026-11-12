@@ -658,6 +658,13 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
    */
   overlayCoordinates(): import('./surface-overlay-coordinates.ts').SurfaceOverlayCoordinates;
   /**
+   * The insertion point at the selection head in client pixels, as the painted caret places
+   * it, whether or not it paints right now. Null when the head is not on a painted page.
+   * Flushes pending input and layout first, as `layout()` does, so a remote commit has
+   * already carried the caret.
+   */
+  caretClientRect(): import('../contracts/editor-highlights.ts').HighlightRect | null;
+  /**
    * The comment, tracked change or carded custom node the caret is in, as the painted bands
    * report it. A custom node without `reviewCard` is never the answer: it has no card.
    *

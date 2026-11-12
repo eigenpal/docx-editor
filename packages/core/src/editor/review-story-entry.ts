@@ -125,3 +125,38 @@ export function openBodyStoryOf(surface: PaginatedSurface, position: SemanticPos
   surface.exitHeaderFooter?.();
   openTextboxAt(surface, position);
 }
+
+/**
+ * Open or leave the text box a selection is in, once the story around it is open.
+ *
+ * A selection inside a box was installed with the box closed: the caret sat in the box's
+ * paragraph while the scope stayed on the story behind it. Both endpoints must be in the same
+ * box, or both outside any box, for the same reason two stories are refused.
+ */
+export function enterTextboxForSelection(
+  surface: PaginatedSurface,
+  selection: { readonly anchor: SemanticPosition; readonly head: SemanticPosition }
+): { ok: true; changed: false } | { ok: false; code: 'unsupported'; reason: string } {
+  const part = partOfNodeId(surface.session, selection.head.paragraphId);
+  const box = part ? textboxScopeOfParagraph(part, selection.head.paragraphId) : null;
+  const anchorBox = part ? textboxScopeOfParagraph(part, selection.anchor.paragraphId) : null;
+  if ((box?.id ?? null) !== (anchorBox?.id ?? null)) {
+    return { ok: false, code: 'unsupported', reason: 'a selection cannot span two stories' };
+  }
+  const active = surface.activeScope();
+  const owner =
+    active.kind === 'headerFooter'
+      ? { kind: 'headerFooter' as const, rId: active.rId }
+      : active.kind === 'frame'
+        ? active.owner
+        : undefined;
+  if (!box) {
+    // Leave an open box for the story it sits in.
+    if (active.kind === 'frame') surface.setActiveScope(owner ?? { kind: 'body' });
+    return { ok: true, changed: false };
+  }
+  if (active.kind === 'frame' && active.id === box.id) return { ok: true, changed: false };
+  return surface.setActiveScope(owner ? { ...box, owner } : box)
+    ? { ok: true, changed: false }
+    : { ok: false, code: 'unsupported', reason: 'that text box could not be opened' };
+}

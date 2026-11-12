@@ -59,7 +59,7 @@ const page = useEditorState((s) => s.page);
 </template>
 ```
 
-Pass a comparator for an object slice. Common fields include `page`, `selection`, `formatting`, `editable`, `isLoading`, `editingMode`, `canUndo`, `pageSetup`, and `lastRejection`.
+Pass a comparator for an object slice. Common fields include `page`, `selection`, `selectionRange`, `formatting`, `editable`, `isLoading`, `editingMode`, `canUndo`, `pageSetup`, and `lastRejection`. `selectionRange` keeps its reference until the selection moves, so the default comparator works for it.
 
 Templates unwrap only top-level refs:
 
@@ -223,6 +223,7 @@ For font origins, see [Fonts](/docs/2.x/guides/fonts). For refused opens, see [O
 | `useNoteScopeState()` | Active footnote or endnote scope |
 | `useNotePropertiesState()` | `ShallowRef` with note numbering properties, or `null` |
 | `useContextMenuTarget()` | `HTMLElement \| null` that received the last context-menu action |
+| `useContextMenuAnchor()` | `{ x, y, trigger } \| null` where the open context menu is anchored; `trigger` is `'pointer'` or `'keyboard'` |
 | `useTableBorderTargetLabel()` | `ComputedRef<string>` label of the table-border target |
 | `useToolbarContext()` | `ComputedRef<{ t, onSave }>` |
 | `useToolbarLabel()` | `(key) => string` for the active scope |

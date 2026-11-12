@@ -72,6 +72,8 @@ Group rows with `Group`, `Separator`, and `Submenu`.
 
 Your rows render after the default rows. To put rows at the top of the menu, wrap them in `ContextMenu.Start`. Use it for rows about the item under the pointer, such as suggestions for the word that you right-click. To read that item, call `useContextMenuTarget()`.
 
+Shift+F10 and the Menu key open the menu below the caret. A menu opened from the keyboard has no target element. To tell the two cases apart, call `useContextMenuAnchor()` and check `trigger`, which is `'pointer'` or `'keyboard'`. For a keyboard open, read the caret with `editor.getSelectionRange()`. For more information, see [Read the selection and the caret](/docs/2.x/guides/navigation#read-the-selection-and-the-caret).
+
 `ContextMenu.Start` adds a separator after its rows. If `Start` renders no rows, the separator stays hidden. You can use more than one `Start`, and the menu shows them in written order.
 
 <FrameworkTabs>
