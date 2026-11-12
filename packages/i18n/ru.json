@@ -84,8 +84,8 @@
       "table": "Таблица",
       "direction": "Направление текста",
       "format": "Формат",
-      "chart": null,
-      "shape": null
+      "chart": "Диаграмма",
+      "shape": "Фигура"
     },
     "undo": "Отменить",
     "undoShortcut": "Отменить (Ctrl+Z)",
@@ -236,10 +236,8 @@
     },
     "lighterPercent": "{color}, светлее на {percent}%",
     "darkerPercent": "{color}, темнее на {percent}%",
-    "choose": null,
-    "hexColor": null,
-    "hexHelp": null,
-    "invalidHex": null
+    "hexColor": "Шестнадцатеричный цвет",
+    "invalidHex": "Введите цвет в формате #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {
@@ -1391,7 +1389,7 @@
         "noSolidFill": "Сначала выберите цвет заливки.",
         "transparency": "Введите число от 0 до 100.",
         "width": "Введите толщину от 0,25 до 1584 пунктов.",
-        "dash": null
+        "dash": "Выберите тип штриха из списка."
       },
       "fill": "Заливка",
       "fillColor": "Цвет заливки",
@@ -1420,20 +1418,20 @@
       "width": "Толщина (пт)",
       "widthPoints": "{value} пт",
       "widthPreset": "Готовая толщина",
-      "dash": null,
+      "dash": "Тип штриха",
       "dashes": {
-        "custom": null,
-        "dash": null,
-        "dashDot": null,
-        "dot": null,
-        "lgDash": null,
-        "lgDashDot": null,
-        "lgDashDotDot": null,
-        "solid": null,
-        "sysDash": null,
-        "sysDashDot": null,
-        "sysDashDotDot": null,
-        "sysDot": null
+        "custom": "Особый",
+        "dash": "Штрих",
+        "dashDot": "Штрих-пунктир",
+        "dot": "Точка",
+        "lgDash": "Длинный штрих",
+        "lgDashDot": "Длинный штрих-пунктир",
+        "lgDashDotDot": "Длинный штрих с двумя точками",
+        "solid": "Сплошная",
+        "sysDash": "Квадратные точки",
+        "sysDashDot": "Квадратный штрих-пунктир",
+        "sysDashDotDot": "Квадратный штрих с двумя точками",
+        "sysDot": "Круглые точки"
       }
     }
   }

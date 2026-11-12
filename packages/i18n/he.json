@@ -80,8 +80,8 @@
       "table": "טבלה",
       "format": "עיצוב",
       "direction": "כיוון טקסט",
-      "chart": null,
-      "shape": null
+      "chart": "תרשים",
+      "shape": "צורה"
     },
     "undo": "בטל",
     "undoShortcut": "בטל (Ctrl+Z)",
@@ -232,10 +232,8 @@
     },
     "lighterPercent": "{color}, בהיר יותר ב-{percent}%",
     "darkerPercent": "{color}, כהה יותר ב-{percent}%",
-    "choose": null,
-    "hexColor": null,
-    "hexHelp": null,
-    "invalidHex": null
+    "hexColor": "צבע הקסדצימלי",
+    "invalidHex": "הקלד צבע בתבנית #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {
@@ -1392,7 +1390,7 @@
         "noSolidFill": "בחר תחילה צבע מילוי.",
         "transparency": "הקלד מספר בין 0 ל-100.",
         "width": "הקלד עובי בין 0.25 ל-1584 נקודות.",
-        "dash": null
+        "dash": "בחר סוג מקף מהרשימה."
       },
       "fill": "מילוי",
       "fillColor": "צבע מילוי",
@@ -1421,20 +1419,20 @@
       "width": "עובי (נק׳)",
       "widthPoints": "{value} נק׳",
       "widthPreset": "עובי מוגדר מראש",
-      "dash": null,
+      "dash": "סוג מקף",
       "dashes": {
-        "custom": null,
-        "dash": null,
-        "dashDot": null,
-        "dot": null,
-        "lgDash": null,
-        "lgDashDot": null,
-        "lgDashDotDot": null,
-        "solid": null,
-        "sysDash": null,
-        "sysDashDot": null,
-        "sysDashDotDot": null,
-        "sysDot": null
+        "custom": "מותאם אישית",
+        "dash": "מקף",
+        "dashDot": "מקף ונקודה",
+        "dot": "נקודה",
+        "lgDash": "מקף ארוך",
+        "lgDashDot": "מקף ארוך ונקודה",
+        "lgDashDotDot": "מקף ארוך ושתי נקודות",
+        "solid": "רציף",
+        "sysDash": "נקודה מרובעת",
+        "sysDashDot": "מקף מרובע ונקודה",
+        "sysDashDotDot": "מקף מרובע ושתי נקודות",
+        "sysDot": "נקודה עגולה"
       }
     }
   }

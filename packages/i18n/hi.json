@@ -79,8 +79,8 @@
       "table": "तालिका",
       "format": "प्रारूप",
       "direction": "पाठ की दिशा",
-      "chart": null,
-      "shape": null
+      "chart": "चार्ट",
+      "shape": "आकृति"
     },
     "undo": "पूर्ववत करें",
     "undoShortcut": "पूर्ववत करें (Ctrl+Z)",
@@ -231,10 +231,8 @@
     },
     "lighterPercent": "{color}, {percent}% हल्का",
     "darkerPercent": "{color}, {percent}% गहरा",
-    "choose": null,
-    "hexColor": null,
-    "hexHelp": null,
-    "invalidHex": null
+    "hexColor": "हेक्स रंग",
+    "invalidHex": "रंग को #RRGGBB के रूप में टाइप करें।"
   },
   "dialogs": {
     "imageProperties": {
@@ -1391,7 +1389,7 @@
         "noSolidFill": "पहले कोई भराव रंग चुनें।",
         "transparency": "0 से 100 तक की कोई संख्या टाइप करें।",
         "width": "0.25 से 1584 पॉइंट तक की चौड़ाई टाइप करें।",
-        "dash": null
+        "dash": "सूची से डैश प्रकार चुनें।"
       },
       "fill": "भराव",
       "fillColor": "भराव रंग",
@@ -1420,20 +1418,20 @@
       "width": "चौड़ाई (pt)",
       "widthPoints": "{value} pt",
       "widthPreset": "पूर्वनिर्धारित चौड़ाई",
-      "dash": null,
+      "dash": "डैश प्रकार",
       "dashes": {
-        "custom": null,
-        "dash": null,
-        "dashDot": null,
-        "dot": null,
-        "lgDash": null,
-        "lgDashDot": null,
-        "lgDashDotDot": null,
-        "solid": null,
-        "sysDash": null,
-        "sysDashDot": null,
-        "sysDashDotDot": null,
-        "sysDot": null
+        "custom": "कस्टम",
+        "dash": "डैश",
+        "dashDot": "डैश डॉट",
+        "dot": "डॉट",
+        "lgDash": "लंबा डैश",
+        "lgDashDot": "लंबा डैश डॉट",
+        "lgDashDotDot": "लंबा डैश डॉट डॉट",
+        "solid": "ठोस",
+        "sysDash": "चौकोर डॉट",
+        "sysDashDot": "चौकोर डैश डॉट",
+        "sysDashDotDot": "चौकोर डैश डॉट डॉट",
+        "sysDot": "गोल डॉट"
       }
     }
   }

@@ -160,8 +160,8 @@
       "format": "Formato",
       "image": "Imagen",
       "table": "Tabla",
-      "chart": null,
-      "shape": null
+      "chart": "Gráfico",
+      "shape": "Forma"
     },
     "undo": "Deshacer",
     "undoShortcut": "Deshacer (Ctrl+Z)",
@@ -311,10 +311,8 @@
     "apply": "Aplicar",
     "lighterPercent": "{color}, {percent}% más claro",
     "darkerPercent": "{color}, {percent}% más oscuro",
-    "choose": null,
-    "hexColor": null,
-    "hexHelp": null,
-    "invalidHex": null
+    "hexColor": "Color hexadecimal",
+    "invalidHex": "Escriba un color como #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {
@@ -1391,7 +1389,7 @@
         "noSolidFill": "Elija primero un color de relleno.",
         "transparency": "Escriba un número de 0 a 100.",
         "width": "Escriba un grosor de 0,25 a 1584 puntos.",
-        "dash": null
+        "dash": "Elija un tipo de guion de la lista."
       },
       "fill": "Relleno",
       "fillColor": "Color de relleno",
@@ -1420,20 +1418,20 @@
       "width": "Grosor (pt)",
       "widthPoints": "{value} pt",
       "widthPreset": "Grosor predefinido",
-      "dash": null,
+      "dash": "Tipo de guion",
       "dashes": {
-        "custom": null,
-        "dash": null,
-        "dashDot": null,
-        "dot": null,
-        "lgDash": null,
-        "lgDashDot": null,
-        "lgDashDotDot": null,
-        "solid": null,
-        "sysDash": null,
-        "sysDashDot": null,
-        "sysDashDotDot": null,
-        "sysDot": null
+        "custom": "Personalizado",
+        "dash": "Guion",
+        "dashDot": "Guion y punto",
+        "dot": "Punto",
+        "lgDash": "Guion largo",
+        "lgDashDot": "Guion largo y punto",
+        "lgDashDotDot": "Guion largo, punto y punto",
+        "solid": "Sólido",
+        "sysDash": "Punto cuadrado",
+        "sysDashDot": "Guion cuadrado y punto",
+        "sysDashDotDot": "Guion cuadrado, punto y punto",
+        "sysDot": "Punto redondo"
       }
     }
   }

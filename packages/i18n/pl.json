@@ -79,8 +79,8 @@
       "table": "Tabela",
       "format": "Formatowanie",
       "direction": "Kierunek tekstu",
-      "chart": null,
-      "shape": null
+      "chart": "Wykres",
+      "shape": "Kształt"
     },
     "undo": "Cofnij",
     "undoShortcut": "Cofnij (Ctrl+Z)",
@@ -231,10 +231,8 @@
     },
     "lighterPercent": "{color}, jaśniejszy o {percent}%",
     "darkerPercent": "{color}, ciemniejszy o {percent}%",
-    "choose": null,
-    "hexColor": null,
-    "hexHelp": null,
-    "invalidHex": null
+    "hexColor": "Kolor szesnastkowy",
+    "invalidHex": "Wpisz kolor w postaci #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {
@@ -1391,7 +1389,7 @@
         "noSolidFill": "Najpierw wybierz kolor wypełnienia.",
         "transparency": "Wpisz liczbę od 0 do 100.",
         "width": "Wpisz grubość od 0,25 do 1584 punktów.",
-        "dash": null
+        "dash": "Wybierz typ kreski z listy."
       },
       "fill": "Wypełnienie",
       "fillColor": "Kolor wypełnienia",
@@ -1420,20 +1418,20 @@
       "width": "Grubość (pkt)",
       "widthPoints": "{value} pkt",
       "widthPreset": "Gotowa grubość",
-      "dash": null,
+      "dash": "Typ kreski",
       "dashes": {
-        "custom": null,
-        "dash": null,
-        "dashDot": null,
-        "dot": null,
-        "lgDash": null,
-        "lgDashDot": null,
-        "lgDashDotDot": null,
-        "solid": null,
-        "sysDash": null,
-        "sysDashDot": null,
-        "sysDashDotDot": null,
-        "sysDot": null
+        "custom": "Niestandardowa",
+        "dash": "Kreska",
+        "dashDot": "Kreska i kropka",
+        "dot": "Kropka",
+        "lgDash": "Długa kreska",
+        "lgDashDot": "Długa kreska i kropka",
+        "lgDashDotDot": "Długa kreska i dwie kropki",
+        "solid": "Ciągła",
+        "sysDash": "Kwadratowa kropka",
+        "sysDashDot": "Kwadratowa kreska i kropka",
+        "sysDashDotDot": "Kwadratowa kreska i dwie kropki",
+        "sysDot": "Okrągła kropka"
       }
     }
   }

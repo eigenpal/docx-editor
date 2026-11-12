@@ -79,8 +79,8 @@
       "table": "Tabela",
       "format": "Formatar",
       "direction": "Direção do texto",
-      "chart": null,
-      "shape": null
+      "chart": "Gráfico",
+      "shape": "Forma"
     },
     "undo": "Desfazer",
     "undoShortcut": "Desfazer (Ctrl+Z)",
@@ -231,10 +231,8 @@
     },
     "lighterPercent": "{color}, {percent}% mais clara",
     "darkerPercent": "{color}, {percent}% mais escura",
-    "choose": null,
-    "hexColor": null,
-    "hexHelp": null,
-    "invalidHex": null
+    "hexColor": "Cor hexadecimal",
+    "invalidHex": "Digite uma cor como #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {
@@ -1391,7 +1389,7 @@
         "noSolidFill": "Escolha primeiro uma cor de preenchimento.",
         "transparency": "Digite um número de 0 a 100.",
         "width": "Digite uma espessura de 0,25 a 1584 pontos.",
-        "dash": null
+        "dash": "Escolha um tipo de traço na lista."
       },
       "fill": "Preenchimento",
       "fillColor": "Cor de preenchimento",
@@ -1420,20 +1418,20 @@
       "width": "Espessura (pt)",
       "widthPoints": "{value} pt",
       "widthPreset": "Espessura predefinida",
-      "dash": null,
+      "dash": "Tipo de traço",
       "dashes": {
-        "custom": null,
-        "dash": null,
-        "dashDot": null,
-        "dot": null,
-        "lgDash": null,
-        "lgDashDot": null,
-        "lgDashDotDot": null,
-        "solid": null,
-        "sysDash": null,
-        "sysDashDot": null,
-        "sysDashDotDot": null,
-        "sysDot": null
+        "custom": "Personalizado",
+        "dash": "Traço",
+        "dashDot": "Traço e ponto",
+        "dot": "Ponto",
+        "lgDash": "Traço longo",
+        "lgDashDot": "Traço longo e ponto",
+        "lgDashDotDot": "Traço longo, ponto e ponto",
+        "solid": "Sólido",
+        "sysDash": "Ponto quadrado",
+        "sysDashDot": "Traço quadrado e ponto",
+        "sysDashDotDot": "Traço quadrado, ponto e ponto",
+        "sysDot": "Ponto redondo"
       }
     }
   }

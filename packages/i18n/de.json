@@ -79,8 +79,8 @@
       "table": "Tabelle",
       "format": "Format",
       "direction": "Textrichtung",
-      "chart": null,
-      "shape": null
+      "chart": "Diagramm",
+      "shape": "Form"
     },
     "undo": "Rückgängig",
     "undoShortcut": "Rückgängig (Strg+Z)",
@@ -231,10 +231,8 @@
     },
     "lighterPercent": "{color}, {percent} % heller",
     "darkerPercent": "{color}, {percent} % dunkler",
-    "choose": null,
-    "hexColor": null,
-    "hexHelp": null,
-    "invalidHex": null
+    "hexColor": "Hex-Farbe",
+    "invalidHex": "Geben Sie eine Farbe als #RRGGBB ein."
   },
   "dialogs": {
     "imageProperties": {
@@ -1391,7 +1389,7 @@
         "noSolidFill": "Wählen Sie zuerst eine Füllfarbe aus.",
         "transparency": "Geben Sie eine Zahl von 0 bis 100 ein.",
         "width": "Geben Sie eine Stärke von 0,25 bis 1584 Punkt ein.",
-        "dash": null
+        "dash": "Wählen Sie eine Strichart aus der Liste."
       },
       "fill": "Füllung",
       "fillColor": "Füllfarbe",
@@ -1420,20 +1418,20 @@
       "width": "Stärke (pt)",
       "widthPoints": "{value} pt",
       "widthPreset": "Stärkenvorgabe",
-      "dash": null,
+      "dash": "Strichart",
       "dashes": {
-        "custom": null,
-        "dash": null,
-        "dashDot": null,
-        "dot": null,
-        "lgDash": null,
-        "lgDashDot": null,
-        "lgDashDotDot": null,
-        "solid": null,
-        "sysDash": null,
-        "sysDashDot": null,
-        "sysDashDotDot": null,
-        "sysDot": null
+        "custom": "Benutzerdefiniert",
+        "dash": "Strich",
+        "dashDot": "Strich-Punkt",
+        "dot": "Punkt",
+        "lgDash": "Langer Strich",
+        "lgDashDot": "Langer Strich-Punkt",
+        "lgDashDotDot": "Langer Strich-Punkt-Punkt",
+        "solid": "Durchgezogen",
+        "sysDash": "Quadratischer Punkt",
+        "sysDashDot": "Quadratischer Strich-Punkt",
+        "sysDashDotDot": "Quadratischer Strich-Punkt-Punkt",
+        "sysDot": "Runder Punkt"
       }
     }
   }

@@ -160,8 +160,8 @@
       "format": "تنسيق",
       "image": "صورة",
       "table": "جدول",
-      "chart": null,
-      "shape": null
+      "chart": "مخطط",
+      "shape": "شكل"
     },
     "undo": "تراجع",
     "undoShortcut": "تراجع (Ctrl+Z)",
@@ -311,10 +311,8 @@
     "apply": "تطبيق",
     "lighterPercent": "{color}، أفتح بنسبة {percent}%",
     "darkerPercent": "{color}، أغمق بنسبة {percent}%",
-    "choose": null,
-    "hexColor": null,
-    "hexHelp": null,
-    "invalidHex": null
+    "hexColor": "لون سداسي عشري",
+    "invalidHex": "اكتب اللون بصيغة #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {
@@ -1391,7 +1389,7 @@
         "noSolidFill": "اختر لون التعبئة أولًا.",
         "transparency": "اكتب رقمًا من 0 إلى 100.",
         "width": "اكتب عرضًا من 0.25 إلى 1584 نقطة.",
-        "dash": null
+        "dash": "اختر نوع الخط المتقطع من القائمة."
       },
       "fill": "التعبئة",
       "fillColor": "لون التعبئة",
@@ -1420,20 +1418,20 @@
       "width": "العرض (نقطة)",
       "widthPoints": "{value} نقطة",
       "widthPreset": "عرض محدد مسبقًا",
-      "dash": null,
+      "dash": "نوع الخط المتقطع",
       "dashes": {
-        "custom": null,
-        "dash": null,
-        "dashDot": null,
-        "dot": null,
-        "lgDash": null,
-        "lgDashDot": null,
-        "lgDashDotDot": null,
-        "solid": null,
-        "sysDash": null,
-        "sysDashDot": null,
-        "sysDashDotDot": null,
-        "sysDot": null
+        "custom": "مخصص",
+        "dash": "شرطة",
+        "dashDot": "شرطة ونقطة",
+        "dot": "نقطة",
+        "lgDash": "شرطة طويلة",
+        "lgDashDot": "شرطة طويلة ونقطة",
+        "lgDashDotDot": "شرطة طويلة ونقطتان",
+        "solid": "متصل",
+        "sysDash": "نقطة مربعة",
+        "sysDashDot": "شرطة مربعة ونقطة",
+        "sysDashDotDot": "شرطة مربعة ونقطتان",
+        "sysDot": "نقطة مستديرة"
       }
     }
   }

@@ -312,9 +312,7 @@
     "lighterPercent": "{color}, lighter {percent}%",
     "darkerPercent": "{color}, darker {percent}%",
     "hexColor": "Hex color",
-    "hexHelp": "Type #RRGGBB, then press Enter.",
-    "invalidHex": "Type a color as #RRGGBB.",
-    "choose": "Choose a color"
+    "invalidHex": "Type a color as #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {

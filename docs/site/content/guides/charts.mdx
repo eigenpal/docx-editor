@@ -96,6 +96,10 @@ function ChartSidePanel() {
 
 Render this component inside `DocxEditor.Root`, beside `DocxEditor.Viewport`. The `panes` option names the panes your listener shows; it defaults to `['chart']`. A pane action is enabled only while a mounted pane or listener takes that pane, and a request that no listener takes is dropped. Vue uses `DocxEditorSidePanel` and the `usePaneRequest` composable. Use `DocxEditor.ChartPane` to place the pane in your own layout.
 
+## Place chart controls anywhere
+
+Each field of the Chart pane is a slot (`chart.type`, `chart.title`, `chart.legend`, and so on) and an exported part, such as `DocxEditor.ChartTitle`. Place the parts in your own toolbar, popover, or drawer, or render `DocxEditor.PaneSections` with `pane="chart"`. For more information, see [Place shape and chart controls](/docs/2.x/guides/object-controls).
+
 ## Build your own chart pane
 
 Build your component with `useSelectedChart`, then pass it as children to `DocxEditor.SidePanel`. The hook returns the selected chart, its `data` and `format`, and editing availability with disabled reasons. Use these methods to edit that chart:

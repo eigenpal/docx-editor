@@ -164,7 +164,8 @@ The handler takes no arguments. Read the selection with `editor.getSelectionPlac
 | `useHighlights(name, source, options?)` | `{ applied, unavailable }` |
 | `useHighlightAt(name?)` | Highlight under the pointer, or `null` |
 | `useNavigationPane(options?)` | `{ open, setOpen, toggle, tab, setTab, paneWidth, shift, overlay }` |
-| `usePaneRequest(listener, options?)` | Nothing. Calls `listener` with `{ pane, focus }` when Insert > Chart, Edit chart, or Format shape asks for a pane that `options.panes` names. `panes` defaults to `['chart']`. See [Charts](/docs/2.x/guides/charts#show-the-chart-pane). |
+| `usePaneRequest(listener, options?)` | Nothing. Calls `listener` with `{ pane, focus }` when Insert > Chart, Edit chart, or Format shape asks for a pane that `options.panes` names. `panes` defaults to `['chart']`. Answer it with any UI. See [Place shape and chart controls](/docs/2.x/guides/object-controls). |
+| `useObjectControl(slotId)` | `{ value, isActive, isEnabled, disabledReason, label, execute, apply, toggle }` for one `shape.*` or `chart.*` slot. See [Place shape and chart controls](/docs/2.x/guides/object-controls). |
 | `useSelectedChart()` | `UseSelectedChartReturn`: the selected chart, its `data` and `format`, whether each can change, `execute` for the chart commands, and `editData` for one checked data change. See [Build your own chart pane](/docs/2.x/guides/charts#build-your-own-chart-pane). |
 | `useSelectedShape()` | `UseSelectedShapeReturn`: the selected shape's `drawingNodeId` and `format`, whether the fill, transparency, and outline can change with reasons, `execute` for `setShapeFill` and `setShapeOutline`, and `edit` for one checked pane change. See [Format a shape](/docs/2.x/guides/images#format-a-shape). |
 | `useNavigationShift()` | `number`, the page offset for an open pane |

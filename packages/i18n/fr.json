@@ -79,8 +79,8 @@
       "table": "Tableau",
       "format": "Format",
       "direction": "Orientation du texte",
-      "chart": null,
-      "shape": null
+      "chart": "Graphique",
+      "shape": "Forme"
     },
     "undo": "Annuler",
     "undoShortcut": "Annuler (Ctrl+Z)",
@@ -231,10 +231,8 @@
     },
     "lighterPercent": "{color}, plus clair de {percent} %",
     "darkerPercent": "{color}, plus foncé de {percent} %",
-    "choose": null,
-    "hexColor": null,
-    "hexHelp": null,
-    "invalidHex": null
+    "hexColor": "Couleur hexadécimale",
+    "invalidHex": "Tapez une couleur au format #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {
@@ -1391,7 +1389,7 @@
         "noSolidFill": "Choisissez d'abord une couleur de remplissage.",
         "transparency": "Saisissez un nombre de 0 à 100.",
         "width": "Saisissez une épaisseur de 0,25 à 1584 points.",
-        "dash": null
+        "dash": "Choisissez un type de tiret dans la liste."
       },
       "fill": "Remplissage",
       "fillColor": "Couleur de remplissage",
@@ -1420,20 +1418,20 @@
       "width": "Épaisseur (pt)",
       "widthPoints": "{value} pt",
       "widthPreset": "Épaisseur prédéfinie",
-      "dash": null,
+      "dash": "Type de tiret",
       "dashes": {
-        "custom": null,
-        "dash": null,
-        "dashDot": null,
-        "dot": null,
-        "lgDash": null,
-        "lgDashDot": null,
-        "lgDashDotDot": null,
-        "solid": null,
-        "sysDash": null,
-        "sysDashDot": null,
-        "sysDashDotDot": null,
-        "sysDot": null
+        "custom": "Personnalisé",
+        "dash": "Tiret",
+        "dashDot": "Tiret-point",
+        "dot": "Point",
+        "lgDash": "Tiret long",
+        "lgDashDot": "Tiret long-point",
+        "lgDashDotDot": "Tiret long-point-point",
+        "solid": "Plein",
+        "sysDash": "Point carré",
+        "sysDashDot": "Tiret carré-point",
+        "sysDashDotDot": "Tiret carré-point-point",
+        "sysDot": "Point rond"
       }
     }
   }

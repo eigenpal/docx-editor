@@ -79,8 +79,8 @@
       "table": "Tablo",
       "format": "Biçim",
       "direction": "Metin yönü",
-      "chart": null,
-      "shape": null
+      "chart": "Grafik",
+      "shape": "Şekil"
     },
     "undo": "Geri al",
     "undoShortcut": "Geri al (Ctrl+Z)",
@@ -231,10 +231,8 @@
     },
     "lighterPercent": "{color}, %{percent} daha açık",
     "darkerPercent": "{color}, %{percent} daha koyu",
-    "choose": null,
-    "hexColor": null,
-    "hexHelp": null,
-    "invalidHex": null
+    "hexColor": "Onaltılık renk",
+    "invalidHex": "Rengi #RRGGBB olarak yazın."
   },
   "dialogs": {
     "imageProperties": {
@@ -1391,7 +1389,7 @@
         "noSolidFill": "Önce bir dolgu rengi seçin.",
         "transparency": "0 ile 100 arasında bir sayı yazın.",
         "width": "0,25 ile 1584 punto arasında bir kalınlık yazın.",
-        "dash": null
+        "dash": "Listeden bir kesik çizgi türü seçin."
       },
       "fill": "Dolgu",
       "fillColor": "Dolgu rengi",
@@ -1420,20 +1418,20 @@
       "width": "Kalınlık (pt)",
       "widthPoints": "{value} pt",
       "widthPreset": "Hazır kalınlık",
-      "dash": null,
+      "dash": "Kesik çizgi türü",
       "dashes": {
-        "custom": null,
-        "dash": null,
-        "dashDot": null,
-        "dot": null,
-        "lgDash": null,
-        "lgDashDot": null,
-        "lgDashDotDot": null,
-        "solid": null,
-        "sysDash": null,
-        "sysDashDot": null,
-        "sysDashDotDot": null,
-        "sysDot": null
+        "custom": "Özel",
+        "dash": "Kesik çizgi",
+        "dashDot": "Çizgi nokta",
+        "dot": "Nokta",
+        "lgDash": "Uzun çizgi",
+        "lgDashDot": "Uzun çizgi nokta",
+        "lgDashDotDot": "Uzun çizgi nokta nokta",
+        "solid": "Düz",
+        "sysDash": "Kare nokta",
+        "sysDashDot": "Kare çizgi nokta",
+        "sysDashDotDot": "Kare çizgi nokta nokta",
+        "sysDot": "Yuvarlak nokta"
       }
     }
   }

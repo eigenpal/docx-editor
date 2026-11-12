@@ -181,7 +181,9 @@ The **Format shape** pane sets the fill and outline of the selected shape, text 
 The pane lives in `DocxEditor.SidePanel`, which shows it while a shape is selected and shows the Chart pane while a chart is selected. Use `DocxEditor.ShapePane` to place the pane in your own layout. Vue uses `DocxEditorSidePanel` and `DocxEditorShapePane`.
 
 - **Fill**: No fill, theme colors with tints and shades, standard colors, a hex color, and transparency in percent.
-- **Outline**: No line, the same colors, a hex color, and a width from 0.25 to 6 points or any typed width.
+- **Outline**: No line, the same colors, a hex color, a width from 0.25 to 6 points or any typed width, and a dash type.
+
+Each field is also a part that you can place in your own toolbar, popover, or drawer. For more information, see [Place shape and chart controls](/docs/2.x/guides/object-controls).
 
 Each change is one undo step. A gradient, pattern, or picture fill shows by name; a picked color or No fill replaces it. A theme color saves as a theme reference with its tint or shade, so it follows a theme change. A hex color saves as RGB and never shows as a theme color.
 
@@ -212,13 +214,14 @@ function OutlineButton() {
 
 Both adapters export the same parts. The `image` toolbar group appears when a picture is selected.
 
-| Slot                | Component or hook                                                |
-| ------------------- | ---------------------------------------------------------------- |
-| `image.insert`      | `ImageInsertProvider`, `ImageInsertTrigger`                      |
-| `image.wrap`        | `ImageWrap`, `useEditorValueCommand('image.wrap')`               |
-| `image.altText`     | `ImageAltText`                                                   |
-| `image.properties`  | `ImagePropertiesTrigger`, `DocxEditorImagePropertiesDialog`      |
+| Slot | Component or hook |
+| --- | --- |
+| `image.insert` | `ImageInsertProvider`, `ImageInsertTrigger` |
+| `image.wrap` | `ImageWrap`, `useEditorValueCommand('image.wrap')` |
+| `image.altText` | `ImageAltText` |
+| `image.properties` | `ImagePropertiesTrigger`, `DocxEditorImagePropertiesDialog` |
 | `image.formatShape` | `DocxEditorSidePanel`, `DocxEditorShapePane`, `useSelectedShape` |
+| `shape.*` | `DocxEditor.ShapeFill`, `ShapeOutlineDash`, and the other shape parts, `useObjectControl` |
 
 The packaged **Insert** menu has an **Image** row. Hide or move it through `DocxEditor.Menu.ImageInsert`. For layout and overrides, see [Toolbar customization](/docs/2.x/guides/toolbar) and [Customize popups](/docs/2.x/guides/customize-dialogs).
 
