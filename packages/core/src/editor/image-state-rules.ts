@@ -156,6 +156,7 @@ export function imageContextEqual(
     (a.intrinsic?.pixelHeight ?? null) === (b.intrinsic?.pixelHeight ?? null) &&
     (a.intrinsic?.dpiX ?? null) === (b.intrinsic?.dpiX ?? null) &&
     (a.intrinsic?.dpiY ?? null) === (b.intrinsic?.dpiY ?? null) &&
+    a.memberId === b.memberId &&
     shapeFormatEqual(a.shapeFormat, b.shapeFormat)
   );
 }

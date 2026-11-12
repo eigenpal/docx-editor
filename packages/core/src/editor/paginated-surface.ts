@@ -330,6 +330,7 @@ import {
   storyScopeOfNodeId,
   noteScopeIdInLayout,
 } from './surface-scope.ts';
+import { memberIntent } from './group-member-selection.ts';
 import { createCaretViewFollower, type CaretFollowMode } from './surface-caret-follow.ts';
 import { createInPlaceReplacement } from './surface-replace-in-place.ts';
 import {
@@ -593,7 +594,9 @@ export function mountPaginatedSurface(
     if (
       next.kind === drawingIntent.kind &&
       (next.kind !== 'pointer' ||
-        (drawingIntent.kind === 'pointer' && next.drawingNodeId === drawingIntent.drawingNodeId))
+        (drawingIntent.kind === 'pointer' &&
+          next.drawingNodeId === drawingIntent.drawingNodeId &&
+          next.memberNodeId === drawingIntent.memberNodeId))
     ) {
       return;
     }
@@ -5037,6 +5040,9 @@ export function mountPaginatedSurface(
       documentSelectionHistory.noteSelectionAfterEdit();
       return resolveSelectedDrawingRecord(surface)?.drawingNodeId === drawingNodeId;
     },
+
+    selectDrawingMember: (memberNodeId) =>
+      memberIntent(session, drawingIntent, memberNodeId, (next) => setDrawingIntent(next, true)),
 
     revealPage(pageIndex, options) {
       // Flushed like its siblings below: a page the deferred pass creates is not findable

@@ -8,6 +8,7 @@ import {
 } from './image-command-fields.ts';
 import { drawingAtomProjection } from '../store/package/drawing-atom-projection.ts';
 import { commandProtectionRefusal } from './command-protection.ts';
+import * as member from './group-member-selection.ts';
 import { inlineToFloatingPosition } from './inline-wrap-placement.ts';
 import { reanchorMovedDrawing } from './drawing-reanchor.ts';
 import { preserveWrapExtentOps, type WrapExtentOverrides } from './image-wrap-extent.ts';
@@ -175,16 +176,6 @@ function anchoredDrawingAtSelection(
   return null;
 }
 
-/**
- * Comparable key for a drawing-selection intent, so a state guard can watch its transitions
- * — including a press on the drawing at offsets the selection already holds.
- */
-export function drawingSelectionIntentKey(
-  intent: import('./paginated-surface-contract.ts').DrawingSelectionIntent
-): string {
-  return intent.kind === 'pointer' ? `pointer:${intent.drawingNodeId}` : intent.kind;
-}
-
 export function resolveSelectedDrawingRecord(
   surface: PaginatedSurface | null
 ): SelectedDrawingRecord | null {
@@ -332,6 +323,7 @@ export function selectedImageStateOf(surface: PaginatedSurface | null): Selected
     resourceStatus: record.resource.kind,
     intrinsic: intrinsicOf(record),
     ...capabilityFlags(projection, chart, locks),
+    ...member.memberImageFields(surface!, record.drawingNodeId),
     shapeFormat: chart === 'none' ? selectedShapeFormat(surface!, record.drawingNodeId) : null,
   });
 }
@@ -608,7 +600,8 @@ export function gateImageCommand(
   if (!surface) {
     return { ok: false, code: 'notFound', reason: 'no document is loaded' };
   }
-  const protectedWrite = commandProtectionRefusal(command, surface);
+  const protectedWrite =
+    commandProtectionRefusal(command, surface) ?? member.groupMemberRefusal(command, surface);
   if (protectedWrite) return protectedWrite;
   if (command.type === 'insertImage') {
     if (command.at) {
@@ -1277,7 +1270,7 @@ export function selectedDrawingOverlayTargetOf(
     position: projection ? positionInputOf(projection) : null,
     anchorFrameOrigin,
     transform: record.transform,
-    ...gated,
+    ...member.memberOverlayFields(surface, record.drawingNodeId, frame, gated),
   });
 }
 

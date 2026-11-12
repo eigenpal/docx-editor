@@ -158,6 +158,8 @@ function planCommand(command: ShapeFormatCommand, surface: PaginatedSurface | nu
       outline: outlineOf(command, themeHex),
     };
   }
+  // A shape selected inside the group takes the edit alone.
+  if (selected.memberId) op = { ...op, shapeNodeId: selected.memberId };
   const part = partOfNodeId(surface.session, selected.id) ?? surface.session.part();
   const rejection = validateShapeFormat(part, op);
   return rejection ? refusalOf(rejection) : op;

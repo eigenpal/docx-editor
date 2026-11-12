@@ -2,6 +2,7 @@ import type { Editor } from '../contracts/editor.ts';
 import type { DocxEditorInstance } from './docx-editor.ts';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
 import { hostDocumentOf, hostWindowOf, isElementNode } from './host-realm.ts';
+import { armGroupMemberPress } from './group-member-selection.ts';
 
 /**
  * Where a press on the selected drawing's frame belongs: to the frame itself (a move), to the
@@ -36,6 +37,9 @@ export function passDrawingFramePress(editor: Editor, event: PointerEvent): Draw
   const surface = (editor as DocxEditorInstance).surface;
   const target = surface ? drawingFramePressTarget(editor, event) : 'frame';
   const frame = isElementNode(event.target) ? event.target : null;
+  // A press on a selected group's frame that comes up without a drag selects the shape
+  // under it, as a second press on a group does; a drag still moves the group.
+  if (surface && target === 'frame' && frame) armGroupMemberPress(surface, event, frame);
   if (!surface || target === 'frame' || !frame) return 'frame';
   if (event.pointerType === 'touch') {
     letTapThrough(frame);

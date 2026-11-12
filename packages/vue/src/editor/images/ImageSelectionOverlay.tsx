@@ -12,6 +12,7 @@ import {
 } from 'vue';
 import {
   beginInlineImageDrag,
+  leaveGroupMember,
   drawingFramePressTarget,
   type DrawingFramePress,
   passDrawingFramePress,
@@ -378,6 +379,12 @@ export const ImageSelectionOverlay = defineComponent({
         return;
       }
       if (previewRef.value) return;
+      // Escape on a shape inside a group selects the group again.
+      if (event.key === 'Escape' && leaveGroupMember(editor)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       // Focus sits on the overlay, not the text surface, so history keys stop here unless
       // the overlay forwards them. Undo usually reverts the resize or move just made.
       const history = historyShortcutOf(event);

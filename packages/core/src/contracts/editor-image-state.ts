@@ -63,9 +63,16 @@ export interface SelectedImageState {
   readonly canCrop: boolean;
   /**
    * The fill and outline of a shape, text box, line or group, which `setShapeFill` and
-   * `setShapeOutline` change. Null for a picture, a chart or a diagram.
+   * `setShapeOutline` change. Null for a picture, a chart or a diagram. With `memberId`, the
+   * fill and outline of that shape alone.
    */
   readonly shapeFormat: ShapeFormatState | null;
+  /**
+   * The node id of the shape selected inside the group `id`, as a second press on the group
+   * selects it. Shape commands then change that shape alone; image commands that move,
+   * resize, or delete refuse until Escape selects the group again. Absent for a group.
+   */
+  readonly memberId?: string;
 }
 
 /**

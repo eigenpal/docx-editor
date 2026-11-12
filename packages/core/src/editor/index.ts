@@ -881,3 +881,4 @@ export {
   type DrawingFramePress,
   passDrawingFramePress,
 } from './drawing-overlay-press.ts';
+export { leaveGroupMember } from './group-member-selection.ts';
