@@ -16,7 +16,11 @@ import type { ExecErrorCode } from '../contracts/types.ts';
 import type { TreeBindingRejection } from '@docx-editor.dev/core/binding';
 import { reviewDiagnosticCode, storeEditDiagnosticCode } from '@docx-editor.dev/core/automation';
 import { BINDING_CAUSES } from '../automation/diagnostic-context.ts';
-import { FORMS_WRITE_REASON, TRACKED_CHANGES_AUTHOR_REASON } from './command-protection.ts';
+import {
+  FORMS_WRITE_REASON,
+  TRACKED_CHANGES_AUTHOR_REASON,
+  TRACKED_CHANGES_DECISION_REASON,
+} from './command-protection.ts';
 import {
   COMMENTS_PROTECTION_REASON,
   FORMS_PROTECTION_SUGGESTING_REASON,
@@ -85,6 +89,7 @@ const EDIT_SENTENCES: ReadonlyMap<string, EditDiagnosticCode> = new Map([
   [FORMS_PROTECTION_SUGGESTING_REASON, 'edit.protected-content'],
   [SUGGESTING_AUTHOR_REASON, 'edit.suggesting-needs-author'],
   [TRACKED_CHANGES_AUTHOR_REASON, 'edit.suggesting-needs-author'],
+  [TRACKED_CHANGES_DECISION_REASON, 'edit.protected-content'],
   [PRO_REVIEW_REASON, 'edit.review-module-required'],
   [PRO_COLLABORATION_REASON, 'edit.unsupported-content'],
   [COLLABORATION_FIELD_RESULTS_REFUSAL, 'edit.unsupported-story'],

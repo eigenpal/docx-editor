@@ -45,6 +45,7 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import type { EditorDiagnostics } from './editor-diagnostics.ts';
 import { PRO_REVIEW_REASON, READ_ONLY_REVISION_REASON } from './opening-editing-mode.ts';
 import { reviewWriteRefusal } from './review-write-refusal.ts';
+import { documentReviewDecisionOf } from './review-document-decisions.ts';
 import { BOUND_CHANGES_REFUSAL, LOCKED_CHANGES_REFUSAL } from './review-guard-refusals.ts';
 import { guardKeepsRevisions, holdsGuardedControls } from '../store/store/revision-content-lock.ts';
 import { withReviewItemFilter } from '../binding/review-item-filter.ts';
@@ -484,7 +485,8 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     if (moved) deps.activate(moved.key);
     return { ok: true, changed: true, revisionAuthors: result };
   };
-  const can = (command: EditorCommand): CanResult | null => {
+  const can = (requested: EditorCommand): CanResult | null => {
+    const command = documentReviewDecisionOf(requested) ?? requested;
     if (command.type === 'setReviewChangesAuthor') return planSetAuthor(command).gate;
     if (
       command.type !== 'navigateReviewChange' &&
@@ -606,7 +608,8 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       );
     return { ok: true, changed: true };
   };
-  const exec = (command: EditorCommand): ExecResult | null => {
+  const exec = (requested: EditorCommand): ExecResult | null => {
+    const command = documentReviewDecisionOf(requested) ?? requested;
     if (command.type === 'setReviewChangesAuthor') return setAuthor(command);
     if (
       !['navigateReviewChange', 'resolveAllReviewChanges', 'setReviewDisplayMode'].includes(

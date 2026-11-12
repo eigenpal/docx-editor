@@ -122,3 +122,25 @@ export function readDocumentProtection(
     return password ? { edit, enforced: false, password } : NO_DOCUMENT_PROTECTION;
   return { edit, enforced: enforcementOf(element), password };
 }
+
+/** Why tracked-changes protection refuses changing the author of a tracked change. */
+export const TRACKED_CHANGES_AUTHOR_REASON =
+  'this document is protected for tracked changes; their authors cannot change';
+/** Why tracked-changes protection refuses accepting or rejecting a tracked change. */
+export const TRACKED_CHANGES_DECISION_REASON =
+  'this document is protected for tracked changes; changes cannot be accepted or rejected';
+
+/**
+ * What enforced tracked-changes protection refuses on existing tracked changes, or null.
+ *
+ * The protection lets a reviewer make tracked edits and comments only, so every change stays
+ * pending and keeps the author who made it: a decision (`'decide'`) and a change of author
+ * (`'attribute'`) are both refused. The editor's commands and the editing API share this rule.
+ */
+export function trackedChangesProtectionRefusal(
+  protection: DocumentProtectionState,
+  operation: 'decide' | 'attribute'
+): string | null {
+  if (!protection.enforced || protection.edit !== 'trackedChanges') return null;
+  return operation === 'decide' ? TRACKED_CHANGES_DECISION_REASON : TRACKED_CHANGES_AUTHOR_REASON;
+}
