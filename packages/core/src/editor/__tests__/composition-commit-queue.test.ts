@@ -9,9 +9,10 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import type { PaginatedSurface } from '../paginated-surface.ts';
+import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+import { runWithHistoryGroup } from '../history-group-scope.ts';
 import { afterNextPaint } from '../surface-composition-commit.ts';
-import { mount as mountDetached, putCaret } from './paginated-surface-fixtures.ts';
+import { docx, mount as mountDetached, putCaret } from './paginated-surface-fixtures.ts';
 
 const paragraph = (text: string) => `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 
@@ -45,7 +46,7 @@ const pagesOf = (container: HTMLElement) => container.querySelector<HTMLElement>
  * One composition the way a browser drives it: each step replaces the composing string in the
  * text node the caret is in (or the selected text in it), then `input` fires.
  */
-function compose(pages: HTMLElement, steps: readonly string[], committed = steps.at(-1)!): void {
+function compose(pages: HTMLElement, steps: readonly string[], ends = true): void {
   pages.dispatchEvent(compositionEvent('compositionstart'));
   const selection = document.getSelection()!;
   const node = selection.focusNode as Text;
@@ -61,8 +62,23 @@ function compose(pages: HTMLElement, steps: readonly string[], committed = steps
       new InputEvent('input', { bubbles: true, inputType: 'insertCompositionText', data: step })
     );
   }
-  pages.dispatchEvent(compositionEvent('compositionend', committed));
+  if (ends) pages.dispatchEvent(compositionEvent('compositionend', steps.at(-1)!));
 }
+
+/** A click in the painted run that shows `text`, at `offset` in it. */
+function click(pages: HTMLElement, text: string, offset: number): void {
+  const run = [...pages.querySelectorAll<HTMLElement>('[data-start]')].find(
+    (candidate) => candidate.textContent === text
+  )!;
+  // The selection gesture alone; a pointer event would start the engine's own hit test.
+  pages.dispatchEvent(new Event('selectstart', { bubbles: true }));
+  document.getSelection()!.setBaseAndExtent(run.firstChild!, offset, run.firstChild!, offset);
+  document.dispatchEvent(new Event('selectionchange'));
+}
+
+const THREE_RUNS =
+  '<w:p><w:r><w:t xml:space="preserve">ab </w:t></w:r><w:r><w:rPr><w:b/></w:rPr>' +
+  '<w:t>cd</w:t></w:r><w:r><w:rPr><w:i/></w:rPr><w:t>ef</w:t></w:r></w:p>';
 
 function keystroke(container: HTMLElement, data: string): void {
   pagesOf(container).dispatchEvent(
@@ -229,5 +245,106 @@ describe('compositions that still commit at once', () => {
     compose(pagesOf(container), ['´', 'é']);
     await nextPaintTask();
     expect(surface.session.bodyText()).toBe('wordé');
+  });
+});
+
+describe('what lands the queue, and where', () => {
+  test('a click past a queued syllable lands at the clicked character', async () => {
+    const { surface, container } = mount(THREE_RUNS);
+    putCaret(surface, 3);
+    const pages = pagesOf(container);
+    compose(pages, ['ㅇ', '아']);
+    // The echo guard of the caret's own write clears on a microtask.
+    await Promise.resolve();
+    expect(surface.session.bodyText()).toBe('ab cdef');
+    click(pages, 'ef', 1);
+    expect(surface.session.bodyText()).toBe('ab 아cdef');
+    // 'ab 아cde|f'
+    expect(surface.state().selection.head.offset).toBe(7);
+  });
+
+  test('a click that ends a composition over a landed, unpainted syllable', async () => {
+    const { surface, container } = mount(THREE_RUNS);
+    putCaret(surface, 3);
+    const pages = pagesOf(container);
+    compose(pages, ['ㅇ', '아']);
+    compose(pages, ['ㄹ', '르'], false);
+    // A frame passes while the next syllable composes: the first lands, the page stays held.
+    await nextPaintTask();
+    expect(surface.session.bodyText()).toBe('ab 아cdef');
+    pages.dispatchEvent(compositionEvent('compositionend', '르'));
+    click(pages, 'ef', 1);
+    expect(surface.session.bodyText()).toBe('ab 아르cdef');
+    expect(surface.state().selection.head.offset).toBe(8);
+  });
+
+  test("the browser's caret echo after the composition leaves it queued", async () => {
+    const { surface, container } = mount(paragraph('ab cd'));
+    putCaret(surface, 3);
+    compose(pagesOf(container), ['ㅇ', '아']);
+    document.dispatchEvent(new Event('selectionchange'));
+    expect(surface.session.bodyText()).toBe('ab cd');
+    await nextPaintTask();
+    expect(surface.session.bodyText()).toBe('ab 아cd');
+    expect(surface.state().selection.head.offset).toBe(4);
+  });
+
+  test('a grouped command after a queued syllable keeps the syllable out of its group', () => {
+    const { surface, container } = mount(paragraph('word '));
+    putCaret(surface, 5);
+    compose(pagesOf(container), ['ㅇ', '아']);
+    const gesture = Symbol('gesture');
+    runWithHistoryGroup(surface, gesture, () => surface.type('!'));
+    runWithHistoryGroup(surface, gesture, () => surface.type('?'));
+    expect(surface.session.bodyText()).toBe('word 아!?');
+    surface.undo();
+    expect(surface.session.bodyText()).toBe('word 아');
+    surface.undo();
+    expect(surface.session.bodyText()).toBe('word ');
+  });
+
+  test('a host that reads the layout on each change cannot put typing between syllables', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    let surface: PaginatedSurface | null = null;
+    const opened = mountPaginatedSurface(container, docx(paragraph('우리나라 ')), {
+      scale: 1,
+      onChange: () => void surface?.layout(),
+    });
+    if (!opened.ok) throw new Error(opened.reason);
+    surface = opened.surface;
+    mounted.push({ surface, container });
+    putCaret(surface, 5);
+    const pages = pagesOf(container);
+    compose(pages, ['ㅇ', '아']);
+    compose(pages, ['ㄹ', '르', '름']);
+    // Another writer edits the paragraph first, so each syllable lands with its own publish.
+    const id = surface.session.paragraphIds()[0]!;
+    surface.session.applyTreeOps([{ op: 'insertText', paragraphId: id, offset: 0, text: 'A' }]);
+    keystroke(container, ' ');
+    surface.flushPendingInput();
+    expect(surface.session.bodyText()).toBe('A우리나라 아름 ');
+  });
+
+  test('save writes queued text', () => {
+    const { surface, container } = mount(paragraph('우리나라 '));
+    putCaret(surface, 5);
+    compose(pagesOf(container), ['ㅇ', '아']);
+    const reopened = mount(paragraph(''));
+    const bytes = surface.save();
+    const again = mountPaginatedSurface(reopened.container, bytes, { scale: 1 });
+    if (!again.ok) throw new Error(again.reason);
+    mounted.push({ surface: again.surface, container: reopened.container });
+    expect(again.surface.session.bodyText()).toBe('우리나라 아');
+  });
+
+  test('destroy with text queued leaves no task behind', async () => {
+    const { surface, container } = mount(paragraph('우리나라 '));
+    putCaret(surface, 5);
+    compose(pagesOf(container), ['ㅇ', '아']);
+    mounted.splice(0);
+    surface.destroy();
+    container.remove();
+    await nextPaintTask();
   });
 });

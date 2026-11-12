@@ -405,7 +405,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    */
   function adoptPendingDomSelection(): boolean {
     const domSelection = hostDocument().getSelection();
-    const next = semanticSelectionFromDom(pagesLayer, domSelection);
+    const next = composed.shown(semanticSelectionFromDom(pagesLayer, domSelection), domSelection);
     if (!next) return false;
     rememberSelectionPage(domSelection);
     if (selectionsEqual(next, deps.selection())) return false;
@@ -442,7 +442,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   /** Mirror the native selection into the model. Ignores selections outside painted text. */
   const adoptDomSelection = (): void => {
     const domSelection = hostDocument().getSelection();
-    const next = semanticSelectionFromDom(pagesLayer, domSelection);
+    const next = composed.shown(semanticSelectionFromDom(pagesLayer, domSelection), domSelection);
     if (!next) {
       // NOT MAPPING IS NOT NOTHING HAPPENING.
       //
@@ -871,6 +871,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
         if (reported === null || !selectionsEqual(reported, deps.selection())) mirrorToDom();
         return;
       }
+      // The browser's caret after unpainted composed text: the next paint mirrors it anyway.
+      if (composed.unpainted() && !userSelectionGesture) return;
       adoptDomSelection();
     },
 

@@ -191,7 +191,7 @@ import { withSavedFieldResults } from './surface-saved-field-results.ts';
 import { bindSurfaceViewport, type SurfaceViewportBinding } from './surface-viewport-binding.ts';
 import { createSurfaceHostListeners } from './surface-host-listeners.ts';
 import { hostTimers, hostWindowOf } from './host-realm.ts';
-import { afterNextPaint } from './surface-composition-commit.ts';
+import { afterNextPaint, landingGuard } from './surface-composition-commit.ts';
 import { createSurfaceHosting } from './surface-host-move.ts';
 import { reviewItemsAtSelection } from '../store/store/review-items.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
@@ -1620,14 +1620,16 @@ export function mountPaginatedSurface(
   let landComposedText = (): void => {};
   let typeFlushTimer: number | null = null;
   let flushingTypeBuffer = false;
+  /** A land publishes, and a host listener's flush must not land typing between syllables. */
+  const landing = landingGuard();
 
   function flushTypeBuffer(): void {
     // Reentrancy first, timer second: a reentrant call (host code inside the
     // flush's own onChange enqueuing more text) must not clear the fresh timer
     // that new text just armed, or it would sit unflushed until an unrelated
     // flush point.
-    if (flushingTypeBuffer) return;
-    landComposedText();
+    if (flushingTypeBuffer || landing.active()) return;
+    landing.wrap(landComposedText)();
     if (typeFlushTimer !== null) {
       timers.clearTimeout(typeFlushTimer);
       typeFlushTimer = null;
@@ -3448,10 +3450,12 @@ export function mountPaginatedSurface(
     },
     commit: (run) => commit(run),
     commitComposed: (run, next, publish) =>
-      commit(run, () => (textFormInteraction ? textFormInteraction.beforeSelect(next) : next), {
-        composed: { publish },
-      }),
-    later: (task) => afterNextPaint(timers, fieldScope.wrap(task)),
+      runWithHistoryGroup(surface, undefined, () =>
+        commit(run, () => (textFormInteraction ? textFormInteraction.beforeSelect(next) : next), {
+          composed: { publish },
+        })
+      ),
+    later: (task) => afterNextPaint(timers, fieldScope.wrap(landing.wrap(task))),
     modelTextOf: (id) => paragraphTextOf(session.partFor(storyScope()) ?? session.part(), id),
     insertOwner: () => insertOwnerOf(contentControlAtCaret()),
     compositionUsesTyping: () => typingSelectionPlan().outsidePromptId !== undefined,

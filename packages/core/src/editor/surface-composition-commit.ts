@@ -24,7 +24,8 @@
 // or refuses, is caught when it lands, and the caller repaints from the model.
 
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { SemanticSelection } from '@docx-editor.dev/core/layout';
+import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core/layout';
+import { paintedSpanRange } from './dom-selection.ts';
 import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { HostTimers } from './host-realm.ts';
 import { rebaseOffset } from './surface-composition-rebase.ts';
@@ -53,6 +54,23 @@ export function afterNextPaint(
     timers.clearTimeout(fallback);
     timers.setTimeout(task, 0);
   });
+}
+
+/** Runs one land at a time: `wrap`ped tasks do nothing while one runs. */
+export function landingGuard(): { active(): boolean; wrap(task: () => void): () => void } {
+  let active = false;
+  return {
+    active: () => active,
+    wrap: (task) => () => {
+      if (active) return;
+      active = true;
+      try {
+        task();
+      } finally {
+        active = false;
+      }
+    },
+  };
 }
 
 /** Text the page shows that its paint did not produce: queued, or committed but unpainted. */
@@ -144,6 +162,37 @@ export function insertionAtCaret(
   return modelText.slice(0, caret) + text + modelText.slice(caret) === painted ? text : null;
 }
 
+/**
+ * A position read from the page, in the text the page shows.
+ *
+ * Painted spans publish offsets from the painted layout, which lacks the unpainted text. A
+ * point in the node the input method wrote into is read from that node; a point past the
+ * insertion in any other span shifts by it.
+ */
+export function shownPosition(
+  position: SemanticPosition,
+  node: Node | null,
+  nodeOffset: number,
+  unpainted: UnpaintedComposition | null,
+  read: string | undefined
+): SemanticPosition {
+  if (!unpainted || read === undefined || position.paragraphId !== unpainted.paragraphId) {
+    return position;
+  }
+  const { text, caret } = unpainted;
+  const grown = text.length - read.length;
+  const at = caret - grown;
+  if (grown <= 0 || at < 0 || text.slice(0, at) + text.slice(caret) !== read) return position;
+  const span = node ? paintedSpanRange(node) : null;
+  if (!node || !span || span.paragraphId !== position.paragraphId) return position;
+  const length = span.end - span.start;
+  if (span.start <= at && at <= span.end && node.textContent?.length === length + grown) {
+    return { ...position, offset: span.start + Math.max(0, Math.min(nodeOffset, length + grown)) };
+  }
+  const past = position.offset > at || (position.offset === at && span.start >= at);
+  return past ? { ...position, offset: position.offset + grown } : position;
+}
+
 /** One composed insertion the page shows and the model does not hold yet. */
 interface QueuedInsertion {
   readonly paragraphId: string;
@@ -177,7 +226,8 @@ export interface ComposedLaneDeps {
   hasPendingInput?(): boolean;
   /**
    * Commit with the caret landed after it. Without `publish`, the layout pass and the paint
-   * are left to the next commit's publish, so a queue of several lays out once.
+   * are left to the next commit's publish, so a queue of several lays out once. Binds no
+   * history group: a land is typing, never part of a command's group (`history-group-scope`).
    */
   commitComposed?(
     run: () => TreeApplyResult,
@@ -188,6 +238,8 @@ export interface ComposedLaneDeps {
   modelTextOf?(paragraphId: string): string | null;
   /** Run `task` on a later task: after the next paint (`afterNextPaint`). */
   later?(task: () => void): void;
+  /** The painted layout's text of a paragraph (`ComposingBaseDeps`). */
+  paintedText?(paragraphId: string): { readonly text: string; readonly revision: number };
 }
 
 export interface ComposedLane {
@@ -209,6 +261,8 @@ export interface ComposedLane {
   unpainted(): UnpaintedComposition | null;
   /** The page was repainted: nothing it shows is unpainted any more. */
   painted(): void;
+  /** A selection read from the page, in the text it shows (`shownPosition`). */
+  shown(selection: SemanticSelection | null, dom: Selection | null): SemanticSelection | null;
 }
 
 /** A composition over queued text, once the queue has landed: `clean` keeps it described. */
@@ -326,6 +380,14 @@ export function createComposedLane(deps: ComposedLaneDeps, land: () => void): Co
     unpainted: () => shown,
     painted() {
       if (queued.length === 0) shown = null;
+    },
+    shown(selection, dom) {
+      if (!selection || !dom || !shown) return selection;
+      const read = deps.paintedText?.(shown.paragraphId).text;
+      return {
+        anchor: shownPosition(selection.anchor, dom.anchorNode, dom.anchorOffset, shown, read),
+        head: shownPosition(selection.head, dom.focusNode, dom.focusOffset, shown, read),
+      };
     },
   };
 }
