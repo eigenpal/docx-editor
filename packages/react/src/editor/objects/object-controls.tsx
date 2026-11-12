@@ -25,6 +25,7 @@ import {
 } from '@docx-editor.dev/core/editor';
 import type { EditorExecOptions, ExecResult } from '@docx-editor.dev/core/contracts/editor';
 import { localizeDisabledReason, type TranslationKey } from '@docx-editor.dev/i18n';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
@@ -70,11 +71,11 @@ export interface ObjectControlProps {
  */
 export interface ObjectButtonPartProps extends ObjectControlProps {
   /** Replaces the slot's icon in the compact variant. */
-  icon?: ReactNode;
+  icon?: DocxEditorChildren;
   /** Renders the one child element as the button, with the part's props merged into it. */
   asChild?: boolean;
   /** With `asChild`, the element that becomes the button. */
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /** What `useObjectControl` returns for every slot. @public */

@@ -132,12 +132,15 @@ import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
 import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { ObjectSlotValueMap } from '@docx-editor.dev/core/editor';
+import { ObjectToggleSlotId } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
 import { PANE_SECTIONS } from '@docx-editor.dev/core/editor';
 import { PaneRequest } from '@docx-editor.dev/core/editor';
 import { PaneRequestListenerOptions } from '@docx-editor.dev/core/editor';
 import { PaneSection } from '@docx-editor.dev/core/editor';
+import { PaneSectionId } from '@docx-editor.dev/core/editor';
+import { PaneSectionIds } from '@docx-editor.dev/core/editor';
 import { paneSections } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogFields } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogMixed } from '@docx-editor.dev/core/editor';
@@ -237,28 +240,13 @@ export interface BookmarkDialogFields {
 
 export { CHART_TYPE_CHOICES }
 
-// @public
-export function ChartAxes(props: ChartPartProps): ReactElement | null;
-
-// @public
-export const ChartCategoryAxisTitle: (props: ChartPartProps) => ReactElement | null;
-
 export { ChartColor }
 
 export { ChartData }
 
-// @public
-export const ChartDataLabels: (props: ChartPartProps) => ReactElement | null;
-
-// @public
-export function ChartDataPart(props: ObjectControlProps): ReactElement | null;
-
 export { ChartFormat }
 
 export { ChartFormatChange }
-
-// @public
-export function ChartGridlines(props: ChartPartProps): ReactElement | null;
 
 // @public
 export function ChartInsert(input: ChartInsertProps): react.JSX.Element | null;
@@ -289,31 +277,22 @@ export interface ChartInsertProps {
     hidden?: boolean;
 }
 
-// @public
-export function ChartLegend(props: ChartPartProps): ReactElement | null;
-
 export { ChartPaneChange }
 
 // @public
 export type ChartPartProps = ObjectControlProps;
 
 // @public
-export function ChartSeriesColors(props: ChartPartProps & {
+export interface ChartSeriesColorsProps extends ChartPartProps {
     index?: number;
-}): ReactElement | null;
+}
 
 // @public
-export function ChartTitle(props: ChartPartProps): ReactElement | null;
+export type ChartTogglePartProps = ObjectButtonPartProps;
 
 export { ChartType }
 
 export { chartTypeLabelKey }
-
-// @public
-export function ChartTypePart(props: ChartPartProps): ReactElement | null;
-
-// @public
-export const ChartValueAxisTitle: (props: ChartPartProps) => ReactElement | null;
 
 export { CHROME_GROUPS }
 
@@ -350,20 +329,34 @@ export { ColorPick }
 
 // @public
 export const ColorPicker: {
-    Content: typeof ColorPickerContent;
-    Grid: typeof ColorPickerGrid;
-    HexInput: typeof ColorPickerHexInput;
-    NoColor: typeof ColorPickerNoColor;
-    Root: typeof ColorPickerRoot;
-    Swatch: typeof ColorPickerSwatch;
-    Trigger: typeof ColorPickerTrigger;
+    readonly Content: ForwardRefExoticComponent<ColorPickerContentProps & RefAttributes<HTMLDivElement>>;
+    readonly Grid: () => ReactElement;
+    readonly HexInput: (props: ColorPickerHexInputProps) => ReactElement;
+    readonly NoColor: (props: ColorPickerNoColorProps) => ReactElement | null;
+    readonly Root: (props: ColorPickerRootProps) => ReactElement;
+    readonly Swatch: (props: ColorPickerSwatchProps) => ReactElement;
+    readonly Trigger: ForwardRefExoticComponent<ColorPickerTriggerProps & RefAttributes<HTMLButtonElement>>;
 };
+
+// @public
+export type ColorPickerCompound = typeof ColorPicker;
 
 // @public
 export interface ColorPickerContentProps extends HTMLAttributes<HTMLDivElement> {
     className?: string;
+    container?: Element | null;
     hexInput?: boolean;
     inline?: boolean;
+}
+
+// @public
+export interface ColorPickerHexInputProps {
+    className?: string;
+}
+
+// @public
+export interface ColorPickerNoColorProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+    className?: string;
 }
 
 // @public
@@ -815,12 +808,42 @@ export interface DocxEditorBookmarkDialogProps extends DialogCustomizationProps 
 }
 
 // @public
+export const DocxEditorChartAxes: ObjectPartComponent<ObjectButtonPartProps, "chart.axes">;
+
+// @public
+export const DocxEditorChartCategoryAxisTitle: ObjectPartComponent<ObjectControlProps, "chart.categoryAxisTitle">;
+
+// @public
+export const DocxEditorChartData: ObjectPartComponent<ObjectControlProps, "chart.data">;
+
+// @public
+export const DocxEditorChartDataLabels: ObjectPartComponent<ObjectButtonPartProps, "chart.dataLabels">;
+
+// @public
+export const DocxEditorChartGridlines: ObjectPartComponent<ObjectButtonPartProps, "chart.gridlines">;
+
+// @public
+export const DocxEditorChartLegend: ObjectPartComponent<ObjectControlProps, "chart.legend">;
+
+// @public
 export function DocxEditorChartPane(input: DocxEditorChartPaneProps): ReactElement;
 
 // @public
 export interface DocxEditorChartPaneProps {
     className?: string;
 }
+
+// @public
+export const DocxEditorChartSeriesColors: ObjectPartComponent<ChartSeriesColorsProps, "chart.seriesColor">;
+
+// @public
+export const DocxEditorChartTitle: ObjectPartComponent<ObjectControlProps, "chart.title">;
+
+// @public
+export const DocxEditorChartType: ObjectPartComponent<ObjectControlProps, "chart.type">;
+
+// @public
+export const DocxEditorChartValueAxisTitle: ObjectPartComponent<ObjectControlProps, "chart.valueAxisTitle">;
 
 // @public
 export type DocxEditorChildren = ReactNode;
@@ -1281,18 +1304,18 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     // (undocumented)
     readonly AuthorStyle: typeof DocxEditorAuthorStyle;
     readonly BookmarkDialog: typeof DocxEditorBookmarkDialog;
-    readonly ChartAxes: typeof ChartAxes;
-    readonly ChartCategoryAxisTitle: typeof ChartCategoryAxisTitle;
-    readonly ChartData: typeof ChartDataPart;
-    readonly ChartDataLabels: typeof ChartDataLabels;
-    readonly ChartGridlines: typeof ChartGridlines;
+    readonly ChartAxes: typeof DocxEditorChartAxes;
+    readonly ChartCategoryAxisTitle: typeof DocxEditorChartCategoryAxisTitle;
+    readonly ChartData: typeof DocxEditorChartData;
+    readonly ChartDataLabels: typeof DocxEditorChartDataLabels;
+    readonly ChartGridlines: typeof DocxEditorChartGridlines;
     readonly ChartInsert: typeof ChartInsert;
-    readonly ChartLegend: typeof ChartLegend;
+    readonly ChartLegend: typeof DocxEditorChartLegend;
     readonly ChartPane: typeof DocxEditorChartPane;
-    readonly ChartSeriesColors: typeof ChartSeriesColors;
-    readonly ChartTitle: typeof ChartTitle;
-    readonly ChartType: typeof ChartTypePart;
-    readonly ChartValueAxisTitle: typeof ChartValueAxisTitle;
+    readonly ChartSeriesColors: typeof DocxEditorChartSeriesColors;
+    readonly ChartTitle: typeof DocxEditorChartTitle;
+    readonly ChartType: typeof DocxEditorChartType;
+    readonly ChartValueAxisTitle: typeof DocxEditorChartValueAxisTitle;
     // (undocumented)
     readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
     readonly ColorPicker: typeof ColorPicker;
@@ -1341,11 +1364,11 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
-    readonly ShapeFill: typeof ShapeFill;
-    readonly ShapeFillTransparency: typeof ShapeFillTransparency;
-    readonly ShapeOutlineColor: typeof ShapeOutlineColor;
-    readonly ShapeOutlineDash: typeof ShapeOutlineDashPart;
-    readonly ShapeOutlineWidth: typeof ShapeOutlineWidth;
+    readonly ShapeFill: typeof DocxEditorShapeFill;
+    readonly ShapeFillTransparency: typeof DocxEditorShapeFillTransparency;
+    readonly ShapeOutlineColor: typeof DocxEditorShapeOutlineColor;
+    readonly ShapeOutlineDash: typeof DocxEditorShapeOutlineDash;
+    readonly ShapeOutlineWidth: typeof DocxEditorShapeOutlineWidth;
     readonly ShapePane: typeof DocxEditorShapePane;
     readonly SidePanel: typeof DocxEditorSidePanel;
     readonly SplitCellDialog: typeof DocxEditorSplitCellDialog;
@@ -1570,13 +1593,13 @@ export interface DocxEditorPageSetupDialogProps extends DialogCustomizationProps
 }
 
 // @public
-export function DocxEditorPaneSections(input: DocxEditorPaneSectionsProps): ReactElement;
+export function DocxEditorPaneSections<P extends EditorPaneId>(input: DocxEditorPaneSectionsProps<P>): ReactElement;
 
 // @public
-export interface DocxEditorPaneSectionsProps {
-    filter?: (section: PaneSection) => boolean;
-    pane: EditorPaneId;
-    sections?: readonly string[];
+export interface DocxEditorPaneSectionsProps<P extends EditorPaneId = EditorPaneId> {
+    filter?: (section: PaneSection<P>) => boolean;
+    pane: P;
+    sections?: readonly PaneSectionId<P>[];
 }
 
 // @public
@@ -1840,6 +1863,21 @@ export interface DocxEditorRulerProps {
     style?: CSSProperties;
     unit?: 'inch' | 'cm';
 }
+
+// @public
+export const DocxEditorShapeFill: ObjectPartComponent<ObjectButtonPartProps, "shape.fill">;
+
+// @public
+export const DocxEditorShapeFillTransparency: ObjectPartComponent<ObjectControlProps, "shape.fillTransparency">;
+
+// @public
+export const DocxEditorShapeOutlineColor: ObjectPartComponent<ObjectButtonPartProps, "shape.outlineColor">;
+
+// @public
+export const DocxEditorShapeOutlineDash: ObjectPartComponent<ObjectControlProps, "shape.outlineDash">;
+
+// @public
+export const DocxEditorShapeOutlineWidth: ObjectPartComponent<ObjectControlProps, "shape.outlineWidth">;
 
 // @public
 export function DocxEditorShapePane(input: DocxEditorShapePaneProps): ReactElement;
@@ -2796,6 +2834,13 @@ export function notificationYieldsToTask(): boolean;
 export const OBJECT_SLOT_PARTS: Readonly<Record<ObjectSlotId, ComponentType<ObjectControlProps>>>;
 
 // @public
+export interface ObjectButtonPartProps extends ObjectControlProps {
+    asChild?: boolean;
+    children?: DocxEditorChildren;
+    icon?: DocxEditorChildren;
+}
+
+// @public
 export interface ObjectControlProps {
     className?: string;
     hidden?: boolean;
@@ -2804,12 +2849,39 @@ export interface ObjectControlProps {
 }
 
 // @public
+export interface ObjectControlState<K extends ObjectSlotId> {
+    readonly disabledReason: string | null;
+    readonly execute: (value: ObjectSlotValueMap[K], options?: EditorExecOptions) => ExecResult;
+    readonly isActive: boolean;
+    // (undocumented)
+    readonly isEnabled: boolean;
+    readonly label: string;
+    readonly options: readonly ObjectSlotValueMap[K][];
+    // (undocumented)
+    readonly slotId: K;
+    readonly value: ObjectSlotValueMap[K] | null;
+}
+
+// @public
 export type ObjectControlVariant = 'field' | 'compact';
+
+// @public
+export type ObjectPartComponent<P, S extends ObjectSlotId> = ((props: P) => ReactElement | null) & {
+    readonly docxSlot: S;
+};
 
 // @public
 export type ObjectSlotId = keyof ObjectSlotValueMap;
 
 export { ObjectSlotValueMap }
+
+// @public
+export interface ObjectToggleControl {
+    // (undocumented)
+    readonly toggle: (options?: EditorExecOptions) => ExecResult;
+}
+
+export { ObjectToggleSlotId }
 
 // @public (undocumented)
 export const OUTLINE_BUTTON_LEFT_OFFSET = 12;
@@ -2970,6 +3042,10 @@ export interface PaginatedDocxEditorShellProps {
 export { PANE_SECTIONS }
 
 export { PaneSection }
+
+export { PaneSectionId }
+
+export { PaneSectionIds }
 
 export { paneSections }
 
@@ -3204,27 +3280,15 @@ export { SHAPE_OUTLINE_DASHES }
 export { SHAPE_OUTLINE_WIDTHS }
 
 // @public
-export function ShapeFill(props: ShapePartProps): ReactElement | null;
+export type ShapeColorPartProps = ObjectButtonPartProps;
 
 export { ShapeFillState }
 
-// @public
-export function ShapeFillTransparency(props: ShapePartProps): ReactElement | null;
-
 export { ShapeFormatState }
-
-// @public
-export function ShapeOutlineColor(props: ShapePartProps): ReactElement | null;
 
 export { ShapeOutlineDash }
 
-// @public
-export function ShapeOutlineDashPart(props: ShapePartProps): ReactElement | null;
-
 export { ShapeOutlineState }
-
-// @public
-export function ShapeOutlineWidth(props: ShapePartProps): ReactElement | null;
 
 export { ShapePaneChange }
 
@@ -3971,19 +4035,7 @@ export function useNoteScopeState(): Extract<ViewScope, {
 export function useObjectControl<K extends ObjectSlotId>(slotId: K): UseObjectControlReturn<K>;
 
 // @public
-export interface UseObjectControlReturn<K extends ObjectSlotId> {
-    readonly apply: (value: ObjectSlotValueMap[K]) => string | null;
-    readonly disabledReason: string | null;
-    readonly execute: (value: ObjectSlotValueMap[K]) => ExecResult;
-    readonly isActive: boolean;
-    // (undocumented)
-    readonly isEnabled: boolean;
-    readonly label: string;
-    // (undocumented)
-    readonly slotId: K;
-    readonly toggle: () => ExecResult;
-    readonly value: string | undefined;
-}
+export type UseObjectControlReturn<K extends ObjectSlotId> = ObjectControlState<K> & (K extends ObjectToggleSlotId ? ObjectToggleControl : unknown);
 
 // @public
 export function useOpenFailure(options?: UseOpenFailureOptions): UseOpenFailureReturn;

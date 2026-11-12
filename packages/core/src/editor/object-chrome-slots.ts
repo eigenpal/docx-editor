@@ -85,11 +85,11 @@ const SHAPE_SLOTS: ReadonlySet<string> = new Set<ShapeChromeSlotId>([
 ]);
 
 /** The chart slots that toggle an element: a bare run turns it on or off. */
-const CHART_TOGGLES = {
+const CHART_TOGGLES: Record<ObjectToggleSlotId, 'dataLabels' | 'axes' | 'gridlines'> = {
   'chart.dataLabels': 'dataLabels',
   'chart.axes': 'axes',
   'chart.gridlines': 'gridlines',
-} as const;
+};
 
 const CHART_SLOTS: ReadonlySet<string> = new Set<ChartChromeSlotId>([
   'chart.type',
@@ -124,7 +124,7 @@ export const isObjectChromeSlot = (id: string): id is ShapeChromeSlotId | ChartC
 export const chartSlotIsToggle = (id: string): boolean => id in CHART_TOGGLES;
 
 /** The object slots that toggle: a run with no value turns the element on or off. @public */
-export type ObjectToggleSlotId = keyof typeof CHART_TOGGLES;
+export type ObjectToggleSlotId = 'chart.dataLabels' | 'chart.axes' | 'chart.gridlines';
 
 /** Text of a state value, or null for no value. */
 const textOf = (text: string | undefined): string | null =>

@@ -101,10 +101,10 @@ export interface ColorPickerContentProps {
   /** Renders the grid in place, inside a popup the host already owns. */
   inline?: boolean;
   /**
-   * Renders the grid in this element (or selector), through `Teleport`, for a host popover
-   * library that places it. The grid then takes no position of its own.
+   * Renders the grid in this element, through `Teleport`, for a host popover library that
+   * places it. The grid then takes no position of its own.
    */
-  container?: Element | string | null;
+  container?: Element | null;
   className?: string;
 }
 
@@ -396,9 +396,9 @@ const ColorPickerContent = defineComponent({
     hexInput: { type: Boolean, default: true },
     /** Renders the grid in place, inside a popup the host already owns. */
     inline: { type: Boolean, default: false },
-    /** Renders the grid in this element (or selector), through `Teleport`. */
+    /** Renders the grid in this element, through `Teleport`. */
     container: {
-      type: [Object, String] as PropType<Element | string | null>,
+      type: Object as PropType<Element | null>,
       default: undefined,
     },
     className: { type: String, default: undefined },

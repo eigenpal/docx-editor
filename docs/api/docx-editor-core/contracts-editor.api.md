@@ -3037,7 +3037,7 @@ export type ShapeOutlineDash = 'solid' | 'sysDot' | 'sysDash' | 'sysDashDot' | '
 // @public
 export interface ShapeOutlineState {
     readonly color: string | null;
-    readonly dash: ShapeOutlineDash | 'custom' | null;
+    readonly dash?: ShapeOutlineDash | 'custom' | null;
     readonly theme?: ShapeThemeColor;
     // (undocumented)
     readonly visible: boolean | null;

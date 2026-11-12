@@ -3291,6 +3291,12 @@ export function nextChartCategoryLabel(data: Pick<ChartData, 'kind' | 'categorie
 export const NO_MIXED_FIELDS: ParagraphDialogMixed;
 
 // @public
+export function objectSlotOptions<K extends keyof ObjectSlotValueMap>(id: K): readonly ObjectSlotValueMap[K][];
+
+// @public
+export function objectSlotValue<K extends keyof ObjectSlotValueMap>(id: K, text: string | undefined): ObjectSlotValueMap[K] | null;
+
+// @public
 export interface ObjectSlotValueMap {
     // (undocumented)
     'chart.axes': boolean;
@@ -3318,6 +3324,9 @@ export interface ObjectSlotValueMap {
     'shape.outlineDash': ShapeOutlineDash;
     'shape.outlineWidth': number;
 }
+
+// @public
+export type ObjectToggleSlotId = 'chart.dataLabels' | 'chart.axes' | 'chart.gridlines';
 
 // @public
 export function observeContentControlPopup(panel: HTMLElement, anchor: HTMLElement): () => void;
@@ -3364,6 +3373,11 @@ export type OpenPaginatedResult = {
 
 // @public
 export function openShapePane(editor: Editor, drawingNodeId?: string): boolean;
+
+// @internal
+export function orderToolbarOverflowSections<T extends {
+    readonly id: string;
+}>(sections: readonly T[]): T[];
 
 // @internal
 export interface OutsidePressOptions {
@@ -3753,7 +3767,9 @@ export interface PaginatedSurfaceState {
 }
 
 // @public
-export const PANE_SECTIONS: Readonly<Record<EditorPaneId, readonly PaneSection[]>>;
+export const PANE_SECTIONS: {
+    readonly [P in EditorPaneId]: readonly PaneSection<P>[];
+};
 
 // @public
 export function paneAvailable(editor: Editor | null, pane: EditorPaneId): boolean;
@@ -3777,15 +3793,26 @@ export interface PaneRequestOptions {
 }
 
 // @public
-export interface PaneSection {
-    readonly id: string;
+export interface PaneSection<P extends EditorPaneId = EditorPaneId> {
+    readonly id: PaneSectionId<P>;
     readonly labelKey: string | null;
     // (undocumented)
     readonly slots: readonly ChromeSlotId[];
 }
 
 // @public
-export function paneSections(pane: EditorPaneId): readonly PaneSection[];
+export type PaneSectionId<P extends EditorPaneId = EditorPaneId> = PaneSectionIds[P];
+
+// @public
+export interface PaneSectionIds {
+    // (undocumented)
+    readonly chart: 'type' | 'elements' | 'colors' | 'data';
+    // (undocumented)
+    readonly shape: 'fill' | 'outline';
+}
+
+// @public
+export function paneSections<P extends EditorPaneId>(pane: P): readonly PaneSection<P>[];
 
 // @public
 export function paneSlots(pane: EditorPaneId): readonly ChromeSlotId[];
@@ -4893,7 +4920,7 @@ export const shapeOutlinePick: (outline: ShapeOutlineState, themeHexes: readonly
 // @public
 export interface ShapeOutlineState {
     readonly color: string | null;
-    readonly dash: ShapeOutlineDash | 'custom' | null;
+    readonly dash?: ShapeOutlineDash | 'custom' | null;
     readonly theme?: ShapeThemeColor;
     // (undocumented)
     readonly visible: boolean | null;
@@ -5439,6 +5466,9 @@ export const TOOLBAR_ITEM_ATTRIBUTE = "data-toolbar-item";
 
 // @internal
 export const TOOLBAR_OVERFLOW_HYSTERESIS = 24;
+
+// @internal
+export const TOOLBAR_OVERFLOW_LEADING_GROUPS: ReadonlySet<string>;
 
 // @internal
 export const TOOLBAR_PANEL_EDGE_MARGIN = 8;

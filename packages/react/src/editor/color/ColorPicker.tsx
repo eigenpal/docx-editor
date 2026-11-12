@@ -267,8 +267,11 @@ function ColorPickerSwatch({ pick, hex, className, ...rest }: ColorPickerSwatchP
   );
 }
 
-/** Props for `ColorPicker.NoColor`. @public */
-export type ColorPickerNoColorProps = ButtonHTMLAttributes<HTMLButtonElement>;
+/** Props for `ColorPicker.NoColor`. The children replace the button text. @public */
+export interface ColorPickerNoColorProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  /** More class names for the button. */
+  className?: string;
+}
 
 /** The first button of the grid: No colour, or Automatic. Renders nothing when there is none. */
 function ColorPickerNoColor({
@@ -459,8 +462,11 @@ const ColorPickerContent = forwardRef<HTMLDivElement, ColorPickerContentProps>(
   }
 );
 
-/** The parts of the `ColorPicker` compound. @public */
-export interface ColorPickerCompound {
+/**
+ * The colour picker compound: `Root`, `Trigger`, `Content`, and the parts of the grid. Every
+ * colour control of the editor is built from it. @public
+ */
+export const ColorPicker: {
   /** Holds the value and the open state. */
   readonly Root: (props: ColorPickerRootProps) => ReactElement;
   /** The button that opens the grid. */
@@ -479,13 +485,7 @@ export interface ColorPickerCompound {
   readonly NoColor: (props: ColorPickerNoColorProps) => ReactElement | null;
   /** The `#RRGGBB` field. */
   readonly HexInput: (props: ColorPickerHexInputProps) => ReactElement;
-}
-
-/**
- * The colour picker compound: `Root`, `Trigger`, `Content`, and the parts of the grid. Every
- * colour control of the editor is built from it. @public
- */
-export const ColorPicker: ColorPickerCompound = {
+} = {
   Root: ColorPickerRoot,
   Trigger: ColorPickerTrigger,
   Content: ColorPickerContent,
@@ -494,6 +494,9 @@ export const ColorPicker: ColorPickerCompound = {
   NoColor: ColorPickerNoColor,
   HexInput: ColorPickerHexInput,
 };
+
+/** The parts of the `ColorPicker` compound. @public */
+export type ColorPickerCompound = typeof ColorPicker;
 
 /** Props for `ColorPickerPanel`. @internal */
 export interface ColorPickerPanelProps {

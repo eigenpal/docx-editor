@@ -34,6 +34,7 @@ import {
 import type { EditorExecOptions, ExecResult } from '@docx-editor.dev/core/contracts/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation, type TranslationKey } from '../../i18n';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import { useStableDocxId } from '../../lib/stable-id';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
@@ -95,9 +96,11 @@ export interface ObjectControlProps {
  */
 export interface ObjectButtonPartProps extends ObjectControlProps {
   /** Replaces the slot's icon in the compact variant. */
-  icon?: VNodeChild;
+  icon?: DocxEditorChildren;
   /** Renders the one child of the default slot as the button, with the part's props merged in. */
   asChild?: boolean;
+  /** With `asChild`, the element that becomes the button. Pass it in the default slot. */
+  children?: DocxEditorChildren;
 }
 
 /** The runtime props of `ObjectControlProps`, shared by every part. @internal */
@@ -111,7 +114,7 @@ export const objectControlProps = {
 /** The runtime props of `ObjectButtonPartProps`. @internal */
 export const objectButtonPartProps = {
   ...objectControlProps,
-  icon: { type: null as unknown as PropType<VNodeChild>, default: undefined },
+  icon: { type: null as unknown as PropType<DocxEditorChildren>, default: undefined },
   asChild: { type: Boolean, default: false },
 } as const;
 
