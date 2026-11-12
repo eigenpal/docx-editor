@@ -78,7 +78,9 @@ test('a part outside every scoped element carries the scope class, with dark und
     expect(frame.classList.contains('docx-editor')).toBe(true);
     expect(frame.classList.contains('dark')).toBe(mode === 'dark');
     // The picker inside the part takes the part's scope; a picker alone carries its own.
-    expect(frame.querySelector('.docx-color-picker')!.classList.contains('docx-editor')).toBe(false);
+    expect(frame.querySelector('.docx-color-picker')!.classList.contains('docx-editor')).toBe(
+      false
+    );
     const alone = host.querySelector(':scope > .docx-color-picker')!;
     expect(alone.classList.contains('docx-editor')).toBe(true);
     cleanup();
@@ -119,7 +121,11 @@ test('toolbar overrides of a shape part and a chart part: className, icon, asChi
         </DocxEditorChartDataLabels>
       ),
     },
-    { name: 'hidden', shape: <DocxEditorShapeFill hidden />, chart: <DocxEditorChartDataLabels hidden /> },
+    {
+      name: 'hidden',
+      shape: <DocxEditorShapeFill hidden />,
+      chart: <DocxEditorChartDataLabels hidden />,
+    },
   ];
   for (const { name, shape, chart } of cases) {
     const shapeView = mount(
@@ -214,7 +220,9 @@ test('the open grid keeps the focus in the hex field across an unrelated host re
   await act(async () => selectParityShape(editor()));
   await flush();
   const bar = view.getByRole('toolbar', { name: 'Host' });
-  await act(async () => bar.querySelector<HTMLButtonElement>('.docx-color-picker__trigger')!.click());
+  await act(async () =>
+    bar.querySelector<HTMLButtonElement>('.docx-color-picker__trigger')!.click()
+  );
   await flush();
   const hex = bar.querySelector<HTMLInputElement>('.docx-color-picker__hex input')!;
   hex.focus();
@@ -228,7 +236,9 @@ test('the open grid keeps the focus in the hex field across an unrelated host re
     fireEvent.keyDown(hex, { key: 'Escape' });
   });
   const host = bar.querySelector('.host-picker')!;
-  await act(async () => host.querySelector<HTMLButtonElement>('.docx-color-picker__trigger')!.click());
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('.docx-color-picker__trigger')!.click()
+  );
   await flush();
   const hostHex = host.querySelector<HTMLInputElement>('.docx-color-picker__hex input')!;
   hostHex.focus();
@@ -318,7 +328,9 @@ test('the font colour grid paints each tint as the shared colour picker does', a
   });
   await flush();
   const hexes = documentThemeHexes(editor().getDocumentThemeColors());
-  const swatches = [...font.querySelectorAll<HTMLButtonElement>('.docx-toolbar__swatch-grid--theme button')];
+  const swatches = [
+    ...font.querySelectorAll<HTMLButtonElement>('.docx-toolbar__swatch-grid--theme button'),
+  ];
   // Row two, column four: Text 2, Lighter 80%.
   expect(swatches[10 + 3]!.getAttribute('data-value')).toBe(colorPickHex('tx2:80', hexes).slice(1));
   expect(swatches[10 + 4]!.getAttribute('data-value')).toBe(
