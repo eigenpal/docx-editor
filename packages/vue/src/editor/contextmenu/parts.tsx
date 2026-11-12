@@ -669,8 +669,9 @@ export const ContextMenuItem = defineComponent({
           ...(props.disabled && props.disabledReason ? { title: props.disabledReason } : {}),
           ...(props.active !== undefined ? { active: props.active } : {}),
           onSelect: () => {
-            props.onSelect?.();
+            // Close first: see the React twin.
             close(true);
+            props.onSelect?.();
           },
           ...(props.className ? { className: props.className } : {}),
         },
