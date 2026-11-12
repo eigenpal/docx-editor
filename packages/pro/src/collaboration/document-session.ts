@@ -570,9 +570,7 @@ class DocumentSession implements DocumentCollaborationSession {
     }
     // After the member refresh: drift it notes belongs to earlier journals, not this one.
     this.registry.inline.takeDrift();
-    const projected = projectTypingOrJournal(this.registry, translated, (id) =>
-      this.materializer.shownPartChildren(id)
-    );
+    const projected = projectTypingOrJournal(this.registry, translated, this.materializer);
     if (!projected.ok) {
       this.refuseLocalJournal({
         code: projected.code as CollaborationFailureCode,

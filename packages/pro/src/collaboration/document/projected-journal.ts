@@ -305,17 +305,33 @@ export interface ProjectedJournal {
 }
 
 /**
+ * What the editor's tree shows, as the materializer last built it. A local journal addresses
+ * that tree, so its projection reads it where shared state alone does not say. It is current
+ * because the session publishes the shared view again after a local edit that renames or
+ * moves what shared text shows, and a pass that does not install its tree leaves a refusal,
+ * not lost content: the realign that follows rebuilds from shared state.
+ */
+export interface ShownTree {
+  /** The children a member part's root shows, in order, or null. */
+  shownPartChildren(rootId: LogicalId): readonly LogicalId[] | null;
+  /** The node the tree shows `id` under, or null when it does not show it. */
+  shownParentOf(id: LogicalId): LogicalId | null;
+}
+
+const NOTHING_SHOWN: ShownTree = { shownPartChildren: () => null, shownParentOf: () => null };
+
+/**
  * A local journal in shared coordinates: typing at one place as the insert it writes
  * (`typedInsertOf`), and any other journal projected (`projectJournalToShared`).
  */
 export function projectTypingOrJournal(
   registry: DocumentRegistry,
   original: CanonicalPrimitiveJournal,
-  shownPartChildren?: (rootId: LogicalId) => readonly LogicalId[] | null
+  tree?: ShownTree
 ): ProjectedJournal | ProjectionRefusal {
   const typed = typedInsertOf(registry, original);
   if (typed) return { ok: true, journal: { ...original, effects: [] }, plan: null, typed };
-  return projectJournalToShared(registry, original, shownPartChildren);
+  return projectJournalToShared(registry, original, tree);
 }
 
 /**
@@ -327,10 +343,10 @@ export function projectTypingOrJournal(
 export function projectJournalToShared(
   registry: DocumentRegistry,
   original: CanonicalPrimitiveJournal,
-  shownPartChildren: (rootId: LogicalId) => readonly LogicalId[] | null = () => null
+  tree: ShownTree = NOTHING_SHOWN
 ): ProjectedJournal | ProjectionRefusal {
   // Paragraph inline content is written to shared text; only the rest is projected here.
-  const routed = routeInlineEffects(registry, original.effects);
+  const routed = routeInlineEffects(registry, original.effects, (id) => tree.shownParentOf(id));
   if (routed.refusal) return { ok: false, ...routed.refusal };
   const journal = routed.plan ? { ...original, effects: routed.passThrough } : original;
   const incoming = journal.effects.map(sharedEffect);
@@ -369,7 +385,7 @@ export function projectJournalToShared(
     raw,
     text,
     (id) => mergedChildrenOf(id),
-    (id) => shownPartChildren(id)
+    (id) => tree.shownPartChildren(id)
   );
   const descriptors = new Map<LogicalId, SharedNodeDescriptor>();
   const kindOf = (id: LogicalId): string | null => descriptors.get(id)?.kind ?? registry.kindOf(id);
@@ -585,7 +601,7 @@ export function projectJournalToShared(
   const listPartMembersAsShown = (parentId: LogicalId): void => {
     if (listedAsShown.has(parentId)) return;
     listedAsShown.add(parentId);
-    const shown = shownPartChildren(parentId);
+    const shown = tree.shownPartChildren(parentId);
     const parent = raw.node(parentId);
     if (!shown || !parent || parent.isText) return;
     const listed = parent.children;

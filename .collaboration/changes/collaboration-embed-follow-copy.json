@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A local edit read a paragraph's inline elements from shared text alone, so an element that followed a split into it while the editor showed another copy of it in an earlier paragraph shifted the edit's offsets, and the edit was refused.",
+  "after": "A local edit reads the paragraph as the editor shows it: an element the editor shows in another paragraph shows nothing in it, and the write removes that hidden copy from the edited paragraph's text.",
+  "reason": "Shared fields, operations, and synchronization keep their meaning. Only the reading of the editor's tree that a local edit addresses changes; the write uses existing text operations, and older clients read the result as before.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-embed-copies.test.ts"],
+  "changeset": "collaboration-embed-follow-copy",
+  "migration": null
+}

@@ -584,7 +584,8 @@ export function applyPrimitiveJournal(
       : { ok: false, code: 'invalid-bound', detail: 'typed text changed', transient: true };
   }
   // A journal the projection did not route (one in shared coordinates already) is routed
-  // here, so paragraph inline content always goes to shared text.
+  // here, so paragraph inline content always goes to shared text. It reads shared state
+  // alone: no editor's tree is known here (`ShownTree`).
   let plan = routed;
   let journal = given;
   if (plan === undefined) {
