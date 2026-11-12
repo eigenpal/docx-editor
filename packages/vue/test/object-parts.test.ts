@@ -13,17 +13,17 @@ import { ColorPicker } from '../src/editor/color/ColorPicker';
 import { ToolbarTableBorderColor, ToolbarTableCellFill } from '../src/editor/toolbar/TableControls';
 import { usePaneRequest } from '../src/editor/panes/index';
 import {
-  ChartAxes,
-  ChartDataPart,
-  ChartDataLabels,
-  ChartLegend,
-  ChartSeriesColors,
-  ChartTitle,
-  ChartTypePart,
+  DocxEditorChartAxes,
+  DocxEditorChartData,
+  DocxEditorChartDataLabels,
+  DocxEditorChartLegend,
+  DocxEditorChartSeriesColors,
+  DocxEditorChartTitle,
+  DocxEditorChartType,
   DocxEditorPaneSections,
-  ShapeFill,
-  ShapeOutlineDashPart,
-  ShapeOutlineWidth,
+  DocxEditorShapeFill,
+  DocxEditorShapeOutlineDash,
+  DocxEditorShapeOutlineWidth,
 } from '../src/editor/objects/index';
 import { docx, flush } from './helpers/fixtures';
 import { mountEditorTree, type MountedEditor } from './helpers/mount';
@@ -60,9 +60,9 @@ test('shape parts in a host toolbar: compact fill, dash, and width apply and fol
   mounted = mountEditorTree(
     () =>
       hostBar(() => [
-        h(ShapeFill, { variant: 'compact' }),
-        h(ShapeOutlineWidth, { variant: 'compact' }),
-        h(ShapeOutlineDashPart, { variant: 'compact', className: 'host-dash' }),
+        h(DocxEditorShapeFill, { variant: 'compact' }),
+        h(DocxEditorShapeOutlineWidth, { variant: 'compact' }),
+        h(DocxEditorShapeOutlineDash, { variant: 'compact', className: 'host-dash' }),
       ]),
     shapePaneDocx(SHAPE_PANE_CASES.theme)
   );
@@ -128,16 +128,16 @@ test('chart parts in a host toolbar and a popover that answers the pane request'
   mounted = mountEditorTree(
     () => [
       hostBar(() => [
-        h(ChartTypePart, { variant: 'compact' }),
-        h(ChartTitle, { variant: 'compact' }),
-        h(ChartLegend, { variant: 'compact' }),
-        h(ChartDataLabels, { variant: 'compact' }),
+        h(DocxEditorChartType, { variant: 'compact' }),
+        h(DocxEditorChartTitle, { variant: 'compact' }),
+        h(DocxEditorChartLegend, { variant: 'compact' }),
+        h(DocxEditorChartDataLabels, { variant: 'compact' }),
       ]),
       h(ChartPopover),
       h('div', { 'data-testid': 'drawer' }, [
-        h(ChartAxes),
-        h(ChartSeriesColors, { index: 0 }),
-        h(ChartDataPart),
+        h(DocxEditorChartAxes),
+        h(DocxEditorChartSeriesColors, { index: 0 }),
+        h(DocxEditorChartData),
       ]),
     ],
     CHART_PANE_SOURCE
