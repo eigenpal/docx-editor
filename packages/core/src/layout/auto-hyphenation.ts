@@ -152,13 +152,39 @@ export function withHyphenationPoints(
   return { cuts: [...new Set(cuts)], hyphens };
 }
 
+/**
+ * `text` with the letters of `w:caps` and `w:smallCaps` runs in capitals, at the same offsets,
+ * so `w:doNotHyphenateCaps` keeps those words whole too.
+ */
+function withShownCapitals(
+  text: string,
+  pieces: readonly FieldAwarePiece[],
+  starts: ReadonlyMap<FieldAwarePiece, number>,
+  skip: (piece: FieldAwarePiece) => boolean
+): string {
+  let units: string[] | undefined;
+  for (const piece of pieces) {
+    if (!piece.style.caps && !piece.style.smallCaps) continue;
+    if (skip(piece) || !isParagraphText(piece)) continue;
+    units ??= text.split('');
+    const start = starts.get(piece)!;
+    for (let index = start; index < start + piece.text.length; index++) {
+      const upper = units[index]!.toUpperCase();
+      if (upper.length === 1) units[index] = upper;
+    }
+  }
+  return units?.join('') ?? text;
+}
+
 /** Hyphenation points of each piece, read over the paragraph text so a word can span runs. */
 export function paragraphHyphenation(
   pieces: readonly FieldAwarePiece[],
   skip: (piece: FieldAwarePiece) => boolean,
   keepCapitals: boolean
 ): (piece: FieldAwarePiece, boundaries: readonly number[]) => HyphenationCuts {
-  const { text, starts } = paragraphBreakText(pieces, skip);
+  const read = paragraphBreakText(pieces, skip);
+  const { starts } = read;
+  const text = keepCapitals ? withShownCapitals(read.text, pieces, starts, skip) : read.text;
   const points = hyphenationPoints(text, keepCapitals);
   return (piece, boundaries) => {
     if (skip(piece) || !isParagraphText(piece)) return { cuts: boundaries, hyphens: new Set() };
