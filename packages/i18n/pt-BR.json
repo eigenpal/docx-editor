@@ -78,7 +78,9 @@
       "image": "Imagem",
       "table": "Tabela",
       "format": "Formatar",
-      "direction": "Direção do texto"
+      "direction": "Direção do texto",
+      "chart": null,
+      "shape": null
     },
     "undo": "Desfazer",
     "undoShortcut": "Desfazer (Ctrl+Z)",
@@ -226,7 +228,13 @@
       "background2": "Plano de Fundo 2",
       "text1": "Texto 1",
       "text2": "Texto 2"
-    }
+    },
+    "lighterPercent": "{color}, {percent}% mais clara",
+    "darkerPercent": "{color}, {percent}% mais escura",
+    "choose": null,
+    "hexColor": null,
+    "hexHelp": null,
+    "invalidHex": null
   },
   "dialogs": {
     "imageProperties": {
@@ -1382,7 +1390,8 @@
         "color": "Digite uma cor como #RRGGBB ou como nome de cor.",
         "noSolidFill": "Escolha primeiro uma cor de preenchimento.",
         "transparency": "Digite um número de 0 a 100.",
-        "width": "Digite uma espessura de 0,25 a 1584 pontos."
+        "width": "Digite uma espessura de 0,25 a 1584 pontos.",
+        "dash": null
       },
       "fill": "Preenchimento",
       "fillColor": "Cor de preenchimento",
@@ -1410,7 +1419,22 @@
       "transparency": "Transparência (%)",
       "width": "Espessura (pt)",
       "widthPoints": "{value} pt",
-      "widthPreset": "Espessura predefinida"
+      "widthPreset": "Espessura predefinida",
+      "dash": null,
+      "dashes": {
+        "custom": null,
+        "dash": null,
+        "dashDot": null,
+        "dot": null,
+        "lgDash": null,
+        "lgDashDot": null,
+        "lgDashDotDot": null,
+        "solid": null,
+        "sysDash": null,
+        "sysDashDot": null,
+        "sysDashDotDot": null,
+        "sysDot": null
+      }
     }
   }
 }

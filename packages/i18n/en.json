@@ -159,7 +159,9 @@
       "listFormatting": "List formatting",
       "format": "Format",
       "image": "Image",
-      "table": "Table"
+      "table": "Table",
+      "shape": "Shape",
+      "chart": "Chart"
     },
     "undo": "Undo",
     "undoShortcut": "Undo (Ctrl+Z)",
@@ -306,7 +308,13 @@
       "lightGray": "Light Gray",
       "brightGreen": "Bright Green"
     },
-    "apply": "Apply"
+    "apply": "Apply",
+    "lighterPercent": "{color}, lighter {percent}%",
+    "darkerPercent": "{color}, darker {percent}%",
+    "hexColor": "Hex color",
+    "hexHelp": "Type #RRGGBB, then press Enter.",
+    "invalidHex": "Type a color as #RRGGBB.",
+    "choose": "Choose a color"
   },
   "dialogs": {
     "imageProperties": {
@@ -1401,7 +1409,23 @@
         "color": "Type a color as #RRGGBB or as a color name.",
         "transparency": "Type a number from 0 to 100.",
         "width": "Type a width from 0.25 to 1584 points.",
-        "noSolidFill": "Pick a fill color first."
+        "noSolidFill": "Pick a fill color first.",
+        "dash": "Pick a dash type from the list."
+      },
+      "dash": "Dash type",
+      "dashes": {
+        "solid": "Solid",
+        "sysDot": "Round dot",
+        "sysDash": "Square dot",
+        "dash": "Dash",
+        "dashDot": "Dash dot",
+        "lgDash": "Long dash",
+        "lgDashDot": "Long dash dot",
+        "lgDashDotDot": "Long dash dot dot",
+        "sysDashDot": "Square dash dot",
+        "sysDashDotDot": "Square dash dot dot",
+        "dot": "Dot",
+        "custom": "Custom"
       }
     },
     "errors": {

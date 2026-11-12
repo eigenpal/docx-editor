@@ -78,7 +78,9 @@
       "image": "Görsel",
       "table": "Tablo",
       "format": "Biçim",
-      "direction": "Metin yönü"
+      "direction": "Metin yönü",
+      "chart": null,
+      "shape": null
     },
     "undo": "Geri al",
     "undoShortcut": "Geri al (Ctrl+Z)",
@@ -226,7 +228,13 @@
       "background2": "Arka Plan 2",
       "text1": "Metin 1",
       "text2": "Metin 2"
-    }
+    },
+    "lighterPercent": "{color}, %{percent} daha açık",
+    "darkerPercent": "{color}, %{percent} daha koyu",
+    "choose": null,
+    "hexColor": null,
+    "hexHelp": null,
+    "invalidHex": null
   },
   "dialogs": {
     "imageProperties": {
@@ -1382,7 +1390,8 @@
         "color": "Rengi #RRGGBB biçiminde veya renk adı olarak yazın.",
         "noSolidFill": "Önce bir dolgu rengi seçin.",
         "transparency": "0 ile 100 arasında bir sayı yazın.",
-        "width": "0,25 ile 1584 punto arasında bir kalınlık yazın."
+        "width": "0,25 ile 1584 punto arasında bir kalınlık yazın.",
+        "dash": null
       },
       "fill": "Dolgu",
       "fillColor": "Dolgu rengi",
@@ -1410,7 +1419,22 @@
       "transparency": "Saydamlık (%)",
       "width": "Kalınlık (pt)",
       "widthPoints": "{value} pt",
-      "widthPreset": "Hazır kalınlık"
+      "widthPreset": "Hazır kalınlık",
+      "dash": null,
+      "dashes": {
+        "custom": null,
+        "dash": null,
+        "dashDot": null,
+        "dot": null,
+        "lgDash": null,
+        "lgDashDot": null,
+        "lgDashDotDot": null,
+        "solid": null,
+        "sysDash": null,
+        "sysDashDot": null,
+        "sysDashDotDot": null,
+        "sysDot": null
+      }
     }
   }
 }

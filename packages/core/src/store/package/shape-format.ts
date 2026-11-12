@@ -10,6 +10,8 @@
 // so a reader of only the fallback shows the same colours.
 
 import { readLineProperties, readStyleReferenceIndex } from './drawing-line-properties.ts';
+import { dashPresetOf } from './drawing-line-dash.ts';
+import type { ShapeOutlineDash } from '../store/tree-op-types.ts';
 import { resolveColorNode, type ShapeColor } from './drawing-shape-color.ts';
 import { presetColorHex } from './drawing-preset-colors.ts';
 import { isMcAlternateContent } from './drawing-projection-walk.ts';
@@ -175,6 +177,11 @@ export interface ShapeOutlineState {
   /** The theme colour a visible outline names, when its markup is a theme reference. */
   readonly theme?: ShapeThemeColor;
   readonly widthPt: number | null;
+  /**
+   * The preset dash the outline shows (`solid` for a plain line), `custom` for a dash list no
+   * preset names, or null when the shapes of a group disagree.
+   */
+  readonly dash: ShapeOutlineDash | 'custom' | null;
 }
 
 /** The fill and outline of the shapes one drawing holds. @public */
@@ -399,6 +406,7 @@ function wspFormat(
       visible: stroke !== null,
       color: stroke?.hex ?? null,
       widthPt: roundPoints(width.widthEmu),
+      dash: dashPresetOf(width.dash),
       ...(lineTheme ? { theme: lineTheme } : {}),
     },
   };
@@ -460,6 +468,7 @@ function vmlFormat(shape: OoxmlElement): ShapeFormatState {
       visible: ink ? stroke !== null : null,
       color: stroke,
       widthPt: ink ? Math.round(ink.weight * 100) / 100 : null,
+      dash: ink ? dashPresetOf(ink.dash) : null,
     },
   };
 }
@@ -490,6 +499,7 @@ function agreed(states: readonly ShapeFormatState[]): ShapeFormatState {
       visible: same((s) => s.outline.visible) ? first.outline.visible : null,
       color: outlineColor ? first.outline.color : null,
       widthPt: same((s) => s.outline.widthPt) ? first.outline.widthPt : null,
+      dash: same((s) => s.outline.dash) ? first.outline.dash : null,
       ...(lineTheme ? { theme: lineTheme } : {}),
     },
   };

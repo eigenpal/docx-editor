@@ -83,7 +83,9 @@
       "image": "Рисунок",
       "table": "Таблица",
       "direction": "Направление текста",
-      "format": "Формат"
+      "format": "Формат",
+      "chart": null,
+      "shape": null
     },
     "undo": "Отменить",
     "undoShortcut": "Отменить (Ctrl+Z)",
@@ -231,7 +233,13 @@
       "background2": "Фон 2",
       "text1": "Текст 1",
       "text2": "Текст 2"
-    }
+    },
+    "lighterPercent": "{color}, светлее на {percent}%",
+    "darkerPercent": "{color}, темнее на {percent}%",
+    "choose": null,
+    "hexColor": null,
+    "hexHelp": null,
+    "invalidHex": null
   },
   "dialogs": {
     "imageProperties": {
@@ -1382,7 +1390,8 @@
         "color": "Введите цвет в формате #RRGGBB или название цвета.",
         "noSolidFill": "Сначала выберите цвет заливки.",
         "transparency": "Введите число от 0 до 100.",
-        "width": "Введите толщину от 0,25 до 1584 пунктов."
+        "width": "Введите толщину от 0,25 до 1584 пунктов.",
+        "dash": null
       },
       "fill": "Заливка",
       "fillColor": "Цвет заливки",
@@ -1410,7 +1419,22 @@
       "transparency": "Прозрачность (%)",
       "width": "Толщина (пт)",
       "widthPoints": "{value} пт",
-      "widthPreset": "Готовая толщина"
+      "widthPreset": "Готовая толщина",
+      "dash": null,
+      "dashes": {
+        "custom": null,
+        "dash": null,
+        "dashDot": null,
+        "dot": null,
+        "lgDash": null,
+        "lgDashDot": null,
+        "lgDashDotDot": null,
+        "solid": null,
+        "sysDash": null,
+        "sysDashDot": null,
+        "sysDashDotDot": null,
+        "sysDot": null
+      }
     }
   }
 }

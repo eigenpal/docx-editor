@@ -1,9 +1,13 @@
 import type { Editor, EditorExecOptions } from '../contracts/editor.ts';
 import type { ImageWrapTarget } from '../contracts/editor.ts';
 import type { TableChromeSlotId } from './table-chrome.ts';
+import type { ObjectSlotValueMap } from './object-chrome-slots.ts';
 
-/** Value types accepted by toolbar controls. Font size uses half-points. @public */
-export interface ToolbarValueMap {
+/**
+ * Value types accepted by toolbar controls. Font size uses half-points. The `shape.*` and
+ * `chart.*` values are `ObjectSlotValueMap`'s. @public
+ */
+export interface ToolbarValueMap extends ObjectSlotValueMap {
   'font.family': string;
   'font.size': number;
   'text.color': string;

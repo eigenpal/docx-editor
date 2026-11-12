@@ -79,7 +79,9 @@
       "image": "תמונה",
       "table": "טבלה",
       "format": "עיצוב",
-      "direction": "כיוון טקסט"
+      "direction": "כיוון טקסט",
+      "chart": null,
+      "shape": null
     },
     "undo": "בטל",
     "undoShortcut": "בטל (Ctrl+Z)",
@@ -227,7 +229,13 @@
       "background2": "רקע 2",
       "text1": "טקסט 1",
       "text2": "טקסט 2"
-    }
+    },
+    "lighterPercent": "{color}, בהיר יותר ב-{percent}%",
+    "darkerPercent": "{color}, כהה יותר ב-{percent}%",
+    "choose": null,
+    "hexColor": null,
+    "hexHelp": null,
+    "invalidHex": null
   },
   "dialogs": {
     "imageProperties": {
@@ -1383,7 +1391,8 @@
         "color": "הקלד צבע בתבנית ‎#RRGGBB או כשם של צבע.",
         "noSolidFill": "בחר תחילה צבע מילוי.",
         "transparency": "הקלד מספר בין 0 ל-100.",
-        "width": "הקלד עובי בין 0.25 ל-1584 נקודות."
+        "width": "הקלד עובי בין 0.25 ל-1584 נקודות.",
+        "dash": null
       },
       "fill": "מילוי",
       "fillColor": "צבע מילוי",
@@ -1411,7 +1420,22 @@
       "transparency": "שקיפות (%)",
       "width": "עובי (נק׳)",
       "widthPoints": "{value} נק׳",
-      "widthPreset": "עובי מוגדר מראש"
+      "widthPreset": "עובי מוגדר מראש",
+      "dash": null,
+      "dashes": {
+        "custom": null,
+        "dash": null,
+        "dashDot": null,
+        "dot": null,
+        "lgDash": null,
+        "lgDashDot": null,
+        "lgDashDotDot": null,
+        "solid": null,
+        "sysDash": null,
+        "sysDashDot": null,
+        "sysDashDotDot": null,
+        "sysDot": null
+      }
     }
   }
 }

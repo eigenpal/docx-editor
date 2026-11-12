@@ -25,6 +25,7 @@ export type {
   ShapeOutlineState,
   ShapeThemeColor,
   ShapeThemeColorName,
+  ShapeOutlineDash,
 } from '../contracts/editor.ts';
 export {
   createLayoutShaping,
@@ -831,6 +832,9 @@ export {
   shapeSwatchCurrent,
   shapeTransparencyText,
   shapeWidthText,
+  SHAPE_OUTLINE_DASHES,
+  shapeDashLabelKey,
+  shapeDashValue,
   type ShapePaneChange,
   type ShapePaneError,
   type ShapePaneResult,
@@ -843,6 +847,38 @@ export {
   type SelectedShapeCommand,
   type SelectedShapeView,
 } from './selected-shape.ts';
+export {
+  COLOR_PICKER_STANDARD_COLORS,
+  COLOR_PICKER_THEME_SLOTS,
+  colorPickerGrid,
+  colorPickFromHexText,
+  colorPickHex,
+  colorPickIsCurrent,
+  colorPickLabel,
+  colorPickOf,
+  colorPickTheme,
+  documentThemeHexes,
+  focusColorSwatch,
+  moveColorSwatchFocus,
+  type ColorPick,
+  type ColorPickerGrid,
+  type ColorPickerThemeSlot,
+  type ColorPickerTranslate,
+  type ColorSwatch,
+} from './color-picker.ts';
+export {
+  CHART_AXES_OFF_REASON,
+  CHART_NO_AXES_REASON,
+  chartSlotIsToggle,
+  commandForObjectSlotValue,
+  isChartChromeSlot,
+  isObjectChromeSlot,
+  isShapeChromeSlot,
+  type ChartChromeSlotId,
+  type ObjectSlotValueMap,
+  type ShapeChromeSlotId,
+} from './object-chrome-slots.ts';
+export { PANE_SECTIONS, paneSections, paneSlots, type PaneSection } from './pane-sections.ts';
 export type { SurfaceChartOps } from './surface-chart-ops.ts';
 export type {
   ChartCopySource,

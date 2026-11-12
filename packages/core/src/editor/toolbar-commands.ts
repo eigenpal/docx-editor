@@ -53,6 +53,13 @@ import {
 import { LINK_PROBE, NO_LINK_VIEW, linkControlState, linkRequestsOf } from './link-chrome.ts';
 import { chartChromeState, chartInsertCommand, runChartControl } from './chart-chrome.ts';
 import { runShapeControl, shapeChromeState } from './shape-chrome.ts';
+import {
+  chartSlotIsToggle,
+  commandForObjectSlotValue,
+  isObjectChromeSlot,
+  objectChromeState,
+  runObjectControl,
+} from './object-chrome-slots.ts';
 
 /** Instance-only surface on the concrete facade — not part of the public `Editor` contract. */
 function surfaceOf(editor: Editor): PaginatedSurface | null {
@@ -296,6 +303,7 @@ export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): Edito
     return { type: 'setImageProperties', description: value };
   }
   if (slotId === 'insert.chart') return chartInsertCommand(value);
+  if (isObjectChromeSlot(slotId)) return commandForObjectSlotValue(slotId, value);
   const entry = VALUE_SLOT_MARKS[slotId];
   if (!entry) return null;
   return { type: 'setMarkAttr', mark: entry.mark, attr: entry.attr, value };
@@ -365,7 +373,8 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
   if (isTableChromeSlot(id)) {
     return tableChromeToolbarState(editor, id);
   }
-  const chart = chartChromeState(editor, id) ?? shapeChromeState(editor, id);
+  const chart =
+    chartChromeState(editor, id) ?? shapeChromeState(editor, id) ?? objectChromeState(editor, id);
   if (chart) return chart;
   if (id === 'review.editingMode') {
     const mode = editor.getEditingMode?.() ?? 'editing';
@@ -649,7 +658,7 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
  * @public
  */
 export function chromeSlotIsToggle(slotId: ChromeSlotId): boolean {
-  if (slotId === 'format.painter') return true;
+  if (slotId === 'format.painter' || chartSlotIsToggle(slotId)) return true;
   const command = commandForSlot(slotId);
   return (
     command?.type === 'toggleMark' ||
@@ -716,6 +725,10 @@ export function runTableChromeCommand(
   return result.ok ? { result, nextDraft: pick.nextDraft } : { result, nextDraft: null };
 }
 
+/** Whether a slot takes a value object, so a plain object there is never exec options. */
+const isValueTakingSlot = (id: ChromeSlotId): boolean =>
+  isTableChromeSlot(id) || isObjectChromeSlot(id);
+
 /**
  * Slots `runToolbarCommand` runs on the surface or through host chrome directly, so `exec`
  * options do not apply.
@@ -778,7 +791,7 @@ export function runToolbarCommand(
     typeof value === 'object' &&
     ('historyGroup' in value || 'scope' in value || Object.keys(value).length === 0)
   ) {
-    if (options || VALUE_SLOT_PROBES[id] !== undefined || isTableChromeSlot(id))
+    if (options || VALUE_SLOT_PROBES[id] !== undefined || isValueTakingSlot(id))
       return {
         ok: false,
         code: 'invalidArgs',
@@ -792,7 +805,10 @@ export function runToolbarCommand(
   if (options?.historyGroup !== undefined && SURFACE_RUN_SLOTS.has(id)) {
     return { ok: false, code: 'unsupported', reason: `${id} does not take a history group` };
   }
-  const chartRun = runChartControl(editor, id, value) ?? runShapeControl(editor, id);
+  const chartRun =
+    runChartControl(editor, id, value) ??
+    runShapeControl(editor, id) ??
+    runObjectControl(editor, id, value, options);
   if (chartRun) return chartRun;
   if (id === 'format.painter') {
     const surface = surfaceOf(editor);

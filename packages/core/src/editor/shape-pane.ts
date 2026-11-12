@@ -1,7 +1,7 @@
 // The Format shape pane, headless: the text of each field, the check of what the user types, and
 // the one command that each committed field or picked color sends (`setShapeFill` or
 // `setShapeOutline`). The React and Vue panes render from these, so both check the same input
-// with the same keys. The color grid is the Chart pane's (`chartColorGrid`). A theme pick sends
+// with the same keys. The color grid is the shared picker's (`colorPickerGrid`). A theme pick sends
 // a theme colour, which writes a theme reference; a standard colour or typed text sends
 // `RRGGBB`. A colour is named as a theme colour only when its markup is a theme reference.
 // DOM-free.
@@ -13,18 +13,44 @@ import type {
   ShapeThemeColor,
 } from '../store/package/shape-format.ts';
 import { shapeColorHex } from '../store/package/shape-format.ts';
+import type { ShapeOutlineDash } from '../store/store/tree-op-types.ts';
+import { isShapeOutlineDash } from '../store/package/drawing-line-dash.ts';
 import {
-  CHART_THEME_SLOTS,
-  chartColorGrid,
-  chartColorLabel,
-  chartPickHex,
-  type ChartColorPick,
-  type ChartTranslate,
-} from './chart-pane.ts';
+  colorPickHex,
+  colorPickIsCurrent,
+  colorPickLabel,
+  colorPickOf,
+  colorPickTheme,
+  type ColorPick,
+  type ColorPickerTranslate,
+} from './color-picker.ts';
 import type { SelectedShapeCommand } from './selected-shape.ts';
+
+type ChartColorPick = ColorPick;
+type ChartTranslate = ColorPickerTranslate;
 
 /** The outline widths the pane offers, in points. @public */
 export const SHAPE_OUTLINE_WIDTHS: readonly number[] = [0.25, 0.5, 0.75, 1, 1.5, 2.25, 3, 4.5, 6];
+
+/**
+ * The outline dashes the pane offers, in list order: a plain line, the two dotted lines, and
+ * the dashed ones. Every preset of `ShapeOutlineDash` is valid in a command. @public
+ */
+export const SHAPE_OUTLINE_DASHES: readonly ShapeOutlineDash[] = [
+  'solid',
+  'sysDot',
+  'sysDash',
+  'dash',
+  'dashDot',
+  'lgDash',
+  'lgDashDot',
+  'lgDashDotDot',
+];
+
+/** The i18n key of a dash's name, such as `shape.pane.dashes.sysDot` ("Round dot"). @public */
+export const shapeDashLabelKey = (
+  dash: ShapeOutlineDash | 'custom'
+): `shape.pane.dashes.${ShapeOutlineDash | 'custom'}` => `shape.pane.dashes.${dash}`;
 
 /** The widest outline the shape commands write, in points. */
 const MAX_OUTLINE_PT = 1584;
@@ -40,13 +66,15 @@ export type ShapePaneChange =
   | { readonly type: 'fillTransparency'; readonly text: string }
   | { readonly type: 'outlineColor'; readonly color: string }
   | { readonly type: 'noOutline' }
-  | { readonly type: 'outlineWidth'; readonly text: string };
+  | { readonly type: 'outlineWidth'; readonly text: string }
+  | { readonly type: 'outlineDash'; readonly dash: ShapeOutlineDash };
 
 /** The i18n key of why the pane refuses typed text. @public */
 export type ShapePaneError =
   | 'shape.pane.errors.color'
   | 'shape.pane.errors.transparency'
   | 'shape.pane.errors.width'
+  | 'shape.pane.errors.dash'
   | 'shape.pane.errors.noSolidFill';
 
 /**
@@ -72,21 +100,12 @@ function parseNumber(text: string, unit: RegExp): number | null {
  */
 export function shapePaneColorHex(color: string, themeHexes: readonly string[]): string | null {
   const text = color.trim();
-  const theme = text.split(':')[0] as (typeof CHART_THEME_SLOTS)[number];
-  if (CHART_THEME_SLOTS.includes(theme) && /^[a-z0-9]+(:-?\d+)?$/.test(text))
-    return chartPickHex(text as ChartColorPick, themeHexes).slice(1);
+  if (colorPickTheme(text)) return colorPickHex(text as ColorPick, themeHexes).slice(1);
   return shapeColorHex(text);
 }
 
 /** The theme colour of a grid pick (`accent1`, `accent1:40`), or null for any other text. */
-function pickTheme(color: string): ShapeThemeColor | null {
-  const text = color.trim();
-  const match = /^([a-z0-9]+)(?::(-?\d+))?$/.exec(text);
-  const name = match?.[1] as (typeof CHART_THEME_SLOTS)[number] | undefined;
-  if (!match || !name || !CHART_THEME_SLOTS.includes(name)) return null;
-  const shift = match[2] === undefined ? 0 : Number(match[2]);
-  return { name, shift };
-}
+const pickTheme = (color: string): ShapeThemeColor | null => colorPickTheme(color);
 
 const sameTheme = (a: ShapeThemeColor | undefined, b: ShapeThemeColor | null): boolean =>
   (a ?? null) === b || (!!a && !!b && a.name === b.name && a.shift === b.shift);
@@ -157,6 +176,17 @@ export function shapePaneCommand(
             : { type: 'setShapeFill', transparency: percent / 100 },
       };
     }
+    case 'outlineDash': {
+      if (!isShapeOutlineDash(change.dash)) return fail('shape.pane.errors.dash');
+      // A dash shows the outline, as a width does.
+      return {
+        ok: true,
+        command:
+          format.outline.visible === true && format.outline.dash === change.dash
+            ? null
+            : { type: 'setShapeOutline', visible: true, dash: change.dash },
+      };
+    }
     case 'outlineWidth': {
       const widthPt = parseNumber(change.text, /pt$/i);
       if (widthPt === null || widthPt < 0.25 || widthPt > MAX_OUTLINE_PT)
@@ -203,7 +233,7 @@ export const shapeWidthText = (widthPt: number | null): string =>
 export const shapeSwatchCurrent = (
   swatchPick: ChartColorPick,
   current: ChartColorPick | null
-): boolean => current !== null && swatchPick.toUpperCase() === current.toUpperCase();
+): boolean => colorPickIsCurrent(swatchPick, current);
 
 /**
  * The grid pick of a color: its theme pick (`accent1`, `accent1:40`) when `theme` says the
@@ -213,15 +243,10 @@ export const shapeSwatchCurrent = (
  */
 export function shapeColorPick(
   color: string | null,
-  themeHexes: readonly string[],
+  _themeHexes: readonly string[],
   theme?: ShapeThemeColor
 ): ChartColorPick | null {
-  if (theme) return theme.shift ? `${theme.name}:${theme.shift}` : theme.name;
-  if (!color || !/^[0-9A-Fa-f]{6}$/.test(color)) return null;
-  const found = chartColorGrid(themeHexes).standard.find(
-    (swatch) => swatch.hex.replace(/^#/, '').toUpperCase() === color.toUpperCase()
-  );
-  return found?.pick ?? `#${color.toUpperCase()}`;
+  return colorPickOf(color, theme);
 }
 
 /** The current grid pick of a fill, or null when it is not solid. @public */
@@ -245,7 +270,7 @@ export function shapeFillSummary(
   t: ChartTranslate
 ): string {
   const pick = shapeFillPick(fill, themeHexes);
-  return pick ? chartColorLabel(pick, t) : t(shapeFillLabelKey(fill));
+  return pick ? colorPickLabel(pick, t) : t(shapeFillLabelKey(fill));
 }
 
 /** What the outline's color button says: a color name, No line, or Mixed. @public */
@@ -256,5 +281,9 @@ export function shapeOutlineSummary(
 ): string {
   if (outline.visible === false) return t('shape.pane.noOutline');
   const pick = shapeOutlinePick(outline, themeHexes);
-  return pick ? chartColorLabel(pick, t) : t('shape.pane.fillTypes.mixed');
+  return pick ? colorPickLabel(pick, t) : t('shape.pane.fillTypes.mixed');
 }
+
+/** What the dash list shows: the dash's name, Custom, or empty when the shapes disagree. @public */
+export const shapeDashValue = (outline: ShapeOutlineState): ShapeOutlineDash | 'custom' | '' =>
+  outline.dash ?? '';

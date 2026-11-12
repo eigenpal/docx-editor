@@ -174,6 +174,7 @@ function shapeFormatEqual(
     a.outline.visible === b.outline.visible &&
     a.outline.color === b.outline.color &&
     a.outline.widthPt === b.outline.widthPt &&
+    a.outline.dash === b.outline.dash &&
     themeEqual(a.fill.theme, b.fill.theme) &&
     themeEqual(a.outline.theme, b.outline.theme)
   );

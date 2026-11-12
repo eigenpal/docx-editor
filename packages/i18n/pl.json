@@ -78,7 +78,9 @@
       "image": "Obraz",
       "table": "Tabela",
       "format": "Formatowanie",
-      "direction": "Kierunek tekstu"
+      "direction": "Kierunek tekstu",
+      "chart": null,
+      "shape": null
     },
     "undo": "Cofnij",
     "undoShortcut": "Cofnij (Ctrl+Z)",
@@ -226,7 +228,13 @@
       "background2": "Tło 2",
       "text1": "Tekst 1",
       "text2": "Tekst 2"
-    }
+    },
+    "lighterPercent": "{color}, jaśniejszy o {percent}%",
+    "darkerPercent": "{color}, ciemniejszy o {percent}%",
+    "choose": null,
+    "hexColor": null,
+    "hexHelp": null,
+    "invalidHex": null
   },
   "dialogs": {
     "imageProperties": {
@@ -1382,7 +1390,8 @@
         "color": "Wpisz kolor jako #RRGGBB lub jako nazwę koloru.",
         "noSolidFill": "Najpierw wybierz kolor wypełnienia.",
         "transparency": "Wpisz liczbę od 0 do 100.",
-        "width": "Wpisz grubość od 0,25 do 1584 punktów."
+        "width": "Wpisz grubość od 0,25 do 1584 punktów.",
+        "dash": null
       },
       "fill": "Wypełnienie",
       "fillColor": "Kolor wypełnienia",
@@ -1410,7 +1419,22 @@
       "transparency": "Przezroczystość (%)",
       "width": "Grubość (pkt)",
       "widthPoints": "{value} pkt",
-      "widthPreset": "Gotowa grubość"
+      "widthPreset": "Gotowa grubość",
+      "dash": null,
+      "dashes": {
+        "custom": null,
+        "dash": null,
+        "dashDot": null,
+        "dot": null,
+        "lgDash": null,
+        "lgDashDot": null,
+        "lgDashDotDot": null,
+        "solid": null,
+        "sysDash": null,
+        "sysDashDot": null,
+        "sysDashDotDot": null,
+        "sysDot": null
+      }
     }
   }
 }

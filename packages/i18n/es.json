@@ -159,7 +159,9 @@
       "listFormatting": "Formato de lista",
       "format": "Formato",
       "image": "Imagen",
-      "table": "Tabla"
+      "table": "Tabla",
+      "chart": null,
+      "shape": null
     },
     "undo": "Deshacer",
     "undoShortcut": "Deshacer (Ctrl+Z)",
@@ -306,7 +308,13 @@
       "lightGray": "Gris claro",
       "brightGreen": "Verde brillante"
     },
-    "apply": "Aplicar"
+    "apply": "Aplicar",
+    "lighterPercent": "{color}, {percent}% más claro",
+    "darkerPercent": "{color}, {percent}% más oscuro",
+    "choose": null,
+    "hexColor": null,
+    "hexHelp": null,
+    "invalidHex": null
   },
   "dialogs": {
     "imageProperties": {
@@ -1382,7 +1390,8 @@
         "color": "Escriba un color como #RRGGBB o como nombre de color.",
         "noSolidFill": "Elija primero un color de relleno.",
         "transparency": "Escriba un número de 0 a 100.",
-        "width": "Escriba un grosor de 0,25 a 1584 puntos."
+        "width": "Escriba un grosor de 0,25 a 1584 puntos.",
+        "dash": null
       },
       "fill": "Relleno",
       "fillColor": "Color de relleno",
@@ -1410,7 +1419,22 @@
       "transparency": "Transparencia (%)",
       "width": "Grosor (pt)",
       "widthPoints": "{value} pt",
-      "widthPreset": "Grosor predefinido"
+      "widthPreset": "Grosor predefinido",
+      "dash": null,
+      "dashes": {
+        "custom": null,
+        "dash": null,
+        "dashDot": null,
+        "dot": null,
+        "lgDash": null,
+        "lgDashDot": null,
+        "lgDashDotDot": null,
+        "solid": null,
+        "sysDash": null,
+        "sysDashDot": null,
+        "sysDashDotDot": null,
+        "sysDot": null
+      }
     }
   }
 }
