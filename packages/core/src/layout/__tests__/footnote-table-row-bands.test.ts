@@ -358,13 +358,15 @@ describe('a row whose long note keeps two lines below it', () => {
   });
 
   test('a reference in a nested table takes the outer row band', () => {
+    // The empty paragraph after the nested table takes no room, so the outer row is one
+    // line high and paginates as the plain referencing row does.
     const nested = rows(8, refs, (n, spec) =>
       n === 5 ? { ...spec, second: tbl([tr({ name: 'N', note: 2 })]) + cite('') } : spec
     );
     const laid = layoutProbe(INTRO + tbl(nested) + TAIL, notes);
     expect(pages(laid.layout)).toEqual([
-      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a Na Nb2 | 1,2',
-      'R6a R6b R7a R7b R8a R8b TAIL | 2c',
+      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a Na Nb2 R6a R6b | 1,2',
+      'R7a R7b R8a R8b TAIL | 2c',
     ]);
     expect(noteLines(laid.layout, 0, 2)).toBe(2);
     expect(laid.fixedPoint).toBe(true);
