@@ -38,6 +38,8 @@ type EditorPoint = CollaborationEditorSelection['anchor'];
 
 /** How many items a caret beside deleted text walks past to find a character still shown. */
 const MAX_DELETED_WALK = 4096;
+/** How many paragraphs an endpoint looks in for its character, along the moves it followed. */
+const MAX_FOLLOW_CANDIDATES = 64;
 
 interface AnchoredPoint {
   /** The paragraph it was anchored in, or null when this replica no longer has it. */
@@ -211,9 +213,12 @@ export class CaretAnchors {
     const shown = follow.shownCopy(identity);
     if (shown) candidates.add(shown);
     for (const holder of follow.holdersOf(identity)) candidates.add(holder);
-    // Text typed in a paragraph a peer removed shows where it follows the move.
-    if (point.paragraph) {
-      for (const target of follow.targetsFor(point.paragraph)) candidates.add(target);
+    // Text typed in a paragraph a peer removed shows where it follows the move, and from
+    // there it can follow on: a join takes the text back into a paragraph that a concurrent
+    // split moves it out of again.
+    for (const candidate of candidates) {
+      if (candidates.size >= MAX_FOLLOW_CANDIDATES) break;
+      for (const target of follow.targetsFor(candidate)) candidates.add(target);
     }
     for (const candidate of candidates) {
       if (registry.inline.isDeletedParagraph(candidate)) continue;
