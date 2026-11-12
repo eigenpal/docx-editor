@@ -2427,7 +2427,7 @@ a.docx-hyperlink:focus-visible {
   pointer-events: auto;
 }
 
-/* A turned line's frame can be one border thick: a band across it, unseen, takes the drag. */
+/* An unseen band around a turned frame takes the drag: a turned line's frame is one border thick. */
 .docx-image-selection-overlay__frame[data-turned='true']::before {
   content: '';
   position: absolute;

@@ -303,8 +303,8 @@ export function hitTestStoryAtLocalPoint(
 
 /**
  * The open header or footer's drawing at a sheet point, past the story band too: a watermark,
- * a logo, or a turned inline shape that reaches into the body is still the open story's. Any page that shows the
- * open story answers, as its band does; the hit names that page.
+ * a logo, or a turned inline shape that reaches into the body is still the open story's. Any
+ * page that shows the open story answers, as its band does; the hit names that page.
  */
 export function activeStoryDrawingAtSheetPoint(
   layout: SemanticLayout,
