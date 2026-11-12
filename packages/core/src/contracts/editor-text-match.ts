@@ -37,7 +37,9 @@ export interface TextMatch {
   readonly scope?: ViewScope;
   /**
    * The matched text as it appears in the document. `selectMatch` and `replaceMatch` return
-   * `notFound` and change nothing when the match's offsets no longer hold this text.
+   * `notFound` and change nothing when the match's offsets no longer hold this text. Search
+   * also finds tracked deleted and moved text: `selectMatch` selects it for review, and
+   * `replaceMatch` refuses it with `unsupported`.
    */
   readonly text: string;
   /**

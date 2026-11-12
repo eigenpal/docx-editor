@@ -272,6 +272,91 @@ describe('a target whose text moved is refused', () => {
   });
 });
 
+describe('struck text is not replaced', () => {
+  const DELETED =
+    '<w:p><w:r><w:t xml:space="preserve">one </w:t></w:r>' +
+    '<w:del w:id="1" w:author="Alan Turing" w:date="2026-01-01T00:00:00Z">' +
+    '<w:r><w:delText>two</w:delText></w:r></w:del>' +
+    '<w:r><w:t xml:space="preserve"> three</w:t></w:r></w:p>';
+  const MOVED =
+    '<w:p><w:r><w:t xml:space="preserve">keep </w:t></w:r>' +
+    '<w:moveFrom w:id="2" w:author="Alan Turing" w:date="2026-01-01T00:00:00Z">' +
+    '<w:r><w:t>moved</w:t></w:r></w:moveFrom></w:p>';
+  const refusal = {
+    ok: false,
+    code: 'unsupported',
+    reason: 'the match overlaps deleted text; accept or reject that change first',
+  };
+
+  test('a second replacement of the same struck word is refused in suggesting mode', () => {
+    const editor = mount(docx('<w:p><w:r><w:t>Alpha Beta Gamma</w:t></w:r></w:p>'));
+    try {
+      expect(editor.setEditingMode('suggesting').ok).toBe(true);
+      const [first] = editor.findMatches('Beta');
+      expect(editor.exec({ type: 'replaceMatch', match: first!, text: 'Zeta' }).ok).toBe(true);
+      const before = bodyXml(editor);
+      // The struck word is still found, and still holds its text.
+      const [struck] = editor.findMatches('Beta');
+      expect(struck).toBeDefined();
+      const command = { type: 'replaceMatch' as const, match: struck!, text: 'Zeta' };
+      expect(editor.can(command)).toEqual(refusal);
+      expect(editor.exec(command)).toEqual(refusal);
+      expect(bodyXml(editor)).toBe(before);
+      expect(textOf(editor, struck!.blockId)).toBe('Alpha BetaZeta Gamma');
+      // Selecting struck text for review stays allowed.
+      expect(editor.selectMatch(struck!)).toEqual({ ok: true, changed: false });
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test("a match across another author's deletion is refused", () => {
+    const editor = mount(docx(DELETED));
+    try {
+      expect(editor.setEditingMode('suggesting').ok).toBe(true);
+      const blockId = editor.surface!.session.paragraphIds()[0]!;
+      expect(textOf(editor, blockId)).toBe('one two three');
+      const before = bodyXml(editor);
+      const range: HighlightRange = { blockId, start: 2, length: 6, expectedText: 'e two ' };
+      expect(editor.exec({ type: 'replaceMatch', match: range, text: 'X' })).toEqual(refusal);
+      expect(bodyXml(editor)).toBe(before);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('editing mode keeps a pending deletion rather than replacing it with plain text', () => {
+    const editor = mount(docx(DELETED));
+    try {
+      const blockId = editor.surface!.session.paragraphIds()[0]!;
+      const before = bodyXml(editor);
+      const range: HighlightRange = { blockId, start: 4, length: 3, expectedText: 'two' };
+      expect(editor.exec({ type: 'replaceMatch', match: range, text: 'four' })).toEqual(refusal);
+      expect(bodyXml(editor)).toBe(before);
+      expect(bodyXml(editor)).toContain('<w:delText>two</w:delText>');
+      // Text beside the deletion still replaces.
+      const beside: HighlightRange = { blockId, start: 0, length: 3, expectedText: 'one' };
+      expect(editor.exec({ type: 'replaceMatch', match: beside, text: 'zero' }).ok).toBe(true);
+      expect(textOf(editor, blockId)).toBe('zero two three');
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('moved-away text is refused too', () => {
+    const editor = mount(docx(MOVED));
+    try {
+      const blockId = editor.surface!.session.paragraphIds()[0]!;
+      const before = bodyXml(editor);
+      const range: HighlightRange = { blockId, start: 5, length: 5, expectedText: 'moved' };
+      expect(editor.exec({ type: 'replaceMatch', match: range, text: 'X' })).toEqual(refusal);
+      expect(bodyXml(editor)).toBe(before);
+    } finally {
+      editor.destroy();
+    }
+  });
+});
+
 describe('a computed range', () => {
   test('replaces with a range-shaped target, in one undo step', () => {
     const editor = mount(docx(SENTENCE));

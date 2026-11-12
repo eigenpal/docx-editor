@@ -19,6 +19,7 @@ import type { OoxmlParagraphNode, OoxmlPart } from '../store/package/ooxml-tree.
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import { isParagraph } from '../store/store/tree-op-segments.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { rangeOverlapsRemovedText } from './removed-text-spans.ts';
 import { textboxScopeOfParagraph } from './review-story-entry.ts';
 import { noteScopeIdInLayout, partOfNodeId } from './surface-scope.ts';
 
@@ -70,6 +71,24 @@ function paragraphOfTarget(surface: PaginatedSurface, blockId: string): TargetPa
   const part = partOfNodeId(surface.session, blockId);
   const node = part ? findNode(part, blockId) : null;
   return part && isParagraph(node) ? { part, paragraph: node } : null;
+}
+
+const OVERLAPS_REMOVED: Refusal = Object.freeze({
+  ok: false as const,
+  code: 'unsupported' as const,
+  reason: 'the match overlaps deleted text; accept or reject that change first',
+});
+
+/**
+ * Refused when the target shares a character with a pending tracked deletion or moved-away
+ * text. Replacing it again would stack a second proposal on a removed word, and editing mode
+ * would turn the pending deletion into plain text.
+ */
+export function removedTextRefusal(surface: PaginatedSurface, target: TextTarget): Refusal | null {
+  const found = paragraphOfTarget(surface, target.blockId);
+  if (!found) return null;
+  const end = target.start + target.length;
+  return rangeOverlapsRemovedText(found.paragraph, target.start, end) ? OVERLAPS_REMOVED : null;
 }
 
 const NOT_IN_DOCUMENT: Refusal = Object.freeze({

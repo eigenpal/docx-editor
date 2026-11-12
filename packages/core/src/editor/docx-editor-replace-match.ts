@@ -16,6 +16,7 @@ import { parseNoteScopeId } from '../store/package/note-nodes.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import {
   isActiveStory,
+  removedTextRefusal,
   resolveTextTarget,
   textTargetArgumentRefusal,
   type TextTarget,
@@ -52,7 +53,8 @@ export function replaceMatchTarget(
       reason: 'replaceMatch does not replace text in a text box',
     };
   }
-  return { ok: true, scope: resolved.scope };
+  // Struck text stays in the model text, so a search finds it; it is not a word to replace.
+  return removedTextRefusal(surface, match) ?? { ok: true, scope: resolved.scope };
 }
 
 /** The store scope of a story, for a write that does not open it. */

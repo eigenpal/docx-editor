@@ -1192,9 +1192,9 @@ export interface EditorCommands
    * `proposeReplacement` would be. The active story, selection, and scroll stay put: a header,
    * footer, or note that is not open is edited in place, without opening it.
    * Without `scope`, the story comes from `blockId`; a `scope` naming another story returns
-   * `invalidArgs`, and a text box returns `unsupported`. When the match carries expected text
-   * (`expectedText`, else `text`) that its offsets no longer hold, because an edit moved it,
-   * it returns `notFound` and changes nothing, as does an unknown `blockId`. Find it again.
+   * `invalidArgs`. A text box, or tracked deleted or moved text, returns `unsupported`. Expected
+   * text (`expectedText`, else `text`) that the offsets no longer hold, or an unknown `blockId`,
+   * returns `notFound` and changes nothing; find it again.
    *
    * On a server, use `range.insertText(text, 'Replace')` from `@docx-editor.dev/editor-api`.
    *

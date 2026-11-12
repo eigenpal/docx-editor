@@ -451,6 +451,7 @@ The shortcuts work only while focus is in the same editor: its pages, pane, or c
 - Viewing mode searches body stories only. Editing mode also searches headers, footers, notes, and text boxes.
 - Matches go stale after document changes. Search again.
 - `replaceMatch` and `selectMatch()` return `notFound` when the text at a match changed. A `scope` that names another story returns `invalidArgs`. A text-box match returns `unsupported` from `replaceMatch`.
+- Search also finds tracked deleted and moved text. `selectMatch()` selects it for review. `replaceMatch` returns `unsupported` for a match that overlaps it, and changes nothing.
 - A match inside a field result covers the whole field. If the match is only part of the shown result, `selectMatch()` selects the field and `replaceMatch` returns `unsupported`.
 - Text highlights allow 32 sets and 10,000 ranges per set. Ranges past the limit count as unavailable and do not throw. The name `search` is reserved.
 - Text highlights support the body, tables, headers, footers, notes, and text boxes in the body.
