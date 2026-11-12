@@ -1361,5 +1361,53 @@
       "invalidValue": "Wykres nie może użyć tej wartości.",
       "suggesting": "Nie można zmieniać wykresów podczas sugerowania zmian. Przełącz na Edytowanie, aby zmienić ten wykres."
     }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "Ten starszy typ kształtu nie ma ustawienia przezroczystości.",
+      "noShape": "Zaznacz jeden kształt, pole tekstowe lub linię.",
+      "noSolidFill": "Kształt nie ma jednolitego wypełnienia. Najpierw wybierz kolor wypełnienia.",
+      "outOfRange": "Wartość jest poza zakresem.",
+      "staleSelection": "Zaznaczenie się zmieniło. Zaznacz kształt ponownie."
+    },
+    "formatShape": "Formatuj kształt…",
+    "pane": {
+      "close": "Zamknij okienko Formatuj kształt",
+      "emptyBody": "Zaznacz kształt, pole tekstowe lub linię w dokumencie, aby je sformatować.",
+      "emptyTitle": "Nie zaznaczono kształtu",
+      "errors": {
+        "color": "Wpisz kolor jako #RRGGBB lub jako nazwę koloru.",
+        "noSolidFill": "Najpierw wybierz kolor wypełnienia.",
+        "transparency": "Wpisz liczbę od 0 do 100.",
+        "width": "Wpisz grubość od 0,25 do 1584 punktów."
+      },
+      "fill": "Wypełnienie",
+      "fillColor": "Kolor wypełnienia",
+      "fillHex": "Kolor wypełnienia (hex)",
+      "fillTypes": {
+        "gradient": "Gradient",
+        "mixed": "Mieszane",
+        "none": "Brak wypełnienia",
+        "pattern": "Deseń",
+        "picture": "Obraz",
+        "solid": "Jednolite"
+      },
+      "hexHelp": "Wpisz #RRGGBB lub nazwę koloru, a następnie naciśnij Enter.",
+      "mixedOutline": "Kształty w tej grupie mają różne kontury.",
+      "noFill": "Brak wypełnienia",
+      "noOutline": "Brak linii",
+      "openFillColors": "Wybierz kolor wypełnienia",
+      "openOutlineColors": "Wybierz kolor konturu",
+      "otherWidth": "Inna grubość",
+      "outline": "Kontur",
+      "outlineColor": "Kolor konturu",
+      "outlineHex": "Kolor konturu (hex)",
+      "readOnlyFill": "Typ wypełnienia: {fill}. Wybierz kolor lub Brak wypełnienia, aby go zastąpić.",
+      "title": "Formatuj kształt",
+      "transparency": "Przezroczystość (%)",
+      "width": "Grubość (pkt)",
+      "widthPoints": "{value} pkt",
+      "widthPreset": "Gotowa grubość"
+    }
   }
 }

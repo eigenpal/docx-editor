@@ -81,7 +81,7 @@ The `copy`, `cut`, and `paste` commands provide the same behavior. Chart clipboa
 
 The Chart pane shows the type, elements, colors, and data of the selected chart. Fields apply when you press Enter or leave them, and Escape restores the old value.
 
-`DocxEditor.SidePanel` holds the pane. **Insert** > **Chart** asks the host to show the panel without moving the focus. **Edit chart** and a double-click on a chart move the focus into it. Listen for these requests with `usePaneRequest`:
+`DocxEditor.SidePanel` holds the pane, and the Format shape pane for a selected shape. **Insert** > **Chart** asks the host to show the panel without moving the focus. **Edit chart** and a double-click on a chart move the focus into it. Listen for these requests with `usePaneRequest`:
 
 ```tsx
 import { useState } from 'react';

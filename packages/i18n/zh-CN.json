@@ -1361,5 +1361,53 @@
       "invalidValue": "图表无法使用此值。",
       "suggesting": "建议编辑时无法更改图表。请切换到“编辑”以更改此图表。"
     }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "这种旧式形状类型没有透明度设置。",
+      "noShape": "请选择一个形状、文本框或线条。",
+      "noSolidFill": "形状没有纯色填充。请先选择填充颜色。",
+      "outOfRange": "值超出范围。",
+      "staleSelection": "所选内容已更改。请重新选择形状。"
+    },
+    "formatShape": "设置形状格式…",
+    "pane": {
+      "close": "关闭“设置形状格式”窗格",
+      "emptyBody": "在文档中选择形状、文本框或线条以设置其格式。",
+      "emptyTitle": "未选择形状",
+      "errors": {
+        "color": "请以 #RRGGBB 或颜色名称的形式键入颜色。",
+        "noSolidFill": "请先选择填充颜色。",
+        "transparency": "请键入 0 到 100 之间的数字。",
+        "width": "请键入 0.25 到 1584 磅之间的宽度。"
+      },
+      "fill": "填充",
+      "fillColor": "填充颜色",
+      "fillHex": "填充十六进制颜色",
+      "fillTypes": {
+        "gradient": "渐变",
+        "mixed": "混合",
+        "none": "无填充",
+        "pattern": "图案",
+        "picture": "图片",
+        "solid": "纯色"
+      },
+      "hexHelp": "键入 #RRGGBB 或颜色名称，然后按 Enter。",
+      "mixedOutline": "此组中的形状具有不同的轮廓。",
+      "noFill": "无填充",
+      "noOutline": "无线条",
+      "openFillColors": "选择填充颜色",
+      "openOutlineColors": "选择轮廓颜色",
+      "otherWidth": "其他宽度",
+      "outline": "轮廓",
+      "outlineColor": "轮廓颜色",
+      "outlineHex": "轮廓十六进制颜色",
+      "readOnlyFill": "填充类型：{fill}。选择一种颜色或“无填充”以替换它。",
+      "title": "设置形状格式",
+      "transparency": "透明度 (%)",
+      "width": "宽度 (磅)",
+      "widthPoints": "{value} 磅",
+      "widthPreset": "预设宽度"
+    }
   }
 }

@@ -686,6 +686,13 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: 'command';
         };
     }, {
+        readonly id: 'formatShape';
+        readonly labelKey: 'shape.formatShape';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
         readonly id: 'wrap';
         readonly labelKey: 'formattingBar.imageWrap';
         readonly paths: readonly string[];
@@ -1074,7 +1081,7 @@ export interface ChromePrintSettings {
 }
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.compareDocuments' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.editChart' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'table.mergeCells' | 'table.splitCell' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.chart' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.compareDocuments' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.editChart' | 'image.formatShape' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'table.mergeCells' | 'table.splitCell' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.chart' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
 
 // @public
 export interface ClearAnchorHighlightOptions {

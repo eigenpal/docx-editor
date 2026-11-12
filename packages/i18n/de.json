@@ -1361,5 +1361,53 @@
       "invalidValue": "Das Diagramm kann diesen Wert nicht verwenden.",
       "suggesting": "Diagramme können im Vorschlagsmodus nicht geändert werden. Wechseln Sie zu „Bearbeiten“, um dieses Diagramm zu ändern."
     }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "Dieser ältere Formtyp hat keine Transparenzeinstellung.",
+      "noShape": "Wählen Sie eine Form, ein Textfeld oder eine Linie aus.",
+      "noSolidFill": "Die Form hat keine einfarbige Füllung. Wählen Sie zuerst eine Füllfarbe aus.",
+      "outOfRange": "Der Wert liegt außerhalb des Bereichs.",
+      "staleSelection": "Die Auswahl hat sich geändert. Wählen Sie die Form erneut aus."
+    },
+    "formatShape": "Form formatieren…",
+    "pane": {
+      "close": "Bereich „Form formatieren“ schließen",
+      "emptyBody": "Wählen Sie im Dokument eine Form, ein Textfeld oder eine Linie aus, um sie zu formatieren.",
+      "emptyTitle": "Keine Form ausgewählt",
+      "errors": {
+        "color": "Geben Sie eine Farbe als #RRGGBB oder als Farbnamen ein.",
+        "noSolidFill": "Wählen Sie zuerst eine Füllfarbe aus.",
+        "transparency": "Geben Sie eine Zahl von 0 bis 100 ein.",
+        "width": "Geben Sie eine Stärke von 0,25 bis 1584 Punkt ein."
+      },
+      "fill": "Füllung",
+      "fillColor": "Füllfarbe",
+      "fillHex": "Hexwert der Füllfarbe",
+      "fillTypes": {
+        "gradient": "Farbverlauf",
+        "mixed": "Gemischt",
+        "none": "Keine Füllung",
+        "pattern": "Muster",
+        "picture": "Bild",
+        "solid": "Einfarbig"
+      },
+      "hexHelp": "Geben Sie #RRGGBB oder einen Farbnamen ein und drücken Sie die Eingabetaste.",
+      "mixedOutline": "Die Formen in dieser Gruppe haben unterschiedliche Konturen.",
+      "noFill": "Keine Füllung",
+      "noOutline": "Keine Linie",
+      "openFillColors": "Füllfarbe auswählen",
+      "openOutlineColors": "Konturfarbe auswählen",
+      "otherWidth": "Andere Stärke",
+      "outline": "Kontur",
+      "outlineColor": "Konturfarbe",
+      "outlineHex": "Hexwert der Konturfarbe",
+      "readOnlyFill": "Fülltyp: {fill}. Wählen Sie eine Farbe oder „Keine Füllung“, um ihn zu ersetzen.",
+      "title": "Form formatieren",
+      "transparency": "Transparenz (%)",
+      "width": "Stärke (pt)",
+      "widthPoints": "{value} pt",
+      "widthPreset": "Stärkenvorgabe"
+    }
   }
 }

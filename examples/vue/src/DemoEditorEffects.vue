@@ -10,7 +10,7 @@ import { watch } from 'vue';
 import { useDocxEditor, usePaneRequest } from '@docx-editor.dev/vue';
 import { storedReviewPane } from '../../shared/review-settings';
 
-const emit = defineEmits<{ chartPane: [] }>();
+const emit = defineEmits<{ chartPane: []; shapePane: [] }>();
 
 const editor = useDocxEditor();
 watch(
@@ -22,5 +22,6 @@ watch(
 );
 usePaneRequest((request) => {
   if (request.pane === 'chart') emit('chartPane');
+  else emit('shapePane');
 });
 </script>

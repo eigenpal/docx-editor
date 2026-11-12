@@ -52,6 +52,7 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'image.insert': 'image',
   'image.properties': 'tune',
   'image.editChart': 'insert_chart',
+  'image.formatShape': 'format_color_fill',
   'image.wrap': 'wrap_text',
   'table.insert': 'table',
   'table.borderTarget': 'border_all',

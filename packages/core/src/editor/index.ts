@@ -747,6 +747,7 @@ export {
   listenPaneRequests,
   requestPane,
   takePaneRequest,
+  takePaneRequestFor,
   openChartPaneFor,
   chartPaneAvailable,
   openChartPaneAt,
@@ -799,6 +800,37 @@ export {
   type SelectedChartCommand,
   type SelectedChartView,
 } from './selected-chart.ts';
+export {
+  openShapePane,
+  paneTitleKey,
+  selectionPane,
+  shapePaneAvailable,
+  sidePanelPane,
+} from './shape-chrome.ts';
+export {
+  SHAPE_OUTLINE_WIDTHS,
+  shapeColorPick,
+  shapeFillEditable,
+  shapeFillLabelKey,
+  shapeFillSummary,
+  shapeOutlineSummary,
+  shapeHexText,
+  shapePaneColorHex,
+  shapePaneCommand,
+  shapeSwatchCurrent,
+  shapeTransparencyText,
+  shapeWidthText,
+  type ShapePaneChange,
+  type ShapePaneError,
+  type ShapePaneResult,
+} from './shape-pane.ts';
+export {
+  editSelectedShape,
+  execSelectedShape,
+  readSelectedShape,
+  type SelectedShapeCommand,
+  type SelectedShapeView,
+} from './selected-shape.ts';
 export type { SurfaceChartOps } from './surface-chart-ops.ts';
 export type {
   ChartCopySource,

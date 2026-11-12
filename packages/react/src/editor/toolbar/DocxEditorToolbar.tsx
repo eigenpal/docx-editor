@@ -268,25 +268,29 @@ function iconPart(slot: ChromeSlotId): PartLike {
 function buildDefaultGroups(
   image: EditorSnapshot['image'],
   direction: boolean,
+  pane: boolean,
   chart: boolean
 ): readonly DefaultGroup[] {
-  return formattingBarChromeGroups(image, { direction, chart }).map((group) => {
-    if (group.id === 'alignment') {
+  const shape = pane && !!image?.shapeFormat;
+  return formattingBarChromeGroups(image, { direction, chart: pane && chart, shape }).map(
+    (group) => {
+      if (group.id === 'alignment') {
+        return {
+          id: group.id,
+          labelKey: group.labelKey,
+          entries: [{ slot: 'alignment' as ArrangementKey, Part: ToolbarAlignment }],
+        };
+      }
       return {
         id: group.id,
         labelKey: group.labelKey,
-        entries: [{ slot: 'alignment' as ArrangementKey, Part: ToolbarAlignment }],
+        entries: group.controls.map((control) => {
+          const slot = chromeSlotId(group, control);
+          return { slot: slot as ArrangementKey, Part: SHAPED_PARTS[slot] ?? iconPart(slot) };
+        }),
       };
     }
-    return {
-      id: group.id,
-      labelKey: group.labelKey,
-      entries: group.controls.map((control) => {
-        const slot = chromeSlotId(group, control);
-        return { slot: slot as ArrangementKey, Part: SHAPED_PARTS[slot] ?? iconPart(slot) };
-      }),
-    };
-  });
+  );
 }
 
 const selectToolbarImage = (snapshot: EditorSnapshot) => snapshot.image;
@@ -376,17 +380,18 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
   // use. It runs above `ToolbarContext.Provider`, so it takes the host `t` directly.
   const label = useToolbarLabelFor(t);
   const image = useEditorState(selectToolbarImage);
-  // Edit chart shows only when the host can show a chart pane.
+  // Edit chart and Format shape show only when the host can show a side panel.
   const editor = useDocxEditor();
-  const chart = useEditorState(selectToolbarChart) && chartPaneAvailable(editor);
+  const chart = useEditorState(selectToolbarChart);
+  const pane = chartPaneAvailable(editor);
   const toolbarDisabled = useEditorState(selectToolbarDisabled);
   const tableChromeVisible = useEditorState(selectTableChromeVisible);
   // A right-to-left interface language puts the paragraph direction buttons in the bar.
   const chromeDir = useChromeDir();
   const directionButtons = chromeDir === 'rtl';
   const defaultGroups = useMemo(
-    () => buildDefaultGroups(image, directionButtons, chart),
-    [image, directionButtons, chart]
+    () => buildDefaultGroups(image, directionButtons, pane, chart),
+    [image, directionButtons, pane, chart]
   );
   const defaultSlots = useMemo(
     () => new Set(defaultGroups.flatMap((group) => group.entries.map((entry) => entry.slot))),

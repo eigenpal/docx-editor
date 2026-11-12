@@ -28,7 +28,7 @@ import {
   focusChartPane,
   listenPaneRequests,
   nextChartCategoryLabel,
-  takePaneRequest,
+  takePaneRequestFor,
   type ChartPaneChange,
 } from '@docx-editor.dev/core/editor';
 import type {
@@ -107,10 +107,12 @@ export const DocxEditorChartPane = defineComponent({
       editorRef,
       (editor, _, onCleanup) => {
         if (!editor) return;
-        if (takePaneRequest(editor)?.focus) void nextTick(() => focusChartPane(root.value));
+        if (takePaneRequestFor(editor, 'chart')?.focus)
+          void nextTick(() => focusChartPane(root.value));
         onCleanup(
           listenPaneRequests(editor, () => {
-            if (takePaneRequest(editor)?.focus) void nextTick(() => focusChartPane(root.value));
+            if (takePaneRequestFor(editor, 'chart')?.focus)
+              void nextTick(() => focusChartPane(root.value));
           })
         );
       },

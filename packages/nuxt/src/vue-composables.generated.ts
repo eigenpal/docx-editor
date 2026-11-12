@@ -49,6 +49,7 @@ export const VUE_COMPOSABLES = [
   'useScopeClassName',
   'useScopedChromeAnchor',
   'useSelectedChart',
+  'useSelectedShape',
   'useSplitCellDialog',
   'useTableBorderTargetLabel',
   'useTextFormFieldDialog',

@@ -14,8 +14,11 @@ import { CHART_TYPES, isChartType } from '../store/package/chart-edit/type.ts';
 import { isElementNode } from './host-realm.ts';
 import { GENERATED_ICON_PATHS } from './generated-icon-paths.ts';
 
-/** A pane that the chrome can ask the host to show. @public */
-export type EditorPaneId = 'chart';
+/**
+ * A pane that the chrome can ask the host to show: the Chart pane, or the Format shape pane
+ * (`shape-chrome.ts`). @public
+ */
+export type EditorPaneId = 'chart' | 'shape';
 
 /** How a pane opens. @public */
 export interface PaneRequestOptions {
@@ -59,6 +62,15 @@ export function takePaneRequest(editor: Editor): PaneRequest | null {
   const request = pending.get(editor) ?? null;
   pending.delete(editor);
   return request;
+}
+
+/**
+ * Take the last pane request when it asks for `pane`, or null and leave it for another pane. A
+ * packaged pane takes only its own requests, so a side panel that swaps one pane for another
+ * hands the request to the pane that the selection shows. @public
+ */
+export function takePaneRequestFor(editor: Editor, pane: EditorPaneId): PaneRequest | null {
+  return pending.get(editor)?.pane === pane ? takePaneRequest(editor) : null;
 }
 
 /** Listen for pane requests of one editor. Returns the function that stops listening. @public */

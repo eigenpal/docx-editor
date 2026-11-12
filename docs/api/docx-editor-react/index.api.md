@@ -183,6 +183,12 @@ import { SEARCH_MATCH_LIMIT } from '@docx-editor.dev/core/editor';
 import { SectionProperties } from '@docx-editor.dev/core/editor';
 import { SelectedChartCommand } from '@docx-editor.dev/core/editor';
 import { SelectedChartState } from '@docx-editor.dev/core/editor';
+import { SelectedShapeCommand } from '@docx-editor.dev/core/editor';
+import { SHAPE_OUTLINE_WIDTHS } from '@docx-editor.dev/core/editor';
+import { ShapeFillState } from '@docx-editor.dev/core/editor';
+import { ShapeFormatState } from '@docx-editor.dev/core/editor';
+import { ShapeOutlineState } from '@docx-editor.dev/core/editor';
+import { ShapePaneChange } from '@docx-editor.dev/core/editor';
 import { SplitCellLimits } from '@docx-editor.dev/core/editor';
 import { SupportedImageMime } from '@docx-editor.dev/core/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core/editor';
@@ -1223,6 +1229,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
+    readonly ShapePane: typeof DocxEditorShapePane;
     readonly SidePanel: typeof DocxEditorSidePanel;
     readonly SplitCellDialog: typeof DocxEditorSplitCellDialog;
     readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
@@ -1705,6 +1712,14 @@ export interface DocxEditorRulerProps {
     // (undocumented)
     style?: CSSProperties;
     unit?: 'inch' | 'cm';
+}
+
+// @public
+export function DocxEditorShapePane(input: DocxEditorShapePaneProps): ReactElement;
+
+// @public
+export interface DocxEditorShapePaneProps {
+    className?: string;
 }
 
 // @public @deprecated
@@ -3010,6 +3025,8 @@ export { SelectedChartCommand }
 
 export { SelectedChartState }
 
+export { SelectedShapeCommand }
+
 // @public
 export interface SelectionFormatting {
     alignment?: ParagraphAlignment;
@@ -3029,6 +3046,16 @@ export interface SelectionFormatting {
     superscript?: boolean;
     underline?: boolean;
 }
+
+export { SHAPE_OUTLINE_WIDTHS }
+
+export { ShapeFillState }
+
+export { ShapeFormatState }
+
+export { ShapeOutlineState }
+
+export { ShapePaneChange }
 
 // @public
 export function Slot(input: SlotProps): ReactElement<unknown, string | react.JSXElementConstructor<any>> | null;
@@ -3879,6 +3906,23 @@ export interface UseSelectedChartReturn {
     readonly format: ChartFormat | null;
     readonly formatDisabledReason: string | null;
     readonly readReason: string | null;
+}
+
+// @public
+export function useSelectedShape(): UseSelectedShapeReturn;
+
+// @public
+export interface UseSelectedShapeReturn {
+    readonly canEditFill: boolean;
+    readonly canEditOutline: boolean;
+    readonly canEditTransparency: boolean;
+    readonly drawingNodeId: string | null;
+    readonly edit: (change: ShapePaneChange) => ExecResult;
+    readonly execute: (command: SelectedShapeCommand) => ExecResult;
+    readonly fillDisabledReason: string | null;
+    readonly format: ShapeFormatState | null;
+    readonly outlineDisabledReason: string | null;
+    readonly transparencyDisabledReason: string | null;
 }
 
 // @public

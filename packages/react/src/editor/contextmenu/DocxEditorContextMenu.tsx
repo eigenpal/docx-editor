@@ -89,6 +89,8 @@ import {
   isHTMLElementNode,
   chartPaneAvailable,
   openChartPaneFor,
+  openShapePane,
+  shapePaneAvailable,
 } from '@docx-editor.dev/core/editor';
 import { useEditorState } from '../useEditorState';
 import { MenuLinkRow } from '../menu/menu-link-row';
@@ -189,9 +191,33 @@ function ContextMenuEditChart() {
   );
 }
 
+const selectShapeId = (snapshot: { image: { id: string; shapeFormat: object | null } | null }) =>
+  snapshot.image?.shapeFormat ? snapshot.image.id : null;
+
+/** Format shape, on a selected shape, text box, line, or group: opens the Format shape pane. */
+function ContextMenuFormatShape() {
+  const editor = useDocxEditor();
+  const menu = useMenuContext();
+  const label = useMenuLabel();
+  const shapeId = useEditorState(selectShapeId);
+  if (!editor || !shapeId || !shapePaneAvailable(editor)) return null;
+  return (
+    <MenuRow
+      slot="image.formatShape"
+      onSelect={() => {
+        menu.setOpenMenu(null);
+        openShapePane(editor, shapeId);
+      }}
+    >
+      {label('shape.formatShape')}
+    </MenuRow>
+  );
+}
+
 const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   { kind: 'row', id: 'field.edit', render: () => <ContextMenuEditField /> },
   { kind: 'row', id: 'image.editChart', render: () => <ContextMenuEditChart /> },
+  { kind: 'row', id: 'image.formatShape', render: () => <ContextMenuFormatShape /> },
   { kind: 'row', id: 'edit.cut', render: () => <ContextMenuCut /> },
   { kind: 'row', id: 'edit.copy', render: () => <ContextMenuCopy /> },
   { kind: 'row', id: 'edit.paste', render: () => <ContextMenuPaste /> },

@@ -980,6 +980,13 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: 'command';
         };
     }, {
+        readonly id: 'formatShape';
+        readonly labelKey: 'shape.formatShape';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
         readonly id: 'wrap';
         readonly labelKey: 'formattingBar.imageWrap';
         readonly paths: readonly string[];
@@ -1454,7 +1461,7 @@ export interface ChromePrintSettings {
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.compareDocuments' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.editChart' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'table.mergeCells' | 'table.splitCell' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.chart' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.compareDocuments' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.editChart' | 'image.formatShape' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'table.mergeCells' | 'table.splitCell' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.chart' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
 
 // @public
 export function chromeSlotId(group: {
@@ -2222,7 +2229,7 @@ export interface EditorModuleRegistry {
 }
 
 // @public
-export type EditorPaneId = 'chart';
+export type EditorPaneId = 'chart' | 'shape';
 
 // @public
 export interface EditorPointPosition {
@@ -2262,6 +2269,9 @@ export interface EditorWindow {
 
 // @public
 export function editSelectedChartData(editor: Editor | null, chart: SelectedChartState | null, change: ChartPaneChange): ExecResult;
+
+// @public
+export function editSelectedShape(editor: Editor | null, image: SelectedImageState | null, change: ShapePaneChange, themeHexes?: readonly string[]): ExecResult;
 
 // @public
 export const EMU_PER_POINT = 12700;
@@ -2308,6 +2318,9 @@ export interface EquationOps {
 
 // @public
 export function execSelectedChart(editor: Editor | null, chart: SelectedChartState | null, command: SelectedChartCommand): ExecResult;
+
+// @public
+export function execSelectedShape(editor: Editor | null, image: SelectedImageState | null, command: SelectedShapeCommand): ExecResult;
 
 // @public
 export function executeImageCommand(editor: DocxEditorInstance, command: Extract<EditorCommand, {
@@ -2465,6 +2478,7 @@ export function formattingBarChromeGroups(image: ImageContext | null, options?: 
 export interface FormattingBarOptions {
     readonly chart?: boolean;
     readonly direction?: boolean;
+    readonly shape?: boolean;
 }
 
 // @public
@@ -3086,6 +3100,9 @@ export type OpenPaginatedResult = {
     readonly reason: string;
 };
 
+// @public
+export function openShapePane(editor: Editor, drawingNodeId?: string): boolean;
+
 // @internal
 export interface OutsidePressOptions {
     readonly close: (event: PointerEvent) => void;
@@ -3486,6 +3503,9 @@ export interface PaneRequestOptions {
 }
 
 // @public
+export const paneTitleKey: (pane: EditorPaneId) => 'chart.pane.title' | 'shape.pane.title';
+
+// @public
 export interface ParagraphDialogFields {
     // (undocumented)
     alignment: 'left' | 'center' | 'right' | 'justify';
@@ -3767,6 +3787,9 @@ export function readInlineMargins(style: CSSStyleDeclaration): {
 
 // @public
 export function readSelectedChart(editor: Editor | null, chart: SelectedChartState | null, snapshot: Pick<EditorSnapshot, 'editable' | 'editingMode'>): SelectedChartView;
+
+// @public
+export function readSelectedShape(editor: Editor | null, image: SelectedImageState | null): SelectedShapeView;
 
 // @public
 export function readSplitCellCounts(columns: string, rows: string, limits: SplitCellLimits | null): SplitCellCounts;
@@ -4447,6 +4470,28 @@ export interface SelectedImageState {
 export function selectedImageStateOf(surface: PaginatedSurface | null): SelectedImageState | null;
 
 // @public
+export type SelectedShapeCommand = Omit<Extract<EditorCommand, {
+    type: 'setShapeFill';
+}>, 'drawingNodeId'> | Omit<Extract<EditorCommand, {
+    type: 'setShapeOutline';
+}>, 'drawingNodeId'>;
+
+// @public
+export interface SelectedShapeView {
+    readonly canEditFill: boolean;
+    readonly canEditOutline: boolean;
+    readonly canEditTransparency: boolean;
+    readonly drawingNodeId: string | null;
+    readonly fillDisabledReason: string | null;
+    readonly format: ShapeFormatState | null;
+    readonly outlineDisabledReason: string | null;
+    readonly transparencyDisabledReason: string | null;
+}
+
+// @public
+export function selectionPane(snapshot: Pick<EditorSnapshot, 'chart' | 'image'>): EditorPaneId | null;
+
+// @public
 export interface SemanticHit {
     // (undocumented)
     readonly caret: CaretGeometry;
@@ -4492,11 +4537,26 @@ export interface SemanticSelection {
 export function separatorLeadingCost(separatorWidth: number, marginInlineStart: number, marginInlineEnd: number, gap: number): number;
 
 // @public
+export const SHAPE_OUTLINE_WIDTHS: readonly number[];
+
+// @public
+export function shapeColorPick(color: string | null, themeHexes: readonly string[]): ChartColorPick | null;
+
+// @public
+export const shapeFillEditable: (fill: ShapeFillState) => boolean;
+
+// @public
+export function shapeFillLabelKey(fill: ShapeFillState): `shape.pane.fillTypes.${ShapeFillState['type']}`;
+
+// @public
 export interface ShapeFillState {
     readonly color: string | null;
     readonly transparency: number;
     readonly type: 'solid' | 'none' | 'gradient' | 'pattern' | 'picture' | 'mixed';
 }
+
+// @public
+export function shapeFillSummary(fill: ShapeFillState, themeHexes: readonly string[], t: ChartTranslate): string;
 
 // @public
 export interface ShapeFormatState {
@@ -4505,6 +4565,9 @@ export interface ShapeFormatState {
     // (undocumented)
     readonly outline: ShapeOutlineState;
 }
+
+// @public
+export const shapeHexText: (color: string | null) => string;
 
 // @public
 export interface ShapeOutlineState {
@@ -4516,10 +4579,65 @@ export interface ShapeOutlineState {
 }
 
 // @public
+export function shapeOutlineSummary(outline: ShapeOutlineState, themeHexes: readonly string[], t: ChartTranslate): string;
+
+// @public
+export const shapePaneAvailable: (editor: Editor | null) => boolean;
+
+// @public
+export type ShapePaneChange = {
+    readonly color: string;
+    readonly type: 'fillColor';
+} | {
+    readonly type: 'noFill';
+} | {
+    readonly text: string;
+    readonly type: 'fillTransparency';
+} | {
+    readonly color: string;
+    readonly type: 'outlineColor';
+} | {
+    readonly type: 'noOutline';
+} | {
+    readonly text: string;
+    readonly type: 'outlineWidth';
+};
+
+// @public
+export function shapePaneColorHex(color: string, themeHexes: readonly string[]): string | null;
+
+// @public
+export function shapePaneCommand(format: ShapeFormatState, change: ShapePaneChange, themeHexes: readonly string[]): ShapePaneResult;
+
+// @public
+export type ShapePaneError = 'shape.pane.errors.color' | 'shape.pane.errors.transparency' | 'shape.pane.errors.width' | 'shape.pane.errors.noSolidFill';
+
+// @public
+export type ShapePaneResult = {
+    readonly command: SelectedShapeCommand;
+    readonly ok: true;
+} | {
+    readonly error: ShapePaneError;
+    readonly ok: false;
+};
+
+// @public
+export const shapeSwatchCurrent: (swatchHex: string, color: string | null) => boolean;
+
+// @public
+export const shapeTransparencyText: (fill: ShapeFillState) => string;
+
+// @public
+export const shapeWidthText: (widthPt: number | null) => string;
+
+// @public
 export function shiftMonth(year: number, month: number, delta: 1 | -1): {
     readonly month: number;
     readonly year: number;
 };
+
+// @public
+export function sidePanelPane(snapshot: Pick<EditorSnapshot, 'chart' | 'image'>, requested: EditorPaneId): EditorPaneId;
 
 // @public
 export const signedFirstLineOf: (kind: SpecialIndent, magnitudeTwips: number) => number;
@@ -4888,6 +5006,9 @@ export type TableInteractionLabelKey = 'table.insertRowBelow' | 'table.insertCol
 
 // @public
 export function takePaneRequest(editor: Editor): PaneRequest | null;
+
+// @public
+export function takePaneRequestFor(editor: Editor, pane: EditorPaneId): PaneRequest | null;
 
 // @public
 export const TEXT_FORM_FORMATS: {

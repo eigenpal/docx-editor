@@ -1361,5 +1361,53 @@
       "invalidValue": "グラフではこの値を使用できません。",
       "suggesting": "編集を提案している間はグラフを変更できません。このグラフを変更するには [編集] に切り替えてください。"
     }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "この古い種類の図形には透明度の設定がありません。",
+      "noShape": "図形、テキスト ボックス、または線を 1 つ選択してください。",
+      "noSolidFill": "図形に単色の塗りつぶしがありません。先に塗りつぶしの色を選択してください。",
+      "outOfRange": "値が範囲外です。",
+      "staleSelection": "選択が変わりました。図形をもう一度選択してください。"
+    },
+    "formatShape": "図形の書式設定…",
+    "pane": {
+      "close": "[図形の書式設定] ウィンドウを閉じる",
+      "emptyBody": "書式を設定するには、文書内の図形、テキスト ボックス、または線を選択してください。",
+      "emptyTitle": "図形が選択されていません",
+      "errors": {
+        "color": "色は #RRGGBB または色名で入力してください。",
+        "noSolidFill": "先に塗りつぶしの色を選択してください。",
+        "transparency": "0 から 100 までの数値を入力してください。",
+        "width": "0.25 から 1584 ポイントまでの幅を入力してください。"
+      },
+      "fill": "塗りつぶし",
+      "fillColor": "塗りつぶしの色",
+      "fillHex": "塗りつぶしの 16 進カラー",
+      "fillTypes": {
+        "gradient": "グラデーション",
+        "mixed": "混在",
+        "none": "塗りつぶしなし",
+        "pattern": "パターン",
+        "picture": "画像",
+        "solid": "単色"
+      },
+      "hexHelp": "#RRGGBB または色名を入力して Enter キーを押してください。",
+      "mixedOutline": "このグループの図形には異なる枠線があります。",
+      "noFill": "塗りつぶしなし",
+      "noOutline": "線なし",
+      "openFillColors": "塗りつぶしの色を選択",
+      "openOutlineColors": "枠線の色を選択",
+      "otherWidth": "その他の幅",
+      "outline": "枠線",
+      "outlineColor": "枠線の色",
+      "outlineHex": "枠線の 16 進カラー",
+      "readOnlyFill": "塗りつぶしの種類: {fill}。置き換えるには、色または [塗りつぶしなし] を選択してください。",
+      "title": "図形の書式設定",
+      "transparency": "透明度 (%)",
+      "width": "幅 (pt)",
+      "widthPoints": "{value} pt",
+      "widthPreset": "幅のプリセット"
+    }
   }
 }

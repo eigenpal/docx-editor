@@ -134,3 +134,17 @@ test('the compare documents collaboration refusal is translatable', () => {
     'Compare documents is not available in a shared editing session.'
   );
 });
+
+describe('the Format shape refusals are translatable', () => {
+  const t = createT(en);
+  test.each([
+    ['this drawing has no fill or outline to set', en.shape.errors.noShape],
+    ['the shape has no solid fill to change; set a color', en.shape.errors.noSolidFill],
+    ['a legacy shape has no transparency', en.shape.errors.legacyTransparency],
+    ['the fill or outline value is out of range', en.shape.errors.outOfRange],
+    ['stale drawing selection', en.shape.errors.staleSelection],
+    ['shape.pane.errors.width', en.shape.pane.errors.width],
+  ])('%s', (reason, expected) => {
+    expect(localizeDisabledReason(reason, t)).toBe(expected);
+  });
+});

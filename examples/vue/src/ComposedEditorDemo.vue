@@ -32,7 +32,7 @@
         :fonts="fonts ?? undefined"
         @font-error="onFontError"
       >
-        <DemoEditorEffects @chart-pane="showPanel('chart')" />
+        <DemoEditorEffects @chart-pane="showPanel('chart')" @shape-pane="showPanel('shape')" />
         <EditorChrome
           :title="title"
           :show-adapter-switcher="showAdapterSwitcher"

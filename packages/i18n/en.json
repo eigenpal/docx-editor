@@ -1361,5 +1361,53 @@
       "invalidValue": "The chart cannot use this value.",
       "suggesting": "Charts cannot change while you suggest edits. Switch to Editing to change this chart."
     }
+  },
+  "shape": {
+    "formatShape": "Format shape…",
+    "pane": {
+      "title": "Format shape",
+      "close": "Close the format shape pane",
+      "emptyTitle": "No shape selected",
+      "emptyBody": "Select a shape, text box, or line in the document to format it.",
+      "fill": "Fill",
+      "outline": "Outline",
+      "noFill": "No fill",
+      "noOutline": "No line",
+      "fillColor": "Fill color",
+      "outlineColor": "Outline color",
+      "openFillColors": "Choose a fill color",
+      "openOutlineColors": "Choose an outline color",
+      "fillHex": "Fill hex color",
+      "outlineHex": "Outline hex color",
+      "hexHelp": "Type #RRGGBB or a color name, then press Enter.",
+      "transparency": "Transparency (%)",
+      "width": "Width (pt)",
+      "widthPreset": "Width preset",
+      "widthPoints": "{value} pt",
+      "otherWidth": "Other width",
+      "readOnlyFill": "Fill type: {fill}. Pick a color or No fill to replace it.",
+      "mixedOutline": "The shapes in this group have different outlines.",
+      "fillTypes": {
+        "solid": "Solid",
+        "none": "No fill",
+        "gradient": "Gradient",
+        "pattern": "Pattern",
+        "picture": "Picture",
+        "mixed": "Mixed"
+      },
+      "errors": {
+        "color": "Type a color as #RRGGBB or as a color name.",
+        "transparency": "Type a number from 0 to 100.",
+        "width": "Type a width from 0.25 to 1584 points.",
+        "noSolidFill": "Pick a fill color first."
+      }
+    },
+    "errors": {
+      "noShape": "Select one shape, text box, or line.",
+      "noSolidFill": "The shape has no solid fill. Pick a fill color first.",
+      "legacyTransparency": "This older shape type has no transparency setting.",
+      "outOfRange": "The value is out of range.",
+      "staleSelection": "The selection changed. Select the shape again."
+    }
   }
 }

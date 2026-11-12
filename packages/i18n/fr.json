@@ -1361,5 +1361,53 @@
       "invalidValue": "Le graphique ne peut pas utiliser cette valeur.",
       "suggesting": "Les graphiques ne peuvent pas être modifiés pendant que vous suggérez des modifications. Passez en mode Édition pour modifier ce graphique."
     }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "Cet ancien type de forme n'a pas de réglage de transparence.",
+      "noShape": "Sélectionnez une forme, une zone de texte ou une ligne.",
+      "noSolidFill": "La forme n'a pas de remplissage uni. Choisissez d'abord une couleur de remplissage.",
+      "outOfRange": "La valeur est hors limites.",
+      "staleSelection": "La sélection a changé. Sélectionnez de nouveau la forme."
+    },
+    "formatShape": "Format de la forme…",
+    "pane": {
+      "close": "Fermer le volet Format de la forme",
+      "emptyBody": "Sélectionnez une forme, une zone de texte ou une ligne dans le document pour la mettre en forme.",
+      "emptyTitle": "Aucune forme sélectionnée",
+      "errors": {
+        "color": "Saisissez une couleur au format #RRGGBB ou un nom de couleur.",
+        "noSolidFill": "Choisissez d'abord une couleur de remplissage.",
+        "transparency": "Saisissez un nombre de 0 à 100.",
+        "width": "Saisissez une épaisseur de 0,25 à 1584 points."
+      },
+      "fill": "Remplissage",
+      "fillColor": "Couleur de remplissage",
+      "fillHex": "Couleur hexadécimale du remplissage",
+      "fillTypes": {
+        "gradient": "Dégradé",
+        "mixed": "Mixte",
+        "none": "Aucun remplissage",
+        "pattern": "Motif",
+        "picture": "Image",
+        "solid": "Uni"
+      },
+      "hexHelp": "Saisissez #RRGGBB ou un nom de couleur, puis appuyez sur Entrée.",
+      "mixedOutline": "Les formes de ce groupe ont des contours différents.",
+      "noFill": "Aucun remplissage",
+      "noOutline": "Aucun trait",
+      "openFillColors": "Choisir une couleur de remplissage",
+      "openOutlineColors": "Choisir une couleur de contour",
+      "otherWidth": "Autre épaisseur",
+      "outline": "Contour",
+      "outlineColor": "Couleur du contour",
+      "outlineHex": "Couleur hexadécimale du contour",
+      "readOnlyFill": "Type de remplissage : {fill}. Choisissez une couleur ou Aucun remplissage pour le remplacer.",
+      "title": "Format de la forme",
+      "transparency": "Transparence (%)",
+      "width": "Épaisseur (pt)",
+      "widthPoints": "{value} pt",
+      "widthPreset": "Épaisseur prédéfinie"
+    }
   }
 }

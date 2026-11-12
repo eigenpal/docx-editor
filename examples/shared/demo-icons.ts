@@ -4,6 +4,7 @@
 
 export type DemoIconName =
   | 'chart'
+  | 'shape'
   | 'settings'
   | 'close'
   | 'open'
@@ -19,6 +20,7 @@ const PANEL = 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 
 
 export const DEMO_ICONS: Readonly<Record<DemoIconName, readonly string[]>> = {
   chart: ['M3 3v16a2 2 0 0 0 2 2h16', 'M18 17V9', 'M13 17V5', 'M8 17v-3'],
+  shape: ['M3 3h10v10H3z', 'M14 11a5 5 0 1 0 7 7a5 5 0 1 0-7-7'],
   settings: [
     'M20 7h-9',
     'M14 17H5',

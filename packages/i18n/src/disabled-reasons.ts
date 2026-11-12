@@ -155,6 +155,13 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'content controls lock every remaining change; remove the locks to decide them':
     'disabledReason.reviewLockedChanges',
   'every remaining change is in a data-bound content control': 'disabledReason.reviewBoundChanges',
+  // Keyed on the refusals of the engine's `shape-format-commands.ts`; the sentences must stay
+  // the same.
+  'this drawing has no fill or outline to set': 'shape.errors.noShape',
+  'the shape has no solid fill to change; set a color': 'shape.errors.noSolidFill',
+  'a legacy shape has no transparency': 'shape.errors.legacyTransparency',
+  'the fill or outline value is out of range': 'shape.errors.outOfRange',
+  'stale drawing selection': 'shape.errors.staleSelection',
   // Keyed on `CHART_SUGGESTING_REFUSAL` in the engine's `surface-chart-ops.ts`.
   'chart changes are not supported in suggesting mode': 'chart.errors.suggesting',
 });
@@ -174,6 +181,9 @@ export function localizeDisabledReason(reason: string | null, t: TFunction): str
     ? DISABLED_REASON_KEYS[reason]
     : undefined;
   if (key) return t(key);
-  // The chart lane states its refusals as `chart.errors.*` keys, which name themselves.
-  return /^chart\.errors\.[a-zA-Z]+$/.test(reason) ? t(reason as TranslationKey) : reason;
+  // The chart lane and the Format shape pane state their refusals as `chart.errors.*` and
+  // `shape.pane.errors.*` keys, which name themselves.
+  return /^(chart\.errors|shape\.pane\.errors)\.[a-zA-Z]+$/.test(reason)
+    ? t(reason as TranslationKey)
+    : reason;
 }

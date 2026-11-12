@@ -1,14 +1,21 @@
 // The tabs of the demo side panel, shared by the React and Vue examples.
 
-export type DemoPanelTab = 'chart' | 'settings';
+export type DemoPanelTab = 'chart' | 'shape' | 'settings';
 
 export const DEMO_PANEL_TABS: readonly {
   readonly id: DemoPanelTab;
-  readonly icon: 'chart' | 'settings';
+  readonly icon: 'chart' | 'shape' | 'settings';
 }[] = [
   { id: 'chart', icon: 'chart' },
+  { id: 'shape', icon: 'shape' },
   { id: 'settings', icon: 'settings' },
 ];
+
+/** What the selection holds: a chart shows the Chart tab, a shape the Format shape tab. */
+export interface DemoSelection {
+  readonly chart: boolean;
+  readonly shape: boolean;
+}
 
 /**
  * The tab that a key moves to in a row of `count` tabs, or null for another key. The arrow
@@ -29,12 +36,12 @@ export function nextDemoTab(
   return null;
 }
 
-/** The tabs that the panel shows: the Chart tab only while a chart is selected. */
-export function visibleDemoTabs(chartSelected: boolean): typeof DEMO_PANEL_TABS {
-  return chartSelected ? DEMO_PANEL_TABS : DEMO_PANEL_TABS.filter((entry) => entry.id !== 'chart');
+/** The tabs that the panel shows: Chart while a chart is selected, Format shape for a shape. */
+export function visibleDemoTabs(selection: DemoSelection): typeof DEMO_PANEL_TABS {
+  return DEMO_PANEL_TABS.filter((entry) => entry.id === 'settings' || selection[entry.id]);
 }
 
-/** The tab that the panel shows: Settings when the chosen tab is Chart and no chart is selected. */
-export function shownDemoTab(tab: DemoPanelTab, chartSelected: boolean): DemoPanelTab {
-  return tab === 'chart' && !chartSelected ? 'settings' : tab;
+/** The tab that the panel shows: Settings when the chosen tab's selection is gone. */
+export function shownDemoTab(tab: DemoPanelTab, selection: DemoSelection): DemoPanelTab {
+  return tab === 'settings' || selection[tab] ? tab : 'settings';
 }

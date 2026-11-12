@@ -10,7 +10,11 @@ import { expect, test } from 'bun:test';
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { strToU8, zipSync } from 'fflate';
-import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import {
+  createDocxEditor,
+  editSelectedShape,
+  readSelectedShape,
+} from '@docx-editor.dev/core/editor';
 import {
   readOoxmlPackage,
   canonicalOoxmlFingerprint,
@@ -206,6 +210,51 @@ test('two editors converge on concurrent fill and outline edits, undo, delete, r
     await converged(a, late);
   } finally {
     late?.destroy();
+    a.destroy();
+    b.destroy();
+  }
+});
+
+test('Format shape pane edits reach the other peer, its pane read follows, a delete empties it', async () => {
+  const a = await peer('Alice'),
+    b = await peer('Bob', a);
+  const pane = (client: Peer) => readSelectedShape(client.editor, client.editor.snapshot().image);
+  const edit = (client: Peer, change: Parameters<typeof editSelectedShape>[2]) =>
+    editSelectedShape(client.editor, client.editor.snapshot().image, change);
+  try {
+    select(a);
+    select(b);
+    // A theme pick on one peer is the other peer's pane state after a sync.
+    expect(edit(a, { type: 'fillColor', color: 'accent1' })).toMatchObject({ ok: true });
+    sync(a, b);
+    expect(pane(b).format?.fill).toMatchObject({ type: 'solid', color: '4472C4' });
+    expect(pane(b).canEditFill).toBe(true);
+    // The other way: a typed width and a picked outline color.
+    expect(edit(b, { type: 'outlineWidth', text: '3' })).toMatchObject({ ok: true });
+    expect(edit(b, { type: 'outlineColor', color: '#0070C0' })).toMatchObject({ ok: true });
+    sync(a, b);
+    expect(pane(a).format?.outline).toEqual({ visible: true, color: '0070C0', widthPt: 3 });
+    // Concurrent pane edits converge.
+    expect(edit(a, { type: 'fillTransparency', text: '50' })).toMatchObject({ ok: true });
+    expect(edit(b, { type: 'noFill' })).toMatchObject({ ok: true });
+    sync(a, b);
+    await converged(a, b);
+    expect(pane(a).format?.fill).toEqual(pane(b).format?.fill);
+    // Undo travels and both panes read it.
+    expect(b.editor.exec({ type: 'undo' })).toMatchObject({ ok: true });
+    sync(a, b);
+    await converged(a, b);
+    expect(pane(a).format?.fill).toEqual(pane(b).format?.fill);
+    // Alice deletes the shape while Bob's pane shows it: Bob's pane empties, edits refuse.
+    expect(a.editor.exec({ type: 'deleteImage' })).toMatchObject({ ok: true });
+    sync(a, b);
+    expect(pane(b)).toMatchObject({ drawingNodeId: null, format: null, canEditFill: false });
+    expect(edit(b, { type: 'fillColor', color: 'accent2' })).toMatchObject({
+      ok: false,
+      code: 'notFound',
+    });
+    await converged(a, b);
+  } finally {
     a.destroy();
     b.destroy();
   }

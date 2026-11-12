@@ -1361,5 +1361,53 @@
       "invalidValue": "O gráfico não pode usar este valor.",
       "suggesting": "Não é possível alterar gráficos enquanto você sugere edições. Mude para Edição para alterar este gráfico."
     }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "Este tipo de forma antigo não tem configuração de transparência.",
+      "noShape": "Selecione uma forma, uma caixa de texto ou uma linha.",
+      "noSolidFill": "A forma não tem preenchimento sólido. Escolha primeiro uma cor de preenchimento.",
+      "outOfRange": "O valor está fora do intervalo.",
+      "staleSelection": "A seleção mudou. Selecione a forma novamente."
+    },
+    "formatShape": "Formatar forma…",
+    "pane": {
+      "close": "Fechar o painel Formatar forma",
+      "emptyBody": "Selecione uma forma, uma caixa de texto ou uma linha no documento para formatá-la.",
+      "emptyTitle": "Nenhuma forma selecionada",
+      "errors": {
+        "color": "Digite uma cor como #RRGGBB ou como nome de cor.",
+        "noSolidFill": "Escolha primeiro uma cor de preenchimento.",
+        "transparency": "Digite um número de 0 a 100.",
+        "width": "Digite uma espessura de 0,25 a 1584 pontos."
+      },
+      "fill": "Preenchimento",
+      "fillColor": "Cor de preenchimento",
+      "fillHex": "Cor hexadecimal do preenchimento",
+      "fillTypes": {
+        "gradient": "Gradiente",
+        "mixed": "Misto",
+        "none": "Sem preenchimento",
+        "pattern": "Padrão",
+        "picture": "Imagem",
+        "solid": "Sólido"
+      },
+      "hexHelp": "Digite #RRGGBB ou o nome de uma cor e pressione Enter.",
+      "mixedOutline": "As formas deste grupo têm contornos diferentes.",
+      "noFill": "Sem preenchimento",
+      "noOutline": "Sem linha",
+      "openFillColors": "Escolher uma cor de preenchimento",
+      "openOutlineColors": "Escolher uma cor de contorno",
+      "otherWidth": "Outra espessura",
+      "outline": "Contorno",
+      "outlineColor": "Cor do contorno",
+      "outlineHex": "Cor hexadecimal do contorno",
+      "readOnlyFill": "Tipo de preenchimento: {fill}. Escolha uma cor ou Sem preenchimento para substituí-lo.",
+      "title": "Formatar forma",
+      "transparency": "Transparência (%)",
+      "width": "Espessura (pt)",
+      "widthPoints": "{value} pt",
+      "widthPreset": "Espessura predefinida"
+    }
   }
 }

@@ -1,0 +1,207 @@
+// The Format shape pane: the shared markup of `shape-pane-markup.json` (the Vue pane renders it
+// too), the side panel that swaps to it for a selected shape, the keyboard path through the
+// color grid and the fields, Format shape from the toolbar slot and the context menu, a change
+// from elsewhere that repaints the pane, and a deleted shape that empties it.
+
+import './dom-setup.ts';
+
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+import { readFileSync, writeFileSync } from 'node:fs';
+import { afterEach, expect, test } from 'bun:test';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import { runToolbarCommand, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
+import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
+import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
+import { DocxEditorSidePanel } from '../src/editor/charts/SidePanel.tsx';
+import { DocxEditorShapePane } from '../src/editor/shapes/ShapePane.tsx';
+import { ContextMenu } from '../src/editor/contextmenu/index.ts';
+import {
+  SHAPE_PANE_CASES,
+  SHAPE_PANE_MARKUP_PATH,
+  normalizeShapePaneMarkup,
+  selectParityShape,
+  shapePaneDocx,
+} from './shape-pane-parity.ts';
+
+afterEach(() => cleanup());
+
+async function flush(): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt += 1)
+    await act(async () => {
+      await Promise.resolve();
+    });
+}
+
+function mount(fill: string, panel: 'pane' | 'side') {
+  let instance: DocxEditorInstance | null = null;
+  const view = render(
+    <DocxEditorRoot
+      document={shapePaneDocx(fill)}
+      onReady={(editor) => {
+        instance = editor as DocxEditorInstance;
+      }}
+    >
+      <DocxEditorViewport>
+        <DocxEditorContent />
+        <ContextMenu />
+      </DocxEditorViewport>
+      {panel === 'pane' ? <DocxEditorShapePane /> : <DocxEditorSidePanel onClose={() => {}} />}
+    </DocxEditorRoot>
+  );
+  return { view, editor: () => instance! };
+}
+
+async function paneMarkup(fill: string | null): Promise<string> {
+  const { view, editor } = mount(fill ?? SHAPE_PANE_CASES.solid, 'pane');
+  await flush();
+  if (fill) await act(async () => selectParityShape(editor()));
+  await flush();
+  const pane = view.container.querySelector('.docx-shape-pane');
+  if (!pane) throw new Error('no pane');
+  const html = normalizeShapePaneMarkup(pane.outerHTML);
+  cleanup();
+  return html;
+}
+
+test('the Format shape pane renders the shared markup for each fill and for no shape', async () => {
+  const markup: Record<string, string> = { none: await paneMarkup(null) };
+  for (const [name, fill] of Object.entries(SHAPE_PANE_CASES))
+    markup[name] = await paneMarkup(fill);
+  expect(markup.solid).toContain('Accent 1');
+  expect(markup.gradient).toContain('Fill type: Gradient.');
+  expect(markup.gradient).toContain('disabled');
+  if (process.env.UPDATE_SHAPE_PANE_MARKUP === '1')
+    writeFileSync(SHAPE_PANE_MARKUP_PATH, `${JSON.stringify(markup, null, 2)}\n`);
+  expect(markup).toEqual(JSON.parse(readFileSync(SHAPE_PANE_MARKUP_PATH, 'utf8')));
+});
+
+const button = (root: HTMLElement, label: string): HTMLButtonElement => {
+  const found = [...root.querySelectorAll<HTMLButtonElement>('button')].find(
+    (b) => b.getAttribute('aria-label') === label || b.textContent === label
+  );
+  if (!found) throw new Error(`no button ${label}`);
+  return found;
+};
+const input = (root: HTMLElement, label: string): HTMLInputElement =>
+  root.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+
+test('the side panel swaps to the pane; keyboard picks, typed fields, undo, and a delete', async () => {
+  const { view, editor } = mount(SHAPE_PANE_CASES.solid, 'side');
+  await flush();
+  const panel = view.container.querySelector<HTMLElement>('.docx-side-panel')!;
+  expect(panel.getAttribute('data-pane')).toBe('chart');
+  await act(async () => selectParityShape(editor()));
+  await flush();
+  expect(panel.getAttribute('data-pane')).toBe('shape');
+  expect(panel.querySelector('.docx-side-panel__title')?.textContent).toBe('Format shape');
+
+  // Format shape from the toolbar slot moves the focus to the first field.
+  await act(async () => {
+    expect(runToolbarCommand(editor(), 'image.formatShape')).toEqual({ ok: true, changed: false });
+    await Promise.resolve();
+  });
+  await flush();
+  const fillButton = panel.querySelector<HTMLButtonElement>('.docx-shape-pane__color-button')!;
+  expect(document.activeElement).toBe(fillButton);
+  expect(fillButton.textContent).toContain('Accent 1');
+
+  // Keyboard: open the grid, the current color has the focus, Right moves, Enter picks.
+  await act(async () => fillButton.click());
+  await flush();
+  const grid = panel.querySelector<HTMLElement>('.docx-chart-pane__grid')!;
+  expect(document.activeElement?.getAttribute('aria-label')).toBe('Accent 1');
+  await act(async () => {
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+  });
+  expect(document.activeElement?.getAttribute('aria-label')).toBe('Accent 2');
+  await act(async () => (document.activeElement as HTMLButtonElement).click());
+  await flush();
+  expect(grid.isConnected).toBe(false);
+  expect(document.activeElement).toBe(fillButton);
+  expect(editor().snapshot().image?.shapeFormat?.fill).toEqual({
+    type: 'solid',
+    color: 'ED7D31',
+    transparency: 0.25,
+  });
+
+  // Outline: 3pt blue from the hex field and the width field, each one undo step.
+  const outlineHex = input(panel, 'Outline hex color');
+  await act(async () => {
+    fireEvent.change(outlineHex, { target: { value: '#0070C0' } });
+    fireEvent.keyDown(outlineHex, { key: 'Enter' });
+  });
+  const width = input(panel, 'Width (pt)');
+  await act(async () => {
+    fireEvent.change(width, { target: { value: '3' } });
+    fireEvent.keyDown(width, { key: 'Enter' });
+  });
+  await flush();
+  expect(editor().snapshot().image?.shapeFormat?.outline).toEqual({
+    visible: true,
+    color: '0070C0',
+    widthPt: 3,
+  });
+  expect(panel.querySelectorAll('.docx-shape-pane__color-button')[1]?.textContent).toBe('Blue');
+  expect(width.value).toBe('3');
+
+  // A typed value the pane cannot read stays in the field with its reason.
+  await act(async () => {
+    fireEvent.change(width, { target: { value: '0' } });
+    fireEvent.keyDown(width, { key: 'Enter' });
+  });
+  expect(width.getAttribute('aria-invalid')).toBe('true');
+  expect(panel.textContent).toContain('Type a width from 0.25 to 1584 points.');
+  await act(async () => {
+    fireEvent.keyDown(width, { key: 'Escape' });
+  });
+
+  // Undo returns the width; a change from elsewhere repaints the pane.
+  await act(async () => {
+    editor().exec({ type: 'undo' });
+  });
+  await flush();
+  expect(input(panel, 'Width (pt)').value).toBe('1');
+  await act(async () => {
+    editor().exec({ type: 'setShapeFill', color: '00B050' });
+  });
+  await flush();
+  expect(input(panel, 'Fill hex color').value).toBe('#00B050');
+  expect(fillButton.textContent).toBe('Green');
+
+  // No fill from the grid; the transparency field then says why it is off.
+  await act(async () => fillButton.click());
+  await flush();
+  await act(async () => button(panel, 'No fill').click());
+  await flush();
+  expect(editor().snapshot().image?.shapeFormat?.fill.type).toBe('none');
+  expect(input(panel, 'Transparency (%)').disabled).toBe(true);
+  expect(panel.textContent).toContain('The shape has no solid fill. Pick a fill color first.');
+
+  // The shape goes: the pane empties.
+  await act(async () => {
+    expect(editor().exec({ type: 'deleteImage' })).toMatchObject({ ok: true });
+  });
+  await flush();
+  expect(panel.textContent).toContain('No shape selected');
+});
+
+test('the context menu shows Format shape for a selected shape and opens the pane', async () => {
+  const { view, editor } = mount(SHAPE_PANE_CASES.solid, 'side');
+  await flush();
+  await act(async () => selectParityShape(editor()));
+  await flush();
+  const scroller = view.container.querySelector<HTMLElement>('.docx-editor__scroll-container')!;
+  await act(async () => {
+    fireEvent.contextMenu(scroller, { clientX: 120, clientY: 140, button: 2 });
+  });
+  const row = view.container.querySelector<HTMLElement>(
+    '.docx-contextmenu [data-slot="image.formatShape"]'
+  );
+  expect(row?.textContent).toContain('Format shape');
+  await act(async () => row!.click());
+  await flush();
+  const pane = view.container.querySelector('.docx-shape-pane')!;
+  expect(pane.contains(document.activeElement)).toBe(true);
+});

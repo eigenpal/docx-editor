@@ -360,6 +360,7 @@ const messages = {
   'demoPanel.label': 'Side panel',
   'demoPanel.tabs': 'Side panel tabs',
   'demoPanel.chart': 'Chart',
+  'demoPanel.shape': 'Format shape',
   'demoPanel.settings': 'Settings',
   'demoPanel.close': 'Close the side panel',
   'demoPanel.theme': 'Theme',
