@@ -213,12 +213,18 @@ export class CaretAnchors {
     const shown = follow.shownCopy(identity);
     if (shown) candidates.add(shown);
     for (const holder of follow.holdersOf(identity)) candidates.add(holder);
-    // Text typed in a paragraph a peer removed shows where it follows the move, and from
-    // there it can follow on: a join takes the text back into a paragraph that a concurrent
-    // split moves it out of again.
+    // Text typed in a paragraph a peer removed shows where it follows the move.
+    if (point.paragraph) {
+      for (const target of follow.targetsFor(point.paragraph)) candidates.add(target);
+    }
+    // From there it can follow on: a join takes the text back into a paragraph that a
+    // concurrent split moves it out of again.
     for (const candidate of candidates) {
       if (candidates.size >= MAX_FOLLOW_CANDIDATES) break;
-      for (const target of follow.targetsFor(candidate)) candidates.add(target);
+      for (const target of follow.targetsFor(candidate)) {
+        if (candidates.size >= MAX_FOLLOW_CANDIDATES) break;
+        candidates.add(target);
+      }
     }
     for (const candidate of candidates) {
       if (registry.inline.isDeletedParagraph(candidate)) continue;
