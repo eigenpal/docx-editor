@@ -1,4 +1,12 @@
-import { PATH_HIT_REACH, turnedShapeBounds, unionBox, vectorShapeHit } from './vector-shape-hit.ts';
+import {
+  PATH_HIT_REACH,
+  textboxPaintsPastFrame,
+  textboxPressReaches,
+  turnedShapeBounds,
+  unionBox,
+  vectorShapeHit,
+} from './vector-shape-hit.ts';
+import { vectorShapeInkClip } from './vector-shape-ink.ts';
 export {
   findDrawingOverlayFrameInLayout,
   type DrawingOverlayFrame,
@@ -319,7 +327,7 @@ function turnedInlineHit(
   context: HitContext,
   controlsOf?: SemanticLayout
 ): SemanticHit | null {
-  const found = turnedInlineDrawingAt(fragments, (drawing) =>
+  const found = turnedInlineDrawingAt(fragments, point, (drawing) =>
     hitBoundsContainDrawing(drawing, point)
   );
   if (!found) return null;
@@ -716,9 +724,13 @@ function hitBoundsContainDrawing(
   const box = drawing.hitBounds;
   // A vector shape takes a press on what it paints: its fill, and its path or outline within
   // reach. A press beside a line, or inside a shape with no fill, goes to the text. A turned
-  // shape paints outside its box too, as far as its turned extent reaches.
+  // shape paints outside its box too, as far as its turned extent reaches, and a shape that
+  // paints outside its extent, such as a callout's tail, as far as its ink reaches.
   const reach = PATH_HIT_REACH + maxStrokeHalfWidth(drawing);
-  const near = unionBox(box, turnedShapeBounds(drawing));
+  const ink = drawing.vectorShape?.overflowVisible
+    ? vectorShapeInkClip(drawing, drawing.paintBounds)
+    : null;
+  const near = unionBox(unionBox(box, turnedShapeBounds(drawing)), ink);
   if (
     point.x < near.x - reach ||
     point.x > near.x + near.width + reach ||
@@ -735,6 +747,9 @@ function hitBoundsContainDrawing(
     point.y >= box.y + box.height
   )
     return false;
+  // A text box that paints past its frame takes a press on its frame, its text, or the shape
+  // it paints there, whatever its effect extent reserves; the gesture follows the same rule.
+  if (textboxPaintsPastFrame(drawing)) return textboxPressReaches(drawing, point);
   return pointInDrawingClip(point.x, point.y, drawing.geometry);
 }
 

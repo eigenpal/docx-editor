@@ -875,6 +875,7 @@ export interface DrawingGeometry {
     readonly imageTransformCorners?: readonly DrawingPoint[];
     // (undocumented)
     readonly paintBounds: LayoutBox;
+    readonly regionCuts?: DrawingRegionCuts;
     // (undocumented)
     readonly transformedCorners: readonly DrawingPoint[];
 }
@@ -951,6 +952,14 @@ export interface DrawingPoint {
     readonly x: number;
     // (undocumented)
     readonly y: number;
+}
+
+// @public
+export interface DrawingRegionCuts {
+    readonly bottom: number;
+    readonly left: number;
+    readonly right: number;
+    readonly top: number;
 }
 
 // @public
@@ -5089,6 +5098,7 @@ export interface VectorGradient {
     readonly kind: 'linear' | 'radial';
     readonly matrix: AffineMatrix;
     readonly stops: readonly GradientStop[];
+    readonly turnsWithShape?: false;
 }
 
 // @public

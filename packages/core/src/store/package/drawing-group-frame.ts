@@ -11,6 +11,7 @@ import {
   schemaAttributeValue,
 } from './ooxml-drawing-rules.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
+import { shapeRotationDegrees } from './drawing-shape-geometry.ts';
 
 export const WPG_NAMESPACE_URI =
   'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
@@ -52,8 +53,8 @@ export function schemaFlagIsSet(value: string | undefined): boolean {
  * `ST_Angle` derives from `xsd:int`, so it carries the same collapse facet as `xsd:boolean`
  * and the same freedom over sign and leading zeros: ` 0 `, `00`, `+0` and `-0` are all a
  * zero rotation. Comparing the raw string to `'0'` refused every one of them and dropped the
- * shape to a placeholder. A non-zero angle still refuses — the engine cannot paint a rotated
- * vector shape — and so does anything that is not a legal `xsd:int`.
+ * shape to a placeholder. A non-zero angle still refuses where the caller does not accept a
+ * turn, and so does anything that is not a legal `xsd:int`.
  */
 export function schemaAngleIsZero(value: string | undefined): boolean {
   if (value === undefined) return true;
@@ -125,14 +126,30 @@ export interface DrawingGroupFrame {
   readonly group: OoxmlElement;
   readonly childOffsetEmu: Readonly<{ x: number; y: number }>;
   readonly childExtentEmu: Readonly<{ cx: number; cy: number }>;
+  /**
+   * The group's own turn and flips, read only when the caller accepts them (`turned`). The
+   * whole group flips, then turns clockwise, about the centre of its extent.
+   */
+  readonly turn?: GroupTurn;
+}
+
+/** A group's `a:xfrm` turn in clockwise degrees in [0, 360), and its flips. */
+export interface GroupTurn {
+  readonly rotationDegrees: number;
+  readonly flipH: boolean;
+  readonly flipV: boolean;
 }
 
 /**
  * The `wpg:wgp` under the anchor's graphic data with its `a:chOff`/`a:chExt`, or null when
- * the payload is not a group, has a missing or negative child extent, or is rotated or
- * flipped. A child extent may be zero on one or both axes.
+ * the payload is not a group or has a missing or negative child extent. A child extent may
+ * be zero on one or both axes. A turned or flipped group is null too, unless `turned` is set:
+ * then its schema-valid turn and flips come back in `turn`.
  */
-export function readDrawingGroupFrame(anchor: OoxmlElement): DrawingGroupFrame | null {
+export function readDrawingGroupFrame(
+  anchor: OoxmlElement,
+  options: { readonly turned?: boolean } = {}
+): DrawingGroupFrame | null {
   const data = findGraphicData(anchor);
   if (!data || schemaAttributeValue(data.attributes, 'uri') !== WPG_GRAPHIC_DATA_URI) return null;
   const group = findDirectChild(data.children, {
@@ -162,7 +179,11 @@ export function readDrawingGroupFrame(anchor: OoxmlElement): DrawingGroupFrame |
     : null;
   if (!group || !groupProperties || !childExtent) return null;
   if (!supportedGroupVisuals(group, groupProperties, true)) return null;
-  if (xfrm) {
+  let turn: GroupTurn | null = null;
+  if (xfrm && options.turned) {
+    turn = groupTurn(xfrm);
+    if (!turn) return null;
+  } else if (xfrm) {
     if (!schemaAngleIsZero(schemaAttributeValue(xfrm.attributes, 'rot'))) return null;
     if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipH'))) return null;
     if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipV'))) return null;
@@ -183,6 +204,20 @@ export function readDrawingGroupFrame(anchor: OoxmlElement): DrawingGroupFrame |
         : 0,
     },
     childExtentEmu: { cx, cy },
+    ...(turn && (turn.rotationDegrees !== 0 || turn.flipH || turn.flipV) ? { turn } : {}),
+  };
+}
+
+/** The schema-valid turn and flips of a group's `a:xfrm`, or null for an invalid spelling. */
+function groupTurn(xfrm: OoxmlElement): GroupTurn | null {
+  const rotationDegrees = shapeRotationDegrees(xfrm);
+  if (rotationDegrees === null) return null;
+  const flips = ['flipH', 'flipV'].map((name) => schemaAttributeValue(xfrm.attributes, name));
+  if (flips.some((value) => !schemaFlagIsUnset(value) && !schemaFlagIsSet(value))) return null;
+  return {
+    rotationDegrees,
+    flipH: schemaFlagIsSet(flips[0]),
+    flipV: schemaFlagIsSet(flips[1]),
   };
 }
 

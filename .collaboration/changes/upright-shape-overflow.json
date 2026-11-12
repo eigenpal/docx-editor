@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "An upright shape was cut at its extent and at a negative effect extent, and a press on geometry past its box went to the text.",
+  "after": "An upright shape paints its whole geometry and outline, unless a layout region cuts into its box, and a press on the painted part past its box selects it.",
+  "reason": "Only the shape projection, the paint clip, and pointer hit testing change. Source XML, shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/upright-shape-overflow.test.ts",
+    "packages/pro/src/collaboration/__tests__/upright-shape-overflow-peers.test.ts",
+    "packages/core/src/layout/__tests__/vector-shape-ink.test.ts",
+    "packages/docx-to-pdf/test/vector-shapes.test.ts"
+  ],
+  "changeset": "upright-shape-overflow",
+  "migration": null
+}

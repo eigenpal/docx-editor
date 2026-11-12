@@ -2,6 +2,7 @@ import type { PointerHost, SurfacePointHit } from './surface-pointer.ts';
 import type { SemanticLayout } from '../layout/semantic-records.ts';
 import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
 import { turnedInlineDrawings } from '../layout/turned-inline-drawing-hit.ts';
+import { drawingPaintsPastBox } from '../layout/vector-shape-hit.ts';
 import {
   findDrawingOverlayFrameInLayout,
   pageAtY,
@@ -109,7 +110,8 @@ export type BehindDrawingHit = NonNullable<SemanticHit['drawing']> & {
 /**
  * The body drawing that a press at a client point reaches by geometry, as the body's own hit
  * test resolves it, page margins included: a drawing behind the text, outside every text line,
- * or a turned shape on what it paints, which can lie past its box and past the text column.
+ * or a turned shape, or a shape that paints past its box, on what it paints, which can lie past
+ * its box and past the text column.
  * Null in a note, on a header or footer band, over another front drawing, and over a read-only
  * position. With a header or footer open, its own drawing that the press reaches instead, past
  * its band too (a watermark). That drawing names its page, which can be another page that
@@ -137,7 +139,9 @@ export function behindDrawingAt(
   if (!page) return null;
   const turned = turnedInlineDrawings(page.fragments);
   const reachable = (drawing: AnchoredDrawingRecord) =>
-    drawing.behindDocument || !!drawing.vectorShape?.rotationDegrees;
+    drawing.behindDocument ||
+    !!drawing.vectorShape?.rotationDegrees ||
+    drawingPaintsPastBox(drawing);
   if (!page.anchoredDrawings?.some(reachable) && turned.length === 0) return null;
   const x = sheet.x - host.pageOffsetX(index);
   const box = page.box;

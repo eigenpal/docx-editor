@@ -14,6 +14,8 @@ import {
   type DrawingOverlayFrame,
 } from '../layout/semantic-hit-test.ts';
 import { readDrawingGroupFrame } from '../store/package/drawing-group-frame.ts';
+import { groupMemberPlacement } from '../store/package/drawing-group-transform.ts';
+import { shapeRotationDegrees } from '../store/package/drawing-shape-geometry.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { schemaAttributeValue, WPS_NAMESPACE_URI } from '../store/package/ooxml-drawing-rules.ts';
 import { WP_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
@@ -104,10 +106,15 @@ export function groupMemberBoxes(
   const root = drawing ? element(drawing) : null;
   const anchor = root ? anchorOf(root) : null;
   const frame = anchor ? readDrawingGroupFrame(anchor) : null;
-  if (!frame) return null;
-  const { x: offX, y: offY } = frame.childOffsetEmu;
+  if (!anchor || !frame) return null;
   const { cx, cy } = frame.childExtentEmu;
   if (cx <= 0 || cy <= 0) return null;
+  // The group extent sets each axis's scale, which places a turned member's box.
+  const extent = childNamed(anchor, WP_NAMESPACE_URI, 'extent');
+  const groupCx = emu(extent, 'cx') ?? cx;
+  const groupCy = emu(extent, 'cy') ?? cy;
+  const scaleX = groupCx > 0 ? groupCx / cx : 1;
+  const scaleY = groupCy > 0 ? groupCy / cy : 1;
   const boxes: GroupMemberBox[] = [];
   for (const child of frame.group.children) {
     const member = element(child);
@@ -119,12 +126,20 @@ export function groupMemberBoxes(
     const ext = xfrm ? childNamed(xfrm, DRAWINGML_MAIN_NAMESPACE_URI, 'ext') : null;
     const [x, y, w, h] = [emu(off, 'x'), emu(off, 'y'), emu(ext, 'cx'), emu(ext, 'cy')];
     if (x === null || y === null || w === null || h === null) continue;
+    // The box the member paints in before it turns, as the paint places it.
+    const place = groupMemberPlacement(
+      { offset: { x, y }, extent: { cx: w, cy: h } },
+      frame.childOffsetEmu,
+      scaleX,
+      scaleY,
+      shapeRotationDegrees(xfrm) ?? 0
+    );
     boxes.push({
       id: member.id,
-      x: (x - offX) / cx,
-      y: (y - offY) / cy,
-      width: w / cx,
-      height: h / cy,
+      x: place.offset.x / (cx * scaleX),
+      y: place.offset.y / (cy * scaleY),
+      width: (place.extent.cx * place.scaleX) / (cx * scaleX),
+      height: (place.extent.cy * place.scaleY) / (cy * scaleY),
     });
   }
   return boxes.length > 0 ? boxes : null;
