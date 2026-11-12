@@ -73,10 +73,16 @@ export interface TableRepaint extends ParagraphReflowPaint {
   cell(cell: TableCellFragmentRecord, rowBox: LayoutBox): HTMLElement;
   /** A nested table receives its previous element, so it can be reused in turn. */
   block(block: BlockFragmentRecord, previous?: HTMLElement): HTMLElement;
+  /**
+   * Layers painted under the rows, such as gap shading; they replace the old ones. Called only
+   * once reuse is accepted, so a refusal paints nothing and leaves the element as it was.
+   */
+  leading?(): readonly HTMLElement[];
 }
 
 const TABLE_GEOMETRY: ReadonlySet<string> = new Set(['rows', 'box', 'columnEdges']);
-const ROW_GEOMETRY: ReadonlySet<string> = new Set(['box', 'cells']);
+// The gap bands paint from `spacingShading` as the fragment's leading layers, not the row.
+const ROW_GEOMETRY: ReadonlySet<string> = new Set(['box', 'cells', 'spacingShading']);
 const CELL_GEOMETRY: ReadonlySet<string> = new Set(['box', 'blocks', 'borders']);
 // Paint draws the per-side edges and the stroke records; edge segments are not painted.
 const BORDER_GEOMETRY: ReadonlySet<string> = new Set(['strokes', 'edgeSegments']);
@@ -332,7 +338,7 @@ export function reflowTableFragment(
   if (before.box.y !== fragment.box.y) style.top = `${fragment.box.y * scale}px`;
   if (before.box.width !== fragment.box.width) style.width = `${fragment.box.width * scale}px`;
   if (before.box.height !== fragment.box.height) style.height = `${fragment.box.height * scale}px`;
-  reconcileChildren(element, [...rows.values()], 0);
+  reconcileChildren(element, [...(repaint.leading?.() ?? []), ...rows.values()], 0);
   tables.set(element, { fragment, rows });
   return element;
 }

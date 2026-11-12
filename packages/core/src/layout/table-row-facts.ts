@@ -7,7 +7,9 @@
 // whole family keeps one record: an answer found for one copy is found for all of them.
 //
 // The record holds only primitive answers, never a row, so a copy does not keep its source
-// alive. Any other row copy, such as a text edit or a split override, starts its own record.
+// alive. A copy that adds only `spacingShading` (`table-spacing-shading.ts`), which no answer
+// reads, joins the family too. Any other row copy, such as a text edit or a split override,
+// starts its own record.
 
 import type { SemanticTableRow } from './semantic-table.ts';
 
@@ -45,7 +47,7 @@ export function rowFacts(row: SemanticTableRow): TableRowFacts {
 
 /**
  * Put `copy` in the family of `source`. Only for a copy that adds or drops the centred
- * side-rule flags and shares every other row and cell field with `source`.
+ * side-rule flags or `spacingShading`, and shares every other row and cell field with `source`.
  */
 export function shareRowFacts(source: SemanticTableRow, copy: SemanticTableRow): SemanticTableRow {
   families.set(copy, rowFacts(source));

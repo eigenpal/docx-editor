@@ -8,21 +8,10 @@
 // over the whole table's, the whole table's even where `w:tblLook` turns a condition off, and
 // a direct `auto` fill painting no colour over a shaded style.
 
-import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
+import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import { wmlChildNamed as childNamed } from '../store/store/tree-op-table-shared.ts';
 import { statedShadingFill } from './ooxml-shading.ts';
 import type { CascadedTableFormatting } from './style-cascade.ts';
-
-function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
-  for (const child of node.children) {
-    if (
-      child.kind !== 'textValue' &&
-      child.namespaceUri === WML_NAMESPACE_URI &&
-      child.localName === localName
-    )
-      return child as OoxmlElement;
-  }
-  return undefined;
-}
 
 /** The validated fill a cell paints under `tableStyle`, or undefined for none. */
 export function cellShading(
@@ -36,6 +25,16 @@ export function cellShading(
     if (format) layers.push(childNamed(format, 'tcPr'));
   }
   layers.push(cellProperties);
+  return cascadedShadingFill(layers);
+}
+
+/**
+ * The fill of property containers (`w:tcPr`, `w:tblPr`, `w:tblPrEx`), base first: each
+ * one's stated `w:shd` over the ones before it, or undefined when none paints a colour.
+ */
+export function cascadedShadingFill(
+  layers: readonly (OoxmlElement | undefined)[]
+): string | undefined {
   let fill: string | null | undefined;
   for (const layer of layers) {
     const stated = statedShadingFill(layer && childNamed(layer, 'shd'));

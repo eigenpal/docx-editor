@@ -1715,6 +1715,7 @@ import { markTrackedRow } from './table-row-revision-paint.ts';
 import { changedPageParts } from './semantic-paint-page-diff.ts';
 import { replaceHeaderFooterLayer } from './semantic-paint-hf-adopt.ts';
 import { tableCellContentHost } from './table-cell-text-direction-paint.ts';
+import { paintTableSpacingShading } from './table-spacing-shading-paint.ts';
 
 function paintTableCell(
   document: Document,
@@ -1815,9 +1816,11 @@ function paintTableFragment(
   previous?: HTMLElement
 ): HTMLElement {
   // Rows, cells and cell paragraphs whose paint inputs are unchanged, or moved only, are kept.
+  // Gap bands are cut around every cell of the fragment; a band that paints the same is kept.
   const retained =
     previous &&
     reflowTableFragment(previous, fragment, {
+      leading: () => paintTableSpacingShading(document, fragment, ctx.scale, previous),
       scale: ctx.scale,
       showParagraphMarks: ctx.showParagraphMarks === true,
       row: (row) => paintTableRow(document, row, fragment, ctx),
@@ -1836,6 +1839,7 @@ function paintTableFragment(
   element.dataset.tableId = fragment.tableId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
   element.style.overflow = 'visible';
+  element.append(...paintTableSpacingShading(document, fragment, scale));
   const rows = new Map<TableRowFragmentRecord, HTMLElement>();
   for (const row of fragment.rows) {
     const painted = paintTableRow(document, row, fragment, ctx);

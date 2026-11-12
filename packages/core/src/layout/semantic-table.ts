@@ -28,7 +28,6 @@ import { withRowMinimumContentInsets } from './table-row-minimum-insets.ts';
 import {
   flattenContentControls,
   healedTableView,
-  WML_NAMESPACE_URI,
   type OoxmlElement,
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
@@ -109,6 +108,12 @@ import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
 import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 import { conditionalTypesFor, readTableLook } from './table-conditional-formats.ts';
 import { cellShading } from './table-cell-shading.ts';
+import { withRowSpacingShading } from './table-spacing-shading.ts';
+import type { TableSpacingShading } from './semantic-records.ts';
+import {
+  wmlAttributeValue as attributeValue,
+  wmlChildNamed as childNamed,
+} from '../store/store/tree-op-table-shared.ts';
 import {
   autofitColumnWidthsPt,
   narrowNestedReader,
@@ -294,6 +299,8 @@ export interface SemanticTableRow {
   /** `w:trPr/w:trHeight` — auto / atLeast floor / exact (clipped) row height. */
   readonly height: TableRowHeight;
   readonly cells: readonly SemanticTableCell[];
+  /** The table's fill (its style, `w:tblPr`, then this row's `w:tblPrEx`) in spaced gaps. */
+  readonly spacingShading?: TableSpacingShading;
 }
 
 /**
@@ -375,24 +382,6 @@ export interface SemanticTableStructure {
   readonly tableBorders: TableBorderBox;
   /** Table-level `tblCellMar` defaults (per-side, Word's own default when a side is omitted). */
   readonly defaultMargins: CellMarginsPt;
-}
-
-function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
-  for (const child of node.children) {
-    if (
-      child.kind !== 'textValue' &&
-      child.namespaceUri === WML_NAMESPACE_URI &&
-      child.localName === localName
-    )
-      return child;
-  }
-  return undefined;
-}
-
-function attributeValue(node: OoxmlElement, localName: string): string | undefined {
-  return node.attributes.find(
-    (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === localName
-  )?.value;
 }
 
 /**
@@ -956,13 +945,19 @@ function readTableStructureUncached(
     contentOffset ?? sideRules.outerRuleOffsetPt ?? placement.bidiRuleShiftPt;
   const autoOuterRulePt =
     contentOffset === undefined ? autoWidthOuterRulePt(contentRows, sideRuleShape) : 0;
+  const shadedRows = withRowSpacingShading(contentRows, {
+    stylePropertyNodes: tableStyle.tablePropertyNodes,
+    tableProperties: tblPr,
+    rowNodeAt: (index) => plans[index]?.node,
+    cellSpacingPt,
+  });
   return {
     ...(bidiVisual ? { bidiVisual: true as const } : {}),
     columnWidthsPt: bidiVisual ? [...columnWidthsPt].reverse() : columnWidthsPt,
     rows:
       legacyWidth === undefined
-        ? contentRows
-        : contentRows.map((row) => ({
+        ? shadedRows
+        : shadedRows.map((row) => ({
             ...row,
             cells: row.cells.map((cell) => ({ ...cell, legacyContentAlignment: true as const })),
           })),

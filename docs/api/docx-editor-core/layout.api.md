@@ -4096,6 +4096,7 @@ export interface SemanticTableRow {
     readonly revisionDate?: string;
     readonly revisionId?: string;
     readonly revisionKind?: 'insert' | 'delete';
+    readonly spacingShading?: TableSpacingShading;
 }
 
 // @public
@@ -4839,6 +4840,7 @@ export interface TableRowFragmentRecord {
     readonly revisionId?: string;
     readonly revisionKind?: 'insert' | 'delete';
     readonly rowIndex: number;
+    readonly spacingShading?: TableSpacingShading;
 }
 
 // @public
@@ -4851,6 +4853,22 @@ export type TableRowHeight = {
 
 // @public
 export type TableRowHeightRule = 'auto' | 'atLeast' | 'exact';
+
+// @public
+export interface TableSpacingShading {
+    readonly fill: string;
+    readonly gapPt: number;
+}
+
+// @internal
+export interface TableSpacingShadingRegion {
+    readonly box: LayoutBox;
+    readonly fill: string;
+    readonly holes: readonly LayoutBox[];
+}
+
+// @internal
+export function tableSpacingShadingRegions(fragment: Pick<TableFragmentRecord, 'rows' | 'box'>): readonly TableSpacingShadingRegion[];
 
 // @public
 export interface TabStop {

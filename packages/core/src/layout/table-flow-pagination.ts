@@ -25,7 +25,7 @@ import {
   type CellPlaceCursor,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
-import { closingCellSpacingPt } from './table-cell-spacing.ts';
+import { placeClosingCellSpacing } from './table-cell-spacing.ts';
 import { vMergePlanFor } from './table-vmerge-plan.ts';
 import {
   closingEdgePt,
@@ -122,9 +122,8 @@ export function* paginateTableInFlowSteps(
   const contentHeight = outOfFlow
     ? (): number => POSITIONED_TABLE_LAYOUT_BOTTOM_PT
     : (): number => firstFragmentBottom ?? flowContentHeight();
-  // `w:tblInd` / `w:jc` place the table inside the text column, `w:tblpPr` against a wider
-  // anchor box; every row and the fragment box share the one origin so cell geometry and
-  // the reported box cannot drift apart.
+  // `w:tblInd` / `w:jc` place the table in the text column, `w:tblpPr` in a wider anchor box;
+  // rows and the fragment box share one origin, so cell geometry and the box cannot drift.
   const originX = (): number =>
     structure.float
       ? positionedTableOriginX(structure, anchorFrames(), flow.compatibilityMode) +
@@ -230,6 +229,7 @@ export function* paginateTableInFlowSteps(
   };
   let wrapsBeside = false;
   const closeTableFragment = (): void => {
+    const frameBottom = contentHeight();
     bandTop = 0;
     firstFragmentBottom = undefined;
     // Every close is a break or the table's end: rows past it are on another sheet. The end
@@ -249,6 +249,7 @@ export function* paginateTableInFlowSteps(
       left: tableLeft,
       top: fragmentTop,
       bottom: contentHeight(),
+      frameBottom,
       deps: tableDeps,
       carry,
       fragmentCarry: fragmentCarry.current,
@@ -976,16 +977,14 @@ export function* paginateTableInFlowSteps(
       rememberInsets(record, placementDeps);
       sourceRows.push(source);
       flow.cursorY = placed.bottom;
-
       if (!hasMore) break;
-
       cursors = placed.remainder!;
       isContinuation = true;
       movedToFreshPage = false;
       breakForContinuation(admitsRepeatedHeaders);
     }
   }
-  flow.cursorY = Math.min(flow.cursorY + closingCellSpacingPt(structure), flow.contentHeight());
+  placeClosingCellSpacing(flow, structure, contentHeight());
   const broken = pinnedBreak !== undefined || (textFlow && fragmentIndex > 0);
   wrapsBeside = broken && fragmentIndex > 0 && textTable.leavesPassage(structure, flow, tableLeft);
   closeTableFragment();

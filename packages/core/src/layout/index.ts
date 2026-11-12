@@ -200,6 +200,7 @@ export {
   type TableCellFragmentRecord,
   type TableFragmentRecord,
   type TableRowFragmentRecord,
+  type TableSpacingShading,
   type TextMeasurer,
   type TextOutline,
 } from './semantic-records.ts';
@@ -743,6 +744,10 @@ export {
   type TableRowHeightRule,
 } from './semantic-table.ts';
 export type { AutofitFieldContext, TableAutofitContext } from './table-autofit-widths.ts';
+export {
+  tableSpacingShadingRegions,
+  type TableSpacingShadingRegion,
+} from './table-spacing-shading.ts';
 export { paragraphMarkDeleted, revisionRemovesParagraph } from './revision-visibility.ts';
 export {
   MAX_TABLE_ROW_FRAGMENTS,

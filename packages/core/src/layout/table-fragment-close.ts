@@ -6,6 +6,7 @@
 // the rows of a fragment that has ended into the record that gets painted.
 
 import { finalizeTableRows, type TableFlowDeps } from './semantic-table-layout.ts';
+import { fragmentClosingGapPt } from './table-cell-spacing.ts';
 import { isSettledPreviousRow } from './table-row-placement-reuse.ts';
 import { fragmentCloseDeps, refreshTerminalRow } from './table-flow-row-state.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
@@ -29,6 +30,8 @@ export interface TableFragmentClose {
   readonly left: number;
   readonly top: number;
   readonly bottom: number;
+  /** The bottom of the frame this fragment fills: a page break closes its gap no lower. */
+  readonly frameBottom: number;
   readonly deps: TableFlowDeps;
   readonly carry: MergedTextCarry;
   readonly fragmentCarry: VMergeFragmentCarry | undefined;
@@ -82,6 +85,14 @@ export function closeTableFragmentRows(input: TableFragmentClose): {
   );
   if (fragmentCarry) finalized = fragmentCarry.finish(finalized);
   const last = finalized[finalized.length - 1]!;
+  const lastBottom = last.box.y + last.box.height;
+  // Measured from the finalized last row, at a break and at the table's end alike.
+  const closingPt = fragmentClosingGapPt(
+    structure.cellSpacingPt,
+    sourceRows.at(-1),
+    input.frameBottom - lastBottom,
+    last.hasContinuation
+  );
   const fragment = annotateTableFragmentGeometry(
     {
       kind: 'table',
@@ -94,7 +105,7 @@ export function closeTableFragmentRows(input: TableFragmentClose): {
         x: input.left,
         y: input.top,
         width: structure.columnWidthsPt.reduce((sum, columnWidth) => sum + columnWidth, 0),
-        height: last.box.y + last.box.height - input.top,
+        height: lastBottom + closingPt - input.top,
       },
     },
     structure.columnWidthsPt,
