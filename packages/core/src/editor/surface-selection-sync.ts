@@ -31,8 +31,19 @@ import {
   snapshotPaintedSpans,
   type PaintedSpanSnapshot,
 } from './surface-composition-readback.ts';
+import { createCompositionPreview } from './surface-composition-preview.ts';
+import { rebaseComposedText, rebaseOffset } from './surface-composition-rebase.ts';
 import { paintedTextOf, paragraphReplacePlan } from './surface-input.ts';
 import { collapsedAt } from './surface-selection-ops.ts';
+
+/** What the page showed for the composing paragraph when the composition began. */
+interface ComposingBase {
+  readonly text: string;
+  /** The caret offset, when the composition began at a collapsed caret. */
+  readonly caret: number | null;
+  readonly scope: import('@docx-editor.dev/core/store').StoryScope;
+  readonly revision: number | null;
+}
 
 /** What the composition root lends this lane. */
 export interface SurfaceSelectionSyncDeps {
@@ -353,6 +364,12 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   let composingOwner: { readonly offset: number; readonly controlId: string } | null = null;
   /** The composing paragraph's text spans at the start, to tell which the browser removed. */
   let composingSpans: readonly PaintedSpanSnapshot[] = [];
+  /**
+   * What the page showed when the composition began: the paragraph's text, the caret if
+   * collapsed, and the story's revision. The page is not repainted until the end, so a
+   * collaborator's edit in between is in the model and not on the page.
+   */
+  let composingBase: ComposingBase | null = null;
 
   /**
    * Take up a selection the user has made but the queued `selectionchange` has not delivered.
@@ -433,20 +450,31 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   function reconcileParagraphFromDom(
     paragraphId: string,
     owner: { readonly offset: number; readonly controlId: string } | null,
-    erased: ReadonlySet<string>
+    erased: ReadonlySet<string>,
+    base: ComposingBase | null
   ): void {
-    const modelText = deps.textOf(paragraphId);
+    // Read against the text the page shows, which is the text the composition began over.
+    const baseText = base?.text ?? deps.textOf(paragraphId);
     // The browser's own selection says WHICH painted copy was composed into, for a paragraph
     // the page repeats: a shared header, a `w:tblHeader` row, a twice-referenced note. The IME
     // leaves the caret in the text it just committed, so this is that copy.
-    const painted = paintedTextOf(
+    const read = paintedTextOf(
       pagesLayer,
       paragraphId,
-      modelText,
+      baseText,
       hostDocument().getSelection()?.anchorNode ?? null,
       erased
     );
-    if (painted === null) return;
+    if (read === null) return;
+    // A collaborator's edit landed while composing: in the model, held off the page. Land the
+    // layout (the page has been read) and carry the composed edit onto the current text.
+    let modelText = baseText;
+    if (base && session.revisionFor(base.scope) !== base.revision) {
+      deps.flushToPaint();
+      modelText = deps.textOf(paragraphId);
+      if (owner) owner = { ...owner, offset: rebaseOffset(baseText, modelText, owner.offset) };
+    }
+    const painted = rebaseComposedText(baseText, read, modelText, base?.caret ?? null);
     const plan = paragraphReplacePlan(paragraphId, modelText, painted);
     if (!plan) return;
     // Composed text takes the armed caret format like typed text would — same transaction,
@@ -643,6 +671,12 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   // Capture here so a caret that lands on the last mirrored offset is still a gesture.
   pagesLayer.addEventListener('pointerdown', noteUserSelectionGesture, true);
   pagesLayer.addEventListener('selectstart', noteUserSelectionGesture, true);
+  // The composing text stays visible in a run painted to a clipped advance.
+  const preview = createCompositionPreview(pagesLayer);
+  const trackComposition = (): void => {
+    if (composing) preview.track();
+  };
+  pagesLayer.addEventListener('input', trackComposition);
 
   return {
     adoptBeforePaint() {
@@ -813,11 +847,23 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       composingSpans = composingAcrossParagraphs
         ? []
         : snapshotPaintedSpans(pagesLayer, composingParagraph);
-      session.beginComposition(deps.storyScope());
+      const scope = deps.storyScope();
+      composingBase = composingAcrossParagraphs
+        ? null
+        : {
+            text: deps.textOf(composingParagraph),
+            caret: selection.anchor.offset === selection.head.offset ? selection.head.offset : null,
+            scope,
+            revision: session.revisionFor(scope),
+          };
+      preview.track();
+      session.beginComposition(scope);
     },
 
     onCompositionEnd: (event?: CompositionEvent): void => {
       composing = false;
+      // Before anything below repaints, so a run the paint keeps is clipped as painted.
+      preview.restore();
       const paragraphId = composingParagraph ?? deps.selection().head.paragraphId;
       composingParagraph = null;
       const owner = composingOwner;
@@ -825,6 +871,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       const acrossParagraphs = composingAcrossParagraphs;
       composingAcrossParagraphs = false;
       const erased = erasedSpanRanges(composingSpans);
+      const base = composingBase;
+      composingBase = null;
       composingSpans = [];
       // ONE scope, sampled once. `type()` can move the active story (a note released by the
       // post-edit caret), and two reads either side would then compare two different stores'
@@ -848,7 +896,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
         // The composed text is in the DOM and nowhere else. Read it back, diff it against
         // what the model holds for that paragraph, and commit the difference — the only
         // route by which an IME edit can reach the tree, since it could not be intercepted.
-        reconcileParagraphFromDom(paragraphId, owner, erased);
+        reconcileParagraphFromDom(paragraphId, owner, erased, base);
       }
 
       session.endComposition();
@@ -880,6 +928,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     destroy() {
       pagesLayer.removeEventListener('pointerdown', noteUserSelectionGesture, true);
       pagesLayer.removeEventListener('selectstart', noteUserSelectionGesture, true);
+      pagesLayer.removeEventListener('input', trackComposition);
+      preview.restore();
       userSelectionGesture = false;
     },
   };

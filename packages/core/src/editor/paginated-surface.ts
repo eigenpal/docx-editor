@@ -1529,6 +1529,8 @@ export function mountPaginatedSurface(
   /** Nonzero while `commitNow` applies its ops; see `renderPublishedLayout`. */
   let commitRunDepth = 0;
   let commitPaintOwed = false;
+  /** The layout painted when the current composition began; the page keeps it until the end. */
+  let compositionLayout: SemanticLayout | null = null;
 
   // Armed once, after the first published render: the derivations a structural edit reads
   // populate their per-node memos in idle tasks instead of inside the first Enter. An edit
@@ -2739,6 +2741,14 @@ export function mountPaginatedSurface(
       notifyChange = true;
     }
     hosting.heal();
+    // THE PAGE IS THE INPUT METHOD'S UNTIL `compositionend`. A newer layout (a collaborator's
+    // edit) would replace the nodes it is composing into; it is painted when the composition
+    // ends, and the readback carries the composed text onto it (surface-composition-rebase).
+    if (selectionSync.isComposing() && currentLayout !== compositionLayout) {
+      commitPaintOwed = true;
+      if (notifyChange) options.onChange?.(currentState());
+      return;
+    }
     // Parked: no viewport, so a paint would build every page into a holder nobody sees. State
     // still reports, and `moveTo` repaints in full.
     if (hosting.parked()) {
@@ -5918,6 +5928,7 @@ export function mountPaginatedSurface(
     inputMethod.repair.stop();
     selectionSync.adoptBeforeInput();
     flushToPaint();
+    compositionLayout = currentLayout;
     selectionSync.onCompositionStart(...args);
   };
 

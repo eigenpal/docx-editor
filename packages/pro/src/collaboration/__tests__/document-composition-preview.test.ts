@@ -1,0 +1,201 @@
+/*
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+// A REMOTE EDIT THAT ARRIVES WHILE A SYLLABLE IS BEING COMPOSED.
+//
+// The composing text lives only in the painted DOM until `compositionend`, and it is kept
+// visible by releasing the clip on the run it is composed into. A collaborator's edit
+// repaints the pages in the middle of that composition. The composed text must still be
+// committed, the remote text must be kept, and both peers must converge, undo and reopen.
+
+import { afterEach, expect, test } from 'bun:test';
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import { collaborationModule } from '../collaboration-module.ts';
+import { createPeerHarness, zipDocument } from './document-peer-support.ts';
+import { packageFingerprint, saveReopenDigest } from './document-support.ts';
+
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+const harness = createPeerHarness('composition-preview', { offlineEditing: true });
+type Editor = ReturnType<typeof createDocxEditor>;
+const editors: Editor[] = [];
+const containers: HTMLElement[] = [];
+afterEach(() => {
+  for (const editor of editors.splice(0)) editor.destroy();
+  for (const container of containers.splice(0)) container.remove();
+  harness.cleanup();
+});
+
+function mount(options: Parameters<typeof createDocxEditor>[0]) {
+  const container = document.createElement('div');
+  document.body.append(container);
+  containers.push(container);
+  const editor = createDocxEditor({ ...options, container });
+  editors.push(editor);
+  return { editor, container };
+}
+
+type Mounted = ReturnType<typeof mount>;
+
+function caret(editor: Editor, index: number, offset: number) {
+  const position = { paragraphId: editor.surface!.session.paragraphIds()[index]!, offset };
+  editor.surface!.setSelection({ anchor: position, head: position });
+}
+
+function compositionEvent(type: string, data = ''): CompositionEvent {
+  const event = new CompositionEvent(type, { bubbles: true });
+  Object.defineProperty(event, 'data', { value: data, configurable: true });
+  return event;
+}
+
+/** The run the browser's caret is in, which is where an input method writes. */
+function caretRun(): HTMLElement | null {
+  const node = document.getSelection()?.focusNode ?? null;
+  const element = node?.nodeType === Node.TEXT_NODE ? node.parentElement : (node as HTMLElement);
+  return element?.closest<HTMLElement>('[data-start]') ?? null;
+}
+
+const clipped = (run: HTMLElement) =>
+  (run.style.clipPath !== '' && run.style.clipPath !== 'none') || run.style.overflow === 'hidden';
+
+/** Let the layout and paint a remote edit schedules run, as they would mid-composition. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
+
+/**
+ * Bob's edit, as it happens in his own window.
+ *
+ * Both editors share one test document, so his caret would move the selection Alice's input
+ * method is composing in. In two windows it cannot; put hers back the way the browser keeps it.
+ */
+function remoteEdit(bob: Mounted, index: number, offset: number, text: string): void {
+  const selection = document.getSelection()!;
+  const node = selection.focusNode!;
+  const at = selection.focusOffset;
+  caret(bob.editor, index, offset);
+  expect(bob.editor.exec({ type: 'insertText', text }).ok).toBe(true);
+  selection.setBaseAndExtent(node, at, node, at);
+}
+
+/**
+ * One composing step the way a browser performs it: the composing string replaces the
+ * previous one in the text node the caret is in, then `input` fires.
+ */
+function composeStep(peer: Mounted, head: string, step: string): HTMLElement {
+  const pages = peer.container.querySelector<HTMLElement>('.docx-pages')!;
+  const node = document.getSelection()!.focusNode as Text;
+  pages.dispatchEvent(compositionEvent('compositionupdate', step));
+  node.data = head + step;
+  document.getSelection()!.setBaseAndExtent(node, node.data.length, node, node.data.length);
+  pages.dispatchEvent(new InputEvent('input', { bubbles: true, data: step }));
+  return node.parentElement!.closest<HTMLElement>('[data-start]')!;
+}
+
+test('a remote edit during a composition keeps the composed and the remote text', async () => {
+  const bytes = zipDocument(
+    '<w:p><w:r><w:t xml:space="preserve">우리나라 </w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t xml:space="preserve">second</w:t></w:r></w:p>'
+  );
+  const peers = await harness.pair(bytes);
+  const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
+    peer.detach();
+    return mount({
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+    });
+  }) as [Mounted, Mounted];
+  const converge = () => {
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+    expect(packageFingerprint(alice.editor.surface!.session.currentPackage())).toBe(
+      packageFingerprint(bob.editor.surface!.session.currentPackage())
+    );
+  };
+
+  caret(alice.editor, 0, 5);
+  const pages = alice.container.querySelector<HTMLElement>('.docx-pages')!;
+  pages.focus();
+  caret(alice.editor, 0, 5);
+  const space = caretRun()!;
+  expect(space.textContent).toBe(' ');
+  expect(clipped(space)).toBe(true);
+  pages.dispatchEvent(compositionEvent('compositionstart'));
+  expect(clipped(composeStep(alice, ' ', 'ㅇ'))).toBe(false);
+
+  // Bob edits the other paragraph, and his edit reaches Alice mid-composition.
+  remoteEdit(bob, 1, 6, '!');
+  converge();
+  expect(alice.editor.surface!.session.bodyText()).toBe('우리나라 \nsecond!');
+  await settle();
+  expect(document.getSelection()!.focusNode!.isConnected).toBe(true);
+
+  // The composition goes on in whatever run the caret is in now, and stays visible.
+  const run = composeStep(alice, ' ', '아');
+  expect(clipped(run)).toBe(false);
+  pages.dispatchEvent(compositionEvent('compositionend', '아'));
+  converge();
+  expect(alice.editor.surface!.session.bodyText()).toBe('우리나라 아\nsecond!');
+  expect(bob.editor.surface!.session.bodyText()).toBe('우리나라 아\nsecond!');
+
+  // The composition is one undo step, and only Alice's own.
+  expect(alice.editor.exec({ type: 'undo' }).ok).toBe(true);
+  converge();
+  expect(bob.editor.surface!.session.bodyText()).toBe('우리나라 \nsecond!');
+  expect(alice.editor.exec({ type: 'redo' }).ok).toBe(true);
+  converge();
+  const reopened = mount({ document: new Uint8Array(await bob.editor.save()) });
+  expect(reopened.editor.surface!.session.bodyText()).toBe('우리나라 아\nsecond!');
+  expect(saveReopenDigest(reopened.editor.surface!.session.currentPackage())).toEqual(
+    saveReopenDigest(bob.editor.surface!.session.currentPackage())
+  );
+});
+
+test('a remote edit in the composing paragraph keeps both texts', async () => {
+  const bytes = zipDocument('<w:p><w:r><w:t xml:space="preserve">우리나라 </w:t></w:r></w:p>');
+  const peers = await harness.pair(bytes);
+  const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
+    peer.detach();
+    return mount({
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+    });
+  }) as [Mounted, Mounted];
+  const converge = () => {
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+    expect(packageFingerprint(alice.editor.surface!.session.currentPackage())).toBe(
+      packageFingerprint(bob.editor.surface!.session.currentPackage())
+    );
+  };
+  const pages = alice.container.querySelector<HTMLElement>('.docx-pages')!;
+  pages.focus();
+  caret(alice.editor, 0, 5);
+  pages.dispatchEvent(compositionEvent('compositionstart'));
+  composeStep(alice, ' ', '아');
+
+  // Bob types at the start of the same paragraph while Alice composes at its end.
+  remoteEdit(bob, 0, 0, 'A');
+  converge();
+  await settle();
+  // The page is held for the input method: the run it composes into is still on it.
+  expect(document.getSelection()!.focusNode!.isConnected).toBe(true);
+
+  // The input method finishes the syllable in the run its text is in now.
+  const node = document.getSelection()!.focusNode as Text;
+  const head = node.data.endsWith('아') ? node.data.slice(0, -1) : node.data;
+  const run = composeStep(alice, head, '알');
+  expect(clipped(run)).toBe(false);
+  pages.dispatchEvent(compositionEvent('compositionend', '알'));
+  converge();
+  expect(alice.editor.surface!.session.bodyText()).toBe('A우리나라 알');
+  expect(bob.editor.surface!.session.bodyText()).toBe('A우리나라 알');
+  // The held paint lands at the end, and shows both edits.
+  const painted = [...pages.querySelectorAll('[data-start]')]
+    .map((run) => run.textContent)
+    .join('');
+  expect(painted).toBe('A우리나라 알');
+  expect(alice.editor.exec({ type: 'undo' }).ok).toBe(true);
+  converge();
+  expect(bob.editor.surface!.session.bodyText()).toBe('A우리나라 ');
+});
