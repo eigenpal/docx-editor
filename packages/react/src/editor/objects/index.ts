@@ -1,31 +1,38 @@
 export {
   useObjectControl,
+  type ObjectButtonPartProps,
   type ObjectControlProps,
+  type ObjectControlState,
   type ObjectControlVariant,
+  type ObjectPartComponent,
   type ObjectSlotId,
+  type ObjectToggleControl,
   type UseObjectControlReturn,
 } from './object-controls';
 export {
-  ShapeFill,
-  ShapeFillTransparency,
-  ShapeOutlineColor,
-  ShapeOutlineDashPart,
-  ShapeOutlineWidth,
+  DocxEditorShapeFill,
+  DocxEditorShapeFillTransparency,
+  DocxEditorShapeOutlineColor,
+  DocxEditorShapeOutlineDash,
+  DocxEditorShapeOutlineWidth,
+  type ShapeColorPartProps,
   type ShapePartProps,
 } from './shape-parts';
 export {
-  ChartAxes,
-  ChartCategoryAxisTitle,
-  ChartDataLabels,
-  ChartGridlines,
-  ChartLegend,
-  ChartSeriesColors,
-  ChartTitle,
-  ChartTypePart,
-  ChartValueAxisTitle,
+  DocxEditorChartAxes,
+  DocxEditorChartCategoryAxisTitle,
+  DocxEditorChartDataLabels,
+  DocxEditorChartGridlines,
+  DocxEditorChartLegend,
+  DocxEditorChartSeriesColors,
+  DocxEditorChartTitle,
+  DocxEditorChartType,
+  DocxEditorChartValueAxisTitle,
   type ChartPartProps,
+  type ChartSeriesColorsProps,
+  type ChartTogglePartProps,
 } from './chart-parts';
-export { ChartDataPart } from './chart-data-part';
+export { DocxEditorChartData } from './chart-data-part';
 export {
   DocxEditorPaneSections,
   OBJECT_SLOT_PARTS,

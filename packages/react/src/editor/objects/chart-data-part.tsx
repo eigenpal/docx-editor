@@ -1,4 +1,4 @@
-// `ChartDataPart`: the data editor of the selected chart (`chart.data`): the categories (or X values)
+// `DocxEditorChartData`: the data editor of the selected chart (`chart.data`): the categories (or X values)
 // and one card per series with its name and a value for each category. A field applies on Enter
 // or blur, and each add or remove applies at once, each as one undo step. The checks come from
 // core (`chartPaneCommand`). The Vue twin is `packages/vue/src/editor/objects/chart-data-part.tsx`.
@@ -18,7 +18,7 @@ import { chromeIcon } from '../toolbar/ToolbarButton';
 import { DELETE_PATHS } from '../contextmenu/contextmenu-icons';
 import { ChartField } from '../charts/chart-fields';
 import { useSelectedChart } from '../charts/useSelectedChart';
-import { useObjectControl, type ObjectControlProps } from './object-controls';
+import { objectPart, useObjectSlot, type ObjectControlProps } from './object-controls';
 
 /**
  * Focus the element that `selector` names under `root` once a render shows it: the row it names
@@ -41,11 +41,10 @@ function useRowFocus(root: { current: HTMLElement | null }) {
   };
 }
 
-/** The categories and series of the selected chart, or why they cannot change. @public */
-export function ChartDataPart(props: ObjectControlProps): ReactElement | null {
+function ChartData(props: ObjectControlProps): ReactElement | null {
   const { t } = useTranslation();
   const selected = useSelectedChart();
-  const control = useObjectControl('chart.data');
+  const { control, apply: applySlot } = useObjectSlot('chart.data');
   const root = useRef<HTMLDivElement>(null);
   const focusLater = useRowFocus(root);
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -78,13 +77,13 @@ export function ChartDataPart(props: ObjectControlProps): ReactElement | null {
   const xy = data.kind === 'xy';
   /** Applies one change: null when it applied, else the reason. */
   const apply = (change: ChartPaneChange): string | null => {
-    const reason = control.apply(change);
+    const reason = applySlot(change);
     if (reason === null) setRefusal(null);
     return reason;
   };
   /** Applies an add or a remove; the part announces a refusal, as no field shows it. */
   const run = (change: ChartPaneChange): boolean => {
-    const reason = control.apply(change);
+    const reason = applySlot(change);
     setRefusal(reason);
     return reason === null;
   };
@@ -247,3 +246,6 @@ export function ChartDataPart(props: ObjectControlProps): ReactElement | null {
     </div>
   );
 }
+
+/** The categories and series of the selected chart, or why they cannot change. @public */
+export const DocxEditorChartData = objectPart('chart.data', ChartData);

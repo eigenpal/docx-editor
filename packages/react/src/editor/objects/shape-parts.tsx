@@ -21,14 +21,19 @@ import {
   ChoiceControl,
   ColorControl,
   TextControl,
+  objectPart,
+  useObjectControlVariant,
+  type ObjectButtonPartProps,
   type ObjectControlProps,
 } from './object-controls';
 
 /** Props of a shape part. @public */
 export type ShapePartProps = ObjectControlProps;
 
-/** The fill colour of the selected shape (`shape.fill`), with No fill. @public */
-export function ShapeFill(props: ShapePartProps): ReactElement | null {
+/** Props of a shape colour part: it also takes `icon` and `asChild`. @public */
+export type ShapeColorPartProps = ObjectButtonPartProps;
+
+function ShapeFill(props: ShapeColorPartProps): ReactElement | null {
   const { t } = useTranslation();
   const translate = useChartTranslate();
   const editor = useDocxEditor();
@@ -53,8 +58,7 @@ export function ShapeFill(props: ShapePartProps): ReactElement | null {
   );
 }
 
-/** The transparency of a solid fill, in percent (`shape.fillTransparency`). @public */
-export function ShapeFillTransparency(props: ShapePartProps): ReactElement | null {
+function ShapeFillTransparency(props: ShapePartProps): ReactElement | null {
   const shape = useSelectedShape();
   return (
     <TextControl
@@ -62,13 +66,11 @@ export function ShapeFillTransparency(props: ShapePartProps): ReactElement | nul
       slotId="shape.fillTransparency"
       numeric
       draftKey={shape.memberId ?? shape.drawingNodeId ?? ''}
-      parse={(text) => text as unknown as number}
     />
   );
 }
 
-/** The outline colour of the selected shape (`shape.outlineColor`), with No line. @public */
-export function ShapeOutlineColor(props: ShapePartProps): ReactElement | null {
+function ShapeOutlineColor(props: ShapeColorPartProps): ReactElement | null {
   const { t } = useTranslation();
   const translate = useChartTranslate();
   const editor = useDocxEditor();
@@ -85,13 +87,10 @@ export function ShapeOutlineColor(props: ShapePartProps): ReactElement | null {
   );
 }
 
-/**
- * The outline width in points (`shape.outlineWidth`): a list of preset widths, and in a field
- * a number box for any other width. @public
- */
-export function ShapeOutlineWidth(props: ShapePartProps): ReactElement | null {
+function ShapeOutlineWidth(props: ShapePartProps): ReactElement | null {
   const { t } = useTranslation();
   const shape = useSelectedShape();
+  const variant = useObjectControlVariant(props.variant);
   if (props.hidden) return null;
   const options = SHAPE_OUTLINE_WIDTHS.map(
     (value) => [String(value), t('shape.pane.widthPoints', { value })] as const
@@ -99,12 +98,13 @@ export function ShapeOutlineWidth(props: ShapePartProps): ReactElement | null {
   const list = (
     <ChoiceControl
       {...props}
-      {...(props.variant === 'compact' ? {} : { label: t('shape.pane.widthPreset') })}
+      variant={variant}
+      {...(variant === 'compact' ? {} : { label: t('shape.pane.widthPreset') })}
       slotId="shape.outlineWidth"
       options={options}
       other={
         // A compact list has no number box, so it names the width it cannot list.
-        props.variant === 'compact' && typeof shape.format?.outline.widthPt === 'number'
+        variant === 'compact' && typeof shape.format?.outline.widthPt === 'number'
           ? t('shape.pane.widthPoints', {
               value: Math.round(shape.format.outline.widthPt * 100) / 100,
             })
@@ -113,7 +113,7 @@ export function ShapeOutlineWidth(props: ShapePartProps): ReactElement | null {
       parse={Number}
     />
   );
-  if (props.variant === 'compact') return list;
+  if (variant === 'compact') return list;
   return (
     <div className="docx-chart-pane__pair">
       {list}
@@ -122,14 +122,12 @@ export function ShapeOutlineWidth(props: ShapePartProps): ReactElement | null {
         {...(props.label ? { label: props.label } : {})}
         numeric
         draftKey={shape.memberId ?? shape.drawingNodeId ?? ''}
-        parse={(text) => text as unknown as number}
       />
     </div>
   );
 }
 
-/** The outline dash (`shape.outlineDash`): solid, dotted, or dashed. @public */
-export function ShapeOutlineDashPart(props: ShapePartProps): ReactElement | null {
+function ShapeOutlineDash(props: ShapePartProps): ReactElement | null {
   const { t } = useTranslation();
   const translate = useChartTranslate();
   const shape = useSelectedShape();
@@ -149,3 +147,24 @@ export function ShapeOutlineDashPart(props: ShapePartProps): ReactElement | null
     />
   );
 }
+
+/** The fill colour of the selected shape (`shape.fill`), with No fill. @public */
+export const DocxEditorShapeFill = objectPart('shape.fill', ShapeFill);
+
+/** The transparency of a solid fill, in percent (`shape.fillTransparency`). @public */
+export const DocxEditorShapeFillTransparency = objectPart(
+  'shape.fillTransparency',
+  ShapeFillTransparency
+);
+
+/** The outline colour of the selected shape (`shape.outlineColor`), with No line. @public */
+export const DocxEditorShapeOutlineColor = objectPart('shape.outlineColor', ShapeOutlineColor);
+
+/**
+ * The outline width in points (`shape.outlineWidth`): a list of preset widths, and in a field a
+ * number box for any other width. @public
+ */
+export const DocxEditorShapeOutlineWidth = objectPart('shape.outlineWidth', ShapeOutlineWidth);
+
+/** The outline dash (`shape.outlineDash`): solid, dotted, or dashed. @public */
+export const DocxEditorShapeOutlineDash = objectPart('shape.outlineDash', ShapeOutlineDash);

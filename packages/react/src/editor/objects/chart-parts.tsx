@@ -1,7 +1,7 @@
 // The chart parts: one exported control for each `chart.*` slot. Each works alone, in a host's
 // toolbar, popover, drawer, or pane, and `DocxEditor.ChartPane` is an arrangement of them
-// (`PANE_SECTIONS.chart`). The data editor is `ChartDataPart` (chart-data-part.tsx). The Vue twin is
-// `packages/vue/src/editor/objects/chart-parts.tsx`.
+// (`PANE_SECTIONS.chart`). The data editor is `DocxEditorChartData` (chart-data-part.tsx). The Vue
+// twin is `packages/vue/src/editor/objects/chart-parts.tsx`.
 
 import { useId, useState } from 'react';
 import type { ReactElement } from 'react';
@@ -31,31 +31,40 @@ import {
   ObjectControlFrame,
   TextControl,
   ToggleControl,
-  useObjectControl,
+  objectPart,
+  useObjectControlVariant,
+  useObjectSlot,
+  type ObjectButtonPartProps,
   type ObjectControlProps,
 } from './object-controls';
 
 /** Props of a chart part. @public */
 export type ChartPartProps = ObjectControlProps;
 
+/** Props of a chart toggle part: it also takes `icon` and `asChild`. @public */
+export type ChartTogglePartProps = ObjectButtonPartProps;
+
+/** Props of `DocxEditor.ChartSeriesColors`. @public */
+export interface ChartSeriesColorsProps extends ChartPartProps {
+  /** Shows the colour of this series (or pie point) only. */
+  index?: number;
+}
+
 /** The most colour fields `ChartSeriesColors` shows: a pie chart can have thousands of points. */
 const MAX_COLOR_FIELDS = 100;
 
-/**
- * The chart type (`chart.type`). A field notes when a type change drops colours or axis titles,
- * and when a pie chart shows only its first series. @public
- */
-export function ChartTypePart(props: ChartPartProps): ReactElement | null {
+function ChartType(props: ChartPartProps): ReactElement | null {
   const { t } = useTranslation();
   const translate = useChartTranslate();
   const selected = useSelectedChart();
+  const variant = useObjectControlVariant(props.variant);
   const [note, setNote] = useState<{ id: string; key: string; before: ChartFormat } | null>(null);
   const id = selected.chart?.drawingNodeId ?? '';
   const format = selected.format;
   const changed =
     note && note.id === id && format ? chartTypeChangeNote(note.before, format) : null;
   const notes =
-    format && props.variant !== 'compact'
+    format && variant !== 'compact'
       ? [
           note?.id === id ? changed : chartTypeHint(format),
           chartSeriesNote(format, selected.data?.series.length ?? 0),
@@ -64,6 +73,7 @@ export function ChartTypePart(props: ChartPartProps): ReactElement | null {
   return (
     <ChoiceControl
       {...props}
+      variant={variant}
       slotId="chart.type"
       options={CHART_TYPE_CHOICES.map((v) => [v, t(chartTypeLabelKey(v))] as const)}
       other={t('chart.types.other')}
@@ -72,7 +82,7 @@ export function ChartTypePart(props: ChartPartProps): ReactElement | null {
         if (refusal === null && format) setNote({ id, key: 'type', before: format });
       }}
       after={
-        props.variant === 'compact' ? null : (
+        variant === 'compact' ? null : (
           <div role="status" className="docx-chart-pane__status">
             {notes.map((key) => (
               <p key={key} className="docx-chart-pane__note">
@@ -86,19 +96,16 @@ export function ChartTypePart(props: ChartPartProps): ReactElement | null {
   );
 }
 
-/**
- * The chart title (`chart.title`). A field shows a Title check box and, while it is on, the title
- * text; a toolbar shows the text field alone, where empty text removes the title. @public
- */
-export function ChartTitle(props: ChartPartProps): ReactElement | null {
+function ChartTitle(props: ChartPartProps): ReactElement | null {
   const { t } = useTranslation();
-  const control = useObjectControl('chart.title');
+  const { control, apply } = useObjectSlot('chart.title');
   const selected = useSelectedChart();
   const reasonId = useId();
+  const variant = useObjectControlVariant(props.variant);
   if (props.hidden) return null;
   const draftKey = selected.chart?.drawingNodeId ?? '';
-  if (props.variant === 'compact')
-    return <TextControl {...props} slotId="chart.title" draftKey={draftKey} />;
+  if (variant === 'compact')
+    return <TextControl {...props} variant="compact" slotId="chart.title" draftKey={draftKey} />;
   return (
     <ObjectControlFrame
       slotId="chart.title"
@@ -115,7 +122,7 @@ export function ChartTitle(props: ChartPartProps): ReactElement | null {
           disabled={!control.isEnabled}
           aria-describedby={control.disabledReason !== null ? reasonId : undefined}
           onChange={(event) =>
-            control.apply(event.currentTarget.checked ? t('chart.format.defaultTitle') : null)
+            apply(event.currentTarget.checked ? t('chart.format.defaultTitle') : null)
           }
         />
         {t('chart.format.showTitle')}
@@ -124,6 +131,7 @@ export function ChartTitle(props: ChartPartProps): ReactElement | null {
         <div className="docx-chart-pane__sub">
           <TextControl
             slotId="chart.title"
+            variant="field"
             {...(props.label ? { label: props.label } : {})}
             draftKey={draftKey}
           />
@@ -133,8 +141,7 @@ export function ChartTitle(props: ChartPartProps): ReactElement | null {
   );
 }
 
-/** Where the legend sits, or none (`chart.legend`). @public */
-export function ChartLegend(props: ChartPartProps): ReactElement | null {
+function ChartLegend(props: ChartPartProps): ReactElement | null {
   const { t } = useTranslation();
   return (
     <ChoiceControl
@@ -147,21 +154,18 @@ export function ChartLegend(props: ChartPartProps): ReactElement | null {
   );
 }
 
-/** Whether each point shows its value (`chart.dataLabels`). @public */
-export const ChartDataLabels = (props: ChartPartProps): ReactElement | null => (
-  <ToggleControl {...props} slotId="chart.dataLabels" />
-);
+function ChartDataLabels(props: ChartTogglePartProps): ReactElement | null {
+  return <ToggleControl {...props} slotId="chart.dataLabels" />;
+}
 
 /** Whether the selected chart has axes; a pie or doughnut chart has none. */
 const useHasAxes = (): boolean => useSelectedChart().format?.axes !== null;
 
-/** Whether the chart shows its axes (`chart.axes`). Nothing for a chart with no axes. @public */
-export function ChartAxes(props: ChartPartProps): ReactElement | null {
+function ChartAxes(props: ChartTogglePartProps): ReactElement | null {
   return useHasAxes() ? <ToggleControl {...props} slotId="chart.axes" /> : null;
 }
 
-/** Whether the value axis shows major gridlines (`chart.gridlines`). @public */
-export function ChartGridlines(props: ChartPartProps): ReactElement | null {
+function ChartGridlines(props: ChartTogglePartProps): ReactElement | null {
   return useHasAxes() ? <ToggleControl {...props} slotId="chart.gridlines" /> : null;
 }
 
@@ -172,6 +176,7 @@ function AxisTitle(
   const { t } = useTranslation();
   const selected = useSelectedChart();
   const helpId = useId();
+  const variant = useObjectControlVariant(props.variant);
   if (props.hidden || selected.format?.axes === null) return null;
   const labels = selected.format ? chartAxisTitleLabels(selected.format) : null;
   const key = labels
@@ -179,11 +184,12 @@ function AxisTitle(
       ? labels.category
       : labels.value
     : null;
-  const field = props.variant !== 'compact';
+  const field = variant !== 'compact';
   return (
     <>
       <TextControl
         {...props}
+        variant={variant}
         {...(key && !props.label ? { label: t(key) } : {})}
         slotId={props.slotId}
         draftKey={selected.chart?.drawingNodeId ?? ''}
@@ -198,30 +204,24 @@ function AxisTitle(
   );
 }
 
-/** The category (or X) axis title (`chart.categoryAxisTitle`). @public */
-export const ChartCategoryAxisTitle = (props: ChartPartProps): ReactElement | null => (
-  <AxisTitle {...props} slotId="chart.categoryAxisTitle" />
-);
+function ChartCategoryAxisTitle(props: ChartPartProps): ReactElement | null {
+  return <AxisTitle {...props} slotId="chart.categoryAxisTitle" />;
+}
 
-/** The value (or Y) axis title (`chart.valueAxisTitle`). @public */
-export const ChartValueAxisTitle = (props: ChartPartProps): ReactElement | null => (
-  <AxisTitle {...props} slotId="chart.valueAxisTitle" />
-);
+function ChartValueAxisTitle(props: ChartPartProps): ReactElement | null {
+  return <AxisTitle {...props} slotId="chart.valueAxisTitle" />;
+}
 
-/**
- * The colour of each series, or of each point of a pie chart (`chart.seriesColor`): one shared
- * colour picker per entry, with Automatic. `index` shows one entry only. @public
- */
-export function ChartSeriesColors(props: ChartPartProps & { index?: number }): ReactElement | null {
+function ChartSeriesColors(props: ChartSeriesColorsProps): ReactElement | null {
   const { t } = useTranslation();
   const translate = useChartTranslate();
   const editor = useDocxEditor();
   const selected = useSelectedChart();
-  const control = useObjectControl('chart.seriesColor');
+  const { control, apply } = useObjectSlot('chart.seriesColor');
   const reasonId = useId();
   const [refusal, setRefusal] = useState<string | null>(null);
+  const variant = useObjectControlVariant(props.variant);
   if (props.hidden) return null;
-  const variant = props.variant ?? 'field';
   const hexes = documentThemeHexes(editor?.getDocumentThemeColors());
   const entries = (selected.format?.colors ?? [])
     .slice(0, MAX_COLOR_FIELDS)
@@ -253,9 +253,7 @@ export function ChartSeriesColors(props: ChartPartProps & { index?: number }): R
             themeHexes={hexes}
             disabled={!control.isEnabled}
             onPick={(next) =>
-              setRefusal(
-                control.apply({ index, color: (next === 'none' ? 'auto' : next) as ColorPick })
-              )
+              setRefusal(apply({ index, color: (next === 'none' ? 'auto' : next) as ColorPick }))
             }
           >
             {variant === 'field' ? (
@@ -283,3 +281,45 @@ export function ChartSeriesColors(props: ChartPartProps & { index?: number }): R
     </ObjectControlFrame>
   );
 }
+
+/**
+ * The chart type (`chart.type`). A field notes when a type change drops colours or axis titles,
+ * and when a pie chart shows only its first series. @public
+ */
+export const DocxEditorChartType = objectPart('chart.type', ChartType);
+
+/**
+ * The chart title (`chart.title`). A field shows a Title check box and, while it is on, the title
+ * text; a toolbar shows the text field alone, where empty text removes the title. @public
+ */
+export const DocxEditorChartTitle = objectPart('chart.title', ChartTitle);
+
+/** Where the legend sits, or none (`chart.legend`). @public */
+export const DocxEditorChartLegend = objectPart('chart.legend', ChartLegend);
+
+/** Whether each point shows its value (`chart.dataLabels`). @public */
+export const DocxEditorChartDataLabels = objectPart('chart.dataLabels', ChartDataLabels);
+
+/** Whether the chart shows its axes (`chart.axes`). Nothing for a chart with no axes. @public */
+export const DocxEditorChartAxes = objectPart('chart.axes', ChartAxes);
+
+/** Whether the value axis shows major gridlines (`chart.gridlines`). @public */
+export const DocxEditorChartGridlines = objectPart('chart.gridlines', ChartGridlines);
+
+/** The category (or X) axis title (`chart.categoryAxisTitle`). @public */
+export const DocxEditorChartCategoryAxisTitle = objectPart(
+  'chart.categoryAxisTitle',
+  ChartCategoryAxisTitle
+);
+
+/** The value (or Y) axis title (`chart.valueAxisTitle`). @public */
+export const DocxEditorChartValueAxisTitle = objectPart(
+  'chart.valueAxisTitle',
+  ChartValueAxisTitle
+);
+
+/**
+ * The colour of each series, or of each point of a pie chart (`chart.seriesColor`): one shared
+ * colour picker per entry, with Automatic. `index` shows one entry only. @public
+ */
+export const DocxEditorChartSeriesColors = objectPart('chart.seriesColor', ChartSeriesColors);

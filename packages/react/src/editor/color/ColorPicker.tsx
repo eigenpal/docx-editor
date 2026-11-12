@@ -6,8 +6,26 @@
 // The model is core's (`color-picker.ts`); the Vue twin is
 // `packages/vue/src/editor/color/ColorPicker.tsx` and renders the same markup.
 
-import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { ButtonHTMLAttributes, HTMLAttributes, ReactElement } from 'react';
+import {
+  createContext,
+  forwardRef,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type {
+  ButtonHTMLAttributes,
+  ForwardRefExoticComponent,
+  HTMLAttributes,
+  ReactElement,
+  Ref,
+  RefAttributes,
+} from 'react';
+import { createPortal } from 'react-dom';
 import {
   colorPickerGrid,
   colorPickFromHexText,
@@ -25,6 +43,8 @@ import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
 import { Slot } from '../toolbar/Slot';
+import { useChromeScopeClassName } from '../color-mode-context';
+import { ChromeDarkContext, ScopedByAncestorContext } from '../scope-context';
 
 /** The value of a picker: a pick, `none` for No colour, or null when the target is mixed. @public */
 export type ColorPickerValue = ColorPick | 'none' | null;
@@ -91,16 +111,28 @@ function ColorPickerRoot({
 }: ColorPickerRootProps): ReactElement {
   const editor = useDocxEditor();
   const { t } = useTranslation();
+  const scope = useChromeScopeClassName();
   const [openState, setOpenState] = useState(false);
   const open = (openProp ?? openState) && !disabled;
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const contentId = useId();
-  const hexes = themeHexes ?? documentThemeHexes(editor?.getDocumentThemeColors());
+  // Stable across renders that change nothing, so a parent render keeps the context, and the
+  // open grid keeps its focus.
+  const hexKey = (themeHexes ?? documentThemeHexes(editor?.getDocumentThemeColors())).join(',');
+  const hexes = useMemo(() => (hexKey ? hexKey.split(',') : []), [hexKey]);
+  const handlers = useRef({ onPick, onOpenChange });
+  useEffect(() => {
+    handlers.current = { onPick, onOpenChange };
+  });
+  const controlled = openProp !== undefined;
+  const setOpen = useCallback(
+    (next: boolean): void => {
+      if (!controlled) setOpenState(next);
+      handlers.current.onOpenChange?.(next);
+    },
+    [controlled]
+  );
   const context = useMemo<ColorPickerContextValue>(() => {
-    const setOpen = (next: boolean): void => {
-      if (openProp === undefined) setOpenState(next);
-      onOpenChange?.(next);
-    };
     return {
       open,
       setOpen,
@@ -108,7 +140,7 @@ function ColorPickerRoot({
       pick: (next) => {
         setOpen(false);
         triggerRef.current?.focus();
-        onPick(next);
+        handlers.current.onPick(next);
       },
       themeHexes: hexes,
       disabled,
@@ -118,29 +150,19 @@ function ColorPickerRoot({
       contentId,
       label: (pick) => colorPickLabel(pick, (key, params) => t(key as TranslationKey, params)),
     };
-  }, [
-    open,
-    openProp,
-    onOpenChange,
-    value,
-    onPick,
-    hexes,
-    disabled,
-    noColor,
-    automaticHex,
-    contentId,
-    t,
-  ]);
+  }, [open, setOpen, value, hexes, disabled, noColor, automaticHex, contentId, t]);
   const Comp = asChild ? Slot : 'div';
   return (
     <ColorPickerContext.Provider value={context}>
-      <Comp
-        className={`docx-color-picker docx-chart-pane__color docx-shape-pane__color${className ? ` ${className}` : ''}`}
-        data-open={open || undefined}
-        {...rest}
-      >
-        {children}
-      </Comp>
+      <ScopedByAncestorContext.Provider value={true}>
+        <Comp
+          className={`${scope}docx-color-picker docx-chart-pane__color docx-shape-pane__color${className ? ` ${className}` : ''}`}
+          data-open={open || undefined}
+          {...rest}
+        >
+          {children}
+        </Comp>
+      </ScopedByAncestorContext.Provider>
     </ColorPickerContext.Provider>
   );
 }
@@ -159,51 +181,57 @@ export interface ColorPickerTriggerProps extends ButtonHTMLAttributes<HTMLButton
   asChild?: boolean;
 }
 
-/** The button that opens the grid; it shows a chip of the current colour, then its children. */
-function ColorPickerTrigger({
-  asChild,
-  className,
-  children,
-  onClick,
-  ...rest
-}: ColorPickerTriggerProps): ReactElement {
-  const context = usePicker('Trigger');
-  const hex = valueHex(context);
-  const Comp = asChild ? Slot : 'button';
-  return (
-    <Comp
-      ref={(node: HTMLButtonElement | null) => {
-        context.triggerRef.current = node;
-      }}
-      type="button"
-      className={`docx-color-picker__trigger docx-shape-pane__color-button${className ? ` ${className}` : ''}`}
-      aria-haspopup="true"
-      aria-expanded={context.open}
-      aria-controls={context.open ? context.contentId : undefined}
-      disabled={context.disabled}
-      data-color={hex ?? ''}
-      onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-        onClick?.(event);
-        if (!event.defaultPrevented) context.setOpen(!context.open);
-      }}
-      {...rest}
-    >
-      {asChild ? (
-        children
-      ) : (
-        <>
-          <span
-            className="docx-color-picker__chip docx-shape-pane__chip"
-            data-none={!hex}
-            style={hex ? { background: hex } : undefined}
-            aria-hidden="true"
-          />
-          {children}
-        </>
-      )}
-    </Comp>
-  );
+/** Set `ref` to `node`, for a callback ref and an object ref alike. */
+function assignRef<T>(ref: Ref<T> | undefined, node: T | null): void {
+  if (typeof ref === 'function') ref(node);
+  else if (ref) (ref as { current: T | null }).current = node;
 }
+
+/**
+ * The button that opens the grid; it shows a chip of the current colour, then its children. It
+ * forwards its ref, so a host popover library can anchor to it.
+ */
+const ColorPickerTrigger = forwardRef<HTMLButtonElement, ColorPickerTriggerProps>(
+  function ColorPickerTrigger({ asChild, className, children, onClick, ...rest }, forwarded) {
+    const context = usePicker('Trigger');
+    const hex = valueHex(context);
+    const Comp = asChild ? Slot : 'button';
+    return (
+      <Comp
+        ref={(node: HTMLButtonElement | null) => {
+          context.triggerRef.current = node;
+          assignRef(forwarded, node);
+        }}
+        type="button"
+        className={`docx-color-picker__trigger docx-shape-pane__color-button${className ? ` ${className}` : ''}`}
+        aria-haspopup="true"
+        aria-expanded={context.open}
+        aria-controls={context.open ? context.contentId : undefined}
+        disabled={context.disabled}
+        data-color={hex ?? ''}
+        onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+          onClick?.(event);
+          if (!event.defaultPrevented) context.setOpen(!context.open);
+        }}
+        {...rest}
+      >
+        {asChild ? (
+          children
+        ) : (
+          <>
+            <span
+              className="docx-color-picker__chip docx-shape-pane__chip"
+              data-none={!hex}
+              style={hex ? { background: hex } : undefined}
+              aria-hidden="true"
+            />
+            {children}
+          </>
+        )}
+      </Comp>
+    );
+  }
+);
 
 /** Props for `ColorPicker.Swatch`. @public */
 export interface ColorPickerSwatchProps extends Omit<
@@ -239,12 +267,15 @@ function ColorPickerSwatch({ pick, hex, className, ...rest }: ColorPickerSwatchP
   );
 }
 
+/** Props for `ColorPicker.NoColor`. @public */
+export type ColorPickerNoColorProps = ButtonHTMLAttributes<HTMLButtonElement>;
+
 /** The first button of the grid: No colour, or Automatic. Renders nothing when there is none. */
 function ColorPickerNoColor({
   className,
   children,
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement>): ReactElement | null {
+}: ColorPickerNoColorProps): ReactElement | null {
   const context = usePicker('NoColor');
   const { t } = useTranslation();
   if (context.noColor === false) return null;
@@ -264,8 +295,14 @@ function ColorPickerNoColor({
   );
 }
 
+/** Props for `ColorPicker.HexInput`. @public */
+export interface ColorPickerHexInputProps {
+  /** More class names for the field. */
+  className?: string;
+}
+
 /** A hex field: `#RRGGBB` applies on Enter; other text stays with its reason. */
-function ColorPickerHexInput({ className }: { className?: string }): ReactElement {
+function ColorPickerHexInput({ className }: ColorPickerHexInputProps): ReactElement {
   const context = usePicker('HexInput');
   const { t } = useTranslation();
   const errorId = useId();
@@ -341,75 +378,114 @@ export interface ColorPickerContentProps extends HTMLAttributes<HTMLDivElement> 
    * of as a popover under the trigger.
    */
   inline?: boolean;
+  /**
+   * Renders the grid in this element, through a portal, for a host popover library that places
+   * it. The grid then takes no position of its own.
+   */
+  container?: Element | null;
   /** More class names for the element. */
   className?: string;
 }
 
 /**
- * The grid popover. It renders only while the picker is open. Children replace the default
- * content: `NoColor`, the grid, and `HexInput`.
+ * The grid popover. It renders only while the picker is open, and moves the focus into the grid
+ * when it opens. Children replace the default content: `NoColor`, the grid, and `HexInput`. With
+ * `container`, it renders there through a portal and leaves the position to the host; it
+ * forwards its ref for a host popover library.
  */
-function ColorPickerContent({
-  hexInput = true,
-  inline = false,
-  className,
-  children,
-  onKeyDown,
-  ...rest
-}: ColorPickerContentProps): ReactElement | null {
-  const context = usePicker('Content');
-  const panel = useRef<HTMLDivElement>(null);
-  const { open, setOpen, triggerRef } = context;
-  useEffect(() => {
-    if (!open) return undefined;
-    const doc = hostDocumentOf(panel.current);
-    const away = (event: PointerEvent): void => {
-      const target = event.target;
-      if (!isDomNode(target)) return;
-      if (!panel.current?.contains(target) && !triggerRef.current?.contains(target)) setOpen(false);
-    };
-    doc.addEventListener('pointerdown', away, true);
-    focusColorSwatch(panel.current);
-    return () => doc.removeEventListener('pointerdown', away, true);
-  }, [open, setOpen, triggerRef]);
-  if (!open) return null;
-  return (
-    <div
-      ref={panel}
-      id={context.contentId}
-      role="group"
-      className={`docx-color-picker__content${inline ? ' docx-color-picker__content--inline' : ' docx-chart-pane__grid'}${className ? ` ${className}` : ''}`}
-      onKeyDown={(event) => {
-        onKeyDown?.(event);
-        if (event.defaultPrevented) return;
-        if (moveColorSwatchFocus(panel.current, event.key)) {
+const ColorPickerContent = forwardRef<HTMLDivElement, ColorPickerContentProps>(
+  function ColorPickerContent(
+    { hexInput = true, inline = false, container, className, children, onKeyDown, ...rest },
+    forwarded
+  ) {
+    const context = usePicker('Content');
+    const dark = useContext(ChromeDarkContext);
+    const panel = useRef<HTMLDivElement | null>(null);
+    const { open, setOpen, triggerRef } = context;
+    useEffect(() => {
+      if (!open) return undefined;
+      const doc = hostDocumentOf(panel.current);
+      const away = (event: PointerEvent): void => {
+        const target = event.target;
+        if (!isDomNode(target)) return;
+        if (!panel.current?.contains(target) && !triggerRef.current?.contains(target))
+          setOpen(false);
+      };
+      doc.addEventListener('pointerdown', away, true);
+      return () => doc.removeEventListener('pointerdown', away, true);
+    }, [open, setOpen, triggerRef]);
+    // Only when the grid opens: a later render of the host keeps the focus where the user put it.
+    useEffect(() => {
+      if (open) focusColorSwatch(panel.current);
+    }, [open]);
+    if (!open) return null;
+    const placed = inline || !!container;
+    // Through a portal the grid leaves the picker's scope, so it carries the scope itself.
+    const scope = container ? (dark ? 'docx-editor dark ' : 'docx-editor ') : '';
+    const grid = (
+      <div
+        ref={(node: HTMLDivElement | null) => {
+          panel.current = node;
+          assignRef(forwarded, node);
+        }}
+        id={context.contentId}
+        role="group"
+        className={`${scope}docx-color-picker__content${placed ? ' docx-color-picker__content--inline' : ' docx-chart-pane__grid'}${className ? ` ${className}` : ''}`}
+        onKeyDown={(event) => {
+          onKeyDown?.(event);
+          if (event.defaultPrevented) return;
+          if (moveColorSwatchFocus(panel.current, event.key)) {
+            event.preventDefault();
+            return;
+          }
+          if (event.key !== 'Escape') return;
           event.preventDefault();
-          return;
-        }
-        if (event.key !== 'Escape') return;
-        event.preventDefault();
-        event.stopPropagation();
-        setOpen(false);
-        triggerRef.current?.focus();
-      }}
-      {...rest}
-    >
-      {children ?? (
-        <>
-          <ColorPickerNoColor />
-          <ColorPickerGrid />
-          {hexInput ? <ColorPickerHexInput /> : null}
-        </>
-      )}
-    </div>
-  );
+          event.stopPropagation();
+          setOpen(false);
+          triggerRef.current?.focus();
+        }}
+        {...rest}
+      >
+        {children ?? (
+          <>
+            <ColorPickerNoColor />
+            <ColorPickerGrid />
+            {hexInput ? <ColorPickerHexInput /> : null}
+          </>
+        )}
+      </div>
+    );
+    return container ? createPortal(grid, container) : grid;
+  }
+);
+
+/** The parts of the `ColorPicker` compound. @public */
+export interface ColorPickerCompound {
+  /** Holds the value and the open state. */
+  readonly Root: (props: ColorPickerRootProps) => ReactElement;
+  /** The button that opens the grid. */
+  readonly Trigger: ForwardRefExoticComponent<
+    ColorPickerTriggerProps & RefAttributes<HTMLButtonElement>
+  >;
+  /** The grid popover, the grid in place with `inline`, or the grid in `container`. */
+  readonly Content: ForwardRefExoticComponent<
+    ColorPickerContentProps & RefAttributes<HTMLDivElement>
+  >;
+  /** The theme colours with their tints and shades, then the standard colours. */
+  readonly Grid: () => ReactElement;
+  /** One colour button. */
+  readonly Swatch: (props: ColorPickerSwatchProps) => ReactElement;
+  /** The first button of the grid: No colour, or Automatic. */
+  readonly NoColor: (props: ColorPickerNoColorProps) => ReactElement | null;
+  /** The `#RRGGBB` field. */
+  readonly HexInput: (props: ColorPickerHexInputProps) => ReactElement;
 }
 
 /**
  * The colour picker compound: `Root`, `Trigger`, `Content`, and the parts of the grid. Every
  * colour control of the editor is built from it. @public
  */
-export const ColorPicker = {
+export const ColorPicker: ColorPickerCompound = {
   Root: ColorPickerRoot,
   Trigger: ColorPickerTrigger,
   Content: ColorPickerContent,
