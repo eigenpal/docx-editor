@@ -57,9 +57,12 @@ export function withResolvedGroupFill(
   } as OoxmlElement;
 }
 
+const SPANNING = new Set(['gradFill', 'pattFill', 'blipFill']);
+
 /**
- * Whether `spPr` says `a:grpFill` while the group fill is a gradient or a pattern. Word spans
- * such a fill across the group box (2026-11-12 render), which per-member paint cannot match.
+ * Whether `spPr` says `a:grpFill` while the group fill is a gradient, a pattern or a picture.
+ * Word spans a gradient across the group box (2026-11-12 render), which per-member paint cannot
+ * match; a pattern or picture group fill has no per-member paint here either.
  *
  * @internal
  */
@@ -67,6 +70,6 @@ export function groupFillSpansMembers(
   spPr: OoxmlElement,
   groupFill: OoxmlElement | null | undefined
 ): boolean {
-  if (groupFill?.localName !== 'gradFill' && groupFill?.localName !== 'pattFill') return false;
+  if (!groupFill || !SPANNING.has(groupFill.localName)) return false;
   return firstFill(spPr)?.localName === 'grpFill';
 }
