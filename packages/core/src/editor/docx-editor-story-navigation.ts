@@ -6,6 +6,12 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { drawingSelectionPosition } from './surface-drawing-selection.ts';
 import { captureSearchResult } from './document-search-result.ts';
 import { openTextboxAt } from './review-story-entry.ts';
+import {
+  isActiveStory,
+  resolveTextTarget,
+  textTargetArgumentRefusal,
+  type TextTarget,
+} from './text-target.ts';
 
 type ScopedStory =
   | {
@@ -68,20 +74,23 @@ export function leaveScopeForBodyParagraph(surface: PaginatedSurface, paragraphI
   surface.exitHeaderFooter?.();
 }
 
-/** Select and reveal one match in the story that owns it. */
-export function selectDocumentSearchMatch(surface: PaginatedSurface, match: TextMatch): ExecResult {
-  if (
-    typeof match?.blockId !== 'string' ||
-    match.blockId.length === 0 ||
-    !Number.isInteger(match.start) ||
-    match.start < 0 ||
-    !Number.isInteger(match.length) ||
-    match.length < 0
-  ) {
-    return { ok: false, code: 'invalidArgs', reason: 'match must carry a blockId and offsets' };
-  }
-  if (match.scope?.kind === 'frame') {
-    const { drawingNodeId, hostParagraphId } = match.scope;
+/**
+ * Select and reveal one match, or one computed range, in the story that owns it. The story
+ * comes from the paragraph when the target names none, and a target whose expected text is
+ * no longer at its offsets is refused before anything opens or moves.
+ */
+export function selectDocumentSearchMatch(
+  surface: PaginatedSurface,
+  match: TextTarget
+): ExecResult {
+  const malformed = textTargetArgumentRefusal(match);
+  if (malformed) return { ok: false, code: 'invalidArgs', reason: malformed };
+  // Selecting part of a field result selects the field, as typing over it would.
+  const resolved = resolveTextTarget(surface, match, 'accept');
+  if (!resolved.ok) return resolved;
+  const scope = resolved.scope;
+  if (scope.kind === 'frame') {
+    const { drawingNodeId, hostParagraphId } = scope;
     // The types make an id-less frame scope unrepresentable, but a host calls this from
     // JavaScript, where they are whatever it passed.
     if (
@@ -107,7 +116,7 @@ export function selectDocumentSearchMatch(surface: PaginatedSurface, match: Text
     if (!drawingSelectionPosition(surface.layout(), drawingNodeId, hostParagraphId)) {
       return unselectable;
     }
-    const owner = match.scope.owner;
+    const owner = scope.owner;
     if (owner) {
       const entered = enterStoryPosition(surface, owner, {
         paragraphId: hostParagraphId,
@@ -123,13 +132,19 @@ export function selectDocumentSearchMatch(surface: PaginatedSurface, match: Text
       : unselectable;
   }
   const position = { paragraphId: match.blockId, offset: match.start };
-  if (isScopedStory(match.scope)) {
-    const entered = enterStoryPosition(surface, match.scope, position);
+  if (isScopedStory(scope)) {
+    const entered = enterStoryPosition(surface, scope, position);
     if (!entered.ok) return entered;
-  } else if (match.scope && match.scope.kind !== 'body') {
-    return { ok: false, code: 'unsupported', reason: 'the match scope cannot be opened' };
   } else {
     leaveScopeForBodyParagraph(surface, match.blockId);
+  }
+  // Never select into a story the reader is not in: the toolbar and typing follow the scope.
+  if (!isActiveStory(surface, scope)) {
+    return {
+      ok: false,
+      code: 'unsupported',
+      reason: 'the story that holds the match could not be opened',
+    };
   }
   surface.setSelection({
     anchor: position,
