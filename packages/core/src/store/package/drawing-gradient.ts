@@ -44,6 +44,11 @@ export interface VectorGradient {
   readonly coords: readonly number[];
   /** Gradient space onto the component's point space. */
   readonly matrix: AffineMatrix;
+  /**
+   * False when the gradient keeps its direction as its shape turns (`rotWithShape="0"`): a
+   * turned group moves it with the shape but does not turn it. Absent when it turns.
+   */
+  readonly turnsWithShape?: false;
 }
 
 /** A gradient read from markup, not yet placed on a shape. */
@@ -173,7 +178,13 @@ export function placeGradient(
     }
     // Gradient space is the unit square, stretched onto the box.
     const box: AffineMatrix = [width, 0, 0, height, 0, 0];
-    return { kind: 'radial', stops, coords: [cx, cy, radius || 1], matrix: compose(place, box) };
+    return {
+      kind: 'radial',
+      stops,
+      coords: [cx, cy, radius || 1],
+      matrix: compose(place, box),
+      ...(spec.turnsWithShape ? {} : { turnsWithShape: false as const }),
+    };
   }
   const radians = (spec.shade.angleDegrees * Math.PI) / 180;
   let nx = Math.cos(radians);
@@ -193,6 +204,7 @@ export function placeGradient(
     stops,
     coords: [centerX - nx * half, centerY - ny * half, centerX + nx * half, centerY + ny * half],
     matrix: place,
+    ...(spec.turnsWithShape ? {} : { turnsWithShape: false as const }),
   };
 }
 

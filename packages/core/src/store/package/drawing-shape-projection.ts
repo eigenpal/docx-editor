@@ -47,7 +47,11 @@ import {
   shapePointTransform,
   shapeRotationDegrees,
 } from './drawing-shape-geometry.ts';
-import { transformComponent } from './drawing-group-transform.ts';
+import {
+  groupMemberPlacement,
+  transformComponent,
+  turnGroupComponents,
+} from './drawing-group-transform.ts';
 import { groupFillOf, groupFillSpansMembers, withResolvedGroupFill } from './drawing-group-fill.ts';
 import { groupPictureOutline } from './drawing-group-picture-outline.ts';
 import { readLineProperties, readStyleReferenceIndex } from './drawing-line-properties.ts';
@@ -118,14 +122,16 @@ export interface VectorShapeProjection {
   /**
    * Geometry outside the extent paints too. A direct shape, turned or upright, is not cut at
    * its extent or its effect extent: a callout's tail, or a custom path past its box, shows
-   * whole. A drawing canvas does not cut its members at its frame either.
+   * whole. A turned group, a group with a turned member, and a drawing canvas do not cut
+   * their members at the frame either. Any other group still cuts its members at its frame
+   * and its effect extent.
    */
   readonly overflowVisible?: true;
   /**
-   * A shape turned by its `a:xfrm/@rot`, in clockwise degrees in (0, 360). It turns about the
-   * centre of its unturned extent, so its geometry paints outside the extent, while layout
-   * keeps the extent and `wp:effectExtent` it reserves. Absent when not turned. A shape with no
-   * extent carries its turn but paints nothing, so it sets no `overflowVisible`.
+   * A shape or a group turned by its `a:xfrm/@rot`, in clockwise degrees in (0, 360). It
+   * turns about the centre of its unturned extent, so its geometry paints outside the extent,
+   * while layout keeps the extent and `wp:effectExtent` it reserves. Absent when not turned. A
+   * shape with no extent carries its turn but paints nothing, so it sets no `overflowVisible`.
    *
    * Informational only: the turn and the flips are already applied to every component's
    * points, so a painter must not apply it again.
@@ -741,8 +747,9 @@ export function projectVectorShape(
     // A direct shape paints its whole geometry and outline, past its extent too.
     overflowVisible = true;
   } else {
-    const frame = readDrawingGroupFrame(anchor);
+    const frame = readDrawingGroupFrame(anchor, { turned: true });
     if (!frame) return null;
+    const turn = frame.turn;
     const { x: chOffX, y: chOffY } = frame.childOffsetEmu;
     const { cx: chExtX, cy: chExtY } = frame.childExtentEmu;
     // Rules that share one x (or y) give the group a zero child extent on that axis. Every
@@ -780,15 +787,28 @@ export function projectVectorShape(
       });
       if (!properties || !supportedGroupVisuals(child, properties, false)) return null;
       if (!identityGroupThemeEffect(child, resolveStyleMatrixReference)) return null;
+      // The text of a text box member does not turn with its group yet: keep the placeholder.
+      if (turn && hasTextbox(child)) return null;
       if (
         isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference, groupFill)
       )
         continue;
       const transform = childTransform(child);
       if (!transform) return null;
+      // A turned member turns in group space, after its box scales, so it never skews.
+      const memberTurn = shapeRotationDegrees(shapeTransformElement(child)) ?? 0;
+      // A turned member paints whole, past the group extent where its corners reach.
+      if (memberTurn !== 0) overflowVisible = true;
+      const place = groupMemberPlacement(
+        transform,
+        frame.childOffsetEmu,
+        scaleX,
+        scaleY,
+        memberTurn
+      );
       const memberComponents = projectShapeComponents(
         child,
-        transform.extent,
+        place.extent,
         pointBudget,
         resolveSchemeColor,
         resolveStyleMatrixReference,
@@ -797,20 +817,16 @@ export function projectVectorShape(
       );
       if (!memberComponents) return null; // A member that paints nothing adds nothing.
       for (const component of memberComponents) {
-        components.push(
-          transformComponent(
-            component,
-            {
-              x: (transform.offset.x - chOffX) * scaleX,
-              y: (transform.offset.y - chOffY) * scaleY,
-            },
-            scaleX,
-            scaleY
-          )
-        );
+        components.push(transformComponent(component, place.offset, place.scaleX, place.scaleY));
       }
     }
     if (components.length === 0) return null;
+    if (turn) {
+      const turned = turnGroupComponents(components, extent, turn);
+      if (!turned) return null;
+      components = turned;
+      rotationDegrees = turn.rotationDegrees;
+    }
   }
   const subpathsEmu: (readonly Readonly<{ x: number; y: number }>[])[] = [];
   for (const component of components) {

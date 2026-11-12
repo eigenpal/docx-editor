@@ -5098,6 +5098,7 @@ export interface VectorGradient {
     readonly kind: 'linear' | 'radial';
     readonly matrix: AffineMatrix;
     readonly stops: readonly GradientStop[];
+    readonly turnsWithShape?: false;
 }
 
 // @public

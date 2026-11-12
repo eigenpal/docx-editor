@@ -7,6 +7,9 @@
 // walks a story, so the per-drawing element budget is not spent on paragraphs.
 
 import { groupFillOf } from './drawing-group-fill.ts';
+import { groupMemberPlacement } from './drawing-group-transform.ts';
+import { shapeRotationDegrees } from './drawing-shape-geometry.ts';
+import { shapeTransformElement } from './drawing-shape-transform.ts';
 import {
   MAX_GROUP_SHAPE_CHILDREN,
   isGroupPropertyChild,
@@ -142,7 +145,6 @@ export function projectGroupTextboxes(
   if (extent.cx <= 0 || extent.cy <= 0) return null;
   const frame = readDrawingGroupFrame(anchor);
   if (!frame) return null;
-  const { x: chOffX, y: chOffY } = frame.childOffsetEmu;
   const { cx: chExtX, cy: chExtY } = frame.childExtentEmu;
   const scaleX = chExtX > 0 ? extent.cx / chExtX : 0;
   const scaleY = chExtY > 0 ? extent.cy / chExtY : 0;
@@ -164,8 +166,17 @@ export function projectGroupTextboxes(
     if (rotationDegrees === null) continue;
     const transform = childTransform(child);
     if (!transform) continue;
-    const cx = Math.round(transform.extent.cx * scaleX);
-    const cy = Math.round(transform.extent.cy * scaleY);
+    // The text lays out in the box the member's shape paints in: a turned member's box maps
+    // into the group extent before it turns.
+    const place = groupMemberPlacement(
+      transform,
+      frame.childOffsetEmu,
+      scaleX,
+      scaleY,
+      shapeRotationDegrees(shapeTransformElement(child)) ?? 0
+    );
+    const cx = Math.round(place.extent.cx * place.scaleX);
+    const cy = Math.round(place.extent.cy * place.scaleY);
     const story = projectWspTextboxStory(
       child,
       { cx, cy },
@@ -177,8 +188,8 @@ export function projectGroupTextboxes(
       Object.freeze({
         memberNodeId: child.id,
         frameEmu: Object.freeze({
-          x: Math.round((transform.offset.x - chOffX) * scaleX),
-          y: Math.round((transform.offset.y - chOffY) * scaleY),
+          x: Math.round(place.offset.x),
+          y: Math.round(place.offset.y),
           cx,
           cy,
         }),
