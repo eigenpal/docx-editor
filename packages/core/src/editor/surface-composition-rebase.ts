@@ -83,15 +83,18 @@ export function rebaseComposedText(
   const edit = composedEdit(base, painted, caret);
   const start = rebaseOffset(base, current, edit.start);
   if (edit.end === edit.start) return current.slice(0, start) + edit.text + current.slice(start);
-  const end = rebaseOffset(base, current, edit.end);
-  // The replaced text still reads as the user saw it: replace it where it is now.
-  if (end >= start && current.slice(start, end) === base.slice(edit.start, edit.end)) {
-    return current.slice(0, start) + edit.text + current.slice(end);
+  // Each replaced character is deleted where it is now, if it is still there unchanged.
+  // Whatever else lies in the range is a collaborator's, which the user never saw.
+  const deleted = new Set<number>();
+  for (let index = edit.start; index < edit.end; index += 1) {
+    const at = rebaseOffset(base, current, index);
+    if (rebaseOffset(base, current, index + 1) === at + 1 && current[at] === base[index]) {
+      deleted.add(at);
+    }
   }
-  // A collaborator changed part of it. Their text stays whole, after the composed text, and
-  // the rest of what the user replaced is deleted.
-  const remote = differingMiddle(base, current);
-  const head = Math.min(edit.start, remote.start);
-  const tail = Math.max(edit.end, remote.end);
-  return base.slice(0, head) + edit.text + remote.text + base.slice(tail);
+  let kept = '';
+  for (let index = start; index < current.length; index += 1) {
+    if (!deleted.has(index)) kept += current[index];
+  }
+  return current.slice(0, start) + edit.text + kept;
 }

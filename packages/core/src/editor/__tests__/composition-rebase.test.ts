@@ -43,6 +43,13 @@ describe('rebaseComposedText', () => {
     expect(rebaseComposedText('abcd', 'a日本d', 'abXd', null)).toBe('a日本Xd');
   });
 
+  test('a range replaced while a collaborator edits inside it and elsewhere', () => {
+    expect(rebaseComposedText('abcd', 'a日本d', 'ZabXd', null)).toBe('Za日本Xd');
+    expect(rebaseComposedText('abc かな def', 'abc 仮名 def', 'Zabc かX defZ', null)).toBe(
+      'Zabc 仮名X defZ'
+    );
+  });
+
   test('remote edits on both sides of the caret leave the composed text at the caret', () => {
     expect(rebaseComposedText('Hello world', 'HelloX world', 'AHello worldB', 5)).toBe(
       'AHelloX worldB'
