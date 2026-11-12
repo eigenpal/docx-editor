@@ -376,6 +376,49 @@ function hasTextbox(wsp: OoxmlElement): boolean {
   return !!findDirectChild(wsp.children, { namespaceUri: WPS_NAMESPACE_URI, localName: 'txbx' });
 }
 
+/** The fill and outline colours a `wps:wsp` paints with, or null without `spPr`. @internal */
+export function shapePaintOf(
+  wsp: OoxmlElement,
+  resolveSchemeColor?: ShapeSchemeColorResolver,
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
+) {
+  const spPr = shapeProperties(wsp);
+  return spPr ? shapePaint(wsp, spPr, resolveSchemeColor, resolveStyleMatrixReference) : null;
+}
+
+const LINE_FILLS = new Set(['noFill', 'solidFill', 'gradFill', 'pattFill']);
+const SHAPE_FILLS = new Set([...LINE_FILLS, 'blipFill', 'grpFill']);
+
+/** The first DrawingML child of `parent` named in `names`. */
+function firstNamed(parent: OoxmlElement | null, names: ReadonlySet<string>) {
+  return parent?.children.find(
+    (node) =>
+      isElement(node) &&
+      node.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI &&
+      names.has(node.localName)
+  ) as OoxmlElement | undefined;
+}
+
+/**
+ * Whether a shape says it has no fill and no outline: its own `a:noFill`, or no authored paint
+ * and no style paint (`a:fillRef`, `a:lnRef` index 0).
+ */
+function unpaintedByDesign(wsp: OoxmlElement): boolean {
+  const spPr = shapeProperties(wsp);
+  if (!spPr) return false;
+  const none = (authored: OoxmlElement | undefined, reference: 'fillRef' | 'lnRef') =>
+    authored
+      ? authored.localName === 'noFill'
+      : (readStyleReferenceIndex(wsp, reference)?.index ?? 0) === 0;
+  const ln = findDirectChild(spPr.children, {
+    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+    localName: 'ln',
+  });
+  return (
+    none(firstNamed(spPr, SHAPE_FILLS), 'fillRef') && none(firstNamed(ln, LINE_FILLS), 'lnRef')
+  );
+}
+
 /**
  * Whether a group member is a text box with no fill, no outline and no unsupported visuals.
  * Its only content is its text, which a group does not lay out, so the member paints nothing
@@ -699,9 +742,14 @@ export function projectVectorShape(
       resolveStyleMatrixReference
     );
     if (!shapeComponents) return null;
-    // A custom geometry with no paths paints nothing, and it keeps its box with no components
-    // and no placeholder. Any other empty list keeps the placeholder.
-    if (shapeComponents.length === 0 && !hasPathlessCustomGeometry(shapeProperties(wsp))) {
+    // A custom geometry with no paths, or a shape that sets neither a fill nor an outline,
+    // paints nothing and keeps its box with no components and no placeholder. Any other empty
+    // list, such as a colour the theme does not resolve, keeps the placeholder.
+    if (
+      shapeComponents.length === 0 &&
+      !hasPathlessCustomGeometry(shapeProperties(wsp)) &&
+      !unpaintedByDesign(wsp)
+    ) {
       return null;
     }
     components = [...shapeComponents];

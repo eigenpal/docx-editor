@@ -161,16 +161,18 @@ if (editor.can({ type: 'setImageWrapType', target: 'square' }).ok) {
 }
 ```
 
-| Command              | Effect                                                      |
-| -------------------- | ----------------------------------------------------------- |
-| `setImageWrapType`   | Changes the wrap target                                     |
-| `setImagePosition`   | Moves a floating drawing, in EMUs                           |
-| `setImageProperties` | Changes size, crop, alternative text, hyperlink, and border |
-| `transformImage`     | Rotates or flips: `rotateCW`, `rotateCCW`, `flipH`, `flipV` |
-| `replaceImage`       | Replaces the picture bytes through `executeImageCommand`    |
-| `deleteImage`        | Deletes the picture                                         |
+| Command              | Effect                                                        |
+| -------------------- | ------------------------------------------------------------- |
+| `setImageWrapType`   | Changes the wrap target                                       |
+| `setImagePosition`   | Moves a floating drawing, in EMUs                             |
+| `setImageProperties` | Changes size, crop, alternative text, hyperlink, and border   |
+| `transformImage`     | Rotates or flips: `rotateCW`, `rotateCCW`, `flipH`, `flipV`   |
+| `replaceImage`       | Replaces the picture bytes through `executeImageCommand`      |
+| `deleteImage`        | Deletes the picture                                           |
+| `setShapeFill`       | Sets or removes the fill of a shape, text box, line, or group |
+| `setShapeOutline`    | Sets the outline visibility, color, and width in points       |
 
-Each completed drag or resize gesture is one undo step. Alternative text reads `@descr`, then `@title`. A picture with neither is decorative.
+`snapshot().image.shapeFormat` reads the selected shape's fill and outline, or `null` for a picture. Each shape command is one undo step. Each completed drag or resize gesture is one undo step. Alternative text reads `@descr`, then `@title`. A picture with neither is decorative.
 
 ## Configure image controls
 

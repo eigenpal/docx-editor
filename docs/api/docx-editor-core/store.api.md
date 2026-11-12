@@ -1534,7 +1534,7 @@ export interface DrawingTextDefaults {
 
 // @public
 export type DrawingTreeDocOp = Extract<TreeDocOp, {
-    readonly op: 'moveInlineDrawing' | 'insertDrawing' | 'replaceDrawingResource' | 'deleteDrawing' | 'resizeDrawing' | 'cropDrawing' | 'positionDrawing' | 'setDrawingWrap' | 'setDrawingMetadata' | 'setDrawingLocks' | 'transformDrawing';
+    readonly op: 'moveInlineDrawing' | 'insertDrawing' | 'replaceDrawingResource' | 'deleteDrawing' | 'resizeDrawing' | 'cropDrawing' | 'positionDrawing' | 'setDrawingWrap' | 'setDrawingMetadata' | 'setDrawingLocks' | 'transformDrawing' | 'setShapeFormat';
 }>;
 
 // @public
@@ -4998,6 +4998,25 @@ export interface ShapeEffectsInput {
 }
 
 // @public
+export type ShapeFillInput = {
+    readonly type: 'none';
+} | {
+    readonly color?: string;
+    readonly transparency?: number;
+    readonly type: 'solid';
+};
+
+// @public
+export interface ShapeOutlineInput {
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly visible?: boolean;
+    // (undocumented)
+    readonly widthPt?: number;
+}
+
+// @public
 export interface ShapeReflection {
     readonly blurEmu: number;
     readonly distanceEmu: number;
@@ -5360,7 +5379,7 @@ export interface TransportPort {
 }
 
 // @public
-export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setRevisionAttribution", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "insertComplexField", "insertEquation", "setFieldCode", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "moveTable", "insertParagraphBesideTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "mergeTableCells", "splitTableCell", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableProperties", "authorTable", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "setDocumentProtection", "setWatermark", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertFragment", "moveInlineDrawing", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "removeToc", "rewriteTocPageNumbers", "refreshFieldResults", "setFieldResult", "setTextFormFieldDefault", "commitTextFormField", "setLegacyCheckbox", "setLegacyDropdown", "insertBuildingBlock", "insertBookmark", "deleteBookmark"];
+export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setRevisionAttribution", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "insertComplexField", "insertEquation", "setFieldCode", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "moveTable", "insertParagraphBesideTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "mergeTableCells", "splitTableCell", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableProperties", "authorTable", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "setDocumentProtection", "setWatermark", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertFragment", "moveInlineDrawing", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "setShapeFormat", "insertToc", "replaceTocResult", "removeToc", "rewriteTocPageNumbers", "refreshFieldResults", "setFieldResult", "setTextFormFieldDefault", "commitTextFormField", "setLegacyCheckbox", "setLegacyDropdown", "insertBuildingBlock", "insertBookmark", "deleteBookmark"];
 
 // @public
 export type TreeDocOp = SetFieldCodeOp | {
@@ -5813,6 +5832,12 @@ export type TreeDocOp = SetFieldCodeOp | {
     readonly drawingNodeId: string;
     readonly op: 'transformDrawing';
 } | {
+    readonly drawingNodeId: string;
+    readonly fill?: ShapeFillInput;
+    readonly op: 'setShapeFormat';
+    readonly outline?: ShapeOutlineInput;
+    readonly shapeNodeId?: string;
+} | {
     readonly bookmarksToCreate: readonly {
         readonly name: string;
         readonly paragraphId: string;
@@ -6074,6 +6099,8 @@ export type TreeOpRejection = 'unknown-op' | 'unknown-paragraph' | 'not-a-paragr
 | 'unknown-drawing'
 /** The drawing's graphic payload is not a supported picture. */
 | 'not-a-picture-drawing'
+/** The drawing holds no shape whose fill and outline can be set: a picture, chart or diagram. */
+| 'not-a-shape-drawing'
 /** A chart in any state: only a delete applies, and it removes the whole chart. */
 | 'chart-drawing'
 /** A lock flag or `@locked` forbids this mutation. */

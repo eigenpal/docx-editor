@@ -461,8 +461,10 @@ export function projectJournalToShared(
       if (!descriptors.has(id) && !registry.showsAsChild(id)) return;
       base.push(index);
     });
+    // A generic parent, such as a shape's properties, takes its rules from its element name.
+    const parentKind = kindOf(parentId);
     const layout = singletonLayout(
-      kindOf(parentId),
+      parentKind === 'generic' ? (shellOf(parentId) ?? parentKind) : parentKind,
       base.map((index) => children[index]!),
       shellOf
     );

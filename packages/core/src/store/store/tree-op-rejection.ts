@@ -130,6 +130,8 @@ export type TreeOpRejection =
   | 'unknown-drawing'
   /** The drawing's graphic payload is not a supported picture. */
   | 'not-a-picture-drawing'
+  /** The drawing holds no shape whose fill and outline can be set: a picture, chart or diagram. */
+  | 'not-a-shape-drawing'
   /** A chart in any state: only a delete applies, and it removes the whole chart. */
   | 'chart-drawing'
   /** A lock flag or `@locked` forbids this mutation. */

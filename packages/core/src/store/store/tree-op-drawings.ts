@@ -63,6 +63,7 @@ import { DIAGRAM_FRAME_EDITS } from './tree-op-diagram-drawing.ts';
 import { holdsDiagramGraphic, holdsShapeGraphic } from '../package/diagram-frame.ts';
 import { mergedDrawingLocks, shapeLocksOf } from '../package/drawing-shape-locks.ts';
 import { holdsChartGraphic } from '../package/mc-fallback-projection.ts';
+import { applyShapeFormat, validateShapeFormat } from './tree-op-shape-format.ts';
 import {
   applyLegacyVmlGeometryOp,
   legacyVmlDrawingOp,
@@ -504,6 +505,8 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
       if (!ctx.projection.picture) return 'not-a-drawing';
       return lockBlocks(ctx.anchor, op.op);
     }
+    case 'setShapeFormat':
+      return validateShapeFormat(part, op);
     default: {
       const _exhaustive: never = op;
       void _exhaustive;
@@ -1635,6 +1638,8 @@ export function applyDrawingOp(
       const updatedAnchor = updateTransform(ctx.anchor, ctx.projection, op.action);
       return replaceDrawingAnchor(part, ctx.drawing, updatedAnchor, op, options);
     }
+    case 'setShapeFormat':
+      return applyShapeFormat(part, op, options);
     default: {
       const _exhaustive: never = op;
       void _exhaustive;

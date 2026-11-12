@@ -94,4 +94,4 @@ export {
   isContentControlNode,
 } from './tree-op-nodes.ts';
 
-export type { TabStopWrite } from './tree-op-types.ts';
+export type { ShapeFillInput, ShapeOutlineInput, TabStopWrite } from './tree-op-types.ts';

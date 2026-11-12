@@ -282,7 +282,11 @@
     },
     {
       "uid": "Word.Shape",
-      "reason": "Published as a partial, unmeasured surface: Body#shapes, Paragraph#shapes, Shape#id, #name, #type and #body, and ShapeCollection#items, #getFirst, #getFirstOrNullObject and #getByTypes, for floating and inline drawings and text-box stories. Not selected for conformance because these members belong to WordApiDesktop 1.2, outside the target requirement sets. Geometry, text frames, insertTextBox, and shape writes are not implemented."
+      "reason": "Published as a partial, unmeasured surface: Body#shapes, Paragraph#shapes, Shape#id, #name, #type, #body and #fill, ShapeFill#type, #foregroundColor, #transparency, #setSolidColor and #clear, and ShapeCollection#items, #getFirst, #getFirstOrNullObject and #getByTypes, for floating and inline drawings and text-box stories. Not selected for conformance because these members belong to WordApiDesktop 1.2, outside the target requirement sets. Geometry, text frames, insertTextBox, ShapeFill#backgroundColor and #set, and other shape writes are not implemented."
+    },
+    {
+      "uid": "Word.LineFormat",
+      "reason": "Word.Shape has no outline member in the pinned reference, so none is added. The outline of a shape, text box, line or group is set through the editor command setShapeOutline (visible, color, widthPt), which has no Office.js equivalent."
     },
     {
       "uid": "Word.Body#getHtml",

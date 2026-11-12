@@ -50,6 +50,7 @@ import {
   resolveSelectedDrawingRecord,
 } from './docx-editor-images.ts';
 import { lineSpacingAttributes, spacingSideAttributes } from './paragraph-format-write.ts';
+import { execShapeFormatCommand, isShapeFormatCommand } from './shape-format-commands.ts';
 
 /**
  * Run one admitted command against the surface.
@@ -649,6 +650,7 @@ export function execEditorCommand(
       if (isImageCommand(command)) {
         return execImageCommand(mounted, command, options?.editor);
       }
+      if (isShapeFormatCommand(command)) return execShapeFormatCommand(mounted, command);
       // Unreachable: `classifyCommand` refused everything else. Typed for the compiler.
       return { ok: false, code: 'unsupported', reason: 'unsupported command' };
   }

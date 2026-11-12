@@ -7,6 +7,12 @@ import type { DrawingProjection } from '../store/package/drawing-projection.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { partOfNodeId } from './surface-scope.ts';
+import {
+  readShapeFormat,
+  shapeFormatTargets,
+  type ShapeFormatState,
+} from '../store/package/shape-format.ts';
+import { createPackageShapeThemeResolvers } from '../store/package/theme-color-resolution.ts';
 
 /**
  * Whether a laid-out drawing is a shape, line or group: not a picture, text box, chart or
@@ -32,4 +38,19 @@ export function isShapeDrawing(
 export function shapeKeepsGeometrySize(projection: DrawingProjection, chartless: boolean): boolean {
   const legacy = !!(projection.legacyGraphic || projection.textArt || projection.horizontalRule);
   return chartless && projection.picture === null && !projection.textboxStory && !legacy;
+}
+
+/**
+ * The fill and outline of the shapes a selected drawing holds, resolved through the theme, or
+ * null for a drawing with none to set: a picture, a chart, a diagram.
+ */
+export function selectedShapeFormat(
+  surface: PaginatedSurface,
+  drawingNodeId: string
+): ShapeFormatState | null {
+  const part = partOfNodeId(surface.session, drawingNodeId) ?? surface.session.part();
+  const targets = shapeFormatTargets(part, drawingNodeId);
+  if (typeof targets === 'string') return null;
+  const theme = createPackageShapeThemeResolvers(surface.session.currentPackage());
+  return Object.freeze(readShapeFormat(targets, theme));
 }

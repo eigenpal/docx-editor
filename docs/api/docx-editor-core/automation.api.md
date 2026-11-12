@@ -5,10 +5,10 @@
 ```ts
 
 // @public
-export const AUTOMATION_COMMAND_OPERATIONS: readonly ["removeDocumentInformation", "compareFromBase64", "setDocumentProperties", "insertTableRows", "insertTable", "updateTable", "updateTableCell", "splitTableCell", "setInlinePicture", "deleteInlinePicture", "insertField", "insertOoxml", "setFieldCode", "setFieldResult", "deleteField", "updateFieldResult", "insertInlinePicture", "insertBreak", "setChangeTrackingMode", "proposeInsertion", "proposeDeletion", "proposeReplacement", "insertText", "replaceSpan", "replaceStoryBlocks", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "insertBookmark", "deleteBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "startNewList", "attachToList", "detachFromList", "setListLevelFormat", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "setCommentText", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "resolveRevisionBatch", "setRevisionAuthorBatch", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
+export const AUTOMATION_COMMAND_OPERATIONS: readonly ["removeDocumentInformation", "compareFromBase64", "setDocumentProperties", "insertTableRows", "insertTable", "updateTable", "updateTableCell", "splitTableCell", "setInlinePicture", "setShapeFill", "deleteInlinePicture", "insertField", "insertOoxml", "setFieldCode", "setFieldResult", "deleteField", "updateFieldResult", "insertInlinePicture", "insertBreak", "setChangeTrackingMode", "proposeInsertion", "proposeDeletion", "proposeReplacement", "insertText", "replaceSpan", "replaceStoryBlocks", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "insertBookmark", "deleteBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "startNewList", "attachToList", "detachFromList", "setListLevelFormat", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "setCommentText", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "resolveRevisionBatch", "setRevisionAuthorBatch", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
 
 // @public
-export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getMergedTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getFieldResult", "getInlinePictures", "getInlinePicture", "getShapes", "getShape", "getShapeBody", "getChangeTrackingMode", "getDocument", "getDocumentProperty", "getStyles", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getTextRanges", "expandSpan", "getReviewedText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getBookmarkNames", "getBookmarkRangeByName", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getReviewItemRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
+export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getMergedTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getFieldResult", "getInlinePictures", "getInlinePicture", "getShapes", "getShape", "getShapeBody", "getShapeFill", "getChangeTrackingMode", "getDocument", "getDocumentProperty", "getStyles", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getTextRanges", "expandSpan", "getReviewedText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getBookmarkNames", "getBookmarkRangeByName", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getReviewItemRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
 
 // @public
 export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["removeDocumentInformation", "compareFromBase64", "insertTableRows", "resolveRevisionBatch", "setRevisionAuthorBatch", "insertTable", "insertInlinePicture", "insertBreak", "startNewList", "deleteNote", "insertComment", "setCommentResolved", "replyToComment", "insertCustomNode"];
@@ -130,6 +130,15 @@ export type AutomationAuthoringOperation = {
 /** A text box's own story. Any other shape has no body and refuses. */
 | {
     readonly op: 'getShapeBody';
+    readonly shape: AutomationHandle;
+}
+/** A shape's fill. A shape with no fill to read (a picture, a chart) refuses. */
+| {
+    readonly op: 'getShapeFill';
+    readonly shape: AutomationHandle;
+} | {
+    readonly fill: AutomationShapeFillWrite;
+    readonly op: 'setShapeFill';
     readonly shape: AutomationHandle;
 } | {
     readonly op: 'getInlinePictures';
@@ -1595,6 +1604,25 @@ export interface AutomationSearchOptions {
 export type AutomationSelectionMode = 'select' | 'start' | 'end';
 
 // @public
+export interface AutomationShapeFillRead {
+    readonly foregroundColor: string;
+    readonly transparency: number;
+    // (undocumented)
+    readonly type: AutomationShapeFillType;
+}
+
+// @public
+export type AutomationShapeFillType = 'Solid' | 'NoFill' | 'Gradient' | 'Pattern' | 'Picture' | 'Mixed';
+
+// @public
+export type AutomationShapeFillWrite = {
+    readonly clear: true;
+} | {
+    readonly color?: string;
+    readonly transparency?: number;
+};
+
+// @public
 export type AutomationShapeOwnerStory = {
     readonly kind: 'body';
 } | {
@@ -1754,6 +1782,9 @@ export type AutomationValue = {
 } | {
     readonly kind: 'shape';
     readonly shape: AutomationShapeRead;
+} | {
+    readonly fill: AutomationShapeFillRead;
+    readonly kind: 'shapeFill';
 } | {
     readonly handle: AutomationHandle;
     readonly kind: 'handle';

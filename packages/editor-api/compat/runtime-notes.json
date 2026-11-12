@@ -403,6 +403,38 @@
     "status": "partial",
     "notes": "A shape that holds its own w:txbxContent story answers it: paragraphs, text, search, and the same edits as any body. This includes a geometric shape with text. A text box or closed geometric shape that the file gives no story reads as an empty story, and writes to it refuse with InvalidArgument (edit.unsupported-story). A picture, a group, a line, a connector, or a linked text box that continues another box refuses with InvalidArgument. Tracked changes in a listed legacy VML text box belong to its body, so the owner story's acceptAll and rejectAll leave them pending. Bodies are reachable for shapes in the body, headers, and footers. Tracked changes inside a text box belong to its body. The owner story's tracked changes, acceptAll, and rejectAll leave them alone. A comment cannot be inserted in a text box, because a comment there is not kept when the file opens; insertComment refuses with InvalidArgument. Edits to a DrawingML story also save to its VML fallback. A standalone legacy VML text box is a story of its own in the same way. The body becomes addressable after the sync that answers it."
   },
+  "Word.Shape#fill": {
+    "status": "partial",
+    "notes": "Fills a wps shape, text box, line, every shape of a group or canvas, or a legacy VML shape. Reads resolve the shape style and theme. Pictures, charts and diagrams refuse with InvalidArgument. Writes in one sync are one fill change; with change tracking on, a write refuses, as Word records no tracked fill change."
+  },
+  "Word.ShapeFill#type": {
+    "status": "partial",
+    "notes": "Solid, NoFill, Gradient, Pattern, Picture, or Mixed for a group whose shapes disagree. Texture is never reported: a tiled picture reads Picture."
+  },
+  "Word.ShapeFill#foregroundColor": {
+    "status": "partial",
+    "notes": "Reads #RRGGBB for a solid fill and an empty string otherwise. Writes accept #RRGGBB only; color names refuse with InvalidArgument. A new color keeps the transparency."
+  },
+  "Word.ShapeFill#transparency": {
+    "status": "partial",
+    "notes": "From 0 to 1, written as a:alpha on the fill color. A legacy VML shape refuses a transparency, and the VML fallback gets none, as Word writes none."
+  },
+  "Word.ShapeFill#setSolidColor": {
+    "status": "partial",
+    "notes": "Writes a:solidFill/a:srgbClr and keeps the transparency. The VML fallback that draws the same shapes gets fillcolor. Accepts #RRGGBB only."
+  },
+  "Word.ShapeFill#clear": {
+    "status": "partial",
+    "notes": "Writes a:noFill and keeps the previous fill in a14:hiddenFill, as Word does. The VML fallback gets filled=\"f\"."
+  },
+  "Word.ShapeFill#backgroundColor": {
+    "status": "unsupported",
+    "notes": "Not published: pattern fills are not written."
+  },
+  "Word.ShapeFill#set": {
+    "status": "unsupported",
+    "notes": "Not published. Use setSolidColor, transparency and clear."
+  },
   "Word.ShapeCollection#getByTypes": {
     "status": "partial",
     "notes": "Filters the listing by type, keeping its order. Unknown type values refuse with InvalidArgument."

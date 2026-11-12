@@ -144,6 +144,34 @@ Main-body reads, search, comments, and revisions exclude text-box content. If `b
 | Shape inside a note or text box | Listed; `body` refuses with `InvalidArgument` |
 | Inline picture | Listed as `Picture`; also in `inlinePictures` |
 
+## Set a shape fill
+
+`Shape.fill` reads and sets the fill of a shape, text box, line, or group. A group fill applies to every shape in the group. The following example fills each geometric shape with a 40 percent transparent blue:
+
+```ts
+await runtime.run(async (context) => {
+  const shapes = context.document.body.shapes.getByTypes([ShapeType.geometricShape]);
+  shapes.load('items');
+  await context.sync();
+
+  for (const shape of shapes.items) {
+    shape.fill.setSolidColor('#4472C4');
+    shape.fill.transparency = 0.4;
+  }
+  await context.sync();
+});
+```
+
+| Member | Behavior |
+| --- | --- |
+| `type` | `Solid`, `NoFill`, `Gradient`, `Pattern`, `Picture`, or `Mixed` for a group whose shapes differ |
+| `foregroundColor` | `#RRGGBB` for a solid fill, otherwise an empty string; writes accept `#RRGGBB` only |
+| `transparency` | From 0 (opaque) to 1 (clear) |
+| `setSolidColor(color)` | Sets a solid fill and keeps the transparency |
+| `clear()` | Removes the fill |
+
+Reads resolve the shape style and theme. Pictures, charts, and diagrams refuse with `InvalidArgument`. A legacy VML shape refuses a transparency. With change tracking on, a fill write refuses. `Shape` has no outline member; in an editor, use the `setShapeOutline` command.
+
 ## Limits
 
 - Separate writes to different stories into different syncs.
@@ -154,7 +182,7 @@ Main-body reads, search, comments, and revisions exclude text-box content. If `b
 - A standalone VML shape (`w:pict`) is listed only with a numbered shape ID that no other shape uses. Text in an unlisted VML text box is unreachable, and its tracked changes stay with the owner story.
 - A VML shape's `id` is the number in `o:spid`, or in `id` when `o:spid` is absent. Its `name` is the `id` attribute.
 - VML template `#_x0000_t202` returns `TextBox`, and other text-bearing VML shapes return `GeometricShape`. VML pictures return `Picture`. VML text paths, horizontal rules, and embedded object previews return `Unsupported`.
-- Shape geometry, text frames, and shape insertion or deletion are unavailable.
+- Shape geometry, outlines, text frames, and shape insertion or deletion are unavailable.
 
 ## See also
 

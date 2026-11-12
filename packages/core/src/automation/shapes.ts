@@ -64,6 +64,8 @@ export interface AutomationShapeEntry extends AutomationShapeRead {
   readonly emptyFrame: boolean;
   /** The `mc:AlternateContent` the drawing was read through, or null for a bare drawing. */
   readonly alternate: OoxmlElement | null;
+  /** What a fill edit names: the drawing or `w:pict`, and the VML shape inside a `w:pict`. */
+  readonly formatTarget: { readonly drawingNodeId: string; readonly shapeNodeId?: string };
 }
 
 export type AutomationShapesRead =
@@ -184,7 +186,7 @@ export function shapesInParagraphs(
             : null;
       if (alternate && !drawing) continue;
       if (!alternate && named(node, WML_NAMESPACE_URI, 'pict')) {
-        for (const { read, root, emptyFrame } of vmlShapesOf(node as OoxmlElement)) {
+        for (const { read, root, emptyFrame, node: shape } of vmlShapesOf(node as OoxmlElement)) {
           if (shapes.length >= MAX_SHAPES_PER_STORY) return { ok: false, reason: 'truncated' };
           const entry: AutomationShapeEntry = {
             ...read,
@@ -192,6 +194,7 @@ export function shapesInParagraphs(
             textboxRoot: root,
             emptyFrame,
             alternate: null,
+            formatTarget: { drawingNodeId: node.id, shapeNodeId: shape.id },
           };
           shapes.push(entry);
           legacy.push(entry);
@@ -211,6 +214,7 @@ export function shapesInParagraphs(
             textboxRoot: found.root,
             emptyFrame: found.emptyFrame,
             alternate: alternate ? node : null,
+            formatTarget: { drawingNodeId: alternate ? node.id : drawing.id },
           });
         }
         continue;

@@ -482,6 +482,7 @@ const TREE_OP_REACH: {
   setDrawingMetadata: (op) => whole(op.drawingNodeId),
   setDrawingLocks: (op) => whole(op.drawingNodeId),
   transformDrawing: (op) => whole(op.drawingNodeId),
+  setShapeFormat: (op) => whole(op.drawingNodeId),
   // A TOC is inserted BESIDE the named paragraph, in the body: the controls that matter are the
   // ones enclosing that paragraph, plus the headings the op writes bookmarks into.
   insertToc: (op) => ({

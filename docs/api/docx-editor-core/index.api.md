@@ -2513,6 +2513,8 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     } | {
         range: EditorSelection;
     };
+    setShapeFill: SetShapeFillCommand;
+    setShapeOutline: SetShapeOutlineCommand;
     setTableBorders: {
         scope: 'none';
         target: TableBorderEdgeTarget;
@@ -4478,6 +4480,7 @@ export interface SelectedImageState {
     readonly resourceStatus: ImageResourceState['kind'];
     // (undocumented)
     readonly rotationDegrees: number;
+    readonly shapeFormat: ShapeFormatState | null;
     // (undocumented)
     readonly title: string;
     // (undocumented)
@@ -4554,6 +4557,52 @@ export type SetReviewChangesAuthorOptions = ReviewChangesAttribution & ({
     keys?: never;
     scope?: 'visible' | 'document';
 });
+
+// @public
+export interface SetShapeFillCommand {
+    // (undocumented)
+    color?: string;
+    drawingNodeId?: string;
+    // (undocumented)
+    transparency?: number;
+    // (undocumented)
+    visible?: boolean;
+}
+
+// @public
+export interface SetShapeOutlineCommand {
+    // (undocumented)
+    color?: string;
+    drawingNodeId?: string;
+    // (undocumented)
+    visible?: boolean;
+    // (undocumented)
+    widthPt?: number;
+}
+
+// @public
+export interface ShapeFillState {
+    readonly color: string | null;
+    readonly transparency: number;
+    readonly type: 'solid' | 'none' | 'gradient' | 'pattern' | 'picture' | 'mixed';
+}
+
+// @public
+export interface ShapeFormatState {
+    // (undocumented)
+    readonly fill: ShapeFillState;
+    // (undocumented)
+    readonly outline: ShapeOutlineState;
+}
+
+// @public
+export interface ShapeOutlineState {
+    readonly color: string | null;
+    // (undocumented)
+    readonly visible: boolean | null;
+    // (undocumented)
+    readonly widthPt: number | null;
+}
 
 // @public
 export interface StyleDefinition {

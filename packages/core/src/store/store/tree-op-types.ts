@@ -1055,6 +1055,19 @@ export type TreeDocOp =
     }
   | {
       /**
+       * Set the fill or outline of a shape, a text box, a line, or every shape of a group.
+       * One undo unit; a VML fallback that draws the same shapes follows.
+       */
+      readonly op: 'setShapeFormat';
+      /** The `w:drawing`, the `mc:AlternateContent` that holds it, or a legacy `w:pict`. */
+      readonly drawingNodeId: string;
+      /** One `wps:wsp` or VML shape of the drawing. Omitted formats every shape it holds. */
+      readonly shapeNodeId?: string;
+      readonly fill?: ShapeFillInput;
+      readonly outline?: ShapeOutlineInput;
+    }
+  | {
+      /**
        * Replace a detected TOC field's cached result paragraphs and ensure heading bookmarks.
        * Preserves field chrome / instruction. One undo unit (phase A of TOC refresh).
        */
@@ -1129,9 +1142,32 @@ export type DrawingTreeDocOp = Extract<
       | 'setDrawingWrap'
       | 'setDrawingMetadata'
       | 'setDrawingLocks'
-      | 'transformDrawing';
+      | 'transformDrawing'
+      | 'setShapeFormat';
   }
 >;
+
+/**
+ * A shape fill to write: none, or solid. A solid fill without `color` keeps the shape's colour,
+ * or brings back the one a hidden fill kept. `transparency` runs from 0 (opaque) to 1 (clear).
+ *
+ * @public
+ */
+export type ShapeFillInput =
+  | { readonly type: 'none' }
+  | { readonly type: 'solid'; readonly color?: string; readonly transparency?: number };
+
+/**
+ * A shape outline to write. Omitted fields keep their value. `color` is `RRGGBB`; `widthPt`
+ * runs from 0.25 to 1584 points.
+ *
+ * @public
+ */
+export interface ShapeOutlineInput {
+  readonly visible?: boolean;
+  readonly color?: string;
+  readonly widthPt?: number;
+}
 
 /** Just the `op` discriminants, for dispatch tables and validation. */
 export type TreeDocOpKind = TreeDocOp['op'];
