@@ -20,6 +20,10 @@
 // The release is a paint-only change, made on the run the composition is in and put back
 // at `compositionend` before anything repaints, so a retained run never keeps it. Layout
 // and the readback are untouched: the readback reads text, not style.
+//
+// It is a preview, not a layout: composed text grows the run past its painted advance, into
+// the margin at the end of a line, and a table cell still clips at its own edge. The commit
+// at `compositionend` lays the text out where it belongs.
 
 /** The inline style properties a release changes, as they were before it. */
 interface SavedClip {

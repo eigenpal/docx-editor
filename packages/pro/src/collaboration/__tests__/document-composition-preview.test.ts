@@ -69,12 +69,13 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
  * Both editors share one test document, so his caret would move the selection Alice's input
  * method is composing in. In two windows it cannot; put hers back the way the browser keeps it.
  */
-function remoteEdit(bob: Mounted, index: number, offset: number, text: string): void {
+function remoteEdit(bob: Mounted, index: number, offset: number, text: string | null): void {
   const selection = document.getSelection()!;
   const node = selection.focusNode!;
   const at = selection.focusOffset;
   caret(bob.editor, index, offset);
-  expect(bob.editor.exec({ type: 'insertText', text }).ok).toBe(true);
+  if (text === null) bob.editor.surface!.splitParagraph();
+  else expect(bob.editor.exec({ type: 'insertText', text }).ok).toBe(true);
   selection.setBaseAndExtent(node, at, node, at);
 }
 
@@ -173,29 +174,60 @@ test('a remote edit in the composing paragraph keeps both texts', async () => {
   caret(alice.editor, 0, 5);
   pages.dispatchEvent(compositionEvent('compositionstart'));
   composeStep(alice, ' ', '아');
+  const composing = document.getSelection()!.focusNode as Text;
+  const shown = () =>
+    [...pages.querySelectorAll('[data-start]')].map((run) => run.textContent).join('');
 
   // Bob types at the start of the same paragraph while Alice composes at its end.
   remoteEdit(bob, 0, 0, 'A');
   converge();
   await settle();
-  // The page is held for the input method: the run it composes into is still on it.
-  expect(document.getSelection()!.focusNode!.isConnected).toBe(true);
+  // The page is held for the input method: the same text node, and no remote text on it yet.
+  expect(document.getSelection()!.focusNode === composing).toBe(true);
+  expect(composing.isConnected).toBe(true);
+  expect(shown()).toBe('우리나라 아');
 
-  // The input method finishes the syllable in the run its text is in now.
-  const node = document.getSelection()!.focusNode as Text;
-  const head = node.data.endsWith('아') ? node.data.slice(0, -1) : node.data;
-  const run = composeStep(alice, head, '알');
+  const run = composeStep(alice, ' ', '알');
   expect(clipped(run)).toBe(false);
   pages.dispatchEvent(compositionEvent('compositionend', '알'));
   converge();
   expect(alice.editor.surface!.session.bodyText()).toBe('A우리나라 알');
   expect(bob.editor.surface!.session.bodyText()).toBe('A우리나라 알');
   // The held paint lands at the end, and shows both edits.
-  const painted = [...pages.querySelectorAll('[data-start]')]
-    .map((run) => run.textContent)
-    .join('');
-  expect(painted).toBe('A우리나라 알');
+  expect(shown()).toBe('A우리나라 알');
   expect(alice.editor.exec({ type: 'undo' }).ok).toBe(true);
   converge();
   expect(bob.editor.surface!.session.bodyText()).toBe('A우리나라 ');
+});
+
+test('a remote split of the composing paragraph puts the syllable after the caret', async () => {
+  const bytes = zipDocument('<w:p><w:r><w:t xml:space="preserve">우리나라 </w:t></w:r></w:p>');
+  const peers = await harness.pair(bytes);
+  const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
+    peer.detach();
+    return mount({
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+    });
+  }) as [Mounted, Mounted];
+  const flush = () => {
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+  };
+  const pages = alice.container.querySelector<HTMLElement>('.docx-pages')!;
+  pages.focus();
+  caret(alice.editor, 0, 5);
+  pages.dispatchEvent(compositionEvent('compositionstart'));
+  composeStep(alice, ' ', '아');
+  // Bob presses Enter inside the word Alice is typing after.
+  remoteEdit(bob, 0, 2, null);
+  flush();
+  await settle();
+  pages.dispatchEvent(compositionEvent('compositionend', '아'));
+  flush();
+  expect(alice.editor.surface!.session.bodyText()).toBe('우리\n나라 아');
+  expect(bob.editor.surface!.session.bodyText()).toBe('우리\n나라 아');
+  expect(packageFingerprint(alice.editor.surface!.session.currentPackage())).toBe(
+    packageFingerprint(bob.editor.surface!.session.currentPackage())
+  );
 });

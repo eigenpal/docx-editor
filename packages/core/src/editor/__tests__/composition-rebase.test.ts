@@ -30,7 +30,8 @@ describe('rebaseComposedText', () => {
 
   test('the caret decides an ambiguous insert', () => {
     // `에` composed before `에서`: a plain diff calls it an insert after the first `에`.
-    expect(rebaseComposedText('에서', '에에서', '에서!', 0)).toBe('에에서!');
+    expect(rebaseComposedText('에서', '에에서', '!에서', 0)).toBe('에!에서');
+    expect(rebaseComposedText('에서', '에에서', '!에서', null)).toBe('!에에서');
   });
 
   test('a remote delete around the caret keeps the composed text', () => {
@@ -39,7 +40,19 @@ describe('rebaseComposedText', () => {
 
   test('a candidate that replaces selected text never deletes remote text', () => {
     // The composition replaced "bc"; meanwhile a collaborator replaced "c" with "X".
-    expect(rebaseComposedText('abcd', 'a日本d', 'abXd', null)).toBe('a日本Xd');
+    expect(rebaseComposedText('abcd', 'a日本d', 'abXd', null)).toBe('a日本bXd');
+  });
+
+  test('remote edits on both sides of the caret leave the composed text at the caret', () => {
+    expect(rebaseComposedText('Hello world', 'HelloX world', 'AHello worldB', 5)).toBe(
+      'AHelloX worldB'
+    );
+  });
+
+  test('a reconversion replaces its own text while remote edits land around it', () => {
+    expect(rebaseComposedText('abc かな def', 'abc 仮名 def', 'Zabc かな defZ', null)).toBe(
+      'Zabc 仮名 defZ'
+    );
   });
 
   test('a remote delete of the whole paragraph keeps the composed text', () => {
@@ -48,10 +61,9 @@ describe('rebaseComposedText', () => {
 });
 
 describe('rebaseOffset', () => {
-  test('before, after and inside the remote change', () => {
+  test('before and after the remote change', () => {
     expect(rebaseOffset('abcd', 'aXYd', 1)).toBe(1);
-    expect(rebaseOffset('abcd', 'aXYZd', 3)).toBe(4);
-    expect(rebaseOffset('abcd', 'aXYd', 2)).toBe(1);
+    expect(rebaseOffset('abcd', 'aXYZd', 4)).toBe(5);
     expect(rebaseOffset('abcd', 'abcd', 2)).toBe(2);
   });
 });

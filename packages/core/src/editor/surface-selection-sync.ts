@@ -32,17 +32,17 @@ import {
   type PaintedSpanSnapshot,
 } from './surface-composition-readback.ts';
 import { createCompositionPreview } from './surface-composition-preview.ts';
-import { rebaseComposedText, rebaseOffset } from './surface-composition-rebase.ts';
+import { composedEdit, rebaseComposedText, rebaseOffset } from './surface-composition-rebase.ts';
 import { paintedTextOf, paragraphReplacePlan } from './surface-input.ts';
 import { collapsedAt } from './surface-selection-ops.ts';
 
-/** What the page showed for the composing paragraph when the composition began. */
+/** What the page shows for the composing paragraph under the input method's text. */
 interface ComposingBase {
   readonly text: string;
-  /** The caret offset, when the composition began at a collapsed caret. */
+  /** The caret offset, when the composition is at a collapsed caret. */
   readonly caret: number | null;
-  readonly scope: import('@docx-editor.dev/core/store').StoryScope;
-  readonly revision: number | null;
+  /** The package revision that text is from. */
+  readonly revision: number;
 }
 
 /** What the composition root lends this lane. */
@@ -96,6 +96,16 @@ export interface SurfaceSelectionSyncDeps {
    * input pressure would leave the screen behind the composition it just landed.
    */
   flushToPaint(): boolean;
+  /**
+   * The text the page currently PAINTS for a paragraph, and the package revision it is from.
+   * It differs from `textOf` while a paint is owed. Without it, the model's text is taken.
+   */
+  paintedText?(paragraphId: string): { readonly text: string; readonly revision: number };
+  /**
+   * Hold repaints from the input method's first write until the composition ends, so a
+   * collaborator's edit does not replace the nodes it composes into; release paints again.
+   */
+  holdPaint?(hold: boolean): void;
   /** The engine's painted caret, repainted with every mirror. */
   updateCaret(): void;
   /** The model text of one paragraph, for diffing what an IME wrote against it. */
@@ -370,6 +380,22 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * collaborator's edit in between is in the model and not on the page.
    */
   let composingBase: ComposingBase | null = null;
+  /** Whether the input method has written yet: the page is held from that write on. */
+  let composingWritten = false;
+
+  /** What the page shows for the composing paragraph now. */
+  function baseOf(paragraphId: string): ComposingBase {
+    const selection = deps.selection();
+    const painted = deps.paintedText?.(paragraphId) ?? {
+      text: deps.textOf(paragraphId),
+      revision: session.packageRevision(),
+    };
+    const collapsed =
+      selection.anchor.paragraphId === paragraphId &&
+      selection.head.paragraphId === paragraphId &&
+      selection.anchor.offset === selection.head.offset;
+    return { ...painted, caret: collapsed ? selection.head.offset : null };
+  }
 
   /**
    * Take up a selection the user has made but the queued `selectionchange` has not delivered.
@@ -469,10 +495,18 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     // A collaborator's edit landed while composing: in the model, held off the page. Land the
     // layout (the page has been read) and carry the composed edit onto the current text.
     let modelText = baseText;
-    if (base && session.revisionFor(base.scope) !== base.revision) {
+    if (base && session.packageRevision() !== base.revision) {
       deps.flushToPaint();
       modelText = deps.textOf(paragraphId);
       if (owner) owner = { ...owner, offset: rebaseOffset(baseText, modelText, owner.offset) };
+      // A remote split or join took the caret into another paragraph: the composed text goes
+      // where the caret went, as typing would.
+      const edit = composedEdit(baseText, read, base.caret);
+      const head = deps.selection().head;
+      if (base.caret !== null && edit.start === edit.end && head.paragraphId !== paragraphId) {
+        if (edit.text.length > 0) deps.replaceSelectionWith?.(edit.text);
+        return;
+      }
     }
     const painted = rebaseComposedText(baseText, read, modelText, base?.caret ?? null);
     const plan = paragraphReplacePlan(paragraphId, modelText, painted);
@@ -674,7 +708,16 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   // The composing text stays visible in a run painted to a clipped advance.
   const preview = createCompositionPreview(pagesLayer);
   const trackComposition = (): void => {
-    if (composing) preview.track();
+    if (!composing) return;
+    preview.track();
+    if (composingWritten) return;
+    // The first write: from here the page is the input method's. A paint that landed since
+    // `compositionstart` (a collaborator's edit) is what the input method wrote over.
+    composingWritten = true;
+    deps.holdPaint?.(true);
+    if (composingParagraph !== null && composingBase !== null) {
+      composingBase = baseOf(composingParagraph);
+    }
   };
   pagesLayer.addEventListener('input', trackComposition);
 
@@ -847,21 +890,16 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       composingSpans = composingAcrossParagraphs
         ? []
         : snapshotPaintedSpans(pagesLayer, composingParagraph);
-      const scope = deps.storyScope();
-      composingBase = composingAcrossParagraphs
-        ? null
-        : {
-            text: deps.textOf(composingParagraph),
-            caret: selection.anchor.offset === selection.head.offset ? selection.head.offset : null,
-            scope,
-            revision: session.revisionFor(scope),
-          };
+      composingBase = composingAcrossParagraphs ? null : baseOf(composingParagraph);
+      composingWritten = false;
       preview.track();
-      session.beginComposition(scope);
+      session.beginComposition(deps.storyScope());
     },
 
     onCompositionEnd: (event?: CompositionEvent): void => {
       composing = false;
+      composingWritten = false;
+      deps.holdPaint?.(false);
       // Before anything below repaints, so a run the paint keeps is clipped as painted.
       preview.restore();
       const paragraphId = composingParagraph ?? deps.selection().head.paragraphId;
