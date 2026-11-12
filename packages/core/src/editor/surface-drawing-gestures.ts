@@ -52,8 +52,8 @@ export function createDrawingGestures(deps: {
   ): {
     readonly drawingNodeId: string;
     readonly paragraphId: string;
-    /** An open story's edit moves to this page first: the drawing is on another page. */
-    readonly enter?: { readonly rId: string; readonly pageIndex: number };
+    /** The page the drawing is on, for a drawing of an open header or footer. */
+    readonly pageIndex?: number;
   } | null;
 }) {
   /** The last press, for telling a double press: a pointer press carries no click count. */
@@ -80,6 +80,18 @@ export function createDrawingGestures(deps: {
     return true;
   };
   const pointOf = (event: PointerEvent) => deps.surface.pointAt(event.clientX, event.clientY);
+  /**
+   * An open header or footer repeats on every page it heads. A press on its drawing on another
+   * page moves the edit to that page, as a press on that page's band does, so the frame shows
+   * where the press landed. A drawing the selection model refuses (select-locked) moves nothing.
+   */
+  const followPage = (drawingNodeId: string, paragraphId: string, pageIndex?: number) => {
+    const scope = deps.surface.activeScope();
+    if (scope.kind !== 'headerFooter' || pageIndex === undefined) return;
+    if (pageIndex === deps.surface.currentPage('caret') - 1) return;
+    if (!deps.surface.selectDrawing(drawingNodeId, paragraphId)) return;
+    deps.surface.enterHeaderFooter({ rId: scope.rId, pageIndex });
+  };
   /** The behind-text drawing a press reaches where no text lies under it, if any. */
   const behindDrawingAt = (event: Event) =>
     isPointerEvent(event) && !event.shiftKey
@@ -126,7 +138,7 @@ export function createDrawingGestures(deps: {
       // no glyph lies under the press, the drawing takes it, as hit testing decides.
       // One the selection model refuses (hidden, select-locked) leaves the press to the text.
       const behind = !editingTextbox && !drawingId ? behindDrawingAt(event) : null;
-      if (behind?.enter) deps.surface.enterHeaderFooter(behind.enter);
+      if (behind) followPage(behind.drawingNodeId, behind.paragraphId, behind.pageIndex);
       if (behind && selectObject(behind.drawingNodeId, behind.paragraphId)) {
         if (selectedImageStateOf(deps.surface)) {
           deps.surface.focus();
@@ -139,6 +151,9 @@ export function createDrawingGestures(deps: {
       // inside a shape with no fill, is on the text, as hit testing decides.
       const point = drawingId && isPointerEvent(event) ? pointOf(event) : null;
       const reached = !point || point.hit.drawing?.drawingNodeId === drawingId;
+      if (drawingId && reached && point?.hit.drawing) {
+        followPage(drawingId, point.hit.drawing.paragraphId, point.hit.pageIndex);
+      }
       deps.setIntent(
         drawingId && reached ? { kind: 'pointer', drawingNodeId: drawingId } : { kind: 'none' }
       );

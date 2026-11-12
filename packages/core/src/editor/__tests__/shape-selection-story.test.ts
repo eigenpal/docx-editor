@@ -129,38 +129,51 @@ test('a header watermark reaching into the body selects while the header is open
   }
 });
 
-test('a header watermark on another page selects and keeps the header open', async () => {
-  const watermark = pageShape(13, 150, 300, 300, 300, true);
-  const lines = Array.from({ length: 90 }, (_, i) => p(text(`Line ${i}`))).join('');
-  const { editor, container } = await mount(
-    p(text('Body')) + lines,
-    `<w:p>${watermark}<w:r><w:t>Header</w:t></w:r></w:p>`
-  );
-  try {
-    const surface = editor.surface!;
-    expect(surface.enterHeaderFooter({ rId: 'rIdH', pageIndex: 0 })).toBe(true);
-    const page = surface.layout().pages[1]!;
-    const record = storyDrawing(page.header, 13);
-    const origin = headerFooterAnchoredDrawingOrigin(record, page.header!.box, page.box);
-    container.querySelector<HTMLElement>('.docx-page-content')!.dispatchEvent(
-      new PointerEvent('pointerdown', {
-        bubbles: true,
-        cancelable: true,
-        button: 0,
-        pointerId: 1,
-        clientX: (origin.x + record.width / 2) * SCALE,
-        clientY: (origin.y + record.height / 2) * SCALE,
-      })
+for (const behind of [true, false])
+  test(`a header ${behind ? 'watermark' : 'logo'} on another page selects there, header open`, async () => {
+    const watermark = pageShape(13, 150, 300, 300, 300, behind);
+    const lines = Array.from({ length: 90 }, (_, i) => p(text(`Line ${i}`))).join('');
+    const { editor, container } = await mount(
+      p(text('Body')) + lines,
+      `<w:p>${watermark}<w:r><w:t>Header</w:t></w:r></w:p>`
     );
-    expect(surface.activeScope()).toMatchObject({ kind: 'headerFooter', rId: 'rIdH' });
-    expect(editor.getSelectedImage!()).toMatchObject({ id: record.drawingNodeId });
-    // The edit moved to the page pressed, so the frame sits over that page's watermark.
-    expect(selectedDrawingOverlayTargetOf(surface)?.pageIndex).toBe(1);
-  } finally {
-    editor.destroy();
-    container.remove();
-  }
-});
+    try {
+      const surface = editor.surface!;
+      expect(surface.enterHeaderFooter({ rId: 'rIdH', pageIndex: 0 })).toBe(true);
+      const page = surface.layout().pages[1]!;
+      const record = storyDrawing(page.header, 13);
+      const origin = headerFooterAnchoredDrawingOrigin(record, page.header!.box, page.box);
+      // Behind the text, the press lands on the text layer; in front, on the page's painted copy.
+      const painted = [
+        ...container.querySelectorAll<HTMLElement>(
+          `[data-drawing-node-id="${CSS.escape(record.drawingNodeId)}"]`
+        ),
+      ].find(
+        (element) => element.closest('[data-page-index]')?.getAttribute('data-page-index') === '1'
+      );
+      const target = behind
+        ? container.querySelector<HTMLElement>('.docx-page-content')!
+        : painted!;
+      expect(target).toBeTruthy();
+      target.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          pointerId: 1,
+          clientX: (origin.x + record.width / 2) * SCALE,
+          clientY: (origin.y + record.height / 2) * SCALE,
+        })
+      );
+      expect(surface.activeScope()).toMatchObject({ kind: 'headerFooter', rId: 'rIdH' });
+      expect(editor.getSelectedImage!()).toMatchObject({ id: record.drawingNodeId });
+      // The edit moved to the page pressed, so the frame sits over that page's watermark.
+      expect(selectedDrawingOverlayTargetOf(surface)?.pageIndex).toBe(1);
+    } finally {
+      editor.destroy();
+      container.remove();
+    }
+  });
 
 test('a press on the selected frame over another drawing selects that drawing', async () => {
   // In front of the text, inside the frame of the shape behind it.

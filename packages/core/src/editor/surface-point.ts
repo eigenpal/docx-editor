@@ -99,9 +99,9 @@ export function repeatedPressOnObject(
   return painted != null && findDrawingOverlayFrameInLayout(layout, painted) === null;
 }
 
-/** A drawing a press reaches through the text, and the page to move an open story's edit to. */
+/** A drawing a press reaches through the text; in an open story, also the page it is on. */
 export type BehindDrawingHit = NonNullable<SemanticHit['drawing']> & {
-  readonly enter?: { readonly rId: string; readonly pageIndex: number };
+  readonly pageIndex?: number;
 };
 
 /**
@@ -109,7 +109,7 @@ export type BehindDrawingHit = NonNullable<SemanticHit['drawing']> & {
  * hit test resolves it: outside every text line, page margins included. Null in a note, on a
  * header or footer band, over a front drawing, and over a read-only position. With a header or
  * footer open, its own drawing that the press reaches instead, past its band too (a watermark).
- * On another page that shows the story, `enter` moves the edit there first, as its band does.
+ * That drawing names its page, which can be another page that shows the story.
  */
 export function behindDrawingAt(
   host: PointerHost,
@@ -122,9 +122,7 @@ export function behindDrawingAt(
   const active = host.activeHeaderFooter?.();
   if (active) {
     const hit = surfacePointAt(host, clientX, clientY)?.hit;
-    if (!hit?.drawing) return null;
-    if (hit.pageIndex === active.pageIndex) return hit.drawing;
-    return { ...hit.drawing, enter: { rId: active.rId, pageIndex: hit.pageIndex } };
+    return hit?.drawing ? { ...hit.drawing, pageIndex: hit.pageIndex } : null;
   }
   const layout = host.layout();
   const rect = host.pagesLayer.getBoundingClientRect();
