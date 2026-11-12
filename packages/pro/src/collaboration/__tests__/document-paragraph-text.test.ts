@@ -7,6 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { afterEach, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import { reviewModule } from '../../review/review-module.ts';
 import { collaborationModule } from '../collaboration-module.ts';
 import { createPeerHarness, zipDocument } from './document-peer-support.ts';
 import { packageFingerprint } from './document-support.ts';
@@ -75,4 +76,40 @@ test('paragraph reads follow concurrent edits, remote undo/redo and save/reopen'
   expect(reopened.getParagraphs().map(({ keptText }) => keptText)).toEqual(
     bob.getParagraphs().map(({ keptText }) => keptText)
   );
+});
+
+test('a remote tracked replacement leaves deleted text out of kept text', async () => {
+  const pair = await harness.pair(
+    zipDocument('<w:p><w:r><w:t xml:space="preserve">I recieve mail</w:t></w:r></w:p>')
+  );
+  const [alice, bob] = [pair.alice, pair.bob].map((peer, index) => {
+    peer.detach();
+    return mount({
+      document: peer.room.document,
+      author: index === 0 ? 'Alice' : 'Bob',
+      modules: [reviewModule(), collaborationModule({ session: peer.room.session })],
+    });
+  }) as [ReturnType<typeof mount>, ReturnType<typeof mount>];
+  expect(alice.exec({ type: 'setEditingMode', mode: 'suggesting' }).ok).toBe(true);
+  const match = alice.findMatches('recieve')[0]!;
+  expect(alice.exec({ type: 'replaceMatch', match, text: 'receive' }).ok).toBe(true);
+  pair.alice.room.session.flushPendingJournals();
+  pair.bob.room.session.flushPendingJournals();
+  const [paragraph] = bob.getParagraphs();
+  expect(paragraph?.keptText).toBe('I receive mail');
+  expect(paragraph?.text.length).toBeGreaterThan(paragraph!.keptText.length);
+  expect(alice.getParagraphs()).toEqual(bob.getParagraphs());
+  const ranges = paragraph!.keptSpans.map(({ start, length }) => ({
+    blockId: paragraph!.blockId,
+    start,
+    length,
+    expectedText: paragraph!.text.slice(start, start + length),
+  }));
+  expect(bob.setHighlights('kept', ranges)).toEqual({ applied: ranges.length, unavailable: 0 });
+  // Undo on one side restores the old text on both.
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  pair.alice.room.session.flushPendingJournals();
+  pair.bob.room.session.flushPendingJournals();
+  expect(bob.getParagraphs()[0]?.keptText).toBe('I recieve mail');
+  expect(bob.getParagraphs()[0]?.keptSpans).toHaveLength(1);
 });

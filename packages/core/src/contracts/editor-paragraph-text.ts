@@ -12,11 +12,22 @@ export interface ParagraphTextSpan {
 export interface ParagraphText {
   /** The paragraph's `HighlightRange.blockId`, scoped to the open document. */
   readonly blockId: string;
-  /** Model text, including tracked deletions, in the editor's configured `fieldResults` offsets. */
+  /**
+   * Model text in the editor's configured `fieldResults` offsets, including tracked deletions.
+   * Pass slices of it as `HighlightRange.expectedText`. It holds placeholder characters, such as
+   * U+FFFC for a field, so check `keptText` instead.
+   */
   readonly text: string;
-  /** Text without tracked deletions or move-from revisions. Insertions are included. */
+  /**
+   * The text a reader sees, for spelling and grammar checks. Tracked deletions, move-from
+   * revisions and optional hyphens are left out. Insertions and hidden text are included.
+   * A non-breaking hyphen reads as U+2011 and a symbol character reads as U+FFFC.
+   */
   readonly keptText: string;
-  /** Ordered spans mapping `keptText` to `text`. Split ranges at gaps to avoid marking deleted text. */
+  /**
+   * Ordered spans mapping `keptText` to `text`. Each span has the same length in both texts.
+   * A range that crosses a gap between spans needs one highlight per span.
+   */
   readonly keptSpans: readonly ParagraphTextSpan[];
 }
 
@@ -33,7 +44,8 @@ export interface EditorParagraphText {
    * Includes body text, tables, content controls, headers, footers, notes and supported text boxes.
    * Body comes first, then other story parts; paragraphs follow model order within each story.
    * Text-box paragraphs follow their host paragraph. Repeated headers and footers appear once.
-   * Read again after a `change` event. Unchanged paragraph nodes retain their result objects.
+   * Read again after a `change` event. An unchanged paragraph returns the same object, so an
+   * object you have already checked needs no new check.
    * @public
    */
   getParagraphs(): readonly ParagraphText[];

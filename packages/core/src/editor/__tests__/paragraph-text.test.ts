@@ -97,6 +97,26 @@ describe('getParagraphText', () => {
     }
   );
 
+  test('reads optional hyphens, non-breaking hyphens and symbols as they show', () => {
+    const editor = mount(
+      p(
+        run('co'),
+        '<w:r><w:softHyphen/></w:r>',
+        run('operate well'),
+        '<w:r><w:noBreakHyphen/></w:r>',
+        run('known '),
+        '<w:r><w:sym w:font="Wingdings" w:char="F04A"/></w:r>'
+      )
+    );
+    const [paragraph] = editor.getParagraphs();
+    expect(paragraph?.text).toBe('co\u001foperate well\u001eknown (');
+    expect(paragraph?.keptText).toBe('cooperate well‑known ￼');
+    expect(paragraph?.keptSpans).toEqual([
+      { start: 0, length: 2, keptStart: 0 },
+      { start: 3, length: 20, keptStart: 2 },
+    ]);
+  });
+
   test.each(['', 'Plain text'])('maps an unchanged paragraph: %s', (text) => {
     const editor = mount(p(run(text)));
     const [paragraph] = editor.getParagraphs();
@@ -187,7 +207,14 @@ describe('getParagraphs', () => {
     const mounted = mountAnchorEditor(bytes);
     cleanups.push(mounted.destroy);
     const paragraphs = mounted.editor.getParagraphs();
-    expect(paragraphs.map(({ text }) => text)).toEqual(['body', '\uFFFC', 'boxed needle', 'Cell']);
+    // A story that ends with a table gets an empty paragraph after it.
+    expect(paragraphs.map(({ text }) => text)).toEqual([
+      'body',
+      '\uFFFC',
+      'boxed needle',
+      'Cell',
+      '',
+    ]);
     const boxed = paragraphs[2]!;
     expect(mounted.editor.getParagraphText(boxed.blockId)).toBe(boxed);
     expect(

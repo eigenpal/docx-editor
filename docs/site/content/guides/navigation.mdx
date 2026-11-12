@@ -69,6 +69,7 @@ With the core package, use the instance from `createDocxEditor()`. Prevent the d
 | `setHighlights(name, ranges, options)` | Mark text ranges, such as glossary terms. | No |
 | `clearHighlights(name)` | Remove one set of text highlights, or all of them. | No |
 | `getHighlightsAt(clientX, clientY)` | Read the text highlights under a pointer position. | No |
+| `getParagraphs()`, `getParagraphText(blockId)` | Read paragraph text in highlight offsets, such as for a spelling check. | No |
 | `exec({ type: 'setSelection', anchor })` | Move the caret to a paragraph reference. | Yes |
 
 <DocumentNavigationDemo />
@@ -331,6 +332,7 @@ Without an adapter, call `watchHighlights(editor, name, source)` from `@docx-edi
 
 - Custom ranges take `blockId`, `start`, and `length` in UTF-16 units.
 - Add `expectedText` to ranges computed outside the editor.
+- To compute ranges from paragraph text, such as spelling marks, see [Highlight ranges that you compute](/docs/2.x/recipes/highlight-ranges#highlight-ranges-that-you-compute).
 
 Each set renders in a `[data-highlight-set]` element. Highlights have the `docx-text-highlight` class; the active one also has `docx-text-highlight--active`.
 

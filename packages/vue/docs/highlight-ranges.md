@@ -30,39 +30,70 @@ A function source runs again after each document change, so the marks follow the
 
 ## Highlight ranges that you compute
 
-Call `editor.getParagraphs()` to read paragraphs across document stories, including pages that have not been painted. Call `editor.getParagraphText(blockId)` to read one. Body text, tables, content controls, headers, footers, notes and supported text boxes are included. Repeated headers and footers appear once.
+Call `editor.getParagraphs()` to read every paragraph, including paragraphs on pages that have not been painted. The list covers body text, tables, content controls, headers, footers, notes, and supported text boxes. Repeated headers and footers appear once. To read one paragraph, call `editor.getParagraphText(blockId)`.
 
-Check `keptText` for spelling. It excludes tracked deletions and move-from revisions, while retaining insertions. The `keptSpans` map gives the model offsets that `setHighlights()` takes. A word spanning a deletion needs a separate highlight for each kept span.
+Each result has two texts:
+
+- `keptText` is the text a reader sees. Check it for spelling. It leaves out tracked deletions, move sources, and optional hyphens.
+- `text` holds the offsets that `setHighlights()` takes. It includes deleted text and placeholder characters.
+
+`keptSpans` maps `keptText` to `text`. A word that crosses a tracked deletion needs one highlight for each kept span.
+
+The following source checks each paragraph once. An unchanged paragraph returns the same object, so the cache skips it after the first check.
 
 ```ts
-import type { Editor, HighlightRange } from '@docx-editor.dev/core';
+import type { Editor, HighlightRange, ParagraphText } from '@docx-editor.dev/core';
 
-function misspelledRanges(editor: Editor, isMisspelled: (word: string) => boolean) {
+/** Highlight ranges for the `keptText` range from `from` to `to`. */
+function keptRanges(paragraph: ParagraphText, from: number, to: number) {
   const ranges: HighlightRange[] = [];
-  for (const { blockId, text, keptText, keptSpans } of editor.getParagraphs()) {
-    for (const word of keptText.matchAll(/\p{L}+/gu)) {
-      if (!isMisspelled(word[0])) continue;
-      for (const span of keptSpans) {
-        const from = Math.max(word.index, span.keptStart);
-        const to = Math.min(word.index + word[0].length, span.keptStart + span.length);
-        if (from >= to) continue;
-        const start = span.start + from - span.keptStart;
-        ranges.push({
-          blockId,
-          start,
-          length: to - from,
-          expectedText: text.slice(start, start + to - from),
-        });
-      }
-    }
+  for (const span of paragraph.keptSpans) {
+    const keptStart = Math.max(from, span.keptStart);
+    const keptEnd = Math.min(to, span.keptStart + span.length);
+    if (keptStart >= keptEnd) continue;
+    const start = span.start + keptStart - span.keptStart;
+    const length = keptEnd - keptStart;
+    const expectedText = paragraph.text.slice(start, start + length);
+    ranges.push({ blockId: paragraph.blockId, start, length, expectedText });
   }
   return ranges;
 }
+
+/** A highlight source that marks each word that `isMisspelled` rejects. */
+export function spellingSource(isMisspelled: (word: string) => boolean) {
+  const checked = new WeakMap<ParagraphText, HighlightRange[]>();
+  return (editor: Editor): HighlightRange[] =>
+    editor.getParagraphs().flatMap((paragraph) => {
+      let ranges = checked.get(paragraph);
+      if (!ranges) {
+        ranges = [];
+        for (const word of paragraph.keptText.matchAll(/[\p{L}\p{M}']+/gu)) {
+          if (!isMisspelled(word[0])) continue;
+          const end = word.index + word[0].length;
+          ranges.push(...keptRanges(paragraph, word.index, end));
+        }
+        checked.set(paragraph, ranges);
+      }
+      return ranges;
+    });
+}
 ```
 
-All offsets use UTF-16 code units and match the editor's `fieldResults` setting. In the default mode, each field is one U+FFFC character in both texts, including hyperlink fields. With `fieldResults: 'editable'`, supported saved field results appear as text.
+Pass the source to `useHighlights`. It runs again after each document change.
 
-Read again after a `change` event. Results are immutable, and unchanged paragraph nodes return the same objects. Hosts can cache checks by object identity. Scrolling does not require another check. For asynchronous checks, confirm the paragraph object is still current before setting highlights.
+```vue
+<script setup lang="ts">
+import { useHighlights } from '@docx-editor.dev/vue';
+import { spellingSource } from './spelling-source';
+
+const props = defineProps<{ isMisspelled: (word: string) => boolean }>();
+useHighlights('spelling', spellingSource(props.isMisspelled), { className: 'spelling-error' });
+</script>
+```
+
+Offsets count UTF-16 code units and follow the editor's `fieldResults` setting. By default, each field is one U+FFFC character in both texts, including hyperlink fields. With `fieldResults: 'editable'`, supported saved field results are text. In `keptText`, a symbol character is U+FFFC and a non-breaking hyphen is U+2011. Hidden text is included.
+
+If your checker is asynchronous, keep the paragraph object with each request. When the result arrives, compare that object with `editor.getParagraphText(paragraph.blockId)`. If they differ, the paragraph changed, so discard the result and check the new object.
 
 ## Configure a highlight set
 

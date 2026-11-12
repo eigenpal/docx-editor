@@ -155,32 +155,58 @@ function appendTextboxStory(
   }
 }
 
+/** One block's stories and walk size, valid for the context it was walked in. */
+interface BlockStories {
+  readonly partName: string;
+  readonly depth: number;
+  readonly namespaceScope: ReadonlyMap<string, string>;
+  readonly visited: number;
+  readonly stories: readonly TextboxStoryRoot[];
+}
+
 /**
- * List the text-box stories in one part, in document order.
- *
- * The bounded walk stops at drawings. It does not project pictures, shape geometry, or story
- * content. Results are memoized by immutable part-root identity.
+ * Stories per paragraph or table node. Such a block's stories depend only on its own subtree,
+ * its depth, the namespaces in scope and the part name. An edit replaces only the nodes it
+ * touches, so a walk of an edited part re-walks only the edited blocks.
  */
-export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot[] {
-  const cached = textboxStoriesCache.get(part.root);
-  if (cached) return cached;
-  const stories: TextboxStoryRoot[] = [];
-  const stack: WalkFrame[] = [
-    {
-      node: part.root,
-      paragraphId: null,
-      namespaceScope: emptyNamespaceScope(),
-      depth: 0,
-      paragraphAtoms: null,
-      hiddenRun: false,
-    },
-  ];
-  let visited = 0;
+const blockStoriesCache = new WeakMap<OoxmlElement, BlockStories>();
+
+/** A paragraph resets the walk context; a table outside any paragraph never had any. */
+function isContextFreeBlock(frame: WalkFrame): boolean {
+  return (
+    frame.node.kind === 'paragraph' ||
+    (frame.node.kind === 'table' && frame.paragraphId === null && !frame.hiddenRun)
+  );
+}
+
+function sameScope(a: ReadonlyMap<string, string>, b: ReadonlyMap<string, string>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const [prefix, uri] of a) if (b.get(prefix) !== uri) return false;
+  return true;
+}
+
+interface WalkBudget {
+  visited: number;
+}
+
+/** Walk from `start`. False when the element budget ran out. */
+function walkStories(
+  part: OoxmlPart,
+  start: WalkFrame,
+  stories: TextboxStoryRoot[],
+  budget: WalkBudget
+): boolean {
+  const stack: WalkFrame[] = [start];
   while (stack.length > 0) {
     const frame = stack.pop()!;
     if (!isElement(frame.node)) continue;
-    visited += 1;
-    if (visited > MAX_PART_SCAN_ELEMENTS) break;
+    if (frame !== start && isContextFreeBlock(frame)) {
+      if (!blockStories(part, frame, stories, budget)) return false;
+      continue;
+    }
+    budget.visited += 1;
+    if (budget.visited > MAX_PART_SCAN_ELEMENTS) return false;
     if (frame.depth > MAX_XML_DEPTH) continue;
     const scope = namespaceScopeForNode(frame.namespaceScope, frame.node);
     const paragraphId = frame.node.kind === 'paragraph' ? frame.node.id : frame.paragraphId;
@@ -252,6 +278,69 @@ export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot
       });
     }
   }
+  return true;
+}
+
+/** Append one block's stories, from the memo when its walk context is unchanged. */
+function blockStories(
+  part: OoxmlPart,
+  frame: WalkFrame,
+  stories: TextboxStoryRoot[],
+  budget: WalkBudget
+): boolean {
+  const node = frame.node as OoxmlElement;
+  const cached = blockStoriesCache.get(node);
+  if (
+    cached &&
+    cached.partName === part.name &&
+    cached.depth === frame.depth &&
+    sameScope(cached.namespaceScope, frame.namespaceScope)
+  ) {
+    // The budget counts what a fresh walk would visit, so the memo never lengthens a scan.
+    budget.visited += cached.visited;
+    if (budget.visited > MAX_PART_SCAN_ELEMENTS) return false;
+    for (const story of cached.stories) stories.push(story);
+    return true;
+  }
+  const own: TextboxStoryRoot[] = [];
+  const before = budget.visited;
+  const complete = walkStories(part, frame, own, budget);
+  for (const story of own) stories.push(story);
+  if (complete) {
+    blockStoriesCache.set(node, {
+      partName: part.name,
+      depth: frame.depth,
+      namespaceScope: frame.namespaceScope,
+      visited: budget.visited - before,
+      stories: Object.freeze(own),
+    });
+  }
+  return complete;
+}
+
+/**
+ * List the text-box stories in one part, in document order.
+ *
+ * The bounded walk stops at drawings. It does not project pictures, shape geometry, or story
+ * content. Results are memoized by immutable part-root identity and per paragraph node.
+ */
+export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot[] {
+  const cached = textboxStoriesCache.get(part.root);
+  if (cached) return cached;
+  const stories: TextboxStoryRoot[] = [];
+  walkStories(
+    part,
+    {
+      node: part.root,
+      paragraphId: null,
+      namespaceScope: emptyNamespaceScope(),
+      depth: 0,
+      paragraphAtoms: null,
+      hiddenRun: false,
+    },
+    stories,
+    { visited: 0 }
+  );
   const frozen = Object.freeze(stories);
   textboxStoriesCache.set(part.root, frozen);
   return frozen;

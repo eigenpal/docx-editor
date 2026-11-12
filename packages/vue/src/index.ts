@@ -590,6 +590,8 @@ export type {
   EditorSnapshot,
   EditorScope,
   PageSetup,
+  ParagraphText,
+  ParagraphTextSpan,
   ScrollToAnchorOptions,
   Watermark,
   WatermarkState,

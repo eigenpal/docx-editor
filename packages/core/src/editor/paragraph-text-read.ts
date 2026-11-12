@@ -6,6 +6,12 @@ import type {
   ParagraphTextSpan,
 } from '../contracts/editor-paragraph-text.ts';
 import { withFieldResultsMode, type FieldResultsMode } from '../store/package/field-result-mode.ts';
+import {
+  hyphenTextOf,
+  isSymbolElement,
+  NON_BREAKING_HYPHEN_TEXT,
+  OPTIONAL_HYPHEN_TEXT,
+} from '../store/package/hyphen-text.ts';
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { storyParagraphs } from '../store/package/story-blocks.ts';
 import { textboxStoriesInPart } from '../store/package/textbox-stories.ts';
@@ -21,6 +27,29 @@ function readParagraph(
   return withFieldResultsMode(fieldResults, () => {
     const text = paragraphModelTextOf(paragraph);
     const index = paragraphOffsetIndex(paragraph);
+    // Model offsets a reader does not see as text: tracked deletions, move sources and
+    // optional hyphens. Kept text skips them; a span ends at each one.
+    const gaps: { start: number; end: number }[] = [];
+    const visit = (node: OoxmlNode): void => {
+      if (node.kind === 'revisionDelete' || node.kind === 'revisionMoveFrom') {
+        const span = index.spanOf(node);
+        if (span && span.end > span.start) gaps.push(span);
+        return;
+      }
+      if ('children' in node) for (const child of node.children) visit(child);
+    };
+    for (const child of paragraph.children) visit(child);
+    // Placeholder characters read as what they show, one for one, so span lengths still
+    // hold in both texts: a symbol is an object, a non-breaking hyphen is U+2011.
+    const shown = new Map<number, string>();
+    for (const segment of index.segments) {
+      if (segment.end - segment.start !== 1) continue;
+      const hyphen = hyphenTextOf(segment.node);
+      if (hyphen === OPTIONAL_HYPHEN_TEXT) gaps.push(segment);
+      else if (hyphen === NON_BREAKING_HYPHEN_TEXT) shown.set(segment.start, '‑');
+      else if (isSymbolElement(segment.node)) shown.set(segment.start, '￼');
+    }
+    gaps.sort((a, b) => a.start - b.start);
     const keptSpans: ParagraphTextSpan[] = [];
     let keptText = '';
     let cursor = 0;
@@ -29,21 +58,14 @@ function readParagraph(
       keptSpans.push(
         Object.freeze({ start: cursor, length: end - cursor, keptStart: keptText.length })
       );
-      keptText += text.slice(cursor, end);
+      if (shown.size === 0) keptText += text.slice(cursor, end);
+      else for (let at = cursor; at < end; at += 1) keptText += shown.get(at) ?? text[at];
       cursor = end;
     };
-    const visit = (node: OoxmlNode): void => {
-      if (node.kind === 'revisionDelete' || node.kind === 'revisionMoveFrom') {
-        const span = index.spanOf(node);
-        if (span) {
-          keepUntil(span.start);
-          cursor = Math.max(cursor, span.end);
-        }
-        return;
-      }
-      if ('children' in node) for (const child of node.children) visit(child);
-    };
-    for (const child of paragraph.children) visit(child);
+    for (const gap of gaps) {
+      keepUntil(gap.start);
+      cursor = Math.max(cursor, gap.end);
+    }
     keepUntil(text.length);
     return Object.freeze({
       blockId: paragraph.id,

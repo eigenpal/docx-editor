@@ -156,6 +156,8 @@ import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
 import { ParagraphFormatRead } from '@docx-editor.dev/core/editor';
 import { ParagraphFormatUpdate } from '@docx-editor.dev/core/editor';
 import { ParagraphTabStop } from '@docx-editor.dev/core/editor';
+import { ParagraphText } from '@docx-editor.dev/core/contracts/editor';
+import { ParagraphTextSpan } from '@docx-editor.dev/core/contracts/editor';
 import { PropType } from 'vue';
 import { PX_PER_CM } from '@docx-editor.dev/core/editor';
 import { PX_PER_INCH } from '@docx-editor.dev/core/editor';
@@ -8472,6 +8474,10 @@ export interface ParagraphStyleProps extends ParagraphStylePartProps {
 }
 
 export { ParagraphTabStop }
+
+export { ParagraphText }
+
+export { ParagraphTextSpan }
 
 // @public
 export function provideDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorResult;
