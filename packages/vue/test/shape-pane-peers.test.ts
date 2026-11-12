@@ -7,7 +7,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { h } from 'vue';
 import { strFromU8, unzipSync } from 'fflate';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
-import { DocxEditorSidePanel } from '../src/editor/charts/SidePanel';
+import { DocxEditorSidePanel } from '../src/editor/panes/SidePanel';
 import { flush } from './helpers/fixtures';
 import { mountEditorTree } from './helpers/mount';
 import { collaborationModule } from '../../pro/src/collaboration/collaboration-module';

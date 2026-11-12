@@ -10038,3 +10038,51 @@ p.docx-review__refused {
   -webkit-line-clamp: unset;
   line-clamp: unset;
 }
+
+/* The shared colour picker and the shape and chart parts. A part is placement-free: a field
+   (label over control) in a pane, popover, or drawer, or a compact control in a toolbar. */
+.docx-editor .docx-color-picker {
+  position: relative;
+}
+.docx-editor .docx-color-picker__hex {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.docx-editor .docx-color-picker__hex .docx-dialog__input {
+  width: 100%;
+}
+.docx-editor .docx-object-control--field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.docx-editor .docx-object-control--compact {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.docx-editor .docx-object-control--compact .docx-chart-pane__field {
+  gap: 0;
+}
+.docx-editor .docx-object-control--compact .docx-dialog__select,
+.docx-editor .docx-object-control--compact .docx-dialog__input {
+  height: 28px;
+  min-width: 0;
+  max-width: 160px;
+  font-size: 13px;
+}
+.docx-editor .docx-object-control--compact .docx-color-picker__trigger {
+  width: auto;
+  min-height: 28px;
+  padding: 0 6px;
+  gap: 4px;
+}
+.docx-editor .docx-object-control--compact .docx-color-picker__summary {
+  display: none;
+}
+.docx-editor .docx-object-control__icon svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}

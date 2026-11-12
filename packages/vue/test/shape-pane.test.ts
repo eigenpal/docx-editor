@@ -10,7 +10,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { h } from 'vue';
 import { commandForSlotValue, runToolbarCommand } from '@docx-editor.dev/core/editor';
 import { DocxEditorShapePane } from '../src/editor/shapes/ShapePane';
-import { DocxEditorSidePanel } from '../src/editor/charts/SidePanel';
+import { DocxEditorSidePanel } from '../src/editor/panes/SidePanel';
 import { DocxEditorContextMenu } from '../src/editor/contextmenu/index.ts';
 import { DocxEditorToolbar } from '../src/editor/toolbar/DocxEditorToolbar';
 import { DocxEditorChartPane } from '../src/editor/charts/ChartPane';

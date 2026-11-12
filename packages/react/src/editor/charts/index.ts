@@ -5,5 +5,6 @@ export {
   type ChartInsertProps,
 } from './ChartInsert';
 export { DocxEditorChartPane, type DocxEditorChartPaneProps } from './ChartPane';
-export { DocxEditorSidePanel, usePaneRequest, type DocxEditorSidePanelProps } from './SidePanel';
+// The side panel moved to `editor/panes/`; this path keeps its exports.
+export { DocxEditorSidePanel, usePaneRequest, type DocxEditorSidePanelProps } from '../panes';
 export { useSelectedChart, type UseSelectedChartReturn } from './useSelectedChart';
