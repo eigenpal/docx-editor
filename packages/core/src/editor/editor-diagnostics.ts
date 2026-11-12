@@ -88,6 +88,7 @@ const FACADE_COMMANDS: ReadonlySet<string> = new Set<EditorCommand['type']>([
   'proposeDeletion',
   'proposeInsertion',
   'proposeReplacement',
+  'replaceDocument',
   'replaceImage',
   'setEditingMode',
   'setReviewDisplayMode',

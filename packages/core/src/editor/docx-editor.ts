@@ -5,6 +5,7 @@ import { createEditorDiagnostics, reportEditorFontError } from './editor-diagnos
 import { surfaceFieldResultsScope } from './field-results-scope.ts';
 import { createReviewDialogs } from './review-dialogs.ts';
 import { withCompareOutcome } from './compare-documents-state.ts';
+import * as replacing from './replace-document-command.ts';
 import { queryEditorDocument, watermarkOf } from './docx-editor-query.ts';
 import { refreshWriteBlocked, writeBlockRefusal } from './refresh-write-guard.ts';
 import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.ts';
@@ -1547,13 +1548,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    */
   function storyScopeOfParagraph(paragraphId: string): StoryScope {
     if (!surface) return { kind: 'body' };
-    // From the id's own PART NAME. Asking each story for its paragraph list instead would
-    // resolve every scope in turn, and resolving a scope OPENS a story store: one call
-    // opened every header and footer in the document, and the store cap (64) is a
-    // permanent ceiling because a store whose part is still in the package is never
-    // evicted. On a 40-section document that left 18 headers unopenable for the rest of
-    // the session — commenting in a footnote broke header editing.
-    // A logical id from a collaboration session names no part; the story indexes find it.
+    // From the id's own PART NAME. Asking each story for its paragraph list instead would resolve
+    // every scope in turn, and resolving a scope OPENS a story store: one call opened every header
+    // and footer in the document, and the store cap (64) is a permanent ceiling because a store
+    // whose part is still in the package is never evicted. On a 40-section document that left 18
+    // headers unopenable for the rest of the session — commenting in a footnote broke header
+    // editing. A logical id from a collaboration session names no part; the story indexes find it.
     const hash = paragraphId.indexOf('#');
     const partName =
       hash === -1 ? partOfNodeId(surface.session, paragraphId)?.name : paragraphId.slice(0, hash);
@@ -1956,14 +1956,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     getDocumentHandle(): DocumentHandle {
-      // Package revision: the body's own stands still for header/footer/note work.
-      return Object.freeze({ revision: surface?.session.packageRevision() ?? 0 });
+      // Package revision and load identity; see `document-handle.ts`.
+      return replacing.documentHandleOf(surface);
     },
 
     exec(command, options) {
       // Before every command path: a history group a command cannot join is refused, not ignored.
       const refusal = writeBlockRefusal(container, command) ?? historyGroups.gate(command, options);
-      if (refusal) return withCompareOutcome(command, refusal);
+      if (refusal) return replacing.withOutcome(command, withCompareOutcome(command, refusal));
       // A command inside the yield window addresses the just-loaded document: mount now.
       // (`can` does NOT flush — chrome polls it per render; a read must not defeat the yield.)
       openScheduler.flush();
@@ -1971,6 +1971,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (reviewDialog) return reviewDialog;
       const dialog = views.dialog(command, true);
       if (dialog) return dialog;
+      if (command.type === 'replaceDocument') return replacing.exec(command, surface, container);
       historyGroups.note(command);
       // A view command: it edits nothing, so it runs before the document gate, and it works
       // on a document that failed to open — the pane is still the reader's to close. Not on a
@@ -2067,6 +2068,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (dialog) return dialog;
       const historyRefusal = historyGroups.gate(command, options);
       if (historyRefusal) return historyRefusal;
+      if (command.type === 'replaceDocument') return replacing.can(command, surface, container);
       if (command.type === 'insertImage' || command.type === 'replaceImage') {
         if (destroyed) return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
         if (options?.scope) {
@@ -2440,14 +2442,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           { anchor: caret, head: caret },
           { allowExcluded: allowExcludedFormatNavigation, preventScroll: true }
         );
-        // Focus-independent by design: the rail card focused itself on mousedown, which is
-        // exactly what keeps the caret-follow scroll from ever firing here.
-        // `centerIfNeeded` by default, not `nearest`: opening a card the reader can already
-        // see must not yank the page, but a card 20 pages away scrolled the MINIMUM distance
-        // parked the change flush against the bottom edge — the reader arrived looking at the
-        // last line of the window rather than at the edit they had just asked to see. A host
-        // whose own list drives the scroll passes `reveal: false` and gets the caret move
-        // without the engine competing for the viewport.
+        // Focus-independent by design: the rail card focused itself on mousedown, which is exactly
+        // what keeps the caret-follow scroll from ever firing here. `centerIfNeeded` by default,
+        // not `nearest`: opening a card the reader can already see must not yank the page, but a
+        // card 20 pages away scrolled the MINIMUM distance parked the change flush against the
+        // bottom edge — the reader arrived looking at the last line of the window rather than at
+        // the edit they had just asked to see. A host whose own list drives the scroll passes
+        // `reveal: false` and gets the caret move without the engine competing for the viewport.
         const reveal = options?.reveal ?? 'centerIfNeeded';
         if (reveal !== false) surface.revealPosition?.(span.start, { block: reveal });
       }

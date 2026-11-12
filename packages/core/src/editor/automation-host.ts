@@ -40,6 +40,7 @@ import type {
 } from '../automation/document-port.ts';
 import type { ReviewWriteIntent } from './paginated-surface-contract.ts';
 import { createAutomationHost } from '../automation/host.ts';
+import { replaceDocumentError } from '../automation/plan-replace-document.ts';
 import { runAsAutomation } from './editor-diagnostics.ts';
 import { publicRefusal } from './diagnostic-codes.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
@@ -452,6 +453,39 @@ function sessionPort(
       );
       // Null only when a gate or the refresh guard stopped the write before `run`.
       return outcome ?? { ok: false, reason: publicRefusal(refused ?? 'refused') };
+    },
+    // THROUGH THE EDITOR COMMAND, so a script's replacement passes the same gates and makes
+    // the same single undo step as `exec({ type: 'replaceDocument' })`.
+    replaceDocument(docx) {
+      sync();
+      const refused = (code: string, message: string) => ({
+        ok: false as const,
+        error: replaceDocumentError({ code, message }),
+      });
+      if (editorPreviewActive(editor))
+        return {
+          ok: false,
+          error: {
+            code: 'transaction-refused',
+            message: PREVIEW_WRITE_REFUSAL,
+            detail: 'edit.preview-active',
+          },
+        };
+      // A replacement is always its own undo step, so it cannot join a history group.
+      if (bound() !== undefined)
+        return {
+          ok: false,
+          error: {
+            code: 'unsupported-capability',
+            message: 'a document replacement cannot join a history group',
+            detail: 'edit.operation-unsupported',
+          },
+        };
+      const result = editor.exec({ type: 'replaceDocument', docx });
+      const outcome = result.replaceDocument;
+      if (outcome?.ok) return { ok: true, changed: outcome.changed };
+      if (outcome) return { ok: false, error: replaceDocumentError(outcome) };
+      return refused('unavailable', result.ok ? 'no outcome' : result.reason);
     },
     save: () => (sync() ? (editor.surface?.save() ?? null) : null),
     // The one genuinely browser-only operation, and the reason the port declares it optional:

@@ -1,4 +1,5 @@
 import type { TableSpacingFrame } from './semantic-records.ts';
+import { spacingFrameParts } from './table-spacing-band.ts';
 
 /**
  * Where the cells of a table with `w:tblCellSpacing` sit along its row, in points from the
@@ -16,6 +17,10 @@ export interface CellSpacingGeometry {
   cellLeft(column: number): number;
   /** The width of a cell spanning `span` columns from `column`, gaps it covers included. */
   cellWidth(column: number, span: number): number;
+  /** The frame part the first column holds (`SpacingFrameParts`), 0 without a frame. */
+  readonly leadPt: number;
+  /** The frame part the last column holds, 0 without a frame. */
+  readonly trailPt: number;
 }
 
 /** How far a spaced table's frame moves its outer cells in (`table-spacing-frame.ts`). */
@@ -29,9 +34,10 @@ export function cellSpacingGapPt(spacingPt: number): number {
 export function cellSpacingGeometry(
   columns: readonly number[],
   spacingPt: number,
-  frame?: SpacedTableFrame
+  frame?: SpacedTableFrame | TableSpacingFrame
 ): CellSpacingGeometry | null {
   if (!Number.isFinite(spacingPt) || spacingPt <= 0 || columns.length === 0) return null;
+  const parts = frame && 'borders' in frame ? spacingFrameParts(frame) : undefined;
   const gapPt = cellSpacingGapPt(spacingPt);
   const prefix = [0];
   for (const width of columns) prefix.push(prefix.at(-1)! + width);
@@ -40,6 +46,8 @@ export function cellSpacingGeometry(
   const at = (column: number): number => prefix[Math.max(0, Math.min(column, columns.length))]!;
   return {
     gapPt,
+    leadPt: parts?.leadPt ?? 0,
+    trailPt: parts?.trailPt ?? 0,
     cellLeft: (column) => left + gapPt * (column + 1) + at(column) * scale,
     cellWidth: (column, span) =>
       (at(column + span) - at(column)) * scale + gapPt * Math.max(0, span - 1),
@@ -52,6 +60,8 @@ export function cellSpacingGeometry(
  * row that ends early) sits the spacing further in on that side: the skipped columns keep
  * their own spacing. Measured in modes 11, 14 and 15 with spacing of 1, 5 and 10pt, rules of
  * 0, 0.5 and 3pt, cell margins of 5.4 and 15pt, and autofit, fixed and automatic widths.
+ * It also moves in by the frame part the outer column on that side holds: with a 6pt left
+ * rule and 0.5pt inside rules, the first cell after `w:gridBefore` sits 10.5pt further in.
  */
 export function spacedCellBox(
   geometry: CellSpacingGeometry,
@@ -68,10 +78,11 @@ export function spacedCellBox(
     if (cell.gridColumn === column + span) skipsAfter = false;
   }
   const inset = geometry.gapPt / 2;
-  const before = skipsBefore ? inset : 0;
+  const before = skipsBefore ? inset + geometry.leadPt : 0;
+  const after = skipsAfter ? inset + geometry.trailPt : 0;
   return {
     x: geometry.cellLeft(column) + before,
-    width: geometry.cellWidth(column, span) - before - (skipsAfter ? inset : 0),
+    width: geometry.cellWidth(column, span) - before - after,
   };
 }
 
