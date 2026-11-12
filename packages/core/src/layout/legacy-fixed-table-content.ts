@@ -138,6 +138,14 @@ export function legacyFixedTableContentOffset(
   const edgeCell = side === 'left' ? visualLeft : visualRight;
   const leading = edgeRow && edgeCell(edgeRow)?.margins[side];
   if (leading === undefined || !Number.isFinite(leading) || leading < 0) return undefined;
+  // A spaced table places its cells by the first edge row's borders; rows whose edge cells
+  // draw another width are unmeasured, so they keep the outer edge.
+  const edgeRuleOf = (row: SemanticTableRow): number => {
+    const borders = edgeCell(row)?.contentBorders ?? edgeCell(row)?.borders;
+    const edge = borders?.[side];
+    return edge?.state === 'edge' ? edge.widthPt : 0;
+  };
+  const edgeRule = edgeRow && edgeRuleOf(edgeRow);
   for (const row of rows) {
     const first = visualLeft(row);
     const last = visualRight(row);
@@ -145,6 +153,7 @@ export function legacyFixedTableContentOffset(
       !first ||
       !last ||
       (reachesEdge(row) && edgeCell(row)?.margins[side] !== leading) ||
+      (spaced && reachesEdge(row) && edgeRuleOf(row) !== edgeRule) ||
       (shape.bidiVisual && (first.gridColumn !== 0 || last.gridColumn + last.gridSpan !== columns))
     )
       return undefined;

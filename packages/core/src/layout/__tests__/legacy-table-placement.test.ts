@@ -140,6 +140,15 @@ describe('legacy placement of a table with cell spacing', () => {
     const indented = table(`${SPACING}<w:tblInd w:w="300" w:type="dxa"/>`);
     expect(cellTextX(indented, 14, UNSTYLED)[0]![0]).toBeCloseTo(15, 6);
   });
+  test('edge cells with different border widths keep the outer edge', () => {
+    const wide = (text: string) =>
+      cell(text).replace(
+        '</w:tcPr>',
+        '<w:tcBorders><w:left w:val="single" w:sz="24"/><w:right w:val="single" w:sz="24"/></w:tcBorders></w:tcPr>'
+      );
+    const rows = FULL + `<w:tr>${wide('c')}${cell('d')}</w:tr>`;
+    expect(structure(table(SPACING, rows), 14).legacyContentOffsetPt).toBeUndefined();
+  });
 });
 
 describe('legacy placement of a table whose rows skip grid columns', () => {
