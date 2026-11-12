@@ -57,6 +57,25 @@ const NO_SHAPE: SelectedShapeView = Object.freeze({
   outlineDisabledReason: SHAPE_NONE_REASON,
 });
 
+/**
+ * Whether two reads show the same thing: the same drawing and format, and the same
+ * enabled states and reasons. An adapter reads the shape on every snapshot, because `can`
+ * depends on more than the drawing (protection, locks, collaboration), and keeps the old value
+ * when nothing a control shows has changed. @public
+ */
+export function sameSelectedShape(a: SelectedShapeView, b: SelectedShapeView): boolean {
+  return (
+    a.drawingNodeId === b.drawingNodeId &&
+    (a.format === b.format || JSON.stringify(a.format) === JSON.stringify(b.format)) &&
+    a.canEditFill === b.canEditFill &&
+    a.canEditTransparency === b.canEditTransparency &&
+    a.canEditOutline === b.canEditOutline &&
+    a.fillDisabledReason === b.fillDisabledReason &&
+    a.transparencyDisabledReason === b.transparencyDisabledReason &&
+    a.outlineDisabledReason === b.outlineDisabledReason
+  );
+}
+
 /** Why `can` refuses `command`, or null when it admits it. */
 function refusal(editor: Editor, command: ShapeFormatCommand): string | null {
   const answer = editor.can(command);

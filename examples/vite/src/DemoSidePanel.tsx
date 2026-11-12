@@ -22,7 +22,7 @@ import { DemoIcon } from './DemoIcon';
 
 /** Opens the panel on the tab of the pane that the chrome asks for. */
 export function useChartPaneRequests(open: (tab: DemoPanelTab) => void): void {
-  usePaneRequest((request) => open(request.pane));
+  usePaneRequest((request) => open(request.pane), { panes: ['chart', 'shape'] });
 }
 
 export interface DemoSidePanelProps {

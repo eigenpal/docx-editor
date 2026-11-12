@@ -751,8 +751,10 @@ export {
   openChartPaneFor,
   chartPaneAvailable,
   openChartPaneAt,
+  paneAvailable,
   type EditorPaneId,
   type PaneRequest,
+  type PaneRequestListenerOptions,
   type PaneRequestOptions,
 } from './chart-chrome.ts';
 export {
@@ -828,6 +830,7 @@ export {
   editSelectedShape,
   execSelectedShape,
   readSelectedShape,
+  sameSelectedShape,
   type SelectedShapeCommand,
   type SelectedShapeView,
 } from './selected-shape.ts';

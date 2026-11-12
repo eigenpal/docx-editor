@@ -19,9 +19,9 @@ import {
   hostWindowOf,
   chartPaneAvailable,
   openChartPaneFor,
-  openShapePane,
   shapePaneAvailable,
 } from '@docx-editor.dev/core/editor';
+import { useEditorCommand } from '../useEditorCommand';
 import { useEditorState } from '../useEditorState';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { mergeArrangement } from '../merge-arrangement';
@@ -185,16 +185,21 @@ const ContextMenuFormatShape = defineComponent({
     const shapeId = useEditorState((snapshot) =>
       snapshot.image?.shapeFormat ? snapshot.image.id : null
     );
+    // Enabled state and its reason come from the slot (`toolbarCommandState`), as on the toolbar.
+    const command = useEditorCommand('image.formatShape');
     return () => {
       const instance = editor.value;
       const id = shapeId.value;
       if (!instance || !id || !shapePaneAvailable(instance)) return null;
       return (
         <MenuRow
+          icon={chromeIcon(chromeControlForSlot('image.formatShape')?.paths) ?? undefined}
           rowSlot="image.formatShape"
+          disabled={!command.isEnabled.value}
+          {...(command.disabledReason.value ? { title: command.disabledReason.value } : {})}
           onSelect={() => {
             menu.value.setOpenMenu(null);
-            openShapePane(instance, id);
+            command.execute();
           }}
         >
           {{ default: () => label('shape.formatShape') }}

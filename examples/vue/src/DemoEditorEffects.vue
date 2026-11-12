@@ -20,8 +20,11 @@ watch(
   },
   { immediate: true }
 );
-usePaneRequest((request) => {
-  if (request.pane === 'chart') emit('chartPane');
-  else emit('shapePane');
-});
+usePaneRequest(
+  (request) => {
+    if (request.pane === 'chart') emit('chartPane');
+    else emit('shapePane');
+  },
+  { panes: ['chart', 'shape'] }
+);
 </script>

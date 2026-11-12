@@ -15,6 +15,7 @@ import {
   takePaneRequest,
   type EditorPaneId,
   type PaneRequest,
+  type PaneRequestListenerOptions,
 } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { MaterialSymbol } from '../../components/ui/Icons';
@@ -24,17 +25,25 @@ import { useEditorState } from '../useEditorState';
 import { DocxEditorChartPane } from './ChartPane';
 import { DocxEditorShapePane } from '../shapes/ShapePane';
 
+/** The panes the side panel shows. */
+const SIDE_PANEL_PANES = { panes: ['chart', 'shape'] } as const;
+
 /**
- * Call `listener` for each pane request of the editor: Insert > Chart, Edit chart, and Format
- * shape send one. A host that hides its side panel shows it here. @public
+ * Call `listener` for each request for a pane in `options.panes`: Insert > Chart and Edit chart
+ * ask for `'chart'`, and Format shape asks for `'shape'`. The default is `['chart']`. A host
+ * that hides its side panel shows it here. Listening for a pane makes its chrome available, so
+ * list only the panes the host shows. @public
  */
-export function usePaneRequest(listener: (request: PaneRequest) => void): void {
+export function usePaneRequest(
+  listener: (request: PaneRequest) => void,
+  options?: PaneRequestListenerOptions
+): void {
   const editorRef = useDocxEditor();
   watch(
     editorRef,
     (editor, _, onCleanup) => {
       if (!editor) return;
-      onCleanup(listenPaneRequests(editor, listener));
+      onCleanup(listenPaneRequests(editor, listener, options));
     },
     { immediate: true }
   );
@@ -67,17 +76,29 @@ export const DocxEditorSidePanel = defineComponent({
     const { t } = useTranslation();
     const editorRef = useDocxEditor();
     const body = ref<HTMLElement | null>(null);
-    // The pane that was asked for last, for a selection that picks none.
+    // The pane that was asked for or selected last, for a selection that picks none, so a text
+    // click after a shape keeps the Format shape pane.
     const requested = ref<EditorPaneId>('chart');
     const selected = useEditorState(selectionPane);
+    watch(
+      selected,
+      (pane) => {
+        if (pane) requested.value = pane;
+      },
+      { immediate: true }
+    );
     watch(
       editorRef,
       (editor, _, onCleanup) => {
         if (!editor) return;
         onCleanup(
-          listenPaneRequests(editor, (request) => {
-            requested.value = request.pane;
-          })
+          listenPaneRequests(
+            editor,
+            (request) => {
+              requested.value = request.pane;
+            },
+            SIDE_PANEL_PANES
+          )
         );
       },
       { immediate: true }
@@ -90,13 +111,22 @@ export const DocxEditorSidePanel = defineComponent({
         const focus = () => queueMicrotask(() => focusChartPane(body.value));
         if (takePaneRequest(editor)?.focus) focus();
         onCleanup(
-          listenPaneRequests(editor, () => {
-            if (takePaneRequest(editor)?.focus) focus();
-          })
+          listenPaneRequests(
+            editor,
+            () => {
+              if (takePaneRequest(editor)?.focus) focus();
+            },
+            SIDE_PANEL_PANES
+          )
         );
       },
       { immediate: true }
     );
+    // Closing hands the keyboard back to the document; the drawing stays selected.
+    const closePanel = (): void => {
+      props.onClose?.();
+      editorRef.value?.focus();
+    };
     return () => {
       const pane = selected.value ?? requested.value;
       const title = t(paneTitleKey(pane));
@@ -109,7 +139,7 @@ export const DocxEditorSidePanel = defineComponent({
           onKeydown={(e: KeyboardEvent) => {
             if (e.key !== 'Escape' || !props.onClose || e.defaultPrevented) return;
             e.preventDefault();
-            props.onClose();
+            closePanel();
           }}
         >
           <div class="docx-side-panel__head">
@@ -120,7 +150,7 @@ export const DocxEditorSidePanel = defineComponent({
                 class="docx-side-panel__close"
                 aria-label={close}
                 title={close}
-                onClick={() => props.onClose?.()}
+                onClick={closePanel}
               >
                 <MaterialSymbol name="close" size={18} />
               </button>

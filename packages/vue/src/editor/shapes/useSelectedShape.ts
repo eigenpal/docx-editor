@@ -7,6 +7,7 @@ import {
   editSelectedShape,
   execSelectedShape,
   readSelectedShape,
+  sameSelectedShape,
   type SelectedShapeCommand,
   type ShapeFormatState,
   type ShapePaneChange,
@@ -38,39 +39,38 @@ export interface UseSelectedShapeReturn {
   /**
    * Run a fill or outline edit on the shape this composable shows, as `editor.exec` does,
    * without the `drawingNodeId`: `execute({ type: 'setShapeOutline', color: '0070C0',
-   * widthPt: 3 })`.
+   * widthPt: 3 })`. A refusal's reason is translated.
    */
   readonly execute: (command: SelectedShapeCommand) => ExecResult;
   /**
    * Apply one checked change, as the packaged pane does: `edit({ type: 'fillColor',
    * color: 'accent1' })` or `edit({ type: 'outlineWidth', text: '3' })`. A theme color resolves
-   * through the document's theme. Text the pane cannot read refuses, with the reason as a
-   * translation key. One undo step.
+   * through the document's theme. Text the pane cannot read refuses with a translated reason.
+   * One undo step.
    */
   readonly edit: (change: ShapePaneChange) => ExecResult;
 }
 
 const selectImage = (snapshot: EditorSnapshot) => snapshot.image;
-const selectEditable = (snapshot: EditorSnapshot) => snapshot.editable;
-const selectMode = (snapshot: EditorSnapshot) => snapshot.editingMode;
 
 /**
  * The selected shape, its fill and outline, whether each can change, and `execute` for the
- * shape commands. Use it inside `DocxEditor.Root` to build a Format shape pane of your own.
- * @public
+ * shape commands. Use it inside `DocxEditor.Root` to build a Format shape pane of your own. It
+ * reads the shape on every editor change, because protection, locks, and collaboration change
+ * what `can` answers. Every refusal reason it returns is translated. @public
  */
 export function useSelectedShape(): UseSelectedShapeReturn {
   const editorRef = useDocxEditor();
   const { t } = useTranslation();
+  const view = useEditorState(
+    (snapshot: EditorSnapshot) => readSelectedShape(editorRef.value, snapshot.image),
+    sameSelectedShape
+  );
   const image = useEditorState(selectImage);
-  const editable = useEditorState(selectEditable);
-  const editingMode = useEditorState(selectMode);
-  const view = computed(() => {
-    // The editing mode is a dependency: the enabled state is the engine's `can` answer.
-    void editable.value;
-    void editingMode.value;
-    return readSelectedShape(editorRef.value, image.value);
-  });
+  const localized = (result: ExecResult): ExecResult =>
+    result.ok
+      ? result
+      : { ...result, reason: localizeDisabledReason(result.reason, t) ?? result.reason };
   return {
     drawingNodeId: computed(() => view.value.drawingNodeId),
     format: computed(() => view.value.format),
@@ -84,7 +84,7 @@ export function useSelectedShape(): UseSelectedShapeReturn {
     outlineDisabledReason: computed(() =>
       localizeDisabledReason(view.value.outlineDisabledReason, t)
     ),
-    execute: (command) => execSelectedShape(editorRef.value, image.value, command),
-    edit: (change) => editSelectedShape(editorRef.value, image.value, change),
+    execute: (command) => localized(execSelectedShape(editorRef.value, image.value, command)),
+    edit: (change) => localized(editSelectedShape(editorRef.value, image.value, change)),
   };
 }

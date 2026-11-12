@@ -51,10 +51,14 @@ export function DocxEditorShapePane({ className }: DocxEditorShapePaneProps): Re
   useEffect(() => {
     if (!editor) return undefined;
     if (takePaneRequestFor(editor, 'shape')?.focus) focusChartPane(root.current);
-    return listenPaneRequests(editor, () => {
-      if (takePaneRequestFor(editor, 'shape')?.focus)
-        queueMicrotask(() => focusChartPane(root.current));
-    });
+    return listenPaneRequests(
+      editor,
+      () => {
+        if (takePaneRequestFor(editor, 'shape')?.focus)
+          queueMicrotask(() => focusChartPane(root.current));
+      },
+      { panes: ['shape'] }
+    );
   }, [editor]);
   // A refusal belongs to the shape it was about.
   const [refusalShape, setRefusalShape] = useState(shape.drawingNodeId);

@@ -9,32 +9,44 @@
 import type { Editor, EditorSnapshot, ExecResult } from '../contracts/editor.ts';
 import type { ChromeSlotId } from './chrome-controls.ts';
 import type { ToolbarCommandState } from './toolbar-commands.ts';
-import { chartPaneAvailable, requestPane, type EditorPaneId } from './chart-chrome.ts';
-import { SHAPE_NONE_REASON } from './selected-shape.ts';
+import { paneAvailable, requestPane, type EditorPaneId } from './pane-requests.ts';
+import { readSelectedShape, SHAPE_NONE_REASON } from './selected-shape.ts';
 
 /**
- * Whether the host can show the Format shape pane: a mounted side panel, or a `usePaneRequest`
- * listener. Without one, Format shape has nowhere to go, so the toolbar and the context menu
- * leave it out. @public
+ * Whether the host shows the Format shape pane: a mounted side panel or Format shape pane, or a
+ * `usePaneRequest` listener for `'shape'`. Without one, Format shape has nowhere to go, so the
+ * toolbar and the context menu leave it out. @public
  */
-export const shapePaneAvailable = (editor: Editor | null): boolean => chartPaneAvailable(editor);
+export const shapePaneAvailable = (editor: Editor | null): boolean =>
+  paneAvailable(editor, 'shape');
 
 /** The enabled state of `image.formatShape`, or null for another slot. */
 export function shapeChromeState(editor: Editor, id: ChromeSlotId): ToolbarCommandState | null {
   if (id !== 'image.formatShape') return null;
-  return editor.snapshot().image?.shapeFormat
+  const reason = shapeFormatRefusal(editor);
+  return reason === null
     ? { id, enabled: true, disabledReason: null, active: false }
-    : { id, enabled: false, disabledReason: SHAPE_NONE_REASON, active: false };
+    : { id, enabled: false, disabledReason: reason, active: false };
+}
+
+/**
+ * Why Format shape has nothing to do, or null: no shape is selected, or neither its fill nor its
+ * outline can change (viewing, protection, a lock), as `can` answers.
+ */
+function shapeFormatRefusal(editor: Editor): string | null {
+  const view = readSelectedShape(editor, editor.snapshot().image);
+  if (!view.format) return SHAPE_NONE_REASON;
+  return view.canEditFill || view.canEditOutline ? null : view.fillDisabledReason;
 }
 
 /**
  * Ask for the Format shape pane with the focus, for the selected shape. Returns false, and asks
- * for nothing, when no shape with a fill or outline is selected, or when `drawingNodeId` names
- * another drawing. @public
+ * for nothing, when no shape with a fill or outline is selected, when neither can change, or
+ * when `drawingNodeId` names another drawing. @public
  */
 export function openShapePane(editor: Editor, drawingNodeId?: string): boolean {
   const image = editor.snapshot().image;
-  if (!image?.shapeFormat) return false;
+  if (!image?.shapeFormat || shapeFormatRefusal(editor) !== null) return false;
   if (drawingNodeId !== undefined && image.id !== drawingNodeId) return false;
   requestPane(editor, 'shape', { focus: true });
   return true;
@@ -43,9 +55,15 @@ export function openShapePane(editor: Editor, drawingNodeId?: string): boolean {
 /** Run `image.formatShape`: open the Format shape pane with the focus. Null for another slot. */
 export function runShapeControl(editor: Editor, id: ChromeSlotId): ExecResult | null {
   if (id !== 'image.formatShape') return null;
-  return openShapePane(editor)
-    ? { ok: true, changed: false }
-    : { ok: false, code: 'notFound', reason: SHAPE_NONE_REASON };
+  const reason = shapeFormatRefusal(editor);
+  if (reason !== null)
+    return {
+      ok: false,
+      code: reason === SHAPE_NONE_REASON ? 'notFound' : 'unsupported',
+      reason,
+    };
+  openShapePane(editor);
+  return { ok: true, changed: false };
 }
 
 /**

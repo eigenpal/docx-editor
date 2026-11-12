@@ -7,6 +7,7 @@ import {
   editSelectedShape,
   execSelectedShape,
   readSelectedShape,
+  sameSelectedShape,
   type SelectedShapeCommand,
   type ShapeFormatState,
   type ShapePaneChange,
@@ -37,45 +38,55 @@ export interface UseSelectedShapeReturn {
   readonly outlineDisabledReason: string | null;
   /**
    * Run a fill or outline edit on the shape this hook shows, as `editor.exec` does, without the
-   * `drawingNodeId`: `execute({ type: 'setShapeOutline', color: '0070C0', widthPt: 3 })`.
+   * `drawingNodeId`: `execute({ type: 'setShapeOutline', color: '0070C0', widthPt: 3 })`. A
+   * refusal's reason is translated.
    */
   readonly execute: (command: SelectedShapeCommand) => ExecResult;
   /**
    * Apply one checked change, as the packaged pane does: `edit({ type: 'fillColor',
    * color: 'accent1' })` or `edit({ type: 'outlineWidth', text: '3' })`. A theme color resolves
-   * through the document's theme. Text the pane cannot read refuses, with the reason as a
-   * translation key. One undo step.
+   * through the document's theme. Text the pane cannot read refuses with a translated reason.
+   * One undo step.
    */
   readonly edit: (change: ShapePaneChange) => ExecResult;
 }
 
-const selectImage = (snapshot: EditorSnapshot) => snapshot.image;
-const selectEditable = (snapshot: EditorSnapshot) => snapshot.editable;
-const selectMode = (snapshot: EditorSnapshot) => snapshot.editingMode;
+/** A result with its refusal reason translated, as every reason this hook returns is. */
+function localized(
+  result: ExecResult,
+  t: Parameters<typeof localizeDisabledReason>[1]
+): ExecResult {
+  if (result.ok) return result;
+  return { ...result, reason: localizeDisabledReason(result.reason, t) ?? result.reason };
+}
 
 /**
  * The selected shape, its fill and outline, whether each can change, and `execute` for the
- * shape commands. Use it inside `DocxEditor.Root` to build a Format shape pane of your own. The
- * value changes only when the selected drawing or the editing mode changes. @public
+ * shape commands. Use it inside `DocxEditor.Root` to build a Format shape pane of your own. It
+ * reads the shape on every editor change, because protection, locks, and collaboration change
+ * what `can` answers, and keeps its value while nothing it shows changes. Every refusal reason
+ * it returns is translated. @public
  */
 export function useSelectedShape(): UseSelectedShapeReturn {
   const editor = useDocxEditor();
+  const view = useEditorState(
+    (snapshot: EditorSnapshot) => readSelectedShape(editor, snapshot.image),
+    sameSelectedShape
+  );
   const image = useEditorState(selectImage);
-  const editable = useEditorState(selectEditable);
-  const editingMode = useEditorState(selectMode);
   const { t } = useTranslation();
-  return useMemo(() => {
-    // The editing mode is a dependency: the enabled state is the engine's `can` answer.
-    void editable;
-    void editingMode;
-    const view = readSelectedShape(editor, image);
-    return {
+  return useMemo(
+    () => ({
       ...view,
       fillDisabledReason: localizeDisabledReason(view.fillDisabledReason, t),
       transparencyDisabledReason: localizeDisabledReason(view.transparencyDisabledReason, t),
       outlineDisabledReason: localizeDisabledReason(view.outlineDisabledReason, t),
-      execute: (command: SelectedShapeCommand) => execSelectedShape(editor, image, command),
-      edit: (change: ShapePaneChange) => editSelectedShape(editor, image, change),
-    };
-  }, [editor, image, editable, editingMode, t]);
+      execute: (command: SelectedShapeCommand) =>
+        localized(execSelectedShape(editor, image, command), t),
+      edit: (change: ShapePaneChange) => localized(editSelectedShape(editor, image, change), t),
+    }),
+    [editor, view, image, t]
+  );
 }
+
+const selectImage = (snapshot: EditorSnapshot) => snapshot.image;

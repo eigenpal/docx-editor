@@ -19,12 +19,19 @@ import {
 import { editSelectedShape, readSelectedShape } from '../selected-shape.ts';
 import { chartThemeHexes } from '../chart-pane.ts';
 import {
+  chartPaneAvailable,
   listenPaneRequests,
   requestPane,
   takePaneRequest,
   takePaneRequestFor,
 } from '../chart-chrome.ts';
-import { openShapePane, paneTitleKey, selectionPane, sidePanelPane } from '../shape-chrome.ts';
+import {
+  openShapePane,
+  paneTitleKey,
+  selectionPane,
+  shapePaneAvailable,
+  sidePanelPane,
+} from '../shape-chrome.ts';
 import {
   runToolbarCommand,
   toolbarCommandState,
@@ -161,6 +168,12 @@ test('the selected shape reads, edits as one undo step, and refuses in viewing m
       fillDisabledReason: 'the document is open for viewing',
       outlineDisabledReason: 'the document is open for viewing',
     });
+    // Format shape follows `can`: nothing to change, so the slot is off with the same reason.
+    expect(toolbarCommandState(editor, 'image.formatShape')).toMatchObject({
+      enabled: false,
+      disabledReason: 'the document is open for viewing',
+    });
+    expect(runToolbarCommand(editor, 'image.formatShape')).toMatchObject({ ok: false });
   } finally {
     editor.destroy();
     container.remove();
@@ -185,8 +198,21 @@ test('Format shape shows for a shape, opens the pane, and its request reaches th
         .controls.map((c) => c.id)
     ).not.toContain('formatShape');
     expect(toolbarCommandState(editor, 'image.formatShape')).toMatchObject({ enabled: true });
+    // A listener for the Chart pane alone does not make Format shape available, and a request
+    // that no listener takes is dropped rather than left for a later pane to steal.
+    const chartHeard: string[] = [];
+    const stopChart = listenPaneRequests(editor, (request) => chartHeard.push(request.pane));
+    expect(chartPaneAvailable(editor)).toBe(true);
+    expect(shapePaneAvailable(editor)).toBe(false);
+    expect(requestPane(editor, 'shape')).toBe(false);
+    expect(chartHeard).toEqual([]);
+    expect(takePaneRequest(editor)).toBeNull();
+    stopChart();
     const heard: string[] = [];
-    const stop = listenPaneRequests(editor, (request) => heard.push(request.pane));
+    const stop = listenPaneRequests(editor, (request) => heard.push(request.pane), {
+      panes: ['chart', 'shape'],
+    });
+    expect(shapePaneAvailable(editor)).toBe(true);
     expect(runToolbarCommand(editor, 'image.formatShape')).toEqual({ ok: true, changed: false });
     expect(heard).toEqual(['shape']);
     // The Chart pane leaves a Format shape request for the shape pane.

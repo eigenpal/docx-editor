@@ -89,9 +89,9 @@ import {
   isHTMLElementNode,
   chartPaneAvailable,
   openChartPaneFor,
-  openShapePane,
   shapePaneAvailable,
 } from '@docx-editor.dev/core/editor';
+import { useEditorCommand } from '../useEditorCommand';
 import { useEditorState } from '../useEditorState';
 import { MenuLinkRow } from '../menu/menu-link-row';
 
@@ -194,19 +194,26 @@ function ContextMenuEditChart() {
 const selectShapeId = (snapshot: { image: { id: string; shapeFormat: object | null } | null }) =>
   snapshot.image?.shapeFormat ? snapshot.image.id : null;
 
-/** Format shape, on a selected shape, text box, line, or group: opens the Format shape pane. */
+/**
+ * Format shape, on a selected shape, text box, line, or group: opens the Format shape pane.
+ * Enabled state and its reason come from the slot (`toolbarCommandState`), as on the toolbar.
+ */
 function ContextMenuFormatShape() {
   const editor = useDocxEditor();
   const menu = useMenuContext();
   const label = useMenuLabel();
   const shapeId = useEditorState(selectShapeId);
+  const { execute, isEnabled, disabledReason } = useEditorCommand('image.formatShape');
   if (!editor || !shapeId || !shapePaneAvailable(editor)) return null;
   return (
     <MenuRow
+      icon={chromeIcon(chromeControlForSlot('image.formatShape')?.paths)}
       slot="image.formatShape"
+      disabled={!isEnabled}
+      {...(disabledReason ? { title: disabledReason } : {})}
       onSelect={() => {
         menu.setOpenMenu(null);
-        openShapePane(editor, shapeId);
+        execute();
       }}
     >
       {label('shape.formatShape')}

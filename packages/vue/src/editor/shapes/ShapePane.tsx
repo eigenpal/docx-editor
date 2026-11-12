@@ -58,10 +58,14 @@ export const DocxEditorShapePane = defineComponent({
         if (takePaneRequestFor(editor, 'shape')?.focus)
           void nextTick(() => focusChartPane(root.value));
         onCleanup(
-          listenPaneRequests(editor, () => {
-            if (takePaneRequestFor(editor, 'shape')?.focus)
-              void nextTick(() => focusChartPane(root.value));
-          })
+          listenPaneRequests(
+            editor,
+            () => {
+              if (takePaneRequestFor(editor, 'shape')?.focus)
+                void nextTick(() => focusChartPane(root.value));
+            },
+            { panes: ['shape'] }
+          )
         );
       },
       { immediate: true }
