@@ -23,6 +23,7 @@ const GROUPABLE = new Set<EditorCommand['type']>([
   'proposeDeletion',
   'proposeReplacement',
   'replaceMatch',
+  'replaceAllMatches',
   'toggleMark',
   'setMarkAttr',
   'setAlignment',

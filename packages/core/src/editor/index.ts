@@ -657,6 +657,7 @@ export type {
   DocumentHandle,
   // What `findMatches` returns and `selectMatch`/`replaceMatch` take.
   TextMatch,
+  ReplaceAllMatchesOutcome,
 } from '../contracts/editor.ts';
 
 export { runChromeExport, ChromeExportError } from './chrome-export.ts';

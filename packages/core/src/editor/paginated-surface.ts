@@ -5218,7 +5218,7 @@ export function mountPaginatedSurface(
 
     revisionDisplayMode: reviewDisplayMode,
     replacementLanding,
-    applyAutomationOps: (staged, scope, packageEdits, requiresReview = false) => {
+    applyAutomationOps: (staged, scope, packageEdits, requiresReview = false, carry) => {
       // Automation shares edit gates and repainting but retains its capture policy.
       // Its explicit story remains independent of the reader's active story.
       let result: ReturnType<TreeDocxSession['applyTreeOps']> | null = null;
@@ -5283,7 +5283,7 @@ export function mountPaginatedSurface(
           // alone is right there, because a clamp with nothing to clamp to is a caret reset.
           const order = paragraphOrder();
           if (order.length === 0) return null;
-          return clampedToDocument(editingLayout(), order, selection);
+          return clampedToDocument(editingLayout(), order, carry?.(selection) ?? selection);
         },
         { automation: true }
       );

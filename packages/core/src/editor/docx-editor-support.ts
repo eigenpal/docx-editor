@@ -25,6 +25,7 @@ import { isDocAnchor, isDocAnchorRange } from './anchor-resolution.ts';
 import { blankDocumentBytes } from './blank-document.ts';
 import { tableCommandCanSupport } from './table-command-plan.ts';
 import { replaceMatchArgumentRefusal } from './docx-editor-replace-match.ts';
+import { replaceAllMatchesArgumentRefusal } from './docx-editor-replace-all.ts';
 
 /** Recursively freeze plain objects and arrays (idempotent). */
 export function deepFreezeValue<T>(value: T): T {
@@ -581,6 +582,12 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         };
       }
       return { supported: true, mutating: true };
+    }
+    case 'replaceAllMatches': {
+      const refusal = replaceAllMatchesArgumentRefusal(command);
+      return refusal
+        ? { supported: false, code: 'invalidArgs', reason: refusal }
+        : { supported: true, mutating: true };
     }
     case 'replaceMatch': {
       const refusal = replaceMatchArgumentRefusal(command);

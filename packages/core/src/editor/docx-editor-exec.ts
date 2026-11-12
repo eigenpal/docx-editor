@@ -8,6 +8,7 @@ import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
 import { isMissingAuthorRefusal } from './docx-editor-author.ts';
 import { isCollaborationFailureCode } from '../collaboration/index.ts';
 import { execReplaceMatch } from './docx-editor-replace-match.ts';
+import { execReplaceAllMatches } from './docx-editor-replace-all.ts';
 // Command dispatch for `createDocxEditor` (editor seam).
 //
 // One switch, one vocabulary: every `EditorCommand` the gate admitted lands here and is
@@ -438,6 +439,8 @@ export function execEditorCommand(
     }
     case 'replaceMatch':
       return execReplaceMatch(mounted, command);
+    case 'replaceAllMatches':
+      return execReplaceAllMatches(mounted, command);
     case 'undo':
       mounted.undo();
       break;

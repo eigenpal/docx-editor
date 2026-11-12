@@ -2,10 +2,17 @@ import type { HistoryGroupOutcome } from './editor-scope.ts';
 import type { DocumentHandle, RevisionAuthorResult, RevisionBatchResult } from './editor.ts';
 import type { CompareDocumentsOutcome } from './compare-documents.ts';
 import type { ReplaceDocumentOutcome } from './replace-document.ts';
+import type { ReplaceAllMatchesOutcome } from './editor-text-match.ts';
 // Types this vocabulary's results hand out, re-exported from where they are declared so every
 // entry built on this module can name them. The contracts lane may import store, layout and
 // collaboration types (`mayImportTypes` in `core-lane-graph.ts`).
-export type { DocumentHandle, HistoryGroupOutcome, RevisionAuthorResult, RevisionBatchResult };
+export type {
+  DocumentHandle,
+  HistoryGroupOutcome,
+  ReplaceAllMatchesOutcome,
+  RevisionAuthorResult,
+  RevisionBatchResult,
+};
 export type * from './revision-markup.ts';
 export type * from './review-pane.ts';
 export type * from './compare-documents.ts';
@@ -192,6 +199,8 @@ export type ExecResult =
       compareDocuments?: CompareDocumentsOutcome;
       /** Present on `replaceDocument`: whether the document changed. */
       replaceDocument?: ReplaceDocumentOutcome;
+      /** Present on `replaceAllMatches`: the matches replaced and the ones skipped. */
+      replacements?: ReplaceAllMatchesOutcome;
     }
   | {
       ok: false;
@@ -208,6 +217,11 @@ export type ExecResult =
       /** Present on `replaceDocument`: the refusal code, typed cause, and message. */
       replaceDocument?: ReplaceDocumentOutcome;
       revisionAuthors?: RevisionAuthorResult;
+      /**
+       * Present on `replaceAllMatches` when it stopped part-way: the matches already replaced,
+       * which still undo as one step, and the ones skipped before it stopped.
+       */
+      replacements?: ReplaceAllMatchesOutcome;
     };
 
 /**

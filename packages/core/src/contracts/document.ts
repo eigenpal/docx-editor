@@ -82,6 +82,7 @@ export type {
   ParagraphDisagreements,
   ParagraphFlags,
   ParagraphTabStop,
+  ReplaceAllMatchesOutcome,
   Revision,
   RevisionAuthorResult,
   RevisionBatchResult,

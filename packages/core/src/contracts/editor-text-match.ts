@@ -47,3 +47,27 @@ export interface TextMatch {
   readonly contextBefore?: string;
   readonly contextAfter?: string;
 }
+
+/**
+ * What one `replaceAllMatches` command did, as `replacements` on its result.
+ *
+ * `replaced` counts the matches written. `skipped` counts the matches found but left
+ * unchanged: struck (tracked-deleted or moved-away) text, a field result, whose visible text
+ * is not editable text, and content that a lock, a table of contents, or the editing mode
+ * protects. A result with `replaced: 0` and `skipped: 0` means that the query found nothing.
+ * The selection and scroll position stay put.
+ *
+ * The command is refused, with no `replacements`, when matches exist but every one that could
+ * be written is protected (`locked`, `bound`), and under document protection that allows only
+ * forms, comments, or reading (`locked`). A refused result that DOES carry `replacements`
+ * stopped part-way, for example on a collaboration failure: the replaced matches stay and
+ * undo as one step, and `skipped` counts only the matches judged before it stopped.
+ *
+ * @public
+ */
+export interface ReplaceAllMatchesOutcome {
+  /** Matches replaced. */
+  readonly replaced: number;
+  /** Matches found but not replaced, because their content cannot take the replacement. */
+  readonly skipped: number;
+}

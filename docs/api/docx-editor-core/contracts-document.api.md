@@ -465,6 +465,7 @@ export type ExecResult = {
     history?: HistoryGroupOutcome;
     ok: true;
     replaceDocument?: ReplaceDocumentOutcome;
+    replacements?: ReplaceAllMatchesOutcome;
     revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
 } | {
@@ -473,6 +474,7 @@ export type ExecResult = {
     ok: false;
     reason: string;
     replaceDocument?: ReplaceDocumentOutcome;
+    replacements?: ReplaceAllMatchesOutcome;
     revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
     target?: DocTarget;
@@ -601,6 +603,12 @@ export interface ParagraphTabStop {
     readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
     // (undocumented)
     readonly positionTwips: number;
+}
+
+// @public
+export interface ReplaceAllMatchesOutcome {
+    readonly replaced: number;
+    readonly skipped: number;
 }
 
 // @public

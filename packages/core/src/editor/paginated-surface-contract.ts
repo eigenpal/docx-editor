@@ -578,7 +578,12 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     packageEdits?: readonly ((
       pkg: import('../store/package/ooxml-package.ts').OoxmlPackage
     ) => import('../store/package/ooxml-package.ts').OoxmlPackage)[],
-    requiresReview?: boolean
+    requiresReview?: boolean,
+    /**
+     * Carry the reader's selection across the committed ops, before it is clamped to the open
+     * story. Omitted, the selection keeps its offsets.
+     */
+    carry?: (selection: SemanticSelection) => SemanticSelection
   ): TreeApplyResult;
   /**
    * Which revision halves this surface is SHOWING.
