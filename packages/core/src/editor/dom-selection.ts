@@ -147,6 +147,13 @@ function spanFor(node: Node): { element: Element; identity: SpanIdentity } | nul
   return null;
 }
 
+/** The model range of the painted text span a node is in, or null. */
+export function paintedSpanRange(
+  node: Node
+): { readonly paragraphId: string; readonly start: number; readonly end: number } | null {
+  return spanFor(node)?.identity ?? null;
+}
+
 /** The header/footer container open for editing, when any. */
 function activeHeaderFooterRoot(root: Element): Element | null {
   return root.querySelector('[data-docx-hf-active]');

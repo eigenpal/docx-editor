@@ -100,6 +100,29 @@ function withSurface(
   }
 }
 
+async function withSurfaceAsync(
+  bytes: Uint8Array,
+  run: (surface: PaginatedSurface, container: HTMLElement) => Promise<void>
+): Promise<void> {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const opened = mountPaginatedSurface(container, bytes, { scale: 1 });
+  if (!opened.ok) throw new Error(opened.reason);
+  try {
+    await run(opened.surface, container);
+  } finally {
+    opened.surface.destroy();
+    container.remove();
+    document.getSelection()?.removeAllRanges();
+  }
+}
+
+/** Let the next frame pass, then the tasks queued after it (the commit, its paint) run. */
+async function nextTasks(): Promise<void> {
+  await new Promise((done) => requestAnimationFrame(() => done(undefined)));
+  for (let index = 0; index < 3; index += 1) await new Promise((done) => setTimeout(done, 0));
+}
+
 function caretAt(surface: PaginatedSurface, paragraphId: string, offset: number): void {
   surface.setSelection({ anchor: { paragraphId, offset }, head: { paragraphId, offset } });
 }
@@ -155,8 +178,8 @@ function composeSteps(
 const pagesOf = (container: HTMLElement) => container.querySelector<HTMLElement>('.docx-pages')!;
 
 describe('a composition after the space that ends a line', () => {
-  test('the composing text is not clipped, and commits', () => {
-    withSurface(docx(p('우리나라 ')), (surface, container) => {
+  test('the composing text is not clipped, and commits', async () => {
+    await withSurfaceAsync(docx(p('우리나라 ')), async (surface, container) => {
       const id = surface.session.paragraphIds()[0]!;
       caretAt(surface, id, 5);
       // The precondition the report hinged on: the caret is in the clipped space run.
@@ -167,6 +190,11 @@ describe('a composition after the space that ends a line', () => {
       const seen = composeSteps(pagesOf(container), ['ㅇ', '아', '알']);
       expect(seen.map((step) => step.run)).toEqual([space, space, space]);
       expect(seen.map((step) => step.clipped)).toEqual([false, false, false]);
+      // The composed text commits on a later task, as typed text does, and its paint with it.
+      // Until then the text the input method wrote stays visible where it was composed.
+      expect(surface.session.bodyText()).toBe('우리나라 ');
+      expect(clipped(space)).toBe(false);
+      await nextTasks();
       expect(surface.session.bodyText()).toBe('우리나라 알');
       // Put back the way it was painted, whether or not the paint kept the element.
       expect(space.style.width).toBe(width);
@@ -192,6 +220,7 @@ describe('a composition after the space that ends a line', () => {
       pages.dispatchEvent(new InputEvent('input', { bubbles: true, data: 'ㅇ' }));
       expect(clipped(space)).toBe(false);
       pages.dispatchEvent(compositionEvent('compositionend', 'ㅇ'));
+      surface.flushPendingInput();
       expect(surface.session.bodyText()).toBe('우리나라 ㅇ');
     });
   });
@@ -209,7 +238,6 @@ describe('a composition after the space that ends a line', () => {
       // The boundary rewrite a Hangul input method performs: the final consonant moves to the
       // next syllable, so the first composition commits shorter than its last update.
       const committed = ['아', '름', '다'];
-      let text = '우리나라 ';
       for (const [index, steps] of syllables.entries()) {
         pages.dispatchEvent(compositionEvent('compositionstart'));
         const node = document.getSelection()!.focusNode as Text;
@@ -228,9 +256,13 @@ describe('a composition after the space that ends a line', () => {
         node.data = head + committed[index]!;
         document.getSelection()!.setBaseAndExtent(node, head.length + 1, node, head.length + 1);
         pages.dispatchEvent(compositionEvent('compositionend', committed[index]!));
-        text += committed[index]!;
-        expect(surface.session.bodyText()).toBe(text);
       }
+      // The input method starts each syllable in the task that ends the one before, so each
+      // starts over the last one's queued text, and none has reached the model yet.
+      expect(surface.session.bodyText()).toBe('우리나라 ');
+      surface.flushPendingInput();
+      expect(surface.session.bodyText()).toBe('우리나라 아름다');
+      expect(pagesOf(container).textContent).toContain('우리나라 아름다');
       // One step per committed syllable, as before.
       surface.undo();
       expect(surface.session.bodyText()).toBe('우리나라 아름');
@@ -282,6 +314,7 @@ describe('the same rule wherever the run is painted', () => {
       expect(clipped(caretRun())).toBe(true);
       const seen = composeSteps(pagesOf(container), ['ㅎ', '하', '한']);
       expect(seen.map((step) => step.clipped)).toEqual([false, false, false]);
+      surface.flushPendingInput();
       expect(surface.session.bodyText()).toBe('우리나라 한\n');
     });
   });
@@ -295,6 +328,7 @@ describe('the same rule wherever the run is painted', () => {
       expect(clipped(caretRun())).toBe(true);
       const seen = composeSteps(pagesOf(container), ['ㅎ', '하', '한']);
       expect(seen.map((step) => step.clipped)).toEqual([false, false, false]);
+      surface.flushPendingInput();
       expect(surface.session.storyText(scope)).toBe('우리나라 한');
     });
   });
@@ -308,6 +342,7 @@ describe('the same rule wherever the run is painted', () => {
       expect(clipped(caretRun())).toBe(true);
       const seen = composeSteps(pagesOf(container), ['ㅎ', '하', '한']);
       expect(seen.map((step) => step.clipped)).toEqual([false, false, false]);
+      surface.flushPendingInput();
       expect(surface.session.storyText(scope)).toBe('우리나라 한');
     });
   });
@@ -319,6 +354,7 @@ describe('the same rule wherever the run is painted', () => {
       const run = caretRun();
       const before = run.getAttribute('style');
       composeSteps(pagesOf(container), ['´', 'é']);
+      surface.flushPendingInput();
       expect(surface.session.bodyText()).toBe('wordé');
       expect(run.getAttribute('style')).toBe(before);
     });
@@ -369,6 +405,7 @@ describe('a composition in a text box', () => {
       caretAt(surface, match!.blockId, 5);
       const seen = composeSteps(pagesOf(container), ['ㅎ', '하', '한']);
       expect(seen.map((step) => step.clipped)).toEqual([false, false, false]);
+      surface.flushPendingInput();
       expect(editor.findMatches('우리나라 한').length).toBe(1);
       expect(editor.findMatches('우리나라').length).toBe(1);
     } finally {

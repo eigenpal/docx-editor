@@ -48,6 +48,8 @@ function compose(peer: ReturnType<typeof mount>, text: string) {
   else line.insertBefore(textNode, line.firstChild);
   document.getSelection()!.setBaseAndExtent(textNode, text.length, textNode, text.length);
   pages.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: text }));
+  // Composed text commits on a later task, as typed text does; land it now.
+  peer.editor.surface!.flushPendingInput();
 }
 
 test('empty paragraph composition converges, retains remote carets, and survives undo and reopen', async () => {

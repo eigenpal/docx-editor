@@ -33,17 +33,15 @@ import {
 } from './surface-composition-readback.ts';
 import { createCompositionPreview } from './surface-composition-preview.ts';
 import { composedEdit, rebaseComposedText, rebaseOffset } from './surface-composition-rebase.ts';
+import {
+  composingBaseOf,
+  createComposedLane,
+  landedBase,
+  type ComposedLaneDeps,
+  type ComposingBase,
+} from './surface-composition-commit.ts';
 import { paintedTextOf, paragraphReplacePlan } from './surface-input.ts';
 import { collapsedAt } from './surface-selection-ops.ts';
-
-/** What the page shows for the composing paragraph under the input method's text. */
-interface ComposingBase {
-  readonly text: string;
-  /** The caret offset, when the composition is at a collapsed caret. */
-  readonly caret: number | null;
-  /** The package revision that text is from. */
-  readonly revision: number;
-}
 
 /** What the composition root lends this lane. */
 export interface SurfaceSelectionSyncDeps {
@@ -110,6 +108,10 @@ export interface SurfaceSelectionSyncDeps {
   updateCaret(): void;
   /** The model text of one paragraph, for diffing what an IME wrote against it. */
   textOf(paragraphId: string): string;
+  /** A plain composed insertion commits on a later task: surface-composition-commit. */
+  commitComposed?: ComposedLaneDeps['commitComposed'];
+  modelTextOf?: ComposedLaneDeps['modelTextOf'];
+  later?: ComposedLaneDeps['later'];
   /**
    * The ops that apply the surface's armed caret formatting (stored marks) to text the
    * readback is about to insert at `offset`, or `[]` when nothing is armed there. Word
@@ -224,6 +226,10 @@ export interface SurfaceSelectionSync {
   adoptBeforeInput(): void;
   /** Whether an IME is composing, which suspends repainting. */
   isComposing(): boolean;
+  /** Whether a composition at the caret would start over text the last one left unpainted. */
+  continuesComposition(): boolean;
+  /** Commit queued composed text: every flush point calls this before anything else. */
+  landComposed(): void;
   /**
    * Record that the browser may park its own selection as the FIX-UP of a prevented input.
    *
@@ -374,28 +380,21 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   let composingOwner: { readonly offset: number; readonly controlId: string } | null = null;
   /** The composing paragraph's text spans at the start, to tell which the browser removed. */
   let composingSpans: readonly PaintedSpanSnapshot[] = [];
-  /**
-   * What the page showed when the composition began: the paragraph's text, the caret if
-   * collapsed, and the story's revision. The page is not repainted until the end, so a
-   * collaborator's edit in between is in the model and not on the page.
-   */
+  /** What the page showed at the start: text, collapsed caret, revision. The page is not
+   * repainted until the end, so a collaborator's edit in between is not on the page. */
   let composingBase: ComposingBase | null = null;
   /** Whether the input method has written yet: the page is held from that write on. */
   let composingWritten = false;
-
-  /** What the page shows for the composing paragraph now. */
-  function baseOf(paragraphId: string): ComposingBase {
-    const selection = deps.selection();
-    const model = { text: deps.textOf(paragraphId), revision: session.packageRevision() };
-    const shown = deps.paintedText?.(paragraphId) ?? model;
-    // Painted from the model's own revision, the two must agree; if not, the model is right.
-    const painted = shown.revision === model.revision ? model : shown;
-    const collapsed =
-      painted.revision !== -1 &&
-      selection.anchor.paragraphId === paragraphId &&
-      selection.head.paragraphId === paragraphId &&
-      selection.anchor.offset === selection.head.offset;
-    return { ...painted, caret: collapsed ? selection.head.offset : null };
+  const packageRevision = () => session.packageRevision();
+  /** Composed insertions read back and not committed yet: surface-composition-commit. */
+  const composed = createComposedLane(deps, () => landComposed(), pagesLayer);
+  const baseOf = (paragraphId: string): ComposingBase =>
+    composingBaseOf({ ...deps, packageRevision }, paragraphId, composed.unpainted());
+  /** Commit queued composed text. False when it did not land as the page shows it. */
+  function landComposed(): boolean {
+    const clean = composed.land(composing && composingWritten);
+    if (composingBase) composingBase = landedBase(composingBase, clean, packageRevision());
+    return clean;
   }
 
   /**
@@ -406,7 +405,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    */
   function adoptPendingDomSelection(): boolean {
     const domSelection = hostDocument().getSelection();
-    const next = semanticSelectionFromDom(pagesLayer, domSelection);
+    const next = composed.read(domSelection);
     if (!next) return false;
     rememberSelectionPage(domSelection);
     if (selectionsEqual(next, deps.selection())) return false;
@@ -443,7 +442,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   /** Mirror the native selection into the model. Ignores selections outside painted text. */
   const adoptDomSelection = (): void => {
     const domSelection = hostDocument().getSelection();
-    const next = semanticSelectionFromDom(pagesLayer, domSelection);
+    const next = composed.read(domSelection);
     if (!next) {
       // NOT MAPPING IS NOT NOTHING HAPPENING.
       //
@@ -479,7 +478,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     owner: { readonly offset: number; readonly controlId: string } | null,
     erased: ReadonlySet<string>,
     base: ComposingBase | null
-  ): void {
+  ): boolean {
     // Read against the text the page shows, which is the text the composition began over.
     const baseText = base?.text ?? deps.textOf(paragraphId);
     // The browser's own selection says WHICH painted copy was composed into, for a paragraph
@@ -488,15 +487,19 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     const read = paintedTextOf(
       pagesLayer,
       paragraphId,
-      baseText,
+      base?.read ?? baseText,
       hostDocument().getSelection()?.anchorNode ?? null,
       erased
     );
-    if (read === null) return;
+    if (read === null) return false;
+    // A plain insertion queues as typing does; until it lands, a caret echo is not the user's.
+    if (composed.queue(paragraphId, base, owner !== null, read)) return (modelMoved = true);
+    // Anything else edits the text the queued insertions complete: they land first.
+    if (composed.pending() && base) base = landedBase(base, landComposed(), packageRevision());
     // A collaborator's edit landed while composing: in the model, held off the page. Land the
     // layout (the page has been read) and carry the composed edit onto the current text.
     let modelText = baseText;
-    if (base && session.packageRevision() !== base.revision) {
+    if (base && packageRevision() !== base.revision) {
       deps.flushToPaint();
       modelText = deps.textOf(paragraphId);
       if (owner) owner = { ...owner, offset: rebaseOffset(baseText, modelText, owner.offset) };
@@ -505,13 +508,14 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       const edit = composedEdit(baseText, read, base.caret);
       const head = deps.selection().head;
       if (base.caret !== null && edit.start === edit.end && head.paragraphId !== paragraphId) {
+        session.beginComposition(deps.storyScope());
         if (edit.text.length > 0) deps.replaceSelectionWith?.(edit.text);
-        return;
+        return false;
       }
     }
     const painted = rebaseComposedText(baseText, read, modelText, base?.caret ?? null);
     const plan = paragraphReplacePlan(paragraphId, modelText, painted);
-    if (!plan) return;
+    if (!plan) return false;
     // Composed text takes the armed caret format like typed text would — same transaction,
     // one undo step. Asked BEFORE the commit (which retires the armed state), and only for
     // an insert landing exactly on the armed anchor; a diff that resolved elsewhere simply
@@ -565,6 +569,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
         named.offset + named.text.length)
       : undefined;
     const scope = deps.storyScope();
+    // Opened here, after any queued text landed: each composition is its own history entry.
+    session.beginComposition(scope);
     deps.commit(() => {
       const result = deps.applyOps([...ops, ...formatOps], deps.selectionMark(), scope);
       // The composed text is not the armed format's hostage: a refused format op must not
@@ -583,6 +589,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
               : plan.caret,
       })
     );
+    return false;
   }
 
   /**
@@ -713,10 +720,11 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     preview.track();
     if (composingWritten) return;
     // The first write: from here the page is the input method's. A paint that landed since
-    // `compositionstart` (a collaborator's edit) is what the input method wrote over.
+    // `compositionstart` (a collaborator's edit) is what the input method wrote over. Queued
+    // text holds the paint, so while it waits, no paint landed and the carried base stands.
     composingWritten = true;
     deps.holdPaint?.(true);
-    if (composingParagraph !== null && composingBase !== null) {
+    if (composingParagraph !== null && composingBase !== null && !composed.pending()) {
       composingBase = baseOf(composingParagraph);
     }
   };
@@ -760,6 +768,12 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
         deps.hasPendingInput?.() === true;
       const adopted =
         modelMoved || holdOff || !userSelectionGesture ? false : adoptPendingDomSelection();
+      // Before the paint, so a run it keeps is clipped as painted. Not at `compositionend`:
+      // composed text stays visible where it was written until this paint replaces it.
+      if (!composing) {
+        preview.restore();
+        composed.painted();
+      }
       // Spent only when the buffer is not holding the answer back: a repaint that deferred to
       // the flush has not made the decision this flag records, and clearing it would let the
       // NEXT repaint adopt a DOM the commit is about to move.
@@ -785,6 +799,10 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     adoptBeforeInput: adoptPendingUserSelection,
 
     isComposing: () => composing,
+
+    continuesComposition: () => composed.carried(baseOf) !== null,
+
+    landComposed: () => void landComposed(),
 
     noteBrowserSelectionFixup() {
       browserSelectionFixup = true;
@@ -853,6 +871,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
         if (reported === null || !selectionsEqual(reported, deps.selection())) mirrorToDom();
         return;
       }
+      // The browser's own caret just past unpainted composed text (`ComposedLane.echo`).
+      if (!userSelectionGesture && composed.echo(hostDocument().getSelection())) return;
       adoptDomSelection();
     },
 
@@ -879,13 +899,16 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       adoptPendingUserSelection();
       composing = true;
       const selection = deps.selection();
+      // Over the last composition's unpainted commit the layout is a pass behind; the caret is
+      // just past text that commit placed, so neither a prompt nor a control can claim it.
+      const carried = composed.carried(baseOf) !== null;
       composingAcrossParagraphs =
         selection.anchor.paragraphId !== selection.head.paragraphId ||
-        deps.compositionUsesTyping?.() === true;
+        (!carried && deps.compositionUsesTyping?.() === true);
       composingParagraph = selection.head.paragraphId;
       const collapsed =
         !composingAcrossParagraphs && selection.anchor.offset === selection.head.offset;
-      const controlId = collapsed ? deps.insertOwner?.() : undefined;
+      const controlId = collapsed && !carried ? deps.insertOwner?.() : undefined;
       composingOwner =
         controlId === undefined ? null : { offset: selection.head.offset, controlId };
       composingSpans = composingAcrossParagraphs
@@ -894,15 +917,12 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       composingBase = composingAcrossParagraphs ? null : baseOf(composingParagraph);
       composingWritten = false;
       preview.track();
-      session.beginComposition(deps.storyScope());
     },
 
     onCompositionEnd: (event?: CompositionEvent): void => {
       composing = false;
       composingWritten = false;
       deps.holdPaint?.(false);
-      // Before anything below repaints, so a run the paint keeps is clipped as painted.
-      preview.restore();
       const paragraphId = composingParagraph ?? deps.selection().head.paragraphId;
       composingParagraph = null;
       const owner = composingOwner;
@@ -918,6 +938,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // clocks — a number that means nothing, and a rebuild that does not happen.
       const scope = deps.storyScope();
       const before = session.revisionFor(scope);
+      let queued = false;
 
       if (acrossParagraphs) {
         // THE EVENT CARRIES THE ANSWER, so the painted DOM never has to be asked. `data` on
@@ -929,16 +950,20 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
         // means, and it goes through the very same call — one transaction inside the
         // composition's own history entry, so it is ONE undo step, with attribution,
         // protection and refusals all applying as they do to typed text.
-        const composed = event?.data ?? '';
-        if (composed.length > 0) deps.replaceSelectionWith?.(composed);
+        const text = event?.data ?? '';
+        landComposed();
+        session.beginComposition(scope);
+        if (text.length > 0) deps.replaceSelectionWith?.(text);
       } else {
         // The composed text is in the DOM and nowhere else. Read it back, diff it against
         // what the model holds for that paragraph, and commit the difference — the only
         // route by which an IME edit can reach the tree, since it could not be intercepted.
-        reconcileParagraphFromDom(paragraphId, owner, erased, base);
+        queued = reconcileParagraphFromDom(paragraphId, owner, erased, base);
       }
 
       session.endComposition();
+      // Queued: the page shows it, and it commits on a later task.
+      if (queued) return;
       // THE BROWSER WROTE ON THE PAGE WHATEVER THE MODEL DID. When the model did not move —
       // the composition was cancelled, or its edit was refused — an unchanged layout repaints
       // nothing by design, so those characters would simply stay on screen, and in a document

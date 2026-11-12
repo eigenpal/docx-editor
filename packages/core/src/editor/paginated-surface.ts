@@ -120,7 +120,7 @@ import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/c
 
 /* eslint-disable max-lines -- composition root; seams live in surface-*.ts */
 
-import { attributeTrackedOps, isTrackedEdit } from './surface-tracked-ops.ts';
+import { attributeTrackedOps, isDocumentEdit, isTrackedEdit } from './surface-tracked-ops.ts';
 import { isMissingAuthorRefusal } from './docx-editor-author.ts';
 import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core/binding';
 import {
@@ -130,6 +130,7 @@ import {
   isContentControl,
   parentNodeOf,
   ORIGIN_IDS,
+  paragraphTextOf,
   parseTocInstruction,
   planTocEntries,
   resolveTocRowHeadings,
@@ -190,6 +191,7 @@ import { withSavedFieldResults } from './surface-saved-field-results.ts';
 import { bindSurfaceViewport, type SurfaceViewportBinding } from './surface-viewport-binding.ts';
 import { createSurfaceHostListeners } from './surface-host-listeners.ts';
 import { hostTimers, hostWindowOf } from './host-realm.ts';
+import { afterNextPaint, landingGuard } from './surface-composition-commit.ts';
 import { createSurfaceHosting } from './surface-host-move.ts';
 import { reviewItemsAtSelection } from '../store/store/review-items.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
@@ -1614,15 +1616,19 @@ export function mountPaginatedSurface(
   // teardown), so the selection at flush time is the selection the first
   // buffered key saw.
   let typeBuffer = '';
+  /** Lands composed text queued before the buffer, one land at a time (`landingGuard`). */
+  let landComposedText = (): void => {};
   let typeFlushTimer: number | null = null;
   let flushingTypeBuffer = false;
+  const landing = landingGuard();
 
   function flushTypeBuffer(): void {
     // Reentrancy first, timer second: a reentrant call (host code inside the
     // flush's own onChange enqueuing more text) must not clear the fresh timer
     // that new text just armed, or it would sit unflushed until an unrelated
     // flush point.
-    if (flushingTypeBuffer) return;
+    if (flushingTypeBuffer || landing.active()) return;
+    landing.wrap(landComposedText)();
     if (typeFlushTimer !== null) {
       timers.clearTimeout(typeFlushTimer);
       typeFlushTimer = null;
@@ -1965,13 +1971,13 @@ export function mountPaginatedSurface(
    * (a prior deferred commit, an external commit, a drawing-resource invalidation can all
    * have filled it), and the `render()` below is the one report of the refusal the host
    * gets — deferring it delayed `lastRejection`, or lost it to a later commit entirely.
+   * `held` defers too: a queued composed insertion the next one in the queue publishes.
    */
-  function publishAfterCommit(rejected: boolean): void {
+  function publishAfterCommit(rejected: boolean, held = false): void {
     if (
       !rejected &&
       scheduler.pending() !== null &&
-      lastLayoutMs > INPUT_PRESSURE_LAYOUT_DEFER_MS &&
-      hasPendingBrowserInput(false)
+      (held || (lastLayoutMs > INPUT_PRESSURE_LAYOUT_DEFER_MS && hasPendingBrowserInput(false)))
     ) {
       return;
     }
@@ -3017,17 +3023,6 @@ export function mountPaginatedSurface(
     () => session.editable
   );
 
-  /** Ops that change the DOCUMENT, as opposed to reading or resolving it. */
-  function isDocumentEdit(op: TreeDocOp): boolean {
-    return (
-      op.op !== 'acceptRevision' &&
-      op.op !== 'rejectRevision' &&
-      op.op !== 'acceptAllRevisions' &&
-      op.op !== 'rejectAllRevisions' &&
-      op.op !== 'setRevisionAttribution'
-    );
-  }
-
   /** Ops that create or extend a reviewable proposal. */
   /**
    * The ops that carry per-op revision attribution, spelled ONCE.
@@ -3167,13 +3162,15 @@ export function mountPaginatedSurface(
            * and applies to whatever is typed next there.
            */
           readonly rearmPending?: ArmedFormat;
+          /** Queued composed text: it precedes the type buffer, and may leave its publish. */
+          readonly composed?: { readonly publish: boolean };
         }
       | undefined = {}
   ): string | null {
     // Any batched typing lands first as its own transaction, so this edit sees
     // the document and selection the user saw. Reentrancy-guarded: the flush
     // itself commits through here with an empty buffer.
-    flushTypeBuffer();
+    if (!options?.composed) flushTypeBuffer();
     if (!flushingTypeBuffer) typingHistory.end();
     const finishSelectionHistory = documentSelectionHistory.begin();
     // An edit invalidates the rectangle: its cells' content has changed, and the collapsed
@@ -3265,7 +3262,7 @@ export function mountPaginatedSurface(
     // nothing, so the surface still has to refresh the state it just changed. Under input
     // pressure the publish may hand layout+paint to the scheduler's own task — see
     // `publishAfterCommit`.
-    publishAfterCommit(rejected !== null);
+    publishAfterCommit(rejected !== null, options?.composed?.publish === false);
     return rejected;
   }
 
@@ -3342,7 +3339,7 @@ export function mountPaginatedSurface(
     // same-position set (the selection mirror re-adopting the caret it painted,
     // which a browser echoes after every keystroke) is not a move and must not
     // break the batch. A move also ends the typing run, even one that comes back later.
-    if (moved && typeBuffer.length > 0) flushTypeBuffer();
+    if (moved) flushTypeBuffer();
     const fieldSelection = textFormInteraction?.beforeSelect(next);
     if (fieldSelection === null) return;
     if (moved) clearPromptBoundary();
@@ -3450,6 +3447,12 @@ export function mountPaginatedSurface(
       publishLocalCollaborationSelection();
     },
     commit: (run) => commit(run),
+    commitComposed: (run, next, publish) =>
+      commit(run, () => (textFormInteraction ? textFormInteraction.beforeSelect(next) : next), {
+        composed: { publish },
+      }),
+    later: (task) => afterNextPaint(timers, fieldScope.wrap(landing.wrap(task))),
+    modelTextOf: (id) => paragraphTextOf(partOfNodeId(session, id) ?? session.part(), id),
     insertOwner: () => insertOwnerOf(contentControlAtCaret()),
     compositionUsesTyping: () => typingSelectionPlan().outsidePromptId !== undefined,
     promptLanding: typedLanding,
@@ -3496,6 +3499,7 @@ export function mountPaginatedSurface(
       heldLayout = hold ? (paintedLayout ?? currentLayout) : null;
     },
   });
+  landComposedText = selectionSync.landComposed;
 
   hfScope = createHeaderFooterScopeController({
     session,
@@ -5935,23 +5939,21 @@ export function mountPaginatedSurface(
   // surface-input.ts, the selection mirror and the IME lane in surface-selection-sync.ts.
   // The document-level selection listener runs in this editor's field-result mode too.
   const { onSelectionChange, onCompositionEnd } = fieldScope.methods({ ...selectionSync });
-  // The IME owns the DOM from compositionstart on; buffered plain typing must
-  // be in the document before that handover, not woven into the readback. The
-  // handover is of the PAINTED DOM, so a layout pass or paint a commit deferred
-  // under input pressure must land too: the readback at compositionend diffs the
-  // painted text against the model, and a composition that began over a stale
-  // paint would read the missing edit back as the IME's own.
+  // The IME owns the DOM from compositionstart on; buffered plain typing must be in the
+  // document before that handover, not woven into the readback. The handover is of the
+  // PAINTED DOM, so a layout pass or paint a commit deferred under input pressure must land
+  // too: the readback diffs the painted text against the model, and a composition begun over
+  // a stale paint reads the missing edit back as the IME's own (but not its own last commit).
   //
-  // The pending USER selection is taken up FIRST, exactly as `onKeyDown` does.
-  // The flush's render mirrors the model selection into the DOM — over the
-  // user's still-unadopted range — and its `applyingSelection` echo guard is
-  // still up (it clears on a microtask) when `onCompositionStart` performs its
-  // own mandatory adoption, which would skip it: the #383 lane choice would
-  // again be made from a selection the user no longer has.
+  // The pending USER selection is taken up FIRST, exactly as `onKeyDown` does. The flush's
+  // render mirrors the model selection into the DOM — over the user's still-unadopted range
+  // — and its `applyingSelection` echo guard is still up (it clears on a microtask) when
+  // `onCompositionStart` performs its own mandatory adoption, which would skip it: the #383
+  // lane choice would again be made from a selection the user no longer has.
   const onCompositionStart: typeof selectionSync.onCompositionStart = (...args) => {
     inputMethod.repair.stop();
     selectionSync.adoptBeforeInput();
-    flushToPaint();
+    if (!selectionSync.continuesComposition()) flushToPaint();
     selectionSync.onCompositionStart(...args);
   };
 

@@ -200,6 +200,101 @@ test('a remote edit in the composing paragraph keeps both texts', async () => {
   expect(bob.editor.surface!.session.bodyText()).toBe('A우리나라 ');
 });
 
+/** Long enough for the task after the next paint, where queued composed text commits. */
+const landed = () => new Promise((resolve) => setTimeout(resolve, 150));
+
+test('a remote edit while syllables are queued keeps both texts, one undo step each', async () => {
+  const bytes = zipDocument('<w:p><w:r><w:t xml:space="preserve">우리나라 </w:t></w:r></w:p>');
+  const peers = await harness.pair(bytes);
+  const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
+    peer.detach();
+    return mount({
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+    });
+  }) as [Mounted, Mounted];
+  const converge = () => {
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+    expect(packageFingerprint(alice.editor.surface!.session.currentPackage())).toBe(
+      packageFingerprint(bob.editor.surface!.session.currentPackage())
+    );
+  };
+  const pages = alice.container.querySelector<HTMLElement>('.docx-pages')!;
+  pages.focus();
+  caret(alice.editor, 0, 5);
+  // The first syllable ends, and the next starts in the same task: the first is queued.
+  pages.dispatchEvent(compositionEvent('compositionstart'));
+  composeStep(alice, ' ', '아');
+  pages.dispatchEvent(compositionEvent('compositionend', '아'));
+  pages.dispatchEvent(compositionEvent('compositionstart'));
+  expect(alice.editor.surface!.session.bodyText()).toBe('우리나라 ');
+  // Bob types at the start of the paragraph before Alice's syllable reaches her model.
+  remoteEdit(bob, 0, 0, 'A');
+  converge();
+  composeStep(alice, ' 아', '름');
+  pages.dispatchEvent(compositionEvent('compositionend', '름'));
+  converge();
+  for (const peer of [alice, bob]) {
+    expect(peer.editor.surface!.session.bodyText()).toBe('A우리나라 아름');
+  }
+  // Each syllable is its own undo step, and only Alice's own.
+  expect(alice.editor.exec({ type: 'undo' }).ok).toBe(true);
+  converge();
+  expect(bob.editor.surface!.session.bodyText()).toBe('A우리나라 아');
+  expect(alice.editor.exec({ type: 'undo' }).ok).toBe(true);
+  converge();
+  expect(bob.editor.surface!.session.bodyText()).toBe('A우리나라 ');
+  expect(alice.editor.exec({ type: 'redo' }).ok).toBe(true);
+  expect(alice.editor.exec({ type: 'redo' }).ok).toBe(true);
+  converge();
+  const reopened = mount({ document: new Uint8Array(await bob.editor.save()) });
+  expect(reopened.editor.surface!.session.bodyText()).toBe('A우리나라 아름');
+  expect(saveReopenDigest(reopened.editor.surface!.session.currentPackage())).toEqual(
+    saveReopenDigest(bob.editor.surface!.session.currentPackage())
+  );
+});
+
+test('a queued syllable lands after a remote edit, where the reader saw it', async () => {
+  const bytes = zipDocument('<w:p><w:r><w:t xml:space="preserve">우리나라 </w:t></w:r></w:p>');
+  const peers = await harness.pair(bytes);
+  const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
+    peer.detach();
+    return mount({
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+    });
+  }) as [Mounted, Mounted];
+  const flush = () => {
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+  };
+  const pages = alice.container.querySelector<HTMLElement>('.docx-pages')!;
+  pages.focus();
+  caret(alice.editor, 0, 5);
+  pages.dispatchEvent(compositionEvent('compositionstart'));
+  const composing = document.getSelection()!.focusNode as Text;
+  composeStep(alice, ' ', '아');
+  pages.dispatchEvent(compositionEvent('compositionend', '아'));
+  // Bob's edit reaches Alice while her syllable is queued: the page keeps showing it.
+  remoteEdit(bob, 0, 2, '!');
+  flush();
+  expect(composing.isConnected).toBe(true);
+  expect(composing.data).toBe(' 아');
+  await landed();
+  flush();
+  for (const peer of [alice, bob]) {
+    expect(peer.editor.surface!.session.bodyText()).toBe('우리!나라 아');
+  }
+  expect(packageFingerprint(alice.editor.surface!.session.currentPackage())).toBe(
+    packageFingerprint(bob.editor.surface!.session.currentPackage())
+  );
+  // The landing repainted the page from the model, with the caret after the syllable.
+  const shown = [...pages.querySelectorAll('[data-start]')].map((run) => run.textContent);
+  expect(shown.join('')).toBe('우리!나라 아');
+  expect(alice.editor.surface!.state().selection.head.offset).toBe(7);
+});
+
 test('a remote split of the composing paragraph puts the syllable after the caret', async () => {
   const bytes = zipDocument('<w:p><w:r><w:t xml:space="preserve">우리나라 </w:t></w:r></w:p>');
   const peers = await harness.pair(bytes);

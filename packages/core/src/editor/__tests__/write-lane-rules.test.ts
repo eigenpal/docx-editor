@@ -206,6 +206,7 @@ describe('#349 IME input in suggesting mode', () => {
         const id = surface.session.paragraphIds()[0]!;
         caretTo(surface, 0, 3);
         compose(container, id, 'abc\u4e2d\u6587');
+        surface.flushPendingInput();
         expect(surface.session.bodyText()).toBe('abc\u4e2d\u6587');
         expect(serializeOoxmlPart(surface.session.part())).toContain('<w:ins');
       },
