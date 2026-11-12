@@ -63,7 +63,7 @@ test('an oversized HYPERLINK field result wraps at the measure', () => {
 test('an oversized field result wraps inside a fixed table cell', () => {
   const result = layout(field(`HYPERLINK "https://example.org/" \\h`, TOKEN), true);
   const cell = lineTexts(result).filter((text) => text !== 'next');
-  expect(cell).toEqual(['ABCDEFGHIJ', 'KLMNOPQRST', 'UVWXY']);
+  expect(cell).toEqual(['ABCDEFGHIJ', 'KLMNOPQRST', 'UVWXY', '']);
 });
 
 test('every chopped field fragment publishes the whole field range', () => {

@@ -40,6 +40,8 @@ const FRAME_ELEMENTS: ReadonlySet<string> = new Set(['shape', 'rect', 'roundrect
 /** One VML shape: what a read answers, and its own story root when it has one. */
 export interface VmlShape {
   readonly read: AutomationShapeRead;
+  /** The VML element that draws the shape. */
+  readonly node: OoxmlElement;
   readonly root: OoxmlElement | null;
   /** A text-bearing shape with no `v:textbox` at all; see `AutomationShapeEntry.emptyFrame`. */
   readonly emptyFrame: boolean;
@@ -122,6 +124,7 @@ export function vmlShapesOf(pict: OoxmlElement): readonly VmlShape[] {
       );
     shapes.push({
       read: { id, name: spid === undefined ? ownId.trim() : ownId, type },
+      node: shape,
       root,
       emptyFrame,
     });

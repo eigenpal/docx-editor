@@ -21,6 +21,7 @@ export {
   hydratedApplied,
   hydratedFlag,
   hydratedFont,
+  hydratedShapeFill,
   hydratedHandle,
   hydratedHandles,
   hydratedNumber,

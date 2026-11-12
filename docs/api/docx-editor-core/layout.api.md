@@ -1213,7 +1213,7 @@ export interface FieldLinkRegistry {
 export function filterRefsOnPage(page: PageRecord, allRefs: readonly PageRefHit[], refIndex?: PageRefIndex): readonly PageRefHit[];
 
 // @public
-export function findDrawingOverlayFrameInLayout(layout: SemanticLayout, drawingNodeId: string): DrawingOverlayFrame | null;
+export function findDrawingOverlayFrameInLayout(layout: SemanticLayout, drawingNodeId: string, preferPage?: number): DrawingOverlayFrame | null;
 
 // @public
 export function findSeparatorNote(part: OoxmlPart | null | undefined, kind: 'separator' | 'continuationSeparator'): OoxmlElement | undefined;
@@ -4096,6 +4096,8 @@ export interface SemanticTableRow {
     readonly revisionDate?: string;
     readonly revisionId?: string;
     readonly revisionKind?: 'insert' | 'delete';
+    readonly spacingFrame?: TableSpacingFrame;
+    readonly spacingShading?: TableSpacingShading;
 }
 
 // @public
@@ -4435,6 +4437,9 @@ export interface SourceRange {
     // (undocumented)
     readonly start: number;
 }
+
+// @internal
+export function spacedTableFrameBorders(fragment: Pick<TableFragmentRecord, 'rows' | 'box'>): ResolvedCellBorders | undefined;
 
 // @public
 export interface SpanLinkRecord {
@@ -4839,6 +4844,8 @@ export interface TableRowFragmentRecord {
     readonly revisionId?: string;
     readonly revisionKind?: 'insert' | 'delete';
     readonly rowIndex: number;
+    readonly spacingFrame?: TableSpacingFrame;
+    readonly spacingShading?: TableSpacingShading;
 }
 
 // @public
@@ -4851,6 +4858,39 @@ export type TableRowHeight = {
 
 // @public
 export type TableRowHeightRule = 'auto' | 'atLeast' | 'exact';
+
+// @public
+export interface TableSpacingFrame {
+    readonly borders: Pick<TableBorderBox, 'top' | 'left' | 'bottom' | 'right'>;
+    readonly bottomPt: number;
+    readonly breakBottomPt: number;
+    readonly breakTopPt: number;
+    readonly first?: true;
+    readonly last?: true;
+    readonly leftPt: number;
+    readonly rightPt: number;
+    readonly rowBorders?: Pick<TableBorderBox, 'left' | 'right'>;
+    readonly spacingPt: number;
+    readonly topPt: number;
+}
+
+// @public
+export interface TableSpacingShading {
+    readonly fill: string;
+    readonly gapPt: number;
+}
+
+// @internal
+export interface TableSpacingShadingRegion {
+    readonly box: LayoutBox;
+    readonly fill: string;
+    readonly holes: readonly LayoutBox[];
+}
+
+// @internal
+export function tableSpacingShadingRegions(fragment: Pick<TableFragmentRecord, 'rows' | 'box'> & {
+    readonly columnEdges?: TableFragmentRecord['columnEdges'];
+}): readonly TableSpacingShadingRegion[];
 
 // @public
 export interface TabStop {

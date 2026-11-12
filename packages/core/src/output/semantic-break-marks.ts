@@ -5,6 +5,7 @@
 // Furniture only: no model range, `aria-hidden`, not editable and not hit-testable, so a label
 // can never be selected, copied, counted as text or take the caret.
 
+import { appendParagraphBoundary } from './semantic-paragraph-boundary.ts';
 import type {
   LineRecord,
   ParagraphFragmentRecord,
@@ -316,9 +317,12 @@ export function paintParagraphEndFurniture(
     readonly revisionStyles?: RevisionStyleContext;
     readonly revisionMarkup?: ResolvedRevisionMarkup;
     readonly revisionKindColors?: boolean;
+    /** A paint with no editing identity: nothing reads its text through an input method. */
+    readonly unbound?: boolean;
   },
   scale: number
 ): void {
+  if (!ctx.unbound) appendParagraphBoundary(document, fragment, lineElements, scale);
   const rtl = paragraphIsRtl(fragment.props);
   // Furniture stories (headers, footers, text boxes) never break a page or end a section.
   const breaks =

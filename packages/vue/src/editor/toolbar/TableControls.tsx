@@ -27,7 +27,7 @@ import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './Toolb
 import type { ToolbarSlotPartComponent } from './parts';
 import { ToolbarSeparator } from './parts';
 import { Slot } from './Slot';
-import { ToolbarHexColorPickerBody } from './ColorSplit';
+import { ColorPickerPanel } from '../color/ColorPicker';
 import { useTableChromeProviderVisible, useTableChromeSlot } from './useTableChrome';
 import { useDropdownClose } from './useDropdownClose';
 import {
@@ -733,12 +733,16 @@ function buildColorSplitCompound(
                 {label('table.clearCellFill')}
               </button>
             ) : null}
-            <ToolbarHexColorPickerBody
-              apply={(hex) => {
+            <ColorPickerPanel
+              apply={(hex: string) => {
                 ctx.setOpen(false);
                 ctx.setLastHex?.(hex);
                 ctx.apply({ kind: 'hex', value: hex });
                 restoreToolbarDocumentFocus(ctx.triggerRef.value);
+              }}
+              onClose={() => {
+                ctx.setOpen(false);
+                ctx.triggerRef.value?.focus();
               }}
               current={pickerCurrent}
             />

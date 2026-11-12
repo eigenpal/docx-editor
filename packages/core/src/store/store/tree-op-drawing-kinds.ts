@@ -10,6 +10,7 @@ export function drawingOpImpact(op: DrawingTreeDocOp): ImpactClass {
     case 'setDrawingMetadata':
     case 'setDrawingLocks':
     case 'replaceDrawingResource':
+    case 'setShapeFormat':
       return 'text-local';
     case 'moveInlineDrawing':
     case 'insertDrawing':
@@ -58,7 +59,8 @@ export function isDrawingTreeDocOp(op: TreeDocOp): op is DrawingTreeDocOp {
     op.op === 'setDrawingWrap' ||
     op.op === 'setDrawingMetadata' ||
     op.op === 'setDrawingLocks' ||
-    op.op === 'transformDrawing'
+    op.op === 'transformDrawing' ||
+    op.op === 'setShapeFormat'
   );
 }
 
@@ -79,3 +81,21 @@ export function isValidXmlMetadata(value: string): boolean {
   }
   return true;
 }
+
+/** The frame edits a text box takes: its size lives in `wp:extent`. */
+export const TEXTBOX_FRAME_EDITS: ReadonlySet<DrawingTreeDocOp['op']> = new Set([
+  'resizeDrawing',
+  'positionDrawing',
+  'deleteDrawing',
+  'setDrawingMetadata',
+]);
+
+/**
+ * The frame edits a shape, line or group takes: its place, removal and alt text. Its size
+ * also lives in its own geometry (`a:xfrm`, a group's child extents), so a resize is refused.
+ */
+export const SHAPE_FRAME_EDITS: ReadonlySet<DrawingTreeDocOp['op']> = new Set([
+  'positionDrawing',
+  'deleteDrawing',
+  'setDrawingMetadata',
+]);

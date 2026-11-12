@@ -20,6 +20,7 @@ import type { ReactNode } from 'react';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  colorPickerGrid,
   commandForSlotValue,
   listenForOutsidePress,
   type ChromeSlotId,
@@ -135,50 +136,17 @@ const THEME_COLUMN_KEYS: readonly string[] = [
   'colorPicker.theme.accent6',
 ];
 
-interface ThemeVariant {
-  readonly labelKey: string;
-  readonly apply: (c: number) => number;
-}
-
-const lighter = (percent: number): ThemeVariant => ({
-  labelKey: `colorPicker.theme.lighter${percent}`,
-  apply: (c) => c + (255 - c) * (percent / 100),
-});
-const darker = (percent: number): ThemeVariant => ({
-  labelKey: `colorPicker.theme.darker${percent}`,
-  apply: (c) => c * (1 - percent / 100),
-});
-
 /**
- * The five variant rows under one theme colour. Word picks the ladder per COLUMN by the
- * base colour's lightness — tinting white or shading black five times would paint five
- * identical swatches:
- * white gets darker steps, black gets lighter steps, light colours shade, dark colours
- * mix tints and shades.
+ * The label key of a tint or shade row: `accent1:40` is Lighter 40%, `accent1:-25` Darker 25%.
+ * The paint comes from core's `colorPickerGrid`, the same luminance model as every other colour
+ * picker, so one swatch paints one colour everywhere.
  */
-function themeVariantsFor(baseHex: string): readonly ThemeVariant[] {
-  const channels = [0, 2, 4].map((at) => parseInt(baseHex.slice(at, at + 2), 16));
-  // HSL lightness, 0..1: the discriminator Word's ladders switch on.
-  const lightness = (Math.max(...channels) + Math.min(...channels)) / 2 / 255;
-  if (lightness === 1) return [darker(5), darker(15), darker(25), darker(35), darker(50)];
-  if (lightness === 0) return [lighter(50), lighter(35), lighter(25), lighter(15), lighter(5)];
-  // Only VERY light colours (Background 2 territory) shade-only; mid accents keep
-  // Word's tint-then-shade ladder.
-  if (lightness >= 0.8) return [darker(10), darker(25), darker(50), darker(75), darker(90)];
-  return [lighter(80), lighter(60), lighter(40), darker(25), darker(50)];
+function variantLabelKey(pick: string): string {
+  const shift = Number(pick.split(':')[1] ?? 0);
+  return shift > 0 ? `colorPicker.theme.lighter${shift}` : `colorPicker.theme.darker${-shift}`;
 }
 
 const HEX_VALUE = /^[0-9A-Fa-f]{6}$/;
-
-/** A variant hex from a validated base hex — channel-wise, clamped, re-hexed. */
-function variantHex(baseHex: string, apply: (channel: number) => number): string {
-  let out = '';
-  for (let i = 0; i < 6; i += 2) {
-    const channel = Math.round(apply(parseInt(baseHex.slice(i, i + 2), 16)));
-    out += Math.max(0, Math.min(255, channel)).toString(16).padStart(2, '0');
-  }
-  return out.toUpperCase();
-}
 
 /** Near-white swatches get an outline so they stay visible on the popup surface. */
 function isLightHex(hex: string): boolean {
@@ -239,8 +207,7 @@ export function ToolbarColorSwatch({
 
 /** The theme matrix: one base row, then five variant rows with per-column ladders. */
 function ThemeMatrix({ apply, label, current, themeHexes }: PopupBodyProps) {
-  const ladders = themeHexes.map(themeVariantsFor);
-  const rows = [0, 1, 2, 3, 4];
+  const rows = colorPickerGrid(themeHexes).theme.slice(1);
   return (
     <div className="docx-toolbar__swatch-section">
       <div className="docx-toolbar__swatch-heading">{label('colorPicker.themeColors')}</div>
@@ -255,16 +222,15 @@ function ThemeMatrix({ apply, label, current, themeHexes }: PopupBodyProps) {
             apply={apply}
           />
         ))}
-        {rows.map((row) =>
-          themeHexes.map((base, column) => {
-            const variant = ladders[column]![row]!;
-            const hex = variantHex(base, variant.apply);
+        {rows.map((row, index) =>
+          row.map((swatch, column) => {
+            const hex = swatch.hex.slice(1);
             return (
               <ToolbarColorSwatch
-                key={`${row}-${column}`}
+                key={`${index}-${column}`}
                 value={hex}
                 css={`#${hex.toLowerCase()}`}
-                title={`${label(THEME_COLUMN_KEYS[column]!)}, ${label(variant.labelKey)}`}
+                title={`${label(THEME_COLUMN_KEYS[column]!)}, ${label(variantLabelKey(swatch.pick))}`}
                 selected={current === hex}
                 apply={apply}
               />

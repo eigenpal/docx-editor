@@ -53,6 +53,7 @@ import {
 } from '../package/ooxml-edit.ts';
 import { W14_NAMESPACE_URI, WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import { isValidXmlText } from '../package/sinks.ts';
+import { holdsStoryBlock, removalEndsStoryWithTable } from '../package/ooxml-story-end-repair.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import {
   TEXT_DEPS,
@@ -481,6 +482,7 @@ const TREE_OP_REACH: {
   setDrawingMetadata: (op) => whole(op.drawingNodeId),
   setDrawingLocks: (op) => whole(op.drawingNodeId),
   transformDrawing: (op) => whole(op.drawingNodeId),
+  setShapeFormat: (op) => whole(op.drawingNodeId),
   // A TOC is inserted BESIDE the named paragraph, in the body: the controls that matter are the
   // ones enclosing that paragraph, plus the headings the op writes bookmarks into.
   insertToc: (op) => ({
@@ -1663,6 +1665,14 @@ export function applyRemoveContentControl(
   if (!owner) return { ok: false, reason: 'tree-invariant' };
   const content = contentControlContentNodeOf(control);
   const kept = op.keepContent && content ? [...content.children] : [];
+  // A story that ends with a paragraph keeps it: a whole control after a final table goes only
+  // with block content kept (`ooxml-story-end-repair.ts`).
+  if (
+    !kept.some(holdsStoryBlock) &&
+    removalEndsStoryWithTable(control.id, (id) => parentNodeOf(part, id))
+  ) {
+    return { ok: false, reason: 'story-end-paragraph' };
+  }
   const children = owner.children.flatMap((child) => (child.id === control.id ? kept : [child]));
   // A control proposed as a tracked insertion goes with its `w:ins` when nothing else is in it:
   // an empty wrapper would stay behind as a review item with nothing to accept or reject.

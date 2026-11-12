@@ -58,7 +58,7 @@ async function paneMarkup(type: string | null): Promise<string> {
 test('the Chart pane renders the shared markup for each chart and for no chart', async () => {
   const markup: Record<string, string> = { none: await paneMarkup(null) };
   for (const type of CHART_PANE_CASES) markup[type] = await paneMarkup(type);
-  expect(markup.columnClustered).toContain('docx-chart-pane__color-button');
+  expect(markup.columnClustered).toContain('docx-color-picker__trigger');
   expect(markup.pie).not.toContain('Category axis title');
   expect(markup.columnClustered).toContain('Category axis title');
   if (process.env.UPDATE_CHART_PANE_MARKUP === '1')

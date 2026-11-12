@@ -108,7 +108,12 @@ export interface RevealOptions {
  */
 export type DrawingSelectionIntent =
   | { readonly kind: 'none' }
-  | { readonly kind: 'pointer'; readonly drawingNodeId: string }
+  | {
+      readonly kind: 'pointer';
+      readonly drawingNodeId: string;
+      /** A shape inside the group `drawingNodeId`, selected by a second press on the group. */
+      readonly memberNodeId?: string;
+    }
   | { readonly kind: 'programmatic' };
 
 /**

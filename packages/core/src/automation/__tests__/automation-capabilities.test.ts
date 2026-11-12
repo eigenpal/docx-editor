@@ -203,6 +203,7 @@ describe('the operation vocabulary declares which operations write', () => {
       'updateTableCell',
       'splitTableCell',
       'setInlinePicture',
+      'setShapeFill',
       'deleteInlinePicture',
       'insertField',
       'insertOoxml',

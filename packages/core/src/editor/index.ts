@@ -18,6 +18,15 @@
 export type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 export type { FontShapingOptions } from '../layout/font-shaping-policy.ts';
 export type { TrackedChangeFilterMode, TrackedChangePredicate } from '../contracts/editor.ts';
+export type {
+  ShapeColorValue,
+  ShapeFillState,
+  ShapeFormatState,
+  ShapeOutlineState,
+  ShapeThemeColor,
+  ShapeThemeColorName,
+  ShapeOutlineDash,
+} from '../contracts/editor.ts';
 export {
   createLayoutShaping,
   disposeLayoutShaping,
@@ -152,6 +161,8 @@ export {
   toolbarPopupLeft,
   TOOLBAR_COLLAPSE_ORDER,
   TOOLBAR_OVERFLOW_HYSTERESIS,
+  TOOLBAR_OVERFLOW_LEADING_GROUPS,
+  orderToolbarOverflowSections,
   TOOLBAR_PANEL_EDGE_MARGIN,
   TOOLBAR_PINNED_GROUPS,
   type ToolbarHostGroupPlacement,
@@ -746,11 +757,14 @@ export {
   listenPaneRequests,
   requestPane,
   takePaneRequest,
+  takePaneRequestFor,
   openChartPaneFor,
   chartPaneAvailable,
   openChartPaneAt,
+  paneAvailable,
   type EditorPaneId,
   type PaneRequest,
+  type PaneRequestListenerOptions,
   type PaneRequestOptions,
 } from './chart-chrome.ts';
 export {
@@ -798,6 +812,87 @@ export {
   type SelectedChartCommand,
   type SelectedChartView,
 } from './selected-chart.ts';
+export {
+  openShapePane,
+  paneTitleKey,
+  selectionPane,
+  shapePaneAvailable,
+  sidePanelPane,
+} from './shape-chrome.ts';
+export {
+  SHAPE_OUTLINE_WIDTHS,
+  shapeColorPick,
+  shapeFillPick,
+  shapeOutlinePick,
+  shapeFillEditable,
+  shapeFillLabelKey,
+  shapeFillSummary,
+  shapeOutlineSummary,
+  shapeHexText,
+  shapePaneColorHex,
+  shapePaneCommand,
+  shapeSwatchCurrent,
+  shapeTransparencyText,
+  shapeWidthText,
+  SHAPE_OUTLINE_DASHES,
+  shapeDashLabelKey,
+  shapeDashValue,
+  type ShapePaneChange,
+  type ShapePaneError,
+  type ShapePaneResult,
+} from './shape-pane.ts';
+export {
+  editSelectedShape,
+  execSelectedShape,
+  readSelectedShape,
+  sameSelectedShape,
+  type SelectedShapeCommand,
+  type SelectedShapeView,
+} from './selected-shape.ts';
+export {
+  COLOR_PICKER_STANDARD_COLORS,
+  COLOR_PICKER_THEME_SLOTS,
+  colorPickerGrid,
+  colorPickFromHexText,
+  colorPickHex,
+  colorPickIsCurrent,
+  colorPickLabel,
+  colorPickOf,
+  colorPickTheme,
+  documentThemeHexes,
+  alignColorPickerPopover,
+  focusColorSwatch,
+  moveColorSwatchFocus,
+  type ColorPick,
+  type ColorPickerGrid,
+  type ColorPickerThemeSlot,
+  type ColorPickerTranslate,
+  type ColorSwatch,
+} from './color-picker.ts';
+export {
+  CHART_AXES_OFF_REASON,
+  CHART_NO_AXES_REASON,
+  chartSlotIsToggle,
+  commandForObjectSlotValue,
+  isChartChromeSlot,
+  isObjectChromeSlot,
+  isShapeChromeSlot,
+  objectSlotOptions,
+  objectSlotValue,
+  type ChartChromeSlotId,
+  type ObjectSlotReadValueMap,
+  type ObjectSlotValueMap,
+  type ObjectToggleSlotId,
+  type ShapeChromeSlotId,
+} from './object-chrome-slots.ts';
+export {
+  PANE_SECTIONS,
+  paneSections,
+  paneSlots,
+  type PaneSection,
+  type PaneSectionId,
+  type PaneSectionIds,
+} from './pane-sections.ts';
 export type { SurfaceChartOps } from './surface-chart-ops.ts';
 export type {
   ChartCopySource,
@@ -838,3 +933,9 @@ export type {
   EditorHostDragEvent,
 } from '../contracts/editor-drop.ts';
 export { canMoveInlineImage, beginInlineImageDrag } from './inline-image-drag.ts';
+export {
+  drawingFramePressTarget,
+  type DrawingFramePress,
+  passDrawingFramePress,
+} from './drawing-overlay-press.ts';
+export { leaveGroupMember } from './group-member-selection.ts';

@@ -871,7 +871,8 @@ export function autofitColumnWidthsPt(
   }
   // Everything below works on cell widths; a spaced table's gaps come back at the end.
   const cellWidths = spacedCellWidths(structure);
-  const scale = cellSpacingScale(structure.columnWidthsPt, structure.cellSpacingPt);
+  const frame = structure.rows[0]?.spacingFrame;
+  const scale = cellSpacingScale(structure.columnWidthsPt, structure.cellSpacingPt, frame);
   const gaps = spacingGapsPt(structure);
   // A column a cell gives a preferred width starts from that width, not from the grid.
   const preferredWidths = cellWidths.map((width, column) =>

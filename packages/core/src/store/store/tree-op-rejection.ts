@@ -43,6 +43,11 @@ export type TreeOpRejection =
   | 'not-a-block'
   | 'block-required'
   | 'carries-section-mark'
+  /**
+   * The removal would leave a body, note or text box ending with a table. Such a story ends
+   * with a paragraph after the table, as a cell does (`ooxml-story-end-repair.ts`).
+   */
+  | 'story-end-paragraph'
   /** The transaction named a part the package does not hold. */
   | 'unknown-part'
   /**
@@ -125,6 +130,13 @@ export type TreeOpRejection =
   | 'unknown-drawing'
   /** The drawing's graphic payload is not a supported picture. */
   | 'not-a-picture-drawing'
+  /** The drawing holds no shape whose fill and outline can be set: a picture, chart or diagram. */
+  | 'not-a-shape-drawing'
+  /**
+   * A fill write without a colour (a transparency, or showing a fill again) on a shape with no
+   * solid fill to keep or bring back. It never invents one: the write needs a colour.
+   */
+  | 'no-solid-fill'
   /** A chart in any state: only a delete applies, and it removes the whole chart. */
   | 'chart-drawing'
   /** A lock flag or `@locked` forbids this mutation. */

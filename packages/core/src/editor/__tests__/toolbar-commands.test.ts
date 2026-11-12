@@ -411,7 +411,8 @@ describe('table command toolbar state (Task 7)', () => {
     expect(runTableCommand(editor, cmd).ok).toBe(true);
   });
 
-  test('final column refusal matches can and exec verbatim', () => {
+  test('the final column of a table that ends the body answers can, toolbar and exec alike', () => {
+    // The body reads an empty paragraph after the table, so the column takes the table with it.
     const oneCol =
       '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>' +
       '<w:tr><w:tc><w:p><w:r><w:t>only</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
@@ -420,11 +421,12 @@ describe('table command toolbar state (Task 7)', () => {
     const cmd = { type: 'deleteColumn' as const };
     const can = editor.can(cmd);
     expect(tableCommandToolbarState(editor.surface, cmd)).toEqual({
-      enabled: false,
-      disabledReason: 'the table must keep at least one row or column',
+      enabled: true,
+      disabledReason: null,
     });
-    expect(can.reason).toBe('the table must keep at least one row or column');
-    expect(runTableCommand(editor, cmd)).toEqual(can);
+    expect(can.ok).toBe(true);
+    expect(runTableCommand(editor, cmd).ok).toBe(true);
+    expect(editor.getSelectedTable()).toBeNull();
   });
 
   test('a merged table answers can and exec alike', () => {

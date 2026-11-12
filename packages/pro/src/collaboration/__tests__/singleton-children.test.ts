@@ -10,6 +10,7 @@ import { WML_NAMESPACE_URI } from '@docx-editor.dev/core/store';
 import {
   partitionChildIds,
   singletonLayout,
+  singletonParentKind,
   type ChildShell,
 } from '../document/singleton-children.ts';
 
@@ -64,5 +65,44 @@ describe('singleton child layout', () => {
   test('a list without conflicts needs no layout', () => {
     expect(singletonLayout('paragraph', [PPR_A, RUN], shellOf)).toBeNull();
     expect(singletonLayout('body', [PPR_A, PPR_B], shellOf)).toBeNull();
+  });
+
+  test("a shape's properties show one fill and one outline", () => {
+    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+    const shape = singletonParentKind('generic', WPS, 'spPr');
+    const line = singletonParentKind('generic', A, 'ln');
+    expect([shape, line, singletonParentKind('generic', WPS, 'txbx')]).toEqual([
+      'shapeProperties',
+      'lineProperties',
+      'generic',
+    ]);
+    const ids = ['xfrm', 'geom', 'solid', 'none', 'lnA', 'lnB', 'ext'].map(
+      (name, index) => `lid:${index % 2 ? 'b' : 'a'}${'0'.repeat(31)}:${index + 10}#${name}`
+    );
+    const names = ['xfrm', 'prstGeom', 'solidFill', 'noFill', 'ln', 'ln', 'extLst'];
+    const local = (id: string): ChildShell => ({
+      kind: 'generic',
+      namespaceUri: A,
+      localName: names[ids.indexOf(id)]!,
+    });
+    expect(singletonLayout(shape, ids, local)?.order).toEqual([0, 1, 2, 4, 6]);
+    const lineIds = ids.slice(2, 4);
+    expect(singletonLayout(line, lineIds, local)?.order).toEqual([0]);
+  });
+
+  test('a hidden copy listed twice stays hidden at both places', () => {
+    // An undo or redo can list a file fill again beside a peer's fill: the file fill loses, at
+    // its first listing and its repeat alike.
+    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const peer = `lid:${'c'.repeat(32)}:25`;
+    const file = '/word/document.xml#0.0.2.0.0.0.8.0.0.1.3.0';
+    const fill = (): ChildShell => ({ kind: 'generic', namespaceUri: A, localName: 'solidFill' });
+    const result = partitionChildIds(
+      { kind: 'generic', namespaceUri: A, localName: 'ln' },
+      [peer, file, file],
+      fill
+    );
+    expect(result.shown).toEqual([peer]);
   });
 });

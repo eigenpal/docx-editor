@@ -1,10 +1,12 @@
 // The block that opens or closes a story, for writes addressed to the story's start or end.
-import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { parentNodeOf } from '../store/package/ooxml-edit.ts';
+import { removalEndsStoryWithTable } from '../store/package/ooxml-story-end-repair.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import { PARAGRAPH_MARK_IN_TEXT } from './line-break-text.ts';
 import type { AutomationParagraphRef } from './operations.ts';
 import type { PlannedOperation } from './plan-types.ts';
-import type { AutomationPackageReads } from './reads.ts';
+import type { AutomationBlockRead, AutomationPackageReads } from './reads.ts';
 import { storyOfHandle } from './spans.ts';
 
 const BLOCKS = new Set(['p', 'tbl', 'sdt', 'customXml', 'altChunk']);
@@ -54,4 +56,22 @@ export function paragraphTextRefusal(text: unknown): PlannedOperation | null {
       },
     };
   return null;
+}
+
+/**
+ * The removable paragraph a whole-story replace keeps to hold the text. With no other block
+ * left, that is the first paragraph. A story the removal would leave ending with a table keeps
+ * its last paragraph, as a deletion does (`ooxml-story-end-repair.ts`).
+ */
+export function storyKeeper(
+  part: OoxmlPart,
+  removed: readonly AutomationBlockRead[],
+  survivors: number
+): AutomationBlockRead | undefined {
+  const paragraphs = removed.filter((block) => block.kind === 'paragraph');
+  if (survivors === 0) return paragraphs[0];
+  const ids = removed.map((block) => block.id);
+  return removalEndsStoryWithTable(ids, (id) => parentNodeOf(part, id))
+    ? paragraphs.at(-1)
+    : undefined;
 }

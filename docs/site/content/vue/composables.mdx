@@ -170,8 +170,10 @@ The handler takes no arguments. Read the selection with `editor.getSelectionPlac
 | `useHighlights(name, source, options?)` | `ComputedRef<{ applied, unavailable }>` |
 | `useHighlightAt(name?)` | `Readonly<ShallowRef>` with the highlight under the pointer, or `null` |
 | `useNavigationPane(options?)` | `{ open, setOpen, toggle, tab, setTab, paneWidth, shift, overlay }` |
-| `usePaneRequest(listener)` | Nothing. Calls `listener` with `{ pane, focus }` when Insert > Chart or Edit chart asks for the Chart pane. See [Charts](/docs/2.x/guides/charts#show-the-chart-pane). |
+| `usePaneRequest(listener, options?)` | Nothing. Calls `listener` with `{ pane, focus }` when Insert > Chart, Edit chart, or Format shape asks for a pane that `options.panes` names. `panes` defaults to `['chart']`. Answer it with any UI. See [Place shape and chart controls](/docs/2.x/guides/object-controls). |
+| `useObjectControl(slotId)` | Refs of one `shape.*` or `chart.*` slot: a typed `value`, `options`, `isActive`, `isEnabled`, `disabledReason`, and `label`, with `execute` and, on toggle slots, `toggle`. See [Place shape and chart controls](/docs/2.x/guides/object-controls). |
 | `useSelectedChart()` | `UseSelectedChartReturn`: computed refs of the selected chart, its `data` and `format`, whether each can change, `execute` for the chart commands, and `editData` for one checked data change. See [Build your own chart pane](/docs/2.x/guides/charts#build-your-own-chart-pane). |
+| `useSelectedShape()` | `UseSelectedShapeReturn`: computed refs of the selected shape's `drawingNodeId` and `format`, whether the fill, transparency, and outline can change with reasons, `execute` for `setShapeFill` and `setShapeOutline`, and `edit` for one checked pane change. See [Format a shape](/docs/2.x/guides/images#format-a-shape). |
 | `useNavigationShift()` | `ShallowRef<number>`, the page offset for an open pane |
 
 Each outline item is `{ heading, depth }`, and `depth` counts from the shallowest heading. Search options accept a value, ref, or getter.

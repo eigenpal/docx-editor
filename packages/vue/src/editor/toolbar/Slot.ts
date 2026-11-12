@@ -93,10 +93,9 @@ export const Slot = defineComponent({
         normalizeClassName(attrs as AnyProps),
         normalizeClassName((child.props ?? {}) as AnyProps)
       );
-      return cloneVNode(
+      const cloned = cloneVNode(
         child,
         {
-          ...merged,
           ref: (value: Element | ComponentPublicInstance | null) => {
             renderedElement = isElementNode(value)
               ? value
@@ -107,6 +106,10 @@ export const Slot = defineComponent({
         },
         true
       );
+      // `merged` already holds the child's props. Merging it into the clone again would
+      // repeat the child's class and run the child's handlers twice.
+      cloned.props = { ...cloned.props, ...merged };
+      return cloned;
     };
   },
 });

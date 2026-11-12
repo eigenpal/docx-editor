@@ -88,7 +88,8 @@ test('a too-tall exact row uses fresh-page recovery without rewriting its author
     frame = row.cells[0]!,
     block = paragraph(result),
     line = block.lines[0]!;
-  expect(result.pages).toHaveLength(1);
+  // The empty paragraph the body reads after the table starts the next page.
+  expect(result.pages).toHaveLength(2);
   expect(page.fragments).toEqual([fragment]);
   expect(page.contentBox.height).toBe(16);
   expect(fragment.fragmentIndex).toBe(0);

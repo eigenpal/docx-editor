@@ -222,6 +222,7 @@ export type AutomationValue =
       readonly picture: import('./pictures.ts').AutomationInlinePictureRead;
     }
   | { readonly kind: 'shape'; readonly shape: import('./shapes.ts').AutomationShapeRead }
+  | { readonly kind: 'shapeFill'; readonly fill: import('./shape-fill.ts').AutomationShapeFillRead }
   | { readonly kind: 'handle'; readonly handle: AutomationHandle }
   | { readonly kind: 'handles'; readonly handles: readonly AutomationHandle[] }
   | { readonly kind: 'text'; readonly text: string }

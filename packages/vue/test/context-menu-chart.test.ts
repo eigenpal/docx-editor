@@ -12,7 +12,7 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { DocxEditorContextMenu } from '../src/editor/contextmenu/index.ts';
-import { usePaneRequest } from '../src/editor/charts/SidePanel';
+import { usePaneRequest } from '../src/editor/panes/SidePanel';
 import { flush, SOURCE } from './helpers/fixtures.ts';
 
 const t = (key: string): string => key;

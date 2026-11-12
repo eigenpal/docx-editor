@@ -1112,7 +1112,7 @@ describe('contextual table chrome (Task 10)', () => {
     await act(async () => {
       (colorRoot.querySelector('.docx-toolbar__colorsplit-caret') as HTMLButtonElement).click();
     });
-    const swatch = colorRoot.querySelector('[data-value="4472C4"]') as HTMLButtonElement;
+    const swatch = colorRoot.querySelector('[data-pick="accent1"]') as HTMLButtonElement;
     expect(swatch).not.toBeNull();
     await act(async () => {
       swatch.click();
@@ -1232,13 +1232,10 @@ describe('contextual table chrome (Task 10)', () => {
         (root.querySelector('.docx-toolbar__colorsplit-caret') as HTMLButtonElement).click();
       });
       const popup = root.querySelector('[role="dialog"]')!;
-      expect(popup.querySelector('.docx-toolbar__swatch-grid--theme')).not.toBeNull();
-      expect(
-        popup.querySelectorAll(
-          '.docx-toolbar__swatch-grid:not(.docx-toolbar__swatch-grid--theme) button'
-        )
-      ).toHaveLength(10);
-      expect(popup.querySelector('.docx-toolbar__swatch-hex')).not.toBeNull();
+      // The shared colour picker: six theme rows, the standard row, and the hex field.
+      const grid = popup.querySelector('.docx-color-picker__content--inline')!;
+      expect(grid.querySelectorAll('[data-color-swatch]')).toHaveLength(70);
+      expect(grid.querySelector('.docx-color-picker__hex input')).not.toBeNull();
       await act(async () => {
         fireEvent.keyDown(popup, { key: 'Escape' });
       });

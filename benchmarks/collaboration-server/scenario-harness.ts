@@ -77,6 +77,12 @@ import {
   reopen,
   sharedContent,
 } from './scenario-oracles.ts';
+import {
+  SHAPE_CHECKS,
+  shapePackageProblems,
+  shapeRoundTripProblems,
+  shapeSavedProblems,
+} from './scenario-shape-checks.ts';
 
 export type { Addressed, Delivery, EditKind };
 
@@ -316,6 +322,16 @@ class Simulation {
     // the replica's state is complete.
     if (touched && !awaitingUpdates(touched.ydoc)) {
       this.problems.push(...this.tokens.hiddenOn(touched.store.currentPackage(), touched.index));
+    }
+    // A replica with its updates complete never shows a repeated fill or line, also right after
+    // an undo or redo, and what it saves keeps the hidden fills and VML fallbacks valid.
+    if (SHAPE_CHECKS.enabled && touched && !awaitingUpdates(touched.ydoc)) {
+      const where = `replica ${touched.index} after action ${this.performed - 1}`;
+      const current = touched.store.currentPackage();
+      this.problems.push(
+        ...shapePackageProblems(current, where),
+        ...shapeSavedProblems(reopen(current), `${where} saved`)
+      );
     }
     if (touched && this.firstFailure < 0 && this.failed()) this.firstFailure = this.performed - 1;
     if (this.strict && this.firstFailure < 0) this.checkShown(`after action ${this.performed - 1}`);
@@ -573,6 +589,8 @@ class Simulation {
 
     // Save and reopen, and the server's view of the shared state.
     try {
+      if (SHAPE_CHECKS.enabled && packages[0])
+        problems.push(...shapeRoundTripProblems(packages[0]));
       const reopened = fingerprint(reopen(packages[0]!));
       if (reopened !== fingerprint(reopen(reopen(packages[0]!)))) {
         problems.push('save and reopen is not stable');

@@ -66,7 +66,8 @@ describe('binding content-control walks', () => {
         ? text.children.map((value) => (value.kind === 'textValue' ? value.value : '')).join('')
         : '';
     });
-    expect(texts).toEqual(['body', 'sdt paragraph', 'cell']);
+    // The body ends with a table, so it reads an empty paragraph after it.
+    expect(texts).toEqual(['body', 'sdt paragraph', 'cell', '']);
   });
 
   test('allParagraphs includes paragraphs inside typed block controls', () => {
@@ -80,7 +81,8 @@ describe('binding content-control walks', () => {
         ? text.children.map((value) => (value.kind === 'textValue' ? value.value : '')).join('')
         : '';
     });
-    expect(texts).toEqual(['body', 'sdt paragraph', 'cell']);
+    // The body ends with a table, so it reads an empty paragraph after it.
+    expect(texts).toEqual(['body', 'sdt paragraph', 'cell', '']);
   });
 
   test('search run addressing crosses inline generic SDTs', () => {

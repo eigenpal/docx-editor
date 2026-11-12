@@ -390,7 +390,7 @@ export interface BorderGridCell {
   readonly rowTableBorders?: TableBorderBox;
 }
 
-interface RawInterval {
+export interface RawInterval {
   gridStart: number;
   gridEnd: number;
   edge: ResolvedTableBorderEdge | undefined;
@@ -476,7 +476,7 @@ function doubleMetricsOf(
   return computeDoubleBorderMetricsPt(edge.widthPt);
 }
 
-function cssStyleForEdge(style: TableBorderStyle): 'solid' | 'dashed' | 'dotted' {
+export function cssStyleForEdge(style: TableBorderStyle): 'solid' | 'dashed' | 'dotted' {
   if (style === 'dashed') return 'dashed';
   if (style === 'dotted') return 'dotted';
   return 'solid';
@@ -676,7 +676,8 @@ function cornerDoubleMetrics(
   return doubleMetricsOf(interval.edge);
 }
 
-function publishFromIntervals(
+/** Stroke geometry for one cell from its resolved side intervals. */
+export function publishFromIntervals(
   top: readonly RawInterval[],
   left: readonly RawInterval[],
   bottom: readonly RawInterval[],

@@ -403,6 +403,38 @@
     "status": "partial",
     "notes": "A shape that holds its own w:txbxContent story answers it: paragraphs, text, search, and the same edits as any body. This includes a geometric shape with text. A text box or closed geometric shape that the file gives no story reads as an empty story, and writes to it refuse with InvalidArgument (edit.unsupported-story). A picture, a group, a line, a connector, or a linked text box that continues another box refuses with InvalidArgument. Tracked changes in a listed legacy VML text box belong to its body, so the owner story's acceptAll and rejectAll leave them pending. Bodies are reachable for shapes in the body, headers, and footers. Tracked changes inside a text box belong to its body. The owner story's tracked changes, acceptAll, and rejectAll leave them alone. A comment cannot be inserted in a text box, because a comment there is not kept when the file opens; insertComment refuses with InvalidArgument. Edits to a DrawingML story also save to its VML fallback. A standalone legacy VML text box is a story of its own in the same way. The body becomes addressable after the sync that answers it."
   },
+  "Word.Shape#fill": {
+    "status": "partial",
+    "notes": "Fills a wps shape, text box, line, every shape of a group or canvas, or a legacy VML shape. Reads resolve the shape style and theme. Pictures, charts and diagrams refuse with InvalidArgument. Writes in one sync are one fill change; with change tracking on, a write refuses, as Word records no tracked fill change. The editor commands setShapeFill and setShapeOutline apply untracked, like other drawing properties. A member that inherits its group's fill (a:grpFill) gets that fill written as its own; the group keeps its fill. In collaboration, two participants who set a transparency on one fill at once can leave two a:alpha values, and a concurrent hide and recolour can leave the VML fallback out of step with the DrawingML shape."
+  },
+  "Word.ShapeFill#type": {
+    "status": "partial",
+    "notes": "Solid, NoFill, Gradient, Pattern, Picture, or Mixed for a group whose shapes disagree. Texture is never reported: a tiled picture reads Picture."
+  },
+  "Word.ShapeFill#foregroundColor": {
+    "status": "partial",
+    "notes": "Reads #RRGGBB for a solid fill and an empty string otherwise. Writes accept #RRGGBB, RRGGBB, or a CSS color name; other values refuse at the sync. A new color keeps the transparency."
+  },
+  "Word.ShapeFill#transparency": {
+    "status": "partial",
+    "notes": "From 0 to 1, written as a:alpha on the fill color. A shape with no solid fill of its own or from its group refuses a transparency instead of inventing a fill. A legacy VML shape refuses a transparency, and the VML fallback gets none, as Word writes none."
+  },
+  "Word.ShapeFill#setSolidColor": {
+    "status": "partial",
+    "notes": "Writes a:solidFill/a:srgbClr and keeps the transparency. The VML fallback that draws the same shapes gets fillcolor. Accepts #RRGGBB, RRGGBB, or a CSS color name."
+  },
+  "Word.ShapeFill#clear": {
+    "status": "partial",
+    "notes": "Writes a:noFill and keeps the previous fill in a14:hiddenFill, as Word does. The VML fallback gets filled=\"f\"."
+  },
+  "Word.ShapeFill#backgroundColor": {
+    "status": "unsupported",
+    "notes": "Reads and writes throw NotSupported: pattern fills are not written."
+  },
+  "Word.ShapeFill#set": {
+    "status": "unsupported",
+    "notes": "Throws NotSupported. Use setSolidColor, transparency and clear."
+  },
   "Word.ShapeCollection#getByTypes": {
     "status": "partial",
     "notes": "Filters the listing by type, keeping its order. Unknown type values refuse with InvalidArgument."
@@ -549,7 +581,7 @@
   },
   "Word.Paragraph#delete": {
     "status": "partial",
-    "notes": "Deletes this paragraph through the canonical store; protected or unsupported structural boundaries refuse. TrackMineOnly records the paragraph's text as deleted runs and its paragraph mark as a deleted paragraph mark, in collaboration too. Accept removes the paragraph; reject restores it. Several adjacent paragraphs can be deleted in one sync. Position markers between them stay in place until accept, which moves them to the join point. After a reopen, or when another participant rejects, an empty w:pPr or w:rPr that the proposal added can remain. NotSupported: the last paragraph of a story, table cell, or content control; a paragraph directly before a table or block content control; a mark that ends a section; an inline content control in the paragraph; a paragraph containing a complex field boundary whose matching boundary is in another paragraph; inline content nested more than 64 levels deep. NotImplemented: the author's own pending change in the paragraph; another author's pending paragraph mark, formatting, move, or structural change in it; a pending change at the start of the next paragraph, including the author's own; or a previous paragraph whose mark the author already proposed deleting; any tracked deletion or replacement that starts a paragraph after such a mark refuses the same way. Delete adjacent paragraphs in one sync; a later sync beside the author's own pending deletion refuses, because it would review as one decision. One refusal refuses the whole sync. In collaboration, text another participant types into struck text joins the deletion; accept removes it with no separate revision. A tracked deletion or replacement that covers an equation strikes the whole equation: accepting removes it, and rejecting restores it."
+    "notes": "Deletes this paragraph through the canonical store; protected or unsupported structural boundaries refuse. TrackMineOnly records the paragraph's text as deleted runs and its paragraph mark as a deleted paragraph mark, in collaboration too. Accept removes the paragraph; reject restores it. Several adjacent paragraphs can be deleted in one sync. Position markers between them stay in place until accept, which moves them to the join point. After a reopen, or when another participant rejects, an empty w:pPr or w:rPr that the proposal added can remain. A body, note, or text box that ends with a table keeps an empty paragraph after it; deleting that paragraph without change tracking refuses with NotSupported (edit.operation-unsupported); a tracked deletion follows the last-paragraph rule. NotSupported: the last paragraph of a story, table cell, or content control; a paragraph directly before a table or block content control; a mark that ends a section; an inline content control in the paragraph; a paragraph containing a complex field boundary whose matching boundary is in another paragraph; inline content nested more than 64 levels deep. NotImplemented: the author's own pending change in the paragraph; another author's pending paragraph mark, formatting, move, or structural change in it; a pending change at the start of the next paragraph, including the author's own; or a previous paragraph whose mark the author already proposed deleting; any tracked deletion or replacement that starts a paragraph after such a mark refuses the same way. Delete adjacent paragraphs in one sync; a later sync beside the author's own pending deletion refuses, because it would review as one decision. One refusal refuses the whole sync. In collaboration, text another participant types into struck text joins the deletion; accept removes it with no separate revision. A tracked deletion or replacement that covers an equation strikes the whole equation: accepting removes it, and rejecting restores it."
   },
   "Word.Range#hyperlink": {
     "status": "partial",
@@ -669,7 +701,7 @@
   },
   "Word.ContentControl#delete": {
     "status": "partial",
-    "notes": "With keepContent=true removes the wrapper while preserving its contents; false removes both. Protected, bound, or unsupported control structures refuse atomically. Inserting a control or paragraph inside a control and deleting that control with keepContent=false in one batch refuses with ConflictingChanges before writing. Deleting nested controls in one batch succeeds."
+    "notes": "With keepContent=true removes the wrapper while preserving its contents; false removes both. Protected, bound, or unsupported control structures refuse atomically. A block control that follows a table at the end of a body, note, or text box refuses keepContent=false with NotSupported (edit.operation-unsupported), because the story keeps a paragraph after the table. Inserting a control or paragraph inside a control and deleting that control with keepContent=false in one batch refuses with ConflictingChanges before writing. Deleting nested controls in one batch succeeds."
   },
   "Word.ContentControl#cannotEdit": {
     "status": "partial",

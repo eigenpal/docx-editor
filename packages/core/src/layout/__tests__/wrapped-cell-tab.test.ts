@@ -85,7 +85,8 @@ test('left and hanging indents recompute the next tab from the continuation orig
 });
 test('trailing tabs do not create a line', () => {
   const result = layout(document({ trailing: true }));
-  expect(linesOf(result)).toHaveLength(1);
+  // The cell's line, then the empty paragraph the body reads after the table.
+  expect(linesOf(result)).toHaveLength(2);
   expect(linesOf(result)[0]!.spans.at(-1)!.text).toBe('\t');
 });
 test('a body tab past the edge replays like a cell tab; a positional tab keeps its placement', () => {
@@ -105,7 +106,7 @@ test('RTL tabs retain their prior leading-edge calculation', () => {
 });
 test('a fresh-line destination beyond the cell width makes bounded progress', () => {
   const result = layout(document({ stop: 2000 }));
-  expect(linesOf(result).length).toBeLessThanOrEqual(3);
+  expect(linesOf(result).slice(0, -1).length).toBeLessThanOrEqual(3);
   expect(
     linesOf(result)
       .flatMap((l) => l.spans)

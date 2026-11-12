@@ -1,14 +1,15 @@
-// The side panel of the demo: a card beside the pages with a Settings tab, and a Chart tab
-// while a chart is selected. The Chart tab holds the library's `DocxEditor.ChartPane`.
-// Insert > Chart and Edit chart ask for it through `usePaneRequest`; the pane itself moves the
-// focus when Edit chart asks for it. The Vue example has the same panel
-// (`examples/vue/src/DemoSidePanel.vue`).
+// The side panel of the demo: a card beside the pages with a Settings tab, a Chart tab while a
+// chart is selected, and a Format shape tab while a shape is selected. The tabs hold the
+// library's `DocxEditor.ChartPane` and `DocxEditor.ShapePane`. Insert > Chart, Edit chart, and
+// Format shape ask for them through `usePaneRequest`; each pane moves the focus itself when
+// asked. The Vue example has the same panel (`examples/vue/src/DemoSidePanel.vue`).
 import { useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import {
   DocxEditor,
   useDocxEditor,
   usePaneRequest,
   useSelectedChart,
+  useSelectedShape,
 } from '@docx-editor.dev/react';
 import { exampleText as t } from '../../shared/example-text';
 import {
@@ -19,11 +20,9 @@ import {
 } from '../../shared/demo-tabs';
 import { DemoIcon } from './DemoIcon';
 
-/** Opens the panel on the Chart tab when the chrome asks for the Chart pane. */
+/** Opens the panel on the tab of the pane that the chrome asks for. */
 export function useChartPaneRequests(open: (tab: DemoPanelTab) => void): void {
-  usePaneRequest((request) => {
-    if (request.pane === 'chart') open('chart');
-  });
+  usePaneRequest((request) => open(request.pane), { panes: ['chart', 'shape'] });
 }
 
 export interface DemoSidePanelProps {
@@ -41,11 +40,14 @@ export function DemoSidePanel({
   settings,
 }: DemoSidePanelProps) {
   const editor = useDocxEditor();
-  // The Chart tab shows only while a chart is selected. Edit chart and Insert > Chart both
-  // leave a chart selected. When the selection leaves the chart, the panel shows Settings.
-  const chartSelected = useSelectedChart().chart !== null;
-  const tabs = visibleDemoTabs(chartSelected);
-  const tab = shownDemoTab(chosenTab, chartSelected);
+  // The Chart tab shows only while a chart is selected, and the Format shape tab only while a
+  // shape is selected. When the selection leaves them, the panel shows Settings.
+  const selection = {
+    chart: useSelectedChart().chart !== null,
+    shape: useSelectedShape().format !== null,
+  };
+  const tabs = visibleDemoTabs(selection);
+  const tab = shownDemoTab(chosenTab, selection);
   const id = useId();
   const tabsRef = useRef<HTMLDivElement>(null);
   const close = () => {
@@ -121,7 +123,13 @@ export function DemoSidePanel({
         id={`${id}-panel-${tab}`}
         aria-labelledby={`${id}-tab-${tab}`}
       >
-        {tab === 'chart' ? <DocxEditor.ChartPane /> : settings}
+        {tab === 'chart' ? (
+          <DocxEditor.ChartPane />
+        ) : tab === 'shape' ? (
+          <DocxEditor.ShapePane />
+        ) : (
+          settings
+        )}
       </div>
     </aside>
   );

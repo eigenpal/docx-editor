@@ -27,6 +27,8 @@ export {
   Shape,
   ShapeCollection,
   ShapeType,
+  ShapeFill,
+  ShapeFillType,
   Table,
   TableRow,
   TableCell,

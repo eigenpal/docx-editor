@@ -168,10 +168,10 @@ describe('the one model reaches beyond plain body paragraphs (phase-4 sweep)', (
     const session = opened.session;
     expect(session.editable).toBe(true);
 
-    // The LAST paragraph id is the cell's: body paragraph first, cell paragraph after it
-    // in document order. Assert on its text to be sure the op landed inside the table.
+    // Body paragraph first, cell paragraph after it in document order, then the empty paragraph
+    // the body reads after its final table. Assert on text to be sure the op lands in the cell.
     const ids = session.paragraphIds();
-    expect(ids.length).toBe(2);
+    expect(ids.length).toBe(3);
     const cellParagraphId = ids[1]!;
     expect(paragraphTextOf(session.part(), cellParagraphId)).toBe('cell');
 

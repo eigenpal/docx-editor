@@ -1,21 +1,8 @@
-// The fields of the Chart pane: a text field that applies on Enter or blur, a check box row, a
-// list, and a color field (a list of Automatic and the theme colors, and a swatch that opens
-// the color grid). The Vue twin is `packages/vue/src/editor/charts/chart-fields.tsx`; both
+// The fields of the Chart pane: a text field that applies on Enter or blur, a check box row, and
+// a list. Colour fields are the shared `ColorPicker`. The Vue twin is `packages/vue/src/editor/charts/chart-fields.tsx`; both
 // render the same markup.
 
-import { useEffect, useId, useRef, useState } from 'react';
-import {
-  chartColorGrid,
-  chartColorLabel,
-  chartColorPicks,
-  chartPickHex,
-  focusChartSwatch,
-  moveChartSwatchFocus,
-  hostDocumentOf,
-  isDomNode,
-  type ChartColor,
-  type ChartColorPick,
-} from '@docx-editor.dev/core/editor';
+import { useId, useState } from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
 
@@ -160,125 +147,6 @@ export function ChartSelect<T extends string>(props: {
           </option>
         ))}
       </select>
-    </div>
-  );
-}
-
-/**
- * A color field: a list of Automatic and the theme colors, and a swatch that opens the color
- * grid. The grid focuses the current color, the arrow keys move in it, and Escape closes it and
- * returns the focus to the swatch.
- */
-export function ChartColorField(props: {
-  label: string;
-  /** The series or point name, for the name of the swatch button. */
-  name: string;
-  value: ChartColorPick;
-  automatic: ChartColor;
-  themeHexes: readonly string[];
-  disabled: boolean;
-  onChange: (pick: ChartColorPick) => void;
-}) {
-  const t = useChartTranslate();
-  const id = useId();
-  const [open, setOpen] = useState(false);
-  const panel = useRef<HTMLDivElement>(null);
-  const button = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const doc = hostDocumentOf(button.current);
-    const away = (event: PointerEvent): void => {
-      const target = event.target;
-      if (!isDomNode(target)) return;
-      if (!panel.current?.contains(target) && !button.current?.contains(target)) setOpen(false);
-    };
-    doc.addEventListener('pointerdown', away, true);
-    focusChartSwatch(panel.current);
-    return () => doc.removeEventListener('pointerdown', away, true);
-  }, [open]);
-  const hex = chartPickHex(props.value, props.themeHexes, props.automatic);
-  const grid = chartColorGrid(props.themeHexes);
-  const pick = (next: ChartColorPick): void => {
-    props.onChange(next);
-    setOpen(false);
-    button.current?.focus();
-  };
-  const swatch = (s: { pick: ChartColorPick; hex: string }) => (
-    <button
-      key={s.pick}
-      type="button"
-      className="docx-chart-pane__swatch"
-      aria-label={chartColorLabel(s.pick, t)}
-      title={chartColorLabel(s.pick, t)}
-      aria-pressed={s.pick === props.value}
-      style={{ background: s.hex }}
-      onClick={() => pick(s.pick)}
-    />
-  );
-  return (
-    <div className="docx-chart-pane__color">
-      <div className="docx-chart-pane__field">
-        <label className="docx-chart-pane__label" htmlFor={id}>
-          {props.label}
-        </label>
-        <select
-          id={id}
-          className="docx-dialog__select"
-          value={props.value}
-          disabled={props.disabled}
-          onChange={(e) => props.onChange(e.currentTarget.value as ChartColorPick)}
-        >
-          {chartColorPicks(props.value).map((p) => (
-            <option key={p} value={p}>
-              {chartColorLabel(p, t)}
-            </option>
-          ))}
-        </select>
-      </div>
-      <button
-        ref={button}
-        type="button"
-        className="docx-chart-pane__color-button"
-        aria-label={t('chart.format.openColors', { name: props.name })}
-        aria-haspopup="true"
-        aria-expanded={open}
-        disabled={props.disabled}
-        data-color={hex}
-        style={{ background: hex }}
-        onClick={() => setOpen((was) => !was)}
-      />
-      {open ? (
-        <div
-          ref={panel}
-          role="group"
-          aria-label={t('chart.format.openColors', { name: props.name })}
-          className="docx-chart-pane__grid"
-          onKeyDown={(e) => {
-            if (moveChartSwatchFocus(panel.current, e.key)) {
-              e.preventDefault();
-              return;
-            }
-            if (e.key !== 'Escape') return;
-            e.preventDefault();
-            e.stopPropagation();
-            setOpen(false);
-            button.current?.focus();
-          }}
-        >
-          <button
-            type="button"
-            className="docx-chart-pane__grid-auto"
-            aria-pressed={props.value === 'auto'}
-            onClick={() => pick('auto')}
-          >
-            {t('colorPicker.automatic')}
-          </button>
-          <span className="docx-chart-pane__grid-title">{t('colorPicker.themeColors')}</span>
-          <div className="docx-chart-pane__swatches">{grid.theme.flat().map(swatch)}</div>
-          <span className="docx-chart-pane__grid-title">{t('colorPicker.standardColors')}</span>
-          <div className="docx-chart-pane__swatches">{grid.standard.map(swatch)}</div>
-        </div>
-      ) : null}
     </div>
   );
 }

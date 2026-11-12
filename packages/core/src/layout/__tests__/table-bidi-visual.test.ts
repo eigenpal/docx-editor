@@ -75,9 +75,8 @@ describe('w:bidiVisual table grid', () => {
     if (hit?.kind !== 'columnDivider') throw new Error('missing divider');
     expect(hit.leftGridColumnId).toBe(b!.gridColumnId!);
     expect(hit.rightGridColumnId).toBe(a!.gridColumnId!);
-    expect(
-      hitTestPage(result, 0, { x: 10 + a!.box.x + 10, y: 10 + a!.box.y + 5 })?.cell?.cellId
-    ).toBe(a!.id);
+    // Content coordinates, inside the first cell.
+    expect(hitTestPage(result, 0, { x: a!.box.x + 10, y: a!.box.y + 5 })?.cell?.cellId).toBe(a!.id);
   });
 
   test.each(['0', 'false', 'off'])('explicit %s keeps LTR columns', (value) => {

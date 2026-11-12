@@ -317,6 +317,12 @@
       "id": 329042364,
       "signed_at": "2026-11-11T11:59:17Z",
       "pull_request_no": 1876
+    },
+    {
+      "name": "adam-vonbismarck",
+      "id": 90396511,
+      "signed_at": "2026-11-11T21:42:33Z",
+      "pull_request_no": 1905
     }
   ]
 }

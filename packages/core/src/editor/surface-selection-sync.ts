@@ -26,6 +26,11 @@ import {
   selectionsEqual,
   semanticSelectionFromDom,
 } from './dom-selection.ts';
+import {
+  erasedSpanRanges,
+  snapshotPaintedSpans,
+  type PaintedSpanSnapshot,
+} from './surface-composition-readback.ts';
 import { paintedTextOf, paragraphReplacePlan } from './surface-input.ts';
 import { collapsedAt } from './surface-selection-ops.ts';
 
@@ -210,6 +215,25 @@ export interface SurfaceSelectionSync {
    * selection instead of adopting.
    */
   noteBrowserSelectionFixup(): void;
+  /**
+   * Record that an input method just edited outside a composition: a deletion that came as
+   * `beforeinput`, or a browser change to the painted text the surface had to undo.
+   *
+   * Such a keyboard keeps its own copy of the caret and corrects the browser's selection on
+   * its own schedule, after the edit; Chromium also parks the caret where ITS deletion would
+   * have left it. Neither is the user's selection. For a short window after the edit, an
+   * in-pages `selectionchange` with no pointer or `selectstart` behind it re-asserts the model
+   * selection instead of being adopted. A real gesture still wins.
+   */
+  noteInputMethodEdit(): void;
+  /**
+   * A key the keymap or the browser acts on itself ends that window: a caret key, or an
+   * editing chord, moves the selection on purpose. An input method's own `keydown` (`key`
+   * `Unidentified`, `keyCode` 229) does not.
+   */
+  noteKeyDown(event: KeyboardEvent): void;
+  /** Whether the browser's selection is the user's, not an input method's correction. */
+  browserSelectionTrusted(): boolean;
   readonly onSelectionChange: () => void;
   readonly onCompositionStart: () => void;
   readonly onCompositionEnd: (event?: CompositionEvent) => void;
@@ -227,6 +251,14 @@ export interface SurfaceSelectionSync {
   /** Keep pointer geometry local; model positions and collaboration selections stay unchanged. */
   notePointerCaret(caret?: CaretGeometry): void;
 }
+
+/**
+ * How long after an input method's edit a gesture-less selection change is taken for its
+ * correction. Long enough to cover a keyboard that answers on a later frame, between the
+ * presses of a held Backspace; each further edit extends it. Short enough that a caret the
+ * keyboard moves on purpose (a cursor swipe) is taken up once the user pauses.
+ */
+const INPUT_METHOD_ECHO_MS = 250;
 
 export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): SurfaceSelectionSync {
   const { pagesLayer, session } = deps;
@@ -319,6 +351,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * that control, as typing does.
    */
   let composingOwner: { readonly offset: number; readonly controlId: string } | null = null;
+  /** The composing paragraph's text spans at the start, to tell which the browser removed. */
+  let composingSpans: readonly PaintedSpanSnapshot[] = [];
 
   /**
    * Take up a selection the user has made but the queued `selectionchange` has not delivered.
@@ -398,7 +432,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    */
   function reconcileParagraphFromDom(
     paragraphId: string,
-    owner: { readonly offset: number; readonly controlId: string } | null
+    owner: { readonly offset: number; readonly controlId: string } | null,
+    erased: ReadonlySet<string>
   ): void {
     const modelText = deps.textOf(paragraphId);
     // The browser's own selection says WHICH painted copy was composed into, for a paragraph
@@ -408,7 +443,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       pagesLayer,
       paragraphId,
       modelText,
-      hostDocument().getSelection()?.anchorNode ?? null
+      hostDocument().getSelection()?.anchorNode ?? null,
+      erased
     );
     if (painted === null) return;
     const plan = paragraphReplacePlan(paragraphId, modelText, painted);
@@ -543,6 +579,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   function noteUserSelectionGesture(event: Event): void {
     if (event.type.startsWith('pointer') && (event as PointerEvent).button !== 0) return;
     userSelectionGesture = true;
+    gestureSinceInputMethodEdit = true;
   }
 
   /**
@@ -551,6 +588,15 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * `selectionchange` that touches the pages. See `noteBrowserSelectionFixup`.
    */
   let browserSelectionFixup = false;
+  /** Until when (on `deps.now()`) a gesture-less selection change may be an IME correction. */
+  let inputMethodEchoUntil = Number.NEGATIVE_INFINITY;
+  /**
+   * Whether a pointer or `selectstart` gesture began since the last input method edit. Kept
+   * apart from `userSelectionGesture`, which every mirror spends: a tap whose `selectionchange`
+   * arrives after a repaint is still the user's.
+   */
+  let gestureSinceInputMethodEdit = false;
+  const inputMethodEchoing = (): boolean => deps.now() < inputMethodEchoUntil;
 
   function mirrorToDom(claim = false): void {
     // Ahead of the ownership guard: the caret is this engine's own, painted whether or not
@@ -666,6 +712,18 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       browserSelectionFixup = true;
     },
 
+    noteInputMethodEdit() {
+      inputMethodEchoUntil = deps.now() + INPUT_METHOD_ECHO_MS;
+      gestureSinceInputMethodEdit = false;
+    },
+
+    noteKeyDown(event) {
+      if (event.key !== 'Unidentified' && event.keyCode !== 229 && !event.isComposing)
+        inputMethodEchoUntil = Number.NEGATIVE_INFINITY;
+    },
+
+    browserSelectionTrusted: () => !inputMethodEchoing() || gestureSinceInputMethodEdit,
+
     onSelectionChange: (): void => {
       // Ignore the echo of our own write, and anything happening outside the pages. The flag
       // is cleared on a later task rather than synchronously: browsers QUEUE `selectionchange`
@@ -701,6 +759,22 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // holds the post-edit one. A late echo from an earlier mirror must not make that stale
       // DOM caret authoritative again; the pending paint will mirror the newer model value.
       if (isStaleMirroredCaret()) return;
+      // An input method correcting the caret after its own edit, or the caret Chromium left
+      // after a deletion it applied itself. Adopting either moved the model caret, and every
+      // later deletion landed mid-word or in another paragraph. A gesture has provenance.
+      if (
+        inputMethodEchoing() &&
+        !userSelectionGesture &&
+        !gestureSinceInputMethodEdit &&
+        domSelectionTouchesPages(pagesLayer, hostDocument().getSelection())
+      ) {
+        // With a paint still owed, the model's offsets do not address these spans yet; that
+        // paint writes the model selection back itself.
+        if (modelMoved) return;
+        const reported = semanticSelectionFromDom(pagesLayer, hostDocument().getSelection());
+        if (reported === null || !selectionsEqual(reported, deps.selection())) mirrorToDom();
+        return;
+      }
       adoptDomSelection();
     },
 
@@ -736,6 +810,9 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       const controlId = collapsed ? deps.insertOwner?.() : undefined;
       composingOwner =
         controlId === undefined ? null : { offset: selection.head.offset, controlId };
+      composingSpans = composingAcrossParagraphs
+        ? []
+        : snapshotPaintedSpans(pagesLayer, composingParagraph);
       session.beginComposition(deps.storyScope());
     },
 
@@ -747,6 +824,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       composingOwner = null;
       const acrossParagraphs = composingAcrossParagraphs;
       composingAcrossParagraphs = false;
+      const erased = erasedSpanRanges(composingSpans);
+      composingSpans = [];
       // ONE scope, sampled once. `type()` can move the active story (a note released by the
       // post-edit caret), and two reads either side would then compare two different stores'
       // clocks — a number that means nothing, and a rebuild that does not happen.
@@ -769,7 +848,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
         // The composed text is in the DOM and nowhere else. Read it back, diff it against
         // what the model holds for that paragraph, and commit the difference — the only
         // route by which an IME edit can reach the tree, since it could not be intercepted.
-        reconcileParagraphFromDom(paragraphId, owner);
+        reconcileParagraphFromDom(paragraphId, owner, erased);
       }
 
       session.endComposition();

@@ -270,15 +270,13 @@ const CELL_TERMINATOR_MARKERS = new Set([
  * in the cell: the rule is about the terminator a trailing nested table forces.
  */
 export function isEmptyCellTerminator(paragraph: OoxmlElement): boolean {
-  for (const child of paragraph.children) {
-    if (child.kind === 'textValue') {
-      if (child.value.length > 0) return false;
-      continue;
-    }
-    if (child.namespaceUri !== WML_NAMESPACE_URI) return false;
-    if (!CELL_TERMINATOR_MARKERS.has(child.localName)) return false;
-  }
-  return true;
+  return paragraph.children.every(isCellTerminatorMarker);
+}
+
+/** An empty text value, or an element beside a cell-terminating `w:p` that paints nothing. */
+export function isCellTerminatorMarker(child: OoxmlNode): boolean {
+  if (child.kind === 'textValue') return child.value.length === 0;
+  return child.namespaceUri === WML_NAMESPACE_URI && CELL_TERMINATOR_MARKERS.has(child.localName);
 }
 
 /** A block, and which children array it actually lives in. */
