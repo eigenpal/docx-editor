@@ -111,3 +111,90 @@ test('a themed shape with a VML fallback selects and deletes as a shape', async 
     container.remove();
   }
 });
+
+/** An editor over the themed shape, opened and laid out, and its one drawing. */
+async function open(document: Uint8Array) {
+  const container = globalThis.document.createElement('div');
+  globalThis.document.body.append(container);
+  const editor = createDocxEditor({ container, document });
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    editor.surface?.layout();
+  }
+  const drawing = () => {
+    const drawings = editor.surface!.layout().pages.flatMap((page) => page.anchoredDrawings ?? []);
+    expect(drawings).toHaveLength(1);
+    return drawings[0]!;
+  };
+  const select = () => {
+    const record = drawing();
+    expect(editor.surface!.selectDrawing(record.drawingNodeId, record.paragraphId)).toBe(true);
+  };
+  return {
+    editor,
+    select,
+    close() {
+      editor.destroy();
+      container.remove();
+    },
+  };
+}
+
+/** The modern copy's horizontal offset and the VML copy, from the saved document. */
+async function copies(editor: Awaited<ReturnType<typeof open>>['editor']) {
+  const xml = await saved(editor);
+  return {
+    offset: /<wp:positionH[^>]*><wp:posOffset>(-?\d+)<\/wp:posOffset>/.exec(xml)?.[1],
+    fallback: /<mc:Fallback>.*<\/mc:Fallback>/.exec(xml)?.[0] ?? null,
+  };
+}
+
+test('a themed shape with a VML fallback moves, and undo and redo restore both copies', async () => {
+  const { editor, select, close } = await open(themedDocument(p(WRAPPED + text('Anchor words'))));
+  try {
+    const before = await copies(editor);
+    expect(before.offset).toBe(String(100 * EMU));
+    expect(before.fallback).toContain('v:rect');
+    select();
+    expect(editor.exec({ type: 'setImagePosition', horizontalEmu: 150 * EMU })).toMatchObject({
+      ok: true,
+    });
+    const moved = await copies(editor);
+    expect(moved.offset).toBe(String(150 * EMU));
+    expect(moved.fallback).toContain('v:rect');
+    expect(editor.exec({ type: 'undo' })).toMatchObject({ ok: true });
+    expect(await copies(editor)).toEqual(before);
+    expect(editor.exec({ type: 'redo' })).toMatchObject({ ok: true });
+    expect(await copies(editor)).toEqual(moved);
+  } finally {
+    close();
+  }
+});
+
+test('a theme colour that does not resolve still selects the shape', async () => {
+  // No theme part, and a theme part without the colour the shape names.
+  // A style fill the theme's style matrix does not hold.
+  const bad = WRAPPED.replace(
+    /<a:solidFill><a:schemeClr val="accent1">.*?<\/a:solidFill>/,
+    ''
+  ).replace(
+    '<wps:bodyPr/>',
+    '<wps:style><a:lnRef idx="0"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="3">' +
+      '<a:schemeClr val="accent1"/></a:fillRef><a:effectRef idx="0"><a:schemeClr val="accent1"/>' +
+      '</a:effectRef><a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef></wps:style>' +
+      '<wps:bodyPr/>'
+  );
+  for (const document of [
+    documentBytes(p(WRAPPED + text('Anchor words'))),
+    themedDocument(p(bad + text('Anchor words'))),
+  ]) {
+    const { editor, select, close } = await open(document);
+    try {
+      select();
+      expect(editor.getSelectedImage!()).not.toBeNull();
+      expect(editor.exec({ type: 'deleteImage' })).toMatchObject({ ok: true });
+    } finally {
+      close();
+    }
+  }
+});
