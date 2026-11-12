@@ -5,6 +5,7 @@
 
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from './drawing-layout.ts';
 import type { VectorShapeComponent } from '../store/package/drawing-shape-projection.ts';
+import type { LayoutBox } from './semantic-records.ts';
 
 type Drawing = InlineDrawingRecord | AnchoredDrawingRecord;
 type Point = { readonly x: number; readonly y: number };
@@ -26,8 +27,10 @@ export function vectorShapeHit(drawing: Drawing, point: Point): boolean | null {
   if (drawing.placeholderGraphicKind === null || drawing.groupPicture) return null;
   const content = drawing.geometry.contentBounds;
   const { cx, cy } = shape.extentEmu;
-  const sx = cx > 0 ? content.width / cx : 0;
-  const sy = cy > 0 ? content.height / cy : 0;
+  // A collapsed axis has no scale of its own; the other axis gives it, so a turned straight
+  // line keeps its length along the axis its extent does not have.
+  const sx = cx > 0 ? content.width / cx : cy > 0 ? content.height / cy : 0;
+  const sy = cy > 0 ? content.height / cy : sx;
   const place = (p: Point): Point => ({ x: content.x + p.x * sx, y: content.y + p.y * sy });
   // A shape that paints nothing would be out of reach: its frame takes the press instead.
   if (!shape.components.some(paints)) return insideBox(content, point, PATH_HIT_REACH);
@@ -125,4 +128,38 @@ function squaredDistance(a: Point, b: Point, point: Point): number {
   const x = a.x + t * dx - point.x;
   const y = a.y + t * dy - point.y;
   return x * x + y * y;
+}
+
+/**
+ * The box a turned shape covers: its unturned extent box turned about its centre, in the
+ * record's coordinates. Null for a drawing that is not a turned shape.
+ */
+export function turnedShapeBounds(drawing: Drawing): LayoutBox | null {
+  const turn = drawing.vectorShape?.rotationDegrees;
+  if (!turn || !Number.isFinite(turn)) return null;
+  const content = drawing.geometry.contentBounds;
+  const radians = (turn * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(radians));
+  const sin = Math.abs(Math.sin(radians));
+  const width = content.width * cos + content.height * sin;
+  const height = content.width * sin + content.height * cos;
+  return Object.freeze({
+    x: content.x + (content.width - width) / 2,
+    y: content.y + (content.height - height) / 2,
+    width,
+    height,
+  });
+}
+
+/** The smallest box holding both boxes. */
+export function unionBox(a: LayoutBox, b: LayoutBox | null): LayoutBox {
+  if (!b) return a;
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  return Object.freeze({
+    x,
+    y,
+    width: Math.max(a.x + a.width, b.x + b.width) - x,
+    height: Math.max(a.y + a.height, b.y + b.height) - y,
+  });
 }

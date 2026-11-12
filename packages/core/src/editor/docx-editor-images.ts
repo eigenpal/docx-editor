@@ -311,7 +311,8 @@ export function selectedImageStateOf(surface: PaginatedSurface | null): Selected
     widthEmu: projection.extentEmu.cx,
     heightEmu: projection.extentEmu.cy,
     crop: cropPercentFromSourceCrop(record.crop),
-    rotationDegrees: transform.rotationDegrees,
+    // A picture turns through its transform; a shape or line through its own `a:xfrm`.
+    rotationDegrees: transform.rotationDegrees || (record.vectorShape?.rotationDegrees ?? 0),
     wrap: wrapOf(record),
     position: positionInputOf(projection),
     name: projection.name,

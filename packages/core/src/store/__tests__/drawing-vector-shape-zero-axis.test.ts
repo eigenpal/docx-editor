@@ -93,7 +93,7 @@ describe('zero-width and zero-height group children', () => {
     expect(shapeOf(lineChild(0, 0, 1000000) + plainRect)?.components).toHaveLength(2);
   });
 
-  test('a standalone vertical or horizontal line projects; a point does not', () => {
+  test('a standalone vertical or horizontal line projects; a point paints nothing', () => {
     const vertical = standaloneLine(0, 1000000);
     expect(vertical?.extentEmu).toEqual({ cx: 0, cy: 1000000 });
     expect(vertical?.components[0]!.subpathsEmu[0]).toEqual([
@@ -101,7 +101,11 @@ describe('zero-width and zero-height group children', () => {
       { x: 0, y: 1000000 },
     ]);
     expect(standaloneLine(1000000, 0)?.components).toHaveLength(1);
-    expect(standaloneLine(0, 0)).toBeNull();
+    // A line with no width and no height paints nothing, not even its outline's caps, and
+    // keeps no placeholder, so it stays selectable.
+    const point = standaloneLine(0, 0);
+    expect(point?.extentEmu).toEqual({ cx: 0, cy: 0 });
+    expect(point?.components).toEqual([]);
   });
 
   test('a group of rules on one x has a zero child extent and keeps its stroke width', () => {

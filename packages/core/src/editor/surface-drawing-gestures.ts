@@ -103,7 +103,11 @@ export function createDrawingGestures(deps: {
     if (!selectedImageStateOf(deps.surface)) return;
     deps.enterStoryPage(pageIndex);
   };
-  /** The straight line in front of the text a press reaches by geometry, if any. */
+  /**
+   * The straight line or turned shape in front of the text a press reaches by geometry, if
+   * any. Neither has a painted box that covers what it paints: a line's box has no height or
+   * width, and a turned shape paints outside its box.
+   */
   const thinLineAt = (event: Event) => {
     if (!isPointerEvent(event) || event.shiftKey) return null;
     const drawing = pointOf(event)?.hit.drawing;
@@ -112,6 +116,7 @@ export function createDrawingGestures(deps: {
     const record = frame?.record;
     if (!frame || !record?.vectorShape) return null;
     if ('behindDocument' in record && record.behindDocument) return null;
+    if (record.vectorShape.rotationDegrees) return drawing;
     return Math.min(frame.width, frame.height) < THIN_LINE_PT ? drawing : null;
   };
   /** The behind-text drawing a press reaches where no text lies under it, if any. */
@@ -169,8 +174,9 @@ export function createDrawingGestures(deps: {
           return;
         }
       }
-      // A straight line paints a box with no height or width, so no press lands on it: within
-      // reach of its path, the hit test that already reaches past the path selects it.
+      // A straight line paints a box with no height or width, and a turned shape paints past
+      // its box, so a press may land beside the box: the hit test that reaches the painted
+      // geometry selects it.
       const line = !editingTextbox && !drawingId && !behind ? thinLineAt(event) : null;
       if (line && selectObject(line.drawingNodeId, line.paragraphId)) {
         deps.surface.focus();

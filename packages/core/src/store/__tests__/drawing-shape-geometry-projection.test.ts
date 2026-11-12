@@ -126,7 +126,7 @@ describe('preset geometry through the geometry engine', () => {
     expect(fills.has('336699')).toBe(true);
   });
 
-  test('a turned top-level shape is refused: it would paint past its extent', () => {
+  test('a turned top-level shape turns about its extent centre and paints past it', () => {
     const [projection] = projectDrawingsInPart(
       parsePart(
         inline(
@@ -140,7 +140,13 @@ describe('preset geometry through the geometry engine', () => {
         )
       )
     );
-    expect(projection?.vectorShape ?? null).toBeNull();
+    const vector = projection!.vectorShape!;
+    expect(vector.rotationDegrees).toBe(90);
+    expect(vector.overflowVisible).toBe(true);
+    // A quarter turn about (500000, 250000): the top-left corner lands at (750000, -250000).
+    const [first] = vector.components[0]!.subpathsEmu[0]!;
+    expect(first!.x).toBeCloseTo(750000, 3);
+    expect(first!.y).toBeCloseTo(-250000, 3);
   });
 });
 

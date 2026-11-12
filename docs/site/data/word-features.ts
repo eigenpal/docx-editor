@@ -687,7 +687,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Preset shapes and supported custom shapes display with fills, outlines, and outer shadows. You can set solid fills and outline colors, widths, and dash types, and move or delete shapes. Resizing, shape text, and gradient or pattern fills stay read-only, and unsupported shapes show a placeholder.',
+      'Preset and supported custom shapes display with fills, outlines, outer shadows, and rotation. You can set solid fills and outline colors, widths, and dash types, and move or delete shapes. Resizing, rotating, shape text, and gradient or pattern fills stay read-only; unsupported shapes show a placeholder.',
   },
   {
     id: 'images.legacy-vml',
