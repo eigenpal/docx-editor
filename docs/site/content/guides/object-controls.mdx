@@ -9,7 +9,7 @@ Every field of the Format shape pane and the Chart pane is a slot and a part. A 
 
 ## Add controls to your toolbar
 
-Each part takes a `variant`. Use `variant="compact"` in a toolbar: the label is for screen readers only, and the disabled reason shows in the tooltip. The default `variant="field"` shows a visible label and the disabled reason under the control.
+Each part takes a `variant`. Use `variant="compact"` in a toolbar: the label is for screen readers only, and the disabled reason shows in the tooltip. The default `variant="field"` shows a visible label and the disabled reason under the control. Inside `DocxEditor.Toolbar`, parts default to `compact`. Each part carries the editor's style scope, so it is styled wherever you place it, in light and dark mode.
 
 The following toolbar adds the fill color and the outline dash of the selected shape:
 
@@ -28,27 +28,61 @@ function ShapeToolbar() {
 
 When no shape is selected, the parts are disabled and give the reason.
 
-Each part is also a named export with the same name, such as `ShapeFill` or `ChartTitle`. Three parts take a `Part` suffix, because a type has the same name: `ChartTypePart`, `ChartDataPart`, and `ShapeOutlineDashPart`.
+Each part is also a named export with the `DocxEditor` prefix, such as `DocxEditorShapeFill` or `DocxEditorChartTitle`.
+
+## Customize a part in the toolbar
+
+A part placed in `DocxEditor.Toolbar` replaces its slot in the default arrangement. The colour parts and the toggle parts also take `icon` and `asChild`. The following toolbar changes the fill control, puts your own button on the data labels toggle, and removes the outline dash:
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+
+function EditorToolbar() {
+  return (
+    <DocxEditor.Toolbar>
+      <DocxEditor.ShapeFill className="my-fill" icon={<FillIcon />} />
+      <DocxEditor.ChartDataLabels asChild>
+        <button type="button" className="my-toggle">
+          Labels
+        </button>
+      </DocxEditor.ChartDataLabels>
+      <DocxEditor.ShapeOutlineDash hidden />
+    </DocxEditor.Toolbar>
+  );
+}
+```
+
+With `preset={false}`, the toolbar renders only the parts you place.
 
 ## Use a slot without a part
 
-To render your own control, read the slot with `useObjectControl`. It returns `value`, `isActive`, `isEnabled`, `disabledReason`, `label`, and three ways to run the slot: `execute`, `apply`, and `toggle`. `apply` returns the translated refusal, or `null` when the change applied.
+To render your own control, read the slot with `useObjectControl`, as you read a value slot with `useEditorValueCommand`. It returns these members:
+
+- `value` is typed for the slot, such as a number for `shape.outlineWidth`. It is `null` when nothing is selected or the object shows several values.
+- `options` lists the values of a list slot, such as the legend positions.
+- `isEnabled`, `disabledReason`, `isActive`, and `label` describe the control.
+- `execute(value, options?)` runs the slot and returns an `ExecResult`.
+- `toggle(options?)` turns a toggle slot on or off. Only `chart.dataLabels`, `chart.axes`, and `chart.gridlines` have it.
 
 ```tsx
 import { useObjectControl } from '@docx-editor.dev/react';
 
-function AccentFillButton() {
-  const fill = useObjectControl('shape.fill');
+function LegendButtons() {
+  const legend = useObjectControl('chart.legend');
   return (
-    <button
-      type="button"
-      disabled={!fill.isEnabled}
-      title={fill.disabledReason ?? fill.label}
-      aria-pressed={fill.value === 'accent1'}
-      onClick={() => fill.execute('accent1')}
-    >
-      Accent fill
-    </button>
+    <div role="group" aria-label={legend.label}>
+      {legend.options.map((position) => (
+        <button
+          key={position}
+          type="button"
+          disabled={!legend.isEnabled}
+          aria-pressed={legend.value === position}
+          onClick={() => legend.execute(position)}
+        >
+          {position}
+        </button>
+      ))}
+    </div>
   );
 }
 ```
@@ -64,7 +98,7 @@ if (!result.ok) console.warn(result.reason);
 
 ## Show pane sections in a popover
 
-Insert > Chart, **Edit chart**, and **Format shape** send a pane request. Any UI can answer it. `usePaneRequest` calls your listener for the panes that `panes` names. `DocxEditor.PaneSections` renders the sections of a pane, each a heading over its parts.
+**Insert** > **Chart**, **Edit chart**, and **Format shape** send a pane request. Any UI can answer it. `usePaneRequest` calls your listener for the panes that `panes` names. `DocxEditor.PaneSections` renders the sections of a pane, each a heading over its parts.
 
 The following popover answers the chart request with the type and elements sections:
 
@@ -87,7 +121,7 @@ function ChartPopover() {
 }
 ```
 
-`PANE_SECTIONS` lists the sections and their slots:
+`sections` takes the section ids of the pane, so a typo or a section of another pane is a type error. `PANE_SECTIONS` lists the sections and their slots:
 
 | Pane | Section | Slots |
 | --- | --- | --- |
@@ -100,7 +134,7 @@ function ChartPopover() {
 
 ## Build a pane from parts
 
-Combine sections and single parts into your own pane or drawer. A part for an element that the chart type does not have renders nothing. For example, `ChartAxes` renders nothing for a pie chart.
+Combine sections and single parts into your own pane or drawer. A part for an element that the chart type does not have renders nothing. For example, `DocxEditor.ChartAxes` renders nothing for a pie chart.
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -138,15 +172,15 @@ The fill, outline, and series color parts use the `ColorPicker` compound. You ca
 A theme pick such as `accent1:40` saves as a theme color reference on shapes and charts. On a table border or shading, it saves as an RGB value. The following control sets the shape outline color:
 
 ```tsx
-import { DocxEditor, useObjectControl, type ColorPickerValue } from '@docx-editor.dev/react';
+import { DocxEditor, useObjectControl } from '@docx-editor.dev/react';
 
 function OutlineColor() {
   const outline = useObjectControl('shape.outlineColor');
   return (
     <DocxEditor.ColorPicker.Root
-      value={(outline.value ?? null) as ColorPickerValue}
+      value={outline.value}
       disabled={!outline.isEnabled}
-      onPick={(pick) => outline.apply(pick)}
+      onPick={(pick) => outline.execute(pick)}
     >
       <DocxEditor.ColorPicker.Trigger aria-label={outline.label} />
       <DocxEditor.ColorPicker.Content />
@@ -156,6 +190,24 @@ function OutlineColor() {
 ```
 
 To build your own grid, put `ColorPicker.NoColor`, `ColorPicker.Swatch` with a `pick`, and `ColorPicker.HexInput` inside `ColorPicker.Content`.
+
+To place the grid with a popover library, pass a `ref` to `ColorPicker.Trigger` and render `ColorPicker.Content` in your floating element with `container`. The grid then renders there through a portal, keeps the editor's style scope, and takes no position of its own:
+
+```tsx
+import { useState } from 'react';
+import { DocxEditor } from '@docx-editor.dev/react';
+
+function FloatingFill({ floating }: { floating: HTMLElement | null }) {
+  const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
+  return (
+    <DocxEditor.ColorPicker.Root value="accent1" onPick={(pick) => console.log(pick)}>
+      <DocxEditor.ColorPicker.Trigger ref={setAnchor} aria-label="Fill" />
+      {/* Position `floating` next to `anchor` with your popover library. */}
+      <DocxEditor.ColorPicker.Content container={floating} />
+    </DocxEditor.ColorPicker.Root>
+  );
+}
+```
 
 ## Use the controls in Vue
 
