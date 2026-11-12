@@ -23,6 +23,8 @@ import { flattenChildren } from '../../lib/flattenChildren';
 import { useEditorState } from '../useEditorState';
 import { useChromeDir } from '../../i18n';
 import { useChromeScopeClassName } from '../color-mode-context';
+import { ScopedByAncestorContext } from '../scope-context';
+import { ObjectControlVariantContext } from '../objects/object-controls';
 import { useDocxEditor } from '../context';
 import { ToolbarContext, useToolbarLabel, type ToolbarTranslate } from './toolbar-context';
 import { ToolbarButton, chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
@@ -36,6 +38,7 @@ import {
   arrangeToolbarGroups,
   collapseOrder,
   TOOLBAR_COLLAPSE_ORDER,
+  orderToolbarOverflowSections,
   TOOLBAR_PINNED_GROUPS,
   toolbarGroupItems,
   toolbarGroupsKey,
@@ -575,6 +578,8 @@ const DocxEditorToolbarRoot = defineComponent({
           );
         }
 
+        // The selected object's own groups lead the menu, under the table controls.
+        const ordered = orderToolbarOverflowSections(sections);
         const tableOverflowed = overflow.value.has(TABLE_CONTEXTUAL_GROUP_ID);
         if (tableChromeVisible.value && tableOverflowed) {
           const rows = TABLE_CONTEXTUAL_GROUP.entries.flatMap((entry) => {
@@ -594,7 +599,7 @@ const DocxEditorToolbarRoot = defineComponent({
             // Keep contextual controls at the top of More. Table pickers render inside the
             // panel, so their trigger must remain visible when opening one temporarily lifts
             // the panel's scroll clipping.
-            sections.unshift({
+            ordered.unshift({
               id: TABLE_CONTEXTUAL_GROUP.id,
               labelKey: TABLE_CONTEXTUAL_GROUP.labelKey,
               children: rows,
@@ -624,7 +629,7 @@ const DocxEditorToolbarRoot = defineComponent({
           ...(appended.length > 0
             ? [h('div', { class: 'docx-toolbar__group', [FIXED_ATTRIBUTE]: '' }, [...appended])]
             : []),
-          ...(sections.length > 0 ? [h(ToolbarOverflow, { sections })] : []),
+          ...(ordered.length > 0 ? [h(ToolbarOverflow, { sections: ordered })] : []),
         ];
       }
 
@@ -651,9 +656,26 @@ const DocxEditorToolbarRoot = defineComponent({
           ...(measuring.value ? { 'data-overflow': '' } : {}),
           onMousedown: guardToolbarMousedown,
         },
-        [h(ParagraphDialogHost, null, { default: () => [inner] })]
+        [
+          h(ParagraphDialogHost, null, {
+            default: () => [h(ToolbarPartScope, null, { default: () => [inner] })],
+          }),
+        ]
       );
     };
+  },
+});
+
+/**
+ * The bar carries the scope class, and its shape and chart parts render compact. Inside the
+ * paragraph dialog host's slot, so the dialog it teleports to the body keeps its own scope.
+ */
+const ToolbarPartScope = defineComponent({
+  name: 'ToolbarPartScope',
+  setup(_, { slots }) {
+    provide(ScopedByAncestorContext, true);
+    provide(ObjectControlVariantContext, 'compact');
+    return () => slots.default?.();
   },
 });
 

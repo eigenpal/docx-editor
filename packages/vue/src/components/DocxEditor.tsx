@@ -233,35 +233,35 @@ export interface DocxEditorNamespace {
   /** The shared colour picker compound (`Root`, `Trigger`, `Content`, `Swatch`, …). */
   readonly ColorPicker: typeof ColorPicker;
   /** The fill colour of the selected shape (`shape.fill`). */
-  readonly ShapeFill: typeof ObjectParts.ShapeFill;
+  readonly ShapeFill: typeof ObjectParts.DocxEditorShapeFill;
   /** The fill transparency of the selected shape (`shape.fillTransparency`). */
-  readonly ShapeFillTransparency: typeof ObjectParts.ShapeFillTransparency;
+  readonly ShapeFillTransparency: typeof ObjectParts.DocxEditorShapeFillTransparency;
   /** The outline colour of the selected shape (`shape.outlineColor`). */
-  readonly ShapeOutlineColor: typeof ObjectParts.ShapeOutlineColor;
+  readonly ShapeOutlineColor: typeof ObjectParts.DocxEditorShapeOutlineColor;
   /** The outline width of the selected shape (`shape.outlineWidth`). */
-  readonly ShapeOutlineWidth: typeof ObjectParts.ShapeOutlineWidth;
+  readonly ShapeOutlineWidth: typeof ObjectParts.DocxEditorShapeOutlineWidth;
   /** The outline dash of the selected shape (`shape.outlineDash`). */
-  readonly ShapeOutlineDash: typeof ObjectParts.ShapeOutlineDashPart;
+  readonly ShapeOutlineDash: typeof ObjectParts.DocxEditorShapeOutlineDash;
   /** The type of the selected chart (`chart.type`). */
-  readonly ChartType: typeof ObjectParts.ChartTypePart;
+  readonly ChartType: typeof ObjectParts.DocxEditorChartType;
   /** The title of the selected chart (`chart.title`). */
-  readonly ChartTitle: typeof ObjectParts.ChartTitle;
+  readonly ChartTitle: typeof ObjectParts.DocxEditorChartTitle;
   /** The legend position of the selected chart (`chart.legend`). */
-  readonly ChartLegend: typeof ObjectParts.ChartLegend;
+  readonly ChartLegend: typeof ObjectParts.DocxEditorChartLegend;
   /** The data labels toggle of the selected chart (`chart.dataLabels`). */
-  readonly ChartDataLabels: typeof ObjectParts.ChartDataLabels;
+  readonly ChartDataLabels: typeof ObjectParts.DocxEditorChartDataLabels;
   /** The axes toggle of the selected chart (`chart.axes`). */
-  readonly ChartAxes: typeof ObjectParts.ChartAxes;
+  readonly ChartAxes: typeof ObjectParts.DocxEditorChartAxes;
   /** The gridlines toggle of the selected chart (`chart.gridlines`). */
-  readonly ChartGridlines: typeof ObjectParts.ChartGridlines;
+  readonly ChartGridlines: typeof ObjectParts.DocxEditorChartGridlines;
   /** The category (X) axis title of the selected chart (`chart.categoryAxisTitle`). */
-  readonly ChartCategoryAxisTitle: typeof ObjectParts.ChartCategoryAxisTitle;
+  readonly ChartCategoryAxisTitle: typeof ObjectParts.DocxEditorChartCategoryAxisTitle;
   /** The value (Y) axis title of the selected chart (`chart.valueAxisTitle`). */
-  readonly ChartValueAxisTitle: typeof ObjectParts.ChartValueAxisTitle;
+  readonly ChartValueAxisTitle: typeof ObjectParts.DocxEditorChartValueAxisTitle;
   /** The series (or point) colours of the selected chart (`chart.seriesColor`). */
-  readonly ChartSeriesColors: typeof ObjectParts.ChartSeriesColors;
+  readonly ChartSeriesColors: typeof ObjectParts.DocxEditorChartSeriesColors;
   /** The data editor of the selected chart (`chart.data`). */
-  readonly ChartData: typeof ObjectParts.ChartDataPart;
+  readonly ChartData: typeof ObjectParts.DocxEditorChartData;
   /** The chart type list that inserts a chart (`insert.chart`), with `Trigger`, `Content`, `Item`. */
   readonly ChartInsert: typeof ChartInsert;
   readonly Navigation: typeof Navigation;
@@ -744,21 +744,21 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   ShapePane: DocxEditorShapePane,
   PaneSections: ObjectParts.DocxEditorPaneSections,
   ColorPicker,
-  ShapeFill: ObjectParts.ShapeFill,
-  ShapeFillTransparency: ObjectParts.ShapeFillTransparency,
-  ShapeOutlineColor: ObjectParts.ShapeOutlineColor,
-  ShapeOutlineWidth: ObjectParts.ShapeOutlineWidth,
-  ShapeOutlineDash: ObjectParts.ShapeOutlineDashPart,
-  ChartType: ObjectParts.ChartTypePart,
-  ChartTitle: ObjectParts.ChartTitle,
-  ChartLegend: ObjectParts.ChartLegend,
-  ChartDataLabels: ObjectParts.ChartDataLabels,
-  ChartAxes: ObjectParts.ChartAxes,
-  ChartGridlines: ObjectParts.ChartGridlines,
-  ChartCategoryAxisTitle: ObjectParts.ChartCategoryAxisTitle,
-  ChartValueAxisTitle: ObjectParts.ChartValueAxisTitle,
-  ChartSeriesColors: ObjectParts.ChartSeriesColors,
-  ChartData: ObjectParts.ChartDataPart,
+  ShapeFill: ObjectParts.DocxEditorShapeFill,
+  ShapeFillTransparency: ObjectParts.DocxEditorShapeFillTransparency,
+  ShapeOutlineColor: ObjectParts.DocxEditorShapeOutlineColor,
+  ShapeOutlineWidth: ObjectParts.DocxEditorShapeOutlineWidth,
+  ShapeOutlineDash: ObjectParts.DocxEditorShapeOutlineDash,
+  ChartType: ObjectParts.DocxEditorChartType,
+  ChartTitle: ObjectParts.DocxEditorChartTitle,
+  ChartLegend: ObjectParts.DocxEditorChartLegend,
+  ChartDataLabels: ObjectParts.DocxEditorChartDataLabels,
+  ChartAxes: ObjectParts.DocxEditorChartAxes,
+  ChartGridlines: ObjectParts.DocxEditorChartGridlines,
+  ChartCategoryAxisTitle: ObjectParts.DocxEditorChartCategoryAxisTitle,
+  ChartValueAxisTitle: ObjectParts.DocxEditorChartValueAxisTitle,
+  ChartSeriesColors: ObjectParts.DocxEditorChartSeriesColors,
+  ChartData: ObjectParts.DocxEditorChartData,
   ChartInsert,
   Navigation: DocxEditorNavigation,
   ExportDialog: DocxEditorExportDialog,

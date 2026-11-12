@@ -21,12 +21,19 @@ import {
   ChoiceControl,
   ColorControl,
   TextControl,
+  objectButtonPartProps,
   objectControlProps,
+  objectPart,
+  useObjectControlVariant,
+  type ObjectButtonPartProps,
   type ObjectControlProps,
 } from './object-controls';
 
 /** Props of a shape part. @public */
 export type ShapePartProps = ObjectControlProps;
+
+/** Props of a shape colour part: it also takes `icon` and `asChild`. @public */
+export type ShapeColorPartProps = ObjectButtonPartProps;
 
 /** The props a part passes on to its control. */
 const passOn = (props: ObjectControlProps) => ({
@@ -36,153 +43,181 @@ const passOn = (props: ObjectControlProps) => ({
   hidden: props.hidden,
 });
 
-/** The fill colour of the selected shape (`shape.fill`), with No fill. @public */
-export const ShapeFill = defineComponent({
-  name: 'ShapeFill',
-  props: objectControlProps,
-  setup(props) {
-    const { t } = useTranslation();
-    const translate = useChartTranslate();
-    const editorRef = useDocxEditor();
-    const shape = useSelectedShape();
-    return () => {
-      const hexes = documentThemeHexes(editorRef.value?.getDocumentThemeColors());
-      const fill = shape.format.value?.fill;
-      const summary = fill ? shapeFillSummary(fill, hexes, translate) : '';
-      return (
-        <ColorControl
-          {...passOn(props)}
-          slotId="shape.fill"
-          summary={summary}
-          noneLabel={t('shape.pane.noFill')}
-          after={
-            fill && !shapeFillEditable(fill) ? (
-              <p class="docx-chart-pane__note" data-fill-type={fill.type}>
-                {t('shape.pane.readOnlyFill', { fill: translate(shapeFillLabelKey(fill)) })}
-              </p>
-            ) : null
-          }
-        />
-      );
-    };
-  },
+/** The props a colour part passes on to its control. */
+const passOnButton = (props: ObjectButtonPartProps) => ({
+  ...passOn(props),
+  icon: props.icon,
+  asChild: props.asChild,
 });
+
+/** The fill colour of the selected shape (`shape.fill`), with No fill. @public */
+export const DocxEditorShapeFill = objectPart(
+  'shape.fill',
+  defineComponent({
+    name: 'DocxEditorShapeFill',
+    props: objectButtonPartProps,
+    setup(props, { slots }) {
+      const { t } = useTranslation();
+      const translate = useChartTranslate();
+      const editorRef = useDocxEditor();
+      const shape = useSelectedShape();
+      return () => {
+        const hexes = documentThemeHexes(editorRef.value?.getDocumentThemeColors());
+        const fill = shape.format.value?.fill;
+        const summary = fill ? shapeFillSummary(fill, hexes, translate) : '';
+        return (
+          <ColorControl
+            {...passOnButton(props)}
+            slotId="shape.fill"
+            summary={summary}
+            noneLabel={t('shape.pane.noFill')}
+            after={
+              fill && !shapeFillEditable(fill) ? (
+                <p class="docx-chart-pane__note" data-fill-type={fill.type}>
+                  {t('shape.pane.readOnlyFill', { fill: translate(shapeFillLabelKey(fill)) })}
+                </p>
+              ) : null
+            }
+          >
+            {{ default: () => slots.default?.() }}
+          </ColorControl>
+        );
+      };
+    },
+  })
+);
 
 /** The transparency of a solid fill, in percent (`shape.fillTransparency`). @public */
-export const ShapeFillTransparency = defineComponent({
-  name: 'ShapeFillTransparency',
-  props: objectControlProps,
-  setup(props) {
-    const shape = useSelectedShape();
-    return () => (
-      <TextControl
-        {...passOn(props)}
-        slotId="shape.fillTransparency"
-        numeric
-        draftKey={shape.memberId.value ?? shape.drawingNodeId.value ?? ''}
-        parse={(text: string) => text}
-      />
-    );
-  },
-});
-
-/** The outline colour of the selected shape (`shape.outlineColor`), with No line. @public */
-export const ShapeOutlineColor = defineComponent({
-  name: 'ShapeOutlineColor',
-  props: objectControlProps,
-  setup(props) {
-    const { t } = useTranslation();
-    const translate = useChartTranslate();
-    const editorRef = useDocxEditor();
-    const shape = useSelectedShape();
-    return () => {
-      const hexes = documentThemeHexes(editorRef.value?.getDocumentThemeColors());
-      const format = shape.format.value;
-      const summary = format ? shapeOutlineSummary(format.outline, hexes, translate) : '';
-      return (
-        <ColorControl
+export const DocxEditorShapeFillTransparency = objectPart(
+  'shape.fillTransparency',
+  defineComponent({
+    name: 'DocxEditorShapeFillTransparency',
+    props: objectControlProps,
+    setup(props) {
+      const shape = useSelectedShape();
+      return () => (
+        <TextControl
           {...passOn(props)}
-          slotId="shape.outlineColor"
-          summary={summary}
-          noneLabel={t('shape.pane.noOutline')}
+          slotId="shape.fillTransparency"
+          numeric
+          draftKey={shape.memberId.value ?? shape.drawingNodeId.value ?? ''}
         />
       );
-    };
-  },
-});
+    },
+  })
+);
+
+/** The outline colour of the selected shape (`shape.outlineColor`), with No line. @public */
+export const DocxEditorShapeOutlineColor = objectPart(
+  'shape.outlineColor',
+  defineComponent({
+    name: 'DocxEditorShapeOutlineColor',
+    props: objectButtonPartProps,
+    setup(props, { slots }) {
+      const { t } = useTranslation();
+      const translate = useChartTranslate();
+      const editorRef = useDocxEditor();
+      const shape = useSelectedShape();
+      return () => {
+        const hexes = documentThemeHexes(editorRef.value?.getDocumentThemeColors());
+        const format = shape.format.value;
+        const summary = format ? shapeOutlineSummary(format.outline, hexes, translate) : '';
+        return (
+          <ColorControl
+            {...passOnButton(props)}
+            slotId="shape.outlineColor"
+            summary={summary}
+            noneLabel={t('shape.pane.noOutline')}
+          >
+            {{ default: () => slots.default?.() }}
+          </ColorControl>
+        );
+      };
+    },
+  })
+);
 
 /**
  * The outline width in points (`shape.outlineWidth`): a list of preset widths, and in a field
  * a number box for any other width. @public
  */
-export const ShapeOutlineWidth = defineComponent({
-  name: 'ShapeOutlineWidth',
-  props: objectControlProps,
-  setup(props) {
-    const { t } = useTranslation();
-    const shape = useSelectedShape();
-    return () => {
-      if (props.hidden) return null;
-      const compact = props.variant === 'compact';
-      const widthPt = shape.format.value?.outline.widthPt;
-      const options = SHAPE_OUTLINE_WIDTHS.map(
-        (value) => [String(value), t('shape.pane.widthPoints', { value })] as const
-      );
-      const list = (
-        <ChoiceControl
-          {...passOn(props)}
-          label={compact ? props.label : t('shape.pane.widthPreset')}
-          slotId="shape.outlineWidth"
-          options={options}
-          other={
-            compact && typeof widthPt === 'number'
-              ? t('shape.pane.widthPoints', { value: Math.round(widthPt * 100) / 100 })
-              : t('shape.pane.otherWidth')
-          }
-          parse={Number}
-        />
-      );
-      if (compact) return list;
-      return (
-        <div class="docx-chart-pane__pair">
-          {list}
-          <TextControl
+export const DocxEditorShapeOutlineWidth = objectPart(
+  'shape.outlineWidth',
+  defineComponent({
+    name: 'DocxEditorShapeOutlineWidth',
+    props: objectControlProps,
+    setup(props) {
+      const { t } = useTranslation();
+      const shape = useSelectedShape();
+      const variantOf = useObjectControlVariant(() => props.variant);
+      return () => {
+        if (props.hidden) return null;
+        const variant = variantOf();
+        const compact = variant === 'compact';
+        const widthPt = shape.format.value?.outline.widthPt;
+        const options = SHAPE_OUTLINE_WIDTHS.map(
+          (value) => [String(value), t('shape.pane.widthPoints', { value })] as const
+        );
+        const list = (
+          <ChoiceControl
+            {...passOn(props)}
+            variant={variant}
+            label={compact ? props.label : t('shape.pane.widthPreset')}
             slotId="shape.outlineWidth"
-            label={props.label}
-            numeric
-            draftKey={shape.memberId.value ?? shape.drawingNodeId.value ?? ''}
-            parse={(text: string) => text}
+            options={options}
+            other={
+              compact && typeof widthPt === 'number'
+                ? t('shape.pane.widthPoints', { value: Math.round(widthPt * 100) / 100 })
+                : t('shape.pane.otherWidth')
+            }
+            parse={Number}
           />
-        </div>
-      );
-    };
-  },
-});
+        );
+        if (compact) return list;
+        return (
+          <div class="docx-chart-pane__pair">
+            {list}
+            <TextControl
+              slotId="shape.outlineWidth"
+              variant="field"
+              label={props.label}
+              numeric
+              draftKey={shape.memberId.value ?? shape.drawingNodeId.value ?? ''}
+            />
+          </div>
+        );
+      };
+    },
+  })
+);
 
 /** The outline dash (`shape.outlineDash`): solid, dotted, or dashed. @public */
-export const ShapeOutlineDashPart = defineComponent({
-  name: 'ShapeOutlineDashPart',
-  props: objectControlProps,
-  setup(props) {
-    const { t } = useTranslation();
-    const translate = useChartTranslate();
-    const shape = useSelectedShape();
-    return () => {
-      const options = SHAPE_OUTLINE_DASHES.map(
-        (dash) => [dash, translate(shapeDashLabelKey(dash))] as const
-      );
-      return (
-        <ChoiceControl
-          {...passOn(props)}
-          slotId="shape.outlineDash"
-          options={options}
-          other={
-            shape.format.value?.outline.dash === 'custom'
-              ? t('shape.pane.dashes.custom')
-              : t('shape.pane.fillTypes.mixed')
-          }
-        />
-      );
-    };
-  },
-});
+export const DocxEditorShapeOutlineDash = objectPart(
+  'shape.outlineDash',
+  defineComponent({
+    name: 'DocxEditorShapeOutlineDash',
+    props: objectControlProps,
+    setup(props) {
+      const { t } = useTranslation();
+      const translate = useChartTranslate();
+      const shape = useSelectedShape();
+      return () => {
+        const options = SHAPE_OUTLINE_DASHES.map(
+          (dash) => [dash, translate(shapeDashLabelKey(dash))] as const
+        );
+        return (
+          <ChoiceControl
+            {...passOn(props)}
+            slotId="shape.outlineDash"
+            options={options}
+            other={
+              shape.format.value?.outline.dash === 'custom'
+                ? t('shape.pane.dashes.custom')
+                : t('shape.pane.fillTypes.mixed')
+            }
+          />
+        );
+      };
+    },
+  })
+);

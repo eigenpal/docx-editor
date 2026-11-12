@@ -354,7 +354,10 @@ export {
 export * from './editor/objects';
 export {
   ColorPicker,
+  type ColorPickerCompound,
   type ColorPickerContentProps,
+  type ColorPickerHexInputProps,
+  type ColorPickerNoColorProps,
   type ColorPickerRootProps,
   type ColorPickerSwatchProps,
   type ColorPickerTriggerProps,
@@ -370,7 +373,10 @@ export {
 export type {
   ColorPick,
   ObjectSlotValueMap,
+  ObjectToggleSlotId,
   PaneSection,
+  PaneSectionId,
+  PaneSectionIds,
   ShapeOutlineDash,
 } from '@docx-editor.dev/core/editor';
 export type {

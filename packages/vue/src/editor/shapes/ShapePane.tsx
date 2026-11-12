@@ -4,7 +4,7 @@
 // each part runs its own slot. The React twin is `packages/react/src/editor/shapes/ShapePane.tsx`;
 // both render the same markup.
 
-import { defineComponent, nextTick, ref, watch } from 'vue';
+import { defineComponent, nextTick, provide, ref, watch } from 'vue';
 import {
   focusChartPane,
   listenPaneRequests,
@@ -12,6 +12,8 @@ import {
 } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
+import { useChromeScopeClassName } from '../color-mode-context';
+import { ScopedByAncestorContext } from '../scope-context';
 import { DocxEditorPaneSections } from '../objects/pane-sections';
 import { useSelectedShape } from './useSelectedShape';
 
@@ -29,6 +31,8 @@ export const DocxEditorShapePane = defineComponent({
   },
   setup(props) {
     const { t } = useTranslation();
+    const scope = useChromeScopeClassName();
+    provide(ScopedByAncestorContext, true);
     const editorRef = useDocxEditor();
     const shape = useSelectedShape();
     const root = ref<HTMLDivElement | null>(null);
@@ -54,9 +58,10 @@ export const DocxEditorShapePane = defineComponent({
       { immediate: true }
     );
     return () => {
-      const classes = ['docx-chart-pane', 'docx-shape-pane', props.className]
+      // The pane carries the scope, so its parts need none of their own.
+      const classes = `${scope()}${['docx-chart-pane', 'docx-shape-pane', props.className]
         .filter(Boolean)
-        .join(' ');
+        .join(' ')}`;
       const format = shape.format.value;
       const drawingNodeId = shape.drawingNodeId.value;
       if (!format || !drawingNodeId)

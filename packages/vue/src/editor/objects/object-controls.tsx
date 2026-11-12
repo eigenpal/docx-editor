@@ -7,24 +7,40 @@
 // `toolbarCommandState`; a change runs `runToolbarCommand`. The React twin is
 // `packages/react/src/editor/objects/object-controls.tsx`; both render the same markup.
 
-import { computed, defineComponent, type ComputedRef, type PropType, type VNodeChild } from 'vue';
+import {
+  computed,
+  defineComponent,
+  inject,
+  provide,
+  type ComputedRef,
+  type InjectionKey,
+  type PropType,
+  type VNodeChild,
+} from 'vue';
 import {
   CHROME_GROUPS,
+  chartSlotIsToggle,
   chromeSlotId,
+  objectSlotOptions,
+  objectSlotValue,
   runToolbarCommand,
   toolbarCommandState,
   type ChromeSlotId,
   type ColorPick,
   type ObjectSlotValueMap,
+  type ObjectToggleSlotId,
   type ToolbarCommandState,
 } from '@docx-editor.dev/core/editor';
-import type { ExecResult } from '@docx-editor.dev/core/contracts/editor';
+import type { EditorExecOptions, ExecResult } from '@docx-editor.dev/core/contracts/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import { useStableDocxId } from '../../lib/stable-id';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
+import { useChromeScopeClassName } from '../color-mode-context';
+import { ScopedByAncestorContext } from '../scope-context';
 import { chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
+import { Slot } from '../toolbar/Slot';
 import { ChartField } from '../charts/chart-fields';
 import { ColorPicker, type ColorPickerValue } from '../color/ColorPicker';
 
@@ -34,45 +50,104 @@ export type ObjectSlotId = keyof ObjectSlotValueMap;
 /** How a part renders: with a visible label (`field`), or as a toolbar control (`compact`). @public */
 export type ObjectControlVariant = 'field' | 'compact';
 
+/**
+ * The variant a part takes when its own `variant` prop is absent. `DocxEditorToolbar` provides
+ * `compact`, so a part placed in the toolbar renders as a toolbar control.
+ */
+export const ObjectControlVariantContext: InjectionKey<ObjectControlVariant> = Symbol(
+  'ObjectControlVariantContext'
+);
+
+/** The variant of a part: its own prop, else the one its container provides. */
+export function useObjectControlVariant(
+  variant: () => ObjectControlVariant | undefined
+): () => ObjectControlVariant {
+  const inherited = inject(ObjectControlVariantContext, 'field');
+  return () => variant() ?? inherited;
+}
+
+/**
+ * The scope class of a part's root, read while rendering, and the scoped flag for what the part
+ * renders inside it. A part placed outside every scoped element (a host toolbar beside `Root`)
+ * carries the scope itself, so the chrome tokens, dark mode, and the popover position apply.
+ */
+export function usePartScope(): () => string {
+  const scope = useChromeScopeClassName();
+  provide(ScopedByAncestorContext, true);
+  return scope;
+}
+
 /** The props every shape and chart part takes. @public */
 export interface ObjectControlProps {
   /** A class name added to the part's root. */
   className?: string;
   /** Replaces the label, which defaults to the slot's translated name. */
   label?: string;
-  /** Default `field`; the toolbar renders `compact`. */
+  /** Default `field`, or `compact` inside `DocxEditorToolbar`. */
   variant?: ObjectControlVariant;
   /** Renders nothing, so a toolbar override can remove the slot. */
   hidden?: boolean;
+}
+
+/**
+ * The props of a part whose control is a button: the colour parts and the toggle parts. With
+ * `asChild`, the one child of the default slot becomes the button. @public
+ */
+export interface ObjectButtonPartProps extends ObjectControlProps {
+  /** Replaces the slot's icon in the compact variant. */
+  icon?: VNodeChild;
+  /** Renders the one child of the default slot as the button, with the part's props merged in. */
+  asChild?: boolean;
 }
 
 /** The runtime props of `ObjectControlProps`, shared by every part. @internal */
 export const objectControlProps = {
   className: { type: String, default: undefined },
   label: { type: String, default: undefined },
-  variant: { type: String as PropType<ObjectControlVariant>, default: 'field' },
+  variant: { type: String as PropType<ObjectControlVariant>, default: undefined },
   hidden: { type: Boolean, default: false },
 } as const;
 
-/** What `useObjectControl` returns. @public */
-export interface UseObjectControlReturn<K extends ObjectSlotId> {
+/** The runtime props of `ObjectButtonPartProps`. @internal */
+export const objectButtonPartProps = {
+  ...objectControlProps,
+  icon: { type: null as unknown as PropType<VNodeChild>, default: undefined },
+  asChild: { type: Boolean, default: false },
+} as const;
+
+/** What `useObjectControl` returns for every slot. @public */
+export interface ObjectControlState<K extends ObjectSlotId> {
   readonly slotId: K;
   /** The slot's translated name. */
   readonly label: ComputedRef<string>;
-  /** What the control shows now, as text (`accent1`, `none`, `2.25`, `dash`), or undefined. */
-  readonly value: ComputedRef<string | undefined>;
+  /**
+   * The value the object shows now, typed for the slot, or null when nothing is selected, the
+   * object shows several values, or the slot has no single value (`chart.seriesColor`,
+   * `chart.data`).
+   */
+  readonly value: ComputedRef<ObjectSlotValueMap[K] | null>;
+  /** The values a list slot offers, in list order; empty for other slots. */
+  readonly options: ComputedRef<readonly ObjectSlotValueMap[K][]>;
   /** Whether a toggle is on, or whether the object shows the property. */
   readonly isActive: ComputedRef<boolean>;
   readonly isEnabled: ComputedRef<boolean>;
   /** Why the control is disabled, translated, or null. */
   readonly disabledReason: ComputedRef<string | null>;
   /** Run the slot with `value`, as `runToolbarCommand` does. */
-  readonly execute: (value: ObjectSlotValueMap[K]) => ExecResult;
-  /** Run the slot and give its refusal translated, or null when it applied. */
-  readonly apply: (value: ObjectSlotValueMap[K]) => string | null;
-  /** Run a toggle with no value: it turns the property on or off. */
-  readonly toggle: () => ExecResult;
+  readonly execute: (value: ObjectSlotValueMap[K], options?: EditorExecOptions) => ExecResult;
 }
+
+/** The member a toggle slot adds: a run with no value turns the element on or off. @public */
+export interface ObjectToggleControl {
+  readonly toggle: (options?: EditorExecOptions) => ExecResult;
+}
+
+/**
+ * What `useObjectControl` returns: the state and `execute`, and `toggle` for the toggle slots
+ * (`chart.dataLabels`, `chart.axes`, `chart.gridlines`). @public
+ */
+export type UseObjectControlReturn<K extends ObjectSlotId> = ObjectControlState<K> &
+  (K extends ObjectToggleSlotId ? ObjectToggleControl : unknown);
 
 const sameState = (a: ToolbarCommandState, b: ToolbarCommandState) =>
   a.value === b.value &&
@@ -91,30 +166,63 @@ const ICONS = new Map<string, readonly string[] | null>(
   )
 );
 
-/**
- * Bind one `shape.*` or `chart.*` slot: its value, enabled state, translated reason, and the
- * function that runs it. Use it to build a control the packaged parts do not cover. @public
- */
-export function useObjectControl<K extends ObjectSlotId>(slotId: K): UseObjectControlReturn<K> {
+/** What the parts read: the public control, the value as text, and a run with its refusal. */
+interface ObjectSlotBinding<K extends ObjectSlotId> {
+  readonly control: UseObjectControlReturn<K>;
+  /** The value as the toolbar state carries it, or empty text. */
+  readonly text: ComputedRef<string>;
+  /** Run the slot with any value it reads; the refusal translated, or null when it applied. */
+  readonly apply: (value: unknown) => string | null;
+}
+
+/** The binding of one slot, shared by `useObjectControl` and the parts. */
+export function useObjectSlot<K extends ObjectSlotId>(slotId: K): ObjectSlotBinding<K> {
   const editorRef = useDocxEditor();
   const { t } = useTranslation();
   const state = useEditorState(() => toolbarCommandState(editorRef.value, slotId), sameState);
-  const execute = (value: ObjectSlotValueMap[K]): ExecResult =>
-    runToolbarCommand(editorRef.value, slotId as ChromeSlotId as never, value as never);
-  return {
+  const run = (value: unknown, options?: EditorExecOptions): ExecResult =>
+    runToolbarCommand(editorRef.value, slotId as ChromeSlotId as never, value as never, options);
+  const control = {
     slotId,
     label: computed(() => t((LABEL_KEYS.get(slotId) ?? slotId) as TranslationKey)),
-    value: computed(() => state.value.value),
+    value: computed(() => objectSlotValue(slotId, state.value.value)),
+    options: computed(() => objectSlotOptions(slotId)),
     isActive: computed(() => state.value.active),
     isEnabled: computed(() => state.value.enabled),
     disabledReason: computed(() => localizeDisabledReason(state.value.disabledReason, t)),
-    execute,
-    apply: (value) => {
-      const result = execute(value);
+    execute: (value: ObjectSlotValueMap[K], options?: EditorExecOptions) => run(value, options),
+    ...(chartSlotIsToggle(slotId)
+      ? { toggle: (options?: EditorExecOptions) => run(undefined, options) }
+      : {}),
+  } as unknown as UseObjectControlReturn<K>;
+  return {
+    control,
+    text: computed(() => state.value.value ?? ''),
+    apply: (value: unknown) => {
+      const result = run(value);
       return result.ok ? null : (localizeDisabledReason(result.reason, t) ?? '');
     },
-    toggle: () => runToolbarCommand(editorRef.value, slotId as ChromeSlotId),
   };
+}
+
+/**
+ * Bind one `shape.*` or `chart.*` slot: its typed value, the values a list offers, the enabled
+ * state, the translated reason, and `execute`. Use it to build a control the packaged parts do
+ * not cover. @public
+ */
+export function useObjectControl<K extends ObjectSlotId>(slotId: K): UseObjectControlReturn<K> {
+  return useObjectSlot(slotId).control;
+}
+
+/** A part component: it renders one slot, and `docxSlot` names the slot for toolbar overrides. @public */
+export type ObjectPartComponent<C, S extends ObjectSlotId> = C & { readonly docxSlot: S };
+
+/** Mark a part with its slot, so `DocxEditorToolbar` replaces that slot with it. */
+export function objectPart<C extends object, S extends ObjectSlotId>(
+  slot: S,
+  component: C
+): ObjectPartComponent<C, S> {
+  return Object.assign(component, { docxSlot: slot });
 }
 
 /** Attributes a part passes through to a compound part, such as a trigger's `title`. */
@@ -130,13 +238,15 @@ export function objectControlFrame(
     reason: string | null;
     reasonId: string;
     active?: boolean;
+    /** The scope class from `usePartScope`. */
+    scope: string;
   },
   children: VNodeChild
 ): VNodeChild {
   const { variant, reason } = props;
   return (
     <div
-      class={`docx-object-control docx-object-control--${variant}${props.className ? ` ${props.className}` : ''}`}
+      class={`${props.scope}docx-object-control docx-object-control--${variant}${props.className ? ` ${props.className}` : ''}`}
       data-slot={props.slotId}
       data-active={props.active ? '' : undefined}
       data-disabled={reason !== null ? '' : undefined}
@@ -157,7 +267,7 @@ export function objectControlFrame(
 export const ColorControl = defineComponent({
   name: 'ObjectColorControl',
   props: {
-    ...objectControlProps,
+    ...objectButtonPartProps,
     slotId: { type: String as PropType<'shape.fill' | 'shape.outlineColor'>, required: true },
     /** What the trigger says: the colour's name, No fill, Gradient. */
     summary: { type: String, required: true },
@@ -165,26 +275,33 @@ export const ColorControl = defineComponent({
     /** Text under the control in a field, such as a note about a fill it cannot show. */
     after: { type: null as unknown as PropType<VNodeChild>, default: null },
   },
-  setup(props) {
-    const control = useObjectControl(props.slotId);
+  setup(props, { slots }) {
+    const { control, text, apply } = useObjectSlot(props.slotId);
     const reasonId = useStableDocxId('object-reason');
     const labelId = useStableDocxId('object-label');
+    const variantOf = useObjectControlVariant(() => props.variant);
+    const scope = usePartScope();
     return () => {
       if (props.hidden) return null;
-      const variant = props.variant;
+      const variant = variantOf();
       const label = props.label ?? control.label.value;
-      const raw = control.value.value;
-      const value: ColorPickerValue = raw === undefined || raw === '' ? null : (raw as ColorPick);
+      const raw = text.value;
+      const value: ColorPickerValue = raw === '' ? null : (raw as ColorPick);
       const reason = control.disabledReason.value;
       return objectControlFrame(
-        { slotId: props.slotId, variant, className: props.className, reason, reasonId },
+        {
+          slotId: props.slotId,
+          variant,
+          className: props.className,
+          reason,
+          reasonId,
+          scope: scope(),
+        },
         [
           <ColorPicker.Root
             value={value}
             disabled={!control.isEnabled.value}
-            onPick={(pick: ColorPick | 'none') =>
-              control.apply(pick as ObjectSlotValueMap['shape.fill'])
-            }
+            onPick={(pick: ColorPick | 'none') => apply(pick)}
           >
             {{
               default: () => [
@@ -195,6 +312,7 @@ export const ColorControl = defineComponent({
                   {label}
                 </span>,
                 <ColorPicker.Trigger
+                  asChild={props.asChild}
                   aria-labelledby={labelId}
                   aria-describedby={reason !== null && variant === 'field' ? reasonId : undefined}
                   {...passAttrs({
@@ -202,16 +320,19 @@ export const ColorControl = defineComponent({
                   })}
                 >
                   {{
-                    default: () => [
-                      variant === 'compact' ? (
-                        <span class="docx-object-control__icon" aria-hidden="true">
-                          {chromeIcon(ICONS.get(props.slotId))}
-                        </span>
-                      ) : null,
-                      <span class="docx-color-picker__summary docx-shape-pane__summary">
-                        {props.summary}
-                      </span>,
-                    ],
+                    default: () =>
+                      props.asChild
+                        ? slots.default?.()
+                        : [
+                            variant === 'compact' ? (
+                              <span class="docx-object-control__icon" aria-hidden="true">
+                                {props.icon ?? chromeIcon(ICONS.get(props.slotId))}
+                              </span>
+                            ) : null,
+                            <span class="docx-color-picker__summary docx-shape-pane__summary">
+                              {props.summary}
+                            </span>,
+                          ],
                   }}
                 </ColorPicker.Trigger>,
                 <ColorPicker.Content aria-label={label}>
@@ -253,18 +374,32 @@ export const ChoiceControl = defineComponent({
     onApplied: { type: Function as PropType<(refusal: string | null) => void>, default: undefined },
   },
   setup(props) {
-    const control = useObjectControl(props.slotId);
+    const { control, text, apply } = useObjectSlot(props.slotId);
     const id = useStableDocxId('object-choice');
     const reasonId = useStableDocxId('object-reason');
+    const variantOf = useObjectControlVariant(() => props.variant);
+    const scope = usePartScope();
     return () => {
       if (props.hidden) return null;
-      const variant = props.variant;
+      const variant = variantOf();
       const label = props.label ?? control.label.value;
-      const value = control.value.value ?? '';
+      const value = text.value;
       const listed = props.options.some(([option]) => option === value);
       const reason = control.disabledReason.value;
+      // With nothing selected, a compact list names itself, as its label is hidden.
+      const placeholder =
+        !control.isEnabled.value && value === '' && variant === 'compact'
+          ? label
+          : (props.other ?? '');
       return objectControlFrame(
-        { slotId: props.slotId, variant, className: props.className, reason, reasonId },
+        {
+          slotId: props.slotId,
+          variant,
+          className: props.className,
+          reason,
+          reasonId,
+          scope: scope(),
+        },
         [
           <div class="docx-chart-pane__field">
             <label
@@ -281,15 +416,13 @@ export const ChoiceControl = defineComponent({
               aria-describedby={reason !== null && variant === 'field' ? reasonId : undefined}
               onChange={(event: Event) => {
                 const text = (event.currentTarget as HTMLSelectElement).value;
-                const refusal = control.apply((props.parse ? props.parse(text) : text) as never);
+                const refusal = apply(props.parse ? props.parse(text) : text);
                 props.onApplied?.(refusal);
               }}
             >
               {listed ? null : (
                 <option value="" disabled>
-                  {control.value.value == null && variant === 'compact'
-                    ? label
-                    : (props.other ?? '')}
+                  {placeholder}
                 </option>
               )}
               {props.options.map(([option, text]) => (
@@ -313,8 +446,6 @@ export const TextControl = defineComponent({
     ...objectControlProps,
     slotId: { type: String as PropType<ObjectSlotId>, required: true },
     numeric: { type: Boolean, default: false },
-    /** Turns the typed text into the slot value. Default the text itself. */
-    parse: { type: Function as PropType<(text: string) => unknown>, default: undefined },
     /** The value the field shows; default the slot's value. */
     value: { type: String, default: undefined },
     /** Keeps unsaved text while it stays the same; default the slot id. */
@@ -323,11 +454,13 @@ export const TextControl = defineComponent({
     describedBy: { type: String, default: undefined },
   },
   setup(props) {
-    const control = useObjectControl(props.slotId);
+    const { control, text, apply } = useObjectSlot(props.slotId);
     const reasonId = useStableDocxId('object-reason');
+    const variantOf = useObjectControlVariant(() => props.variant);
+    const scope = usePartScope();
     return () => {
       if (props.hidden) return null;
-      const variant = props.variant;
+      const variant = variantOf();
       const label = props.label ?? control.label.value;
       const reason = control.disabledReason.value;
       const described = [
@@ -337,18 +470,23 @@ export const TextControl = defineComponent({
         .filter(Boolean)
         .join(' ');
       return objectControlFrame(
-        { slotId: props.slotId, variant, className: props.className, reason, reasonId },
+        {
+          slotId: props.slotId,
+          variant,
+          className: props.className,
+          reason,
+          reasonId,
+          scope: scope(),
+        },
         <ChartField
           draftKey={props.draftKey ?? props.slotId}
           label={label}
           visibleLabel={variant === 'field' ? label : undefined}
-          value={props.value ?? control.value.value ?? ''}
+          value={props.value ?? text.value}
           numeric={props.numeric}
           disabled={!control.isEnabled.value}
           describedBy={described || undefined}
-          onCommit={(text: string) =>
-            control.apply((props.parse ? props.parse(text) : text) as never)
-          }
+          onCommit={(typed: string) => apply(typed)}
         />
       );
     };
@@ -359,21 +497,30 @@ export const TextControl = defineComponent({
 export const ToggleControl = defineComponent({
   name: 'ObjectToggleControl',
   props: {
-    ...objectControlProps,
-    slotId: {
-      type: String as PropType<'chart.dataLabels' | 'chart.axes' | 'chart.gridlines'>,
-      required: true,
-    },
+    ...objectButtonPartProps,
+    slotId: { type: String as PropType<ObjectToggleSlotId>, required: true },
   },
-  setup(props) {
-    const control = useObjectControl(props.slotId);
+  setup(props, { slots }) {
+    const { control, apply } = useObjectSlot(props.slotId);
     const reasonId = useStableDocxId('object-reason');
+    const variantOf = useObjectControlVariant(() => props.variant);
+    const scope = usePartScope();
     return () => {
       if (props.hidden) return null;
-      const variant = props.variant;
+      const variant = variantOf();
       const label = props.label ?? control.label.value;
       const reason = control.disabledReason.value;
       const active = control.isActive.value;
+      const button = (name: string, on: boolean) => ({
+        type: 'button' as const,
+        class: 'docx-toolbar__button',
+        'aria-label': name,
+        title: name,
+        'aria-pressed': on,
+        disabled: !control.isEnabled.value,
+        'data-active': on ? '' : undefined,
+        onClick: () => (control as UseObjectControlReturn<ObjectToggleSlotId>).toggle(),
+      });
       return objectControlFrame(
         {
           slotId: props.slotId,
@@ -382,20 +529,16 @@ export const ToggleControl = defineComponent({
           reason,
           reasonId,
           active,
+          scope: scope(),
         },
         variant === 'compact' ? (
-          <button
-            type="button"
-            class="docx-toolbar__button"
-            aria-label={label}
-            title={label}
-            aria-pressed={active}
-            disabled={!control.isEnabled.value}
-            data-active={active ? '' : undefined}
-            onClick={() => control.toggle()}
-          >
-            {chromeIcon(ICONS.get(props.slotId))}
-          </button>
+          props.asChild ? (
+            <Slot {...button(label, active)}>{{ default: () => slots.default?.() }}</Slot>
+          ) : (
+            <button {...button(label, active)}>
+              {props.icon ?? chromeIcon(ICONS.get(props.slotId))}
+            </button>
+          )
         ) : (
           <label class="docx-dialog__checkbox-row">
             <input
@@ -403,9 +546,7 @@ export const ToggleControl = defineComponent({
               checked={active}
               disabled={!control.isEnabled.value}
               aria-describedby={reason !== null ? reasonId : undefined}
-              onChange={(event: Event) =>
-                control.apply((event.currentTarget as HTMLInputElement).checked as never)
-              }
+              onChange={(event: Event) => apply((event.currentTarget as HTMLInputElement).checked)}
             />
             {label}
           </label>

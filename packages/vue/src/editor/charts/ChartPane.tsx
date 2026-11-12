@@ -4,7 +4,7 @@
 // runs its own slot. The React twin is `packages/react/src/editor/charts/ChartPane.tsx`; both
 // render the same markup.
 
-import { defineComponent, nextTick, ref, watch } from 'vue';
+import { defineComponent, nextTick, provide, ref, watch } from 'vue';
 import {
   focusChartPane,
   listenPaneRequests,
@@ -12,6 +12,8 @@ import {
 } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
+import { useChromeScopeClassName } from '../color-mode-context';
+import { ScopedByAncestorContext } from '../scope-context';
 import { DocxEditorPaneSections } from '../objects/pane-sections';
 import { useSelectedChart } from './useSelectedChart';
 
@@ -32,6 +34,8 @@ export const DocxEditorChartPane = defineComponent({
   },
   setup(props) {
     const { t } = useTranslation();
+    const scope = useChromeScopeClassName();
+    provide(ScopedByAncestorContext, true);
     const editorRef = useDocxEditor();
     const selected = useSelectedChart();
     const root = ref<HTMLDivElement | null>(null);
@@ -53,7 +57,8 @@ export const DocxEditorChartPane = defineComponent({
       { immediate: true }
     );
     return () => {
-      const classes = ['docx-chart-pane', props.className].filter(Boolean).join(' ');
+      // The pane carries the scope, so its parts need none of their own.
+      const classes = `${scope()}${['docx-chart-pane', props.className].filter(Boolean).join(' ')}`;
       const chart = selected.chart.value;
       if (!chart)
         return (

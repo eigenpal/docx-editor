@@ -6,6 +6,7 @@
 // Escape closes it, and the focus returns to the trigger. Both render the same markup.
 
 import {
+  Teleport,
   computed,
   defineComponent,
   inject,
@@ -35,6 +36,8 @@ import { useTranslation, type TranslationKey } from '../../i18n';
 import { useStableDocxId } from '../../lib/stable-id';
 import { useDocxEditor } from '../context';
 import { Slot } from '../toolbar/Slot';
+import { useChromeDark, useChromeScopeClassName } from '../color-mode-context';
+import { ScopedByAncestorContext } from '../scope-context';
 
 /** The value of a picker: a pick, `none` for No colour, or null when the target is mixed. @public */
 export type ColorPickerValue = ColorPick | 'none' | null;
@@ -97,6 +100,22 @@ export interface ColorPickerContentProps {
   hexInput?: boolean;
   /** Renders the grid in place, inside a popup the host already owns. */
   inline?: boolean;
+  /**
+   * Renders the grid in this element (or selector), through `Teleport`, for a host popover
+   * library that places it. The grid then takes no position of its own.
+   */
+  container?: Element | string | null;
+  className?: string;
+}
+
+/** Props for `ColorPicker.NoColor`. The default slot replaces the button text. @public */
+export interface ColorPickerNoColorProps {
+  className?: string;
+}
+
+/** Props for `ColorPicker.HexInput`. @public */
+export interface ColorPickerHexInputProps {
+  /** More class names for the field. */
   className?: string;
 }
 
@@ -126,6 +145,8 @@ const ColorPickerRoot = defineComponent({
   setup(props, { slots }) {
     const editorRef = useDocxEditor();
     const { t } = useTranslation();
+    const scope = useChromeScopeClassName();
+    provide(ScopedByAncestorContext, true);
     const openState = ref(false);
     const open = computed(() => (props.open ?? openState.value) && !props.disabled);
     const triggerRef = shallowRef<HTMLButtonElement | null>(null);
@@ -143,9 +164,15 @@ const ColorPickerRoot = defineComponent({
         triggerRef.value?.focus();
         props.onPick(next);
       },
-      themeHexes: computed(
-        () => props.themeHexes ?? documentThemeHexes(editorRef.value?.getDocumentThemeColors())
-      ),
+      themeHexes: (() => {
+        // Stable across renders that change nothing, as React keeps it.
+        const key = computed(() =>
+          (props.themeHexes ?? documentThemeHexes(editorRef.value?.getDocumentThemeColors())).join(
+            ','
+          )
+        );
+        return computed(() => (key.value ? key.value.split(',') : []));
+      })(),
       disabled: computed(() => props.disabled),
       noColor: computed(() => props.noColor),
       automaticHex: computed(() => props.automaticHex),
@@ -155,7 +182,7 @@ const ColorPickerRoot = defineComponent({
     });
     return () => {
       const rootProps = {
-        class: `docx-color-picker docx-chart-pane__color docx-shape-pane__color${props.className ? ` ${props.className}` : ''}`,
+        class: `${scope()}docx-color-picker docx-chart-pane__color docx-shape-pane__color${props.className ? ` ${props.className}` : ''}`,
         'data-open': open.value || undefined,
       };
       if (props.asChild) return <Slot {...rootProps}>{{ default: () => slots.default?.() }}</Slot>;
@@ -171,15 +198,19 @@ function valueHex(context: ColorPickerContextValue): string | null {
   return colorPickHex(value, context.themeHexes.value, context.automaticHex.value);
 }
 
-/** The button that opens the grid; it shows a chip of the current colour, then its children. */
+/**
+ * The button that opens the grid; it shows a chip of the current colour, then its children. Its
+ * template ref exposes `element`, the button, so a host popover library can anchor to it.
+ */
 const ColorPickerTrigger = defineComponent({
   name: 'ColorPickerTrigger',
   props: {
     className: { type: String, default: undefined },
     asChild: { type: Boolean, default: false },
   },
-  setup(props, { slots }) {
+  setup(props, { slots, expose }) {
     const context = usePicker('Trigger');
+    expose({ element: context.triggerRef });
     const setTrigger = (node: unknown): void => {
       context.triggerRef.value = isElementNode(node) ? (node as HTMLButtonElement) : null;
     };
@@ -353,7 +384,11 @@ const ColorPickerGrid = defineComponent({
   },
 });
 
-/** The grid popover. It renders only while the picker is open. */
+/**
+ * The grid popover. It renders only while the picker is open, and moves the focus into the grid
+ * when it opens. With `container`, it renders there through `Teleport` and leaves the position to
+ * the host; its template ref exposes `element`, the grid, for a host popover library.
+ */
 const ColorPickerContent = defineComponent({
   name: 'ColorPickerContent',
   props: {
@@ -361,11 +396,18 @@ const ColorPickerContent = defineComponent({
     hexInput: { type: Boolean, default: true },
     /** Renders the grid in place, inside a popup the host already owns. */
     inline: { type: Boolean, default: false },
+    /** Renders the grid in this element (or selector), through `Teleport`. */
+    container: {
+      type: [Object, String] as PropType<Element | string | null>,
+      default: undefined,
+    },
     className: { type: String, default: undefined },
   },
-  setup(props, { slots }) {
+  setup(props, { slots, expose }) {
     const context = usePicker('Content');
+    const dark = useChromeDark();
     const panel = ref<HTMLDivElement | null>(null);
+    expose({ element: panel });
     watch(
       context.open,
       (isOpen, _, onCleanup) => {
@@ -378,19 +420,30 @@ const ColorPickerContent = defineComponent({
             context.setOpen(false);
         };
         doc.addEventListener('pointerdown', away, true);
-        focusColorSwatch(panel.value);
         onCleanup(() => doc.removeEventListener('pointerdown', away, true));
+      },
+      { flush: 'post', immediate: true }
+    );
+    // Only when the grid opens: a later render of the host keeps the focus where the user put it.
+    watch(
+      context.open,
+      (isOpen) => {
+        if (isOpen) focusColorSwatch(panel.value);
       },
       { flush: 'post', immediate: true }
     );
     return () => {
       if (!context.open.value) return null;
-      return (
+      const container = props.container ?? null;
+      const placed = props.inline || !!container;
+      // Through a portal the grid leaves the picker's scope, so it carries the scope itself.
+      const scope = container ? (dark.value ? 'docx-editor dark ' : 'docx-editor ') : '';
+      const grid = (
         <div
           ref={panel}
           id={context.contentId}
           role="group"
-          class={`docx-color-picker__content${props.inline ? ' docx-color-picker__content--inline' : ' docx-chart-pane__grid'}${props.className ? ` ${props.className}` : ''}`}
+          class={`${scope}docx-color-picker__content${placed ? ' docx-color-picker__content--inline' : ' docx-chart-pane__grid'}${props.className ? ` ${props.className}` : ''}`}
           onKeydown={(event: KeyboardEvent) => {
             if (event.defaultPrevented) return;
             if (moveColorSwatchFocus(panel.value, event.key)) {
@@ -411,6 +464,7 @@ const ColorPickerContent = defineComponent({
           ]}
         </div>
       );
+      return container ? <Teleport to={container}>{grid}</Teleport> : grid;
     };
   },
 });
@@ -428,6 +482,9 @@ export const ColorPicker = {
   NoColor: ColorPickerNoColor,
   HexInput: ColorPickerHexInput,
 };
+
+/** The parts of the `ColorPicker` compound. @public */
+export type ColorPickerCompound = typeof ColorPicker;
 
 /**
  * The shared grid inside a popup the host owns, for a target that keeps only `RRGGBB` (a table
