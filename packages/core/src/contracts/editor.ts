@@ -33,23 +33,9 @@ export type {
 } from './editor-fonts.ts';
 import type { EditorEvents } from './editor-events.ts';
 import type { EditorAnchorNavigation, ScrollToAnchorOptions } from './editor-anchor.ts';
-export type {
-  AnchorHighlightAnimation,
-  AnchorHighlightOptions,
-  ClearAnchorHighlightOptions,
-  EditorAnchorNavigation,
-  ScrollPlacement,
-  ScrollToAnchorOptions,
-} from './editor-anchor.ts';
+export type * from './editor-anchor.ts';
 import type { EditorHighlights, HighlightRange } from './editor-highlights.ts';
-export type {
-  EditorHighlights,
-  HighlightHit,
-  HighlightOptions,
-  HighlightRange,
-  HighlightRect,
-  HighlightResult,
-} from './editor-highlights.ts';
+export type * from './editor-highlights.ts';
 import type { EditorReviewHits } from './editor-review-hits.ts';
 import type { ReviewItemQuery } from './editor-review-query.ts';
 export type { ReviewItemQuery } from './editor-review-query.ts';
