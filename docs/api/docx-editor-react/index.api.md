@@ -132,6 +132,7 @@ import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
 import { PaneRequest } from '@docx-editor.dev/core/editor';
+import { PaneRequestListenerOptions } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogFields } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogMixed } from '@docx-editor.dev/core/editor';
 import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
@@ -3828,7 +3829,7 @@ export interface UsePageSetupReturn {
 }
 
 // @public
-export function usePaneRequest(listener: (request: PaneRequest) => void): void;
+export function usePaneRequest(listener: (request: PaneRequest) => void, options?: PaneRequestListenerOptions): void;
 
 // @public
 export function useParagraphDialog(): UseParagraphDialogReturn;

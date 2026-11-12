@@ -2898,6 +2898,7 @@ export interface SelectedImageState {
     readonly kind: DrawingKind;
     // (undocumented)
     readonly locks: DrawingLocks;
+    readonly memberId?: string;
     // (undocumented)
     readonly name: string;
     // (undocumented)
@@ -2987,7 +2988,7 @@ export type SetReviewChangesAuthorOptions = ReviewChangesAttribution & ({
 // @public
 export interface SetShapeFillCommand {
     // (undocumented)
-    color?: string;
+    color?: ShapeColorValue;
     drawingNodeId?: string;
     // (undocumented)
     transparency?: number;
@@ -2998,7 +2999,7 @@ export interface SetShapeFillCommand {
 // @public
 export interface SetShapeOutlineCommand {
     // (undocumented)
-    color?: string;
+    color?: ShapeColorValue;
     drawingNodeId?: string;
     // (undocumented)
     visible?: boolean;
@@ -3007,8 +3008,15 @@ export interface SetShapeOutlineCommand {
 }
 
 // @public
+export type ShapeColorValue = string | {
+    readonly shift?: number;
+    readonly theme: ShapeThemeColorName;
+};
+
+// @public
 export interface ShapeFillState {
     readonly color: string | null;
+    readonly theme?: ShapeThemeColor;
     readonly transparency: number;
     readonly type: 'solid' | 'none' | 'gradient' | 'pattern' | 'picture' | 'mixed';
 }
@@ -3024,11 +3032,22 @@ export interface ShapeFormatState {
 // @public
 export interface ShapeOutlineState {
     readonly color: string | null;
+    readonly theme?: ShapeThemeColor;
     // (undocumented)
     readonly visible: boolean | null;
     // (undocumented)
     readonly widthPt: number | null;
 }
+
+// @public
+export interface ShapeThemeColor {
+    // (undocumented)
+    readonly name: 'bg1' | 'tx1' | 'bg2' | 'tx2' | 'accent1' | 'accent2' | 'accent3' | 'accent4' | 'accent5' | 'accent6';
+    readonly shift: number;
+}
+
+// @public
+export type ShapeThemeColorName = 'bg1' | 'tx1' | 'bg2' | 'tx2' | 'accent1' | 'accent2' | 'accent3' | 'accent4' | 'accent5' | 'accent6';
 
 // @public
 export interface StyleDefinition {

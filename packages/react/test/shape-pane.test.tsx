@@ -10,7 +10,11 @@ import './dom-setup.ts';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { afterEach, expect, test } from 'bun:test';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
-import { runToolbarCommand, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import {
+  commandForSlotValue,
+  runToolbarCommand,
+  type DocxEditorInstance,
+} from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
@@ -208,4 +212,62 @@ test('the context menu shows Format shape for a selected shape and opens the pan
   await flush();
   const pane = view.container.querySelector('.docx-shape-pane')!;
   expect(pane.contains(document.activeElement)).toBe(true);
+});
+
+test('the side panel follows mode changes, remembers the shape pane, and Escape returns focus', async () => {
+  let closed = 0;
+  let instance: DocxEditorInstance | null = null;
+  const view = render(
+    <DocxEditorRoot
+      document={shapePaneDocx(SHAPE_PANE_CASES.theme)}
+      onReady={(editor) => {
+        instance = editor as DocxEditorInstance;
+      }}
+    >
+      <DocxEditorViewport>
+        <DocxEditorContent />
+      </DocxEditorViewport>
+      <DocxEditorSidePanel onClose={() => (closed += 1)} />
+    </DocxEditorRoot>
+  );
+  await flush();
+  const editor = instance!;
+  await act(async () => selectParityShape(editor));
+  await flush();
+  const panel = view.container.querySelector<HTMLElement>('.docx-side-panel')!;
+  const fillButton = () =>
+    panel.querySelector<HTMLButtonElement>('.docx-shape-pane__color-button')!;
+  expect(fillButton().disabled).toBe(false);
+  // Viewing mode changes what `can` answers, not the drawing: the fields still follow it.
+  await act(async () => {
+    editor.exec(commandForSlotValue('review.editingMode', 'viewing')!);
+  });
+  await flush();
+  expect(editor.snapshot().image).not.toBeNull();
+  expect(fillButton().disabled).toBe(true);
+  await act(async () => {
+    editor.exec(commandForSlotValue('review.editingMode', 'editing')!);
+  });
+  await flush();
+  expect(fillButton().disabled).toBe(false);
+  // Escape closes the panel, gives the keyboard to the editor, and keeps the shape selected.
+  await act(async () => {
+    fireEvent.keyDown(fillButton(), { key: 'Escape' });
+  });
+  await flush();
+  expect(closed).toBe(1);
+  expect(view.container.querySelector('.docx-pages')!.contains(document.activeElement)).toBe(true);
+  expect(editor.snapshot().image?.shapeFormat).not.toBeNull();
+  // A caret in text keeps the shape pane: the panel does not fall back to the chart pane.
+  await act(async () => {
+    const paragraph = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: paragraph, offset: 1 },
+      head: { paragraphId: paragraph, offset: 1 },
+    });
+  });
+  await flush();
+  expect(editor.snapshot().image).toBeNull();
+  expect(panel.getAttribute('data-pane')).toBe('shape');
+  expect(panel.textContent).toContain('No shape selected');
 });

@@ -5002,6 +5002,7 @@ export type ShapeFillInput = {
     readonly type: 'none';
 } | {
     readonly color?: string;
+    readonly theme?: ShapeThemeColorInput;
     readonly transparency?: number;
     readonly type: 'solid';
 };
@@ -5010,6 +5011,7 @@ export type ShapeFillInput = {
 export interface ShapeOutlineInput {
     // (undocumented)
     readonly color?: string;
+    readonly theme?: ShapeThemeColorInput;
     // (undocumented)
     readonly visible?: boolean;
     // (undocumented)
@@ -5039,6 +5041,16 @@ export interface ShapeShadow {
 
 // @internal
 export function shapeThemeCacheToken(resolveSchemeColor: (token: string) => string | null): string | undefined;
+
+// @public
+export interface ShapeThemeColorInput {
+    // (undocumented)
+    readonly name: ShapeThemeColorName;
+    readonly shift?: number;
+}
+
+// @public
+export type ShapeThemeColorName = 'bg1' | 'tx1' | 'bg2' | 'tx2' | 'accent1' | 'accent2' | 'accent3' | 'accent4' | 'accent5' | 'accent6';
 
 // @public
 export interface ShapingPort {

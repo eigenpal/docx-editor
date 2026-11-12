@@ -183,7 +183,11 @@ The pane lives in `DocxEditor.SidePanel`, which shows it while a shape is select
 - **Fill**: No fill, theme colors with tints and shades, standard colors, a hex color, and transparency in percent.
 - **Outline**: No line, the same colors, a hex color, and a width from 0.25 to 6 points or any typed width.
 
-Each change is one undo step. A gradient, pattern, or picture fill shows by name; a picked color or No fill replaces it. Theme colors save as their RGB value.
+Each change is one undo step. A gradient, pattern, or picture fill shows by name; a picked color or No fill replaces it. A theme color saves as a theme reference with its tint or shade, so it follows a theme change. A hex color saves as RGB and never shows as a theme color.
+
+In a group, the first press selects the group and a fill applies to every shape in it. A second press selects the shape under the pointer, and the pane then edits that shape alone. Press Escape to select the group again. A shape inside a group does not move, resize, or delete on its own.
+
+From code, pass a theme color as an object: `editor.exec({ type: 'setShapeFill', color: { theme: 'accent1', shift: 40 } })` sets Accent 1, Lighter 40%. A negative `shift` is darker.
 
 To build your own pane, use `useSelectedShape`. Its `edit` method takes the same checked changes as the packaged pane:
 

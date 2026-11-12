@@ -18,7 +18,14 @@
 export type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 export type { FontShapingOptions } from '../layout/font-shaping-policy.ts';
 export type { TrackedChangeFilterMode, TrackedChangePredicate } from '../contracts/editor.ts';
-export type { ShapeFillState, ShapeFormatState, ShapeOutlineState } from '../contracts/editor.ts';
+export type {
+  ShapeColorValue,
+  ShapeFillState,
+  ShapeFormatState,
+  ShapeOutlineState,
+  ShapeThemeColor,
+  ShapeThemeColorName,
+} from '../contracts/editor.ts';
 export {
   createLayoutShaping,
   disposeLayoutShaping,

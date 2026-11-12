@@ -409,7 +409,7 @@ export interface ChartLanes {
 export type ChartLegendPosition = 'none' | 'top' | 'bottom' | 'left' | 'right';
 
 // @public
-export function chartPaneAvailable(editor: Editor | null): boolean;
+export const chartPaneAvailable: (editor: Editor | null) => boolean;
 
 // @public
 export type ChartPaneChange = {
@@ -2129,6 +2129,7 @@ export type DrawingSelectionIntent = {
 } | {
     readonly drawingNodeId: string;
     readonly kind: 'pointer';
+    readonly memberNodeId?: string;
 } | {
     readonly kind: 'programmatic';
 };
@@ -2942,6 +2943,9 @@ export function keepScrollAtInlineEnd(scroller: HTMLElement): () => void;
 export function layoutPointsToCssPixels(points: number, paintScale: number): number;
 
 // @public
+export function leaveGroupMember(editor: Editor): boolean;
+
+// @public
 export const LINE_SPACING_PRESETS: readonly number[];
 
 // @public
@@ -2975,7 +2979,7 @@ export function listenForPopupEscape(options: PopupEscapeOptions): () => void;
 export function listenForPopupFocusLeave(options: PopupFocusLeaveOptions): () => void;
 
 // @public
-export function listenPaneRequests(editor: Editor, listener: (request: PaneRequest) => void): () => void;
+export function listenPaneRequests(editor: Editor, listener: (request: PaneRequest) => void, options?: PaneRequestListenerOptions): () => void;
 
 // @public
 export function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult>;
@@ -3329,6 +3333,7 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     sectionPropertiesAt(paragraphId: string): SectionProperties;
     selectAll(): void;
     selectDrawing(drawingNodeId: string, hostParagraphId: string): boolean;
+    selectDrawingMember(memberNodeId: string | null): boolean;
     selectedText(): string;
     // (undocumented)
     readonly session: TreeDocxSessionView;
@@ -3490,11 +3495,19 @@ export interface PaginatedSurfaceState {
 }
 
 // @public
+export function paneAvailable(editor: Editor | null, pane: EditorPaneId): boolean;
+
+// @public
 export interface PaneRequest {
     // (undocumented)
     readonly focus: boolean;
     // (undocumented)
     readonly pane: EditorPaneId;
+}
+
+// @public
+export interface PaneRequestListenerOptions {
+    readonly panes?: readonly EditorPaneId[];
 }
 
 // @public
@@ -4265,6 +4278,9 @@ export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId, value
 export function sameItemOverflow(a: ToolbarItemOverflow, b: ToolbarItemOverflow): boolean;
 
 // @public
+export function sameSelectedShape(a: SelectedShapeView, b: SelectedShapeView): boolean;
+
+// @public
 export function sameTabStops(a: readonly ParagraphTabStop[], b: readonly ParagraphTabStop[]): boolean;
 
 // @public
@@ -4449,6 +4465,7 @@ export interface SelectedImageState {
     readonly kind: DrawingKind;
     // (undocumented)
     readonly locks: DrawingLocks;
+    readonly memberId?: string;
     // (undocumented)
     readonly name: string;
     // (undocumented)
@@ -4540,7 +4557,13 @@ export function separatorLeadingCost(separatorWidth: number, marginInlineStart: 
 export const SHAPE_OUTLINE_WIDTHS: readonly number[];
 
 // @public
-export function shapeColorPick(color: string | null, themeHexes: readonly string[]): ChartColorPick | null;
+export function shapeColorPick(color: string | null, themeHexes: readonly string[], theme?: ShapeThemeColor): ChartColorPick | null;
+
+// @public
+export type ShapeColorValue = string | {
+    readonly shift?: number;
+    readonly theme: ShapeThemeColorName;
+};
 
 // @public
 export const shapeFillEditable: (fill: ShapeFillState) => boolean;
@@ -4549,8 +4572,12 @@ export const shapeFillEditable: (fill: ShapeFillState) => boolean;
 export function shapeFillLabelKey(fill: ShapeFillState): `shape.pane.fillTypes.${ShapeFillState['type']}`;
 
 // @public
+export const shapeFillPick: (fill: ShapeFillState, themeHexes: readonly string[]) => ChartColorPick | null;
+
+// @public
 export interface ShapeFillState {
     readonly color: string | null;
+    readonly theme?: ShapeThemeColor;
     readonly transparency: number;
     readonly type: 'solid' | 'none' | 'gradient' | 'pattern' | 'picture' | 'mixed';
 }
@@ -4570,8 +4597,12 @@ export interface ShapeFormatState {
 export const shapeHexText: (color: string | null) => string;
 
 // @public
+export const shapeOutlinePick: (outline: ShapeOutlineState, themeHexes: readonly string[]) => ChartColorPick | null;
+
+// @public
 export interface ShapeOutlineState {
     readonly color: string | null;
+    readonly theme?: ShapeThemeColor;
     // (undocumented)
     readonly visible: boolean | null;
     // (undocumented)
@@ -4614,7 +4645,7 @@ export type ShapePaneError = 'shape.pane.errors.color' | 'shape.pane.errors.tran
 
 // @public
 export type ShapePaneResult = {
-    readonly command: SelectedShapeCommand;
+    readonly command: SelectedShapeCommand | null;
     readonly ok: true;
 } | {
     readonly error: ShapePaneError;
@@ -4622,7 +4653,17 @@ export type ShapePaneResult = {
 };
 
 // @public
-export const shapeSwatchCurrent: (swatchHex: string, color: string | null) => boolean;
+export const shapeSwatchCurrent: (swatchPick: ChartColorPick, current: ChartColorPick | null) => boolean;
+
+// @public
+export interface ShapeThemeColor {
+    // (undocumented)
+    readonly name: 'bg1' | 'tx1' | 'bg2' | 'tx2' | 'accent1' | 'accent2' | 'accent3' | 'accent4' | 'accent5' | 'accent6';
+    readonly shift: number;
+}
+
+// @public
+export type ShapeThemeColorName = 'bg1' | 'tx1' | 'bg2' | 'tx2' | 'accent1' | 'accent2' | 'accent3' | 'accent4' | 'accent5' | 'accent6';
 
 // @public
 export const shapeTransparencyText: (fill: ShapeFillState) => string;

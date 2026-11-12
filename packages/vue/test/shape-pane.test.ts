@@ -8,7 +8,7 @@ import './dom-setup.ts';
 import { readFileSync } from 'node:fs';
 import { afterEach, expect, test } from 'bun:test';
 import { h } from 'vue';
-import { runToolbarCommand } from '@docx-editor.dev/core/editor';
+import { commandForSlotValue, runToolbarCommand } from '@docx-editor.dev/core/editor';
 import { DocxEditorShapePane } from '../src/editor/shapes/ShapePane';
 import { DocxEditorSidePanel } from '../src/editor/charts/SidePanel';
 import { DocxEditorContextMenu } from '../src/editor/contextmenu/index.ts';
@@ -143,4 +143,46 @@ test('the context menu shows Format shape for a selected shape and opens the pan
   await flush();
   const pane = mounted.container.querySelector('.docx-shape-pane')!;
   expect(pane.contains(document.activeElement)).toBe(true);
+});
+
+test('the side panel follows mode changes, remembers the shape pane, and Escape returns focus', async () => {
+  let closed = 0;
+  mounted = mountEditorTree(
+    () => h(DocxEditorSidePanel, { onClose: () => (closed += 1) }),
+    shapePaneDocx(SHAPE_PANE_CASES.theme)
+  );
+  await flush();
+  const editor = mounted.editor();
+  selectParityShape(editor);
+  await flush();
+  const panel = mounted.container.querySelector<HTMLElement>('.docx-side-panel')!;
+  const fillButton = () =>
+    panel.querySelector<HTMLButtonElement>('.docx-shape-pane__color-button')!;
+  expect(fillButton().disabled).toBe(false);
+  // Viewing mode changes what `can` answers, not the drawing: the fields still follow it.
+  editor.exec(commandForSlotValue('review.editingMode', 'viewing')!);
+  await flush();
+  expect(editor.snapshot().image).not.toBeNull();
+  expect(fillButton().disabled).toBe(true);
+  editor.exec(commandForSlotValue('review.editingMode', 'editing')!);
+  await flush();
+  expect(fillButton().disabled).toBe(false);
+  // Escape closes the panel, gives the keyboard to the editor, and keeps the shape selected.
+  fillButton().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await flush();
+  expect(closed).toBe(1);
+  expect(mounted.container.querySelector('.docx-pages')!.contains(document.activeElement)).toBe(
+    true
+  );
+  expect(editor.snapshot().image?.shapeFormat).not.toBeNull();
+  // A caret in text keeps the shape pane: the panel does not fall back to the chart pane.
+  const paragraph = editor.surface!.session.paragraphIds()[0]!;
+  editor.surface!.setSelection({
+    anchor: { paragraphId: paragraph, offset: 1 },
+    head: { paragraphId: paragraph, offset: 1 },
+  });
+  await flush();
+  expect(editor.snapshot().image).toBeNull();
+  expect(panel.getAttribute('data-pane')).toBe('shape');
+  expect(panel.textContent).toContain('No shape selected');
 });

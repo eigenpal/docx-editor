@@ -10,6 +10,7 @@ export type {
   ShapeThemeColor,
 } from '../store/package/shape-format.ts';
 import type { ShapeThemeColorName } from '../store/store/tree-op-types.ts';
+export type { ShapeThemeColorName } from '../store/store/tree-op-types.ts';
 
 /**
  * A colour for a shape command: `RRGGBB`, `#RRGGBB`, or a theme colour such as
