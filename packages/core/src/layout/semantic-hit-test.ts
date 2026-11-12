@@ -1,4 +1,11 @@
-import { PATH_HIT_REACH, turnedShapeBounds, unionBox, vectorShapeHit } from './vector-shape-hit.ts';
+import {
+  PATH_HIT_REACH,
+  textboxPaintsPastFrame,
+  textboxPressReaches,
+  turnedShapeBounds,
+  unionBox,
+  vectorShapeHit,
+} from './vector-shape-hit.ts';
 import { vectorShapeInkClip } from './vector-shape-ink.ts';
 export {
   findDrawingOverlayFrameInLayout,
@@ -320,7 +327,7 @@ function turnedInlineHit(
   context: HitContext,
   controlsOf?: SemanticLayout
 ): SemanticHit | null {
-  const found = turnedInlineDrawingAt(fragments, (drawing) =>
+  const found = turnedInlineDrawingAt(fragments, point, (drawing) =>
     hitBoundsContainDrawing(drawing, point)
   );
   if (!found) return null;
@@ -740,6 +747,9 @@ function hitBoundsContainDrawing(
     point.y >= box.y + box.height
   )
     return false;
+  // A text box that paints past its frame takes a press on its frame, its text, or the shape
+  // it paints there, whatever its effect extent reserves; the gesture follows the same rule.
+  if (textboxPaintsPastFrame(drawing)) return textboxPressReaches(drawing, point);
   return pointInDrawingClip(point.x, point.y, drawing.geometry);
 }
 

@@ -45,9 +45,9 @@ const reachCache = new WeakMap<VectorShapeProjection, DrawingInsets>();
  * (`overflowVisible`, every direct shape) grows by its whole geometry and ink instead, past a
  * cell or content edge outside its extent and past a negative effect extent. Where a layout
  * region cut into the extent itself (`geometry.regionCuts`: a cell, a frame, or the page, never
- * an inline drawing's own line or column), such a shape is cut at the region edge. A side stays as it is when a region or a negative effect extent cut into the extent
- * of a shape that does not paint outside its extent. A drawing
- * clipped to nothing stays empty.
+ * an inline drawing's own line or column), such a shape is cut at the region edge. A side
+ * stays as it is when a region or a negative effect extent cut into the extent of a shape that
+ * does not paint outside its extent. A drawing clipped to nothing stays empty.
  *
  * Only the paint clip grows; collisions and text wrap keep `paintBounds`. Hit testing reaches
  * the ink of a shape that paints outside its extent, through its geometry.

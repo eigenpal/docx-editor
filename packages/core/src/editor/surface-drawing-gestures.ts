@@ -1,9 +1,11 @@
 import type { DrawingSelectionIntent } from './paginated-surface.ts';
 import type { PaginatedSurface } from './paginated-surface.ts';
+import type { SurfacePointHit } from './surface-pointer.ts';
 import type { createTextboxEditing } from './surface-textbox-editing.ts';
 import { resolveSelectedDrawingRecord, selectedImageStateOf } from './docx-editor-images.ts';
 import { textboxDrawingOnPage } from '../layout/textbox-drawing-records.ts';
 import { findDrawingOverlayFrameInLayout } from '../layout/semantic-hit-test.ts';
+import { textboxPaintsPastFrame, textboxPressReaches } from '../layout/vector-shape-hit.ts';
 
 /** A painted box thinner than this, in points, has no area a press can land on. */
 const THIN_LINE_PT = 1;
@@ -139,26 +141,39 @@ export function createDrawingGestures(deps: {
         event.stopImmediatePropagation();
         return;
       }
-      const drawingId =
+      const pressedId =
         !editingTextbox &&
         element
           ?.closest<HTMLElement>('[data-drawing-node-id]')
           ?.getAttribute('data-drawing-node-id');
-      if (drawingId && element?.closest('.docx-drawing-textbox')) {
+      // A press beside what a text box paints past its frame passes through its painted box.
+      let passedThrough = false;
+      if (pressedId && element?.closest('.docx-drawing-textbox')) {
         // Body boxes only: a header or footer box selects through its own story scope.
         let drawing;
         for (const page of deps.surface.layout().pages) {
-          drawing = textboxDrawingOnPage(page, drawingId);
+          drawing = textboxDrawingOnPage(page, pressedId);
           if (drawing) break;
         }
         // A textbox can extend outside the body column. Its border selects its anchor,
-        // even when ordinary text hit testing would land on a nearby body paragraph.
-        if (drawing && selectObject(drawingId, drawing.paragraphId)) {
+        // even when ordinary text hit testing would land on a nearby body paragraph. Past its
+        // frame, only the shape it paints there, such as a callout's tail, takes the press.
+        // Its painted box spans that shape, so a press beside the shape lands on it too.
+        const box = drawing && element.closest('.docx-drawing-textbox');
+        const missed =
+          drawing && box && textboxPaintsPastFrame(drawing) && isPointerEvent(event)
+            ? missesTextboxShape(drawing, box, event, () => pointOf(event))
+            : false;
+        if (drawing && !missed && selectObject(pressedId, drawing.paragraphId)) {
           event.preventDefault();
           event.stopImmediatePropagation();
           return;
         }
+        passedThrough = !!missed;
       }
+      // A press that passed through a text box goes on as a press on the page under it: a
+      // drawing behind the text there takes it, else the text does.
+      const drawingId = passedThrough ? null : pressedId;
       // A drawing behind the text paints under it, so the press reaches the text layer. Where
       // no glyph lies under the press, the drawing takes it, as hit testing decides. A turned
       // shape, or a callout's tail, paints past its box, so a press on that part reaches the
@@ -294,4 +309,30 @@ export function createDrawingGestures(deps: {
       deps.setIntent({ kind: 'none' });
     },
   };
+}
+
+/**
+ * Whether a press on the painted box `box` of a text box that paints past its frame misses
+ * what it paints (see `textboxPressReaches`), such as beside a callout's tail. The browser
+ * already found nothing in front of the box at the press. The press maps from client pixels
+ * onto the box's paint bounds: paint sizes the box to them and widens only its clip for ink
+ * reach. Where the box has no client size to map the press through,
+ * the layout hit test decides. A DOM without layout, as in unit tests, always takes that
+ * fallback: a test of the client mapping must give the box a client rectangle.
+ */
+function missesTextboxShape(
+  drawing: NonNullable<ReturnType<typeof textboxDrawingOnPage>>,
+  box: Element,
+  event: PointerEvent,
+  hitAt: () => SurfacePointHit | null
+): boolean {
+  const rect = box.getBoundingClientRect();
+  const paint = drawing.paintBounds;
+  if (!(rect.width > 0) || !(rect.height > 0) || !(paint.width > 0) || !(paint.height > 0)) {
+    return hitAt()?.hit.drawing?.drawingNodeId !== drawing.drawingNodeId;
+  }
+  return !textboxPressReaches(drawing, {
+    x: paint.x + ((event.clientX - rect.left) / rect.width) * paint.width,
+    y: paint.y + ((event.clientY - rect.top) / rect.height) * paint.height,
+  });
 }

@@ -152,3 +152,69 @@ test('a cell top cuts an inline shape whose effect extent reaches above it, at a
     }
   }
 });
+
+test('an inline callout takes a press on its tail below its line', async () => {
+  // A 144 x 72pt inline callout: its default tail tip sits at (54, 81)pt in its box.
+  const inline =
+    '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+    `<wp:extent cx="${144 * EMU}" cy="${72 * EMU}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>` +
+    '<wp:docPr id="52" name="Inline callout"/><wp:cNvGraphicFramePr/>' +
+    `<a:graphic><a:graphicData uri="${SHAPE_URI}">` +
+    shape('wedgeRectCallout', SOLID('FF0000')) +
+    '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+  const { editor, container } = await mount(p(text('Before')) + p(inline) + FILLERS);
+  try {
+    const record = editor
+      .surface!.layout()
+      .pages[0]!.fragments.flatMap((block) =>
+        block.kind === 'paragraph' ? block.lines.flatMap((line) => line.drawings ?? []) : []
+      )[0]!;
+    expect(record.vectorShape?.overflowVisible).toBe(true);
+    // On the tail, below the box and over the next line: the callout.
+    pressAt(container, editor, record.x + 54, record.y + 76);
+    expect(editor.getSelectedImage!()?.id).toBe(record.drawingNodeId);
+    // Beside the tail: the text.
+    pressAt(container, editor, record.x + 130, record.y + 76);
+    expect(editor.getSelectedImage!()).toBeNull();
+  } finally {
+    editor.destroy();
+    container.remove();
+  }
+});
+
+test('an exact-height row that hides an inline tail does not let a press select it there', async () => {
+  // A 144 x 72pt inline callout in a 75pt exact-height row: its tail tip at 81pt is cut off.
+  const inline =
+    '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+    `<wp:extent cx="${144 * EMU}" cy="${72 * EMU}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>` +
+    '<wp:docPr id="53" name="Cell callout"/><wp:cNvGraphicFramePr/>' +
+    `<a:graphic><a:graphicData uri="${SHAPE_URI}">` +
+    shape('wedgeRectCallout', SOLID('FF0000')) +
+    '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+  const table =
+    '<w:tbl><w:tblPr><w:tblW w:w="4000" w:type="dxa"/></w:tblPr><w:tblGrid>' +
+    '<w:gridCol w:w="4000"/></w:tblGrid>' +
+    '<w:tr><w:trPr><w:trHeight w:val="1500" w:hRule="exact"/></w:trPr>' +
+    `<w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>${p(inline)}</w:tc></w:tr></w:tbl>`;
+  const { editor, container } = await mount(table + FILLERS);
+  try {
+    const page = editor.surface!.layout().pages[0]!;
+    const tableBlock = page.fragments.find((block) => block.kind === 'table')!;
+    const cellBlock =
+      tableBlock.kind === 'table' ? tableBlock.rows[0]!.cells[0]!.blocks[0]! : undefined;
+    expect(cellBlock?.kind === 'paragraph' && cellBlock.clipToBox).toBe(true);
+    const record = cellBlock!.kind === 'paragraph' ? cellBlock!.lines[0]!.drawings![0]! : null;
+    const clip = cellBlock!.box;
+    // Inside the box, the callout takes the press.
+    pressAt(container, editor, record!.x + 54, record!.y + 36);
+    expect(editor.getSelectedImage!()?.id).toBe(record!.drawingNodeId);
+    // On the hidden tail, below the clipped paragraph: not the callout.
+    const y = record!.y + 77;
+    expect(y).toBeGreaterThan(clip.y + clip.height);
+    pressAt(container, editor, record!.x + 54, y);
+    expect(editor.getSelectedImage!()?.id).not.toBe(record!.drawingNodeId);
+  } finally {
+    editor.destroy();
+    container.remove();
+  }
+});
