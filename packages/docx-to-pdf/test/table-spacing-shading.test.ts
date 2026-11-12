@@ -53,3 +53,15 @@ test('a table without spacing paints no table fill', async () => {
   const streams = await contentStreams(table(''));
   expect(streams.includes(FILL)).toBe(false);
 });
+
+test("a spaced table's outer borders draw a frame around the gaps", async () => {
+  const outer = ['top', 'left', 'bottom', 'right']
+    .map((side) => `<w:${side} w:val="single" w:sz="24" w:color="C00000"/>`)
+    .join('');
+  const spaced = await contentStreams(
+    table(`<w:tblCellSpacing w:w="100" w:type="dxa"/><w:tblBorders>${outer}</w:tblBorders>`)
+  );
+  // 192 0 0 over 255: one rule per side of the frame, and no cell takes one.
+  const rules = spaced.match(/0\.752941 0 0 rg [\d. ]+ re f/g) ?? [];
+  expect(rules).toHaveLength(4);
+});

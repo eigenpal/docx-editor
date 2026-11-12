@@ -240,13 +240,7 @@ export function emitNestedTable(
   if (keepsWhole && bounded && freshBand && y > maxBottom + 0.001) layRows(false);
   if (rawRows.length === 0 || y > maxBottom + 0.001) return { fragment: null, bottom: top };
   // At the table's end and at a break alike, as the page holds it.
-  const lastPlaced = rawRows[rawRows.length - 1]!;
-  y += fragmentClosingGapPt(
-    structure.cellSpacingPt,
-    sourceRows.at(-1),
-    maxBottom - y,
-    lastPlaced.hasContinuation
-  );
+  y += fragmentClosingGapPt(structure.cellSpacingPt, sourceRows.at(-1), maxBottom - y);
   const rows = finalizeTableRows(
     rawRows,
     structure,

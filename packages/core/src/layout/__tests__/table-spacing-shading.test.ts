@@ -86,12 +86,29 @@ test('with cell spacing every row shows the table fill in its gaps, cells exclud
   // 100 twips of spacing is a 10pt gap; the table closes it below the last row, inside its box.
   const lastRow = table!.rows[1]!.box;
   expect(table!.box.y + table!.box.height).toBeCloseTo(lastRow.y + lastRow.height + 10, 6);
+  // Rows of one fill and width share one band, so no seam shows where they meet.
   const regions = tableSpacingShadingRegions(table!);
-  expect(regions).toHaveLength(2);
-  const [first, last] = regions;
-  expect(first!.box).toEqual(table!.rows[0]!.box);
-  expect(first!.holes).toEqual(table!.rows[0]!.cells.map((c) => c.box));
-  expect(last!.box.height).toBeCloseTo(table!.rows[1]!.box.height + 10, 6);
+  expect(regions).toHaveLength(1);
+  const [band] = regions;
+  expect(band!.box.y).toBe(table!.rows[0]!.box.y);
+  expect(band!.box.y + band!.box.height).toBeCloseTo(table!.box.y + table!.box.height, 6);
+  expect(band!.holes).toEqual(table!.rows.flatMap((row) => row.cells.map((c) => c.box)));
+});
+
+test('a row of another fill starts a band of its own', () => {
+  const exception = '<w:tblPrEx><w:shd w:val="clear" w:color="auto" w:fill="FFC000"/></w:tblPrEx>';
+  const [table] = layoutTable({
+    tblPr: SPACING + shd('D9E2F3'),
+    rows: [
+      `<w:tr>${cell('a')}${cell('b')}</w:tr>`,
+      `<w:tr>${exception}${cell('c')}${cell('d')}</w:tr>`,
+      `<w:tr>${cell('e')}${cell('f')}</w:tr>`,
+    ],
+  });
+  const regions = tableSpacingShadingRegions(table!);
+  expect(regions.map((region) => region.fill)).toEqual(['D9E2F3', 'FFC000', 'D9E2F3']);
+  for (const [index, region] of regions.entries())
+    expect(region.box.y).toBe(table!.rows[index]!.box.y);
 });
 
 test('the cascade: style, then the table, then the row exception', () => {
@@ -135,20 +152,20 @@ test('a cell merged down stays a hole in the rows it crosses', () => {
     ],
   });
   const head = table!.rows[0]!.cells[0]!.box;
-  const [, second] = tableSpacingShadingRegions(table!);
-  const band = second!.box;
-  // The head cell's part inside the second band, and the second row's own unmerged cell.
-  expect(second!.holes).toContainEqual({
+  const [band] = tableSpacingShadingRegions(table!);
+  const second = table!.rows[1]!.box;
+  // The head cell's part in the first row and in the second, and each row's own cell.
+  expect(band!.holes).toContainEqual({
     x: head.x,
-    y: band.y,
+    y: second.y,
     width: head.width,
-    height: head.y + head.height - band.y,
+    height: head.y + head.height - second.y,
   });
-  expect(second!.holes).toContainEqual(table!.rows[1]!.cells[1]!.box);
-  expect(second!.holes).toHaveLength(2);
+  expect(band!.holes).toContainEqual(table!.rows[1]!.cells[1]!.box);
+  expect(band!.holes).toHaveLength(4);
 });
 
-test('a row split across pages closes the gap only below its last part', () => {
+test('each part of a row split across pages closes with the gap the row closes with', () => {
   const tall = Array.from({ length: 12 }, (_, i) => `<w:p><w:r><w:t>line ${i}</w:t></w:r></w:p>`);
   const fragments = layoutTable({
     tblPr: SPACING + shd('D9E2F3'),
@@ -162,8 +179,10 @@ test('a row split across pages closes the gap only below its last part', () => {
     const [region] = tableSpacingShadingRegions(fragment);
     return region!.box.height - fragment.rows[0]!.box.height;
   });
-  expect(heights.slice(0, -1).every((extra) => extra === 0)).toBe(true);
-  expect(heights.at(-1)).toBeCloseTo(10, 6);
+  // The table's last row: every part keeps the full 10pt gap below it, the page holding it.
+  for (const extra of heights) expect(extra).toBeCloseTo(10, 6);
+  for (const fragment of fragments)
+    expect(fragment.box.y + fragment.box.height).toBeLessThanOrEqual(100 + 1e-6);
 });
 
 test('a row band covers its own cells only, not columns skipped by gridBefore', () => {
@@ -287,7 +306,7 @@ test('a nested spaced table broken between rows closes each page with the gap to
   }
 });
 
-test('a table broken between rows closes each page with the gap, as the page holds it', () => {
+test('a table broken between rows closes each page with the spacing, and its end with the gap', () => {
   const rows = Array.from(
     { length: 12 },
     (_, i) => `<w:tr>${cell(`r${i}`)}${cell(`r${i}`)}</w:tr>`
@@ -297,8 +316,10 @@ test('a table broken between rows closes each page with the gap, as the page hol
   for (const fragment of fragments) {
     const last = fragment.rows.at(-1)!.box;
     const extra = fragment.box.y + fragment.box.height - (last.y + last.height);
-    // The full 10pt gap, or what is left of the page below the last row.
-    expect(extra).toBeCloseTo(Math.min(10, 150 - (last.y + last.height)), 6);
+    // With no frame, a page break leaves the 5pt spacing; the table's end the 10pt gap. A row
+    // that ends a page keeps that room, so the page always holds it.
+    expect(extra).toBeCloseTo(fragment === fragments.at(-1) ? 10 : 5, 6);
+    expect(fragment.box.y + fragment.box.height).toBeLessThanOrEqual(150 + 1e-6);
     const band = tableSpacingShadingRegions(fragment).at(-1)!;
     expect(band.box.y + band.box.height).toBeCloseTo(fragment.box.y + fragment.box.height, 6);
   }

@@ -101,8 +101,8 @@ export function withTableContentBorders(
   columns: number,
   collapsed = true
 ): readonly SemanticTableRow[] {
+  if (!collapsed) return separatedContentBorders(rows, table);
   const merged = resolveVMergeSpans(rows);
-  if (!collapsed) return separatedContentBorders(rows, table, columns, merged);
   const grid = rows.map((row) =>
     row.cells.map((cell) => ({
       ...cell,
@@ -201,13 +201,13 @@ export function withTableContentBorders(
 
 function separatedContentBorders(
   rows: readonly SemanticTableRow[],
-  tableBox: TableBorderBox,
-  columns: number,
-  merged: ReadonlyMap<string, number>
+  tableBox: TableBorderBox
 ): readonly SemanticTableRow[] {
   const side = (own: TableBorderSide, inherited: TableBorderSide) =>
     own.state === 'omitted' && inherited.state === 'edge' ? inherited : own;
-  return rows.map((row, index) => ({
+  // A spaced table's outer borders draw its frame (`table-spacing-frame.ts`): every cell,
+  // at the table's edge or not, takes the inside borders on all four sides.
+  return rows.map((row) => ({
     ...row,
     cells: row.cells.map((cell) => {
       // A row's `w:tblPrEx` borders replace the table's own for its cells.
@@ -215,16 +215,10 @@ function separatedContentBorders(
       return {
         ...cell,
         contentBorders: {
-          top: side(cell.borders.top, index === 0 ? table.top : table.insideH),
-          bottom: side(
-            cell.borders.bottom,
-            index + (merged.get(cell.id) ?? 1) === rows.length ? table.bottom : table.insideH
-          ),
-          left: side(cell.borders.left, cell.gridColumn === 0 ? table.left : table.insideV),
-          right: side(
-            cell.borders.right,
-            cell.gridColumn + cell.gridSpan === columns ? table.right : table.insideV
-          ),
+          top: side(cell.borders.top, table.insideH),
+          bottom: side(cell.borders.bottom, table.insideH),
+          left: side(cell.borders.left, table.insideV),
+          right: side(cell.borders.right, table.insideV),
         },
       };
     }),

@@ -23,7 +23,7 @@ import type { PinnedTableBreak } from './table-pinned-break.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
 import { authoredRowMinimumFloorPt } from './table-row-minimum-insets.ts';
-import { cellSpacingGapPt } from './table-cell-spacing.ts';
+import { rowOpeningGapPt } from './table-cell-spacing.ts';
 
 /**
  * Height the first fragment of `row` needs where it starts: the padded `atLeast` minimum, or
@@ -37,7 +37,7 @@ export function rowMinimumOpeningPt(
 ): number | undefined {
   if (row.height.rule !== 'atLeast' || !(row.height.valuePt > 0)) return undefined;
   // The cell-spacing gap above the row's cells counts toward its height, as row layout places it.
-  const gapPt = cellSpacingGapPt(cellSpacingPt);
+  const gapPt = rowOpeningGapPt(row, cellSpacingPt);
   const cells = row.cells.map((cell) => {
     const own =
       deps.cellContentInsets?.get(cell.id) ?? cellContentInsets(cell, cellSpacingPt === 0);

@@ -62,7 +62,7 @@ test('a table without spacing paints no band, and its unshaded cells stay unshad
     expect(cell.style.backgroundColor).toBe('');
 });
 
-test('typing in a shaded spaced table keeps rows, and bands that paint the same', () => {
+test('typing in a shaded spaced table keeps rows, and the band while it paints the same', () => {
   const part = load(
     table(
       Array.from({ length: 6 }, (_, i) => row(`Row${i}`)),
@@ -85,7 +85,8 @@ test('typing in a shaded spaced table keeps rows, and bands that paint the same'
   const same = (a: Element[], b: Element[]) => a.map((element, index) => element === b[index]);
   const rowsBefore = Array.from(container.querySelectorAll('.docx-table-row'));
   const bandsBefore = bandsOf();
-  expect(bandsBefore).toHaveLength(6);
+  // Rows of one fill share one band.
+  expect(bandsBefore).toHaveLength(1);
   const node = part.root.children
     .find((n) => n.kind === 'body')!
     .children.find((n) => n.kind === 'table')! as OoxmlElement;
@@ -96,17 +97,79 @@ test('typing in a shaded spaced table keeps rows, and bands that paint the same'
     paintSemanticLayout(container, lay(op.part, 15, { session, cache }), { scale: 1 });
     return op.part;
   };
-  // One letter changes no geometry: every row and every band element stays.
+  // One letter changes no geometry: every row and the band element stay.
   const typed = edit(part, 'X');
   const rowsAfter = Array.from(container.querySelectorAll('.docx-table-row'));
   expect(rowsAfter[0] === rowsBefore[0] && rowsAfter[5] === rowsBefore[5]).toBe(true);
-  expect(same(bandsOf(), bandsBefore)).toEqual([true, true, true, true, true, true]);
-  // Text that wraps grows its row: only its own band is new; the bands below it only move.
+  expect(same(bandsOf(), bandsBefore)).toEqual([true]);
+  // Text that wraps grows its row and so the band, which is painted again; rows stay.
   const wrapped = edit(typed, ' and a few more words');
   const bandsWrapped = bandsOf();
-  expect(same(bandsWrapped, bandsBefore).slice(0, 2)).toEqual([true, true]);
   expect(bandsWrapped.filter((band) => !bandsBefore.includes(band))).toHaveLength(1);
   const cold = document.createElement('div');
   paintSemanticLayout(cold, lay(wrapped), { scale: 1 });
   expect(container.innerHTML).toBe(cold.innerHTML);
+});
+
+test("a spaced table's outer borders paint one inert frame over the gap fill, under the rows", () => {
+  const outer = ['top', 'left', 'bottom', 'right']
+    .map((side) => `<w:${side} w:val="single" w:sz="24" w:color="C00000"/>`)
+    .join('');
+  const container = paint(SPACING + SHADED + `<w:tblBorders>${outer}</w:tblBorders>`);
+  const fragment = container.querySelector<HTMLElement>('.docx-table-fragment')!;
+  const frame = fragment.querySelector<HTMLElement>(':scope > .docx-table-spacing-frame')!;
+  expect(frame).not.toBeNull();
+  expect(frame.getAttribute('aria-hidden')).toBe('true');
+  expect(frame.getAttribute('contenteditable')).toBe('false');
+  expect(frame.style.pointerEvents).toBe('none');
+  // Bands first, then the frame, then the rows.
+  const children = [...fragment.children];
+  const band = children.findIndex((child) => child.matches('.docx-table-spacing-shading'));
+  const row = children.findIndex((child) => child.matches('.docx-table-row'));
+  expect(band).toBeLessThan(children.indexOf(frame));
+  expect(children.indexOf(frame)).toBeLessThan(row);
+  expect(frame.style.width).toBe(fragment.style.width);
+  expect(frame.style.height).toBe(fragment.style.height);
+  expect(frame.children.length).toBeGreaterThan(0);
+  // No cell paints a frame rule of its own.
+  for (const cell of fragment.querySelectorAll<HTMLElement>('.docx-table-row > *'))
+    expect(/192, 0, 0|C00000/i.test(cell.outerHTML)).toBe(false);
+});
+
+test('typing in a framed spaced table keeps the frame until the table changes size', () => {
+  const outer = ['top', 'left', 'bottom', 'right']
+    .map((side) => `<w:${side} w:val="single" w:sz="24" w:color="C00000"/>`)
+    .join('');
+  const tblPr = SPACING + `<w:tblBorders>${outer}</w:tblBorders><w:tblLayout w:type="fixed"/>`;
+  const part = load(table([row('Row0'), row('Row1')], tblPr));
+  const session = createLayoutSession();
+  const cache = createParagraphLayoutCache();
+  const container = document.createElement('div');
+  paintSemanticLayout(container, lay(part, 15, { session, cache }), { scale: 1 });
+  const frameOf = () => container.querySelector('.docx-table-fragment > .docx-table-spacing-frame');
+  const before = frameOf();
+  expect(before).not.toBeNull();
+  const node = part.root.children
+    .find((n) => n.kind === 'body')!
+    .children.find((n) => n.kind === 'table')! as OoxmlElement;
+  const id = readTableStructure(node, 310, 0)!.rows[1]!.cells[0]!.blocks[0]!.id;
+  const edit = (from: typeof part, text: string) => {
+    const op = applyTreeOp(from, { op: 'insertText', paragraphId: id, offset: 0, text });
+    if (!op.ok) throw Error(op.reason);
+    paintSemanticLayout(container, lay(op.part, 15, { session, cache }), { scale: 1 });
+    return op.part;
+  };
+  const typed = edit(part, 'X');
+  expect(frameOf() === before).toBe(true);
+  // Wrapping text makes the table taller, so the frame is painted again.
+  const wrapped = edit(typed, ' and a few more words that wrap');
+  expect(frameOf() === before).toBe(false);
+  const cold = document.createElement('div');
+  paintSemanticLayout(cold, lay(wrapped), { scale: 1 });
+  expect(container.innerHTML).toBe(cold.innerHTML);
+});
+
+test('a spaced table without outer borders paints no frame', () => {
+  const fragment = paint(SPACING + SHADED).querySelector<HTMLElement>('.docx-table-fragment')!;
+  expect(fragment.querySelector('.docx-table-spacing-frame')).toBeNull();
 });

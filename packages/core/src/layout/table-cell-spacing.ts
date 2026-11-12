@@ -1,10 +1,13 @@
+import type { TableSpacingFrame } from './semantic-records.ts';
+
 /**
  * Where the cells of a table with `w:tblCellSpacing` sit along its row, in points from the
  * table's left edge.
  *
  * The spacing (17.4.45) is the space on each side of every cell, so two neighbouring cells,
  * and a cell and the table edge, sit twice that apart. Those gaps come out of the table's own
- * width: every column gives up its share in proportion to its width.
+ * width: every column gives up its share in proportion to its width. A spaced table's frame
+ * moves its outer cells further in by {@link SpacedTableFrame} (`table-spacing-frame.ts`).
  */
 export interface CellSpacingGeometry {
   /** The gap between neighbouring cells, and between a cell and the table edge. */
@@ -15,6 +18,9 @@ export interface CellSpacingGeometry {
   cellWidth(column: number, span: number): number;
 }
 
+/** How far a spaced table's frame moves its outer cells in (`table-spacing-frame.ts`). */
+export type SpacedTableFrame = Omit<TableSpacingFrame, 'borders' | 'rowBorders'>;
+
 /** The gap between neighbouring cells, and a cell and the table edge: twice the spacing. */
 export function cellSpacingGapPt(spacingPt: number): number {
   return Number.isFinite(spacingPt) && spacingPt > 0 ? 2 * spacingPt : 0;
@@ -22,43 +28,97 @@ export function cellSpacingGapPt(spacingPt: number): number {
 
 export function cellSpacingGeometry(
   columns: readonly number[],
-  spacingPt: number
+  spacingPt: number,
+  frame?: SpacedTableFrame
 ): CellSpacingGeometry | null {
   if (!Number.isFinite(spacingPt) || spacingPt <= 0 || columns.length === 0) return null;
   const gapPt = cellSpacingGapPt(spacingPt);
   const prefix = [0];
   for (const width of columns) prefix.push(prefix.at(-1)! + width);
-  const scale = cellSpacingScale(columns, spacingPt);
+  const scale = cellSpacingScale(columns, spacingPt, frame);
+  const left = frame?.leftPt ?? 0;
   const at = (column: number): number => prefix[Math.max(0, Math.min(column, columns.length))]!;
   return {
     gapPt,
-    cellLeft: (column) => gapPt * (column + 1) + at(column) * scale,
+    cellLeft: (column) => left + gapPt * (column + 1) + at(column) * scale,
     cellWidth: (column, span) =>
       (at(column + span) - at(column)) * scale + gapPt * Math.max(0, span - 1),
   };
 }
 
+/** The space a spaced table's gaps and frame take from its width. */
+function gapsAcross(columnCount: number, spacingPt: number, frame?: SpacedTableFrame): number {
+  return (
+    (columnCount + 1) * cellSpacingGapPt(spacingPt) + (frame ? frame.leftPt + frame.rightPt : 0)
+  );
+}
+
 /**
  * The factor a column's width is scaled by to give its cell's width, after the spacing gaps
- * come out of the table: 1 with no spacing.
+ * and the frame come out of the table: 1 with no spacing.
  */
-export function cellSpacingScale(columns: readonly number[], spacingPt: number): number {
+export function cellSpacingScale(
+  columns: readonly number[],
+  spacingPt: number,
+  frame?: SpacedTableFrame
+): number {
   if (!Number.isFinite(spacingPt) || spacingPt <= 0 || columns.length === 0) return 1;
   let total = 0;
   for (const width of columns) total += width;
   if (total <= 0) return 1;
-  return Math.max(0, total - (columns.length + 1) * cellSpacingGapPt(spacingPt)) / total;
+  return Math.max(0, total - gapsAcross(columns.length, spacingPt, frame)) / total;
 }
 
-/** The total of a spaced table's gaps: twice the spacing at every column edge. */
+/** The total of a spaced table's gaps: twice the spacing at every column edge, and its frame. */
 export function spacingGapsPt(structure: SpacedTable): number {
-  return (structure.columnWidthsPt.length + 1) * cellSpacingGapPt(structure.cellSpacingPt);
+  const frame = structure.rows?.[0]?.spacingFrame;
+  return gapsAcross(structure.columnWidthsPt.length, structure.cellSpacingPt, frame);
 }
 
 /** Each column's cell width: the column itself, or its share once the gaps come out. */
 export function spacedCellWidths(structure: SpacedTable): readonly number[] {
-  const scale = cellSpacingScale(structure.columnWidthsPt, structure.cellSpacingPt);
+  const frame = structure.rows?.[0]?.spacingFrame;
+  const scale = cellSpacingScale(structure.columnWidthsPt, structure.cellSpacingPt, frame);
   return scale === 1 ? structure.columnWidthsPt : structure.columnWidthsPt.map((w) => w * scale);
+}
+
+/**
+ * Where a row of a spaced table opens: at the table's start or below another row (`start`),
+ * as the first whole row or header repeat of a fragment the table continues in (`break`), or
+ * as the rest of a row split across pages (`remainder`).
+ */
+export type SpacedRowOpening = 'start' | 'break' | 'remainder';
+
+/**
+ * The gap above a row's cells: twice the spacing and, above the table's first row, the frame.
+ * A whole row or header repeat that opens a page break sits the spacing plus the frame's rule
+ * from it instead. The rest of a split row keeps its own gap, or that, whichever is wider.
+ * An exact-height row opens the gap inside its height.
+ */
+export function rowOpeningGapPt(
+  row: { readonly spacingFrame?: SpacedTableFrame },
+  spacingPt: number,
+  opening: SpacedRowOpening = 'start'
+): number {
+  const gap = cellSpacingGapPt(spacingPt);
+  if (gap === 0) return 0;
+  const frame = row.spacingFrame;
+  const own = gap + (frame?.first ? frame.topPt : 0);
+  if (opening === 'start' || !frame) return Math.max(0, own);
+  const atBreak = gap + frame.breakTopPt;
+  return Math.max(0, opening === 'break' ? atBreak : Math.max(own, atBreak));
+}
+
+/**
+ * How much taller than authored an exact-height row of a spaced table lays out: a row below
+ * the first measures its height from the middle of the gap above its cells, which starts
+ * that much below the row's top here.
+ */
+export function exactSpacingExtensionPt(
+  row: { readonly spacingFrame?: SpacedTableFrame },
+  spacingPt: number
+): number {
+  return cellSpacingGapPt(spacingPt) > 0 && !row.spacingFrame?.first ? spacingPt : 0;
 }
 
 /** Column widths whose cells, once `gaps` come out of their total, have the widths given. */
@@ -74,6 +134,7 @@ export function columnsAroundCells(cells: readonly number[], gaps: number): read
 interface SpacedTable {
   readonly columnWidthsPt: readonly number[];
   readonly cellSpacingPt: number;
+  readonly rows?: readonly { readonly spacingFrame?: SpacedTableFrame }[];
 }
 
 export function sumCols(cols: readonly number[], from: number, to: number): number {
@@ -83,25 +144,42 @@ export function sumCols(cols: readonly number[], from: number, to: number): numb
 }
 
 /**
- * The gap a fragment of a spaced table closes below its last row, `lastRow`: twice the
- * spacing, none below an exact-height row, which keeps its authored height, and no more than
- * `roomPt`. Every fragment that ends between rows closes this way, at a page break as at the
- * table's end; a row split across pages (`splitRow`) closes with none.
+ * The gap a fragment of a spaced table closes below its last row, `lastRow`, split or whole:
+ * twice the spacing and the frame, which is wider below the table's last row than at a page
+ * break; no more than `roomPt`.
  */
 export function fragmentClosingGapPt(
   cellSpacingPt: number,
-  lastRow: { readonly height: { readonly rule: string } } | undefined,
-  roomPt: number,
-  splitRow = false
+  lastRow: { readonly spacingFrame?: SpacedTableFrame } | undefined,
+  roomPt: number
 ): number {
-  if (splitRow || !lastRow || lastRow.height.rule === 'exact') return 0;
-  return Math.max(0, Math.min(cellSpacingGapPt(cellSpacingPt), roomPt));
+  if (!lastRow) return 0;
+  const gap = cellSpacingGapPt(cellSpacingPt);
+  if (gap === 0) return 0;
+  const frame = lastRow.spacingFrame;
+  const extra = frame ? (frame.last ? frame.bottomPt : frame.breakBottomPt) : 0;
+  return Math.max(0, Math.min(gap + extra, roomPt));
+}
+
+/**
+ * The room a row of a spaced table keeps free below it on a page, for the gap and frame its
+ * fragment closes with there (`fragmentClosingGapPt`). Spacing so wide that the row's
+ * opening and closing take half the page band or more is not reserved: no row could fit.
+ */
+export function closingReservePt(
+  cellSpacingPt: number,
+  row: { readonly spacingFrame?: SpacedTableFrame } | undefined,
+  pageBandPt: number
+): number {
+  const closing = fragmentClosingGapPt(cellSpacingPt, row, Infinity);
+  if (closing === 0 || !row) return 0;
+  return closing + rowOpeningGapPt(row, cellSpacingPt) < pageBandPt / 2 ? closing : 0;
 }
 
 /** The gap a whole table leaves below its last row, with no bound below it. */
 export function closingCellSpacingPt(structure: {
   readonly cellSpacingPt: number;
-  readonly rows: readonly { readonly height: { readonly rule: string } }[];
+  readonly rows: readonly { readonly spacingFrame?: SpacedTableFrame }[];
 }): number {
   return fragmentClosingGapPt(structure.cellSpacingPt, structure.rows.at(-1), Infinity);
 }

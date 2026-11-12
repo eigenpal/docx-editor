@@ -3,9 +3,10 @@ Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// A table's own fill (`w:tblPr/w:shd`) paints in its cell-spacing gaps. Two participants: a
-// row one adds beside the other's typing takes the fill on both editors, through undo, redo
-// and a save and reopen, and the two editors paint the same bands.
+// A table's own fill (`w:tblPr/w:shd`) paints in its cell-spacing gaps, and its outer borders
+// draw a frame around them. Two participants: a row one adds beside the other's typing takes
+// the fill and the frame on both editors, through undo, redo and a save and reopen, and the
+// two editors paint the same bands and frame.
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterEach, expect, test } from 'bun:test';
@@ -84,7 +85,7 @@ async function fingerprint(created: Peer) {
   return canonicalOoxmlFingerprint(loaded.package.parts.get(loaded.package.mainDocumentPart)!);
 }
 
-/** The painted gap bands: their fill, size and clip, in paint order. */
+/** The painted gap bands: their fill, size and clip, in paint order. Rows of one fill share one. */
 function bands(created: Peer): string[] {
   return [...created.container.querySelectorAll<HTMLElement>('.docx-table-spacing-shading')].map(
     (band) =>
@@ -118,8 +119,9 @@ test('a row added beside typing takes the gap fill on both editors, through undo
   const alice = await peer('Alice');
   const bob = await peer('Bob', alice);
   await settle(alice, bob);
-  expect(bands(alice)).toHaveLength(2);
+  expect(bands(alice)).toHaveLength(1);
   expect(bands(bob)).toEqual(bands(alice));
+  const twoRows = bands(bob)[0];
 
   await alice.runtime.run(async (context) => {
     context.document.body.tables.getFirst().addRows('End', 1, [['e', 'f']]);
@@ -133,19 +135,21 @@ test('a row added beside typing takes the gap fill on both editors, through undo
   await settle(alice, bob);
   expect(rowCount(alice)).toBe(3);
   expect(rowCount(bob)).toBe(3);
-  expect(bands(alice)).toHaveLength(3);
+  // The band grows over the new row.
+  expect(bands(bob)[0]).not.toBe(twoRows);
+  expect(bands(alice)).toHaveLength(1);
   expect(bands(bob)).toEqual(bands(alice));
   expect(await fingerprint(alice)).toBe(await fingerprint(bob));
 
   expect(alice.editor.exec({ type: 'undo' }).ok).toBe(true);
   sync(alice, bob);
   await settle(alice, bob);
-  expect(bands(alice)).toHaveLength(2);
+  expect(bands(alice)).toHaveLength(1);
   expect(bands(bob)).toEqual(bands(alice));
   expect(alice.editor.exec({ type: 'redo' }).ok).toBe(true);
   sync(alice, bob);
   await settle(alice, bob);
-  expect(bands(bob)).toHaveLength(3);
+  expect(bands(bob)).toHaveLength(1);
   expect(bands(bob)).toEqual(bands(alice));
 
   // Save and reopen as a fresh room: the table keeps its fill and paints the same bands.
@@ -169,6 +173,63 @@ test('a row deleted while the other participant types in it converges on the sam
   await settle(alice, bob);
   expect(await fingerprint(alice)).toBe(await fingerprint(bob));
   expect(rowCount(bob)).toBe(rowCount(alice));
-  expect(bands(alice)).toHaveLength(rowCount(alice));
+  expect(bands(alice)).toHaveLength(1);
   expect(bands(bob)).toEqual(bands(alice));
+});
+
+const outer = ['top', 'left', 'bottom', 'right']
+  .map((side) => `<w:${side} w:val="single" w:sz="24" w:color="C00000"/>`)
+  .join('');
+const framed = zipDocument(
+  `<w:tbl><w:tblPr><w:tblW w:w="4000" w:type="dxa"/><w:tblCellSpacing w:w="100" w:type="dxa"/>` +
+    `<w:tblBorders>${outer}<w:insideH w:val="single" w:sz="4" w:color="0070C0"/>` +
+    `<w:insideV w:val="single" w:sz="4" w:color="0070C0"/></w:tblBorders></w:tblPr>` +
+    `<w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>` +
+    `<w:tr>${cell('a')}${cell('b')}</w:tr><w:tr>${cell('c')}${cell('d')}</w:tr></w:tbl>` +
+    `<w:p><w:r><w:t>Tail</w:t></w:r></w:p>`
+);
+
+/** The painted frame: its size and its rules, in paint order. */
+function frame(created: Peer): string {
+  const element = created.container.querySelector<HTMLElement>('.docx-table-spacing-frame');
+  if (!element) return 'none';
+  const rules = [...element.querySelectorAll<HTMLElement>('*')].map((rule) =>
+    [rule.style.left, rule.style.top, rule.style.width, rule.style.height].join(' ')
+  );
+  return [element.style.width, element.style.height, ...rules].join('|');
+}
+
+test('the frame of a spaced table follows rows added and typed on both editors', async () => {
+  const alice = await peer('Alice', undefined, framed);
+  const bob = await peer('Bob', alice);
+  await settle(alice, bob);
+  const before = frame(alice);
+  expect(before).not.toBe('none');
+  expect(frame(bob)).toBe(before);
+
+  await alice.runtime.run(async (context) => {
+    context.document.body.tables.getFirst().addRows('End', 1, [['e', 'f']]);
+    await context.sync();
+  });
+  await bob.runtime.run(async (context) => {
+    context.document.body.tables.getFirst().getCell(0, 0).body.insertText(' typed', 'End');
+    await context.sync();
+  });
+  sync(alice, bob);
+  await settle(alice, bob);
+  expect(rowCount(alice)).toBe(3);
+  const grown = frame(alice);
+  expect(grown).not.toBe(before);
+  expect(frame(bob)).toBe(grown);
+  expect(await fingerprint(alice)).toBe(await fingerprint(bob));
+
+  expect(alice.editor.exec({ type: 'undo' }).ok).toBe(true);
+  sync(alice, bob);
+  await settle(alice, bob);
+  expect(frame(bob)).toBe(frame(alice));
+  expect(rowCount(bob)).toBe(2);
+
+  const reopened = await peer('Carol', undefined, new Uint8Array(await bob.editor.save()));
+  await settle(reopened);
+  expect(frame(reopened)).toBe(frame(bob));
 });
