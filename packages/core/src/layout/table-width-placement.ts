@@ -18,6 +18,7 @@ import {
 } from './legacy-table-content-width.ts';
 import type { SemanticTableRow, TableAlignment } from './semantic-table.ts';
 import type { TableBorderBox, TableBorderSide } from './table-borders.ts';
+import { outerBandPt } from './table-spacing-band.ts';
 import type { CellWidthClaim, PreferredWidth } from './table-widths.ts';
 
 /** The painted width of a simple outer side rule; other rules have no captured geometry. */
@@ -103,6 +104,35 @@ export interface TableWidthPlacement {
   readonly bidiRuleShiftPt?: number;
   /** See `SemanticTableStructure.textBoxBidiShiftPt`. */
   readonly textBoxBidiShiftPt?: number;
+}
+
+/**
+ * How far a top-level spaced right-to-left table sits toward its visual left: by its whole
+ * right frame rule, or half of it in legacy modes, so that rule ends at the aligned edge or
+ * centres on it. Measured with spacing of 5pt, right rules of 0.5 and 6pt and left rules of
+ * 0.5 and 6pt, right-, left- and centre-aligned, autofit and fixed: a 6pt rule moves the table
+ * 6pt in mode 15 and 3pt in mode 0.
+ */
+function spacedBidiFrameShiftPt(
+  borders: TableBorderBox,
+  table: {
+    readonly bidiVisual?: boolean;
+    readonly depth: number;
+    readonly textBox?: boolean;
+    readonly floating?: boolean;
+    readonly cellSpacingPt: number;
+    readonly compatibilityMode?: number;
+    readonly tableWidth: PreferredWidth;
+  }
+): number {
+  if (!table.bidiVisual || table.depth > 0 || table.textBox || table.floating) return 0;
+  // Measured with absolute and automatic widths only.
+  if (!(table.cellSpacingPt > 0) || table.tableWidth.type === 'pct') return 0;
+  // The visual right rule of a right-to-left table is its `w:left` border.
+  const band = outerBandPt(borders.left);
+  return hasCompatibilityRule(table.compatibilityMode, 'modernBidiSpacedFrameInside')
+    ? -band
+    : -band / 2;
 }
 
 /**
@@ -194,7 +224,12 @@ export function resolveTableWidthPlacement(input: {
     hasCompatibilityRule(input.compatibilityMode, 'modernBidiTableRuleShift')
       ? outerSideRulesPt(input.tableBorders, rows, true)
       : undefined;
-  const shift = sides ? -(sides.left + sides.right) / 4 : 0;
+  const shift = sides
+    ? -(sides.left + sides.right) / 4
+    : spacedBidiFrameShiftPt(input.tableBorders, {
+        ...input,
+        depth,
+      });
   const textBoxShift =
     input.bidiVisual &&
     input.textBox &&
