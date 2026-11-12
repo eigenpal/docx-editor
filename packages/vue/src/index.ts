@@ -203,6 +203,7 @@ export {
 } from './editor/toolbar/toolbar-context';
 
 export {
+  useContextMenuAnchor,
   useContextMenuTarget,
   DocxEditorContextMenu,
   ContextMenuCopy,

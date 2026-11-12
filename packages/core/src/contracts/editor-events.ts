@@ -66,7 +66,8 @@ export interface EditorEvents {
   reviewItemReveal: (event: ReviewItemRevealEvent) => void;
   /**
    * An accept-all or reject-all decision committed: from the toolbar, the menu, or
-   * `exec({ type: 'resolveAllReviewChanges' })`. `skipped` names the changes it left pending,
+   * `exec()` with `resolveAllReviewChanges`, `acceptAllRevisions`, or `rejectAllRevisions`.
+   * `action` is `'accept'` or `'reject'` for all three. `skipped` names the changes it left pending,
    * so a host can say why they stay. A remote decision in a collaboration session never fires
    * it: it is a local event.
    *

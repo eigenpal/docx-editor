@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The acceptAllRevisions, rejectAllRevisions, acceptRevision, rejectRevision, addComment, replyComment, and resolveComment commands were refused as unsupported, and tracked-changes protection allowed accept and reject.",
+  "after": "The bulk commands run the existing resolveAllReviewChanges decision with document scope; the single comment and revision commands run the existing review methods on the card their OOXML id names; tracked-changes protection refuses accept and reject before any operation is written.",
+  "reason": "The commands reuse the existing review planner, review methods, and commit lane, and the protection gate only refuses earlier. Shared nodes, operation shapes, offsets, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/accept-all-revisions.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-accept-all-revisions.test.ts",
+    "packages/core/src/editor/__tests__/document-review-commands.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-review-commands.test.ts"
+  ],
+  "changeset": "accept-all-revisions-command",
+  "migration": null
+}

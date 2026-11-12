@@ -3488,6 +3488,7 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     canInsertTable(rows: number, cols: number): boolean;
     canInsertToc(): boolean;
     canRefreshToc(tocId?: string): boolean;
+    caretClientRect(): HighlightRect | null;
     clearFormatting(): void;
     collaborationSession(): EditorCollaborationSession | null;
     commitReviewOps(run: (historyToken: symbol | undefined) => {
@@ -3609,6 +3610,7 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
     releaseSelection(pin: SelectionPin): void;
     remotePresenceColor(name: string): string | undefined;
+    remoteSelectionPending(): boolean;
     removeToc(tocId?: string): boolean;
     removeTocRefusal(tocId?: string): TocRemovalRefusal | null;
     repaintHighlights(): void;

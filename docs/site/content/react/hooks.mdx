@@ -59,7 +59,7 @@ function PageIndicator() {
 }
 ```
 
-Pass a comparator for an object slice. Common fields include `page`, `selection`, `formatting`, `editable`, `isLoading`, `editingMode`, `canUndo`, `pageSetup`, and `lastRejection`.
+Pass a comparator for an object slice. Common fields include `page`, `selection`, `selectionRange`, `formatting`, `editable`, `isLoading`, `editingMode`, `canUndo`, `pageSetup`, and `lastRejection`. `selectionRange` holds `anchor` and `head` positions with `blockId` and `offset`, and keeps its reference until the selection moves, so the default comparator works for it.
 
 | Hook | Returns | Notes |
 | --- | --- | --- |
@@ -217,6 +217,7 @@ For font origins, see [Fonts](/docs/2.x/guides/fonts). For refused opens, see [O
 | `useNoteScopeState()` | Active footnote or endnote scope |
 | `useNotePropertiesState()` | Note numbering properties, or `null` |
 | `useContextMenuTarget()` | `HTMLElement \| null` that received the last context-menu action |
+| `useContextMenuAnchor()` | `{ x, y, trigger } \| null` where the open context menu is anchored; `trigger` is `'pointer'` or `'keyboard'` |
 | `useTableBorderTargetLabel()` | `string` label of the table-border target |
 | `useToolbarContext()` | `{ t, onSave }` |
 | `useToolbarLabel()` | `(key) => string` for the active scope |

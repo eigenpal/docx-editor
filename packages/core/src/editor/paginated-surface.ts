@@ -5454,6 +5454,11 @@ export function mountPaginatedSurface(
       options.onChange?.(currentState());
     },
 
+    caretClientRect: () => {
+      flushLayout();
+      return caret.clientRect();
+    },
+    remoteSelectionPending: () => remoteCaret.pending(),
     activeReviewKey: () => {
       const active = activeReviewAtCaret();
       return active ? reviewItemKey(active) : null;

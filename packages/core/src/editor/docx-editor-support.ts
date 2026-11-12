@@ -185,31 +185,52 @@ export function resolveMarkAttr(command: { mark: string; value: unknown }): Reso
   }
 }
 
-function isSurfacePosition(value: unknown): value is SurfaceSelection['anchor'] {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { paragraphId?: unknown }).paragraphId === 'string' &&
-    typeof (value as { offset?: unknown }).offset === 'number'
-  );
+/** What a `setSelection` range with anchor/head endpoints resolves to. */
+export type TextSelectionInput =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'ok'; readonly selection: SurfaceSelection }
+  | { readonly kind: 'invalid'; readonly reason: string };
+
+const NOT_A_TEXT_SELECTION: TextSelectionInput = { kind: 'none' };
+
+/** One endpoint: `blockId`, or its older name `paragraphId`, plus an offset. */
+function textPositionOf(
+  value: unknown,
+  name: 'anchor' | 'head'
+): SurfaceSelection['anchor'] | string {
+  if (typeof value !== 'object' || value === null) return `${name} must be a text position`;
+  const { blockId, paragraphId, offset } = value as {
+    blockId?: unknown;
+    paragraphId?: unknown;
+    offset?: unknown;
+  };
+  if (typeof offset !== 'number') return `${name}.offset must be a number`;
+  if (blockId !== undefined && typeof blockId !== 'string')
+    return `${name}.blockId must be a string`;
+  if (paragraphId !== undefined && typeof paragraphId !== 'string') {
+    return `${name}.paragraphId must be a string`;
+  }
+  if (blockId === undefined && paragraphId === undefined) return `${name} needs a blockId`;
+  if (blockId !== undefined && paragraphId !== undefined && blockId !== paragraphId) {
+    return `${name}.blockId and ${name}.paragraphId name different paragraphs`;
+  }
+  return { paragraphId: (blockId ?? paragraphId) as string, offset };
 }
 
 /**
- * The surface's native selection form: paragraph-id + offset endpoints.
+ * A `setSelection` range of text positions, normalized to the surface's form.
  *
- * `DocAnchor` forms (`{ anchor: { paraId } }`, `{ range: { from, to } }` with anchor
- * endpoints) are resolved through the session's paraId index at exec time — see
- * `anchor-resolution.ts`. `DocLocation` and `SemanticTarget` still address the document
- * through indexes this lane does not build, so they stay refused rather than resolved
- * approximately.
+ * `none` for a range with no anchor/head pair, which the paraId forms handle. `invalid` for
+ * an anchor/head pair whose positions name no paragraph, or two different ones.
  */
-export function isSurfaceSelection(value: unknown): value is SurfaceSelection {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    isSurfacePosition((value as { anchor?: unknown }).anchor) &&
-    isSurfacePosition((value as { head?: unknown }).head)
-  );
+export function textSelectionOf(range: unknown): TextSelectionInput {
+  if (typeof range !== 'object' || range === null) return NOT_A_TEXT_SELECTION;
+  if (!('anchor' in range) || !('head' in range)) return NOT_A_TEXT_SELECTION;
+  const anchor = textPositionOf((range as { anchor: unknown }).anchor, 'anchor');
+  if (typeof anchor === 'string') return { kind: 'invalid', reason: anchor };
+  const head = textPositionOf((range as { head: unknown }).head, 'head');
+  if (typeof head === 'string') return { kind: 'invalid', reason: head };
+  return { kind: 'ok', selection: { anchor, head } };
 }
 
 export function editorError(code: string, message: string): EditorError {
@@ -862,19 +883,24 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return command.region === 'table'
         ? { supported: true, mutating: false }
         : { supported: false, reason: `selecting a table ${command.region} is not supported yet` };
-    case 'setSelection':
+    case 'setSelection': {
       // Shape gate only: whether an anchor's paraId exists (and its `search` phrase is
       // unique) is a property of the DOCUMENT, checked at exec — the same split as
       // `insertText`, whose target cannot be pre-verified either.
-      return ('range' in command &&
-        (isSurfaceSelection(command.range) || isDocAnchorRange(command.range))) ||
+      const text = 'range' in command ? textSelectionOf(command.range) : NOT_A_TEXT_SELECTION;
+      if (text.kind === 'invalid') {
+        return { supported: false, code: 'invalidArgs', reason: text.reason };
+      }
+      return text.kind === 'ok' ||
+        ('range' in command && isDocAnchorRange(command.range)) ||
         ('anchor' in command && isDocAnchor(command.anchor))
         ? { supported: true, mutating: false }
         : {
             supported: false,
             reason:
-              'setSelection accepts { anchor: { paraId } }, a { range } whose from/to are paraId anchors, or a { range } carrying a semantic { anchor: { paragraphId, offset }, head } selection',
+              'setSelection accepts { anchor: { paraId } }, a { range } whose from/to are paraId anchors, or a { range } carrying an { anchor: { blockId, offset }, head } selection',
           };
+    }
     case 'insertTextBox':
       return { supported: true, mutating: true };
     case 'insertChart':

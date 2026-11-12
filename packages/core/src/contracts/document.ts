@@ -178,13 +178,76 @@ export interface DocEdits {
   proposeReplacement: { target: DocTarget; replaceWith: string; author: string };
   proposeInsertion: { target: DocTarget; text: string; author: string };
   proposeDeletion: { target: DocTarget; author: string };
+  /**
+   * Comment on the selection. In the editor this runs `Editor.addComment` with the same gates
+   * and history group support; `author` overrides the configured author for one call. The
+   * editor does not take a `target`: a command with one is refused with `unsupported`.
+   * Requires the review module, as every comment and revision command does.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#comment-and-decide-by-id | Comment and decide by id}
+   */
   addComment: { target: DocTarget; text: string; author: string };
+  /**
+   * Reply to the comment whose `w:id` is `commentId`, the `id` of a `DocComment` and of
+   * `ReviewCommentItem.comment`. In the editor this runs `Editor.replyToReviewItem` on that
+   * comment's card. An unknown id, or a comment that a reviewer filter hides, is refused
+   * with `notFound`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#comment-and-decide-by-id | Comment and decide by id}
+   */
   replyComment: { commentId: string; text: string; author: string };
+  /**
+   * Resolve the comment thread whose `w:id` is `commentId`. In the editor this runs
+   * `Editor.setCommentResolved` on that comment's card, with the same rules as
+   * `replyComment`. Resolving a resolved thread succeeds with `changed: false`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#comment-and-decide-by-id | Comment and decide by id}
+   */
   resolveComment: { commentId: string };
 
+  /**
+   * Accept the tracked change whose `w:id` is `id`. `@w:id` is unique only within a part, so
+   * `part` names it: `'body'` (the default) is the main document, and `'footnote'` and
+   * `'endnote'` are the notes parts. `noteId` narrows a note change to the note with that
+   * `w:id`. In the editor this runs `Editor.acceptReviewItem` on the change's card, so it
+   * resolves every site of that change in one undo step and joins a history group.
+   *
+   * Refused with `notFound` when no listed change has the id there (a reviewer filter hides
+   * changes), with `invalidArgs` when the id names more than one change (decide each with
+   * `acceptReviewItem`), and with `locked` under tracked-changes protection.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#comment-and-decide-by-id | Comment and decide by id}
+   */
   acceptRevision: { id: number; part?: 'body' | 'footnote' | 'endnote'; noteId?: number };
+  /**
+   * Reject the tracked change whose `w:id` is `id`. Addressing, gates, and refusals are the
+   * same as for `acceptRevision`; the editor runs `Editor.rejectReviewItem`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#comment-and-decide-by-id | Comment and decide by id}
+   */
   rejectRevision: { id: number; part?: 'body' | 'footnote' | 'endnote'; noteId?: number };
+  /**
+   * Accept every tracked change in the document in one undo step: the body, tables,
+   * headers, footers, notes, and text boxes. Reviewer filters do not narrow it. In the editor
+   * it runs as `resolveAllReviewChanges` with `scope: 'document'` and returns the same
+   * `revisions` result. A change that cannot be accepted, such as one in locked content, is
+   * left pending and listed in `revisions.skipped`.
+   *
+   * Requires the review module from `@docx-editor.dev/pro`; without it the command is refused
+   * with `unsupported`. Also refused with `locked` while viewing or under read-only, comments,
+   * or tracked-changes protection, with `notFound` when the document has no tracked
+   * changes, and, when no change can be accepted, with `locked`, `bound`, or `unsupported`
+   * for the cause. A refusal writes nothing.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#accept-or-reject-every-change | Accept or reject every change}
+   */
   acceptAllRevisions: Record<never, never>;
+  /**
+   * Reject every tracked change in the document in one undo step. The scope, gates, and
+   * result are the same as for `acceptAllRevisions`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#accept-or-reject-every-change | Accept or reject every change}
+   */
   rejectAllRevisions: Record<never, never>;
 
   /**

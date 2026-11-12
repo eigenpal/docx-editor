@@ -1,5 +1,6 @@
 import type { DocAnchor } from './types.ts';
 import type { SemanticPosition, SemanticSelection } from '../layout/semantic-interaction.ts';
+import type { TextPosition } from './editor-selection-range.ts';
 
 /**
  * A selection endpoint, in either vocabulary the engine resolves.
@@ -18,9 +19,17 @@ export type EditorPosition = DocAnchor | SemanticPosition;
 /**
  * A selection, in one endpoint vocabulary or the other.
  *
- * The two do NOT mix: a range is a pair of paraId anchors, or a semantic anchor/head pair,
- * and `can()` refuses anything else with the engine's own reason. Spelled as two arms rather
- * than `{ from: EditorPosition; to: EditorPosition }` for exactly that reason — the looser
- * shape would type a mixed pair the engine rejects at runtime.
+ * The vocabularies do NOT mix: a range is a pair of paraId anchors, or an anchor/head pair
+ * of text positions, and `can()` refuses anything else with the engine's own reason. Spelled
+ * as separate arms rather than `{ from: EditorPosition; to: EditorPosition }` for exactly
+ * that reason: the looser shape would type a mixed pair the engine rejects at runtime.
+ *
+ * A text position names its paragraph with `blockId`, as {@link TextPosition} and
+ * `getSelectionRange()` do. `paragraphId` is the older name for the same id and stays
+ * accepted. A position with neither, or with both set to different ids, is refused with
+ * `invalidArgs`.
  */
-export type EditorSelection = SemanticSelection | { from: DocAnchor; to: DocAnchor };
+export type EditorSelection =
+  | { anchor: TextPosition; head: TextPosition }
+  | SemanticSelection
+  | { from: DocAnchor; to: DocAnchor };

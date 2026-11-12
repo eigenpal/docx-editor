@@ -765,11 +765,10 @@ export interface ContentControlWidgetPictureProps extends DocxEditorContentContr
     autoOpen?: boolean;
 }
 
-// @public (undocumented)
+// @public
 export interface ContextMenuAnchor {
-    // (undocumented)
+    readonly trigger: 'pointer' | 'keyboard';
     readonly x: number;
-    // (undocumented)
     readonly y: number;
 }
 
@@ -9422,7 +9421,10 @@ export interface UseContentControlWidgetResult {
     readonly value: Readonly<Ref<string>>;
 }
 
-// @public (undocumented)
+// @public
+export function useContextMenuAnchor(): ComputedRef<ContextMenuAnchor | null>;
+
+// @public
 export function useContextMenuTarget(): HTMLElement | null;
 
 // @public

@@ -151,6 +151,8 @@ export interface RemoteCaret {
    * user had then, which the host's choice replaces: nothing is carried.
    */
   discard(): void;
+  /** Whether a remote commit is waiting for the next layout to carry the selection. */
+  pending(): boolean;
   /** The layout now shows the remote commit; carry the selection across it. */
   map(selection: SemanticSelection): SemanticSelection;
 }
@@ -221,6 +223,7 @@ export function createRemoteCaret(deps: RemoteCaretDeps): RemoteCaret {
     discard() {
       capture = null;
     },
+    pending: () => capture !== null,
     map(selection) {
       const next = carry(selection);
       // The same selection when nothing moved: a caller treats a new one as a caret move.

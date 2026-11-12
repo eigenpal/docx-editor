@@ -518,9 +518,8 @@ export interface ContentControlWidgetPictureProps extends DocxEditorContentContr
 
 // @public
 export interface ContextMenuAnchor {
-    // (undocumented)
+    readonly trigger: 'pointer' | 'keyboard';
     readonly x: number;
-    // (undocumented)
     readonly y: number;
 }
 
@@ -3822,6 +3821,9 @@ export interface UseContentControlWidgetResult {
     // (undocumented)
     readonly value: string;
 }
+
+// @public
+export function useContextMenuAnchor(): ContextMenuAnchor | null;
 
 // @public
 export function useContextMenuTarget(): HTMLElement | null;
