@@ -3294,7 +3294,13 @@ export const NO_MIXED_FIELDS: ParagraphDialogMixed;
 export function objectSlotOptions<K extends keyof ObjectSlotValueMap>(id: K): readonly ObjectSlotValueMap[K][];
 
 // @public
-export function objectSlotValue<K extends keyof ObjectSlotValueMap>(id: K, text: string | undefined): ObjectSlotValueMap[K] | null;
+export interface ObjectSlotReadValueMap extends Omit<ObjectSlotValueMap, 'shape.fill' | 'shape.outlineColor'> {
+    'shape.fill': ColorPick | 'none';
+    'shape.outlineColor': ColorPick | 'none';
+}
+
+// @public
+export function objectSlotValue<K extends keyof ObjectSlotValueMap>(id: K, text: string | undefined): ObjectSlotReadValueMap[K] | null;
 
 // @public
 export interface ObjectSlotValueMap {

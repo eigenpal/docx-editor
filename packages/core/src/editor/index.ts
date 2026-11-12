@@ -880,6 +880,7 @@ export {
   objectSlotOptions,
   objectSlotValue,
   type ChartChromeSlotId,
+  type ObjectSlotReadValueMap,
   type ObjectSlotValueMap,
   type ObjectToggleSlotId,
   type ShapeChromeSlotId,

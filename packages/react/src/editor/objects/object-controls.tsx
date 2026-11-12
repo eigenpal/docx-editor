@@ -19,6 +19,7 @@ import {
   toolbarCommandState,
   type ChromeSlotId,
   type ColorPick,
+  type ObjectSlotReadValueMap,
   type ObjectSlotValueMap,
   type ObjectToggleSlotId,
   type ToolbarCommandState,
@@ -88,7 +89,7 @@ export interface ObjectControlState<K extends ObjectSlotId> {
    * object shows several values, or the slot has no single value (`chart.seriesColor`,
    * `chart.data`).
    */
-  readonly value: ObjectSlotValueMap[K] | null;
+  readonly value: ObjectSlotReadValueMap[K] | null;
   /** The values a list slot offers, in list order; empty for other slots. */
   readonly options: readonly ObjectSlotValueMap[K][];
   /** Whether a toggle is on, or whether the object shows the property. */

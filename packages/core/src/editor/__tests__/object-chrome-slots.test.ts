@@ -19,7 +19,7 @@ import {
   toolbarCommandState,
 } from '../toolbar-commands.ts';
 import { PANE_SECTIONS, paneSlots } from '../pane-sections.ts';
-import { isObjectChromeSlot } from '../object-chrome-slots.ts';
+import { isObjectChromeSlot, objectSlotValue } from '../object-chrome-slots.ts';
 import type { SelectedImageState } from '../../contracts/editor-image-state.ts';
 
 const objectSlots = (groupId: 'shape' | 'chart'): ChromeSlotId[] =>
@@ -213,4 +213,14 @@ describe('chart slots on a live editor', () => {
       container.remove();
     }
   });
+});
+
+test('a colour slot reads back a grid pick or none, never other text', () => {
+  expect(objectSlotValue('shape.fill', 'accent1:40')).toBe('accent1:40');
+  expect(objectSlotValue('shape.fill', '#4472C4')).toBe('#4472C4');
+  expect(objectSlotValue('shape.outlineColor', 'none')).toBe('none');
+  expect(objectSlotValue('shape.outlineColor', 'auto')).toBe('auto');
+  expect(objectSlotValue('shape.fill', 'red')).toBeNull();
+  expect(objectSlotValue('shape.fill', '4472C4')).toBeNull();
+  expect(objectSlotValue('shape.fill', '')).toBeNull();
 });

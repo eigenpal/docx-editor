@@ -56,3 +56,16 @@ test('a placed part and a placed picker take the chrome font and text colour', (
     expect(body).toContain('color: var(--doc-text)');
   }
 });
+
+test('a grid in a host container stacks its rows', () => {
+  const declarations = new Map<string, string>();
+  postcss.parse(css).walkRules((rule) => {
+    if (!rule.selectors.includes('.docx-editor.docx-color-picker__content--inline')) return;
+    rule.walkDecls((decl) => {
+      declarations.set(decl.prop, decl.value);
+    });
+  });
+  expect(declarations.get('display')).toBe('flex');
+  expect(declarations.get('flex-direction')).toBe('column');
+  expect(declarations.has('gap')).toBe(true);
+});

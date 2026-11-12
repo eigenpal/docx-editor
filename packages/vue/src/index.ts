@@ -372,6 +372,7 @@ export {
 } from '@docx-editor.dev/core/editor';
 export type {
   ColorPick,
+  ObjectSlotReadValueMap,
   ObjectSlotValueMap,
   ObjectToggleSlotId,
   PaneSection,

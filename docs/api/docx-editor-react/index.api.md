@@ -131,6 +131,7 @@ import { MarkedFontResolver } from '@docx-editor.dev/core/editor';
 import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
 import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
+import { ObjectSlotReadValueMap } from '@docx-editor.dev/core/editor';
 import { ObjectSlotValueMap } from '@docx-editor.dev/core/editor';
 import { ObjectToggleSlotId } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
@@ -2859,7 +2860,7 @@ export interface ObjectControlState<K extends ObjectSlotId> {
     readonly options: readonly ObjectSlotValueMap[K][];
     // (undocumented)
     readonly slotId: K;
-    readonly value: ObjectSlotValueMap[K] | null;
+    readonly value: ObjectSlotReadValueMap[K] | null;
 }
 
 // @public
@@ -2872,6 +2873,8 @@ export type ObjectPartComponent<P, S extends ObjectSlotId> = ((props: P) => Reac
 
 // @public
 export type ObjectSlotId = keyof ObjectSlotValueMap;
+
+export { ObjectSlotReadValueMap }
 
 export { ObjectSlotValueMap }
 

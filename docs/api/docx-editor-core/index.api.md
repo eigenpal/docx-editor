@@ -3749,6 +3749,12 @@ export interface NumberingRef {
 }
 
 // @public
+export interface ObjectSlotReadValueMap extends Omit<ObjectSlotValueMap, 'shape.fill' | 'shape.outlineColor'> {
+    'shape.fill': ColorPick | 'none';
+    'shape.outlineColor': ColorPick | 'none';
+}
+
+// @public
 export interface ObjectSlotValueMap {
     // (undocumented)
     'chart.axes': boolean;

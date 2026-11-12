@@ -123,6 +123,28 @@ export const isObjectChromeSlot = (id: string): id is ShapeChromeSlotId | ChartC
 /** Whether a chart slot toggles an element, so its control carries `aria-pressed`. @public */
 export const chartSlotIsToggle = (id: string): boolean => id in CHART_TOGGLES;
 
+/**
+ * The value each object slot reads back, as `objectSlotValue` and `useObjectControl` give it.
+ * It is the value the slot takes, except for the colour slots: they take a colour name too, but
+ * read back only a grid pick or `none`, which `ColorPicker.Root` takes as its `value`. @public
+ */
+export interface ObjectSlotReadValueMap extends Omit<
+  ObjectSlotValueMap,
+  'shape.fill' | 'shape.outlineColor'
+> {
+  /** The grid pick of a solid fill, or `none` for No fill. */
+  'shape.fill': ColorPick | 'none';
+  /** The grid pick of a visible outline, or `none` for No line. */
+  'shape.outlineColor': ColorPick | 'none';
+}
+
+/** Whether `value` is a grid pick or `none`, as a colour slot reads back. */
+const isReadColor = (value: string): value is ColorPick | 'none' =>
+  value === 'none' ||
+  value === 'auto' ||
+  /^#[0-9A-F]{6}$/i.test(value) ||
+  colorPickTheme(value) !== null;
+
 /** The object slots that toggle: a run with no value turns the element on or off. @public */
 export type ObjectToggleSlotId = 'chart.dataLabels' | 'chart.axes' | 'chart.gridlines';
 
@@ -139,13 +161,15 @@ const textOf = (text: string | undefined): string | null =>
 export function objectSlotValue<K extends keyof ObjectSlotValueMap>(
   id: K,
   text: string | undefined
-): ObjectSlotValueMap[K] | null {
+): ObjectSlotReadValueMap[K] | null {
   const value = textOf(text);
   if (value === null) return null;
   let typed: unknown = null;
   switch (id) {
     case 'shape.fill':
     case 'shape.outlineColor':
+      typed = isReadColor(value) ? value : null;
+      break;
     case 'chart.title':
     case 'chart.categoryAxisTitle':
     case 'chart.valueAxisTitle':
@@ -174,7 +198,7 @@ export function objectSlotValue<K extends keyof ObjectSlotValueMap>(
     default:
       typed = null;
   }
-  return typed as ObjectSlotValueMap[K] | null;
+  return typed as ObjectSlotReadValueMap[K] | null;
 }
 
 /**

@@ -10061,6 +10061,12 @@ p.docx-review__refused {
   line-height: 1.4;
   color: var(--doc-text);
 }
+/* It stacks No color, the titles, and the swatch rows, as the popover grid does. */
+.docx-editor.docx-color-picker__content--inline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .docx-editor .docx-color-picker__hex {
   display: flex;
   flex-direction: column;

@@ -138,6 +138,7 @@ import { MaybeRef } from 'vue';
 import { MaybeRefOrGetter as MaybeRefOrGetter_2 } from 'vue';
 import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
+import { ObjectSlotReadValueMap } from '@docx-editor.dev/core/editor';
 import { ObjectSlotValueMap } from '@docx-editor.dev/core/editor';
 import { ObjectToggleSlotId } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
@@ -8005,7 +8006,7 @@ export interface ObjectControlState<K extends ObjectSlotId> {
     readonly options: ComputedRef<readonly ObjectSlotValueMap[K][]>;
     // (undocumented)
     readonly slotId: K;
-    readonly value: ComputedRef<ObjectSlotValueMap[K] | null>;
+    readonly value: ComputedRef<ObjectSlotReadValueMap[K] | null>;
 }
 
 // @public
@@ -8018,6 +8019,8 @@ export type ObjectPartComponent<C, S extends ObjectSlotId> = C & {
 
 // @public
 export type ObjectSlotId = keyof ObjectSlotValueMap;
+
+export { ObjectSlotReadValueMap }
 
 export { ObjectSlotValueMap }
 

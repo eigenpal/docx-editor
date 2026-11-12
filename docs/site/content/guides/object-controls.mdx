@@ -58,7 +58,7 @@ With `preset={false}`, the toolbar renders only the parts you place.
 
 To render your own control, read the slot with `useObjectControl`, as you read a value slot with `useEditorValueCommand`. It returns these members:
 
-- `value` is typed for the slot, such as a number for `shape.outlineWidth`. It is `null` when nothing is selected or the object shows several values.
+- `value` is typed for the slot, such as a number for `shape.outlineWidth`. It is `null` when nothing is selected or the object shows several values. A color slot reads a grid pick or `none`, so you can pass it to `ColorPicker.Root`. `ObjectSlotReadValueMap` holds the types.
 - `options` lists the values of a list slot, such as the legend positions.
 - `isEnabled`, `disabledReason`, `isActive`, and `label` describe the control.
 - `execute(value, options?)` runs the slot and returns an `ExecResult`.
@@ -230,6 +230,24 @@ usePaneRequest(() => (open.value = true), { panes: ['chart'] });
   <div v-if="open" role="dialog" aria-label="Chart">
     <DocxEditor.PaneSections pane="chart" :sections="['type', 'elements']" />
   </div>
+</template>
+```
+
+The following color control reads the outline color and passes it to `ColorPicker.Root`:
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, useObjectControl, type ColorPick } from '@docx-editor.dev/vue';
+
+const { value, isEnabled, label, execute } = useObjectControl('shape.outlineColor');
+const pick = (color: ColorPick | 'none') => execute(color);
+</script>
+
+<template>
+  <DocxEditor.ColorPicker.Root :value="value" :disabled="!isEnabled" @pick="pick">
+    <DocxEditor.ColorPicker.Trigger :aria-label="label" />
+    <DocxEditor.ColorPicker.Content />
+  </DocxEditor.ColorPicker.Root>
 </template>
 ```
 

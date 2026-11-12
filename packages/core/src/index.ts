@@ -162,6 +162,7 @@ export type {
   ChartPaneChange,
   ColorPick,
   ColorPickerThemeSlot,
+  ObjectSlotReadValueMap,
   ObjectSlotValueMap,
   TableChromeSlotId,
   ToolbarValueMap,
