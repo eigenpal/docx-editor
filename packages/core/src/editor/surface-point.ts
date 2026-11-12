@@ -1,11 +1,14 @@
 import type { PointerHost, SurfacePointHit } from './surface-pointer.ts';
+import type { SemanticLayout } from '../layout/semantic-records.ts';
 import {
+  findDrawingOverlayFrameInLayout,
   pageAtY,
   hitTestFragments,
   hitTestPage,
   type SemanticHit,
 } from '../layout/semantic-hit-test.ts';
 import {
+  activeStoryDrawingAtSheetPoint,
   findNoteAtSheetPoint,
   findStoryAtSheetPoint,
   isBodyContentPoint,
@@ -48,15 +51,16 @@ export function surfacePointAt(
     hit = hitTestFragments(layout, index, note.fragments, note.local, options);
   } else if (activeStory) {
     if (index !== activeStory.pageIndex) return null;
+    const binding = {
+      scope: { kind: 'headerFooter' as const, rId: activeStory.rId },
+      ...activeStory,
+    };
     const story = findStoryAtSheetPoint(pageLayout, sheet, host.pageOffsetX);
-    if (
-      !story ||
-      !storyMatchesBinding(story.story, {
-        scope: { kind: 'headerFooter', rId: activeStory.rId },
-        ...activeStory,
-      })
-    )
-      return null;
+    if (!story || !storyMatchesBinding(story.story, binding)) {
+      // Past the band, only the open story's own drawings answer (a watermark).
+      const drawing = activeStoryDrawingAtSheetPoint(layout, binding, sheet, host.pageOffsetX);
+      return drawing ? { hit: drawing, x: sheet.x, y: sheet.y } : null;
+    }
     origin = { x: sheet.x - story.local.x, y: sheet.y - story.local.y };
     hit = hitTestStoryAtLocalPoint(layout, index, story.story, story.local, options);
   } else {
@@ -81,9 +85,26 @@ export function surfacePointAt(
 }
 
 /**
+ * Whether a repeated press stays on an object rather than selecting a word or a paragraph.
+ * For a drawing the layout places, the hit decides, not the painted box: inside a shape with
+ * no fill is text. A text box takes its repeated presses elsewhere.
+ */
+export function repeatedPressOnObject(
+  layout: SemanticLayout,
+  hit: SemanticHit,
+  target: Element | null
+): boolean {
+  if (target?.closest('.docx-drawing-textbox')) return false;
+  if (hit.drawing) return true;
+  const painted = target?.closest('[data-drawing-node-id]')?.getAttribute('data-drawing-node-id');
+  return painted != null && findDrawingOverlayFrameInLayout(layout, painted) === null;
+}
+
+/**
  * The body drawing behind the text that a press at a client point reaches, as the body's own
  * hit test resolves it: outside every text line, page margins included. Null in a note, on a
- * header or footer band, over a front drawing, and over a read-only position.
+ * header or footer band, over a front drawing, and over a read-only position. With a header or
+ * footer open, its own drawing that the press reaches instead, past its band too (a watermark).
  */
 export function behindDrawingAt(
   host: PointerHost,
@@ -92,7 +113,9 @@ export function behindDrawingAt(
 ): NonNullable<SemanticHit['drawing']> | null {
   if (!Number.isFinite(clientX) || !Number.isFinite(clientY) || !host.pagesLayer.isConnected)
     return null;
-  if (host.activeNote?.() || host.activeHeaderFooter?.()) return null;
+  if (host.activeNote?.()) return null;
+  if (host.activeHeaderFooter?.())
+    return surfacePointAt(host, clientX, clientY)?.hit.drawing ?? null;
   const layout = host.layout();
   const rect = host.pagesLayer.getBoundingClientRect();
   const scale = host.scale() || 1;

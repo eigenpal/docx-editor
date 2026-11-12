@@ -9,7 +9,8 @@
     "packages/core/src/editor/__tests__/shape-selection.test.ts",
     "packages/core/src/store/__tests__/tree-drawing-shape-ops.test.ts",
     "packages/core/src/editor/__tests__/shape-selection-reach.test.ts",
-    "packages/core/src/editor/__tests__/shape-selection-scope.test.ts"
+    "packages/core/src/editor/__tests__/shape-selection-scope.test.ts",
+    "packages/core/src/editor/__tests__/shape-selection-story.test.ts"
   ],
   "changeset": "select-shapes",
   "migration": null

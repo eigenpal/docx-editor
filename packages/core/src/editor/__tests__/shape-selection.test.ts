@@ -170,7 +170,7 @@ test('with the shape behind the text selected, a press on its frame over text pl
     // The frame an adapter paints over the drawing: off the pages, as in a portal.
     const frame = document.createElement('div');
     container.append(frame);
-    const results: boolean[] = [];
+    const results: ReturnType<typeof passDrawingFramePressToText>[] = [];
     frame.addEventListener('pointerdown', (event) =>
       results.push(passDrawingFramePressToText(editor, event))
     );
@@ -187,10 +187,10 @@ test('with the shape behind the text selected, a press on its frame over text pl
       );
     // Outside every line, the frame keeps the press, to move the shape.
     press(380, gapY(editor));
-    expect(results).toEqual([false]);
+    expect(results).toEqual(['frame']);
     // On "Short", the text takes it: the caret lands there and the shape is no longer selected.
     press(2, firstLineBox(editor).y + 4);
-    expect(results).toEqual([false, true]);
+    expect(results).toEqual(['frame', 'text']);
     expect(editor.getSelectedImage!()).toBeNull();
     expect(editor.surface!.state().selection.head.offset).toBeLessThan(3);
   } finally {

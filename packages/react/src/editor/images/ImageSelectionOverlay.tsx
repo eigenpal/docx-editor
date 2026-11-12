@@ -12,7 +12,8 @@ import {
 import { createPortal } from 'react-dom';
 import {
   beginInlineImageDrag,
-  drawingFramePressGoesToText,
+  drawingFramePressTarget,
+  type DrawingFramePress,
   passDrawingFramePressToText,
   canMoveInlineImage,
   captureImageMutationPreconditions,
@@ -141,13 +142,19 @@ export function ImageSelectionOverlay({
         focusRequestedForDrawingRef.current = null;
         return;
       }
-      const drawingId = element
-        ?.closest<HTMLElement>('[data-drawing-node-id]')
-        ?.getAttribute('data-drawing-node-id');
-      // A press the frame hands to the text leaves the keyboard with the editor.
-      const toText = !!editor && drawingFramePressGoesToText(editor, event);
-      focusRequestedForDrawingRef.current = toText ? null : (drawingId ?? null);
-      if (drawingId && drawingId === target?.id && !toText) {
+      // A drawing behind the text paints under it, so the hit names what the press reaches.
+      const drawingId =
+        element
+          ?.closest<HTMLElement>('[data-drawing-node-id]')
+          ?.getAttribute('data-drawing-node-id') ??
+        editor?.surface?.pointAt(event.clientX, event.clientY)?.hit.drawing?.drawingNodeId;
+      // A press on the frame goes where the frame hands it: text keeps the keyboard with the
+      // editor, another drawing takes it once selected.
+      const onFrame = !!editor && !!drawingId && drawingId === target?.id;
+      const press: DrawingFramePress = onFrame ? drawingFramePressTarget(editor, event) : 'frame';
+      focusRequestedForDrawingRef.current =
+        press === 'text' ? null : press === 'frame' ? (drawingId ?? null) : press.drawingNodeId;
+      if (onFrame && press === 'frame') {
         queueMicrotask(() => overlayRef.current?.focus({ preventScroll: true }));
       }
     };
@@ -608,7 +615,12 @@ export function ImageSelectionOverlay({
           }}
           onPointerDown={(event) => {
             // Over text in front of a drawing behind it, the text takes the press.
-            if (passDrawingFramePressToText(editor, event.nativeEvent)) return;
+            const passed = passDrawingFramePressToText(editor, event.nativeEvent);
+            if (passed !== 'frame') {
+              // The forwarded press ran the capture listener again; the frame's answer wins.
+              focusRequestedForDrawingRef.current = passed === 'text' ? null : passed.drawingNodeId;
+              return;
+            }
             if (showInlineMove && beginInlineImageDrag(editor, event.nativeEvent, active.id))
               return;
             guardToolbarMousedown(event);

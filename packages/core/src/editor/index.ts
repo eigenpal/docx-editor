@@ -839,6 +839,7 @@ export type {
 } from '../contracts/editor-drop.ts';
 export { canMoveInlineImage, beginInlineImageDrag } from './inline-image-drag.ts';
 export {
-  drawingFramePressGoesToText,
+  drawingFramePressTarget,
+  type DrawingFramePress,
   passDrawingFramePressToText,
 } from './drawing-overlay-press.ts';

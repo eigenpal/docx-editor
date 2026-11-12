@@ -12,7 +12,8 @@ import {
 } from 'vue';
 import {
   beginInlineImageDrag,
-  drawingFramePressGoesToText,
+  drawingFramePressTarget,
+  type DrawingFramePress,
   passDrawingFramePressToText,
   canMoveInlineImage,
   captureImageMutationPreconditions,
@@ -160,14 +161,22 @@ export const ImageSelectionOverlay = defineComponent({
             focusRequestedForDrawingRef.value = null;
             return;
           }
-          const drawingId = element
-            ?.closest<HTMLElement>('[data-drawing-node-id]')
-            ?.getAttribute('data-drawing-node-id');
-          // A press the frame hands to the text leaves the keyboard with the editor.
           const instance = editorRef.value;
-          const toText = !!instance && drawingFramePressGoesToText(instance, event);
-          focusRequestedForDrawingRef.value = toText ? null : (drawingId ?? null);
-          if (drawingId && drawingId === target.value?.id && !toText) {
+          // A drawing behind the text paints under it, so the hit names what the press reaches.
+          const drawingId =
+            element
+              ?.closest<HTMLElement>('[data-drawing-node-id]')
+              ?.getAttribute('data-drawing-node-id') ??
+            instance?.surface?.pointAt(event.clientX, event.clientY)?.hit.drawing?.drawingNodeId;
+          // A press on the frame goes where the frame hands it: text keeps the keyboard with
+          // the editor, another drawing takes it once selected.
+          const onFrame = !!instance && !!drawingId && drawingId === target.value?.id;
+          const press: DrawingFramePress = onFrame
+            ? drawingFramePressTarget(instance, event)
+            : 'frame';
+          focusRequestedForDrawingRef.value =
+            press === 'text' ? null : press === 'frame' ? (drawingId ?? null) : press.drawingNodeId;
+          if (onFrame && press === 'frame') {
             queueMicrotask(() => overlayRef.value?.focus({ preventScroll: true }));
           }
         };
@@ -645,7 +654,13 @@ export const ImageSelectionOverlay = defineComponent({
               }}
               onPointerdown={(event: PointerEvent) => {
                 // Over text in front of a drawing behind it, the text takes the press.
-                if (passDrawingFramePressToText(editor, event)) return;
+                const passed = passDrawingFramePressToText(editor, event);
+                if (passed !== 'frame') {
+                  // The forwarded press ran the capture listener again; the frame's answer wins.
+                  focusRequestedForDrawingRef.value =
+                    passed === 'text' ? null : passed.drawingNodeId;
+                  return;
+                }
                 if (showInlineMove && beginInlineImageDrag(editor, event, current.id)) return;
                 guardToolbarMousedown(event as unknown as MouseEvent);
                 if (!showMove || !current.position) return;

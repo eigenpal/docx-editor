@@ -39,15 +39,18 @@ export function anchor(options: {
   uri: string;
   behind?: boolean;
   locked?: boolean;
+  /** What the offsets count from: the margins by default. */
+  relativeFrom?: 'margin' | 'page';
 }): string {
   const { id, name, x, y, cx, cy } = options;
+  const from = options.relativeFrom ?? 'margin';
   return (
     `<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" ` +
     `relativeHeight="${id}" behindDoc="${options.behind ? 1 : 0}" ` +
     `locked="${options.locked ? 1 : 0}" layoutInCell="1" allowOverlap="1">` +
     '<wp:simplePos x="0" y="0"/>' +
-    `<wp:positionH relativeFrom="margin"><wp:posOffset>${x}</wp:posOffset></wp:positionH>` +
-    `<wp:positionV relativeFrom="margin"><wp:posOffset>${y}</wp:posOffset></wp:positionV>` +
+    `<wp:positionH relativeFrom="${from}"><wp:posOffset>${x}</wp:posOffset></wp:positionH>` +
+    `<wp:positionV relativeFrom="${from}"><wp:posOffset>${y}</wp:posOffset></wp:positionV>` +
     `<wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>` +
     `<wp:docPr id="${id}" name="${name}"/><wp:cNvGraphicFramePr/>` +
     `<a:graphic><a:graphicData uri="${options.uri}">${options.graphic}</a:graphicData></a:graphic>` +
@@ -104,20 +107,34 @@ export const GROUP = anchor({
   uri: GROUP_URI,
 });
 
-/** A header part with one paragraph, and the section that references it. */
-export const HEADER_SECTION =
+/** The section that references the header part, and the footer part when there is one. */
+const headerSection = (footer: boolean) =>
   `<w:sectPr xmlns:r="${R}"><w:headerReference w:type="default" r:id="rIdH"/>` +
+  (footer ? '<w:footerReference w:type="default" r:id="rIdF"/>' : '') +
   '<w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" ' +
   'w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
 
-export function documentBytes(body: string, header?: string): Uint8Array {
+export const HEADER_SECTION = headerSection(false);
+
+/** A header or footer part: plain text is its one paragraph, markup is its body as given. */
+const storyPart = (root: 'hdr' | 'ftr', content: string) =>
+  strToU8(
+    `<w:${root} xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}">` +
+      (content.startsWith('<') ? content : `<w:p><w:r><w:t>${content}</w:t></w:r></w:p>`) +
+      `</w:${root}>`
+  );
+
+export function documentBytes(body: string, header?: string, footer?: string): Uint8Array {
   const headerType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml';
+  const footerType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml';
+  const FTR = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
         '<Default Extension="xml" ContentType="application/xml"/>' +
         `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
         (header ? `<Override PartName="/word/header1.xml" ContentType="${headerType}"/>` : '') +
+        (footer ? `<Override PartName="/word/footer1.xml" ContentType="${footerType}"/>` : '') +
         '</Types>'
     ),
     '_rels/.rels': strToU8(
@@ -126,23 +143,16 @@ export function documentBytes(body: string, header?: string): Uint8Array {
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}" ` +
         `xmlns:wpg="${WPG}" xmlns:mc="${MC}"><w:body>${body}` +
-        `${header ? HEADER_SECTION : ''}</w:body></w:document>`
+        `${header ? headerSection(footer != null) : ''}</w:body></w:document>`
     ),
     'word/_rels/document.xml.rels': strToU8(
       `<Relationships xmlns="${REL}">` +
         (header ? `<Relationship Id="rIdH" Type="${HDR}" Target="header1.xml"/>` : '') +
+        (footer ? `<Relationship Id="rIdF" Type="${FTR}" Target="footer1.xml"/>` : '') +
         '</Relationships>'
     ),
-    ...(header
-      ? {
-          'word/header1.xml': strToU8(
-            // Plain text is the header's one paragraph; markup is its body as given.
-            `<w:hdr xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}">` +
-              (header.startsWith('<') ? header : `<w:p><w:r><w:t>${header}</w:t></w:r></w:p>`) +
-              '</w:hdr>'
-          ),
-        }
-      : {}),
+    ...(header ? { 'word/header1.xml': storyPart('hdr', header) } : {}),
+    ...(footer ? { 'word/footer1.xml': storyPart('ftr', footer) } : {}),
   });
 }
 
@@ -158,11 +168,12 @@ export const BODY =
 
 export async function mount(
   body = BODY,
-  header?: string
+  header?: string,
+  footer?: string
 ): Promise<{ editor: DocxEditorInstance; container: HTMLElement }> {
   const container = document.createElement('div');
   document.body.append(container);
-  const editor = createDocxEditor({ container, document: documentBytes(body, header) });
+  const editor = createDocxEditor({ container, document: documentBytes(body, header, footer) });
   for (let attempt = 0; attempt < 20; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 0));
     editor.surface?.layout();

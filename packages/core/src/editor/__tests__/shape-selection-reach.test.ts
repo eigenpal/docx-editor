@@ -182,7 +182,7 @@ function frameOver(container: HTMLElement, editor: Parameters<typeof pressAt>[1]
   const frame = document.createElement('div');
   frame.className = 'docx-image-selection-overlay__frame';
   container.append(frame);
-  const results: boolean[] = [];
+  const results: ReturnType<typeof passDrawingFramePressToText>[] = [];
   frame.addEventListener('pointerdown', (event) =>
     results.push(passDrawingFramePressToText(editor, event))
   );
@@ -209,7 +209,7 @@ test('a touch press on the frame over text lets the tap through to the text', as
     pressAt(container, editor, 380, gapY(editor));
     const { frame, results, press } = frameOver(container, editor);
     const event = press(2, firstLineBox(editor).y + 4, 'touch');
-    expect(results).toEqual([true]);
+    expect(results).toEqual(['text']);
     // Not taken: the browser's own tap lands on the text under the frame.
     expect(event.defaultPrevented).toBe(false);
     expect(frame.style.pointerEvents).toBe('none');
@@ -232,7 +232,7 @@ test('a mouse press on the frame over text goes on to the element under the fram
     const targets: EventTarget[] = [];
     run.addEventListener('pointerdown', (event) => targets.push(event.target!));
     press(2, firstLineBox(editor).y + 4, 'mouse');
-    expect(results).toEqual([true]);
+    expect(results).toEqual(['text']);
     expect(targets).toEqual([run]);
     expect(editor.getSelectedImage!()).toBeNull();
   } finally {

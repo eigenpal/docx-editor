@@ -6,7 +6,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { expect, test } from 'bun:test';
-import { drawingFramePressGoesToText } from '../drawing-overlay-press.ts';
+import { drawingFramePressTarget } from '../drawing-overlay-press.ts';
 import type { DocxEditorInstance } from '../docx-editor.ts';
 import type { AnchoredDrawingRecord } from '../../layout/drawing-layout.ts';
 import {
@@ -168,8 +168,8 @@ test('the frame names the presses it hands to the text, so adapters keep the key
         clientX: (page.contentBox.x + x) * SCALE,
         clientY: (page.contentBox.y + y) * SCALE,
       });
-    expect(drawingFramePressGoesToText(editor, press(2, firstLineBox(editor).y + 4))).toBe(true);
-    expect(drawingFramePressGoesToText(editor, press(380, gapY(editor)))).toBe(false);
+    expect(drawingFramePressTarget(editor, press(2, firstLineBox(editor).y + 4))).toBe('text');
+    expect(drawingFramePressTarget(editor, press(380, gapY(editor)))).toBe('frame');
     // Only asked, not acted on: the shape stays selected.
     expect(editor.getSelectedImage!()).not.toBeNull();
   } finally {
