@@ -33,6 +33,7 @@ import {
 } from '../package/ooxml-tree.ts';
 import { MAX_INLINE_CONTAINER_DEPTH, nextInlineContainerDepth } from '../package/ooxml-shared.ts';
 import { paragraphIdsInDocumentOrder } from './tree-op-blocks.ts';
+import { removalEndsStoryWithTable } from '../package/ooxml-story-end-repair.ts';
 import {
   cloneWithNewIds,
   declaredLockOf,
@@ -271,7 +272,9 @@ function planWholeControl(part: OoxmlPart, control: OoxmlElement): RemovalPlan |
   const siblings = (parent?.children ?? []).filter(
     (child) => child.id !== control.id && !isProperties(child) && !isZeroWidth(child)
   );
-  if (carried.length === 0 && marked.length === 0 && siblings.length > 0) {
+  // A story that ends with a paragraph keeps one after a final table, as a deletion does.
+  const endsAfterTable = removalEndsStoryWithTable(control.id, (id) => parentOf(part, id));
+  if (carried.length === 0 && marked.length === 0 && siblings.length > 0 && !endsAfterTable) {
     return { removed: [control.id], deleted: [...deleted], caretOffset: 0 };
   }
   // One empty paragraph stays in place of the control: the one with the section mark, which
@@ -378,8 +381,17 @@ function planRemoval(part: OoxmlPart, toc: DetectedToc): RemovalPlan | TreeOpRej
     const properties = after.children.filter(isProperties);
     const content = after.children.filter((child) => !isProperties(child));
     survivor = withChildren(end, [...properties, ...carried, ...content]);
-  } else if (rest.length === 0 || carriesSectionMark(end) || carried.length > 0) {
-    // A cell or a document needs one paragraph; a section mark and carried markers need one.
+  } else if (
+    rest.length === 0 ||
+    carriesSectionMark(end) ||
+    carried.length > 0 ||
+    removalEndsStoryWithTable(
+      [...paragraphs, ...between].map((block) => block.id),
+      (id) => parentOf(part, id)
+    )
+  ) {
+    // A cell or a document needs one paragraph; a section mark and carried markers need one,
+    // and so does a story the removal would leave ending with a table.
     survivor = withChildren(end, [...end.children.filter(isProperties), ...carried]);
   }
   const removed = paragraphs.filter((paragraph) => paragraph.id !== survivor?.id);

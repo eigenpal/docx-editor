@@ -54,11 +54,11 @@ describe('Body.insertParagraph beside a table at the edge of the body', () => {
     expect(result.blocks).toEqual(['new', '[table: in cell]', 'after']);
   });
 
-  test('End goes after a table that closes the body, not into its last cell', async () => {
+  test('End goes after the empty paragraph a body reads after a closing table', async () => {
     const result = await inserted(TRAILING, (context) =>
       context.document.body.insertParagraph('new', 'End')
     );
-    expect(result.blocks).toEqual(['before', '[table: in cell]', 'new']);
+    expect(result.blocks).toEqual(['before', '[table: in cell]', '', 'new']);
   });
 
   test('a tracked insertion proposes the paragraph and its text', async () => {

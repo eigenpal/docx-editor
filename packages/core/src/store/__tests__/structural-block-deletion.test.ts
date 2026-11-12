@@ -139,8 +139,46 @@ describe('deleteBlock refuses what it would break', () => {
   });
 
   test('removing the last table would leave no paragraph at all', () => {
-    const part = load(TABLE);
+    // A header keeps a final table as written; a body would read a paragraph after it.
+    const read = readOoxmlPart(`<w:hdr xmlns:w="${W}">${TABLE}</w:hdr>`, {
+      name: '/word/header1.xml',
+      contentType: 'app/xml',
+    });
+    if (!read.ok) throw new Error(read.reason);
+    const part = read.part;
     expect(refusal(part, findByKind(part, 'table'))).toBe('block-required');
+  });
+
+  test('the paragraph after a table that ends the body stays, read or authored', () => {
+    const read = load(`${PARAGRAPH('before')}${TABLE}`);
+    expect(refusal(read, idsOfKind(read, 'paragraph').at(-1)!)).toBe('story-end-paragraph');
+    const authored = load(BODY);
+    expect(refusal(authored, idsOfKind(authored, 'paragraph').at(-1)!)).toBe('story-end-paragraph');
+    // The table itself may go: the paragraph then ends the body on its own.
+    expect(
+      applyTreeOp(authored, { op: 'deleteBlock', blockId: findByKind(authored, 'table') }).ok
+    ).toBe(true);
+  });
+
+  test('the last paragraph of a control after a table that ends the body stays', () => {
+    const sdt = (inner: string) => `<w:sdt><w:sdtPr/><w:sdtContent>${inner}</w:sdtContent></w:sdt>`;
+    const wrapped = load(`${PARAGRAPH('before')}${sdt(`${TABLE}${PARAGRAPH('in')}`)}`);
+    expect(refusal(wrapped, idsOfKind(wrapped, 'paragraph').at(-1)!)).toBe('story-end-paragraph');
+    // Removing the whole control after a final table needs its content kept.
+    const trailing = load(`${PARAGRAPH('before')}${TABLE}${sdt(PARAGRAPH('in'))}`);
+    const controlId = findByKind(trailing, 'contentControl');
+    const removed = (keepContent: boolean) =>
+      applyTreeOp(trailing, { op: 'removeContentControl', controlId, keepContent });
+    expect(removed(false)).toMatchObject({ ok: false, reason: 'story-end-paragraph' });
+    expect(removed(true).ok).toBe(true);
+    // A control left empty, or holding only markers, does not end the story.
+    const only = load(`${PARAGRAPH('before')}${TABLE}${sdt(PARAGRAPH('in'))}`);
+    expect(refusal(only, idsOfKind(only, 'paragraph').at(-1)!)).toBe('story-end-paragraph');
+    const marks = load(`${PARAGRAPH('a')}${TABLE}${sdt('<w:bookmarkStart w:id="1" w:name="m"/>')}`);
+    // The read adds the paragraph after the table, before the marker-only control.
+    expect(idsOfKind(marks, 'paragraph')).toHaveLength(6);
+    const last = idsOfKind(marks, 'paragraph').at(-1)!;
+    expect(refusal(marks, last)).toBe('story-end-paragraph');
   });
 
   test('a paragraph carrying a section mark stays', () => {

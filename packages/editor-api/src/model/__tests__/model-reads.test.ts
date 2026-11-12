@@ -193,7 +193,7 @@ describe('the paragraphs of a story', () => {
       await context.sync();
       return paragraphs.items.map((paragraph) => paragraph.text);
     });
-    expect(texts).toEqual(['outer', 'deep']);
+    expect(texts).toEqual(['outer', 'deep', '']);
   });
 
   test('count an empty paragraph, and it reads as empty text', async () => {

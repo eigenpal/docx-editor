@@ -38,7 +38,12 @@ function layout({
     layoutSemanticDocument(parsed.part, 0, { ...options, session: createLayoutSession() }).pages
   ).toEqual(result.pages);
   expect(serializeOoxmlPart(parsed.part)).toBe(before);
-  const text = result.pages.map((page) =>
+  // Pages up to the table's last: the empty paragraph the body reads after it may take one more.
+  const last = result.pages.findLastIndex((page) =>
+    page.fragments.some((fragment) => fragment.kind === 'table')
+  );
+  const tablePages = result.pages.slice(0, last + 1);
+  const text = tablePages.map((page) =>
     page.fragments
       .flatMap((fragment) =>
         fragment.kind === 'table'

@@ -49,7 +49,7 @@ import {
 import { planBreakOperation, planLineBreak } from './plan-breaks.ts';
 import { planParagraphBreaks } from './plan-paragraph-breaks.ts';
 import { insertTextOps, lineBreakRefusal, PARAGRAPH_MARK_IN_TEXT } from './line-break-text.ts';
-import { edgeTableOf, paragraphTextRefusal } from './plan-story-edge.ts';
+import { edgeTableOf, paragraphTextRefusal, storyKeeper } from './plan-story-edge.ts';
 import { automationListLevelExists } from './list-authoring.ts';
 import { planListAuthoring } from './plan-list-authoring.ts';
 import { hyperlinkStyleFor } from '../store/package/hyperlink-style-edit.ts';
@@ -674,11 +674,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       .flatMap((block) => block.paragraphIds);
 
     // One paragraph has to remain to hold the text. When something already has to stay — a section
-    // mark, a content control's contents — that IS the remainder and nothing is kept on its
-    // account; otherwise the story's first paragraph is kept, so a caller's handle for it goes on
-    // naming a paragraph and a script can clear a story and keep writing to it.
-    const keeper =
-      survivors.length === 0 ? removed.find((block) => block.kind === 'paragraph') : undefined;
+    // mark, a content control's contents — that IS the remainder, plus the empty paragraph after
+    // a final table; otherwise the story's first paragraph is kept, so a caller's handle for it
+    // goes on naming a paragraph and a script can clear a story and keep writing to it.
+    const keeper = storyKeeper(reads.part, removed, survivors.length);
     if (!keeper && survivors.length === 0) {
       // Every block is a table (or the story is empty). Emptying this story would need a paragraph
       // CREATED at the top level, which is not an op this slice has — and inventing one here would
@@ -702,7 +701,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
     const ops: TreeDocOp[] = [];
     // Reading order, so the text lands in the first paragraph the story still has.
-    const kept: string[] = (keeper ? [keeper.id] : [...survivors]).sort(
+    const kept: string[] = [...(keeper ? [keeper.id] : []), ...survivors].sort(
       (a, b) => reads.indexOf(a) - reads.indexOf(b)
     );
     const target = kept[0] as string;

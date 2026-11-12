@@ -157,7 +157,7 @@ test('a nested header table taller than a fresh page splits instead of failing',
   const result = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });
   if (!result.ok) throw new Error(result.reason);
   const layout = layoutSemanticDocument(result.part, 0, options);
-  expect(texts(layout)).toEqual(['head', ...Array.from({ length: 8 }, (_, i) => `y${i}`)]);
+  expect(texts(layout)).toEqual(['head', ...Array.from({ length: 8 }, (_, i) => `y${i}`), '']);
   expect(layout.pages).toHaveLength(2);
 });
 

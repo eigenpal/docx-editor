@@ -109,7 +109,7 @@ describe('an empty paragraph with a hidden mark leaves the flow', () => {
     const boxes = (result: ReturnType<typeof layout>) =>
       result.pages.flatMap((page) => page.fragments.map((fragment) => fragment.box));
     expect(boxes(withHidden)).toEqual(boxes(without));
-    expect(lineTexts(withHidden)).toEqual(['cell']);
+    expect(lineTexts(withHidden)).toEqual(['cell', '']);
   });
 });
 
@@ -125,6 +125,7 @@ describe('an empty paragraph with a hidden mark before a table', () => {
     expect(lineTexts(layout(`${table('one')}${hiddenNoBefore(240)}${table('two')}`))).toEqual([
       'one',
       'two',
+      '',
     ]);
     const adjacent = tops(`${table('one')}${table('two')}`);
     expect(joined[1]! - joined[0]!).toBeCloseTo(adjacent[1]! - adjacent[0]!, 6);
@@ -134,6 +135,7 @@ describe('an empty paragraph with a hidden mark before a table', () => {
     expect(lineTexts(layout(`${para(text('a'))}${hiddenNoBefore()}${table('cell')}`))).toEqual([
       'a',
       'cell',
+      '',
     ]);
   });
 
@@ -156,7 +158,7 @@ describe('an empty paragraph with a hidden mark before a table', () => {
     const tops = (source: string, compat: string) =>
       linesOf(layout(source, { styleCascade: cascade(compat) })).map((line) => line.box.y);
     for (const compat of ['', '<w:doNotUseHTMLParagraphAutoSpacing/>']) {
-      expect(lineTexts(layout(body, { styleCascade: cascade(compat) }))).toEqual(['a', 'cell']);
+      expect(lineTexts(layout(body, { styleCascade: cascade(compat) }))).toEqual(['a', 'cell', '']);
       // No automatic gap stays behind: the table sits where it would without the paragraph.
       expect(tops(body, compat)).toEqual(tops(`${para(text('a'))}${table('cell')}`, compat));
     }
@@ -206,7 +208,8 @@ describe('paragraphs that keep their line', () => {
 
   test('a paragraph before a table keeps its line when it states a space before', () => {
     const table = `<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid><w:tr><w:tc>${para(text('cell'))}</w:tc></w:tr></w:tbl>`;
-    kept(`${emptyMarked(HIDDEN)}${table}`, ['', 'cell']);
+    // The body ends with the table, so the empty paragraph read after it ends the list.
+    kept(`${emptyMarked(HIDDEN)}${table}`, ['', 'cell', '']);
   });
 
   test('the last paragraph of a content control does not join the next block', () => {

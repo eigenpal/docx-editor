@@ -170,13 +170,12 @@ describe('a table stays when nothing else could host the caret', () => {
     expect(texts(surface)).toEqual(['']);
   });
 
-  test('with no paragraph outside it, the table is emptied in place', () => {
+  test('a body that ends with the table reads a paragraph after it, which hosts the caret', () => {
     const { surface, container } = mount(TABLE);
     surface.selectAll();
     surface.deleteSelection();
-    // Nothing outside the table could hold the caret, so it stays and its cells clear.
-    expect(texts(surface)).toEqual(['', '', '', '']);
-    expect(container.querySelectorAll('.docx-table-cell')).toHaveLength(4);
+    expect(container.querySelectorAll('.docx-table-cell')).toHaveLength(0);
+    expect(texts(surface)).toEqual(['']);
   });
 });
 

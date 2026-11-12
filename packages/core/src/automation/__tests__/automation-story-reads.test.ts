@@ -80,7 +80,7 @@ describe("a story's text", () => {
   test('includes table-cell paragraphs, in the same reading order', () => {
     const host = open(docx(`${p('head')}${table(row(cell(p('in'))))}`));
     const { body } = roots(host);
-    expect(storyText(host, body)).toBe('head\rin');
+    expect(storyText(host, body)).toBe('head\rin\r');
   });
 });
 

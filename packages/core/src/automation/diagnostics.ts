@@ -130,6 +130,7 @@ const STORE_EDIT_CODES: Readonly<
   'style-not-defined': 'edit.style-not-defined',
   'no-styles-defined': 'edit.no-styles-defined',
   'carries-section-mark': 'edit.section-mark',
+  'story-end-paragraph': 'edit.operation-unsupported',
   'table-has-merge': 'edit.table-structure-unsupported',
   'row-hides-cell': 'edit.table-structure-unsupported',
   'unknown-grid-column': 'edit.table-structure-unsupported',

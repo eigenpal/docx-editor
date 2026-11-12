@@ -392,10 +392,13 @@ describe('unsupported shapes place by the ordinary row rules', () => {
     expect(pages(lay(load(body)))).toEqual(plain(body));
   });
 
-  test('a kept last row with nothing after the table does not move', () => {
+  test('a kept last row moves with the empty paragraph the body reads after the table', () => {
+    // Measured: a body that ends with a table reads an empty paragraph after it, and a kept
+    // last row keeps with that paragraph, which starts the next page here.
     const body = P8 + table([row('R1'), row('R2'), row('R3'), row('R4', { keep: ALL })]);
     expect(pages(lay(load(body)))).toEqual([
-      `${P} R1c1-1 R1c2-1 R2c1-1 R2c2-1 R3c1-1 R3c2-1 R4c1-1 R4c2-1`,
+      `${P} R1c1-1 R1c2-1 R2c1-1 R2c2-1 R3c1-1 R3c2-1`,
+      'R4c1-1 R4c2-1',
     ]);
   });
 
