@@ -69,6 +69,7 @@ test('outer columns hold their own frame part while the columns fit the width', 
     leadPt: 5.5,
     trailPt: 0,
     outsidePt: 2.75,
+    rightBandPt: 0.5,
   });
   const columns = fitColumnsAboveMinimums([50, 100, 150], 260, [5.5, 0, 0]);
   expect(cells[0]).toBeCloseTo(columns[0]! - 5.5, 6);
@@ -130,16 +131,130 @@ test('without a table width the first cell gives its stated width the frame part
   expect(b).toBeCloseTo(100, 6);
 });
 
-test('a percentage width holds the whole frame', () => {
-  const pct = '<w:tblW w:w="2500" w:type="pct"/>';
-  const thickLeft = layoutTable([2000, 2000], tblPr(pct, 48, 4, FIXED));
-  const thickRight = layoutTable([2000, 2000], tblPr(pct, 4, 48, FIXED));
-  // No part of the frame lies outside the share, whichever side holds the thick rule.
-  expect(thickLeft.box.width).toBeCloseTo(thickRight.box.width, 6);
+const PCT = '<w:tblW w:w="2500" w:type="pct"/>';
+const jc = (value: string) => `<w:jc w:val="${value}"/>`;
+
+test('a percentage width is the outer extent of the frame, right rule included', () => {
+  const thickLeft = layoutTable([2000, 2000], tblPr(PCT, 48, 4, FIXED));
+  const thickRight = layoutTable([2000, 2000], tblPr(PCT, 4, 48, FIXED));
+  // 50% of the page less the 3.25pt mean side rule, plus that rule: 201.625pt. The right rule
+  // draws outward from the box.
+  expect(thickLeft.box.width).toBeCloseTo(201.625 - 0.5, 6);
+  expect(thickRight.box.width).toBeCloseTo(201.625 - 6, 6);
   // The first column still holds its part: it gives way above that part, not in proportion.
   const [a, b] = widths(thickLeft);
   expect(b! - a!).toBeGreaterThan(4);
   expect(b! - a!).toBeLessThan(5.5);
+});
+
+test('legacy modes widen a spaced percentage by its frame and move it out by half the left rule', () => {
+  for (const [left, right, x, box] of [
+    // 50% of 400pt + 4 x 5pt spacing + two 0.5pt margins + 6.5pt of rules, plus half the rules.
+    [48, 4, -3, 217 - 0.5],
+    [4, 48, -0.25, 217 - 6],
+  ] as const) {
+    const table = layoutTable([2000, 2000], tblPr(PCT, left, right, FIXED), undefined, 14);
+    expect(table.box.x).toBeCloseTo(x, 6);
+    expect(table.box.width).toBeCloseTo(box, 6);
+  }
+  // A stated indent aligns the first cell's content with the text edge instead, as an
+  // absolute width does.
+  const indented = (width: string) =>
+    layoutTable(
+      [2000, 2000],
+      `${width}<w:tblCellSpacing w:w="100" w:type="dxa"/><w:tblInd w:w="0" w:type="dxa"/>` +
+        `${borders(48, 4)}${FIXED}${NO_MARGINS}`,
+      undefined,
+      14
+    ).rows[0]!.cells[0]!.box.x;
+  expect(indented(PCT)).toBeCloseTo(indented(dxa(4000)), 6);
+  expect(indented(PCT)).toBeLessThan(1);
+});
+
+test('a legacy spaced percentage reads the margins of its outer cells and may overhang the text', () => {
+  const margins =
+    '<w:tblCellMar><w:left w:w="108" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar>';
+  const withMargins = layoutTable(
+    [2000, 2000],
+    `${PCT}<w:tblCellSpacing w:w="100" w:type="dxa"/>${borders(4, 48)}${FIXED}${margins}`,
+    undefined,
+    14
+  );
+  // 50% of (400 + 20 + 5.4 + 5.4 + 6.5) + 3.25, less the 6pt right rule.
+  expect(withMargins.box.width).toBeCloseTo(218.65 + 3.25 - 6, 6);
+  // Equal 0.5pt rules at 100%: 400 + 20 + 1 + 1 + 0.5pt wide, the frame centred on the page.
+  const full = layoutTable(
+    [2000, 2000],
+    tblPr('<w:tblW w:w="5000" w:type="pct"/>' + jc('center'), 4, 4, FIXED),
+    undefined,
+    14
+  );
+  expect(full.box.width).toBeCloseTo(422.5 - 0.5, 6);
+  // The rule centres sit 0.25pt inside the box on the left and 0.25pt past it on the right.
+  expect(full.box.x + 0.25 + full.box.width / 2).toBeCloseTo(PAGE_WIDTH / 2, 6);
+  expect(full.box.x).toBeLessThan(-10);
+});
+
+test('equal 0.5pt rules move a spaced table by half or a whole rule', () => {
+  const at = (align: string, mode: number) =>
+    layoutTable([2000, 2000], tblPr(dxa(4000) + jc(align), 4, 4, FIXED), undefined, mode).box;
+  // Mode 15: the frame, right rule included, is centred or ends at the margin.
+  expect(at('center', 15).x).toBeCloseTo((PAGE_WIDTH - at('center', 15).width) / 2 - 0.25, 6);
+  expect(at('right', 15).x + at('right', 15).width).toBeCloseTo(PAGE_WIDTH - 0.5, 6);
+  // Legacy: the rules' centres are centred.
+  expect(at('center', 14).x).toBeCloseTo((PAGE_WIDTH - at('center', 14).width) / 2 - 0.25, 6);
+  // A mode outside both classes takes the mode-15 geometry, as its percentage width does.
+  expect(at('right', 0).x).toBeCloseTo(at('right', 15).x, 6);
+});
+
+test('mode 15 aligns the outer edges of the frame rules', () => {
+  for (const width of [PCT, dxa(4000)]) {
+    for (const [left, right] of [
+      [48, 4],
+      [4, 48],
+    ] as const) {
+      const rightPt = right / 8;
+      const centred = layoutTable([2000, 2000], tblPr(width + jc('center'), left, right, FIXED));
+      // The box leaves out the right rule, which draws outward; the whole frame is centred.
+      expect(centred.box.x + (centred.box.width + rightPt) / 2).toBeCloseTo(PAGE_WIDTH / 2, 6);
+      const trailing = layoutTable([2000, 2000], tblPr(width + jc('right'), left, right, FIXED));
+      expect(trailing.box.x + trailing.box.width + rightPt).toBeCloseTo(PAGE_WIDTH, 6);
+    }
+  }
+  // A centred right-to-left table also moves by a quarter of its visual left rule, `w:right`.
+  const bidi = layoutTable(
+    [2000, 2000],
+    '<w:bidiVisual/>' + tblPr(dxa(4000) + jc('center'), 4, 48, FIXED)
+  );
+  expect(bidi.box.x + (bidi.box.width + 0.5) / 2).toBeCloseTo(PAGE_WIDTH / 2 - 6 / 4, 6);
+});
+
+test("legacy modes centre the rules' centres and end trailing content past the edge by the parts' difference", () => {
+  for (const [left, right] of [
+    [48, 4],
+    [4, 48],
+  ] as const) {
+    const [leftPt, rightPt] = [left / 8, right / 8];
+    const centred = layoutTable(
+      [2000, 2000],
+      tblPr(dxa(4000) + jc('center'), left, right, FIXED),
+      undefined,
+      14
+    );
+    const centres = [centred.box.x + leftPt / 2, centred.box.x + centred.box.width + rightPt / 2];
+    expect((centres[0]! + centres[1]!) / 2).toBeCloseTo(PAGE_WIDTH / 2, 6);
+    for (const width of [PCT, dxa(4000)]) {
+      const trailing = layoutTable(
+        [2000, 2000],
+        tblPr(width + jc('right'), left, right, FIXED),
+        undefined,
+        14
+      );
+      const last = trailing.rows[0]!.cells[1]!.box;
+      // The first column's part less the last column's, past the 0.5pt inside rule.
+      expect(last.x + last.width).toBeCloseTo(PAGE_WIDTH + 0.5 + (leftPt - rightPt), 6);
+    }
+  }
 });
 
 test('a row after skipped leading columns moves its first cell in by the left part too', () => {
@@ -159,7 +274,7 @@ test('a right-to-left table gives its first column the right part and ends its r
   const bidi = '<w:bidiVisual/>';
   for (const [mode, shift] of [
     [15, 6],
-    [0, 3],
+    [12, 3],
   ] as const) {
     const table = layoutTable(
       [1000, 2000, 3000],

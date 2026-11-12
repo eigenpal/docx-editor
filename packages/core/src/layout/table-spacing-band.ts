@@ -29,6 +29,8 @@ export interface SpacingFrameParts {
   readonly trailPt: number;
   /** What lies outside the columns: half the left rule band less half the right one. */
   readonly outsidePt: number;
+  /** The right rule's band, which draws outward from the table's box. */
+  readonly rightBandPt: number;
 }
 
 /** The frame insets and rules `spacingFrameParts` reads. */
@@ -54,7 +56,8 @@ export function spacingFrameParts(
   const rowRightPt = frame.rowBorders ? outerBandPt(frame.rowBorders.right) : 0;
   const leftPt = frame.leftPt - rowLeftPt;
   const rightPt = frame.rightPt - rowRightPt;
+  const rightBandPt = outerBandPt(frame.borders.right);
   const leadPt = leftPt - outerBandPt(frame.borders.left) / 2;
-  const trailPt = rightPt + outerBandPt(frame.borders.right) / 2;
-  return { leadPt, trailPt, outsidePt: leftPt + rightPt - leadPt - trailPt };
+  const trailPt = rightPt + rightBandPt / 2;
+  return { leadPt, trailPt, outsidePt: leftPt + rightPt - leadPt - trailPt, rightBandPt };
 }

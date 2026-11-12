@@ -52,7 +52,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `keepNextGivesTailLines` | `modern` | A keep-with-next paragraph gives its last lines to the next page |
 | `legacyPercentTableContentWidth` | `legacy` | A percent-width table resolves against the legacy content width |
 | `legacySharedGridLineSideRules` | `legacy` | Side rules center on shared grid lines, in left-to-right, right-to-left, and nested tables |
-| `modernBidiSpacedFrameInside` | `modern` | A spaced right-to-left table keeps its whole right frame rule inside its aligned edge; legacy modes keep half |
+| `legacySpacedFrameRuleCenters` | `legacy` | A spaced table aligns the centers of its outer frame rules; later modes align their outer edges |
 | `modernBidiTableRuleShift` | `modern` | A right-to-left table sits half its mean outer side rule toward its visual left |
 | `modernGridLineSideRules` | `modern` | Side rules center on grid lines for covered shapes, including one-rule percent widths; edge-aligned grids move by half a rule |
 | `noteAreaHoldsLineSpacing` | `modern` | Auto line spacing below a body line must fit above the footnote area |

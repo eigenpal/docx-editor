@@ -132,9 +132,11 @@ describe('legacy placement of a table with cell spacing', () => {
   });
 
   test('a centred table, mode 15, and an unstyled table without an indent keep the outer edge', () => {
-    expect(structure(table(`${SPACING}<w:jc w:val="center"/>`), 14).outerRuleOffsetPt).toBe(
-      undefined
-    );
+    // A centred table aligns no content; it centres its outer rules' centres, a quarter of
+    // each 0.5pt rule toward the left (`legacySpacedFrameRuleCenters`).
+    const centred = structure(table(`${SPACING}<w:jc w:val="center"/>`), 14);
+    expect(centred.legacyContentOffsetPt).toBeUndefined();
+    expect(centred.outerRuleOffsetPt).toBeCloseTo(-0.25, 6);
     expect(structure(table(SPACING), 15).legacyContentOffsetPt).toBeUndefined();
     // Less half the leading frame rule: 0.25pt for a 0.5pt rule (measured from 0.25 to 6pt).
     expect(structure(table(SPACING), 14, UNSTYLED).legacyContentOffsetPt).toBe(-0.25);

@@ -91,6 +91,41 @@ export function modernSharedPercentWidth(
   };
 }
 
+/**
+ * The width of a top-level spaced percentage table in the legacy modes, as a share of the
+ * container: the share of the text column widened by four spacing gaps, the outer cell
+ * margins (half a point at least) and both outer frame rules, plus half those rules. The
+ * result is the frame's outer extent. The margins are those of the cells on the outer grid
+ * columns. Measured without a compatibility mode declaration, with 25 to 100% widths,
+ * spacing of 5 and 15pt, outer rules of 0, 0.5 and 6pt on either side and cell margins of 0
+ * and 5.4pt: thirteen tables to within 0.25pt. A 100% table overhangs both text edges.
+ */
+export function legacySpacedPercentWidth(
+  tableWidth: PreferredWidth,
+  containerWidthPt: number,
+  cellSpacingPt: number,
+  borders: TableBorderBox,
+  rows: readonly SemanticTableRow[],
+  columnCount: number
+): PreferredWidth {
+  if (tableWidth.type !== 'pct' || !(containerWidthPt > 0) || !(cellSpacingPt > 0))
+    return tableWidth;
+  // The first cells that reach the outer grid columns; a row may skip either end.
+  const first = rows.find((row) => row.cells[0]?.gridColumn === 0)?.cells[0];
+  const lastOf = (row: SemanticTableRow) => row.cells.at(-1);
+  const last = rows
+    .map(lastOf)
+    .find((cell) => cell !== undefined && cell.gridColumn + cell.gridSpan === columnCount);
+  const leftMarginPt = Math.max(first?.margins.left ?? 0, 0.5);
+  const rightMarginPt = Math.max(last?.margins.right ?? 0, 0.5);
+  const rulesPt = outerBandPt(borders.left) + outerBandPt(borders.right);
+  const boxPt = containerWidthPt + 4 * cellSpacingPt + leftMarginPt + rightMarginPt + rulesPt;
+  const widthPt = (tableWidth.value / 100) * boxPt + rulesPt / 2;
+  return Number.isFinite(widthPt)
+    ? { type: 'pct', value: (widthPt / containerWidthPt) * 100 }
+    : tableWidth;
+}
+
 export interface TableWidthPlacement {
   readonly legacy: LegacyTableContentWidth | undefined;
   /** The width preference the column resolver reads. */
@@ -100,23 +135,28 @@ export interface TableWidthPlacement {
   readonly claims: readonly CellWidthClaim[];
   /** The indent that places the table. */
   readonly indentPt: number;
-  /** How far a right-to-left table moves from its aligned place, in points. */
-  readonly bidiRuleShiftPt?: number;
+  /** How far a table moves from its aligned place for its outer rules, in points. */
+  readonly ruleShiftPt?: number;
   /** See `SemanticTableStructure.textBoxBidiShiftPt`. */
   readonly textBoxBidiShiftPt?: number;
 }
 
 /**
- * How far a top-level spaced right-to-left table sits toward its visual left: by its whole
- * right frame rule, or half of it in legacy modes, so that rule ends at the aligned edge or
- * centres on it. Measured with spacing of 5pt, right rules of 0.5 and 6pt and left rules of
- * 0.5 and 6pt, right-, left- and centre-aligned, autofit and fixed: a 6pt rule moves the table
- * 6pt in mode 15 and 3pt in mode 0.
+ * How far a top-level spaced table moves from its aligned place, so that its frame rules
+ * meet the aligned edges: the layout box leaves out the visual right rule, which draws
+ * outward. Mode 15 aligns the outer edges of the rules: a centred table centres its whole
+ * frame, and a right-to-left one also moves by a quarter of its visual left rule. The legacy
+ * modes align the rules' centres; a right-aligned left-to-right table aligns its content
+ * there instead (`legacyFixedTableContentOffset`). Modes outside both classes take the
+ * mode-15 geometry, as their percentage widths do. Measured with spacing of 5pt, outer rules
+ * of 0.5 and 6pt on either side, left-, centre- and right-aligned, absolute, percentage and
+ * automatic widths, both directions: every table to within 0.3pt.
  */
-function spacedBidiFrameShiftPt(
+function spacedFrameShiftPt(
   borders: TableBorderBox,
   table: {
     readonly bidiVisual?: boolean;
+    readonly alignment: TableAlignment;
     readonly depth: number;
     readonly textBox?: boolean;
     readonly floating?: boolean;
@@ -125,14 +165,19 @@ function spacedBidiFrameShiftPt(
     readonly tableWidth: PreferredWidth;
   }
 ): number {
-  if (!table.bidiVisual || table.depth > 0 || table.textBox || table.floating) return 0;
+  if (table.depth > 0 || table.textBox || table.floating || !(table.cellSpacingPt > 0)) return 0;
   // Measured with absolute and automatic widths only.
-  if (!(table.cellSpacingPt > 0) || table.tableWidth.type === 'pct') return 0;
+  if (table.bidiVisual && table.tableWidth.type === 'pct') return 0;
   // The visual right rule of a right-to-left table is its `w:left` border.
-  const band = outerBandPt(borders.left);
-  return hasCompatibilityRule(table.compatibilityMode, 'modernBidiSpacedFrameInside')
-    ? -band
-    : -band / 2;
+  const right = outerBandPt(table.bidiVisual ? borders.left : borders.right);
+  const left = outerBandPt(table.bidiVisual ? borders.right : borders.left);
+  const modern = !hasCompatibilityRule(table.compatibilityMode, 'legacySpacedFrameRuleCenters');
+  if (table.alignment === 'center') {
+    if (!modern) return -(left + right) / 4;
+    return table.bidiVisual ? -right / 2 - left / 4 : -right / 2;
+  }
+  if (table.bidiVisual) return modern ? -right : -right / 2;
+  return table.alignment === 'right' && modern ? -right : 0;
 }
 
 /**
@@ -177,18 +222,36 @@ export function resolveTableWidthPlacement(input: {
   });
   const legacy =
     reference && input.textBox ? textBoxLegacyContentWidth(reference, tableWidth) : reference;
+  const legacyPercent = hasCompatibilityRule(
+    input.compatibilityMode,
+    'legacyPercentTableContentWidth'
+  );
   // A nested table, and every table outside the legacy modes, adds its outer rule to the share.
+  // A top-level spaced inline table in the legacy modes widens its share by its frame.
   const resolvedWidth =
     legacy === undefined &&
-    (depth > 0 || !hasCompatibilityRule(input.compatibilityMode, 'legacyPercentTableContentWidth'))
-      ? ruleAdjustedTableWidth(
+    legacyPercent &&
+    depth === 0 &&
+    !input.floating &&
+    !input.textBox &&
+    !input.bidiVisual
+      ? legacySpacedPercentWidth(
           tableWidth,
           contentWidthPt,
+          input.cellSpacingPt,
           input.tableBorders,
           rows,
-          input.bidiVisual
+          input.columnCount
         )
-      : tableWidth;
+      : legacy === undefined && (depth > 0 || !legacyPercent)
+        ? ruleAdjustedTableWidth(
+            tableWidth,
+            contentWidthPt,
+            input.tableBorders,
+            rows,
+            input.bidiVisual
+          )
+        : tableWidth;
   // With neither a table style nor a stated indent, a leading-aligned legacy table sits as if
   // indented by its leading cell margin: its outer edge, not its content, meets the text edge.
   const leading = input.alignment === 'left' && !input.bidiVisual;
@@ -226,7 +289,7 @@ export function resolveTableWidthPlacement(input: {
       : undefined;
   const shift = sides
     ? -(sides.left + sides.right) / 4
-    : spacedBidiFrameShiftPt(input.tableBorders, {
+    : spacedFrameShiftPt(input.tableBorders, {
         ...input,
         depth,
       });
@@ -237,7 +300,7 @@ export function resolveTableWidthPlacement(input: {
     !input.floating &&
     input.cellSpacingPt === 0;
   return {
-    ...(shift < 0 ? { bidiRuleShiftPt: shift } : {}),
+    ...(shift < 0 ? { ruleShiftPt: shift } : {}),
     ...(textBoxShift ? { textBoxBidiShiftPt: TEXT_BOX_BIDI_SHIFT_PT } : {}),
     legacy,
     tableWidth: resolvedWidth,

@@ -128,7 +128,10 @@ function alignedOriginX(structure: SemanticTableStructure, containerWidthPt: num
     return structure.legacyTrailingOuterEdge ? slack : slack + last;
   }
   if (structure.alignment === 'center')
-    return slack / 2 + (structure.bidiVisual ? (structure.outerRuleOffsetPt ?? 0) : 0);
+    return (
+      slack / 2 +
+      (structure.bidiVisual || structure.cellSpacingPt > 0 ? (structure.outerRuleOffsetPt ?? 0) : 0)
+    );
   // Travels with the cell insets that `withSharedGridLineSideRules` gives the same table.
   const ruleOffset = structure.outerRuleOffsetPt ?? 0;
   // A bidiVisual table aligned to its leading (right) edge measures the indent from that edge.

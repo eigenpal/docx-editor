@@ -514,12 +514,20 @@ export function resolveColumnWidthsPt(input: {
   const gapsPt = input.spacing?.gapsPt ?? 0;
   const gaps = Number.isFinite(gapsPt) && gapsPt > 0 ? gapsPt : 0;
   // A framed table's outer columns hold part of its frame; the rest lies outside an absolute
-  // width. A percentage width, already widened by its outer rules (`ruleAdjustedTableWidth`),
-  // holds the whole frame: measured in mode 15, a 50% table of a 468pt column with a 6pt left
-  // rule and a 0.5pt right rule lays out its cells to within 0.5pt that way.
+  // width. A percentage width (`ruleAdjustedTableWidth`, or `legacySpacedPercentWidth`) is
+  // the frame's outer extent, out to the far side of the right rule, which draws outward
+  // from the table's box. Measured in modes 0 and 15 at 25, 50, 75 and 100%, with outer rules
+  // of 0, 0.5 and 6pt on either side.
   const frame = gaps > 0 ? input.spacing?.frame : undefined;
   const held = frame ? frame.leadPt + frame.trailPt : 0;
-  const outside = tableWidth.type === 'dxa' ? (frame?.outsidePt ?? 0) : 0;
+  const outside = !frame
+    ? 0
+    : tableWidth.type === 'dxa'
+      ? frame.outsidePt
+      : // Unmeasured for a right-to-left table in the legacy modes, which keeps its share.
+        tableWidth.type === 'pct'
+        ? -frame.rightBandPt
+        : 0;
   const target = Math.max(
     (statedTableWidth > 0 ? statedTableWidth + outside : Math.min(total + gaps - held, pageCap)) -
       gaps,

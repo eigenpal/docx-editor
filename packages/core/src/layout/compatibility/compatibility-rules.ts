@@ -115,9 +115,9 @@ export const MODE_RULES = {
     'Collapsed side rules center on shared grid lines for every simple table, in either direction; a percent width keeps the legacy reference box',
     'ECMA-376 Part 1 §17.4.38 tblBorders'
   ),
-  modernBidiSpacedFrameInside: modern(
-    'A spaced right-to-left table keeps its whole right frame rule inside its aligned edge; legacy modes keep half',
-    'ECMA-376 Part 1 §17.4.1 bidiVisual'
+  legacySpacedFrameRuleCenters: legacy(
+    'A spaced table aligns the centers of its outer frame rules; later modes align their outer edges',
+    'ECMA-376 Part 1 §17.4.38 tblBorders'
   ),
   modernBidiTableRuleShift: modern(
     'A right-to-left table sits half its mean outer side rule toward its visual left',

@@ -931,8 +931,7 @@ function readTableStructureUncached(
     contentOffset !== undefined && tableWidth.type === 'auto' && cellSpacingPt === 0
       ? withLegacyTableSideRules(sideRules.rows)
       : sideRules.rows;
-  const outerRuleOffsetPt =
-    contentOffset ?? sideRules.outerRuleOffsetPt ?? placement.bidiRuleShiftPt;
+  const outerRuleOffsetPt = contentOffset ?? sideRules.outerRuleOffsetPt ?? placement.ruleShiftPt;
   const autoOuterRulePt =
     contentOffset === undefined ? autoWidthOuterRulePt(contentRows, sideRuleShape) : 0;
   const shadedRows = withRowSpacingShading(

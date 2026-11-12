@@ -100,7 +100,7 @@ export function spacingGapsBeforeColumns(
   if (!reversed) return { gapsPt, frame, edges };
   return {
     gapsPt,
-    frame: { leadPt: frame.trailPt, trailPt: frame.leadPt, outsidePt: frame.outsidePt },
+    frame: { ...frame, leadPt: frame.trailPt, trailPt: frame.leadPt },
     edges: { starts: [...edges.ends].reverse(), ends: [...edges.starts].reverse() },
   };
 }
