@@ -238,12 +238,24 @@ function withExtension(
     : children.filter((child) => child !== list);
 }
 
-/** The fill a hidden-fill or hidden-line extension keeps, or null. */
-function hiddenPayload(children: readonly OoxmlNode[], uri: string): OoxmlElement | null {
+/**
+ * A copy, with new ids, of the fill a hidden-fill or hidden-line extension keeps, or null.
+ *
+ * A fill that moves between the shape and its hidden extension always moves as a copy. Moved
+ * with its own id, a fill the file held keeps a file id in both places, and after concurrent
+ * undos a collaboration room can hold the restored fill beside the `a:noFill` it replaced,
+ * both with file ids, which the room keeps as the file's own content.
+ */
+function hiddenPayload(
+  children: readonly OoxmlNode[],
+  uri: string,
+  nextId: () => string
+): OoxmlElement | null {
   const list = children.find((child) => isA(child, 'extLst')) as OoxmlElement | undefined;
   const ext = list && elements(list).find((e) => isA(e, 'ext') && attributeOf(e, 'uri') === uri);
   const hidden = ext && elements(ext)[0];
-  return hidden ? (elements(hidden)[0] ?? null) : null;
+  const payload = hidden ? elements(hidden)[0] : undefined;
+  return payload ? (cloneWithNewIds(payload, nextId) as OoxmlElement) : null;
 }
 
 /** The colour element of a solid fill, with its opacity set to `transparency`. */
@@ -319,7 +331,12 @@ function formatFill(
   if (fill.type === 'none') {
     if (current?.localName === 'noFill') return children;
     const kept = current
-      ? withExtension(children, HIDDEN_FILL, el(nextId, 'hiddenFill', [], [current], A14), nextId)
+      ? withExtension(
+          children,
+          HIDDEN_FILL,
+          el(nextId, 'hiddenFill', [], [cloneWithNewIds(current, nextId)], A14),
+          nextId
+        )
       : children;
     return put(el(nextId, 'noFill'), kept);
   }
@@ -345,7 +362,7 @@ function formatFill(
   } else if (current && current.localName !== 'noFill') {
     solid = current;
   } else {
-    solid = hiddenPayload(children, HIDDEN_FILL) ?? styleSolid(wsp, 'fillRef', nextId);
+    solid = hiddenPayload(children, HIDDEN_FILL, nextId) ?? styleSolid(wsp, 'fillRef', nextId);
   }
   // Never invent a fill: without a colour to keep or bring back, the write needs one.
   if (!solid) return 'no-solid-fill';
@@ -378,7 +395,13 @@ function formatOutline(
     if (current?.localName !== 'noFill') {
       const width = attributeOf(ln, 'w');
       const hidden = current
-        ? el(nextId, 'hiddenLine', width ? [attr('w', width)] : [], [current], A14)
+        ? el(
+            nextId,
+            'hiddenLine',
+            width ? [attr('w', width)] : [],
+            [cloneWithNewIds(current, nextId)],
+            A14
+          )
         : null;
       const kept = hidden ? withExtension(lnChildren, HIDDEN_LINE, hidden, nextId) : lnChildren;
       lnChildren = put(el(nextId, 'noFill'), kept);
@@ -389,7 +412,7 @@ function formatOutline(
     else if (current && current.localName !== 'noFill') solid = current;
     else
       solid =
-        hiddenPayload(lnChildren, HIDDEN_LINE) ??
+        hiddenPayload(lnChildren, HIDDEN_LINE, nextId) ??
         styleSolid(wsp, 'lnRef', nextId) ??
         srgbSolid('000000', nextId);
     lnChildren = put(solid, withExtension(lnChildren, HIDDEN_LINE, null, nextId));

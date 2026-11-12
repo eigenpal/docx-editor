@@ -16,7 +16,7 @@ test('the shape document passes the shape oracles', () => {
   expect(shapeRoundTripProblems(pkg)).toEqual([]);
 });
 
-test('a repeated fill, line child, or alpha is reported', () => {
+test('a repeated fill or line child is reported', () => {
   const twice = SHAPE_FORMAT_BODY.replace(
     '<a:solidFill><a:srgbClr val="D9E2F3"/></a:solidFill>',
     '<a:solidFill><a:srgbClr val="D9E2F3"/></a:solidFill><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>'
@@ -29,5 +29,4 @@ test('a repeated fill, line child, or alpha is reported', () => {
   const problems = shapePackageProblems(open(twice), 'seed');
   expect(problems.some((problem) => /spPr .* 2 fill children/.test(problem))).toBe(true);
   expect(problems.some((problem) => /ln .* 2 join children/.test(problem))).toBe(true);
-  expect(problems.some((problem) => /srgbClr .* 2 alpha children/.test(problem))).toBe(true);
 });

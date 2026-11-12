@@ -128,6 +128,21 @@ describe('setShapeFormat on a DrawingML shape', () => {
       between(xml(part), '<wps:spPr>', '</wps:spPr>')
     );
     expect(restored).not.toContain('filled=');
+    // A fill moves into and out of hiding as a copy with new ids, never with its own: a room
+    // keeps two file-id fills that concurrent undos leave side by side as the file's content.
+    const idsOf = (node: OoxmlNode, out: string[] = []): string[] => {
+      if (node.kind === 'textValue') return out;
+      if (node.localName === 'solidFill') out.push(node.id);
+      for (const child of node.children) idsOf(child, out);
+      return out;
+    };
+    const original = idsOf(part.root);
+    const hiddenIds = idsOf(hidden.root);
+    const shown = idsOf(
+      apply(hidden, { op: 'setShapeFormat', drawingNodeId: ac, fill: { type: 'solid' } }).root
+    );
+    expect(hiddenIds.some((id) => original.includes(id))).toBe(false);
+    expect(shown.some((id) => hiddenIds.includes(id) || original.includes(id))).toBe(false);
   });
 
   test('transparency writes a:alpha, and a new colour keeps it', () => {

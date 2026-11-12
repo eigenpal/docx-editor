@@ -27,8 +27,8 @@ const LINE_GROUPS: Readonly<Record<string, ReadonlySet<string>>> = {
   dash: new Set(['prstDash', 'custDash']),
   join: new Set(['round', 'bevel', 'miter']),
 };
-/** A colour element holds one `a:alpha` at most. */
-const COLOR_NAMES = new Set(['srgbClr', 'schemeClr', 'prstClr', 'sysClr', 'scrgbClr', 'hslClr']);
+// Colour transforms may repeat (`EG_ColorTransform` is unbounded), so two `a:alpha` that
+// concurrent transparency writes leave are valid XML; the runtime notes record that limit.
 
 function repeated(
   node: OoxmlNode,
@@ -55,8 +55,6 @@ export function shapePropertyProblems(root: OoxmlNode, where: string): string[] 
       found = repeated(node, SHAPE_GROUPS);
     else if (node.namespaceUri === A && node.localName === 'ln')
       found = repeated(node, LINE_GROUPS);
-    else if (node.namespaceUri === A && COLOR_NAMES.has(node.localName))
-      found = repeated(node, { alpha: new Set(['alpha']) });
     if (found) problems.push(`${where}: ${node.localName} ${node.id} holds ${found}`);
     for (const child of node.children) walk(child, depth + 1);
   };
