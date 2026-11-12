@@ -32,6 +32,8 @@ import {
   TRACKED_WEIGHTS,
 } from './scenario-plan.ts';
 import { zipDocument } from '../../packages/pro/src/collaboration/__tests__/document-peer-support.ts';
+import { SHAPE_CHECKS } from './scenario-shape-checks.ts';
+import { SHAPE_FORMAT_BODY, SHAPE_FORMAT_WEIGHTS } from './scenario-shape-document.ts';
 
 const TEXTBOX_DOCUMENT = path.resolve(
   import.meta.dirname,
@@ -246,6 +248,34 @@ export const SCENARIO_CONFIGS = {
     documentBody: REORDER_BODY,
     weights: REORDER_CONTROL_WEIGHTS,
   },
+  // Concurrent shape fill and outline edits, theme and group fills, shape deletes, and typing in
+  // the anchor paragraphs, with undo, redo, offline periods, and a late joiner. The shape
+  // oracles check each spPr and a:ln for repeated children after every action.
+  shapeFormat: {
+    replicas: 3,
+    steps: 150,
+    offlineChance: 0.05,
+    undoChance: 0.12,
+    lateJoiners: 1,
+    documentBody: SHAPE_FORMAT_BODY,
+    weights: SHAPE_FORMAT_WEIGHTS,
+  },
+  shapeFormatPairs: {
+    replicas: 2,
+    steps: 150,
+    offlineChance: 0.08,
+    undoChance: 0.15,
+    documentBody: SHAPE_FORMAT_BODY,
+    weights: SHAPE_FORMAT_WEIGHTS,
+  },
+  shapeFormatSequential: {
+    replicas: 3,
+    steps: 120,
+    delivery: 'in-order',
+    undoChance: 0.1,
+    documentBody: SHAPE_FORMAT_BODY,
+    weights: SHAPE_FORMAT_WEIGHTS,
+  },
 } as const satisfies Record<
   string,
   Partial<ScenarioOptions> & { documentPath?: string; documentBody?: string }
@@ -271,6 +301,7 @@ export function configFor(requested: string | undefined, saved?: SavedCase): Sce
   if (!(config in SCENARIO_CONFIGS)) {
     throw new Error(`unknown --config ${config}; use ${Object.keys(SCENARIO_CONFIGS).join(', ')}`);
   }
+  SHAPE_CHECKS.enabled = config.startsWith('shapeFormat');
   return config as ScenarioConfig;
 }
 
