@@ -25,6 +25,15 @@ import { isDocAnchor, isDocAnchorRange } from './anchor-resolution.ts';
 import { blankDocumentBytes } from './blank-document.ts';
 import { tableCommandCanSupport } from './table-command-plan.ts';
 import { replaceMatchArgumentRefusal } from './docx-editor-replace-match.ts';
+import { replaceAllMatchesArgumentRefusal } from './docx-editor-replace-all.ts';
+import { classifySelectionEdit } from './docx-editor-selection-edits.ts';
+
+/** A mutating command, or an `invalidArgs` refusal when its arguments give a reason. */
+function mutatingUnlessRefused(refusal: string | null | undefined): CommandSupport {
+  return refusal
+    ? { supported: false, code: 'invalidArgs', reason: refusal }
+    : { supported: true, mutating: true };
+}
 
 /** Recursively freeze plain objects and arrays (idempotent). */
 export function deepFreezeValue<T>(value: T): T {
@@ -560,6 +569,12 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         command.kind === 'sectionContinuous'
         ? { supported: true, mutating: true }
         : { supported: false, reason: `break kind '${command.kind}' is not supported` };
+    case 'replaceText':
+    case 'applyFormatting':
+    case 'splitParagraph':
+    case 'mergeParagraphs':
+    case 'removeTabMark':
+      return classifySelectionEdit(command);
     case 'insertText':
       return command.target === undefined
         ? { supported: true, mutating: true }
@@ -603,12 +618,10 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       }
       return { supported: true, mutating: true };
     }
-    case 'replaceMatch': {
-      const refusal = replaceMatchArgumentRefusal(command);
-      return refusal
-        ? { supported: false, code: 'invalidArgs', reason: refusal }
-        : { supported: true, mutating: true };
-    }
+    case 'replaceAllMatches':
+      return mutatingUnlessRefused(replaceAllMatchesArgumentRefusal(command));
+    case 'replaceMatch':
+      return mutatingUnlessRefused(replaceMatchArgumentRefusal(command));
     case 'proposeDeletion':
       return command.author !== undefined && command.author.trim().length === 0
         ? {
@@ -952,12 +965,8 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return typeof command.name === 'string' && command.name.length > 0
         ? { supported: true, mutating: command.type !== 'goToBookmark' }
         : { supported: false, code: 'invalidArgs', reason: `${command.type} needs a name` };
-    case 'setWatermark': {
-      const refusal = watermarkRefusal(command.watermark);
-      return refusal
-        ? { supported: false, code: 'invalidArgs', reason: refusal }
-        : { supported: true, mutating: true };
-    }
+    case 'setWatermark':
+      return mutatingUnlessRefused(watermarkRefusal(command.watermark));
     default:
       return { supported: false, reason: unknownCommandReason(command.type) };
   }

@@ -22,7 +22,7 @@ export type TableInteractionLabelKey =
 
 export type { ZoomFitTarget, ZoomMode } from './editor-zoom.ts';
 import type { TextMatch } from './editor-text-match.ts';
-export type { TextMatch } from './editor-text-match.ts';
+export type { ReplaceAllMatchesOutcome, TextMatch } from './editor-text-match.ts';
 import type { EditorFontErrorCode, FontFaceRequest } from './editor-fonts.ts';
 export type {
   EditorFontErrorCode,
@@ -1167,7 +1167,7 @@ export interface EditorCommands
     scope?: 'document' | 'section';
   };
 
-  /** Remove the tab stop at this position (twips) from the current paragraph. */
+  /** Remove the selection paragraphs' tab stop at this position (twips); none there: `notFound`. */
   removeTabMark: { positionTwips: number };
 
   /**
@@ -1197,10 +1197,10 @@ export interface EditorCommands
   replaceMatch: { match: TextMatch | HighlightRange; text: string };
 
   /**
-   * Replace EVERY match of `query` in one undoable step. Separate from looping
-   * `replaceMatch` because each replacement shifts the offsets of the ones after it —
-   * legacy applied its edits back-to-front for exactly this reason, and that ordering
-   * belongs with whoever owns the offsets.
+   * Replace every match of `query` with `text` (empty deletes) in one undo step, across the
+   * stories {@link Editor.findMatches} searches; tracked in suggesting mode. Skips and refusals:
+   * {@link ReplaceAllMatchesOutcome}. Refused past the search limit (`unsupported`).
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement | Replace as a tracked change}
    */
   replaceAllMatches: {
     query: string;

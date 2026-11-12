@@ -5,9 +5,9 @@ import { execBookmarkCommand } from './docx-editor-bookmarks.ts';
 import { CHART_CLIPBOARD_REASON, fragmentRefusalOf } from './clipboard-object-selection.ts';
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
-import { isMissingAuthorRefusal } from './docx-editor-author.ts';
-import { isCollaborationFailureCode } from '../collaboration/index.ts';
 import { execReplaceMatch } from './docx-editor-replace-match.ts';
+import { execReplaceAllMatches } from './docx-editor-replace-all.ts';
+import { execSelectionEdit, runFormatRefusal } from './docx-editor-selection-edits.ts';
 // Command dispatch for `createDocxEditor` (editor seam).
 //
 // One switch, one vocabulary: every `EditorCommand` the gate admitted lands here and is
@@ -60,20 +60,6 @@ import { execShapeFormatCommand, isShapeFormatCommand } from './shape-format-com
  * verb that changed nothing), and `null` when it completed normally — the caller then
  * derives `changed` from the model revision rather than trusting the verb.
  */
-/**
- * A refused run format as a command result. A missing author or the generated table of
- * contents is the caller's to fix, as `insertText` reports it; a collaboration session that
- * is not ready is a retry, as the contract documents; anything else is a lock.
- */
-function runFormatRefusal(reason: string): ExecResult {
-  if (isCollaborationFailureCode(reason)) return { ok: false, code: 'unsupported', reason };
-  const callerFixable =
-    isMissingAuthorRefusal(reason) ||
-    reason === 'the table of contents is generated and read-only' ||
-    reason === FIELD_CODE_INPUT_REFUSAL;
-  return { ok: false, code: callerFixable ? 'invalidArgs' : 'locked', reason };
-}
-
 export function execEditorCommand(
   mounted: PaginatedSurface,
   command: EditorCommand,
@@ -391,6 +377,12 @@ export function execEditorCommand(
     case 'setChartFormat':
     case 'setChartColor':
       return execChartCommand(mounted, command, options?.translate);
+    case 'replaceText':
+    case 'applyFormatting':
+    case 'splitParagraph':
+    case 'mergeParagraphs':
+    case 'removeTabMark':
+      return execSelectionEdit(mounted, command);
     case 'insertText':
       mounted.type(command.text);
       if (
@@ -439,6 +431,8 @@ export function execEditorCommand(
     }
     case 'replaceMatch':
       return execReplaceMatch(mounted, command);
+    case 'replaceAllMatches':
+      return execReplaceAllMatches(mounted, command);
     case 'undo':
       mounted.undo();
       break;

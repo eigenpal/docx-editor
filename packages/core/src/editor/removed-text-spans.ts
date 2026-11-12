@@ -2,7 +2,7 @@
 // away (`w:moveFrom`). It stays in the model text until the change is accepted, so search finds
 // it and offsets address it.
 //
-// The same rule decides which `replaceAllMatches` matches are skipped. Keep the two in step.
+// `replaceMatch` refuses a range that overlaps it, and `replaceAllMatches` skips one.
 
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import type { OoxmlNode, OoxmlParagraphNode } from '../store/package/ooxml-tree.ts';

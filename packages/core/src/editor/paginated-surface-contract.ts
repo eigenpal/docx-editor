@@ -261,6 +261,14 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
    */
   setRunProperty(localName: string, attributes?: Record<string, string>): string | null;
   /**
+   * Several run properties over the selection in ONE transaction: the store accepts or
+   * refuses them together, and they undo as one step. `setRunProperty` is this with a
+   * single entry.
+   */
+  setRunProperties(
+    entries: readonly { localName: string; attributes?: Record<string, string> }[]
+  ): string | null;
+  /**
    * Set a property on every paragraph the selection touches — alignment, style, spacing.
    *
    * `mergeAttributes` keeps the attributes the call does not name, for the properties that
@@ -578,7 +586,12 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     packageEdits?: readonly ((
       pkg: import('../store/package/ooxml-package.ts').OoxmlPackage
     ) => import('../store/package/ooxml-package.ts').OoxmlPackage)[],
-    requiresReview?: boolean
+    requiresReview?: boolean,
+    /**
+     * Carry the reader's selection across the committed ops, before it is clamped to the open
+     * story. Omitted, the selection keeps its offsets.
+     */
+    carry?: (selection: SemanticSelection) => SemanticSelection
   ): TreeApplyResult;
   /**
    * Which revision halves this surface is SHOWING.
