@@ -64,18 +64,64 @@ export interface RefreshSubmission {
   readonly bytes: ArrayBuffer;
 }
 
+/**
+ * How `applyUpdate()` puts returned bytes on screen.
+ *
+ * - `'reload'` (default): reload the document. Resets selection and undo history. Refused in
+ *   collaboration sessions.
+ * - `'edit'`: apply the difference as ONE undoable edit on top of the current history. Undo
+ *   returns to the captured submission (or the previous accepted result), and redo applies the
+ *   result again. Works in collaboration sessions, where the update reaches other participants
+ *   as an ordinary edit. Refuses with `edit-unsupported` when the difference cannot apply as an
+ *   edit; the document and its history stay unchanged, so outside a collaboration session you
+ *   can retry with `'reload'`. Refuses with `edit-not-permitted` in viewing mode or on a
+ *   protected document.
+ *
+ * @public
+ */
+export type RefreshUpdateMode = 'reload' | 'edit';
+
 /** Cumulative output for one submission. Assign sequence at the processor, before delivery. @public */
 export interface RefreshUpdate {
   readonly submission: RefreshSubmission;
   readonly sequence: number;
   readonly bytes: ArrayBuffer | Uint8Array;
+  /**
+   * `'edit'` applies the result as one undoable edit; `'reload'` (default) reloads the document.
+   * See {@link RefreshUpdateMode}.
+   *
+   * @example
+   * ```ts
+   * let result = await refresh.applyUpdate({ submission, sequence: 1, bytes, mode: 'edit' });
+   * if (!result.ok && result.code === 'edit-unsupported') {
+   *   result = await refresh.applyUpdate({ submission, sequence: 1, bytes });
+   * }
+   * ```
+   */
+  readonly mode?: RefreshUpdateMode;
   /** Omit to derive changes from tracked revisions when a review module is registered. */
   readonly changes?: readonly RefreshChangeInput[];
   /** Stable failed operation ids. The controller reports these and never retries processor work. */
   readonly failures?: readonly string[];
 }
 
-/** Stable refusal codes for external document replacement. @public */
+/**
+ * Stable refusal codes for external document replacement.
+ *
+ * - `local-edits`: the document changed after capture, even through undo. With `mode: 'edit'`
+ *   in a collaboration session, another participant's edit counts too.
+ * - `collaboration`: a reload while a collaboration session is attached.
+ * - `unavailable`: no mounted document, the document is still opening, or the collaboration
+ *   session cannot accept edits now. A later retry can succeed.
+ * - `edit-not-permitted`: the editor or the document does not permit an update with
+ *   `mode: 'edit'`. A retry does not help until that changes.
+ * - `edit-unsupported`: the result cannot apply as one undoable edit, or the collaboration
+ *   room refused it. The document and its history are unchanged.
+ *
+ * The document refresh guide describes every code and the usual response.
+ *
+ * @public
+ */
 export type RefreshFailureCode =
   | 'unavailable'
   | 'collaboration'
@@ -89,23 +135,91 @@ export type RefreshFailureCode =
   | 'invalid-document'
   | 'input-failed'
   | 'load-failed'
-  | 'recovery-failed';
+  | 'recovery-failed'
+  | 'edit-not-permitted'
+  | 'edit-unsupported';
+
+/**
+ * The specific cause behind a refusal code, for an update with `mode: 'edit'`.
+ *
+ * With code `edit-not-permitted`:
+ * - `viewing`: the editor is in viewing mode.
+ * - `protected`: enforced document protection permits only comments, form fields, tracked
+ *   changes, or no edits, and the update would be an untracked edit.
+ *
+ * With code `unavailable`:
+ * - `collaboration-unavailable`: the collaboration session cannot accept edits now.
+ *
+ * With code `edit-unsupported`:
+ * - `different-main-part`: the returned file names a different main document part.
+ * - `unsupported-difference`: the difference cannot be expressed as an edit of the open
+ *   document.
+ * - `collaboration-refused`: the collaboration room refused the edit, for example because a
+ *   value exceeds its size limits. The document keeps the room's content.
+ *
+ * @public
+ */
+export type RefreshRefusalReason =
+  | 'viewing'
+  | 'protected'
+  | 'collaboration-unavailable'
+  | 'different-main-part'
+  | 'unsupported-difference'
+  | 'collaboration-refused';
+
+/** Fields every refused {@link RefreshResult} carries. @public */
+export interface RefreshRefusalFields {
+  readonly ok: false;
+  readonly resultId: string;
+  /**
+   * Why the update was refused, in English, for logs and diagnostics. Never parse it: branch
+   * on `code` and `reason`. `DocumentRefreshError` from `capture()` has the same pair:
+   * a stable `code` and an English `message`.
+   */
+  readonly message: string;
+  /** For `load-failed`: whether the previous document was restored. */
+  readonly recovered?: boolean;
+}
+
+/**
+ * A refused update. `code` is stable; `reason` names the specific cause where one exists, and
+ * narrows `code`: checking `reason === 'collaboration-refused'` implies `edit-unsupported`.
+ *
+ * @public
+ */
+export type RefreshRefusal =
+  | (RefreshRefusalFields & {
+      readonly code: 'edit-not-permitted';
+      readonly reason: 'viewing' | 'protected';
+    })
+  | (RefreshRefusalFields & {
+      readonly code: 'edit-unsupported';
+      readonly reason: 'different-main-part' | 'unsupported-difference' | 'collaboration-refused';
+    })
+  | (RefreshRefusalFields & {
+      readonly code: 'unavailable';
+      readonly reason?: 'collaboration-unavailable';
+    })
+  | (RefreshRefusalFields & {
+      readonly code: Exclude<
+        RefreshFailureCode,
+        'edit-not-permitted' | 'edit-unsupported' | 'unavailable'
+      >;
+      readonly reason?: undefined;
+    });
 
 /** Completion belongs to one result, including refusals and recovery failures. @public */
 export type RefreshResult =
   | {
       readonly ok: true;
       readonly resultId: string;
+      /** How the result was applied: an undoable edit, or a reload. */
+      readonly mode: RefreshUpdateMode;
       readonly changes: readonly RefreshChange[];
       readonly changeInformation: 'available' | 'unavailable';
       readonly failures: readonly string[];
     }
-  | {
-      readonly ok: false;
-      readonly resultId: string;
-      readonly code: RefreshFailureCode;
-      readonly recovered?: boolean;
-    };
+  | RefreshRefusal;
 
 /** Observable controller state. Document editing stays available during processing. @public */
 export interface DocumentRefreshState {
@@ -141,11 +255,18 @@ export interface NavigateToChangeOptions extends ScrollToAnchorOptions {
   readonly block?: ScrollPlacement;
 }
 
-/** External file transport stays in your application. Reload resets selection and undo history. @public */
+/**
+ * External file transport stays in your application. A reload resets selection and undo
+ * history; an update with `mode: 'edit'` keeps both and adds one undo step.
+ * @public
+ */
 export interface DocumentRefresh {
   /** Finish pending input and capture bytes with their document revision. Supersedes earlier submissions. */
   capture(): Promise<RefreshSubmission>;
-  /** Accept cumulative output. Preserve a clamped scroll position without moving focus. */
+  /**
+   * Accept cumulative output. Preserve the scroll position without moving focus. With
+   * `mode: 'edit'`, apply it as one undoable edit and keep selection where it maps.
+   */
   applyUpdate(update: RefreshUpdate): Promise<RefreshResult>;
   /** Cancel pending processing. An accepted result stays loaded. */
   cancel(): void;

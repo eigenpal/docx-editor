@@ -466,10 +466,15 @@ describe('external document refresh', () => {
     expect(await refresh.recover()).toBe(true);
     expect(refresh.recoveryBytes()).toBeNull();
   });
-  test('refuses collaboration even when its connection is unavailable', async () => {
+  test('refuses a collaborative reload even when its connection is unavailable', async () => {
     const { editor, refresh } = open();
     refreshHostFor(editor).collaboration = () => true;
-    await expect(refresh.capture()).rejects.toMatchObject({ code: 'collaboration' });
+    // Capture serves an undoable edit too, so only the reload refuses.
+    const submission = await refresh.capture();
+    expect(
+      await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1) })
+    ).toMatchObject({ ok: false, code: 'collaboration' });
+    expect(editor.surface!.session.bodyText()).not.toContain('Updated delivery');
     editor.load(refreshFixture(1));
     expect(editor.surface!.session.bodyText()).toContain('Updated delivery');
   });

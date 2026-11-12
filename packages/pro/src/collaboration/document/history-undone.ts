@@ -29,9 +29,10 @@ import { noteUndoneParagraphTargets, undoKeeps } from './undo-unlisted-text.ts';
 
 /**
  * The part members a part always lists. Numbering definitions are not among them: concurrent
- * list edits leave them loose by design, and the repair is how they show.
+ * list edits leave them loose by design, and the repair is how they show. A comment's thread
+ * record (`w15:commentEx`) is one: an undo that removes it must not see it adopted back.
  */
-const LISTED_MEMBERS = new Set(['comment', 'footnote', 'endnote']);
+const LISTED_MEMBERS = new Set(['comment', 'commentEx', 'footnote', 'endnote']);
 
 /** The meta key under which a history step keeps the records its undo marked. */
 const MARKED = 'docx-undone-records';

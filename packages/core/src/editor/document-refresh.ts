@@ -2,9 +2,12 @@ import { DocumentRefreshError } from './document-refresh-types.ts';
 export { DocumentRefreshError } from './document-refresh-types.ts';
 import { readOoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { DocxEditorInstance } from './docx-editor-types.ts';
+import type { DocumentHandle } from '../contracts/editor.ts';
 import { createParagraphHighlights } from './paragraph-highlights.ts';
 import { revealScrollOptions } from './reveal-scroll-options.ts';
 import { refreshHostFor } from './document-refresh-host.ts';
+import type { ReplaceDocumentRefusal } from '../contracts/replace-document.ts';
+import { withRefreshEditSource } from './refresh-edit-source.ts';
 import { refreshCompositionActive } from './refresh-write-guard.ts';
 import { pendingSurfaceCommit } from './surface-commit-state.ts';
 import {
@@ -23,6 +26,25 @@ import type {
 export type * from './document-refresh-types.ts';
 
 const controllers = new WeakMap<DocxEditorInstance, DocumentRefresh>();
+
+/** The `message` a refusal carries when nothing more specific explains it. */
+const REFRESH_FAILURE_MESSAGES: Readonly<Record<RefreshFailureCode, string>> = {
+  unavailable: 'No document is mounted, or it is still opening.',
+  collaboration: 'A reload cannot replace the document while a collaboration session is attached.',
+  busy: 'A replacement is running, or a preview blocks edits.',
+  cancelled: 'Cancellation interrupted the update.',
+  superseded: 'The result belongs to an inactive submission, or arrived after cancellation.',
+  'document-changed': 'The document changed during the update.',
+  'local-edits': 'The document changed after capture.',
+  'out-of-order': 'A duplicate or older sequence arrived.',
+  'invalid-result': 'The update object is malformed.',
+  'invalid-document': 'The returned bytes are not a valid DOCX file.',
+  'input-failed': 'Pending input or serialization failed.',
+  'load-failed': 'A valid file failed to mount.',
+  'recovery-failed': 'Mounting and restoration both failed.',
+  'edit-not-permitted': 'The editor or the document does not permit an undoable edit.',
+  'edit-unsupported': 'The result cannot apply as an undoable edit.',
+};
 let nextController = 0;
 
 /**
@@ -40,6 +62,8 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
     token: RefreshSubmission;
     epoch: number;
     revision: number;
+    /** The document an undoable update must still find: taken at capture, moved on accept. */
+    handle: DocumentHandle;
     sequence: number;
     seen: Map<string, string>;
   } | null = null;
@@ -90,18 +114,60 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
     }
     return result;
   };
+  /** A refusal without a specific cause; edit refusals with one go through `editFailure`. */
   const failure = (
     resultId: string,
-    code: RefreshFailureCode,
+    code: Exclude<RefreshFailureCode, 'edit-not-permitted' | 'edit-unsupported'>,
     recovered?: boolean
   ): RefreshResult => ({
     ok: false,
     resultId,
     code,
+    message: REFRESH_FAILURE_MESSAGES[code],
     ...(recovered === undefined ? {} : { recovered }),
   });
-  const refusal = (): RefreshFailureCode | null =>
-    host.collaboration()
+  /** A `replaceDocument` refusal in this controller's own codes, keeping its cause. */
+  const editFailure = (resultId: string, refusal: ReplaceDocumentRefusal): RefreshResult => {
+    const base = { ok: false as const, resultId, message: refusal.message };
+    switch (refusal.code) {
+      case 'editNotPermitted':
+        // A refresh runs in suggesting mode too, so only viewing and protection reach here.
+        return {
+          ...base,
+          code: 'edit-not-permitted',
+          reason: refusal.reason === 'protected' ? 'protected' : 'viewing',
+        };
+      case 'editUnsupported':
+        return {
+          ...base,
+          code: 'edit-unsupported',
+          reason:
+            refusal.reason === 'differentMainPart'
+              ? 'different-main-part'
+              : refusal.reason === 'collaborationRefused'
+                ? 'collaboration-refused'
+                : 'unsupported-difference',
+        };
+      case 'unavailable':
+        return refusal.reason
+          ? { ...base, code: 'unavailable', reason: 'collaboration-unavailable' }
+          : { ...base, code: 'unavailable' };
+      case 'staleDocument':
+        return {
+          ...base,
+          code: refusal.reason === 'otherDocument' ? 'document-changed' : 'local-edits',
+        };
+      case 'invalidRequest':
+        return { ...base, code: 'invalid-result' };
+      case 'invalidDocument':
+        return { ...base, code: 'invalid-document' };
+      case 'busy':
+        return { ...base, code: 'busy' };
+    }
+  };
+  // A reload replaces the session, which a collaboration session cannot follow; an edit can.
+  const refusal = (mode: RefreshUpdate['mode']): 'collaboration' | 'unavailable' | null =>
+    host.collaboration() && mode !== 'edit'
       ? 'collaboration'
       : !host.surface() || !host.container() || editor.snapshot().isOpening
         ? 'unavailable'
@@ -163,11 +229,44 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
     // No await between final input, serialization, and the revision read.
     const bytes = surface.save();
     if (host.surface() !== surface) throw new Error('document-changed');
-    return { bytes, revision: host.revision };
+    return { bytes, revision: host.revision, handle: editor.getDocumentHandle() };
+  };
+  /** Record an accepted result: advance the sequence, resolve its changes, and report. */
+  const accept = (
+    request: NonNullable<typeof active>,
+    resultId: string,
+    owned: RefreshUpdate,
+    mode: 'reload' | 'edit'
+  ): RefreshResult => {
+    highlights.clear();
+    if (mode === 'edit') {
+      // The update's own change event carries a source, so the revision baseline stays put.
+      recovery = null;
+      request.revision = host.revision;
+    }
+    request.handle = editor.getDocumentHandle();
+    request.sequence = owned.sequence;
+    const resolved = resolveRefreshChanges(host, resultId, owned.changes, request.seen);
+    located = host.revision === request.revision ? resolved.located : [];
+    for (const entry of located) request.seen.set(entry.change.id, entry.fingerprint);
+    acceptedRevision = request.revision;
+    const changes = Object.freeze(located.map((entry) => Object.freeze(entry.change)));
+    const result: RefreshResult = Object.freeze({
+      ok: true,
+      resultId,
+      mode,
+      changes,
+      changeInformation:
+        host.revision === request.revision && resolved.available ? 'available' : 'unavailable',
+      failures: Object.freeze(owned.failures ?? []),
+    });
+    notify({ changes, result, phase: 'complete', recoveryAvailable: false });
+    return result;
   };
   const controller: DocumentRefresh = {
     async capture() {
-      const code = refusal();
+      // Capture serves both modes, so only `applyUpdate()` refuses a reload in collaboration.
+      const code = refusal('edit');
       if (recovery) throw new DocumentRefreshError('recovery-failed');
       if (code || busy) throw new DocumentRefreshError(code ?? 'busy');
       reset();
@@ -193,6 +292,7 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
           token,
           epoch,
           revision: captured.revision,
+          handle: captured.handle,
           sequence: -1,
           seen: revisionChangeKeys(host),
         };
@@ -215,6 +315,7 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
           !Number.isSafeInteger(update.sequence) ||
           update.sequence < 0 ||
           !(update.bytes instanceof Uint8Array || update.bytes instanceof ArrayBuffer) ||
+          (update.mode !== undefined && update.mode !== 'reload' && update.mode !== 'edit') ||
           (update.failures !== undefined &&
             (!Array.isArray(update.failures) ||
               update.failures.length > 10000 ||
@@ -271,7 +372,7 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
       }
       const apply = async (): Promise<RefreshResult> => {
         const request = active;
-        const code = refusal();
+        const code = refusal(owned.mode);
         if (code) return publish(failure(resultId, code));
         if (!request || request.token !== owned.submission)
           return publish(failure(resultId, 'superseded'));
@@ -286,6 +387,15 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
           if (previous.revision !== request.revision)
             return publish(failure(resultId, 'local-edits'), 'failed');
           const bytes = owned.bytes as Uint8Array;
+          if (owned.mode === 'edit') {
+            // The `replaceDocument` command does the work; refresh tags its change event.
+            const outcome = withRefreshEditSource(host.surface()!.session, () =>
+              editor.exec({ type: 'replaceDocument', docx: bytes, expected: request.handle })
+            ).replaceDocument;
+            if (!outcome) return publish(failure(resultId, 'unavailable'), 'failed');
+            if (!outcome.ok) return publish(editFailure(resultId, outcome), 'failed');
+            return publish(accept(request, resultId, owned, 'edit'));
+          }
           if (!readOoxmlPackage(bytes).ok)
             return publish(failure(resultId, 'invalid-document'), 'failed');
           highlights.clear();
@@ -319,26 +429,8 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
           }
           // Accepted content stays accepted if cancellation races with mount completion.
           recovery = null;
-          highlights.clear();
           request.revision = host.mountedRevision;
-          request.sequence = owned.sequence;
-          const resolved = resolveRefreshChanges(host, resultId, owned.changes, request.seen);
-          located = host.revision === request.revision ? resolved.located : [];
-          for (const entry of located) request.seen.set(entry.change.id, entry.fingerprint);
-          acceptedRevision = request.revision;
-          const changes = Object.freeze(located.map((entry) => Object.freeze(entry.change)));
-          const result: RefreshResult = Object.freeze({
-            ok: true,
-            resultId,
-            changes,
-            changeInformation:
-              host.revision === request.revision && resolved.available
-                ? 'available'
-                : 'unavailable',
-            failures: Object.freeze(owned.failures ?? []),
-          });
-          notify({ changes, result, phase: 'complete', recoveryAvailable: false });
-          return publish(result);
+          return publish(accept(request, resultId, owned, 'reload'));
         } catch {
           return publish(
             failure(resultId, valid() ? 'input-failed' : 'cancelled'),

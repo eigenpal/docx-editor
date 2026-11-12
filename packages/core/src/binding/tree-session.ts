@@ -1,5 +1,6 @@
 import { shareUndoHistoryPosition } from '../store/store/undo-history-position.ts';
 import { replaceWholePackage } from '../store/store/tree-package-replace.ts';
+import { applyPackageUpdate } from '../store/store/tree-package-update.ts';
 import { applyDrawingFrameOps } from '../store/store/tree-package-diagram-frame.ts';
 import { chartLanesFor } from '../store/store/tree-package-charts.ts';
 import { createSessionPackageWriter } from './session-package-writer.ts';
@@ -1247,6 +1248,7 @@ export function openTreeSessionFromPackage(
       charts: () => chartLanesFor(packageStore),
       applyFragmentPaste: (scope, input) => packageStore.applyFragmentPaste(scope, input),
       replacePackage: (pkg) => replaceWholePackage(packageStore, pkg),
+      applyPackageUpdate: (pkg) => applyPackageUpdate(packageStore, pkg),
     },
   };
   shareUndoHistoryPosition(result.session, packageStore);

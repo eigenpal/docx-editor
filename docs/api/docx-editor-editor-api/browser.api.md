@@ -64,6 +64,7 @@ class Body_2 extends ModelObject {
     // @internal
     hydrateAddress(address: ObjectAddress): void;
     get inlinePictures(): InlinePictureCollection;
+    insertFileFromBase64(base64File: string, insertLocation: InsertLocation.replace | InsertLocation.start | InsertLocation.end | 'Replace' | 'Start' | 'End'): Range_2;
     insertParagraph(paragraphText: string, insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End'): Paragraph;
     insertTable(rowCount: number, columnCount: number, insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End', values?: string[][]): Table;
     insertText(text: string, insertLocation: InsertLocation.replace | InsertLocation.start | InsertLocation.end | 'Replace' | 'Start' | 'End'): Range_2;
