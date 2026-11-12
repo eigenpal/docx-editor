@@ -111,8 +111,20 @@ export type {
  */
 export interface DocEdits {
   insertText: { target: DocTarget; text: string };
+  /**
+   * Replace the selection with `text`, as a paste does: newlines start paragraphs, and an
+   * empty `text` deletes the selection. Tracked in suggesting mode. The editor acts on the
+   * selection and refuses a `target`.
+   */
   replaceText: { target: DocTarget; text: string };
   deleteText: { target: DocTarget };
+  /**
+   * Set run formatting over the selection in one undo step. Accepts the run fields of
+   * {@link RunFormatting}: `bold`, `italic`, `underline`, `strike`, `superscript`, `subscript`,
+   * a hex `color`, `highlight`, `fontFamily`, and `fontSizePt`. `false` states a switch off. A
+   * paragraph field, a theme color, or both scripts together are refused with `invalidArgs`.
+   * The editor acts on the selection and refuses a `target`.
+   */
   applyFormatting: { target: DocTarget; marks: RunFormatting };
   setParagraphStyle: { target: DocTarget; styleId: string };
   insertTable: { target: DocTarget; rows: number; cols: number };
@@ -143,9 +155,20 @@ export interface DocEdits {
    * definition is created on first use, `numbering.xml` included.
    */
   toggleList: { target: DocTarget; kind: 'bullet' | 'ordered' };
+  /** Split the paragraph at the selection, as Enter does. Tracked in suggesting mode. */
   splitParagraph: { target: DocTarget };
+  /**
+   * Join the paragraphs the selection spans, or the selection's paragraph and the next one in
+   * its story. Suggesting mode proposes removing the paragraph marks instead. A join across
+   * table cells is refused; with no following paragraph the result is `notFound`.
+   */
   mergeParagraphs: { target: DocTarget };
+  /**
+   * Set a document variable (`w:docVars`). Not implemented by the editor: refused with
+   * `unsupported`.
+   */
   setVariable: { name: string; value: string };
+  /** Set several document variables. Not implemented by the editor: refused with `unsupported`. */
   applyVariables: { values: Record<string, string> };
 
   /**

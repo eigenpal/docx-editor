@@ -89,12 +89,18 @@ export function commandProtectionRefusal(
       text = command.text;
       paste = true;
       break;
+    case 'replaceText':
+      intent = 'text';
+      text = command.text;
+      paste = true;
+      break;
     case 'deleteText':
     case 'cut':
       intent = 'text';
       break;
     case 'toggleMark':
     case 'setMarkAttr':
+    case 'applyFormatting':
     case 'pasteFormatting':
       intent = 'runFormat';
       break;

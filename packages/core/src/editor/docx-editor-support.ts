@@ -26,6 +26,7 @@ import { blankDocumentBytes } from './blank-document.ts';
 import { tableCommandCanSupport } from './table-command-plan.ts';
 import { replaceMatchArgumentRefusal } from './docx-editor-replace-match.ts';
 import { replaceAllMatchesArgumentRefusal } from './docx-editor-replace-all.ts';
+import { classifySelectionEdit } from './docx-editor-selection-edits.ts';
 
 /** Recursively freeze plain objects and arrays (idempotent). */
 export function deepFreezeValue<T>(value: T): T {
@@ -540,6 +541,12 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         command.kind === 'sectionContinuous'
         ? { supported: true, mutating: true }
         : { supported: false, reason: `break kind '${command.kind}' is not supported` };
+    case 'replaceText':
+    case 'applyFormatting':
+    case 'splitParagraph':
+    case 'mergeParagraphs':
+    case 'removeTabMark':
+      return classifySelectionEdit(command);
     case 'insertText':
       return command.target === undefined
         ? { supported: true, mutating: true }

@@ -9,6 +9,7 @@ import { isMissingAuthorRefusal } from './docx-editor-author.ts';
 import { isCollaborationFailureCode } from '../collaboration/index.ts';
 import { execReplaceMatch } from './docx-editor-replace-match.ts';
 import { execReplaceAllMatches } from './docx-editor-replace-all.ts';
+import { execSelectionEdit } from './docx-editor-selection-edits.ts';
 // Command dispatch for `createDocxEditor` (editor seam).
 //
 // One switch, one vocabulary: every `EditorCommand` the gate admitted lands here and is
@@ -391,6 +392,12 @@ export function execEditorCommand(
     case 'setChartFormat':
     case 'setChartColor':
       return execChartCommand(mounted, command, options?.translate);
+    case 'replaceText':
+    case 'applyFormatting':
+    case 'splitParagraph':
+    case 'mergeParagraphs':
+    case 'removeTabMark':
+      return execSelectionEdit(mounted, command);
     case 'insertText':
       mounted.type(command.text);
       if (

@@ -1187,7 +1187,7 @@ export interface EditorCommands
     scope?: 'document' | 'section';
   };
 
-  /** Remove the tab stop at this position (twips) from the current paragraph. */
+  /** Remove the selection paragraphs' tab stop at this position (twips); none there: `notFound`. */
   removeTabMark: { positionTwips: number };
 
   /**
