@@ -25,7 +25,7 @@
 
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core/layout';
-import { paintedSpanRange } from './dom-selection.ts';
+import { paintedSpanRange, semanticSelectionFromDom } from './dom-selection.ts';
 import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { HostTimers } from './host-realm.ts';
 import { rebaseOffset } from './surface-composition-rebase.ts';
@@ -184,14 +184,22 @@ export function shownPosition(
   const at = caret - grown;
   if (grown <= 0 || at < 0 || text.slice(0, at) + text.slice(caret) !== read) return position;
   const span = node ? paintedSpanRange(node) : null;
-  if (!node || !span || span.paragraphId !== position.paragraphId) return position;
-  const length = span.end - span.start;
-  if (span.start <= at && at <= span.end && node.textContent?.length === length + grown) {
+  if (span && span.paragraphId !== position.paragraphId) return position;
+  // The run the input method wrote into is longer than its range by the insertion.
+  const length = span ? span.end - span.start : 0;
+  if (span && span.start <= at && at <= span.end && node!.textContent?.length === length + grown) {
+    // A text node's offset is a character; an element's (the run itself) is a child index.
+    if (node!.nodeType !== TEXT_NODE)
+      return { ...position, offset: nodeOffset > 0 ? span.end + grown : span.start };
     return { ...position, offset: span.start + Math.max(0, Math.min(nodeOffset, length + grown)) };
   }
-  const past = position.offset > at || (position.offset === at && span.start >= at);
+  // A point between runs (a line end, a seat, a child index) at the insertion is after it.
+  const past = position.offset > at || (position.offset === at && (!span || span.start >= at));
   return past ? { ...position, offset: position.offset + grown } : position;
 }
+
+/** `Node.TEXT_NODE`, without the global of one window. */
+const TEXT_NODE = 3;
 
 /** One composed insertion the page shows and the model does not hold yet. */
 interface QueuedInsertion {
@@ -261,8 +269,14 @@ export interface ComposedLane {
   unpainted(): UnpaintedComposition | null;
   /** The page was repainted: nothing it shows is unpainted any more. */
   painted(): void;
-  /** A selection read from the page, in the text it shows (`shownPosition`). */
-  shown(selection: SemanticSelection | null, dom: Selection | null): SemanticSelection | null;
+  /** The page's selection, in the text the page shows (`shownPosition`). */
+  read(dom: Selection | null): SemanticSelection | null;
+  /**
+   * Whether the page's selection is the caret the browser leaves just past
+   * unpainted composed text. The paint that follows mirrors it, and adopting it would land
+   * the text before that frame; any other selection is the user's.
+   */
+  echo(dom: Selection | null): boolean;
 }
 
 /** A composition over queued text, once the queue has landed: `clean` keeps it described. */
@@ -275,7 +289,11 @@ export function landedBase(base: ComposingBase, clean: boolean, revision: number
  * The queue of composed insertions. `land` is what the zero-delay task runs; without
  * `commitComposed`, `modelTextOf` and `later`, nothing is ever queued.
  */
-export function createComposedLane(deps: ComposedLaneDeps, land: () => void): ComposedLane {
+export function createComposedLane(
+  deps: ComposedLaneDeps,
+  land: () => void,
+  pages: Element
+): ComposedLane {
   const { session, commitComposed, modelTextOf, later } = deps;
   let queued: QueuedInsertion[] = [];
   let shown: UnpaintedComposition | null = null;
@@ -314,7 +332,7 @@ export function createComposedLane(deps: ComposedLaneDeps, land: () => void): Co
     );
   }
 
-  return {
+  const lane: ComposedLane = {
     queue(paragraphId, base, owned, read) {
       if (!commitComposed || !modelTextOf || !later || owned || base?.caret == null) return false;
       if (base.revision !== session.packageRevision()) return false;
@@ -381,7 +399,15 @@ export function createComposedLane(deps: ComposedLaneDeps, land: () => void): Co
     painted() {
       if (queued.length === 0) shown = null;
     },
-    shown(selection, dom) {
+    echo(dom) {
+      const mapped = shown ? lane.read(dom) : null;
+      if (!shown || !mapped) return false;
+      const at = (position: SemanticPosition) =>
+        position.paragraphId === shown!.paragraphId && position.offset === shown!.caret;
+      return at(mapped.anchor) && at(mapped.head);
+    },
+    read(dom) {
+      const selection = semanticSelectionFromDom(pages, dom);
       if (!selection || !dom || !shown) return selection;
       const read = deps.paintedText?.(shown.paragraphId).text;
       return {
@@ -390,4 +416,5 @@ export function createComposedLane(deps: ComposedLaneDeps, land: () => void): Co
       };
     },
   };
+  return lane;
 }

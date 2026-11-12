@@ -65,16 +65,24 @@ function compose(pages: HTMLElement, steps: readonly string[], ends = true): voi
   if (ends) pages.dispatchEvent(compositionEvent('compositionend', steps.at(-1)!));
 }
 
-/** A click in the painted run that shows `text`, at `offset` in it. */
-function click(pages: HTMLElement, text: string, offset: number): void {
-  const run = [...pages.querySelectorAll<HTMLElement>('[data-start]')].find(
+/** The painted run that shows `text`. */
+const runOf = (pages: HTMLElement, text: string) =>
+  [...pages.querySelectorAll<HTMLElement>('[data-start]')].find(
     (candidate) => candidate.textContent === text
   )!;
-  // The selection gesture alone; a pointer event would start the engine's own hit test.
-  pages.dispatchEvent(new Event('selectstart', { bubbles: true }));
-  document.getSelection()!.setBaseAndExtent(run.firstChild!, offset, run.firstChild!, offset);
+
+/** A selection gesture alone; a pointer event would start the engine's own hit test. */
+function gesture(anchor: Node, anchorOffset: number, focus = anchor, focusOffset = anchorOffset) {
+  anchor
+    .ownerDocument!.querySelector('.docx-pages')!
+    .dispatchEvent(new Event('selectstart', { bubbles: true }));
+  document.getSelection()!.setBaseAndExtent(anchor, anchorOffset, focus, focusOffset);
   document.dispatchEvent(new Event('selectionchange'));
 }
+
+/** A click in the painted run that shows `text`, at `offset` in it. */
+const click = (pages: HTMLElement, text: string, offset: number) =>
+  gesture(runOf(pages, text).firstChild!, offset);
 
 const THREE_RUNS =
   '<w:p><w:r><w:t xml:space="preserve">ab </w:t></w:r><w:r><w:rPr><w:b/></w:rPr>' +
@@ -346,5 +354,61 @@ describe('what lands the queue, and where', () => {
     surface.destroy();
     container.remove();
     await nextPaintTask();
+  });
+
+  test('a drag end on the run the input method wrote into, as an element', async () => {
+    const { surface, container } = mount(THREE_RUNS);
+    putCaret(surface, 3);
+    const pages = pagesOf(container);
+    compose(pages, ['ㅇ', '아']);
+    await Promise.resolve();
+    const run = runOf(pages, '아cd');
+    gesture(run, 1);
+    expect(surface.session.bodyText()).toBe('ab 아cdef');
+    expect(surface.state().selection.head.offset).toBe(6);
+  });
+
+  test('the end of the line past the insertion', async () => {
+    const { surface, container } = mount(THREE_RUNS);
+    putCaret(surface, 3);
+    const pages = pagesOf(container);
+    compose(pages, ['ㅇ', '아']);
+    await Promise.resolve();
+    const line = runOf(pages, 'ef').closest('.docx-line')!;
+    gesture(line, line.childNodes.length);
+    expect(surface.session.bodyText()).toBe('ab 아cdef');
+    expect(surface.state().selection.head.offset).toBe(8);
+  });
+
+  test('ranges into and out of the composed text', async () => {
+    const { surface, container } = mount(THREE_RUNS);
+    putCaret(surface, 3);
+    const pages = pagesOf(container);
+    compose(pages, ['ㅇ', '아']);
+    await Promise.resolve();
+    gesture(runOf(pages, '아cd').firstChild!, 0, runOf(pages, 'ef').firstChild!, 1);
+    const out = surface.state().selection;
+    expect([out.anchor.offset, out.head.offset]).toEqual([3, 7]);
+    surface.undo();
+    putCaret(surface, 3);
+    compose(pages, ['ㅇ', '아']);
+    await Promise.resolve();
+    gesture(runOf(pages, 'ab ').firstChild!, 1, runOf(pages, '아cd').firstChild!, 2);
+    const into = surface.state().selection;
+    expect([into.anchor.offset, into.head.offset]).toEqual([1, 5]);
+  });
+
+  test('a selection change with no gesture that is not the echo is adopted', async () => {
+    const { surface, container } = mount(THREE_RUNS);
+    putCaret(surface, 3);
+    const pages = pagesOf(container);
+    compose(pages, ['ㅇ', '아']);
+    await Promise.resolve();
+    // An assistive technology or host code moves the caret.
+    const ab = runOf(pages, 'ab ').firstChild!;
+    document.getSelection()!.setBaseAndExtent(ab, 1, ab, 1);
+    document.dispatchEvent(new Event('selectionchange'));
+    expect(surface.session.bodyText()).toBe('ab 아cdef');
+    expect(surface.state().selection.head.offset).toBe(1);
   });
 });

@@ -387,7 +387,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   let composingWritten = false;
   const packageRevision = () => session.packageRevision();
   /** Composed insertions read back and not committed yet: surface-composition-commit. */
-  const composed = createComposedLane(deps, () => landComposed());
+  const composed = createComposedLane(deps, () => landComposed(), pagesLayer);
   const baseOf = (paragraphId: string): ComposingBase =>
     composingBaseOf({ ...deps, packageRevision }, paragraphId, composed.unpainted());
   /** Commit queued composed text. False when it did not land as the page shows it. */
@@ -405,7 +405,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    */
   function adoptPendingDomSelection(): boolean {
     const domSelection = hostDocument().getSelection();
-    const next = composed.shown(semanticSelectionFromDom(pagesLayer, domSelection), domSelection);
+    const next = composed.read(domSelection);
     if (!next) return false;
     rememberSelectionPage(domSelection);
     if (selectionsEqual(next, deps.selection())) return false;
@@ -442,7 +442,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   /** Mirror the native selection into the model. Ignores selections outside painted text. */
   const adoptDomSelection = (): void => {
     const domSelection = hostDocument().getSelection();
-    const next = composed.shown(semanticSelectionFromDom(pagesLayer, domSelection), domSelection);
+    const next = composed.read(domSelection);
     if (!next) {
       // NOT MAPPING IS NOT NOTHING HAPPENING.
       //
@@ -871,8 +871,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
         if (reported === null || !selectionsEqual(reported, deps.selection())) mirrorToDom();
         return;
       }
-      // The browser's caret after unpainted composed text: the next paint mirrors it anyway.
-      if (composed.unpainted() && !userSelectionGesture) return;
+      // The browser's own caret just past unpainted composed text (`ComposedLane.echo`).
+      if (!userSelectionGesture && composed.echo(hostDocument().getSelection())) return;
       adoptDomSelection();
     },
 
