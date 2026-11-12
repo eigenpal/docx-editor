@@ -339,10 +339,15 @@ export function singletonLayout<Id extends string>(
     }
   }
   if (hidden.size === 0 && !moveLeading && trailAfter < 0) return null;
+  // A hidden copy stays hidden at every place its id is listed: an undo or redo can list an
+  // id again, and its second listing must not show the copy the rule hid.
+  const hiddenIds = new Set<Id>();
+  for (const index of hidden) hiddenIds.add(children[index]!);
   const order: number[] = [];
   if (moveLeading) order.push(leading);
   for (let index = 0; index < children.length; index += 1) {
-    if (hidden.has(index) || (moveLeading && index === leading)) continue;
+    if (hidden.has(index) || hiddenIds.has(children[index]!)) continue;
+    if (moveLeading && index === leading) continue;
     if (trailAfter >= 0 && index === trailing) continue;
     order.push(index);
     if (index === trailAfter) order.push(trailing!);

@@ -90,4 +90,19 @@ describe('singleton child layout', () => {
     const lineIds = ids.slice(2, 4);
     expect(singletonLayout(line, lineIds, local)?.order).toEqual([0]);
   });
+
+  test('a hidden copy listed twice stays hidden at both places', () => {
+    // An undo or redo can list a file fill again beside a peer's fill: the file fill loses, at
+    // its first listing and its repeat alike.
+    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const peer = `lid:${'c'.repeat(32)}:25`;
+    const file = '/word/document.xml#0.0.2.0.0.0.8.0.0.1.3.0';
+    const fill = (): ChildShell => ({ kind: 'generic', namespaceUri: A, localName: 'solidFill' });
+    const result = partitionChildIds(
+      { kind: 'generic', namespaceUri: A, localName: 'ln' },
+      [peer, file, file],
+      fill
+    );
+    expect(result.shown).toEqual([peer]);
+  });
 });
