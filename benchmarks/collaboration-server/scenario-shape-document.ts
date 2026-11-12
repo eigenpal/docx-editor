@@ -122,6 +122,33 @@ const GROUP = anchor(
   NS
 );
 
+/** A group wrapped with a VML group fallback: one member takes the group fill. */
+const GROUP_ALTERNATE =
+  `<mc:AlternateContent ${NS}><mc:Choice Requires="wpg">` +
+  anchor(
+    7,
+    WPG_URI,
+    1828800,
+    457200,
+    '<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1828800" cy="457200"/>' +
+      '<a:chOff x="0" y="0"/><a:chExt cx="1828800" cy="457200"/></a:xfrm>' +
+      '<a:solidFill><a:srgbClr val="7030A0"/></a:solidFill></wpg:grpSpPr>' +
+      wsp(`${EXT(914400, 457200)}${RECT}<a:grpFill/><a:ln><a:noFill/></a:ln>`, '', 21) +
+      wsp(
+        `<a:xfrm><a:off x="914400" y="0"/><a:ext cx="914400" cy="457200"/></a:xfrm>${RECT}` +
+          '<a:solidFill><a:srgbClr val="FFC000"/></a:solidFill>' +
+          '<a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>',
+        '',
+        22
+      ) +
+      '</wpg:wgp>'
+  ) +
+  '</mc:Choice><mc:Fallback><w:pict><v:group id="_x0000_s1040" coordsize="1828800,457200" ' +
+  'style="width:144pt;height:36pt"><v:rect id="_x0000_s1041" style="position:absolute;width:914400;' +
+  'height:457200" fillcolor="#7030a0" stroked="f"/><v:rect id="_x0000_s1042" style="position:absolute;' +
+  'left:914400;width:914400;height:457200" fillcolor="#ffc000" strokecolor="#000000" strokeweight="1pt"/>' +
+  '</v:group></w:pict></mc:Fallback></mc:AlternateContent>';
+
 /** A straight line: an outline and no fill. */
 const LINE = anchor(
   6,
@@ -142,6 +169,7 @@ export const SHAPE_FORMAT_BODY = [
   para('Text box anchor paragraph here.', STYLED_BOX),
   para('Hidden fill shape anchor text.', HIDDEN),
   para('Group anchor paragraph with members.', GROUP),
+  para('Group with a fallback anchor paragraph.', GROUP_ALTERNATE),
   para('Line anchor paragraph at the end.', LINE),
   para('Closing paragraph after the shapes.'),
 ].join('');

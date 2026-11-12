@@ -81,6 +81,7 @@ import {
   SHAPE_CHECKS,
   shapePackageProblems,
   shapeRoundTripProblems,
+  shapeSavedProblems,
 } from './scenario-shape-checks.ts';
 
 export type { Addressed, Delivery, EditKind };
@@ -322,14 +323,14 @@ class Simulation {
     if (touched && !awaitingUpdates(touched.ydoc)) {
       this.problems.push(...this.tokens.hiddenOn(touched.store.currentPackage(), touched.index));
     }
-    // A replica with its updates complete never shows a repeated fill, line, or alpha, also
-    // right after an undo or redo.
+    // A replica with its updates complete never shows a repeated fill or line, also right after
+    // an undo or redo, and what it saves keeps the hidden fills and VML fallbacks valid.
     if (SHAPE_CHECKS.enabled && touched && !awaitingUpdates(touched.ydoc)) {
+      const where = `replica ${touched.index} after action ${this.performed - 1}`;
+      const current = touched.store.currentPackage();
       this.problems.push(
-        ...shapePackageProblems(
-          touched.store.currentPackage(),
-          `replica ${touched.index} after action ${this.performed - 1}`
-        )
+        ...shapePackageProblems(current, where),
+        ...shapeSavedProblems(reopen(current), `${where} saved`)
       );
     }
     if (touched && this.firstFailure < 0 && this.failed()) this.firstFailure = this.performed - 1;

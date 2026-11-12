@@ -19,6 +19,7 @@
 // (treated as absent) unless it decides the type of a part the document needs.
 
 import { textboxFallbackExportPackageSteps } from './textbox-fallback-export.ts';
+import { shapeFormatExportPackage } from './shape-format-export.ts';
 import { readOoxmlPartSteps } from './ooxml-part-steps.ts';
 import {
   readZip,
@@ -666,7 +667,10 @@ export function* writeOoxmlPackageSteps(
 ): Generator<void, Uint8Array> {
   // Concurrent note property writes can leave a repeated element in shared state; the saved
   // file keeps the first copy, which is the one every reader uses.
-  const cleaned = commentExportPackage(withoutDuplicateNoteProperties(pkg));
+  // Concurrent shape fill writes can leave an empty hidden fill or a disagreeing VML copy.
+  const cleaned = shapeFormatExportPackage(
+    commentExportPackage(withoutDuplicateNoteProperties(pkg))
+  );
   // Revision ids are made unique before the text box fallbacks re-sync, so a fallback copies
   // the ids its choice saves with.
   const exported = yield* textboxFallbackExportPackageSteps(

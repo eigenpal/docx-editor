@@ -11,7 +11,11 @@ import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { strToU8, zipSync } from 'fflate';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
-import { readOoxmlPackage, canonicalOoxmlFingerprint } from '@docx-editor.dev/core/store';
+import {
+  readOoxmlPackage,
+  canonicalOoxmlFingerprint,
+  serializeOoxmlPart,
+} from '@docx-editor.dev/core/store';
 import { createDocumentCollaboration } from '../document-session.ts';
 import { collaborationModule } from '../collaboration-module.ts';
 
@@ -204,5 +208,56 @@ test('two editors converge on concurrent fill and outline edits, undo, delete, r
     late?.destroy();
     a.destroy();
     b.destroy();
+  }
+});
+
+/** The saved document part as XML. */
+async function savedXml(client: Peer): Promise<string> {
+  const loaded = readOoxmlPackage(new Uint8Array(await client.editor.save()));
+  if (!loaded.ok) throw new Error(loaded.reason);
+  return serializeOoxmlPart(loaded.package.parts.get(loaded.package.mainDocumentPart)!);
+}
+
+/** The saved shape is valid: a hidden fill holds one fill, and the VML copy agrees. */
+function expectConsistentShape(xml: string): void {
+  expect(xml).not.toMatch(/<a14:hiddenFill[^>]*\/>/);
+  expect(xml).not.toMatch(/<a14:hiddenFill[^>]*>\s*<\/a14:hiddenFill>/);
+  const spPr = /<wps:spPr>(.*?)<\/wps:spPr>/.exec(xml)![1]!;
+  const ownFill = spPr.replace(/<a:extLst>.*<\/a:extLst>/, '').replace(/<a:ln[ >].*<\/a:ln>/, '');
+  const rect = /<v:rect [^>]*>/.exec(xml)![0];
+  if (ownFill.includes('<a:noFill/>')) expect(rect).toContain('filled="f"');
+  const color = /<a:solidFill><a:srgbClr val="([0-9A-F]{6})"/.exec(ownFill)?.[1];
+  if (color) {
+    expect(rect).not.toContain('filled="f"');
+    expect(rect).toContain(`fillcolor="#${color.toLowerCase()}"`);
+  }
+}
+
+test('a hidden fill against a recolour saves one valid fill and a VML copy that agrees', async () => {
+  for (const order of ['hide-first', 'recolour-first'] as const) {
+    const a = await peer('Alice'),
+      b = await peer('Bob', a);
+    try {
+      select(a);
+      select(b);
+      const hide = { type: 'setShapeFill', visible: false } as const;
+      const recolour = { type: 'setShapeFill', color: '7030A0' } as const;
+      expect(a.editor.exec(order === 'hide-first' ? hide : recolour)).toMatchObject({ ok: true });
+      expect(b.editor.exec(order === 'hide-first' ? recolour : hide)).toMatchObject({ ok: true });
+      sync(a, b);
+      await converged(a, b);
+      const xml = await savedXml(a);
+      expect(await savedXml(b)).toBe(xml);
+      expectConsistentShape(xml);
+      // Showing the fill again brings back exactly one fill.
+      select(a);
+      expect(a.editor.exec({ type: 'setShapeFill', visible: true })).toMatchObject({ ok: true });
+      sync(a, b);
+      await converged(a, b);
+      expectConsistentShape(await savedXml(b));
+    } finally {
+      a.destroy();
+      b.destroy();
+    }
   }
 });
