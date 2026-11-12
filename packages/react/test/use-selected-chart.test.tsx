@@ -12,7 +12,7 @@ import { openChartPaneFor, type DocxEditorInstance } from '@docx-editor.dev/core
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
-import { DocxEditorSidePanel } from '../src/editor/charts/SidePanel.tsx';
+import { DocxEditorSidePanel } from '../src/editor/panes/SidePanel.tsx';
 import {
   useSelectedChart,
   type UseSelectedChartReturn,

@@ -47,7 +47,7 @@ export interface DocumentStyleEntry {
 
 // @public
 export type DrawingTreeDocOp = Extract<TreeDocOp, {
-    readonly op: 'moveInlineDrawing' | 'insertDrawing' | 'replaceDrawingResource' | 'deleteDrawing' | 'resizeDrawing' | 'cropDrawing' | 'positionDrawing' | 'setDrawingWrap' | 'setDrawingMetadata' | 'setDrawingLocks' | 'transformDrawing';
+    readonly op: 'moveInlineDrawing' | 'insertDrawing' | 'replaceDrawingResource' | 'deleteDrawing' | 'resizeDrawing' | 'cropDrawing' | 'positionDrawing' | 'setDrawingWrap' | 'setDrawingMetadata' | 'setDrawingLocks' | 'transformDrawing' | 'setShapeFormat';
 }>;
 
 // @public

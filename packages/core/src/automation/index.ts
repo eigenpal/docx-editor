@@ -69,6 +69,11 @@ export type { AutomationAuthoringOperation } from './authoring-operations.ts';
 export type { AutomationInlinePictureRead, AutomationInlinePictureWrite } from './pictures.ts';
 export type { AutomationShapeRead, AutomationShapeType } from './shapes.ts';
 export type {
+  AutomationShapeFillRead,
+  AutomationShapeFillType,
+  AutomationShapeFillWrite,
+} from './shape-fill.ts';
+export type {
   AutomationListBullet,
   AutomationListLevelFormat,
   AutomationListNumbering,

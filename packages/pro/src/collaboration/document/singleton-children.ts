@@ -100,6 +100,68 @@ const NOT_ALLOWED: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ],
 ]);
 
+const DRAWINGML_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+/** The namespaces of the shape property elements whose children are DrawingML (`*:spPr`). */
+const SHAPE_PROPERTY_NAMESPACES = new Set([
+  DRAWINGML_NAMESPACE_URI,
+  'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
+  'http://schemas.openxmlformats.org/drawingml/2006/picture',
+]);
+const SHAPE_FILLS = new Set(['noFill', 'solidFill', 'gradFill', 'blipFill', 'pattFill', 'grpFill']);
+const LINE_FILLS = new Set(['noFill', 'solidFill', 'gradFill', 'pattFill']);
+const GEOMETRIES = new Set(['prstGeom', 'custGeom']);
+const DASHES = new Set(['prstDash', 'custDash']);
+const JOINS = new Set(['round', 'bevel', 'miter']);
+
+/**
+ * DrawingML children a shape's properties (`CT_ShapeProperties`) and its outline
+ * (`CT_LineProperties`) hold once. Two people setting a shape's outline at once each give it an
+ * `a:ln` when it had none, and two `a:ln` make a shape Word refuses to open.
+ */
+const UNIQUE_DRAWINGML: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  [
+    'shapeProperties',
+    new Set(['xfrm', 'ln', 'effectLst', 'effectDag', 'scene3d', 'sp3d', 'extLst']),
+  ],
+  ['lineProperties', new Set(['headEnd', 'tailEnd', 'extLst'])],
+]);
+
+/**
+ * The kind the rules know a parent by. A shape's properties and its outline are generic
+ * elements, so they take a rule name from their element name.
+ */
+export function singletonParentKind(
+  kind: string,
+  namespaceUri: string | undefined,
+  localName: string | undefined
+): string {
+  if (kind !== 'generic') return kind;
+  if (localName === 'spPr' && SHAPE_PROPERTY_NAMESPACES.has(namespaceUri ?? ''))
+    return 'shapeProperties';
+  if (localName === 'ln' && namespaceUri === DRAWINGML_NAMESPACE_URI) return 'lineProperties';
+  return kind;
+}
+
+/** A parent by kind, or by element so a generic parent can take a rule name. */
+export type SingletonParent =
+  | string
+  | null
+  | { readonly kind: string; readonly namespaceUri?: string; readonly localName?: string };
+
+function parentKindOf(parent: SingletonParent): string | null {
+  if (parent === null || typeof parent === 'string') return parent;
+  return singletonParentKind(parent.kind, parent.namespaceUri, parent.localName);
+}
+
+/** A DrawingML child's name in `names`, or null for any other child. */
+function drawingMlName(child: ChildShell, names: ReadonlySet<string>): string | null {
+  return child.kind === 'generic' &&
+    child.namespaceUri === DRAWINGML_NAMESPACE_URI &&
+    names.has(child.localName)
+    ? child.localName
+    : null;
+}
+
 /** Choice groups whose members are worth nothing without their content. */
 const CONTENT_GROUPS = new Set(['choice:position']);
 
@@ -116,6 +178,21 @@ const CHOICE_GROUPS: ReadonlyMap<string, (child: ChildShell) => string | null> =
     drawingPositionH: () => 'choice:position',
     drawingPositionV: () => 'choice:position',
     anchoredDrawing: (child) => (WRAP_KINDS.has(child.kind) ? 'choice:wrap' : null),
+    // A shape has one fill and one geometry; an outline one fill, one dash and one join.
+    shapeProperties: (child) =>
+      drawingMlName(child, SHAPE_FILLS)
+        ? 'choice:fill'
+        : drawingMlName(child, GEOMETRIES)
+          ? 'choice:geometry'
+          : null,
+    lineProperties: (child) =>
+      drawingMlName(child, LINE_FILLS)
+        ? 'choice:fill'
+        : drawingMlName(child, DASHES)
+          ? 'choice:dash'
+          : drawingMlName(child, JOINS)
+            ? 'choice:join'
+            : null,
   })
 );
 
@@ -155,6 +232,9 @@ function groupKey(parentKind: string, child: ChildShell): string | null {
   if (SINGLETON_KINDS.get(parentKind)?.includes(child.kind)) return `kind:${child.kind}`;
   const choice = CHOICE_GROUPS.get(parentKind)?.(child);
   if (choice) return choice;
+  const unique = UNIQUE_DRAWINGML.get(parentKind);
+  const name = unique ? drawingMlName(child, unique) : null;
+  if (name) return `a:${name}`;
   if (
     UNIQUE_PROPERTY_PARENTS.has(parentKind) &&
     child.kind === 'generic' &&
@@ -166,12 +246,14 @@ function groupKey(parentKind: string, child: ChildShell): string | null {
 }
 
 /** True when this parent kind can hold a concurrent singleton conflict at all. */
-export function hasSingletonRules(parentKind: string | null): boolean {
+export function hasSingletonRules(parent: SingletonParent): boolean {
+  const parentKind = parentKindOf(parent);
   return (
     parentKind !== null &&
     (SINGLETON_KINDS.has(parentKind) ||
       CHOICE_GROUPS.has(parentKind) ||
       NOT_ALLOWED.has(parentKind) ||
+      UNIQUE_DRAWINGML.has(parentKind) ||
       UNIQUE_PROPERTY_PARENTS.has(parentKind))
   );
 }
@@ -198,12 +280,12 @@ export interface SingletonLayout {
  * Each shell is read once, because rebuilt paragraphs and runs pass through here per keystroke.
  */
 export function singletonLayout<Id extends string>(
-  parentKind: string | null,
+  parent: SingletonParent,
   children: readonly Id[],
   shellOf: (id: Id) => ChildShell | null
 ): SingletonLayout | null {
-  if (!hasSingletonRules(parentKind)) return null;
-  const kind = parentKind!;
+  const kind = parentKindOf(parent);
+  if (kind === null || !hasSingletonRules(kind)) return null;
   const groups = new Map<string, number[]>();
   const seen = new Set<string>();
   const shells: (ChildShell | null)[] = [];
@@ -257,10 +339,15 @@ export function singletonLayout<Id extends string>(
     }
   }
   if (hidden.size === 0 && !moveLeading && trailAfter < 0) return null;
+  // A hidden copy stays hidden at every place its id is listed: an undo or redo can list an
+  // id again, and its second listing must not show the copy the rule hid.
+  const hiddenIds = new Set<Id>();
+  for (const index of hidden) hiddenIds.add(children[index]!);
   const order: number[] = [];
   if (moveLeading) order.push(leading);
   for (let index = 0; index < children.length; index += 1) {
-    if (hidden.has(index) || (moveLeading && index === leading)) continue;
+    if (hidden.has(index) || hiddenIds.has(children[index]!)) continue;
+    if (moveLeading && index === leading) continue;
     if (trailAfter >= 0 && index === trailing) continue;
     order.push(index);
     if (index === trailAfter) order.push(trailing!);
@@ -270,7 +357,7 @@ export function singletonLayout<Id extends string>(
 
 /** The indexes of `children` a replica shows, in order, or null when nothing changes. */
 function visibleChildOrder<Id extends string>(
-  parentKind: string | null,
+  parentKind: SingletonParent,
   children: readonly Id[],
   shellOf: (id: Id) => ChildShell | null
 ): readonly number[] | null {
@@ -293,7 +380,7 @@ export function sharedChildShell(registry: DocumentRegistry, id: LogicalId): Chi
 
 /** `childIds` split into the ids a replica shows, in order, and the ids a conflict hides. */
 export function partitionChildIds<Id extends string>(
-  parentKind: string | null,
+  parentKind: SingletonParent,
   childIds: readonly Id[],
   shellOf: (id: Id) => ChildShell | null
 ): { readonly shown: readonly Id[]; readonly hidden: readonly Id[] } {
@@ -321,7 +408,7 @@ export const MERGED_KINDS: ReadonlySet<string> = new Set([
  * the hidden copies whose children it also shows, after its own.
  */
 export function partitionWithMerges<Id extends string>(
-  parentKind: string | null,
+  parentKind: SingletonParent,
   childIds: readonly Id[],
   shellOf: (id: Id) => ChildShell | null
 ): {

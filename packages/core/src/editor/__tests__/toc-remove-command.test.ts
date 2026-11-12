@@ -270,3 +270,15 @@ test('a click after the menu closes ends its hold: a later refresh leaves the ca
   editor.exec({ type: 'refreshToc' });
   expect(surface.state().selection.head).toEqual(caret);
 });
+
+test('a table of contents after a table that ends the body leaves an empty paragraph', () => {
+  const table =
+    '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
+    `<w:tr><w:tc>${para(run('cell'))}</w:tc></w:tr></w:tbl>`;
+  for (const toc of [control(ENTRIES), ENTRIES]) {
+    const { editor, surface } = mount(para(run('Before')) + table + toc);
+    const tocId = detectBodyTocs(surface.session.part())[0]!.id;
+    expect(editor.exec({ type: 'removeToc', tocId })).toEqual({ ok: true, changed: true });
+    expect(bodyXml(editor)).toMatch(/<\/w:tbl><w:p[ />]/);
+  }
+});

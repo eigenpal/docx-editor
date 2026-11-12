@@ -32,6 +32,7 @@ import type { ParagraphSummary } from '../contracts/document.ts';
 import { classifyCommand } from './docx-editor-support.ts';
 import { NO_COPIED_FORMATTING } from './surface-format-painter-contract.ts';
 import { gateImageCommand, resolveSelectedDrawingRecord } from './docx-editor-images.ts';
+import { gateShapeFormatCommand } from './shape-format-commands.ts';
 import { chartTargetIn } from '../store/store/tree-package-charts.ts';
 import { chartCommandContentRefusal } from './chart-commands.ts';
 
@@ -600,6 +601,8 @@ export function gateCommand(
   if (imageGate && !imageGate.ok) {
     return { ok: false, refusal: imageGate };
   }
+  const shapeGate = gateShapeFormatCommand(command, surface);
+  if (shapeGate) return { ok: false, refusal: shapeGate };
   return { ok: true };
 }
 

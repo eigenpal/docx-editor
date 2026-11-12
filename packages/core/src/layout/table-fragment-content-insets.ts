@@ -16,7 +16,10 @@ export function firstRowContentDeps(
   row: SemanticTableRow,
   deps: TableFlowDeps
 ): TableFlowDeps {
-  if (structure.cellSpacingPt > 0) return deps;
+  // A spaced table's cells keep their borders inside; a row below its first opens the
+  // fragment at a page break (`rowOpeningGapPt`).
+  if (structure.cellSpacingPt > 0)
+    return row.spacingFrame && !row.spacingFrame.first ? { ...deps, opensTableBreak: true } : deps;
   const insets = new Map(deps.cellContentInsets);
   const minimumInsets = new Map(deps.cellMinimumContentInsets);
   const own = row.cells.map((cell) =>

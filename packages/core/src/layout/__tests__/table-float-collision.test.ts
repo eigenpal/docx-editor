@@ -575,7 +575,10 @@ describe('header admission after wrapping picture clearance', () => {
 
   test('keeps the authored group on its page when no picture reduces the band', () => {
     const result = lay(exactParagraph('Before') + rows(540), undefined, 15);
-    expect(result.pages).toHaveLength(1);
+    // The empty paragraph the body reads after the table may take the next page.
+    expect(
+      result.pages.filter((page) => page.fragments.some((f) => f.kind === 'table'))
+    ).toHaveLength(1);
     expect(tablesOn(result, 0)[0]!.rows).toHaveLength(3);
   });
 

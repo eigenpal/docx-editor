@@ -84,7 +84,8 @@ test('an over-tall exact row after a short row and before another one takes a pa
   const result = pages(
     table(row(p('first', 240), 20), row(lines('A', 12), 90), row(lines('B', 12), 90))
   );
-  expect(result).toHaveLength(3);
+  // The empty paragraph the body reads after the table takes the page after these.
+  expect(result.filter((page) => page.tables.length > 0)).toHaveLength(3);
   expect(result[0]!.tables[0]!.rows).toHaveLength(1);
   expect(result[0]!.tables[0]!.rows[0]!.box.height).toBe(20);
   expectClampedRow(result[1]!, 'A0');

@@ -91,6 +91,7 @@ export const TREE_DOC_OP_KINDS = [
   'setDrawingMetadata',
   'setDrawingLocks',
   'transformDrawing',
+  'setShapeFormat',
   'insertToc',
   'replaceTocResult',
   'removeToc',

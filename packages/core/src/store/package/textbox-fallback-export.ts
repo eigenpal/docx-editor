@@ -14,14 +14,14 @@
 // collaboration session saves the same bytes for the same document.
 
 import { blockScanSummary } from './block-scan-summary.ts';
-import { runWithoutJournalCapture } from './canonical-primitive-capture.ts';
 import { resolveRunLevelMcAtom } from './drawing-projection.ts';
 import {
   emptyNamespaceScope,
   isMcAlternateContent,
   namespaceScopeForNode,
 } from './drawing-projection-walk.ts';
-import { createNodeIdAllocator, replaceNode } from './ooxml-edit.ts';
+import { replaceNodesForExport } from './export-node-replace.ts';
+import { createNodeIdAllocator } from './ooxml-edit.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { MC_NAMESPACE_URI, WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type { OoxmlElement, OoxmlNamespaceBinding, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
@@ -200,15 +200,10 @@ export function* textboxFallbackExportPackageSteps(
   for (const part of pkg.parts.values()) {
     const pairs = yield* staleFallbacks(part);
     if (pairs.length === 0) continue;
-    const synced = runWithoutJournalCapture(() => {
-      let current = part;
-      for (const [stale, replacement] of pairs) {
-        const replaced = replaceNode(current, stale.id, replacement);
-        if (!replaced.ok) return null;
-        current = replaced.part;
-      }
-      return current;
-    });
+    const synced = replaceNodesForExport(
+      part,
+      new Map(pairs.map(([stale, replacement]) => [stale.id, replacement]))
+    );
     if (!synced) continue;
     next ??= { ...pkg, parts: new Map(pkg.parts) };
     (next.parts as Map<string, OoxmlPart>).set(part.name, synced);

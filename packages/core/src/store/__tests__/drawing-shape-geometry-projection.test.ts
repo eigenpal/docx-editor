@@ -368,3 +368,52 @@ describe('drawing canvases', () => {
     expect(atoms[0]!.vectorShape?.components.length).toBe(1);
   });
 });
+
+describe('group fills inside a drawing canvas', () => {
+  const member =
+    '<wps:wsp><wps:cNvPr id="5" name="Member"/><wps:cNvSpPr/><wps:spPr>' +
+    '<a:xfrm><a:off x="0" y="0"/><a:ext cx="1000000" cy="500000"/></a:xfrm>' +
+    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:grpFill/>' +
+    '<a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></wps:spPr>' +
+    '<wps:bodyPr/></wps:wsp>';
+  const canvasWithGroup = (fill: string) =>
+    inline(
+      6000000,
+      800000,
+      WPC,
+      '<wpc:wpc><wpc:bg/><wpc:whole/><wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr>' +
+        '<a:xfrm><a:off x="0" y="0"/><a:ext cx="1000000" cy="500000"/>' +
+        '<a:chOff x="0" y="0"/><a:chExt cx="1000000" cy="500000"/></a:xfrm>' +
+        `${fill}</wpg:grpSpPr>${member}</wpg:wgp></wpc:wpc>`
+    );
+  const vectorOf = (fill: string) =>
+    projectDrawingsInPart(parsePart(canvasWithGroup(fill)))[0]?.vectorShape ?? null;
+
+  test('a member paints a solid group fill', () => {
+    const vector = vectorOf('<a:solidFill><a:srgbClr val="C00000"/></a:solidFill>');
+    expect(vector?.components.map((c) => c.fillHex)).toEqual(['C00000']);
+  });
+
+  // A gradient spans the group box in Word; a pattern or picture fill has no per-member paint.
+  for (const [name, fill] of [
+    [
+      'gradient',
+      '<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs>' +
+        '<a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs></a:gsLst><a:lin ang="0"/></a:gradFill>',
+    ],
+    [
+      'pattern',
+      '<a:pattFill prst="pct50"><a:fgClr><a:srgbClr val="FF0000"/></a:fgClr>' +
+        '<a:bgClr><a:srgbClr val="FFFFFF"/></a:bgClr></a:pattFill>',
+    ],
+    [
+      'picture',
+      '<a:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+        'r:embed="rId9"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>',
+    ],
+  ]) {
+    test(`a member that takes a ${name} group fill keeps the placeholder`, () => {
+      expect(vectorOf(fill!)).toBeNull();
+    });
+  }
+});

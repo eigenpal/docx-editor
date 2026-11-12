@@ -29,11 +29,13 @@ import type { EditorScope, ViewScope } from '../contracts/editor.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 import type { OoxmlPart, StoryScope } from '@docx-editor.dev/core/store';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
+import { hitStoryDrawingAtPoint, type StoryDrawingLayer } from '../layout/story-drawing-hit.ts';
 import {
   hitAnchoredDrawingAtPoint,
   hitTestFragments,
   hitTestPage,
   pageAtY,
+  pointInTextLine,
   type SemanticHit,
 } from '../layout/semantic-hit-test.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
@@ -283,7 +285,44 @@ export function hitTestStoryAtLocalPoint(
   local: { readonly x: number; readonly y: number },
   options: { readonly measurer?: TextMeasurer } = {}
 ): SemanticHit | null {
-  return hitTestFragments(layout, pageIndex, story.fragments, local, options);
+  // The story's own drawings, as the body's: in front first, then the text, and a drawing
+  // behind the text only outside every line of it.
+  const page = layout.pages[pageIndex];
+  const point = { x: story.box.x + local.x, y: story.box.y + local.y };
+  const drawingAt = (layer: StoryDrawingLayer) =>
+    page
+      ? hitStoryDrawingAtPoint(story.anchoredDrawings, story.box, page.box, point, pageIndex, layer)
+      : null;
+  const front = drawingAt('front');
+  if (front) return front;
+  const text = hitTestFragments(layout, pageIndex, story.fragments, local, options);
+  if (text && (text.onGlyphs || pointInTextLine(story.fragments, local))) return text;
+  return drawingAt('behind') ?? text;
+}
+
+/**
+ * The open header or footer's drawing at a sheet point, past the story band too: a watermark
+ * or a logo that reaches into the body is still the open story's. Any page that shows the
+ * open story answers, as its band does; the hit names that page.
+ */
+export function activeStoryDrawingAtSheetPoint(
+  layout: SemanticLayout,
+  active: HeaderFooterScopeBinding,
+  sheet: { readonly x: number; readonly y: number },
+  pageOffsetX: (pageIndex: number) => number
+): SemanticHit | null {
+  const page = layout.pages[pageAtY(layout, sheet.y)];
+  const story = page ? storyOnPage(page, active) : undefined;
+  if (!page || !story?.anchoredDrawings?.length) return null;
+  const point = { x: sheet.x - pageOffsetX(page.index), y: sheet.y };
+  return hitStoryDrawingAtPoint(
+    story.anchoredDrawings,
+    story.box,
+    page.box,
+    point,
+    page.index,
+    'any'
+  );
 }
 
 /**

@@ -526,7 +526,7 @@ export function deleteImage(
   const part = pkg.parts.get(ownerPartName);
   const projection =
     drawingProjection(pkg, ownerPartName, drawingNodeId) ??
-    (part ? drawingAtomProjection(part, drawingNodeId) : null);
+    (part ? drawingAtomProjection(part, drawingNodeId, pkg) : null);
   if (!projection) return { ok: false, reason: 'unknown-drawing' };
   const embedRel = projection.picture?.embeddedRelationshipId ?? null;
   const linkRel = projection.picture?.linkedRelationshipId ?? null;

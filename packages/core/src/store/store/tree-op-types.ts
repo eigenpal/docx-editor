@@ -1055,6 +1055,19 @@ export type TreeDocOp =
     }
   | {
       /**
+       * Set the fill or outline of a shape, a text box, a line, or every shape of a group.
+       * One undo unit; a VML fallback that draws the same shapes follows.
+       */
+      readonly op: 'setShapeFormat';
+      /** The `w:drawing`, the `mc:AlternateContent` that holds it, or a legacy `w:pict`. */
+      readonly drawingNodeId: string;
+      /** One `wps:wsp` or VML shape of the drawing. Omitted formats every shape it holds. */
+      readonly shapeNodeId?: string;
+      readonly fill?: ShapeFillInput;
+      readonly outline?: ShapeOutlineInput;
+    }
+  | {
+      /**
        * Replace a detected TOC field's cached result paragraphs and ensure heading bookmarks.
        * Preserves field chrome / instruction. One undo unit (phase A of TOC refresh).
        */
@@ -1129,9 +1142,84 @@ export type DrawingTreeDocOp = Extract<
       | 'setDrawingWrap'
       | 'setDrawingMetadata'
       | 'setDrawingLocks'
-      | 'transformDrawing';
+      | 'transformDrawing'
+      | 'setShapeFormat';
   }
 >;
+
+/**
+ * A theme colour of a shape fill or outline: a slot of the document theme, lighter or darker by
+ * `shift` percent (`40` is Lighter 40%, `-25` is Darker 25%). It writes `a:schemeClr` with the
+ * `a:lumMod` and `a:lumOff` that the theme colour grid writes. @public
+ */
+export interface ShapeThemeColorInput {
+  readonly name: ShapeThemeColorName;
+  /** From -100 to 100; 0 or omitted is the theme colour itself. */
+  readonly shift?: number;
+}
+
+/** The theme colour slots a shape colour can name. @public */
+export type ShapeThemeColorName =
+  | 'bg1'
+  | 'tx1'
+  | 'bg2'
+  | 'tx2'
+  | 'accent1'
+  | 'accent2'
+  | 'accent3'
+  | 'accent4'
+  | 'accent5'
+  | 'accent6';
+
+/**
+ * A shape fill to write: none, or solid. A solid fill without `color` keeps the shape's colour,
+ * or brings back the one a hidden fill kept. `transparency` runs from 0 (opaque) to 1 (clear).
+ * With `theme`, the DrawingML shape takes the theme reference and `color` is the `RRGGBB` it
+ * resolves to, which a VML copy writes.
+ *
+ * @public
+ */
+export type ShapeFillInput =
+  | { readonly type: 'none' }
+  | {
+      readonly type: 'solid';
+      readonly color?: string;
+      readonly theme?: ShapeThemeColorInput;
+      readonly transparency?: number;
+    };
+
+/**
+ * A preset outline dash (ECMA-376 Part 1, 20.1.10.48 `ST_PresetLineDashVal`). `solid` is a
+ * plain line; the `sys` presets scale with the line width in short steps. @public
+ */
+export type ShapeOutlineDash =
+  | 'solid'
+  | 'sysDot'
+  | 'sysDash'
+  | 'sysDashDot'
+  | 'sysDashDotDot'
+  | 'dot'
+  | 'dash'
+  | 'lgDash'
+  | 'dashDot'
+  | 'lgDashDot'
+  | 'lgDashDotDot';
+
+/**
+ * A shape outline to write. Omitted fields keep their value. `color` is `RRGGBB`; `widthPt`
+ * runs from 0.25 to 1584 points; `dash` writes `a:prstDash` (and `v:stroke/@dashstyle` on a
+ * VML shape).
+ *
+ * @public
+ */
+export interface ShapeOutlineInput {
+  readonly visible?: boolean;
+  readonly color?: string;
+  /** A theme reference for the DrawingML outline; `color` is then its `RRGGBB`. */
+  readonly theme?: ShapeThemeColorInput;
+  readonly widthPt?: number;
+  readonly dash?: ShapeOutlineDash;
+}
 
 /** Just the `op` discriminants, for dispatch tables and validation. */
 export type TreeDocOpKind = TreeDocOp['op'];

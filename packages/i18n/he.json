@@ -79,7 +79,9 @@
       "image": "תמונה",
       "table": "טבלה",
       "format": "עיצוב",
-      "direction": "כיוון טקסט"
+      "direction": "כיוון טקסט",
+      "chart": "תרשים",
+      "shape": "צורה"
     },
     "undo": "בטל",
     "undoShortcut": "בטל (Ctrl+Z)",
@@ -227,7 +229,11 @@
       "background2": "רקע 2",
       "text1": "טקסט 1",
       "text2": "טקסט 2"
-    }
+    },
+    "lighterPercent": "{color}, בהיר יותר ב-{percent}%",
+    "darkerPercent": "{color}, כהה יותר ב-{percent}%",
+    "hexColor": "צבע הקסדצימלי",
+    "invalidHex": "הקלד צבע בתבנית #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {
@@ -692,7 +698,8 @@
     },
     "selection": "תמונה נבחרת",
     "locked": "לא ניתן להזיז תיבה זו או לשנות את גודלה",
-    "textLocked": "לא ניתן לערוך את הטקסט בתיבה זו"
+    "textLocked": "לא ניתן לערוך את הטקסט בתיבה זו",
+    "selectionShape": "צורה נבחרת"
   },
   "revisions": {
     "paragraphMarkInserted": "סימן פסקה נוסף",
@@ -1062,7 +1069,9 @@
     "outermostLevel": "הבחירה כבר ברמה החיצונית ביותר",
     "cannotIndentFurther": "לא ניתן להגדיל עוד את הכניסה של הבחירה",
     "noGoToView": "מעבר אינו זמין כאן",
-    "noBookmarkDialog": "לא ניתן להוסיף סימניות כאן"
+    "noBookmarkDialog": "לא ניתן להוסיף סימניות כאן",
+    "groupMemberMove": "צורה בתוך קבוצה אינה זזה, משנה גודל או נמחקת בנפרד. הקש Escape כדי לבחור את הקבוצה.",
+    "groupMemberProperties": "צורה בתוך קבוצה מקבלת את הגלישה, הטקסט החלופי והמאפיינים מהקבוצה. הקש Escape כדי לבחור את הקבוצה."
   },
   "equationPopup": {
     "apply": "החלה",
@@ -1360,6 +1369,71 @@
       "unsupported": "העורך אינו תומך בשינוי זה בתרשים.",
       "invalidValue": "התרשים אינו יכול להשתמש בערך זה.",
       "suggesting": "לא ניתן לשנות תרשימים בזמן הצעת עריכות. עבור לעריכה כדי לשנות תרשים זה."
+    }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "לסוג צורה ישן זה אין הגדרת שקיפות.",
+      "noShape": "בחר צורה אחת, תיבת טקסט אחת או קו אחד.",
+      "noSolidFill": "לצורה אין מילוי אחיד. בחר תחילה צבע מילוי.",
+      "outOfRange": "הערך מחוץ לטווח.",
+      "staleSelection": "הבחירה השתנתה. בחר את הצורה שוב.",
+      "mixedFill": "לצורות בקבוצה זו יש מילויים שונים. בחר צבע כדי להחיל אותו על כולן."
+    },
+    "formatShape": "עיצוב צורה…",
+    "pane": {
+      "close": "סגור את חלונית עיצוב הצורה",
+      "emptyBody": "בחר צורה, תיבת טקסט או קו במסמך כדי לעצב אותם.",
+      "emptyTitle": "לא נבחרה צורה",
+      "errors": {
+        "color": "הקלד צבע בתבנית ‎#RRGGBB או כשם של צבע.",
+        "noSolidFill": "בחר תחילה צבע מילוי.",
+        "transparency": "הקלד מספר בין 0 ל-100.",
+        "width": "הקלד עובי בין 0.25 ל-1584 נקודות.",
+        "dash": "בחר סוג מקף מהרשימה."
+      },
+      "fill": "מילוי",
+      "fillColor": "צבע מילוי",
+      "fillHex": "צבע מילוי הקסדצימלי",
+      "fillTypes": {
+        "gradient": "מעבר צבע",
+        "mixed": "מעורב",
+        "none": "ללא מילוי",
+        "pattern": "דוגמה",
+        "picture": "תמונה",
+        "solid": "אחיד"
+      },
+      "hexHelp": "הקלד ‎#RRGGBB או שם של צבע, ולאחר מכן הקש Enter.",
+      "mixedOutline": "לצורות בקבוצה זו יש קווי מתאר שונים.",
+      "noFill": "ללא מילוי",
+      "noOutline": "ללא קו",
+      "openFillColors": "בחר צבע מילוי",
+      "openOutlineColors": "בחר צבע קו מתאר",
+      "otherWidth": "עובי אחר",
+      "outline": "קו מתאר",
+      "outlineColor": "צבע קו מתאר",
+      "outlineHex": "צבע קו מתאר הקסדצימלי",
+      "readOnlyFill": "סוג מילוי: {fill}. בחר צבע או ״ללא מילוי״ כדי להחליף אותו.",
+      "title": "עיצוב צורה",
+      "transparency": "שקיפות (%)",
+      "width": "עובי (נק׳)",
+      "widthPoints": "{value} נק׳",
+      "widthPreset": "עובי מוגדר מראש",
+      "dash": "סוג מקף",
+      "dashes": {
+        "custom": "מותאם אישית",
+        "dash": "מקף",
+        "dashDot": "מקף ונקודה",
+        "dot": "נקודה",
+        "lgDash": "מקף ארוך",
+        "lgDashDot": "מקף ארוך ונקודה",
+        "lgDashDotDot": "מקף ארוך ושתי נקודות",
+        "solid": "רציף",
+        "sysDash": "נקודה מרובעת",
+        "sysDashDot": "מקף מרובע ונקודה",
+        "sysDashDotDot": "מקף מרובע ושתי נקודות",
+        "sysDot": "נקודה עגולה"
+      }
     }
   }
 }

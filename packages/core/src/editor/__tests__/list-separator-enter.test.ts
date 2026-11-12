@@ -203,7 +203,8 @@ describe('Enter continues a single blank separator between list items', () => {
     const table = `<w:tbl><w:tr><w:tc>${sequence()}</w:tc><w:tc>${item('Other')}</w:tc></w:tr></w:tbl>`;
     const editor = mount(docx(table));
     enter(editor, 2, 6);
-    expect(texts(editor)).toEqual(['First', '', 'Second', '', '', 'Third', 'Other']);
+    // The body ends with a table, so it reads an empty paragraph after it.
+    expect(texts(editor)).toEqual(['First', '', 'Second', '', '', 'Third', 'Other', '']);
   });
   test('tracked Enter proposes both new marks and rejects without leaving a separator', async () => {
     const editor = mount(docx(sequence()), 'Test author');

@@ -102,6 +102,13 @@ export type AutomationAuthoringOperation =
   | { readonly op: 'getShape'; readonly shape: AutomationHandle }
   /** A text box's own story. Any other shape has no body and refuses. */
   | { readonly op: 'getShapeBody'; readonly shape: AutomationHandle }
+  /** A shape's fill. A shape with no fill to read (a picture, a chart) refuses. */
+  | { readonly op: 'getShapeFill'; readonly shape: AutomationHandle }
+  | {
+      readonly op: 'setShapeFill';
+      readonly shape: AutomationHandle;
+      readonly fill: import('./shape-fill.ts').AutomationShapeFillWrite;
+    }
   | { readonly op: 'getInlinePictures'; readonly span: AutomationSpanRef }
   | { readonly op: 'getInlinePicture'; readonly picture: AutomationHandle }
   | {

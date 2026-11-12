@@ -4,9 +4,12 @@ import {
   runToolbarCommand,
   toolbarCommandState,
   type ImageWrapTarget,
+  type ObjectSlotValueMap,
   type ToolbarValueMap,
 } from '@docx-editor.dev/core/editor';
 import type { EditorExecOptions, ExecResult } from '@docx-editor.dev/core/contracts/editor';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
+import { useTranslation } from '../i18n';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 
@@ -18,11 +21,15 @@ export interface EditorValueCommandState<T extends string | number> {
   readonly isEnabled: ComputedRef<boolean>;
   readonly disabledReason: ComputedRef<string | null>;
 }
-/** Bind a value slot. Font size values use half-points; colors use six digits without `#`. @public */
-export function useEditorValueCommand<K extends keyof ToolbarValueMap>(
-  slotId: K
-): EditorValueCommandState<ToolbarValueMap[K]> {
+/**
+ * Bind a value slot. Font size values use half-points; colors use six digits without `#`. The
+ * `shape.*` and `chart.*` slots bind through `useObjectControl`. @public
+ */
+export function useEditorValueCommand<
+  K extends Exclude<keyof ToolbarValueMap, keyof ObjectSlotValueMap>,
+>(slotId: K): EditorValueCommandState<ToolbarValueMap[K]> {
   const editor = useDocxEditor();
+  const { t } = useTranslation();
   const state = useEditorState(
     () => toolbarCommandState(editor.value, slotId),
     (a, b) =>
@@ -42,7 +49,8 @@ export function useEditorValueCommand<K extends keyof ToolbarValueMap>(
       () => (slotId === 'image.wrap' ? IMAGE_WRAP_TARGETS : []) as readonly ToolbarValueMap[K][]
     ),
     isEnabled: computed(() => state.value.enabled),
-    disabledReason: computed(() => state.value.disabledReason),
+    // Translated, as `useEditorCommand` gives it.
+    disabledReason: computed(() => localizeDisabledReason(state.value.disabledReason, t)),
   };
 }
 /** @public */

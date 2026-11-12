@@ -14,7 +14,7 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { ContextMenu } from '../src/editor/contextmenu/index.ts';
-import { usePaneRequest } from '../src/editor/charts/SidePanel.tsx';
+import { usePaneRequest } from '../src/editor/panes/SidePanel.tsx';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';

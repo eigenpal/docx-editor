@@ -24,7 +24,7 @@ import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import type { TableFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
 import { initialCellCursors, type NestedTableCursor } from './table-cell-cursor.ts';
-import { closingCellSpacingPt } from './table-cell-spacing.ts';
+import { fragmentClosingGapPt } from './table-cell-spacing.ts';
 
 /**
  * A nested table inside a cell. Ordinary rows continue at row boundaries, and a row that does
@@ -239,8 +239,8 @@ export function emitNestedTable(
   layRows(keepsWhole);
   if (keepsWhole && bounded && freshBand && y > maxBottom + 0.001) layRows(false);
   if (rawRows.length === 0 || y > maxBottom + 0.001) return { fragment: null, bottom: top };
-  if (nextRowIndex >= structure.rows.length)
-    y = Math.min(y + closingCellSpacingPt(structure), Math.max(y, maxBottom));
+  // At the table's end and at a break alike, as the page holds it.
+  y += fragmentClosingGapPt(structure.cellSpacingPt, sourceRows.at(-1), maxBottom - y);
   const rows = finalizeTableRows(
     rawRows,
     structure,
