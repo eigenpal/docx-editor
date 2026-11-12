@@ -4692,7 +4692,6 @@ export interface SelectedImageState {
     readonly position: DrawingPositionInput | null;
     // (undocumented)
     readonly resourceStatus: ImageResourceState['kind'];
-    // (undocumented)
     readonly rotationDegrees: number;
     readonly shapeFormat: ShapeFormatState | null;
     // (undocumented)

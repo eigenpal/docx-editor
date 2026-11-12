@@ -38,6 +38,7 @@ import {
   createImageOverlayScrollPort,
   cssPixelsToLayoutPoints,
   finalizeImageOverlayInteraction,
+  overlayFrameCssBox,
   overlayFrameToSheetCssPixels,
   overlayHostOrigin,
   resizePreservesAspect,
@@ -585,6 +586,8 @@ export function ImageSelectionOverlay({
       width: sheetRect.width,
       height: sheetRect.height,
     };
+    // A turned shape's frame rings its unturned extent, turned; a drag preview keeps the turn.
+    const frame = overlayFrameCssBox(rect, target?.turn, coordinates.paintScale);
     const showHandles = active.canResize;
     const showMove = active.kind === 'anchored' && active.canMove;
     const showInlineMove = active.kind === 'inline' && canMoveInlineImage(editor, active.id);
@@ -604,16 +607,18 @@ export function ImageSelectionOverlay({
             showMove || showInlineMove ? ' docx-editor-one-surface__overlay-control' : ''
           }`}
           data-textbox={active.textbox ? 'true' : undefined}
+          data-turned={frame.transform ? 'true' : undefined}
           // To pointer and screen reader users alike.
           title={frameLabel}
           aria-description={frameLabel}
           role="group"
           aria-label={t(active.shape ? 'imageOverlay.selectionShape' : 'imageOverlay.selection')}
           style={{
-            left: `${rect.left}px`,
-            top: `${rect.top}px`,
-            width: `${rect.width}px`,
-            height: `${rect.height}px`,
+            left: `${frame.left}px`,
+            top: `${frame.top}px`,
+            width: `${frame.width}px`,
+            height: `${frame.height}px`,
+            transform: frame.transform,
             cursor: showMove || showInlineMove ? 'move' : 'default',
           }}
           // A double press on a chart opens the Chart pane, as Edit chart does.
@@ -682,7 +687,7 @@ export function ImageSelectionOverlay({
           : null}
       </div>
     );
-  }, [active, beginSession, editor, onOverlayKeyDown, origin.left, origin.top, t]);
+  }, [active, beginSession, editor, onOverlayKeyDown, origin.left, origin.top, t, target]);
 
   if (!rendered || !portalRef.current) return null;
   return createPortal(rendered, portalRef.current);

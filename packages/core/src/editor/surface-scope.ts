@@ -34,6 +34,7 @@ import {
   hitAnchoredDrawingAtPoint,
   hitTestFragments,
   hitTestPage,
+  hitTestTurnedInlineDrawing,
   pageAtY,
   pointInTextLine,
   type SemanticHit,
@@ -301,9 +302,9 @@ export function hitTestStoryAtLocalPoint(
 }
 
 /**
- * The open header or footer's drawing at a sheet point, past the story band too: a watermark
- * or a logo that reaches into the body is still the open story's. Any page that shows the
- * open story answers, as its band does; the hit names that page.
+ * The open header or footer's drawing at a sheet point, past the story band too: a watermark,
+ * a logo, or a turned inline shape that reaches into the body is still the open story's. Any
+ * page that shows the open story answers, as its band does; the hit names that page.
  */
 export function activeStoryDrawingAtSheetPoint(
   layout: SemanticLayout,
@@ -313,15 +314,12 @@ export function activeStoryDrawingAtSheetPoint(
 ): SemanticHit | null {
   const page = layout.pages[pageAtY(layout, sheet.y)];
   const story = page ? storyOnPage(page, active) : undefined;
-  if (!page || !story?.anchoredDrawings?.length) return null;
+  if (!page || !story) return null;
   const point = { x: sheet.x - pageOffsetX(page.index), y: sheet.y };
-  return hitStoryDrawingAtPoint(
-    story.anchoredDrawings,
-    story.box,
-    page.box,
-    point,
-    page.index,
-    'any'
+  const local = { x: point.x - story.box.x, y: point.y - story.box.y };
+  return (
+    hitStoryDrawingAtPoint(story.anchoredDrawings, story.box, page.box, point, page.index, 'any') ??
+    hitTestTurnedInlineDrawing(layout, page.index, story.fragments, local)
   );
 }
 

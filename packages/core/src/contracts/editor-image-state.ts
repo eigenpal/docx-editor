@@ -29,6 +29,7 @@ export interface SelectedImageState {
   readonly heightEmu: number;
   /** Crop inset per edge in UI percent (0–100); OOXML stores permille (×1000). */
   readonly crop: ImageCropPercent;
+  /** Clockwise turn in degrees: a picture's, or a shape's or line's own; 0 when upright. */
   readonly rotationDegrees: number;
   readonly wrap: ImageWrapTarget;
   readonly position: DrawingPositionInput | null;

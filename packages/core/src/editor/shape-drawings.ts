@@ -59,3 +59,28 @@ export function selectedShapeFormat(
   const theme = createPackageShapeThemeResolvers(surface.session.currentPackage());
   return Object.freeze(readShapeFormat(targets, theme));
 }
+
+/**
+ * The frame of a turned shape or line: its unturned extent, in points, and its clockwise turn
+ * in degrees. A selection overlay rings it turned about the centre of the box it covers.
+ *
+ * @public
+ */
+export interface OverlayFrameTurn {
+  /** Clockwise turn in degrees, never 0. */
+  readonly rotationDegrees: number;
+  /** Unturned extent width, in points. */
+  readonly width: number;
+  /** Unturned extent height, in points. */
+  readonly height: number;
+}
+
+/** The overlay turn fields of a laid-out drawing: `turn` for a turned shape, else nothing. */
+export function overlayFrameTurnOf(record: InlineDrawingRecord | AnchoredDrawingRecord): {
+  readonly turn?: OverlayFrameTurn;
+} {
+  const rotationDegrees = record.vectorShape?.rotationDegrees;
+  if (!rotationDegrees) return {};
+  const { width, height } = record.geometry.contentBounds;
+  return { turn: Object.freeze({ rotationDegrees, width, height }) };
+}

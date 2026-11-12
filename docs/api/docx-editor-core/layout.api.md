@@ -5155,6 +5155,7 @@ export interface VectorShapeProjection {
     readonly fillAlpha?: number;
     readonly fillHex: string | null;
     readonly overflowVisible?: true;
+    readonly rotationDegrees?: number;
     // (undocumented)
     readonly strokeAlpha?: number;
     readonly strokeHex: string | null;

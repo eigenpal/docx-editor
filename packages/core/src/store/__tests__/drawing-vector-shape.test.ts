@@ -559,8 +559,9 @@ describe('wps vector shape projection', () => {
   // `rot` is `ST_Angle`, which derives from `xsd:int` — so it carries the same fixed
   // `whiteSpace="collapse"` facet as the flip flags, plus a sign and leading zeros. Every
   // spelling of zero below is a shape Word paints upright; comparing the raw string to `'0'`
-  // refused all but the bare one. Both `a:xfrm` sites read `rot`, so both are driven.
-  test('every legal spelling of a zero rotation paints, and any real angle refuses', () => {
+  // refused all but the bare one. Both `a:xfrm` sites read `rot`, so both are driven. A shape
+  // turns by any legal angle; a group still refuses a real one.
+  test('every legal spelling of a zero rotation paints, and a group refuses a real angle', () => {
     const spellings = [
       [undefined, true],
       ['0', true],
@@ -570,7 +571,7 @@ describe('wps vector shape projection', () => {
       ['+0', true],
       ['-0', true],
       ['000000', true],
-      // A real angle: the engine cannot paint a rotated vector shape.
+      // A real angle: a shape turns, a group refuses.
       ['60000', false],
       ['-60000', false],
       ['1', false],
@@ -599,7 +600,10 @@ describe('wps vector shape projection', () => {
           }).values(),
         ][0]?.vectorShape;
         const label = `${site.name}=${JSON.stringify(value)}`;
-        expect(`${label}: ${shape !== null && shape !== undefined}`).toBe(`${label}: ${paints}`);
+        const turnedShape = site.name === 'shape rot' && /^[+-]?\d+$/.test(value ?? '');
+        expect(`${label}: ${shape !== null && shape !== undefined}`).toBe(
+          `${label}: ${paints || turnedShape}`
+        );
       }
     }
   });

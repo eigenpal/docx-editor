@@ -405,6 +405,7 @@ export {
   createImageOverlayScrollPort,
   cssPixelsToLayoutPoints,
   layoutPointsToCssPixels,
+  overlayFrameCssBox,
   overlayFrameToSheetCssPixels,
   overlayHostOrigin,
   resizePreservesAspect,
@@ -416,6 +417,7 @@ export {
   type OverlayFrameRect,
   type SurfaceOverlayCoordinates,
 } from './surface-overlay-coordinates.ts';
+export type { OverlayFrameTurn } from './shape-drawings.ts';
 export {
   IMAGE_WRAP_TARGETS,
   type ImageWrapTarget,

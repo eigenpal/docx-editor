@@ -3,7 +3,7 @@ import { identityGroupThemeEffect } from './drawing-group-theme-effects.ts';
 // stories. Split from drawing-projection.ts, which owns the drawing walk, MC selection, and
 // the assembled DrawingProjection; this module is pure direct-child reads with no walk state.
 
-import { parseEmu, findDirectChild, readSize } from './drawing-shape-readers.ts';
+import { parseEmu, findDirectChild } from './drawing-shape-readers.ts';
 export { MAX_EMU, parseEmu, findDirectChild } from './drawing-shape-readers.ts';
 import { isElement } from './drawing-projection-walk.ts';
 import {
@@ -13,7 +13,6 @@ import {
   readDrawingGroupFrame,
   supportedGroupVisuals,
   schemaFlagIsSet,
-  schemaFlagIsUnset,
 } from './drawing-group-frame.ts';
 import { schemaAttributeValue, WPS_NAMESPACE_URI } from './ooxml-drawing-rules.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
@@ -59,6 +58,14 @@ import {
   type ShapeSchemeColorResolver,
 } from './drawing-shape-color.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
+import {
+  childTransform,
+  shapeFlagsValid,
+  shapeProperties,
+  shapeTransformElement,
+  zeroExtentShapeProjection,
+} from './drawing-shape-transform.ts';
+export { childTransform } from './drawing-shape-transform.ts';
 import type {
   TextboxOutlineProjection,
   TextboxTextAreaRule,
@@ -79,8 +86,9 @@ export type ShapeStyleMatrixResolver = (
  * group of them: closed polygon subpaths (`a:custGeom` with move/line/close/cubicBezTo
  * verbs, or a supported `a:prstGeom`) with a solid fill and/or stroke. The colour may come
  * from `a:srgbClr` or from the theme, through `a:schemeClr` or a `wps:style` matrix
- * reference. Anything richer (gradient and picture fills, text bodies, rotation, a nested
- * group) projects as `null` and paints the labelled placeholder instead.
+ * reference. Anything richer (picture fills, a turned group, a nested group) projects as
+ * `null` and paints the labelled placeholder instead. A top-level text box paints through its
+ * story, not through this projection.
  *
  * @public
  */
@@ -112,6 +120,16 @@ export interface VectorShapeProjection {
    * its frame: a member placed past an edge shows whole.
    */
   readonly overflowVisible?: true;
+  /**
+   * A shape turned by its `a:xfrm/@rot`, in clockwise degrees in (0, 360). It turns about the
+   * centre of its unturned extent, so its geometry paints outside the extent (`overflowVisible`)
+   * while layout keeps the extent and `wp:effectExtent` it reserves. Absent when not turned. A
+   * shape with no extent carries its turn but paints nothing, so it sets no `overflowVisible`.
+   *
+   * Informational only: the turn and the flips are already applied to every component's
+   * points, so a painter must not apply it again.
+   */
+  readonly rotationDegrees?: number;
 }
 
 /** One painted layer of a vector shape. @public */
@@ -371,11 +389,6 @@ function shapePaint(
   return { fill, fillGradient, pattern, ln, stroke, styleStroke };
 }
 
-/** The shape's `spPr`, in its own namespace: `wps:spPr`, or `dsp:spPr` in a diagram drawing. */
-function shapeProperties(wsp: OoxmlElement): OoxmlElement | null {
-  return findDirectChild(wsp.children, { namespaceUri: wsp.namespaceUri, localName: 'spPr' });
-}
-
 function hasTextbox(wsp: OoxmlElement): boolean {
   return !!findDirectChild(wsp.children, { namespaceUri: WPS_NAMESPACE_URI, localName: 'txbx' });
 }
@@ -453,8 +466,8 @@ export function isUnpaintedGroupTextbox(
  * draw faces with their own fill mode, and some paths only stroke or only fill.
  *
  * `groupMember` lets a text box member paint its shape; its story lays out separately. A
- * top-level text box paints through its story instead. Only a group member may turn: a turned
- * top-level shape would paint past the extent that layout reserves for it.
+ * top-level text box paints through its story instead. A shape turns about the centre of its
+ * extent, after its flips, so a turned shape may paint outside the extent.
  *
  * An empty list means the shape paints nothing (no fill and no outline); null means its
  * geometry, transform or paint is outside the supported subset.
@@ -471,18 +484,9 @@ export function projectShapeComponents(
   if (!groupMember && hasTextbox(wsp)) return null;
   const spPr = shapeProperties(wsp);
   if (!spPr || groupFillSpansMembers(spPr, groupFill)) return null;
-  const xfrm = findDirectChild(spPr.children, {
-    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-    localName: 'xfrm',
-  });
+  const xfrm = shapeTransformElement(wsp);
   const rotation = shapeRotationDegrees(xfrm);
-  if (rotation === null || (rotation !== 0 && !groupMember)) return null;
-  if (xfrm) {
-    for (const name of ['flipH', 'flipV']) {
-      const value = schemaAttributeValue(xfrm.attributes, name);
-      if (!schemaFlagIsUnset(value) && !schemaFlagIsSet(value)) return null;
-    }
-  }
+  if (rotation === null || !shapeFlagsValid(xfrm)) return null;
   const { fill, fillGradient, pattern, ln, stroke, styleStroke } = shapePaint(
     wsp,
     spPr,
@@ -687,46 +691,6 @@ function enclosesArea(points: readonly Readonly<{ x: number; y: number }>[]): bo
 }
 
 /**
- * A group child's offset and extent. A straight vertical or horizontal line has zero width or
- * height, so a zero axis is valid. The child's own geometry checks still decide whether it
- * paints. A negative extent is invalid and refuses.
- */
-export function childTransform(wsp: OoxmlElement): {
-  readonly offset: Readonly<{ x: number; y: number }>;
-  readonly extent: Readonly<{ cx: number; cy: number }>;
-} | null {
-  const spPr = shapeProperties(wsp);
-  const xfrm = spPr
-    ? findDirectChild(spPr.children, {
-        namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-        localName: 'xfrm',
-      })
-    : null;
-  const off = xfrm
-    ? findDirectChild(xfrm.children, {
-        namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-        localName: 'off',
-      })
-    : null;
-  const ext = xfrm
-    ? findDirectChild(xfrm.children, {
-        namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-        localName: 'ext',
-      })
-    : null;
-  const cx = ext ? readSize(schemaAttributeValue(ext.attributes, 'cx'), null) : null;
-  const cy = ext ? readSize(schemaAttributeValue(ext.attributes, 'cy'), null) : null;
-  if (cx === null || cy === null) return null;
-  return {
-    offset: {
-      x: off ? (parseEmu(schemaAttributeValue(off.attributes, 'x'), false) ?? 0) : 0,
-      y: off ? (parseEmu(schemaAttributeValue(off.attributes, 'y'), false) ?? 0) : 0,
-    },
-    extent: { cx, cy },
-  };
-}
-
-/**
  * Renderable-subset projection of direct `wps:wsp` and one bounded `wpg:wgp` group.
  *
  * `groupPictureNodeIds` names the group members the group picture projection paints; they
@@ -741,11 +705,16 @@ export function projectVectorShape(
   groupPictureNodeIds?: ReadonlySet<string>
 ): VectorShapeProjection | null {
   void compatibilityMode;
-  // A straight vertical or horizontal line has a zero width or height; both zero is empty.
-  if (extent.cx < 0 || extent.cy < 0 || (extent.cx === 0 && extent.cy === 0)) return null;
+  // A straight vertical or horizontal line has a zero width or height.
+  if (extent.cx < 0 || extent.cy < 0) return null;
   const pointBudget = { remaining: MAX_VECTOR_SHAPE_POINTS };
   const wsp = findWspInAnchor(anchor);
+  if (extent.cx === 0 && extent.cy === 0) {
+    // A group with no extent stays refused: its members have no extent to scale into.
+    return wsp && !hasTextbox(wsp) ? zeroExtentShapeProjection(wsp) : null;
+  }
   let components: VectorShapeComponent[] = [];
+  let rotationDegrees = 0;
   if (wsp) {
     const shapeComponents = projectShapeComponents(
       wsp,
@@ -766,6 +735,7 @@ export function projectVectorShape(
       return null;
     }
     components = [...shapeComponents];
+    rotationDegrees = shapeRotationDegrees(shapeTransformElement(wsp)) ?? 0;
   } else {
     const frame = readDrawingGroupFrame(anchor);
     if (!frame) return null;
@@ -852,6 +822,7 @@ export function projectVectorShape(
     strokeAlpha: first?.strokeAlpha ?? 1,
     strokeWidthEmu: first?.strokeWidthEmu ?? 0,
     components,
+    ...(rotationDegrees !== 0 ? { overflowVisible: true as const, rotationDegrees } : {}),
   };
 }
 
