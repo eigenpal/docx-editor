@@ -7,10 +7,19 @@
 import type { ChromeSlotId } from './chrome-controls.ts';
 import type { EditorPaneId } from './pane-requests.ts';
 
+/** The section ids of each packaged pane. @public */
+export interface PaneSectionIds {
+  readonly shape: 'fill' | 'outline';
+  readonly chart: 'type' | 'elements' | 'colors' | 'data';
+}
+
+/** A section id of `pane`, such as `fill` for the shape pane. @public */
+export type PaneSectionId<P extends EditorPaneId = EditorPaneId> = PaneSectionIds[P];
+
 /** One section of a pane: a heading and the slots under it, in order. @public */
-export interface PaneSection {
+export interface PaneSection<P extends EditorPaneId = EditorPaneId> {
   /** Stable section id, unique within its pane. */
-  readonly id: string;
+  readonly id: PaneSectionId<P>;
   /** The i18n key of the heading, or null for a section with no heading. */
   readonly labelKey: string | null;
   readonly slots: readonly ChromeSlotId[];
@@ -20,7 +29,7 @@ export interface PaneSection {
  * The sections of each packaged pane, in pane order. More panes can join in a minor release, so
  * read it with `paneSections(pane)`. @public
  */
-export const PANE_SECTIONS: Readonly<Record<EditorPaneId, readonly PaneSection[]>> = {
+export const PANE_SECTIONS: { readonly [P in EditorPaneId]: readonly PaneSection<P>[] } = {
   shape: [
     { id: 'fill', labelKey: 'shape.pane.fill', slots: ['shape.fill', 'shape.fillTransparency'] },
     {
@@ -50,8 +59,8 @@ export const PANE_SECTIONS: Readonly<Record<EditorPaneId, readonly PaneSection[]
 };
 
 /** The sections of `pane`, or none for a pane with no packaged sections. @public */
-export function paneSections(pane: EditorPaneId): readonly PaneSection[] {
-  return PANE_SECTIONS[pane] ?? [];
+export function paneSections<P extends EditorPaneId>(pane: P): readonly PaneSection<P>[] {
+  return (PANE_SECTIONS[pane] as readonly PaneSection<P>[] | undefined) ?? [];
 }
 
 /** Every slot `pane` shows, in pane order. @public */

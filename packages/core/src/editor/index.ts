@@ -161,6 +161,8 @@ export {
   toolbarPopupLeft,
   TOOLBAR_COLLAPSE_ORDER,
   TOOLBAR_OVERFLOW_HYSTERESIS,
+  TOOLBAR_OVERFLOW_LEADING_GROUPS,
+  orderToolbarOverflowSections,
   TOOLBAR_PANEL_EDGE_MARGIN,
   TOOLBAR_PINNED_GROUPS,
   type ToolbarHostGroupPlacement,
@@ -875,11 +877,21 @@ export {
   isChartChromeSlot,
   isObjectChromeSlot,
   isShapeChromeSlot,
+  objectSlotOptions,
+  objectSlotValue,
   type ChartChromeSlotId,
   type ObjectSlotValueMap,
+  type ObjectToggleSlotId,
   type ShapeChromeSlotId,
 } from './object-chrome-slots.ts';
-export { PANE_SECTIONS, paneSections, paneSlots, type PaneSection } from './pane-sections.ts';
+export {
+  PANE_SECTIONS,
+  paneSections,
+  paneSlots,
+  type PaneSection,
+  type PaneSectionId,
+  type PaneSectionIds,
+} from './pane-sections.ts';
 export type { SurfaceChartOps } from './surface-chart-ops.ts';
 export type {
   ChartCopySource,

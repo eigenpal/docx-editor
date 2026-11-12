@@ -179,9 +179,10 @@ export interface ShapeOutlineState {
   readonly widthPt: number | null;
   /**
    * The preset dash the outline shows (`solid` for a plain line), `custom` for a dash list no
-   * preset names, or null when the shapes of a group disagree.
+   * preset names, or null when the shapes of a group disagree. The engine always sets it; it is
+   * optional so a state built by hand (a test double) without it stays valid.
    */
-  readonly dash: ShapeOutlineDash | 'custom' | null;
+  readonly dash?: ShapeOutlineDash | 'custom' | null;
 }
 
 /** The fill and outline of the shapes one drawing holds. @public */

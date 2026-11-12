@@ -21,6 +21,7 @@ import { shapeColorHex } from '../store/package/shape-format.ts';
 import { colorPickTheme, documentThemeHexes, type ColorPick } from './color-picker.ts';
 import {
   CHART_LEGEND_CHOICES,
+  CHART_TYPE_CHOICES,
   chartColorOfPick,
   chartColorPick,
   chartPaneCommand,
@@ -30,6 +31,8 @@ import {
 import { readSelectedChart } from './selected-chart.ts';
 import { readSelectedShape, SHAPE_NONE_REASON, type SelectedShapeView } from './selected-shape.ts';
 import {
+  SHAPE_OUTLINE_DASHES,
+  SHAPE_OUTLINE_WIDTHS,
   shapeFillPick,
   shapeOutlinePick,
   shapePaneCommand,
@@ -119,6 +122,76 @@ export const isObjectChromeSlot = (id: string): id is ShapeChromeSlotId | ChartC
 
 /** Whether a chart slot toggles an element, so its control carries `aria-pressed`. @public */
 export const chartSlotIsToggle = (id: string): boolean => id in CHART_TOGGLES;
+
+/** The object slots that toggle: a run with no value turns the element on or off. @public */
+export type ObjectToggleSlotId = keyof typeof CHART_TOGGLES;
+
+/** Text of a state value, or null for no value. */
+const textOf = (text: string | undefined): string | null =>
+  text === undefined || text === '' ? null : text;
+
+/**
+ * The typed value of an object slot, from the text its toolbar state carries
+ * (`ToolbarCommandState.value`). Null when nothing is selected, when the object shows several
+ * values or a value the slot cannot name (a custom dash), or for a slot with no single value
+ * (`chart.seriesColor`, `chart.data`). A title that is off is null. @public
+ */
+export function objectSlotValue<K extends keyof ObjectSlotValueMap>(
+  id: K,
+  text: string | undefined
+): ObjectSlotValueMap[K] | null {
+  const value = textOf(text);
+  if (value === null) return null;
+  let typed: unknown = null;
+  switch (id) {
+    case 'shape.fill':
+    case 'shape.outlineColor':
+    case 'chart.title':
+    case 'chart.categoryAxisTitle':
+    case 'chart.valueAxisTitle':
+      typed = value;
+      break;
+    case 'shape.fillTransparency':
+    case 'shape.outlineWidth': {
+      const number = Number(value);
+      typed = Number.isFinite(number) ? number : null;
+      break;
+    }
+    case 'shape.outlineDash':
+      typed = isShapeOutlineDash(value) ? value : null;
+      break;
+    case 'chart.type':
+      typed = isChartType(value) ? value : null;
+      break;
+    case 'chart.legend':
+      typed = CHART_LEGEND_CHOICES.includes(value as ChartLegendPosition) ? value : null;
+      break;
+    case 'chart.dataLabels':
+    case 'chart.axes':
+    case 'chart.gridlines':
+      typed = value === 'true' ? true : value === 'false' ? false : null;
+      break;
+    default:
+      typed = null;
+  }
+  return typed as ObjectSlotValueMap[K] | null;
+}
+
+/**
+ * The values a list slot offers, in list order: chart types, legend positions, outline dashes,
+ * and outline widths. Empty for every other slot. @public
+ */
+export function objectSlotOptions<K extends keyof ObjectSlotValueMap>(
+  id: K
+): readonly ObjectSlotValueMap[K][] {
+  const options: Partial<Record<keyof ObjectSlotValueMap, readonly unknown[]>> = {
+    'chart.type': CHART_TYPE_CHOICES,
+    'chart.legend': CHART_LEGEND_CHOICES,
+    'shape.outlineDash': SHAPE_OUTLINE_DASHES,
+    'shape.outlineWidth': SHAPE_OUTLINE_WIDTHS,
+  };
+  return (options[id] ?? []) as readonly ObjectSlotValueMap[K][];
+}
 
 const isFullData = (value: unknown): value is Omit<ChartData, 'workbook'> =>
   !!value && typeof value === 'object' && 'categories' in value && 'series' in value;
