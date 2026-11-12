@@ -7,14 +7,26 @@ export type {
   ShapeFillState,
   ShapeFormatState,
   ShapeOutlineState,
+  ShapeThemeColor,
 } from '../store/package/shape-format.ts';
+import type { ShapeThemeColorName } from '../store/store/tree-op-types.ts';
+
+/**
+ * A colour for a shape command: `RRGGBB`, `#RRGGBB`, or a theme colour such as
+ * `{ theme: 'accent1', shift: 40 }` (Lighter 40%). A theme colour writes a theme reference, so
+ * it follows a later theme change; `shift` runs from -100 (darker) to 100 (lighter).
+ *
+ * @public
+ */
+export type ShapeColorValue =
+  string | { readonly theme: ShapeThemeColorName; readonly shift?: number };
 
 /**
  * Set the fill of the selected shape, text box, line or group: `exec({ type: 'setShapeFill',
  * color: '4472C4' })`. A group fills every shape it holds. One undo step.
  *
  * `visible: false` removes the fill and keeps it, so a later `visible: true` brings it back.
- * `color` is `RRGGBB` or `#RRGGBB`. `transparency` runs from 0 (opaque) to 1 (clear); a new
+ * `color` is `RRGGBB`, `#RRGGBB`, or a theme colour (`ShapeColorValue`). `transparency` runs from 0 (opaque) to 1 (clear); a new
  * colour without one keeps the shape's transparency. Pictures, charts and diagrams refuse.
  *
  * @public
@@ -23,7 +35,7 @@ export interface SetShapeFillCommand {
   /** Expected drawing node id, from `snapshot().image.id`; a different selection refuses. */
   drawingNodeId?: string;
   visible?: boolean;
-  color?: string;
+  color?: ShapeColorValue;
   transparency?: number;
 }
 
@@ -40,6 +52,6 @@ export interface SetShapeOutlineCommand {
   /** Expected drawing node id, from `snapshot().image.id`; a different selection refuses. */
   drawingNodeId?: string;
   visible?: boolean;
-  color?: string;
+  color?: ShapeColorValue;
   widthPt?: number;
 }

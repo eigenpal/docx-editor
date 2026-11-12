@@ -28,6 +28,8 @@ export const ShapeColorField = defineComponent({
     noneLabel: { type: String, required: true },
     summary: { type: String, required: true },
     color: { type: String as PropType<string | null>, default: null },
+    /** The grid pick the shape shows now, from `shapeFillPick` or `shapeOutlinePick`. */
+    current: { type: String as PropType<ChartColorPick | null>, default: null },
     none: { type: Boolean, required: true },
     themeHexes: { type: Array as PropType<readonly string[]>, required: true },
     disabled: { type: Boolean, required: true },
@@ -81,7 +83,7 @@ export const ShapeColorField = defineComponent({
           class="docx-chart-pane__swatch"
           aria-label={chartColorLabel(s.pick, t)}
           title={chartColorLabel(s.pick, t)}
-          aria-pressed={!props.none && shapeSwatchCurrent(s.hex, props.color)}
+          aria-pressed={!props.none && shapeSwatchCurrent(s.pick, props.current)}
           style={{ background: s.hex }}
           onClick={() => pick(s.pick)}
         />

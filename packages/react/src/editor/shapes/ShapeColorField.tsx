@@ -30,6 +30,8 @@ export function ShapeColorField(props: {
   summary: string;
   /** `RRGGBB` of the current color, or null. */
   color: string | null;
+  /** The grid pick the shape shows now, from `shapeFillPick` or `shapeOutlinePick`. */
+  current: ChartColorPick | null;
   /** Whether the shape has no fill (or no line) now. */
   none: boolean;
   themeHexes: readonly string[];
@@ -71,7 +73,7 @@ export function ShapeColorField(props: {
       className="docx-chart-pane__swatch"
       aria-label={chartColorLabel(s.pick, t)}
       title={chartColorLabel(s.pick, t)}
-      aria-pressed={!props.none && shapeSwatchCurrent(s.hex, props.color)}
+      aria-pressed={!props.none && shapeSwatchCurrent(s.pick, props.current)}
       style={{ background: s.hex }}
       onClick={() => pick(s.pick)}
     />

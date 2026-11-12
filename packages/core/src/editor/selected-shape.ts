@@ -158,5 +158,7 @@ export function editSelectedShape(
   const hexes = themeHexes ?? chartThemeHexes(editor.getDocumentThemeColors());
   const planned = shapePaneCommand(format, change, hexes);
   if (!planned.ok) return { ok: false, code: 'invalidArgs', reason: planned.error };
+  // A change to what the shape already shows sends nothing and adds no undo step.
+  if (!planned.command) return { ok: true, changed: false };
   return execSelectedShape(editor, image, planned.command);
 }

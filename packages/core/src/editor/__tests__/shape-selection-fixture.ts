@@ -124,7 +124,25 @@ const storyPart = (root: 'hdr' | 'ftr', content: string) =>
       `</w:${root}>`
   );
 
-export function documentBytes(body: string, header?: string, footer?: string): Uint8Array {
+/** A theme part whose colour scheme has accent1 `4472C4`, for theme colour tests. */
+export const THEME_XML =
+  `<a:theme xmlns:a="${A}" name="Test"><a:themeElements><a:clrScheme name="Test">` +
+  '<a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>' +
+  '<a:dk2><a:srgbClr val="44546A"/></a:dk2><a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>' +
+  '<a:accent1><a:srgbClr val="4472C4"/></a:accent1><a:accent2><a:srgbClr val="ED7D31"/></a:accent2>' +
+  '<a:accent3><a:srgbClr val="A5A5A5"/></a:accent3><a:accent4><a:srgbClr val="FFC000"/></a:accent4>' +
+  '<a:accent5><a:srgbClr val="5B9BD5"/></a:accent5><a:accent6><a:srgbClr val="70AD47"/></a:accent6>' +
+  '<a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink>' +
+  '</a:clrScheme></a:themeElements></a:theme>';
+
+export function documentBytes(
+  body: string,
+  header?: string,
+  footer?: string,
+  theme?: string
+): Uint8Array {
+  const THEME_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme';
+  const themeType = 'application/vnd.openxmlformats-officedocument.theme+xml';
   const headerType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml';
   const footerType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml';
   const FTR = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
@@ -135,6 +153,7 @@ export function documentBytes(body: string, header?: string, footer?: string): U
         `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
         (header ? `<Override PartName="/word/header1.xml" ContentType="${headerType}"/>` : '') +
         (footer ? `<Override PartName="/word/footer1.xml" ContentType="${footerType}"/>` : '') +
+        (theme ? `<Override PartName="/word/theme/theme1.xml" ContentType="${themeType}"/>` : '') +
         '</Types>'
     ),
     '_rels/.rels': strToU8(
@@ -149,10 +168,12 @@ export function documentBytes(body: string, header?: string, footer?: string): U
       `<Relationships xmlns="${REL}">` +
         (header ? `<Relationship Id="rIdH" Type="${HDR}" Target="header1.xml"/>` : '') +
         (footer ? `<Relationship Id="rIdF" Type="${FTR}" Target="footer1.xml"/>` : '') +
+        (theme ? `<Relationship Id="rIdT" Type="${THEME_REL}" Target="theme/theme1.xml"/>` : '') +
         '</Relationships>'
     ),
     ...(header ? { 'word/header1.xml': storyPart('hdr', header) } : {}),
     ...(footer ? { 'word/footer1.xml': storyPart('ftr', footer) } : {}),
+    ...(theme ? { 'word/theme/theme1.xml': strToU8(theme) } : {}),
   });
 }
 
@@ -169,11 +190,15 @@ export const BODY =
 export async function mount(
   body = BODY,
   header?: string,
-  footer?: string
+  footer?: string,
+  theme?: string
 ): Promise<{ editor: DocxEditorInstance; container: HTMLElement }> {
   const container = document.createElement('div');
   document.body.append(container);
-  const editor = createDocxEditor({ container, document: documentBytes(body, header, footer) });
+  const editor = createDocxEditor({
+    container,
+    document: documentBytes(body, header, footer, theme),
+  });
   for (let attempt = 0; attempt < 20; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 0));
     editor.surface?.layout();

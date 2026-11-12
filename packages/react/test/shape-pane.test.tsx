@@ -69,7 +69,10 @@ test('the Format shape pane renders the shared markup for each fill and for no s
   const markup: Record<string, string> = { none: await paneMarkup(null) };
   for (const [name, fill] of Object.entries(SHAPE_PANE_CASES))
     markup[name] = await paneMarkup(fill);
-  expect(markup.solid).toContain('Accent 1');
+  expect(markup.theme).toContain('Accent 1');
+  // An RGB fill that paints Accent 1 is not named as a theme colour.
+  expect(markup.solid).not.toContain('Accent 1');
+  expect(markup.solid).toContain('#4472C4');
   expect(markup.gradient).toContain('Fill type: Gradient.');
   expect(markup.gradient).toContain('disabled');
   if (process.env.UPDATE_SHAPE_PANE_MARKUP === '1')
@@ -88,7 +91,7 @@ const input = (root: HTMLElement, label: string): HTMLInputElement =>
   root.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
 
 test('the side panel swaps to the pane; keyboard picks, typed fields, undo, and a delete', async () => {
-  const { view, editor } = mount(SHAPE_PANE_CASES.solid, 'side');
+  const { view, editor } = mount(SHAPE_PANE_CASES.theme, 'side');
   await flush();
   const panel = view.container.querySelector<HTMLElement>('.docx-side-panel')!;
   expect(panel.getAttribute('data-pane')).toBe('chart');
@@ -124,6 +127,7 @@ test('the side panel swaps to the pane; keyboard picks, typed fields, undo, and 
     type: 'solid',
     color: 'ED7D31',
     transparency: 0.25,
+    theme: { name: 'accent2', shift: 0 },
   });
 
   // Outline: 3pt blue from the hex field and the width field, each one undo step.

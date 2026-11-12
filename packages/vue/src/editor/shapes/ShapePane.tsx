@@ -12,8 +12,10 @@ import {
   listenPaneRequests,
   shapeFillEditable,
   shapeFillLabelKey,
+  shapeFillPick,
   shapeFillSummary,
   shapeHexText,
+  shapeOutlinePick,
   shapeOutlineSummary,
   shapeTransparencyText,
   shapeWidthText,
@@ -139,6 +141,7 @@ export const DocxEditorShapePane = defineComponent({
               noneLabel={t('shape.pane.noFill')}
               summary={shapeFillSummary(fill, themeHexes, translate)}
               color={fill.type === 'solid' ? fill.color : null}
+              current={shapeFillPick(fill, themeHexes)}
               none={fill.type === 'none'}
               themeHexes={themeHexes}
               disabled={fillDisabled}
@@ -185,6 +188,7 @@ export const DocxEditorShapePane = defineComponent({
               noneLabel={t('shape.pane.noOutline')}
               summary={shapeOutlineSummary(outline, themeHexes, translate)}
               color={outline.visible ? outline.color : null}
+              current={shapeOutlinePick(outline, themeHexes)}
               none={outline.visible === false}
               themeHexes={themeHexes}
               disabled={outlineDisabled}

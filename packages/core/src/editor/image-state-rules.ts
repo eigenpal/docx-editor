@@ -172,6 +172,14 @@ function shapeFormatEqual(
     a.fill.transparency === b.fill.transparency &&
     a.outline.visible === b.outline.visible &&
     a.outline.color === b.outline.color &&
-    a.outline.widthPt === b.outline.widthPt
+    a.outline.widthPt === b.outline.widthPt &&
+    themeEqual(a.fill.theme, b.fill.theme) &&
+    themeEqual(a.outline.theme, b.outline.theme)
   );
 }
+
+type ThemeColor = NonNullable<SelectedImageState['shapeFormat']>['fill']['theme'];
+
+/** Whether two theme colours agree; a theme reference and an RGB of the same colour differ. */
+const themeEqual = (a: ThemeColor, b: ThemeColor): boolean =>
+  a === b || (!!a && !!b && a.name === b.name && a.shift === b.shift);

@@ -29,7 +29,26 @@ const shape = (fill: string) =>
   '<a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></wps:spPr>' +
   '<wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing>';
 
-/** A one-shape document; `fill` is the shape's DrawingML fill. */
+const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const slot = (name: string, hex: string) => `<a:${name}><a:srgbClr val="${hex}"/></a:${name}>`;
+/** The default theme colours, so a theme reference resolves as it does in a real document. */
+const THEME =
+  `<a:theme xmlns:a="${A}" name="Office Theme"><a:themeElements><a:clrScheme name="Office">` +
+  slot('dk1', '000000') +
+  slot('lt1', 'FFFFFF') +
+  slot('dk2', '44546A') +
+  slot('lt2', 'E7E6E6') +
+  slot('accent1', '4472C4') +
+  slot('accent2', 'ED7D31') +
+  slot('accent3', 'A5A5A5') +
+  slot('accent4', 'FFC000') +
+  slot('accent5', '5B9BD5') +
+  slot('accent6', '70AD47') +
+  slot('hlink', '0563C1') +
+  slot('folHlink', '954F72') +
+  '</a:clrScheme></a:themeElements></a:theme>';
+
+/** A one-shape document with the default theme; `fill` is the shape's DrawingML fill. */
 export function shapePaneDocx(fill: string): Uint8Array {
   const document =
     `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
@@ -43,17 +62,27 @@ export function shapePaneDocx(fill: string): Uint8Array {
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Default Extension="xml" ContentType="application/xml"/>' +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>' +
         '</Types>'
     ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(document),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdT" Type="${R}/theme" Target="theme/theme1.xml"/></Relationships>`
+    ),
+    'word/theme/theme1.xml': strToU8(THEME),
   });
 }
 
-/** The pane cases: a solid fill, and a gradient that the pane shows by name. */
+/**
+ * The pane cases: a theme fill, which the pane names; an RGB fill of the same colour, which it
+ * does not; and a gradient that the pane shows by name.
+ */
 export const SHAPE_PANE_CASES = {
+  theme:
+    '<a:solidFill><a:schemeClr val="accent1"><a:alpha val="75000"/></a:schemeClr></a:solidFill>',
   solid: '<a:solidFill><a:srgbClr val="4472C4"><a:alpha val="75000"/></a:srgbClr></a:solidFill>',
   gradient:
     '<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FFFFFF"/></a:gs>' +

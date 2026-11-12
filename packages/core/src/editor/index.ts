@@ -812,6 +812,8 @@ export {
 export {
   SHAPE_OUTLINE_WIDTHS,
   shapeColorPick,
+  shapeFillPick,
+  shapeOutlinePick,
   shapeFillEditable,
   shapeFillLabelKey,
   shapeFillSummary,

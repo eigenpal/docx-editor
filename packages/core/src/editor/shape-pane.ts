@@ -1,13 +1,16 @@
 // The Format shape pane, headless: the text of each field, the check of what the user types, and
 // the one command that each committed field or picked color sends (`setShapeFill` or
 // `setShapeOutline`). The React and Vue panes render from these, so both check the same input
-// with the same keys. The color grid is the Chart pane's (`chartColorGrid`); a theme color
-// resolves to its `RRGGBB` here, because the shape commands write `RRGGBB` only. DOM-free.
+// with the same keys. The color grid is the Chart pane's (`chartColorGrid`). A theme pick sends
+// a theme colour, which writes a theme reference; a standard colour or typed text sends
+// `RRGGBB`. A colour is named as a theme colour only when its markup is a theme reference.
+// DOM-free.
 
 import type {
   ShapeFillState,
   ShapeFormatState,
   ShapeOutlineState,
+  ShapeThemeColor,
 } from '../store/package/shape-format.ts';
 import { shapeColorHex } from '../store/package/shape-format.ts';
 import {
@@ -46,9 +49,12 @@ export type ShapePaneError =
   | 'shape.pane.errors.width'
   | 'shape.pane.errors.noSolidFill';
 
-/** The command of a change, or the i18n key of why the typed text is refused. @public */
+/**
+ * The command of a change, or the i18n key of why the typed text is refused. `command` is null
+ * when the change asks for what the shape already shows, so nothing is sent. @public
+ */
 export type ShapePaneResult =
-  | { readonly ok: true; readonly command: SelectedShapeCommand }
+  | { readonly ok: true; readonly command: SelectedShapeCommand | null }
   | { readonly ok: false; readonly error: ShapePaneError };
 
 const fail = (error: ShapePaneError): ShapePaneResult => ({ ok: false, error });
@@ -72,9 +78,32 @@ export function shapePaneColorHex(color: string, themeHexes: readonly string[]):
   return shapeColorHex(text);
 }
 
+/** The theme colour of a grid pick (`accent1`, `accent1:40`), or null for any other text. */
+function pickTheme(color: string): ShapeThemeColor | null {
+  const text = color.trim();
+  const match = /^([a-z0-9]+)(?::(-?\d+))?$/.exec(text);
+  const name = match?.[1] as (typeof CHART_THEME_SLOTS)[number] | undefined;
+  if (!match || !name || !CHART_THEME_SLOTS.includes(name)) return null;
+  const shift = match[2] === undefined ? 0 : Number(match[2]);
+  return { name, shift };
+}
+
+const sameTheme = (a: ShapeThemeColor | undefined, b: ShapeThemeColor | null): boolean =>
+  (a ?? null) === b || (!!a && !!b && a.name === b.name && a.shift === b.shift);
+
+/** Whether a picked colour is what the shape shows: the same theme colour, or the same `RRGGBB`. */
+function sameColor(
+  current: { readonly color: string | null; readonly theme?: ShapeThemeColor },
+  color: string,
+  theme: ShapeThemeColor | null
+): boolean {
+  if (theme || current.theme) return sameTheme(current.theme, theme);
+  return current.color !== null && current.color.toUpperCase() === color.toUpperCase();
+}
+
 /**
  * The command of one pane change for a shape whose fill and outline are `format`, or why the
- * typed text is refused. @public
+ * typed text is refused. A change to what the shape already shows gives a null command. @public
  */
 export function shapePaneCommand(
   format: ShapeFormatState,
@@ -84,33 +113,62 @@ export function shapePaneCommand(
   switch (change.type) {
     case 'fillColor':
     case 'outlineColor': {
-      const color = shapePaneColorHex(change.color, themeHexes);
-      if (!color) return fail('shape.pane.errors.color');
+      const hex = shapePaneColorHex(change.color, themeHexes);
+      if (!hex) return fail('shape.pane.errors.color');
+      const theme = pickTheme(change.color);
+      const color = theme ? { theme: theme.name, shift: theme.shift } : hex;
+      if (change.type === 'fillColor')
+        return {
+          ok: true,
+          command:
+            format.fill.type === 'solid' && sameColor(format.fill, hex, theme)
+              ? null
+              : { type: 'setShapeFill', color },
+        };
       return {
         ok: true,
         command:
-          change.type === 'fillColor'
-            ? { type: 'setShapeFill', color }
+          format.outline.visible === true && sameColor(format.outline, hex, theme)
+            ? null
             : { type: 'setShapeOutline', visible: true, color },
       };
     }
     case 'noFill':
-      return { ok: true, command: { type: 'setShapeFill', visible: false } };
+      return {
+        ok: true,
+        command: format.fill.type === 'none' ? null : { type: 'setShapeFill', visible: false },
+      };
     case 'noOutline':
-      return { ok: true, command: { type: 'setShapeOutline', visible: false } };
+      return {
+        ok: true,
+        command:
+          format.outline.visible === false ? null : { type: 'setShapeOutline', visible: false },
+      };
     case 'fillTransparency': {
       if (format.fill.type !== 'solid') return fail('shape.pane.errors.noSolidFill');
       const percent = parseNumber(change.text, /%$/);
       if (percent === null || percent < 0 || percent > 100)
         return fail('shape.pane.errors.transparency');
-      return { ok: true, command: { type: 'setShapeFill', transparency: percent / 100 } };
+      return {
+        ok: true,
+        command:
+          Math.round(format.fill.transparency * 100) === percent
+            ? null
+            : { type: 'setShapeFill', transparency: percent / 100 },
+      };
     }
     case 'outlineWidth': {
       const widthPt = parseNumber(change.text, /pt$/i);
       if (widthPt === null || widthPt < 0.25 || widthPt > MAX_OUTLINE_PT)
         return fail('shape.pane.errors.width');
       // A width shows the outline, as picking a weight for a shape with no line does.
-      return { ok: true, command: { type: 'setShapeOutline', visible: true, widthPt } };
+      return {
+        ok: true,
+        command:
+          format.outline.visible === true && format.outline.widthPt === widthPt
+            ? null
+            : { type: 'setShapeOutline', visible: true, widthPt },
+      };
     }
   }
 }
@@ -139,27 +197,46 @@ export const shapeWidthText = (widthPt: number | null): string =>
   widthPt === null ? '' : String(Math.round(widthPt * 100) / 100);
 
 /**
- * Whether a swatch of `swatchHex` (`#RRGGBB`) shows the shape's color `color` (`RRGGBB`):
- * the grid marks it as the current color. @public
+ * Whether the grid swatch `swatchPick` is the shape's current pick `current` (from
+ * `shapeFillPick` or `shapeOutlinePick`): the grid marks it as the current color. @public
  */
-export const shapeSwatchCurrent = (swatchHex: string, color: string | null): boolean =>
-  color !== null && swatchHex.replace(/^#/, '').toUpperCase() === color.toUpperCase();
+export const shapeSwatchCurrent = (
+  swatchPick: ChartColorPick,
+  current: ChartColorPick | null
+): boolean => current !== null && swatchPick.toUpperCase() === current.toUpperCase();
 
 /**
- * The grid pick that shows `color` (`RRGGBB`): the first theme color, tint, shade, or standard
- * color that paints it, else `#RRGGBB`. Null for no color. @public
+ * The grid pick of a color: its theme pick (`accent1`, `accent1:40`) when `theme` says the
+ * markup is a theme reference, else the standard color that paints `color` (`RRGGBB`), else
+ * `#RRGGBB`. An `RRGGBB` that matches a theme color is not named as one. Null for no color.
+ * @public
  */
 export function shapeColorPick(
   color: string | null,
-  themeHexes: readonly string[]
+  themeHexes: readonly string[],
+  theme?: ShapeThemeColor
 ): ChartColorPick | null {
+  if (theme) return theme.shift ? `${theme.name}:${theme.shift}` : theme.name;
   if (!color || !/^[0-9A-Fa-f]{6}$/.test(color)) return null;
-  const grid = chartColorGrid(themeHexes);
-  const found = [...grid.theme.flat(), ...grid.standard].find((swatch) =>
-    shapeSwatchCurrent(swatch.hex, color)
+  const found = chartColorGrid(themeHexes).standard.find(
+    (swatch) => swatch.hex.replace(/^#/, '').toUpperCase() === color.toUpperCase()
   );
   return found?.pick ?? `#${color.toUpperCase()}`;
 }
+
+/** The current grid pick of a fill, or null when it is not solid. @public */
+export const shapeFillPick = (
+  fill: ShapeFillState,
+  themeHexes: readonly string[]
+): ChartColorPick | null =>
+  fill.type === 'solid' ? shapeColorPick(fill.color, themeHexes, fill.theme) : null;
+
+/** The current grid pick of an outline, or null when it is hidden or mixed. @public */
+export const shapeOutlinePick = (
+  outline: ShapeOutlineState,
+  themeHexes: readonly string[]
+): ChartColorPick | null =>
+  outline.visible ? shapeColorPick(outline.color, themeHexes, outline.theme) : null;
 
 /** What the fill's color button says: a color name, No fill, Gradient, and so on. @public */
 export function shapeFillSummary(
@@ -167,7 +244,7 @@ export function shapeFillSummary(
   themeHexes: readonly string[],
   t: ChartTranslate
 ): string {
-  const pick = fill.type === 'solid' ? shapeColorPick(fill.color, themeHexes) : null;
+  const pick = shapeFillPick(fill, themeHexes);
   return pick ? chartColorLabel(pick, t) : t(shapeFillLabelKey(fill));
 }
 
@@ -178,6 +255,6 @@ export function shapeOutlineSummary(
   t: ChartTranslate
 ): string {
   if (outline.visible === false) return t('shape.pane.noOutline');
-  const pick = outline.visible ? shapeColorPick(outline.color, themeHexes) : null;
+  const pick = shapeOutlinePick(outline, themeHexes);
   return pick ? chartColorLabel(pick, t) : t('shape.pane.fillTypes.mixed');
 }

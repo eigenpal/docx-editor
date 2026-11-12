@@ -148,13 +148,7 @@ import type { SupportedImageMime } from '../store/package/image-resources.ts';
 import type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 import type { ImageContext, SelectedImageState } from './editor-image-state.ts';
 import type { SetShapeFillCommand, SetShapeOutlineCommand } from './editor-shape-format.ts';
-export type {
-  SetShapeFillCommand,
-  SetShapeOutlineCommand,
-  ShapeFillState,
-  ShapeFormatState,
-  ShapeOutlineState,
-} from './editor-shape-format.ts';
+export type * from './editor-shape-format.ts';
 import type {
   EditorChartCommands,
   EditorChartQueries,

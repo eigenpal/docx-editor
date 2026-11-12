@@ -67,7 +67,7 @@ function type(field: HTMLInputElement, value: string): void {
 test('the side panel swaps to the pane; keyboard picks, typed fields, undo, and a delete', async () => {
   mounted = mountEditorTree(
     () => h(DocxEditorSidePanel, { onClose: () => {} }),
-    shapePaneDocx(SHAPE_PANE_CASES.solid)
+    shapePaneDocx(SHAPE_PANE_CASES.theme)
   );
   await flush();
   const editor = mounted.editor();
@@ -95,6 +95,7 @@ test('the side panel swaps to the pane; keyboard picks, typed fields, undo, and 
   expect(panel.querySelector('.docx-chart-pane__grid')).toBeNull();
   expect(document.activeElement).toBe(fillButton);
   expect(editor.snapshot().image?.shapeFormat?.fill.color).toBe('ED7D31');
+  expect(editor.snapshot().image?.shapeFormat?.fill.theme).toEqual({ name: 'accent2', shift: 0 });
 
   type(input(panel, 'Outline hex color'), '#0070C0');
   await flush();
