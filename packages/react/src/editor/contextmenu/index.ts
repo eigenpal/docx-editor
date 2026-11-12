@@ -35,6 +35,7 @@ export {
 } from './parts';
 export {
   useContextMenuAnchor,
+  useContextMenuHighlights,
   useContextMenuTarget,
   type ContextMenuAnchor,
   type ContextMenuContextValue,

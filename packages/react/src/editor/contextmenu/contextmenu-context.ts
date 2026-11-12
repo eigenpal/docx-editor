@@ -10,7 +10,11 @@
 // whole adapter between the two compounds, and it is why this context carries only what
 // the menu context has no field for.
 
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import type { HighlightHit, HighlightRange } from '@docx-editor.dev/core/contracts/editor';
+import { editorHostWindow } from '@docx-editor.dev/core/editor';
+import { useDocxEditor } from '../context';
+import { readContextMenuHighlights } from './menu-highlights';
 
 /**
  * Where the panel opened, in client coordinates, and how it was opened.
@@ -106,4 +110,65 @@ export function useContextMenuTarget(): HTMLElement | null {
  */
 export function useContextMenuAnchor(): ContextMenuAnchor | null {
   return useContext(ContextMenuContext).anchor;
+}
+
+/**
+ * The text highlights the open context menu is about, topmost first. Pass a set name to read
+ * one set. `R` is your range type, so fields you added to your ranges come back typed on
+ * `range`.
+ *
+ * For a right-click (`trigger: 'pointer'`), these are the marks under the pointer. For a
+ * keyboard open (`trigger: 'keyboard'`, Shift+F10 or the Menu key), these are the marks whose
+ * current range holds the caret: same paragraph, and the caret offset from `start` to
+ * `start + length`, both ends included. For a range selection, the caret is its `head`. A
+ * keyboard hit's `rect` is the mark's rectangle on the caret's line.
+ *
+ * A document change while the menu is open, such as a collaborator's edit, reads the marks
+ * again, so `start` and `length` never describe text that moved. Text that moved away from
+ * the pointer or the caret is no longer reported. Empty while the menu is closed, and when
+ * the caret is on a page that is not painted.
+ *
+ * @example
+ * ```tsx
+ * function SpellingRows() {
+ *   const [hit] = useContextMenuHighlights<MisspellingRange>('spelling');
+ *   if (!hit) return null;
+ *   return hit.range.suggestions.map((word) => (
+ *     <ContextMenu.Item key={word} label={word} onSelect={() => replaceHit(hit, word)} />
+ *   ));
+ * }
+ * ```
+ * @public
+ */
+export function useContextMenuHighlights<R extends HighlightRange = HighlightRange>(
+  name?: string
+): readonly HighlightHit<R>[] {
+  const editor = useDocxEditor();
+  const anchor = useContextMenuAnchor();
+  // Bumped after each document change while open: at once, for a change painted before it
+  // reports, and again a frame later, for a paint the surface deferred under input pressure.
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    if (!editor || !anchor) return undefined;
+    const view = editorHostWindow(editor);
+    let frame = 0;
+    const bump = () => setRevision((value) => value + 1);
+    const off = editor.on('change', () => {
+      bump();
+      if (frame === 0) {
+        frame = view.requestAnimationFrame(() => {
+          frame = 0;
+          bump();
+        });
+      }
+    });
+    return () => {
+      off();
+      if (frame !== 0) view.cancelAnimationFrame(frame);
+    };
+  }, [editor, anchor]);
+  return useMemo(() => {
+    void revision;
+    return readContextMenuHighlights<R>(editor, anchor, name);
+  }, [editor, anchor, name, revision]);
 }

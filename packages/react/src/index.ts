@@ -304,6 +304,7 @@ export {
   ContextMenuRefreshTocPageNumbers,
   ContextMenuRemoveToc,
   useContextMenuAnchor,
+  useContextMenuHighlights,
   useContextMenuTarget,
   type ContextMenuAnchor,
   type ContextMenuCommandProps,
@@ -402,7 +403,12 @@ export {
   useEditorHostDocument,
   type UseEditorHostDocumentReturn,
 } from './editor/useEditorHostDocument';
-export { HIGHLIGHT_REFRESH_MS, useHighlights, type HighlightSource } from './editor/useHighlights';
+export {
+  HIGHLIGHT_REFRESH_MS,
+  useHighlights,
+  type HighlightSource,
+  type UseHighlightsReturn,
+} from './editor/useHighlights';
 export { useHighlightAt } from './editor/useHighlightAt';
 export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';
 export {

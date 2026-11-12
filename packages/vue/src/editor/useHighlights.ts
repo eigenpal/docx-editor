@@ -22,19 +22,37 @@ const HIGHLIGHT_REFRESH_MAX_WAIT_MS = 1000;
 const EMPTY_RESULT: HighlightResult = Object.freeze({ applied: 0, unavailable: 0 });
 
 /**
+ * The value of the ref that {@link useHighlights} returns: the counts of the last
+ * application, and `refresh` to run the source again. @public
+ */
+export interface UseHighlightsReturn extends HighlightResult {
+  /**
+   * Run the source again, for changes Vue and the editor cannot see: a word added to a plain
+   * dictionary object, the caret leaving the word being typed, or an asynchronous result
+   * arriving in a cache that is not reactive. An array source applies again.
+   *
+   * The set updates in Vue's next flush, before the next paint, and a run that was waiting
+   * for typing to pause is replaced by this one. It keeps the same identity across updates,
+   * and does nothing after the calling scope is disposed.
+   */
+  readonly refresh: () => void;
+}
+
+/**
  * Mark text ranges as the named set while the calling scope is active.
  *
  * A function source runs inside reactive tracking, so a getter that reads refs reapplies
- * when they change. Use a unique `name` per call: two calls with the same name replace each
- * other's ranges.
+ * when they change. For state that is not reactive, call `refresh()` on the returned value.
+ * Use a unique `name` per call: two calls with the same name replace each other's ranges.
  *
  * @example
  * ```ts
- * useHighlights(
+ * const glossary = useHighlights(
  *   'glossary',
  *   (editor) => editor.findMatches(terms.value, { wholeWord: true }).flat(),
  *   { className: 'glossary-term' }
  * );
+ * // glossary.value.applied; glossary.value.refresh() runs the source again.
  * ```
  *
  * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/highlight-ranges | Highlight ranges}
@@ -44,15 +62,17 @@ export function useHighlights(
   name: MaybeRefOrGetter<string>,
   source: MaybeRefOrGetter<HighlightSource>,
   options?: MaybeRefOrGetter<HighlightOptions>
-): ComputedRef<HighlightResult> {
+): ComputedRef<UseHighlightsReturn> {
   const editorRef = useDocxEditor();
   const contentElement = useEditorContentElement();
   const result = shallowRef(EMPTY_RESULT);
   // Bumped after document changes, so a function source runs again.
   const documentTick = shallowRef(0);
-  // Bumped after a refresh or recovery, so any source applies again.
+  // Bumped after a refresh or recovery, and by `refresh()`, so any source applies again.
   const refreshTick = shallowRef(0);
   let owned: { readonly editor: Editor; readonly name: string } | null = null;
+  // Drops a run that waits for typing to pause; `refresh()` replaces it.
+  let cancelPending = () => {};
   scopeDispose(() => owned?.editor.clearHighlights(owned.name));
 
   // A FUNCTION source runs again after document changes; a fixed array does not. A getter
@@ -123,6 +143,12 @@ export function useHighlights(
         timer = undefined;
       };
       let firstAt = 0;
+      // A refresh ends the burst too, so the next edit waits the full delay again.
+      const drop = () => {
+        cancel();
+        firstAt = 0;
+      };
+      cancelPending = drop;
       const bump = () => {
         timer = undefined;
         firstAt = 0;
@@ -158,10 +184,18 @@ export function useHighlights(
       onCleanup(() => {
         off();
         cancel();
+        if (cancelPending === drop) cancelPending = () => {};
       });
     },
     { immediate: true }
   );
 
-  return computed(() => result.value);
+  // A tick the watch reads for any source, so the set applies again; a no-op once the
+  // scope is disposed, because its watchers are stopped. A run that waits for typing to
+  // pause is dropped, so an edit and a refresh run the source once.
+  const refresh = () => {
+    cancelPending();
+    refreshTick.value += 1;
+  };
+  return computed(() => ({ ...result.value, refresh }));
 }
