@@ -219,6 +219,7 @@ export declare namespace DocxEditor {
     getComments(): CommentCollection;
     insertParagraph(paragraphText: string, insertLocation: 'Start' | 'End'): Paragraph;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range;
+    insertFileFromBase64(base64File: string, insertLocation: 'Replace' | 'Start' | 'End'): Range;
     search(searchText: string, searchOptions?: SearchOptions): RangeCollection;
   }
 

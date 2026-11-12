@@ -353,6 +353,63 @@ export class Body extends ModelObject {
   }
 
   /**
+   * Replace the whole document with the DOCX file in `base64File`. Answers the new body's range.
+   *
+   * Only `Replace` on the main body is supported: the file's body, headers, footers, styles,
+   * comments, and tracked changes replace this document's as one undoable edit, and a
+   * collaboration session shares it as an ordinary edit. `Start` and `End` refuse with
+   * `NotSupported`, and so does a header, footer, or note body. Must be the only write in its
+   * sync. Refused while `changeTrackingMode` tracks changes, because the replacement records
+   * no revisions. Refused with `NotImplemented` when the document holds a locked or data-bound
+   * content control, as every other write that would overwrite one is.
+   *
+   * Invalid base64 or a file that is not a DOCX package refuses with `InvalidArgument`. Every
+   * refusal leaves the document and its undo history unchanged.
+   *
+   * You can load the returned range in the same sync. Objects read before the replacement can
+   * refuse with `InvalidObjectPath` afterward when their content is gone: read them again.
+   *
+   * @example
+   * ```ts
+   * const range = context.document.body.insertFileFromBase64(docxBase64, 'Replace');
+   * range.load('text');
+   * await context.sync();
+   * ```
+   */
+  insertFileFromBase64(
+    base64File: string,
+    insertLocation:
+      | InsertLocation.replace
+      | InsertLocation.start
+      | InsertLocation.end
+      | 'Replace'
+      | 'Start'
+      | 'End'
+  ): Range {
+    const target = `${this.path.label}.insertFileFromBase64`;
+    this.requireUsablePath();
+    const created = Range.promised(this.context, target, false);
+    this.commandCreating(
+      created,
+      target,
+      () => {
+        if (typeof base64File !== 'string' || base64File.length === 0)
+          fail({ code: 'InvalidArgument', target });
+        if (bodyTextLocation(insertLocation, target) !== 'Replace')
+          fail({ code: 'NotSupported', target });
+        // The main body only: a header, footer, or note body is not the whole document.
+        if (this.path.handle().ref !== this.internals.roots().body.ref)
+          fail({ code: 'NotSupported', target });
+        return { op: 'replaceDocumentFromBase64', base64: base64File };
+      },
+      (value) => {
+        created.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) });
+      }
+    );
+    return created;
+  }
+
+  /**
    * Add a paragraph at the start or the end of the story. Answers the new paragraph.
    * You can load the returned paragraph in the same sync. Editing it needs a sync first.
    */

@@ -4,7 +4,7 @@ description: 'Display updated DOCX files, preserve scroll, and present recent ch
 category: 'Guides'
 ---
 
-Use `createDocumentRefresh(editor)` to display complete DOCX files that your server returns. The controller keeps the editor instance, subscriptions, and scroll position. Your application receives each result; the editor does not watch files or URLs.
+Use `createDocumentRefresh(editor)` to display complete DOCX files that your server returns. The controller keeps the editor instance, subscriptions, and scroll position. It can reload the document, or apply the result as one undoable edit. Your application receives each result; the editor does not watch files or URLs.
 
 The controller is a host integration API, separate from the Office.js-shaped automation model. If your agent can issue document edits, use [Revisions](/docs/2.x/editor-api/revisions) instead.
 
@@ -15,7 +15,7 @@ Call `createDocumentRefresh(editor)` after the editor mounts. Repeated calls for
 | Method | Purpose |
 | --- | --- |
 | `capture()` | Capture the current bytes and revision. Returns a submission. |
-| `applyUpdate(update)` | Accept a complete DOCX for that submission and sequence. Returns a success or refusal result. |
+| `applyUpdate(update)` | Accept a complete DOCX for that submission and sequence. Set `mode: 'edit'` to apply it as one undoable edit. Returns a success or refusal result. |
 | `finish(submission)` | Close the submission when the job ends. Accepted content and change navigation stay. |
 | `cancel()` | Invalidate pending results. It does not cancel your network request. |
 | `highlightChanges(options?)` | Highlight available changes. Returns the selected available change count, including offscreen locations, or `0` during replacement. |
@@ -67,6 +67,69 @@ Get `editor` from `useDocxEditor()` inside the editor root. React returns an ins
 - Any edit after capture makes `applyUpdate()` return `local-edits`, even after undo. Capture again; do not replay the old result.
 - `applyUpdate()` resolves after the replacement lays out its opening pages and accepts clicks.
 
+## Apply an update as one undoable edit
+
+<a id="undoable-update" />
+
+By default, `applyUpdate()` reloads the document, which resets selection and undo history. To keep both, pass `mode: 'edit'`. The editor applies the difference between the open document and the returned file as one edit, through the [`replaceDocument` command](/docs/2.x/guides/loading-and-saving#replace-the-document-as-one-undoable-edit):
+
+```ts
+const submission = await refresh.capture();
+const bytes = await processDocument(submission.bytes);
+
+let result = await refresh.applyUpdate({ submission, sequence: 1, bytes, mode: 'edit' });
+if (!result.ok && result.code === 'edit-unsupported') {
+  // The document and its undo history are unchanged. Outside a
+  // collaboration session, reload instead.
+  result = await refresh.applyUpdate({ submission, sequence: 1, bytes });
+}
+```
+
+An update with `mode: 'edit'` behaves as follows:
+
+- One undo returns the document to the captured submission, and one redo applies the result again. Undo steps from before the update stay available.
+- The content matches what a reload of the returned file shows. Pending tracked changes keep their authors and dates, and comments keep their IDs and threads. The update creates no revisions of its own, even in suggesting mode.
+- The caret and selection stay in their paragraphs when those paragraphs survive. If the update removes a paragraph, its caret moves to the end of the nearest earlier paragraph. The scroll position stays where it is.
+- Each accepted cumulative result adds one undo step, so undo after the second result returns to the first.
+- The `change` event has `source: 'refresh'`, so it does not start another processing job. Undo and redo are user edits and omit `source`.
+- A result identical to the open document succeeds without an undo step.
+
+If the difference cannot apply as an edit, for example because the returned file names a different main document part, the update refuses with `edit-unsupported`. Nothing changes, and you can retry the same sequence with a reload. In a collaboration session, a reload refuses with `collaboration`, so report the failure instead.
+
+An editor in viewing mode refuses the update with `edit-not-permitted`. So does a document whose enforced protection permits only comments, form fields, tracked changes, or no edits, because the update is an untracked edit. Protection refuses the whole update, even when the document has editable ranges. Outside a collaboration session, a reload of a protected document still works.
+
+### Refusal causes
+
+A refused update has a stable `code` and an English `message` for logs. With `mode: 'edit'`, it can also carry `reason`, a `RefreshRefusalReason` that names the specific cause. Each `reason` belongs to one `code`, so checking `reason` also narrows `code` in TypeScript:
+
+| `reason` | `code` | Situation |
+| --- | --- | --- |
+| `viewing` | `edit-not-permitted` | The editor is in viewing mode. |
+| `protected` | `edit-not-permitted` | Enforced document protection does not permit an untracked edit. |
+| `collaboration-unavailable` | `unavailable` | The collaboration session cannot accept edits now. |
+| `different-main-part` | `edit-unsupported` | The returned file names a different main document part. |
+| `unsupported-difference` | `edit-unsupported` | The difference cannot be expressed as an edit of the open document. |
+| `collaboration-refused` | `edit-unsupported` | The collaboration room refused the edit, for example because a value exceeds its size limits. |
+
+```ts
+if (!result.ok && result.reason === 'collaboration-refused') {
+  // Reprocessing returns the same file, so report it instead of retrying.
+  // reportProcessorFailure is your own error reporting.
+  reportProcessorFailure(result.message);
+}
+```
+
+### Collaboration sessions
+
+An update with `mode: 'edit'` works while a collaboration session is attached. Other participants receive the update as an ordinary edit, and it converges with their concurrent edits:
+
+- Undo on the participant who applied the update takes back that update only. Edits that other participants made meanwhile stay.
+- An edit by any participant after `capture()` refuses the update with `local-edits`. Capture again and process the newer document.
+- An update made while offline reaches other participants when the connection returns, if your session enables offline editing.
+- If the session cannot accept edits now, the update refuses with `unavailable`. If the room refuses the update, for example because a value exceeds its size limits, the update refuses with `edit-unsupported`. The document keeps the room's content, and `change` listeners still see the edit and its reversal.
+
+A reload still refuses collaboration sessions with `collaboration`, because it would replace the shared document for every participant.
+
 ## Receive cumulative results
 
 The processor assigns each result a nonnegative integer `sequence`. Each file holds the complete cumulative output for the submission:
@@ -101,10 +164,11 @@ try {
 | `submission` | The object that `capture()` returned. |
 | `sequence` | Processor order, never network arrival order. Duplicate or older sequences return `out-of-order`. Replacements run one at a time, and only a successful load advances the accepted sequence and revision baseline. |
 | `bytes` | The complete DOCX, as `ArrayBuffer` or `Uint8Array`. |
+| `mode` | `'reload'` (default) or `'edit'`. See [Apply an update as one undoable edit](#undoable-update). |
 | `changes` | Optional change metadata. See [Provide change locations](#provide-reliable-change-locations). |
 | `failures` | Optional failed processor operation IDs. The controller reports them and never retries them. |
 
-Do not start processing from every `change` event. Replacement events have `source: 'refresh'` or `source: 'recovery'`, loads have `source: 'load'`, and user edits omit `source`:
+Do not start processing from every `change` event. Replacements and undoable updates have `source: 'refresh'` or `source: 'recovery'`, loads have `source: 'load'`, and user edits omit `source`:
 
 ```ts
 editor.on('change', (change) => {
@@ -219,18 +283,20 @@ Navigation returns `false` for an unavailable location or during replacement. It
 
 ## Handle refusals and recovery
 
-`applyUpdate()` returns `{ ok: false, code }` with a `RefreshFailureCode`. `capture()` rejects with `DocumentRefreshError`, whose `code` is a `RefreshFailureCode`. Handle codes, not messages:
+`applyUpdate()` returns `{ ok: false, code, message }` with a `RefreshFailureCode`. `message` is an English explanation for logs; do not parse it. Edit refusals also carry a `reason`; see [Refusal causes](#refusal-causes). `capture()` rejects with `DocumentRefreshError`, whose `code` is a `RefreshFailureCode`. Handle codes, not messages:
 
 | Code | Situation | Action |
 | --- | --- | --- |
-| `local-edits` | The user edited after capture, even with undo. | Capture again and start a new job. |
+| `local-edits` | The document changed after capture, even through undo. With `mode: 'edit'`, this includes another participant's edit. | Capture again and start a new job. |
 | `out-of-order` | A duplicate or older sequence arrived. | Discard the result. |
 | `superseded` | The result belongs to an inactive submission, or arrived after cancellation. | Discard it. |
 | `document-changed` | The document changed during replacement. | Discard it. |
 | `cancelled` | Cancellation interrupted a replacement. | Stop the transport. |
-| `collaboration` | A collaboration session is attached, even if disconnected. | Use document edits through collaboration instead. |
-| `unavailable` | No mounted document, or the document is still opening. | Retry after the editor mounts. |
-| `busy` | A replacement is running. | Wait for it to finish. |
+| `collaboration` | A reload while a collaboration session is attached, even if disconnected. | Use `mode: 'edit'`. |
+| `unavailable` | No mounted document, the document is still opening, or the collaboration session cannot accept edits now. | Retry later. |
+| `edit-not-permitted` | An update with `mode: 'edit'` in viewing mode or on a protected document. A retry does not help. | Change the editing mode, or reload outside a collaboration session. |
+| `busy` | A replacement is running, or a preview blocks edits. | Wait for it to finish. |
+| `edit-unsupported` | The result cannot apply as an undoable edit. The document and its history are unchanged. | Outside a collaboration session, retry the same sequence without `mode: 'edit'`. |
 | `invalid-result` | The update object is malformed, such as a change with wrong field types. | Fix the update. |
 | `invalid-document` | The bytes are not a valid DOCX. The visible document stays. | Report the processor failure. |
 | `input-failed` | Pending input or serialization failed. | Report the failure. |
@@ -257,8 +323,9 @@ Recovery bytes are not an undo archive for accepted files.
 
 ## Limits
 
-- Each accepted file replaces the whole document and resets selection, undo history, and some review state.
-- Refresh refuses collaborative sessions, including disconnected ones.
+- A reload replaces the whole document and resets selection, undo history, and some review state. An update with `mode: 'edit'` keeps them.
+- A reload refuses collaborative sessions, including disconnected ones.
+- An update with `mode: 'edit'` maps the caret only within its own paragraph. A caret inside rewritten text moves to the end of that text.
 - Scroll uses pixel offsets. A shorter file clamps the offset; neither case keeps the same subject in view.
 - The controller does not compare document meaning or reject unrelated content. Check document and job identity in your application before `applyUpdate()`.
 - An ordinary `editor.load()` invalidates pending submissions and recovery.

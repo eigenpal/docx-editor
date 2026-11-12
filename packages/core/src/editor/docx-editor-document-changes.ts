@@ -2,6 +2,7 @@
 
 import type { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
 import type { PaginatedSurface } from './paginated-surface.ts';
+import { refreshEditActive } from './refresh-edit-source.ts';
 
 export interface DocumentChangeHooks {
   /** A commit can move a page-fit zoom's numerator. */
@@ -25,6 +26,8 @@ export function subscribeDocumentChanges(
       created: change.created,
       deleted: change.deleted,
       dirty: change.dirty,
+      // An undoable document update is the processor's result, not a user edit.
+      ...(refreshEditActive(surface.session) ? { source: 'refresh' as const } : {}),
     };
     // A commit can move a fit's numerator: `setPageSetup` directly, and undo by both of its
     // routes (the keymap's `surface.undo()` and `exec`), neither of which passes a command

@@ -570,4 +570,13 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
   replacePackage(
     pkg: OoxmlPackage
   ): import('../store/store/tree-package-replace.ts').PackageReplacementResult;
+
+  /**
+   * Apply a complete updated package, opened as a load would open it, as ONE undoable edit
+   * that replicates: unchanged nodes keep their ids, and a collaboration session receives the
+   * difference as an ordinary journal. Refuses with nothing changed when it cannot apply.
+   */
+  applyPackageUpdate(
+    pkg: OoxmlPackage
+  ): import('../store/store/tree-package-update.ts').PackageUpdateResult;
 }

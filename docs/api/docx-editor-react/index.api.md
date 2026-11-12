@@ -163,9 +163,18 @@ import { RefreshFailureCode } from '@docx-editor.dev/core/editor';
 import { RefreshHighlightAnimation } from '@docx-editor.dev/core/editor';
 import { RefreshHighlightOptions } from '@docx-editor.dev/core/editor';
 import { RefreshLocation } from '@docx-editor.dev/core/editor';
+import { RefreshRefusal } from '@docx-editor.dev/core/editor';
+import { RefreshRefusalFields } from '@docx-editor.dev/core/editor';
+import { RefreshRefusalReason } from '@docx-editor.dev/core/editor';
 import { RefreshResult } from '@docx-editor.dev/core/editor';
 import { RefreshSubmission } from '@docx-editor.dev/core/editor';
 import { RefreshUpdate } from '@docx-editor.dev/core/editor';
+import { RefreshUpdateMode } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentErrorCode } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentOutcome } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentRefusal } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentRefusalReason } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentRequest } from '@docx-editor.dev/core/editor';
 import { ResolvedChromePrintSettings } from '@docx-editor.dev/core/editor';
 import { ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
 import { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
@@ -3158,11 +3167,29 @@ export { RefreshHighlightOptions }
 
 export { RefreshLocation }
 
+export { RefreshRefusal }
+
+export { RefreshRefusalFields }
+
+export { RefreshRefusalReason }
+
 export { RefreshResult }
 
 export { RefreshSubmission }
 
 export { RefreshUpdate }
+
+export { RefreshUpdateMode }
+
+export { ReplaceDocumentErrorCode }
+
+export { ReplaceDocumentOutcome }
+
+export { ReplaceDocumentRefusal }
+
+export { ReplaceDocumentRefusalReason }
+
+export { ReplaceDocumentRequest }
 
 // @public
 export type ResolvedColorMode = 'light' | 'dark';

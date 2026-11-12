@@ -884,7 +884,13 @@ function readTableStructureUncached(
       // A hidden revision row can still account for part of the authored grid.
       hasOmittedRows,
       minimumsPt: cellMarginMinimumsPt(rows, columnCount),
-      spacing: spacingGapsBeforeColumns(contentRows, visualBorders, cellSpacingPt, columnCount),
+      spacing: spacingGapsBeforeColumns(
+        contentRows,
+        visualBorders,
+        cellSpacingPt,
+        columnCount,
+        bidiVisual
+      ),
     });
   let columnWidthsPt = resolveColumns(placement.tableWidth);
   // A mode-15 percentage table whose rules share its grid lines takes its share less the rule.
@@ -925,8 +931,7 @@ function readTableStructureUncached(
     contentOffset !== undefined && tableWidth.type === 'auto' && cellSpacingPt === 0
       ? withLegacyTableSideRules(sideRules.rows)
       : sideRules.rows;
-  const outerRuleOffsetPt =
-    contentOffset ?? sideRules.outerRuleOffsetPt ?? placement.bidiRuleShiftPt;
+  const outerRuleOffsetPt = contentOffset ?? sideRules.outerRuleOffsetPt ?? placement.ruleShiftPt;
   const autoOuterRulePt =
     contentOffset === undefined ? autoWidthOuterRulePt(contentRows, sideRuleShape) : 0;
   const shadedRows = withRowSpacingShading(

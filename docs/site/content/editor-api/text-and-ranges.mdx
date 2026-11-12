@@ -244,6 +244,42 @@ The runtime uses a bounded parser and never fetches or evaluates anything. Other
 | `NotImplemented` | `edit.tracked-foreign-revision-unsupported` | With `TrackMineOnly`, the point is in another author's structural change |
 | `ConflictingChanges` | None | Another edit in the sync changes the same paragraph |
 
+## Replace the whole document
+
+`Body.insertFileFromBase64(base64File, 'Replace')` replaces the whole document with a DOCX file and returns the range of the new body. The file's headers, footers, styles, numbering, theme, settings, comments, and tracked changes replace the current ones, so formatting follows the file.
+
+```ts
+await runtime.run(async (context) => {
+  const range = context.document.body.insertFileFromBase64(docxBase64, 'Replace');
+  range.load('text');
+  await context.sync();
+  return range.text;
+});
+```
+
+The replacement is one edit. In a browser editor, one undo step takes it back. In a collaboration session, from a browser or a server runtime, other participants receive it as an ordinary edit. A file that matches the document changes nothing.
+
+Make the replacement the only write in its sync. Loads on other objects in the same sync answer the document before the replacement. After the sync, an object you read earlier refuses with `InvalidObjectPath` when its content is gone, so read it again.
+
+Only `Replace` on `document.body` is supported. Other calls refuse, and nothing changes:
+
+| Error | `innerError.code` | Cause |
+| --- | --- | --- |
+| `NotSupported` | None | `Start` or `End`; a header, footer, or note body |
+| `NotSupported` | `edit.preview-unsupported` | A call inside a preview callback |
+| `NotSupported` | `edit.tracked-operation-unsupported` | `changeTrackingMode` is `TrackMineOnly`, or the browser editor is suggesting, because the replacement records no tracked changes |
+| `NotSupported` | `edit.unsupported-content` | The file names another main document part, or the difference cannot apply as one edit |
+| `NotSupported` | `edit.resource-limit` | The file is over 128 MiB |
+| `NotSupported` | `edit.operation-unsupported` | The run joins an editor history group |
+| `InvalidArgument` | None or `edit.invalid-argument` | Empty or invalid base64, an unknown location, or a file that is not a DOCX package |
+| `NotImplemented` | `edit.protected-content` | Enforced document protection permits only comments, form fields, tracked changes, or no edits; or the document holds a locked or data-bound content control |
+| `PreviewActive` | `edit.preview-active` | The browser editor shows a preview |
+| `GeneralException` | `edit.read-only` | The browser editor is open for viewing |
+| `GeneralException` | `edit.collaboration-not-ready` or `edit.refused` | The collaboration session cannot take edits now, or the room refused the edit |
+| `ConflictingChanges` | None | Another write shares the sync |
+
+The base64 must be canonical, with no line breaks or spaces. To replace the document from editor code instead of a script, see [Replace the document as one undoable edit](/docs/2.x/guides/loading-and-saving#replace-the-document-as-one-undoable-edit).
+
 ## Refresh ranges after edits
 
 A `Range` keeps the paragraph identities and UTF-16 offsets from when you found it:

@@ -117,7 +117,7 @@ editorRef.current?.focus();
 | --- | --- | --- |
 | `save()` | `Promise<ArrayBuffer \| null>` | Serializes the document to `.docx`. Returns `null` when no document is loaded. |
 | `load(document)` | `void` | Loads DOCX bytes, `'blank'`, or a `DocumentHandle`. |
-| `getDocumentHandle()` | `DocumentHandle \| null` | Returns the current document identity and revision. |
+| `getDocumentHandle()` | `DocumentHandle \| null` | Returns the current document's `revision` and its `loadId`, which changes on every load. |
 | `getEditor()` | `Editor \| null` | Returns the full editor facade. |
 | `exec(command, options?)` | `ExecResult` | Runs a typed command. Options name a scope and a `historyGroup`. |
 | `snapshot(options?)` | `EditorSnapshot` | Reads the current facade snapshot. |

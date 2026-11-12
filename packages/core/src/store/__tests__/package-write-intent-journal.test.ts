@@ -109,6 +109,29 @@ function listDoc(): Uint8Array {
   });
 }
 
+/** A header part that keeps its own `.rels` part (a hyperlink) or has none. */
+function headerDoc(withHeaderRels: boolean): Uint8Array {
+  const header = withHeaderRels
+    ? `<w:hdr xmlns:w="${W}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+      '<w:p><w:hyperlink r:id="rIdL"><w:r><w:t>Link</w:t></w:r></w:hyperlink></w:p></w:hdr>'
+    : `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>Link</w:t></w:r></w:p></w:hdr>`;
+  const extraXml: Record<string, string> = { 'word/header1.xml': header };
+  if (withHeaderRels)
+    extraXml['word/_rels/header1.xml.rels'] =
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      `<Relationship Id="rIdL" Type="${R}/hyperlink" Target="https://example.com" TargetMode="External"/>` +
+      '</Relationships>';
+  return zipDoc({
+    body:
+      '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
+      '<w:sectPr><w:headerReference w:type="default" r:id="rIdH"/></w:sectPr>',
+    rels: `<Relationship Id="rIdH" Type="${R}/header" Target="header1.xml"/>`,
+    overrides:
+      '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>',
+    extraXml,
+  });
+}
+
 function fragmentDoc(): Uint8Array {
   return zipDoc({ body: '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>BoldPaste</w:t></w:r></w:p>' });
 }
@@ -415,6 +438,50 @@ const PACKAGE_WRITE_INTENTS: readonly PackageWriteIntent[] = [
         ...IMAGE_INSERT,
         expectedPackageRevision: session.packageRevision(),
       });
+      return result.ok ? null : result.reason;
+    },
+  },
+  {
+    name: 'session.applyPackageUpdate (adds an image, its relationship, and a rels part)',
+    host: 'session',
+    bytes: plainDoc,
+    async run(session) {
+      const opened = openTreeSession(drawingDoc());
+      if (!opened.ok) return opened.reason;
+      const result = session.applyPackageUpdate(opened.session.currentPackage());
+      return result.ok ? null : result.reason;
+    },
+  },
+  {
+    name: 'session.applyPackageUpdate (removes an image and adds a list part)',
+    host: 'session',
+    bytes: drawingDoc,
+    async run(session) {
+      const opened = openTreeSession(listDoc());
+      if (!opened.ok) return opened.reason;
+      const result = session.applyPackageUpdate(opened.session.currentPackage());
+      return result.ok ? null : result.reason;
+    },
+  },
+  {
+    name: 'session.applyPackageUpdate (removes a header rels part and keeps the header)',
+    host: 'session',
+    bytes: () => headerDoc(true),
+    async run(session) {
+      const opened = openTreeSession(headerDoc(false));
+      if (!opened.ok) return opened.reason;
+      const result = session.applyPackageUpdate(opened.session.currentPackage());
+      return result.ok ? null : result.reason;
+    },
+  },
+  {
+    name: 'session.applyPackageUpdate (adds a rels part to a kept header)',
+    host: 'session',
+    bytes: () => headerDoc(false),
+    async run(session) {
+      const opened = openTreeSession(headerDoc(true));
+      if (!opened.ok) return opened.reason;
+      const result = session.applyPackageUpdate(opened.session.currentPackage());
       return result.ok ? null : result.reason;
     },
   },

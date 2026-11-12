@@ -2,6 +2,7 @@ import type { EditorPointPosition } from './editor-drop.ts';
 export type { EditorPointPosition, EditorDropEvent, EditorHostDragEvent } from './editor-drop.ts';
 import type { ResolvedRevisionMarkup } from './revision-markup.ts';
 import type { CompareDocumentsRequest } from './compare-documents.ts';
+import type { ReplaceDocumentRequest } from './replace-document.ts';
 import type { ResolvedReviewPane } from './review-pane.ts';
 /**
  * `@docx-editor.dev/core/contracts/editor` — the `Editor` contract adapters are written against.
@@ -32,29 +33,11 @@ export type {
 } from './editor-fonts.ts';
 import type { EditorEvents } from './editor-events.ts';
 import type { EditorAnchorNavigation, ScrollToAnchorOptions } from './editor-anchor.ts';
-export type {
-  AnchorHighlightAnimation,
-  AnchorHighlightOptions,
-  ClearAnchorHighlightOptions,
-  EditorAnchorNavigation,
-  ScrollPlacement,
-  ScrollToAnchorOptions,
-} from './editor-anchor.ts';
+export type * from './editor-anchor.ts';
 import type { EditorHighlights } from './editor-highlights.ts';
 import type { EditorSelectionRange, EditorSelectionReads } from './editor-selection-range.ts';
-export type {
-  EditorSelectionRange,
-  EditorSelectionReads,
-  TextPosition,
-} from './editor-selection-range.ts';
-export type {
-  EditorHighlights,
-  HighlightHit,
-  HighlightOptions,
-  HighlightRange,
-  HighlightRect,
-  HighlightResult,
-} from './editor-highlights.ts';
+export type * from './editor-selection-range.ts';
+export type * from './editor-highlights.ts';
 import type { EditorReviewHits } from './editor-review-hits.ts';
 import type { ReviewItemQuery } from './editor-review-query.ts';
 export type { ReviewItemQuery } from './editor-review-query.ts';
@@ -222,6 +205,8 @@ export type {
 export interface DocumentHandle {
   /** Package revision: rises for every edit, wherever it landed. Safe to compare. */
   readonly revision: number;
+  /** The loaded document's identity: new on every `load()` (a reload too), kept across edits. */
+  readonly loadId: string;
 }
 
 /**
@@ -996,6 +981,8 @@ export interface EditorCommands
    * translate (`compareDocuments.errors.<code>`).
    */
   compareDocuments: CompareDocumentsRequest;
+  /** Replace the document with a DOCX file as one undoable edit; see {@link ReplaceDocumentRequest}. */
+  replaceDocument: ReplaceDocumentRequest;
   /** Word's Show/Hide paragraph marks; presentation only. */
   toggleParagraphMarks: Record<never, never>;
   /** Word's Protect Document: enforce filling-in-forms protection, or lift the enforced one. */

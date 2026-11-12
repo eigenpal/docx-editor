@@ -689,6 +689,10 @@ export type {
   DocumentRefreshState,
   RefreshSubmission,
   RefreshUpdate,
+  RefreshRefusal,
+  RefreshRefusalFields,
+  RefreshRefusalReason,
+  RefreshUpdateMode,
   RefreshResult,
   RefreshFailureCode,
   RefreshChange,
@@ -745,6 +749,11 @@ export type {
   CompareDocumentsRefusalReason,
   CompareDocumentsOutcome,
   CompareDocumentsRequest,
+  ReplaceDocumentErrorCode,
+  ReplaceDocumentOutcome,
+  ReplaceDocumentRefusal,
+  ReplaceDocumentRefusalReason,
+  ReplaceDocumentRequest,
 } from '@docx-editor.dev/core/editor';
 
 export {
