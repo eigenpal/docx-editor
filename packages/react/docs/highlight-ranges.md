@@ -63,6 +63,8 @@ import {
   DocxEditor,
   useContextMenuHighlights,
   useDocxEditor,
+  useHighlights,
+  type Editor,
   type TextMatch,
 } from '@docx-editor.dev/react';
 
@@ -90,12 +92,17 @@ function ReplacementRows({ recheck }: { recheck: () => void }) {
   return <DocxEditor.ContextMenu.Item label={hit.range.replacement} onSelect={replace} />;
 }
 
-// Inside DocxEditor.Viewport, with `refresh` from useHighlights('terms', ...):
-<DocxEditor.ContextMenu>
-  <DocxEditor.ContextMenu.Start>
-    <ReplacementRows recheck={refresh} />
-  </DocxEditor.ContextMenu.Start>
-</DocxEditor.ContextMenu>;
+// Render inside DocxEditor.Viewport. Pass a stable `findTerms`, such as one from useCallback.
+export function TermMenu({ findTerms }: { findTerms: (editor: Editor) => TermRange[] }) {
+  const { refresh } = useHighlights('terms', findTerms);
+  return (
+    <DocxEditor.ContextMenu>
+      <DocxEditor.ContextMenu.Start>
+        <ReplacementRows recheck={refresh} />
+      </DocxEditor.ContextMenu.Start>
+    </DocxEditor.ContextMenu>
+  );
+}
 ```
 
 A highlight moves with its text, so use the hit's `start` and `length`, not the offsets of `range`. The hook reads the highlights again when the document changes while the menu is open. A term that moves away from the pointer or the caret is no longer reported. `expectedText` makes the replacement refuse with `notFound` if the text changed anyway.
