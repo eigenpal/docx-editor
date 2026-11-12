@@ -7,6 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // merge against split, undo and redo, reconnect, a late joiner, and save and reopen.
 
 import { afterEach, describe, expect, test } from 'bun:test';
+import * as Y from 'yjs';
 import {
   readOoxmlPackage,
   writeOoxmlPackage,
@@ -23,10 +24,31 @@ import {
 } from './document-peer-support.ts';
 
 const harness = createPeerHarness('table-merge-split-room');
+/** Fixed client IDs, for a case whose outcome depends on which concurrent write Yjs keeps. */
+const ordered = createPeerHarness('table-merge-split-ordered', undefined, {
+  alice: 100,
+  bob: 200,
+  carol: 300,
+  late: 999,
+});
 
 afterEach(() => {
   harness.cleanup();
+  ordered.cleanup();
 });
+
+/** Deliver every update between the peers, a detached one among them, until they agree. */
+function syncAll(peers: readonly Peer[]): void {
+  for (let round = 0; round < 3; round += 1) {
+    for (const from of peers) {
+      for (const to of peers) {
+        if (from === to) continue;
+        const update = Y.encodeStateAsUpdate(from.ydoc, Y.encodeStateVector(to.ydoc));
+        Y.applyUpdate(to.ydoc, update, 'relay');
+      }
+    }
+  }
+}
 
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 const CELL = (text: string) => `<w:tc>${P(text)}</w:tc>`;
@@ -304,6 +326,137 @@ describe('cell merge in collaboration', () => {
     expect(alice.room.session.undo()).toBe(true);
     harness.expectConverged(alice, bob);
     expect(nodeText(tableOf(bob))).toContain('Z');
+  });
+
+  // Both peers merge the same cells at once, and one undoes its merge. The undo empties the
+  // other peer's deletion of the merged-away cell, which that peer writes again. A paragraph
+  // the undoing peer split in that cell meanwhile is listed only there, so it shows only when
+  // the cell keeps the survivor its merge named.
+  test('a paragraph split in a cell two peers merge away stays when one peer undoes', async () => {
+    const pair = await harness.pair(TABLE);
+    const { alice, bob } = pair;
+    const merged = (peer: Peer) =>
+      merge(peer, [
+        [0, 0],
+        [0, 1],
+      ]);
+    const paragraph = cellParagraph(alice, 0, 1).id;
+    pair.pause();
+    harness.apply(alice, [merged(alice)]);
+    alice.room.session.flushPendingJournals();
+    expect(alice.room.session.undo()).toBe(true);
+    harness.apply(bob, [merged(bob)]);
+    harness.apply(alice, [
+      { op: 'insertText', paragraphId: paragraph, offset: 1, text: 'XY' },
+      { op: 'splitParagraph', paragraphId: paragraph, offset: 0 },
+    ]);
+    pair.resume();
+    harness.expectConverged(alice, bob);
+    expect(texts(alice)[0]).toEqual(['a++bXY', 'c']);
+    const late = await harness.join(alice, 'late');
+    harness.expectConverged(alice, late);
+    expectWholeGrid(late);
+    // Undo and redo on both sides keep the typed paragraph.
+    alice.room.session.flushPendingJournals();
+    bob.room.session.flushPendingJournals();
+    expect(bob.room.session.undo()).toBe(true);
+    harness.expectConverged(alice, bob);
+    expect(nodeText(tableOf(alice))).toContain('bXY');
+    expect(bob.room.session.redo()).toBe(true);
+    harness.expectConverged(alice, bob);
+    expect(texts(bob)[0]).toEqual(['a++bXY', 'c']);
+    expect(alice.room.session.undo()).toBe(true);
+    harness.expectConverged(alice, bob);
+    expect(nodeText(tableOf(bob))).toContain('b');
+    for (const peer of [alice, bob]) expect(peer.room.session.status()).toBe('ready');
+  });
+
+  // The peer that undid redoes its merge after the other peer wrote its survivor again, and
+  // then the other peer undoes. The redo writes its own survivor too, so the cell keeps one.
+  test('a paragraph split in a cell two peers merge away stays through a redo and an undo', async () => {
+    const pair = await harness.pair(TABLE);
+    const { alice, bob } = pair;
+    const carol = await harness.joinDetached(alice, 'carol');
+    const sync = () => syncAll([alice, bob, carol]);
+    const merged = (peer: Peer) =>
+      merge(peer, [
+        [0, 0],
+        [0, 1],
+      ]);
+    const paragraph = cellParagraph(carol, 0, 1).id;
+    pair.pause();
+    harness.apply(alice, [merged(alice)]);
+    alice.room.session.flushPendingJournals();
+    expect(alice.room.session.undo()).toBe(true);
+    harness.apply(bob, [merged(bob)]);
+    harness.apply(carol, [
+      { op: 'insertText', paragraphId: paragraph, offset: 1, text: 'XY' },
+      { op: 'splitParagraph', paragraphId: paragraph, offset: 0 },
+    ]);
+    pair.resume();
+    sync();
+    for (const peer of [bob, carol]) harness.expectConverged(alice, peer);
+    expect(texts(alice)[0]).toEqual(['a++bXY', 'c']);
+    alice.room.session.flushPendingJournals();
+    bob.room.session.flushPendingJournals();
+    expect(alice.room.session.redo()).toBe(true);
+    sync();
+    expect(bob.room.session.undo()).toBe(true);
+    sync();
+    for (const peer of [bob, carol]) harness.expectConverged(alice, peer);
+    expect(texts(carol)[0]).toEqual(['a++bXY', 'c']);
+    const late = await harness.join(alice, 'late');
+    harness.expectConverged(alice, late);
+    expect(texts(late)[0]).toEqual(['a++bXY', 'c']);
+    expectWholeGrid(late);
+    for (const peer of [alice, bob, carol]) expect(peer.room.session.status()).toBe('ready');
+  });
+
+  // The two keys of a merged-away cell resolve apart: a column delete and undo that only alice
+  // saw makes Yjs keep alice's deletion and bob's survivor. Bob's undo then empties only the
+  // survivor, and alice writes the survivor her merge named again.
+  test('a merged-away cell keeps a survivor when an undo empties only the survivor', async () => {
+    const pair = await ordered.pair(TABLE);
+    const { alice, bob } = pair;
+    const carol = await ordered.joinDetached(alice, 'carol');
+    pair.pause();
+    ordered.apply(carol, [
+      { op: 'deleteTableColumn', tableId: tableOf(carol).id, gridColumnId: gridColumns(carol)[1]! },
+    ]);
+    carol.room.session.flushPendingJournals();
+    expect(carol.room.session.undo()).toBe(true);
+    syncAll([carol, alice]);
+    carol.room.session.flushPendingJournals();
+    const paragraph = cellParagraph(carol, 0, 1).id;
+    ordered.apply(carol, [
+      { op: 'insertText', paragraphId: paragraph, offset: 1, text: 'XY' },
+      { op: 'splitParagraph', paragraphId: paragraph, offset: 0 },
+    ]);
+    for (const peer of [alice, bob]) {
+      ordered.apply(peer, [
+        merge(peer, [
+          [0, 0],
+          [0, 1],
+        ]),
+      ]);
+      peer.room.session.flushPendingJournals();
+    }
+    pair.resume();
+    syncAll([alice, bob, carol]);
+    expect(bob.room.session.undo()).toBe(true);
+    syncAll([alice, bob, carol]);
+    for (const peer of [bob, carol]) ordered.expectConverged(alice, peer);
+    expect(texts(carol)[0]).toEqual(['a++bXY', 'c']);
+    expect(alice.room.session.undo()).toBe(true);
+    syncAll([alice, bob, carol]);
+    expect(alice.room.session.redo()).toBe(true);
+    expect(bob.room.session.redo()).toBe(true);
+    syncAll([alice, bob, carol]);
+    for (const peer of [bob, carol]) ordered.expectConverged(alice, peer);
+    expect(nodeText(tableOf(alice))).toContain('bXY');
+    const late = await ordered.join(alice, 'late');
+    ordered.expectConverged(alice, late);
+    for (const peer of [alice, bob, carol]) expect(peer.room.session.status()).toBe('ready');
   });
 });
 
