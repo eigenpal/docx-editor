@@ -268,6 +268,8 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     let mintedComment: string | undefined;
     /** The one custom-node write a batch may hold, solitary and its own commit for the same reason. */
     let customNodeWrite: { write: InsertCustomNodeWrite; scope: StoryScope } | null = null;
+    /** The one document replacement a batch may hold, solitary like the writes above. */
+    let documentReplace: Uint8Array | null = null;
     let firstCommand = -1;
     let requiresReview = false;
     let stagedTracking = tracking;
@@ -347,6 +349,9 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       } else if (step.kind === 'customNodeWrite') {
         if (firstCommand < 0) firstCommand = index;
         customNodeWrite = { write: step.write, scope: planner.writeScope ?? { kind: 'body' } };
+      } else if (step.kind === 'documentReplace') {
+        if (firstCommand < 0) firstCommand = index;
+        documentReplace = step.docx;
       }
     }
 
@@ -382,6 +387,24 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
           revision
         );
       }
+      changed = applied.changed;
+    }
+    if (documentReplace) {
+      const at = firstCommand < 0 ? 0 : firstCommand;
+      if (!port.replaceDocument)
+        return refuse(
+          operations,
+          at,
+          automationError(
+            'unsupported-capability',
+            'this host cannot replace the document',
+            'edit.operation-unsupported'
+          ),
+          revision
+        );
+      const applied = port.replaceDocument(documentReplace);
+      // The port's revision: a collaboration room that refused the update has realigned it.
+      if (!applied.ok) return refuse(operations, at, applied.error, port.revision());
       changed = applied.changed;
     }
     if (lifecycle) {
@@ -484,7 +507,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
         step.kind === 'query'
           ? stampEndpoints(step.value, revision, texts, handles, start)
           : stampEndpoints(
-              step.kind === 'customNodeWrite'
+              step.kind === 'customNodeWrite' || step.kind === 'documentReplace'
                 ? step.answer(post)
                 : step.answer(post, mintedComment),
               committed,

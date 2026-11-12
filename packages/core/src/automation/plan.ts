@@ -11,6 +11,7 @@ import {
   withEnclosedBookmarkDrops,
 } from './plan-bookmarks.ts';
 import { planCompare } from './plan-compare.ts';
+import { planReplaceDocument } from './plan-replace-document.ts';
 import { planPackageOperation } from './plan-package-operations.ts';
 // The shared frozen refusal and query answer, under the names this planner has always used.
 import { answered as query, refused as refuse } from './plan-results.ts';
@@ -1633,17 +1634,18 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           trackingAuthor
         );
       case 'compareFromBase64':
-        return planCompare(operation, {
-          reads: packageReads,
-          engine: host.compareDocuments,
-          collaborative: host.collaborative ?? false,
-          pin: () => {
-            const plan = planFor(packageReads.body!);
-            const refusal = pinWrite(plan);
-            if (!refusal) plan.wholesale = true;
-            return refusal;
-          },
-        });
+      case 'replaceDocumentFromBase64': {
+        const pin = () => {
+          const plan = planFor(packageReads.body!);
+          const refusal = pinWrite(plan);
+          if (!refusal) plan.wholesale = true;
+          return refusal;
+        };
+        if (operation.op === 'replaceDocumentFromBase64')
+          return planReplaceDocument(operation, { reads: packageReads, handles, pin });
+        const { compareDocuments: engine, collaborative = false } = host;
+        return planCompare(operation, { reads: packageReads, engine, collaborative, pin });
+      }
       case 'removeDocumentInformation':
       case 'getDocumentProperty':
       case 'setDocumentProperties':

@@ -43,7 +43,7 @@ For setup, see [Drive an open browser editor](/docs/2.x/editor-api/runtime#drive
 | Shared server edits | An agent and readers share a collaboration room | `DocxEditor.createCollaborative(room.document, room.session)` | [Let a server agent propose redlines](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redlines) |
 | Complete file refresh | The agent or a processor returns a whole DOCX | `createDocumentRefresh(editor)` | [Document refresh API](/docs/2.x/guides/document-refresh#api-overview) |
 
-For refresh, call `capture()` before processing, then pass the result to `refresh.applyUpdate()`. Refresh does not compare arbitrary files or create tracked changes. See the [interactive effects preview](/docs/2.x/guides/document-refresh#try-the-effects).
+For refresh, call `capture()` before processing, then pass the result to `refresh.applyUpdate()`. With `mode: 'edit'`, the result arrives as one undoable edit. Refresh does not create tracked changes. See the [interactive effects preview](/docs/2.x/guides/document-refresh#try-the-effects).
 
 ## Publish progress safely
 
@@ -67,7 +67,8 @@ To propose a rewrite word by word, see [Propose an AI rewrite as tracked changes
 ## Limits
 
 - If the document changes after the agent reads it, handle `StaleDocument` by reading again and reconsidering. Never replay the old edit automatically.
-- Each accepted refresh resets selection and undo history. Refresh refuses collaborative sessions and results captured before a later edit.
+- A reloading refresh resets selection and undo history and refuses collaborative sessions. To keep history, apply the result as one undoable edit with `mode: 'edit'`.
+- Refresh refuses results captured before a later edit.
 - The editor does not watch a file URL. Your application receives or fetches each result.
 - The editing API and Pro review module require the EigenPal Pro License.
 

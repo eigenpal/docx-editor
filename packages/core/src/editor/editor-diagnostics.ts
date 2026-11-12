@@ -93,6 +93,7 @@ const FACADE_COMMANDS: ReadonlySet<string> = new Set<EditorCommand['type']>([
   'proposeReplacement',
   'rejectAllRevisions',
   'rejectRevision',
+  'replaceDocument',
   'replaceImage',
   'replyComment',
   'resolveComment',

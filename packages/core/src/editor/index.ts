@@ -624,6 +624,10 @@ export type {
   DocumentRefreshState,
   RefreshSubmission,
   RefreshUpdate,
+  RefreshRefusal,
+  RefreshRefusalFields,
+  RefreshRefusalReason,
+  RefreshUpdateMode,
   RefreshResult,
   RefreshFailureCode,
   RefreshChange,
@@ -649,6 +653,8 @@ export type {
   HistoryGroup,
   HistoryGroupOptions,
   CommentTextOptions,
+  // What `getDocumentHandle` returns and `replaceDocument` takes as `expected`.
+  DocumentHandle,
   // What `findMatches` returns and `selectMatch`/`replaceMatch` take.
   TextMatch,
 } from '../contracts/editor.ts';
@@ -719,6 +725,13 @@ export {
   COMPARE_DOCUMENTS_ACCEPT,
   compareDocumentsErrorKey,
 } from '../contracts/compare-documents.ts';
+export type {
+  ReplaceDocumentErrorCode,
+  ReplaceDocumentOutcome,
+  ReplaceDocumentRefusal,
+  ReplaceDocumentRefusalReason,
+  ReplaceDocumentRequest,
+} from '../contracts/replace-document.ts';
 export {
   COMPARE_DOCUMENTS_PHASE_ATTRIBUTE,
   focusCompareDocumentsControl,

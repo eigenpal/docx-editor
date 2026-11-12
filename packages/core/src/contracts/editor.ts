@@ -2,6 +2,7 @@ import type { EditorPointPosition } from './editor-drop.ts';
 export type { EditorPointPosition, EditorDropEvent, EditorHostDragEvent } from './editor-drop.ts';
 import type { ResolvedRevisionMarkup } from './revision-markup.ts';
 import type { CompareDocumentsRequest } from './compare-documents.ts';
+import type { ReplaceDocumentRequest } from './replace-document.ts';
 import type { ResolvedReviewPane } from './review-pane.ts';
 /**
  * `@docx-editor.dev/core/contracts/editor` — the `Editor` contract adapters are written against.
@@ -216,6 +217,8 @@ export type {
 export interface DocumentHandle {
   /** Package revision: rises for every edit, wherever it landed. Safe to compare. */
   readonly revision: number;
+  /** The loaded document's identity: new on every `load()` (a reload too), kept across edits. */
+  readonly loadId: string;
 }
 
 /**
@@ -998,6 +1001,8 @@ export interface EditorCommands
    * translate (`compareDocuments.errors.<code>`).
    */
   compareDocuments: CompareDocumentsRequest;
+  /** Replace the document with a DOCX file as one undoable edit; see {@link ReplaceDocumentRequest}. */
+  replaceDocument: ReplaceDocumentRequest;
   /** Word's Show/Hide paragraph marks; presentation only. */
   toggleParagraphMarks: Record<never, never>;
   /** Word's Protect Document: enforce filling-in-forms protection, or lift the enforced one. */

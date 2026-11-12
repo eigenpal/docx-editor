@@ -91,6 +91,7 @@ export const AUTOMATION_QUERY_OPERATIONS = [
 export const AUTOMATION_COMMAND_OPERATIONS = [
   'removeDocumentInformation',
   'compareFromBase64',
+  'replaceDocumentFromBase64',
   'setDocumentProperties',
   'insertTableRows',
   'insertTable',
@@ -169,6 +170,9 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
 export const AUTOMATION_SOLITARY_OPERATIONS = [
   'removeDocumentInformation',
   'compareFromBase64',
+  // A replacement rewrites every part, so a command beside it would address a document that
+  // no longer exists when it commits.
+  'replaceDocumentFromBase64',
   'insertTableRows',
   'resolveRevisionBatch',
   'setRevisionAuthorBatch',

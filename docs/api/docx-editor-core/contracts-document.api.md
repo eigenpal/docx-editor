@@ -457,6 +457,7 @@ export type ExecResult = {
     compareDocuments?: CompareDocumentsOutcome;
     history?: HistoryGroupOutcome;
     ok: true;
+    replaceDocument?: ReplaceDocumentOutcome;
     revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
 } | {
@@ -464,6 +465,7 @@ export type ExecResult = {
     compareDocuments?: CompareDocumentsOutcome;
     ok: false;
     reason: string;
+    replaceDocument?: ReplaceDocumentOutcome;
     revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
     target?: DocTarget;
@@ -593,6 +595,36 @@ export interface ParagraphTabStop {
     // (undocumented)
     readonly positionTwips: number;
 }
+
+// @public
+export type ReplaceDocumentOutcome = {
+    readonly changed: boolean;
+    readonly ok: true;
+} | ReplaceDocumentRefusal;
+
+// @public
+export type ReplaceDocumentRefusal = {
+    readonly message: string;
+    readonly ok: false;
+} & ({
+    readonly code: 'editNotPermitted';
+    readonly reason: 'viewing' | 'suggesting' | 'protected';
+} | {
+    readonly code: 'editUnsupported';
+    readonly reason: 'differentMainPart' | 'unsupportedDifference' | 'collaborationRefused';
+} | {
+    readonly code: 'unavailable';
+    readonly reason?: 'collaborationUnavailable';
+} | {
+    readonly code: 'staleDocument';
+    readonly reason: 'otherDocument' | 'edited';
+} | {
+    readonly code: 'invalidRequest';
+    readonly reason?: undefined;
+} | {
+    readonly code: 'invalidDocument' | 'busy';
+    readonly reason?: undefined;
+});
 
 // @public
 export interface ReviewPosition {

@@ -76,6 +76,7 @@
         "getComments",
         "insertParagraph",
         "insertText",
+        "insertFileFromBase64",
         "search",
         "footnotes",
         "endnotes"

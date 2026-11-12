@@ -133,6 +133,46 @@ Pass `{ direction: 'rtl' }` for a [right-to-left document](/docs/2.x/guides/righ
 
 To accept a complete updated file from a server, use the [Document refresh API](/docs/2.x/guides/document-refresh).
 
+## Replace the document as one undoable edit
+
+`load()` resets selection and undo history. To keep both, run the `replaceDocument` command. It replaces the whole document with a DOCX file as one undo step, and a collaboration session shares it as an ordinary edit. Use it to restore a version, render a template again, or apply the output of a server tool:
+
+```ts
+// Take the handle together with the document.
+const expected = editor.getDocumentHandle();
+const docx = await renderTemplate(await editor.save());
+
+const result = editor.exec({ type: 'replaceDocument', docx, expected });
+if (!result.ok) {
+  // The document and its undo history are unchanged.
+  console.warn(result.replaceDocument?.code, result.reason);
+}
+```
+
+The replacement behaves as follows:
+
+- One undo returns to the document before the replacement. Earlier undo steps stay available.
+- Tracked changes and comments arrive as the file has them. The replacement creates no revisions of its own.
+- The caret stays in its paragraph when that paragraph survives. The scroll position stays where it is.
+- A file identical to the open document succeeds with `changed: false` and adds no undo step.
+- With `expected`, the command refuses with `staleDocument` unless the open document is still the one the handle describes. `reason: 'edited'` means anyone edited it, another participant included. `reason: 'otherDocument'` means another document was loaded, because each `load()` gives the handle a new `loadId`.
+- Suggesting mode refuses the command, because a replacement records no revisions.
+- Locked content controls do not block a replacement, because the file replaces the whole document.
+
+`result.replaceDocument` carries the typed outcome. A refusal has a stable `code`, an English `message`, and for some codes a `reason`. Read this `code` rather than the coarser top-level `result.code`:
+
+| `code` | Situation | Action |
+| --- | --- | --- |
+| `staleDocument` | `reason` is `edited` or `otherDocument`: the open document is not the one `expected` describes. | Read the document again and redo your work. |
+| `invalidRequest` | The arguments are wrong, or the command was given a history group. | Fix the call. A replacement is always its own undo step. |
+| `invalidDocument` | The bytes are not a valid DOCX file. | Report the failure. |
+| `unavailable` | No document is mounted, the editor was destroyed, or `reason: 'collaborationUnavailable'`. | Retry when a document is mounted and the session is connected. |
+| `busy` | A document refresh or a preview blocks edits. | Wait for it to finish. |
+| `editNotPermitted` | `reason` is `viewing`, `suggesting`, or `protected`. A retry does not help. | Change the editing mode, or call `load()` outside a collaboration session. |
+| `editUnsupported` | `reason` is `differentMainPart`, `unsupportedDifference`, or `collaborationRefused`. | Outside a collaboration session, call `load()` instead. |
+
+Use `replaceDocument` when your code owns the timing. Use the [Document refresh API](/docs/2.x/guides/document-refresh) for server jobs that return results while the user keeps editing. Refresh adds capture, sequencing, change highlights, and recovery, and its `mode: 'edit'` runs this command. In the editing API, `Body.insertFileFromBase64` with `Replace` does the same replacement, on a server too. For more information, see [Replace the whole document](/docs/2.x/editor-api/text-and-ranges#replace-the-whole-document).
+
 ## Save a document
 
 <a id="what-a-save-includes" />

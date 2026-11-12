@@ -47,9 +47,12 @@ export function widenedTableStructure(
     },
     widths
   );
-  // A legacy content-edge offset does not depend on the widths; other offsets move with them.
+  // A legacy content-edge offset does not depend on the widths, nor does a spaced table's
+  // frame offset; shared grid line offsets move with them.
   const { outerRuleOffsetPt: _previousOffset, ...unchanged } = base;
-  const offset = base.legacyContentOffsetPt ?? sideRules.outerRuleOffsetPt;
+  const offset =
+    base.legacyContentOffsetPt ??
+    (base.cellSpacingPt > 0 ? base.outerRuleOffsetPt : sideRules.outerRuleOffsetPt);
   const structure: SemanticTableStructure = {
     ...unchanged,
     columnWidthsPt: widths,

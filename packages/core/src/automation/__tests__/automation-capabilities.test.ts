@@ -196,6 +196,7 @@ describe('the operation vocabulary declares which operations write', () => {
     expect([...AUTOMATION_COMMAND_OPERATIONS]).toEqual([
       'removeDocumentInformation',
       'compareFromBase64',
+      'replaceDocumentFromBase64',
       'setDocumentProperties',
       'insertTableRows',
       'insertTable',
@@ -261,6 +262,7 @@ describe('the operation vocabulary declares which operations write', () => {
     expect([...AUTOMATION_SOLITARY_OPERATIONS]).toEqual([
       'removeDocumentInformation',
       'compareFromBase64',
+      'replaceDocumentFromBase64',
       'insertTableRows',
       'resolveRevisionBatch',
       'setRevisionAuthorBatch',

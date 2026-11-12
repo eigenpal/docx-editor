@@ -26,6 +26,7 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
   const [sampleEdited, setSampleEdited] = useState(false);
   const sampleEditedRef = useRef(false);
   const [scrollToChange, setScrollToChange] = useState(false);
+  const [undoable, setUndoable] = useState(true);
   const [message, setMessage] = useState(t('documentRefresh.idle'));
 
   useEffect(
@@ -77,8 +78,15 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
             change &&
             refresh.navigateToChange(change.id, { behavior: 'instant' });
           refresh.highlightChanges({ timeoutMs: 5000 });
-          setMessage(moved ? t('documentRefresh.scrolled') : t('documentRefresh.complete'));
-        }
+          setMessage(
+            moved
+              ? t('documentRefresh.scrolled')
+              : result.mode === 'edit'
+                ? t('documentRefresh.completeUndoable')
+                : t('documentRefresh.complete')
+          );
+        },
+        undoable ? 'edit' : 'reload'
       );
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -101,6 +109,15 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
       <h1>{t('documentRefresh.title')}</h1>
       <p>{t('documentRefresh.description')}</p>
       <p>{t('documentRefresh.limitations')}</p>
+      <label>
+        <input
+          type="checkbox"
+          checked={undoable}
+          disabled={busy}
+          onChange={(event) => setUndoable(event.target.checked)}
+        />
+        {t('documentRefresh.undoable')}
+      </label>{' '}
       <label>
         <input
           type="checkbox"

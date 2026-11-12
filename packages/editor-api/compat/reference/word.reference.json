@@ -80,6 +80,26 @@
             }
           ]
         },
+        "insertFileFromBase64": {
+          "uid": "Word.Body#insertFileFromBase64",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "base64File",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Replace\" | \"Start\" | \"End\""
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
         "insertParagraph": {
           "uid": "Word.Body#insertParagraph",
           "kind": "method",

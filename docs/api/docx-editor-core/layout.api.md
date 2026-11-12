@@ -762,7 +762,7 @@ export const DEFAULT_TAB_INTERVAL_TWIPS = 720;
 export const DEFAULT_VERTICAL_WEIGHT = 8;
 
 // @public
-export function defaultNoteSeparatorRuleStyle(_noteKind: NoteKind, _kind: 'separator' | 'continuationSeparator'): NoteSeparatorRuleStyle;
+export function defaultNoteSeparatorRuleStyle(_noteKind: NoteKind$1, _kind: 'separator' | 'continuationSeparator'): NoteSeparatorRuleStyle;
 
 // @public
 export function defaultTabIntervalFromSettings(settings: OoxmlNode | null | undefined): number;
@@ -771,10 +771,10 @@ export function defaultTabIntervalFromSettings(settings: OoxmlNode | null | unde
 export function deletedTextBoundaries(layout: SemanticLayout, paragraphId: string): ReadonlySet<number>;
 
 // @public
-export function deriveNoteDisplayMarks(noteKind: NoteKind, references: readonly NoteReferenceSite[], properties: ResolvedNoteProperties): readonly NoteDisplayMark[];
+export function deriveNoteDisplayMarks(noteKind: NoteKind$1, references: readonly NoteReferenceSite[], properties: ResolvedNoteProperties): readonly NoteDisplayMark[];
 
 // @public
-export function deriveNoteDisplayMarksResolved(_noteKind: NoteKind, references: readonly NoteReferenceSite[], resolveProps: (sectionIndex: number) => ResolvedNoteProperties): readonly NoteDisplayMark[];
+export function deriveNoteDisplayMarksResolved(_noteKind: NoteKind$1, references: readonly NoteReferenceSite[], resolveProps: (sectionIndex: number) => ResolvedNoteProperties): readonly NoteDisplayMark[];
 
 // @public
 export function displayText(text: string, style: ResolvedRunStyle): string;
@@ -1901,7 +1901,7 @@ export function layoutHeaderFooterStory(part: OoxmlPart, contentWidth: number, m
 export function layoutNoteById(part: OoxmlPart | null | undefined, noteId: number, contentWidth: number, options: LayoutNoteStoryOptions): NoteStoryLayout | null;
 
 // @public
-export function layoutNoteSeparator(part: OoxmlPart | null | undefined, kind: 'separator' | 'continuationSeparator', contentWidth: number, options: LayoutNoteStoryOptions, noteKind: NoteKind, maxFlowHeightPt?: number): NoteSeparatorLayout;
+export function layoutNoteSeparator(part: OoxmlPart | null | undefined, kind: 'separator' | 'continuationSeparator', contentWidth: number, options: LayoutNoteStoryOptions, noteKind: NoteKind$1, maxFlowHeightPt?: number): NoteSeparatorLayout;
 
 // @public
 export function layoutNoteStory(note: OoxmlNode, contentWidth: number, options: LayoutNoteStoryOptions): NoteStoryLayout | null;
@@ -2293,7 +2293,7 @@ export type NoteLayoutFallbackReason = 'note-count-limit' | 'note-fragment-limit
 | 'note-separator-height-cap' | 'note-continuation-notice-height-cap' | 'missing-note-body' | 'dangling-note-reference';
 
 // @public
-export function noteLineIdPrefix(noteKind: NoteKind, noteId: number): string;
+export function noteLineIdPrefix(noteKind: NoteKind$1, noteId: number): string;
 
 // @public
 export interface NoteMarkContext {
@@ -2304,7 +2304,7 @@ export interface NoteMarkContext {
 }
 
 // @public
-export function noteMarkKey(noteKind: NoteKind, noteId: number): string;
+export function noteMarkKey(noteKind: NoteKind$1, noteId: number): string;
 
 // @public
 export type NotePaginationFallbackReason = NoteLayoutFallbackReason | 'note-reflow-exhausted' | 'note-area-fragment-limit' | 'note-overflow-page-limit'
@@ -2420,7 +2420,7 @@ export interface NoteStoryLayout {
     // (undocumented)
     readonly noteId: number;
     // (undocumented)
-    readonly noteKind: NoteKind;
+    readonly noteKind: NoteKind$1;
     // (undocumented)
     readonly noteType: ReturnType<typeof noteTypeOf>;
     readonly scopeId: string;
