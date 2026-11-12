@@ -21,6 +21,8 @@ import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorSidePanel } from '../src/editor/charts/SidePanel.tsx';
 import { DocxEditorShapePane } from '../src/editor/shapes/ShapePane.tsx';
 import { ContextMenu } from '../src/editor/contextmenu/index.ts';
+import { DocxEditorToolbar } from '../src/editor/toolbar/DocxEditorToolbar.tsx';
+import { DocxEditorChartPane } from '../src/editor/charts/ChartPane.tsx';
 import {
   SHAPE_PANE_CASES,
   SHAPE_PANE_MARKUP_PATH,
@@ -271,3 +273,30 @@ test('the side panel follows mode changes, remembers the shape pane, and Escape 
   expect(panel.getAttribute('data-pane')).toBe('shape');
   expect(panel.textContent).toContain('No shape selected');
 });
+
+for (const only of ['chart', 'shape'] as const) {
+  test(`with only the ${only} pane mounted, Format shape follows the shape pane alone`, async () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={shapePaneDocx(SHAPE_PANE_CASES.solid)}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorToolbar overflow={false} />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+        {only === 'chart' ? <DocxEditorChartPane /> : <DocxEditorShapePane />}
+      </DocxEditorRoot>
+    );
+    await flush();
+    await act(async () => selectParityShape(instance!));
+    await flush();
+    const formatShape = view.container.querySelector(
+      '.docx-toolbar [data-slot="image.formatShape"]'
+    );
+    expect(formatShape !== null).toBe(only === 'shape');
+  });
+}

@@ -12,6 +12,8 @@ import { commandForSlotValue, runToolbarCommand } from '@docx-editor.dev/core/ed
 import { DocxEditorShapePane } from '../src/editor/shapes/ShapePane';
 import { DocxEditorSidePanel } from '../src/editor/charts/SidePanel';
 import { DocxEditorContextMenu } from '../src/editor/contextmenu/index.ts';
+import { DocxEditorToolbar } from '../src/editor/toolbar/DocxEditorToolbar';
+import { DocxEditorChartPane } from '../src/editor/charts/ChartPane';
 import { flush } from './helpers/fixtures';
 import { mountEditorTree, type MountedEditor } from './helpers/mount';
 import {
@@ -186,3 +188,22 @@ test('the side panel follows mode changes, remembers the shape pane, and Escape 
   expect(panel.getAttribute('data-pane')).toBe('shape');
   expect(panel.textContent).toContain('No shape selected');
 });
+
+for (const only of ['chart', 'shape'] as const) {
+  test(`with only the ${only} pane mounted, Format shape follows the shape pane alone`, async () => {
+    mounted = mountEditorTree(
+      () => [
+        h(DocxEditorToolbar, { overflow: false }),
+        h(only === 'chart' ? DocxEditorChartPane : DocxEditorShapePane),
+      ],
+      shapePaneDocx(SHAPE_PANE_CASES.solid)
+    );
+    await flush();
+    selectParityShape(mounted.editor());
+    await flush();
+    const formatShape = mounted.container.querySelector(
+      '.docx-toolbar [data-slot="image.formatShape"]'
+    );
+    expect(formatShape !== null).toBe(only === 'shape');
+  });
+}

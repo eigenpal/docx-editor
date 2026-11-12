@@ -41,6 +41,7 @@ import type { ReactElement } from 'react';
 import { unwrapFragment } from '../merge-arrangement';
 import {
   chartPaneAvailable,
+  shapePaneAvailable,
   chromeSlotId,
   formattingBarChromeGroups,
   type ChromeSlotId,
@@ -268,11 +269,12 @@ function iconPart(slot: ChromeSlotId): PartLike {
 function buildDefaultGroups(
   image: EditorSnapshot['image'],
   direction: boolean,
-  pane: boolean,
+  panes: { readonly chart: boolean; readonly shape: boolean },
   chart: boolean
 ): readonly DefaultGroup[] {
-  const shape = pane && !!image?.shapeFormat;
-  return formattingBarChromeGroups(image, { direction, chart: pane && chart, shape }).map(
+  // Each button shows only when a mounted pane or listener takes its own pane.
+  const shape = panes.shape && !!image?.shapeFormat;
+  return formattingBarChromeGroups(image, { direction, chart: panes.chart && chart, shape }).map(
     (group) => {
       if (group.id === 'alignment') {
         return {
@@ -383,15 +385,17 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
   // Edit chart and Format shape show only when the host can show a side panel.
   const editor = useDocxEditor();
   const chart = useEditorState(selectToolbarChart);
-  const pane = chartPaneAvailable(editor);
+  const chartPane = chartPaneAvailable(editor);
+  const shapePane = shapePaneAvailable(editor);
   const toolbarDisabled = useEditorState(selectToolbarDisabled);
   const tableChromeVisible = useEditorState(selectTableChromeVisible);
   // A right-to-left interface language puts the paragraph direction buttons in the bar.
   const chromeDir = useChromeDir();
   const directionButtons = chromeDir === 'rtl';
   const defaultGroups = useMemo(
-    () => buildDefaultGroups(image, directionButtons, pane, chart),
-    [image, directionButtons, pane, chart]
+    () =>
+      buildDefaultGroups(image, directionButtons, { chart: chartPane, shape: shapePane }, chart),
+    [image, directionButtons, chartPane, shapePane, chart]
   );
   const defaultSlots = useMemo(
     () => new Set(defaultGroups.flatMap((group) => group.entries.map((entry) => entry.slot))),

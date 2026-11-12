@@ -13,6 +13,7 @@ import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import {
   chartPaneAvailable,
+  shapePaneAvailable,
   chromeSlotId,
   formattingBarChromeGroups,
   type ChromeSlotId,
@@ -226,11 +227,12 @@ function iconPart(slot: ChromeSlotId): PartLike {
 function buildDefaultGroups(
   image: EditorSnapshot['image'],
   direction: boolean,
-  pane: boolean,
+  panes: { readonly chart: boolean; readonly shape: boolean },
   chart: boolean
 ): readonly DefaultGroup[] {
-  const shape = pane && !!image?.shapeFormat;
-  return formattingBarChromeGroups(image, { direction, chart: pane && chart, shape }).map(
+  // Each button shows only when a mounted pane or listener takes its own pane.
+  const shape = panes.shape && !!image?.shapeFormat;
+  return formattingBarChromeGroups(image, { direction, chart: panes.chart && chart, shape }).map(
     (group) => {
       if (group.id === 'alignment') {
         return {
@@ -405,7 +407,10 @@ const DocxEditorToolbarRoot = defineComponent({
       buildDefaultGroups(
         image.value,
         chromeDir.value === 'rtl',
-        chartPaneAvailable(editorRef.value),
+        {
+          chart: chartPaneAvailable(editorRef.value),
+          shape: shapePaneAvailable(editorRef.value),
+        },
         chart.value
       )
     );
