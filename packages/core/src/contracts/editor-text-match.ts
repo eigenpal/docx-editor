@@ -16,7 +16,9 @@ import type { ViewScope } from './editor-scope.ts';
  * A frame scope selects its anchoring drawing and never places a caret inside its story.
  * A match inside a field result reports the field atom's model range. Its `length` is one,
  * while `text` carries the visible match and can be longer. Select with `start` and `length`.
- * Never derive the selected length from `text.length`.
+ * Never derive the selected length from `text.length`. When `text` is only part of the field
+ * result, `selectMatch` selects the whole field and the `replaceMatch` command refuses with
+ * `unsupported`, because it would replace the whole field.
  */
 export interface TextMatch {
   readonly blockId: string;
@@ -33,7 +35,12 @@ export interface TextMatch {
   readonly runOffset: number;
   /** Story containing the match. Absence means the body. */
   readonly scope?: ViewScope;
-  /** The matched text as it appears in the document. */
+  /**
+   * The matched text as it appears in the document. `selectMatch` and `replaceMatch` return
+   * `notFound` and change nothing when the match's offsets no longer hold this text. Search
+   * also finds tracked deleted and moved text: `selectMatch` selects it for review, and
+   * `replaceMatch` refuses it with `unsupported`.
+   */
   readonly text: string;
   /**
    * Paragraph text immediately before and after the match, bounded at the derivation

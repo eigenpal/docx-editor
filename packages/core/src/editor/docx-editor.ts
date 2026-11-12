@@ -89,7 +89,6 @@ import type {
   EditorScope,
   EditorSnapshot,
   ExecResult,
-  TextMatch,
   Unsubscribe,
   ViewScope,
 } from '@docx-editor.dev/core/contracts/editor';
@@ -124,7 +123,8 @@ import {
 } from './docx-editor-support.ts';
 import { createDocumentOpenFailureState } from './document-open-failure.ts';
 import { execEditorCommand } from './docx-editor-exec.ts';
-import { replaceMatchStoryRefusal } from './docx-editor-replace-match.ts';
+import { replaceMatchTarget } from './docx-editor-replace-match.ts';
+import type { TextTarget } from './text-target.ts';
 import { createMountHistoryGroups } from './editor-history-groups.ts';
 import { createPublishSignal } from './surface-publish-signal.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
@@ -2088,8 +2088,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const gated = gateCommand(command, surface, hostConfig.modeForGate(), options);
       if (!gated.ok) return gated.refusal;
       if (command.type === 'replaceMatch') {
-        const story = replaceMatchStoryRefusal(surface!, command.match);
-        if (story) return story;
+        const target = replaceMatchTarget(surface!, command.match);
+        if (!target.ok) return target;
       }
       if (
         command.type === 'proposeInsertion' ||
@@ -2178,7 +2178,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       )) as DocxEditorInstance['findMatches'],
 
     // Selection uses the match's model address and then reveals its paragraph.
-    selectMatch(match: TextMatch): ExecResult {
+    selectMatch(match: TextTarget): ExecResult {
       // Same rule as `exec`: a selection aimed into the yield window lands, not refuses.
       openScheduler.flush();
       if (!surface) {

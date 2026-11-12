@@ -1054,7 +1054,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
     save(): Promise<ArrayBuffer>;
     scrollToBlock(blockId: string, options?: ScrollToAnchorOptions): boolean;
     scrollToPage(pageNumber: number): boolean;
-    selectMatch(match: TextMatch): ExecResult;
+    selectMatch(match: TextMatch | HighlightRange): ExecResult;
     setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
     setActiveScope(scope: ViewScope): void;
     setCommentResolved(key: string, resolved: boolean, options?: HistoryGroupOptions): ExecResult;
@@ -1250,7 +1250,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         mime?: SupportedImageMime;
     };
     replaceMatch: {
-        match: TextMatch;
+        match: TextMatch | HighlightRange;
         text: string;
     };
     resolveAllReviewChanges: ResolveReviewChangesOptions;
