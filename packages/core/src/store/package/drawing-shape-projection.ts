@@ -755,7 +755,8 @@ export function projectVectorShape(
         resolveStyleMatrixReference,
         true
       );
-      if (!memberComponents?.length) return null;
+      if (!memberComponents) return null;
+      // A member with no fill and no outline paints nothing; the other members still paint.
       for (const component of memberComponents) {
         components.push(
           transformComponent(
