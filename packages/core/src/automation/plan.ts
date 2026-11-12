@@ -16,6 +16,7 @@ import { planPackageOperation } from './plan-package-operations.ts';
 import { answered as query, refused as refuse } from './plan-results.ts';
 import { referencedNoteIds } from './note-references.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
+import { revisionProtectionRefusal } from './revision-protection.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { createContextualRunFormatting } from '../layout/complex-script-formatting.ts';
 
@@ -1562,6 +1563,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         host.fieldPageContext,
         trackingAuthor
       );
+    const protectedRevision = revisionProtectionRefusal(operation, packageReads.package);
+    if (protectedRevision) return protectedRevision;
     switch (operation.op) {
       case 'getShapes':
       case 'getShape':

@@ -274,7 +274,7 @@ Omit the selection to process the whole story, including history that `items` om
 | Undo | Changes commit in one transaction and one undo step. |
 | Filters | API batches do not inherit editor filters. |
 | Browser | Requires the Pro review module and an editable document. |
-| Permissions | Protection, content control locks, and collaboration permissions apply. |
+| Permissions | Protection, content control locks, and collaboration permissions apply. Tracked-changes protection refuses every decision and author change. |
 | Range collections | `resolve()` and `setAuthor()` refuse with `NotSupported`. Use the story's collection. |
 
 ### Interpret skipped decisions
@@ -291,6 +291,23 @@ Omit the selection to process the whole story, including history that `items` om
 | `incomplete-group` | The change resolves only with another change the selection leaves out, often a deleted row. Decide both in one call, or clear the filter that hides the other. |
 | `retained-structure` | A row stays to keep nested table content. Other selected changes may have applied. |
 | `unknown-revision` | The target no longer exists. Load the collection again. |
+
+### Tracked-changes protection
+
+If the document enforces tracked-changes protection (`w:documentProtection` with `w:edit="trackedChanges"`), reviewers can make tracked edits and comments only. Every decision call, `resolve()`, and `setAuthor()` then fails the sync with `GeneralException` and `debugInfo.innerError.code` `edit.protected-content`, and nothing changes. The live editor refuses the same decisions.
+
+```ts
+try {
+  await runtime.run(async (context) => {
+    context.document.revisions.acceptAll();
+    await context.sync();
+  });
+} catch (error) {
+  if (error.debugInfo?.innerError?.code === 'edit.protected-content') {
+    // Leave the changes pending, or ask the document owner to lift the protection.
+  }
+}
+```
 
 If a strict batch fails with `NotImplemented`, or with `GeneralException` and `review.locked-content` or `review.bound-content`, use `resolve()` and report what remains. For `StaleDocument`, start a fresh run and load the revisions again.
 
