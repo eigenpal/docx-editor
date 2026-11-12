@@ -16,7 +16,9 @@ import type { ViewScope } from './editor-scope.ts';
  * A frame scope selects its anchoring drawing and never places a caret inside its story.
  * A match inside a field result reports the field atom's model range. Its `length` is one,
  * while `text` carries the visible match and can be longer. Select with `start` and `length`.
- * Never derive the selected length from `text.length`.
+ * Never derive the selected length from `text.length`. When `text` is only part of the field
+ * result, `selectMatch` selects the whole field and the `replaceMatch` command refuses with
+ * `unsupported`, because it would replace the whole field.
  */
 export interface TextMatch {
   readonly blockId: string;

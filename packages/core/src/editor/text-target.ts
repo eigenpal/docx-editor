@@ -78,13 +78,38 @@ const NOT_IN_DOCUMENT: Refusal = Object.freeze({
   reason: 'the match paragraph is not in the document; find it again',
 });
 
-/** Refused when the target expects text its offsets no longer hold. */
-function textRefusal(target: TextTarget, found: TargetParagraph): Refusal | null {
+/** Whether a match that covers only part of a field result is accepted or refused. */
+export type PartialFieldMatch = 'accept' | 'refuse';
+
+const INSIDE_FIELD: Refusal = Object.freeze({
+  ok: false as const,
+  code: 'unsupported' as const,
+  reason: 'the match is inside a field result; replace the whole field or edit the field',
+});
+
+/**
+ * Refused when the target expects text its offsets no longer hold. A declared `expectedText`
+ * must equal the range's text. A match's `text` may be part of a field result, verified as the
+ * same occurrence through its context; `partial` decides whether such a match is accepted.
+ */
+function textRefusal(
+  target: TextTarget,
+  found: TargetParagraph,
+  partial: PartialFieldMatch
+): Refusal | null {
+  const declared = (target as Partial<HighlightRange>).expectedText;
+  const match = target as Partial<TextMatch>;
   const expected = expectedTextOfTarget(target);
   if (expected === undefined) return null;
-  return rangeHoldsText(found.paragraph, target.start, target.start + target.length, expected)
-    ? null
-    : { ok: false, code: 'notFound', reason: TEXT_TARGET_CHANGED };
+  const context =
+    typeof declared === 'string'
+      ? undefined
+      : { before: match.contextBefore, after: match.contextAfter };
+  const end = target.start + target.length;
+  const held = rangeHoldsText(found.paragraph, target.start, end, expected, context);
+  if (held === 'equal') return null;
+  if (held === 'partial') return partial === 'accept' ? null : INSIDE_FIELD;
+  return { ok: false, code: 'notFound', reason: TEXT_TARGET_CHANGED };
 }
 
 /** The relationship ids whose header or footer is `partName`, in section order. */
@@ -168,12 +193,13 @@ export type ResolvedTextTarget = { readonly ok: true; readonly scope: ViewScope 
  */
 export function resolveTextTarget(
   surface: PaginatedSurface,
-  target: TextTarget
+  target: TextTarget,
+  partial: PartialFieldMatch
 ): ResolvedTextTarget {
   const declared = target.scope;
   const found = paragraphOfTarget(surface, target.blockId);
   if (declared?.kind === 'frame') {
-    const changed = found ? textRefusal(target, found) : null;
+    const changed = found ? textRefusal(target, found, partial) : null;
     return changed ?? { ok: true, scope: declared };
   }
   if (
@@ -194,7 +220,7 @@ export function resolveTextTarget(
       reason: 'the match scope names a different story than the one that holds its paragraph',
     };
   }
-  return textRefusal(target, found) ?? { ok: true, scope: story };
+  return textRefusal(target, found, partial) ?? { ok: true, scope: story };
 }
 
 /** Whether `scope` is the story the reader is in. */

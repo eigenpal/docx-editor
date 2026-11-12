@@ -42,7 +42,8 @@ export function replaceMatchTarget(
   surface: PaginatedSurface,
   match: TextTarget
 ): { readonly ok: true; readonly scope: ViewScope } | Refusal {
-  const resolved = resolveTextTarget(surface, match);
+  // A match inside a field result covers the whole field; replacing it would replace more.
+  const resolved = resolveTextTarget(surface, match, 'refuse');
   if (!resolved.ok) return resolved;
   if (resolved.scope.kind === 'frame') {
     return {

@@ -85,7 +85,8 @@ export function selectDocumentSearchMatch(
 ): ExecResult {
   const malformed = textTargetArgumentRefusal(match);
   if (malformed) return { ok: false, code: 'invalidArgs', reason: malformed };
-  const resolved = resolveTextTarget(surface, match);
+  // Selecting part of a field result selects the field, as typing over it would.
+  const resolved = resolveTextTarget(surface, match, 'accept');
   if (!resolved.ok) return resolved;
   const scope = resolved.scope;
   if (scope.kind === 'frame') {

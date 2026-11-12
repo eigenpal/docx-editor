@@ -72,6 +72,16 @@ function mount(bytes: Uint8Array): DocxEditorInstance {
   return editor;
 }
 
+const run = (text: string): string => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
+
+/** A complex field whose saved result shows `result`. */
+const field = (result: string): string =>
+  '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+  '<w:r><w:instrText xml:space="preserve"> REF exhibit </w:instrText></w:r>' +
+  '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+  `<w:r><w:t xml:space="preserve">${result}</w:t></w:r>` +
+  '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+
 const SENTENCE = '<w:p><w:r><w:t xml:space="preserve">He go to school.</w:t></w:r></w:p>';
 
 const bodyXml = (editor: DocxEditorInstance): string =>
@@ -139,15 +149,8 @@ describe('a target whose text moved is refused', () => {
     }
   });
 
-  test('a match inside a field result still holds its text', () => {
-    const field =
-      '<w:p><w:r><w:t xml:space="preserve">See </w:t></w:r>' +
-      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
-      '<w:r><w:instrText xml:space="preserve"> REF exhibit </w:instrText></w:r>' +
-      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
-      '<w:r><w:t>Exhibit A</w:t></w:r>' +
-      '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
-    const editor = mount(docx(field));
+  test('a match inside a field result selects the field and refuses a replacement', () => {
+    const editor = mount(docx(`<w:p>${run('See ')}${field('Exhibit A')}</w:p>`));
     try {
       const [match] = editor.findMatches('hibit');
       // The model range is the whole field; the text is the part that matched.
@@ -157,6 +160,83 @@ describe('a target whose text moved is refused', () => {
         ok: false,
         code: 'notFound',
       });
+      const before = bodyXml(editor);
+      const command = { type: 'replaceMatch' as const, match: match!, text: 'X' };
+      const refusal = {
+        ok: false,
+        code: 'unsupported',
+        reason: 'the match is inside a field result; replace the whole field or edit the field',
+      };
+      expect(editor.can(command)).toEqual(refusal);
+      expect(editor.exec(command)).toEqual(refusal);
+      expect(bodyXml(editor)).toBe(before);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('a match covering a whole field result replaces the field', () => {
+    const editor = mount(docx(`<w:p>${run('See ')}${field('Exhibit A')}</w:p>`));
+    try {
+      const [match] = editor.findMatches('Exhibit A');
+      expect(match).toMatchObject({ start: 4, length: 1, text: 'Exhibit A' });
+      expect(editor.exec({ type: 'replaceMatch', match: match!, text: 'Annex 1' })).toEqual({
+        ok: true,
+        changed: true,
+      });
+      expect(textOf(editor, match!.blockId)).toBe('See Annex 1');
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('a stale field match is refused when another field takes its offsets', () => {
+    const body = `<w:p>${run('See ')}${field('Exhibit A')}${run(' and ')}${field('Exhibit B')}</w:p>`;
+    const editor = mount(docx(body));
+    try {
+      const [match] = editor.findMatches('hibit');
+      expect(match).toMatchObject({ start: 4, length: 1, text: 'hibit' });
+      // A peer deletes the first field and " and ", so the second field sits at offset 4.
+      const blockId = match!.blockId;
+      const removed = editor.exec({
+        type: 'replaceMatch',
+        match: { blockId, start: 4, length: 6 },
+        text: '',
+      });
+      expect(removed.ok).toBe(true);
+      expect(editor.findMatches('Exhibit B')[0]).toMatchObject({ start: 4, length: 1 });
+      const before = bodyXml(editor);
+
+      for (const command of [
+        { type: 'replaceMatch' as const, match: match!, text: 'Q' },
+        { type: 'replaceMatch' as const, match: match!, text: '' },
+      ]) {
+        expect(editor.exec(command)).toMatchObject({ ok: false, code: 'notFound' });
+      }
+      expect(editor.selectMatch(match!)).toMatchObject({ ok: false, code: 'notFound' });
+      expect(bodyXml(editor)).toBe(before);
+      expect(editor.findMatches('Exhibit B')).toHaveLength(1);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('a range over a field is accepted only when its whole text equals expectedText', () => {
+    const body = `<w:p>${field('Exhibit A')}${run(' go to school.')}</w:p>`;
+    const editor = mount(docx(body));
+    try {
+      const blockId = editor.surface!.session.paragraphIds()[0]!;
+      const before = bodyXml(editor);
+      const wide: HighlightRange = { blockId, start: 0, length: 8, expectedText: 'go' };
+      expect(editor.exec({ type: 'replaceMatch', match: wide, text: 'X' })).toMatchObject({
+        ok: false,
+        code: 'notFound',
+      });
+      expect(editor.selectMatch(wide)).toMatchObject({ ok: false, code: 'notFound' });
+      // The same range, named by the text it shows, is accepted.
+      const exact: HighlightRange = { blockId, start: 0, length: 4, expectedText: 'Exhibit A go' };
+      expect(editor.selectMatch(exact)).toEqual({ ok: true, changed: false });
+      expect(bodyXml(editor)).toBe(before);
     } finally {
       editor.destroy();
     }

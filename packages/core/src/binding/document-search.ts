@@ -290,27 +290,60 @@ export function searchableTextEntry(
 }
 
 /**
- * Whether the model range `[start, end)` of `paragraph` still holds `expected`, as either its
- * model text or the text a search reports for it. A match inside a field result covers the
- * whole field in model offsets while its text is only the part that matched, so a range over
- * a displayed field result also holds any text that result still shows.
+ * How a model range still holds an expected text: `equal` when its model text or its shown
+ * text is exactly `expected`, `partial` when it is a field result that still shows `expected`
+ * as the very occurrence a search reported, and `differs` otherwise.
+ */
+export type RangeTextHold = 'equal' | 'partial' | 'differs';
+
+/**
+ * Whether the model range `[start, end)` of `paragraph` still holds `expected`.
+ *
+ * A search match inside a field result covers the whole field in model offsets while its text
+ * is only the part that matched. Such a range holds its text only as that same occurrence: the
+ * search runs again for `expected`, and an occurrence must sit at the same model range and show
+ * the same `context` the match reported. Without context, a partial range never holds: another
+ * field can take the same offsets and show the same words.
  */
 export function rangeHoldsText(
   paragraph: OoxmlParagraphNode,
   start: number,
   end: number,
-  expected: string
-): boolean {
+  expected: string,
+  context?: { readonly before?: string; readonly after?: string }
+): RangeTextHold {
   const model = paragraphModelTextOf(paragraph);
-  if (start < 0 || end < start || end > model.length) return false;
-  if (model.slice(start, end) === expected) return true;
+  if (start < 0 || end < start || end > model.length) return 'differs';
+  if (model.slice(start, end) === expected) return 'equal';
   const projected = searchableTextOf(paragraph);
   const from = projected.projectedOffset(start);
   const to = projected.projectedOffset(end);
   const raw = projected.displaySlice(from, to);
   const shown = bounded(raw, raw.length);
-  if (shown === expected || shown.slice(0, SEARCH_QUERY_MAX) === expected) return true;
-  return expected.length > 0 && to - from !== end - start && shown.includes(expected);
+  if (shown === expected || shown.slice(0, SEARCH_QUERY_MAX) === expected) return 'equal';
+  if (
+    expected.length === 0 ||
+    to - from === end - start ||
+    (context?.before === undefined && context?.after === undefined)
+  ) {
+    return 'differs';
+  }
+  const found = projected.findOccurrences(expected, SEARCH_MATCH_LIMIT, { matchCase: true });
+  for (const occurrence of found.matches) {
+    if (occurrence.rawStart !== start || occurrence.rawEnd !== end) continue;
+    const at = occurrence.start;
+    const past = at + occurrence.length;
+    if (bounded(projected.displaySlice(at, past), SEARCH_QUERY_MAX) !== expected) continue;
+    const before = bounded(
+      projected.displaySlice(Math.max(0, at - CONTEXT_RADIUS), at),
+      CONTEXT_RADIUS
+    );
+    if (context.before !== undefined && before !== context.before) continue;
+    const after = bounded(projected.displaySlice(past, past + CONTEXT_RADIUS), CONTEXT_RADIUS);
+    if (context.after !== undefined && after !== context.after) continue;
+    return 'partial';
+  }
+  return 'differs';
 }
 
 /** Bound and flatten one file-derived string on its way out of this module. */
