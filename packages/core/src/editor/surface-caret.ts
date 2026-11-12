@@ -342,9 +342,11 @@ export function createSurfaceCaret(
     composing = true;
     update();
   };
+  // The end does not place the caret here: the commit that follows does, through its paint.
+  // Placed now, it stood against the layout from before the composed text, and its native
+  // caret's restyle covered every painted page; an unpainted commit keeps the native caret.
   const onCompositionEnd = (): void => {
     composing = false;
-    update();
   };
   const onFocusIn = (): void => update();
   const onFocusOut = (event: FocusEvent): void => {

@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Each composed syllable committed, laid out, and painted inside compositionend.",
+  "after": "A plain composed insertion at the caret commits in the first task after the frame that shows it, as one undo step, and any other input or selection change lands it first.",
+  "reason": "Only local commit timing changes. Each syllable sends the same insertion operation as before, and shared nodes, text offsets, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/composition-commit-queue.test.ts",
+    "packages/core/src/editor/__tests__/composition-preview.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-composition-preview.test.ts"
+  ],
+  "changeset": "ime-syllable-commit",
+  "migration": null
+}
