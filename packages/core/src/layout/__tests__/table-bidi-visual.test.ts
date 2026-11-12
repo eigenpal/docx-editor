@@ -216,8 +216,14 @@ describe('w:bidiVisual table grid', () => {
       ).toBe(merged ? 'first\t\tthird' : 'first\tsecond\tthird');
     }
   );
-  test('sparse RTL rows report the full grid with valid logical column indices', () => {
-    const result = layout(table(row(cell('second') + cell('third'), '<w:gridBefore w:val="1"/>')));
+  test('sparse RTL rows report the reached grid with valid logical column indices', () => {
+    // Another row reaches the first column; a column no row reaches takes no width or index.
+    const result = layout(
+      table(
+        row(cell('second') + cell('third'), '<w:gridBefore w:val="1"/>') +
+          row(cell('a') + cell('b') + cell('c'))
+      )
+    );
     const t = tables(result)[0]!;
     for (const [index, c] of t.rows[0]!.cells.entries()) {
       const paragraph = c.blocks[0]!;

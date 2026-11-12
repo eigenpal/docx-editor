@@ -37,3 +37,31 @@ export function emptyColumnContent(): AutofitColumnContent {
     spans: [],
   };
 }
+
+/** A table's column needs: its minimums now and once widened, and what its cells say. */
+export interface AutofitColumnNeeds {
+  readonly minimumsNow: number[];
+  readonly ifWidened: number[];
+  readonly content: AutofitColumnContent;
+}
+
+/**
+ * Takes the larger need of each column between `needs` and a second reading of the same
+ * table, such as the one that shows deleted content. `measure` fills the reading's widened
+ * minimums and content and returns its minimums now.
+ */
+export function mergeMarkupNeeds(
+  needs: AutofitColumnNeeds,
+  measure: (widened: number[], content: AutofitColumnContent) => readonly number[]
+): void {
+  const { minimumsNow, ifWidened, content } = needs;
+  const widened: number[] = [];
+  const other = emptyColumnContent();
+  for (const [column, minimum] of measure(widened, other).entries()) {
+    if (!other.measured[column]) continue;
+    minimumsNow[column] = Math.max(minimumsNow[column]!, minimum);
+    ifWidened[column] = Math.max(ifWidened[column]!, widened[column]!);
+    content.insets[column] = Math.max(content.insets[column]!, other.insets[column]!);
+    content.maximums[column] = Math.max(content.maximums[column]!, other.maximums[column]!);
+  }
+}

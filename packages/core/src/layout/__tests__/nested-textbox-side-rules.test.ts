@@ -118,9 +118,9 @@ test('a nested absolute width wider than its grid stretches the grid', () => {
   const [first, second] = nestedCells({ type: 'dxa', width: '4320', col: 1440 }).cells;
   expect(first!.box.width).toBeCloseTo(second!.box.width, 6);
   expect(first!.box.width + second!.box.width).toBeCloseTo(216, 1);
-  // A stated width past the 300pt outer cell keeps the grid.
+  // Measured: a stated width past the 300pt outer cell stretches the grid past it too.
   const past = nestedCells({ type: 'dxa', width: '7000', col: 1440 }).cells;
-  expect(past[0]!.box.width + past[1]!.box.width).toBeCloseTo(144, 1);
+  expect(past[0]!.box.width + past[1]!.box.width).toBeCloseTo(350, 1);
 });
 
 // References of nested AutoFit tables in an AutoFit outer table, in modes 14 and 15: the

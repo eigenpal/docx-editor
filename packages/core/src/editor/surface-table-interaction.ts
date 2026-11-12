@@ -94,6 +94,8 @@ interface DragState {
   readonly leftTwips: number;
   readonly rightTwips: number;
   readonly tableWidthTwips: number;
+  /** Grid twips per laid-out twip: a stated table width can stretch or shrink the grid. */
+  readonly gridScale: number;
   readonly rowHeightTwips: number;
   readonly target: Extract<
     TableInteractionHit,
@@ -150,6 +152,17 @@ function occurrenceRef(
     return findTableOccurrence(layout, hit.tableId, hit.rowId, hit.isHeaderRepeat);
   }
   return null;
+}
+
+/** Grid twips per laid-out twip of a table whose painted columns match its grid. */
+function gridScaleOf(
+  columnEdges: readonly number[] | undefined,
+  gridColumns: number,
+  gridTwips: number
+): number {
+  if (!columnEdges || columnEdges.length !== gridColumns + 1 || !(gridTwips > 0)) return 1;
+  const laidOutTwips = (columnEdges.at(-1)! - columnEdges[0]!) * PT_TO_TWIPS;
+  return laidOutTwips > 0 ? gridTwips / laidOutTwips : 1;
 }
 
 /**
@@ -584,6 +597,11 @@ export function createSurfaceTableInteraction(
       leftTwips,
       rightTwips,
       tableWidthTwips,
+      gridScale: gridScaleOf(
+        ref?.table.columnEdges,
+        topo.topology.gridColumns.length,
+        tableWidthTwips
+      ),
       rowHeightTwips,
       target,
       ref,
@@ -684,8 +702,9 @@ export function createSurfaceTableInteraction(
         ...mode,
       });
     } else if (activeDrag.target.kind === 'columnDivider') {
-      let leftTwips = activeDrag.leftTwips + moveTwips;
-      let rightTwips = activeDrag.rightTwips - moveTwips;
+      const gridMove = Math.round(moveTwips * activeDrag.gridScale);
+      let leftTwips = activeDrag.leftTwips + gridMove;
+      let rightTwips = activeDrag.rightTwips - gridMove;
       leftTwips = Math.max(MIN_TABLE_COLUMN_WIDTH_TWIPS, leftTwips);
       rightTwips = Math.max(MIN_TABLE_COLUMN_WIDTH_TWIPS, rightTwips);
       const sum = activeDrag.leftTwips + activeDrag.rightTwips;

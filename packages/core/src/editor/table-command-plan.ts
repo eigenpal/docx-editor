@@ -123,6 +123,8 @@ interface ResolvedAnchor {
   readonly cellId: string;
   readonly cellIds: readonly string[];
   readonly gridColumnIndex: number;
+  /** The anchor cell's authored grid column: layout indexes only the columns cells reach. */
+  readonly gridColumnId?: string;
   readonly isHeaderRepeat: boolean;
 }
 
@@ -490,6 +492,7 @@ function resolveAnchor(input: TableCommandPlannerInput): ResolvedAnchor | null {
     cellId: anchor.cellId,
     cellIds: [...anchor.cellIds],
     gridColumnIndex: anchor.gridColumnIndex,
+    ...(anchor.gridColumnId ? { gridColumnId: anchor.gridColumnId } : {}),
     isHeaderRepeat: anchor.isHeaderRepeat,
   };
 }
@@ -851,6 +854,7 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
       const gridColumnId =
         columnTarget?.gridColumnId ??
         outerColumnOfSelection(part, anchor, where) ??
+        anchor.gridColumnId ??
         gridColumnIdAt(part, tableId, anchor.gridColumnIndex);
       const op: TreeDocOp = gridColumnId
         ? {
@@ -871,7 +875,9 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
       if (!anchor) return refusal('unsupported', 'the selection is not inside a table');
       const tableId = columnTarget?.tableId ?? anchor.tableId;
       const gridColumnId =
-        columnTarget?.gridColumnId ?? gridColumnIdAt(part, tableId, anchor.gridColumnIndex);
+        columnTarget?.gridColumnId ??
+        anchor.gridColumnId ??
+        gridColumnIdAt(part, tableId, anchor.gridColumnIndex);
       if (!gridColumnId) {
         return refusal('invalidArgs', 'the table has no grid column to delete');
       }

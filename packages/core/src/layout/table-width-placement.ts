@@ -132,6 +132,8 @@ export function resolveTableWidthPlacement(input: {
   readonly indentPt: number;
   /** A direct or style `w:tblInd` states the indent. */
   readonly indentStated: boolean;
+  /** The authored width of leading columns no cell reaches (`leadingSkipPt`). */
+  readonly leadingSkipPt?: number;
   readonly tableBorders: TableBorderBox;
   readonly claims: readonly CellWidthClaim[];
   readonly gridCols: readonly OoxmlElement[];
@@ -160,10 +162,16 @@ export function resolveTableWidthPlacement(input: {
   // With neither a table style nor a stated indent, a leading-aligned legacy table sits as if
   // indented by its leading cell margin: its outer edge, not its content, meets the text edge.
   const leading = input.alignment === 'left' && !input.bidiVisual;
+  // Measured for top-level inline tables only.
+  const skipPt =
+    leading && !input.indentStated && depth === 0 && !input.floating
+      ? (input.leadingSkipPt ?? 0)
+      : 0;
   const indentPt =
-    legacy && leading && !input.indentStated && input.propertyNodes.length === 0
+    skipPt +
+    (legacy && leading && !input.indentStated && input.propertyNodes.length === 0
       ? (rows[0]?.cells[0]?.margins.left ?? 0)
-      : input.indentPt;
+      : input.indentPt);
   // A top-level AutoFit table without a width fits the room its leading indent leaves.
   const autoRoomPt =
     tableWidth.type === 'auto' &&

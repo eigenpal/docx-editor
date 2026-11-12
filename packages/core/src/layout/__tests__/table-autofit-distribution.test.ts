@@ -99,6 +99,17 @@ describe('a cell spanning several columns', () => {
     expect(raised[1]).toBeGreaterThanOrEqual(90);
     expect(raised[0]! + raised[1]!).toBeCloseTo(140, 6);
   });
+
+  test('raises columns that fall short by a fraction of a point', () => {
+    // Text 0.002pt wider than its columns still breaks inside the cell.
+    const raised = spanAdjustedMinimums(
+      [6.85, 72],
+      [6.85, 72],
+      [6.85, 72],
+      [{ from: 0, count: 2, minimum: 78.852 }]
+    );
+    expect(raised[0]! + raised[1]!).toBeGreaterThanOrEqual(78.852 - 1e-9);
+  });
 });
 
 describe('minimums that overflow their room', () => {

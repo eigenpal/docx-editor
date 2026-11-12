@@ -136,7 +136,8 @@ describe('legacy placement of a table with cell spacing', () => {
       undefined
     );
     expect(structure(table(SPACING), 15).legacyContentOffsetPt).toBeUndefined();
-    expect(structure(table(SPACING), 14, UNSTYLED).legacyContentOffsetPt).toBeUndefined();
+    // Less half the leading frame rule: 0.25pt for a 0.5pt rule (measured from 0.25 to 6pt).
+    expect(structure(table(SPACING), 14, UNSTYLED).legacyContentOffsetPt).toBe(-0.25);
     const indented = table(`${SPACING}<w:tblInd w:w="300" w:type="dxa"/>`);
     expect(cellTextX(indented, 14, UNSTYLED)[0]![0]).toBeCloseTo(15, 6);
   });
