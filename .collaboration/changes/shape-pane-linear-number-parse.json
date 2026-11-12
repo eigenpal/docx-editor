@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Shape pane number fields parse typed text with a pattern that backtracks on long digit strings.",
+  "after": "Shape pane number fields accept the same text and parse it in linear time.",
+  "reason": "Only local validation of typed field text changes. Shared nodes, operations, and saved rooms stay the same.",
+  "tests": ["packages/core/src/editor/__tests__/shape-pane.test.ts"],
+  "changeset": "shape-pane-number-parse",
+  "migration": null
+}
