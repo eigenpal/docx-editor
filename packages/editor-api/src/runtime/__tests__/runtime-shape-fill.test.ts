@@ -88,33 +88,62 @@ describe('Shape.fill through the host', () => {
     }
   });
 
-  test('a color name, a legacy transparency and an out-of-range value refuse', async () => {
+  test('bare hex and CSS color names write; other values and unsupported members refuse', async () => {
     const runtime = await DocxEditor.createServer(BYTES);
     try {
       const outcome = await runtime.run(async (context) => {
         const shapes = context.document.body.shapes;
         shapes.load('items');
         await context.sync();
-        const errors: string[] = [];
+        const fill = shapes.items[0]!.fill;
+        const codes: string[] = [];
+        const code = (run: () => unknown) => {
+          try {
+            run();
+          } catch (error) {
+            codes.push((error as { code: string }).code);
+          }
+        };
+        fill.foregroundColor = 'c00000';
+        await context.sync();
+        fill.load('foregroundColor');
+        await context.sync();
+        const bare = fill.foregroundColor;
+        fill.setSolidColor('Teal');
+        await context.sync();
+        fill.load('foregroundColor');
+        await context.sync();
+        const named = fill.foregroundColor;
+        code(() => (fill.transparency = 2));
+        code(() => fill.backgroundColor);
+        code(() => (fill.backgroundColor = '#FFFFFF'));
+        code(() => fill.set({}));
+        fill.setSolidColor('not-a-color');
         try {
-          shapes.items[0]!.fill.setSolidColor('red');
+          await context.sync();
         } catch (error) {
-          errors.push((error as { code: string }).code);
-        }
-        try {
-          shapes.items[0]!.fill.transparency = 2;
-        } catch (error) {
-          errors.push((error as { code: string }).code);
+          codes.push((error as { code: string }).code);
         }
         shapes.items[1]!.fill.transparency = 0.5;
         try {
           await context.sync();
         } catch (error) {
-          errors.push((error as { code: string }).code);
+          codes.push((error as { code: string }).code);
         }
-        return errors;
+        return { bare, named, codes };
       });
-      expect(outcome).toEqual(['InvalidArgument', 'InvalidArgument', 'InvalidArgument']);
+      expect(outcome).toEqual({
+        bare: '#C00000',
+        named: '#008080',
+        codes: [
+          'InvalidArgument',
+          'NotSupported',
+          'NotSupported',
+          'NotSupported',
+          'InvalidArgument',
+          'InvalidArgument',
+        ],
+      });
     } finally {
       runtime.dispose();
     }

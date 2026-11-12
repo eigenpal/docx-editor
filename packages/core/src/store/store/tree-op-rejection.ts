@@ -132,6 +132,11 @@ export type TreeOpRejection =
   | 'not-a-picture-drawing'
   /** The drawing holds no shape whose fill and outline can be set: a picture, chart or diagram. */
   | 'not-a-shape-drawing'
+  /**
+   * A fill write without a colour (a transparency, or showing a fill again) on a shape with no
+   * solid fill to keep or bring back. It never invents one: the write needs a colour.
+   */
+  | 'no-solid-fill'
   /** A chart in any state: only a delete applies, and it removes the whole chart. */
   | 'chart-drawing'
   /** A lock flag or `@locked` forbids this mutation. */

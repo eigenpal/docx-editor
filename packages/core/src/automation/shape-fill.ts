@@ -6,6 +6,7 @@
 
 import type { ShapeFillState } from '../store/package/shape-format.ts';
 import type { ShapeFillInput } from '../store/store/tree-op-types.ts';
+import { shapeColorHex } from '../store/package/shape-format.ts';
 
 /** `Word.ShapeFillType`, as a read answers it. */
 export type AutomationShapeFillType =
@@ -52,8 +53,8 @@ export function shapeFillInput(
   const { color, transparency } = write;
   if (color === undefined && transparency === undefined)
     return { refused: 'fill: set a color or a transparency' };
-  if (color !== undefined && (typeof color !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(color)))
-    return { refused: 'color: not a #RRGGBB triplet' };
+  const hex = color === undefined ? undefined : shapeColorHex(color);
+  if (hex === null) return { refused: 'color: expected #RRGGBB, RRGGBB or a CSS color name' };
   if (
     transparency !== undefined &&
     (typeof transparency !== 'number' || !(transparency >= 0 && transparency <= 1))
@@ -61,7 +62,7 @@ export function shapeFillInput(
     return { refused: 'transparency: expected a number from 0 to 1' };
   return {
     type: 'solid',
-    ...(color !== undefined ? { color: color.slice(1).toUpperCase() } : {}),
+    ...(hex !== undefined ? { color: hex } : {}),
     ...(transparency !== undefined ? { transparency } : {}),
   };
 }

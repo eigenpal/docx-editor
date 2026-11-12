@@ -132,7 +132,7 @@ function planShapeFormat(
     const shape = targets.shapes[index]!;
     const edited = targets.legacy
       ? formatVml(shape, op.fill, op.outline)
-      : formatWsp(shape, op.fill, op.outline, nextId);
+      : formatWsp(shape, op.fill, op.outline, nextId, targets.groupFills[index] ?? null);
     if (typeof edited === 'string') return edited;
     replaced.set(shape.id, edited);
     const copy = targets.fallback?.[index];
@@ -263,7 +263,9 @@ function withTransparency(
 
 /** A copy of the style's placeholder colour as a solid fill, or null without one. */
 function styleSolid(wsp: OoxmlElement, ref: 'fillRef' | 'lnRef', nextId: () => string) {
-  const color = readStyleReferenceIndex(wsp, ref)?.color;
+  // Index 0 is the style matrix's "no fill" or "no line": there is no colour to bring back.
+  const reference = readStyleReferenceIndex(wsp, ref);
+  const color = reference && reference.index > 0 ? reference.color : undefined;
   return color && color.kind !== 'textValue' && color.namespaceUri === A
     ? el(nextId, 'solidFill', [], [cloneWithNewIds(color, nextId)])
     : null;
@@ -277,7 +279,8 @@ function formatWsp(
   wsp: OoxmlElement,
   fill: ShapeFillInput | undefined,
   outline: ShapeOutlineInput | undefined,
-  nextId: () => string
+  nextId: () => string,
+  groupFill: OoxmlElement | null
 ): OoxmlElement | TreeOpRejection {
   const spPr = elements(wsp).find(
     (c) => c.namespaceUri === wsp.namespaceUri && c.localName === 'spPr'
@@ -285,7 +288,7 @@ function formatWsp(
   if (!spPr) return 'not-a-shape-drawing';
   let children: readonly OoxmlNode[] = spPr.children;
   if (fill) {
-    const next = formatFill(wsp, children, fill, nextId);
+    const next = formatFill(wsp, children, fill, nextId, groupFill);
     if (typeof next === 'string') return next;
     children = next;
   }
@@ -305,7 +308,8 @@ function formatFill(
   wsp: OoxmlElement,
   children: readonly OoxmlNode[],
   fill: ShapeFillInput,
-  nextId: () => string
+  nextId: () => string,
+  groupFill: OoxmlElement | null
 ): readonly OoxmlNode[] | TreeOpRejection {
   const current = children.find((c) => isA(c, SHAPE_FILL_NAMES)) as OoxmlElement | undefined;
   const put = (node: OoxmlElement, list: readonly OoxmlNode[]) =>
@@ -332,14 +336,21 @@ function formatFill(
         alpha.map((t) => cloneWithNewIds(t, nextId))
       ),
     ]);
+  } else if (current?.localName === 'grpFill') {
+    // A group member that takes its group's fill gets that fill written as its own.
+    solid =
+      groupFill?.localName === 'solidFill'
+        ? (cloneWithNewIds(groupFill, nextId) as OoxmlElement)
+        : null;
   } else if (current && current.localName !== 'noFill') {
     solid = current;
   } else {
     solid = hiddenPayload(children, HIDDEN_FILL) ?? styleSolid(wsp, 'fillRef', nextId);
   }
-  if (!solid) return 'invalid-drawing-value';
+  // Never invent a fill: without a colour to keep or bring back, the write needs one.
+  if (!solid) return 'no-solid-fill';
   if (fill.transparency !== undefined) {
-    if (solid.localName !== 'solidFill') return 'invalid-drawing-value';
+    if (solid.localName !== 'solidFill') return 'no-solid-fill';
     const next = withTransparency(solid, fill.transparency, nextId);
     if (typeof next === 'string') return next;
     solid = next;

@@ -343,3 +343,70 @@ describe('setShapeFormat output paints', () => {
     expect(paint()).toMatchObject({ fillHex: null, strokeHex: 'FF0000', strokeWidthEmu: 50800 });
   });
 });
+
+describe('setShapeFormat never invents a fill', () => {
+  const refused = (part: OoxmlPart, op: TreeDocOp) => {
+    const result = applyTreeOp(part, op);
+    return result.ok ? 'applied' : result.reason;
+  };
+
+  test('a style with fillRef idx 0 has no fill to make transparent or bring back', () => {
+    const noFillStyle = wsp(`${XFRM}${RECT}`).replace('fillRef idx="1"', 'fillRef idx="0"');
+    const part = parse(anchor(WPS_URI, noFillStyle));
+    const drawing = idOf(part, 'drawing');
+    expect(
+      refused(part, {
+        op: 'setShapeFormat',
+        drawingNodeId: drawing,
+        fill: { type: 'solid', transparency: 0.5 },
+      })
+    ).toBe('no-solid-fill');
+    expect(
+      refused(part, { op: 'setShapeFormat', drawingNodeId: drawing, fill: { type: 'solid' } })
+    ).toBe('no-solid-fill');
+    // A colour is always enough.
+    const out = xml(
+      apply(part, {
+        op: 'setShapeFormat',
+        drawingNodeId: drawing,
+        fill: { type: 'solid', color: '00B050', transparency: 0.5 },
+      })
+    );
+    expect(out).toContain('<a:srgbClr val="00B050"><a:alpha val="50000"/></a:srgbClr>');
+  });
+
+  test('a group member with a:grpFill reads the group colour and writes it as its own', () => {
+    const member = wsp(`${XFRM}${RECT}<a:grpFill/>`);
+    const group = (fill: string) =>
+      `<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr>${XFRM}${fill}</wpg:grpSpPr>${member}</wpg:wgp>`;
+    const part = parse(
+      anchor(WPG_URI, group('<a:solidFill><a:srgbClr val="C00000"/></a:solidFill>'))
+    );
+    const drawing = idOf(part, 'drawing');
+    const targets = shapeFormatTargets(part, drawing);
+    if (typeof targets === 'string') throw new Error(targets);
+    expect(readShapeFormat(targets).fill).toEqual({
+      type: 'solid',
+      color: 'C00000',
+      transparency: 0,
+    });
+    const out = xml(
+      apply(part, {
+        op: 'setShapeFormat',
+        drawingNodeId: drawing,
+        fill: { type: 'solid', transparency: 0.25 },
+      })
+    );
+    expect(out).toContain('<a:srgbClr val="C00000"><a:alpha val="75000"/></a:srgbClr>');
+    expect(out).not.toContain('<a:grpFill/>');
+    // A group with no solid fill of its own leaves nothing to make transparent.
+    const plain = parse(anchor(WPG_URI, group('')));
+    expect(
+      refused(plain, {
+        op: 'setShapeFormat',
+        drawingNodeId: idOf(plain, 'drawing'),
+        fill: { type: 'solid', transparency: 0.25 },
+      })
+    ).toBe('no-solid-fill');
+  });
+});

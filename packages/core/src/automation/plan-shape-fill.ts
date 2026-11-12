@@ -64,7 +64,13 @@ export function planShapeFill(
   // A legacy VML shape has no transparency to write; refuse it here rather than at commit.
   const rejection = validateShapeFormat(story.part, op);
   if (rejection)
-    return refused('unsupported-content', `that fill cannot be written: ${rejection}`, 'fill');
+    return refused(
+      'unsupported-content',
+      rejection === 'no-solid-fill'
+        ? 'the shape has no solid fill of its own or from its group to change; set a color'
+        : `that fill cannot be written: ${rejection}`,
+      'fill'
+    );
   return {
     ok: true,
     kind: 'command',

@@ -17,6 +17,7 @@ import { commandProtectionRefusal } from './command-protection.ts';
 import { selectedImageStateOf } from './docx-editor-images.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { partOfNodeId } from './surface-scope.ts';
+import { shapeColorHex } from '../store/package/shape-format.ts';
 
 type ShapeFormatCommand = Extract<EditorCommand, { type: 'setShapeFill' | 'setShapeOutline' }>;
 type SetShapeFormatOp = Extract<DrawingTreeDocOp, { op: 'setShapeFormat' }>;
@@ -26,10 +27,10 @@ export function isShapeFormatCommand(command: EditorCommand): command is ShapeFo
   return command.type === 'setShapeFill' || command.type === 'setShapeOutline';
 }
 
-/** `RRGGBB` from `RRGGBB` or `#RRGGBB`; anything else stays as it is for the op to refuse. */
+/** `RRGGBB` from `RRGGBB`, `#RRGGBB` or a CSS colour name; anything else stays for the op to refuse. */
 function hexOf(color: unknown): string | undefined {
   if (color === undefined) return undefined;
-  return typeof color === 'string' ? color.replace(/^#/, '').toUpperCase() : String(color);
+  return typeof color === 'string' ? (shapeColorHex(color) ?? color) : String(color);
 }
 
 function fillOf(command: SetShapeFillCommand): SetShapeFormatOp['fill'] | Refusal {
@@ -64,6 +65,7 @@ function outlineOf(command: SetShapeOutlineCommand): SetShapeFormatOp['outline']
 const REASONS: Partial<Record<TreeOpRejection, string>> = {
   'invalid-drawing-value': 'the fill or outline value is out of range',
   'unsupported-property': 'a legacy shape has no transparency',
+  'no-solid-fill': 'the shape has no solid fill to change; set a color',
   'not-a-shape-drawing': 'this drawing has no fill or outline to set',
   'unknown-drawing': 'stale drawing selection',
 };

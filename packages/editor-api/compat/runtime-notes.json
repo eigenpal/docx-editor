@@ -405,7 +405,7 @@
   },
   "Word.Shape#fill": {
     "status": "partial",
-    "notes": "Fills a wps shape, text box, line, every shape of a group or canvas, or a legacy VML shape. Reads resolve the shape style and theme. Pictures, charts and diagrams refuse with InvalidArgument. Writes in one sync are one fill change; with change tracking on, a write refuses, as Word records no tracked fill change."
+    "notes": "Fills a wps shape, text box, line, every shape of a group or canvas, or a legacy VML shape. Reads resolve the shape style and theme. Pictures, charts and diagrams refuse with InvalidArgument. Writes in one sync are one fill change; with change tracking on, a write refuses, as Word records no tracked fill change. The editor commands setShapeFill and setShapeOutline apply untracked, like other drawing properties."
   },
   "Word.ShapeFill#type": {
     "status": "partial",
@@ -413,15 +413,15 @@
   },
   "Word.ShapeFill#foregroundColor": {
     "status": "partial",
-    "notes": "Reads #RRGGBB for a solid fill and an empty string otherwise. Writes accept #RRGGBB only; color names refuse with InvalidArgument. A new color keeps the transparency."
+    "notes": "Reads #RRGGBB for a solid fill and an empty string otherwise. Writes accept #RRGGBB, RRGGBB, or a CSS color name; other values refuse at the sync. A new color keeps the transparency."
   },
   "Word.ShapeFill#transparency": {
     "status": "partial",
-    "notes": "From 0 to 1, written as a:alpha on the fill color. A legacy VML shape refuses a transparency, and the VML fallback gets none, as Word writes none."
+    "notes": "From 0 to 1, written as a:alpha on the fill color. A shape with no solid fill of its own or from its group refuses a transparency instead of inventing a fill. A legacy VML shape refuses a transparency, and the VML fallback gets none, as Word writes none."
   },
   "Word.ShapeFill#setSolidColor": {
     "status": "partial",
-    "notes": "Writes a:solidFill/a:srgbClr and keeps the transparency. The VML fallback that draws the same shapes gets fillcolor. Accepts #RRGGBB only."
+    "notes": "Writes a:solidFill/a:srgbClr and keeps the transparency. The VML fallback that draws the same shapes gets fillcolor. Accepts #RRGGBB, RRGGBB, or a CSS color name."
   },
   "Word.ShapeFill#clear": {
     "status": "partial",
@@ -429,11 +429,11 @@
   },
   "Word.ShapeFill#backgroundColor": {
     "status": "unsupported",
-    "notes": "Not published: pattern fills are not written."
+    "notes": "Reads and writes throw NotSupported: pattern fills are not written."
   },
   "Word.ShapeFill#set": {
     "status": "unsupported",
-    "notes": "Not published. Use setSolidColor, transparency and clear."
+    "notes": "Throws NotSupported. Use setSolidColor, transparency and clear."
   },
   "Word.ShapeCollection#getByTypes": {
     "status": "partial",

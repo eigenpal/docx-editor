@@ -241,3 +241,25 @@ test('a mouse press on the frame over text goes on to the element under the fram
     container.remove();
   }
 });
+
+test('a shape that paints nothing takes a press anywhere on its frame', async () => {
+  const invisible = anchor({
+    id: 6,
+    name: 'Invisible',
+    x: 0,
+    y: 200 * EMU,
+    cx: 200 * EMU,
+    cy: 80 * EMU,
+    graphic: wsp(200 * EMU, 80 * EMU, 'rect', '<a:noFill/><a:ln><a:noFill/></a:ln>'),
+    uri: SHAPE_URI,
+  });
+  const { editor, container } = await mount(p(invisible + text('Anchor')) + FILLERS);
+  try {
+    const shape = drawingNamed(editor, 6);
+    pressDrawing(container, editor, 6, shape.x + shape.width / 2, shape.y + shape.height / 2);
+    expect(editor.getSelectedImage!()).toMatchObject({ id: shape.drawingNodeId });
+  } finally {
+    editor.destroy();
+    container.remove();
+  }
+});

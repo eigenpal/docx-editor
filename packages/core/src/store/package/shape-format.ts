@@ -11,6 +11,7 @@
 
 import { readLineProperties, readStyleReferenceIndex } from './drawing-line-properties.ts';
 import { resolveColorNode, type ShapeColor } from './drawing-shape-color.ts';
+import { presetColorHex } from './drawing-preset-colors.ts';
 import { isMcAlternateContent } from './drawing-projection-walk.ts';
 import { shapePaintOf } from './drawing-shape-projection.ts';
 import { legacyInk } from './legacy-vml-shapes.ts';
@@ -44,6 +45,19 @@ const VML_FORMAT_SHAPES: ReadonlySet<string> = new Set([
 ]);
 const EMU_PER_POINT = 12_700;
 
+/**
+ * `RRGGBB` from `RRGGBB`, `#RRGGBB`, or a CSS colour name, case-insensitive; null for anything
+ * else. Shared by the editor commands and `Shape.fill`, so both accept the same spellings.
+ *
+ * @internal
+ */
+export function shapeColorHex(color: string): string | null {
+  if (typeof color !== 'string') return null;
+  const hex = /^#?([0-9A-Fa-f]{6})$/.exec(color);
+  if (hex) return hex[1]!.toUpperCase();
+  return /^[A-Za-z]{3,20}$/.test(color) ? (presetColorHex(color.toLowerCase()) ?? null) : null;
+}
+
 /** The fill choices of `a:spPr` (ECMA-376 `EG_FillProperties`). @internal */
 export const SHAPE_FILL_NAMES: ReadonlySet<string> = new Set([
   'noFill',
@@ -64,6 +78,11 @@ export interface ShapeFormatTargets {
   readonly shapes: readonly OoxmlElement[];
   /** The VML fallback shape of each of `shapes`, index for index, or null when none matches. */
   readonly fallback: readonly OoxmlElement[] | null;
+  /**
+   * The fill each of `shapes` takes from its groups when it says `a:grpFill`: the nearest
+   * group's own fill element, or null when no group sets one.
+   */
+  readonly groupFills: readonly (OoxmlElement | null)[];
 }
 
 /** The fill a read answers. @public */
@@ -98,8 +117,18 @@ function child(parent: OoxmlElement, namespaceUri: string, localName: string): O
   return element(parent.children.find((node) => named(node, namespaceUri, localName)));
 }
 
+/** The fill a group sets in its `grpSpPr`, `a:grpFill` taking its parent group's. */
+function containerFill(container: OoxmlElement, inherited: OoxmlElement | null) {
+  const properties = child(container, container.namespaceUri, 'grpSpPr');
+  const own = properties ? authoredFill(properties) : undefined;
+  if (!own) return null;
+  return own.localName === 'grpFill' ? inherited : own;
+}
+
 /** The `wps:wsp` shapes under a drawing's graphic data, or null for any other payload. */
-function drawingShapes(drawing: OoxmlElement): OoxmlElement[] | null {
+function drawingShapes(
+  drawing: OoxmlElement
+): { shapes: OoxmlElement[]; groupFills: (OoxmlElement | null)[] } | null {
   const anchor = children(drawing).find(
     (node) => named(node, WP_NAMESPACE_URI, 'anchor') || named(node, WP_NAMESPACE_URI, 'inline')
   );
@@ -108,17 +137,20 @@ function drawingShapes(drawing: OoxmlElement): OoxmlElement[] | null {
   const uri = data ? schemaAttributeValue(data.attributes, 'uri') : undefined;
   if (!data || (uri !== WPS_NAMESPACE_URI && uri !== WPG && uri !== WPC)) return null;
   const shapes: OoxmlElement[] = [];
-  const walk = (node: OoxmlElement, depth: number): boolean => {
+  const groupFills: (OoxmlElement | null)[] = [];
+  const walk = (node: OoxmlElement, depth: number, fill: OoxmlElement | null): boolean => {
     for (const member of children(node)) {
       if (named(member, WPS_NAMESPACE_URI, 'wsp')) {
+        groupFills.push(fill);
         if (shapes.push(member) > MAX_SHAPES) return false;
       } else if (CONTAINERS.get(member.namespaceUri)?.has(member.localName)) {
-        if (depth >= MAX_DEPTH || !walk(member, depth + 1)) return false;
+        if (depth >= MAX_DEPTH || !walk(member, depth + 1, containerFill(member, fill)))
+          return false;
       }
     }
     return true;
   };
-  return walk(data, 0) && shapes.length > 0 ? shapes : null;
+  return walk(data, 0, null) && shapes.length > 0 ? { shapes, groupFills } : null;
 }
 
 /** The VML shapes a `w:pict` draws, with a group's members in place of the group. */
@@ -164,7 +196,7 @@ export function shapeFormatTargets(
   if (named(node, WML_NAMESPACE_URI, 'pict')) {
     const shapes = vmlShapes(node);
     return shapes?.length
-      ? { root: node, legacy: true, shapes, fallback: null }
+      ? { root: node, legacy: true, shapes, fallback: null, groupFills: shapes.map(() => null) }
       : 'not-a-shape-drawing';
   }
   let drawing: OoxmlElement | null = null;
@@ -183,13 +215,15 @@ export function shapeFormatTargets(
     if (!drawing) return 'not-a-shape-drawing';
     alternate = node;
   }
-  const shapes = drawing && drawingShapes(drawing);
-  if (!drawing || !shapes) return 'not-a-shape-drawing';
+  const found = drawing && drawingShapes(drawing);
+  if (!drawing || !found) return 'not-a-shape-drawing';
+  const { shapes, groupFills } = found;
   return {
     root: alternate ?? drawing,
     legacy: false,
     shapes,
     fallback: alternate ? fallbackShapes(alternate, shapes.length) : null,
+    groupFills,
   };
 }
 
@@ -225,6 +259,7 @@ export function narrowedTargets(
     ...targets,
     shapes: chosen.map((index) => targets.shapes[index]!),
     fallback: targets.fallback ? chosen.map((index) => targets.fallback![index]!) : null,
+    groupFills: chosen.map((index) => targets.groupFills[index]!),
   };
 }
 
@@ -263,10 +298,17 @@ function authoredFill(parent: OoxmlElement | null): OoxmlElement | undefined {
     : undefined;
 }
 
-function wspFormat(wsp: OoxmlElement, theme?: PackageShapeThemeResolvers): ShapeFormatState {
+function wspFormat(
+  wsp: OoxmlElement,
+  groupFill: OoxmlElement | null,
+  theme?: PackageShapeThemeResolvers
+): ShapeFormatState {
   const spPr = child(wsp, wsp.namespaceUri, 'spPr');
   const paint = shapePaintOf(wsp, theme?.resolveSchemeColor, theme?.resolveStyleMatrixReference);
-  const authored = authoredFill(spPr);
+  const own = authoredFill(spPr);
+  // `a:grpFill` paints the group's fill: read that one, or none when no group sets a fill.
+  if (own?.localName === 'grpFill') return withGroupFill(wsp, groupFill, theme);
+  const authored = own;
   const fill = paint?.fill ?? (authored ? null : styleColor(wsp, 'fillRef', theme));
   const type: ShapeFillState['type'] = authored
     ? FILL_TYPES[authored.localName]!
@@ -290,6 +332,48 @@ function wspFormat(wsp: OoxmlElement, theme?: PackageShapeThemeResolvers): Shape
       color: stroke?.hex ?? null,
       widthPt: roundPoints(width.widthEmu),
     },
+  };
+}
+
+function withGroupFill(
+  wsp: OoxmlElement,
+  groupFill: OoxmlElement | null,
+  theme?: PackageShapeThemeResolvers
+): ShapeFormatState {
+  const spPr = child(wsp, wsp.namespaceUri, 'spPr')!;
+  const ownState = wspFormat(
+    {
+      ...wsp,
+      children: wsp.children.map((n) =>
+        n === spPr
+          ? {
+              ...spPr,
+              children: spPr.children.filter(
+                (c) => c.kind === 'textValue' || c.localName !== 'grpFill'
+              ),
+            }
+          : n
+      ),
+    } as OoxmlElement,
+    null,
+    theme
+  );
+  const color = groupFill?.localName === 'solidFill' ? children(groupFill)[0] : undefined;
+  const solid = color ? resolveColorNode(color, theme?.resolveSchemeColor) : null;
+  const type: ShapeFillState['type'] = !groupFill
+    ? 'none'
+    : groupFill.localName === 'solidFill'
+      ? solid
+        ? 'solid'
+        : 'mixed'
+      : FILL_TYPES[groupFill.localName]!;
+  return {
+    fill: {
+      type,
+      color: solid?.hex ?? null,
+      transparency: solid ? roundTransparency(solid.alpha) : 0,
+    },
+    outline: ownState.outline,
   };
 }
 
@@ -342,6 +426,8 @@ export function readShapeFormat(
   theme?: PackageShapeThemeResolvers
 ): ShapeFormatState {
   return agreed(
-    targets.shapes.map((shape) => (targets.legacy ? vmlFormat(shape) : wspFormat(shape, theme)))
+    targets.shapes.map((shape, index) =>
+      targets.legacy ? vmlFormat(shape) : wspFormat(shape, targets.groupFills[index]!, theme)
+    )
   );
 }

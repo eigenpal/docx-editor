@@ -58,8 +58,11 @@ test('a group takes the fill on every shape; bad values and stale ids refuse in 
       color: '00B050',
       transparency: 0,
     });
+    // A CSS color name writes its hex value, as `Shape.fill` takes it.
+    expect(editor.exec({ type: 'setShapeFill', color: 'teal' })).toMatchObject({ ok: true });
+    expect(editor.getSelectedImage!()?.shapeFormat?.fill.color).toBe('008080');
     for (const command of [
-      { type: 'setShapeFill', color: 'green' },
+      { type: 'setShapeFill', color: 'greenish' },
       { type: 'setShapeFill', transparency: 1.5 },
       { type: 'setShapeFill' },
       { type: 'setShapeOutline', widthPt: 0 },

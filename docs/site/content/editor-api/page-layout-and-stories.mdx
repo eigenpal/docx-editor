@@ -165,12 +165,12 @@ await runtime.run(async (context) => {
 | Member | Behavior |
 | --- | --- |
 | `type` | `Solid`, `NoFill`, `Gradient`, `Pattern`, `Picture`, or `Mixed` for a group whose shapes differ |
-| `foregroundColor` | `#RRGGBB` for a solid fill, otherwise an empty string; writes accept `#RRGGBB` only |
+| `foregroundColor` | `#RRGGBB` for a solid fill, otherwise an empty string; writes accept `#RRGGBB`, `RRGGBB`, or a CSS color name |
 | `transparency` | From 0 (opaque) to 1 (clear) |
 | `setSolidColor(color)` | Sets a solid fill and keeps the transparency |
 | `clear()` | Removes the fill |
 
-Reads resolve the shape style and theme. Pictures, charts, and diagrams refuse with `InvalidArgument`. A legacy VML shape refuses a transparency. With change tracking on, a fill write refuses. `Shape` has no outline member; in an editor, use the `setShapeOutline` command.
+Reads resolve the shape style and theme. Pictures, charts, and diagrams refuse with `InvalidArgument`. A shape with no solid fill refuses a transparency; set a color first. A legacy VML shape refuses a transparency. `backgroundColor` and `set()` throw `NotSupported`. With change tracking on, a fill write refuses. `Shape` has no outline member; in an editor, use the `setShapeOutline` command.
 
 ## Limits
 

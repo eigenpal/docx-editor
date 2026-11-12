@@ -1591,6 +1591,8 @@ export class ShapeCollection extends ItemCollection<Shape> {
 
 // @public
 export class ShapeFill extends ModelObject {
+    get backgroundColor(): string;
+    set backgroundColor(_value: string);
     clear(): void;
     get foregroundColor(): string;
     set foregroundColor(value: string);
@@ -1598,6 +1600,7 @@ export class ShapeFill extends ModelObject {
     static of(context: RequestContext, label: string, owner: ObjectPath, shape: () => AutomationHandle): ShapeFill;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
+    set(_properties: unknown): void;
     setSolidColor(color: string): void;
     get transparency(): number;
     set transparency(value: number);

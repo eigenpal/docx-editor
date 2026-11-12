@@ -44,7 +44,8 @@ type FillWrite = { clear: true } | { color?: string; transparency?: number };
  *
  * `foregroundColor` reads `#RRGGBB` for a solid fill and an empty string otherwise, from the
  * shape's own fill or its style's. `type` reads `Mixed` for a group whose shapes disagree.
- * Writes accept `#RRGGBB` only; a color name refuses with `InvalidArgument`.
+ * Writes accept `#RRGGBB`, `RRGGBB`, or a CSS color name; any other value fails the sync.
+ * `backgroundColor` and `set()` throw `NotSupported`.
  * Pictures, charts and diagrams have no fill to set and refuse at the sync.
  *
  * @public
@@ -99,7 +100,21 @@ export class ShapeFill extends ModelObject {
     this.#author({ clear: true });
   }
 
-  /** Fill with one color, `#RRGGBB`. The shape's transparency stays. */
+  /** Not supported: pattern fills have no background color to set. Throws `NotSupported`. */
+  get backgroundColor(): string {
+    return fail({ code: 'NotSupported', target: `${this.path.label}.backgroundColor` });
+  }
+
+  set backgroundColor(_value: string) {
+    fail({ code: 'NotSupported', target: `${this.path.label}.backgroundColor` });
+  }
+
+  /** Not supported: set `foregroundColor` and `transparency` one at a time. Throws `NotSupported`. */
+  set(_properties: unknown): void {
+    fail({ code: 'NotSupported', target: `${this.path.label}.set` });
+  }
+
+  /** Fill with one color, `#RRGGBB`, `RRGGBB`, or a CSS color name. The transparency stays. */
   setSolidColor(color: string): void {
     this.#author({ color: requireColor(color, `${this.path.label}.setSolidColor`) });
   }
@@ -146,8 +161,9 @@ export class ShapeFill extends ModelObject {
   #replace: (next: FillWrite) => void = () => {};
 }
 
+/** A colour the host checks at the sync: `#RRGGBB`, `RRGGBB`, or a CSS color name. */
 function requireColor(value: unknown, target: string): string {
-  if (typeof value !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(value))
+  if (typeof value !== 'string' || value.length === 0 || value.length > 32)
     fail({ code: 'InvalidArgument', target });
   return value;
 }
