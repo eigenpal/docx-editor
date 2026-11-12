@@ -4120,6 +4120,7 @@ export interface SemanticTableStructure {
     // (undocumented)
     readonly rows: readonly SemanticTableRow[];
     readonly sharedGridLinesHold?: true;
+    readonly statedColumnWidthsPt?: readonly number[];
     readonly tableBorders: TableBorderBox;
     readonly tableWidth: PreferredWidth;
     readonly textBox?: true;

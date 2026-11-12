@@ -33,7 +33,7 @@ const ZERO_MARGINS =
   '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/>' +
   '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>';
 const autofit = (rows: readonly string[], tblPr = '', columns = 3) =>
-  `<w:tbl><w:tblPr>${tblPr}<w:tblW w:w="6000" w:type="dxa"/>${BORDERS}${ZERO_MARGINS}</w:tblPr>` +
+  `<w:tbl><w:tblPr>${tblPr}<w:tblW w:w="${2000 * columns}" w:type="dxa"/>${BORDERS}${ZERO_MARGINS}</w:tblPr>` +
   `<w:tblGrid>${'<w:gridCol w:w="2000"/>'.repeat(columns)}</w:tblGrid>${rows.join('')}</w:tbl>`;
 
 const tableNode = (part: OoxmlPart): OoxmlElement =>

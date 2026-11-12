@@ -315,6 +315,8 @@ export interface SemanticTableStructure {
   /** Whether stored columns and horizontal table properties display right to left. */
   readonly bidiVisual?: true;
   readonly columnWidthsPt: readonly number[];
+  /** Cell widths before the table width fitted them, when it did (`resolveColumnWidthsPt`). */
+  readonly statedColumnWidthsPt?: readonly number[];
   readonly rows: readonly SemanticTableRow[];
   /** Verified pre-2013 percentage-width inline table; derived, never serialized. */
   readonly legacyContentAlignment?: true;
@@ -662,8 +664,8 @@ function readTableStructureUncached(
   }
 
   const authoredGrid = gridColumnElements(table);
-  const gridCols = reachedGridColumns(authoredGrid, cellEnd, hasOmittedRows, compatibilityMode);
-  const columnCount = gridCols.length > 0 ? gridCols.length : derivedColumns;
+  const { lead, gridCols } = reachedGrid(authoredGrid, plans, claims, cellEnd, hasOmittedRows);
+  const columnCount = gridCols.length > 0 ? gridCols.length : derivedColumns - lead;
   // Table style conditions, such as the last column, count the authored grid.
   const styleColumns = authoredGrid.length > 0 ? authoredGrid.length : derivedColumns;
   const bodyRows = plans.length;
@@ -705,7 +707,7 @@ function readTableStructureUncached(
         look,
         rowIndex,
         rowCount: bodyRows,
-        gridColumn,
+        gridColumn: gridColumn + lead,
         gridSpan,
         columnCount: styleColumns,
         // A producer may state the conditions itself rather than leave them to be derived.
@@ -796,49 +798,30 @@ function readTableStructureUncached(
     });
   }
 
-  // `w:tblW` and `w:tblLayout` both live in CT_TblPrBase, which is what a table STYLE's
-  // `w:tblPr` carries — the same reason `tblCellMar` and `tblBorders` cascade above. A style
-  // that states "AutoFit to Window" or fixed layout is stating it for every table that names
-  // it. 17.4.52: an absent `w:tblLayout` means autofit.
-  let styleTableWidth = AUTO_PREFERRED_WIDTH;
-  let styleLayoutFixed: boolean | undefined;
-  let styleIndentPt: number | undefined;
-  let styleAlignment: TableAlignment | undefined;
-  let styleCellSpacingPt: number | undefined;
-  let styleFloat: TableFloatPosition | undefined;
-  for (const node of tableStyle.tablePropertyNodes) {
-    const styleW = childNamed(node, 'tblW');
-    if (styleW) styleTableWidth = readTablePreferredWidth(styleW);
-    const styleLayout = childNamed(node, 'tblLayout');
-    if (styleLayout) styleLayoutFixed = attributeValue(styleLayout, 'type') === 'fixed';
-    styleIndentPt =
-      readTableIndentPt(childNamed(node, 'tblInd'), MAX_TABLE_INDENT_PT) ?? styleIndentPt;
-    styleAlignment = readTableAlignment(node) ?? styleAlignment;
-    styleCellSpacingPt =
-      preferredLengthPt(childNamed(node, 'tblCellSpacing'), MAX_CELL_MARGIN_PT) ??
-      styleCellSpacingPt;
-    styleFloat = readTableFloatPosition(node) ?? styleFloat;
-  }
+  const style = readStyleTableProperties(tableStyle.tablePropertyNodes, {
+    indentPt: MAX_TABLE_INDENT_PT,
+    cellSpacingPt: MAX_CELL_MARGIN_PT,
+  });
   const ownTblW = tblPr && childNamed(tblPr, 'tblW');
-  const tableWidth = ownTblW ? readTablePreferredWidth(ownTblW) : styleTableWidth;
+  const tableWidth = ownTblW ? readTablePreferredWidth(ownTblW) : style.tableWidth;
   const tblLayout = tblPr && childNamed(tblPr, 'tblLayout');
   const layoutFixed = tblLayout
     ? attributeValue(tblLayout, 'type') === 'fixed'
-    : (styleLayoutFixed ?? false);
+    : (style.layoutFixed ?? false);
   const statedIndentPt =
     readTableIndentPt(tblPr && childNamed(tblPr, 'tblInd'), MAX_TABLE_INDENT_PT) ??
-    styleIndentPt ??
+    style.indentPt ??
     0;
   // Captured controls pull a top-level table (bidiVisual too) into the leading margin by a
   // negative indent, and leave a nested table where a zero indent puts it.
   const readIndentPt = depth === 0 ? statedIndentPt : Math.max(0, statedIndentPt);
-  const alignment = readTableAlignment(tblPr) ?? styleAlignment ?? 'left';
+  const alignment = readTableAlignment(tblPr) ?? style.alignment ?? 'left';
   // A nested table's position is stated against its cell, not the page — `w:tblpPr` inside
   // one is honoured by Word only for the top-level table, so deeper tables stay in flow.
-  const float = depth === 0 ? (readTableFloatPosition(tblPr) ?? styleFloat) : undefined;
+  const float = depth === 0 ? (readTableFloatPosition(tblPr) ?? style.float) : undefined;
   const cellSpacingPt =
     preferredLengthPt(tblPr && childNamed(tblPr, 'tblCellSpacing'), MAX_CELL_MARGIN_PT) ??
-    styleCellSpacingPt ??
+    style.cellSpacingPt ??
     uniformRowCellSpacingPt(table) ??
     0;
 
@@ -857,7 +840,8 @@ function readTableStructureUncached(
     alignment,
     bidiVisual,
     indentPt: readIndentPt,
-    indentStated: Boolean(tblPr && childNamed(tblPr, 'tblInd')) || styleIndentPt !== undefined,
+    indentStated: Boolean(tblPr && childNamed(tblPr, 'tblInd')) || style.indentPt !== undefined,
+    leadingSkipPt: leadingSkipPt(authoredGrid, lead),
     tableBorders,
     claims: claimsWithinGrid(claims, columnCount),
     gridCols,
@@ -873,8 +857,24 @@ function readTableStructureUncached(
     depth,
     textBox,
   });
+  // Project the grid visually; cell arrays retain document order for keyboard traversal.
+  const visualRows = physicalTableRows(rows, columnCount, bidiVisual);
+  const visualBorders = bidiVisual
+    ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
+    : tableBorders;
+  const collapsed = cellSpacingPt === 0;
+  let contentRows = withTableContentBorders(visualRows, visualBorders, columnCount, collapsed);
+  contentRows = withRowMinimumContentInsets(
+    contentRows,
+    visualRows,
+    visualBorders,
+    columnCount,
+    collapsed
+  );
+  const statedOut: { widths?: readonly number[] } = {};
   const resolveColumns = (width: PreferredWidth): readonly number[] =>
     resolveColumnWidthsPt({
+      statedOut,
       gridCols,
       claims: placement.claims,
       columnCount,
@@ -883,28 +883,10 @@ function readTableStructureUncached(
       layoutFixed,
       // A hidden revision row can still account for part of the authored grid.
       hasOmittedRows,
-      pastTextColumn,
+      minimumsPt: cellMarginMinimumsPt(rows, columnCount),
+      spacing: spacingGapsBeforeColumns(contentRows, visualBorders, cellSpacingPt, columnCount),
     });
   let columnWidthsPt = resolveColumns(placement.tableWidth);
-  // Project the grid visually; cell arrays retain document order for keyboard traversal.
-  const visualRows = physicalTableRows(rows, columnWidthsPt.length, bidiVisual);
-  const visualBorders = bidiVisual
-    ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
-    : tableBorders;
-  const collapsed = cellSpacingPt === 0;
-  let contentRows = withTableContentBorders(
-    visualRows,
-    visualBorders,
-    columnWidthsPt.length,
-    collapsed
-  );
-  contentRows = withRowMinimumContentInsets(
-    contentRows,
-    visualRows,
-    visualBorders,
-    columnWidthsPt.length,
-    collapsed
-  );
   // A mode-15 percentage table whose rules share its grid lines takes its share less the rule.
   const percentRulePt = modernPercentRulePt(contentRows, {
     ...{ compatibilityMode, depth, cellSpacingPt, widthType: tableWidth.type },
@@ -959,6 +941,9 @@ function readTableStructureUncached(
   return {
     ...(bidiVisual ? { bidiVisual: true as const } : {}),
     columnWidthsPt: bidiVisual ? [...columnWidthsPt].reverse() : columnWidthsPt,
+    ...(statedOut.widths
+      ? { statedColumnWidthsPt: visualOrder(statedOut.widths, bidiVisual) }
+      : {}),
     rows:
       legacyWidth === undefined
         ? shadedRows
@@ -995,4 +980,6 @@ function readTableStructureUncached(
 }
 import { physicalTableRows, withTableContentBorders } from './table-content-borders.ts';
 import { withSpacingFrame } from './table-spacing-frame.ts';
-import { claimsWithinGrid, reachedGridColumns } from './table-reached-grid.ts';
+import { claimsWithinGrid, leadingSkipPt, reachedGrid } from './table-reached-grid.ts';
+import { readStyleTableProperties } from './table-style-properties.ts';
+import { cellMarginMinimumsPt, spacingGapsBeforeColumns, visualOrder } from './table-column-fit.ts';

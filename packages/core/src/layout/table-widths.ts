@@ -28,6 +28,8 @@ import {
   type OoxmlElement,
 } from '@docx-editor.dev/core/store';
 import { MAX_TABLE_COLUMNS } from '../store/store/table-constraints.ts';
+import { columnsAroundCells } from './table-cell-spacing.ts';
+import { fitColumnsAboveMinimums, type SpacingTake } from './table-column-fit.ts';
 
 export { MAX_TABLE_COLUMNS };
 
@@ -324,17 +326,15 @@ const WIDTH_EPSILON_PT = 0.001;
  * that contain them; a span then distributes only the width its settled columns have not
  * already accounted for.
  *
- * That maximum settles rows that disagree with EACH OTHER. It does not settle a cell that
- * disagrees with the grid of a table that states its own total width: there the producer has
- * already reconciled `w:tblGrid` against `w:tblW`, so widening one column only forces the
- * whole table to be scaled back down and redistributes width across columns nobody restated.
- * Both reference engines render the authored grid in that case. So when `w:tblW` states a
- * positive total, an ABSOLUTE `w:tcW` settles only the columns `w:tblGrid` leaves open.
+ * That maximum settles rows that disagree with EACH OTHER. Against the grid, a stated cell
+ * width is not a request for more: it replaces the grid's width for its column, whether the
+ * table states its own width or not. Measured in modes 11, 14 and 15, autofit and fixed: a
+ * 1000/2368-twip grid whose cells state 1684 each lays out as two equal columns, under an
+ * automatic width, a 3368-twip width and an 8640-twip width alike.
  *
- * Absolute is the operative word. A `dxa` preference is stated in the grid's own unit, so
- * disagreeing with the grid is a real disagreement. A `pct` preference cannot express an
- * exact twip, so it disagrees with the grid it was computed from by a rounding — which is
- * `legacyRoundedCellClaims`' subject, and which keeps its own reconciliation here.
+ * A `pct` preference cannot express an exact twip, so in a table that states its own width it
+ * disagrees with the grid it was computed from by a rounding, which is
+ * `legacyRoundedCellClaims`' subject: there it only ever widens the grid.
  */
 function applyWidthClaims(
   seed: readonly (number | undefined)[],
@@ -342,10 +342,10 @@ function applyWidthClaims(
   columnCount: number,
   tableWidthPt: number,
   /** What a `pct` cell width is a share of when the table states no width of its own. */
-  percentBasisPt = tableWidthPt
+  percentBasisPt = tableWidthPt,
+  /** A row the view hides may hold the widths the grid kept, so the grid only widens. */
+  gridOnlyWidens = false
 ): (number | undefined)[] {
-  // A stated total is what makes the authored grid a settled layout rather than a seed.
-  const gridIsSettled = tableWidthPt > 0;
   const settled: (number | undefined)[] = [];
   for (let index = 0; index < columnCount; index += 1) settled.push(seed[index]);
 
@@ -359,7 +359,8 @@ function applyWidthClaims(
     )
     .sort((a, b) => a.span - b.span);
 
-  const textShares = new Set<number>();
+  // Columns a claim has stated: later claims there take the maximum, not the grid.
+  const claimed = new Set<number>();
   for (const claim of ordered) {
     const last = Math.min(claim.start + claim.span, columnCount);
     if (last <= claim.start) continue;
@@ -373,16 +374,11 @@ function applyWidthClaims(
     if (!Number.isFinite(stated) || stated <= 0) continue;
 
     if (last - claim.start === 1) {
-      // A single-column claim states that column outright; maximum wins across rows. It does
-      // not get to restate a column an already-reconciled grid settled.
-      if (gridIsSettled && claim.preferred.type === 'dxa' && seed[claim.start] !== undefined)
-        continue;
-      // A share of the text column replaces the initial grid of a table with no width.
-      const current =
-        claim.preferred.type === 'pct' && tableWidthPt <= 0 && !textShares.has(claim.start)
-          ? undefined
-          : settled[claim.start];
-      if (claim.preferred.type === 'pct') textShares.add(claim.start);
+      // A single-column claim states that column outright, replacing the grid; maximum wins
+      // across rows. A share of a stated table width only widens the grid.
+      const outright = !gridOnlyWidens && (claim.preferred.type === 'dxa' || tableWidthPt <= 0);
+      const current = outright && !claimed.has(claim.start) ? undefined : settled[claim.start];
+      claimed.add(claim.start);
       settled[claim.start] = current === undefined ? stated : Math.max(current, stated);
       continue;
     }
@@ -395,7 +391,17 @@ function applyWidthClaims(
       if (current === undefined) open.push(index);
       else remaining -= current;
     }
-    if (open.length === 0 || remaining <= 0) continue;
+    if (remaining <= 0) continue;
+    if (open.length === 0) {
+      // Measured in modes 0 and 15: a span wider than columns its rows' narrower cells
+      // state widens the last of them. 9794 twips over 3686/942/1466/1466/1577 adds 657
+      // to the fifth; 8000 over 2000/2000/2000 lays out as 100/100/200pt.
+      let stated = true;
+      for (let index = claim.start; index < last; index += 1)
+        if (!claimed.has(index)) stated = false;
+      if (stated) settled[last - 1] = settled[last - 1]! + remaining;
+      continue;
+    }
     const each = remaining / open.length;
     for (const index of open) settled[index] = each;
   }
@@ -407,20 +413,19 @@ function applyWidthClaims(
  *
  * `w:tblGrid` seeds the columns, the authored `w:tcW`/`w:wBefore` preferences are laid over
  * it (see {@link applyWidthClaims}), and anything still unstated shares what the content
- * width has left. Columns never resolve to zero. Where `w:tblW` states a positive total the
- * grid is already reconciled against it, so an absolute preference fills its gaps rather
- * than restating its columns.
+ * width has left. Columns never resolve to zero.
  *
  * A stated preferred width bounds the initial grid. The text column bounds an autofit
  * table only when no positive table width is authored. A requested width may extend into
  * the margins; clamping it to the text column changes both alignment and cell wrapping.
  * The AutoFit content-growth limit does not shrink an already-authored wider table.
  *
- * A `pct` table width is a two-way instruction — it is Word's "AutoFit to Window", so a
- * table narrower than its stated percentage is stretched up to it as well as shrunk down, and
- * so is one whose absolute width is past the text column (`pastTextColumn`). Any other
- * absolute or absent width only ever shrinks: a narrow autofit table already shows its
- * authored geometry, and stretching it would invent geometry no one authored.
+ * A stated table width is a two-way instruction: a grid narrower than a `pct` or `dxa` width
+ * stretches up to it, in proportion to its columns, as well as shrinking down to it. Measured
+ * in modes 11, 14 and 15, autofit and fixed, top-level and nested: a 1684-twip grid under an
+ * 8640-twip `w:tblW` fills 8640, two equal columns under it take 4320 each, and 1000/3000
+ * under 6000 lay out as 1500/4500. Only an absent width shrinks a grid to the page and never
+ * stretches it.
  */
 export function resolveColumnWidthsPt(input: {
   readonly gridCols: readonly OoxmlElement[];
@@ -430,13 +435,15 @@ export function resolveColumnWidthsPt(input: {
   readonly tableWidth: PreferredWidth;
   readonly layoutFixed: boolean;
   readonly hasOmittedRows?: boolean;
-  /**
-   * A top-level autofit table whose absolute width is wider than the text column: it is laid
-   * out at that width, so a narrower grid stretches up to it like a percentage.
-   */
-  readonly pastTextColumn?: boolean;
+  /** Each column's fixed-layout minimum (`fitColumnsAboveMinimums`). */
+  readonly minimumsPt?: readonly number[];
+  /** What a spaced table's gaps and frame take from its width. */
+  readonly spacing?: SpacingTake;
+  /** Receives the cell widths before a table width fits them, when it changes them. */
+  readonly statedOut?: { widths?: readonly number[] };
 }): readonly number[] {
   const { columnCount, tableWidth } = input;
+  if (input.statedOut) input.statedOut.widths = undefined;
   // A caller with a degenerate or non-finite content box has told us nothing about the page.
   // The authored grid is still perfectly good evidence on its own, so resolve from it and
   // skip the page clamp rather than scaling the table down to a sliver of a width that was
@@ -463,7 +470,8 @@ export function resolveColumnWidthsPt(input: {
     input.claims,
     columnCount,
     statedTableWidth,
-    statedTableWidth > 0 ? statedTableWidth : hasPage && !input.layoutFixed ? available : 0
+    statedTableWidth > 0 ? statedTableWidth : hasPage && !input.layoutFixed ? available : 0,
+    input.hasOmittedRows === true
   );
 
   let stated = 0;
@@ -498,18 +506,27 @@ export function resolveColumnWidthsPt(input: {
   // not.
   const floor = columnCount * MIN_DERIVED_COLUMN_PT;
   const pageCap = input.layoutFixed || !hasPage ? Number.POSITIVE_INFINITY : available;
+  // A spaced table's gaps come out of a stated width. Without one, the table grows by them.
+  const gapsPt = input.spacing?.gapsPt ?? 0;
+  const gaps = Number.isFinite(gapsPt) && gapsPt > 0 ? gapsPt : 0;
   const target = Math.max(
-    statedTableWidth > 0 ? statedTableWidth : Math.min(total, pageCap),
+    (statedTableWidth > 0 ? statedTableWidth : Math.min(total + gaps, pageCap)) - gaps,
     floor
   );
 
-  // Only a `pct` table width, or one past the text column, stretches a narrow table up to it.
-  const stretches =
-    (tableWidth.type === 'pct' || input.pastTextColumn === true) && statedTableWidth > 0;
-  if (total <= target + WIDTH_EPSILON_PT && !stretches) return resolved;
-  if (Math.abs(total - target) <= WIDTH_EPSILON_PT) return resolved;
-  const scale = target / total;
-  return resolved.map((width) => width * scale);
+  let cells: readonly number[] = resolved;
+  if (total > target + WIDTH_EPSILON_PT) {
+    // The gaps, and a stated absolute width, come out above each column's minimum.
+    cells =
+      input.minimumsPt && (gaps > 0 || tableWidth.type === 'dxa')
+        ? fitColumnsAboveMinimums(resolved, target, input.minimumsPt, input.spacing?.framePt)
+        : resolved.map((width) => (width * target) / total);
+  } else if (total < target - WIDTH_EPSILON_PT && statedTableWidth > 0) {
+    // A stated width stretches a narrower grid up to it; an absent width only shrinks it.
+    cells = resolved.map((width) => (width * target) / total);
+  }
+  if (input.statedOut && cells !== resolved) input.statedOut.widths = resolved;
+  return gaps > 0 ? columnsAroundCells(cells, gaps) : cells;
 }
 
 /**

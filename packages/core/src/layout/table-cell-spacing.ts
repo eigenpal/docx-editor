@@ -46,6 +46,35 @@ export function cellSpacingGeometry(
   };
 }
 
+/**
+ * The box of a spaced cell in its row, from the table's left edge. A cell with no neighbour on
+ * a side because its row skips the grid columns there (`w:gridBefore`, `w:gridAfter`, or a
+ * row that ends early) sits the spacing further in on that side: the skipped columns keep
+ * their own spacing. Measured in modes 11, 14 and 15 with spacing of 1, 5 and 10pt, rules of
+ * 0, 0.5 and 3pt, cell margins of 5.4 and 15pt, and autofit, fixed and automatic widths.
+ */
+export function spacedCellBox(
+  geometry: CellSpacingGeometry,
+  cells: readonly { readonly gridColumn: number; readonly gridSpan: number }[],
+  column: number,
+  span: number,
+  columnCount: number
+): { readonly x: number; readonly width: number } {
+  // By grid position: a visually reversed row keeps its cells in document order.
+  let skipsBefore = column > 0;
+  let skipsAfter = column + span < columnCount;
+  for (const cell of cells) {
+    if (cell.gridColumn + cell.gridSpan === column) skipsBefore = false;
+    if (cell.gridColumn === column + span) skipsAfter = false;
+  }
+  const inset = geometry.gapPt / 2;
+  const before = skipsBefore ? inset : 0;
+  return {
+    x: geometry.cellLeft(column) + before,
+    width: geometry.cellWidth(column, span) - before - (skipsAfter ? inset : 0),
+  };
+}
+
 /** The space a spaced table's gaps and frame take from its width. */
 function gapsAcross(columnCount: number, spacingPt: number, frame?: SpacedTableFrame): number {
   return (

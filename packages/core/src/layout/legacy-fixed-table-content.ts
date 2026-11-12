@@ -3,7 +3,7 @@ import type { SemanticTableCell, SemanticTableRow } from './semantic-table.ts';
 import type { TableBorderBox } from './table-borders.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
 import { cellSpacingGeometry } from './table-cell-spacing.ts';
-import { withSpacingFrame } from './table-spacing-frame.ts';
+import { outerBandPt, withSpacingFrame } from './table-spacing-frame.ts';
 import type { SideRuleTableShape } from './legacy-table-side-rules.ts';
 import { hasSupportedLegacyTableMargins } from './legacy-table-margins.ts';
 import { readTableIndentPt } from './table-widths.ts';
@@ -83,8 +83,9 @@ export function legacyFixedTableContentOffset(
     shape.floating ||
     (spaced && (!tableBorders || shape.bidiVisual || shape.textBox)) ||
     (shape.alignment !== 'left' && shape.alignment !== 'right') ||
-    // AutoFit takes it with an absolute width only; captured controls cover no other.
-    !(shape.widthType === 'dxa' || (shape.layoutFixed && shape.widthType === 'auto')) ||
+    // AutoFit takes it with an absolute width only; captured controls cover no other. A
+    // spaced table takes it with an automatic width too.
+    !(shape.widthType === 'dxa' || ((shape.layoutFixed || spaced) && shape.widthType === 'auto')) ||
     // In a text box only a leading alignment aligns the content; a trailing one keeps the
     // outer edge on the trailing text edge.
     (shape.textBox && shape.alignment !== 'left') ||
@@ -117,7 +118,11 @@ export function legacyFixedTableContentOffset(
         return undefined;
     }
   }
-  if (leadingAlignment && !indentStated && !styled && !shape.textBox) return undefined;
+  if (leadingAlignment && !indentStated && !styled && !shape.textBox) {
+    // A spaced table keeps its outer edge at the text edge, less half its leading frame rule.
+    const half = spaced ? outerBandPt(tableBorders!.left) / 2 : 0;
+    return half > 0 ? -half : undefined;
+  }
   // The aligned visual edge: a leading alignment is the right edge of a right-to-left table.
   const side = leadingAlignment === shape.bidiVisual ? 'right' : 'left';
   // Rows keep document order with visual grid columns: a right-to-left row lists its visually

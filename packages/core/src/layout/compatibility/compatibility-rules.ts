@@ -55,6 +55,10 @@ export const MODE_RULES = {
     'An autofit column minimum leaves out a positive first-line indent: a word too wide for the first line breaks there',
     'ECMA-376 Part 1 §17.3.1.12 ind'
   ),
+  autofitRefitsNestedCells: modern(
+    'A nested autofit table whose stated cell widths pass its room gives way above each column content minimum',
+    'ECMA-376 Part 1 §17.4.64 tblLayout'
+  ),
   anchorOnlyParagraphSeeding: modern(
     'Seed the pages of consecutive anchor-only paragraphs before later bands wrap earlier text',
     'ECMA-376 Part 1 §20.4.2.3 anchor'
@@ -202,10 +206,6 @@ export const MODE_RULES = {
   tableParagraphWidowControl: modern(
     'Paragraphs that split inside table cells apply widow and orphan control',
     'ECMA-376 Part 1 §17.3.1.44 widowControl'
-  ),
-  unreachedGridColumnsTakeNoWidth: modern(
-    'Trailing grid columns that no cell reaches take no width, even when a row end skip spans them',
-    'ECMA-376 Part 1 §17.4.49 tblGrid'
   ),
   vMergeTextMovesPastHeadRow: modern(
     'Merged cell text moves whole into the next row when the head row cannot hold it',

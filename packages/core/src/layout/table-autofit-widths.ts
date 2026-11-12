@@ -5,6 +5,7 @@ import { rowForWidenedMeasurement } from './legacy-table-side-rules.ts';
 import { autofitReuseScope } from './autofit-context-reuse.ts';
 import { withDefaultTabInterval } from './paragraph-tabs.ts';
 import { MAX_TABLE_GROWTH_PT } from './table-widths.ts';
+import * as columnFit from './table-column-fit.ts';
 import {
   cellSpacingGapPt,
   cellSpacingScale,
@@ -75,7 +76,11 @@ import {
   percentShareWidths,
   preferredSpreadWidths,
 } from './table-autofit-spread.ts';
-import { emptyColumnContent, type AutofitColumnContent } from './table-autofit-column-content.ts';
+import {
+  emptyColumnContent,
+  mergeMarkupNeeds,
+  type AutofitColumnContent,
+} from './table-autofit-column-content.ts';
 export type { AutofitColumnContent } from './table-autofit-column-content.ts';
 import { resolveCjkTypography } from './cjk-typography.ts';
 import { withoutLineEndWhitespace } from './trailing-spaces.ts';
@@ -508,8 +513,9 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
   }
   close();
   endLine();
-  // An empty paragraph still keeps its first line's indents (a list item's marker slot).
-  const min = widest > 0 ? widest : Math.max(0, left + right + firstShift);
+  // An empty paragraph keeps its side indents and a list marker slot, never a first-line indent.
+  const emptyShift = listItem ? firstShift : Math.min(0, firstShift);
+  const min = widest > 0 ? widest : Math.max(0, left + right + emptyShift);
   const minWidened = Math.max(min, widestWidened);
   const widths = { min, max: Math.max(minWidened, longest), minWidened };
   if (key) byParagraph.set(paragraph, { key, widths, scope });
@@ -824,62 +830,39 @@ export function autofitColumnWidthsPt(
   const known = byStructure.get(structure);
   if (known && known.contentWidthPt === contentWidthPt) return known.widths;
   if (structure.layoutFixed) {
-    // A nested fixed table paints no wider than the cell that holds it, after its indent: its
-    // columns give way down to their own minimums. A top-level fixed table never reaches here.
-    // A percentage above 100 extends it past the cell instead.
-    const { tableWidth } = structure;
-    const overflow =
-      tableWidth.type === 'pct' && tableWidth.value > 100
-        ? (contentWidthPt * tableWidth.value) / 100
-        : 0;
-    const room = Math.max(0, contentWidthPt - Math.max(0, leadingIndentPt(structure)), overflow);
-    const widths = fixedNestedWidths(structure, room, () =>
+    // Only a nested fixed table reaches here: its columns give way down to their own minimums.
+    const widths = fixedNestedWidths(structure, contentWidthPt, () =>
       fixedTableCellMinimums(structure, context, view)
     );
     byStructure.set(structure, { contentWidthPt, widths });
     return widths;
   }
-  // Whether the table widens is decided in its current geometry. Widening rebuilds every
-  // cell, which can change every cell's insets, so once it widens every column is sized for
-  // the geometry widening can bring.
+  // Whether the table widens is decided in its current geometry. Widening rebuilds every cell
+  // and can change its insets, so a widened table sizes every column for that geometry.
   const ifWidened: number[] = [];
   const content = emptyColumnContent();
   const minimumsNow = autofitColumnMinimumsPt(structure, context, view, ifWidened, content);
   // Deleted content widens a column too: take the larger need of the two readings.
   const markup = view.markupStructure;
   if (markup && markup.columnWidthsPt.length === structure.columnWidthsPt.length) {
-    const markupWidened: number[] = [];
-    const markupContent = emptyColumnContent();
     const markupView: AutofitView = { ...view, displayMode: 'all-markup' };
-    const markupMinimums = autofitColumnMinimumsPt(
-      markup,
-      context,
-      markupView,
-      markupWidened,
-      markupContent
+    mergeMarkupNeeds({ minimumsNow, ifWidened, content }, (widened, into) =>
+      autofitColumnMinimumsPt(markup, context, markupView, widened, into)
     );
-    for (const [column, minimum] of markupMinimums.entries()) {
-      if (!markupContent.measured[column]) continue;
-      minimumsNow[column] = Math.max(minimumsNow[column]!, minimum);
-      ifWidened[column] = Math.max(ifWidened[column]!, markupWidened[column]!);
-      content.insets[column] = Math.max(content.insets[column]!, markupContent.insets[column]!);
-      content.maximums[column] = Math.max(
-        content.maximums[column]!,
-        markupContent.maximums[column]!
-      );
-    }
   }
   // Everything below works on cell widths; a spaced table's gaps come back at the end.
   const cellWidths = spacedCellWidths(structure);
   const frame = structure.rows[0]?.spacingFrame;
   const scale = cellSpacingScale(structure.columnWidthsPt, structure.cellSpacingPt, frame);
   const gaps = spacingGapsPt(structure);
+  columnFit.keepFirstLineWhereWidening(ifWidened, minimumsNow, cellWidths, (plain) =>
+    autofitColumnMinimumsPt(structure, context, view, plain, undefined, false)
+  );
   // A column a cell gives a preferred width starts from that width, not from the grid.
   const preferredWidths = cellWidths.map((width, column) =>
     content.preferredWidths[column] === undefined ? width : content.preferredWidths[column]! * scale
   );
-  // Whether the table widens is decided with the insets it has now, spans included.
-  // Spans are held against the widths the table paints at now, not the ones its cells ask.
+  // Whether the table widens is decided with its present insets and painted widths, spans too.
   const current = spanAdjustedMinimums(
     cellWidths,
     minimumsNow,
@@ -893,6 +876,28 @@ export function autofitColumnWidthsPt(
   const widens = current.some(
     (minimum, column) => minimum > cellWidths[column]! + WIDTH_EPSILON_PT
   );
+  // Stated cell widths that had to give way do so above each column's content minimum.
+  const refit =
+    sizedByContent || (structure.autoOuterRulePt ?? 0) > 0
+      ? undefined
+      : columnFit.autofitRefit(structure, content, cellWidths, minimumsNow, {
+          depth: view.depth ?? 0,
+          compatibilityMode: context.compatibilityMode,
+        });
+  const stretched =
+    refit || sizedByContent || gaps > 0 || content.spans.length > 0
+      ? undefined
+      : columnFit.stretchAboveMinimums(structure.statedColumnWidthsPt, cellWidths, minimumsNow);
+  if (stretched) {
+    const widths = sameOrComputed(structure, stretched);
+    byStructure.set(structure, { contentWidthPt, widths });
+    return widths;
+  }
+  if (refit) {
+    const widths = sameOrComputed(structure, gaps > 0 ? columnsAroundCells(refit, gaps) : refit);
+    byStructure.set(structure, { contentWidthPt, widths });
+    return widths;
+  }
   // Widening may end shared grid lines, but not legacy content alignment, whose minimums hold.
   const spread = sizedByContent
     ? undefined
@@ -938,7 +943,8 @@ export function autofitColumnWidthsPt(
   // A table wider than its text column grows to hold its minimums instead of scaling them.
   const roomPt = Math.max(0, (structure.pastTextColumn ? MAX_TABLE_GROWTH_PT : availablePt) - gaps);
   const ownWidth = structure.tableWidth.value > 0 && structure.tableWidth.type !== 'auto';
-  const settle = (): readonly number[] =>
+  let base = cellWidths;
+  const settle = (from: readonly number[] = base): readonly number[] =>
     sizedByContent
       ? contentSizedWidths(
           preferredWidths,
@@ -949,13 +955,18 @@ export function autofitColumnWidthsPt(
           ownWidth ? targetPt : undefined,
           roomPt,
           {
-            currentPt: cellWidths.reduce((sum, width) => sum + width, 0),
+            currentPt: from.reduce((sum, width) => sum + width, 0),
             insets: content.insets,
           }
         )
-      : (percentShareWidths(structure, content, cellWidths, minimums, targetPt, view.depth ?? 0) ??
-        widenAutofitColumns(cellWidths, minimums, targetPt, roomPt, { insets: content.insets }));
+      : (percentShareWidths(structure, content, from, minimums, targetPt, view.depth ?? 0) ??
+        widenAutofitColumns(from, minimums, targetPt, roomPt, { insets: content.insets }));
   let cells = settle();
+  const unstretched = columnFit.unstretchedBase(structure, cellWidths, cells, targetPt);
+  if (unstretched) {
+    minimums = columnFit.keepUnmeasured(minimums, content.measured, unstretched);
+    cells = settle((base = unstretched));
+  }
   // A span the preferred widths held may lose its room as columns settle: hold it against
   // the settled widths and settle again.
   for (let round = 0; round < MAX_SPAN_ROUNDS; round++) {
@@ -963,7 +974,7 @@ export function autofitColumnWidthsPt(
       let held = 0;
       for (let column = span.from; column < span.from + span.count; column++)
         held += cells[column] ?? 0;
-      return held < span.minimum - WIDTH_EPSILON_PT;
+      return held < span.minimum;
     });
     if (short.length === 0) break;
     const raised = spanAdjustedMinimums(cells, minimums, content.maximums, short);

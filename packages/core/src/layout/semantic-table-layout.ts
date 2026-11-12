@@ -50,6 +50,7 @@ import {
   exactSpacingExtensionPt,
   rowOpeningGapPt,
   cellSpacingGeometry,
+  spacedCellBox,
   closingCellSpacingPt,
   sumCols,
 } from './table-cell-spacing.ts';
@@ -1356,9 +1357,12 @@ export function layoutRowFragmentBounded(
     const { gridSpan: span, gridColumn } = cell;
     const slotX = left + sumCols(cols, 0, gridColumn);
     const slotW = sumCols(cols, gridColumn, Math.min(gridColumn + span, cols.length)) || total;
-    const spaced = gap && gridColumn < cols.length ? gap : null;
-    const cellX = spaced ? left + spaced.cellLeft(gridColumn) : slotX;
-    const cellW = Math.max(spaced ? spaced.cellWidth(gridColumn, span) : slotW, MIN_CELL_BOX_PT);
+    const spaced =
+      gap && gridColumn < cols.length
+        ? spacedCellBox(gap, row.cells, gridColumn, span, cols.length)
+        : null;
+    const cellX = spaced ? left + spaced.x : slotX;
+    const cellW = Math.max(spaced ? spaced.width : slotW, MIN_CELL_BOX_PT);
     const ownInsets = endRowInsets(cell, deps, terminalBorderPt, rowTop, maxBottom, cellSpacingPt);
     const insets = rowGapPt > 0 ? { ...ownInsets, top: ownInsets.top + rowGapPt } : ownInsets;
     // Each page fragment retains the cell padding, even when its paragraph continues.

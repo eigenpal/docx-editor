@@ -37,6 +37,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 
 | Rule | Applies in | Behavior |
 | --- | --- | --- |
+| `autofitRefitsNestedCells` | `modern` | A nested autofit table whose stated cell widths pass its room gives way above each column's content minimum, as a top-level table does |
 | `anchorOnlyParagraphSeeding` | `modern` | Seeds the pages of consecutive anchor-only paragraphs first |
 | `anchorOnlyParagraphWrapExclusion` | `modern` | An anchor-only paragraph wraps around its own anchors |
 | `anchorsLayOutInCell` | `modern` | Every anchored object in a table cell lays out in its cell |
@@ -68,7 +69,6 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `rowPageBreakYieldsToKeep` | `modern` | A row with a page break follows a row that keeps with it |
 | `tallRowStaysWhole` | `legacy` | A row that cannot split and is taller than a page stays whole on its page and runs past the bottom margin |
 | `tableParagraphWidowControl` | `modern` | Paragraphs that split in table cells apply widow control |
-| `unreachedGridColumnsTakeNoWidth` | `modern` | Trailing grid columns that no cell reaches take no width, even when a row end skip spans them. Table style conditions still count the authored grid |
 | `vMergeTextMovesPastHeadRow` | `modern` | Merged cell text moves whole past a head row that cannot hold it |
 | `wrappedAnchorsEndAtBottomMargin` | `modern` | A wrapping object positioned from its paragraph or line moves up to end at the bottom margin. When that would lift it above its line, the line moves to the next page, and an object that still crosses the margin ends the page. In a table cell, the row splits before that line |
 | `wrappedAnchorsEndOnSheet` | `legacy` | A wrapping object positioned from its paragraph or line moves up to end at the bottom page edge, never above the top page edge. Its line never moves. A row whose cell object would cross the bottom margin moves to the next page |

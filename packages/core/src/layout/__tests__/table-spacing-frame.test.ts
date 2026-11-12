@@ -40,6 +40,8 @@ function layoutTable(
   const layout = layoutSemanticDocument(result.part, 0, {
     measurer: createFixedMeasurer(6, 12),
     geometry: { width: 400, height: pageHeight, margin: { top: 0, right: 0, bottom: 0, left: 0 } },
+    // Older modes move an unstyled table by half its leading frame rule.
+    compatibilityMode: 15,
   });
   return layout.pages.flatMap((page) =>
     page.fragments.filter((fragment): fragment is TableFragmentRecord => fragment.kind === 'table')
