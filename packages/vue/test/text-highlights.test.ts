@@ -518,7 +518,7 @@ describe('context menu highlights', () => {
     const before = spelling[0]!;
     expect(before.start).toBe(editor().findMatches('signs')[0]!.start);
     // A collaborator types at the paragraph start while the menu stays open.
-    const caret = { paragraphId: before.range.blockId, offset: 0 };
+    const caret = { blockId: before.range.blockId, offset: 0 };
     editor().exec({ type: 'setSelection', range: { anchor: caret, head: caret } });
     editor().exec({ type: 'insertText', text: 'Now ' });
     await flush();
@@ -546,7 +546,7 @@ describe('context menu highlights', () => {
    */
   async function alignMarksWithCaret(container: HTMLElement, editor: DocxEditorInstance) {
     const match = editor.findMatches('signs')[0]!;
-    const start = { paragraphId: match.blockId, offset: match.start };
+    const start = { blockId: match.blockId, offset: match.start };
     editor.exec({ type: 'setSelection', range: { anchor: start, head: start } });
     await flush();
     const caret = editor.getCaretRect()!;
@@ -565,7 +565,7 @@ describe('context menu highlights', () => {
   ) {
     await alignMarksWithCaret(container, editor);
     const match = editor.findMatches(word)[0]!;
-    const caret = { paragraphId: match.blockId, offset: match.start + offsetInWord };
+    const caret = { blockId: match.blockId, offset: match.start + offsetInWord };
     editor.exec({ type: 'setSelection', range: { anchor: caret, head: caret } });
     await flush();
     // Shift+F10 and the Menu key report no pointer position.

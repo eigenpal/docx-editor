@@ -40,7 +40,7 @@ function highlightsAtCaret<R extends HighlightRange>(editor: Editor): readonly H
       const id = `${hit.name}\u0000${hit.index}`;
       if (seen.has(id)) continue;
       seen.add(id);
-      if (hit.range.blockId !== caret.paragraphId) continue;
+      if (hit.range.blockId !== caret.blockId) continue;
       if (caret.offset < hit.start || caret.offset > hit.start + hit.length) continue;
       hits.push(hit);
     }

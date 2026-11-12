@@ -680,7 +680,7 @@ describe('context menu highlights', () => {
     expect(before.start).toBe(view.editor().findMatches('signs')[0]!.start);
     // A collaborator types at the paragraph start while the menu stays open.
     await act(async () => {
-      const caret = { paragraphId: before.range.blockId, offset: 0 };
+      const caret = { blockId: before.range.blockId, offset: 0 };
       view.editor().exec({ type: 'setSelection', range: { anchor: caret, head: caret } });
       view.editor().exec({ type: 'insertText', text: 'Now ' });
       await wait(40);
@@ -712,7 +712,7 @@ describe('context menu highlights', () => {
    */
   function alignMarksWithCaret(view: Awaited<ReturnType<typeof mountMenu>>) {
     const match = view.editor().findMatches('signs')[0]!;
-    const start = { paragraphId: match.blockId, offset: match.start };
+    const start = { blockId: match.blockId, offset: match.start };
     act(() => {
       view.editor().exec({ type: 'setSelection', range: { anchor: start, head: start } });
     });
@@ -731,7 +731,7 @@ describe('context menu highlights', () => {
   ) {
     alignMarksWithCaret(view);
     const match = view.editor().findMatches(word)[0]!;
-    const caret = { paragraphId: match.blockId, offset: match.start + offsetInWord };
+    const caret = { blockId: match.blockId, offset: match.start + offsetInWord };
     await act(async () => {
       view.editor().exec({ type: 'setSelection', range: { anchor: caret, head: caret } });
       await wait(20);
