@@ -11,9 +11,8 @@
 // So the readback is taken against the text the page shows (`base`), and the one edit that
 // yields is moved onto the model's current text. Offsets move the way a remote caret's do
 // (`mapOffsetAcrossText`), so the composed text stays where the reader's caret is. A
-// deletion the composition made (a candidate replacing a selection) is applied only while the
-// characters it deletes are still there, unchanged: it never deletes what a collaborator
-// wrote, which the user did not see.
+// deletion the composition made (a candidate replacing a selection) never deletes what a
+// collaborator wrote, which the user did not see.
 
 import { mapOffsetAcrossText } from '../collaboration/offset-mapping.ts';
 
@@ -85,7 +84,14 @@ export function rebaseComposedText(
   const start = rebaseOffset(base, current, edit.start);
   if (edit.end === edit.start) return current.slice(0, start) + edit.text + current.slice(start);
   const end = rebaseOffset(base, current, edit.end);
-  // Deleted only while it still reads as the user saw it.
-  const intact = end >= start && current.slice(start, end) === base.slice(edit.start, edit.end);
-  return current.slice(0, start) + edit.text + current.slice(intact ? end : start);
+  // The replaced text still reads as the user saw it: replace it where it is now.
+  if (end >= start && current.slice(start, end) === base.slice(edit.start, edit.end)) {
+    return current.slice(0, start) + edit.text + current.slice(end);
+  }
+  // A collaborator changed part of it. Their text stays whole, after the composed text, and
+  // the rest of what the user replaced is deleted.
+  const remote = differingMiddle(base, current);
+  const head = Math.min(edit.start, remote.start);
+  const tail = Math.max(edit.end, remote.end);
+  return base.slice(0, head) + edit.text + remote.text + base.slice(tail);
 }

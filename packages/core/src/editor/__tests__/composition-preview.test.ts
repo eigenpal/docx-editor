@@ -19,6 +19,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+import { createDocxEditor } from '../docx-editor.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -321,5 +322,59 @@ describe('the same rule wherever the run is painted', () => {
       expect(surface.session.bodyText()).toBe('wordé');
       expect(run.getAttribute('style')).toBe(before);
     });
+  });
+});
+
+const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+
+/** A floating text box holding one paragraph, anchored in a body paragraph. */
+function textBoxDocx(text: string): Uint8Array {
+  const box =
+    '<w:p><w:r><w:drawing><wp:anchor simplePos="0" relativeHeight="1" behindDoc="0" locked="0" ' +
+    'layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
+    '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+    '<wp:extent cx="2000000" cy="800000"/><wp:wrapNone/><wp:docPr id="1" name="Box"/>' +
+    `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp><wps:spPr><a:xfrm><a:off x="0" y="0"/>` +
+    '<a:ext cx="2000000" cy="800000"/></a:xfrm><a:prstGeom prst="rect"/></wps:spPr>' +
+    `<wps:txbx><w:txbxContent>${p(text)}</w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp>` +
+    '</a:graphicData></a:graphic></wp:anchor></w:drawing></w:r><w:r><w:t>Host</w:t></w:r></w:p>';
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Override PartName="/word/document.xml" ContentType="${TYPE}.document.main+xml"/></Types>`
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:wps="${WPS}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:r="${R}">` +
+        `<w:body>${box}</w:body></w:document>`
+    ),
+  });
+}
+
+describe('a composition in a text box', () => {
+  test('commits once, after the space that ends its line, and stays visible', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container, document: textBoxDocx('우리나라 ') });
+    try {
+      const [match] = editor.findMatches('우리나라');
+      expect(match?.scope?.kind).toBe('frame');
+      const surface = editor.surface!;
+      expect(surface.setActiveScope(match!.scope!)).toBe(true);
+      caretAt(surface, match!.blockId, 5);
+      const seen = composeSteps(pagesOf(container), ['ㅎ', '하', '한']);
+      expect(seen.map((step) => step.clipped)).toEqual([false, false, false]);
+      expect(editor.findMatches('우리나라 한').length).toBe(1);
+      expect(editor.findMatches('우리나라').length).toBe(1);
+    } finally {
+      editor.destroy();
+      container.remove();
+      document.getSelection()?.removeAllRanges();
+    }
   });
 });

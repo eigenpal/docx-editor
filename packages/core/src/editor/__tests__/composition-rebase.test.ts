@@ -40,7 +40,7 @@ describe('rebaseComposedText', () => {
 
   test('a candidate that replaces selected text never deletes remote text', () => {
     // The composition replaced "bc"; meanwhile a collaborator replaced "c" with "X".
-    expect(rebaseComposedText('abcd', 'a日本d', 'abXd', null)).toBe('a日本bXd');
+    expect(rebaseComposedText('abcd', 'a日本d', 'abXd', null)).toBe('a日本Xd');
   });
 
   test('remote edits on both sides of the caret leave the composed text at the caret', () => {

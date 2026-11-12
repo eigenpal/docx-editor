@@ -386,11 +386,12 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   /** What the page shows for the composing paragraph now. */
   function baseOf(paragraphId: string): ComposingBase {
     const selection = deps.selection();
-    const painted = deps.paintedText?.(paragraphId) ?? {
-      text: deps.textOf(paragraphId),
-      revision: session.packageRevision(),
-    };
+    const model = { text: deps.textOf(paragraphId), revision: session.packageRevision() };
+    const shown = deps.paintedText?.(paragraphId) ?? model;
+    // Painted from the model's own revision, the two must agree; if not, the model is right.
+    const painted = shown.revision === model.revision ? model : shown;
     const collapsed =
+      painted.revision !== -1 &&
       selection.anchor.paragraphId === paragraphId &&
       selection.head.paragraphId === paragraphId &&
       selection.anchor.offset === selection.head.offset;

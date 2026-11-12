@@ -3486,8 +3486,9 @@ export function mountPaginatedSurface(
     paintedText: (paragraphId) => {
       const shown = paintedLayout ?? currentLayout;
       const current = shown === currentLayout && !commitPaintOwed && scheduler.pending() === null;
+      // Through the open text box's projection, as `textOf` reads: its story is only there.
       return {
-        text: paragraphTextFromLayout(shown, paragraphId),
+        text: paragraphTextFromLayout(textboxEditing?.layout(shown) ?? shown, paragraphId),
         revision: current ? session.packageRevision() : -1,
       };
     },

@@ -231,3 +231,58 @@ test('a remote split of the composing paragraph puts the syllable after the care
     packageFingerprint(bob.editor.surface!.session.currentPackage())
   );
 });
+
+const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const textBox = (text: string) =>
+  `<w:p><w:r><w:drawing xmlns:wps="${WPS}" xmlns:wp="${WP}" xmlns:a="${A}">` +
+  '<wp:anchor simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" ' +
+  'allowOverlap="1"><wp:simplePos x="0" y="0"/>' +
+  '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
+  '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+  '<wp:extent cx="2000000" cy="800000"/><wp:wrapNone/><wp:docPr id="1" name="Box"/>' +
+  `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp><wps:spPr><a:xfrm><a:off x="0" y="0"/>` +
+  '<a:ext cx="2000000" cy="800000"/></a:xfrm><a:prstGeom prst="rect"/></wps:spPr>' +
+  `<wps:txbx><w:txbxContent><w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>` +
+  '</w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor>' +
+  '</w:drawing></w:r><w:r><w:t>Host</w:t></w:r></w:p>';
+
+test('a remote edit while composing in a text box keeps both texts once', async () => {
+  const peers = await harness.pair(zipDocument(textBox('우리나라 ')));
+  const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
+    peer.detach();
+    return mount({
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+    });
+  }) as [Mounted, Mounted];
+  const flush = () => {
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+  };
+  const [match] = alice.editor.findMatches('우리나라');
+  expect(match?.scope?.kind).toBe('frame');
+  const pages = alice.container.querySelector<HTMLElement>('.docx-pages')!;
+  pages.focus();
+  expect(alice.editor.surface!.setActiveScope(match!.scope!)).toBe(true);
+  const at = { paragraphId: match!.blockId, offset: 5 };
+  alice.editor.surface!.setSelection({ anchor: at, head: at });
+  pages.dispatchEvent(compositionEvent('compositionstart'));
+  expect(clipped(composeStep(alice, ' ', '하'))).toBe(false);
+  // Bob types in the host paragraph while Alice composes in the box.
+  remoteEdit(bob, 0, 2, '!');
+  flush();
+  await settle();
+  composeStep(alice, ' ', '한');
+  pages.dispatchEvent(compositionEvent('compositionend', '한'));
+  flush();
+  for (const peer of [alice, bob]) {
+    expect(peer.editor.findMatches('우리나라 한').length).toBe(1);
+    expect(peer.editor.findMatches('우리나라').length).toBe(1);
+    expect(peer.editor.findMatches('!').length).toBe(1);
+  }
+  expect(packageFingerprint(alice.editor.surface!.session.currentPackage())).toBe(
+    packageFingerprint(bob.editor.surface!.session.currentPackage())
+  );
+});
