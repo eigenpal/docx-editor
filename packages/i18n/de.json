@@ -1370,7 +1370,8 @@
       "noShape": "Wählen Sie eine Form, ein Textfeld oder eine Linie aus.",
       "noSolidFill": "Die Form hat keine einfarbige Füllung. Wählen Sie zuerst eine Füllfarbe aus.",
       "outOfRange": "Der Wert liegt außerhalb des Bereichs.",
-      "staleSelection": "Die Auswahl hat sich geändert. Wählen Sie die Form erneut aus."
+      "staleSelection": "Die Auswahl hat sich geändert. Wählen Sie die Form erneut aus.",
+      "mixedFill": "Die Formen in dieser Gruppe haben unterschiedliche Füllungen. Wählen Sie eine Farbe für alle."
     },
     "formatShape": "Form formatieren…",
     "pane": {

@@ -1370,7 +1370,8 @@
       "noShape": "请选择一个形状、文本框或线条。",
       "noSolidFill": "形状没有纯色填充。请先选择填充颜色。",
       "outOfRange": "值超出范围。",
-      "staleSelection": "所选内容已更改。请重新选择形状。"
+      "staleSelection": "所选内容已更改。请重新选择形状。",
+      "mixedFill": "此组中的形状填充不同。选择一种颜色即可应用到所有形状。"
     },
     "formatShape": "设置形状格式…",
     "pane": {

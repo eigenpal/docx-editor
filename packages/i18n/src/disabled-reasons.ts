@@ -165,6 +165,8 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   // the same.
   'this drawing has no fill or outline to set': 'shape.errors.noShape',
   'the shape has no solid fill to change; set a color': 'shape.errors.noSolidFill',
+  'the shapes in this group have different fills; pick a color to set them all':
+    'shape.errors.mixedFill',
   'a legacy shape has no transparency': 'shape.errors.legacyTransparency',
   'the fill or outline value is out of range': 'shape.errors.outOfRange',
   'stale drawing selection': 'shape.errors.staleSelection',

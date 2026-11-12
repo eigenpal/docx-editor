@@ -1407,6 +1407,7 @@
     "errors": {
       "noShape": "Select one shape, text box, or line.",
       "noSolidFill": "The shape has no solid fill. Pick a fill color first.",
+      "mixedFill": "The shapes in this group have different fills. Pick a color to set them all.",
       "legacyTransparency": "This older shape type has no transparency setting.",
       "outOfRange": "The value is out of range.",
       "staleSelection": "The selection changed. Select the shape again."

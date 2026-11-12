@@ -50,6 +50,8 @@ export interface SelectedShapeView {
 /** The reason of a refused selection: no drawing, or one with no fill or outline. */
 export const SHAPE_NONE_REASON = 'this drawing has no fill or outline to set';
 const NO_SOLID_FILL_REASON = 'the shape has no solid fill to change; set a color';
+const MIXED_FILL_REASON =
+  'the shapes in this group have different fills; pick a color to set them all';
 
 const NO_SHAPE: SelectedShapeView = Object.freeze({
   drawingNodeId: null,
@@ -120,7 +122,9 @@ export function readSelectedShape(
           drawingNodeId,
           transparency: format.fill.transparency,
         })
-      : NO_SOLID_FILL_REASON);
+      : format.fill.type === 'mixed'
+        ? MIXED_FILL_REASON
+        : NO_SOLID_FILL_REASON);
   return {
     drawingNodeId,
     memberId: image.memberId ?? null,

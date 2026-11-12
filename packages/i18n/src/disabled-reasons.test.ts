@@ -140,6 +140,10 @@ describe('the Format shape refusals are translatable', () => {
   test.each([
     ['this drawing has no fill or outline to set', en.shape.errors.noShape],
     ['the shape has no solid fill to change; set a color', en.shape.errors.noSolidFill],
+    [
+      'the shapes in this group have different fills; pick a color to set them all',
+      en.shape.errors.mixedFill,
+    ],
     ['a legacy shape has no transparency', en.shape.errors.legacyTransparency],
     ['the fill or outline value is out of range', en.shape.errors.outOfRange],
     ['stale drawing selection', en.shape.errors.staleSelection],
