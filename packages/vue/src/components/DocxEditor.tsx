@@ -42,6 +42,9 @@ import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/Do
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { DocxEditorChartPane, DocxEditorSidePanel } from '../editor/charts';
 import { DocxEditorShapePane } from '../editor/shapes';
+import { ChartInsert } from '../editor/charts/ChartInsert';
+import { ColorPicker } from '../editor/color/ColorPicker';
+import * as ObjectParts from '../editor/objects';
 import { DocxEditorNavigation, Navigation } from '../editor/navigation';
 import type { DocxEditorNavigationProps } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
@@ -225,6 +228,42 @@ export interface DocxEditorNamespace {
   readonly ChartPane: typeof DocxEditorChartPane;
   /** The Format shape pane: the fill and outline of the selected shape. */
   readonly ShapePane: typeof DocxEditorShapePane;
+  /** The sections of a pane (`PANE_SECTIONS`), each a heading over its slot parts. */
+  readonly PaneSections: typeof ObjectParts.DocxEditorPaneSections;
+  /** The shared colour picker compound (`Root`, `Trigger`, `Content`, `Swatch`, …). */
+  readonly ColorPicker: typeof ColorPicker;
+  /** The fill colour of the selected shape (`shape.fill`). */
+  readonly ShapeFill: typeof ObjectParts.ShapeFill;
+  /** The fill transparency of the selected shape (`shape.fillTransparency`). */
+  readonly ShapeFillTransparency: typeof ObjectParts.ShapeFillTransparency;
+  /** The outline colour of the selected shape (`shape.outlineColor`). */
+  readonly ShapeOutlineColor: typeof ObjectParts.ShapeOutlineColor;
+  /** The outline width of the selected shape (`shape.outlineWidth`). */
+  readonly ShapeOutlineWidth: typeof ObjectParts.ShapeOutlineWidth;
+  /** The outline dash of the selected shape (`shape.outlineDash`). */
+  readonly ShapeOutlineDash: typeof ObjectParts.ShapeOutlineDash;
+  /** The type of the selected chart (`chart.type`). */
+  readonly ChartType: typeof ObjectParts.ChartTypePart;
+  /** The title of the selected chart (`chart.title`). */
+  readonly ChartTitle: typeof ObjectParts.ChartTitle;
+  /** The legend position of the selected chart (`chart.legend`). */
+  readonly ChartLegend: typeof ObjectParts.ChartLegend;
+  /** The data labels toggle of the selected chart (`chart.dataLabels`). */
+  readonly ChartDataLabels: typeof ObjectParts.ChartDataLabels;
+  /** The axes toggle of the selected chart (`chart.axes`). */
+  readonly ChartAxes: typeof ObjectParts.ChartAxes;
+  /** The gridlines toggle of the selected chart (`chart.gridlines`). */
+  readonly ChartGridlines: typeof ObjectParts.ChartGridlines;
+  /** The category (X) axis title of the selected chart (`chart.categoryAxisTitle`). */
+  readonly ChartCategoryAxisTitle: typeof ObjectParts.ChartCategoryAxisTitle;
+  /** The value (Y) axis title of the selected chart (`chart.valueAxisTitle`). */
+  readonly ChartValueAxisTitle: typeof ObjectParts.ChartValueAxisTitle;
+  /** The series (or point) colours of the selected chart (`chart.seriesColor`). */
+  readonly ChartSeriesColors: typeof ObjectParts.ChartSeriesColors;
+  /** The data editor of the selected chart (`chart.data`). */
+  readonly ChartData: typeof ObjectParts.ChartData;
+  /** The chart type list that inserts a chart (`insert.chart`), with `Trigger`, `Content`, `Item`. */
+  readonly ChartInsert: typeof ChartInsert;
   readonly Navigation: typeof Navigation;
   /** File export progress and errors, configured through popups.export. */
   readonly ExportDialog: typeof DocxEditorExportDialog;
@@ -703,6 +742,24 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   SidePanel: DocxEditorSidePanel,
   ChartPane: DocxEditorChartPane,
   ShapePane: DocxEditorShapePane,
+  PaneSections: ObjectParts.DocxEditorPaneSections,
+  ColorPicker,
+  ShapeFill: ObjectParts.ShapeFill,
+  ShapeFillTransparency: ObjectParts.ShapeFillTransparency,
+  ShapeOutlineColor: ObjectParts.ShapeOutlineColor,
+  ShapeOutlineWidth: ObjectParts.ShapeOutlineWidth,
+  ShapeOutlineDash: ObjectParts.ShapeOutlineDash,
+  ChartType: ObjectParts.ChartTypePart,
+  ChartTitle: ObjectParts.ChartTitle,
+  ChartLegend: ObjectParts.ChartLegend,
+  ChartDataLabels: ObjectParts.ChartDataLabels,
+  ChartAxes: ObjectParts.ChartAxes,
+  ChartGridlines: ObjectParts.ChartGridlines,
+  ChartCategoryAxisTitle: ObjectParts.ChartCategoryAxisTitle,
+  ChartValueAxisTitle: ObjectParts.ChartValueAxisTitle,
+  ChartSeriesColors: ObjectParts.ChartSeriesColors,
+  ChartData: ObjectParts.ChartData,
+  ChartInsert,
   Navigation: DocxEditorNavigation,
   ExportDialog: DocxEditorExportDialog,
   PrintDialog: DocxEditorPrintDialog,

@@ -130,6 +130,7 @@ import {
   type TableBorderWidthNamespace,
   type TableCellFillNamespace,
 } from './TableControls';
+import { OBJECT_TOOLBAR_PARTS } from '../objects/toolbar-parts';
 import { ParagraphDialogHost } from '../paragraph-dialog-host';
 import { TableChromeProvider } from './useTableChrome';
 import { ToolbarEditingMode } from './EditingMode';
@@ -196,6 +197,8 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'image.wrap': ToolbarImageWrap,
   'insert.chart': ToolbarChartInsert,
   'image.altText': ToolbarImageAltText,
+  // The contextual shape and chart groups: the object parts in their compact form.
+  ...OBJECT_TOOLBAR_PARTS,
 };
 
 const TABLE_CONTEXTUAL_GROUP: DefaultGroup = {
@@ -232,25 +235,29 @@ function buildDefaultGroups(
 ): readonly DefaultGroup[] {
   // Each button shows only when a mounted pane or listener takes its own pane.
   const shape = panes.shape && !!image?.shapeFormat;
-  return formattingBarChromeGroups(image, { direction, chart: panes.chart && chart, shape }).map(
-    (group) => {
-      if (group.id === 'alignment') {
-        return {
-          id: group.id,
-          labelKey: group.labelKey,
-          entries: [{ slot: 'alignment' as ArrangementKey, Part: ToolbarAlignment }],
-        };
-      }
+  const objects = { shapeControls: !!image?.shapeFormat, chartControls: chart };
+  return formattingBarChromeGroups(image, {
+    direction,
+    chart: panes.chart && chart,
+    shape,
+    ...objects,
+  }).map((group) => {
+    if (group.id === 'alignment') {
       return {
         id: group.id,
         labelKey: group.labelKey,
-        entries: group.controls.map((control) => {
-          const slot = chromeSlotId(group, control);
-          return { slot: slot as ArrangementKey, Part: SHAPED_PARTS[slot] ?? iconPart(slot) };
-        }),
+        entries: [{ slot: 'alignment' as ArrangementKey, Part: ToolbarAlignment }],
       };
     }
-  );
+    return {
+      id: group.id,
+      labelKey: group.labelKey,
+      entries: group.controls.map((control) => {
+        const slot = chromeSlotId(group, control);
+        return { slot: slot as ArrangementKey, Part: SHAPED_PARTS[slot] ?? iconPart(slot) };
+      }),
+    };
+  });
 }
 
 const selectToolbarImage = (snapshot: EditorSnapshot) => snapshot.image;

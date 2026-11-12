@@ -100,14 +100,21 @@ test('the side panel swaps to the pane; keyboard picks, typed fields, undo, and 
   expect(editor.snapshot().image?.shapeFormat?.fill.color).toBe('ED7D31');
   expect(editor.snapshot().image?.shapeFormat?.fill.theme).toEqual({ name: 'accent2', shift: 0 });
 
-  type(input(panel, 'Outline hex color'), '#0070C0');
+  const outlineButton = panel.querySelectorAll<HTMLButtonElement>(
+    '.docx-color-picker__trigger'
+  )[1]!;
+  outlineButton.click();
   await flush();
+  type(panel.querySelector<HTMLInputElement>('.docx-color-picker__hex input')!, '#0070C0');
+  await flush();
+  expect(document.activeElement).toBe(outlineButton);
   type(input(panel, 'Width (pt)'), '3');
   await flush();
   expect(editor.snapshot().image?.shapeFormat?.outline).toEqual({
     visible: true,
     color: '0070C0',
     widthPt: 3,
+    dash: 'solid',
   });
   expect(panel.querySelectorAll('.docx-shape-pane__color-button')[1]?.textContent).toBe('Blue');
 
@@ -116,7 +123,8 @@ test('the side panel swaps to the pane; keyboard picks, typed fields, undo, and 
   expect(input(panel, 'Width (pt)').value).toBe('1');
   editor.exec({ type: 'setShapeFill', color: '00B050' });
   await flush();
-  expect(input(panel, 'Fill hex color').value).toBe('#00B050');
+  expect(fillButton.getAttribute('data-color')).toBe('#00B050');
+  expect(fillButton.textContent).toBe('Green');
 
   expect(editor.exec({ type: 'deleteImage' })).toMatchObject({ ok: true });
   await flush();
