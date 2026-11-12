@@ -4024,6 +4024,22 @@ export function partOfNodeId(session: Pick<TreeDocxSessionView, 'currentPackage'
 export function passDrawingFramePress(editor: Editor, event: PointerEvent): DrawingFramePress;
 
 // @internal
+export function placeContextMenu(pointer: {
+    readonly x: number;
+    readonly y: number;
+}, panel: {
+    readonly height: number;
+    readonly width: number;
+}, view: {
+    readonly height: number;
+    readonly width: number;
+}, rtl: boolean): {
+    readonly left: number;
+    readonly maxHeight: number;
+    readonly top: number;
+};
+
+// @internal
 export function placeSubmenu(row: {
     readonly left: number;
     readonly right: number;
@@ -4301,6 +4317,9 @@ export function resolveThemeColorHex(color: Extract<ColorValue, {
 
 // @public
 export function resolveZoomMode(mode: ZoomMode | 'auto'): ZoomMode | null;
+
+// @internal
+export function revealMenuItem(panel: HTMLElement, item: Element | null): void;
 
 // @internal
 export const REVIEW_MARKERS_GUTTER_PX = 44;
@@ -5004,6 +5023,9 @@ export function shiftMonth(year: number, month: number, delta: 1 | -1): {
     readonly month: number;
     readonly year: number;
 };
+
+// @internal
+export function showInTopLayer(panel: HTMLElement): boolean;
 
 // @public
 export function sidePanelPane(snapshot: Pick<EditorSnapshot, 'chart' | 'image'>, requested: EditorPaneId): EditorPaneId;

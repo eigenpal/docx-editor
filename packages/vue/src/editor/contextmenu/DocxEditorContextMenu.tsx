@@ -19,7 +19,10 @@ import {
   hostWindowOf,
   chartPaneAvailable,
   openChartPaneFor,
+  placeContextMenu,
+  revealMenuItem,
   shapePaneAvailable,
+  showInTopLayer,
 } from '@docx-editor.dev/core/editor';
 import { useEditorCommand } from '../useEditorCommand';
 import { useEditorState } from '../useEditorState';
@@ -80,7 +83,8 @@ import { MenuLinkRow } from '../menu/menu-link-row';
 import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
 import { useChromeDir } from '../../i18n';
 
-const VIEWPORT_INSET = 8;
+/** Where the measured panel sits, and the height past which it scrolls. */
+type ContextMenuPlacement = ReturnType<typeof placeContextMenu>;
 
 /** @public */
 export interface DocxEditorContextMenuProps {
@@ -385,7 +389,7 @@ export const DocxEditorContextMenu = defineComponent({
     const anchor = ref<ContextMenuAnchor | null>(null);
     const tocId = ref<string | null>(null);
     const target = ref<HTMLElement | null>(null);
-    const placement = ref<ContextMenuAnchor | null>(null);
+    const placement = ref<ContextMenuPlacement | null>(null);
     const clipboardRefusal = ref<string | null>(null);
     const wasOpen = ref(false);
     const openChangeRef = shallowRef(props.onOpenChange);
@@ -466,7 +470,13 @@ export const DocxEditorContextMenu = defineComponent({
             close();
           }
         };
-        const onScroll = () => close();
+        const onScroll = (event: Event) => {
+          // The panel's own scroll, when a long menu scrolls inside, is not the user moving on.
+          if (event.type === 'scroll' && panelRef.value?.contains(event.target as Node | null)) {
+            return;
+          }
+          close();
+        };
         const doc = hostDocumentOf(menuScroller ?? hostRef.value);
         const win = hostWindowOf(menuScroller ?? hostRef.value);
         doc.addEventListener('pointerdown', onPointerDown, true);
@@ -493,29 +503,32 @@ export const DocxEditorContextMenu = defineComponent({
         await nextTick();
         const panel = panelRef.value;
         if (!panel || !anchor.value) return;
+        // The top layer first: a host's stacking context otherwise paints over the panel
+        // whatever its own `z-index`. The panel must also be open there to be measured.
+        showInTopLayer(panel);
         const { width, height } = panel.getBoundingClientRect();
         const win = hostWindowOf(panel);
-        const maxX = win.innerWidth - width - VIEWPORT_INSET;
-        const maxY = win.innerHeight - height - VIEWPORT_INSET;
         // Right-to-left chrome opens toward the left of the pointer, and flips right instead.
         const rtl = win.getComputedStyle(panel).direction === 'rtl';
-        const leftward = rtl ? anchor.value.x - width >= VIEWPORT_INSET : anchor.value.x > maxX;
-        const x = Math.max(
-          VIEWPORT_INSET,
-          Math.min(leftward ? anchor.value.x - width : anchor.value.x, maxX)
+        placement.value = placeContextMenu(
+          anchor.value,
+          { width, height },
+          { width: win.innerWidth, height: win.innerHeight },
+          rtl
         );
-        const y = Math.max(
-          VIEWPORT_INSET,
-          anchor.value.y > maxY ? anchor.value.y - height : anchor.value.y
-        );
-        placement.value = { x, y };
       },
       { flush: 'post' }
     );
 
-    watch(placement, (current) => {
-      if (current) panelRef.value?.focus({ preventScroll: true });
-    });
+    // After the render that makes the panel visible: a `visibility: hidden` panel is not
+    // focusable, and the arrow keys are handled on the panel.
+    watch(
+      placement,
+      (current) => {
+        if (current) panelRef.value?.focus({ preventScroll: true });
+      },
+      { flush: 'post' }
+    );
 
     watch(anchor, (current) => {
       const open = current !== null;
@@ -554,8 +567,9 @@ export const DocxEditorContextMenu = defineComponent({
     return () => {
       const style: CSSProperties = {
         position: 'fixed',
-        left: `${(placement.value ?? anchor.value)?.x ?? 0}px`,
-        top: `${(placement.value ?? anchor.value)?.y ?? 0}px`,
+        left: `${placement.value?.left ?? anchor.value?.x ?? 0}px`,
+        top: `${placement.value?.top ?? anchor.value?.y ?? 0}px`,
+        ...(placement.value ? { maxHeight: `${placement.value.maxHeight}px` } : {}),
         visibility: placement.value ? 'visible' : 'hidden',
         pointerEvents: 'auto',
       };
@@ -626,19 +640,24 @@ export const DocxEditorContextMenu = defineComponent({
                     const panel = panelRef.value;
                     if (!panel) return;
                     const items = panelItems(panel);
+                    const doc = hostDocumentOf(panel);
                     if (event.key === 'ArrowDown') {
                       event.preventDefault();
-                      focusBy(items, hostDocumentOf(panel).activeElement, 1);
+                      focusBy(items, doc.activeElement, 1);
                     } else if (event.key === 'ArrowUp') {
                       event.preventDefault();
-                      focusBy(items, hostDocumentOf(panel).activeElement, -1);
+                      focusBy(items, doc.activeElement, -1);
                     } else if (event.key === 'Home') {
                       event.preventDefault();
                       focusEdge(items, 'first');
                     } else if (event.key === 'End') {
                       event.preventDefault();
                       focusEdge(items, 'last');
+                    } else {
+                      return;
                     }
+                    // A menu taller than the window scrolls; keep the focused row in view.
+                    revealMenuItem(panel, doc.activeElement);
                   },
                 },
                 rows

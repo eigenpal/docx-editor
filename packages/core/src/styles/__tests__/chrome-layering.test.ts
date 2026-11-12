@@ -98,4 +98,18 @@ describe('chrome layering', () => {
       .filter((d) => !/^var\(--doc-z-[a-z]+\)$/.test(d.value));
     expect(offenders).toEqual([]);
   });
+
+  // The context menu opens in the top layer, so a host header or docked pane with its own
+  // stacking context cannot paint over it. The popover defaults would center it.
+  test('the context menu popover keeps the pointer placement', () => {
+    const root = postcss.parse(css, { from: cssPath });
+    const decls: Record<string, string> = {};
+    root.walkRules((rule) => {
+      if (rule.selector !== '.docx-contextmenu[popover]') return;
+      rule.walkDecls((decl) => {
+        decls[decl.prop] = decl.value.trim();
+      });
+    });
+    expect(decls).toEqual({ inset: 'auto', margin: '0' });
+  });
 });
