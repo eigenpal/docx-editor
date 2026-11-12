@@ -75,7 +75,8 @@ export function childTransform(wsp: OoxmlElement): {
 export function zeroExtentShapeProjection(wsp: OoxmlElement): VectorShapeProjection | null {
   if (!shapeProperties(wsp)) return null;
   const xfrm = shapeTransformElement(wsp);
-  if (shapeRotationDegrees(xfrm) === null || !shapeFlagsValid(xfrm)) return null;
+  const rotationDegrees = shapeRotationDegrees(xfrm);
+  if (rotationDegrees === null || !shapeFlagsValid(xfrm)) return null;
   return {
     extentEmu: { cx: 0, cy: 0 },
     subpathsEmu: [],
@@ -85,5 +86,6 @@ export function zeroExtentShapeProjection(wsp: OoxmlElement): VectorShapeProject
     strokeAlpha: 1,
     strokeWidthEmu: 0,
     components: [],
+    ...(rotationDegrees !== 0 ? { rotationDegrees } : {}),
   };
 }

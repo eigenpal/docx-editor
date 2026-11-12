@@ -176,6 +176,8 @@ describe('shapes with no width and no height', () => {
       const projection = project({ cx: 0, cy: 0, rot, prst: 'line', paint: OUTLINE });
       expect(projection.vectorShape?.components).toEqual([]);
       expect(projection.vectorShape?.extentEmu).toEqual({ cx: 0, cy: 0 });
+      // The turn still reads back, though there is nothing to paint turned.
+      expect(projection.vectorShape?.rotationDegrees).toBe(rot ? 45 : undefined);
       expect(projection.diagnostics.some((d) => d.code === 'unsupported-graphic')).toBe(false);
     }
   });

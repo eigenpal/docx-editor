@@ -9,8 +9,18 @@ import { expect, test } from 'bun:test';
 import type { DocxEditorInstance } from '../docx-editor.ts';
 import type { InlineDrawingRecord } from '../../layout/drawing-layout.ts';
 import type { BlockFragmentRecord } from '../../layout/semantic-records.ts';
-import { findDrawingOverlayFrameInLayout } from '../../layout/semantic-hit-test.ts';
-import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
+import {
+  findDrawingOverlayFrameInLayout,
+  hitTestFragments,
+} from '../../layout/semantic-hit-test.ts';
+import {
+  selectedDrawingOverlayTargetOf,
+  type ImageInteractionSession,
+} from '../docx-editor-images.ts';
+import {
+  finalizeImageOverlayInteraction,
+  overlayFrameCssBox,
+} from '../surface-overlay-coordinates.ts';
 import {
   EMU,
   SHAPE_URI,
@@ -114,9 +124,42 @@ test('a turned shape paints past its box and a press on its turned corner select
     expect(frame.height).toBeCloseTo(134.35, 1);
     expect(frame.x).toBeCloseTo(c.x - 80.35, 1);
     expect(frame.y).toBeCloseTo(c.y - 67.18, 1);
+    // The overlay rings the unturned extent, turned about the frame centre, at any zoom.
+    expect(frame.turn).toEqual({ rotationDegrees: 30, width: 144, height: 72 });
+    const css = overlayFrameCssBox(
+      { left: 10, top: 20, width: 321.42, height: 268.7 },
+      frame.turn,
+      2
+    );
+    expect(css).toMatchObject({ width: 288, height: 144, transform: 'rotate(30deg)' });
+    expect(css.left).toBeCloseTo(26.71, 6);
+    expect(css.top).toBeCloseTo(82.35, 6);
+    const upright = { left: 1, top: 2, width: 3, height: 4 };
+    expect(overlayFrameCssBox(upright, undefined, 2)).toBe(upright);
     // The unturned box corner, off the turned geometry, goes to the text.
     pressAt(container, editor, c.x - 70, c.y - 34, painted(container, editor, 21)!);
     expect(selectedId(editor)).toBeNull();
+  });
+});
+
+test('a press on a turned corner in the page margin selects the shape', async () => {
+  // At 40pt from the top of the page, the turned top corner reaches into the top margin.
+  const nearTop = anchor({
+    id: 24,
+    name: 'Near top',
+    relativeFrom: 'page',
+    x: 100 * EMU,
+    y: 40 * EMU,
+    cx: 144 * EMU,
+    cy: 72 * EMU,
+    graphic: graphic(144 * EMU, 72 * EMU, ' rot="1800000"', 'rect', RED),
+    uri: SHAPE_URI,
+  });
+  await withEditor(p(nearTop + text('Anchor')) + FILLERS, (editor, container) => {
+    const c = centreOf(editor, 24);
+    expect(c.y - 50).toBeLessThan(0);
+    pressAt(container, editor, c.x - 30, c.y - 50);
+    expect(selectedId(editor)).toBe(drawingNamed(editor, 24).drawingNodeId);
   });
 });
 
@@ -222,6 +265,110 @@ test('a turned header shape frames its turned extent', async () => {
       const frame = findDrawingOverlayFrameInLayout(layout, drawing!.drawingNodeId, 0)!;
       expect(frame.width).toBeCloseTo(160.71, 1);
       expect(frame.height).toBeCloseTo(134.35, 1);
+    },
+    header
+  );
+});
+
+test('a move drag of a turned shape shifts its offsets by the drag, from its turned frame', async () => {
+  await withEditor(p(TURNED_RECT + text('Anchor')) + FILLERS, async (editor, container) => {
+    const c = centreOf(editor, 21);
+    pressAt(container, editor, c.x, c.y, painted(container, editor, 21)!);
+    const target = selectedDrawingOverlayTargetOf(editor.surface!)!;
+    const start = target.position!;
+    expect(start).toMatchObject({ mode: 'frame', horizontalEmu: 100 * EMU });
+    const session = {
+      startBounds: { x: target.x, y: target.y, width: target.width, height: target.height },
+      startWidthEmu: target.widthEmu,
+      startHeightEmu: target.heightEmu,
+      startPosition: start,
+      transform: target.transform,
+      mode: 'move',
+      handle: null,
+    } as unknown as ImageInteractionSession;
+    const move = (startPosition: typeof start) =>
+      finalizeImageOverlayInteraction({
+        session: { ...session, startPosition },
+        deltaXPt: 10,
+        deltaYPt: 20,
+        accumulatedScrollPt: 0,
+        aspectLocked: true,
+        shiftKey: false,
+        anchorFrameOrigin: target.anchorFrameOrigin,
+      }).position!;
+    expect(move(start)).toMatchObject({ horizontalEmu: 110 * EMU, verticalEmu: 220 * EMU });
+    // An aligned axis has no offset: the turned frame's own shift cancels out of the origin.
+    const aligned = { mode: 'frame', relativeToH: 'margin', relativeToV: 'margin' };
+    const fromFrame = move(aligned as typeof start) as {
+      horizontalEmu: number;
+      verticalEmu: number;
+    };
+    expect(fromFrame.horizontalEmu).toBeCloseTo(110 * EMU, -1);
+    expect(fromFrame.verticalEmu).toBeCloseTo(220 * EMU, -1);
+    expect(
+      editor.exec({ type: 'setImagePosition', horizontalEmu: 110 * EMU, verticalEmu: 220 * EMU })
+    ).toMatchObject({ ok: true });
+    expect(centreOf(editor, 21).x).toBeCloseTo(c.x + 10, 3);
+    expect(drawingNamed(editor, 21).vectorShape?.rotationDegrees).toBe(30);
+    expect(await saved(editor)).toMatch(
+      /<a:xfrm (flipH="1" rot="1800000"|rot="1800000" flipH="1")>/
+    );
+  });
+});
+
+test('a turned shape that paints nothing takes a press inside its turned frame', async () => {
+  const empty = anchor({
+    id: 25,
+    name: 'Unpainted',
+    x: 100 * EMU,
+    y: 200 * EMU,
+    cx: 144 * EMU,
+    cy: 72 * EMU,
+    graphic: graphic(
+      144 * EMU,
+      72 * EMU,
+      ' rot="1800000"',
+      'rect',
+      '<a:noFill/><a:ln><a:noFill/></a:ln>'
+    ),
+    uri: SHAPE_URI,
+  });
+  await withEditor(p(empty + text('Anchor')) + FILLERS, (editor, container) => {
+    const record = drawingNamed(editor, 25);
+    expect(record.vectorShape?.components).toEqual([]);
+    const c = centreOf(editor, 25);
+    // Inside the turned frame, left of the unturned box.
+    pressAt(container, editor, c.x - 78, c.y - 4.8);
+    expect(selectedId(editor)).toBe(record.drawingNodeId);
+    // Inside the unturned box corner, outside the turned frame.
+    pressAt(container, editor, c.x - 70, c.y - 34, painted(container, editor, 25)!);
+    expect(selectedId(editor)).toBeNull();
+  });
+});
+
+test('a turned inline header shape takes a press over the header line above it', async () => {
+  const inline =
+    '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+    `<wp:extent cx="${144 * EMU}" cy="${72 * EMU}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>` +
+    '<wp:docPr id="32" name="Header inline turned"/><wp:cNvGraphicFramePr/>' +
+    `<a:graphic><a:graphicData uri="${SHAPE_URI}">` +
+    graphic(144 * EMU, 72 * EMU, ' rot="1800000"', 'rect', RED) +
+    '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+  const header = p(text('Header line above')) + p(inline + text('after'));
+  await withEditor(
+    p(text('Body')) + FILLERS,
+    (editor) => {
+      const layout = editor.surface!.layout();
+      const story = layout.pages[0]!.header!;
+      const drawing = story.fragments
+        .flatMap((block) => (block.kind === 'paragraph' ? block.lines : []))
+        .flatMap((line) => line.drawings ?? [])[0]!;
+      expect(drawing.vectorShape?.rotationDegrees).toBe(30);
+      const box = drawing.geometry.contentBounds;
+      const point = { x: box.x + box.width / 2 - 30, y: box.y + box.height / 2 - 50 };
+      expect(point.y).toBeLessThan(drawing.y);
+      const hit = hitTestFragments(layout, 0, story.fragments, point);
+      expect(hit?.drawing?.drawingNodeId).toBe(drawing.drawingNodeId);
     },
     header
   );

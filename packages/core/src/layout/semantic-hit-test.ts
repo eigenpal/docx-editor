@@ -260,8 +260,8 @@ export function hitTestPage(
   const behindDrawings = (page.anchoredDrawings ?? []).filter((drawing) => drawing.behindDocument);
   const frontHit = hitAnchoredDrawingAtPoint(frontDrawings, point, context.pageIndex);
   if (frontHit) return { ...frontHit, contentControlId };
-  const turnedHit = turnedInlineHit(page.fragments, point, context);
-  if (turnedHit) return { ...turnedHit, contentControlId };
+  const turnedHit = turnedInlineHit(page.fragments, point, context, layout);
+  if (turnedHit) return turnedHit;
   const textHit = bottomToTopHit(layout, resolveBlocks(page.fragments, point, context, null));
   // Anywhere in a line's box is on the text, so a drawing behind it takes the press only
   // outside every line: in the margins, or in the space between paragraphs.
@@ -316,7 +316,8 @@ export function hitTestPage(
 function turnedInlineHit(
   fragments: readonly BlockFragmentRecord[],
   point: HitPoint,
-  context: HitContext
+  context: HitContext,
+  controlsOf?: SemanticLayout
 ): SemanticHit | null {
   const found = turnedInlineDrawingAt(fragments, (drawing) =>
     hitBoundsContainDrawing(drawing, point)
@@ -340,7 +341,14 @@ function turnedInlineHit(
       ? addressOf(context.layout, found.cell.table, found.cell.row, found.cell.cell)
       : null,
     onGlyphs: true,
-    contentControlId: null,
+    // The control that holds the shape, read at the middle of its advance on its own line,
+    // not one under a neighbouring line it paints over.
+    contentControlId: controlsOf
+      ? contentControlIdAtPoint(controlsOf, context.pageIndex, {
+          x: (drawing.advanceStart + drawing.advanceEnd) / 2,
+          y: line.box.y + line.box.height / 2,
+        })
+      : null,
     drawing: drawingHitIdentity(drawing),
   };
 }
@@ -385,7 +393,10 @@ export function hitTestFragments(
     verticalWeight: options.verticalWeight ?? DEFAULT_VERTICAL_WEIGHT,
     measurer: options.measurer,
   };
-  return bottomToTopHit(layout, resolveBlocks(fragments, point, context, null));
+  return (
+    turnedInlineHit(fragments, point, context) ??
+    bottomToTopHit(layout, resolveBlocks(fragments, point, context, null))
+  );
 }
 
 /**

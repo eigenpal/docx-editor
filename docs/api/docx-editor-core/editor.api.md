@@ -3393,6 +3393,20 @@ export interface OutsidePressOptions {
 }
 
 // @public
+export function overlayFrameCssBox(rect: {
+    readonly height: number;
+    readonly left: number;
+    readonly top: number;
+    readonly width: number;
+}, turn: OverlayFrameTurn | undefined, paintScale: number): {
+    readonly height: number;
+    readonly left: number;
+    readonly top: number;
+    readonly transform?: string;
+    readonly width: number;
+};
+
+// @public
 export interface OverlayFrameRect {
     // (undocumented)
     readonly height: number;
@@ -3413,6 +3427,13 @@ export function overlayFrameToSheetCssPixels(layout: SemanticLayout, frame: Over
     readonly top: number;
     readonly width: number;
 };
+
+// @public
+export interface OverlayFrameTurn {
+    readonly height: number;
+    readonly rotationDegrees: number;
+    readonly width: number;
+}
 
 // @public
 export function overlayHostOrigin(surfaceElement: HTMLElement | null): {
@@ -4752,6 +4773,7 @@ export interface SelectedDrawingOverlayTarget {
     readonly textEditable?: boolean;
     // (undocumented)
     readonly transform: DrawingTransform;
+    readonly turn?: OverlayFrameTurn;
     // (undocumented)
     readonly width: number;
     // (undocumented)

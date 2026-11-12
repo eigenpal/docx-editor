@@ -12,8 +12,8 @@ import { turnedShapeBounds } from './vector-shape-hit.ts';
 
 /**
  * The box a drawing's frame rings, in the record's coordinates: its painted box, or for a
- * turned shape the box its extent covers once turned about its centre, so the frame hugs a
- * turned line as it does an upright one.
+ * turned shape the upright box its extent covers once turned about its centre. A quarter-turned
+ * line keeps a thin frame; a line at another angle gets the box around it.
  */
 function frameBounds(record: InlineDrawingRecord | AnchoredDrawingRecord) {
   return turnedShapeBounds(record) ?? record.paintBounds;

@@ -55,7 +55,10 @@ export function createDrawingGestures(deps: {
    * page's band does: no scroll, so the page under the pointer stays put.
    */
   enterStoryPage(pageIndex: number): void;
-  /** The body drawing behind the text a press at a client point reaches, if any. */
+  /**
+   * The body drawing a press at a client point reaches by geometry, if any: one behind the
+   * text, or a turned shape on what it paints, page margins included.
+   */
   behindDrawingAt(
     clientX: number,
     clientY: number
@@ -103,11 +106,7 @@ export function createDrawingGestures(deps: {
     if (!selectedImageStateOf(deps.surface)) return;
     deps.enterStoryPage(pageIndex);
   };
-  /**
-   * The straight line or turned shape in front of the text a press reaches by geometry, if
-   * any. Neither has a painted box that covers what it paints: a line's box has no height or
-   * width, and a turned shape paints outside its box.
-   */
+  /** The straight line in front of the text a press reaches by geometry, if any. */
   const thinLineAt = (event: Event) => {
     if (!isPointerEvent(event) || event.shiftKey) return null;
     const drawing = pointOf(event)?.hit.drawing;
@@ -116,10 +115,9 @@ export function createDrawingGestures(deps: {
     const record = frame?.record;
     if (!frame || !record?.vectorShape) return null;
     if ('behindDocument' in record && record.behindDocument) return null;
-    if (record.vectorShape.rotationDegrees) return drawing;
     return Math.min(frame.width, frame.height) < THIN_LINE_PT ? drawing : null;
   };
-  /** The behind-text drawing a press reaches where no text lies under it, if any. */
+  /** The behind-text drawing, or the turned shape, a press reaches by geometry, if any. */
   const behindDrawingAt = (event: Event) =>
     isPointerEvent(event) && !event.shiftKey
       ? deps.behindDrawingAt(event.clientX, event.clientY)
@@ -162,7 +160,8 @@ export function createDrawingGestures(deps: {
         }
       }
       // A drawing behind the text paints under it, so the press reaches the text layer. Where
-      // no glyph lies under the press, the drawing takes it, as hit testing decides.
+      // no glyph lies under the press, the drawing takes it, as hit testing decides. A turned
+      // shape paints past its box, so a press on that part reaches the page, the margins too.
       // One the selection model refuses (hidden, select-locked) leaves the press to the text.
       const behind = !editingTextbox && !drawingId ? behindDrawingAt(event) : null;
       if (behind) followPage(behind.drawingNodeId, behind.paragraphId, behind.pageIndex);
@@ -174,9 +173,8 @@ export function createDrawingGestures(deps: {
           return;
         }
       }
-      // A straight line paints a box with no height or width, and a turned shape paints past
-      // its box, so a press may land beside the box: the hit test that reaches the painted
-      // geometry selects it.
+      // A straight line paints a box with no height or width, so no press lands on it: within
+      // reach of its path, the hit test that already reaches past the path selects it.
       const line = !editingTextbox && !drawingId && !behind ? thinLineAt(event) : null;
       if (line && selectObject(line.drawingNodeId, line.paragraphId)) {
         deps.surface.focus();

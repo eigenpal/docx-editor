@@ -86,8 +86,9 @@ export type ShapeStyleMatrixResolver = (
  * group of them: closed polygon subpaths (`a:custGeom` with move/line/close/cubicBezTo
  * verbs, or a supported `a:prstGeom`) with a solid fill and/or stroke. The colour may come
  * from `a:srgbClr` or from the theme, through `a:schemeClr` or a `wps:style` matrix
- * reference. Anything richer (picture fills, a nested group) projects as `null` and paints the
- * labelled placeholder instead.
+ * reference. Anything richer (picture fills, a turned group, a nested group) projects as
+ * `null` and paints the labelled placeholder instead. A top-level text box paints through its
+ * story, not through this projection.
  *
  * @public
  */
@@ -122,7 +123,11 @@ export interface VectorShapeProjection {
   /**
    * A shape turned by its `a:xfrm/@rot`, in clockwise degrees in (0, 360). It turns about the
    * centre of its unturned extent, so its geometry paints outside the extent (`overflowVisible`)
-   * while layout keeps the extent and `wp:effectExtent` it reserves. Absent when not turned.
+   * while layout keeps the extent and `wp:effectExtent` it reserves. Absent when not turned. A
+   * shape with no extent carries its turn but paints nothing, so it sets no `overflowVisible`.
+   *
+   * Informational only: the turn and the flips are already applied to every component's
+   * points, so a painter must not apply it again.
    */
   readonly rotationDegrees?: number;
 }

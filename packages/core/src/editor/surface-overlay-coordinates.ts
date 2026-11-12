@@ -8,6 +8,7 @@ import type {
   DrawingTransform,
 } from '../store/package/drawing-projection.ts';
 import type { SemanticLayout } from '../layout/semantic-records.ts';
+import type { OverlayFrameTurn } from './shape-drawings.ts';
 import type { ImageInteractionSession, ImageResizeHandle } from './docx-editor-images.ts';
 import { EMU_PER_POINT, pointsToEmu, computeMovedImagePosition } from './docx-editor-images.ts';
 
@@ -68,6 +69,42 @@ export function overlayFrameToSheetCssPixels(
     top: (page.contentBox.y + frame.y) * scale,
     width: frame.width * scale,
     height: frame.height * scale,
+  });
+}
+
+/**
+ * The CSS box of a drawing's selection frame, from `rect`, the frame placed in CSS pixels by
+ * {@link overlayFrameToSheetCssPixels}. A turned shape's frame is its unturned extent, centred
+ * on `rect` (the box the turned extent covers) and turned about its centre, so it hugs the
+ * shape at any angle. An upright drawing keeps `rect`.
+ *
+ * @public
+ */
+export function overlayFrameCssBox(
+  rect: {
+    readonly left: number;
+    readonly top: number;
+    readonly width: number;
+    readonly height: number;
+  },
+  turn: OverlayFrameTurn | undefined,
+  paintScale: number
+): {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+  readonly transform?: string;
+} {
+  if (!turn || !Number.isFinite(turn.rotationDegrees)) return rect;
+  const width = turn.width * paintScale;
+  const height = turn.height * paintScale;
+  return Object.freeze({
+    left: rect.left + (rect.width - width) / 2,
+    top: rect.top + (rect.height - height) / 2,
+    width,
+    height,
+    transform: `rotate(${turn.rotationDegrees}deg)`,
   });
 }
 

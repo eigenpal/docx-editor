@@ -14,7 +14,13 @@ import { reanchorMovedDrawing } from './drawing-reanchor.ts';
 import { preserveWrapExtentOps, type WrapExtentOverrides } from './image-wrap-extent.ts';
 import { reportCommandResult } from './command-reporting.ts';
 import { chartDrawingRefusal, drawingGate, type ChartGate } from './image-state-rules.ts';
-import { isShapeDrawing, selectedShapeFormat, shapeKeepsGeometrySize } from './shape-drawings.ts';
+import {
+  isShapeDrawing,
+  overlayFrameTurnOf,
+  selectedShapeFormat,
+  shapeKeepsGeometrySize,
+  type OverlayFrameTurn,
+} from './shape-drawings.ts';
 export { imageContextEqual } from './image-state-rules.ts';
 // Selected-image derivation and image command dispatch for `createDocxEditor` (task 13).
 //
@@ -311,7 +317,6 @@ export function selectedImageStateOf(surface: PaginatedSurface | null): Selected
     widthEmu: projection.extentEmu.cx,
     heightEmu: projection.extentEmu.cy,
     crop: cropPercentFromSourceCrop(record.crop),
-    // A picture turns through its transform; a shape or line through its own `a:xfrm`.
     rotationDegrees: transform.rotationDegrees || (record.vectorShape?.rotationDegrees ?? 0),
     wrap: wrapOf(record),
     position: positionInputOf(projection),
@@ -1169,6 +1174,8 @@ export interface SelectedDrawingOverlayTarget {
   readonly position: DrawingPositionInput | null;
   readonly anchorFrameOrigin: { readonly x: number; readonly y: number } | null;
   readonly transform: DrawingTransform;
+  /** A turned shape's frame, which `overlayFrameCssBox` rings turned; absent when upright. */
+  readonly turn?: OverlayFrameTurn;
   readonly canResize: boolean;
   readonly canMove: boolean;
   /** Hard lock from `noChangeAspect` — never overridden by Shift. */
@@ -1271,6 +1278,7 @@ export function selectedDrawingOverlayTargetOf(
     position: projection ? positionInputOf(projection) : null,
     anchorFrameOrigin,
     transform: record.transform,
+    ...overlayFrameTurnOf(record),
     ...member.memberOverlayFields(surface, record.drawingNodeId, frame, gated),
   });
 }

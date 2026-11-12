@@ -32,8 +32,11 @@ export function vectorShapeHit(drawing: Drawing, point: Point): boolean | null {
   const sx = cx > 0 ? content.width / cx : cy > 0 ? content.height / cy : 0;
   const sy = cy > 0 ? content.height / cy : sx;
   const place = (p: Point): Point => ({ x: content.x + p.x * sx, y: content.y + p.y * sy });
-  // A shape that paints nothing would be out of reach: its frame takes the press instead.
-  if (!shape.components.some(paints)) return insideBox(content, point, PATH_HIT_REACH);
+  // A shape that paints nothing would be out of reach: its frame takes the press instead, the
+  // turned frame for a turned shape.
+  if (!shape.components.some(paints)) {
+    return insideBox(content, unturned(point, content, shape.rotationDegrees), PATH_HIT_REACH);
+  }
   for (const component of shape.components) {
     if (componentHit(component, place, point)) return true;
   }
@@ -48,6 +51,19 @@ function paints(component: VectorShapeComponent): boolean {
     (component.strokeHex !== null && component.strokeAlpha > 0) ||
     !!component.arrowheadsEmu?.length
   );
+}
+
+/** `point` turned back about the centre of `box` by `turn` degrees: into the unturned frame. */
+function unturned(point: Point, box: LayoutBox, turn: number | undefined): Point {
+  if (!turn) return point;
+  const radians = (-turn * Math.PI) / 180;
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  const dx = point.x - cx;
+  const dy = point.y - cy;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
 }
 
 function insideBox(
