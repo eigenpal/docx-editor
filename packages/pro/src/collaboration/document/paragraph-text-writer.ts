@@ -339,7 +339,9 @@ function referencedIds(effect: SharedEffect): LogicalId[] {
  */
 export function routeInlineEffects(
   registry: DocumentRegistry,
-  given: readonly CanonicalPrimitiveEffect[]
+  given: readonly CanonicalPrimitiveEffect[],
+  /** The node the editor's tree shows a node under, or null (`ShownTree`). */
+  shownParentOf: (id: LogicalId) => LogicalId | null = () => null
 ): {
   readonly passThrough: CanonicalPrimitiveEffect[];
   readonly plan: InlinePlan | null;
@@ -400,9 +402,13 @@ export function routeInlineEffects(
       // arrived. A placeholder for it put a child in this tree that the editor's tree lacks,
       // and the journal's child indexes then addressed the wrong children.
       // A node two copies in the text embed shows once, at the first, as the materializer
-      // places it once.
+      // places it once. Copies in two paragraphs show once too: text that follows a split can
+      // carry a copy into another paragraph, and only the materializer's placement says which
+      // paragraph shows it, so a node the editor shows elsewhere shows nothing here.
       const placeholderOf = (id: LogicalId): OoxmlNode | null => {
         if (!registry.showsAsChild(id)) return null;
+        const shownUnder = shownParentOf(id);
+        if (shownUnder !== null && shownUnder !== paragraphId) return null;
         if (embedded.has(id)) return null;
         embedded.add(id);
         return embedPlaceholder(id);

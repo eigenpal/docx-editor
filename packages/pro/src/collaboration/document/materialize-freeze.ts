@@ -269,6 +269,27 @@ export function markPlaced(node: OoxmlNode, placed: Set<LogicalId>): boolean {
   return uncontested;
 }
 
+/**
+ * Add to `dirty` the ancestors each changed node showed under in the last tree. Every
+ * ancestor of a changed node has to rebuild. The registry's parent index says where a node
+ * lives NOW; a node a peer moved or detached is still shown under its old ancestors, and they
+ * must rebuild too, or the view keeps the stale subtree.
+ */
+export function addShownAncestors(
+  dirty: Set<LogicalId>,
+  changed: ReadonlySet<LogicalId>,
+  shownUnder: ReadonlyMap<LogicalId, LogicalId>,
+  maxDepth: number
+): void {
+  for (const id of changed) {
+    let at = shownUnder.get(id);
+    for (let depth = 0; at !== undefined && depth < maxDepth; depth++) {
+      dirty.add(at);
+      at = shownUnder.get(at);
+    }
+  }
+}
+
 export function expandAncestors(
   registry: DocumentRegistry,
   ids: ReadonlySet<LogicalId>

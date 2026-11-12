@@ -58,6 +58,65 @@ function embedAgain(peer: Peer, paragraphId: string, offset: number): void {
   throw new Error('no embedded node');
 }
 
+describe('a node that follows a split while its paragraph shows another copy', () => {
+  // A tab typed after a split point follows into the new paragraph. A second copy of it in the
+  // first paragraph's own text shows there, so the editor shows the tab once, in the first
+  // paragraph, and the new paragraph's text shows as one text value. An edit after the place
+  // the tab follows to addresses that text value as the editor shows it.
+  test('an edit in the paragraph it follows into applies on every peer', async () => {
+    const { alice, bob, pause, resume } = await harness.pair(
+      zipDocument('<w:p><w:r><w:t xml:space="preserve">Hello world</w:t></w:r></w:p><w:sectPr/>')
+    );
+    const first = harness.paragraphIdAt(alice, 0);
+    pause();
+    harness.apply(alice, [{ op: 'splitParagraph', paragraphId: first, offset: 5 }]);
+    harness.apply(bob, [{ op: 'insertTab', paragraphId: first, offset: 8 }]);
+    resume();
+    harness.expectConverged(alice, bob);
+    expect(paragraphTexts(alice)).toEqual(['Hello', ' world']);
+    embedAgain(alice, first, -7);
+    harness.expectConverged(alice, bob);
+    for (const peer of [alice, bob]) expect(tabCount(peer)).toBe(1);
+    const second = harness.paragraphIdAt(alice, 1);
+    // A refused edit recovers by taking shared state back, so only its status change shows it.
+    const refused: string[] = [];
+    for (const [name, peer] of [
+      ['alice', alice],
+      ['bob', bob],
+    ] as const) {
+      peer.room.session.subscribeStatus((status, reason) => {
+        if (status === 'error') refused.push(`${name}: ${reason}`);
+      });
+    }
+    // The edit is its own undo step, apart from the split.
+    (alice.room.session as unknown as { undoManager: Y.UndoManager }).undoManager.stopCapturing();
+    harness.apply(alice, [{ op: 'insertText', paragraphId: second, offset: 5, text: 'X' }]);
+    harness.apply(bob, [{ op: 'deleteText', paragraphId: second, start: 0, end: 1 }]);
+    harness.expectConverged(alice, bob);
+    expect(refused).toEqual([]);
+    const carol = await harness.join(alice, 'carol');
+    harness.expectConverged(alice, carol);
+    for (const peer of [alice, bob, carol]) {
+      expect(paragraphTexts(peer)).toEqual(['Hello', 'worlXd']);
+      expect(tabCount(peer)).toBe(1);
+      expect(peer.room.session.status()).toBe('ready');
+    }
+    // Undo and redo of the edit, while a peer types in the same text at the same time.
+    alice.room.session.flushPendingJournals();
+    pause();
+    expect(alice.room.session.undo()).toBe(true);
+    harness.apply(bob, [{ op: 'insertText', paragraphId: second, offset: 2, text: 'Y' }]);
+    resume();
+    harness.expectConverged(alice, bob);
+    expect(paragraphTexts(alice)).toEqual(['Hello', 'woYrld']);
+    expect(alice.room.session.redo()).toBe(true);
+    harness.expectConverged(alice, bob);
+    expect(paragraphTexts(bob)).toEqual(['Hello', 'woYrlXd']);
+    expect(tabCount(bob)).toBe(1);
+    expect(refused).toEqual([]);
+  });
+});
+
 describe('a node a paragraph text embeds twice', () => {
   test('shows once, and edits after the second copy apply on every peer', async () => {
     const { alice, bob } = await harness.pair(
