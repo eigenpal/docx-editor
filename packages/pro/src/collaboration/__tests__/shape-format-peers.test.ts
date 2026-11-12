@@ -233,7 +233,12 @@ test('Format shape pane edits reach the other peer, its pane read follows, a del
     expect(edit(b, { type: 'outlineWidth', text: '3' })).toMatchObject({ ok: true });
     expect(edit(b, { type: 'outlineColor', color: '#0070C0' })).toMatchObject({ ok: true });
     sync(a, b);
-    expect(pane(a).format?.outline).toEqual({ visible: true, color: '0070C0', widthPt: 3 });
+    expect(pane(a).format?.outline).toEqual({
+      visible: true,
+      color: '0070C0',
+      widthPt: 3,
+      dash: 'solid',
+    });
     // Concurrent pane edits converge.
     expect(edit(a, { type: 'fillTransparency', text: '50' })).toMatchObject({ ok: true });
     expect(edit(b, { type: 'noFill' })).toMatchObject({ ok: true });
