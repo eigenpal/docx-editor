@@ -342,7 +342,9 @@ export function ChoiceControl<K extends ObjectSlotId>(
           }
           onChange={(event) => {
             const text = event.currentTarget.value;
-            props.onApplied?.(apply(props.parse ? props.parse(text) : text));
+            // Apply first: an optional call skips its argument when there is no listener.
+            const refusal = apply(props.parse ? props.parse(text) : text);
+            props.onApplied?.(refusal);
           }}
         >
           {listed ? null : (

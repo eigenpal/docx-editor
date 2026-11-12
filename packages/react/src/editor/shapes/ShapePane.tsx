@@ -12,6 +12,8 @@ import {
 } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
+import { useChromeScopeClassName } from '../color-mode-context';
+import { ScopedByAncestorContext } from '../scope-context';
 import { DocxEditorPaneSections } from '../objects/pane-sections';
 import { useSelectedShape } from './useSelectedShape';
 
@@ -41,9 +43,14 @@ export function DocxEditorShapePane({ className }: DocxEditorShapePaneProps): Re
       { panes: ['shape'] }
     );
   }, [editor]);
-  const classes = `docx-chart-pane docx-shape-pane${className ? ` ${className}` : ''}`;
+  // The pane carries the scope, so its parts need none of their own.
+  const scope = useChromeScopeClassName();
+  const classes = `${scope}docx-chart-pane docx-shape-pane${className ? ` ${className}` : ''}`;
+  const scoped = (node: ReactElement): ReactElement => (
+    <ScopedByAncestorContext.Provider value={true}>{node}</ScopedByAncestorContext.Provider>
+  );
   if (!shape.format || !shape.drawingNodeId)
-    return (
+    return scoped(
       <div className={classes} ref={root} data-shape="">
         <div className="docx-chart-pane__empty">
           <p className="docx-chart-pane__empty-title">{t('shape.pane.emptyTitle')}</p>
@@ -53,7 +60,7 @@ export function DocxEditorShapePane({ className }: DocxEditorShapePaneProps): Re
     );
   // Parts keep unsaved text per shape: a group, or one shape in it.
   const key = shape.memberId ?? shape.drawingNodeId;
-  return (
+  return scoped(
     <div className={classes} ref={root} data-shape={shape.drawingNodeId}>
       <DocxEditorPaneSections key={key} pane="shape" />
       {shape.format.outline.visible === null ? (

@@ -12,6 +12,8 @@ import {
 } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
+import { useChromeScopeClassName } from '../color-mode-context';
+import { ScopedByAncestorContext } from '../scope-context';
 import { DocxEditorPaneSections } from '../objects/pane-sections';
 import { useSelectedChart } from './useSelectedChart';
 
@@ -40,10 +42,15 @@ export function DocxEditorChartPane({ className }: DocxEditorChartPaneProps): Re
         queueMicrotask(() => focusChartPane(root.current));
     });
   }, [editor]);
-  const classes = `docx-chart-pane${className ? ` ${className}` : ''}`;
+  // The pane carries the scope, so its parts need none of their own.
+  const scope = useChromeScopeClassName();
+  const classes = `${scope}docx-chart-pane${className ? ` ${className}` : ''}`;
+  const scoped = (node: ReactElement): ReactElement => (
+    <ScopedByAncestorContext.Provider value={true}>{node}</ScopedByAncestorContext.Provider>
+  );
   const chart = selected.chart;
   if (!chart)
-    return (
+    return scoped(
       <div className={classes} ref={root} data-chart-version="">
         <div className="docx-chart-pane__empty">
           <p className="docx-chart-pane__empty-title">{t('chart.pane.emptyTitle')}</p>
@@ -51,7 +58,7 @@ export function DocxEditorChartPane({ className }: DocxEditorChartPaneProps): Re
         </div>
       </div>
     );
-  return (
+  return scoped(
     <div className={classes} ref={root} data-chart-version={chart.version}>
       {selected.format ? null : (
         <div className="docx-chart-pane__empty">

@@ -16,17 +16,17 @@ import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorToolbar } from '../src/editor/toolbar/DocxEditorToolbar.tsx';
 import { usePaneRequest } from '../src/editor/panes/index.ts';
 import {
-  ChartAxes,
-  ChartDataPart,
-  ChartDataLabels,
-  ChartLegend,
-  ChartSeriesColors,
-  ChartTitle,
-  ChartTypePart,
+  DocxEditorChartAxes,
+  DocxEditorChartData,
+  DocxEditorChartDataLabels,
+  DocxEditorChartLegend,
+  DocxEditorChartSeriesColors,
+  DocxEditorChartTitle,
+  DocxEditorChartType,
   DocxEditorPaneSections,
-  ShapeFill,
-  ShapeOutlineDashPart,
-  ShapeOutlineWidth,
+  DocxEditorShapeFill,
+  DocxEditorShapeOutlineDash,
+  DocxEditorShapeOutlineWidth,
 } from '../src/editor/objects/index.ts';
 import { SHAPE_PANE_CASES, selectParityShape, shapePaneDocx } from './shape-pane-parity.ts';
 import { CHART_PANE_SOURCE, insertParityChart } from './chart-pane-parity.ts';
@@ -62,9 +62,9 @@ test('shape parts in a host toolbar: compact fill, dash, and width apply and fol
   const { view, editor } = mount(
     shapePaneDocx(SHAPE_PANE_CASES.theme),
     <div role="toolbar" aria-label="Host">
-      <ShapeFill variant="compact" />
-      <ShapeOutlineWidth variant="compact" />
-      <ShapeOutlineDashPart variant="compact" className="host-dash" />
+      <DocxEditorShapeFill variant="compact" />
+      <DocxEditorShapeOutlineWidth variant="compact" />
+      <DocxEditorShapeOutlineDash variant="compact" className="host-dash" />
     </div>
   );
   await flush();
@@ -132,16 +132,16 @@ test('chart parts in a host toolbar and a popover that answers the pane request'
     CHART_PANE_SOURCE,
     <>
       <div role="toolbar" aria-label="Host">
-        <ChartTypePart variant="compact" />
-        <ChartTitle variant="compact" />
-        <ChartLegend variant="compact" />
-        <ChartDataLabels variant="compact" />
+        <DocxEditorChartType variant="compact" />
+        <DocxEditorChartTitle variant="compact" />
+        <DocxEditorChartLegend variant="compact" />
+        <DocxEditorChartDataLabels variant="compact" />
       </div>
       <ChartPopover />
       <div data-testid="drawer">
-        <ChartAxes />
-        <ChartSeriesColors index={0} />
-        <ChartDataPart />
+        <DocxEditorChartAxes />
+        <DocxEditorChartSeriesColors index={0} />
+        <DocxEditorChartData />
       </div>
     </>
   );
