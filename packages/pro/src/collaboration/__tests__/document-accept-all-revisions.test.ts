@@ -5,7 +5,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // `acceptAllRevisions` and `rejectAllRevisions` across two collaborating editors: the decision
 // converges, its undo and redo converge, a concurrent edit by the other peer survives the
-// decision and its undo, and a decision made offline converges after reconnect.
+// decision and its undo, typing inside a pending insertion during the decision converges, and
+// a decision made while the transport is disconnected converges on reconnect.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
@@ -187,27 +188,69 @@ test('a change the other peer suggests concurrently stays pending', async () => 
   }
 });
 
-test('a decision made offline converges after reconnect, and so does its undo', async () => {
+for (const mode of ['editing', 'suggesting'] as const) {
+  for (const type of ['acceptAllRevisions', 'rejectAllRevisions'] as const) {
+    test(`typing inside a pending insertion while the other peer runs ${type}, ${mode}`, async () => {
+      const a = await peer('Alice');
+      const b = await peer('Bob', a);
+      try {
+        const original = await converged(a, b);
+        expect(b.editor.exec({ type: 'setEditingMode', mode }).ok).toBe(true);
+        // Bob types between the "3" and the "0" of the pending insertion "30".
+        const first = b.editor.surface!.session.paragraphIds()[0]!;
+        const at = { paragraphId: first, offset: 'Payment is due in 3'.length };
+        b.editor.surface!.setSelection({ anchor: at, head: at });
+        expect(b.editor.exec({ type: 'insertText', text: '5' }).ok).toBe(true);
+        expect(a.editor.exec({ type }).ok).toBe(true);
+        sync(a, b);
+        await converged(a, b);
+        expect(pending(a)).toBe(pending(b));
+
+        expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+        sync(a, b);
+        await converged(a, b);
+        expect(pending(a)).toBe(pending(b));
+        expect(text(b)).toContain('5');
+
+        expect(b.editor.exec({ type: 'undo' }).ok).toBe(true);
+        sync(a, b);
+        expect(await converged(a, b)).toBe(original);
+      } finally {
+        b.close();
+        a.close();
+      }
+    });
+  }
+}
+
+test('a decision made while the transport is disconnected converges on reconnect', async () => {
   const a = await peer('Alice');
   const b = await peer('Bob', a);
-  let rejoined: Peer | undefined;
+  let joined: Peer | undefined;
   try {
     const original = await converged(a, b);
-    // No relay while Alice decides: she is offline.
+    a.room.session.setTransportStatus('disconnected', 'transport-disconnected', 'test-drop');
+    expect(a.room.session.statusSnapshot().status).toBe('disconnected');
+    // No relay while the wire is down: Alice decides, Bob keeps typing.
     expect(a.editor.exec({ type: 'rejectAllRevisions' }).ok).toBe(true);
+    typeAtEnd(b, ' Bob was here.');
     expect(pending(b)).toBe(3);
+    a.room.session.setTransportStatus('ready');
     sync(a, b);
     const decided = await converged(a, b);
-    rejoined = await peer('Carol', b);
-    expect(await fingerprint(rejoined)).toBe(decided);
+    expect(pending(b)).toBe(0);
+    expect(text(b)).toContain('Bob was here.');
+    joined = await peer('Carol', b);
+    expect(await fingerprint(joined)).toBe(decided);
 
     expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+    expect(b.editor.exec({ type: 'undo' }).ok).toBe(true);
     sync(a, b);
-    sync(b, rejoined);
+    sync(b, joined);
     expect(await converged(a, b)).toBe(original);
-    expect(await fingerprint(rejoined)).toBe(original);
+    expect(await fingerprint(joined)).toBe(original);
   } finally {
-    rejoined?.close();
+    joined?.close();
     b.close();
     a.close();
   }
