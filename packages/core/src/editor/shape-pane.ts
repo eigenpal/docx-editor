@@ -87,7 +87,7 @@ const fail = (error: ShapePaneError): ShapePaneResult => ({ ok: false, error });
 /** The number in a field: `,` reads as a decimal point and a trailing unit is dropped. */
 function parseNumber(text: string, unit: RegExp): number | null {
   const t = text.trim().replace(unit, '').trim().replace(',', '.');
-  if (t === '' || !/^[+-]?(\d+\.?\d*|\.\d+)$/.test(t)) return null;
+  if (t === '' || !/^[+-]?(\d+(\.\d*)?|\.\d+)$/.test(t)) return null;
   return Number(t);
 }
 

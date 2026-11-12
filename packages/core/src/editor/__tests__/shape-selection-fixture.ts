@@ -95,10 +95,7 @@ export const GROUP = anchor({
     '<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm><a:off x="0" y="0"/>' +
     `<a:ext cx="${200 * EMU}" cy="${40 * EMU}"/><a:chOff x="0" y="0"/>` +
     `<a:chExt cx="${200 * EMU}" cy="${40 * EMU}"/></a:xfrm></wpg:grpSpPr>` +
-    wsp(100 * EMU, 40 * EMU, 'rect', SOLID('9DC3E6')).replace(
-      '<a:off x="0" y="0"/>',
-      '<a:off x="0" y="0"/>'
-    ) +
+    wsp(100 * EMU, 40 * EMU, 'rect', SOLID('9DC3E6')) +
     wsp(100 * EMU, 40 * EMU, 'rect', SOLID('A9D18E')).replace(
       '<a:off x="0" y="0"/>',
       `<a:off x="${100 * EMU}" y="0"/>`
