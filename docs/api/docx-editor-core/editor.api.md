@@ -3682,6 +3682,10 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     setRevisionMarkup(settings: ResolvedRevisionMarkup): void;
     // (undocumented)
     setRevisionStyles(colors: RevisionStyles | undefined): void;
+    setRunProperties(entries: readonly {
+        attributes?: Record<string, string>;
+        localName: string;
+    }[]): string | null;
     setRunProperty(localName: string, attributes?: Record<string, string>): string | null;
     setSectionProperties(update: {
         readonly anchorParagraphId?: string;

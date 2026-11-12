@@ -261,6 +261,14 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
    */
   setRunProperty(localName: string, attributes?: Record<string, string>): string | null;
   /**
+   * Several run properties over the selection in ONE transaction: the store accepts or
+   * refuses them together, and they undo as one step. `setRunProperty` is this with a
+   * single entry.
+   */
+  setRunProperties(
+    entries: readonly { localName: string; attributes?: Record<string, string> }[]
+  ): string | null;
+  /**
    * Set a property on every paragraph the selection touches — alignment, style, spacing.
    *
    * `mergeAttributes` keeps the attributes the call does not name, for the properties that

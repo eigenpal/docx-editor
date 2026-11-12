@@ -13,6 +13,9 @@ import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core/
 import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { RunFormatting } from '../contracts/types.ts';
 import { paragraphTextOf } from '../store/store/paragraph-model-text.ts';
+import { isCollaborationFailureCode } from '../collaboration/index.ts';
+import { isMissingAuthorRefusal } from './docx-editor-author.ts';
+import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
 import { MARKS, resolveMarkAttr, type CommandSupport } from './docx-editor-support.ts';
 import { runWithHistoryGroup, takeHistoryGroup } from './history-group-scope.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
@@ -168,9 +171,18 @@ function grouped(surface: PaginatedSurface): <T>(commit: () => T) => T {
   return (commit) => runWithHistoryGroup(surface, group, commit);
 }
 
-/** A refused run-format write, in the command result's vocabulary. */
-function runRefusal(reason: string): Refusal {
-  return { ok: false, code: reason === 'locked' ? 'locked' : 'invalidArgs', reason };
+/**
+ * A refused run format as a command result. A missing author or the generated table of
+ * contents is the caller's to fix, as `insertText` reports it; a collaboration session that
+ * is not ready is a retry, as the contract documents; anything else is a lock.
+ */
+export function runFormatRefusal(reason: string): Refusal {
+  if (isCollaborationFailureCode(reason)) return { ok: false, code: 'unsupported', reason };
+  const callerFixable =
+    isMissingAuthorRefusal(reason) ||
+    reason === 'the table of contents is generated and read-only' ||
+    reason === FIELD_CODE_INPUT_REFUSAL;
+  return { ok: false, code: callerFixable ? 'invalidArgs' : 'locked', reason };
 }
 
 /**
@@ -241,12 +253,9 @@ export function execSelectionEdit(
     case 'applyFormatting': {
       const writes = runWritesOf(command.marks);
       if (typeof writes === 'string') return { ok: false, code: 'invalidArgs', reason: writes };
-      const inGroup = grouped(surface);
-      for (const write of writes) {
-        const refused = inGroup(() => surface.setRunProperty(write.localName, write.attributes));
-        if (refused) return runRefusal(refused);
-      }
-      return null;
+      // One commit for every mark, so the store accepts or refuses them together.
+      const refused = grouped(surface)(() => surface.setRunProperties(writes));
+      return refused ? runFormatRefusal(refused) : null;
     }
     case 'splitParagraph':
       surface.splitParagraph();

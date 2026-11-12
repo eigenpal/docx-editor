@@ -110,6 +110,42 @@ describe('applyFormatting', () => {
     }
   });
 
+  test('a refused mark refuses them all: no change and no undo step', () => {
+    const { editor, dispose } = mount(paragraph('plain words'));
+    try {
+      const before = bodyXml(editor);
+      select(editor, 0, 0, 5);
+      // The store refuses any batch that writes italic, as a lock on one property would.
+      const session = editor.surface!.session;
+      const apply = session.applyTreeOps.bind(session);
+      const batches: string[][] = [];
+      session.applyTreeOps = ((ops, ...rest) => {
+        const names = ops.flatMap((op) =>
+          'properties' in op && Array.isArray(op.properties)
+            ? op.properties.map((property: { localName: string }) => property.localName)
+            : []
+        );
+        batches.push(names);
+        if (names.includes('i')) {
+          return { committed: false, rejected: true, opCount: 0, reason: 'locked' };
+        }
+        return apply(ops, ...rest);
+      }) as typeof session.applyTreeOps;
+      const result = editor.exec({
+        type: 'applyFormatting',
+        marks: { bold: true, italic: true },
+      } as never);
+      expect(result).toMatchObject({ ok: false, code: 'locked' });
+      // Bold and italic reached the store as one batch, so nothing landed.
+      expect(batches).toHaveLength(1);
+      expect(batches[0]).toEqual(expect.arrayContaining(['b', 'i']));
+      expect(bodyXml(editor)).toBe(before);
+      expect(editor.can({ type: 'undo' }).ok).toBe(false);
+    } finally {
+      dispose();
+    }
+  });
+
   test('false states the switch off rather than toggling it', () => {
     const { editor, dispose } = mount('<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>');
     try {

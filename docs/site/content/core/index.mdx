@@ -110,7 +110,7 @@ These commands act on the selection, as the matching gesture does. Each is one u
 | Command | What it does |
 | --- | --- |
 | `replaceText` | Replaces the selection with `text`. Newlines start paragraphs. Empty `text` deletes the selection. |
-| `applyFormatting` | Sets run formatting from `marks`: bold, italic, underline, strike, superscript, subscript, a hex color, highlight, font family, and size in points. `false` turns a switch off. |
+| `applyFormatting` | Sets run formatting from `marks`: bold, italic, underline, strike, superscript, subscript, a hex color, highlight, font family, and size in points. `false` turns a switch off. Every mark applies, or none does. |
 | `splitParagraph` | Splits the paragraph at the selection, as **Enter** does. |
 | `mergeParagraphs` | Joins the paragraphs the selection spans, or the selection's paragraph and the next one. A join across table cells is refused. |
 | `removeTabMark` | Removes the tab stop at `positionTwips` from the selection's paragraphs. |

@@ -119,11 +119,11 @@ export interface DocEdits {
   replaceText: { target: DocTarget; text: string };
   deleteText: { target: DocTarget };
   /**
-   * Set run formatting over the selection in one undo step. Accepts the run fields of
-   * {@link RunFormatting}: `bold`, `italic`, `underline`, `strike`, `superscript`, `subscript`,
-   * a hex `color`, `highlight`, `fontFamily`, and `fontSizePt`. `false` states a switch off. A
-   * paragraph field, a theme color, or both scripts together are refused with `invalidArgs`.
-   * The editor acts on the selection and refuses a `target`.
+   * Set run formatting over the selection in one undo step: every mark applies, or none does.
+   * Accepts the run fields of {@link RunFormatting}: `bold`, `italic`, `underline`, `strike`,
+   * `superscript`, `subscript`, a hex `color`, `highlight`, `fontFamily`, and `fontSizePt`.
+   * `false` states a switch off. A paragraph field, a theme color, or both scripts together
+   * are refused with `invalidArgs`. The editor acts on the selection and refuses a `target`.
    */
   applyFormatting: { target: DocTarget; marks: RunFormatting };
   setParagraphStyle: { target: DocTarget; styleId: string };
