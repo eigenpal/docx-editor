@@ -260,6 +260,7 @@ export type {
   DrawingGeometry,
   DrawingInsets,
   DrawingPoint,
+  DrawingRegionCuts,
 } from './drawing-geometry.ts';
 export type {
   DrawingAccessibility,

@@ -41,12 +41,16 @@ const reachCache = new WeakMap<VectorShapeProjection, DrawingInsets>();
  * its full width. The reach comes from butt-capped segments and miter joins, measured
  * only on the part of each segment inside the extent, so geometry outside the extent stays
  * clipped and a side grows by at most the miter reach. A line-end triangle on a line that
- * ends inside the extent grows it too. A side stays as it is when a layout region or a
- * negative effect extent cut into the shape itself, and a drawing clipped to nothing stays
- * empty.
+ * ends inside the extent grows it too. A shape that paints outside its extent
+ * (`overflowVisible`, every direct shape) grows by its whole geometry and ink instead, past a
+ * cell or content edge outside its extent and past a negative effect extent. Where a layout
+ * region cut into the extent itself (`geometry.regionCuts`: a cell, a frame, or the page, never
+ * an inline drawing's own line or column), such a shape is cut at the region edge. A side stays as it is when a region or a negative effect extent cut into the extent
+ * of a shape that does not paint outside its extent. A drawing
+ * clipped to nothing stays empty.
  *
- * Only the paint clip grows. Collisions, hit testing, and pointer targets keep `paintBounds`,
- * so a painter clips with this box without making it clickable.
+ * Only the paint clip grows; collisions and text wrap keep `paintBounds`. Hit testing reaches
+ * the ink of a shape that paints outside its extent, through its geometry.
  *
  * `bounds` is the drawing's `paintBounds` in any translation: the record's own, or the
  * absolute paint bounds of an export visit.
@@ -72,7 +76,14 @@ function inkGrowth(drawing: Drawing): DrawingInsets {
     reachEmu = strokeReach(shape);
     reachCache.set(shape, reachEmu);
   }
-  if (reachEmu === NO_GROWTH) return NO_GROWTH;
+  // A shape that paints outside its extent is cut only by a region: a negative effect extent
+  // cuts nothing, so the clip grows back to the extent on that side.
+  const open = shape.overflowVisible === true;
+  // A hand-built record may carry no effect insets; it then has no effect extent to undo.
+  const effect: DrawingInsets = drawing.geometry.effectInsets ?? NO_GROWTH;
+  const effectCuts =
+    open && (effect.left < 0 || effect.top < 0 || effect.right < 0 || effect.bottom < 0);
+  if (reachEmu === NO_GROWTH && !effectCuts) return NO_GROWTH;
   const paint = drawing.paintBounds;
   const content = drawing.geometry.contentBounds;
   // A drawing that a region clipped away entirely paints nothing, ink included. A zero-width
@@ -85,8 +96,16 @@ function inkGrowth(drawing: Drawing): DrawingInsets {
   const scaleY = cy > 0 ? content.height / cy : content.width / cx;
   // `room` is how far the paint edge already sits outside the extent edge: the effect extent,
   // or less where a region cut it. A paint edge inside the extent means a region or a negative
-  // effect extent cut into the shape itself, and that side stays as it is.
-  const grow = (overhangEmu: number, scale: number, room: number) => {
+  // effect extent cut into the shape itself, and that side stays as it is. A shape that paints
+  // outside its extent is cut only at the edge of a region that cut into its extent (`cut`,
+  // its depth inside the extent); a negative effect extent cuts nothing, so that side grows
+  // back past the extent, or back to the region edge.
+  const cuts = drawing.geometry.regionCuts;
+  const grow = (overhangEmu: number, scale: number, room: number, cut: number) => {
+    if (open) {
+      const extra = cut > 0 ? -room - cut : overhangEmu * scale - room;
+      return Number.isFinite(extra) && extra > 0 ? extra : 0;
+    }
     if (room < -CLIP_EPSILON) return 0;
     const extra = overhangEmu * scale - Math.max(0, room);
     return Number.isFinite(extra) && extra > 0 ? extra : 0;
@@ -95,10 +114,20 @@ function inkGrowth(drawing: Drawing): DrawingInsets {
   // other edges as a shape's outline does.
   const inlinePicture = drawing.kind === 'inlineDrawing' && drawing.placeholderGraphicKind === null;
   const growth = {
-    left: grow(reachEmu.left, scaleX, content.x - paint.x),
-    top: inlinePicture ? 0 : grow(reachEmu.top, scaleY, content.y - paint.y),
-    right: grow(reachEmu.right, scaleX, paint.x + paint.width - (content.x + content.width)),
-    bottom: grow(reachEmu.bottom, scaleY, paint.y + paint.height - (content.y + content.height)),
+    left: grow(reachEmu.left, scaleX, content.x - paint.x, cuts?.left ?? 0),
+    top: inlinePicture ? 0 : grow(reachEmu.top, scaleY, content.y - paint.y, cuts?.top ?? 0),
+    right: grow(
+      reachEmu.right,
+      scaleX,
+      paint.x + paint.width - (content.x + content.width),
+      cuts?.right ?? 0
+    ),
+    bottom: grow(
+      reachEmu.bottom,
+      scaleY,
+      paint.y + paint.height - (content.y + content.height),
+      cuts?.bottom ?? 0
+    ),
   };
   return growth.left || growth.top || growth.right || growth.bottom
     ? Object.freeze(growth)

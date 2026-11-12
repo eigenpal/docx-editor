@@ -161,7 +161,8 @@ export function createDrawingGestures(deps: {
       }
       // A drawing behind the text paints under it, so the press reaches the text layer. Where
       // no glyph lies under the press, the drawing takes it, as hit testing decides. A turned
-      // shape paints past its box, so a press on that part reaches the page, the margins too.
+      // shape, or a callout's tail, paints past its box, so a press on that part reaches the
+      // page, the margins too.
       // One the selection model refuses (hidden, select-locked) leaves the press to the text.
       const behind = !editingTextbox && !drawingId ? behindDrawingAt(event) : null;
       if (behind) followPage(behind.drawingNodeId, behind.paragraphId, behind.pageIndex);

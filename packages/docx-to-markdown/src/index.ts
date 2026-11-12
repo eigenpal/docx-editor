@@ -123,6 +123,7 @@ export type {
   DrawingGroupPictureRecord,
   DrawingHorizontalReferenceFrame,
   DrawingPlaceholderKind,
+  DrawingRegionCuts,
   DrawingTransform,
   DrawingVerticalReferenceFrame,
   GroupTextboxStoryRecord,

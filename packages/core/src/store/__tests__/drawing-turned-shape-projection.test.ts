@@ -151,10 +151,10 @@ describe('turned top-level shapes', () => {
     expect(flipped.components[0]!.strokeHex).toBe('000080');
   });
 
-  test('an upright shape carries no turn and keeps its extent clip', () => {
+  test('an upright shape carries no turn and paints past its extent', () => {
     const shape = vector({ cx: 144 * EMU, cy: 72 * EMU, rot: '0' });
     expect(shape.rotationDegrees).toBeUndefined();
-    expect(shape.overflowVisible).toBeUndefined();
+    expect(shape.overflowVisible).toBe(true);
     expect(
       vector({ cx: 144 * EMU, cy: 72 * EMU, rot: '21600000' }).rotationDegrees
     ).toBeUndefined();

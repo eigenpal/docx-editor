@@ -1350,7 +1350,9 @@ export function buildInlineDrawingRecord(options: {
     baselineOffset: options.baseline,
     paintBounds,
     hitBounds,
-    geometry: clipGeometryToRegion(geometry, clipRegion),
+    // The line and column clip is no region a shape stays cut at: a shape that paints past its
+    // extent paints over the margins, and a cell clips it again (semantic-table-layout.ts).
+    geometry: clipGeometryToRegion(geometry, clipRegion, false),
     resource: options.input.resource,
     accessibility: drawingAccessibility(options.input.projection),
     ...drawingPaintFields(options.input.projection),

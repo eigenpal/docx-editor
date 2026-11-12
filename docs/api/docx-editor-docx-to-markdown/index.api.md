@@ -102,6 +102,7 @@ export interface DrawingGeometry {
     readonly imageTransformCorners?: readonly DrawingPoint[];
     // (undocumented)
     readonly paintBounds: LayoutBox;
+    readonly regionCuts?: DrawingRegionCuts;
     // (undocumented)
     readonly transformedCorners: readonly DrawingPoint[];
 }
@@ -128,6 +129,14 @@ export type DrawingHorizontalReferenceFrame = 'character' | 'column' | 'insideMa
 
 // @public
 export type DrawingPlaceholderKind = 'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
+
+// @public
+export interface DrawingRegionCuts {
+    readonly bottom: number;
+    readonly left: number;
+    readonly right: number;
+    readonly top: number;
+}
 
 // @public (undocumented)
 export interface DrawingTransform {

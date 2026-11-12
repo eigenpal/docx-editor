@@ -1,4 +1,5 @@
 import { PATH_HIT_REACH, turnedShapeBounds, unionBox, vectorShapeHit } from './vector-shape-hit.ts';
+import { vectorShapeInkClip } from './vector-shape-ink.ts';
 export {
   findDrawingOverlayFrameInLayout,
   type DrawingOverlayFrame,
@@ -716,9 +717,13 @@ function hitBoundsContainDrawing(
   const box = drawing.hitBounds;
   // A vector shape takes a press on what it paints: its fill, and its path or outline within
   // reach. A press beside a line, or inside a shape with no fill, goes to the text. A turned
-  // shape paints outside its box too, as far as its turned extent reaches.
+  // shape paints outside its box too, as far as its turned extent reaches, and a shape that
+  // paints outside its extent, such as a callout's tail, as far as its ink reaches.
   const reach = PATH_HIT_REACH + maxStrokeHalfWidth(drawing);
-  const near = unionBox(box, turnedShapeBounds(drawing));
+  const ink = drawing.vectorShape?.overflowVisible
+    ? vectorShapeInkClip(drawing, drawing.paintBounds)
+    : null;
+  const near = unionBox(unionBox(box, turnedShapeBounds(drawing)), ink);
   if (
     point.x < near.x - reach ||
     point.x > near.x + near.width + reach ||

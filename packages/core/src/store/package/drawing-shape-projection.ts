@@ -116,15 +116,16 @@ export interface VectorShapeProjection {
   /** Independently styled paths, always non-empty. A direct shape has one component. */
   readonly components: readonly VectorShapeComponent[];
   /**
-   * Geometry outside the extent paints too. A drawing canvas does not cut its members at
-   * its frame: a member placed past an edge shows whole.
+   * Geometry outside the extent paints too. A direct shape, turned or upright, is not cut at
+   * its extent or its effect extent: a callout's tail, or a custom path past its box, shows
+   * whole. A drawing canvas does not cut its members at its frame either.
    */
   readonly overflowVisible?: true;
   /**
    * A shape turned by its `a:xfrm/@rot`, in clockwise degrees in (0, 360). It turns about the
-   * centre of its unturned extent, so its geometry paints outside the extent (`overflowVisible`)
-   * while layout keeps the extent and `wp:effectExtent` it reserves. Absent when not turned. A
-   * shape with no extent carries its turn but paints nothing, so it sets no `overflowVisible`.
+   * centre of its unturned extent, so its geometry paints outside the extent, while layout
+   * keeps the extent and `wp:effectExtent` it reserves. Absent when not turned. A shape with no
+   * extent carries its turn but paints nothing, so it sets no `overflowVisible`.
    *
    * Informational only: the turn and the flips are already applied to every component's
    * points, so a painter must not apply it again.
@@ -715,6 +716,7 @@ export function projectVectorShape(
   }
   let components: VectorShapeComponent[] = [];
   let rotationDegrees = 0;
+  let overflowVisible = false;
   if (wsp) {
     const shapeComponents = projectShapeComponents(
       wsp,
@@ -736,6 +738,8 @@ export function projectVectorShape(
     }
     components = [...shapeComponents];
     rotationDegrees = shapeRotationDegrees(shapeTransformElement(wsp)) ?? 0;
+    // A direct shape paints its whole geometry and outline, past its extent too.
+    overflowVisible = true;
   } else {
     const frame = readDrawingGroupFrame(anchor);
     if (!frame) return null;
@@ -822,7 +826,8 @@ export function projectVectorShape(
     strokeAlpha: first?.strokeAlpha ?? 1,
     strokeWidthEmu: first?.strokeWidthEmu ?? 0,
     components,
-    ...(rotationDegrees !== 0 ? { overflowVisible: true as const, rotationDegrees } : {}),
+    ...(overflowVisible || rotationDegrees !== 0 ? { overflowVisible: true as const } : {}),
+    ...(rotationDegrees !== 0 ? { rotationDegrees } : {}),
   };
 }
 
