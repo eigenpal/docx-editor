@@ -691,7 +691,8 @@
     },
     "selection": "Imagem selecionada",
     "locked": "Esta caixa não pode ser movida nem redimensionada",
-    "textLocked": "O texto desta caixa não pode ser editado"
+    "textLocked": "O texto desta caixa não pode ser editado",
+    "selectionShape": "Forma selecionada"
   },
   "revisions": {
     "paragraphMarkInserted": "Marca de parágrafo inserida",

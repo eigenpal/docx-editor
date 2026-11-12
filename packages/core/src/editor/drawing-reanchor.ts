@@ -7,7 +7,7 @@
 import type { DrawingPositionInput } from '../store/package/drawing-projection.ts';
 import type { OoxmlDrawingNode, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { findNode, parentNodeOf } from '../store/package/ooxml-edit.ts';
-import { drawingWithPosition } from '../store/store/tree-op-drawings.ts';
+import { drawingAnchorLocked, drawingWithPosition } from '../store/store/tree-op-drawings.ts';
 import type { DrawingTreeDocOp } from '../store/store/tree-op-types.ts';
 import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
@@ -101,6 +101,7 @@ export function planDrawingReanchor(
   const part = surface.session.part();
   const drawing = findNode(part, drawingNodeId);
   if (!drawing || drawing.kind !== 'drawing' || !plainRunDrawing(surface, drawing)) return null;
+  if (drawingAnchorLocked(drawing as OoxmlDrawingNode)) return null;
   const verticalEmu =
     record.verticalFrame === 'paragraph'
       ? Math.round((top - target.box.y) * EMU_PER_POINT)

@@ -13,6 +13,7 @@ import { reanchorMovedDrawing } from './drawing-reanchor.ts';
 import { preserveWrapExtentOps, type WrapExtentOverrides } from './image-wrap-extent.ts';
 import { reportCommandResult } from './command-reporting.ts';
 import { chartDrawingRefusal, drawingGate, type ChartGate } from './image-state-rules.ts';
+import { isShapeDrawing, shapeKeepsGeometrySize } from './shape-drawings.ts';
 export { imageContextEqual } from './image-state-rules.ts';
 // Selected-image derivation and image command dispatch for `createDocxEditor` (task 13).
 //
@@ -215,16 +216,14 @@ function projectDrawingForRecord(
   const scope = surface.storyScope();
   const part = surface.session.partFor(scope) ?? surface.session.part();
   const drawing = findNode(part, record.drawingNodeId);
+  const pkg = surface.session.currentPackage();
   if (!drawing) return null;
-  if (drawing.kind !== 'drawing') return drawingAtomProjection(part, record.drawingNodeId);
+  if (drawing.kind !== 'drawing') return drawingAtomProjection(part, record.drawingNodeId, pkg);
   return projectDrawing(drawing as import('../store/package/ooxml-tree.ts').OoxmlDrawingNode, {
     ownerPartName: record.ownerPartName,
     supportedMcRequires: DEFAULT_SUPPORTED_MC_REQUIRES,
     limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
-    resolveRelationship: createDrawingRelationshipResolver(
-      surface.session.currentPackage(),
-      record.ownerPartName
-    ),
+    resolveRelationship: createDrawingRelationshipResolver(pkg, record.ownerPartName),
   });
 }
 
@@ -266,8 +265,9 @@ function capabilityFlags(
   const locks = chart === 'locked' ? { resize: true, move: true, changeAspect: true } : gateLocks;
   // An inline text box flows with its line: it resizes in place but is never dragged.
   const fixed = projection.kind === 'inline' && projection.textboxStory !== null;
+  const shape = shapeKeepsGeometrySize(projection, chart === 'none');
   return Object.freeze({
-    canResize: !locks.resize && !projection.hidden,
+    canResize: !shape && !locks.resize && !projection.hidden,
     canMove: !fixed && !locks.move && !projection.hidden,
     canChangeWrap:
       (chart === 'frame' || (chart === 'none' && projection.picture !== null)) &&
@@ -288,13 +288,14 @@ function wrapOf(record: SelectedDrawingRecord): ImageWrapTarget {
 }
 
 /**
- * Image commands reach pictures, text boxes, charts (drawn, by their fallback, or as a
- * placeholder) and diagrams (`chart` is not `none`); the overlay offers handles on the same
- * gate. A chart or a diagram selects as an object.
+ * Image commands reach pictures, text boxes, shapes, lines and groups (`vectorShape`), charts
+ * (drawn, by their fallback, or as a placeholder) and diagrams (`chart` is not `none`); the
+ * overlay offers handles on the same gate. A chart or a diagram selects as an object.
  */
 const imageCommandsReach = (record: SelectedDrawingRecord, chart: ChartGate): boolean =>
   record.placeholderGraphicKind === null ||
   !!record.textboxStory ||
+  !!record.vectorShape ||
   record.placeholderGraphicKind === 'chart' ||
   !!record.chart ||
   chart !== 'none';
@@ -630,15 +631,15 @@ export function gateImageCommand(
   const record = resolveSelectedDrawingRecord(surface);
   const textbox = record && 'textboxStory' in record && record.textboxStory;
   if (
-    textbox &&
     (command.type === 'replaceImage' ||
       command.type === 'transformImage' ||
-      (command.type === 'setImageProperties' && command.hyperlink !== undefined))
+      (command.type === 'setImageProperties' && command.hyperlink !== undefined)) &&
+    (textbox || isShapeDrawing(surface, record))
   ) {
     return {
       ok: false,
       code: 'unsupported',
-      reason: 'this operation is not supported for textboxes',
+      reason: `this operation is not supported for ${textbox ? 'textboxes' : 'shapes'}`,
     };
   }
   if (command.type === 'replaceImage') {
@@ -1154,6 +1155,8 @@ export interface ImageOverlayScrollPort {
 export interface SelectedDrawingOverlayTarget {
   /** Keep the text area available for pointer editing through the frame. */
   readonly textbox?: boolean;
+  /** A shape, line or group: its frame is labelled as a shape, not as an image. */
+  readonly shape?: boolean;
   /**
    * False for a text box whose text takes no caret: rotated or vertical text, or a story
    * holding a table. Absent for a drawing that is not a text box.
@@ -1221,14 +1224,13 @@ export function selectedDrawingOverlayTargetOf(
   // place handles, stamp a drag session — so a pass still parked on the scheduler's timer must
   // land first. Nothing pending makes this a plain read.
   const layout = surface.layout();
-  const edited =
-    scope.kind === 'frame'
-      ? editedTextboxOverlayFrame(layout, scope, surface.currentPage('caret') - 1)
-      : null;
+  const page = surface.currentPage('caret') - 1;
+  const edited = scope.kind === 'frame' ? editedTextboxOverlayFrame(layout, scope, page) : null;
   const record = scope.kind === 'frame' ? edited?.record : selected;
   if (!record) return null;
   if (record.accessibility.hidden) return null;
-  const frame = edited ?? findDrawingOverlayFrameInLayout(layout, record.drawingNodeId);
+  // The page the caret is on: an open header's drawing repeats on every page it heads.
+  const frame = edited ?? findDrawingOverlayFrameInLayout(layout, record.drawingNodeId, page);
   if (!frame) return null;
   const projection = projectDrawingForRecord(surface, record);
   const gate = projection ? drawingGate(surface, record.drawingNodeId, projection) : null;
@@ -1258,6 +1260,7 @@ export function selectedDrawingOverlayTargetOf(
   return Object.freeze({
     id: record.drawingNodeId,
     textbox: 'textboxStory' in record && !!record.textboxStory,
+    shape: isShapeDrawing(surface, record),
     ...textboxTextEditable(
       record,
       partOfNodeId(surface.session, record.drawingNodeId) ?? surface.session.part()

@@ -67,6 +67,23 @@ function diagramRelIds(drawing: OoxmlElement): OoxmlElement | null {
   });
 }
 
+/** The `graphicData/@uri` of a shape and of a group of shapes. */
+const SHAPE_GRAPHIC_DATA_URIS: ReadonlySet<string> = new Set([
+  'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
+  'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup',
+]);
+
+/**
+ * Whether `drawing` is a `w:drawing` that holds a shape, a line or a group of shapes, whether
+ * or not its geometry projects: such a frame moves and deletes as a whole.
+ */
+export function holdsShapeGraphic(drawing: OoxmlElement): boolean {
+  const anchor = anchorOf(drawing);
+  const data = anchor ? findGraphicData(anchor) : null;
+  const uri = data?.attributes.find((attribute) => attribute.localName === 'uri')?.value;
+  return uri !== undefined && SHAPE_GRAPHIC_DATA_URIS.has(uri);
+}
+
 /** Whether `drawing` is a `w:drawing` that holds a DrawingML diagram. */
 export function holdsDiagramGraphic(drawing: OoxmlElement): boolean {
   return diagramRelIds(drawing) !== null;

@@ -1213,7 +1213,7 @@ export interface FieldLinkRegistry {
 export function filterRefsOnPage(page: PageRecord, allRefs: readonly PageRefHit[], refIndex?: PageRefIndex): readonly PageRefHit[];
 
 // @public
-export function findDrawingOverlayFrameInLayout(layout: SemanticLayout, drawingNodeId: string): DrawingOverlayFrame | null;
+export function findDrawingOverlayFrameInLayout(layout: SemanticLayout, drawingNodeId: string, preferPage?: number): DrawingOverlayFrame | null;
 
 // @public
 export function findSeparatorNote(part: OoxmlPart | null | undefined, kind: 'separator' | 'continuationSeparator'): OoxmlElement | undefined;

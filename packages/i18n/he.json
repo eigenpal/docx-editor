@@ -692,7 +692,8 @@
     },
     "selection": "תמונה נבחרת",
     "locked": "לא ניתן להזיז תיבה זו או לשנות את גודלה",
-    "textLocked": "לא ניתן לערוך את הטקסט בתיבה זו"
+    "textLocked": "לא ניתן לערוך את הטקסט בתיבה זו",
+    "selectionShape": "צורה נבחרת"
   },
   "revisions": {
     "paragraphMarkInserted": "סימן פסקה נוסף",

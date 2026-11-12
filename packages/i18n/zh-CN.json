@@ -691,7 +691,8 @@
     },
     "selection": "选定的图像",
     "locked": "此框无法移动或调整大小",
-    "textLocked": "此框中的文本无法编辑"
+    "textLocked": "此框中的文本无法编辑",
+    "selectionShape": "选定的形状"
   },
   "revisions": {
     "paragraphMarkInserted": "已插入段落标记",

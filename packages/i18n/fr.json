@@ -667,7 +667,8 @@
     },
     "selection": "Image sélectionnée",
     "locked": "Ce cadre ne peut être ni déplacé ni redimensionné",
-    "textLocked": "Le texte de ce cadre ne peut pas être modifié"
+    "textLocked": "Le texte de ce cadre ne peut pas être modifié",
+    "selectionShape": "Forme sélectionnée"
   },
   "ruler": {
     "horizontal": "Règle horizontale",

@@ -721,7 +721,8 @@
     },
     "selection": "Gambar yang dipilih",
     "locked": "Kotak ini tidak dapat dipindahkan atau diubah ukurannya",
-    "textLocked": "Teks dalam kotak ini tidak dapat diedit"
+    "textLocked": "Teks dalam kotak ini tidak dapat diedit",
+    "selectionShape": "Bentuk yang dipilih"
   },
   "ruler": {
     "horizontal": "Penggaris Horizontal",

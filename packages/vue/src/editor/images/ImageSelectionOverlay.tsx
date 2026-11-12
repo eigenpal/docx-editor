@@ -12,6 +12,9 @@ import {
 } from 'vue';
 import {
   beginInlineImageDrag,
+  drawingFramePressTarget,
+  type DrawingFramePress,
+  passDrawingFramePress,
   canMoveInlineImage,
   captureImageMutationPreconditions,
   computeMovedImagePosition,
@@ -158,11 +161,22 @@ export const ImageSelectionOverlay = defineComponent({
             focusRequestedForDrawingRef.value = null;
             return;
           }
-          const drawingId = element
-            ?.closest<HTMLElement>('[data-drawing-node-id]')
-            ?.getAttribute('data-drawing-node-id');
-          focusRequestedForDrawingRef.value = drawingId ?? null;
-          if (drawingId && drawingId === target.value?.id) {
+          const instance = editorRef.value;
+          // A drawing behind the text paints under it, so the hit names what the press reaches.
+          const drawingId =
+            element
+              ?.closest<HTMLElement>('[data-drawing-node-id]')
+              ?.getAttribute('data-drawing-node-id') ??
+            instance?.surface?.pointAt(event.clientX, event.clientY)?.hit.drawing?.drawingNodeId;
+          // A press on the frame goes where the frame hands it: text keeps the keyboard with
+          // the editor, another drawing takes it once selected.
+          const onFrame = !!instance && !!drawingId && drawingId === target.value?.id;
+          const press: DrawingFramePress = onFrame
+            ? drawingFramePressTarget(instance, event)
+            : 'frame';
+          focusRequestedForDrawingRef.value =
+            press === 'text' ? null : press === 'frame' ? (drawingId ?? null) : press.drawingNodeId;
+          if (onFrame && press === 'frame') {
             queueMicrotask(() => overlayRef.value?.focus({ preventScroll: true }));
           }
         };
@@ -377,7 +391,8 @@ export const ImageSelectionOverlay = defineComponent({
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
         event.stopPropagation();
-        editor.exec({ type: 'deleteImage' });
+        // The frame goes with the drawing: the caret it leaves keeps the keyboard, for undo.
+        if (editor.exec({ type: 'deleteImage' }).ok) editor.focus();
         return;
       }
       if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
@@ -622,7 +637,9 @@ export const ImageSelectionOverlay = defineComponent({
               title={frameLabel}
               aria-description={frameLabel}
               role="group"
-              aria-label={t('imageOverlay.selection')}
+              aria-label={t(
+                current.shape ? 'imageOverlay.selectionShape' : 'imageOverlay.selection'
+              )}
               style={{
                 left: `${rect.left}px`,
                 top: `${rect.top}px`,
@@ -636,6 +653,14 @@ export const ImageSelectionOverlay = defineComponent({
                 if (instance && openChartPaneFor(instance, current.id)) event.preventDefault();
               }}
               onPointerdown={(event: PointerEvent) => {
+                // Over text in front of a drawing behind it, the text takes the press.
+                const passed = passDrawingFramePress(editor, event);
+                if (passed !== 'frame') {
+                  // The forwarded press ran the capture listener again; the frame's answer wins.
+                  focusRequestedForDrawingRef.value =
+                    passed === 'text' ? null : passed.drawingNodeId;
+                  return;
+                }
                 if (showInlineMove && beginInlineImageDrag(editor, event, current.id)) return;
                 guardToolbarMousedown(event as unknown as MouseEvent);
                 if (!showMove || !current.position) return;

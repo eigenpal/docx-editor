@@ -2073,6 +2073,14 @@ export const DRAWING_REL_FROM_H: readonly string[];
 export const DRAWING_REL_FROM_V: readonly string[];
 
 // @public
+export type DrawingFramePress = 'frame' | 'text' | {
+    readonly drawingNodeId: string;
+};
+
+// @public
+export function drawingFramePressTarget(editor: Editor, event: PointerEvent): DrawingFramePress;
+
+// @public
 export type DrawingGraphicKind = 'picture' | 'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
 
 // @public
@@ -3671,6 +3679,9 @@ export function parseIsoDate(value: string): Date | null;
 // @public
 export function partOfNodeId(session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'> & Partial<Pick<TreeDocxSessionView, 'storyParts'>>, nodeId: string | undefined): OoxmlPart | null;
 
+// @public
+export function passDrawingFramePress(editor: Editor, event: PointerEvent): DrawingFramePress;
+
 // @internal
 export function placeSubmenu(row: {
     readonly left: number;
@@ -4369,6 +4380,7 @@ export interface SelectedDrawingOverlayTarget {
     readonly pageIndex: number;
     // (undocumented)
     readonly position: DrawingPositionInput | null;
+    readonly shape?: boolean;
     readonly textbox?: boolean;
     readonly textEditable?: boolean;
     // (undocumented)
