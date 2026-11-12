@@ -21,4 +21,4 @@ scripts/api-forgotten-exports.baseline.json
 
 # Test fixtures captured from other applications, kept byte for byte: the clipboard tests
 # compare against their exact markup.
-packages/*/src/**/__tests__/fixtures/**
+packages/*/src/**/__tests__/fixtures/**/*.html
