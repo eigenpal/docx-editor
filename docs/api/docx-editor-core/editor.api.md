@@ -4501,6 +4501,7 @@ export interface SelectedShapeView {
     readonly drawingNodeId: string | null;
     readonly fillDisabledReason: string | null;
     readonly format: ShapeFormatState | null;
+    readonly memberId: string | null;
     readonly outlineDisabledReason: string | null;
     readonly transparencyDisabledReason: string | null;
 }

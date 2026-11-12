@@ -8621,6 +8621,7 @@ export interface UseSelectedShapeReturn {
     readonly execute: (command: SelectedShapeCommand) => ExecResult;
     readonly fillDisabledReason: ComputedRef<string | null>;
     readonly format: ComputedRef<ShapeFormatState | null>;
+    readonly memberId: ComputedRef<string | null>;
     readonly outlineDisabledReason: ComputedRef<string | null>;
     readonly transparencyDisabledReason: ComputedRef<string | null>;
 }

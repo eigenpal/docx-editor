@@ -3922,6 +3922,7 @@ export interface UseSelectedShapeReturn {
     readonly execute: (command: SelectedShapeCommand) => ExecResult;
     readonly fillDisabledReason: string | null;
     readonly format: ShapeFormatState | null;
+    readonly memberId: string | null;
     readonly outlineDisabledReason: string | null;
     readonly transparencyDisabledReason: string | null;
 }
