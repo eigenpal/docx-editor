@@ -120,7 +120,8 @@ export function readSelectedShape(
       ? refusal(editor, {
           type: 'setShapeFill',
           drawingNodeId,
-          transparency: format.fill.transparency,
+          // A nonzero value, so a shape that refuses any transparency says so here.
+          transparency: format.fill.transparency || 0.5,
         })
       : format.fill.type === 'mixed'
         ? MIXED_FILL_REASON
