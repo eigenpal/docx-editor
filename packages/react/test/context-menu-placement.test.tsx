@@ -13,6 +13,7 @@ import './dom-setup.ts';
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
@@ -87,12 +88,12 @@ afterEach(() => {
   delete (HTMLElement.prototype as Partial<HTMLElement>).showPopover;
 });
 
-function mount(): ReturnType<typeof render> {
+function mount(rows?: ReactNode): ReturnType<typeof render> {
   return render(
     <DocxEditorRoot document={SOURCE}>
       <DocxEditorViewport>
         <DocxEditorContent />
-        <ContextMenu t={t} />
+        <ContextMenu t={t}>{rows}</ContextMenu>
       </DocxEditorViewport>
     </DocxEditorRoot>
   );
@@ -210,5 +211,59 @@ describe('stacking', () => {
     const panel = rightClick(view, 120, 100);
     expect(panel.getAttribute('popover')).toBe('manual');
     expect(shown).toEqual([panel]);
+  });
+});
+
+describe('a narrow window', () => {
+  test('caps the menu width so its right edge stays in the window', () => {
+    Object.defineProperty(window, 'innerWidth', { value: 200, configurable: true });
+    const view = mount();
+    const panel = rightClick(view, 150, 100);
+    expect(Number.parseFloat(panel.style.left)).toBe(8);
+    expect(Number.parseFloat(panel.style.maxWidth)).toBe(200 - 16);
+  });
+});
+
+describe('a submenu in a scrolling menu', () => {
+  test('follows its row when the menu scrolls', () => {
+    panelSize = { width: 240, height: 900 };
+    const view = mount(
+      <ContextMenu.Submenu label="More">
+        <ContextMenu.Item label="Inner" />
+      </ContextMenu.Submenu>
+    );
+    const panel = rightClick(view, 120, 300);
+    const wrapper = panel.querySelector<HTMLElement>('.docx-menubar__submenu')!;
+    const row = wrapper.querySelector<HTMLElement>('[aria-haspopup="menu"]')!;
+    row.getBoundingClientRect = () => rectOf(0, 400 - panel.scrollTop, 240, 32);
+    act(() => {
+      fireEvent.mouseEnter(wrapper);
+    });
+    const submenu = () => panel.querySelector<HTMLElement>('.docx-menubar__submenu-panel')!;
+    expect(Number.parseFloat(submenu().style.top)).toBe(396);
+
+    act(() => {
+      panel.scrollTop = 100;
+      fireEvent.scroll(panel);
+    });
+    expect(Number.parseFloat(submenu().style.top)).toBe(296);
+  });
+});
+
+describe('a host row that opens a dialog', () => {
+  test('keeps the focus the dialog takes', () => {
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    const view = mount(<ContextMenu.Item label="Edit" onSelect={() => input.focus()} />);
+    const panel = rightClick(view, 120, 100);
+    const row = [...panel.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (item) => item.textContent === 'Edit'
+    )!;
+    act(() => {
+      fireEvent.click(row);
+    });
+    expect(view.container.querySelector('.docx-contextmenu')).toBeNull();
+    expect(document.activeElement).toBe(input);
+    input.remove();
   });
 });

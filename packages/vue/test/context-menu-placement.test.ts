@@ -6,11 +6,12 @@
 import './dom-setup.ts';
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { createApp, h } from 'vue';
+import { createApp, h, type VNode } from 'vue';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
-import { DocxEditorContextMenu } from '../src/editor/contextmenu/index.ts';
+import { ContextMenuItem, DocxEditorContextMenu } from '../src/editor/contextmenu/index.ts';
+import { MenuSubmenu } from '../src/editor/menu/menu-flyouts.tsx';
 import { flush, SOURCE } from './helpers/fixtures.ts';
 
 const t = (key: string): string => key;
@@ -58,7 +59,7 @@ afterEach(() => {
   delete (HTMLElement.prototype as Partial<HTMLElement>).showPopover;
 });
 
-async function mount(): Promise<HTMLElement> {
+async function mount(rows?: () => VNode[]): Promise<HTMLElement> {
   const container = document.createElement('div');
   document.body.appendChild(container);
   createApp({
@@ -69,7 +70,10 @@ async function mount(): Promise<HTMLElement> {
         {
           default: () =>
             h(DocxEditorViewport, null, {
-              default: () => [h(DocxEditorContent), h(DocxEditorContextMenu, { t })],
+              default: () => [
+                h(DocxEditorContent),
+                h(DocxEditorContextMenu, { t }, rows ? { default: rows } : undefined),
+              ],
             }),
         }
       ),
@@ -130,8 +134,18 @@ describe('the menu stays inside the window', () => {
 
 describe('a menu taller than the window scrolls', () => {
   test('the panel takes focus once visible, so the arrow keys work', async () => {
+    // A `visibility: hidden` element is not focusable in a browser, so focus must move only
+    // after the render that makes the panel visible.
+    const seen: string[] = [];
+    const onFocus = (event: FocusEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.classList?.contains('docx-contextmenu')) seen.push(target.style.visibility);
+    };
+    document.addEventListener('focusin', onFocus, true);
     const panel = await rightClick(await mount(), 120, 100);
+    document.removeEventListener('focusin', onFocus, true);
     expect(document.activeElement).toBe(panel);
+    expect(seen).toEqual(['visible']);
   });
 
   test('the panel scrolling inside itself does not close it', async () => {
@@ -182,5 +196,61 @@ describe('stacking', () => {
     const panel = await rightClick(await mount(), 120, 100);
     expect(panel.getAttribute('popover')).toBe('manual');
     expect(shown).toEqual([panel]);
+  });
+});
+
+describe('a narrow window', () => {
+  test('caps the menu width so its right edge stays in the window', async () => {
+    Object.defineProperty(window, 'innerWidth', { value: 200, configurable: true });
+    const panel = await rightClick(await mount(), 150, 100);
+    expect(Number.parseFloat(panel.style.left)).toBe(8);
+    expect(Number.parseFloat(panel.style.maxWidth)).toBe(200 - 16);
+  });
+});
+
+describe('a submenu in a scrolling menu', () => {
+  test('follows its row when the menu scrolls', async () => {
+    panelSize = { width: 240, height: 900 };
+    const panel = await rightClick(
+      await mount(() => [
+        h(
+          MenuSubmenu,
+          { label: 'More' },
+          { default: () => [h(ContextMenuItem, { label: 'Inner' })] }
+        ),
+      ]),
+      120,
+      300
+    );
+    const wrapper = panel.querySelector<HTMLElement>('.docx-menubar__submenu')!;
+    const row = wrapper.querySelector<HTMLElement>('[aria-haspopup="menu"]')!;
+    row.getBoundingClientRect = () => rectOf(0, 400 - panel.scrollTop, 240, 32);
+    wrapper.dispatchEvent(new MouseEvent('mouseenter'));
+    await flush();
+    const submenu = () => panel.querySelector<HTMLElement>('.docx-menubar__submenu-panel')!;
+    expect(Number.parseFloat(submenu().style.top)).toBe(396);
+
+    panel.scrollTop = 100;
+    panel.dispatchEvent(new Event('scroll'));
+    await flush();
+    expect(Number.parseFloat(submenu().style.top)).toBe(296);
+  });
+});
+
+describe('a host row that opens a dialog', () => {
+  test('keeps the focus the dialog takes', async () => {
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    const container = await mount(() => [
+      h(ContextMenuItem, { label: 'Edit', onSelect: () => input.focus() }),
+    ]);
+    const panel = await rightClick(container, 120, 100);
+    const row = [...panel.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (item) => item.textContent === 'Edit'
+    )!;
+    row.click();
+    await flush();
+    expect(container.querySelector('.docx-contextmenu')).toBeNull();
+    expect(document.activeElement).toBe(input);
   });
 });

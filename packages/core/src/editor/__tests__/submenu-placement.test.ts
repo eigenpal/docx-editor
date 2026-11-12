@@ -1,5 +1,10 @@
 import { expect, test } from 'bun:test';
-import { placeContextMenu, placeSubmenu, submenuKeys } from '../submenu-placement.ts';
+import {
+  placeContextMenu,
+  placeSubmenu,
+  showInTopLayer,
+  submenuKeys,
+} from '../submenu-placement.ts';
 
 const view = { width: 1440, height: 900 };
 const panel = { width: 240, height: 200 };
@@ -31,6 +36,7 @@ test('a context menu opens below the press, flips above it, or moves up only as 
   expect(placeContextMenu({ x: 100, y: 100 }, { width: 240, height: 300 }, small, false)).toEqual({
     left: 100,
     top: 100,
+    maxWidth: 984,
     maxHeight: 584,
   });
   expect(placeContextMenu({ x: 100, y: 500 }, { width: 240, height: 300 }, small, false).top).toBe(
@@ -45,7 +51,7 @@ test('a context menu taller than the window is capped to it, from the top inset'
   const small = { width: 1000, height: 600 };
   for (const y of [20, 300, 590]) {
     const placed = placeContextMenu({ x: 100, y }, { width: 240, height: 900 }, small, false);
-    expect(placed).toEqual({ left: 100, top: 8, maxHeight: 584 });
+    expect(placed).toEqual({ left: 100, top: 8, maxWidth: 984, maxHeight: 584 });
   }
 });
 
@@ -58,4 +64,25 @@ test('a keyboard-opened context menu anchored above the window opens from the to
 test('a context menu flips to the free side of the press horizontally', () => {
   expect(placeContextMenu({ x: 1400, y: 100 }, panel, view, false).left).toBe(1160);
   expect(placeContextMenu({ x: 100, y: 100 }, panel, view, true).left).toBe(100);
+});
+
+test('a window narrower than the panel keeps both edges in view', () => {
+  const narrow = { width: 200, height: 600 };
+  expect(placeSubmenu({ left: 60, right: 150, top: 100 }, panel, narrow, true).left).toBe(8);
+  expect(placeSubmenu({ left: 60, right: 150, top: 100 }, panel, narrow, false).left).toBe(8);
+  const menu = placeContextMenu({ x: 150, y: 100 }, panel, narrow, false);
+  expect(menu.left).toBe(8);
+  expect(menu.maxWidth).toBe(184);
+});
+
+test('the top layer reports a refused popover as not shown', () => {
+  const panel = {
+    showPopover: () => {
+      throw new Error('refused');
+    },
+    hasAttribute: () => false,
+    setAttribute: () => {},
+    matches: () => false,
+  } as unknown as HTMLElement;
+  expect(showInTopLayer(panel)).toBe(false);
 });

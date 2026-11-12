@@ -569,7 +569,12 @@ export const DocxEditorContextMenu = defineComponent({
         position: 'fixed',
         left: `${placement.value?.left ?? anchor.value?.x ?? 0}px`,
         top: `${placement.value?.top ?? anchor.value?.y ?? 0}px`,
-        ...(placement.value ? { maxHeight: `${placement.value.maxHeight}px` } : {}),
+        ...(placement.value
+          ? {
+              maxWidth: `${placement.value.maxWidth}px`,
+              maxHeight: `${placement.value.maxHeight}px`,
+            }
+          : {}),
         visibility: placement.value ? 'visible' : 'hidden',
         pointerEvents: 'auto',
       };

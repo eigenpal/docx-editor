@@ -632,7 +632,7 @@ export function DocxEditorContextMenu({
     position: 'fixed',
     left: placement?.left ?? anchor?.x ?? 0,
     top: placement?.top ?? anchor?.y ?? 0,
-    ...(placement ? { maxHeight: placement.maxHeight } : {}),
+    ...(placement ? { maxWidth: placement.maxWidth, maxHeight: placement.maxHeight } : {}),
     // Hidden until measured, so the panel is never seen at the pre-flip position.
     visibility: placement ? 'visible' : 'hidden',
   };

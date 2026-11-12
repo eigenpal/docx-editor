@@ -8,8 +8,10 @@ export const SUBMENU_EDGE_INSET = 8;
  *
  * The panel opens on the row's inline-end side: to the right in a left-to-right menu, to the
  * left in a right-to-left one, where the submenu caret points. It takes the other side when
- * it would not fit, and keeps `SUBMENU_EDGE_INSET` from the window edges. It aligns its top
- * with the row's, then rises so a submenu on the last row of a tall menu stays in view.
+ * it would not fit, and keeps `SUBMENU_EDGE_INSET` from the window edges. A panel wider than
+ * the window less both insets is placed as that wide, so its right edge stays in the window
+ * once the panel takes the matching `max-width`. It aligns its top with the row's, then rises
+ * so a submenu on the last row of a tall menu stays in view.
  *
  * @internal
  */
@@ -19,10 +21,14 @@ export function placeSubmenu(
   view: { readonly width: number; readonly height: number },
   rtl: boolean
 ): { readonly left: number; readonly top: number } {
-  const rightSide = Math.min(row.right, view.width - panel.width - SUBMENU_EDGE_INSET);
-  const leftSide = Math.max(SUBMENU_EDGE_INSET, row.left - panel.width);
-  const fitsRight = row.right + panel.width <= view.width - SUBMENU_EDGE_INSET;
-  const fitsLeft = row.left - panel.width >= SUBMENU_EDGE_INSET;
+  const width = Math.min(panel.width, Math.max(0, view.width - SUBMENU_EDGE_INSET * 2));
+  const rightSide = Math.max(
+    SUBMENU_EDGE_INSET,
+    Math.min(row.right, view.width - width - SUBMENU_EDGE_INSET)
+  );
+  const leftSide = Math.max(SUBMENU_EDGE_INSET, row.left - width);
+  const fitsRight = row.right + width <= view.width - SUBMENU_EDGE_INSET;
+  const fitsLeft = row.left - width >= SUBMENU_EDGE_INSET;
   const left = rtl ? (fitsLeft ? leftSide : rightSide) : fitsRight ? rightSide : leftSide;
   const top = Math.max(
     SUBMENU_EDGE_INSET,
@@ -43,12 +49,14 @@ export function submenuKeys(rtl: boolean): { readonly open: string; readonly clo
 }
 
 /**
- * The `left`, `top`, and `maxHeight` of a context menu opened at a pointer, in client pixels.
+ * The `left`, `top`, `maxWidth`, and `maxHeight` of a context menu opened at a pointer, in
+ * client pixels.
  *
  * Horizontally it is a submenu beside a zero-width row at the pointer. Vertically it opens
  * below the pointer, flips above it when there is no room below, and otherwise moves up only
  * as far as it must to stay in the window. A menu taller than the window gets `maxHeight` (the
- * window less `SUBMENU_EDGE_INSET` at each edge) and scrolls inside.
+ * window less `SUBMENU_EDGE_INSET` at each edge) and scrolls inside. A window narrower than
+ * the menu caps its width the same way, so the right edge stays in the window.
  *
  * @internal
  */
@@ -57,7 +65,13 @@ export function placeContextMenu(
   panel: { readonly width: number; readonly height: number },
   view: { readonly width: number; readonly height: number },
   rtl: boolean
-): { readonly left: number; readonly top: number; readonly maxHeight: number } {
+): {
+  readonly left: number;
+  readonly top: number;
+  readonly maxWidth: number;
+  readonly maxHeight: number;
+} {
+  const maxWidth = Math.max(0, view.width - SUBMENU_EDGE_INSET * 2);
   const maxHeight = Math.max(0, view.height - SUBMENU_EDGE_INSET * 2);
   const height = Math.min(panel.height, maxHeight);
   const { left } = placeSubmenu(
@@ -76,7 +90,7 @@ export function placeContextMenu(
       : pointer.y - height >= SUBMENU_EDGE_INSET
         ? pointer.y - height
         : Math.max(SUBMENU_EDGE_INSET, bottom - height);
-  return { left, top, maxHeight };
+  return { left, top, maxWidth, maxHeight };
 }
 
 /**
@@ -111,7 +125,11 @@ export function showInTopLayer(panel: HTMLElement): boolean {
   try {
     panel.showPopover();
   } catch {
-    // Already open: a second measure of the same panel.
+    // Already open (a second measure of the same panel), or refused; the state says which.
   }
-  return true;
+  try {
+    return panel.matches(':popover-open');
+  } catch {
+    return false;
+  }
 }

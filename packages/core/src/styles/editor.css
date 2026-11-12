@@ -7778,7 +7778,8 @@ p.docx-review__refused {
    * wrapper's mouseleave, and close the submenu the user was moving toward. Visual
    * separation comes from the card's own border and shadow. */
   margin-inline-start: 0;
-  min-width: 240px;
+  min-width: min(240px, calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
 }
 
 /* The third-level reviewer list can be long. Keep the hierarchy anchored to its source,
@@ -7900,7 +7901,10 @@ p.docx-review__refused {
 .docx-editor .docx-contextmenu,
 .docx-contextmenu {
   z-index: var(--doc-z-context);
-  min-width: 240px;
+  /* Never wider than the window less both insets: a narrow window keeps the right edge in
+   * view. The component sets the exact cap from the window it measured. */
+  min-width: min(240px, calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
   /* A menu longer than the window scrolls rather than overflowing it. The component sets
    * the exact cap from the window it measured; this is the value before it does. */
   max-height: calc(100vh - 16px);

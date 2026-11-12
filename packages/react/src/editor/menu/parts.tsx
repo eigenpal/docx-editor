@@ -578,22 +578,30 @@ export function MenuSubmenu({
   useLayoutEffect(() => {
     if (!open) {
       setBox(null);
-      return;
+      return undefined;
     }
     const row = parentRef.current;
-    const panel = panelRef.current;
     const view = row?.ownerDocument.defaultView;
-    if (!row || !panel || !view) return;
-    // The row's inline-end side first, where its caret points; the other side when the
-    // panel would not fit there.
-    setBox(
-      placeSubmenu(
-        row.getBoundingClientRect(),
-        { width: panel.offsetWidth, height: panel.offsetHeight },
-        { width: view.innerWidth, height: view.innerHeight },
-        view.getComputedStyle(row).direction === 'rtl'
-      )
-    );
+    if (!row || !view) return undefined;
+    const place = (): void => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      // The row's inline-end side first, where its caret points; the other side when the
+      // panel would not fit there.
+      setBox(
+        placeSubmenu(
+          row.getBoundingClientRect(),
+          { width: panel.offsetWidth, height: panel.offsetHeight },
+          { width: view.innerWidth, height: view.innerHeight },
+          view.getComputedStyle(row).direction === 'rtl'
+        )
+      );
+    };
+    place();
+    // A long context menu scrolls inside itself; the panel follows its row.
+    const parentPanel = row.closest('[role="menu"]');
+    parentPanel?.addEventListener('scroll', place, { passive: true });
+    return () => parentPanel?.removeEventListener('scroll', place);
   }, [open]);
   return (
     <div

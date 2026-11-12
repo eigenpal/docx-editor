@@ -704,8 +704,10 @@ export function ContextMenuItem({
       {...(disabled && disabledReason ? { title: disabledReason } : {})}
       {...(active !== undefined ? { active } : {})}
       onSelect={() => {
-        onSelect?.();
+        // Close first: `close(true)` returns focus to the document, and a host row that
+        // opens a dialog must keep the focus that dialog takes.
         close(true);
+        onSelect?.();
       }}
       {...(className ? { className } : {})}
     >

@@ -4036,6 +4036,7 @@ export function placeContextMenu(pointer: {
 }, rtl: boolean): {
     readonly left: number;
     readonly maxHeight: number;
+    readonly maxWidth: number;
     readonly top: number;
 };
 
