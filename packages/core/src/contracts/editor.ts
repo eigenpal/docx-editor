@@ -42,7 +42,11 @@ export type {
 } from './editor-anchor.ts';
 import type { EditorHighlights } from './editor-highlights.ts';
 import type { EditorSelectionRange, EditorSelectionReads } from './editor-selection-range.ts';
-export type { EditorSelectionRange, EditorSelectionReads } from './editor-selection-range.ts';
+export type {
+  EditorSelectionRange,
+  EditorSelectionReads,
+  TextPosition,
+} from './editor-selection-range.ts';
 export type {
   EditorHighlights,
   HighlightHit,
@@ -1344,7 +1348,10 @@ export interface EditorCommands
   redo: Record<never, never>;
   /**
    * Move the selection. Three accepted forms, and `can()` names all three when it refuses:
-   * a collapsed paraId anchor, a range of two paraId anchors, or a semantic anchor/head pair.
+   * a collapsed paraId anchor, a range of two paraId anchors, or an anchor/head pair of
+   * text positions. A text position takes `blockId`, or the older name `paragraphId`; a
+   * position with neither, or with both naming different paragraphs, refuses `invalidArgs`.
+   * A {@link EditorSelectionRange} read passes here unchanged.
    *
    * `{ anchor }` takes a {@link DocAnchor} rather than an {@link EditorPosition} because a
    * collapsed SEMANTIC position is spelled as a range whose anchor and head are equal, which

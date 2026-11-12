@@ -49,8 +49,8 @@ function paragraph(editor: Editor, index: number): string {
   return editor.surface!.session.paragraphIds()[index]!;
 }
 
-function caret(editor: Editor, paragraphId: string, offset: number): void {
-  const at = { paragraphId, offset };
+function caret(editor: Editor, blockId: string, offset: number): void {
+  const at = { blockId, offset };
   expect(editor.exec({ type: 'setSelection', range: { anchor: at, head: at } }).ok).toBe(true);
 }
 
@@ -69,7 +69,7 @@ describe('getSelectionRange in a collaboration session', () => {
     expect(alice.exec({ type: 'insertText', text: 'Our ' }).ok).toBe(true);
     deliver();
     expect(paragraphTextOf(bob.surface!.session.part(), shared)).toBe('Our Shared text');
-    expect(bob.getSelectionRange()?.head).toEqual({ paragraphId: shared, offset: 10 });
+    expect(bob.getSelectionRange()?.head).toEqual({ blockId: shared, offset: 10 });
     expect(bob.snapshot().selectionRange?.head.offset).toBe(10);
     expect(seen).toContain(10);
 
@@ -78,14 +78,14 @@ describe('getSelectionRange in a collaboration session', () => {
       alice.exec({
         type: 'setSelection',
         range: {
-          anchor: { paragraphId: shared, offset: 0 },
-          head: { paragraphId: shared, offset: 4 },
+          anchor: { blockId: shared, offset: 0 },
+          head: { blockId: shared, offset: 4 },
         },
       }).ok
     ).toBe(true);
     expect(alice.surface!.deleteSelection()).toBe(true);
     deliver();
-    expect(bob.getSelectionRange()?.head).toEqual({ paragraphId: shared, offset: 6 });
+    expect(bob.getSelectionRange()?.head).toEqual({ blockId: shared, offset: 6 });
 
     // A remote edit after the caret leaves the read unchanged, by reference.
     const before = bob.getSelectionRange();
@@ -115,9 +115,9 @@ describe('getSelectionRange in a collaboration session', () => {
     expect(paragraphTextOf(alice.surface!.session.part(), shared)).toBe('Our SharedX text');
     // Read at once, before the scheduler's own layout task carries the caret: the text has
     // already moved, so the read must not pair it with the old offset.
-    expect(bob.getSelectionRange()?.head).toEqual({ paragraphId: shared, offset: 11 });
+    expect(bob.getSelectionRange()?.head).toEqual({ blockId: shared, offset: 11 });
     expect(bob.snapshot().selectionRange?.head.offset).toBe(11);
-    expect(alice.getSelectionRange()?.head).toEqual({ paragraphId: shared, offset: 4 });
+    expect(alice.getSelectionRange()?.head).toEqual({ blockId: shared, offset: 4 });
   });
 
   test('a remote undo of an insert before the caret restores its offset', async () => {
@@ -131,6 +131,6 @@ describe('getSelectionRange in a collaboration session', () => {
     expect(alice.exec({ type: 'undo' }).ok).toBe(true);
     deliver();
     expect(paragraphTextOf(bob.surface!.session.part(), shared)).toBe('Shared text');
-    expect(bob.getSelectionRange()?.head).toEqual({ paragraphId: shared, offset: 11 });
+    expect(bob.getSelectionRange()?.head).toEqual({ blockId: shared, offset: 11 });
   });
 });

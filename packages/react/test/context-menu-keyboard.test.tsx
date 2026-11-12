@@ -129,7 +129,7 @@ function open(view: ReturnType<typeof render>, init: MouseEventInit): HTMLElemen
 /** Move the caret, then let the deferred state notifications land inside `act`. */
 async function placeCaret(offset: number): Promise<void> {
   const paragraphId = editor!.surface!.session.paragraphIds()[0]!;
-  const at = { paragraphId, offset };
+  const at = { blockId: paragraphId, offset };
   await act(async () => {
     expect(editor!.exec({ type: 'setSelection', range: { anchor: at, head: at } }).ok).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 0));

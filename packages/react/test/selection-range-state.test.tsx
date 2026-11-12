@@ -71,13 +71,14 @@ test('a selectionRange consumer re-renders for caret moves only', async () => {
   await settle(() => {});
   const paragraphId = editor!.surface!.session.paragraphIds()[0]!;
   const caret = (offset: number) => {
-    const at = { paragraphId, offset };
+    const at = { blockId: paragraphId, offset };
     expect(editor!.exec({ type: 'setSelection', range: { anchor: at, head: at } }).ok).toBe(true);
   };
   await settle(() => caret(3));
   expect(offsets.at(-1)).toBe(3);
   await settle(() => caret(7));
   expect(offsets.at(-1)).toBe(7);
+  expect(editor!.snapshot().selectionRange?.head).toEqual({ blockId: paragraphId, offset: 7 });
   const renders = offsets.length;
   await settle(() => expect(editor!.setZoom(1.5).ok).toBe(true));
   expect(editor!.snapshot().zoom).toBe(1.5);

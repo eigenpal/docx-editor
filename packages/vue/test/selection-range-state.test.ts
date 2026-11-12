@@ -58,7 +58,7 @@ test('a selectionRange consumer updates for caret moves only', async () => {
   const editor = editorRef!.value!;
   const paragraphId = editor.surface!.session.paragraphIds()[0]!;
   const caret = async (offset: number) => {
-    const at = { paragraphId, offset };
+    const at = { blockId: paragraphId, offset };
     expect(editor.exec({ type: 'setSelection', range: { anchor: at, head: at } }).ok).toBe(true);
     await flush();
   };
@@ -66,6 +66,7 @@ test('a selectionRange consumer updates for caret moves only', async () => {
   expect(offsets.at(-1)).toBe(3);
   await caret(7);
   expect(offsets.at(-1)).toBe(7);
+  expect(editor!.snapshot().selectionRange?.head).toEqual({ blockId: paragraphId, offset: 7 });
   const updates = offsets.length;
   expect(editor.setZoom(1.5).ok).toBe(true);
   await flush();

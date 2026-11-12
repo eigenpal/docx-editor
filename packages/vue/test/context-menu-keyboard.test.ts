@@ -130,7 +130,7 @@ async function open(container: HTMLElement, init: MouseEventInit): Promise<HTMLE
 async function placeCaret(offset: number): Promise<void> {
   const editor = editorRef!.value!;
   const paragraphId = editor.surface!.session.paragraphIds()[0]!;
-  const at = { paragraphId, offset };
+  const at = { blockId: paragraphId, offset };
   expect(editor.exec({ type: 'setSelection', range: { anchor: at, head: at } }).ok).toBe(true);
   await flush();
 }

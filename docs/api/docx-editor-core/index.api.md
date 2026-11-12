@@ -3033,15 +3033,18 @@ export type EditorScope = {
 };
 
 // @public
-export type EditorSelection = SemanticSelection | {
+export type EditorSelection = {
+    anchor: TextPosition;
+    head: TextPosition;
+} | SemanticSelection | {
     from: DocAnchor;
     to: DocAnchor;
 };
 
 // @public
 export interface EditorSelectionRange {
-    readonly anchor: SemanticPosition;
-    readonly head: SemanticPosition;
+    readonly anchor: TextPosition;
+    readonly head: TextPosition;
     readonly scope: ViewScope;
 }
 
@@ -5045,6 +5048,12 @@ export interface TextMatch {
     readonly scope?: ViewScope;
     readonly start: number;
     readonly text: string;
+}
+
+// @public
+export interface TextPosition {
+    readonly blockId: string;
+    readonly offset: number;
 }
 
 // @public

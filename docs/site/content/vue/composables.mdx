@@ -59,7 +59,7 @@ const page = useEditorState((s) => s.page);
 </template>
 ```
 
-Pass a comparator for an object slice. Common fields include `page`, `selection`, `selectionRange`, `formatting`, `editable`, `isLoading`, `editingMode`, `canUndo`, `pageSetup`, and `lastRejection`. `selectionRange` keeps its reference until the selection moves, so the default comparator works for it.
+Pass a comparator for an object slice. Common fields include `page`, `selection`, `selectionRange`, `formatting`, `editable`, `isLoading`, `editingMode`, `canUndo`, `pageSetup`, and `lastRejection`. `selectionRange` holds `anchor` and `head` positions with `blockId` and `offset`, and keeps its reference until the selection moves, so the default comparator works for it.
 
 Templates unwrap only top-level refs:
 

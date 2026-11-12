@@ -32,9 +32,9 @@ function sameScope(a: unknown, b: unknown): boolean {
 
 function sameSelection(range: EditorSelectionRange, selection: SemanticSelection): boolean {
   return (
-    range.anchor.paragraphId === selection.anchor.paragraphId &&
+    range.anchor.blockId === selection.anchor.paragraphId &&
     range.anchor.offset === selection.anchor.offset &&
-    range.head.paragraphId === selection.head.paragraphId &&
+    range.head.blockId === selection.head.paragraphId &&
     range.head.offset === selection.head.offset
   );
 }
@@ -79,8 +79,8 @@ export function createSelectionRangeRead(surface: () => PaginatedSurface | null)
     if (cached && sameSelection(cached, selection) && sameScope(cached.scope, scope)) return cached;
     // Copied and frozen: the surface's own objects must not reach a host that could mutate them.
     cached = deepFreezeValue({
-      anchor: { paragraphId: selection.anchor.paragraphId, offset: selection.anchor.offset },
-      head: { paragraphId: selection.head.paragraphId, offset: selection.head.offset },
+      anchor: { blockId: selection.anchor.paragraphId, offset: selection.anchor.offset },
+      head: { blockId: selection.head.paragraphId, offset: selection.head.offset },
       scope: structuredClone(scope),
     });
     return cached;

@@ -3,17 +3,30 @@
 
 import type { HighlightRect } from './editor-highlights.ts';
 import type { ViewScope } from './editor-scope.ts';
-import type { SemanticPosition } from '../layout/semantic-interaction.ts';
+
+/**
+ * A text position: a paragraph and a UTF-16 offset in its model text.
+ *
+ * `blockId` is the paragraph id that `TextMatch.blockId`, `HighlightRange.blockId`, and
+ * `ParagraphSummary.id` carry, so a position compares directly with a search result or a
+ * highlight range. `offset` counts in the units of `TextMatch.start`, `HighlightRange.start`,
+ * and `ParagraphSummary.text`; a field counts the way those count it.
+ *
+ * @public
+ */
+export interface TextPosition {
+  /** The paragraph, as `TextMatch.blockId` names it. */
+  readonly blockId: string;
+  /** UTF-16 offset in the paragraph's model text. */
+  readonly offset: number;
+}
 
 /**
  * The current text selection as two paragraph positions.
  *
  * It is a valid `range` for `exec({ type: 'setSelection', range })`, so a read can be passed
  * back unchanged to restore the selection. Passing it back opens the story it is in, such as
- * a header, a note, or a text box. `paragraphId` is the id that `TextMatch.blockId`,
- * `HighlightRange.blockId`, and `ParagraphSummary.id` carry. `offset` counts UTF-16 code
- * units in the paragraph's model text, in the units of `TextMatch.start`,
- * `HighlightRange.start`, and `ParagraphSummary.text`. A field counts the way those count it.
+ * a header, a note, or a text box. Each position is a {@link TextPosition}.
  *
  * @example
  * ```ts
@@ -27,12 +40,12 @@ import type { SemanticPosition } from '../layout/semantic-interaction.ts';
  */
 export interface EditorSelectionRange {
   /** Where the selection started. */
-  readonly anchor: SemanticPosition;
+  readonly anchor: TextPosition;
   /**
    * Where the selection ends: the caret. It comes before `anchor` in a backward selection.
    * A caret with no range has `head` equal to `anchor`.
    */
-  readonly head: SemanticPosition;
+  readonly head: TextPosition;
   /**
    * The open story that holds both positions: the body, a header or footer, a note, or a text
    * box. A text box opens only for editing, so in viewing mode a selection inside one names
@@ -66,7 +79,7 @@ export interface EditorSelectionReads {
    * const caret = editor.getSelectionRange()?.head;
    * const flagged = editor.findMatches('teh').filter(
    *   (match) =>
-   *     caret?.paragraphId !== match.blockId ||
+   *     caret?.blockId !== match.blockId ||
    *     caret.offset < match.start ||
    *     caret.offset > match.start + match.length
    * );

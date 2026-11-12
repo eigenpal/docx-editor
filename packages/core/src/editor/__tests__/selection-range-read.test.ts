@@ -43,10 +43,10 @@ function paragraphIds(editor: DocxEditorInstance): readonly string[] {
   return editor.surface!.session.paragraphIds();
 }
 
-function caretAt(editor: DocxEditorInstance, paragraphId: string, offset: number, head = offset) {
+function caretAt(editor: DocxEditorInstance, blockId: string, offset: number, head = offset) {
   const result = editor.exec({
     type: 'setSelection',
-    range: { anchor: { paragraphId, offset }, head: { paragraphId, offset: head } },
+    range: { anchor: { blockId, offset }, head: { blockId, offset: head } },
   });
   expect(result.ok).toBe(true);
 }
@@ -58,8 +58,8 @@ describe('getSelectionRange', () => {
     caretAt(editor, first!, 4);
     const range = editor.getSelectionRange();
     expect(range).toEqual({
-      anchor: { paragraphId: first!, offset: 4 },
-      head: { paragraphId: first!, offset: 4 },
+      anchor: { blockId: first!, offset: 4 },
+      head: { blockId: first!, offset: 4 },
       scope: { kind: 'body' },
     });
     caretAt(editor, second!, 2);
@@ -67,13 +67,48 @@ describe('getSelectionRange', () => {
     expect(editor.getSelectionRange()).toEqual(range);
   });
 
+  test('setSelection takes blockId and the older paragraphId, and refuses ambiguous positions', () => {
+    const { editor } = mount();
+    const [first, second] = paragraphIds(editor);
+    const older = { paragraphId: first!, offset: 3 };
+    expect(editor.exec({ type: 'setSelection', range: { anchor: older, head: older } }).ok).toBe(
+      true
+    );
+    expect(editor.getSelectionRange()?.head).toEqual({ blockId: first!, offset: 3 });
+    const before = editor.getSelectionRange();
+    const refused = [
+      { offset: 1 },
+      { blockId: first!, paragraphId: second!, offset: 1 },
+      { blockId: 7, offset: 1 },
+      { blockId: first! },
+    ];
+    for (const position of refused) {
+      const range = { anchor: position, head: position } as never;
+      expect(editor.can({ type: 'setSelection', range })).toMatchObject({
+        ok: false,
+        code: 'invalidArgs',
+      });
+      expect(editor.exec({ type: 'setSelection', range })).toMatchObject({
+        ok: false,
+        code: 'invalidArgs',
+      });
+    }
+    expect(editor.getSelectionRange()).toBe(before);
+    // Both names set to the same id are one position.
+    const both = { blockId: second!, paragraphId: second!, offset: 2 };
+    expect(editor.exec({ type: 'setSelection', range: { anchor: both, head: both } }).ok).toBe(
+      true
+    );
+    expect(editor.getSelectionRange()?.head).toEqual({ blockId: second!, offset: 2 });
+  });
+
   test('keeps a backward selection backward', () => {
     const { editor } = mount();
     const [first] = paragraphIds(editor);
     caretAt(editor, first!, 9, 2);
     expect(editor.getSelectionRange()).toMatchObject({
-      anchor: { paragraphId: first!, offset: 9 },
-      head: { paragraphId: first!, offset: 2 },
+      anchor: { blockId: first!, offset: 9 },
+      head: { blockId: first!, offset: 2 },
     });
     expect(editor.snapshot().selectionCollapsed).toBe(false);
   });
@@ -84,8 +119,8 @@ describe('getSelectionRange', () => {
     expect(match).toBeDefined();
     expect(editor.selectMatch(match!).ok).toBe(true);
     expect(editor.getSelectionRange()).toMatchObject({
-      anchor: { paragraphId: match!.blockId, offset: match!.start },
-      head: { paragraphId: match!.blockId, offset: match!.start + match!.length },
+      anchor: { blockId: match!.blockId, offset: match!.start },
+      head: { blockId: match!.blockId, offset: match!.start + match!.length },
     });
   });
 
@@ -136,7 +171,7 @@ describe('getSelectionRange', () => {
     caretAt(editor, first!, 9);
     caretAt(editor, first!, 0);
     expect(editor.exec({ type: 'insertText', text: 'The ' }).ok).toBe(true);
-    expect(editor.getSelectionRange()?.head).toEqual({ paragraphId: first!, offset: 4 });
+    expect(editor.getSelectionRange()?.head).toEqual({ blockId: first!, offset: 4 });
   });
 
   test('stays readable after focus leaves the editor', () => {
@@ -148,7 +183,7 @@ describe('getSelectionRange', () => {
     document.body.append(outside);
     cleanups.push(() => outside.remove());
     outside.focus();
-    expect(editor.getSelectionRange()?.head).toEqual({ paragraphId: first!, offset: 6 });
+    expect(editor.getSelectionRange()?.head).toEqual({ blockId: first!, offset: 6 });
   });
 
   test('names the story, and a header range round-trips from the body', () => {
@@ -170,7 +205,7 @@ describe('getSelectionRange', () => {
     caretAt(editor, match.blockId, match.start + 5);
     const range = editor.getSelectionRange();
     expect(range?.scope).toEqual(match.scope!);
-    expect(range?.head).toEqual({ paragraphId: match.blockId, offset: match.start + 5 });
+    expect(range?.head).toEqual({ blockId: match.blockId, offset: match.start + 5 });
     editor.setActiveScope({ kind: 'body' });
     expect(editor.getSelectionRange()?.scope).toEqual({ kind: 'body' });
     expect(editor.exec({ type: 'setSelection', range: range! }).ok).toBe(true);
@@ -183,7 +218,7 @@ describe('getSelectionRange', () => {
     // A range from the box to the body is in two stories.
     const split = editor.exec({
       type: 'setSelection',
-      range: { anchor: range!.head, head: { paragraphId: body.blockId, offset: body.start } },
+      range: { anchor: range!.head, head: { blockId: body.blockId, offset: body.start } },
     });
     expect(split).toMatchObject({ ok: false, code: 'unsupported' });
   });
@@ -196,8 +231,8 @@ describe('getSelectionRange', () => {
     const range = editor.getSelectionRange();
     // A box opens only for editing, so the scope stays on the story around it.
     expect(range).toEqual({
-      anchor: { paragraphId: match.blockId, offset: match.start + 2 },
-      head: { paragraphId: match.blockId, offset: match.start + 2 },
+      anchor: { blockId: match.blockId, offset: match.start + 2 },
+      head: { blockId: match.blockId, offset: match.start + 2 },
       scope: { kind: 'body' },
     });
     const body = editor.findMatches('body')[0]!;
@@ -219,8 +254,8 @@ describe('getSelectionRange', () => {
     const result = editor.exec({
       type: 'setSelection',
       range: {
-        anchor: { paragraphId: host, offset: 0 },
-        head: { paragraphId: match.blockId, offset: match.start },
+        anchor: { blockId: host, offset: 0 },
+        head: { blockId: match.blockId, offset: match.start },
       },
     });
     expect(result).toMatchObject({ ok: false, code: 'unsupported' });
@@ -270,7 +305,7 @@ describe('reads during buffered typing', () => {
       for (const key of 'abc') {
         surface.enqueueType(key);
         // A host polling the caret between keystrokes reads the committed position.
-        expect(editor.getSelectionRange()?.head).toEqual({ paragraphId: first!, offset: 0 });
+        expect(editor.getSelectionRange()?.head).toEqual({ blockId: first!, offset: 0 });
         editor.getCaretRect();
       }
       expect(surface.state().revision).toBe(revision);
@@ -279,7 +314,7 @@ describe('reads during buffered typing', () => {
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
     surface.layout();
-    expect(editor.getSelectionRange()?.head).toEqual({ paragraphId: first!, offset: 3 });
+    expect(editor.getSelectionRange()?.head).toEqual({ blockId: first!, offset: 3 });
   });
 });
 
