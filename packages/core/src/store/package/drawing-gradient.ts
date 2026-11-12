@@ -12,7 +12,7 @@ import {
   type ShapeColor,
   type ShapeSchemeColorResolver,
 } from './drawing-shape-color.ts';
-import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
+import { parseSchemaBoolean, schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 
 const A = DRAWINGML_MAIN_NAMESPACE_URI;
@@ -101,7 +101,9 @@ export function readGradientFill(
   const lin = findDirectChild(gradFill.children, { namespaceUri: A, localName: 'lin' });
   const path = findDirectChild(gradFill.children, { namespaceUri: A, localName: 'path' });
   const rotWithShape = schemaAttributeValue(gradFill.attributes, 'rotWithShape');
-  const turnsWithShape = rotWithShape !== '0' && rotWithShape !== 'false';
+  // `xsd:boolean` collapses white space: " 0 " keeps the gradient's direction too. An invalid
+  // spelling turns with the shape, as the default does.
+  const turnsWithShape = parseSchemaBoolean(rotWithShape) !== false;
   if (path && !lin) {
     const rect = findDirectChild(path.children, { namespaceUri: A, localName: 'fillToRect' });
     const inset = (name: string) => (intAttribute(rect, name, 10_000_000) ?? 0) / 100_000;

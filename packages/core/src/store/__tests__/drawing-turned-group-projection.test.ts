@@ -252,14 +252,14 @@ describe('turned groups', () => {
   });
 
   test('a gradient that keeps its direction moves with a turned group but does not turn', () => {
-    const gradient = (rotWithShape: 0 | 1) =>
+    const gradient = (rotWithShape: string | number) =>
       member(0, 72, 72, 'rect', 'FF0000').replace(
         '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>',
         `<a:gradFill rotWithShape="${rotWithShape}"><a:gsLst><a:gs pos="0">` +
           '<a:srgbClr val="FF0000"/></a:gs><a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs>' +
           '</a:gsLst><a:lin ang="0" scaled="0"/></a:gradFill>'
       );
-    const matrix = (rotWithShape: 0 | 1) =>
+    const matrix = (rotWithShape: string | number) =>
       group({ rot: 45, members: gradient(rotWithShape) })!.components[0]!.fillGradient!.matrix;
     // Measured: the gradient runs left to right across the 72pt member box, centred on the
     // turned member's centre, (72 - 25.46, 36 - 25.46)pt in the group.
@@ -271,6 +271,10 @@ describe('turned groups', () => {
     const [ta, tb] = matrix(1);
     expect(ta).toBeCloseTo(Math.SQRT1_2, 9);
     expect(tb).toBeCloseTo(Math.SQRT1_2, 9);
+    // Every legal false spelling keeps the direction; an invalid one turns, as the default does.
+    for (const spelling of [' 0 ', 'false', ' false\t'])
+      expect(matrix(spelling)).toEqual(matrix(0));
+    expect(matrix('no')).toEqual(matrix(1));
   });
 
   test('a member turn and flip compose with the group turn', () => {

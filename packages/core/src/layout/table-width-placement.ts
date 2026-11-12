@@ -127,7 +127,8 @@ export function legacySpacedPercentWidth(
  * cell margins (half a point at least) and one more point, plus half the outer frame rules.
  * The result is the frame's outer extent, as for a left-to-right table. Measured in mode 14
  * with 30 to 100% widths, spacing of 5, 10 and 15pt, outer rules of 0.5, 3 and 6pt on either
- * side and cell margins of 0, 2.7 and 5.4pt: seventeen tables to within 0.25pt.
+ * side and cell margins of 0, 2.7 and 5.4pt: seventeen tables to within 0.25pt. The other
+ * legacy modes take the same rule unmeasured, as they take the left-to-right one.
  */
 export function legacySpacedBidiPercentWidth(
   tableWidth: PreferredWidth,

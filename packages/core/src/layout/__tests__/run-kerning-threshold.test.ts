@@ -101,7 +101,8 @@ describe.skipIf(!MALGUN || !existsSync(MALGUN))('Malgun Gothic under w:kern', ()
         })
         .glyphs.reduce((sum, glyph) => sum + glyph.advanceX, 0);
     // Measured: 10pt "AVA To" spans 34.40pt with `w:kern w:val="20"`, as it does unkerned.
+    // The shaper's 1/64pt advances sum to 34.34pt, 0.06pt short, with kerning on or off.
     expect(width(1)).toBe(width(0));
-    expect(width(1) / 64).toBeCloseTo(34.4, 0);
+    expect(width(1) / 64).toBeCloseTo(34.344, 3);
   });
 });
