@@ -28,6 +28,13 @@ import { replaceMatchArgumentRefusal } from './docx-editor-replace-match.ts';
 import { replaceAllMatchesArgumentRefusal } from './docx-editor-replace-all.ts';
 import { classifySelectionEdit } from './docx-editor-selection-edits.ts';
 
+/** A mutating command, or an `invalidArgs` refusal when its arguments give a reason. */
+function mutatingUnlessRefused(refusal: string | null | undefined): CommandSupport {
+  return refusal
+    ? { supported: false, code: 'invalidArgs', reason: refusal }
+    : { supported: true, mutating: true };
+}
+
 /** Recursively freeze plain objects and arrays (idempotent). */
 export function deepFreezeValue<T>(value: T): T {
   if (value === null || typeof value !== 'object') return value;
@@ -611,18 +618,10 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       }
       return { supported: true, mutating: true };
     }
-    case 'replaceAllMatches': {
-      const refusal = replaceAllMatchesArgumentRefusal(command);
-      return refusal
-        ? { supported: false, code: 'invalidArgs', reason: refusal }
-        : { supported: true, mutating: true };
-    }
-    case 'replaceMatch': {
-      const refusal = replaceMatchArgumentRefusal(command);
-      return refusal
-        ? { supported: false, code: 'invalidArgs', reason: refusal }
-        : { supported: true, mutating: true };
-    }
+    case 'replaceAllMatches':
+      return mutatingUnlessRefused(replaceAllMatchesArgumentRefusal(command));
+    case 'replaceMatch':
+      return mutatingUnlessRefused(replaceMatchArgumentRefusal(command));
     case 'proposeDeletion':
       return command.author !== undefined && command.author.trim().length === 0
         ? {
@@ -966,12 +965,8 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return typeof command.name === 'string' && command.name.length > 0
         ? { supported: true, mutating: command.type !== 'goToBookmark' }
         : { supported: false, code: 'invalidArgs', reason: `${command.type} needs a name` };
-    case 'setWatermark': {
-      const refusal = watermarkRefusal(command.watermark);
-      return refusal
-        ? { supported: false, code: 'invalidArgs', reason: refusal }
-        : { supported: true, mutating: true };
-    }
+    case 'setWatermark':
+      return mutatingUnlessRefused(watermarkRefusal(command.watermark));
     default:
       return { supported: false, reason: unknownCommandReason(command.type) };
   }
