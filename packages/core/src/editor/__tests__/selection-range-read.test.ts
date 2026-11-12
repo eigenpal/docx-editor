@@ -215,6 +215,35 @@ describe('getSelectionRange', () => {
   });
 });
 
+describe('reads during buffered typing', () => {
+  test('neither flush buffered keystrokes nor run a deferred layout pass early', async () => {
+    const { editor } = mount();
+    const surface = editor.surface!;
+    const [first] = paragraphIds(editor);
+    caretAt(editor, first!, 0);
+    const nav = globalThis.navigator as Navigator & { scheduling?: unknown };
+    Object.defineProperty(nav, 'scheduling', {
+      value: { isInputPending: () => true },
+      configurable: true,
+    });
+    try {
+      const revision = surface.state().revision;
+      for (const key of 'abc') {
+        surface.enqueueType(key);
+        // A host polling the caret between keystrokes reads the committed position.
+        expect(editor.getSelectionRange()?.head).toEqual({ paragraphId: first!, offset: 0 });
+        editor.getCaretRect();
+      }
+      expect(surface.state().revision).toBe(revision);
+    } finally {
+      delete nav.scheduling;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    surface.layout();
+    expect(editor.getSelectionRange()?.head).toEqual({ paragraphId: first!, offset: 3 });
+  });
+});
+
 describe('getCaretRect', () => {
   function paintedCaret(container: HTMLElement): HTMLElement {
     const caret = container.querySelector<HTMLElement>('[data-docx-caret]');

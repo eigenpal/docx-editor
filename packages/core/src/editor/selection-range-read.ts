@@ -89,12 +89,15 @@ export function createSelectionRangeRead(surface: () => PaginatedSurface | null)
   /**
    * The host's direct read. A remote commit carries the caret when its layout publishes,
    * which can wait for the scheduler's task; the text has moved by then, so a read in
-   * between would pair new text with an old offset. Flushing first closes that window, and
-   * costs nothing when no pass is pending. The snapshot does not flush: the publish that
-   * carries the caret ticks it again.
+   * between would pair new text with an old offset. Only that case runs the pass early. A
+   * local edit has already moved the selection, so a read during typing forces neither a
+   * deferred layout nor a flush of buffered keystrokes; buffered characters are not in the
+   * document text yet, and the offsets describe that text. The snapshot never flushes: the
+   * publish that carries the caret ticks it again.
    */
   function currentSelectionRange(): EditorSelectionRange | null {
-    surface()?.layout();
+    const mounted = surface();
+    if (mounted?.remoteSelectionPending()) mounted.layout();
     return selectionRange();
   }
 

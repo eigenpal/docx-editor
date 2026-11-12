@@ -3603,6 +3603,7 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
     releaseSelection(pin: SelectionPin): void;
     remotePresenceColor(name: string): string | undefined;
+    remoteSelectionPending(): boolean;
     removeToc(tocId?: string): boolean;
     removeTocRefusal(tocId?: string): TocRemovalRefusal | null;
     repaintHighlights(): void;

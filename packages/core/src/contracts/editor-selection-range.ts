@@ -52,8 +52,9 @@ export interface EditorSelectionReads {
    * result is reference-stable while the selection does not move, and it is also on
    * `snapshot().selectionRange`, so `selectionChange` handlers and adapter state hooks can
    * read it. Edits before the caret, including remote edits in a collaboration session,
-   * move `offset` with the text. A call brings pending layout up to date first, so the
-   * offsets always describe the current text.
+   * move `offset` with the text. The offsets describe the committed document text. While
+   * fast typing is buffered, the buffered characters count once they commit, and
+   * `selectionChange` fires then. The call never forces a layout pass for local typing.
    *
    * @example
    * ```ts
