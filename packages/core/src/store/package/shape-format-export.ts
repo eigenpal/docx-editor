@@ -15,9 +15,8 @@
 // copies do not contradict each other is written back unchanged. The decision reads canonical
 // content only, so every participant in a collaboration session saves the same bytes.
 
-import { runWithoutJournalCapture } from './canonical-primitive-capture.ts';
 import { isMcAlternateContent } from './drawing-projection-walk.ts';
-import { replaceNode } from './ooxml-edit.ts';
+import { replaceNodesForExport } from './export-node-replace.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import {
   DRAWINGML_MAIN_NAMESPACE_URI as A,
@@ -28,6 +27,7 @@ import {
 } from './ooxml-tree.ts';
 import { shapeColorHex, shapeFormatTargets } from './shape-format.ts';
 
+const VML = 'urn:schemas-microsoft-com:vml';
 const HIDDEN_FILL_URI = '{909E8E84-426E-40DD-AFC4-6F175D3DCCD1}';
 const HIDDEN_URIS = new Set([HIDDEN_FILL_URI, '{91240B29-F687-4F45-9708-019B960494DF}']);
 const FILLS = new Set(['noFill', 'solidFill', 'gradFill', 'blipFill', 'pattFill', 'grpFill']);
@@ -150,7 +150,8 @@ function paints(fill: OoxmlElement | null | undefined): boolean | null {
 
 /**
  * Sets a VML colour that names a different colour than `color`. Only a colour the VML copy
- * names is compared, by value (`black` is `#000000`), with a theme index suffix ignored.
+ * names and the repair can read is compared, by value (`black` is `#000000`), with a theme
+ * index suffix ignored.
  */
 function agreeColour(
   values: Map<string, string | null>,
@@ -160,7 +161,9 @@ function agreeColour(
 ): void {
   const current = attributeOf(vml, name);
   if (!color || current === undefined) return;
-  if (vmlColourHex(current) !== color) values.set(name, `#${color.toLowerCase()}`);
+  // A colour the repair cannot read (`window`, `rgb(...)`) stays as written.
+  const named = vmlColourHex(current);
+  if (named !== null && named !== color) values.set(name, `#${color.toLowerCase()}`);
 }
 
 /**
@@ -181,21 +184,41 @@ function agreeingVml(
   const ln = elementsOf(spPr).find((c) => c.namespaceUri === A && c.localName === 'ln');
   const lineFill = ln ? fillsOf(ln)[0] : undefined;
   const values = new Map<string, string | null>();
+  // A `v:fill` or `v:stroke` child with `on="f"` turns the paint off as the flag does.
+  const shown = new Set<OoxmlElement>();
+  const agree = (paint: boolean | null, flag: string, colour: string, child: string) => {
+    const sub = elementsOf(vml).find((c) => c.namespaceUri === VML && c.localName === child);
+    const flagIsOff = flagOff(attributeOf(vml, flag));
+    const subIsOff = !!sub && flagOff(attributeOf(sub, 'on'));
+    // A VML copy that names a colour paints it unless a flag says otherwise.
+    if (paint === false && !flagIsOff && !subIsOff && attributeOf(vml, colour) !== undefined)
+      values.set(flag, 'f');
+    if (paint === true && flagIsOff) values.set(flag, null);
+    if (paint === true && subIsOff) shown.add(sub!);
+  };
   // A line has no inside; its fill is never drawn.
   const fills = vml.localName === 'line' ? null : paints(fill);
-  const filledOff = flagOff(attributeOf(vml, 'filled'));
-  if (fills === false && !filledOff && attributeOf(vml, 'fillcolor') !== undefined)
-    values.set('filled', 'f');
-  if (fills === true && filledOff) values.set('filled', null);
+  agree(fills, 'filled', 'fillcolor', 'fill');
   if (fills === true) agreeColour(values, vml, 'fillcolor', srgbOf(fill));
   const strokes = paints(lineFill);
-  const strokedOff = flagOff(attributeOf(vml, 'stroked'));
-  if (strokes === false && !strokedOff && attributeOf(vml, 'strokecolor') !== undefined)
-    values.set('stroked', 'f');
-  if (strokes === true && strokedOff) values.set('stroked', null);
+  agree(strokes, 'stroked', 'strokecolor', 'stroke');
   if (strokes === true) agreeColour(values, vml, 'strokecolor', srgbOf(lineFill));
-  if (values.size === 0) return vml;
-  return { ...vml, attributes: setAttributes(vml.attributes, values) } as OoxmlElement;
+  if (values.size === 0 && shown.size === 0) return vml;
+  const on = new Map<string, string | null>([['on', null]]);
+  return {
+    ...vml,
+    attributes: values.size ? setAttributes(vml.attributes, values) : vml.attributes,
+    children: shown.size
+      ? vml.children.map((c) =>
+          shown.has(c as OoxmlElement)
+            ? ({
+                ...c,
+                attributes: setAttributes((c as OoxmlElement).attributes, on),
+              } as OoxmlElement)
+            : c
+        )
+      : vml.children,
+  } as OoxmlElement;
 }
 
 /** Roots already found consistent: a save after an edit elsewhere skips them. */
@@ -246,15 +269,7 @@ export function shapeFormatExportPackage(pkg: OoxmlPackage): OoxmlPackage {
   for (const part of pkg.parts.values()) {
     const repairs = repairsOf(part);
     if (!repairs) continue;
-    const repaired = runWithoutJournalCapture(() => {
-      let current = part;
-      for (const [id, replacement] of repairs) {
-        const result = replaceNode(current, id, replacement);
-        if (!result.ok) return null;
-        current = result.part;
-      }
-      return current;
-    });
+    const repaired = replaceNodesForExport(part, repairs);
     if (!repaired) continue;
     next ??= { ...pkg, parts: new Map(pkg.parts) };
     (next.parts as Map<string, OoxmlPart>).set(part.name, repaired);

@@ -3,7 +3,13 @@
 
 import { expect, test } from 'bun:test';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
-import { readOoxmlPart, serializeOoxmlPart, type OoxmlPart } from '../package/ooxml-tree.ts';
+import { findNode, nodeIndexTestRecorder } from '../package/ooxml-edit.ts';
+import {
+  readOoxmlPart,
+  serializeOoxmlPart,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '../package/ooxml-tree.ts';
 import { shapeFormatExportPackage } from '../package/shape-format-export.ts';
 
 const NS = [
@@ -139,3 +145,59 @@ test('a shape whose copies agree saves the same package', () => {
   expect(next).toBe(pkg);
   expect(next.parts.get('/word/document.xml')).toBe(part);
 });
+
+test('a VML colour the repair cannot read stays as written', () => {
+  for (const colour of ['window', 'rgb(10, 20, 30)', 'fill darken(118)']) {
+    const pkg = packageOf(shape(RED, `<v:rect fillcolor="${colour}"/>`));
+    expect(shapeFormatExportPackage(pkg)).toBe(pkg);
+  }
+});
+
+test('a v:fill child that turns the fill off counts as the flag does', () => {
+  // The fill is off in both copies: nothing to repair.
+  const off = packageOf(
+    shape('<a:noFill/>', '<v:rect fillcolor="#ff0000"><v:fill on="f"/></v:rect>')
+  );
+  expect(shapeFormatExportPackage(off)).toBe(off);
+  // The DrawingML fill shows: the child turns it back on.
+  const xml = saved(packageOf(shape(RED, '<v:rect fillcolor="#ff0000"><v:fill on="f"/></v:rect>')));
+  expect(xml).toContain('<v:rect fillcolor="#ff0000"><v:fill/></v:rect>');
+});
+
+test('2,000 disagreeing shapes repair in one pass, under a second', () => {
+  const run = Array.from({ length: 2000 }, () =>
+    shape(RED, '<v:rect fillcolor="#7030a0" filled="f"/>')
+  ).join('');
+  const pkg = packageOf(run);
+  const started = performance.now();
+  const xml = saved(pkg);
+  expect(performance.now() - started).toBeLessThan(1000);
+  expect(xml.match(/<v:rect fillcolor="#ff0000"\/>/g)).toHaveLength(2000);
+});
+
+test('a repaired save leaves the live part and its node index as they were', () => {
+  const pkg = packageOf(shape(RED, '<v:rect fillcolor="#7030a0" filled="f"/>'));
+  const part = pkg.parts.get('/word/document.xml')!;
+  const rectId = idOfRect(part);
+  const rect = findNode(part, rectId)!;
+  shapeFormatExportPackage(pkg);
+  const recorder = nodeIndexTestRecorder();
+  recorder.reset();
+  // The live part still finds its nodes without a rebuild walk.
+  expect(findNode(part, rectId)).toBe(rect);
+  expect(recorder.completeBuilds).toBe(0);
+  expect(serializeOoxmlPart(part)).toContain('filled="f"');
+});
+
+function idOfRect(part: OoxmlPart): string {
+  const walk = (node: OoxmlNode): string | null => {
+    if (node.kind === 'textValue') return null;
+    if (node.localName === 'rect') return node.id;
+    for (const child of node.children) {
+      const found = walk(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  return walk(part.root)!;
+}
