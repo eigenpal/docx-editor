@@ -171,14 +171,98 @@ describe('which spaces take the balanced width', () => {
   });
 });
 
+describe('balanced spaces with authored character spacing and scaling', () => {
+  // Like `measurer`, with `w:w` scaling each advance before the character spacing.
+  const scaled: TextMeasurer = {
+    ...measurer,
+    measure: (text, style) =>
+      [...text].reduce(
+        (n, c) =>
+          n +
+          ((c === ' ' ? 4 : 10) * style.horizontalScalePercent) / 100 +
+          style.characterSpacingPt,
+        0
+      ),
+  };
+
+  test('the character spacing of a widened space counts twice', () => {
+    // 가가|나나 and 나나|ab widen to 5.5 + 2 * spacing; ab|cd keeps 4 + spacing.
+    expect(spaceAdvances(layout({ text: '가가 나나 ab cd', spacing: -0.4 }))).toEqual([
+      4.7, 4.7, 3.6,
+    ]);
+    expect(spaceAdvances(layout({ text: '가가 나나 ab cd', spacing: 1 }))).toEqual([7.5, 7.5, 5]);
+    // Each space of a run of spaces, between Latin words too.
+    expect(spaceAdvances(layout({ text: 'ab  cd', spacing: -1 }))).toEqual([3.5, 3.5]);
+  });
+
+  test('scaling scales the balanced width before the spacing is added', () => {
+    const at = (properties: { spacing?: number; scale: number }) =>
+      spaceAdvances(layout({ text: '가가 나나 ab cd', ...properties }, { measure: scaled }));
+    expect(at({ scale: 80 })).toEqual([4.4, 4.4, 3.2]);
+    expect(at({ scale: 150 })).toEqual([8.25, 8.25, 6]);
+    expect(at({ scale: 80, spacing: 1 })).toEqual([6.4, 6.4, 4.2]);
+  });
+
+  test("only the space's own run spacing counts", () => {
+    expect(spaceAdvances(layout(['가가', { text: ' ', spacing: 2 }, '나나']))).toEqual([9.5]);
+    const spacedWords = [{ text: '가가', spacing: 2 }, ' ', { text: '나나', spacing: 2 }];
+    expect(spaceAdvances(layout(spacedWords))).toEqual([5.5]);
+  });
+
+  test('legacy compatibility modes widen spaced spaces the same way', () => {
+    expect(spaceAdvances(layout({ text: '가가 나나', spacing: -0.4 }, { mode: 14 }))).toEqual([
+      4.7,
+    ]);
+  });
+
+  test('a face without East Asian glyphs keeps its spaced or scaled spaces', () => {
+    const cd = (run: Run, measure = measurer) =>
+      linesOf(layout(run, { measure }))[0]!.spans.find((span) => span.text.endsWith('cd'))!;
+    const latin = { text: 'ab  cd', font: LATIN_ONLY };
+    // `ab` is 22 pt with 1 pt spacing, then two spaces of 5 pt (4 pt and the spacing).
+    expect(cd({ ...latin, spacing: 1 }).box.x).toBe(32);
+    // `ab` is 16 pt at 80 percent, then two spaces of 3.2 pt.
+    expect(cd({ ...latin, scale: 80 }, scaled).box.x).toBeCloseTo(22.4, 6);
+  });
+
+  test('without balanced widths, spaced spaces keep their advance plus spacing', () => {
+    const text = { text: '가가 나나 ab cd', spacing: -0.4 };
+    expect(spaceAdvances(layout(text, { balanced: false }))).toEqual([3.6, 3.6, 3.6]);
+  });
+
+  test('wider spaced spaces wrap a word that fits with natural spaces', () => {
+    // Four words of 19.2 pt and three spaces: 3.6 pt natural (87.6 pt), 4.7 pt balanced (90.9 pt).
+    const text = { text: '가가 나나 다다 라라', spacing: -0.4 };
+    const lines = (balanced: boolean) =>
+      linesOf(layout(text, { width: 89, balanced })).map((line) =>
+        line.spans
+          .map((span) => span.text)
+          .join('')
+          .trim()
+      );
+    expect(lines(false)).toEqual(['가가 나나 다다 라라']);
+    expect(lines(true)).toEqual(['가가 나나 다다', '라라']);
+  });
+
+  test('the caret after a spaced widened space stands where the next word starts', () => {
+    const result = layout({ text: 'ab 가가', spacing: -0.4 });
+    const line = linesOf(result)[0]!;
+    const word = line.spans.find((span) => span.text === '가가')!;
+    const at = (offset: number) =>
+      caretAt(result, { paragraphId: word.range.paragraphId, offset }, measurer)!.x;
+    expect(at(3) - at(2)).toBeCloseTo(4.7, 6);
+    expect(at(3) - line.spans[0]!.box.x).toBeCloseTo(word.box.x - line.spans[0]!.box.x, 6);
+  });
+});
+
 test('an AutoFit cell is as wide as its text with balanced spaces', () => {
-  const table = (balanced: boolean) =>
+  const table = (balanced: boolean, item: Run = '가가 나나 다다') =>
     layoutSemanticDocument(
       loadBody(
         '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblLayout w:type="autofit"/>' +
           '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/>' +
           '</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="400"/></w:tblGrid><w:tr><w:tc>' +
-          `<w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr><w:p>${run('가가 나나 다다')}</w:p>` +
+          `<w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr><w:p>${run(item)}</w:p>` +
           '</w:tc></w:tr></w:tbl><w:p/>' +
           '<w:sectPr><w:pgSz w:w="9000" w:h="6000"/>' +
           '<w:pgMar w:left="500" w:right="500" w:top="500" w:bottom="500"/></w:sectPr>'
@@ -191,6 +275,13 @@ test('an AutoFit cell is as wide as its text with balanced spaces', () => {
     const lines = linesOf(table(balanced)).filter((line) => line.spans.length > 0);
     expect(lines[0]!.spans.map((span) => span.text).join('')).toBe('가가 나나 다다');
   }
+  // With -0.4 pt spacing, the cell fits 57.6 pt of syllables and two 4.7 pt spaces.
+  const spaced = linesOf(table(true, { text: '가가 나나 다다', spacing: -0.4 })).filter(
+    (line) => line.spans.length > 0
+  );
+  expect(spaced[0]!.spans.map((span) => span.text).join('')).toBe('가가 나나 다다');
+  const last = spaced[0]!.spans.at(-1)!;
+  expect(last.box.x + last.box.width).toBeCloseTo(67, 6);
 });
 
 test('the caret after a widened space stands where the next word starts', () => {
@@ -338,13 +429,16 @@ describe('distributed characters with balanced spaces', () => {
     expect(linesOf(layout('가나 다라', { ...settings, width: 44 }))).toHaveLength(2);
   });
 
-  test('authored character spacing and scaling do not acquire balanced space styles', () => {
+  test('spaced and scaled characters keep their distributed positions with balanced spaces', () => {
     for (const properties of [{ spacing: 1 }, { scale: 120 }]) {
       const run = { text: '가나 다라', ...properties };
-      const shape = (balanced: boolean) =>
-        linesOf(layout(run, { ...settings, width: 100, balanced }))[0]!.spans;
-      expect(shape(true)).toEqual(shape(false));
+      expect(positions(run)).toEqual(positions(run, false));
     }
+    // The spaced space itself carries the widened advance, 5.5 pt and twice the spacing.
+    const space = linesOf(
+      layout({ text: '가나 다라', spacing: 1 }, { ...settings, width: 100 })
+    )[0]!.spans.find((span) => span.text === ' ');
+    expect(space?.box.width).toBeCloseTo(7.5, 6);
   });
 
   test('the caret follows the distributed glyph positions after a balanced space', () => {
