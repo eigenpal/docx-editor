@@ -936,10 +936,11 @@ function readTableStructureUncached(
     tableStyle.tablePropertyNodes,
     contentRows,
     sideRuleShape,
-    tableStyle !== EMPTY_TABLE_FORMATTING
+    tableStyle !== EMPTY_TABLE_FORMATTING,
+    visualBorders
   );
   contentRows =
-    contentOffset !== undefined && tableWidth.type === 'auto'
+    contentOffset !== undefined && tableWidth.type === 'auto' && cellSpacingPt === 0
       ? withLegacyTableSideRules(sideRules.rows)
       : sideRules.rows;
   const outerRuleOffsetPt =

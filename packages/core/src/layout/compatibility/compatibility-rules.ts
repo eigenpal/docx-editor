@@ -72,7 +72,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.18.44 ST_Jc'
   ),
   fixedTableContentEdgeOrigin: legacy(
-    'A collapsed table with an absolute width aligns the content edge of its aligned outer cell with the text column; a leading alignment without a stated indent or table style keeps the outer edge',
+    'A table with an absolute width aligns the content edge of its aligned outer cell with the text column, with or without cell spacing; a leading alignment without a stated indent or table style keeps the outer edge',
     'ECMA-376 Part 1 §17.4.52 tblLayout'
   ),
   floatingTableContentOrigin: legacy(
