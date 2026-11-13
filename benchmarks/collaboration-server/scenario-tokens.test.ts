@@ -18,7 +18,7 @@ function firstParagraph(node: OoxmlNode): string | null {
   return null;
 }
 
-function setup() {
+function setup(identity?: { client: number; clock: number }) {
   const store = storeFrom(new Uint8Array(readFileSync(DEFAULT_DOCUMENT)));
   const paragraphId = firstParagraph(store.bodyStore().part.root)!;
   const tokens = new TypedTokens();
@@ -31,7 +31,7 @@ function setup() {
   const op = tagged.addressed.op as TreeDocOp & { text: string };
   expect(op.text.length).toBe(3);
   expect(applyOp(store, op, 'replica-0').ok).toBe(true);
-  tokens.typedInto(tagged.token!, 0, paragraphId);
+  tokens.typedInto(tagged.token!, 0, paragraphId, identity);
   return { store, paragraphId, tokens };
 }
 
@@ -95,6 +95,39 @@ describe('typed-text oracle', () => {
     apply(store, { op: 'deleteText', paragraphId, start: 3, end: 4 } as TreeDocOp);
     expect(tokens.check([store.currentPackage()])).toEqual([
       'typed token 0 of replica 0 is lost, while the paragraph it was typed in remains',
+    ]);
+  });
+
+  test('an undo excuses the typing of the step it reverted, though no text held it', () => {
+    // The token is the third character of the item 7:10 typed: identity 7:12.
+    const { store, paragraphId, tokens } = setup({ client: 7, clock: 12 });
+    // A peer moved the typing, and the copies wait in a held-back update: neither the shared
+    // text nor the view holds the token when the undo runs, and the undo hides the copies.
+    apply(store, { op: 'deleteText', paragraphId, start: 2, end: 3 } as TreeDocOp);
+    tokens.undoOn(0, '', '', undefined, [{ client: 7, clock: 10, length: 3 }]);
+    expect(tokens.check([store.currentPackage()])).toEqual([]);
+  });
+
+  test('an undo excuses no typing of a step it did not revert', () => {
+    const { store, paragraphId, tokens } = setup({ client: 7, clock: 12 });
+    apply(store, { op: 'deleteText', paragraphId, start: 2, end: 3 } as TreeDocOp);
+    tokens.undoOn(0, '', '', undefined, [
+      { client: 7, clock: 13, length: 3 },
+      { client: 8, clock: 12, length: 1 },
+    ]);
+    // Another replica's undo of a step that held the same item ID excuses nothing either.
+    tokens.undoOn(1, '', '', undefined, [{ client: 7, clock: 10, length: 3 }]);
+    expect(tokens.check([store.currentPackage()])).toEqual([
+      'typed token 0 of replica 0 is lost, while the paragraph it was typed in remains',
+    ]);
+  });
+
+  test('typing an undo reverted must not show again', () => {
+    const { store, tokens } = setup({ client: 7, clock: 12 });
+    // The undo reverted the step, but a copy of its typing still shows once updates settle.
+    tokens.undoOn(0, '', '', undefined, [{ client: 7, clock: 10, length: 3 }]);
+    expect(tokens.check([store.currentPackage()])).toEqual([
+      'typed token 0 of replica 0 shows again after replica 0 deleted it',
     ]);
   });
 });

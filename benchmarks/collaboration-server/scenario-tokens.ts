@@ -82,6 +82,27 @@ function hasParagraph(pkg: OoxmlPackage, id: string): boolean {
   return false;
 }
 
+/** One character of the shared text: the Yjs item ID of its client and clock. */
+export interface TokenIdentity {
+  readonly client: number;
+  readonly clock: number;
+}
+
+/** A run of Yjs item IDs of one client, as a history step's insertions hold them. */
+export interface TokenRun {
+  readonly client: number;
+  readonly clock: number;
+  readonly length: number;
+}
+
+function holds(run: TokenRun, identity: TokenIdentity): boolean {
+  return (
+    run.client === identity.client &&
+    identity.clock >= run.clock &&
+    identity.clock < run.clock + run.length
+  );
+}
+
 export class TypedTokens {
   private next = 0;
   /** Each token typed, by whom, into which paragraph of that replica's store. */
@@ -90,6 +111,8 @@ export class TypedTokens {
     { readonly replica: number; readonly paragraph: string }
   >();
   private readonly excused = new Set<string>();
+  /** The Yjs item ID each token was typed as, in its typist's shared text. */
+  private readonly identities = new Map<string, TokenIdentity>();
   /** Each token a replica deleted, by the replica, until that replica's undo puts it back. */
   private readonly deletedBy = new Map<string, number>();
   /** Every replica that ever deleted each token: its redo may delete the token again. */
@@ -138,9 +161,13 @@ export class TypedTokens {
     };
   }
 
-  /** A tagged edit that applied: its token is now in `paragraph` of `replica`'s store. */
-  typedInto(token: string, replica: number, paragraph: string): void {
+  /**
+   * A tagged edit that applied: its token is now in `paragraph` of `replica`'s store, and in
+   * the shared text as the item character `identity` names, when the caller knows it.
+   */
+  typedInto(token: string, replica: number, paragraph: string, identity?: TokenIdentity): void {
     this.typed.set(token, { replica, paragraph });
+    if (identity) this.identities.set(token, identity);
   }
 
   /**
@@ -205,11 +232,24 @@ export class TypedTokens {
     replica: number,
     before: string,
     after: string,
-    shown?: { readonly before: OoxmlPackage; readonly after: OoxmlPackage }
+    shown?: { readonly before: OoxmlPackage; readonly after: OoxmlPackage },
+    /** The insertions of the history steps the undo or redo reverted. */
+    reverted: readonly TokenRun[] = []
   ): void {
     const still = this.ownInText(after, replica);
+    const takenBack = new Set<string>();
     for (const token of this.ownInText(before, replica)) {
-      if (still.has(token)) continue;
+      if (!still.has(token)) takenBack.add(token);
+    }
+    // A step's own typing is taken back even where neither the shared text nor the view held
+    // it: a peer moved it, and the copies the move left wait in an update held back for one
+    // the replica has not received yet. The undo records the characters deleted, so those
+    // copies stay hidden once they arrive.
+    for (const [token, identity] of this.identities) {
+      if (this.typed.get(token)?.replica !== replica) continue;
+      if (reverted.some((run) => holds(run, identity))) takenBack.add(token);
+    }
+    for (const token of takenBack) {
       this.excused.add(token);
       this.removedOtherwise.add(token);
       // The typist took the token back, as a deletion does. A copy a peer wrote at the same
