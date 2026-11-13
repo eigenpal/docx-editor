@@ -649,6 +649,7 @@ export type {
   ClearAnchorHighlightOptions,
   HighlightHit,
   HighlightKind,
+  NavigateHighlightCommand,
   HighlightOptions,
   HighlightRange,
   HighlightRect,

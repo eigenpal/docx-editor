@@ -264,6 +264,9 @@
   /* Text highlights (Find results, host marks). Opaque, because the layer multiplies. */
   --doc-text-highlight-color: #fff176;
   --doc-text-highlight-active-color: #ff9632;
+  /* Proofing marks the browser paints through the CSS Custom Highlight API. */
+  --doc-proofing-spelling-color: #e53935;
+  --doc-proofing-grammar-color: #1e88e5;
   --doc-motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
   /* ----------------------------------------------------------------------
@@ -7123,6 +7126,20 @@ p.docx-review__refused {
     --doc-text-highlight-set-active-color,
     var(--doc-text-highlight-active-color)
   );
+}
+
+/* Highlight sets with a `kind`: the covered text joins a shared `spelling-error` or
+ * `grammar-error` highlight where the browser has the CSS Custom Highlight API. The browser
+ * exposes that type to assistive technology; this rule draws the usual wavy underline. The
+ * overlay marks above still paint the set's own color and classes in every browser. */
+.docx-editor ::highlight(docx-spelling-error) {
+  text-decoration: underline wavy var(--doc-proofing-spelling-color);
+  text-decoration-skip-ink: none;
+}
+
+.docx-editor ::highlight(docx-grammar-error) {
+  text-decoration: underline wavy var(--doc-proofing-grammar-color);
+  text-decoration-skip-ink: none;
 }
 
 /* The editing-mode control: a pill that shows the current mode and a menu that changes it.

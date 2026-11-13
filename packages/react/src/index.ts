@@ -576,6 +576,7 @@ export type {
   DocumentOpenFailureReason,
   HighlightHit,
   HighlightKind,
+  NavigateHighlightCommand,
   HighlightOptions,
   HighlightRange,
   HighlightRect,

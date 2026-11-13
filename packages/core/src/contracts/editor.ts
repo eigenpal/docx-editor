@@ -28,7 +28,11 @@ export type * from './editor-fonts.ts';
 import type { EditorEvents } from './editor-events.ts';
 import type { EditorAnchorNavigation, ScrollToAnchorOptions } from './editor-anchor.ts';
 export type * from './editor-anchor.ts';
-import type { EditorHighlights, HighlightRange } from './editor-highlights.ts';
+import type {
+  EditorHighlights,
+  HighlightRange,
+  NavigateHighlightCommand,
+} from './editor-highlights.ts';
 import type { EditorSelectionRange, EditorSelectionReads } from './editor-selection-range.ts';
 export type * from './editor-selection-range.ts';
 export type * from './editor-highlights.ts';
@@ -1003,6 +1007,22 @@ export interface EditorCommands
    * replacement, the other half is a stop of its own.
    */
   navigateReviewChange: { direction: 'next' | 'previous' };
+  /**
+   * Select the next or previous mark of a highlight set, such as the next spelling issue, and
+   * scroll it into view. Marks are taken in reading order across stories, as `getParagraphs()`
+   * lists paragraphs, and navigation wraps at the end. Only marks that still cover their text
+   * count. A collapsed caret at the start of a mark selects that mark first. With a mark
+   * selected, open the context menu from the keyboard with Shift+F10 or the menu key.
+   *
+   * Returns `notFound` for an unknown set or a set without marks. It changes no document
+   * content and no highlight.
+   *
+   * @example
+   * ```ts
+   * editor.exec({ type: 'navigateHighlight', name: 'spelling', direction: 'next' });
+   * ```
+   */
+  navigateHighlight: NavigateHighlightCommand;
   /** Resolve eligible changes shown by the active filters, or an explicit scope, in one undo step. */
   resolveAllReviewChanges: ResolveReviewChangesOptions;
   /** Attribute eligible changes to another author, keeping them pending, in one undo step. */

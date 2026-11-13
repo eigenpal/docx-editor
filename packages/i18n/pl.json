@@ -591,7 +591,9 @@
     "fontSubstitutionNotice": "Niektóre czcionki w tym dokumencie są niedostępne, dlatego wyświetlane są czcionki zastępcze: {fonts}",
     "documentContent": "Zawartość dokumentu",
     "previewContent": "Podgląd proponowanych zmian",
-    "documentViewport": "Strony dokumentu"
+    "documentViewport": "Strony dokumentu",
+    "grammarIssueCount": "{count, plural, =0 {Brak błędów gramatycznych.} one {# błąd gramatyczny.} few {# błędy gramatyczne.} many {# błędów gramatycznych.} other {# błędu gramatycznego.}}",
+    "spellingIssueCount": "{count, plural, =0 {Brak błędów pisowni.} one {# błąd pisowni.} few {# błędy pisowni.} many {# błędów pisowni.} other {# błędu pisowni.}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Tekst wyświetlany",

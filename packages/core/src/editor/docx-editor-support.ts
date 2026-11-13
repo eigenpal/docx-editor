@@ -21,6 +21,7 @@ import { isDocAnchor, isDocAnchorRange } from './anchor-resolution.ts';
 import { tableCommandCanSupport } from './table-command-plan.ts';
 import { replaceMatchArgumentRefusal } from './docx-editor-replace-match.ts';
 import { replaceAcceptedTextArgumentRefusal } from './docx-editor-replace-accepted-text.ts';
+import { navigateHighlightArgumentRefusal } from './highlight-navigation.ts';
 import { replaceAllMatchesArgumentRefusal } from './docx-editor-replace-all.ts';
 import { classifySelectionEdit } from './docx-editor-selection-edits.ts';
 
@@ -547,6 +548,12 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return mutatingUnlessRefused(replaceMatchArgumentRefusal(command));
     case 'replaceAcceptedText':
       return mutatingUnlessRefused(replaceAcceptedTextArgumentRefusal(command));
+    case 'navigateHighlight': {
+      const refusal = navigateHighlightArgumentRefusal(command);
+      return refusal
+        ? { supported: false, code: 'invalidArgs', reason: refusal }
+        : { supported: true, mutating: false };
+    }
     case 'proposeDeletion':
       return command.author !== undefined && command.author.trim().length === 0
         ? {
