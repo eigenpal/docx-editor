@@ -2,7 +2,7 @@
 title: 'Office.js compatibility'
 description: 'Compare the supported Office.js API subset, known differences, and unavailable APIs.'
 category: 'Editing API'
-order: 65
+order: 66
 ---
 
 `@docx-editor.dev/editor-api` implements a subset of the Office.js object model. Code built on `Document`, `Body`, `Paragraph`, and `Range` carries over after you replace the host setup and adapt the differences on this page. Compatibility covers the listed subset, not complete Office.js behavior.
@@ -33,6 +33,7 @@ The package does not provide `Office.onReady` or `Word.run`. In a browser, use `
 | Office.js behavior | DocxEditor behavior | Required change |
 | --- | --- | --- |
 | The Office.js host supplies the comment author. | No host-provided account identity exists. | Pass `{ author }` when you create the runtime. |
+| Annotations belong to the open document in the host. | Annotations belong to one runtime and are never saved or shared. A critique counts in `Paragraph.text` of the runtime's revision view. An edit that changes the critiqued text removes the annotation. | Read annotations again after edits. Pass empty strings for the popup resource ids. |
 | An item accessor returns a usable proxy at once. | Read-derived proxies resolve prerequisite reads during `sync()`. A read-derived range can resolve and edit in one sync. | Sync before you inspect loaded values. |
 | A load queued after an assignment reads the new value. | A load in the same sync as a write returns the value from before the write. A load on an object that the write returns reports the inserted content. | Load a written property in a later sync. Sync before you edit an inserted object. |
 | Collections load paths such as `items/font/bold`. | Collections load `items/<property>` one level deep. Deeper paths, `items/font`, and paths on non-collections throw `InvalidArgument`. | Load navigation objects such as `font` on each item. |
@@ -73,6 +74,7 @@ A supported subset covers only the listed operations, not every Office.js member
 | Content controls | Partial | No typed subtype objects; bound controls refuse writes | [Content controls](/docs/2.x/editor-api/content-controls) |
 | Comments and replies | Partial | Explicit author; no comment body replacement | [Comments](/docs/2.x/editor-api/comments) |
 | Tracked changes | Partial | `TrackAll` fails; table and wrapper boundaries refuse | [Tracked changes](/docs/2.x/editor-api/revisions) |
+| Proofing annotations | Partial | View state only; no events or popup; popup resource ids refuse | [Proofing annotations](/docs/2.x/editor-api/proofing-annotations) |
 | Hyperlinks | Partial | `Range.hyperlink` only | [Formatting](/docs/2.x/editor-api/formatting) |
 
 ## Identify extensions
@@ -110,6 +112,8 @@ Code that uses these APIs fails TypeScript compilation.
 | `Style.font`, `Style.paragraphFormat`, `Style.delete`, `Document.addStyle`, `getByName`, `getItem` | `StyleCollection.getByNameOrNullObject()` |
 | `BookmarkCollection.exists()` | Load the collection and inspect its items |
 | `Range.start`, `Range.end`, `Bookmark.start`, `Bookmark.end` | Ranges and paragraph text |
+| `Document.onAnnotationClicked`, `onAnnotationHovered`, `onAnnotationInserted`, `onAnnotationRemoved`, `onAnnotationPopupAction` | Read annotations after a sync; in a browser, hit-test marks with `editor.getHighlightsAt()` |
+| `Document.onParagraphAdded`, `onParagraphChanged`, `onParagraphDeleted` | The editor's own change events, then read paragraphs in a run |
 
 Handle typed errors such as `NotSupported`, `NotImplemented`, and `ItemNotFound` for operations outside the subset.
 
