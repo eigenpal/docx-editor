@@ -101,6 +101,7 @@
       "AutomationBatchResponse",
       "AutomationCapabilities",
       "AutomationHost",
+      "AutomationSpan",
       "BookmarkIndex",
       "BookmarkNameProblem",
       "BookmarkPlace",

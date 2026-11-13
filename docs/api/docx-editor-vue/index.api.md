@@ -117,6 +117,7 @@ import { FunctionalComponent } from 'vue';
 import { generateRulerTicks } from '@docx-editor.dev/core/editor';
 import { HIGHLIGHT_REFRESH_MS } from '@docx-editor.dev/core/editor';
 import { HighlightHit } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightKind } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightOptions } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightRange } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightRect } from '@docx-editor.dev/core/contracts/editor';
@@ -139,6 +140,7 @@ import { MarkedFontResolver } from '@docx-editor.dev/core/editor';
 import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
 import { MaybeRef } from 'vue';
 import { MaybeRefOrGetter as MaybeRefOrGetter_2 } from 'vue';
+import { NavigateHighlightCommand } from '@docx-editor.dev/core/contracts/editor';
 import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { ObjectSlotReadValueMap } from '@docx-editor.dev/core/editor';
@@ -158,6 +160,7 @@ import { ParagraphDialogMixed } from '@docx-editor.dev/core/editor';
 import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
 import { ParagraphFormatRead } from '@docx-editor.dev/core/editor';
 import { ParagraphFormatUpdate } from '@docx-editor.dev/core/editor';
+import { ParagraphsChangeEvent } from '@docx-editor.dev/core/contracts/editor';
 import { ParagraphTabStop } from '@docx-editor.dev/core/editor';
 import { ParagraphText } from '@docx-editor.dev/core/contracts/editor';
 import { ParagraphTextProofing } from '@docx-editor.dev/core/contracts/editor';
@@ -7128,6 +7131,8 @@ export { HIGHLIGHT_REFRESH_MS }
 
 export { HighlightHit }
 
+export { HighlightKind }
+
 export { HighlightOptions }
 
 export { HighlightRange }
@@ -7732,6 +7737,8 @@ export interface MenuTableGridProps {
     className?: string;
     slot?: ChromeSlotId;
 }
+
+export { NavigateHighlightCommand }
 
 export { NavigateToChangeOptions }
 
@@ -8471,6 +8478,8 @@ export { ParagraphFlagState }
 export { ParagraphFormatRead }
 
 export { ParagraphFormatUpdate }
+
+export { ParagraphsChangeEvent }
 
 // @public (undocumented)
 export interface ParagraphStyleItemProps extends ParagraphStylePartProps {
