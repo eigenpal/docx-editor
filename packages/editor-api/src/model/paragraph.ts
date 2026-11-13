@@ -220,6 +220,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
    * which also overrides a style. The write keeps `alignment` as authored: in a right-to-left
    * paragraph, `Left` and `Right` name the start and end edges. With change tracking on, a write
    * that changes the direction is recorded as a paragraph formatting revision.
+   *
+   * @docxEditorExtension
    */
   get readingOrder(): ParagraphReadingOrder {
     return this.loadedProperty<ParagraphReadingOrder>('readingOrder');

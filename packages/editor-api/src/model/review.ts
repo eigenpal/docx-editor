@@ -200,7 +200,11 @@ abstract class CommentBase extends ModelObject implements PromisedItem {
     );
   }
 
-  /** Legacy read-only alias. Prefer the standard `content` property for new code. */
+  /**
+   * Legacy read-only alias. Prefer the standard `content` property for new code.
+   *
+   * @docxEditorExtension
+   */
   get text(): string {
     return this.loadedProperty<string>('text');
   }
@@ -791,6 +795,8 @@ export class RevisionCollection extends HandleCollection<Revision> {
    * for (const skipped of result.value.skipped)
    *   console.log(skipped.reason, skipped.detail ?? '');
    * ```
+   *
+   * @docxEditorExtension
    */
   resolve(
     action: 'accept' | 'reject',
@@ -841,6 +847,8 @@ export class RevisionCollection extends HandleCollection<Revision> {
    * await context.sync();
    * console.log(result.value.updated.length, result.value.skipped);
    * ```
+   *
+   * @docxEditorExtension
    */
   setAuthor(
     author: string,

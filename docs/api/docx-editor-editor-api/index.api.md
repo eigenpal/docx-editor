@@ -674,9 +674,7 @@ export class FieldCollection extends ItemCollection<Field> {
     getFirst(): Field;
     // (undocumented)
     getFirstOrNullObject(): Field;
-    // (undocumented)
     getLast(): Field;
-    // (undocumented)
     getLastOrNullObject(): Field;
     // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): Field;
@@ -958,9 +956,7 @@ export class InlinePictureCollection extends ItemCollection<InlinePicture> {
     getFirst(): InlinePicture;
     // (undocumented)
     getFirstOrNullObject(): InlinePicture;
-    // (undocumented)
     getLast(): InlinePicture;
-    // (undocumented)
     getLastOrNullObject(): InlinePicture;
     // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): InlinePicture;

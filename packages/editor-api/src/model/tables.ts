@@ -148,7 +148,11 @@ export class Table extends ModelObject implements PromisedItem {
   get rowCount(): number {
     return this.loadedProperty<number>('rowCount');
   }
-  /** Number of columns in the rectangular grid. Load before reading. */
+  /**
+   * Number of columns in the rectangular grid. Load before reading.
+   *
+   * @docxEditorExtension
+   */
   get columnCount(): number {
     return this.loadedProperty<number>('columnCount');
   }
