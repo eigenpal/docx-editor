@@ -84,6 +84,11 @@ export interface ReviewPanelProps {
    * Add comment controls appear and open the draft here. Default: true.
    */
   readonly registerAsRail?: boolean;
+  /**
+   * What to list. `'comments'` lists comment threads only, for hosts that show tracked changes
+   * in the document itself, as Word does. Default: `'all'`.
+   */
+  readonly show?: 'all' | 'comments';
 }
 
 interface Thread {
@@ -144,6 +149,7 @@ export function ReviewPanel({
   onRefused,
   headerExtra,
   registerAsRail = true,
+  show = 'all',
 }: ReviewPanelProps) {
   const editor = useDocxEditor();
   // `register` is stable while the registry object changes with its counts.
@@ -157,7 +163,13 @@ export function ReviewPanel({
   const canEdit = editingMode !== 'viewing';
   const { items, activeKey } = useReviewItems(editor);
   const [showResolved, setShowResolved] = useState(defaultShowResolved);
-  const entries = useMemo(() => buildEntries(items, showResolved), [items, showResolved]);
+  const entries = useMemo(
+    () =>
+      buildEntries(items, showResolved).filter(
+        (entry) => show === 'all' || entry.kind === 'thread'
+      ),
+    [items, showResolved, show]
+  );
   const resolvedCount = useMemo(
     () => items.filter((item) => item.kind === 'comment' && !item.parentId && item.resolved).length,
     [items]

@@ -6,3 +6,4 @@ export {
   type ReviewPanelProps,
 } from './ReviewPanel';
 export { useReviewItems, type ReviewState } from './useReviewItems';
+export { useCurrentRevision } from './useCurrentRevision';
