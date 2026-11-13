@@ -136,6 +136,31 @@ describe('reading paragraph borders', () => {
     expect(bottom.isVisible).toBe(false);
   });
 
+  test('a table style border reads in force and turns off as none', () => {
+    const styles =
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+      '<w:style w:type="table" w:styleId="Grid"><w:name w:val="Grid"/>' +
+      '<w:pPr><w:pBdr><w:bottom w:val="single" w:sz="8" w:space="1" w:color="auto"/></w:pBdr></w:pPr>' +
+      '</w:style>';
+    const host = open(
+      docx(
+        '<w:tbl><w:tblPr><w:tblStyle w:val="Grid"/></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
+          '<w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
+        styles
+      )
+    );
+    const cell = paragraphsOf(host, roots(host).body).find(
+      (paragraph) => bordersOf(host, paragraph)[2]?.isVisible
+    );
+    expect(cell).toBeDefined();
+    expect(bordersOf(host, cell!)[2]).toMatchObject({ lineStyle: 'Single', lineWidth: 'Pt100' });
+    write(host, cell!, [a('bottom', 'isVisible', false)]);
+    expect(savedMainXml(host)).toContain(
+      '<w:pBdr><w:bottom w:color="auto" w:space="0" w:sz="0" w:val="none"/></w:pBdr>'
+    );
+    expect(bordersOf(host, cell!)[2]?.isVisible).toBe(false);
+  });
+
   test('a line style no Office value names reads null, art and thick included', () => {
     const host = open(
       docx(
@@ -292,6 +317,34 @@ describe('writing paragraph borders', () => {
     expect(bordersOf(host, paragraph)[0]).toMatchObject({ color: null, colorIndex: 'Auto' });
   });
 
+  test('a colour the edge already stores keeps its theme colour', () => {
+    const own =
+      '<w:top w:color="4472C4" w:sz="4" w:themeColor="accent1" w:themeShade="BF" w:val="single"/>';
+    const host = open(
+      docx(`<w:p><w:pPr><w:pBdr>${own}</w:pBdr></w:pPr><w:r><w:t>x</w:t></w:r></w:p>`)
+    );
+    const paragraph = only(host);
+    const read = bordersOf(host, paragraph)[0]!;
+    write(host, paragraph, [a('top', 'color', read.color)]);
+    expect(savedMainXml(host)).toContain(own);
+  });
+
+  test('an own edge with no usable line stays off over a style line', () => {
+    const host = open(
+      docx(
+        '<w:p><w:pPr><w:pStyle w:val="Ruled"/><w:pBdr><w:bottom w:val="apples!" w:sz="4"/></w:pBdr>' +
+          '</w:pPr><w:r><w:t>x</w:t></w:r></w:p>',
+        RULED_STYLE
+      )
+    );
+    const paragraph = only(host);
+    const response = write(host, paragraph, [a('left', 'lineStyle', 'Single')]);
+    expect(response.results[0]?.status).toBe('ok');
+    const xml = savedMainXml(host);
+    expect(xml).toContain('<w:bottom w:color="auto" w:space="0" w:sz="0" w:val="none"/>');
+    expect(bordersOf(host, paragraph)[2]?.isVisible).toBe(false);
+  });
+
   test('turning the only own edge off removes the paragraph border', () => {
     const host = open(docx(OWN_RED));
     write(host, only(host), [a('bottom', 'isVisible', false)]);
@@ -399,6 +452,19 @@ describe('writing paragraph borders', () => {
     expect(response.results[0]?.status).toBe('ok');
     expect(savedMainXml(host)).toContain(
       '<w:bottom w:color="00FF00" w:space="31" w:sz="255" w:val="single"/>'
+    );
+  });
+
+  test('a size with leading zeros keeps its value', () => {
+    const host = open(
+      docx(
+        '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="0008" w:space="02"/></w:pBdr></w:pPr>' +
+          '<w:r><w:t>x</w:t></w:r></w:p>'
+      )
+    );
+    write(host, only(host), [a('bottom', 'color', '#00FF00')]);
+    expect(savedMainXml(host)).toContain(
+      '<w:bottom w:color="00FF00" w:space="02" w:sz="8" w:val="single"/>'
     );
   });
 

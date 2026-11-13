@@ -583,7 +583,7 @@ export function paragraphFormatProperties(
   let borders: readonly ParagraphBorderEdgeWrite[] | null = null;
   if (request.borders !== undefined) {
     // Against the style this same write applies, so a style and a border can share a sync.
-    const planned = paragraphBordersPlan(paragraph, request.borders, styles, styleId);
+    const planned = paragraphBordersPlan(part, paragraph, request.borders, styles, styleId);
     if (!planned.ok) return planned;
     borders = planned.edges;
   }

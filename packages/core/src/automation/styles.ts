@@ -25,12 +25,11 @@ import { findNode } from '../store/package/ooxml-edit.ts';
 import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import {
+  inheritedParagraphPropertyNodes,
   paragraphInheritsRtl,
   type DirectionSources,
 } from '../layout/paragraph-direction-inheritance.ts';
 import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
-import { buildStyleCascadeTable, type StyleCascadeTable } from '../layout/style-cascade.ts';
-import { inheritedParagraphBorderElements } from '../layout/paragraph-border-resolve.ts';
 import { MAX_STYLE_NAME, styleDefinitionsOf } from './style-definitions.ts';
 
 /** What the document says its paragraph styles are. */
@@ -61,11 +60,12 @@ export interface AutomationStyleIndex {
    */
   inheritsRtl(part: OoxmlPart, paragraph: OoxmlNode, styleId?: string): boolean;
   /**
-   * The `w:pBdr` elements the paragraph inherits from the document defaults and its style
-   * chain, in cascade order, ignoring its own. Layout folds them edge by edge. `styleId`
-   * resolves them as if the paragraph named that style.
+   * The `w:pBdr` elements the paragraph inherits, in cascade order, ignoring its own: document
+   * defaults, an enclosing cell's table style, its style chain, and its numbering level, as
+   * layout resolves them. Layout folds them edge by edge. `styleId` resolves them as if the
+   * paragraph named that style.
    */
-  inheritedBorders(paragraph: OoxmlNode, styleId?: string): readonly OoxmlNode[];
+  inheritedBorders(part: OoxmlPart, paragraph: OoxmlNode, styleId?: string): readonly OoxmlNode[];
 }
 
 /**
@@ -85,13 +85,18 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
   // Cell styles resolve as the proposed document shows them, like automation's run writes.
   const inheritsRtl = (target: OoxmlPart, paragraph: OoxmlNode, styleId?: string) =>
     paragraphInheritsRtl(sources, target, paragraph, 'proposed', styleId);
-  // Built on first use: most runs never read or write a border.
-  let cascade: StyleCascadeTable | undefined;
-  const inheritedBorders = (paragraph: OoxmlNode, styleId?: string) => {
-    if (!sources.styles) return [];
-    cascade ??= buildStyleCascadeTable(sources.styles, undefined, sources.settings);
-    return inheritedParagraphBorderElements(cascade, paragraphPropertiesNodeOf(paragraph), styleId);
-  };
+  const inheritedBorders = (target: OoxmlPart, paragraph: OoxmlNode, styleId?: string) =>
+    inheritedParagraphPropertyNodes(
+      sources,
+      target,
+      paragraph,
+      'proposed',
+      'pBdr',
+      styleId
+    ).flatMap((node) => {
+      const pBdr = namedChild(node, 'pBdr');
+      return pBdr ? [pBdr] : [];
+    });
   if (!part) {
     return Object.freeze({
       nameOf: () => null,

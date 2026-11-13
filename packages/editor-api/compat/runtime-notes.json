@@ -961,7 +961,7 @@
   },
   "Word.Paragraph#borders": {
     "status": "partial",
-    "notes": "Returns a BorderUniversalCollection whose items are top, left, bottom, right, then the border between paragraphs, whose inside is true. Office.js does not define the item order; DocxEditor uses the w:pBdr order. Load items and sync before writing. Reads fold the document defaults, the style chain, and the paragraph's own w:pBdr edge by edge, as the page shows them. A theme color reads as its stored w:color fallback. The vertical bar border (w:bar) has no item, and every write keeps it."
+    "notes": "Returns a BorderUniversalCollection whose items are top, left, bottom, right, then the border between paragraphs, whose inside is true. Office.js does not define the item order; DocxEditor uses the w:pBdr order. Load items and sync before writing. Reads fold the document defaults, a cell's table style, the style chain, the numbering level, and the paragraph's own w:pBdr edge by edge, as the page shows them. A theme color reads as its stored w:color fallback. The vertical bar border (w:bar) has no item, and every write keeps it."
   },
   "Word.BorderUniversal#lineStyle": {
     "status": "partial",

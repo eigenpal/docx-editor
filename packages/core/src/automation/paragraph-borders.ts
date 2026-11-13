@@ -5,11 +5,11 @@
 // the `CT_PBdr` sequence without `w:bar`, which no Office-shaped member addresses and which every
 // write carries through unchanged.
 //
-// BORDERS CASCADE EDGE BY EDGE. Each level of the cascade (document defaults, the style chain,
-// the paragraph's own `w:pBdr`) overrides only the edges it states. A read answers what the page
-// shows, folded the same way layout paints it, so a style's rule reads as a line on the
-// paragraph. A write states only the edges it changes, and writing back a value read here
-// changes nothing.
+// BORDERS CASCADE EDGE BY EDGE. Each level of the cascade (document defaults, a cell's table
+// style, the style chain, the numbering level, the paragraph's own `w:pBdr`) overrides only the
+// edges it states. A read answers what the page shows, folded the same way layout paints it, so
+// a style's rule reads as a line on the paragraph. A write states only the edges it changes, and
+// writing back a value read here changes nothing.
 //
 // ASSIGNMENTS APPLY IN ORDER, as the same calls do in sequence: a line style resets the width,
 // so `lineWidth` before `lineStyle` is lost and after it is kept (see `applied`).
@@ -265,11 +265,11 @@ type EdgeMap = Map<ParagraphBorderEdgeName, EdgeAttributes>;
 /** Where the inherited borders come from: the style index, which owns the cascade. */
 export interface InheritedParagraphBorders {
   /**
-   * The `w:pBdr` elements the paragraph's document defaults and style chain state, in cascade
-   * order, ignoring the paragraph's own. `styleId` resolves them as if the paragraph named that
-   * style.
+   * The `w:pBdr` elements the paragraph inherits, in cascade order, ignoring its own: document
+   * defaults, an enclosing cell's table style, its style chain, and its numbering level.
+   * `styleId` resolves them as if the paragraph named that style.
    */
-  inheritedBorders(paragraph: OoxmlNode, styleId?: string): readonly OoxmlNode[];
+  inheritedBorders(part: OoxmlPart, paragraph: OoxmlNode, styleId?: string): readonly OoxmlNode[];
 }
 
 /** The `w:`-namespace attributes of one element's edges, with logical names folded to physical. */
@@ -360,10 +360,14 @@ function readEdge(
   };
 }
 
-/** The edges a paragraph shows: its style chain's, folded with its own, edge by edge. */
-function edgesInForce(paragraph: OoxmlNode, styles: InheritedParagraphBorders): EdgeMap {
+/** The edges a paragraph shows: the inherited ones, folded with its own, edge by edge. */
+function edgesInForce(
+  part: OoxmlPart,
+  paragraph: OoxmlNode,
+  styles: InheritedParagraphBorders
+): EdgeMap {
   return foldedEdges([
-    ...styles.inheritedBorders(paragraph),
+    ...styles.inheritedBorders(part, paragraph),
     namedChild(paragraphPropertiesNodeOf(paragraph), 'pBdr'),
   ]);
 }
@@ -376,7 +380,7 @@ export function paragraphBordersRead(
 ): readonly AutomationParagraphBorderRead[] | null {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return null;
-  const edges = edgesInForce(paragraph, styles);
+  const edges = edgesInForce(part, paragraph, styles);
   return AUTOMATION_PARAGRAPH_BORDER_EDGES.map((edge) => readEdge(edge, edges.get(edge)));
 }
 
@@ -452,6 +456,9 @@ function applied(
       const color = requestedColor(property, value);
       if (color === null)
         return `${property}: ${property === 'color' ? 'not #RRGGBB' : String(value)}`;
+      // A colour the edge already stores is kept with its theme colour, which `color` and
+      // `colorIndex` read back as that stored value.
+      if (shown && current.color?.toLowerCase() === color.toLowerCase()) return current;
       const next = shown ? admissibleBorderAttributes(current) : { ...OFF_EDGE };
       next.color = color;
       // A theme colour overrides `w:color`, so a stated colour has to drop it to show.
@@ -473,6 +480,7 @@ function applied(
  * sync and the border resolves against the new style.
  */
 export function paragraphBordersPlan(
+  part: OoxmlPart,
   paragraph: OoxmlNode,
   request: unknown,
   styles: InheritedParagraphBorders,
@@ -481,7 +489,7 @@ export function paragraphBordersPlan(
   if (!Array.isArray(request)) return refuse('borders: not a list of assignments');
   if (request.length > MAX_ASSIGNMENTS) return refuse('borders: too many assignments');
   const own = edgesOf(namedChild(paragraphPropertiesNodeOf(paragraph), 'pBdr'));
-  const inherited = foldedEdges(styles.inheritedBorders(paragraph, styleId));
+  const inherited = foldedEdges(styles.inheritedBorders(part, paragraph, styleId));
   const state = new Map<ParagraphBorderEdgeName, EdgeAttributes | undefined>();
   for (const assignment of request as readonly unknown[]) {
     if (typeof assignment !== 'object' || assignment === null)
@@ -517,8 +525,12 @@ export function paragraphBordersPlan(
   return {
     ok: true,
     edges: PARAGRAPH_BORDER_EDGES.flatMap((edge) => {
-      const attributes = after.get(edge);
-      return attributes ? [{ edge, attributes: admissibleBorderAttributes(attributes) }] : [];
+      const stated = after.get(edge);
+      if (!stated) return [];
+      const attributes = admissibleBorderAttributes(stated);
+      if (attributes.val !== undefined) return [{ edge, attributes }];
+      // An untouched own edge with no usable line shows no line: keep it off over a style line.
+      return visible(inherited.get(edge)) ? [{ edge, attributes: { ...OFF_EDGE } }] : [];
     }),
   };
 }

@@ -125,7 +125,7 @@ For editor commands, see [Right-to-left text](/docs/2.x/guides/right-to-left).
 | `3`   | Right                                                     |
 | `4`   | Between paragraphs. This item has `inside` set to `true`. |
 
-Load `items` and sync before you read or write an item. The following example reads the bottom border, then replaces it with a dark blue rule:
+Load `items` and sync before you read or write an item. The following example reads the bottom border, then replaces it with a 1.5-point blue line:
 
 ```ts
 await runtime.run(async (context) => {
@@ -133,7 +133,7 @@ await runtime.run(async (context) => {
   borders.load('items/lineStyle,items/lineWidth');
   await context.sync();
 
-  const bottom = borders.items[2];
+  const bottom = borders.items[2]!;
   console.log(`Bottom border: ${bottom.lineStyle} ${bottom.lineWidth}`);
   bottom.lineStyle = 'Single';
   bottom.lineWidth = 'Pt150'; // Set the width after the line style.
@@ -142,23 +142,27 @@ await runtime.run(async (context) => {
 });
 ```
 
-| Property | Values |
+| Property | Values and write effect |
 | --- | --- |
-| `lineStyle` | `BorderLineStyle` values. `None` turns the edge off. A write sets the width to `Pt050` and keeps the color and the gap. |
-| `isVisible` | `true` adds a single `Pt050` automatic line to an edge with no line. `false` turns the edge off. |
-| `lineWidth` | `LineWidth` values, from `Pt025` to `Pt600`. On an edge with no line, a width has no effect. |
-| `color` | `#RRGGBB`. A write removes the edge's theme color. |
+| `lineStyle` | `BorderLineStyle` values. `None` turns the edge off. A write sets the width to `Pt050` and keeps the color and the space between the border and the text. |
+| `isVisible` | `true` adds a `Single` `Pt050` line to an edge with no line. An edge that has a line keeps it. `false` turns the edge off. |
+| `lineWidth` | `LineWidth` values, from `Pt025` to `Pt600`. On an edge with no line, a width has no effect. Reads `null` for an edge with no line or a width with no enum member. |
+| `color` | `#RRGGBB`. A write removes the edge's theme color. Reads `null` for an edge with no line or an automatic color. |
 | `colorIndex` | `Auto` and the 16 basic colors. `ClassicRed`, `ClassicBlue`, and `ByAuthor` throw `NotSupported`. |
+| `inside` | Read-only. `true` only for the border between paragraphs. |
 
-- Border writes apply in the order you make them. Set `lineStyle` first, then `lineWidth` and `color`. `set()` applies its properties in that order.
-- A new line has an automatic color and no gap from the text. The API cannot change the gap.
+- Border writes apply in the order you make them. Set `lineStyle` before `lineWidth`, because a line style resets the width.
+- A color set on an edge with no line applies to the next line drawn on that edge. Otherwise, a new line has an automatic color.
+- `set()` applies its properties in this order: `isVisible`, `lineStyle`, `lineWidth`, `color`, and `colorIndex`.
+- A new line has no space between the border and the text. The API cannot change that space.
 - Each value is checked when you assign it. An invalid value throws `InvalidArgument`, and `debugInfo.errorLocation` names the property, such as `borders.items[2].color`.
-- Reads return the effective borders: the paragraph's own edges over the edges its style supplies. A value with no enum member reads as `null`, and a theme color reads as its stored fallback color.
-- A write changes only the edges you set. If you turn off an edge that the style supplies, the paragraph stores it as `none`. Writing back a value you read changes nothing.
+- Reads return the effective borders: the paragraph's own edges over the edges its style, table style, or list level supplies. A value with no enum member reads as `null`, and a theme color reads as its stored fallback color.
+- A write changes only the edges you set. If you turn off an edge that a style supplies, the paragraph stores it as `none`. Writing back a value you read changes nothing.
 - A `load` in the same sync as a write returns the value from before the write.
 - The vertical bar border (`w:bar`) has no item. Writes keep it.
-- `artStyle`, `artWidth`, and `applyPageBordersToAllSections` throw `NotSupported`, also from `load()`.
-- With `TrackMineOnly`, a border write records one paragraph property revision.
+- `artStyle`, `artWidth`, and `applyPageBordersToAllSections` throw `NotSupported`, including from `load()`.
+- Only `Paragraph.borders` is available. Other border collections, such as table and page borders, are not.
+- A content control with a content lock refuses border writes. With `TrackMineOnly`, a border write records one paragraph property revision.
 
 ## Apply an existing style
 

@@ -203,7 +203,9 @@ export function admissibleBorderAttributes(
     if (value === undefined) continue;
     if (validBorderAttribute(name, value)) kept[name] = value;
     else if ((name === 'sz' || name === 'space') && /^\d{1,9}$/.test(value))
-      kept[name] = String(name === 'sz' ? MAX_BORDER_EIGHTHS : MAX_BORDER_SPACE);
+      kept[name] = String(
+        Math.min(Number(value), name === 'sz' ? MAX_BORDER_EIGHTHS : MAX_BORDER_SPACE)
+      );
   }
   return kept;
 }
