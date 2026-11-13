@@ -186,3 +186,39 @@ test('concurrent edits and a deletion during a disconnect converge after reconne
   expect(alice.events.slice(before).every((event) => event.source === 'local')).toBe(true);
   converged();
 });
+
+test("one participant's split, merge, paste, undo and redo are local to it and remote to the peer", async () => {
+  const { alice, bob, converged } = await pair();
+  const before = { alice: alice.events.length, bob: bob.events.length };
+  caret(bob.editor, 'Second line', 6);
+  expect(bob.editor.exec({ type: 'splitParagraph' }).ok).toBe(true);
+  converged();
+  const head = bob.editor.findMatches('Second')[0]!;
+  const tail = bob.editor.findMatches(' line here.')[1]!;
+  expect(
+    bob.editor.exec({
+      type: 'setSelection',
+      range: {
+        anchor: { paragraphId: head.blockId, offset: 6 },
+        head: { paragraphId: tail.blockId, offset: 0 },
+      },
+    }).ok
+  ).toBe(true);
+  expect(bob.editor.exec({ type: 'deleteText' }).ok).toBe(true);
+  converged();
+  caret(bob.editor, 'Third', 5);
+  expect(
+    bob.editor.exec({ type: 'paste', text: 'One\nTwo', html: '<p>One</p><p>Two</p>' }).ok
+  ).toBe(true);
+  converged();
+  expect(bob.editor.exec({ type: 'undo' }).ok).toBe(true);
+  converged();
+  expect(bob.editor.exec({ type: 'redo' }).ok).toBe(true);
+  converged();
+  const own = bob.events.slice(before.bob);
+  const seen = alice.events.slice(before.alice);
+  expect(own.length).toBeGreaterThan(0);
+  expect(own.filter((event) => event.source !== 'local')).toEqual([]);
+  expect(seen.length).toBeGreaterThan(0);
+  expect(seen.filter((event) => event.source !== 'remote')).toEqual([]);
+});

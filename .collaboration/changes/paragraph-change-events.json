@@ -1,8 +1,8 @@
 {
   "impact": "compatible",
   "fields": [],
-  "before": "Editors had no event that named the paragraphs a commit touched, and a participant's own collaborative undo or redo installed with the actor id 'remote'.",
-  "after": "Each editor emits paragraphsChange from its own commits, with source 'remote' for a peer's change. A participant's own collaborative undo or redo installs under its local actor id, so it reports as local.",
+  "before": "Editors had no event that named the paragraphs a commit touched. A participant's own collaborative undo or redo, and the drift and realign publishes that rebind the ids of its own edits, installed with the actor id 'remote'.",
+  "after": "Each editor emits paragraphsChange from its own commits, with source 'remote' for a peer's change. A participant's own undo, redo, drift publish, and realign install under its local actor id, so they report as local.",
   "reason": "The event and the actor attribution are local to each replica. They read committed tree changes after shared updates integrate and change no shared node, update, identity, or operation, so released participants interpret the room the same way.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/document-paragraph-changes-editors.test.ts",
