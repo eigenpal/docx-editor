@@ -2,7 +2,7 @@
   "impact": "compatible",
   "fields": [],
   "before": "A join adopted the following text of each planned paragraph once, in order. An adoption into a later paragraph could move an embed out of an earlier one and leave a copy beside a hidden duplicate there, which then showed as that paragraph's following text. That paragraph had already adopted, so its write typed the text again as new characters, and it showed twice.",
-  "after": "The planned paragraphs adopt again until none shows following text, at most once more than there are planned paragraphs.",
+  "after": "The planned paragraphs adopt again while an adoption writes something, at most once more than there are planned paragraphs.",
   "reason": "It writes the same kind of adoption a join already writes, with existing fields and operations, so older clients read it as before. Shared fields, operations, and synchronization keep their meaning.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/document-join-adopts-beside-duplicate.test.ts"

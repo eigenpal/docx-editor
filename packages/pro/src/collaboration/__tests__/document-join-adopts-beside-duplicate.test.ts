@@ -42,7 +42,8 @@ function syncAll(peers: readonly Peer[]): void {
   for (const from of peers) for (const to of peers) if (from !== to) deliver(from, to);
 }
 
-// Both orders of the two joins' copies in the first paragraph.
+// Both orders of the two joins' copies in the first paragraph. In one of them, the first
+// paragraph adopts before the paragraph whose adoption changes what it shows.
 for (const [name, clientIds] of [
   ['alice first', { alice: 101, bob: 202, carol: 303 }],
   ['carol first', { alice: 303, bob: 202, carol: 101 }],
