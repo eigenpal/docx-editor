@@ -8,6 +8,6 @@
     "packages/core/src/editor/__tests__/repaint-selection-authority.test.ts",
     "packages/pro/src/collaboration/__tests__/document-remote-caret-stale-dom.test.ts"
   ],
-  "changeset": "context-menu-keeps-caret",
+  "changeset": "proofing-follow-ups",
   "migration": null
 }
