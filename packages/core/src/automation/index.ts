@@ -84,6 +84,7 @@ export type { AutomationStyleKind, AutomationStyleRead } from './style-listing.t
 // Formatting: what a span agrees about its characters, and what a write may author.
 export type {
   AutomationAlignment,
+  AutomationLineSpacingRule,
   AutomationReadingOrder,
   AutomationFontRead,
   AutomationFontWrite,

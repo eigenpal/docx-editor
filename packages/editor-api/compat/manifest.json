@@ -461,6 +461,10 @@
       "reason": "Implemented by DocxEditor's object model as an addition: Office.js has no paragraph direction member on Paragraph or ParagraphFormat, in the pinned declarations or in the preview declarations. The name follows the desktop object model's ParagraphFormat.ReadingOrder, and the values follow Word.SectionDirection ('LeftToRight', 'RightToLeft'). Reads answer the effective direction: the paragraph's own w:bidi, else its style chain, its numbering level, an enclosing cell's table style, and the document defaults, as layout resolves them. A write of the direction the paragraph already has changes nothing. Otherwise it removes the paragraph's own w:bidi when that alone set the other direction, or states w:bidi, with the explicit off value only over a right-to-left style. Writes keep w:jc as authored. With change tracking on, a write that changes the direction records a paragraph property revision."
     },
     {
+      "uid": "Word.Paragraph#lineSpacingRule",
+      "reason": "Implemented by DocxEditor's object model as an addition: Office.js has no line spacing rule member on Paragraph or ParagraphFormat, so Word.Paragraph#lineSpacing alone cannot switch between exact, at-least, and multiple spacing. The name and values follow the desktop object model's ParagraphFormat.LineSpacingRule ('Single', 'OnePointFive', 'Double', 'AtLeast', 'Exactly', 'Multiple'). Reads answer the rule in force: the paragraph's own w:spacing line attributes, else its style chain and the document defaults. Single, OnePointFive, and Double set w:line to 240, 360, or 480 under the auto rule; Multiple, AtLeast, and Exactly keep the points in force. With lineSpacing in the same sync, the rule applies first. With change tracking on, a write records a paragraph property revision."
+    },
+    {
       "uid": "Word.Style#font",
       "reason": "Style definitions are read, not written. Font is a formatting object over the definition, and this subset does not resolve or write style formatting. Apply a listed style with Paragraph#style, Range#style, or Body#style instead."
     },

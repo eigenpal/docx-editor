@@ -427,6 +427,9 @@ export interface AutomationInlinePictureWrite {
     readonly width?: number;
 }
 
+// @public
+export type AutomationLineSpacingRule = 'Single' | 'OnePointFive' | 'Double' | 'AtLeast' | 'Exactly' | 'Multiple';
+
 // @public (undocumented)
 export type AutomationListBullet = 'Custom' | 'Solid' | 'Hollow' | 'Square' | 'Diamonds' | 'Arrow' | 'Checkmark';
 
@@ -1591,8 +1594,8 @@ export interface AutomationParagraphFormatRead {
     readonly firstLineIndent: number | null;
     // (undocumented)
     readonly leftIndent: number | null;
-    // (undocumented)
     readonly lineSpacing: number | null;
+    readonly lineSpacingRule: AutomationLineSpacingRule;
     readonly readingOrder: AutomationReadingOrder;
     // (undocumented)
     readonly rightIndent: number | null;
@@ -1614,8 +1617,8 @@ export interface AutomationParagraphFormatWrite {
     readonly firstLineIndent?: number;
     // (undocumented)
     readonly leftIndent?: number;
-    // (undocumented)
     readonly lineSpacing?: number;
+    readonly lineSpacingRule?: AutomationLineSpacingRule;
     readonly readingOrder?: AutomationReadingOrder;
     // (undocumented)
     readonly rightIndent?: number;
