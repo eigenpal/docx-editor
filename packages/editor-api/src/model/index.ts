@@ -52,7 +52,12 @@ export type {
   RangeInsertTextLocation,
   SelectionMode,
 } from './locations.ts';
-export { Paragraph, type ParagraphAlignment, type ParagraphReadingOrder } from './paragraph.ts';
+export {
+  Paragraph,
+  type ParagraphAlignment,
+  type ParagraphLineSpacingRule,
+  type ParagraphReadingOrder,
+} from './paragraph.ts';
 export { Range } from './range.ts';
 export {
   getReviewItemRange,
