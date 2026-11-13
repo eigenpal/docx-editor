@@ -4,6 +4,8 @@
 
 ```ts
 
+import { acceptedOffsetFromText } from '@docx-editor.dev/core/editor';
+import { acceptedTextRanges } from '@docx-editor.dev/core/editor';
 import { AnchorHighlightAnimation } from '@docx-editor.dev/core/contracts/editor';
 import { AnchorHighlightOptions } from '@docx-editor.dev/core/contracts/editor';
 import { BookmarkSortOrder } from '@docx-editor.dev/core/editor';
@@ -121,7 +123,6 @@ import { ImageWrapTarget } from '@docx-editor.dev/core/editor';
 import { IndentFormatting } from '@docx-editor.dev/core/contracts/editor';
 import { InvalidTextFormFieldSession } from '@docx-editor.dev/core/editor';
 import { isFontResolver } from '@docx-editor.dev/core/editor';
-import { keptTextRanges } from '@docx-editor.dev/core/editor';
 import { loadFonts } from '@docx-editor.dev/core/editor';
 import { LoadFontsRequest } from '@docx-editor.dev/core/editor';
 import { LoadFontsResult } from '@docx-editor.dev/core/editor';
@@ -152,6 +153,7 @@ import { ParagraphFormatUpdate } from '@docx-editor.dev/core/editor';
 import { ParagraphTabStop } from '@docx-editor.dev/core/editor';
 import { ParagraphText } from '@docx-editor.dev/core/contracts/editor';
 import { ParagraphTextProofing } from '@docx-editor.dev/core/contracts/editor';
+import { ParagraphTextReadOptions } from '@docx-editor.dev/core/contracts/editor';
 import { ParagraphTextSpan } from '@docx-editor.dev/core/contracts/editor';
 import { PX_PER_CM } from '@docx-editor.dev/core/editor';
 import { PX_PER_INCH } from '@docx-editor.dev/core/editor';
@@ -174,6 +176,7 @@ import { RefreshResult } from '@docx-editor.dev/core/editor';
 import { RefreshSubmission } from '@docx-editor.dev/core/editor';
 import { RefreshUpdate } from '@docx-editor.dev/core/editor';
 import { RefreshUpdateMode } from '@docx-editor.dev/core/editor';
+import { ReplaceAcceptedTextCommand } from '@docx-editor.dev/core/contracts/editor';
 import { ReplaceDocumentErrorCode } from '@docx-editor.dev/core/editor';
 import { ReplaceDocumentOutcome } from '@docx-editor.dev/core/editor';
 import { ReplaceDocumentRefusal } from '@docx-editor.dev/core/editor';
@@ -224,6 +227,7 @@ import { TableInteractionLabelKey } from '@docx-editor.dev/core/contracts/editor
 import { TextFormFieldDialogSession } from '@docx-editor.dev/core/editor';
 import { TextMatch } from '@docx-editor.dev/core/contracts/editor';
 import { TextMeasurer } from '@docx-editor.dev/core/editor';
+import { textOffsetFromAccepted } from '@docx-editor.dev/core/editor';
 import { TFunction } from '@docx-editor.dev/i18n';
 import { Theme } from '@docx-editor.dev/core/contracts/editor';
 import { ToolbarCommandState } from '@docx-editor.dev/core/editor';
@@ -239,6 +243,10 @@ import { Watermark } from '@docx-editor.dev/core/contracts/editor';
 import { WatermarkState } from '@docx-editor.dev/core/contracts/editor';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
 import { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
+
+export { acceptedOffsetFromText }
+
+export { acceptedTextRanges }
 
 export { AnchorHighlightAnimation }
 
@@ -2588,8 +2596,6 @@ export function isFieldLink(link: SurfaceHyperlink): boolean;
 
 export { isFontResolver }
 
-export { keptTextRanges }
-
 // @public (undocumented)
 export interface ListState {
     // (undocumented)
@@ -3146,6 +3152,8 @@ export { ParagraphText }
 
 export { ParagraphTextProofing }
 
+export { ParagraphTextReadOptions }
+
 export { ParagraphTextSpan }
 
 // @public
@@ -3192,6 +3200,8 @@ export { RefreshSubmission }
 export { RefreshUpdate }
 
 export { RefreshUpdateMode }
+
+export { ReplaceAcceptedTextCommand }
 
 export { ReplaceDocumentErrorCode }
 
@@ -3506,6 +3516,8 @@ export interface TextFormFieldDialogFields {
 }
 
 export { TextMatch }
+
+export { textOffsetFromAccepted }
 
 // @public @deprecated (undocumented)
 export function TitleBar(input: TitleBarProps): react__default.JSX.Element;

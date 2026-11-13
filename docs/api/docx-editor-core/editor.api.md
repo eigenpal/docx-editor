@@ -5,6 +5,12 @@
 ```ts
 
 // @public
+export function acceptedOffsetFromText(paragraph: ParagraphText, offset: number): number;
+
+// @public
+export function acceptedTextRanges(paragraph: ParagraphText, from: number, to: number): HighlightRange[];
+
+// @public
 export function alignColorPickerPopover(grid: HTMLElement | null): void;
 
 // @public
@@ -3172,9 +3178,6 @@ export function isTextNode(value: unknown): value is Text;
 export function keepScrollAtInlineEnd(scroller: HTMLElement): () => void;
 
 // @public
-export function keptTextRanges(paragraph: ParagraphText, from: number, to: number): HighlightRange[];
-
-// @public
 export function layoutPointsToCssPixels(points: number, paintScale: number): number;
 
 // @public
@@ -4050,24 +4053,29 @@ export interface ParagraphTabStop {
 
 // @public
 export interface ParagraphText {
+    readonly acceptedSpans: readonly ParagraphTextSpan[];
+    readonly acceptedText: string;
     readonly blockId: string;
-    readonly keptSpans: readonly ParagraphTextSpan[];
-    readonly keptText: string;
     readonly proofing: readonly ParagraphTextProofing[];
     readonly text: string;
 }
 
 // @public
 export interface ParagraphTextProofing {
-    readonly keptStart: number;
+    readonly acceptedStart: number;
     readonly lang: string | null;
     readonly length: number;
     readonly noProof: boolean;
 }
 
 // @public
+export interface ParagraphTextReadOptions {
+    readonly fields?: 'object' | 'result';
+}
+
+// @public
 export interface ParagraphTextSpan {
-    readonly keptStart: number;
+    readonly acceptedStart: number;
     readonly length: number;
     readonly start: number;
 }
@@ -4322,6 +4330,16 @@ export interface RemoteCaretLabelHost {
 
 // @public
 export type RenderableImageMime = SupportedImageMime | VectorImageMime;
+
+// @public
+export interface ReplaceAcceptedTextCommand {
+    readonly blockId: string;
+    readonly expectedText?: string;
+    readonly length: number;
+    readonly scope?: ViewScope;
+    readonly start: number;
+    readonly text: string;
+}
 
 // @public
 export interface ReplaceAllMatchesOutcome {
@@ -5609,6 +5627,9 @@ export interface TextMeasurer {
     syntheticBold?(style: ResolvedRunStyle): boolean;
     textOutline?(text: string, style: ResolvedRunStyle): TextOutline | undefined;
 }
+
+// @public
+export function textOffsetFromAccepted(paragraph: ParagraphText, offset: number): number;
 
 // @public
 export interface TocRemovalRefusal {
