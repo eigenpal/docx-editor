@@ -84,8 +84,8 @@ test('a letter between a removed embed and a removed tail keeps its place', () =
   // character that a peer's concurrent deletion of it does not reach.
   const marker = (copy: string): Token => ({
     key: `emarker-${copy}`,
-    strong: 'emarker',
-    insert: { n: 'marker' },
+    strong: `emarker-${copy}`,
+    insert: { n: `marker-${copy}` },
     attributes: {},
   });
   const before = [
