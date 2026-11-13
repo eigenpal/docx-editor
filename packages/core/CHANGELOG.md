@@ -1,5 +1,47 @@
 # @docx-editor.dev/core
 
+## 2.38.0
+
+### Minor Changes
+
+- 1f54ef6: Add a Format shape pane in React and Vue that sets the fill, transparency, outline color, and outline width of the selected shape or of one shape inside a group, with `useSelectedShape` for custom panes and theme colors that save as theme references. `EditorPaneId` gains `'shape'`, so add a default branch to exhaustive switches over it, and pass `{ panes: ['chart', 'shape'] }` to `usePaneRequest` to receive Format shape requests. A pane request that no mounted pane or listener takes is dropped, and `useEditorValueCommand` now gives a translated `disabledReason`.
+- cdc64af: Add `editor.getParagraphs()` and `editor.getParagraphText()` to read the accepted text of each paragraph with its language and proofing settings, and the `replaceAcceptedText` command to fix a range of that text. `acceptedTextRanges()`, `acceptedOffsetFromText()`, and `textOffsetFromAccepted()` convert its offsets, and highlight counts update as a large document finishes its layout.
+- 24ce743: Support the `replaceAllMatches` command, which replaces every match of a query across the body, tables, headers, footers, notes, and text boxes in one undo step, and records tracked changes in suggesting mode. The result reports the replaced and skipped matches as `replacements`.
+- 3a49612: The `replaceMatch` command and `selectMatch` accept a computed range as well as a `findMatches` result, and refuse with `notFound`, changing nothing, when the text the target expects has moved. A target without `scope` resolves its story from its paragraph, and a match in a header, footer, or note that is not open is replaced without opening it, while a match that covers only part of a field result or overlaps tracked deleted text is refused.
+- 4e12c3c: Shapes, lines, and groups select as objects, and a drawing behind the text selects where no text lies under the pointer. A drawing locked to its anchor paragraph still selects, moves, and deletes.
+- 24ce743: Support the `replaceText`, `applyFormatting`, `splitParagraph`, `mergeParagraphs`, and `removeTabMark` commands at the selection, each as one undo step that is tracked in suggesting mode.
+- ca0a4ad: Add `editor.getSelectionRange()`, `snapshot().selectionRange`, and `editor.getCaretRect()` to read the selection as `blockId` and offset positions and to place popovers at the caret; `setSelection` now accepts `blockId` positions and opens the text box a range is in. A context menu opened with Shift+F10 or the Menu key now opens below the caret, and `useContextMenuAnchor()` reports how the menu was opened.
+- 3f13fec: Draw the borders of tables with cell spacing as separate boxes: the outer borders frame the whole table and every cell draws its own borders, in the editor and in PDF export.
+- fe49844: Paint table shading (`w:tblPr/w:shd`) and row exception shading in the cell-spacing gaps of a table, in the editor and in PDF export. Fixes #1900
+- c249c34: Add the `replaceDocument` editor command and `Body.insertFileFromBase64(base64File, 'Replace')`, which replace the document with a DOCX file as one undoable edit, and an undoable `mode: 'edit'` for document refresh. Undoing a comment reply in a collaboration session now also removes its thread record. Fixes #1907, fixes #1934
+
+### Patch Changes
+
+- 948475b: The `acceptAllRevisions`, `rejectAllRevisions`, `acceptRevision`, `rejectRevision`, `addComment`, `replyComment`, and `resolveComment` editor commands now run instead of being refused, and they require the review module. Tracked-changes protection now refuses every accept and reject of a tracked change, in the editor and in the editing API, while it keeps comments available.
+- f429ad2: Fix autofit table columns that widened for a long word in a compatibility mode 15 document with automatic hyphenation. The column now keeps its preferred width, and words in capitals stay whole when the document sets `w:doNotHyphenateCaps`.
+- 90f044b: Fix autofit table columns that shrank for a long word in `w:caps` or `w:smallCaps` text when the document sets `w:doNotHyphenateCaps`. These words now stay whole, as words typed in capitals do.
+- dab9554: With `w:balanceSingleByteDoubleByteWidth`, spaces beside East Asian text keep their balanced width when the run sets character spacing or scaling, so condensed Korean text wraps at the correct words. Fixes #1913
+- e2cbc55: Right-to-left tables with cell spacing now get the correct percentage width and placement, including tables aligned to the visual left edge. Fixes #1948
+- 5a6e15c: Parts added in a collaborative session, such as a first comment or a new header, keep their content types when you save, so other DOCX applications and the editor recognize them when you reopen the file.
+- 313429a: The context menu opens above the toolbar and host chrome, stays inside the window, and scrolls with the arrow keys when it is taller than the window.
+- 845bd85: Equations draw delimiters (`m:d`): the brackets and separators grow to the height of their contents, such as a fraction, instead of showing the equation as plain text.
+- c92f662: End the page body right after a footnote reference whose note continues on the next page, so later rows and paragraphs move to the next page and the note fills the room.
+- e2cbc55: A gradient whose `rotWithShape` spells false with surrounding spaces now keeps its direction in a rotated group.
+- 4644e6c: Text that an input method composes stays visible while you type it, including after a space at the end of a line, and an edit from a collaborator no longer disrupts it. Fixes #1912
+- 5db571e: Typing with an input method stays responsive in long documents, because each composed syllable commits after the frame that shows it. Fixes #1931
+- 59809e2: Fix fast Backspace from mobile keyboards that delete through the platform text service, which removed the wrong characters or brought erased words back. Fixes #1896
+- c92f662: Place tables with cell spacing or skipped grid columns correctly in documents without compatibility mode 15, and give the empty paragraph after a nested table no height when its runs hold no text.
+- f041510: Shape pane number fields now parse long digit strings in linear time.
+- e2cbc55: Rotate, flip, replace, and hyperlink commands on a selected shape or text box now refuse with a reason that names the command. Fixes #1944
+- ca8b82c: Spaced tables with a thicker outer rule on one side lay out their column widths, frame width, and alignment correctly. Spaced percentage-width tables get the correct width in older compatibility modes.
+- cd04dcc: A body, note, or text box that ends with a table now has an empty paragraph after it, which takes a line, can start a page, holds the caret, and is saved.
+- 414877c: Resolve table column widths correctly for stated table and cell widths, skipped grid columns, and tables with cell spacing.
+- e2cbc55: A press on the tail of a callout text box now selects the text box, and a turned text box paints its whole tail. Fixes #1953
+- e2cbc55: Rotated and flipped shape groups now paint with every member turned, and a press on a painted member selects the group. Rotated members in a group that scales its axes unevenly no longer skew. Fixes #1945
+- 479c556: Paint rotated shapes and lines with their rotation instead of a placeholder, and select them with a press on what they paint. A line with no width and no height paints nothing and stays selectable. Fixes #1917
+- e2cbc55: Upright shapes without text now paint their whole geometry and outline past their box, such as a callout's tail, and a negative effect extent no longer cuts them. A press on the part past the box selects the shape. Fixes #1946
+- Updated dependencies: @docx-editor.dev/i18n@2.38.0
+
 ## 2.37.0
 
 ### Minor Changes

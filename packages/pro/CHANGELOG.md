@@ -1,5 +1,24 @@
 # @docx-editor.dev/pro
 
+## 2.38.0
+
+### Minor Changes
+
+- 592db9f: Add placeable shape and chart controls: every Format shape and Chart pane field is a toolbar slot and a part you can put in any toolbar, popover, or drawer, with a shared color picker and a shape outline dash control. Theme tint and shade swatches in the font color and table color pickers now show the colors that a theme reference paints, so some swatches look slightly different.
+- a1c7a8f: Breaking collaboration upgrade (format `docx-collaboration:1.5.4.1`): add shape fill and outline editing through the `setShapeFill` and `setShapeOutline` editor commands and the `Shape.fill` automation API, and keep one fill and one outline when two participants edit a shape at once; export saved rooms with your current release and reseed them, see [Upgrade rooms to format 1.5.4.1](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1541).
+
+### Patch Changes
+
+- 30ee904: In a collaborative session, the caret stays after your typing when one participant joins a split paragraph back while another splits it offline. Fixes #1941
+- 2c9fa77: In a collaborative session, text in a paragraph split inside a table cell that two participants merge away at once is no longer lost when one of them undoes the merge. Fixes #1940
+- 9812818: In a collaborative session, an edit in a paragraph that a split left sharing an inline element with the paragraph before it now applies instead of being refused.
+- b166f8c: In a collaborative session, text typed while participants split and join the same paragraph at once no longer shows twice. Fixes #1962
+- 3376544: In a collaborative session, text a participant typed no longer shows twice after concurrent joins of the same paragraphs. Fixes #1973
+- 0f262d8: In a collaborative session, text you delete no longer shows again when another participant splits the same paragraph right after it. Fixes #1964
+- 87360b9: In a collaborative session, splitting a paragraph that an undo of a join put back keeps the paragraphs in order. Fixes #1966
+- 0ab7d97: In a collaborative session, undoing your picture resize no longer stops the session with an error when another participant resized the same picture at the same time. Fixes #1965
+- Updated dependencies: @docx-editor.dev/core@2.38.0, @docx-editor.dev/react@2.38.0, @docx-editor.dev/vue@2.38.0
+
 ## 2.37.0
 
 ### Patch Changes
