@@ -6,11 +6,7 @@
 // sub-object references stable across re-derivations.
 
 import { watermarkRefusal } from './docx-editor-watermark.ts';
-import type {
-  DocumentSource,
-  EditorCommand,
-  EditorError,
-} from '@docx-editor.dev/core/contracts/editor';
+import type { EditorCommand, EditorError } from '@docx-editor.dev/core/contracts/editor';
 import type { SemanticSelection as SurfaceSelection } from '@docx-editor.dev/core/layout';
 // Direct, not through the layout barrel: this is an internal bound the write shares with
 // the reader, not something the layout package publishes.
@@ -22,12 +18,15 @@ import {
 } from '../store/store/table-constraints.ts';
 import { fontFamilyName } from '../store/package/font-family-name.ts';
 import { isDocAnchor, isDocAnchorRange } from './anchor-resolution.ts';
-import { blankDocumentBytes } from './blank-document.ts';
 import { tableCommandCanSupport } from './table-command-plan.ts';
 import { replaceMatchArgumentRefusal } from './docx-editor-replace-match.ts';
 import { replaceAcceptedTextArgumentRefusal } from './docx-editor-replace-accepted-text.ts';
 import { replaceAllMatchesArgumentRefusal } from './docx-editor-replace-all.ts';
 import { classifySelectionEdit } from './docx-editor-selection-edits.ts';
+
+import { NOT_A_TEXT_SELECTION, textSelectionOf } from './docx-editor-text-selection.ts';
+export { textSelectionOf, type TextSelectionInput } from './docx-editor-text-selection.ts';
+export { normalizeSource, unloadableSourceReason } from './docx-editor-document-source.ts';
 
 /** A mutating command, or an `invalidArgs` refusal when its arguments give a reason. */
 function mutatingUnlessRefused(refusal: string | null | undefined): CommandSupport {
@@ -193,54 +192,6 @@ export function resolveMarkAttr(command: { mark: string; value: unknown }): Reso
   }
 }
 
-/** What a `setSelection` range with anchor/head endpoints resolves to. */
-export type TextSelectionInput =
-  | { readonly kind: 'none' }
-  | { readonly kind: 'ok'; readonly selection: SurfaceSelection }
-  | { readonly kind: 'invalid'; readonly reason: string };
-
-const NOT_A_TEXT_SELECTION: TextSelectionInput = { kind: 'none' };
-
-/** One endpoint: `blockId`, or its older name `paragraphId`, plus an offset. */
-function textPositionOf(
-  value: unknown,
-  name: 'anchor' | 'head'
-): SurfaceSelection['anchor'] | string {
-  if (typeof value !== 'object' || value === null) return `${name} must be a text position`;
-  const { blockId, paragraphId, offset } = value as {
-    blockId?: unknown;
-    paragraphId?: unknown;
-    offset?: unknown;
-  };
-  if (typeof offset !== 'number') return `${name}.offset must be a number`;
-  if (blockId !== undefined && typeof blockId !== 'string')
-    return `${name}.blockId must be a string`;
-  if (paragraphId !== undefined && typeof paragraphId !== 'string') {
-    return `${name}.paragraphId must be a string`;
-  }
-  if (blockId === undefined && paragraphId === undefined) return `${name} needs a blockId`;
-  if (blockId !== undefined && paragraphId !== undefined && blockId !== paragraphId) {
-    return `${name}.blockId and ${name}.paragraphId name different paragraphs`;
-  }
-  return { paragraphId: (blockId ?? paragraphId) as string, offset };
-}
-
-/**
- * A `setSelection` range of text positions, normalized to the surface's form.
- *
- * `none` for a range with no anchor/head pair, which the paraId forms handle. `invalid` for
- * an anchor/head pair whose positions name no paragraph, or two different ones.
- */
-export function textSelectionOf(range: unknown): TextSelectionInput {
-  if (typeof range !== 'object' || range === null) return NOT_A_TEXT_SELECTION;
-  if (!('anchor' in range) || !('head' in range)) return NOT_A_TEXT_SELECTION;
-  const anchor = textPositionOf((range as { anchor: unknown }).anchor, 'anchor');
-  if (typeof anchor === 'string') return { kind: 'invalid', reason: anchor };
-  const head = textPositionOf((range as { head: unknown }).head, 'head');
-  if (typeof head === 'string') return { kind: 'invalid', reason: head };
-  return { kind: 'ok', selection: { anchor, head } };
-}
-
 export function editorError(code: string, message: string): EditorError {
   const error = new Error(message) as Error & { code?: string };
   error.code = code;
@@ -256,35 +207,6 @@ export function selectionsMatch(a: SurfaceSelection | null, b: SurfaceSelection 
     a.head.paragraphId === b.head.paragraphId &&
     a.head.offset === b.head.offset
   );
-}
-
-export function normalizeSource(source: DocumentSource): Uint8Array | null {
-  // `'blank'` is Word's blank template, minted here rather than by every host: omitting
-  // the document is NOT a way to ask for an empty one, and the engine should not make
-  // hosts discover that the hard way. Fresh bytes per call, so two editors opened blank
-  // never alias one buffer.
-  if (source === 'blank') return blankDocumentBytes();
-  if (source instanceof Uint8Array) return source;
-  if (source instanceof ArrayBuffer) return new Uint8Array(source);
-  // Any OTHER string is a mistake worth naming. Falling through to the handle branch below
-  // would answer a `document="/report.docx"` or a `'Blank'` typo with "a DocumentHandle
-  // cannot be re-loaded", which names a type the caller never mentioned.
-  if (typeof source === 'string') return null;
-  // The remaining form is a DocumentHandle: identity and revision, not content.
-  return null;
-}
-
-/**
- * Why a source produced no bytes, in the caller's own terms.
- *
- * `normalizeSource` answers `null` for two unrelated reasons, and a host that passed a
- * string deserves to hear about the string rather than about handles.
- */
-export function unloadableSourceReason(source: DocumentSource): string {
-  if (typeof source === 'string') {
-    return `'${source}' is not a document; pass DOCX bytes, or 'blank' for an empty one`;
-  }
-  return 'a DocumentHandle cannot be re-loaded; pass DOCX bytes';
 }
 
 /**
