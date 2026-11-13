@@ -34,6 +34,8 @@ Call `editor.getParagraphs()` to read every paragraph, including paragraphs on p
 
 The list is empty until a document opens. A large document opens in steps, so read the list again after each `change` event. A function source of `useHighlights` does this for you.
 
+To check only what an edit touched, listen for the `paragraphsChange` event. It lists the `blockId` of each paragraph that a commit added, changed, or deleted, in every story. It fires after the `change` event of the same commit, and never for a selection or highlight change. Its `source` is `remote` for an edit from a collaboration peer, and `local` for other edits, including undo and redo. It does not fire when a document loads, so check every paragraph when `getDocumentHandle().loadId` changes.
+
 ### Choose the text to check
 
 Each paragraph has three parts:
@@ -50,7 +52,7 @@ A tracked change can make a word misspelled, for example a deletion of one lette
 
 ### Mark misspelled words
 
-The following module, `spelling.ts`, checks each paragraph once. An unchanged paragraph returns the same object, so the cache skips it after the first check. It finds words with `Intl.Segmenter` in the language of each `proofing` stretch, so `don’t` is one word. It normalizes each word to NFC before the lookup, and keeps the offsets of the original text. Each word gets one mark from the start of its first part to the end of its last part, so a word that a deletion splits shows one mark.
+The following module, `spelling.ts`, checks every paragraph when a document opens. After that, it checks only the paragraphs that `paragraphsChange` lists. It finds words with `Intl.Segmenter` in the language of each `proofing` stretch, so `don’t` is one word. It normalizes each word to NFC before the lookup, and keeps the offsets of the original text. Each word gets one mark from the start of its first part to the end of its last part, so a word that a deletion splits shows one mark.
 
 The source skips the word at the caret only while the reader types in that paragraph. It counts an edit as typing when the caret paragraph changed since the last run. When a document opens, the caret is at the start of the first paragraph, and the first word still gets its mark.
 
@@ -112,14 +114,17 @@ function check(paragraph: ParagraphText, checker: SpellChecker): SpellingRange[]
       const last = parts.at(-1);
       if (!first || !last) continue;
       const end = last.start + last.length;
+      const suggestions = checker.suggest(lookup, stretch.lang);
       marks.push({
         blockId: paragraph.blockId,
         start: first.start,
         length: end - first.start,
         expectedText: paragraph.text.slice(first.start, end),
+        // Read by screen readers for the marked word.
+        description: suggestions[0] ? `Spelling: did you mean ${suggestions[0]}?` : 'Spelling',
         word,
         acceptedStart: from,
-        suggestions: checker.suggest(lookup, stretch.lang),
+        suggestions,
       });
     }
   }
@@ -127,29 +132,55 @@ function check(paragraph: ParagraphText, checker: SpellChecker): SpellingRange[]
 }
 
 /**
- * A highlight source that marks each misspelled word. While the reader types in a
- * paragraph, it skips the word at the caret.
+ * A highlight source that marks each misspelled word. It checks every paragraph when a
+ * document opens, and then only the paragraphs that an edit added or changed. While the
+ * reader types in a paragraph, it skips the word at the caret.
  */
 export function spellingSource(checker: SpellChecker) {
-  const checked = new WeakMap<ParagraphText, SpellingRange[]>();
+  const marks = new Map<string, SpellingRange[]>();
+  // Paragraphs to check on the next run. Null means every paragraph.
+  let pending: Set<string> | null = null;
+  let watched: Editor | null = null;
+  let loadId: string | null = null;
   let seen: ParagraphText | null = null;
   let typing = false;
   return (editor: Editor): SpellingRange[] => {
+    if (watched !== editor) {
+      watched = editor;
+      editor.on('paragraphsChange', ({ added, changed, deleted }) => {
+        for (const id of deleted) marks.delete(id);
+        for (const id of [...added, ...changed]) pending?.add(id);
+      });
+    }
+    // A new document can reuse block IDs, so check all of it.
+    const current = editor.getDocumentHandle().loadId;
+    if (current !== loadId) {
+      loadId = current;
+      pending = null;
+    }
+    if (pending === null) {
+      marks.clear();
+      for (const paragraph of editor.getParagraphs()) {
+        marks.set(paragraph.blockId, check(paragraph, checker));
+      }
+    } else {
+      for (const id of pending) {
+        const paragraph = editor.getParagraphText(id);
+        if (paragraph) marks.set(id, check(paragraph, checker));
+        else marks.delete(id);
+      }
+    }
+    pending = new Set();
     const caret = editor.getSelectionRange()?.head;
     const here = caret ? editor.getParagraphText(caret.blockId) : null;
     // Typing starts with an edit in the caret paragraph and ends when the caret leaves it.
     typing = here !== null && here.blockId === seen?.blockId && (typing || here !== seen);
     seen = here;
-    return editor.getParagraphs().flatMap((paragraph) => {
-      let marks = checked.get(paragraph);
-      if (!marks) {
-        marks = check(paragraph, checker);
-        checked.set(paragraph, marks);
-      }
-      if (!typing || !caret || caret.blockId !== paragraph.blockId) return marks;
+    return [...marks.entries()].flatMap(([blockId, list]) => {
+      if (!typing || !here || !caret || blockId !== here.blockId) return list;
       // The caret counts in `text`; the marks count in `acceptedText`.
-      const at = acceptedOffsetFromText(paragraph, caret.offset);
-      return marks.filter(
+      const at = acceptedOffsetFromText(here, caret.offset);
+      return list.filter(
         (mark) => at < mark.acceptedStart || at > mark.acceptedStart + mark.word.length
       );
     });
@@ -212,6 +243,7 @@ import { fixWord, spellingSource, type SpellChecker, type SpellingRange } from '
 const props = defineProps<{ checker: SpellChecker }>();
 const editor = useDocxEditor();
 const marks = useHighlights('spelling', spellingSource(props.checker), {
+  kind: 'spelling',
   className: 'spelling-error',
 });
 const hits = useContextMenuHighlights<SpellingRange>('spelling');
@@ -250,11 +282,32 @@ function fix(suggestion: string) {
 
 To fix words from a side list, keep the marks that the source returned, and call `fixWord(editor, mark, suggestion)` from the list. Build the list again after each `change` event. If `fixWord` returns false, the word changed, so check the document again.
 
+### Make marks accessible
+
+Marks are painted over the page, so assistive technology does not see them by default. Pass `kind: 'spelling'` or `kind: 'grammar'` in the options of a proofing set:
+
+- The painted text that a mark covers gets `aria-invalid` with that value.
+- A range with a `description` links it to the covered text with `aria-describedby`.
+- If the browser supports the CSS Custom Highlight API, the covered text joins a `spelling-error` or `grammar-error` highlight. The browser reports that type to assistive technology and draws a wavy underline in `--doc-proofing-spelling-color` or `--doc-proofing-grammar-color`.
+- A polite live region reads the number of issues of each kind after the count stops changing.
+
+To move through the issues from the keyboard, run the `navigateHighlight` command. It selects the next or previous mark of a set in reading order and wraps at the end. With the word selected, the reader opens the context menu with Shift+F10 or the menu key, and the suggestion rows show.
+
+```ts
+import type { Editor } from '@docx-editor.dev/core';
+
+/** Select the next or previous spelling mark, for your own shortcut or button. */
+export function goToIssue(editor: Editor, direction: 'next' | 'previous'): boolean {
+  return editor.exec({ type: 'navigateHighlight', name: 'spelling', direction }).ok;
+}
+```
+
 ### Check text asynchronously
 
 If your checker runs on a server, keep the paragraph object and the document identity with each request. The document identity is `editor.getDocumentHandle().loadId`. It is new on every `load()`, which can reuse block IDs. When the result arrives, discard it if the `loadId` changed, or if `editor.getParagraphText(paragraph.blockId)` returns another object. Undo can return an earlier object, and its earlier result is still correct.
 
 ```ts
+// check-remotely.ts
 import type { Editor, ParagraphText } from '@docx-editor.dev/core';
 
 /** Check one paragraph on a server. Resolves to null when the result is stale. */
@@ -270,6 +323,48 @@ export async function checkRemotely(
   return issues;
 }
 ```
+
+The following function sends every paragraph once, and then only the paragraphs that `paragraphsChange` lists. It keeps one result per paragraph, so a deleted paragraph drops its issues. The server returns offsets in `acceptedText`.
+
+```ts
+import { acceptedTextRanges, type Editor, type HighlightRange } from '@docx-editor.dev/core';
+import { checkRemotely } from './check-remotely';
+
+/** Check a document on a server and report every issue after each answer. */
+export function watchGrammar(
+  editor: Editor,
+  request: (text: string) => Promise<readonly { start: number; length: number }[]>,
+  report: (ranges: readonly HighlightRange[]) => void
+): () => void {
+  const results = new Map<string, readonly HighlightRange[]>();
+  const publish = () => report([...results.values()].flat());
+  const check = async (blockId: string) => {
+    const paragraph = editor.getParagraphText(blockId);
+    if (!paragraph) return;
+    const issues = await checkRemotely(editor, paragraph, request);
+    // Null: the paragraph changed, and a newer check of it is on its way.
+    if (!issues) return;
+    results.set(
+      blockId,
+      issues.flatMap(({ start, length }) =>
+        acceptedTextRanges(paragraph, start, start + length).map((range) => ({
+          ...range,
+          expectedText: paragraph.text.slice(range.start, range.start + range.length),
+        }))
+      )
+    );
+    publish();
+  };
+  for (const paragraph of editor.getParagraphs()) void check(paragraph.blockId);
+  return editor.on('paragraphsChange', ({ added, changed, deleted }) => {
+    for (const id of deleted) results.delete(id);
+    if (deleted.length > 0) publish();
+    for (const id of [...added, ...changed]) void check(id);
+  });
+}
+```
+
+Pass a `report` function that calls `editor.setHighlights('grammar', ranges, { kind: 'grammar' })`. After a new `load()`, stop the watch and start a new one.
 
 A result can still go stale between the check and a fix. Pass the checked text as `expectedText` to `replaceAcceptedText`, so a stale fix returns `notFound` and changes nothing.
 
@@ -395,6 +490,7 @@ For a keyboard open, a highlight counts when the caret is inside it or at either
 | `source` | The ranges, or a function of the editor that returns them. |
 | `options.className` | CSS classes added to every mark of the set. |
 | `options.activeIndex` | The range to show in the active color, such as the current result of your own search list. |
+| `options.kind` | `spelling` or `grammar` for proofing marks. Makes the marks available to assistive technology. For more information, see [Make marks accessible](#make-marks-accessible). |
 | `applied` | The number of ranges that resolve and paint. |
 | `unavailable` | The number of ranges that do not resolve or paint. While a large document lays out in the background, it includes ranges on pages that are not laid out yet, and it updates as they are. |
 | `refresh()` | Runs the source again, or applies an array again. |
