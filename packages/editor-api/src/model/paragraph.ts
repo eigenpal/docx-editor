@@ -69,6 +69,24 @@ export type ParagraphAlignment =
 export type ParagraphReadingOrder = 'LeftToRight' | 'RightToLeft';
 
 /**
+ * How a paragraph's line spacing is measured, as {@link Paragraph.lineSpacingRule} reads and
+ * writes it.
+ *
+ * @public
+ */
+export type ParagraphLineSpacingRule =
+  'Single' | 'OnePointFive' | 'Double' | 'AtLeast' | 'Exactly' | 'Multiple';
+
+const LINE_SPACING_RULES: ReadonlySet<unknown> = new Set([
+  'Single',
+  'OnePointFive',
+  'Double',
+  'AtLeast',
+  'Exactly',
+  'Multiple',
+]);
+
+/**
  * One paragraph: what it says, what it is, and the ways it can be changed.
  *
  * Identity is the document's own. {@link Paragraph.uniqueLocalId} is the `w14:paraId` the file
@@ -263,11 +281,12 @@ export class Paragraph extends ModelObject implements PromisedItem {
   }
 
   /**
-   * Points between the paragraph's lines.
+   * Line spacing in points.
    *
-   * A write keeps the line rule the paragraph states. Under an exact or minimum rule the value is
-   * the line height; under the multiple rule 12 points is one line. A paragraph that states no
-   * rule gets the multiple rule, even when its style states another one.
+   * A write keeps the line rule in force, including one the style supplies; set
+   * {@link Paragraph.lineSpacingRule} to change it. Under the `Exactly` and `AtLeast` rules the
+   * value is the line height. Under the other rules 12 points is one line, so `18` on a single
+   * spaced paragraph gives 1.5 lines.
    */
   get lineSpacing(): number {
     return this.loadedProperty<number>('lineSpacing');
@@ -275,6 +294,27 @@ export class Paragraph extends ModelObject implements PromisedItem {
 
   set lineSpacing(value: number) {
     this.#authorFormat('lineSpacing', requirePoints(value, `${this.path.label}.lineSpacing`));
+  }
+
+  /**
+   * How the line spacing is measured: `Single`, `OnePointFive`, `Double`, `AtLeast`, `Exactly`,
+   * or `Multiple`.
+   *
+   * A DocxEditor addition: Office.js has no line spacing rule member. The read resolves the
+   * paragraph's own spacing, then its style, as the page shows it. `Single`, `OnePointFive`, and
+   * `Double` also set the spacing to 12, 18, or 24 points. The other rules keep the points in
+   * force, so `Exactly` on a 1.5-line paragraph gives exactly 18 points. When `lineSpacingRule`
+   * and `lineSpacing` share a sync, the rule applies first. With change tracking on, a write is
+   * recorded as a paragraph property revision.
+   */
+  get lineSpacingRule(): ParagraphLineSpacingRule {
+    return this.loadedProperty<ParagraphLineSpacingRule>('lineSpacingRule');
+  }
+
+  set lineSpacingRule(value: ParagraphLineSpacingRule) {
+    const target = `${this.path.label}.lineSpacingRule`;
+    if (!LINE_SPACING_RULES.has(value)) fail({ code: 'InvalidArgument', target });
+    this.#authorFormat('lineSpacingRule', value);
   }
 
   /** Points above the paragraph. */
@@ -722,6 +762,7 @@ const FORMAT_FIELDS = [
   'leftIndent',
   'rightIndent',
   'lineSpacing',
+  'lineSpacingRule',
   'spaceBefore',
   'spaceAfter',
   'readingOrder',

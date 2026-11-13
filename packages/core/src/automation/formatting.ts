@@ -47,7 +47,12 @@ import {
   paragraphPropertiesNodeOf,
   runPropertiesNodeOf,
 } from '../store/store/tree-op-nodes.ts';
-import { paragraphStyleName, styleIdFor, type AutomationStyleIndex } from './styles.ts';
+import {
+  paragraphStyleName,
+  styleIdFor,
+  type AutomationStyleIndex,
+  type InheritedLineSpacing,
+} from './styles.ts';
 import type { OoxmlProperty } from '../store/store/tree-ops.ts';
 import { points, pointsToTwips, readTwipsMeasure, twips, twipsToPoints } from '../store/units.ts';
 
@@ -102,6 +107,58 @@ export interface AutomationFontWrite {
   readonly color?: string;
 }
 
+/**
+ * How a paragraph's line spacing is measured. `Single`, `OnePointFive`, and `Double` are the
+ * multiple rule at one, one and a half, and two lines; `Multiple` is any other number of lines.
+ */
+export type AutomationLineSpacingRule =
+  'Single' | 'OnePointFive' | 'Double' | 'AtLeast' | 'Exactly' | 'Multiple';
+
+/** `w:line` for the rules that fix the spacing, in 240ths of a line. */
+const FIXED_LINE_BY_RULE: Readonly<Partial<Record<AutomationLineSpacingRule, string>>> = {
+  Single: '240',
+  OnePointFive: '360',
+  Double: '480',
+};
+
+/** `w:lineRule` each rule writes. */
+const LINE_RULE_BY_RULE: Readonly<Record<AutomationLineSpacingRule, string>> = {
+  Single: 'auto',
+  OnePointFive: 'auto',
+  Double: 'auto',
+  AtLeast: 'atLeast',
+  Exactly: 'exact',
+  Multiple: 'auto',
+};
+
+/** A `w:line` this lane can carry: a positive whole number of a size `w:spacing` takes. */
+const LINE_VALUE = /^[1-9]\d{0,4}$/;
+
+/**
+ * The line spacing a paragraph shows: its own `w:line` and `w:lineRule` over what it inherits,
+ * attribute by attribute, else single spacing.
+ */
+function lineSpacingInForce(
+  own: Readonly<Record<string, string>>,
+  inherited: InheritedLineSpacing
+): { line: string; lineRule: string } {
+  const line = [own.line, inherited.line].find((value) => value && LINE_VALUE.test(value));
+  const lineRule = [own.lineRule, inherited.lineRule].find(
+    (value) => value === 'auto' || value === 'atLeast' || value === 'exact'
+  );
+  return { line: line ?? '240', lineRule: lineRule ?? 'auto' };
+}
+
+/** The rule a `w:line` and `w:lineRule` pair reads as. */
+function lineSpacingRuleOf(spacing: { line: string; lineRule: string }): AutomationLineSpacingRule {
+  if (spacing.lineRule === 'atLeast') return 'AtLeast';
+  if (spacing.lineRule === 'exact') return 'Exactly';
+  if (spacing.line === '240') return 'Single';
+  if (spacing.line === '360') return 'OnePointFive';
+  if (spacing.line === '480') return 'Double';
+  return 'Multiple';
+}
+
 /** One paragraph's own paragraph properties, in points. `null` = the paragraph authors none. */
 export interface AutomationParagraphFormatRead {
   readonly alignment: AutomationAlignment;
@@ -117,6 +174,11 @@ export interface AutomationParagraphFormatRead {
   readonly leftIndent: number | null;
   readonly rightIndent: number | null;
   readonly lineSpacing: number | null;
+  /**
+   * How the line spacing in force is measured: the paragraph's own `w:spacing` line attributes
+   * over its style cascade's, else single spacing.
+   */
+  readonly lineSpacingRule: AutomationLineSpacingRule;
   readonly spaceBefore: number | null;
   readonly spaceAfter: number | null;
   readonly widowControl: boolean | null;
@@ -144,7 +206,14 @@ export interface AutomationParagraphFormatWrite {
   readonly firstLineIndent?: number;
   readonly leftIndent?: number;
   readonly rightIndent?: number;
+  /** Points. Keeps the rule in force: under `auto`, 12 points is one line. */
   readonly lineSpacing?: number;
+  /**
+   * The rule to measure line spacing by. `Single`, `OnePointFive`, and `Double` set the spacing
+   * too; the other rules keep the points in force. With `lineSpacing` in the same write, the
+   * rule applies first.
+   */
+  readonly lineSpacingRule?: AutomationLineSpacingRule;
   readonly spaceBefore?: number;
   readonly spaceAfter?: number;
   readonly widowControl?: boolean;
@@ -346,6 +415,9 @@ export function paragraphFormatRead(
     leftIndent: pointsFromTwips(attributeOf(indent, 'left') ?? attributeOf(indent, 'start')),
     rightIndent: pointsFromTwips(attributeOf(indent, 'right') ?? attributeOf(indent, 'end')),
     lineSpacing: pointsFromTwips(attributeOf(spacing, 'line')),
+    lineSpacingRule: lineSpacingRuleOf(
+      lineSpacingInForce(attributesOf(spacing), styles.inheritedLineSpacing(paragraph))
+    ),
     spaceBefore: pointsFromTwips(attributeOf(spacing, 'before')),
     spaceAfter: pointsFromTwips(attributeOf(spacing, 'after')),
     widowControl: onOff(namedChild(pPr, 'widowControl')),
@@ -532,14 +604,32 @@ export function paragraphFormatProperties(
     spacingAttributes[attribute] = String(twips.value);
     touchedSpacing = true;
   }
-  if (request.lineSpacing !== undefined) {
-    const twips = twipsFor(request.lineSpacing, 'lineSpacing');
-    if (!twips.ok) return twips;
-    if (twips.value <= 0) return { ok: false, detail: 'lineSpacing: out of range' };
-    spacingAttributes.line = String(twips.value);
-    // The paragraph's own rule is kept when it has one, because `exact` and `auto` are
-    // different documents and a write of one number must not silently change which.
-    spacingAttributes.lineRule ??= 'auto';
+  if (request.lineSpacing !== undefined || request.lineSpacingRule !== undefined) {
+    // Against the line spacing in force, the style this same write applies included: a value
+    // keeps the rule the paragraph shows, and a rule keeps the points the paragraph shows.
+    const inForce = lineSpacingInForce(
+      spacingAttributes,
+      styles.inheritedLineSpacing(paragraph, styleId)
+    );
+    let { line, lineRule } = inForce;
+    // The rule applies first, then the value, so `lineSpacingRule` and `lineSpacing` in one
+    // write give the asked rule at the asked points.
+    if (request.lineSpacingRule !== undefined) {
+      const fixed = FIXED_LINE_BY_RULE[request.lineSpacingRule as AutomationLineSpacingRule];
+      const rule = LINE_RULE_BY_RULE[request.lineSpacingRule as AutomationLineSpacingRule];
+      if (rule === undefined)
+        return { ok: false, detail: `lineSpacingRule: ${String(request.lineSpacingRule)}` };
+      lineRule = rule;
+      if (fixed !== undefined) line = fixed;
+    }
+    if (request.lineSpacing !== undefined) {
+      const twips = twipsFor(request.lineSpacing, 'lineSpacing');
+      if (!twips.ok) return twips;
+      if (twips.value <= 0) return { ok: false, detail: 'lineSpacing: out of range' };
+      line = String(twips.value);
+    }
+    spacingAttributes.line = line;
+    spacingAttributes.lineRule = lineRule;
     touchedSpacing = true;
   }
   if (touchedSpacing) properties.push({ localName: 'spacing', attributes: spacingAttributes });

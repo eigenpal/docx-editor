@@ -300,6 +300,7 @@ describe('reading a paragraph format', () => {
       leftIndent: 36,
       rightIndent: 18,
       lineSpacing: 18,
+      lineSpacingRule: 'OnePointFive',
       spaceBefore: 12,
       spaceAfter: 6,
       widowControl: false,
@@ -318,6 +319,7 @@ describe('reading a paragraph format', () => {
       leftIndent: null,
       rightIndent: null,
       lineSpacing: null,
+      lineSpacingRule: 'Single',
       spaceBefore: null,
       spaceAfter: null,
       widowControl: null,
@@ -387,6 +389,7 @@ describe('writing a paragraph format', () => {
       leftIndent: 18,
       rightIndent: 18,
       lineSpacing: 18,
+      lineSpacingRule: 'OnePointFive',
       spaceBefore: 12,
       spaceAfter: 6,
       widowControl: false,
@@ -532,5 +535,62 @@ describe('formatting and the rest of a batch', () => {
       operations: [{ op: 'setFont', span: { paragraph: first! }, font: { bold: true } }],
     });
     expect(refusal(response)).toBe('invalid-handle');
+  });
+});
+
+describe('a line spacing rule the style supplies', () => {
+  const EXACT_STYLE =
+    '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="Tight"><w:name w:val="Tight"/>' +
+    '<w:pPr><w:spacing w:line="280" w:lineRule="exact"/></w:pPr></w:style>';
+  const tight = docx(
+    '<w:p><w:pPr><w:pStyle w:val="Tight"/></w:pPr><w:r><w:t>tight</w:t></w:r></w:p>',
+    EXACT_STYLE
+  );
+
+  test('reads as the paragraph rule, and a lineSpacing write keeps it', () => {
+    const host = open(tight);
+    const [paragraph] = paragraphsOf(host, roots(host).body);
+    expect(formatOf(host, paragraph!).lineSpacingRule).toBe('Exactly');
+    host.execute({
+      operations: [
+        {
+          op: 'setParagraphFormat',
+          paragraph: { paragraph: paragraph! },
+          format: { lineSpacing: 18 },
+        },
+      ],
+    });
+    expect(savedMainXml(host)).toContain('<w:spacing w:line="360" w:lineRule="exact"/>');
+  });
+
+  test('a rule write keeps the points the style supplies', () => {
+    const host = open(tight);
+    const [paragraph] = paragraphsOf(host, roots(host).body);
+    host.execute({
+      operations: [
+        {
+          op: 'setParagraphFormat',
+          paragraph: { paragraph: paragraph! },
+          format: { lineSpacingRule: 'AtLeast' },
+        },
+      ],
+    });
+    expect(savedMainXml(host)).toContain('<w:spacing w:line="280" w:lineRule="atLeast"/>');
+  });
+
+  test('an unknown rule is refused', () => {
+    const host = open(tight);
+    const [paragraph] = paragraphsOf(host, roots(host).body);
+    const response = host.execute({
+      operations: [
+        {
+          op: 'setParagraphFormat',
+          paragraph: { paragraph: paragraph! },
+          format: { lineSpacingRule: 'Triple' as 'Single' },
+        },
+      ],
+    });
+    expect(refusal(response)).toBe('unsupported-content');
   });
 });

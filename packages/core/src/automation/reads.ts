@@ -203,6 +203,7 @@ const NO_STYLE_INDEX: AutomationStyleIndex = Object.freeze({
   defaultId: null,
   present: false,
   inheritsRtl: () => false,
+  inheritedLineSpacing: () => ({}),
 });
 const NO_BLOCKS: readonly AutomationBlockRead[] = Object.freeze([]);
 const NO_SECTIONS: readonly AutomationSectionRead[] = Object.freeze([]);

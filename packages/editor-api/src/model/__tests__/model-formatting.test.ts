@@ -398,6 +398,76 @@ describe("a paragraph's own paragraph formatting", () => {
     runtime.dispose();
   });
 
+  test('lineSpacingRule reads and writes the rule as the desktop object model does', async () => {
+    const spaced = (line: number, rule: string, text: string): string =>
+      `<w:p><w:pPr><w:spacing w:line="${line}" w:lineRule="${rule}"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+    const runtime = await serverRuntime(
+      docx(
+        spaced(240, 'auto', 'single') +
+          spaced(360, 'auto', 'oneAndHalf') +
+          spaced(360, 'atLeast', 'atLeast') +
+          spaced(360, 'exact', 'exact') +
+          spaced(280, 'exact', 'exact14') +
+          spaced(300, 'auto', 'multiple') +
+          p('none')
+      )
+    );
+    const read = await runtime.run(async (context) => {
+      const paragraphs = context.document.body.paragraphs;
+      paragraphs.load('items/lineSpacingRule,items/lineSpacing');
+      await context.sync();
+      const rules = paragraphs.items.map((paragraph) => paragraph.lineSpacingRule);
+      const [single, half, least, exact, exact14, multiple, none] = paragraphs.items;
+      single!.lineSpacingRule = 'Exactly'; // keeps 12 points
+      half!.lineSpacingRule = 'AtLeast'; // keeps 18 points
+      least!.lineSpacingRule = 'Single'; // sets one line
+      exact!.lineSpacingRule = 'Multiple'; // keeps 18 points: 1.5 lines
+      exact14!.lineSpacingRule = 'Double'; // sets two lines
+      multiple!.lineSpacing = 18; // keeps the rule
+      none!.lineSpacingRule = 'Exactly';
+      none!.lineSpacing = 15; // the rule applies first
+      await context.sync();
+      return rules;
+    });
+    expect(read).toEqual([
+      'Single',
+      'OnePointFive',
+      'AtLeast',
+      'Exactly',
+      'Exactly',
+      'Multiple',
+      'Single',
+    ]);
+    const xml = await mainXmlOf(runtime);
+    const spacingBefore = (text: string): string | undefined =>
+      new RegExp(`<w:spacing [^>]*/></w:pPr><w:r><w:t>${text}</w:t>`).exec(xml)?.[0];
+    expect(spacingBefore('single')).toContain('w:line="240" w:lineRule="exact"');
+    expect(spacingBefore('oneAndHalf')).toContain('w:line="360" w:lineRule="atLeast"');
+    expect(spacingBefore('atLeast')).toContain('w:line="240" w:lineRule="auto"');
+    expect(spacingBefore('exact')).toContain('w:line="360" w:lineRule="auto"');
+    expect(spacingBefore('exact14')).toContain('w:line="480" w:lineRule="auto"');
+    expect(spacingBefore('multiple')).toContain('w:line="360" w:lineRule="auto"');
+    expect(spacingBefore('none')).toContain('w:line="300" w:lineRule="exact"');
+    runtime.dispose();
+  });
+
+  test('a line spacing rule this API does not have is refused at the assignment', async () => {
+    const runtime = await serverRuntime(SPACED);
+    const code = await runtime.run(async (context) => {
+      const paragraphs = context.document.body.paragraphs;
+      paragraphs.load();
+      await context.sync();
+      try {
+        (paragraphs.items[0] as unknown as { lineSpacingRule: string }).lineSpacingRule = 'Triple';
+      } catch (error) {
+        return isDocxEditorError(error) ? error.code : 'untyped';
+      }
+      return 'accepted';
+    });
+    expect(code).toBe('InvalidArgument');
+    runtime.dispose();
+  });
+
   test('an alignment this API does not have is refused at the assignment', async () => {
     const runtime = await serverRuntime(SPACED);
     const code = await runtime.run(async (context) => {

@@ -87,6 +87,7 @@ export {
   type NoteItemType,
   PageOrientation,
   type ParagraphAlignment,
+  type ParagraphLineSpacingRule,
   type ParagraphReadingOrder,
   type ParagraphInsertTextLocation,
   type RangeInsertTextLocation,
