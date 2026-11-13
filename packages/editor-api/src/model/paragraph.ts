@@ -57,6 +57,9 @@ import { clientResult, type ClientResult } from '../runtime/client-result.ts';
 /** Most delimiters one `split` may name. The host applies its own cap as well. */
 const MAX_DELIMITERS = 16;
 
+/** Widest line spacing a write may author, in points: the host refuses anything past 31680 twips. */
+const MAX_LINE_SPACING = 1584;
+
 /** Paragraph alignment values readable and writable through this object model. */
 export type ParagraphAlignment =
   Alignment | 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
@@ -281,19 +284,23 @@ export class Paragraph extends ModelObject implements PromisedItem {
   }
 
   /**
-   * Line spacing in points.
+   * Line spacing in points, greater than 0 and at most 1584.
    *
-   * A write keeps the line rule in force, including one the style supplies; set
+   * A write keeps the line spacing rule in force, including one the style supplies; set
    * {@link Paragraph.lineSpacingRule} to change it. Under the `Exactly` and `AtLeast` rules the
-   * value is the line height. Under the other rules 12 points is one line, so `18` on a single
-   * spaced paragraph gives 1.5 lines.
+   * value is the line height. Under the other rules 12 points is one line, so `18` on a
+   * single-spaced paragraph gives 1.5 lines. A read returns only the paragraph's own value, and
+   * `null` when it inherits its spacing.
    */
   get lineSpacing(): number {
     return this.loadedProperty<number>('lineSpacing');
   }
 
   set lineSpacing(value: number) {
-    this.#authorFormat('lineSpacing', requirePoints(value, `${this.path.label}.lineSpacing`));
+    const target = `${this.path.label}.lineSpacing`;
+    const points = requirePoints(value, target);
+    if (!(points > 0 && points <= MAX_LINE_SPACING)) fail({ code: 'InvalidArgument', target });
+    this.#authorFormat('lineSpacing', points);
   }
 
   /**

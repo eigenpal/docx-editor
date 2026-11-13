@@ -88,7 +88,7 @@ await runtime.run(async (context) => {
 
 | Property | Values |
 | --- | --- |
-| `leftIndent`, `rightIndent`, `spaceBefore`, `spaceAfter`, `lineSpacing` | Finite points within supported bounds |
+| `leftIndent`, `rightIndent`, `spaceBefore`, `spaceAfter`, `lineSpacing` | Points, at most 1584 in size. `spaceBefore` and `spaceAfter` cannot be negative, and `lineSpacing` must be greater than 0. |
 | `firstLineIndent` | Finite points. A negative value makes a hanging indent. |
 | `alignment` | `Left`, `Centered`, `Right`, `Justified`. `Mixed` and `Unknown` are read-only values. |
 
@@ -96,16 +96,16 @@ Assignments on one proxy coalesce per sync. Paragraph properties and `style` als
 
 ### Line spacing and its rule
 
-`lineSpacing` is a value in points. A write keeps the line rule in force, including a rule the style supplies:
+`lineSpacing` is a value in points, greater than 0 and at most 1584. A write keeps the line spacing rule in force, including a rule the style supplies:
 
 - With the `Exactly` or `AtLeast` rule, the value is the line height. For example, `14` gives lines of exactly 14 points.
 - With any other rule, 12 points is one line. For example, `18` on a single-spaced paragraph gives 1.5 lines.
 
-Office.js has no line rule member, so `Paragraph.lineSpacingRule` is a DocxEditor addition. To set exact line heights, set the rule first, then the value:
+Office.js has no line spacing rule member, so `Paragraph.lineSpacingRule` is a DocxEditor addition. To set exact line heights, set the rule first, then the value:
 
 ```ts
 await runtime.run(async (context) => {
-  const paragraph = context.document.body.paragraphs.getFirst();
+  const paragraph = context.document.paragraphs.getFirst();
   paragraph.lineSpacingRule = 'Exactly';
   paragraph.lineSpacing = 14;
   await context.sync();
@@ -114,13 +114,14 @@ await runtime.run(async (context) => {
 
 | `lineSpacingRule` | Effect of a write |
 | --- | --- |
-| `Single`, `OnePointFive`, `Double` | Sets the spacing to 12, 18, or 24 points under the multiple rule. |
+| `Single`, `OnePointFive`, `Double` | Sets the spacing to 12, 18, or 24 points under the `Multiple` rule. |
 | `Multiple` | Keeps the points: exactly 18 points becomes 1.5 lines. |
 | `AtLeast`, `Exactly` | Keeps the points as a minimum or exact line height. |
 
-- A read returns the rule in force, from the paragraph or its style. A paragraph with no spacing reads as `Single`.
-- When `lineSpacingRule` and `lineSpacing` share a sync, the rule applies first.
-- Other values throw `InvalidArgument` at the assignment.
+- A `lineSpacingRule` read returns the rule in force, from the paragraph or its style. A paragraph with no spacing reads as `Single`.
+- A `lineSpacing` read returns only the paragraph's own value. It returns `null` when the paragraph inherits its spacing, even when `lineSpacingRule` returns an inherited rule.
+- When `lineSpacingRule` and `lineSpacing` share a sync, the rule applies first. With `Single`, `OnePointFive`, or `Double`, your `lineSpacing` value then wins, so the rule reads back as `Multiple` unless the value is 12, 18, or 24.
+- Other `lineSpacingRule` values throw `InvalidArgument` at the assignment. A `lineSpacing` value out of range throws `InvalidArgument` at the assignment.
 
 ### Right-to-left paragraphs
 

@@ -451,6 +451,25 @@ describe("a paragraph's own paragraph formatting", () => {
     runtime.dispose();
   });
 
+  test('a line spacing out of range is refused at the assignment, naming the property', async () => {
+    const runtime = await serverRuntime(SPACED);
+    const locations = await runtime.run(async (context) => {
+      const paragraphs = context.document.body.paragraphs;
+      paragraphs.load();
+      await context.sync();
+      return [0, -5, 100000].map((value) => {
+        try {
+          paragraphs.items[0]!.lineSpacing = value;
+        } catch (error) {
+          return isDocxEditorError(error) ? error.debugInfo.errorLocation : 'untyped';
+        }
+        return 'accepted';
+      });
+    });
+    for (const location of locations) expect(location).toMatch(/\.lineSpacing$/);
+    runtime.dispose();
+  });
+
   test('a line spacing rule this API does not have is refused at the assignment', async () => {
     const runtime = await serverRuntime(SPACED);
     const code = await runtime.run(async (context) => {
