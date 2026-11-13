@@ -106,8 +106,8 @@ export function useHighlights(
   const resolveOptions = (): HighlightOptions | undefined => {
     const value = toValue(options);
     if (!value) return undefined;
-    const { color, activeColor, activeIndex, className, priority } = value;
-    return { color, activeColor, activeIndex, className, priority };
+    const { color, activeColor, activeIndex, className, priority, kind } = value;
+    return { color, activeColor, activeIndex, className, priority, kind };
   };
 
   watch(

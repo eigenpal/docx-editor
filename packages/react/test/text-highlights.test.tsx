@@ -328,6 +328,33 @@ describe('useHighlights', () => {
     expect(marks(view.container, 'glossary')).toHaveLength(0);
   });
 
+  test('a new proofing kind applies the set again', async () => {
+    let kind: 'spelling' | 'grammar' = 'spelling';
+    function Marks() {
+      useHighlights('proofing', (editor) => editor.findMatches('pays'), { kind });
+      return null;
+    }
+    const tree = () => (
+      <DocxEditorRoot document={SOURCE}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+        <Marks />
+      </DocxEditorRoot>
+    );
+    const view = render(tree());
+    await act(async () => wait(0));
+    const invalid = () =>
+      [...view.container.querySelectorAll('[aria-invalid]')].map((span) =>
+        span.getAttribute('aria-invalid')
+      );
+    expect(invalid()).toEqual(['spelling']);
+    kind = 'grammar';
+    view.rerender(tree());
+    await act(async () => wait(0));
+    expect(invalid()).toEqual(['grammar']);
+  });
+
   test('an inline options literal does not reapply the set every render', async () => {
     const { view, editor } = mount(null);
     const ranges = editor().findMatches('Supplier');

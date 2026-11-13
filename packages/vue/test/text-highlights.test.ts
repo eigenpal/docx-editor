@@ -232,6 +232,31 @@ describe('useHighlights', () => {
     expect(marks(container, 'glossary')).toHaveLength(0);
   });
 
+  test('passes the proofing kind, so covered text reports aria-invalid', async () => {
+    const kind = ref<'spelling' | 'grammar'>('spelling');
+    const Marks = defineComponent({
+      setup() {
+        useHighlights(
+          'proofing',
+          (editor) => editor.findMatches('pays'),
+          () => ({
+            kind: kind.value,
+          })
+        );
+        return () => null;
+      },
+    });
+    const { container } = await mount(() => [h(Marks)]);
+    const invalid = () =>
+      [...container.querySelectorAll('[aria-invalid]')].map((span) =>
+        span.getAttribute('aria-invalid')
+      );
+    expect(invalid()).toEqual(['spelling']);
+    kind.value = 'grammar';
+    await flush();
+    expect(invalid()).toEqual(['grammar']);
+  });
+
   test('a function source runs again after document changes', async () => {
     let runs = 0;
     const Marks = defineComponent({
