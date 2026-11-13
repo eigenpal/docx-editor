@@ -880,7 +880,7 @@ export function applyInlinePlan(
   // moves its text, and only its write marks the join's text as copies a peer's delete hides.
   // An adoption changes the texts it takes from, and so what another planned paragraph shows:
   // an embed moving out can leave text beside a hidden duplicate, which then shows as that
-  // paragraph's following text. Paragraphs adopt again until an adoption writes nothing.
+  // paragraph's following text. Paragraphs adopt again until a pass writes nothing.
   const adopted = new Set<LogicalId>();
   for (let pass = 0, again = true; again && pass <= plan.paragraphs.length; pass += 1) {
     again = false;
