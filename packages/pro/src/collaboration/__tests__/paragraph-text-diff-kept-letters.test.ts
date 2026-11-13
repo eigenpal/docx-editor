@@ -82,14 +82,20 @@ test('a letter between a removed embed and a removed tail keeps its place', () =
   // Enter moves the tail away, and the head drops a second copy of a comment marker that
   // shared text held. The last letter of the head stays: written again, it would be a new
   // character that a peer's concurrent deletion of it does not reach.
-  const marker: Token = {
-    key: 'emarker',
+  const marker = (copy: string): Token => ({
+    key: `emarker-${copy}`,
     strong: 'emarker',
     insert: { n: 'marker' },
     attributes: {},
-  };
-  const before = [...word('sit', 'a'), marker, marker, ...word('k', 'b'), ...word(' tail', 'b')];
-  const after = [...word('sit', 'a'), marker, ...word('k', 'b')];
+  });
+  const before = [
+    ...word('sit', 'a'),
+    marker('1'),
+    marker('2'),
+    ...word('k', 'b'),
+    ...word(' tail', 'b'),
+  ];
+  const after = [...word('sit', 'a'), marker('1'), ...word('k', 'b')];
   expect(keptFrom(diffTokens(before, after), after.length)).toEqual([0, 1, 2, 3, 5]);
 });
 
@@ -135,4 +141,13 @@ test('accepting a long insertion between two deletions costs time in proportion 
   const long = timed(3000);
   // Ten times the text: a linear diff takes about ten times as long, a quadratic one a hundred.
   expect(long).toBeLessThan(Math.max(short * 30, 5));
+});
+
+test('a replacement that reaches past letters between deletions still types its text whole', () => {
+  // The cleanup merges the deletions around the kept letters step by step, until the change
+  // reaches the new text. A peer's concurrent deletion of the old word then leaves the new
+  // one whole.
+  const before = word('xaybcz', 'a');
+  const after = word('abcnew', 'a');
+  expect(keptFrom(diffTokens(before, after), after.length)).toEqual([-1, -1, -1, -1, -1, -1]);
 });
