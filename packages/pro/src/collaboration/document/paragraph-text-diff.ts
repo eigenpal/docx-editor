@@ -418,9 +418,12 @@ const MAX_CLEANUP_PASSES = 16;
  * position peers anchored to it. Text kept at the ends of a change, as typing inside a
  * word keeps, is longer than the change or has no change on one side, so it stays. Only
  * plain letters are replaced: an embed, a surrogate pair, or an element the model holds as
- * a control character keeps its identity.
+ * a control character keeps its identity. A change that types nothing in the end keeps every
+ * letter ({@link keepLettersTypedOverByNothing}).
  */
 function dropScatteredLetters(steps: Step[], before: readonly Token[]): Step[] {
+  // The `before` index of each letter written again, by its `after` index.
+  const rewritten = new Map<number, number>();
   for (let pass = 0; pass < MAX_CLEANUP_PASSES; pass += 1) {
     const groups: Step[][] = [];
     for (const step of steps) {
@@ -463,12 +466,59 @@ function dropScatteredLetters(steps: Step[], before: readonly Token[]): Step[] {
       }
       changed = true;
       for (const step of group) if (step.op === 'eq') out.push({ op: 'del', before: step.before });
-      for (const step of group) if (step.op === 'eq') out.push({ op: 'ins', after: step.after });
+      for (const step of group) {
+        if (step.op !== 'eq') continue;
+        out.push({ op: 'ins', after: step.after });
+        rewritten.set(step.after, step.before);
+      }
     });
     steps = out;
     if (!changed) break;
   }
-  return steps;
+  return keepLettersTypedOverByNothing(steps, rewritten);
+}
+
+/**
+ * Keep the letters `dropScatteredLetters` wrote again in a change that types nothing.
+ *
+ * Only new text can take the place of a kept letter. A change whose inserts are all letters
+ * written again only deletes, as the head of a paragraph does when Enter moves its tail away
+ * and a second copy of an embed before its last letter goes too. Written again there, a letter
+ * is a new character, and a peer's concurrent deletion of the old one does not reach it, so
+ * the deleted text shows again. A change is a run of steps between kept characters, so letters
+ * the cleanup merged into a replacement that types new text stay replaced.
+ */
+function keepLettersTypedOverByNothing(
+  steps: Step[],
+  rewritten: ReadonlyMap<number, number>
+): Step[] {
+  if (rewritten.size === 0) return steps;
+  const keptAt = new Map<number, number>();
+  for (const [after, before] of rewritten) keptAt.set(before, after);
+  const out: Step[] = [];
+  for (let at = 0; at < steps.length;) {
+    const step = steps[at]!;
+    if (step.op === 'eq') {
+      out.push(step);
+      at += 1;
+      continue;
+    }
+    let end = at;
+    while (end < steps.length && steps[end]!.op !== 'eq') end += 1;
+    const change = steps.slice(at, end);
+    at = end;
+    if (change.some((entry) => entry.op === 'ins' && !rewritten.has(entry.after))) {
+      out.push(...change);
+      continue;
+    }
+    // Each letter written again is deleted in its place in `before` order: keep it there.
+    for (const entry of change) {
+      if (entry.op !== 'del') continue;
+      const after = keptAt.get(entry.before);
+      out.push(after === undefined ? entry : { op: 'eq', before: entry.before, after });
+    }
+  }
+  return out;
 }
 
 /**
