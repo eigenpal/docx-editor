@@ -12,6 +12,8 @@ export type EquationAtomClass = 'ord' | 'op' | 'bin' | 'rel' | 'open' | 'close' 
 /** One atom of an equation argument, in source order. @internal */
 export interface EquationSpacingAtom {
   readonly atomClass: EquationAtomClass;
+  /** The class of the atom's right side, when it differs: a delimiter opens and closes. */
+  readonly endClass?: EquationAtomClass;
   /** The size of the atom, in points. A space beside an operator takes its neighbour's size. */
   readonly sizePt: number;
   /** The source text of a text atom. Digits on both sides of `,` or `.` make one number. */
@@ -187,7 +189,7 @@ function resolvedClasses(atoms: readonly EquationSpacingAtom[]): readonly Resolv
       resolved.push(atomClass);
       continue;
     }
-    const left = resolved[index - 1];
+    const left = atoms[index - 1]?.endClass ?? resolved[index - 1];
     const right = raw[index + 1];
     if (
       left === undefined ||
@@ -216,7 +218,7 @@ export function equationAtomSpaces(atoms: readonly EquationSpacingAtom[]): reado
   const classes = resolvedClasses(atoms);
   return atoms.map((atom, index) => {
     if (index === 0) return 0;
-    const space = pairSpace(classes[index - 1]!, classes[index]!);
+    const space = pairSpace(atoms[index - 1]!.endClass ?? classes[index - 1]!, classes[index]!);
     if (space.em === 0) return 0;
     return space.em * (space.sizeFromLeft ? atoms[index - 1]!.sizePt : atom.sizePt);
   });

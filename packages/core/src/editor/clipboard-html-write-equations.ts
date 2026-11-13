@@ -158,6 +158,19 @@ function mathml(expression: EquationExpression, depth: number): string {
         .join(' ');
       return `<menclose notation="${notation}">${row(expression.body)}</menclose>`;
     }
+    case 'delimiter': {
+      const stretchy = expression.grow ? '' : ' stretchy="false"';
+      const fence = (character: string) =>
+        character ? `<mo fence="true"${stretchy}>${escapeXml(character)}</mo>` : '';
+      const separator = expression.separator
+        ? `<mo separator="true"${stretchy}>${escapeXml(expression.separator)}</mo>`
+        : '';
+      return (
+        `<mrow>${fence(expression.opening)}` +
+        expression.items.map(row).join(separator) +
+        `${fence(expression.closing)}</mrow>`
+      );
+    }
     case 'fraction':
       return `<mfrac>${row(expression.numerator)}${row(expression.denominator)}</mfrac>`;
     case 'radical':

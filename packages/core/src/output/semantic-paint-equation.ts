@@ -197,6 +197,11 @@ function paintNode(
       element.style.fontSize = `${node.fontSizePt * scale}px`;
       element.style.lineHeight = `${node.box.height * scale}px`;
       element.style.whiteSpace = 'pre';
+      if (node.kind === 'text' && node.stretch) {
+        // A grown delimiter character keeps its font box and scales its glyph vertically.
+        element.style.transformOrigin = `0 ${node.stretch.originY * scale}px`;
+        element.style.transform = `scaleY(${node.stretch.scale})`;
+      }
       if (node.kind === 'fallback') {
         // A text fallback is an unsupported element whose slot takes its own presses.
         element.style.pointerEvents = 'auto';
@@ -358,6 +363,36 @@ function paintNode(
           'docx-equation-bar',
           { ...node.bar, x: x + node.bar.x, y: y + node.bar.y },
           scale
+        )
+      );
+      break;
+    case 'delimiter':
+      node.fences.forEach((fence, index) =>
+        paintNode(
+          document,
+          host,
+          fence,
+          equation,
+          scale,
+          x,
+          y,
+          classes,
+          `${path}.fences.${index}`,
+          applyFace
+        )
+      );
+      node.items.forEach((item, index) =>
+        paintNode(
+          document,
+          host,
+          item,
+          equation,
+          scale,
+          x,
+          y,
+          classes,
+          `${path}.items.${index}`,
+          applyFace
         )
       );
       break;

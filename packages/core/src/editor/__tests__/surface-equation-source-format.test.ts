@@ -33,6 +33,7 @@ const cases = [
   ['literal', run('<m:rPr><m:lit/></m:rPr>'), true],
   ['normal', run('<m:rPr><m:nor/></m:rPr>'), true],
   ['bar', `<m:bar><m:e>${run()}</m:e></m:bar>`, true],
+  ['delimiter', `<m:d><m:e>${run()}</m:e></m:d>`, true],
   ['bold fraction control properties', fraction('<w:b/>'), true],
   ['default fraction control properties', fraction(DEFAULT), false],
   [

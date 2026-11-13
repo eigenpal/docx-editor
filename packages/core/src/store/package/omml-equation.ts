@@ -11,6 +11,9 @@ import {
   equationMathChildren as namedChildren,
 } from './omml-run-format.ts';
 import {
+  DEFAULT_DELIMITER_CHARACTERS,
+  DELIMITER_CHARACTERS,
+  delimiterCharacter,
   equationStructureHasControlProperties,
   isSupportedExpressionNode,
   mathOnOff,
@@ -192,12 +195,19 @@ function collectFallbackText(node: OoxmlNode, state: ProjectionState, depth: num
     appendProjectionText(state, node.value);
     return;
   }
-  // The operator of an n-ary structure is a property, not text, but it is drawn.
+  // The operator of an n-ary structure and the characters of a delimiter are properties, not
+  // text, but they are drawn.
   if (isMathElement(node, 'nary')) appendProjectionText(state, naryOperator(node));
+  const delimiter = isMathElement(node, 'd') ? node : null;
+  if (delimiter) appendProjectionText(state, delimiterCharacter(delimiter, 'begChr'));
+  let argument = 0;
   for (const child of childrenOf(node)) {
+    if (delimiter && isMathElement(child, 'e') && argument++ > 0)
+      appendProjectionText(state, delimiterCharacter(delimiter, 'sepChr'));
     collectFallbackText(child, state, depth + 1);
     if (state.truncated && state.text.length >= state.limits.maxTextLength) return;
   }
+  if (delimiter) appendProjectionText(state, delimiterCharacter(delimiter, 'endChr'));
 }
 
 function projectContainer(
@@ -265,6 +275,31 @@ function projectStructured(
         topLeftToBottomRight: flag('strikeTLBR'),
       }),
       ...controlSource(node, 'borderBoxPr', state),
+    });
+  }
+  if (node.localName === 'd') {
+    // The characters join the projected text in drawing order, as the fallback scan reads them.
+    const opening = delimiterCharacter(node, 'begChr');
+    const separator = delimiterCharacter(node, 'sepChr');
+    const closing = delimiterCharacter(node, 'endChr');
+    const property = namedChild(node, 'dPr');
+    const grow = property ? namedChild(property, 'grow') : null;
+    const shape = property ? namedChild(property, 'shp') : null;
+    appendProjectionText(state, opening);
+    const items = namedChildren(node, 'e').map((argument, index) => {
+      if (index > 0) appendProjectionText(state, separator);
+      return projectContainer(argument, state, depth + 1);
+    });
+    appendProjectionText(state, closing);
+    return Object.freeze({
+      kind: 'delimiter',
+      opening,
+      closing,
+      separator,
+      items: Object.freeze(items),
+      grow: grow === null || mathOnOff(grow),
+      shape: shape && mathVal(shape) === 'match' ? 'match' : 'centered',
+      ...controlSource(node, 'dPr', state),
     });
   }
   if (node.localName === 'f') {
@@ -815,6 +850,27 @@ function expressionNodes(
           'borderBox',
           structureProperties('borderBoxPr', properties, context),
           [container('e', expression.body)],
+          context
+        ),
+      ];
+    }
+    case 'delimiter': {
+      const value = (localName: string, val: string) =>
+        mathElement(localName, [], nextId, [mathAttribute('val', val)]);
+      const { opening: begChr, separator: sepChr, closing: endChr } = expression;
+      const characters = { begChr, sepChr, endChr };
+      const properties = [
+        ...DELIMITER_CHARACTERS.filter(
+          (name) => characters[name] !== DEFAULT_DELIMITER_CHARACTERS[name]
+        ).map((name) => value(name, characters[name])),
+        ...(expression.grow ? [] : [value('grow', '0')]),
+        ...(expression.shape === 'match' ? [value('shp', 'match')] : []),
+      ];
+      return [
+        structure(
+          'd',
+          structureProperties('dPr', properties, context),
+          expression.items.map((item) => container('e', item)),
           context
         ),
       ];

@@ -177,3 +177,34 @@ test('draws each atom after the first as an inline-block so no shaping crosses a
   });
   expect(children.some((child) => child.style.marginLeft === '')).toBe(true);
 });
+
+test('draws a delimiter grown around a fraction by scaling its characters vertically', () => {
+  const { container, layout } = layoutAndPaint(
+    '<w:p><m:oMath><m:d><m:dPr><m:begChr m:val="["/><m:endChr m:val="]"/></m:dPr>' +
+      '<m:e><m:f><m:num><m:r><m:t>a</m:t></m:r></m:num>' +
+      '<m:den><m:r><m:t>b</m:t></m:r></m:den></m:f></m:e></m:d></m:oMath></w:p>'
+  );
+  const geometry = linesOf(layout)[0]!.spans.find((span) => span.equation)!.equation!.geometry;
+  const delimiter = geometry.kind === 'row' ? geometry.items[0] : geometry;
+  if (delimiter?.kind !== 'delimiter') throw new Error('expected a delimiter');
+  const equation = container.querySelector<HTMLElement>('[data-docx-equation]')!;
+  expect(equation.querySelector('.docx-equation-fallback')).toBeNull();
+  expect(equation.querySelector('.docx-equation-fraction-bar')).not.toBeNull();
+  const fences = Array.from(
+    equation.querySelectorAll<HTMLElement>('.docx-equation-delimiter.docx-equation-text')
+  ).filter((span) => span.textContent === '[' || span.textContent === ']');
+  expect(fences.map((span) => span.textContent)).toEqual(['[', ']']);
+  fences.forEach((span, index) => {
+    const stretch = delimiter.fences[index]!.stretch!;
+    expect(stretch.scale).toBeGreaterThan(1);
+    expect(span.style.transform).toBe(`scaleY(${stretch.scale})`);
+    expect(Number.parseFloat(span.style.transformOrigin.split(' ')[1]!)).toBeCloseTo(
+      stretch.originY,
+      6
+    );
+  });
+  // The fraction parts are not scaled.
+  for (const part of equation.querySelectorAll<HTMLElement>('.docx-equation-fraction')) {
+    expect(part.style.transform).toBe('');
+  }
+});

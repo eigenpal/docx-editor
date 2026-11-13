@@ -438,6 +438,7 @@ export {
   type EquationSpanRecord,
   type EquationTextGeometry,
 } from './equation-layout.ts';
+export type { EquationDelimiterGeometry, EquationStretch } from './equation-delimiter.ts';
 export {
   DEFAULT_CANVAS_FONT_STACK,
   isCanvasMeasurementAvailable,
