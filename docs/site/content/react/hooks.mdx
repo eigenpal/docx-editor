@@ -73,6 +73,8 @@ Pass a comparator for an object slice. Common fields include `page`, `selection`
 
 `selectionChange` also fires when other state moves without a document change, such as the page count. Compare `snapshot.selection` with the previous value before you react.
 
+`paragraphsChange` lists only the paragraphs that one commit touched, so a proofing tool can check those paragraphs instead of the whole document. For an example, see [Check spelling and grammar](/docs/2.x/recipes/highlight-ranges#check-spelling-and-grammar).
+
 ### `useDocxEditor`
 
 Use the instance for actions and one-time reads:

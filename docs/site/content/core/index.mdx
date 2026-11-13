@@ -90,6 +90,7 @@ Stable snapshots let [`useEditorState`](/docs/2.x/react/hooks) skip deep compare
 | Event | Fires when |
 | --- | --- |
 | `change` | A mutation commits. Carries the revision and block ids, not bytes. |
+| `paragraphsChange` | A commit adds, changes, or deletes paragraphs. Lists their `blockId`s in every story, with `source` `local` or `remote`. Fires after `change`. |
 | `selectionChange` | Selection, formatting, open header or footer, collaboration status, or page count changes. |
 | `error` | The editor reports an `EditorError`. |
 | `diagnostic` | An anonymous diagnostic, such as a refused edit or a failed font. |
