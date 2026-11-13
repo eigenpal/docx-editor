@@ -28,75 +28,244 @@ const result = useHighlights(
 
 A function source runs again after each document change, so the marks follow the text. The set is removed when the component unmounts.
 
-## Highlight ranges that you compute
+## Check spelling and grammar
 
 Call `editor.getParagraphs()` to read every paragraph, including paragraphs on pages that have not been painted. The list covers body text, tables, content controls, headers, footers, notes, and supported text boxes. Repeated headers and footers appear once. To read one paragraph, call `editor.getParagraphText(blockId)`.
 
-Each result has three parts:
+The list is empty until a document opens. A large document opens in steps, so read the list again after each `change` event. A function source of `useHighlights` does this for you.
 
-- `keptText` is the text a reader sees. Check it for spelling and grammar. It leaves out tracked deletions, move sources, hidden text, and optional hyphens. An object, such as a field, a picture, or a note reference, reads as U+FFFC, so treat U+FFFC as a word boundary.
-- `text` holds the offsets that `setHighlights()` takes. It includes deleted and hidden text.
-- `proofing` lists stretches of `keptText` with their language, such as `en-GB`, and a `noProof` flag. Skip text that has `noProof` set, and check other text in its own language.
+### Choose the text to check
 
-To convert a `keptText` range to highlight ranges, call `keptTextRanges(paragraph, from, to)`. A word that crosses a tracked deletion or hidden text gets one range for each visible part.
+Each paragraph has three parts:
 
-The following module, `spelling-source.ts`, checks each paragraph once. An unchanged paragraph returns the same object, so the cache skips it after the first check.
+- `acceptedText` is the paragraph text with every tracked change accepted. Insertions are in, and tracked deletions and move sources are out. Hidden text and optional hyphens are left out too. Check spelling and grammar in this text.
+- `text` holds the offsets that `setHighlights()` takes and that the caret reports. It includes deleted and hidden text.
+- `proofing` lists stretches of `acceptedText` with their language, such as `en-GB`, and a `noProof` flag. Skip text that has `noProof` set, and check other text in its own language. East Asian characters and complex-script text have their own language tags.
+
+In `acceptedText`, a tab reads as `\t` and a line break as `\n`. An object, such as a picture, a note reference, a symbol, or a field, reads as U+FFFC. Treat all three as word boundaries. To check the saved text of fields, read `editor.getParagraphs({ fields: 'result' })`. That read does not change how the editor addresses fields.
+
+`acceptedText` does not depend on the review display mode. In the `original` mode, the page shows the text with every change rejected, so a mark on inserted text does not show.
+
+A tracked change can make a word misspelled, for example a deletion of one letter in the middle of the word. If `acceptedTextRanges()` returns more than one range for a word, a tracked change or hidden text splits it. Tell the reader that the word reads this way after the changes are accepted.
+
+### Mark misspelled words
+
+The following module, `spelling.ts`, checks each paragraph once. An unchanged paragraph returns the same object, so the cache skips it after the first check. Each word gets one mark from the start of its first part to the end of its last part, so a word that a deletion splits shows one mark. The source skips the word at the caret, because the reader is still typing it.
 
 ```ts
+// spelling.ts
 import {
-  keptTextRanges,
+  acceptedOffsetFromText,
+  acceptedTextRanges,
   type Editor,
   type HighlightRange,
   type ParagraphText,
 } from '@docx-editor.dev/core';
 
-const WORD = /[\p{L}\p{M}']+/gu;
-
-/** Whether proofing tools should skip the `keptText` offset `at`. */
-function skipped(paragraph: ParagraphText, at: number): boolean {
-  return paragraph.proofing.some(
-    (part) => part.noProof && at >= part.keptStart && at < part.keptStart + part.length
-  );
+/** Your checker. `lang` is the language tag of the word, or null. */
+export interface SpellChecker {
+  isMisspelled(word: string, lang: string | null): boolean;
+  suggest(word: string, lang: string | null): readonly string[];
 }
 
-/** A highlight source that marks each word that `isMisspelled` rejects. */
-export function spellingSource(isMisspelled: (word: string) => boolean) {
-  const checked = new WeakMap<ParagraphText, HighlightRange[]>();
-  return (editor: Editor): HighlightRange[] =>
-    editor.getParagraphs().flatMap((paragraph) => {
-      let ranges = checked.get(paragraph);
-      if (!ranges) {
-        ranges = [];
-        for (const word of paragraph.keptText.matchAll(WORD)) {
-          if (skipped(paragraph, word.index) || !isMisspelled(word[0])) continue;
-          const end = word.index + word[0].length;
-          ranges.push(...keptTextRanges(paragraph, word.index, end));
-        }
-        checked.set(paragraph, ranges);
-      }
-      return ranges;
+/** One mark for one misspelled word, with what a fix needs. */
+export type SpellingRange = HighlightRange & {
+  /** The word as `acceptedText` reads it. */
+  readonly word: string;
+  /** Where the word starts in `acceptedText`. */
+  readonly acceptedStart: number;
+  readonly suggestions: readonly string[];
+};
+
+const WORD = /[\p{L}\p{M}']+/gu;
+
+function check(paragraph: ParagraphText, checker: SpellChecker): SpellingRange[] {
+  const marks: SpellingRange[] = [];
+  for (const match of paragraph.acceptedText.matchAll(WORD)) {
+    const from = match.index;
+    const stretch = paragraph.proofing.find(
+      (part) => from >= part.acceptedStart && from < part.acceptedStart + part.length
+    );
+    if (!stretch || stretch.noProof) continue;
+    const word = match[0];
+    if (!checker.isMisspelled(word, stretch.lang)) continue;
+    // One range per visible part of the word. The mark covers all of them.
+    const parts = acceptedTextRanges(paragraph, from, from + word.length);
+    const first = parts[0];
+    const last = parts.at(-1);
+    if (!first || !last) continue;
+    const end = last.start + last.length;
+    marks.push({
+      blockId: paragraph.blockId,
+      start: first.start,
+      length: end - first.start,
+      expectedText: paragraph.text.slice(first.start, end),
+      word,
+      acceptedStart: from,
+      suggestions: checker.suggest(word, stretch.lang),
     });
+  }
+  return marks;
+}
+
+/** A highlight source that marks each misspelled word, except the word at the caret. */
+export function spellingSource(checker: SpellChecker) {
+  const checked = new WeakMap<ParagraphText, SpellingRange[]>();
+  return (editor: Editor): SpellingRange[] => {
+    const caret = editor.getSelectionRange()?.head;
+    return editor.getParagraphs().flatMap((paragraph) => {
+      let marks = checked.get(paragraph);
+      if (!marks) {
+        marks = check(paragraph, checker);
+        checked.set(paragraph, marks);
+      }
+      if (caret?.blockId !== paragraph.blockId) return marks;
+      // The caret counts in `text`; the marks count in `acceptedText`.
+      const at = acceptedOffsetFromText(paragraph, caret.offset);
+      return marks.filter(
+        (mark) => at < mark.acceptedStart || at > mark.acceptedStart + mark.word.length
+      );
+    });
+  };
+}
+
+/**
+ * Replace a marked word. `at` is where the mark is now, such as a context menu hit.
+ * Returns false when the text changed: check the document again.
+ */
+export function fixWord(
+  editor: Editor,
+  mark: SpellingRange,
+  replacement: string,
+  at: { readonly start: number } = mark
+): boolean {
+  const paragraph = editor.getParagraphText(mark.blockId);
+  if (!paragraph) return false;
+  const result = editor.exec({
+    type: 'replaceAcceptedText',
+    blockId: mark.blockId,
+    start: acceptedOffsetFromText(paragraph, at.start),
+    length: mark.word.length,
+    text: replacement,
+    expectedText: mark.word,
+  });
+  return result.ok;
 }
 ```
 
-Pass the source to `useHighlights`. It runs again after each document change.
+`fixWord` runs the `replaceAcceptedText` command. It compares the word with the replacement and edits only the letters that differ, so the tracked changes of other authors stay where they are. A fix of a word that a deletion splits edits each part and is one undo step. In suggesting mode, the fix is a tracked change under the editor's author. If the word changed since it was checked, `expectedText` makes the command return `notFound` and change nothing.
+
+### Fix words from the context menu
+
+The following component marks misspelled words and offers the suggestions for the word under a right-click. It runs the source again when the caret moves to another paragraph, so the word that the reader typed gets its mark.
 
 ```vue
 <script setup lang="ts">
-import { computed } from 'vue';
-import { useHighlights } from '@docx-editor.dev/vue';
-import { spellingSource } from './spelling-source';
+import {
+  DocxEditor,
+  useContextMenuHighlights,
+  useDocxEditor,
+  useEditorEvent,
+  useHighlights,
+} from '@docx-editor.dev/vue';
+import { fixWord, spellingSource, type SpellChecker, type SpellingRange } from './spelling';
 
-const props = defineProps<{ isMisspelled: (word: string) => boolean }>();
-// Create the source again only when the checker changes, so its cache survives updates.
-const source = computed(() => spellingSource(props.isMisspelled));
-useHighlights('spelling', source, { className: 'spelling-error' });
+// Render inside DocxEditor.Viewport. Pass a stable `checker`.
+const props = defineProps<{ checker: SpellChecker }>();
+const editor = useDocxEditor();
+const marks = useHighlights('spelling', spellingSource(props.checker), {
+  className: 'spelling-error',
+});
+const hits = useContextMenuHighlights<SpellingRange>('spelling');
+
+let caretParagraph: string | undefined;
+useEditorEvent('selectionChange', (snapshot) => {
+  const blockId = snapshot.selectionRange?.head.blockId;
+  if (blockId === caretParagraph) return;
+  caretParagraph = blockId;
+  marks.value.refresh();
+});
+
+function fix(suggestion: string) {
+  const hit = hits.value[0];
+  if (!hit || !editor.value) return;
+  // The hit says where the mark is now, after edits before it.
+  if (!fixWord(editor.value, hit.range, suggestion, hit)) marks.value.refresh();
+}
 </script>
+
+<template>
+  <DocxEditor.ContextMenu>
+    <DocxEditor.ContextMenu.Start>
+      <template v-if="hits[0]">
+        <DocxEditor.ContextMenu.Item
+          v-for="suggestion in hits[0].range.suggestions"
+          :key="suggestion"
+          :label="suggestion"
+          @select="fix(suggestion)"
+        />
+      </template>
+    </DocxEditor.ContextMenu.Start>
+  </DocxEditor.ContextMenu>
+</template>
 ```
 
-Offsets count UTF-16 code units and follow the editor's `fieldResults` setting. By default, each field is one U+FFFC character in both texts, including `HYPERLINK` fields. Link text in a `w:hyperlink` element is ordinary text. With `fieldResults: 'editable'`, supported saved field results are text. In `keptText`, a non-breaking hyphen is U+2011.
+To fix words from a side list, keep the marks that the source returned, and call `fixWord(editor, mark, suggestion)` from the list. Build the list again after each `change` event. If `fixWord` returns false, the word changed, so check the document again.
 
-If your checker is asynchronous, keep the paragraph object with each request. When the result arrives, compare that object with `editor.getParagraphText(paragraph.blockId)`. If they differ, the paragraph changed, so discard the result and check the new object. Undo can return an earlier object, and its earlier result is still correct. Loading another document can reuse paragraph IDs, so discard pending results when you load a document.
+### Check text asynchronously
+
+If your checker runs on a server, keep the paragraph object and the document identity with each request. The document identity is `editor.getDocumentHandle().loadId`. It is new on every `load()`, which can reuse block IDs. When the result arrives, discard it if the `loadId` changed, or if `editor.getParagraphText(paragraph.blockId)` returns another object. Undo can return an earlier object, and its earlier result is still correct.
+
+```ts
+import type { Editor, ParagraphText } from '@docx-editor.dev/core';
+
+/** Check one paragraph on a server. Resolves to null when the result is stale. */
+export async function checkRemotely(
+  editor: Editor,
+  paragraph: ParagraphText,
+  request: (text: string) => Promise<readonly { start: number; length: number }[]>
+) {
+  const loadId = editor.getDocumentHandle().loadId;
+  const issues = await request(paragraph.acceptedText);
+  const current = editor.getParagraphText(paragraph.blockId);
+  if (editor.getDocumentHandle().loadId !== loadId || current !== paragraph) return null;
+  return issues;
+}
+```
+
+A result can still go stale between the check and a fix. Pass the checked text as `expectedText` to `replaceAcceptedText`, so a stale fix returns `notFound` and changes nothing.
+
+### Check terminology
+
+To find a term, search `acceptedText`, not `editor.findMatches()`. Search finds the text that a tracked deletion removes, and it misses a term that a deletion splits. The following function marks each occurrence of a term with one mark.
+
+```ts
+import { acceptedTextRanges, type Editor, type HighlightRange } from '@docx-editor.dev/core';
+
+export function termMarks(editor: Editor, term: string): HighlightRange[] {
+  const marks: HighlightRange[] = [];
+  for (const paragraph of editor.getParagraphs()) {
+    for (let at = paragraph.acceptedText.indexOf(term); at >= 0;) {
+      const parts = acceptedTextRanges(paragraph, at, at + term.length);
+      const first = parts[0];
+      const last = parts.at(-1);
+      if (first && last) {
+        const end = last.start + last.length;
+        marks.push({
+          blockId: paragraph.blockId,
+          start: first.start,
+          length: end - first.start,
+          expectedText: paragraph.text.slice(first.start, end),
+        });
+      }
+      at = paragraph.acceptedText.indexOf(term, at + term.length);
+    }
+  }
+  return marks;
+}
+```
+
+To replace a term, run `replaceAcceptedText` with the term's offset in `acceptedText` and the term as `expectedText`.
 
 ## Run the source again
 
@@ -189,6 +358,7 @@ For a keyboard open, a highlight counts when the caret is inside it or at either
 | `options.className` | CSS classes added to every mark of the set. |
 | `options.activeIndex` | The range to show in the active color, such as the current result of your own search list. |
 | `applied` | The number of ranges that resolve and paint. |
+| `unavailable` | The number of ranges that do not resolve or paint. While a large document lays out in the background, it includes ranges on pages that are not laid out yet, and it updates as they are. |
 | `refresh()` | Runs the source again, or applies an array again. |
 
 ## Use highlights outside components

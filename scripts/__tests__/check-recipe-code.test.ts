@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { codeBlocks, toRecipeLines, vueScript } from '../check-recipe-code.mjs';
+import { codeBlocks, toRecipeLines, tsModuleName, vueScript } from '../check-recipe-code.mjs';
 
 describe('recipe code check', () => {
   test('finds each fenced block with the recipe line its code starts on', () => {
@@ -25,6 +25,12 @@ describe('recipe code check', () => {
     const { name, script } = vueScript(code);
     expect(name).toBe('MyCards');
     expect(script.split('\n')[2]).toBe('const a = 1;');
+  });
+
+  test('reads the module name of a ts block from its leading comment', () => {
+    expect(tsModuleName('// spelling.ts\nexport const a = 1;')).toBe('spelling');
+    expect(tsModuleName('const a = 1; // spelling.ts')).toBeUndefined();
+    expect(tsModuleName('// Mark each word.\nconst a = 1;')).toBeUndefined();
   });
 
   test('refuses a Vue block without a typed script setup', () => {

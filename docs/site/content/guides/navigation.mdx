@@ -71,6 +71,7 @@ With the core package, use the instance from `createDocxEditor()`. Prevent the d
 | `clearHighlights(name)` | Remove one set of text highlights, or all of them. | No |
 | `getHighlightsAt(clientX, clientY)` | Read the text highlights under a pointer position. | No |
 | `getParagraphs()`, `getParagraphText(blockId)` | Read paragraph text in highlight offsets, such as for a spelling check. | No |
+| `exec({ type: 'replaceAcceptedText', blockId, start, length, text })` | Fix a range of a paragraph's accepted text, such as a misspelled word. | No |
 | `exec({ type: 'setSelection', anchor })` | Move the caret to a paragraph reference. | Yes |
 | `getSelectionRange()` | Read the selection as paragraph IDs and offsets. | No |
 | `getCaretRect()` | Read the caret position in client coordinates. | No |
@@ -534,6 +535,7 @@ The shortcuts work only while focus is in the same editor: its pages, pane, or c
 - Viewing mode searches body stories only. Editing mode also searches headers, footers, notes, and text boxes.
 - Matches go stale after document changes. Search again.
 - `replaceMatch` and `selectMatch()` return `notFound` when the text at a match changed. A `scope` that names another story returns `invalidArgs`. A text-box match returns `unsupported` from `replaceMatch`.
+- `replaceAcceptedText` edits a paragraph in a text box, header, footer, or note without opening it. It returns `notFound` when the paragraph no longer holds the accepted text you checked.
 - Search also finds tracked deleted and moved text. `selectMatch()` selects it for review. `replaceMatch` returns `unsupported` for a match that overlaps it, and changes nothing.
 - A match inside a field result covers the whole field. If the match is only part of the shown result, `selectMatch()` selects the field and `replaceMatch` returns `unsupported`.
 - `replaceAllMatches` refuses a query with more than 2,000 matches with `unsupported`. Narrow the query, or replace in steps.
