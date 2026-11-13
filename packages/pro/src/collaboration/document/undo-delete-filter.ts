@@ -63,15 +63,22 @@ export function whileUndoingCreations<Result>(
 export function whileSteppingReplaced<Result>(
   doc: Y.Doc,
   maps: NodeDescriptorMaps,
-  step: { readonly deletions?: unknown } | undefined,
+  step: { readonly insertions?: unknown; readonly deletions?: unknown } | undefined,
   run: () => Result
 ): Result {
   const replaced = new Map<Y.Map<string>, Map<string, string>>();
+  const insertions = step?.insertions as Parameters<typeof Y.isDeleted>[0] | undefined;
   for (const deleted of deleteSetRuns(step?.deletions)) {
     for (let clock = deleted.clock; clock < deleted.clock + deleted.length;) {
       const item = structAt(doc, { client: deleted.client, clock });
-      if (!item) break;
+      if (!item) {
+        clock += 1;
+        continue;
+      }
       clock = item.id.clock + item.length;
+      // A write the step itself made and replaced, as two quick resizes in one step do, is
+      // not what the step replaced; Yjs skips it the same way.
+      if (insertions && Y.isDeleted(insertions, item.id)) continue;
       const parent = item.parent as unknown;
       if (parent !== maps.attributes && parent !== maps.bindings) continue;
       if (item.parentSub === null || !(item.content instanceof Y.ContentAny)) continue;
@@ -99,7 +106,7 @@ function restoreReplaced(item: Y.Item, maps: NodeDescriptorMaps): void {
   if (item.parentSub === null || item.deleted) return;
   const parent = item.parent as unknown as Y.Map<string>;
   const value = steppingReplaced.get(maps.attributes)?.get(parent)?.get(item.parentSub);
-  // A value Yjs restored, or another client's later write, holds the key instead.
+  // A value Yjs restored holds the key instead.
   if (value === undefined || parent._map.get(item.parentSub) !== item) return;
   parent.set(item.parentSub, value);
 }

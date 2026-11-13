@@ -4,7 +4,7 @@
   "before": "When two peers set the same attribute at the same time and the peer whose value was kept undid its change, Yjs did not restore the value that change replaced, and the other peer's value was already gone. The attribute key held no value, so a required attribute such as a drawing's size was missing and every replica failed to build the element.",
   "after": "An undo or redo that deletes this replica's attribute or binding write, where Yjs restores no value for the key, writes the value that write replaced again, in the same transaction.",
   "reason": "It writes existing attribute and binding keys with values they held before. Older clients read them as before. Shared fields, operations, and synchronization keep their meaning.",
-  "tests": ["packages/pro/src/collaboration/__tests__/document-structure-races.test.ts"],
+  "tests": ["packages/pro/src/collaboration/__tests__/document-image-undo-races.test.ts"],
   "changeset": "undo-restores-replaced-attribute",
   "migration": null
 }
