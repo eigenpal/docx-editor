@@ -35,6 +35,12 @@ import type {
 } from './tree-op-content-controls.ts';
 import type { TableBorderStyle } from '../table-border-style.ts';
 import type { TreeOpRejection } from './tree-op-rejection.ts';
+import type { SetParagraphBordersOp } from './tree-op-paragraph-borders.ts';
+export type {
+  ParagraphBorderEdgeName,
+  ParagraphBorderEdgeWrite,
+  SetParagraphBordersOp,
+} from './tree-op-paragraph-borders.ts';
 
 /**
  * A colour as an op carries it: a literal, a theme reference, or automatic.
@@ -176,6 +182,7 @@ export {
  */
 export type TreeDocOp =
   | SetFieldCodeOp
+  | SetParagraphBordersOp
   | {
       /**
        * Replace one story's complete block structure with fresh plain paragraphs.

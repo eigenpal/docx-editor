@@ -341,6 +341,13 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
       paragraphId: firstParagraphId(store),
       stops: [{ positionTwips: 720, alignment: 'left' }],
     })),
+    story('setParagraphBorders', plainDoc(), (store) => ({
+      op: 'setParagraphBorders',
+      paragraphId: firstParagraphId(store),
+      edges: [
+        { edge: 'bottom', attributes: { val: 'single', sz: '4', space: '1', color: 'auto' } },
+      ],
+    })),
     story('setParagraphMarkProperties', plainDoc(), (store) => ({
       op: 'setParagraphMarkProperties',
       paragraphId: firstParagraphId(store),

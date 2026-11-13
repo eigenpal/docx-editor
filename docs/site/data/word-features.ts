@@ -374,7 +374,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Edit paragraph shading and display existing paragraph borders. Common line borders display; decorative and three-dimensional borders use approximations. Saving preserves borders, but you cannot add, change, or remove them through the editor.',
+      'Edit paragraph shading in the editor, and paragraph borders through the editing API. The editor has no border controls. Decorative and three-dimensional borders display as approximations.',
   },
   {
     id: 'paragraphs.tabs',

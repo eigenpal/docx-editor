@@ -150,6 +150,7 @@ import {
   applySetSectionMark,
   applySetSectionProperties,
 } from './tree-op-section.ts';
+import { applySetParagraphBorders } from './tree-op-paragraph-borders.ts';
 import { pageFieldContentBuilders, pageFieldModelLength } from './tree-op-fields.ts';
 import { applyInsertComplexField } from './tree-op-field-insert.ts';
 import { applySetFieldResult } from './tree-op-field-result-write.ts';
@@ -500,6 +501,8 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
         nextId,
         op.revision
       );
+    case 'setParagraphBorders':
+      return applySetParagraphBorders(part, paragraph, op, options, nextId);
     case 'setParagraphTabStops':
       return applySetParagraphTabStops(
         part,

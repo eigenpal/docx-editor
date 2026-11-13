@@ -90,6 +90,15 @@ export type {
   AutomationParagraphFormatRead,
   AutomationParagraphFormatWrite,
 } from './formatting.ts';
+export type {
+  AutomationBorderColorIndex,
+  AutomationBorderLineStyle,
+  AutomationBorderLineWidth,
+  AutomationParagraphBorderEdge,
+  AutomationParagraphBorderRead,
+  AutomationParagraphBorderWrite,
+  AutomationParagraphBordersWrite,
+} from './paragraph-borders.ts';
 
 // The operation vocabulary.
 export {

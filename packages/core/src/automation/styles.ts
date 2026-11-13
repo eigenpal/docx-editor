@@ -29,6 +29,8 @@ import {
   type DirectionSources,
 } from '../layout/paragraph-direction-inheritance.ts';
 import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
+import { buildStyleCascadeTable, type StyleCascadeTable } from '../layout/style-cascade.ts';
+import { inheritedParagraphBorderElement } from '../layout/paragraph-border-resolve.ts';
 import { MAX_STYLE_NAME, styleDefinitionsOf } from './style-definitions.ts';
 
 /** What the document says its paragraph styles are. */
@@ -58,6 +60,11 @@ export interface AutomationStyleIndex {
    * layout resolves them. `styleId` resolves it as if it named that paragraph style.
    */
   inheritsRtl(part: OoxmlPart, paragraph: OoxmlNode, styleId?: string): boolean;
+  /**
+   * The last `w:pBdr` the paragraph inherits from its style chain and the document defaults,
+   * ignoring its own, as layout paints it. `styleId` resolves it as if the paragraph named it.
+   */
+  inheritedBorders(paragraph: OoxmlNode, styleId?: string): OoxmlNode | undefined;
 }
 
 /**
@@ -77,6 +84,13 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
   // Cell styles resolve as the proposed document shows them, like automation's run writes.
   const inheritsRtl = (target: OoxmlPart, paragraph: OoxmlNode, styleId?: string) =>
     paragraphInheritsRtl(sources, target, paragraph, 'proposed', styleId);
+  // Built on first use: most runs never read or write a border.
+  let cascade: StyleCascadeTable | undefined;
+  const inheritedBorders = (paragraph: OoxmlNode, styleId?: string) => {
+    if (!sources.styles) return undefined;
+    cascade ??= buildStyleCascadeTable(sources.styles, undefined, sources.settings);
+    return inheritedParagraphBorderElement(cascade, paragraphPropertiesNodeOf(paragraph), styleId);
+  };
   if (!part) {
     return Object.freeze({
       nameOf: () => null,
@@ -85,6 +99,7 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
       defaultId: null,
       present: false,
       inheritsRtl,
+      inheritedBorders,
     });
   }
   // The same cached definitions the style listing reads, so the two agree on every name.
@@ -97,6 +112,7 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
     defaultId,
     present: true,
     inheritsRtl,
+    inheritedBorders,
   });
 }
 

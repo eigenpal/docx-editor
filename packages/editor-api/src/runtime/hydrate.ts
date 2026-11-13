@@ -15,6 +15,7 @@ import type {
   AutomationFontRead,
   AutomationHandle,
   AutomationPageSetupRead,
+  AutomationParagraphBorderRead,
   AutomationParagraphFormatRead,
   AutomationSpan,
   AutomationStyleRead,
@@ -73,6 +74,15 @@ export function hydratedParagraphFormat(
 ): AutomationParagraphFormatRead {
   if (value.kind !== 'paragraphFormat') throw wrongShape(target);
   return value.format;
+}
+
+/** A paragraph's five borders, in collection order. */
+export function hydratedParagraphBorders(
+  value: AutomationValue,
+  target: string
+): readonly AutomationParagraphBorderRead[] {
+  if (value.kind !== 'paragraphBorders' || value.borders.length !== 5) throw wrongShape(target);
+  return value.borders;
 }
 
 /** A paragraph style name, or null where nothing names one. */

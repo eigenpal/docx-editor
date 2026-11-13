@@ -42,6 +42,7 @@ import { List, ListItem } from './lists.ts';
 import { requireStyleName, spanRefOf } from './addressing.ts';
 import { Table, tableInsertion } from './tables.ts';
 import { Font } from './font.ts';
+import { BorderUniversalCollection, type BorderEdge, type BorderWritableField } from './borders.ts';
 import {
   besideLocation,
   insertableText,
@@ -88,6 +89,7 @@ export type ParagraphReadingOrder = 'LeftToRight' | 'RightToLeft';
  */
 export class Paragraph extends ModelObject implements PromisedItem {
   #font: Font | undefined;
+  #borders: BorderUniversalCollection | undefined;
   #shapes: ShapeCollection | undefined;
   #list: List | undefined;
   #listItem: ListItem | undefined;
@@ -192,6 +194,24 @@ export class Paragraph extends ModelObject implements PromisedItem {
   get font(): Font {
     this.#font ??= Font.of(this.context, `${this.path.label}.font`, this.path, 'paragraph');
     return this.#font;
+  }
+
+  /**
+   * The paragraph's borders: top, left, bottom, right, then the border between paragraphs.
+   *
+   * Reads answer the borders the page shows, including ones the paragraph's style supplies.
+   * Border writes join this paragraph's other formatting writes in the same sync as one write.
+   * With change tracking on, they are recorded as one paragraph formatting revision.
+   */
+  get borders(): BorderUniversalCollection {
+    this.#borders ??= BorderUniversalCollection.of(
+      this.context,
+      `${this.path.label}.borders`,
+      this.path,
+      () => this.#handle(),
+      (edge, field, value) => this.#authorBorder(edge, field, value)
+    );
+    return this.#borders;
   }
 
   /**
@@ -663,7 +683,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
    * have been built from the tree the first already changed. The bag is detached when sync captures
    * the queue, so later assignments belong to the next sync.
    */
-  #authorFormat(field: FormatField, value: unknown): void {
+  #authorFormat(field: FormatField | 'borders', value: unknown): void {
     this.requireUsablePath();
     if (this.#format) {
       this.#format[field] = value;
@@ -688,6 +708,35 @@ export class Paragraph extends ModelObject implements PromisedItem {
         if (this.#format === pending) this.#format = undefined;
       }
     );
+  }
+
+  /**
+   * Fold one border assignment into this paragraph's pending write.
+   *
+   * One sync carries the last value of each property, not the order they were set in, so a later
+   * assignment drops an earlier one it overrides: a line style or visibility replaces the other
+   * where they disagree, and `color` and `colorIndex` replace each other.
+   */
+  #authorBorder(edge: BorderEdge, field: BorderWritableField, value: unknown): void {
+    const pending = (this.#format?.borders ?? {}) as Record<string, Record<string, unknown>>;
+    const current = { ...(pending[edge] ?? {}) };
+    if (field === 'lineStyle') {
+      delete current.isVisible;
+      if (value === 'None') {
+        current.isVisible = false;
+        delete current.lineStyle;
+      } else current.lineStyle = value;
+    } else if (field === 'isVisible') {
+      if (value === false) {
+        delete current.lineStyle;
+        current.isVisible = false;
+      } else if (current.lineStyle === undefined) current.isVisible = true;
+    } else {
+      if (field === 'color') delete current.colorIndex;
+      if (field === 'colorIndex') delete current.color;
+      current[field] = value;
+    }
+    this.#authorFormat('borders', { ...pending, [edge]: current });
   }
 
   #listAt(label: string): List {

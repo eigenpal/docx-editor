@@ -113,6 +113,40 @@ await runtime.run(async (context) => {
 
 For editor commands, see [Right-to-left text](/docs/2.x/guides/right-to-left).
 
+### Paragraph borders
+
+`Paragraph.borders` returns five `BorderUniversal` items. The order is top, left, bottom, right, then the border between paragraphs. That last item has `inside` set to `true`.
+
+The following example reads the borders, then adds a red bottom rule:
+
+```ts
+await runtime.run(async (context) => {
+  const paragraph = context.document.body.paragraphs.getFirst();
+  const borders = paragraph.borders;
+  borders.load('items/lineStyle,items/lineWidth,items/color');
+  await context.sync();
+
+  const bottom = borders.items[2];
+  bottom.set({ lineStyle: 'Single', lineWidth: 'Pt150', color: '#C00000' });
+  await context.sync();
+});
+```
+
+| Property | Values |
+| --- | --- |
+| `lineStyle` | `BorderLineStyle` values. `None` turns the edge off. |
+| `isVisible` | `true` adds a single half-point automatic line to an edge with none. `false` turns the edge off. |
+| `lineWidth` | `LineWidth` values, from `Pt025` to `Pt600` |
+| `color` | `#RRGGBB`. A write removes the edge's theme color. |
+| `colorIndex` | `Auto` and the 16 basic colors. `ClassicRed`, `ClassicBlue`, and `ByAuthor` fail with `InvalidArgument`. |
+
+- Reads return the borders the page shows, from the paragraph or its style. A value that has no enum member reads as `null`.
+- A width or color on an edge with no line fails with `InvalidArgument`. Set `lineStyle` or `isVisible` in the same sync.
+- If the style supplies borders, a write copies them into the paragraph. A style edge you turn off is saved as `w:val="nil"`.
+- The vertical bar border (`w:bar`) has no item. Writes keep it.
+- `artStyle`, `artWidth`, and `applyPageBordersToAllSections` throw `NotSupported`.
+- With `TrackMineOnly`, a border write records one paragraph property revision.
+
 ## Apply an existing style
 
 Assign the display name of a paragraph style the document defines:

@@ -23,6 +23,14 @@ export {
 export { Document } from './document.ts';
 export { DocumentProperties } from './document-properties.ts';
 export { Font, UnderlineType } from './font.ts';
+export {
+  BorderUniversal,
+  BorderUniversalCollection,
+  type BorderUniversalUpdateData,
+  type UpdateOptions,
+} from './borders.ts';
+export { BorderLineStyle, ColorIndex, LineWidth } from './border-enums.ts';
+export { PageBorderArt } from './page-border-art.ts';
 export { List, ListCollection, ListItem, ListBullet, ListNumbering } from './lists.ts';
 export { NoteItem, NoteItemCollection, type NoteItemType } from './notes.ts';
 export {
