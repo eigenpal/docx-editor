@@ -42,6 +42,7 @@ import {
 } from './surface-composition-commit.ts';
 import { paintedTextOf, paragraphReplacePlan } from './surface-input.ts';
 import { collapsedAt } from './surface-selection-ops.ts';
+import { pagesOwnSelection } from './surface-selection-owner.ts';
 
 /** What the composition root lends this lane. */
 export interface SurfaceSelectionSyncDeps {
@@ -413,31 +414,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     return true;
   }
 
-  /**
-   * Whether writing the selection would take it from someone else.
-   *
-   * True when focus or the selection is already inside these pages, and also when NOTHING
-   * holds a selection — writing one then takes it from nobody. What this refuses is the case
-   * that matters: a caret living in another element, which a repaint here would otherwise
-   * yank away without an interaction.
-   */
-  function ownsSelection(): boolean {
-    const active = hostDocument().activeElement;
-    if (active && pagesLayer.contains(active)) return true;
-    // Text inputs can own focus while the document Selection is empty or still
-    // points into our pages. Their native caret is not represented by that Selection.
-    if (active && active !== hostDocument().body && active !== hostDocument().documentElement)
-      return false;
-    const domSelection = hostDocument().getSelection();
-    if (!domSelection || domSelection.rangeCount === 0) return true;
-    const anchor = domSelection.anchorNode;
-    if (!anchor) return true;
-    // A selection anchored in a subtree that has been removed from the document belongs to
-    // nobody — a surface that was torn down, or a re-rendered host. Refusing to write over
-    // it would leave this surface unable to show its own caret.
-    if (!anchor.isConnected) return true;
-    return pagesLayer.contains(anchor);
-  }
+  const ownsSelection = (): boolean => pagesOwnSelection(pagesLayer);
 
   /** Mirror the native selection into the model. Ignores selections outside painted text. */
   const adoptDomSelection = (): void => {
@@ -828,6 +805,11 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // be read straight back, fighting the user mid-drag.
       if (applyingSelection) return;
       if (composing) return;
+      // Focus in other chrome (an open context menu, a popover field): a change here is a
+      // repaint replacing the nodes the selection sat in, never a gesture. Adopting that
+      // collapsed selection moved the caret to the document start, and the claimed write
+      // then took focus back from that chrome.
+      if (!ownsSelection()) return;
       if (deps.isGesturing?.()) return;
       if (deps.holdsCellSelection?.()) return;
       // A prevented `insertReplacementText` leaves the browser's own selection parked over
