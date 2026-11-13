@@ -54,6 +54,8 @@ import { Range } from './range.ts';
 import { searchOptions as readSearchOptions, type SearchOptions } from './search-options.ts';
 import { optionalFlag, reviewedTextVersion, textRangeMarks } from './text-ranges.ts';
 import { clientResult, type ClientResult } from '../runtime/client-result.ts';
+import { AnnotationCollection, insertAnnotations } from './annotations.ts';
+import type { AnnotationSet } from './annotation-input.ts';
 
 /** Most delimiters one `split` may name. The host applies its own cap as well. */
 const MAX_DELIMITERS = 16;
@@ -475,6 +477,42 @@ export class Paragraph extends ModelObject implements PromisedItem {
       (value) => fill(hydratedText(value, target))
     );
     return result;
+  }
+
+  /**
+   * Mark proofing issues in this paragraph. Answers the new annotation ids, in critique order.
+   *
+   * `start` and `length` count in this paragraph's `text`. Annotations are view state: they are
+   * not saved, not shared with collaborators, and gone when the runtime is disposed. The
+   * browser runtime paints them; a server runtime keeps them as data. A critique past the end
+   * of the text refuses with `InvalidArgument`.
+   *
+   * @example
+   * ```ts
+   * const ids = paragraph.insertAnnotations({
+   *   critiques: [{ colorScheme: 'Red', start: 4, length: 3, popupOptions: {
+   *     brandingTextResourceId: '', subtitleResourceId: '', titleResourceId: '',
+   *     suggestions: ['the'],
+   *   } }],
+   * });
+   * await context.sync();
+   * console.log(ids.value);
+   * ```
+   */
+  insertAnnotations(annotations: AnnotationSet): ClientResult<string[]> {
+    return insertAnnotations(
+      this.context,
+      (action) => this.enqueue(action),
+      `${this.path.label}.insertAnnotations`,
+      () => this.#handle(),
+      annotations
+    );
+  }
+
+  /** The annotations on this paragraph, in text order. Load the collection before you read it. */
+  getAnnotations(): AnnotationCollection {
+    this.requireUsablePath();
+    return AnnotationCollection.of(this.context, `${this.path.label}.getAnnotations()`, this.path);
   }
 
   /** Start a new independent bullet list with this paragraph. Sync before using the returned list. */

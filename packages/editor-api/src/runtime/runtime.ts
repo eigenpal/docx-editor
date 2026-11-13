@@ -43,6 +43,7 @@ import { DocxEditorError, fail } from './errors.ts';
 import { hydratedHandle } from './hydrate.ts';
 import type { RootHandles } from './internals.ts';
 import { RequestContext, type RuntimeSession } from './request-context.ts';
+import { AnnotationStore, type AnnotationPainter } from './annotation-store.ts';
 import {
   openPreview,
   type DocumentPreview,
@@ -302,6 +303,8 @@ export interface CreateRuntimeOptions {
    * Runs a batch inside an editor history group, answering `null` for a handle that is not
    * open on the editor. Only the browser runtime has one; without it `historyGroup` refuses.
    */
+  /** Paints this runtime's proofing annotations. Only the browser runtime has one. */
+  readonly annotationPainter?: AnnotationPainter;
   readonly historyGroups?: {
     /** One run's frames of `group`, or `null` when it is not an open handle of the editor. */
     begin(group: HistoryGroup): {
@@ -374,6 +377,7 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
   }
   let disposed = false;
   let roots: RootHandles | null = null;
+  const annotations = new AnnotationStore(host, revisionTextView, options.annotationPainter);
 
   const assertLive = (target?: string): void => {
     if (disposed) fail({ code: 'RuntimeDisposed', ...(target === undefined ? {} : { target }) });
@@ -420,6 +424,7 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
     ...(options.onRefusal ? { onRefusal: options.onRefusal } : {}),
     ...(options.onException ? { onException: options.onException } : {}),
     id: {},
+    annotations,
     roots: resolveRoots,
     assertLive,
     openDocument: (context) => Document.open(context),
@@ -449,8 +454,10 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
   /** A run over a preview's fork: its own roots, its own adoption identity, its own host. */
   const runOn = async <T>(on: AutomationHost, callback: PreviewCallback<T>): Promise<T> => {
     let forkRoots: RootHandles | null = null;
+    // A preview's fork mints its own handles, and annotations are not part of what it shows.
+    const { annotations: _annotations, ...forkSession } = session;
     const { context, finish } = RequestContext.begin({
-      ...session,
+      ...forkSession,
       host: on,
       capabilities: Object.freeze({ ...on.capabilities, preview: false }),
       id: {},
@@ -536,6 +543,7 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
       disposed = true;
       roots = null;
       for (const open of [...previews]) open.discard();
+      annotations.dispose();
       host.dispose();
     },
   };
