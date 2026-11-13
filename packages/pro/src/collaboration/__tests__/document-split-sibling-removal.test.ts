@@ -132,3 +132,36 @@ describe('removing a paragraph of a concurrent split run', () => {
       });
     }
 });
+
+describe('a split piece an undo put back', () => {
+  for (const { label, ids: clientIds } of ORDERS)
+    for (const joiner of ['alice', 'bob'] as const)
+      for (const splitter of ['alice', 'bob'] as const)
+        test(`splitting it again shows both halves in its place (${label}, ${joiner} undoes, ${splitter} splits)`, async () => {
+          const r = await room(clientIds, 'abcdefgh');
+          r.pause();
+          r.split(r.alice, 0, 2);
+          r.split(r.bob, 0, 4);
+          r.resume();
+          const pieces = r.converged();
+          expect(pieces.map((entry) => entry.text)).toEqual(['ab', 'cd', 'efgh', 'End']);
+          later();
+          r.harness.apply(r[joiner], [
+            { op: 'joinParagraphs', firstId: pieces[1]!.id, secondId: pieces[2]!.id },
+          ]);
+          r.converged();
+          expect(r[joiner].room.session.undo()).toBe(true);
+          expect(ids(r.converged())).toEqual(ids(pieces));
+          later();
+          r.split(r[splitter], 2, 2);
+          // The half split off goes right after the piece, in the splitter's view too.
+          expect(r.shown(r[splitter]).map((entry) => entry.text)).toEqual([
+            'ab',
+            'cd',
+            'ef',
+            'gh',
+            'End',
+          ]);
+          expect(r.converged().map((entry) => entry.text)).toEqual(['ab', 'cd', 'ef', 'gh', 'End']);
+        });
+});
