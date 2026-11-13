@@ -90,6 +90,7 @@ await runtime.run(async (context) => {
 ```
 
 - `accept()` edits only the characters that differ. With `TrackMineOnly`, the fix is a tracked change. The state becomes `Accepted`, and other annotations in the paragraph move with the fix.
+- With `TrackMineOnly`, use one `context.sync()` for each `accept()` in the same paragraph. A second tracked fix in that paragraph and sync fails with `ConflictingChanges`, and nothing changes.
 - `reject()` sets the state to `Rejected`. `delete()` forgets the annotation.
 - The following table lists the refusals of `accept()`. Nothing changes after a refusal.
 

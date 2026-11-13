@@ -333,6 +333,8 @@ export class CritiqueAnnotation extends ModelObject {
    * - `InvalidArgument` when the suggestion holds a paragraph mark or U+FFFC.
    * - `InvalidObjectPath` with `edit.stale-target` when an edit changed the critiqued text, or
    *   the annotation was decided or deleted.
+   * - `ConflictingChanges` when tracking is on and another tracked edit in the same sync
+   *   changes this paragraph. Sync after each tracked `accept()` in one paragraph.
    */
   accept(): void {
     const target = `${this.path.label}.accept`;

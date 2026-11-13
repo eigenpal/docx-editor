@@ -279,6 +279,43 @@ describe('accept, reject, and delete', () => {
     }
   });
 
+  test('two tracked accepts in one paragraph need one sync each', async () => {
+    const runtime = await open(p('Teh cat and teh dog.'));
+    try {
+      const critiques = [
+        { colorScheme: 'Red' as const, start: 0, length: 3, popupOptions: popup('The') },
+        { colorScheme: 'Red' as const, start: 12, length: 3, popupOptions: popup('the') },
+      ];
+      const error = await failure(
+        runtime.run(async (context) => {
+          context.document.changeTrackingMode = 'TrackMineOnly';
+          const ids = await insert(context, { critiques });
+          for (const id of ids) context.document.getAnnotationById(id).critiqueAnnotation.accept();
+          await context.sync();
+        })
+      );
+      expect(error).toMatchObject({ code: 'ConflictingChanges' });
+      expect(await firstText(runtime)).toBe('Teh cat and teh dog.');
+
+      await runtime.run(async (context) => {
+        context.document.changeTrackingMode = 'TrackMineOnly';
+        const ids = await insert(context, { critiques });
+        for (const id of ids) {
+          context.document.getAnnotationById(id).critiqueAnnotation.accept();
+          await context.sync();
+        }
+      });
+      const reviewed = await runtime.run(async (context) => {
+        const result = context.document.body.paragraphs.getFirst().getReviewedText('Current');
+        await context.sync();
+        return result.value;
+      });
+      expect(reviewed).toBe('The cat and the dog.');
+    } finally {
+      runtime.dispose();
+    }
+  });
+
   test('accept without a suggestion refuses, and changes nothing', async () => {
     const runtime = await open(p('Teh cat.'));
     try {
