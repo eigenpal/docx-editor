@@ -315,8 +315,10 @@ export class Paragraph extends ModelObject implements PromisedItem {
    * force, so `Exactly` on a 1.5-line paragraph gives exactly 18 points. `Multiple` at 12, 18, or
    * 24 points reads back as `Single`, `OnePointFive`, or `Double`. When `lineSpacingRule` and
    * `lineSpacing` share a sync, the rule applies first. Writing the rule the paragraph already
-   * shows adds no formatting. With change tracking on, a write is
-   * recorded as a paragraph property revision.
+   * shows adds no formatting. With change tracking on, a write is recorded as a paragraph
+   * property revision.
+   *
+   * @docxEditorExtension
    */
   get lineSpacingRule(): ParagraphLineSpacingRule {
     return this.loadedProperty<ParagraphLineSpacingRule>('lineSpacingRule');
