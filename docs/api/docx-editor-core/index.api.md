@@ -8,6 +8,15 @@
 export function acceptedOffsetFromText(paragraph: ParagraphText, offset: number): number;
 
 // @public
+export interface AcceptedTextRange {
+    readonly blockId: string;
+    readonly expectedText?: string;
+    readonly length: number;
+    readonly scope?: ViewScope;
+    readonly start: number;
+}
+
+// @public
 export function acceptedTextRanges(paragraph: ParagraphText, from: number, to: number): HighlightRange[];
 
 // @public
@@ -4048,11 +4057,7 @@ export type RenderableImageMime = SupportedImageMime | VectorImageMime;
 
 // @public
 export interface ReplaceAcceptedTextCommand {
-    readonly blockId: string;
-    readonly expectedText?: string;
-    readonly length: number;
-    readonly scope?: ViewScope;
-    readonly start: number;
+    readonly match: AcceptedTextRange;
     readonly text: string;
 }
 

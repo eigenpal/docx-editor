@@ -5,6 +5,15 @@
 ```ts
 
 // @public
+export interface AcceptedTextRange {
+    readonly blockId: string;
+    readonly expectedText?: string;
+    readonly length: number;
+    readonly scope?: ViewScope;
+    readonly start: number;
+}
+
+// @public
 export interface AnchorHighlightAnimation {
     readonly durationMs?: number;
     readonly easing?: string;
@@ -2359,11 +2368,7 @@ export type RenderableImageMime = SupportedImageMime | VectorImageMime;
 
 // @public
 export interface ReplaceAcceptedTextCommand {
-    readonly blockId: string;
-    readonly expectedText?: string;
-    readonly length: number;
-    readonly scope?: ViewScope;
-    readonly start: number;
+    readonly match: AcceptedTextRange;
     readonly text: string;
 }
 

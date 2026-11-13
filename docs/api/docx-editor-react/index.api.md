@@ -5,6 +5,7 @@
 ```ts
 
 import { acceptedOffsetFromText } from '@docx-editor.dev/core/editor';
+import { AcceptedTextRange } from '@docx-editor.dev/core/contracts/editor';
 import { acceptedTextRanges } from '@docx-editor.dev/core/editor';
 import { AnchorHighlightAnimation } from '@docx-editor.dev/core/contracts/editor';
 import { AnchorHighlightOptions } from '@docx-editor.dev/core/contracts/editor';
@@ -245,6 +246,8 @@ import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
 import { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
 
 export { acceptedOffsetFromText }
+
+export { AcceptedTextRange }
 
 export { acceptedTextRanges }
 
