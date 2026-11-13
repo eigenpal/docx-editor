@@ -126,6 +126,7 @@ import {
 import { createDocumentOpenFailureState } from './document-open-failure.ts';
 import { execEditorCommand } from './docx-editor-exec.ts';
 import { replaceMatchTarget } from './docx-editor-replace-match.ts';
+import { replaceAcceptedTextRefusal } from './docx-editor-replace-accepted-text.ts';
 import type { TextTarget } from './text-target.ts';
 import { createMountHistoryGroups } from './editor-history-groups.ts';
 import { createPublishSignal } from './surface-publish-signal.ts';
@@ -2099,6 +2100,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (command.type === 'replaceMatch') {
         const target = replaceMatchTarget(surface!, command.match);
         if (!target.ok) return target;
+      }
+      if (command.type === 'replaceAcceptedText') {
+        const paragraph = editor.getParagraphText(command.blockId);
+        const refusal = replaceAcceptedTextRefusal(surface!, paragraph, command);
+        if (refusal) return refusal;
       }
       const proposal = proposalCapabilityRefusal(command, surface!, author);
       if (proposal) return proposal;

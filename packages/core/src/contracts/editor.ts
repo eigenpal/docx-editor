@@ -32,7 +32,7 @@ import type { EditorHighlights, HighlightRange } from './editor-highlights.ts';
 import type { EditorSelectionRange, EditorSelectionReads } from './editor-selection-range.ts';
 export type * from './editor-selection-range.ts';
 export type * from './editor-highlights.ts';
-import type { EditorParagraphText } from './editor-paragraph-text.ts';
+import type { EditorParagraphText, ReplaceAcceptedTextCommand } from './editor-paragraph-text.ts';
 export type * from './editor-paragraph-text.ts';
 import type { EditorReviewHits } from './editor-review-hits.ts';
 import type { ReviewItemQuery } from './editor-review-query.ts';
@@ -1196,6 +1196,9 @@ export interface EditorCommands
    * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement | Replace as a tracked change}
    */
   replaceMatch: { match: TextMatch | HighlightRange; text: string };
+
+  /** Fix a range of `ParagraphText.acceptedText`, editing only the letters that differ. */
+  replaceAcceptedText: ReplaceAcceptedTextCommand;
 
   /**
    * Replace every match of `query` with `text` (empty deletes) in one undo step, across the

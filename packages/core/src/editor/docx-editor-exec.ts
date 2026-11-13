@@ -6,6 +6,7 @@ import { CHART_CLIPBOARD_REASON, fragmentRefusalOf } from './clipboard-object-se
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
 import { execReplaceMatch } from './docx-editor-replace-match.ts';
+import { execReplaceAcceptedText } from './docx-editor-replace-accepted-text.ts';
 import { execReplaceAllMatches } from './docx-editor-replace-all.ts';
 import { execSelectionEdit, runFormatRefusal } from './docx-editor-selection-edits.ts';
 // Command dispatch for `createDocxEditor` (editor seam).
@@ -68,7 +69,7 @@ export function execEditorCommand(
     readonly translate?: (key: string, params?: Record<string, string | number>) => string;
     readonly editor?: Pick<
       import('./docx-editor-types.ts').DocxEditorInstance,
-      'surface' | 'mountGeneration'
+      'surface' | 'mountGeneration' | 'getParagraphText'
     >;
   }
 ): ExecResult | null {
@@ -431,6 +432,12 @@ export function execEditorCommand(
     }
     case 'replaceMatch':
       return execReplaceMatch(mounted, command);
+    case 'replaceAcceptedText':
+      return execReplaceAcceptedText(
+        mounted,
+        (blockId) => options?.editor?.getParagraphText(blockId) ?? null,
+        command
+      );
     case 'replaceAllMatches':
       return execReplaceAllMatches(mounted, command);
     case 'undo':

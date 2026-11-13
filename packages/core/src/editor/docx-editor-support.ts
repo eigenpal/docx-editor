@@ -25,6 +25,7 @@ import { isDocAnchor, isDocAnchorRange } from './anchor-resolution.ts';
 import { blankDocumentBytes } from './blank-document.ts';
 import { tableCommandCanSupport } from './table-command-plan.ts';
 import { replaceMatchArgumentRefusal } from './docx-editor-replace-match.ts';
+import { replaceAcceptedTextArgumentRefusal } from './docx-editor-replace-accepted-text.ts';
 import { replaceAllMatchesArgumentRefusal } from './docx-editor-replace-all.ts';
 import { classifySelectionEdit } from './docx-editor-selection-edits.ts';
 
@@ -622,6 +623,8 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return mutatingUnlessRefused(replaceAllMatchesArgumentRefusal(command));
     case 'replaceMatch':
       return mutatingUnlessRefused(replaceMatchArgumentRefusal(command));
+    case 'replaceAcceptedText':
+      return mutatingUnlessRefused(replaceAcceptedTextArgumentRefusal(command));
     case 'proposeDeletion':
       return command.author !== undefined && command.author.trim().length === 0
         ? {
