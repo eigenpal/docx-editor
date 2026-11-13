@@ -375,6 +375,29 @@ describe("a paragraph's own paragraph formatting", () => {
     runtime.dispose();
   });
 
+  test('lineSpacing keeps the line rule the paragraph states, and defaults to multiples of a line', async () => {
+    const runtime = await serverRuntime(
+      docx(
+        '<w:p><w:pPr><w:spacing w:line="240" w:lineRule="exact"/></w:pPr><w:r><w:t>exact</w:t></w:r></w:p>' +
+          '<w:p><w:pPr><w:spacing w:line="240" w:lineRule="atLeast"/></w:pPr><w:r><w:t>least</w:t></w:r></w:p>' +
+          p('none')
+      )
+    );
+    await runtime.run(async (context) => {
+      const paragraphs = context.document.body.paragraphs;
+      paragraphs.load();
+      await context.sync();
+      for (const paragraph of paragraphs.items) paragraph.lineSpacing = 18;
+      await context.sync();
+    });
+    const xml = await mainXmlOf(runtime);
+    expect(xml).toContain('<w:spacing w:line="360" w:lineRule="exact"/>');
+    expect(xml).toContain('<w:spacing w:line="360" w:lineRule="atLeast"/>');
+    // 18 points under the `auto` rule is 1.5 lines: one line is 12 points.
+    expect(xml).toContain('<w:spacing w:line="360" w:lineRule="auto"/>');
+    runtime.dispose();
+  });
+
   test('an alignment this API does not have is refused at the assignment', async () => {
     const runtime = await serverRuntime(SPACED);
     const code = await runtime.run(async (context) => {

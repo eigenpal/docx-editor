@@ -262,7 +262,13 @@ export class Paragraph extends ModelObject implements PromisedItem {
     this.#authorFormat('rightIndent', requirePoints(value, `${this.path.label}.rightIndent`));
   }
 
-  /** Points between the paragraph's lines. */
+  /**
+   * Points between the paragraph's lines.
+   *
+   * A write keeps the line rule the paragraph states. Under an exact or minimum rule the value is
+   * the line height; under the multiple rule 12 points is one line. A paragraph that states no
+   * rule gets the multiple rule, even when its style states another one.
+   */
   get lineSpacing(): number {
     return this.loadedProperty<number>('lineSpacing');
   }
