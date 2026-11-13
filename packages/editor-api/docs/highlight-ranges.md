@@ -69,7 +69,9 @@ A tracked change can make a word misspelled, for example a deletion of one lette
 
 ### Mark misspelled words
 
-The following module, `spelling.ts`, checks each paragraph once. An unchanged paragraph returns the same object, so the cache skips it after the first check. Each word gets one mark from the start of its first part to the end of its last part, so a word that a deletion splits shows one mark. The source skips the word at the caret, because the reader is still typing it.
+The following module, `spelling.ts`, checks each paragraph once. An unchanged paragraph returns the same object, so the cache skips it after the first check. It finds words with `Intl.Segmenter` in the language of each `proofing` stretch, so `don’t` is one word. It normalizes each word to NFC before the lookup, and keeps the offsets of the original text. Each word gets one mark from the start of its first part to the end of its last part, so a word that a deletion splits shows one mark.
+
+The source skips the word at the caret only while the reader types in that paragraph. It counts an edit as typing when the caret paragraph changed since the last run. When a document opens, the caret is at the start of the first paragraph, and the first word still gets its mark.
 
 ```ts
 // spelling.ts
@@ -96,49 +98,74 @@ export type SpellingRange = HighlightRange & {
   readonly suggestions: readonly string[];
 };
 
-const WORD = /[\p{L}\p{M}']+/gu;
+const segmenters = new Map<string, Intl.Segmenter>();
+
+function wordSegmenter(lang: string | null): Intl.Segmenter {
+  const key = lang ?? '';
+  let segmenter = segmenters.get(key);
+  if (!segmenter) {
+    segmenter = new Intl.Segmenter(lang ?? undefined, { granularity: 'word' });
+    segmenters.set(key, segmenter);
+  }
+  return segmenter;
+}
 
 function check(paragraph: ParagraphText, checker: SpellChecker): SpellingRange[] {
   const marks: SpellingRange[] = [];
-  for (const match of paragraph.acceptedText.matchAll(WORD)) {
-    const from = match.index;
-    const stretch = paragraph.proofing.find(
-      (part) => from >= part.acceptedStart && from < part.acceptedStart + part.length
+  for (const stretch of paragraph.proofing) {
+    if (stretch.noProof) continue;
+    const text = paragraph.acceptedText.slice(
+      stretch.acceptedStart,
+      stretch.acceptedStart + stretch.length
     );
-    if (!stretch || stretch.noProof) continue;
-    const word = match[0];
-    if (!checker.isMisspelled(word, stretch.lang)) continue;
-    // One range per visible part of the word. The mark covers all of them.
-    const parts = acceptedTextRanges(paragraph, from, from + word.length);
-    const first = parts[0];
-    const last = parts.at(-1);
-    if (!first || !last) continue;
-    const end = last.start + last.length;
-    marks.push({
-      blockId: paragraph.blockId,
-      start: first.start,
-      length: end - first.start,
-      expectedText: paragraph.text.slice(first.start, end),
-      word,
-      acceptedStart: from,
-      suggestions: checker.suggest(word, stretch.lang),
-    });
+    for (const segment of wordSegmenter(stretch.lang).segment(text)) {
+      if (!segment.isWordLike) continue;
+      const word = segment.segment;
+      const from = stretch.acceptedStart + segment.index;
+      // Look up the normalized word. The offsets stay on the original text.
+      const lookup = word.normalize('NFC');
+      if (!checker.isMisspelled(lookup, stretch.lang)) continue;
+      // One range per visible part of the word. The mark covers all of them.
+      const parts = acceptedTextRanges(paragraph, from, from + word.length);
+      const first = parts[0];
+      const last = parts.at(-1);
+      if (!first || !last) continue;
+      const end = last.start + last.length;
+      marks.push({
+        blockId: paragraph.blockId,
+        start: first.start,
+        length: end - first.start,
+        expectedText: paragraph.text.slice(first.start, end),
+        word,
+        acceptedStart: from,
+        suggestions: checker.suggest(lookup, stretch.lang),
+      });
+    }
   }
   return marks;
 }
 
-/** A highlight source that marks each misspelled word, except the word at the caret. */
+/**
+ * A highlight source that marks each misspelled word. While the reader types in a
+ * paragraph, it skips the word at the caret.
+ */
 export function spellingSource(checker: SpellChecker) {
   const checked = new WeakMap<ParagraphText, SpellingRange[]>();
+  let seen: ParagraphText | null = null;
+  let typing = false;
   return (editor: Editor): SpellingRange[] => {
     const caret = editor.getSelectionRange()?.head;
+    const here = caret ? editor.getParagraphText(caret.blockId) : null;
+    // Typing starts with an edit in the caret paragraph and ends when the caret leaves it.
+    typing = here !== null && here.blockId === seen?.blockId && (typing || here !== seen);
+    seen = here;
     return editor.getParagraphs().flatMap((paragraph) => {
       let marks = checked.get(paragraph);
       if (!marks) {
         marks = check(paragraph, checker);
         checked.set(paragraph, marks);
       }
-      if (caret?.blockId !== paragraph.blockId) return marks;
+      if (!typing || !caret || caret.blockId !== paragraph.blockId) return marks;
       // The caret counts in `text`; the marks count in `acceptedText`.
       const at = acceptedOffsetFromText(paragraph, caret.offset);
       return marks.filter(
@@ -150,7 +177,7 @@ export function spellingSource(checker: SpellChecker) {
 
 /**
  * Replace a marked word. `at` is where the mark is now, such as a context menu hit.
- * Returns false when the text changed: check the document again.
+ * Returns false when the command refuses the fix, for example because the text changed.
  */
 export function fixWord(
   editor: Editor,
@@ -162,17 +189,28 @@ export function fixWord(
   if (!paragraph) return false;
   const result = editor.exec({
     type: 'replaceAcceptedText',
-    blockId: mark.blockId,
-    start: acceptedOffsetFromText(paragraph, at.start),
-    length: mark.word.length,
+    match: {
+      blockId: mark.blockId,
+      start: acceptedOffsetFromText(paragraph, at.start),
+      length: mark.word.length,
+      expectedText: mark.word,
+    },
     text: replacement,
-    expectedText: mark.word,
   });
   return result.ok;
 }
 ```
 
-`fixWord` runs the `replaceAcceptedText` command. It compares the word with the replacement and edits only the letters that differ, so the tracked changes of other authors stay where they are. A fix of a word that a deletion splits edits each part and is one undo step. In suggesting mode, the fix is a tracked change under the editor's author. If the word changed since it was checked, `expectedText` makes the command return `notFound` and change nothing.
+`fixWord` runs the `replaceAcceptedText` command. It compares the word with the replacement and edits only the letters that differ, so the tracked changes of other authors stay where they are. The new letters go into the container of the letters they replace, such as a hyperlink or a content control. A fix of a word that a deletion splits edits each part and is one undo step. In suggesting mode, the fix is a tracked change under the editor's author.
+
+The command refuses some fixes and changes nothing:
+
+- If the word changed since it was checked, `expectedText` makes the command return `notFound`.
+- If the replacement adds U+FFFC, the command returns `invalidArgs`. An object cannot be written as text.
+- If the differing letters include an object, such as a field or a picture, the command returns `unsupported`. An object stays in place when the replacement keeps its U+FFFC at the same position.
+- If the letters are in a locked or data-bound content control, the command returns `locked` or `bound`.
+
+If two people fix the same word at the same time, both fixes can insert letters, so the checker marks the merged word again.
 
 ### Fix words from the context menu
 

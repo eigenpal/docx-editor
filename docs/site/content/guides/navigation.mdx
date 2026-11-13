@@ -71,7 +71,7 @@ With the core package, use the instance from `createDocxEditor()`. Prevent the d
 | `clearHighlights(name)` | Remove one set of text highlights, or all of them. | No |
 | `getHighlightsAt(clientX, clientY)` | Read the text highlights under a pointer position. | No |
 | `getParagraphs()`, `getParagraphText(blockId)` | Read paragraph text in highlight offsets, such as for a spelling check. | No |
-| `exec({ type: 'replaceAcceptedText', blockId, start, length, text })` | Fix a range of a paragraph's accepted text, such as a misspelled word. | No |
+| `exec({ type: 'replaceAcceptedText', match: { blockId, start, length }, text })` | Fix a range of a paragraph's accepted text, such as a misspelled word. | No |
 | `exec({ type: 'setSelection', anchor })` | Move the caret to a paragraph reference. | Yes |
 | `getSelectionRange()` | Read the selection as paragraph IDs and offsets. | No |
 | `getCaretRect()` | Read the caret position in client coordinates. | No |
