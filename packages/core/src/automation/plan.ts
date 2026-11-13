@@ -89,7 +89,6 @@ import {
   fontProperties,
   fontVerticalProperties,
   fontRead,
-  paragraphFormatProperties,
   paragraphFormatRead,
   type AutomationFontWrite,
   type AutomationParagraphFormatWrite,
@@ -101,6 +100,8 @@ import type {
   AutomationTextProjection,
 } from './operations.ts';
 import { createBatchCommandPolicy } from './batch-command-policy.ts';
+import { paragraphFormatOps } from './plan-paragraph-format.ts';
+import { paragraphBordersRead } from './paragraph-borders.ts';
 import type { AutomationHandle, AutomationSpan, AutomationValue } from './protocol.ts';
 import {
   scopedStoryReads,
@@ -1065,32 +1066,19 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const part = reads.part;
     const pin = pinWrite(plan);
     if (pin) return pin;
-    const properties = paragraphFormatProperties(
-      part,
-      paragraph.paragraphId,
-      request ?? {},
-      reads.styles()
-    );
-    if (!properties.ok)
+    const planned = paragraphFormatOps(part, paragraph.paragraphId, request ?? {}, reads.styles());
+    if (!planned.ok)
       return refuse(
         'unsupported-content',
         'that is not paragraph formatting this host writes',
-        properties.detail
+        planned.detail
       );
     const conflict = claimFormatting(plan, paragraph.paragraphId, 'paragraph');
     if (conflict) return conflict;
     return {
       ok: true,
       kind: 'command',
-      ops: properties.unchanged
-        ? []
-        : [
-            {
-              op: 'setParagraphProperties',
-              paragraphId: paragraph.paragraphId,
-              properties: properties.value,
-            },
-          ],
+      ops: planned.ops,
       story: reads.story,
       answer: () => APPLIED,
     };
@@ -1945,12 +1933,22 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return planSetStyle(planFor(story), resolved.value, operation.name);
       }
 
-      case 'getParagraphFormat': {
+      case 'getParagraphFormat':
+      case 'getParagraphBorders': {
         const paragraph = resolveParagraphRef(operation.paragraph, handles, packageReads);
         if (!paragraph.ok)
           return refuse(paragraph.code, 'that is not a paragraph', paragraph.detail);
         const story = packageReads.story(paragraph.value.story);
         if (!story) return refuse('document-unavailable', 'this host holds no document right now');
+        if (operation.op === 'getParagraphBorders') {
+          const borders = paragraphBordersRead(
+            story.part,
+            paragraph.value.paragraphId,
+            story.styles()
+          );
+          if (!borders) return refuse('invalid-handle', 'that handle does not name a paragraph');
+          return query({ kind: 'paragraphBorders', borders });
+        }
         const format = paragraphFormatRead(story.part, paragraph.value.paragraphId, story.styles());
         if (!format) return refuse('invalid-handle', 'that handle does not name a paragraph');
         return query({ kind: 'paragraphFormat', format });

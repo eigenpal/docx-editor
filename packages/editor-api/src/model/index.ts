@@ -23,6 +23,14 @@ export {
 export { Document } from './document.ts';
 export { DocumentProperties } from './document-properties.ts';
 export { Font, UnderlineType } from './font.ts';
+export {
+  BorderUniversal,
+  BorderUniversalCollection,
+  type BorderUniversalUpdateData,
+  type UpdateOptions,
+} from './borders.ts';
+export { BorderLineStyle, ColorIndex, LineWidth } from './border-enums.ts';
+export { PageBorderArt } from './page-border-art.ts';
 export { List, ListCollection, ListItem, ListBullet, ListNumbering } from './lists.ts';
 export { NoteItem, NoteItemCollection, type NoteItemType } from './notes.ts';
 export {
@@ -52,7 +60,12 @@ export type {
   RangeInsertTextLocation,
   SelectionMode,
 } from './locations.ts';
-export { Paragraph, type ParagraphAlignment, type ParagraphReadingOrder } from './paragraph.ts';
+export {
+  Paragraph,
+  type ParagraphAlignment,
+  type ParagraphLineSpacingRule,
+  type ParagraphReadingOrder,
+} from './paragraph.ts';
 export { Range } from './range.ts';
 export {
   getReviewItemRange,

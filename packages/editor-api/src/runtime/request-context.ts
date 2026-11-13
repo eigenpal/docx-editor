@@ -176,7 +176,11 @@ export class RequestContext {
     return this.#document;
   }
 
-  /** What the document host behind this context can do. */
+  /**
+   * What the document host behind this context can do.
+   *
+   * @docxEditorExtension
+   */
   get capabilities(): DocumentCapabilities {
     return this.#session.capabilities;
   }

@@ -153,12 +153,22 @@ export class FieldCollection extends ItemCollection<Field> {
   getFirst(): Field {
     return this.edge('first', 'getFirst', false);
   }
+  /**
+   * The last field. Throws `ItemNotFound` at sync when there is none.
+   *
+   * @docxEditorExtension
+   */
   getLast(): Field {
     return this.edge('last', 'getLast', false);
   }
   getFirstOrNullObject(): Field {
     return this.edge('first', 'getFirstOrNullObject', true);
   }
+  /**
+   * The last field, or a null object when there is none.
+   *
+   * @docxEditorExtension
+   */
   getLastOrNullObject(): Field {
     return this.edge('last', 'getLastOrNullObject', true);
   }

@@ -29,6 +29,7 @@ export const TREE_DOC_OP_KINDS = [
   'setListLevel',
   'setListNumbering',
   'setParagraphTabStops',
+  'setParagraphBorders',
   'setParagraphMarkProperties',
   'splitParagraph',
   'splitParagraphMany',

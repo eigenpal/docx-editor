@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Editing API members that Office.js lacks had no machine-readable marker.",
+  "after": "Those members carry the @docxEditorExtension TSDoc tag. Only doc comments changed, and every member keeps its behavior.",
+  "reason": "The change edits TSDoc comments only. No operation, shared field, encoding, offset rule, or repair rule changes, so released peers are unaffected.",
+  "tests": ["packages/editor-api/src/office-compat/__tests__/extension-tags.test.ts"],
+  "changeset": "editor-api-extension-tag",
+  "migration": null
+}

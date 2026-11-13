@@ -47,7 +47,6 @@ import {
 } from './paragraph-flow.ts';
 import {
   cascadedParagraphBorders,
-  paragraphBorders,
   paragraphContextualSpacing,
   paragraphLineSpacing,
   paragraphSpacing,
@@ -700,26 +699,13 @@ export function cascadeParagraphWithNumbering(
 }
 
 /**
- * Bottom border after cascade: a later `w:pBdr` replaces an earlier one; absence inherits.
- * `nil`/`none` clear the edge via `paragraphBorders`.
+ * Bottom border after the cascade, folded edge by edge like `cascadedParagraphBorders`: the
+ * last level that states `w:bottom` decides it, and `nil`/`none` turn it off.
  */
 export function cascadedBottomBorder(
   paragraphPropertyNodes: readonly OoxmlNode[]
 ): ParagraphBorderEdge | undefined {
-  let edge: ParagraphBorderEdge | undefined;
-  for (const node of paragraphPropertyNodes) {
-    if (!node || node.kind === 'textValue') continue;
-    let hasPBdr = false;
-    for (const child of node.children) {
-      if (isElement(child) && child.localName === 'pBdr') {
-        hasPBdr = true;
-        break;
-      }
-    }
-    if (!hasPBdr) continue;
-    edge = paragraphBorders(node).bottom;
-  }
-  return edge;
+  return cascadedParagraphBorders(paragraphPropertyNodes).bottom;
 }
 
 /**
@@ -946,6 +932,7 @@ export function resolveParagraphLayoutInputs(
   const tabStops = withNumberingTabRule(cascadedTabStops(nodes), styleCascade);
   const styleId = cascaded ? cascaded.styleId : (styleIdFromProps(props, 'pStyle') ?? null);
   const outlineLevel = resolveParagraphOutlineLevel(props, styleCascade, styleId);
+  const borders = cascadedParagraphBorders(nodes);
   return {
     props,
     indent,
@@ -973,8 +960,8 @@ export function resolveParagraphLayoutInputs(
     contextualSpacing: paragraphContextualSpacing(props),
     styleId,
     outlineLevel,
-    bottomBorder: cascadedBottomBorder(nodes),
-    borders: cascadedParagraphBorders(nodes),
+    bottomBorder: borders.bottom,
+    borders,
     shading: paragraphShading(props),
     inheritedRunProperties,
     markRunProperties: lastInputs?.markRunProperties ?? markRunProperties,

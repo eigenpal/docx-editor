@@ -36,6 +36,7 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'search',
   'getFont',
   'getParagraphFormat',
+  'getParagraphBorders',
   'getStyle',
   'getSections',
   'getPageSetup',

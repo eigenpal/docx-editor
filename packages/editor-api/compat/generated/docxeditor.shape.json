@@ -282,6 +282,99 @@
         }
       }
     },
+    "BorderUniversal": {
+      "uid": "DocxEditor.BorderUniversal",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "color": {
+          "uid": "DocxEditor.BorderUniversal#color",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "colorIndex": {
+          "uid": "DocxEditor.BorderUniversal#colorIndex",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Auto\" | \"Black\" | \"Blue\" | \"Turquoise\" | \"BrightGreen\" | \"Pink\" | \"Red\" | \"Yellow\" | \"White\" | \"DarkBlue\" | \"Teal\" | \"Green\" | \"Violet\" | \"DarkRed\" | \"DarkYellow\" | \"Gray50\" | \"Gray25\" | \"ClassicRed\" | \"ClassicBlue\" | \"ByAuthor\""
+            }
+          ]
+        },
+        "inside": {
+          "uid": "DocxEditor.BorderUniversal#inside",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "isVisible": {
+          "uid": "DocxEditor.BorderUniversal#isVisible",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "lineStyle": {
+          "uid": "DocxEditor.BorderUniversal#lineStyle",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"None\" | \"Single\" | \"Dot\" | \"DashSmallGap\" | \"DashLargeGap\" | \"DashDot\" | \"DashDotDot\" | \"Double\" | \"Triple\" | \"ThinThickSmallGap\" | \"ThickThinSmallGap\" | \"ThinThickThinSmallGap\" | \"ThinThickMedGap\" | \"ThickThinMedGap\" | \"ThinThickThinMedGap\" | \"ThinThickLargeGap\" | \"ThickThinLargeGap\" | \"ThinThickThinLargeGap\" | \"SingleWavy\" | \"DoubleWavy\" | \"DashDotStroked\" | \"Emboss3D\" | \"Engrave3D\" | \"Outset\" | \"Inset\""
+            }
+          ]
+        },
+        "lineWidth": {
+          "uid": "DocxEditor.BorderUniversal#lineWidth",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Pt025\" | \"Pt050\" | \"Pt075\" | \"Pt100\" | \"Pt150\" | \"Pt225\" | \"Pt300\" | \"Pt450\" | \"Pt600\""
+            }
+          ]
+        }
+      }
+    },
+    "BorderUniversalCollection": {
+      "uid": "DocxEditor.BorderUniversalCollection",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "items": {
+          "uid": "DocxEditor.BorderUniversalCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "BorderUniversal[]"
+            }
+          ]
+        }
+      }
+    },
     "ClientObject": {
       "uid": "DocxEditor.ClientObject",
       "kind": "class",
@@ -1412,6 +1505,18 @@
             {
               "params": [],
               "returns": "\"Mixed\" | \"Unknown\" | \"Left\" | \"Centered\" | \"Right\" | \"Justified\""
+            }
+          ]
+        },
+        "borders": {
+          "uid": "DocxEditor.Paragraph#borders",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "BorderUniversalCollection"
             }
           ]
         },

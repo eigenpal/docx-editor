@@ -77,18 +77,20 @@ A supported subset covers only the listed operations, not every Office.js member
 
 ## Identify extensions
 
-These members extend the Office.js shape:
+These members extend the Office.js shape. Each one has the `@docxEditorExtension` tag in its TSDoc comment, so your editor shows it on hover and coding agents can read it from the type declarations. Code that uses a tagged member does not run in an Office.js host.
 
 | Member | Purpose |
 | --- | --- |
 | `Body.bookmarks`, `Body.revisions` | Enumerate one body story only |
 | `RevisionCollection.resolve()`, `setAuthor()` | Resolve a batch, or change authors, in one story |
 | `Document.footnotes`, `Document.endnotes`, `NoteItem.text` | Enumerate note parts and read note text |
-| `ContentControlCollection.getByTag()`, `getByTitle()` | Find controls without a file ID |
-| `ContentControl.setValue()`, `isBound`, `subtype` | Write typed values, preflight bindings (sync checks again), and report DOCX control types |
+| `ContentControl.setValue()`, `isBound`, `placeholderShown`, `temporary` | Write typed values, preflight bindings (sync checks again), and read placeholder and removal state |
 | `Comment.text`, `CommentReply.text` | Read comment text |
-| `Paragraph.uniqueLocalId`, `Paragraph.readingOrder` | Paragraph identity for the runtime, and paragraph direction |
+| `Paragraph.readingOrder`, `Paragraph.lineSpacingRule` | Paragraph direction and the line spacing rule |
+| `Table.columnCount` | Read the number of grid columns |
+| `RangeCollection.getLast()`, `InlinePictureCollection.getLast()`, `getLastOrNullObject()`, `FieldCollection.getLast()`, `getLastOrNullObject()` | Get the last item without loading the collection |
 | `getReviewItemRevisions()`, `getReviewItemRange()`, `getReviewItemRangeOrNullObject()` | Act on a review item `key`; see [Work with review items](/docs/2.x/editor-api/revisions#work-with-review-items) |
+| `RequestContext.capabilities` | Read what the document host can do |
 | `DocxEditorRuntime.preview()` | Show edits before you commit them; browser only |
 
 On `Range.revisions`, `acceptAll()` and `rejectAll()` resolve every overlapping change whole, while `resolve()` and `setAuthor()` refuse with `NotSupported`.

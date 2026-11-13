@@ -26,6 +26,7 @@ export {
   hydratedHandles,
   hydratedNumber,
   hydratedPageSetup,
+  hydratedParagraphBorders,
   hydratedParagraphFormat,
   hydratedSpan,
   hydratedSpans,

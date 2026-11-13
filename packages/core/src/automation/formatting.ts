@@ -47,8 +47,15 @@ import {
   paragraphPropertiesNodeOf,
   runPropertiesNodeOf,
 } from '../store/store/tree-op-nodes.ts';
-import { paragraphStyleName, styleIdFor, type AutomationStyleIndex } from './styles.ts';
+import {
+  paragraphStyleName,
+  styleIdFor,
+  type AutomationStyleIndex,
+  type InheritedLineSpacing,
+} from './styles.ts';
 import type { OoxmlProperty } from '../store/store/tree-ops.ts';
+import type { ParagraphBorderEdgeWrite } from '../store/store/tree-op-paragraph-borders.ts';
+import { paragraphBordersPlan, type AutomationParagraphBordersWrite } from './paragraph-borders.ts';
 import { points, pointsToTwips, readTwipsMeasure, twips, twipsToPoints } from '../store/units.ts';
 
 /** Widest value `w:ind`/`w:spacing` will be authored with, in twips — 22 inches of slack. */
@@ -102,6 +109,62 @@ export interface AutomationFontWrite {
   readonly color?: string;
 }
 
+/**
+ * How a paragraph's line spacing is measured. `Single`, `OnePointFive`, and `Double` are the
+ * multiple rule at one, one and a half, and two lines; `Multiple` is any other number of lines.
+ */
+export type AutomationLineSpacingRule =
+  'Single' | 'OnePointFive' | 'Double' | 'AtLeast' | 'Exactly' | 'Multiple';
+
+/** `w:line` for the rules that fix the spacing, in 240ths of a line. */
+const FIXED_LINE_BY_RULE: Readonly<Partial<Record<AutomationLineSpacingRule, string>>> = {
+  Single: '240',
+  OnePointFive: '360',
+  Double: '480',
+};
+
+/** `w:lineRule` each rule writes. */
+const LINE_RULE_BY_RULE: Readonly<Record<AutomationLineSpacingRule, string>> = {
+  Single: 'auto',
+  OnePointFive: 'auto',
+  Double: 'auto',
+  AtLeast: 'atLeast',
+  Exactly: 'exact',
+  Multiple: 'auto',
+};
+
+/** A `w:line` this lane can carry: a positive whole number of a size `w:spacing` takes. */
+const LINE_VALUE = /^[1-9]\d{0,4}$/;
+
+/**
+ * The line spacing a paragraph shows: its own `w:line` and `w:lineRule` over what it inherits,
+ * attribute by attribute, else single spacing.
+ */
+function lineSpacingInForce(
+  own: Readonly<Record<string, string>>,
+  inherited: InheritedLineSpacing
+): { line: string; lineRule: string } {
+  // The nearest statement decides, as layout reads it. With no usable `w:line` the paragraph
+  // shows single spacing, whatever rule a level states on its own.
+  const line = own.line ?? inherited.line;
+  if (line === undefined || !LINE_VALUE.test(line)) return { line: '240', lineRule: 'auto' };
+  const lineRule = own.lineRule ?? inherited.lineRule;
+  return {
+    line,
+    lineRule: lineRule === 'atLeast' || lineRule === 'exact' ? lineRule : 'auto',
+  };
+}
+
+/** The rule a `w:line` and `w:lineRule` pair reads as. */
+function lineSpacingRuleOf(spacing: { line: string; lineRule: string }): AutomationLineSpacingRule {
+  if (spacing.lineRule === 'atLeast') return 'AtLeast';
+  if (spacing.lineRule === 'exact') return 'Exactly';
+  if (spacing.line === '240') return 'Single';
+  if (spacing.line === '360') return 'OnePointFive';
+  if (spacing.line === '480') return 'Double';
+  return 'Multiple';
+}
+
 /** One paragraph's own paragraph properties, in points. `null` = the paragraph authors none. */
 export interface AutomationParagraphFormatRead {
   readonly alignment: AutomationAlignment;
@@ -116,7 +179,17 @@ export interface AutomationParagraphFormatRead {
   readonly firstLineIndent: number | null;
   readonly leftIndent: number | null;
   readonly rightIndent: number | null;
+  /**
+   * The line spacing in force, in points: the paragraph's own `w:line` over its style cascade's,
+   * else single spacing (12). Unlike the other spacing fields, never null, so it always pairs
+   * with `lineSpacingRule`.
+   */
   readonly lineSpacing: number | null;
+  /**
+   * How the line spacing in force is measured: the paragraph's own `w:spacing` line attributes
+   * over its style cascade's, else single spacing.
+   */
+  readonly lineSpacingRule: AutomationLineSpacingRule;
   readonly spaceBefore: number | null;
   readonly spaceAfter: number | null;
   readonly widowControl: boolean | null;
@@ -144,7 +217,14 @@ export interface AutomationParagraphFormatWrite {
   readonly firstLineIndent?: number;
   readonly leftIndent?: number;
   readonly rightIndent?: number;
+  /** Points. Keeps the rule in force: under `auto`, 12 points is one line. */
   readonly lineSpacing?: number;
+  /**
+   * The rule to measure line spacing by. `Single`, `OnePointFive`, and `Double` set the spacing
+   * too; the other rules keep the points in force. With `lineSpacing` in the same write, the
+   * rule applies first.
+   */
+  readonly lineSpacingRule?: AutomationLineSpacingRule;
   readonly spaceBefore?: number;
   readonly spaceAfter?: number;
   readonly widowControl?: boolean;
@@ -154,6 +234,11 @@ export interface AutomationParagraphFormatWrite {
    * `<w:bidi/>`, or `<w:bidi w:val="0"/>` over a right-to-left style.
    */
   readonly readingOrder?: AutomationReadingOrder;
+  /**
+   * Border assignments, applied in order. In the same request as the rest because a border
+   * write rewrites the same `w:pPr`, and two ops naming it in one batch are refused.
+   */
+  readonly borders?: AutomationParagraphBordersWrite;
 }
 
 /** Why a formatting value could not be authored. Named so a caller learns the field. */
@@ -339,13 +424,19 @@ export function paragraphFormatRead(
   const pPr = paragraphPropertiesNodeOf(paragraph);
   const spacing = namedChild(pPr, 'spacing');
   const indent = namedChild(pPr, 'ind');
+  const lineInForce = lineSpacingInForce(
+    attributesOf(spacing),
+    styles.inheritedLineSpacing(part, paragraph)
+  );
   return {
     alignment: alignmentOf(pPr),
     style: paragraphStyleName(part, paragraphId, styles),
     firstLineIndent: firstLineIndentOf(indent),
     leftIndent: pointsFromTwips(attributeOf(indent, 'left') ?? attributeOf(indent, 'start')),
     rightIndent: pointsFromTwips(attributeOf(indent, 'right') ?? attributeOf(indent, 'end')),
-    lineSpacing: pointsFromTwips(attributeOf(spacing, 'line')),
+    // The value and rule in force, so a style's exact spacing reads with its points.
+    lineSpacing: pointsFromTwips(lineInForce.line),
+    lineSpacingRule: lineSpacingRuleOf(lineInForce),
     spaceBefore: pointsFromTwips(attributeOf(spacing, 'before')),
     spaceAfter: pointsFromTwips(attributeOf(spacing, 'after')),
     widowControl: onOff(namedChild(pPr, 'widowControl')),
@@ -467,7 +558,11 @@ export function paragraphFormatProperties(
   paragraphId: string,
   request: AutomationParagraphFormatWrite,
   styles: AutomationStyleIndex
-): FormattingPlan<OoxmlProperty[]> & { readonly unchanged?: boolean } {
+): FormattingPlan<OoxmlProperty[]> & {
+  readonly unchanged?: boolean;
+  /** The paragraph's own border edges as they should stand, or null for no border change. */
+  readonly borders?: readonly ParagraphBorderEdgeWrite[] | null;
+} {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return { ok: false, detail: 'not a paragraph' };
   const pPr = paragraphPropertiesNodeOf(paragraph);
@@ -532,15 +627,36 @@ export function paragraphFormatProperties(
     spacingAttributes[attribute] = String(twips.value);
     touchedSpacing = true;
   }
-  if (request.lineSpacing !== undefined) {
-    const twips = twipsFor(request.lineSpacing, 'lineSpacing');
-    if (!twips.ok) return twips;
-    if (twips.value <= 0) return { ok: false, detail: 'lineSpacing: out of range' };
-    spacingAttributes.line = String(twips.value);
-    // The paragraph's own rule is kept when it has one, because `exact` and `auto` are
-    // different documents and a write of one number must not silently change which.
-    spacingAttributes.lineRule ??= 'auto';
-    touchedSpacing = true;
+  let lineSatisfied = false;
+  if (request.lineSpacing !== undefined || request.lineSpacingRule !== undefined) {
+    // Against the line spacing in force, the style this same write applies included: a value
+    // keeps the rule the paragraph shows, and a rule keeps the points the paragraph shows.
+    const inForce = lineSpacingInForce(
+      spacingAttributes,
+      styles.inheritedLineSpacing(part, paragraph, styleId)
+    );
+    let { line, lineRule } = inForce;
+    // The rule applies first, then the value, so `lineSpacingRule` and `lineSpacing` in one
+    // write give the asked rule at the asked points.
+    if (request.lineSpacingRule !== undefined) {
+      const asked = request.lineSpacingRule as AutomationLineSpacingRule;
+      if (typeof asked !== 'string' || !Object.hasOwn(LINE_RULE_BY_RULE, asked))
+        return { ok: false, detail: `lineSpacingRule: ${String(asked)}` };
+      lineRule = LINE_RULE_BY_RULE[asked];
+      if (Object.hasOwn(FIXED_LINE_BY_RULE, asked)) line = FIXED_LINE_BY_RULE[asked]!;
+    }
+    if (request.lineSpacing !== undefined) {
+      const twips = twipsFor(request.lineSpacing, 'lineSpacing');
+      if (!twips.ok) return twips;
+      if (twips.value <= 0) return { ok: false, detail: 'lineSpacing: out of range' };
+      line = String(twips.value);
+    }
+    // Spacing the paragraph already shows is a request satisfied: no direct formatting added.
+    if (line !== inForce.line || lineRule !== inForce.lineRule) {
+      spacingAttributes.line = line;
+      spacingAttributes.lineRule = lineRule;
+      touchedSpacing = true;
+    } else lineSatisfied = true;
   }
   if (touchedSpacing) properties.push({ localName: 'spacing', attributes: spacingAttributes });
 
@@ -569,8 +685,23 @@ export function paragraphFormatProperties(
     }
   }
 
-  // A direction the paragraph already has is a request satisfied, not a refusal.
-  if (properties.length === 0 && !removeBidi && request.readingOrder === undefined)
+  let borders: readonly ParagraphBorderEdgeWrite[] | null = null;
+  if (request.borders !== undefined) {
+    // Against the style this same write applies, so a style and a border can share a sync.
+    const planned = paragraphBordersPlan(part, paragraph, request.borders, styles, styleId);
+    if (!planned.ok) return planned;
+    borders = planned.edges;
+  }
+
+  // A direction, border, or line spacing the paragraph already has is a request satisfied, not
+  // a refusal.
+  if (
+    properties.length === 0 &&
+    !removeBidi &&
+    request.readingOrder === undefined &&
+    request.borders === undefined &&
+    !lineSatisfied
+  )
     return { ok: false, detail: 'no formatting was asked for' };
   // `setParagraphProperties` REPLACES the container: an authorable property the op does not name
   // is DROPPED. So the op has to carry the paragraph's existing bag forward, or setting alignment
@@ -579,7 +710,7 @@ export function paragraphFormatProperties(
   const merged = mergedProperties(current, properties);
   const value = removeBidi ? merged.filter((property) => property.localName !== 'bidi') : merged;
   // A write of what the paragraph already states is no edit: no op, no change event, no undo step.
-  return { ok: true, value, unchanged: sameProperties(current, value) };
+  return { ok: true, value, unchanged: sameProperties(current, value), borders };
 }
 
 /** Whether two property bags state the same elements with the same attributes, in any order. */

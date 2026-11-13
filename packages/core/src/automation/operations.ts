@@ -368,6 +368,11 @@ export type AutomationOperation =
   | { readonly op: 'setStyle'; readonly span: AutomationSpanRef; readonly name: string }
   /** One paragraph's own paragraph properties, in points. */
   | { readonly op: 'getParagraphFormat'; readonly paragraph: AutomationParagraphRef }
+  /**
+   * The five borders a paragraph shows, in collection order: top, left, bottom, right, then the
+   * border between paragraphs. Resolved through the style cascade, as the page paints them.
+   */
+  | { readonly op: 'getParagraphBorders'; readonly paragraph: AutomationParagraphRef }
   /** Author paragraph properties. Only the fields present are written. */
   | {
       readonly op: 'setParagraphFormat';

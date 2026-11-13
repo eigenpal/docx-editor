@@ -228,6 +228,8 @@ export interface DocxEditorRuntime {
    * // Later, from the review UI:
    * await preview.commit(); // or preview.discard()
    * ```
+   *
+   * @docxEditorExtension
    */
   preview<T = void>(callback: PreviewCallback<T>): Promise<DocumentPreview<T>>;
   /** Release the host. Idempotent. */

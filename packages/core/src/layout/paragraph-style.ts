@@ -603,12 +603,19 @@ export function paragraphBorders(pPr: OoxmlNode | undefined): ParagraphBorders {
   return bordersOfElement(pBdr);
 }
 
+/** The element one edge reads from: the physical name, else its logical alias. */
+function edgeElementOf(pBdr: OoxmlElement, side: ParagraphBorderSide): OoxmlElement | undefined {
+  if (side === 'left') return childNamed(pBdr, 'left') ?? childNamed(pBdr, 'start');
+  if (side === 'right') return childNamed(pBdr, 'right') ?? childNamed(pBdr, 'end');
+  return childNamed(pBdr, side);
+}
+
 /**
- * `w:pBdr` after the style cascade: a later `w:pBdr` replaces an earlier one WHOLESALE.
+ * `w:pBdr` after the style cascade, folded EDGE BY EDGE.
  *
- * Word does not merge edges across the cascade. A style that states only `w:bottom` discards
- * the box its `basedOn` ancestor declared, so folding edge by edge would leave a lone
- * underline surrounded by a box no one authored. Absence inherits; `nil`/`none` clear.
+ * Each level overrides only the edges it states: a `basedOn` style that adds `w:left` keeps
+ * its ancestor's top and bottom, and a paragraph's own `w:bottom` replaces only the bottom.
+ * An absent edge inherits; `nil`/`none` turn an inherited edge off.
  */
 export function cascadedParagraphBorders(
   paragraphPropertyNodes: readonly OoxmlNode[]
@@ -618,7 +625,16 @@ export function cascadedParagraphBorders(
     if (!node || node.kind === 'textValue') continue;
     const pBdr = childNamed(node, 'pBdr');
     if (!pBdr) continue;
-    borders = bordersOfElement(pBdr);
+    let next: { -readonly [Side in ParagraphBorderSide]?: ParagraphBorderEdge } | undefined;
+    for (const side of PARAGRAPH_BORDER_SIDES) {
+      const element = edgeElementOf(pBdr, side);
+      if (!element) continue;
+      next ??= { ...borders };
+      const edge = borderEdgeOf(element);
+      if (edge) next[side] = edge;
+      else delete next[side];
+    }
+    if (next) borders = next;
   }
   return borders;
 }

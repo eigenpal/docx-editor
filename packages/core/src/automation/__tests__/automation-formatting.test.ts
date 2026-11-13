@@ -300,6 +300,7 @@ describe('reading a paragraph format', () => {
       leftIndent: 36,
       rightIndent: 18,
       lineSpacing: 18,
+      lineSpacingRule: 'OnePointFive',
       spaceBefore: 12,
       spaceAfter: 6,
       widowControl: false,
@@ -317,7 +318,8 @@ describe('reading a paragraph format', () => {
       firstLineIndent: null,
       leftIndent: null,
       rightIndent: null,
-      lineSpacing: null,
+      lineSpacing: 12,
+      lineSpacingRule: 'Single',
       spaceBefore: null,
       spaceAfter: null,
       widowControl: null,
@@ -387,6 +389,7 @@ describe('writing a paragraph format', () => {
       leftIndent: 18,
       rightIndent: 18,
       lineSpacing: 18,
+      lineSpacingRule: 'OnePointFive',
       spaceBefore: 12,
       spaceAfter: 6,
       widowControl: false,
@@ -532,5 +535,146 @@ describe('formatting and the rest of a batch', () => {
       operations: [{ op: 'setFont', span: { paragraph: first! }, font: { bold: true } }],
     });
     expect(refusal(response)).toBe('invalid-handle');
+  });
+});
+
+describe('a line spacing rule the style supplies', () => {
+  const EXACT_STYLE =
+    '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="Tight"><w:name w:val="Tight"/>' +
+    '<w:pPr><w:spacing w:line="280" w:lineRule="exact"/></w:pPr></w:style>';
+  const tight = docx(
+    '<w:p><w:pPr><w:pStyle w:val="Tight"/></w:pPr><w:r><w:t>tight</w:t></w:r></w:p>',
+    EXACT_STYLE
+  );
+
+  test('reads as the paragraph rule, and a lineSpacing write keeps it', () => {
+    const host = open(tight);
+    const [paragraph] = paragraphsOf(host, roots(host).body);
+    expect(formatOf(host, paragraph!).lineSpacingRule).toBe('Exactly');
+    host.execute({
+      operations: [
+        {
+          op: 'setParagraphFormat',
+          paragraph: { paragraph: paragraph! },
+          format: { lineSpacing: 18 },
+        },
+      ],
+    });
+    expect(savedMainXml(host)).toContain('<w:spacing w:line="360" w:lineRule="exact"/>');
+  });
+
+  test('a rule write keeps the points the style supplies', () => {
+    const host = open(tight);
+    const [paragraph] = paragraphsOf(host, roots(host).body);
+    host.execute({
+      operations: [
+        {
+          op: 'setParagraphFormat',
+          paragraph: { paragraph: paragraph! },
+          format: { lineSpacingRule: 'AtLeast' },
+        },
+      ],
+    });
+    expect(savedMainXml(host)).toContain('<w:spacing w:line="280" w:lineRule="atLeast"/>');
+  });
+
+  test('a table style line spacing reaches a cell paragraph, as layout paints it', () => {
+    const styles =
+      '<w:docDefaults><w:pPrDefault><w:pPr><w:spacing w:line="259" w:lineRule="auto"/></w:pPr>' +
+      '</w:pPrDefault></w:docDefaults>' +
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+      '<w:style w:type="table" w:styleId="Grid"><w:name w:val="Grid"/>' +
+      '<w:pPr><w:spacing w:line="240" w:lineRule="exact"/></w:pPr></w:style>';
+    const host = open(
+      docx(
+        '<w:tbl><w:tblPr><w:tblStyle w:val="Grid"/></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
+          '<w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
+        styles
+      )
+    );
+    const cell = paragraphsOf(host, roots(host).body).find(
+      (paragraph) => formatOf(host, paragraph).lineSpacingRule === 'Exactly'
+    );
+    expect(cell).toBeDefined();
+    host.execute({
+      operations: [
+        { op: 'setParagraphFormat', paragraph: { paragraph: cell! }, format: { lineSpacing: 14 } },
+      ],
+    });
+    expect(savedMainXml(host)).toContain('<w:spacing w:line="280" w:lineRule="exact"/>');
+  });
+
+  test('a rule stated without a line reads as single spacing', () => {
+    const styles =
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/>' +
+      '<w:pPr><w:spacing w:lineRule="exact"/></w:pPr></w:style>';
+    const host = open(docx(p('bare'), styles));
+    const [paragraph] = paragraphsOf(host, roots(host).body);
+    expect(formatOf(host, paragraph!).lineSpacingRule).toBe('Single');
+  });
+
+  test('a style exact spacing reads with its points', () => {
+    const styles =
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/>' +
+      '<w:pPr><w:spacing w:line="280" w:lineRule="exact"/></w:pPr></w:style>';
+    const host = open(docx(p('styled'), styles));
+    const [paragraph] = paragraphsOf(host, roots(host).body);
+    expect(formatOf(host, paragraph!)).toMatchObject({
+      lineSpacing: 14,
+      lineSpacingRule: 'Exactly',
+    });
+  });
+
+  test('writing the spacing a paragraph already shows adds no formatting', () => {
+    const styles =
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/>' +
+      '<w:pPr><w:spacing w:line="280" w:lineRule="exact"/></w:pPr></w:style>';
+    const host = open(docx(p('styled'), styles));
+    const [paragraph] = paragraphsOf(host, roots(host).body);
+    const before = savedMainXml(host);
+    for (const format of [
+      { lineSpacingRule: 'Exactly' },
+      { lineSpacing: 14 },
+      { lineSpacingRule: 'Exactly', lineSpacing: 14 },
+    ] as const) {
+      const response = host.execute({
+        operations: [{ op: 'setParagraphFormat', paragraph: { paragraph: paragraph! }, format }],
+      });
+      expect(response.results[0]?.status).toBe('ok');
+    }
+    expect(savedMainXml(host)).toBe(before);
+  });
+
+  for (const name of ['toString', '__proto__', 'Triple']) {
+    test(`refuses the rule ${name} by name`, () => {
+      const host = open(tight);
+      const [paragraph] = paragraphsOf(host, roots(host).body);
+      const response = host.execute({
+        operations: [
+          {
+            op: 'setParagraphFormat',
+            paragraph: { paragraph: paragraph! },
+            format: { lineSpacingRule: name as 'Single' },
+          },
+        ],
+      });
+      expect(refusal(response)).toBe('unsupported-content');
+    });
+  }
+
+  test('an unknown rule is refused', () => {
+    const host = open(tight);
+    const [paragraph] = paragraphsOf(host, roots(host).body);
+    const response = host.execute({
+      operations: [
+        {
+          op: 'setParagraphFormat',
+          paragraph: { paragraph: paragraph! },
+          format: { lineSpacingRule: 'Triple' as 'Single' },
+        },
+      ],
+    });
+    expect(refusal(response)).toBe('unsupported-content');
   });
 });

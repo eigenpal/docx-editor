@@ -19,6 +19,7 @@ import {
   buildStyleCascadeTable,
   cascadeParagraphFormatting,
   cascadeParagraphWithNumbering,
+  type CascadedParagraphFormatting,
 } from './style-cascade.ts';
 
 /** The parts a paragraph's inherited direction comes from. `null` where the package has none. */
@@ -32,8 +33,9 @@ type Resolver = (
   part: OoxmlPart,
   paragraph: OoxmlNode,
   mode: FormattingDisplayMode,
-  styleId: string | undefined
-) => boolean;
+  styleId: string | undefined,
+  without: string | undefined
+) => CascadedParagraphFormatting;
 
 const absent = {};
 const resolvers = new WeakMap<object, WeakMap<object, WeakMap<object, Resolver>>>();
@@ -67,25 +69,63 @@ function withParagraphStyle(pPr: OoxmlNode | undefined, styleId: string): OoxmlN
   } as unknown as OoxmlNode;
 }
 
+/** A read-only `w:pPr` view without its `localName` children, for what the paragraph inherits. */
+function withoutChild(pPr: OoxmlNode | undefined, localName: string): OoxmlNode | undefined {
+  if (!pPr || pPr.kind === 'textValue') return pPr;
+  return {
+    ...pPr,
+    children: pPr.children.filter(
+      (child) => child.kind === 'textValue' || child.localName !== localName
+    ),
+  } as unknown as OoxmlNode;
+}
+
 function createResolver(sources: DirectionSources): Resolver {
   const table = buildStyleCascadeTable(sources.styles, undefined, sources.settings);
   const cellStyleOf = createFormattingCellStyles(table);
   const numbering = withNumberingStyleLinks(buildNumberingIndex(sources.numbering), table);
-  return (part, paragraph, mode, styleId) => {
-    const own = propertyContainer(paragraph, 'paragraphProperties', 'pPr');
+  return (part, paragraph, mode, styleId, without) => {
+    const container = propertyContainer(paragraph, 'paragraphProperties', 'pPr');
+    const own = without === undefined ? container : withoutChild(container, without);
     const direct = styleId === undefined ? own : withParagraphStyle(own, styleId);
     // The list level comes from the style chain and direct properties, without the cell style,
     // as layout resolves list items.
     const numPr = readNumPr(cascadeParagraphFormatting(table, direct).paragraphPropertyNodes);
     const level = numPr ? resolveNumberingLevel(numbering, numPr.numId, numPr.ilvl) : null;
-    const cascaded = cascadeParagraphWithNumbering(
+    return cascadeParagraphWithNumbering(
       table,
       direct,
       cellStyleOf(part, paragraph, mode),
       level ? numberingParagraphProperties(level.level) : undefined
     );
-    return paragraphIsRtl(cascaded.inheritedParagraphProperties);
   };
+}
+
+function resolverFor(sources: DirectionSources): Resolver {
+  let bySettings = resolvers.get(sources.styles ?? absent);
+  if (!bySettings) resolvers.set(sources.styles ?? absent, (bySettings = new WeakMap()));
+  let byNumbering = bySettings.get(sources.settings ?? absent);
+  if (!byNumbering) bySettings.set(sources.settings ?? absent, (byNumbering = new WeakMap()));
+  let resolve = byNumbering.get(sources.numbering ?? absent);
+  if (!resolve) byNumbering.set(sources.numbering ?? absent, (resolve = createResolver(sources)));
+  return resolve;
+}
+
+/**
+ * The `w:pPr` nodes a paragraph's `without` property cascades through, in order: document
+ * defaults, an enclosing cell's table style, the style chain with the numbering level at its rank,
+ * then the paragraph's own `w:pPr` with its `without` child left out. The same cascade layout
+ * paints with, so folding these nodes gives the value the paragraph inherits.
+ */
+export function inheritedParagraphPropertyNodes(
+  sources: DirectionSources,
+  part: OoxmlPart,
+  paragraph: OoxmlNode,
+  mode: FormattingDisplayMode,
+  without: string,
+  styleId?: string
+): readonly OoxmlNode[] {
+  return resolverFor(sources)(part, paragraph, mode, styleId, without).paragraphPropertyNodes;
 }
 
 /**
@@ -101,11 +141,6 @@ export function paragraphInheritsRtl(
   mode: FormattingDisplayMode,
   styleId?: string
 ): boolean {
-  let bySettings = resolvers.get(sources.styles ?? absent);
-  if (!bySettings) resolvers.set(sources.styles ?? absent, (bySettings = new WeakMap()));
-  let byNumbering = bySettings.get(sources.settings ?? absent);
-  if (!byNumbering) bySettings.set(sources.settings ?? absent, (byNumbering = new WeakMap()));
-  let resolve = byNumbering.get(sources.numbering ?? absent);
-  if (!resolve) byNumbering.set(sources.numbering ?? absent, (resolve = createResolver(sources)));
-  return resolve(part, paragraph, mode, styleId);
+  const cascaded = resolverFor(sources)(part, paragraph, mode, styleId, undefined);
+  return paragraphIsRtl(cascaded.inheritedParagraphProperties);
 }

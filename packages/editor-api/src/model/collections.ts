@@ -181,6 +181,8 @@ export class RangeCollection extends ItemCollection<Range> {
    * only its first, and the pieces of a split are the case that makes the other end worth having —
    * "the paragraph this one ended up as" is the last piece, and counting `items` to find it means
    * loading them all. Recorded as an omission in `compat/manifest.json` for that reason.
+   *
+   * @docxEditorExtension
    */
   getLast(): Range {
     return this.edge('last', 'getLast', false);

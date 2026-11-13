@@ -84,12 +84,23 @@ export type { AutomationStyleKind, AutomationStyleRead } from './style-listing.t
 // Formatting: what a span agrees about its characters, and what a write may author.
 export type {
   AutomationAlignment,
+  AutomationLineSpacingRule,
   AutomationReadingOrder,
   AutomationFontRead,
   AutomationFontWrite,
   AutomationParagraphFormatRead,
   AutomationParagraphFormatWrite,
 } from './formatting.ts';
+export type {
+  AutomationBorderColorIndex,
+  AutomationBorderLineStyle,
+  AutomationBorderLineWidth,
+  AutomationParagraphBorderAssignment,
+  AutomationParagraphBorderEdge,
+  AutomationParagraphBorderProperty,
+  AutomationParagraphBorderRead,
+  AutomationParagraphBordersWrite,
+} from './paragraph-borders.ts';
 
 // The operation vocabulary.
 export {

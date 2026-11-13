@@ -125,6 +125,117 @@ export class BookmarkCollection extends HandleCollection<Bookmark> {
 }
 
 // @public
+export enum BorderLineStyle {
+    // (undocumented)
+    dashDot = "DashDot",
+    // (undocumented)
+    dashDotDot = "DashDotDot",
+    // (undocumented)
+    dashDotStroked = "DashDotStroked",
+    // (undocumented)
+    dashLargeGap = "DashLargeGap",
+    // (undocumented)
+    dashSmallGap = "DashSmallGap",
+    // (undocumented)
+    dot = "Dot",
+    // (undocumented)
+    double = "Double",
+    // (undocumented)
+    doubleWavy = "DoubleWavy",
+    // (undocumented)
+    emboss3D = "Emboss3D",
+    // (undocumented)
+    engrave3D = "Engrave3D",
+    // (undocumented)
+    inset = "Inset",
+    // (undocumented)
+    none = "None",
+    // (undocumented)
+    outset = "Outset",
+    // (undocumented)
+    single = "Single",
+    // (undocumented)
+    singleWavy = "SingleWavy",
+    // (undocumented)
+    thickThinLargeGap = "ThickThinLargeGap",
+    // (undocumented)
+    thickThinMedGap = "ThickThinMedGap",
+    // (undocumented)
+    thickThinSmallGap = "ThickThinSmallGap",
+    // (undocumented)
+    thinThickLargeGap = "ThinThickLargeGap",
+    // (undocumented)
+    thinThickMedGap = "ThinThickMedGap",
+    // (undocumented)
+    thinThickSmallGap = "ThinThickSmallGap",
+    // (undocumented)
+    thinThickThinLargeGap = "ThinThickThinLargeGap",
+    // (undocumented)
+    thinThickThinMedGap = "ThinThickThinMedGap",
+    // (undocumented)
+    thinThickThinSmallGap = "ThinThickThinSmallGap",
+    // (undocumented)
+    triple = "Triple"
+}
+
+// @public
+export class BorderUniversal extends ModelObject {
+    get artStyle(): PageBorderArt;
+    set artStyle(_value: PageBorderArt | 'Apples' | 'ArchedScallops' | 'BabyPacifier' | 'BabyRattle' | 'Balloons3Colors' | 'BalloonsHotAir' | 'BasicBlackDashes' | 'BasicBlackDots' | 'BasicBlackSquares' | 'BasicThinLines' | 'BasicWhiteDashes' | 'BasicWhiteDots' | 'BasicWhiteSquares' | 'BasicWideInline' | 'BasicWideMidline' | 'BasicWideOutline' | 'Bats' | 'Birds' | 'BirdsFlight' | 'Cabins' | 'CakeSlice' | 'CandyCorn' | 'CelticKnotwork' | 'CertificateBanner' | 'ChainLink' | 'ChampagneBottle' | 'CheckedBarBlack' | 'CheckedBarColor' | 'Checkered' | 'ChristmasTree' | 'CirclesLines' | 'CirclesRectangles' | 'ClassicalWave' | 'Clocks' | 'Compass' | 'Confetti' | 'ConfettiGrays' | 'ConfettiOutline' | 'ConfettiStreamers' | 'ConfettiWhite' | 'CornerTriangles' | 'CouponCutoutDashes' | 'CouponCutoutDots' | 'CrazyMaze' | 'CreaturesButterfly' | 'CreaturesFish' | 'CreaturesInsects' | 'CreaturesLadyBug' | 'CrossStitch' | 'Cup' | 'DecoArch' | 'DecoArchColor' | 'DecoBlocks' | 'DiamondsGray' | 'DoubleD' | 'DoubleDiamonds' | 'Earth1' | 'Earth2' | 'EclipsingSquares1' | 'EclipsingSquares2' | 'EggsBlack' | 'Fans' | 'Film' | 'Firecrackers' | 'FlowersBlockPrint' | 'FlowersDaisies' | 'FlowersModern1' | 'FlowersModern2' | 'FlowersPansy' | 'FlowersRedRose' | 'FlowersRoses' | 'FlowersTeacup' | 'FlowersTiny' | 'Gems' | 'GingerbreadMan' | 'Gradient' | 'Handmade1' | 'Handmade2' | 'HeartBalloon' | 'HeartGray' | 'Hearts' | 'HeebieJeebies' | 'Holly' | 'HouseFunky' | 'Hypnotic' | 'IceCreamCones' | 'LightBulb' | 'Lightning1' | 'Lightning2' | 'MapPins' | 'MapleLeaf' | 'MapleMuffins' | 'Marquee' | 'MarqueeToothed' | 'Moons' | 'Mosaic' | 'MusicNotes' | 'Northwest' | 'Ovals' | 'Packages' | 'PalmsBlack' | 'PalmsColor' | 'PaperClips' | 'Papyrus' | 'PartyFavor' | 'PartyGlass' | 'Pencils' | 'People' | 'PeopleHats' | 'PeopleWaving' | 'Poinsettias' | 'PostageStamp' | 'Pumpkin1' | 'PushPinNote1' | 'PushPinNote2' | 'Pyramids' | 'PyramidsAbove' | 'Quadrants' | 'Rings' | 'Safari' | 'Sawtooth' | 'SawtoothGray' | 'ScaredCat' | 'Seattle' | 'ShadowedSquares' | 'SharksTeeth' | 'ShorebirdTracks' | 'Skyrocket' | 'SnowflakeFancy' | 'Snowflakes' | 'Sombrero' | 'Southwest' | 'Stars' | 'Stars3D' | 'StarsBlack' | 'StarsShadowed' | 'StarsTop' | 'Sun' | 'Swirligig' | 'TornPaper' | 'TornPaperBlack' | 'Trees' | 'TriangleParty' | 'Triangles' | 'Tribal1' | 'Tribal2' | 'Tribal3' | 'Tribal4' | 'Tribal5' | 'Tribal6' | 'TwistedLines1' | 'TwistedLines2' | 'Vine' | 'Waveline' | 'WeavingAngles' | 'WeavingBraid' | 'WeavingRibbon' | 'WeavingStrips' | 'WhiteFlowers' | 'Woodwork' | 'XIllusions' | 'ZanyTriangles' | 'ZigZag' | 'ZigZagStitch');
+    get artWidth(): number;
+    set artWidth(_value: number);
+    get color(): string | null;
+    set color(value: string);
+    get colorIndex(): ColorIndex | 'Auto' | 'Black' | 'Blue' | 'BrightGreen' | 'ByAuthor' | 'ClassicBlue' | 'ClassicRed' | 'DarkBlue' | 'DarkRed' | 'DarkYellow' | 'Gray25' | 'Gray50' | 'Green' | 'Pink' | 'Red' | 'Teal' | 'Turquoise' | 'Violet' | 'White' | 'Yellow' | null;
+    set colorIndex(value: ColorIndex | 'Auto' | 'Black' | 'Blue' | 'BrightGreen' | 'ByAuthor' | 'ClassicBlue' | 'ClassicRed' | 'DarkBlue' | 'DarkRed' | 'DarkYellow' | 'Gray25' | 'Gray50' | 'Green' | 'Pink' | 'Red' | 'Teal' | 'Turquoise' | 'Violet' | 'White' | 'Yellow');
+    // @internal
+    fill(read: object, fields: readonly BorderField[]): void;
+    get inside(): boolean;
+    get isVisible(): boolean;
+    set isVisible(value: boolean);
+    get lineStyle(): BorderLineStyle | 'DashDot' | 'DashDotDot' | 'DashDotStroked' | 'DashLargeGap' | 'DashSmallGap' | 'Dot' | 'Double' | 'DoubleWavy' | 'Emboss3D' | 'Engrave3D' | 'Inset' | 'None' | 'Outset' | 'Single' | 'SingleWavy' | 'ThickThinLargeGap' | 'ThickThinMedGap' | 'ThickThinSmallGap' | 'ThinThickLargeGap' | 'ThinThickMedGap' | 'ThinThickSmallGap' | 'ThinThickThinLargeGap' | 'ThinThickThinMedGap' | 'ThinThickThinSmallGap' | 'Triple' | null;
+    set lineStyle(value: BorderLineStyle | 'DashDot' | 'DashDotDot' | 'DashDotStroked' | 'DashLargeGap' | 'DashSmallGap' | 'Dot' | 'Double' | 'DoubleWavy' | 'Emboss3D' | 'Engrave3D' | 'Inset' | 'None' | 'Outset' | 'Single' | 'SingleWavy' | 'ThickThinLargeGap' | 'ThickThinMedGap' | 'ThickThinSmallGap' | 'ThinThickLargeGap' | 'ThinThickMedGap' | 'ThinThickSmallGap' | 'ThinThickThinLargeGap' | 'ThinThickThinMedGap' | 'ThinThickThinSmallGap' | 'Triple');
+    get lineWidth(): LineWidth | 'Pt025' | 'Pt050' | 'Pt075' | 'Pt100' | 'Pt150' | 'Pt225' | 'Pt300' | 'Pt450' | 'Pt600' | null;
+    set lineWidth(value: LineWidth | 'Pt025' | 'Pt050' | 'Pt075' | 'Pt100' | 'Pt150' | 'Pt225' | 'Pt300' | 'Pt450' | 'Pt600');
+    // @internal
+    static of(context: RequestContext, label: string, owner: ObjectPath, edge: BorderEdge, paragraph: () => AutomationHandle, author: BorderAuthor): BorderUniversal;
+    // @internal
+    protected onLoad(request: ResolvedLoadOptions): void;
+    set(properties: BorderUniversalUpdateData, options?: UpdateOptions): void;
+    set(properties: BorderUniversal): void;
+}
+
+// @public
+export class BorderUniversalCollection extends ModelObject {
+    applyPageBordersToAllSections(): void;
+    get items(): BorderUniversal[];
+    // @internal
+    protected get loadsItemPaths(): boolean;
+    // @internal
+    static of(context: RequestContext, label: string, owner: ObjectPath, paragraph: () => AutomationHandle, author: BorderAuthor): BorderUniversalCollection;
+    // @internal
+    protected onLoad(request: ResolvedLoadOptions): void;
+}
+
+// @public
+export interface BorderUniversalUpdateData {
+    // (undocumented)
+    artStyle?: PageBorderArt | 'Apples' | 'ArchedScallops' | 'BabyPacifier' | 'BabyRattle' | 'Balloons3Colors' | 'BalloonsHotAir' | 'BasicBlackDashes' | 'BasicBlackDots' | 'BasicBlackSquares' | 'BasicThinLines' | 'BasicWhiteDashes' | 'BasicWhiteDots' | 'BasicWhiteSquares' | 'BasicWideInline' | 'BasicWideMidline' | 'BasicWideOutline' | 'Bats' | 'Birds' | 'BirdsFlight' | 'Cabins' | 'CakeSlice' | 'CandyCorn' | 'CelticKnotwork' | 'CertificateBanner' | 'ChainLink' | 'ChampagneBottle' | 'CheckedBarBlack' | 'CheckedBarColor' | 'Checkered' | 'ChristmasTree' | 'CirclesLines' | 'CirclesRectangles' | 'ClassicalWave' | 'Clocks' | 'Compass' | 'Confetti' | 'ConfettiGrays' | 'ConfettiOutline' | 'ConfettiStreamers' | 'ConfettiWhite' | 'CornerTriangles' | 'CouponCutoutDashes' | 'CouponCutoutDots' | 'CrazyMaze' | 'CreaturesButterfly' | 'CreaturesFish' | 'CreaturesInsects' | 'CreaturesLadyBug' | 'CrossStitch' | 'Cup' | 'DecoArch' | 'DecoArchColor' | 'DecoBlocks' | 'DiamondsGray' | 'DoubleD' | 'DoubleDiamonds' | 'Earth1' | 'Earth2' | 'EclipsingSquares1' | 'EclipsingSquares2' | 'EggsBlack' | 'Fans' | 'Film' | 'Firecrackers' | 'FlowersBlockPrint' | 'FlowersDaisies' | 'FlowersModern1' | 'FlowersModern2' | 'FlowersPansy' | 'FlowersRedRose' | 'FlowersRoses' | 'FlowersTeacup' | 'FlowersTiny' | 'Gems' | 'GingerbreadMan' | 'Gradient' | 'Handmade1' | 'Handmade2' | 'HeartBalloon' | 'HeartGray' | 'Hearts' | 'HeebieJeebies' | 'Holly' | 'HouseFunky' | 'Hypnotic' | 'IceCreamCones' | 'LightBulb' | 'Lightning1' | 'Lightning2' | 'MapPins' | 'MapleLeaf' | 'MapleMuffins' | 'Marquee' | 'MarqueeToothed' | 'Moons' | 'Mosaic' | 'MusicNotes' | 'Northwest' | 'Ovals' | 'Packages' | 'PalmsBlack' | 'PalmsColor' | 'PaperClips' | 'Papyrus' | 'PartyFavor' | 'PartyGlass' | 'Pencils' | 'People' | 'PeopleHats' | 'PeopleWaving' | 'Poinsettias' | 'PostageStamp' | 'Pumpkin1' | 'PushPinNote1' | 'PushPinNote2' | 'Pyramids' | 'PyramidsAbove' | 'Quadrants' | 'Rings' | 'Safari' | 'Sawtooth' | 'SawtoothGray' | 'ScaredCat' | 'Seattle' | 'ShadowedSquares' | 'SharksTeeth' | 'ShorebirdTracks' | 'Skyrocket' | 'SnowflakeFancy' | 'Snowflakes' | 'Sombrero' | 'Southwest' | 'Stars' | 'Stars3D' | 'StarsBlack' | 'StarsShadowed' | 'StarsTop' | 'Sun' | 'Swirligig' | 'TornPaper' | 'TornPaperBlack' | 'Trees' | 'TriangleParty' | 'Triangles' | 'Tribal1' | 'Tribal2' | 'Tribal3' | 'Tribal4' | 'Tribal5' | 'Tribal6' | 'TwistedLines1' | 'TwistedLines2' | 'Vine' | 'Waveline' | 'WeavingAngles' | 'WeavingBraid' | 'WeavingRibbon' | 'WeavingStrips' | 'WhiteFlowers' | 'Woodwork' | 'XIllusions' | 'ZanyTriangles' | 'ZigZag' | 'ZigZagStitch';
+    // (undocumented)
+    artWidth?: number;
+    // (undocumented)
+    color?: string;
+    // (undocumented)
+    colorIndex?: ColorIndex | 'Auto' | 'Black' | 'Blue' | 'BrightGreen' | 'ByAuthor' | 'ClassicBlue' | 'ClassicRed' | 'DarkBlue' | 'DarkRed' | 'DarkYellow' | 'Gray25' | 'Gray50' | 'Green' | 'Pink' | 'Red' | 'Teal' | 'Turquoise' | 'Violet' | 'White' | 'Yellow';
+    // (undocumented)
+    isVisible?: boolean;
+    // (undocumented)
+    lineStyle?: BorderLineStyle | 'DashDot' | 'DashDotDot' | 'DashDotStroked' | 'DashLargeGap' | 'DashSmallGap' | 'Dot' | 'Double' | 'DoubleWavy' | 'Emboss3D' | 'Engrave3D' | 'Inset' | 'None' | 'Outset' | 'Single' | 'SingleWavy' | 'ThickThinLargeGap' | 'ThickThinMedGap' | 'ThickThinSmallGap' | 'ThinThickLargeGap' | 'ThinThickMedGap' | 'ThinThickSmallGap' | 'ThinThickThinLargeGap' | 'ThinThickThinMedGap' | 'ThinThickThinSmallGap' | 'Triple';
+    // (undocumented)
+    lineWidth?: LineWidth | 'Pt025' | 'Pt050' | 'Pt075' | 'Pt100' | 'Pt150' | 'Pt225' | 'Pt300' | 'Pt450' | 'Pt600';
+}
+
+// @public
 export enum BreakType {
     // (undocumented)
     line = "Line",
@@ -201,6 +312,50 @@ export class ClientResult<T> {
     };
     get isLoaded(): boolean;
     get value(): T;
+}
+
+// @public
+export enum ColorIndex {
+    // (undocumented)
+    auto = "Auto",
+    // (undocumented)
+    black = "Black",
+    // (undocumented)
+    blue = "Blue",
+    // (undocumented)
+    brightGreen = "BrightGreen",
+    // (undocumented)
+    byAuthor = "ByAuthor",
+    // (undocumented)
+    classicBlue = "ClassicBlue",
+    // (undocumented)
+    classicRed = "ClassicRed",
+    // (undocumented)
+    darkBlue = "DarkBlue",
+    // (undocumented)
+    darkRed = "DarkRed",
+    // (undocumented)
+    darkYellow = "DarkYellow",
+    // (undocumented)
+    gray25 = "Gray25",
+    // (undocumented)
+    gray50 = "Gray50",
+    // (undocumented)
+    green = "Green",
+    // (undocumented)
+    pink = "Pink",
+    // (undocumented)
+    red = "Red",
+    // (undocumented)
+    teal = "Teal",
+    // (undocumented)
+    turquoise = "Turquoise",
+    // (undocumented)
+    violet = "Violet",
+    // (undocumented)
+    white = "White",
+    // (undocumented)
+    yellow = "Yellow"
 }
 
 // @public
@@ -682,9 +837,7 @@ export class FieldCollection extends ItemCollection<Field> {
     getFirst(): Field;
     // (undocumented)
     getFirstOrNullObject(): Field;
-    // (undocumented)
     getLast(): Field;
-    // (undocumented)
     getLastOrNullObject(): Field;
     // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): Field;
@@ -966,9 +1119,7 @@ export class InlinePictureCollection extends ItemCollection<InlinePicture> {
     getFirst(): InlinePicture;
     // (undocumented)
     getFirstOrNullObject(): InlinePicture;
-    // (undocumented)
     getLast(): InlinePicture;
-    // (undocumented)
     getLastOrNullObject(): InlinePicture;
     // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): InlinePicture;
@@ -998,6 +1149,28 @@ export enum InsertLocation {
 
 // @public
 export function isDocxEditorError(value: unknown): value is DocxEditorError;
+
+// @public
+export enum LineWidth {
+    // (undocumented)
+    pt025 = "Pt025",
+    // (undocumented)
+    pt050 = "Pt050",
+    // (undocumented)
+    pt075 = "Pt075",
+    // (undocumented)
+    pt100 = "Pt100",
+    // (undocumented)
+    pt150 = "Pt150",
+    // (undocumented)
+    pt225 = "Pt225",
+    // (undocumented)
+    pt300 = "Pt300",
+    // (undocumented)
+    pt450 = "Pt450",
+    // (undocumented)
+    pt600 = "Pt600"
+}
 
 // @public
 export class List extends ModelObject implements PromisedItem {
@@ -1130,6 +1303,338 @@ export class NoteItemCollection extends HandleCollection<NoteItem> {
 export type NoteItemType = 'Footnote' | 'Endnote';
 
 // @public
+export enum PageBorderArt {
+    // (undocumented)
+    apples = "Apples",
+    // (undocumented)
+    archedScallops = "ArchedScallops",
+    // (undocumented)
+    babyPacifier = "BabyPacifier",
+    // (undocumented)
+    babyRattle = "BabyRattle",
+    // (undocumented)
+    balloons3Colors = "Balloons3Colors",
+    // (undocumented)
+    balloonsHotAir = "BalloonsHotAir",
+    // (undocumented)
+    basicBlackDashes = "BasicBlackDashes",
+    // (undocumented)
+    basicBlackDots = "BasicBlackDots",
+    // (undocumented)
+    basicBlackSquares = "BasicBlackSquares",
+    // (undocumented)
+    basicThinLines = "BasicThinLines",
+    // (undocumented)
+    basicWhiteDashes = "BasicWhiteDashes",
+    // (undocumented)
+    basicWhiteDots = "BasicWhiteDots",
+    // (undocumented)
+    basicWhiteSquares = "BasicWhiteSquares",
+    // (undocumented)
+    basicWideInline = "BasicWideInline",
+    // (undocumented)
+    basicWideMidline = "BasicWideMidline",
+    // (undocumented)
+    basicWideOutline = "BasicWideOutline",
+    // (undocumented)
+    bats = "Bats",
+    // (undocumented)
+    birds = "Birds",
+    // (undocumented)
+    birdsFlight = "BirdsFlight",
+    // (undocumented)
+    cabins = "Cabins",
+    // (undocumented)
+    cakeSlice = "CakeSlice",
+    // (undocumented)
+    candyCorn = "CandyCorn",
+    // (undocumented)
+    celticKnotwork = "CelticKnotwork",
+    // (undocumented)
+    certificateBanner = "CertificateBanner",
+    // (undocumented)
+    chainLink = "ChainLink",
+    // (undocumented)
+    champagneBottle = "ChampagneBottle",
+    // (undocumented)
+    checkedBarBlack = "CheckedBarBlack",
+    // (undocumented)
+    checkedBarColor = "CheckedBarColor",
+    // (undocumented)
+    checkered = "Checkered",
+    // (undocumented)
+    christmasTree = "ChristmasTree",
+    // (undocumented)
+    circlesLines = "CirclesLines",
+    // (undocumented)
+    circlesRectangles = "CirclesRectangles",
+    // (undocumented)
+    classicalWave = "ClassicalWave",
+    // (undocumented)
+    clocks = "Clocks",
+    // (undocumented)
+    compass = "Compass",
+    // (undocumented)
+    confetti = "Confetti",
+    // (undocumented)
+    confettiGrays = "ConfettiGrays",
+    // (undocumented)
+    confettiOutline = "ConfettiOutline",
+    // (undocumented)
+    confettiStreamers = "ConfettiStreamers",
+    // (undocumented)
+    confettiWhite = "ConfettiWhite",
+    // (undocumented)
+    cornerTriangles = "CornerTriangles",
+    // (undocumented)
+    couponCutoutDashes = "CouponCutoutDashes",
+    // (undocumented)
+    couponCutoutDots = "CouponCutoutDots",
+    // (undocumented)
+    crazyMaze = "CrazyMaze",
+    // (undocumented)
+    creaturesButterfly = "CreaturesButterfly",
+    // (undocumented)
+    creaturesFish = "CreaturesFish",
+    // (undocumented)
+    creaturesInsects = "CreaturesInsects",
+    // (undocumented)
+    creaturesLadyBug = "CreaturesLadyBug",
+    // (undocumented)
+    crossStitch = "CrossStitch",
+    // (undocumented)
+    cup = "Cup",
+    // (undocumented)
+    decoArch = "DecoArch",
+    // (undocumented)
+    decoArchColor = "DecoArchColor",
+    // (undocumented)
+    decoBlocks = "DecoBlocks",
+    // (undocumented)
+    diamondsGray = "DiamondsGray",
+    // (undocumented)
+    doubleD = "DoubleD",
+    // (undocumented)
+    doubleDiamonds = "DoubleDiamonds",
+    // (undocumented)
+    earth1 = "Earth1",
+    // (undocumented)
+    earth2 = "Earth2",
+    // (undocumented)
+    eclipsingSquares1 = "EclipsingSquares1",
+    // (undocumented)
+    eclipsingSquares2 = "EclipsingSquares2",
+    // (undocumented)
+    eggsBlack = "EggsBlack",
+    // (undocumented)
+    fans = "Fans",
+    // (undocumented)
+    film = "Film",
+    // (undocumented)
+    firecrackers = "Firecrackers",
+    // (undocumented)
+    flowersBlockPrint = "FlowersBlockPrint",
+    // (undocumented)
+    flowersDaisies = "FlowersDaisies",
+    // (undocumented)
+    flowersModern1 = "FlowersModern1",
+    // (undocumented)
+    flowersModern2 = "FlowersModern2",
+    // (undocumented)
+    flowersPansy = "FlowersPansy",
+    // (undocumented)
+    flowersRedRose = "FlowersRedRose",
+    // (undocumented)
+    flowersRoses = "FlowersRoses",
+    // (undocumented)
+    flowersTeacup = "FlowersTeacup",
+    // (undocumented)
+    flowersTiny = "FlowersTiny",
+    // (undocumented)
+    gems = "Gems",
+    // (undocumented)
+    gingerbreadMan = "GingerbreadMan",
+    // (undocumented)
+    gradient = "Gradient",
+    // (undocumented)
+    handmade1 = "Handmade1",
+    // (undocumented)
+    handmade2 = "Handmade2",
+    // (undocumented)
+    heartBalloon = "HeartBalloon",
+    // (undocumented)
+    heartGray = "HeartGray",
+    // (undocumented)
+    hearts = "Hearts",
+    // (undocumented)
+    heebieJeebies = "HeebieJeebies",
+    // (undocumented)
+    holly = "Holly",
+    // (undocumented)
+    houseFunky = "HouseFunky",
+    // (undocumented)
+    hypnotic = "Hypnotic",
+    // (undocumented)
+    iceCreamCones = "IceCreamCones",
+    // (undocumented)
+    lightBulb = "LightBulb",
+    // (undocumented)
+    lightning1 = "Lightning1",
+    // (undocumented)
+    lightning2 = "Lightning2",
+    // (undocumented)
+    mapleLeaf = "MapleLeaf",
+    // (undocumented)
+    mapleMuffins = "MapleMuffins",
+    // (undocumented)
+    mapPins = "MapPins",
+    // (undocumented)
+    marquee = "Marquee",
+    // (undocumented)
+    marqueeToothed = "MarqueeToothed",
+    // (undocumented)
+    moons = "Moons",
+    // (undocumented)
+    mosaic = "Mosaic",
+    // (undocumented)
+    musicNotes = "MusicNotes",
+    // (undocumented)
+    northwest = "Northwest",
+    // (undocumented)
+    ovals = "Ovals",
+    // (undocumented)
+    packages = "Packages",
+    // (undocumented)
+    palmsBlack = "PalmsBlack",
+    // (undocumented)
+    palmsColor = "PalmsColor",
+    // (undocumented)
+    paperClips = "PaperClips",
+    // (undocumented)
+    papyrus = "Papyrus",
+    // (undocumented)
+    partyFavor = "PartyFavor",
+    // (undocumented)
+    partyGlass = "PartyGlass",
+    // (undocumented)
+    pencils = "Pencils",
+    // (undocumented)
+    people = "People",
+    // (undocumented)
+    peopleHats = "PeopleHats",
+    // (undocumented)
+    peopleWaving = "PeopleWaving",
+    // (undocumented)
+    poinsettias = "Poinsettias",
+    // (undocumented)
+    postageStamp = "PostageStamp",
+    // (undocumented)
+    pumpkin1 = "Pumpkin1",
+    // (undocumented)
+    pushPinNote1 = "PushPinNote1",
+    // (undocumented)
+    pushPinNote2 = "PushPinNote2",
+    // (undocumented)
+    pyramids = "Pyramids",
+    // (undocumented)
+    pyramidsAbove = "PyramidsAbove",
+    // (undocumented)
+    quadrants = "Quadrants",
+    // (undocumented)
+    rings = "Rings",
+    // (undocumented)
+    safari = "Safari",
+    // (undocumented)
+    sawtooth = "Sawtooth",
+    // (undocumented)
+    sawtoothGray = "SawtoothGray",
+    // (undocumented)
+    scaredCat = "ScaredCat",
+    // (undocumented)
+    seattle = "Seattle",
+    // (undocumented)
+    shadowedSquares = "ShadowedSquares",
+    // (undocumented)
+    sharksTeeth = "SharksTeeth",
+    // (undocumented)
+    shorebirdTracks = "ShorebirdTracks",
+    // (undocumented)
+    skyrocket = "Skyrocket",
+    // (undocumented)
+    snowflakeFancy = "SnowflakeFancy",
+    // (undocumented)
+    snowflakes = "Snowflakes",
+    // (undocumented)
+    sombrero = "Sombrero",
+    // (undocumented)
+    southwest = "Southwest",
+    // (undocumented)
+    stars = "Stars",
+    // (undocumented)
+    stars3D = "Stars3D",
+    // (undocumented)
+    starsBlack = "StarsBlack",
+    // (undocumented)
+    starsShadowed = "StarsShadowed",
+    // (undocumented)
+    starsTop = "StarsTop",
+    // (undocumented)
+    sun = "Sun",
+    // (undocumented)
+    swirligig = "Swirligig",
+    // (undocumented)
+    tornPaper = "TornPaper",
+    // (undocumented)
+    tornPaperBlack = "TornPaperBlack",
+    // (undocumented)
+    trees = "Trees",
+    // (undocumented)
+    triangleParty = "TriangleParty",
+    // (undocumented)
+    triangles = "Triangles",
+    // (undocumented)
+    tribal1 = "Tribal1",
+    // (undocumented)
+    tribal2 = "Tribal2",
+    // (undocumented)
+    tribal3 = "Tribal3",
+    // (undocumented)
+    tribal4 = "Tribal4",
+    // (undocumented)
+    tribal5 = "Tribal5",
+    // (undocumented)
+    tribal6 = "Tribal6",
+    // (undocumented)
+    twistedLines1 = "TwistedLines1",
+    // (undocumented)
+    twistedLines2 = "TwistedLines2",
+    // (undocumented)
+    vine = "Vine",
+    // (undocumented)
+    waveline = "Waveline",
+    // (undocumented)
+    weavingAngles = "WeavingAngles",
+    // (undocumented)
+    weavingBraid = "WeavingBraid",
+    // (undocumented)
+    weavingRibbon = "WeavingRibbon",
+    // (undocumented)
+    weavingStrips = "WeavingStrips",
+    // (undocumented)
+    whiteFlowers = "WhiteFlowers",
+    // (undocumented)
+    woodwork = "Woodwork",
+    // (undocumented)
+    xillusions = "XIllusions",
+    // (undocumented)
+    zanyTriangles = "ZanyTriangles",
+    // (undocumented)
+    zigZag = "ZigZag",
+    // (undocumented)
+    zigZagStitch = "ZigZagStitch"
+}
+
+// @public
 export enum PageOrientation {
     // (undocumented)
     landscape = "Landscape",
@@ -1166,6 +1671,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Paragraph;
     attachToList(listId: number, level: number): List;
+    get borders(): BorderUniversalCollection;
     clear(): void;
     get contentControls(): ContentControlCollection;
     delete(): void;
@@ -1188,6 +1694,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
     set leftIndent(value: number);
     get lineSpacing(): number;
     set lineSpacing(value: number);
+    get lineSpacingRule(): ParagraphLineSpacingRule;
+    set lineSpacingRule(value: ParagraphLineSpacingRule);
     get list(): List;
     get listItem(): ListItem;
     // @internal
@@ -1239,6 +1747,9 @@ export class ParagraphCollection extends ItemCollection<Paragraph> {
 
 // @public
 export type ParagraphInsertTextLocation = Extract<RangeInsertTextLocation, 'Replace' | 'Start' | 'End'>;
+
+// @public
+export type ParagraphLineSpacingRule = 'Single' | 'OnePointFive' | 'Double' | 'AtLeast' | 'Exactly' | 'Multiple';
 
 // @public
 export type ParagraphReadingOrder = 'LeftToRight' | 'RightToLeft';
@@ -1865,6 +2376,11 @@ export enum UnderlineType {
     waveHeavy = "WaveHeavy",
     // (undocumented)
     word = "Word"
+}
+
+// @public
+export interface UpdateOptions {
+    throwOnReadOnly?: boolean;
 }
 
 // @public
