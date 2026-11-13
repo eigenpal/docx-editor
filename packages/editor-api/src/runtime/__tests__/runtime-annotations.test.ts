@@ -189,6 +189,29 @@ describe('refusals at insertAnnotations', () => {
       runtime.dispose();
     }
   });
+
+  test('refuses a critique that starts or ends inside a surrogate pair', async () => {
+    const runtime = await open(p('a😀b'));
+    try {
+      for (const [start, length] of [
+        [2, 1],
+        [1, 1],
+      ] as const) {
+        const error = await failure(
+          runtime.run((context) =>
+            insert(context, { critiques: [{ colorScheme: 'Red', start, length }] })
+          )
+        );
+        expect(error).toMatchObject({ code: 'InvalidArgument' });
+      }
+      const ids = await runtime.run((context) =>
+        insert(context, { critiques: [{ colorScheme: 'Red', start: 1, length: 2 }] })
+      );
+      expect(ids).toHaveLength(1);
+    } finally {
+      runtime.dispose();
+    }
+  });
 });
 
 describe('accept, reject, and delete', () => {

@@ -48,6 +48,14 @@ import { Range } from './range.ts';
 const ANNOTATION_PROPERTIES = ['id', 'state', 'critiqueAnnotation'] as const;
 const PARAGRAPH_MARK = /[\r\n\v\f\u2028\u2029]/;
 
+/** Whether offset `at` of `text` falls between the two halves of a surrogate pair. */
+function splitsPair(text: string, at: number): boolean {
+  if (at <= 0 || at >= text.length) return false;
+  const before = text.charCodeAt(at - 1);
+  const after = text.charCodeAt(at);
+  return before >= 0xd800 && before <= 0xdbff && after >= 0xdc00 && after <= 0xdfff;
+}
+
 /** The store behind a context, or the refusal a preview gives. */
 function storeOf(context: RequestContext, target: string): AnnotationStore {
   const store = internalsOf(context).annotations;
@@ -550,7 +558,9 @@ export function insertAnnotations(
       const text = current;
       if (text === null) gone(label);
       critiques.forEach((critique, index) => {
-        if (critique.start + critique.length > text.length)
+        const end = critique.start + critique.length;
+        // A boundary inside a surrogate pair names half a character, which no edit can fix.
+        if (end > text.length || splitsPair(text, critique.start) || splitsPair(text, end))
           fail({ code: 'InvalidArgument', target: `${label}.critiques[${String(index)}]` });
       });
       if (store.liveCount + critiques.length > MAX_LIVE_ANNOTATIONS)
