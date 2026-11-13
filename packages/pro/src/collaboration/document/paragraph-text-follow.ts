@@ -548,6 +548,14 @@ export class TextFollow {
     );
   }
 
+  /** The paragraph that shows a copy a move wrote of one character, or null. */
+  private shownMovedCopy(identity: Identity): LogicalId | null {
+    const parsed = parseClientClock(identity);
+    if (!parsed || !this.index.hasCopies(parsed.client)) return null;
+    const moved = this.index.holdersOf('move', parsed.client, parsed.clock);
+    return this.holders.lastOf(moved, identity, true);
+  }
+
   /** The paragraph that shows a copy of one character, or null when none holds a copy. */
   shownCopy(identity: Identity): LogicalId | null {
     const parsed = parseClientClock(identity);
@@ -904,10 +912,11 @@ export class TextFollow {
 
   /**
    * The anchor text in `source` follows: the nearest one with a copy that shows, when that
-   * copy shows in another paragraph. A copy that shows in `source` itself keeps the text there,
-   * as a join brings back the characters a peer's Enter moved away: an anchor farther back
-   * that another split moved elsewhere must not take it along. Text typed before a character
-   * follows it only out of a paragraph that is gone.
+   * copy shows in another paragraph. A copy a move wrote in `source` itself keeps the text
+   * there, as a join brings back the characters a peer's Enter moved away: an anchor farther
+   * back that another split moved elsewhere must not take it along. A copy an undo or redo
+   * wrote in `source` can follow out itself, by the typing it copies: the next anchor decides.
+   * Text typed before a character follows it only out of a paragraph that is gone.
    */
   private leadingAnchor(
     source: LogicalId,
@@ -918,7 +927,8 @@ export class TextFollow {
       if (anchor.before && live) continue;
       const target = this.shownCopy(anchor.identity);
       if (target === null) continue;
-      return target === source ? undefined : anchor;
+      if (target !== source) return anchor;
+      if (this.shownMovedCopy(anchor.identity) === source) return undefined;
     }
     return undefined;
   }

@@ -209,3 +209,33 @@ describe('a join that brings back text a concurrent split also moved', () => {
     expect(paragraphTexts(late)).toEqual(['Alphatma gamma.Delta.', ' be']);
   });
 });
+
+describe('text typed after a restored letter', () => {
+  test('follows the letter a peer moved, when an undo wrote the letter back', async () => {
+    // Bob presses Enter before "beta". Offline, Carol types "N" after "bet" and "X" after
+    // it, deletes the "N", and undoes that. Her restored "N" follows Bob's Enter, and so
+    // does the "X" typed after it.
+    later();
+    const { alice, bob, pause, resume } = await harness.pair(zipDocument(BODY));
+    pause();
+    const carol = await harness.joinDetached(alice, 'carol');
+    const peers = [alice, bob, carol];
+    harness.apply(bob, [
+      { op: 'splitParagraph', paragraphId: harness.paragraphIdAt(bob, 0), offset: 6 },
+    ]);
+    const at = harness.paragraphIdAt(carol, 0);
+    harness.apply(carol, [{ op: 'insertText', paragraphId: at, offset: 9, text: 'N' }]);
+    later();
+    harness.apply(carol, [{ op: 'insertText', paragraphId: at, offset: 10, text: 'X' }]);
+    later();
+    harness.apply(carol, [{ op: 'deleteText', paragraphId: at, start: 9, end: 10 }]);
+    later();
+    expect(carol.room.session.undo()).toBe(true);
+    resume();
+    syncAll(peers);
+    for (const peer of [bob, carol]) harness.expectConverged(alice, peer);
+    for (const peer of peers) {
+      expect(paragraphTexts(peer)).toEqual(['Alpha ', 'betNXa gamma.', 'Delta.']);
+    }
+  });
+});

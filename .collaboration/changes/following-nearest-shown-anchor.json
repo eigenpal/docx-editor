@@ -2,8 +2,8 @@
   "impact": "compatible",
   "fields": [],
   "before": "Text typed in a paragraph followed the first of its anchors whose copy showed in another paragraph, skipping nearer anchors whose copies showed in its own paragraph. When a join brought back characters a peer's Enter had moved, and another concurrent split moved characters farther back, the typed text left with the farther anchor while a copy of it also showed, so it showed twice.",
-  "after": "The nearest anchor with a copy that shows decides. When that copy shows in the text's own paragraph, the text stays there.",
-  "reason": "Only where a replica shows following text changes; nothing new is written to shared state. Every replica applies the same rule to the same shared state, so replicas converge. Older clients read shared state as before.",
+  "after": "The nearest anchor with a copy that shows decides. When a copy a move wrote of that anchor shows in the text's own paragraph, the text stays there; a copy an undo or redo wrote there lets the next anchor decide, as before.",
+  "reason": "Only where a replica shows following text changes; nothing new is written to shared state. Every replica on this version applies the same rule to the same shared state, so replicas converge. Older clients read shared state as before, and keep the old placement of following text until they upgrade.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/document-following-copy-hides-original.test.ts"
   ],
