@@ -152,12 +152,22 @@ export class InlinePictureCollection extends ItemCollection<InlinePicture> {
   getFirst(): InlinePicture {
     return this.edge('first', 'getFirst', false);
   }
+  /**
+   * The last inline picture. Throws `ItemNotFound` at sync when there is none.
+   *
+   * @docxEditorExtension
+   */
   getLast(): InlinePicture {
     return this.edge('last', 'getLast', false);
   }
   getFirstOrNullObject(): InlinePicture {
     return this.edge('first', 'getFirstOrNullObject', true);
   }
+  /**
+   * The last inline picture, or a null object when there is none.
+   *
+   * @docxEditorExtension
+   */
   getLastOrNullObject(): InlinePicture {
     return this.edge('last', 'getLastOrNullObject', true);
   }

@@ -327,6 +327,8 @@ export class Document extends ModelObject {
    * The document's footnotes, in the order its notes part writes them.
    *
    * Legacy document-wide accessor. Prefer the Office.js-shaped `body.footnotes` accessor.
+   *
+   * @docxEditorExtension
    */
   get footnotes(): NoteItemCollection {
     const document = this.path.handle();
@@ -339,7 +341,11 @@ export class Document extends ModelObject {
     return this.#footnotes;
   }
 
-  /** The document's endnotes, in the order its notes part writes them. */
+  /**
+   * The document's endnotes, in the order its notes part writes them.
+   *
+   * @docxEditorExtension
+   */
   get endnotes(): NoteItemCollection {
     const document = this.path.handle();
     this.#endnotes ??= NoteItemCollection.of(this.context, 'document.endnotes', this.path, () => ({

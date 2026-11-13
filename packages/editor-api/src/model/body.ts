@@ -159,6 +159,8 @@ export class Body extends ModelObject {
    * This is story-scoped: `document.body.bookmarks` covers only the main body story. A header,
    * footer or note body answers its own bookmarks through that body's accessor; this collection
    * does not aggregate bookmarks from other stories.
+   *
+   * @docxEditorExtension
    */
   get bookmarks(): BookmarkCollection {
     const handle = this.#handle();
@@ -256,6 +258,8 @@ export class Body extends ModelObject {
    * collection is what makes a header's, footer's, or note's changes reachable at all. Recorded in
    * `compat/manifest.json`. `items` may omit a structural card with no single type; collection-wide decisions still
    * resolve every store-resolvable revision in this story.
+   *
+   * @docxEditorExtension
    */
   get revisions(): RevisionCollection {
     this.#revisions ??= RevisionCollection.of(

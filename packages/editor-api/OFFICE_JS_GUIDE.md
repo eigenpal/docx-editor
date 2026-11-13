@@ -157,6 +157,10 @@ const trackingMine = mode === ChangeTrackingMode.trackMineOnly;
 
 For orientation, use `PageSetup['orientation']` in the same way after loading and syncing that property. Type compatibility does not imply support for every enum value: `TrackAll` fails with `NotSupported` at `sync()`.
 
+## Check for extensions before you port code
+
+A member with the `@docxEditorExtension` tag in its TSDoc comment is a DocxEditor addition, such as `Paragraph.readingOrder`. Office.js has no such member, so code that uses it does not run in an Office.js host. If your code must also run in an Office.js host, use only untagged members, or keep the tagged calls behind your own host check.
+
 ## Give each sync a purpose
 
 A sync either supplies data for the next decision or commits a complete edit. Batch independent reads and writes. For progressive agent review, one completed suggestion per sync is intentional: peers see each suggestion as it is ready. For independent edits in different paragraphs, multiple edits can share one sync and one transaction. Edits that claim the same paragraph can conflict; reconsider their anchors between commits. A range read before an earlier sync changed text before its end fails with `StaleDocument`, so search again in that paragraph before the next suggestion.

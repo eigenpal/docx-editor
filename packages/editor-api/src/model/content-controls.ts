@@ -176,6 +176,8 @@ export class ContentControl extends ModelObject implements PromisedItem {
    * after this property is loaded, so the atomic sync-time refusal remains the final authority.
    * Only binding presence is exposed: XPath, namespace mappings, store ids, and custom XML
    * content remain inside the untrusted-document boundary.
+   *
+   * @docxEditorExtension
    */
   get isBound(): boolean {
     return this.loadedProperty<boolean>('isBound');
@@ -213,12 +215,18 @@ export class ContentControl extends ModelObject implements PromisedItem {
    * STATE, not text. A control showing its placeholder holds the prompt in its runs, and the
    * first thing written into it replaces the whole prompt — so a caller that treats `text` as a
    * value must ask this before believing it.
+   *
+   * @docxEditorExtension
    */
   get placeholderShown(): boolean {
     return this.loadedProperty<boolean>('placeholderShown');
   }
 
-  /** Whether the control removes its own wrapper on the first content edit (`w:temporary`). */
+  /**
+   * Whether the control removes its own wrapper on the first content edit (`w:temporary`).
+   *
+   * @docxEditorExtension
+   */
   get temporary(): boolean {
     return this.loadedProperty<boolean>('temporary');
   }
@@ -274,6 +282,8 @@ export class ContentControl extends ModelObject implements PromisedItem {
    * engine's single write path, which is the same path a keystroke takes. {@link isBound} is an
    * advisory preflight only; this sync-time check remains authoritative if the document changed
    * after the flag was loaded.
+   *
+   * @docxEditorExtension
    */
   setValue(value: ContentControlValue): void {
     const target = `${this.path.label}.setValue`;
