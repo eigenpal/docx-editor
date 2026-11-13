@@ -1074,6 +1074,17 @@ export interface EquationBorderBoxGeometry extends EquationGeometryBase {
     readonly thickness: number;
 }
 
+// @public (undocumented)
+export interface EquationDelimiterGeometry {
+    readonly baseline: number;
+    // (undocumented)
+    readonly box: LayoutBox;
+    readonly fences: readonly EquationTextGeometry[];
+    readonly items: readonly EquationGeometry[];
+    // (undocumented)
+    readonly kind: 'delimiter';
+}
+
 // @public
 export interface EquationDiagonal {
     // (undocumented)
@@ -1099,7 +1110,7 @@ export interface EquationFractionGeometry extends EquationGeometryBase {
 }
 
 // @public (undocumented)
-export type EquationGeometry = EquationTextGeometry | EquationRowGeometry | EquationFractionGeometry | EquationRadicalGeometry | EquationBarGeometry | EquationBorderBoxGeometry | EquationScriptGeometry | EquationNaryGeometry;
+export type EquationGeometry = EquationTextGeometry | EquationRowGeometry | EquationFractionGeometry | EquationRadicalGeometry | EquationBarGeometry | EquationBorderBoxGeometry | EquationDelimiterGeometry | EquationScriptGeometry | EquationNaryGeometry;
 
 // @public (undocumented)
 export interface EquationNaryGeometry extends EquationGeometryBase {
@@ -1161,6 +1172,12 @@ export interface EquationSpanRecord {
     readonly truncated: boolean;
 }
 
+// @public
+export interface EquationStretch {
+    readonly originY: number;
+    readonly scale: number;
+}
+
 // @public (undocumented)
 export interface EquationTextGeometry extends EquationGeometryBase {
     // (undocumented)
@@ -1168,6 +1185,7 @@ export interface EquationTextGeometry extends EquationGeometryBase {
     // (undocumented)
     readonly kind: 'text' | 'fallback';
     readonly runStyle?: ResolvedRunStyle;
+    readonly stretch?: EquationStretch;
     // (undocumented)
     readonly text: string;
 }

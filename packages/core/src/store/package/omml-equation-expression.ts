@@ -101,6 +101,29 @@ export type EquationExpression =
     } & EquationControlSource)
   | ({
       /**
+       * `m:d`: arguments between an opening and a closing character, with a separator
+       * character between arguments. Each character is the source `m:val`, or the default
+       * (`(`, `)`, and `|`) when the source names none. An empty string draws nothing.
+       */
+      readonly kind: 'delimiter';
+      readonly opening: string;
+      readonly closing: string;
+      readonly separator: string;
+      /** The `m:e` arguments, in source order. There is at least one. */
+      readonly items: readonly EquationExpression[];
+      /**
+       * `m:grow`: the characters stretch to the height of the arguments. An omitted `m:grow`
+       * is on for a delimiter (ISO/IEC 29500-1), and Word applies it to delimiters.
+       */
+      readonly grow: boolean;
+      /**
+       * `m:shp`: `centered` characters cover the arguments evenly above and below the math
+       * axis; `match` characters cover exactly the arguments.
+       */
+      readonly shape: 'centered' | 'match';
+    } & EquationControlSource)
+  | ({
+      /**
        * `m:borderBox`: the body inside a rectangle. A hidden edge draws no rule and keeps no
        * gap. Strikes cross the box horizontally, vertically, or along a diagonal.
        */

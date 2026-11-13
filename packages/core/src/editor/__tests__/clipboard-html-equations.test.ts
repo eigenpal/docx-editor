@@ -389,6 +389,31 @@ describe('copying equations to other applications', () => {
     expect(flavours.html).toContain('<mtext>∑aby</mtext>');
   });
 
+  test('a delimiter copies its characters as text and as MathML fences', () => {
+    const items = '<m:e><m:r><m:t>a</m:t></m:r></m:e><m:e><m:r><m:t>b</m:t></m:r></m:e>';
+    const copy = (properties: string) => {
+      const source = mount(
+        `<w:p xmlns:m="${M}"><m:oMath><m:d>${properties}${items}</m:d></m:oMath></w:p>`
+      );
+      putCaret(source.surface, 0);
+      source.surface.selectAll();
+      const flavours = source.surface.copyFlavours();
+      source.container.remove();
+      return flavours;
+    };
+    const named = copy(
+      '<m:dPr><m:begChr m:val="["/><m:sepChr m:val=";"/><m:endChr m:val="]"/></m:dPr>'
+    );
+    expect(named.text).toBe('[a;b]');
+    expect(named.html).toContain(
+      '<mrow><mo fence="true">[</mo><mrow><mi>a</mi></mrow><mo separator="true">;</mo>' +
+        '<mrow><mi>b</mi></mrow><mo fence="true">]</mo></mrow>'
+    );
+    const fixed = copy('<m:dPr><m:grow m:val="0"/></m:dPr>');
+    expect(fixed.text).toBe('(a|b)');
+    expect(fixed.html).toContain('<mo fence="true" stretchy="false">(</mo>');
+  });
+
   test('the HTML alone pastes back as the same equations without duplicates', () => {
     const html = copied();
     const visible = /<div[^>]*>([\s\S]*)<\/div>/.exec(html)![1]!;

@@ -1670,6 +1670,14 @@ export type EquationExpression = {
     readonly operator: string;
     readonly upperLimit?: EquationExpression;
 } & EquationControlSource) | ({
+    readonly closing: string;
+    readonly grow: boolean;
+    readonly items: readonly EquationExpression[];
+    readonly kind: 'delimiter';
+    readonly opening: string;
+    readonly separator: string;
+    readonly shape: 'centered' | 'match';
+} & EquationControlSource) | ({
     readonly body: EquationExpression;
     readonly hidden: EquationBoxEdges;
     readonly kind: 'borderBox';

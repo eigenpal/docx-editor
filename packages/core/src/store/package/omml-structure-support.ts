@@ -104,6 +104,31 @@ export const BORDER_BOX_FLAGS = Object.freeze([
   'strikeTLBR',
 ] as const);
 
+/** The `m:dPr` properties that name one character. */
+export const DELIMITER_CHARACTERS = Object.freeze(['begChr', 'sepChr', 'endChr'] as const);
+/** The characters of an `m:d` whose `m:dPr` names none. */
+export const DEFAULT_DELIMITER_CHARACTERS = Object.freeze({
+  begChr: '(',
+  sepChr: '|',
+  endChr: ')',
+});
+const DELIMITER_SHAPES: ReadonlySet<string> = new Set(['centered', 'match']);
+
+/** One character of an `m:d`: the `m:val` of its `m:dPr` property, or the default. */
+export function delimiterCharacter(
+  node: OoxmlGenericElementNode,
+  name: (typeof DELIMITER_CHARACTERS)[number]
+): string {
+  const property = namedChild(node, 'dPr');
+  const character = property ? namedChild(property, name) : null;
+  return (character && mathVal(character)) ?? DEFAULT_DELIMITER_CHARACTERS[name];
+}
+
+/** A character property (`ST_Char`): one `m:val` of at most one character. */
+function isCharacterProperty(node: OoxmlGenericElementNode): boolean {
+  return hasOnlyMathVal(node) && [...mathVal(node)!].length <= 1;
+}
+
 /** An on/off property: a bare element, or one `m:val` from `ST_OnOff`. */
 function isOnOffProperty(node: OoxmlGenericElementNode): boolean {
   if (node.children.length > 0) return false;
@@ -142,6 +167,34 @@ export function isSupportedExpressionNode(node: OoxmlNode): boolean {
           const value = namedChild(property, flag);
           return !value || isOnOffProperty(value);
         })
+      ) &&
+      containersSupported(node, ['e'])
+    );
+  }
+  if (node.localName === 'd') {
+    return (
+      hasOnlyMathChildren(node, { dPr: OPTIONAL, e: { min: 1, max: Number.MAX_SAFE_INTEGER } }) &&
+      propertyIsSupported(
+        namedChild(node, 'dPr'),
+        {
+          begChr: OPTIONAL,
+          sepChr: OPTIONAL,
+          endChr: OPTIONAL,
+          grow: OPTIONAL,
+          shp: OPTIONAL,
+        },
+        (property) => {
+          const grow = namedChild(property, 'grow');
+          const shape = namedChild(property, 'shp');
+          return (
+            DELIMITER_CHARACTERS.every((name) => {
+              const character = namedChild(property, name);
+              return !character || isCharacterProperty(character);
+            }) &&
+            (!grow || isOnOffProperty(grow)) &&
+            (!shape || hasOnlyMathVal(shape, DELIMITER_SHAPES))
+          );
+        }
       ) &&
       containersSupported(node, ['e'])
     );

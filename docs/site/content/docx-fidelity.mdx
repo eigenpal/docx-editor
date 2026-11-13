@@ -183,6 +183,7 @@ The editor calculates layout from document fonts, themes, section geometry, and 
 | Script and fraction text | 73 percent of the run size, rounded down to a half point. Nested scripts use 60 percent. |
 | Display equations | `m:oMathPara`, or an `m:oMath` alone in its paragraph. No display style: they use inline fraction rules and part sizes. |
 | N-ary operators | Inline: limits sit to the right, whatever `m:limLoc` says. Display: the operator enlarges and limits follow `m:limLoc`. |
+| Delimiters | `m:d` brackets and separators grow to the ink of their contents, evenly about the math axis or matched with `m:shp`. A grown glyph stretches vertically. |
 | Operators | Take math spacing by class. A hyphen-minus draws as a minus sign. |
 | Line height | Later runs add only their glyph height and math leading. Multiple and exact line spacing apply as for text. |
 | Math settings | Document-wide limit defaults in `m:mathPr` are not read. |
@@ -193,7 +194,7 @@ Compact equation replacement is disabled when it cannot keep the source. The equ
 - Integrals, because replacement writes only sums.
 - Limit location `subSup`.
 - Mixed source sizes.
-- Run formatting, bars, or control properties (`m:ctrlPr`) other than one shared default: Cambria Math, italic, one size, and a language.
+- Run formatting, bars, delimiters, or control properties (`m:ctrlPr`) other than one shared default: Cambria Math, italic, one size, and a language.
 
 ### Text frames
 
