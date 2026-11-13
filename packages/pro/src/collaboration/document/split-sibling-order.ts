@@ -197,7 +197,18 @@ export function splitSiblingRanks(
     for (let at = start; at > 1;) {
       const item = items[at - 1]!;
       const removed = members.find((member) => member.deleted && inItem(item.rightOrigin, member));
-      if (!removed) break;
+      if (!removed) {
+        // A later split of the put-back sibling, earlier in it, goes in right before the
+        // paragraph an earlier split put after it.
+        const splitAgain =
+          !item.deleted &&
+          pending.some((follower) => inItem(item.rightOrigin, follower)) &&
+          !(item.origin && head.origin && Y.compareIDs(item.origin, head.origin));
+        if (!splitAgain) break;
+        at -= 1;
+        pending.unshift(item);
+        continue;
+      }
       at -= 1;
       if (item.deleted) {
         members.push(item);

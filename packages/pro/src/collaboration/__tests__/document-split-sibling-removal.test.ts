@@ -164,4 +164,43 @@ describe('a split piece an undo put back', () => {
           ]);
           expect(r.converged().map((entry) => entry.text)).toEqual(['ab', 'cd', 'ef', 'gh', 'End']);
         });
+
+  for (const { label, ids: clientIds } of ORDERS)
+    for (const splitter of ['alice', 'bob'] as const)
+      test(`splitting it twice, the second time earlier, keeps the halves in order (${label}, ${splitter} splits)`, async () => {
+        const r = await room(clientIds, 'abcdefgh');
+        r.pause();
+        r.split(r.alice, 0, 2);
+        r.split(r.bob, 0, 4);
+        r.resume();
+        const pieces = r.converged();
+        later();
+        r.harness.apply(r.alice, [
+          { op: 'joinParagraphs', firstId: pieces[1]!.id, secondId: pieces[2]!.id },
+        ]);
+        r.converged();
+        expect(r.alice.room.session.undo()).toBe(true);
+        expect(ids(r.converged())).toEqual(ids(pieces));
+        later();
+        r.split(r[splitter], 2, 3);
+        r.converged();
+        later();
+        r.split(r[splitter], 2, 1);
+        expect(r.shown(r[splitter]).map((entry) => entry.text)).toEqual([
+          'ab',
+          'cd',
+          'e',
+          'fg',
+          'h',
+          'End',
+        ]);
+        expect(r.converged().map((entry) => entry.text)).toEqual([
+          'ab',
+          'cd',
+          'e',
+          'fg',
+          'h',
+          'End',
+        ]);
+      });
 });
