@@ -4,7 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import * as Y from 'yjs';
-import { holderItem } from './yjs-items.ts';
+import { deleteSetRuns, holderItem, structAt } from './yjs-items.ts';
 import { FIELD_SEP, NODE_INITIAL_SHELL_FIELD, NODE_SPLIT_LINEAGE_FIELD } from './schema.ts';
 
 /** The shared maps that hold each element's attributes and namespace bindings by node ID. */
@@ -17,6 +17,8 @@ export interface NodeDescriptorMaps {
 const undoingCreations = new WeakMap<Y.Map<string>, ReadonlySet<string>>();
 /** Items the running undo keeps although its step wrote them, by the same map. */
 const undoingKeeps = new WeakMap<Y.Map<string>, (item: Y.Item) => boolean>();
+/** The attribute and binding values the running step's writes replaced, by the same map. */
+const steppingReplaced = new WeakMap<Y.Map<string>, Map<Y.Map<string>, Map<string, string>>>();
 
 /**
  * Run an undo of a step that created the nodes `created`.
@@ -43,6 +45,63 @@ export function whileUndoingCreations<Result>(
     undoingCreations.delete(maps.attributes);
     undoingKeeps.delete(maps.attributes);
   }
+}
+
+/**
+ * Run an undo or redo of `step`, and put back the attribute and binding values its writes
+ * replaced when Yjs does not.
+ *
+ * Yjs restores a replaced map value only when no other client wrote the same key since. Two
+ * peers that set one attribute at the same time both write it, and Yjs keeps one write and
+ * deletes the other. When the peer whose write Yjs kept undoes it, Yjs refuses to restore the
+ * value it replaced, because of the other peer's write, and that write is gone too: the key
+ * holds no value at all. A required attribute, such as the size of a drawing, then leaves an
+ * element no replica can build. While `run` runs, the delete filter writes the replaced value
+ * again in place of the write it deletes, in the same transaction, so no replica ever reads
+ * the key empty.
+ */
+export function whileSteppingReplaced<Result>(
+  doc: Y.Doc,
+  maps: NodeDescriptorMaps,
+  step: { readonly deletions?: unknown } | undefined,
+  run: () => Result
+): Result {
+  const replaced = new Map<Y.Map<string>, Map<string, string>>();
+  for (const deleted of deleteSetRuns(step?.deletions)) {
+    for (let clock = deleted.clock; clock < deleted.clock + deleted.length;) {
+      const item = structAt(doc, { client: deleted.client, clock });
+      if (!item) break;
+      clock = item.id.clock + item.length;
+      const parent = item.parent as unknown;
+      if (parent !== maps.attributes && parent !== maps.bindings) continue;
+      if (item.parentSub === null || !(item.content instanceof Y.ContentAny)) continue;
+      const value = item.content.getContent()[0];
+      if (typeof value !== 'string') continue;
+      const values = replaced.get(parent as Y.Map<string>) ?? new Map<string, string>();
+      values.set(item.parentSub, value);
+      replaced.set(parent as Y.Map<string>, values);
+    }
+  }
+  if (replaced.size === 0) return run();
+  steppingReplaced.set(maps.attributes, replaced);
+  try {
+    return run();
+  } finally {
+    steppingReplaced.delete(maps.attributes);
+  }
+}
+
+/**
+ * The step deletes this replica's write of an attribute or binding, and Yjs restored no value
+ * for its key: write the value the step's write replaced again ({@link whileSteppingReplaced}).
+ */
+function restoreReplaced(item: Y.Item, maps: NodeDescriptorMaps): void {
+  if (item.parentSub === null || item.deleted) return;
+  const parent = item.parent as unknown as Y.Map<string>;
+  const value = steppingReplaced.get(maps.attributes)?.get(parent)?.get(item.parentSub);
+  // A value Yjs restored, or another client's later write, holds the key instead.
+  if (value === undefined || parent._map.get(item.parentSub) !== item) return;
+  parent.set(item.parentSub, value);
 }
 
 /** Whether `item` is an attribute or binding of a node the running undo un-creates. */
@@ -109,6 +168,12 @@ export function nodeRecordDeleteFilter(
     if (parent === null) return true;
     if (describesUndoneCreation(item, maps)) return false;
     if (maps && undoingKeeps.get(maps.attributes)?.(item)) return false;
+    if (
+      maps &&
+      ((parent as unknown) === maps.attributes || (parent as unknown) === maps.bindings)
+    ) {
+      restoreReplaced(item, maps);
+    }
     // The record entry itself.
     if ((parent as unknown) === nodes) return false;
     // A field of a record: its holder sits directly in `nodes`.

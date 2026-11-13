@@ -298,6 +298,43 @@ describe('image races', () => {
     expect(nodes(pair.alice, 'drawing')).toHaveLength(nodes(pair.bob, 'drawing').length);
   });
 
+  for (const undoer of ['alice', 'bob'] as const) {
+    test(`two peers resize one image and ${undoer} undoes: the image keeps a size`, async () => {
+      const pair = await harness.pair(SAMPLE);
+      const drawing = nodes(pair.alice, 'drawing')[0]!;
+      pair.pause();
+      harness.apply(pair.alice, [
+        { op: 'resizeDrawing', drawingNodeId: drawing.id, extentEmu: { cx: 900_000, cy: 600_000 } },
+      ]);
+      harness.apply(pair.bob, [
+        {
+          op: 'resizeDrawing',
+          drawingNodeId: drawing.id,
+          extentEmu: { cx: 1_200_000, cy: 800_000 },
+        },
+      ]);
+      pair.resume();
+      // One resize is kept. Undoing the kept one must not leave the drawing with no size, which
+      // no replica can build.
+      expect(pair[undoer].room.session.undo()).toBe(true);
+      for (const peer of [pair.alice, pair.bob]) {
+        expect(peer.room.session.statusSnapshot().reason?.code).toBeUndefined();
+        const extent = nodes(peer, 'extent')[0]!;
+        const size = Object.fromEntries(
+          (extent.kind === 'textValue' ? [] : extent.attributes).map((attribute) => [
+            attribute.localName,
+            attribute.value,
+          ])
+        );
+        expect(Number(size.cx)).toBeGreaterThan(0);
+        expect(Number(size.cy)).toBeGreaterThan(0);
+      }
+      harness.expectConverged(pair.alice, pair.bob);
+      const late = await harness.join(pair.alice, 'late');
+      harness.expectConverged(pair.alice, late);
+    });
+  }
+
   test('deleting an image while a peer resizes it converges on the deletion', async () => {
     const pair = await harness.pair(SAMPLE);
     const before = nodes(pair.alice, 'drawing').length;
