@@ -958,5 +958,45 @@
   "Word.InlinePicture#insertFileFromBase64": {
     "status": "unsupported",
     "notes": "Not implemented. Inserting a file beside a picture is not supported. Use Body.insertFileFromBase64 with Replace to replace the whole document."
+  },
+  "Word.Paragraph#borders": {
+    "status": "partial",
+    "notes": "Returns a BorderUniversalCollection whose items are top, left, bottom, right, then the border between paragraphs, whose inside is true. Office.js does not define the item order; DocxEditor uses the w:pBdr order. Load items and sync before writing. Reads fold the document defaults, a cell's table style, the style chain, the numbering level, and the paragraph's own w:pBdr edge by edge, as the page shows them. A theme color reads as its stored w:color fallback. The vertical bar border (w:bar) has no item, and every write keeps it."
+  },
+  "Word.BorderUniversal#lineStyle": {
+    "status": "partial",
+    "notes": "Supported only through Paragraph.borders, whose items are top, left, bottom, right, then the border between paragraphs. Office.js does not define the item order; DocxEditor uses the w:pBdr order. Values are checked at the assignment: an invalid value throws InvalidArgument with the property as errorLocation. Writes the 24 BorderLineStyle line styles as their OOXML values; None turns the edge off. Every line style write sets the width to Pt050 and keeps the edge's color and gap, so assign lineWidth after lineStyle. A new line is automatic and keeps any gap the edge stores, else none. Reads return null for a stored style no BorderLineStyle value names, such as thick or an art border. Border assignments apply in the order they are made and join the paragraph's other formatting writes in one sync. Borders cascade edge by edge, so a write states only the edges it changes; an edge turned off over a style line is written as w:val=\"none\", and one with no style line under it is removed. Writing back a visibility or color read changes nothing; a line style write resets the width. TrackMineOnly records one paragraph property revision. A content lock refuses the write; a data binding allows it. A load queued in the same sync as a write returns the value from before the write."
+  },
+  "Word.BorderUniversal#lineWidth": {
+    "status": "partial",
+    "notes": "Supported only through Paragraph.borders, whose items are top, left, bottom, right, then the border between paragraphs. Office.js does not define the item order; DocxEditor uses the w:pBdr order. Values are checked at the assignment: an invalid value throws InvalidArgument with the property as errorLocation. Writes the nine LineWidth values as w:sz in eighths of a point. On an edge with no line, a width has no effect. Reads return null for no line or a width no LineWidth value names. Border assignments apply in the order they are made and join the paragraph's other formatting writes in one sync. Borders cascade edge by edge, so a write states only the edges it changes; an edge turned off over a style line is written as w:val=\"none\", and one with no style line under it is removed. Writing back a visibility or color read changes nothing; a line style write resets the width. TrackMineOnly records one paragraph property revision. A content lock refuses the write; a data binding allows it. A load queued in the same sync as a write returns the value from before the write."
+  },
+  "Word.BorderUniversal#color": {
+    "status": "partial",
+    "notes": "Supported only through Paragraph.borders, whose items are top, left, bottom, right, then the border between paragraphs. Office.js does not define the item order; DocxEditor uses the w:pBdr order. Values are checked at the assignment: an invalid value throws InvalidArgument with the property as errorLocation. Writes #RRGGBB only, like Font.color, and removes a theme color the edge had. On an edge with no line, the color applies to the next line drawn there in the same sync. Reads return #RRGGBB, or null for no line or an automatic color; a theme color reads as its stored fallback. Border assignments apply in the order they are made and join the paragraph's other formatting writes in one sync. Borders cascade edge by edge, so a write states only the edges it changes; an edge turned off over a style line is written as w:val=\"none\", and one with no style line under it is removed. Writing back a visibility or color read changes nothing; a line style write resets the width. TrackMineOnly records one paragraph property revision. A content lock refuses the write; a data binding allows it. A load queued in the same sync as a write returns the value from before the write."
+  },
+  "Word.BorderUniversal#colorIndex": {
+    "status": "partial",
+    "notes": "Supported only through Paragraph.borders, whose items are top, left, bottom, right, then the border between paragraphs. Office.js does not define the item order; DocxEditor uses the w:pBdr order. Values are checked at the assignment: an invalid value throws InvalidArgument with the property as errorLocation. Writes Auto and the 16 basic palette colors. ClassicRed, ClassicBlue, and ByAuthor throw NotSupported at the assignment. Reads return Auto for an automatic color, the palette name for an exact palette color, and null otherwise. Border assignments apply in the order they are made and join the paragraph's other formatting writes in one sync. Borders cascade edge by edge, so a write states only the edges it changes; an edge turned off over a style line is written as w:val=\"none\", and one with no style line under it is removed. Writing back a visibility or color read changes nothing; a line style write resets the width. TrackMineOnly records one paragraph property revision. A content lock refuses the write; a data binding allows it. A load queued in the same sync as a write returns the value from before the write."
+  },
+  "Word.BorderUniversal#isVisible": {
+    "status": "partial",
+    "notes": "Supported only through Paragraph.borders, whose items are top, left, bottom, right, then the border between paragraphs. Office.js does not define the item order; DocxEditor uses the w:pBdr order. Values are checked at the assignment: an invalid value throws InvalidArgument with the property as errorLocation. True on an edge with no line draws a single Pt050 automatic line, keeping any gap the edge stores, and leaves an existing line alone; false turns the edge off. Border assignments apply in the order they are made and join the paragraph's other formatting writes in one sync. Borders cascade edge by edge, so a write states only the edges it changes; an edge turned off over a style line is written as w:val=\"none\", and one with no style line under it is removed. Writing back a visibility or color read changes nothing; a line style write resets the width. TrackMineOnly records one paragraph property revision. A content lock refuses the write; a data binding allows it. A load queued in the same sync as a write returns the value from before the write."
+  },
+  "Word.BorderUniversal#set": {
+    "status": "partial",
+    "notes": "Supported only through Paragraph.borders, whose items are top, left, bottom, right, then the border between paragraphs. Office.js does not define the item order; DocxEditor uses the w:pBdr order. Values are checked at the assignment: an invalid value throws InvalidArgument with the property as errorLocation. Applies isVisible, lineStyle, lineWidth, color, then colorIndex from the data, or the writable properties another border has loaded. Unknown properties throw InvalidArgument. inside is skipped when throwOnReadOnly is false. artStyle and artWidth throw NotSupported. Border assignments apply in the order they are made and join the paragraph's other formatting writes in one sync. Borders cascade edge by edge, so a write states only the edges it changes; an edge turned off over a style line is written as w:val=\"none\", and one with no style line under it is removed. Writing back a visibility or color read changes nothing; a line style write resets the width. TrackMineOnly records one paragraph property revision. A content lock refuses the write; a data binding allows it. A load queued in the same sync as a write returns the value from before the write."
+  },
+  "Word.BorderUniversal#artStyle": {
+    "status": "unsupported",
+    "notes": "Art borders belong to pages. On a paragraph border, reads, writes, and loads throw NotSupported."
+  },
+  "Word.BorderUniversal#artWidth": {
+    "status": "unsupported",
+    "notes": "Art borders belong to pages. On a paragraph border, reads, writes, and loads throw NotSupported."
+  },
+  "Word.BorderUniversalCollection#applyPageBordersToAllSections": {
+    "status": "unsupported",
+    "notes": "Paragraph borders are not page borders. Throws NotSupported."
   }
 }

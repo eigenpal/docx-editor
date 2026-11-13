@@ -169,14 +169,26 @@ describe('paragraphBorders reads every CT_PBdr child', () => {
   });
 });
 
-describe('cascadedParagraphBorders replaces a w:pBdr wholesale', () => {
-  test('a later w:pBdr discards the box an earlier one declared', () => {
+describe('cascadedParagraphBorders folds a w:pBdr edge by edge', () => {
+  test('a later w:pBdr overrides only the edges it states', () => {
     const styled = load(paragraph('x', BOX));
-    const direct = load(paragraph('x', '<w:pBdr><w:bottom w:val="single" w:sz="8"/></w:pBdr>'));
+    const direct = load(
+      paragraph('x', '<w:pBdr><w:bottom w:val="single" w:sz="8" w:color="00B050"/></w:pBdr>')
+    );
     const merged = cascadedParagraphBorders([propertiesNodeOf(styled)!, propertiesNodeOf(direct)!]);
-    // Word does not fold edge by edge: a style stating only `w:bottom` leaves an underline,
-    // not the ancestor's box with a new bottom.
-    expect(Object.keys(merged)).toEqual(['bottom']);
+    // The ancestor's box keeps its top, left, and right; only the bottom is the new green line.
+    expect(Object.keys(merged).sort()).toEqual(['bottom', 'left', 'right', 'top']);
+    expect(merged.bottom?.color).toBe('00B050');
+    expect(merged.top?.color).toBe('C00000');
+  });
+
+  test('nil and none turn an inherited edge off', () => {
+    const styled = load(paragraph('x', BOX));
+    const direct = load(
+      paragraph('x', '<w:pBdr><w:top w:val="nil"/><w:left w:val="none" w:sz="0"/></w:pBdr>')
+    );
+    const merged = cascadedParagraphBorders([propertiesNodeOf(styled)!, propertiesNodeOf(direct)!]);
+    expect(Object.keys(merged).sort()).toEqual(['bottom', 'right']);
   });
 
   test('a node without a w:pBdr inherits rather than clearing', () => {

@@ -61,6 +61,13 @@ export interface AutomationStyleIndex {
    */
   inheritsRtl(part: OoxmlPart, paragraph: OoxmlNode, styleId?: string): boolean;
   /**
+   * The `w:pBdr` elements the paragraph inherits, in cascade order, ignoring its own: document
+   * defaults, an enclosing cell's table style, its style chain, and its numbering level, as
+   * layout resolves them. Layout folds them edge by edge. `styleId` resolves them as if the
+   * paragraph named that style.
+   */
+  inheritedBorders(part: OoxmlPart, paragraph: OoxmlNode, styleId?: string): readonly OoxmlNode[];
+  /**
    * The `w:spacing` line attributes the paragraph inherits, ignoring its own: document defaults,
    * an enclosing cell's table style, its style chain, and its numbering level, as layout resolves
    * them, each attribute from the last level that states it. `styleId` resolves them as if the
@@ -115,6 +122,18 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
   // Cell styles resolve as the proposed document shows them, like automation's run writes.
   const inheritsRtl = (target: OoxmlPart, paragraph: OoxmlNode, styleId?: string) =>
     paragraphInheritsRtl(sources, target, paragraph, 'proposed', styleId);
+  const inheritedBorders = (target: OoxmlPart, paragraph: OoxmlNode, styleId?: string) =>
+    inheritedParagraphPropertyNodes(
+      sources,
+      target,
+      paragraph,
+      'proposed',
+      'pBdr',
+      styleId
+    ).flatMap((node) => {
+      const pBdr = namedChild(node, 'pBdr');
+      return pBdr ? [pBdr] : [];
+    });
   const inheritedLineSpacing = (target: OoxmlPart, paragraph: OoxmlNode, styleId?: string) =>
     foldedLineSpacing(
       inheritedParagraphPropertyNodes(sources, target, paragraph, 'proposed', 'spacing', styleId)
@@ -127,6 +146,7 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
       defaultId: null,
       present: false,
       inheritsRtl,
+      inheritedBorders,
       inheritedLineSpacing,
     });
   }
@@ -140,6 +160,7 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
     defaultId,
     present: true,
     inheritsRtl,
+    inheritedBorders,
     inheritedLineSpacing,
   });
 }

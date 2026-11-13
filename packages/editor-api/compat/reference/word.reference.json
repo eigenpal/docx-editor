@@ -282,6 +282,99 @@
         }
       }
     },
+    "BorderUniversal": {
+      "uid": "Word.BorderUniversal",
+      "kind": "class",
+      "requirementSet": "WordApiDesktop 1.3",
+      "members": {
+        "color": {
+          "uid": "Word.BorderUniversal#color",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "colorIndex": {
+          "uid": "Word.BorderUniversal#colorIndex",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Auto\" | \"Black\" | \"Blue\" | \"Turquoise\" | \"BrightGreen\" | \"Pink\" | \"Red\" | \"Yellow\" | \"White\" | \"DarkBlue\" | \"Teal\" | \"Green\" | \"Violet\" | \"DarkRed\" | \"DarkYellow\" | \"Gray50\" | \"Gray25\" | \"ClassicRed\" | \"ClassicBlue\" | \"ByAuthor\""
+            }
+          ]
+        },
+        "inside": {
+          "uid": "Word.BorderUniversal#inside",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "isVisible": {
+          "uid": "Word.BorderUniversal#isVisible",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "lineStyle": {
+          "uid": "Word.BorderUniversal#lineStyle",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"None\" | \"Single\" | \"Dot\" | \"DashSmallGap\" | \"DashLargeGap\" | \"DashDot\" | \"DashDotDot\" | \"Double\" | \"Triple\" | \"ThinThickSmallGap\" | \"ThickThinSmallGap\" | \"ThinThickThinSmallGap\" | \"ThinThickMedGap\" | \"ThickThinMedGap\" | \"ThinThickThinMedGap\" | \"ThinThickLargeGap\" | \"ThickThinLargeGap\" | \"ThinThickThinLargeGap\" | \"SingleWavy\" | \"DoubleWavy\" | \"DashDotStroked\" | \"Emboss3D\" | \"Engrave3D\" | \"Outset\" | \"Inset\""
+            }
+          ]
+        },
+        "lineWidth": {
+          "uid": "Word.BorderUniversal#lineWidth",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Pt025\" | \"Pt050\" | \"Pt075\" | \"Pt100\" | \"Pt150\" | \"Pt225\" | \"Pt300\" | \"Pt450\" | \"Pt600\""
+            }
+          ]
+        }
+      }
+    },
+    "BorderUniversalCollection": {
+      "uid": "Word.BorderUniversalCollection",
+      "kind": "class",
+      "requirementSet": "WordApiDesktop 1.3",
+      "members": {
+        "items": {
+          "uid": "Word.BorderUniversalCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "BorderUniversal[]"
+            }
+          ]
+        }
+      }
+    },
     "ClientObject": {
       "uid": "OfficeExtension.ClientObject",
       "kind": "class",
@@ -1412,6 +1505,18 @@
             {
               "params": [],
               "returns": "\"Mixed\" | \"Unknown\" | \"Left\" | \"Centered\" | \"Right\" | \"Justified\""
+            }
+          ]
+        },
+        "borders": {
+          "uid": "Word.Paragraph#borders",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "BorderUniversalCollection"
             }
           ]
         },

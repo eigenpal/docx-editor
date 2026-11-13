@@ -15,6 +15,7 @@ import type { RevisionAuthorResult } from '../store/store/revision-author-change
 
 import type { AutomationFontRead, AutomationParagraphFormatRead } from './formatting.ts';
 import type { AutomationOperation } from './operations.ts';
+import type { AutomationParagraphBorderRead } from './paragraph-borders.ts';
 import type { AutomationPageSetupRead } from './sections.ts';
 
 /**
@@ -239,6 +240,11 @@ export type AutomationValue =
    */
   | { readonly kind: 'font'; readonly font: AutomationFontRead }
   | { readonly kind: 'paragraphFormat'; readonly format: AutomationParagraphFormatRead }
+  /** A paragraph's five borders, in collection order. */
+  | {
+      readonly kind: 'paragraphBorders';
+      readonly borders: readonly AutomationParagraphBorderRead[];
+    }
   /** One section's page geometry, in points. */
   | { readonly kind: 'pageSetup'; readonly setup: AutomationPageSetupRead }
   /**

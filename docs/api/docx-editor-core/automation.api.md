@@ -8,7 +8,7 @@
 export const AUTOMATION_COMMAND_OPERATIONS: readonly ["removeDocumentInformation", "compareFromBase64", "replaceDocumentFromBase64", "setDocumentProperties", "insertTableRows", "insertTable", "updateTable", "updateTableCell", "splitTableCell", "setInlinePicture", "setShapeFill", "deleteInlinePicture", "insertField", "insertOoxml", "setFieldCode", "setFieldResult", "deleteField", "updateFieldResult", "insertInlinePicture", "insertBreak", "setChangeTrackingMode", "proposeInsertion", "proposeDeletion", "proposeReplacement", "insertText", "replaceSpan", "replaceStoryBlocks", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "insertBookmark", "deleteBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "startNewList", "attachToList", "detachFromList", "setListLevelFormat", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "setCommentText", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "resolveRevisionBatch", "setRevisionAuthorBatch", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
 
 // @public
-export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getMergedTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getFieldResult", "getInlinePictures", "getInlinePicture", "getShapes", "getShape", "getShapeBody", "getShapeFill", "getChangeTrackingMode", "getDocument", "getDocumentProperty", "getStyles", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getTextRanges", "expandSpan", "getReviewedText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getBookmarkNames", "getBookmarkRangeByName", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getReviewItemRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
+export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getMergedTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getFieldResult", "getInlinePictures", "getInlinePicture", "getShapes", "getShape", "getShapeBody", "getShapeFill", "getChangeTrackingMode", "getDocument", "getDocumentProperty", "getStyles", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getTextRanges", "expandSpan", "getReviewedText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getParagraphBorders", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getBookmarkNames", "getBookmarkRangeByName", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getReviewItemRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
 
 // @public
 export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["removeDocumentInformation", "compareFromBase64", "replaceDocumentFromBase64", "insertTableRows", "resolveRevisionBatch", "setRevisionAuthorBatch", "insertTable", "insertInlinePicture", "insertBreak", "startNewList", "deleteNote", "insertComment", "setCommentResolved", "replyToComment", "insertCustomNode"];
@@ -198,6 +198,15 @@ export interface AutomationBatchResponse {
     readonly results: readonly AutomationOperationResult[];
     readonly revision: number;
 }
+
+// @public
+export type AutomationBorderColorIndex = 'Auto' | 'Black' | 'Blue' | 'Turquoise' | 'BrightGreen' | 'Pink' | 'Red' | 'Yellow' | 'White' | 'DarkBlue' | 'Teal' | 'Green' | 'Violet' | 'DarkRed' | 'DarkYellow' | 'Gray50' | 'Gray25';
+
+// @public
+export type AutomationBorderLineStyle = 'None' | 'Single' | 'Dot' | 'DashSmallGap' | 'DashLargeGap' | 'DashDot' | 'DashDotDot' | 'Double' | 'Triple' | 'ThinThickSmallGap' | 'ThickThinSmallGap' | 'ThinThickThinSmallGap' | 'ThinThickMedGap' | 'ThickThinMedGap' | 'ThinThickThinMedGap' | 'ThinThickLargeGap' | 'ThickThinLargeGap' | 'ThinThickThinLargeGap' | 'SingleWavy' | 'DoubleWavy' | 'DashDotStroked' | 'Emboss3D' | 'Engrave3D' | 'Outset' | 'Inset';
+
+// @public
+export type AutomationBorderLineWidth = 'Pt025' | 'Pt050' | 'Pt075' | 'Pt100' | 'Pt150' | 'Pt225' | 'Pt300' | 'Pt450' | 'Pt600';
 
 // @public
 export interface AutomationCapabilities {
@@ -725,6 +734,14 @@ export type AutomationOperation = AutomationAuthoringOperation | {
 /** One paragraph's own paragraph properties, in points. */
 | {
     readonly op: 'getParagraphFormat';
+    readonly paragraph: AutomationParagraphRef;
+}
+/**
+* The five borders a paragraph shows, in collection order: top, left, bottom, right, then the
+* border between paragraphs. Resolved through the style cascade, as the page paints them.
+*/
+| {
+    readonly op: 'getParagraphBorders';
     readonly paragraph: AutomationParagraphRef;
 }
 /** Author paragraph properties. Only the fields present are written. */
@@ -1526,6 +1543,50 @@ export interface AutomationPaginationSnapshot {
 }
 
 // @public
+export type AutomationParagraphBorderAssignment = {
+    readonly edge: AutomationParagraphBorderEdge;
+    readonly property: 'isVisible';
+    readonly value: boolean;
+} | {
+    readonly edge: AutomationParagraphBorderEdge;
+    readonly property: 'lineStyle';
+    readonly value: AutomationBorderLineStyle;
+} | {
+    readonly edge: AutomationParagraphBorderEdge;
+    readonly property: 'lineWidth';
+    readonly value: AutomationBorderLineWidth;
+} | {
+    readonly edge: AutomationParagraphBorderEdge;
+    readonly property: 'color';
+    readonly value: string;
+} | {
+    readonly edge: AutomationParagraphBorderEdge;
+    readonly property: 'colorIndex';
+    readonly value: AutomationBorderColorIndex;
+};
+
+// @public
+export type AutomationParagraphBorderEdge = 'top' | 'left' | 'bottom' | 'right' | 'between';
+
+// @public
+export type AutomationParagraphBorderProperty = 'isVisible' | 'lineStyle' | 'lineWidth' | 'color' | 'colorIndex';
+
+// @public
+export interface AutomationParagraphBorderRead {
+    readonly color: string | null;
+    readonly colorIndex: AutomationBorderColorIndex | null;
+    // (undocumented)
+    readonly edge: AutomationParagraphBorderEdge;
+    readonly inside: boolean;
+    readonly isVisible: boolean;
+    readonly lineStyle: AutomationBorderLineStyle | null;
+    readonly lineWidth: AutomationBorderLineWidth | null;
+}
+
+// @public
+export type AutomationParagraphBordersWrite = readonly AutomationParagraphBorderAssignment[];
+
+// @public
 export interface AutomationParagraphFormatRead {
     // (undocumented)
     readonly alignment: AutomationAlignment;
@@ -1551,6 +1612,7 @@ export interface AutomationParagraphFormatRead {
 export interface AutomationParagraphFormatWrite {
     // (undocumented)
     readonly alignment?: AutomationAlignment;
+    readonly borders?: AutomationParagraphBordersWrite;
     // (undocumented)
     readonly firstLineIndent?: number;
     // (undocumented)
@@ -1830,6 +1892,11 @@ export type AutomationValue = {
 } | {
     readonly format: AutomationParagraphFormatRead;
     readonly kind: 'paragraphFormat';
+}
+/** A paragraph's five borders, in collection order. */
+| {
+    readonly borders: readonly AutomationParagraphBorderRead[];
+    readonly kind: 'paragraphBorders';
 }
 /** One section's page geometry, in points. */
 | {

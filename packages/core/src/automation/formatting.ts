@@ -54,6 +54,8 @@ import {
   type InheritedLineSpacing,
 } from './styles.ts';
 import type { OoxmlProperty } from '../store/store/tree-ops.ts';
+import type { ParagraphBorderEdgeWrite } from '../store/store/tree-op-paragraph-borders.ts';
+import { paragraphBordersPlan, type AutomationParagraphBordersWrite } from './paragraph-borders.ts';
 import { points, pointsToTwips, readTwipsMeasure, twips, twipsToPoints } from '../store/units.ts';
 
 /** Widest value `w:ind`/`w:spacing` will be authored with, in twips — 22 inches of slack. */
@@ -232,6 +234,11 @@ export interface AutomationParagraphFormatWrite {
    * `<w:bidi/>`, or `<w:bidi w:val="0"/>` over a right-to-left style.
    */
   readonly readingOrder?: AutomationReadingOrder;
+  /**
+   * Border assignments, applied in order. In the same request as the rest because a border
+   * write rewrites the same `w:pPr`, and two ops naming it in one batch are refused.
+   */
+  readonly borders?: AutomationParagraphBordersWrite;
 }
 
 /** Why a formatting value could not be authored. Named so a caller learns the field. */
@@ -551,7 +558,11 @@ export function paragraphFormatProperties(
   paragraphId: string,
   request: AutomationParagraphFormatWrite,
   styles: AutomationStyleIndex
-): FormattingPlan<OoxmlProperty[]> & { readonly unchanged?: boolean } {
+): FormattingPlan<OoxmlProperty[]> & {
+  readonly unchanged?: boolean;
+  /** The paragraph's own border edges as they should stand, or null for no border change. */
+  readonly borders?: readonly ParagraphBorderEdgeWrite[] | null;
+} {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return { ok: false, detail: 'not a paragraph' };
   const pPr = paragraphPropertiesNodeOf(paragraph);
@@ -674,11 +685,21 @@ export function paragraphFormatProperties(
     }
   }
 
-  // A direction or line spacing the paragraph already has is a request satisfied, not a refusal.
+  let borders: readonly ParagraphBorderEdgeWrite[] | null = null;
+  if (request.borders !== undefined) {
+    // Against the style this same write applies, so a style and a border can share a sync.
+    const planned = paragraphBordersPlan(part, paragraph, request.borders, styles, styleId);
+    if (!planned.ok) return planned;
+    borders = planned.edges;
+  }
+
+  // A direction, border, or line spacing the paragraph already has is a request satisfied, not
+  // a refusal.
   if (
     properties.length === 0 &&
     !removeBidi &&
     request.readingOrder === undefined &&
+    request.borders === undefined &&
     !lineSatisfied
   )
     return { ok: false, detail: 'no formatting was asked for' };
@@ -689,7 +710,7 @@ export function paragraphFormatProperties(
   const merged = mergedProperties(current, properties);
   const value = removeBidi ? merged.filter((property) => property.localName !== 'bidi') : merged;
   // A write of what the paragraph already states is no edit: no op, no change event, no undo step.
-  return { ok: true, value, unchanged: sameProperties(current, value) };
+  return { ok: true, value, unchanged: sameProperties(current, value), borders };
 }
 
 /** Whether two property bags state the same elements with the same attributes, in any order. */

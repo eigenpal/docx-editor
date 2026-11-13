@@ -181,6 +181,7 @@ export function trackPlannedChanges(
       if (
         op.op === 'setRunProperties' ||
         op.op === 'setParagraphProperties' ||
+        op.op === 'setParagraphBorders' ||
         op.op === 'setParagraphMarkProperties' ||
         op.op === 'setListNumbering' ||
         op.op === 'setListLevel'

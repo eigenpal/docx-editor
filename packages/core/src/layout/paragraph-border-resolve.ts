@@ -36,7 +36,7 @@ function styleCascadeDeclaresBorders(table: StyleCascadeTable): boolean {
  * Resolve `w:pBdr` for one paragraph, through the style cascade when a style could contribute.
  *
  * Direct `w:pPr` is enough when no style in the table declares a border; otherwise the same
- * last-`w:pBdr`-wins cascade as spacing/indent is walked for all six edges.
+ * edge-by-edge `w:pBdr` cascade is walked for all six edges.
  */
 export function resolveParagraphBorders(
   pPr: OoxmlNode | undefined,
