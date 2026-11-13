@@ -3,7 +3,7 @@ import './dom-setup.ts';
 import { afterEach, expect, test } from 'bun:test';
 import { h, nextTick } from 'vue';
 import { DocxEditorMenu } from '../src/editor/menu';
-import { LARGE_SOURCE } from './helpers/fixtures';
+import { flushUntil, LARGE_SOURCE } from './helpers/fixtures';
 import { flush, mountEditorTree } from './helpers/mount';
 
 afterEach(() => {
@@ -30,8 +30,8 @@ test('the menu bar is disabled and closed while the next document opens', async 
   expect(triggers().every((trigger) => trigger.disabled)).toBe(true);
   expect(view.container.querySelector('[role="menu"]')).toBeNull();
 
-  await flush();
-  expect(view.editor().snapshot().isOpening).toBe(false);
+  await flushUntil(() => !view.editor().snapshot().isOpening);
+  await nextTick();
   expect(triggers().every((trigger) => !trigger.disabled)).toBe(true);
   view.unmount();
 });

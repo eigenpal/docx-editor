@@ -2,7 +2,7 @@
 // engine's `watchHighlights`, which reruns a function source after document changes and
 // applies fixed ranges again after a refresh.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HighlightOptions, HighlightResult } from '@docx-editor.dev/core/contracts/editor';
 import {
   HIGHLIGHT_REFRESH_MS,
@@ -16,6 +16,24 @@ export { HIGHLIGHT_REFRESH_MS, type HighlightSource };
 
 const EMPTY_RESULT: HighlightResult = Object.freeze({ applied: 0, unavailable: 0 });
 
+/**
+ * What {@link useHighlights} returns: the counts of the last application, and `refresh` to
+ * run the source again. @public
+ */
+export interface UseHighlightsReturn extends HighlightResult {
+  /**
+   * Run the source again now, for changes the editor cannot see: a word added to your
+   * dictionary, the caret leaving the word being typed, or an asynchronous result arriving.
+   * An array source applies again.
+   *
+   * The set updates synchronously, and a run that was waiting for typing to pause is
+   * replaced by this one. Call it from an effect or an event handler, not during render. It
+   * keeps the same identity across renders, and does nothing before the editor is ready or
+   * after the component unmounts.
+   */
+  readonly refresh: () => void;
+}
+
 function optionsKey(options: HighlightOptions | undefined): string {
   if (!options) return '';
   const { color, activeColor, activeIndex, className, priority } = options;
@@ -24,10 +42,13 @@ function optionsKey(options: HighlightOptions | undefined): string {
 
 /**
  * Highlight text ranges as the named set while the component is mounted, and keep them
- * current as the document changes. Returns what the last application resolved.
+ * current as the document changes. Returns what the last application resolved, and
+ * `refresh` to run the source again when your own state changes.
  *
  * Use a unique `name` per hook: two hooks with the same name replace each other's ranges.
- * Keep a function `source` stable with `useCallback`.
+ * Keep a function `source` stable with `useCallback`. A function source runs again after
+ * document changes and when its identity changes. For state it reads through a ref, such as
+ * a dictionary or a result cache, call `refresh()` instead of creating a new function.
  *
  * @example
  * ```tsx
@@ -35,7 +56,9 @@ function optionsKey(options: HighlightOptions | undefined): string {
  *   (editor: Editor) => editor.findMatches(terms, { wholeWord: true }).flat(),
  *   [terms]
  * );
- * useHighlights('glossary', findTerms, { className: 'glossary-term' });
+ * const { applied, refresh } = useHighlights('glossary', findTerms, {
+ *   className: 'glossary-term',
+ * });
  * ```
  *
  * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/highlight-ranges | Highlight ranges}
@@ -45,7 +68,7 @@ export function useHighlights(
   name: string,
   source: HighlightSource,
   options?: HighlightOptions
-): HighlightResult {
+): UseHighlightsReturn {
   const editor = useDocxEditor();
   const [result, setResult] = useState(EMPTY_RESULT);
   const watchRef = useRef<{ watch: HighlightWatch; source: HighlightSource; key: string } | null>(
@@ -89,5 +112,7 @@ export function useHighlights(
     current.watch.update(source, latestOptions.current ?? {});
   }, [source, key]);
 
-  return result;
+  // Read the watch at call time: stable, and a no-op without one.
+  const refresh = useCallback(() => watchRef.current?.watch.refresh(), []);
+  return useMemo(() => ({ ...result, refresh }), [result, refresh]);
 }

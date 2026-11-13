@@ -426,6 +426,7 @@ describe('paragraph ends for the browser text services', () => {
       const [node] = domPoint(container, first!, 5);
       node.appendData('!');
       layer.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+      surface.flushPendingInput();
       expect(textOf(surface, first!)).toBe('First!');
       expect(surface.session.paragraphIds()).toHaveLength(2);
     });

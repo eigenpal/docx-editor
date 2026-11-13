@@ -154,6 +154,11 @@ export type AutomationOperation =
       readonly detectFormatChanges?: boolean;
       readonly removeDateAndTime?: boolean;
     }
+  /**
+   * Replace the whole document with a DOCX given as base64, as one undoable edit that a
+   * collaboration session shares like any other. Answers the new body's whole span.
+   */
+  | { readonly op: 'replaceDocumentFromBase64'; readonly base64: string }
   | {
       readonly op: 'getDocumentProperty';
       readonly name: import('../store/package/document-property-writes.ts').DocumentPropertyName;

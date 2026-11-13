@@ -2,6 +2,7 @@ import type { EditorPointPosition } from './editor-drop.ts';
 export type { EditorPointPosition, EditorDropEvent, EditorHostDragEvent } from './editor-drop.ts';
 import type { ResolvedRevisionMarkup } from './revision-markup.ts';
 import type { CompareDocumentsRequest } from './compare-documents.ts';
+import type { ReplaceDocumentRequest } from './replace-document.ts';
 import type { ResolvedReviewPane } from './review-pane.ts';
 /**
  * `@docx-editor.dev/core/contracts/editor` — the `Editor` contract adapters are written against.
@@ -21,34 +22,16 @@ export type TableInteractionLabelKey =
 
 export type { ZoomFitTarget, ZoomMode } from './editor-zoom.ts';
 import type { TextMatch } from './editor-text-match.ts';
-export type { TextMatch } from './editor-text-match.ts';
+export type { ReplaceAllMatchesOutcome, TextMatch } from './editor-text-match.ts';
 import type { EditorFontErrorCode, FontFaceRequest } from './editor-fonts.ts';
-export type {
-  EditorFontErrorCode,
-  FontConfiguration,
-  FontFaceRequest,
-  FontSource,
-  FontSourceSubstitution,
-} from './editor-fonts.ts';
+export type * from './editor-fonts.ts';
 import type { EditorEvents } from './editor-events.ts';
 import type { EditorAnchorNavigation, ScrollToAnchorOptions } from './editor-anchor.ts';
-export type {
-  AnchorHighlightAnimation,
-  AnchorHighlightOptions,
-  ClearAnchorHighlightOptions,
-  EditorAnchorNavigation,
-  ScrollPlacement,
-  ScrollToAnchorOptions,
-} from './editor-anchor.ts';
-import type { EditorHighlights } from './editor-highlights.ts';
-export type {
-  EditorHighlights,
-  HighlightHit,
-  HighlightOptions,
-  HighlightRange,
-  HighlightRect,
-  HighlightResult,
-} from './editor-highlights.ts';
+export type * from './editor-anchor.ts';
+import type { EditorHighlights, HighlightRange } from './editor-highlights.ts';
+import type { EditorSelectionRange, EditorSelectionReads } from './editor-selection-range.ts';
+export type * from './editor-selection-range.ts';
+export type * from './editor-highlights.ts';
 import type { EditorParagraphText } from './editor-paragraph-text.ts';
 export type * from './editor-paragraph-text.ts';
 import type { EditorReviewHits } from './editor-review-hits.ts';
@@ -218,6 +201,8 @@ export type {
 export interface DocumentHandle {
   /** Package revision: rises for every edit, wherever it landed. Safe to compare. */
   readonly revision: number;
+  /** The loaded document's identity: new on every `load()` (a reload too), kept across edits. */
+  readonly loadId: string;
 }
 
 /**
@@ -288,7 +273,12 @@ export type CanResult = { ok: true } | { ok: false; code: ExecErrorCode; reason:
  * ```
  */
 export interface Editor
-  extends EditorAnchorNavigation, EditorHighlights, EditorParagraphText, EditorReviewHits {
+  extends
+    EditorAnchorNavigation,
+    EditorHighlights,
+    EditorParagraphText,
+    EditorReviewHits,
+    EditorSelectionReads {
   /**
    * Load a new document (DOCX bytes, `'blank'`, or a handle), replacing the current one.
    *
@@ -446,12 +436,12 @@ export interface Editor
   ): readonly (readonly TextMatch[])[];
 
   /**
-   * Move the selection to a found match — what a find dialog's next/previous do.
-   *
-   * Separate from `findMatches` because finding is a read and selecting is a write, and
-   * a caller may want the count without moving the caret.
+   * Move the selection to a match — what a find dialog's next/previous do. Takes a
+   * {@link TextMatch} or a {@link HighlightRange} you computed, and opens the header, footer,
+   * or note that holds it, unlike `replaceMatch`, which edits a closed story in place. Refusals
+   * match: `notFound` when the expected text moved, `invalidArgs` when `scope` is wrong.
    */
-  selectMatch(match: TextMatch): ExecResult;
+  selectMatch(match: TextMatch | HighlightRange): ExecResult;
 
   /** The image at the selection, for the image toolbar and transform controls. */
   getSelectedImage(): SelectedImageState | null;
@@ -616,15 +606,6 @@ export interface Editor
   addComment(text: string, options?: HistoryGroupOptions): ExecResult;
   /** {@link addComment} with an author for this call, overriding the configured author. */
   addComment(text: string, author?: string, options?: HistoryGroupOptions): ExecResult;
-
-  /**
-   * Where a comment on the current selection would sit, in the same space as
-   * {@link ReviewItemPlacement.anchorY}, or null when nothing is selected.
-   *
-   * Published so a host can place an "add a comment" affordance beside the selected text
-   * without deriving document geometry, which is the one thing an adapter must not do.
-   */
-  getSelectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null;
 
   /**
    * Card to document: a COLLAPSED caret at the range start, and a scroll to it. `null` clears it.
@@ -1001,6 +982,8 @@ export interface EditorCommands
    * translate (`compareDocuments.errors.<code>`).
    */
   compareDocuments: CompareDocumentsRequest;
+  /** Replace the document with a DOCX file as one undoable edit; see {@link ReplaceDocumentRequest}. */
+  replaceDocument: ReplaceDocumentRequest;
   /** Word's Show/Hide paragraph marks; presentation only. */
   toggleParagraphMarks: Record<never, never>;
   /** Word's Protect Document: enforce filling-in-forms protection, or lift the enforced one. */
@@ -1185,33 +1168,40 @@ export interface EditorCommands
     scope?: 'document' | 'section';
   };
 
-  /** Remove the tab stop at this position (twips) from the current paragraph. */
+  /** Remove the selection paragraphs' tab stop at this position (twips); none there: `notFound`. */
   removeTabMark: { positionTwips: number };
 
   /**
-   * Replace one found match with `text`, addressed by the {@link TextMatch} `findMatches`
-   * returns. An empty `text` deletes it. The selection and scroll position stay put. In
-   * suggesting mode it is a tracked replacement under the editor's author, refused where
-   * `proposeReplacement` would be. The match must be in the open story, not a text box.
+   * Replace one match with `text`: a {@link TextMatch}, or a {@link HighlightRange} you
+   * computed. An empty `text` deletes it. One undo step, which joins an open `historyGroup`.
+   * In suggesting mode it is a tracked replacement under the editor's author, refused where
+   * `proposeReplacement` would be. The active story, selection, and scroll stay put: a header,
+   * footer, or note that is not open is edited in place, without opening it.
+   * Without `scope`, the story comes from `blockId`; a `scope` naming another story returns
+   * `invalidArgs`. A text box, or tracked deleted or moved text, returns `unsupported`. Expected
+   * text (`expectedText`, else `text`) that the offsets no longer hold, or an unknown `blockId`,
+   * returns `notFound` and changes nothing; find it again.
    *
-   * For headless or server use, see `range.insertText(text, 'Replace')` with
-   * `document.changeTrackingMode` set to `'TrackMineOnly'` in `@docx-editor.dev/editor-api`.
+   * On a server, use `range.insertText(text, 'Replace')` from `@docx-editor.dev/editor-api`.
    *
    * @example
    * ```ts
    * const [match] = editor.findMatches('30 days', { matchCase: true });
    * if (match) editor.exec({ type: 'replaceMatch', match, text: '45 days' });
+   * const range = { blockId, start: 3, length: 5, expectedText: 'go to' };
+   * const result = editor.exec({ type: 'replaceMatch', match: range, text: 'goes to' });
+   * if (!result.ok && result.code === 'notFound') refreshSuggestions();
    * ```
    *
    * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement | Replace as a tracked change}
    */
-  replaceMatch: { match: TextMatch; text: string };
+  replaceMatch: { match: TextMatch | HighlightRange; text: string };
 
   /**
-   * Replace EVERY match of `query` in one undoable step. Separate from looping
-   * `replaceMatch` because each replacement shifts the offsets of the ones after it —
-   * legacy applied its edits back-to-front for exactly this reason, and that ordering
-   * belongs with whoever owns the offsets.
+   * Replace every match of `query` with `text` (empty deletes) in one undo step, across the
+   * stories {@link Editor.findMatches} searches; tracked in suggesting mode. Skips and refusals:
+   * {@link ReplaceAllMatchesOutcome}. Refused past the search limit (`unsupported`).
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement | Replace as a tracked change}
    */
   replaceAllMatches: {
     query: string;
@@ -1353,7 +1343,10 @@ export interface EditorCommands
   redo: Record<never, never>;
   /**
    * Move the selection. Three accepted forms, and `can()` names all three when it refuses:
-   * a collapsed paraId anchor, a range of two paraId anchors, or a semantic anchor/head pair.
+   * a collapsed paraId anchor, a range of two paraId anchors, or an anchor/head pair of
+   * text positions. A text position takes `blockId`, or the older name `paragraphId`; a
+   * position with neither, or with both naming different paragraphs, refuses `invalidArgs`.
+   * A {@link EditorSelectionRange} read passes here unchanged.
    *
    * `{ anchor }` takes a {@link DocAnchor} rather than an {@link EditorPosition} because a
    * collapsed SEMANTIC position is spelled as a range whose anchor and head are equal, which
@@ -1566,6 +1559,11 @@ export interface EditorSnapshot {
    * to produce one bit, on every tick a host's selector runs.
    */
   readonly selectionCollapsed: boolean;
+  /**
+   * The selection with offsets, as {@link EditorSelectionReads.getSelectionRange} returns it.
+   * Reference-stable while the selection does not move.
+   */
+  readonly selectionRange: EditorSelectionRange | null;
   readonly formatting: RunFormatting | null;
   readonly table: TableContext | null;
   /**

@@ -23,15 +23,16 @@ import { textDeletionsOf, type DeletedRun } from './paragraph-text-deletions.ts'
 import { deleteSetRuns, structAt } from './yjs-items.ts';
 import { textMarksOf } from './paragraph-text-marks.ts';
 import { INLINE_FIELD } from './paragraph-text.ts';
-import { whileUndoingCreations } from './undo-delete-filter.ts';
+import { whileSteppingReplaced, whileUndoingCreations } from './undo-delete-filter.ts';
 import { ownDeletedRecords, redoRefusedDeletes } from './tombstone-guard.ts';
 import { noteUndoneParagraphTargets, undoKeeps } from './undo-unlisted-text.ts';
 
 /**
  * The part members a part always lists. Numbering definitions are not among them: concurrent
- * list edits leave them loose by design, and the repair is how they show.
+ * list edits leave them loose by design, and the repair is how they show. A comment's thread
+ * record (`w15:commentEx`) is one: an undo that removes it must not see it adopted back.
  */
-const LISTED_MEMBERS = new Set(['comment', 'footnote', 'endnote']);
+const LISTED_MEMBERS = new Set(['comment', 'commentEx', 'footnote', 'endnote']);
 
 /** The meta key under which a history step keeps the records its undo marked. */
 const MARKED = 'docx-undone-records';
@@ -167,10 +168,19 @@ export function stepHistory(
         whileUndoingCreations(
           registry.schema,
           createdBy(registry, popped),
-          () => history.undo(),
+          () =>
+            whileSteppingReplaced(
+              registry.doc,
+              registry.schema,
+              popped as YjsStep | undefined,
+              () => history.undo()
+            ),
           undoKeeps(registry.doc, registry.schema.nodes, popped)
         );
-      } else history.redo();
+      } else
+        whileSteppingReplaced(registry.doc, registry.schema, popped as YjsStep | undefined, () =>
+          history.redo()
+        );
     } finally {
       if (below.length > 0) {
         const restored = below.concat(stack);

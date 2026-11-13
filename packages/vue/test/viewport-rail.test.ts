@@ -9,7 +9,7 @@ import { DocxEditorLoading } from '../src/editor/DocxEditorLoading';
 import { DocxEditorHorizontalRuler } from '../src/editor/DocxEditorRulers';
 import { useReviewRailRegistry } from '../src/editor/context';
 import { useNavigationLayoutStore } from '../src/editor/navigation/navigation-layout';
-import { LARGE_SOURCE, SOURCE } from './helpers/fixtures';
+import { flushUntil, LARGE_SOURCE, SOURCE } from './helpers/fixtures';
 import { flush, mountEditorTree } from './helpers/mount';
 
 afterEach(() => {
@@ -147,8 +147,7 @@ describe('DocxEditorViewport review rail', () => {
     await nextTick();
 
     expect(view.container.querySelector('.docx-ruler-frame--opening')).not.toBeNull();
-    await flush();
-    expect(view.container.querySelector('.docx-ruler-frame--opening')).toBeNull();
+    await flushUntil(() => view.container.querySelector('.docx-ruler-frame--opening') === null);
     view.unmount();
   });
 });

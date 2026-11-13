@@ -5,6 +5,7 @@ import { createEditorDiagnostics, reportEditorFontError } from './editor-diagnos
 import { surfaceFieldResultsScope } from './field-results-scope.ts';
 import { createReviewDialogs } from './review-dialogs.ts';
 import { withCompareOutcome } from './compare-documents-state.ts';
+import * as replacing from './replace-document-command.ts';
 import { queryEditorDocument, watermarkOf } from './docx-editor-query.ts';
 import { refreshWriteBlocked, writeBlockRefusal } from './refresh-write-guard.ts';
 import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.ts';
@@ -22,6 +23,7 @@ import {
   reviewActivationRefusal,
   reviewModelOption,
 } from './docx-editor-review-commands.ts';
+import { isGroupedReviewWrite } from './review-document-decisions.ts';
 import { canEditorViewCommand, createEditorViews } from './docx-editor-view-commands.ts';
 import { bindPopupChromeRequests } from './text-form-field-chrome.ts';
 import { completePendingSuggesting } from './opening-editing-mode.ts';
@@ -89,7 +91,6 @@ import type {
   EditorScope,
   EditorSnapshot,
   ExecResult,
-  TextMatch,
   Unsubscribe,
   ViewScope,
 } from '@docx-editor.dev/core/contracts/editor';
@@ -124,11 +125,12 @@ import {
 } from './docx-editor-support.ts';
 import { createDocumentOpenFailureState } from './document-open-failure.ts';
 import { execEditorCommand } from './docx-editor-exec.ts';
-import { replaceMatchStoryRefusal } from './docx-editor-replace-match.ts';
+import { replaceMatchTarget } from './docx-editor-replace-match.ts';
+import type { TextTarget } from './text-target.ts';
 import { createMountHistoryGroups } from './editor-history-groups.ts';
 import { createPublishSignal } from './surface-publish-signal.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
-import { resolveDocTargetSelection } from './doc-target-resolution.ts';
+import { proposalCapabilityRefusal } from './proposal-capability.ts';
 import { createOpenScheduler } from './docx-editor-open-scheduler.ts';
 import * as preparedOpen from './docx-editor-prepared-open.ts';
 import { configSurfaceOptions } from './docx-editor-surface-config.ts';
@@ -150,7 +152,8 @@ import {
   selectedTableOf,
 } from './docx-editor-derive.ts';
 import { commentTargetRangeOf } from './docx-editor-comment-resolution.ts';
-import { createReviewWrites } from './docx-editor-review-writes.ts';
+import { createReviewWrites, type ReviewWriteDeps } from './docx-editor-review-writes.ts';
+import { createDocumentReviewCommands } from './docx-editor-document-review.ts';
 import { registerEditorAutomation } from './editor-automation-registry.ts';
 import {
   canContentControlCommand,
@@ -241,6 +244,7 @@ import {
   liveHostConfigSetters,
 } from './docx-editor-host-config.ts';
 import type { DocxEditorConfig, DocxEditorInstance } from './docx-editor-types.ts';
+import { createSelectionRangeRead, selectionCollapsedOf } from './selection-range-read.ts';
 export type {
   BookmarkChromeHandlers,
   DocxEditorConfig,
@@ -639,6 +643,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     container: () => container,
     flushOpen: () => openScheduler.flush(),
   });
+  const selectionRead = createSelectionRangeRead(() => surface);
 
   function mountBytes(...args: Parameters<typeof mountBytesNow>): void {
     const refreshing = refreshHost?.source !== undefined;
@@ -1335,18 +1340,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       zoom: zoomLane.zoom(),
       zoomMode: zoomLane.mode(),
       selection: selectionRangeOf(surface),
-      // Whether the selection is a CARET rather than a range.
-      //
-      // Cheap on purpose. The only way to ask this used to be
-      // `query({ type: 'selectedText' }) === ''`, which materializes the whole selected
-      // string to answer a boolean — and hosts ask it from selector functions that re-run on
-      // every tick, so a select-all on a long document allocated megabytes per tick to learn
-      // one bit. `selection` cannot carry it: `DocRange` addresses paragraphs by paraId and
-      // has no offsets, so a caret and a within-paragraph range look identical there.
-      selectionCollapsed:
-        state === null ||
-        (state.selection.anchor.paragraphId === state.selection.head.paragraphId &&
-          state.selection.anchor.offset === state.selection.head.offset),
+      selectionCollapsed: selectionCollapsedOf(state),
+      selectionRange: selectionRead.selectionRange(),
       formatting: runFormattingOf(surface),
       table: tableContextOf(surface),
       tocContext: tocContextOf(state?.contextTocId ?? null),
@@ -1548,13 +1543,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    */
   function storyScopeOfParagraph(paragraphId: string): StoryScope {
     if (!surface) return { kind: 'body' };
-    // From the id's own PART NAME. Asking each story for its paragraph list instead would
-    // resolve every scope in turn, and resolving a scope OPENS a story store: one call
-    // opened every header and footer in the document, and the store cap (64) is a
-    // permanent ceiling because a store whose part is still in the package is never
-    // evicted. On a 40-section document that left 18 headers unopenable for the rest of
-    // the session — commenting in a footnote broke header editing.
-    // A logical id from a collaboration session names no part; the story indexes find it.
+    // From the id's own PART NAME. Asking each story for its paragraph list instead would resolve
+    // every scope in turn, and resolving a scope OPENS a story store: one call opened every header
+    // and footer in the document, and the store cap (64) is a permanent ceiling because a store
+    // whose part is still in the package is never evicted. On a 40-section document that left 18
+    // headers unopenable for the rest of the session — commenting in a footnote broke header
+    // editing. A logical id from a collaboration session names no part; the story indexes find it.
     const hash = paragraphId.indexOf('#');
     const partName =
       hash === -1 ? partOfNodeId(surface.session, paragraphId)?.name : paragraphId.slice(0, hash);
@@ -1812,7 +1806,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     events.emitHistoryDiagnostic,
     () => JSON.stringify(surface?.state().selection)
   );
-  const reviewWrites = createReviewWrites({
+  const reviewWriteDeps: ReviewWriteDeps = {
     reviewEnabled,
     historyGroups,
     surface: () => surface,
@@ -1825,7 +1819,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     placements: reviewPlacements,
     resolveReviewItem,
     bump,
-  });
+  };
+  const reviewWrites = createReviewWrites(reviewWriteDeps);
+  const documentReview = createDocumentReviewCommands(
+    reviewWriteDeps,
+    reviewWrites,
+    reviewCommands
+  );
   const editor: DocxEditorInstance = {
     beginHistoryGroup() {
       openScheduler.flush();
@@ -1957,14 +1957,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     getDocumentHandle(): DocumentHandle {
-      // Package revision: the body's own stands still for header/footer/note work.
-      return Object.freeze({ revision: surface?.session.packageRevision() ?? 0 });
+      // Package revision and load identity; see `document-handle.ts`.
+      return replacing.documentHandleOf(surface);
     },
 
     exec(command, options) {
       // Before every command path: a history group a command cannot join is refused, not ignored.
       const refusal = writeBlockRefusal(container, command) ?? historyGroups.gate(command, options);
-      if (refusal) return withCompareOutcome(command, refusal);
+      if (refusal) return replacing.withOutcome(command, withCompareOutcome(command, refusal));
       // A command inside the yield window addresses the just-loaded document: mount now.
       // (`can` does NOT flush — chrome polls it per render; a read must not defeat the yield.)
       openScheduler.flush();
@@ -1972,6 +1972,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (reviewDialog) return reviewDialog;
       const dialog = views.dialog(command, true);
       if (dialog) return dialog;
+      if (command.type === 'replaceDocument') return replacing.exec(command, surface, container);
       historyGroups.note(command);
       // A view command: it edits nothing, so it runs before the document gate, and it works
       // on a document that failed to open — the pane is still the reader's to close. Not on a
@@ -2012,12 +2013,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
       const protectionResult = protection.exec(command);
       if (protectionResult) return protectionResult;
-      // A review write binds its history group like every other grouped command.
+      // A review write binds its history group; the document vocabulary's run their methods.
       const reviewResult =
-        surface &&
-        (command.type === 'resolveAllReviewChanges' || command.type === 'setReviewChangesAuthor')
+        documentReview.exec(command, options) ??
+        (surface && isGroupedReviewWrite(command)
           ? historyGroups.run(surface, command, options, () => reviewCommands.exec(command)!)
-          : reviewCommands.exec(command);
+          : reviewCommands.exec(command));
       if (reviewResult) return reviewResult;
       if (isContentControlEditorCommand(command)) {
         // The LIVE mode, not the constructed one — see `gateModeOf`.
@@ -2068,6 +2069,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (dialog) return dialog;
       const historyRefusal = historyGroups.gate(command, options);
       if (historyRefusal) return historyRefusal;
+      if (command.type === 'replaceDocument') return replacing.can(command, surface, container);
       if (command.type === 'insertImage' || command.type === 'replaceImage') {
         if (destroyed) return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
         if (options?.scope) {
@@ -2080,7 +2082,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (viewCapability) return viewCapability;
       const protectionCapability = protection.can(command);
       if (protectionCapability) return protectionCapability;
-      const reviewCapability = reviewCommands.can(command);
+      const reviewCapability = documentReview.can(command) ?? reviewCommands.can(command);
       if (reviewCapability) return reviewCapability;
       if (isContentControlEditorCommand(command)) {
         return canContentControlCommand(command, surface, gateModeOf(editingMode), options);
@@ -2095,44 +2097,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const gated = gateCommand(command, surface, hostConfig.modeForGate(), options);
       if (!gated.ok) return gated.refusal;
       if (command.type === 'replaceMatch') {
-        const story = replaceMatchStoryRefusal(surface!, command.match);
-        if (story) return story;
+        const target = replaceMatchTarget(surface!, command.match);
+        if (!target.ok) return target;
       }
-      if (
-        command.type === 'proposeInsertion' ||
-        command.type === 'proposeDeletion' ||
-        command.type === 'proposeReplacement'
-      ) {
-        const writer = (command.author ?? author ?? '').trim();
-        if (!writer) {
-          return {
-            ok: false,
-            code: 'invalidArgs',
-            reason: `${command.type} requires a non-empty author`,
-          };
-        }
-        const resolved =
-          command.target === undefined
-            ? { ok: true as const, selection: surface!.state().selection }
-            : resolveDocTargetSelection(surface!, command.target);
-        if (!resolved.ok) return resolved;
-        const { anchor, head } = resolved.selection;
-        const collapsed = anchor.paragraphId === head.paragraphId && anchor.offset === head.offset;
-        // A rectangle over one empty cell mirrors a collapsed range but still covers a cell
-        // the surface replaces over, so `can` agrees — replacement only (a deletion over
-        // empty cells commits nothing), and only when no explicit target overrides it.
-        const rectangleReplacement =
-          command.type === 'proposeReplacement' &&
-          command.target === undefined &&
-          surface!.state().cellSelection !== null;
-        if (command.type !== 'proposeInsertion' && collapsed && !rectangleReplacement) {
-          return {
-            ok: false,
-            code: 'invalidArgs',
-            reason: `${command.type} needs a non-collapsed selection`,
-          };
-        }
-      }
+      const proposal = proposalCapabilityRefusal(command, surface!, author);
+      if (proposal) return proposal;
       if (isImageCommand(command) && imageCommandHasIdentityFields(command)) {
         const pre = captureImageMutationPreconditions(editor);
         if (pre) {
@@ -2185,7 +2154,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       )) as DocxEditorInstance['findMatches'],
 
     // Selection uses the match's model address and then reveals its paragraph.
-    selectMatch(match: TextMatch): ExecResult {
+    selectMatch(match: TextTarget): ExecResult {
       // Same rule as `exec`: a selection aimed into the yield window lands, not refuses.
       openScheduler.flush();
       if (!surface) {
@@ -2441,14 +2410,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           { anchor: caret, head: caret },
           { allowExcluded: allowExcludedFormatNavigation, preventScroll: true }
         );
-        // Focus-independent by design: the rail card focused itself on mousedown, which is
-        // exactly what keeps the caret-follow scroll from ever firing here.
-        // `centerIfNeeded` by default, not `nearest`: opening a card the reader can already
-        // see must not yank the page, but a card 20 pages away scrolled the MINIMUM distance
-        // parked the change flush against the bottom edge — the reader arrived looking at the
-        // last line of the window rather than at the edit they had just asked to see. A host
-        // whose own list drives the scroll passes `reveal: false` and gets the caret move
-        // without the engine competing for the viewport.
+        // Focus-independent by design: the rail card focused itself on mousedown, which is exactly
+        // what keeps the caret-follow scroll from ever firing here. `centerIfNeeded` by default,
+        // not `nearest`: opening a card the reader can already see must not yank the page, but a
+        // card 20 pages away scrolled the MINIMUM distance parked the change flush against the
+        // bottom edge — the reader arrived looking at the last line of the window rather than at
+        // the edit they had just asked to see. A host whose own list drives the scroll passes
+        // `reveal: false` and gets the caret move without the engine competing for the viewport.
         const reveal = options?.reveal ?? 'centerIfNeeded';
         if (reveal !== false) surface.revealPosition?.(span.start, { block: reveal });
       }
@@ -2516,6 +2484,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     ...zoomFacadeMembers(zoomLane, () => surface),
     ...highlights.members,
+    ...selectionRead.members,
     ...createReviewItemsAt({ frame: highlights.frame, placements: reviewPlacements }),
     ...createParagraphTextReads({ surface: () => surface, fieldResults: fieldScope.mode }),
     ...createEditorPointMembers(

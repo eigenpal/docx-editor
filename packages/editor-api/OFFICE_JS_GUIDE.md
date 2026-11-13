@@ -720,3 +720,20 @@ Only `CompareTargetCurrent` is supported. `CompareTargetNew`, `CompareTargetSele
 Without `authorName`, the revisions carry the revised document's last author, then its creator, then `Comparison`. To count the main-body result, load `document.revisions` with `'items'` after the compare's `context.sync()`.
 
 A refused compare writes nothing. Handle `error.code` first. If `debugInfo.innerError` exists, its `code` names the cause: `edit.review-module-required`, `edit.resource-limit`, `edit.invalid-argument`, `edit.protected-content`, or `edit.unsupported-content`. Do not retry the same pair; report the cause instead.
+
+## Replace the whole document
+
+To install a document that a template engine or a server tool produced, call `document.body.insertFileFromBase64(base64File, 'Replace')`. The file replaces the whole document as one edit. A browser editor undoes it in one step, and a collaboration session, including a server agent's, shares it as an ordinary edit. Run the call alone in its sync.
+
+```ts
+await runtime.run(async (context) => {
+  const range = context.document.body.insertFileFromBase64(renderedBase64, 'Replace');
+  range.load('text');
+  await context.sync();
+  return range.text;
+});
+```
+
+Only `Replace` on the main body is supported. `Start`, `End`, and other stories refuse with `NotSupported`; ranges, paragraphs, and content controls have no `insertFileFromBase64`. So does `TrackMineOnly`, because the replacement records no tracked changes; never turn tracking off to make it pass. A document that holds a locked or data-bound content control refuses with `NotImplemented` (`edit.protected-content`). Invalid base64 and unreadable packages refuse with `InvalidArgument`.
+
+Proxies you held before the sync can name content that is gone. Re-read the document after the replacement instead of replaying earlier edits.

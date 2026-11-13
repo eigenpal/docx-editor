@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "When an undo put back a paragraph piece that two concurrent splits made, and a participant then split that piece, the new paragraph's listing sat between the put-back entry and its removed entry. The sibling order walk stopped at it, so the pieces showed out of order, and the replica then wrote a reordered listing that differed from what its own edit meant.",
+  "after": "The walk keeps items listed after a put-back piece, such as a paragraph split off it, with that piece, so the pieces show in order and the replica writes no reordered listing.",
+  "reason": "Only how a replica orders the paragraphs it reads changes, and it writes fewer listing repairs. Older clients read the shared listing as before. Shared fields, operations, and synchronization keep their meaning.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-split-sibling-removal.test.ts"],
+  "changeset": "split-piece-put-back-order",
+  "migration": null
+}

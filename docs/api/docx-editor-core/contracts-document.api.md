@@ -210,15 +210,12 @@ export type DocEdit = {
 
 // @public
 export interface DocEdits {
-    // (undocumented)
     acceptAllRevisions: Record<never, never>;
-    // (undocumented)
     acceptRevision: {
         id: number;
         noteId?: number;
         part?: 'body' | 'footnote' | 'endnote';
     };
-    // (undocumented)
     addComment: {
         author: string;
         target: DocTarget;
@@ -233,12 +230,10 @@ export interface DocEdits {
         direction: 'increase' | 'decrease';
         target: DocTarget;
     };
-    // (undocumented)
     applyFormatting: {
         marks: RunFormatting;
         target: DocTarget;
     };
-    // (undocumented)
     applyVariables: {
         values: Record<string, string>;
     };
@@ -279,7 +274,6 @@ export interface DocEdits {
         target: DocTarget;
         text: string;
     };
-    // (undocumented)
     mergeParagraphs: {
         target: DocTarget;
     };
@@ -299,9 +293,7 @@ export interface DocEdits {
         replaceWith: string;
         target: DocTarget;
     };
-    // (undocumented)
     rejectAllRevisions: Record<never, never>;
-    // (undocumented)
     rejectRevision: {
         id: number;
         noteId?: number;
@@ -320,18 +312,15 @@ export interface DocEdits {
         index: number;
         target: DocTarget;
     };
-    // (undocumented)
     replaceText: {
         target: DocTarget;
         text: string;
     };
-    // (undocumented)
     replyComment: {
         author: string;
         commentId: string;
         text: string;
     };
-    // (undocumented)
     resolveComment: {
         commentId: string;
     };
@@ -345,12 +334,10 @@ export interface DocEdits {
         styleId: string;
         target: DocTarget;
     };
-    // (undocumented)
     setVariable: {
         name: string;
         value: string;
     };
-    // (undocumented)
     splitParagraph: {
         target: DocTarget;
     };
@@ -464,6 +451,8 @@ export type ExecResult = {
     compareDocuments?: CompareDocumentsOutcome;
     history?: HistoryGroupOutcome;
     ok: true;
+    replaceDocument?: ReplaceDocumentOutcome;
+    replacements?: ReplaceAllMatchesOutcome;
     revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
 } | {
@@ -471,6 +460,8 @@ export type ExecResult = {
     compareDocuments?: CompareDocumentsOutcome;
     ok: false;
     reason: string;
+    replaceDocument?: ReplaceDocumentOutcome;
+    replacements?: ReplaceAllMatchesOutcome;
     revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
     target?: DocTarget;
@@ -600,6 +591,42 @@ export interface ParagraphTabStop {
     // (undocumented)
     readonly positionTwips: number;
 }
+
+// @public
+export interface ReplaceAllMatchesOutcome {
+    readonly replaced: number;
+    readonly skipped: number;
+}
+
+// @public
+export type ReplaceDocumentOutcome = {
+    readonly changed: boolean;
+    readonly ok: true;
+} | ReplaceDocumentRefusal;
+
+// @public
+export type ReplaceDocumentRefusal = {
+    readonly message: string;
+    readonly ok: false;
+} & ({
+    readonly code: 'editNotPermitted';
+    readonly reason: 'viewing' | 'suggesting' | 'protected';
+} | {
+    readonly code: 'editUnsupported';
+    readonly reason: 'differentMainPart' | 'unsupportedDifference' | 'collaborationRefused';
+} | {
+    readonly code: 'unavailable';
+    readonly reason?: 'collaborationUnavailable';
+} | {
+    readonly code: 'staleDocument';
+    readonly reason: 'otherDocument' | 'edited';
+} | {
+    readonly code: 'invalidRequest';
+    readonly reason?: undefined;
+} | {
+    readonly code: 'invalidDocument' | 'busy';
+    readonly reason?: undefined;
+});
 
 // @public
 export interface ReviewPosition {

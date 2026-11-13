@@ -39,6 +39,7 @@ import {
   createImageOverlayScrollPort,
   cssPixelsToLayoutPoints,
   finalizeImageOverlayInteraction,
+  overlayFrameCssBox,
   overlayFrameToSheetCssPixels,
   overlayHostOrigin,
   resizePreservesAspect,
@@ -614,6 +615,8 @@ export const ImageSelectionOverlay = defineComponent({
         width: sheetRect.width,
         height: sheetRect.height,
       };
+      // A turned shape's frame rings its unturned extent, turned; a drag preview keeps the turn.
+      const frame = overlayFrameCssBox(rect, target.value?.turn, coordinates.paintScale);
       const showHandles = current.canResize;
       const showMove = current.kind === 'anchored' && current.canMove;
       const showInlineMove = current.kind === 'inline' && canMoveInlineImage(editor, current.id);
@@ -640,6 +643,7 @@ export const ImageSelectionOverlay = defineComponent({
                 showMove || showInlineMove ? ' docx-editor-one-surface__overlay-control' : ''
               }`}
               data-textbox={current.textbox ? 'true' : undefined}
+              data-turned={frame.transform ? 'true' : undefined}
               // To pointer and screen reader users alike.
               title={frameLabel}
               aria-description={frameLabel}
@@ -648,10 +652,11 @@ export const ImageSelectionOverlay = defineComponent({
                 current.shape ? 'imageOverlay.selectionShape' : 'imageOverlay.selection'
               )}
               style={{
-                left: `${rect.left}px`,
-                top: `${rect.top}px`,
-                width: `${rect.width}px`,
-                height: `${rect.height}px`,
+                left: `${frame.left}px`,
+                top: `${frame.top}px`,
+                width: `${frame.width}px`,
+                height: `${frame.height}px`,
+                transform: frame.transform,
                 cursor: showMove || showInlineMove ? 'move' : 'default',
               }}
               // A double press on a chart opens the Chart pane, as Edit chart does.

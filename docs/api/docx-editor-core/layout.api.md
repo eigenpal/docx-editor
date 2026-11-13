@@ -765,7 +765,7 @@ export const DEFAULT_TAB_INTERVAL_TWIPS = 720;
 export const DEFAULT_VERTICAL_WEIGHT = 8;
 
 // @public
-export function defaultNoteSeparatorRuleStyle(_noteKind: NoteKind, _kind: 'separator' | 'continuationSeparator'): NoteSeparatorRuleStyle;
+export function defaultNoteSeparatorRuleStyle(_noteKind: NoteKind$1, _kind: 'separator' | 'continuationSeparator'): NoteSeparatorRuleStyle;
 
 // @public
 export function defaultTabIntervalFromSettings(settings: OoxmlNode | null | undefined): number;
@@ -774,10 +774,10 @@ export function defaultTabIntervalFromSettings(settings: OoxmlNode | null | unde
 export function deletedTextBoundaries(layout: SemanticLayout, paragraphId: string): ReadonlySet<number>;
 
 // @public
-export function deriveNoteDisplayMarks(noteKind: NoteKind, references: readonly NoteReferenceSite[], properties: ResolvedNoteProperties): readonly NoteDisplayMark[];
+export function deriveNoteDisplayMarks(noteKind: NoteKind$1, references: readonly NoteReferenceSite[], properties: ResolvedNoteProperties): readonly NoteDisplayMark[];
 
 // @public
-export function deriveNoteDisplayMarksResolved(_noteKind: NoteKind, references: readonly NoteReferenceSite[], resolveProps: (sectionIndex: number) => ResolvedNoteProperties): readonly NoteDisplayMark[];
+export function deriveNoteDisplayMarksResolved(_noteKind: NoteKind$1, references: readonly NoteReferenceSite[], resolveProps: (sectionIndex: number) => ResolvedNoteProperties): readonly NoteDisplayMark[];
 
 // @public
 export function displayText(text: string, style: ResolvedRunStyle): string;
@@ -878,6 +878,7 @@ export interface DrawingGeometry {
     readonly imageTransformCorners?: readonly DrawingPoint[];
     // (undocumented)
     readonly paintBounds: LayoutBox;
+    readonly regionCuts?: DrawingRegionCuts;
     // (undocumented)
     readonly transformedCorners: readonly DrawingPoint[];
 }
@@ -954,6 +955,14 @@ export interface DrawingPoint {
     readonly x: number;
     // (undocumented)
     readonly y: number;
+}
+
+// @public
+export interface DrawingRegionCuts {
+    readonly bottom: number;
+    readonly left: number;
+    readonly right: number;
+    readonly top: number;
 }
 
 // @public
@@ -1068,6 +1077,17 @@ export interface EquationBorderBoxGeometry extends EquationGeometryBase {
     readonly thickness: number;
 }
 
+// @public (undocumented)
+export interface EquationDelimiterGeometry {
+    readonly baseline: number;
+    // (undocumented)
+    readonly box: LayoutBox;
+    readonly fences: readonly EquationTextGeometry[];
+    readonly items: readonly EquationGeometry[];
+    // (undocumented)
+    readonly kind: 'delimiter';
+}
+
 // @public
 export interface EquationDiagonal {
     // (undocumented)
@@ -1093,7 +1113,7 @@ export interface EquationFractionGeometry extends EquationGeometryBase {
 }
 
 // @public (undocumented)
-export type EquationGeometry = EquationTextGeometry | EquationRowGeometry | EquationFractionGeometry | EquationRadicalGeometry | EquationBarGeometry | EquationBorderBoxGeometry | EquationScriptGeometry | EquationNaryGeometry;
+export type EquationGeometry = EquationTextGeometry | EquationRowGeometry | EquationFractionGeometry | EquationRadicalGeometry | EquationBarGeometry | EquationBorderBoxGeometry | EquationDelimiterGeometry | EquationScriptGeometry | EquationNaryGeometry;
 
 // @public (undocumented)
 export interface EquationNaryGeometry extends EquationGeometryBase {
@@ -1155,6 +1175,12 @@ export interface EquationSpanRecord {
     readonly truncated: boolean;
 }
 
+// @public
+export interface EquationStretch {
+    readonly originY: number;
+    readonly scale: number;
+}
+
 // @public (undocumented)
 export interface EquationTextGeometry extends EquationGeometryBase {
     // (undocumented)
@@ -1162,6 +1188,7 @@ export interface EquationTextGeometry extends EquationGeometryBase {
     // (undocumented)
     readonly kind: 'text' | 'fallback';
     readonly runStyle?: ResolvedRunStyle;
+    readonly stretch?: EquationStretch;
     // (undocumented)
     readonly text: string;
 }
@@ -1904,7 +1931,7 @@ export function layoutHeaderFooterStory(part: OoxmlPart, contentWidth: number, m
 export function layoutNoteById(part: OoxmlPart | null | undefined, noteId: number, contentWidth: number, options: LayoutNoteStoryOptions): NoteStoryLayout | null;
 
 // @public
-export function layoutNoteSeparator(part: OoxmlPart | null | undefined, kind: 'separator' | 'continuationSeparator', contentWidth: number, options: LayoutNoteStoryOptions, noteKind: NoteKind, maxFlowHeightPt?: number): NoteSeparatorLayout;
+export function layoutNoteSeparator(part: OoxmlPart | null | undefined, kind: 'separator' | 'continuationSeparator', contentWidth: number, options: LayoutNoteStoryOptions, noteKind: NoteKind$1, maxFlowHeightPt?: number): NoteSeparatorLayout;
 
 // @public
 export function layoutNoteStory(note: OoxmlNode, contentWidth: number, options: LayoutNoteStoryOptions): NoteStoryLayout | null;
@@ -2296,7 +2323,7 @@ export type NoteLayoutFallbackReason = 'note-count-limit' | 'note-fragment-limit
 | 'note-separator-height-cap' | 'note-continuation-notice-height-cap' | 'missing-note-body' | 'dangling-note-reference';
 
 // @public
-export function noteLineIdPrefix(noteKind: NoteKind, noteId: number): string;
+export function noteLineIdPrefix(noteKind: NoteKind$1, noteId: number): string;
 
 // @public
 export interface NoteMarkContext {
@@ -2307,7 +2334,7 @@ export interface NoteMarkContext {
 }
 
 // @public
-export function noteMarkKey(noteKind: NoteKind, noteId: number): string;
+export function noteMarkKey(noteKind: NoteKind$1, noteId: number): string;
 
 // @public
 export type NotePaginationFallbackReason = NoteLayoutFallbackReason | 'note-reflow-exhausted' | 'note-area-fragment-limit' | 'note-overflow-page-limit'
@@ -2423,7 +2450,7 @@ export interface NoteStoryLayout {
     // (undocumented)
     readonly noteId: number;
     // (undocumented)
-    readonly noteKind: NoteKind;
+    readonly noteKind: NoteKind$1;
     // (undocumented)
     readonly noteType: ReturnType<typeof noteTypeOf>;
     readonly scopeId: string;
@@ -5099,6 +5126,7 @@ export interface VectorGradient {
     readonly kind: 'linear' | 'radial';
     readonly matrix: AffineMatrix;
     readonly stops: readonly GradientStop[];
+    readonly turnsWithShape?: false;
 }
 
 // @public
@@ -5165,6 +5193,7 @@ export interface VectorShapeProjection {
     readonly fillAlpha?: number;
     readonly fillHex: string | null;
     readonly overflowVisible?: true;
+    readonly rotationDegrees?: number;
     // (undocumented)
     readonly strokeAlpha?: number;
     readonly strokeHex: string | null;

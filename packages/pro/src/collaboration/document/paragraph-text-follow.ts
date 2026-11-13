@@ -548,6 +548,14 @@ export class TextFollow {
     );
   }
 
+  /** The paragraph that shows a copy a move wrote of one character, or null. */
+  private shownMovedCopy(identity: Identity): LogicalId | null {
+    const parsed = parseClientClock(identity);
+    if (!parsed || !this.index.hasCopies(parsed.client)) return null;
+    const moved = this.index.holdersOf('move', parsed.client, parsed.clock);
+    return this.holders.lastOf(moved, identity, true);
+  }
+
   /** The paragraph that shows a copy of one character, or null when none holds a copy. */
   shownCopy(identity: Identity): LogicalId | null {
     const parsed = parseClientClock(identity);
@@ -814,7 +822,7 @@ export class TextFollow {
         (!identities.starts[position] ||
           (position > 0 && identities.lefts[position] === identities.ids[position - 1]));
       const anchor: Placement | undefined =
-        identities.anchors[position]?.find((candidate) => this.leadsOut(source, live, candidate)) ??
+        this.leadingAnchor(source, live, identities.anchors[position]) ??
         (live || continues ? undefined : this.movedAfter(source, identities, position));
       if (anchor) {
         open = {
@@ -882,7 +890,7 @@ export class TextFollow {
   /** Whether an original typed in `source` follows by one of its anchors, as `followingOf` reads them. */
   private follows(original: TypedOriginal): boolean {
     const live = !this.isDeleted(original.source);
-    return original.anchors.some((anchor) => this.leadsOut(original.source, live, anchor));
+    return this.leadingAnchor(original.source, live, original.anchors) !== undefined;
   }
 
   /** Whether the original of `id` in the live paragraph `holder` shows as its following text. */
@@ -903,13 +911,26 @@ export class TextFollow {
   }
 
   /**
-   * Whether text in `source` follows `anchor`: a copy of the anchor shows in another
-   * paragraph. Text typed before a character follows it only out of a paragraph that is gone.
+   * The anchor text in `source` follows: the nearest one with a copy that shows, when that
+   * copy shows in another paragraph. A copy a move wrote in `source` itself keeps the text
+   * there, as a join brings back the characters a peer's Enter moved away: an anchor farther
+   * back that another split moved elsewhere must not take it along. A copy an undo or redo
+   * wrote in `source` can follow out itself, by the typing it copies: the next anchor decides.
+   * Text typed before a character follows it only out of a paragraph that is gone.
    */
-  private leadsOut(source: LogicalId, live: boolean, anchor: FollowAnchor): boolean {
-    if (anchor.before && live) return false;
-    const target = this.shownCopy(anchor.identity);
-    return target !== null && target !== source;
+  private leadingAnchor(
+    source: LogicalId,
+    live: boolean,
+    anchors: readonly FollowAnchor[] | null | undefined
+  ): FollowAnchor | undefined {
+    for (const anchor of anchors ?? []) {
+      if (anchor.before && live) continue;
+      const target = this.shownCopy(anchor.identity);
+      if (target === null) continue;
+      if (target !== source) return anchor;
+      if (this.shownMovedCopy(anchor.identity) === source) return undefined;
+    }
+    return undefined;
   }
 
   /**

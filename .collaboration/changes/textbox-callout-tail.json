@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A press on a text box callout's tail selected nothing, and a press beside the tail on the painted box selected the text box. A turned text box's painted box missed a tail that turned past it.",
+  "after": "A press on the tail selects the text box, a press beside it goes to the text, and the painted box of a turned text box holds its tail.",
+  "reason": "Only pointer hit testing and the painted box change. Source XML, shared nodes, text offsets, operations, and awareness payloads remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/textbox-callout-tail.test.ts",
+    "packages/core/src/layout/__tests__/textbox-outline-hit.test.ts",
+    "packages/pro/src/collaboration/__tests__/textbox-callout-tail-peers.test.ts"
+  ],
+  "changeset": "textbox-callout-tail",
+  "migration": null
+}

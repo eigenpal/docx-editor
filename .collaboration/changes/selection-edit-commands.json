@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "replaceText, applyFormatting, splitParagraph, mergeParagraphs, and removeTabMark were refused as unsupported.",
+  "after": "Each command commits through an existing lane: the paste insert, the run-property write, the paragraph split, the joinParagraphs operation, and the paragraph tab-stop write.",
+  "reason": "The commands reuse existing operations and commit lanes. Shared nodes, operation shapes, offsets, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/selection-edit-commands.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-selection-edits.test.ts"
+  ],
+  "changeset": "selection-edit-commands",
+  "migration": null
+}

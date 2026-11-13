@@ -405,6 +405,7 @@ export {
   createImageOverlayScrollPort,
   cssPixelsToLayoutPoints,
   layoutPointsToCssPixels,
+  overlayFrameCssBox,
   overlayFrameToSheetCssPixels,
   overlayHostOrigin,
   resizePreservesAspect,
@@ -416,6 +417,7 @@ export {
   type OverlayFrameRect,
   type SurfaceOverlayCoordinates,
 } from './surface-overlay-coordinates.ts';
+export type { OverlayFrameTurn } from './shape-drawings.ts';
 export {
   IMAGE_WRAP_TARGETS,
   type ImageWrapTarget,
@@ -623,6 +625,10 @@ export type {
   DocumentRefreshState,
   RefreshSubmission,
   RefreshUpdate,
+  RefreshRefusal,
+  RefreshRefusalFields,
+  RefreshRefusalReason,
+  RefreshUpdateMode,
   RefreshResult,
   RefreshFailureCode,
   RefreshChange,
@@ -651,8 +657,11 @@ export type {
   HistoryGroup,
   HistoryGroupOptions,
   CommentTextOptions,
+  // What `getDocumentHandle` returns and `replaceDocument` takes as `expected`.
+  DocumentHandle,
   // What `findMatches` returns and `selectMatch`/`replaceMatch` take.
   TextMatch,
+  ReplaceAllMatchesOutcome,
 } from '../contracts/editor.ts';
 
 export { runChromeExport, ChromeExportError } from './chrome-export.ts';
@@ -721,6 +730,13 @@ export {
   COMPARE_DOCUMENTS_ACCEPT,
   compareDocumentsErrorKey,
 } from '../contracts/compare-documents.ts';
+export type {
+  ReplaceDocumentErrorCode,
+  ReplaceDocumentOutcome,
+  ReplaceDocumentRefusal,
+  ReplaceDocumentRefusalReason,
+  ReplaceDocumentRequest,
+} from '../contracts/replace-document.ts';
 export {
   COMPARE_DOCUMENTS_PHASE_ATTRIBUTE,
   focusCompareDocumentsControl,

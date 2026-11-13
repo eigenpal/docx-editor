@@ -170,9 +170,18 @@ import { RefreshFailureCode } from '@docx-editor.dev/core/editor';
 import { RefreshHighlightAnimation } from '@docx-editor.dev/core/editor';
 import { RefreshHighlightOptions } from '@docx-editor.dev/core/editor';
 import { RefreshLocation } from '@docx-editor.dev/core/editor';
+import { RefreshRefusal } from '@docx-editor.dev/core/editor';
+import { RefreshRefusalFields } from '@docx-editor.dev/core/editor';
+import { RefreshRefusalReason } from '@docx-editor.dev/core/editor';
 import { RefreshResult } from '@docx-editor.dev/core/editor';
 import { RefreshSubmission } from '@docx-editor.dev/core/editor';
 import { RefreshUpdate } from '@docx-editor.dev/core/editor';
+import { RefreshUpdateMode } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentErrorCode } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentOutcome } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentRefusal } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentRefusalReason } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentRequest } from '@docx-editor.dev/core/editor';
 import { ResolvedChromePrintSettings } from '@docx-editor.dev/core/editor';
 import { ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
 import { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
@@ -760,11 +769,10 @@ export interface ContentControlWidgetPictureProps extends DocxEditorContentContr
     autoOpen?: boolean;
 }
 
-// @public (undocumented)
+// @public
 export interface ContextMenuAnchor {
-    // (undocumented)
+    readonly trigger: 'pointer' | 'keyboard';
     readonly x: number;
-    // (undocumented)
     readonly y: number;
 }
 
@@ -6947,9 +6955,9 @@ export { Editor }
 
 // @public (undocumented)
 export interface EditorCaret {
-    // (undocumented)
+    readonly blockId: string;
     readonly offset: number;
-    // (undocumented)
+    // @deprecated
     readonly paragraphId: string;
 }
 
@@ -8546,11 +8554,29 @@ export { RefreshHighlightOptions }
 
 export { RefreshLocation }
 
+export { RefreshRefusal }
+
+export { RefreshRefusalFields }
+
+export { RefreshRefusalReason }
+
 export { RefreshResult }
 
 export { RefreshSubmission }
 
 export { RefreshUpdate }
+
+export { RefreshUpdateMode }
+
+export { ReplaceDocumentErrorCode }
+
+export { ReplaceDocumentOutcome }
+
+export { ReplaceDocumentRefusal }
+
+export { ReplaceDocumentRefusalReason }
+
+export { ReplaceDocumentRequest }
 
 // @public
 export type ResolvedColorMode = 'light' | 'dark';
@@ -9407,7 +9433,13 @@ export interface UseContentControlWidgetResult {
     readonly value: Readonly<Ref<string>>;
 }
 
-// @public (undocumented)
+// @public
+export function useContextMenuAnchor(): ComputedRef<ContextMenuAnchor | null>;
+
+// @public
+export function useContextMenuHighlights<R extends HighlightRange = HighlightRange>(name?: string): Readonly<ShallowRef<readonly HighlightHit<R>[]>>;
+
+// @public
 export function useContextMenuTarget(): HTMLElement | null;
 
 // @public
@@ -9593,7 +9625,12 @@ export function useHeaderFooterState(): ShallowRef<HeaderFooterState | null>;
 export function useHighlightAt<R extends HighlightRange = HighlightRange>(name?: MaybeRefOrGetter<string>): Readonly<ShallowRef<HighlightHit<R> | null>>;
 
 // @public
-export function useHighlights(name: MaybeRefOrGetter<string>, source: MaybeRefOrGetter<HighlightSource>, options?: MaybeRefOrGetter<HighlightOptions>): ComputedRef<HighlightResult>;
+export function useHighlights(name: MaybeRefOrGetter<string>, source: MaybeRefOrGetter<HighlightSource>, options?: MaybeRefOrGetter<HighlightOptions>): ComputedRef<UseHighlightsReturn>;
+
+// @public
+export interface UseHighlightsReturn extends HighlightResult {
+    readonly refresh: () => void;
+}
 
 // @public
 export function useHistoryGroup(input: HistoryGroupBindingOptions): UseHistoryGroupReturn;

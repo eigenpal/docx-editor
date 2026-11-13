@@ -120,7 +120,7 @@ import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/c
 
 /* eslint-disable max-lines -- composition root; seams live in surface-*.ts */
 
-import { attributeTrackedOps, isTrackedEdit } from './surface-tracked-ops.ts';
+import { attributeTrackedOps, isDocumentEdit, isTrackedEdit } from './surface-tracked-ops.ts';
 import { isMissingAuthorRefusal } from './docx-editor-author.ts';
 import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core/binding';
 import {
@@ -130,6 +130,7 @@ import {
   isContentControl,
   parentNodeOf,
   ORIGIN_IDS,
+  paragraphTextOf,
   parseTocInstruction,
   planTocEntries,
   resolveTocRowHeadings,
@@ -174,6 +175,7 @@ import {
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
+  paragraphTextFromLayout,
 } from '@docx-editor.dev/core/layout';
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { rangesOnPages } from '../layout/selection-rects.ts';
@@ -189,6 +191,7 @@ import { withSavedFieldResults } from './surface-saved-field-results.ts';
 import { bindSurfaceViewport, type SurfaceViewportBinding } from './surface-viewport-binding.ts';
 import { createSurfaceHostListeners } from './surface-host-listeners.ts';
 import { hostTimers, hostWindowOf } from './host-realm.ts';
+import { afterNextPaint, landingGuard } from './surface-composition-commit.ts';
 import { createSurfaceHosting } from './surface-host-move.ts';
 import { reviewItemsAtSelection } from '../store/store/review-items.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
@@ -1529,6 +1532,10 @@ export function mountPaginatedSurface(
   /** Nonzero while `commitNow` applies its ops; see `renderPublishedLayout`. */
   let commitRunDepth = 0;
   let commitPaintOwed = false;
+  /** The layout the page shows: `currentLayout` until a paint is owed. */
+  let paintedLayout: SemanticLayout | null = null;
+  /** While an input method writes on the page, the layout it is held at; see `render`. */
+  let heldLayout: SemanticLayout | null = null;
 
   // Armed once, after the first published render: the derivations a structural edit reads
   // populate their per-node memos in idle tasks instead of inside the first Enter. An edit
@@ -1609,15 +1616,19 @@ export function mountPaginatedSurface(
   // teardown), so the selection at flush time is the selection the first
   // buffered key saw.
   let typeBuffer = '';
+  /** Lands composed text queued before the buffer, one land at a time (`landingGuard`). */
+  let landComposedText = (): void => {};
   let typeFlushTimer: number | null = null;
   let flushingTypeBuffer = false;
+  const landing = landingGuard();
 
   function flushTypeBuffer(): void {
     // Reentrancy first, timer second: a reentrant call (host code inside the
     // flush's own onChange enqueuing more text) must not clear the fresh timer
     // that new text just armed, or it would sit unflushed until an unrelated
     // flush point.
-    if (flushingTypeBuffer) return;
+    if (flushingTypeBuffer || landing.active()) return;
+    landing.wrap(landComposedText)();
     if (typeFlushTimer !== null) {
       timers.clearTimeout(typeFlushTimer);
       typeFlushTimer = null;
@@ -1960,13 +1971,13 @@ export function mountPaginatedSurface(
    * (a prior deferred commit, an external commit, a drawing-resource invalidation can all
    * have filled it), and the `render()` below is the one report of the refusal the host
    * gets — deferring it delayed `lastRejection`, or lost it to a later commit entirely.
+   * `held` defers too: a queued composed insertion the next one in the queue publishes.
    */
-  function publishAfterCommit(rejected: boolean): void {
+  function publishAfterCommit(rejected: boolean, held = false): void {
     if (
       !rejected &&
       scheduler.pending() !== null &&
-      lastLayoutMs > INPUT_PRESSURE_LAYOUT_DEFER_MS &&
-      hasPendingBrowserInput(false)
+      (held || (lastLayoutMs > INPUT_PRESSURE_LAYOUT_DEFER_MS && hasPendingBrowserInput(false)))
     ) {
       return;
     }
@@ -2739,6 +2750,14 @@ export function mountPaginatedSurface(
       notifyChange = true;
     }
     hosting.heal();
+    // THE PAGE IS THE INPUT METHOD'S UNTIL `compositionend`. A newer layout (a collaborator's
+    // edit) would replace the nodes it is composing into; it is painted when the composition
+    // ends, and the readback carries the composed text onto it (surface-composition-rebase).
+    if (heldLayout !== null && currentLayout !== heldLayout) {
+      commitPaintOwed = true;
+      if (notifyChange) options.onChange?.(currentState());
+      return;
+    }
     // Parked: no viewport, so a paint would build every page into a holder nobody sees. State
     // still reports, and `moveTo` repaints in full.
     if (hosting.parked()) {
@@ -2760,6 +2779,7 @@ export function mountPaginatedSurface(
     const activeHf = hfScope?.getActive() ?? null;
     const contentControlChrome = contentControlChromeOptions();
     const emptyTocIds = emptyTocPlaceholderParagraphIds(session.part());
+    paintedLayout = currentLayout;
     paintSemanticLayoutWithAuthorSlots(
       pagesLayer,
       currentLayout,
@@ -3003,17 +3023,6 @@ export function mountPaginatedSurface(
     () => session.editable
   );
 
-  /** Ops that change the DOCUMENT, as opposed to reading or resolving it. */
-  function isDocumentEdit(op: TreeDocOp): boolean {
-    return (
-      op.op !== 'acceptRevision' &&
-      op.op !== 'rejectRevision' &&
-      op.op !== 'acceptAllRevisions' &&
-      op.op !== 'rejectAllRevisions' &&
-      op.op !== 'setRevisionAttribution'
-    );
-  }
-
   /** Ops that create or extend a reviewable proposal. */
   /**
    * The ops that carry per-op revision attribution, spelled ONCE.
@@ -3153,13 +3162,15 @@ export function mountPaginatedSurface(
            * and applies to whatever is typed next there.
            */
           readonly rearmPending?: ArmedFormat;
+          /** Queued composed text: it precedes the type buffer, and may leave its publish. */
+          readonly composed?: { readonly publish: boolean };
         }
       | undefined = {}
   ): string | null {
     // Any batched typing lands first as its own transaction, so this edit sees
     // the document and selection the user saw. Reentrancy-guarded: the flush
     // itself commits through here with an empty buffer.
-    flushTypeBuffer();
+    if (!options?.composed) flushTypeBuffer();
     if (!flushingTypeBuffer) typingHistory.end();
     const finishSelectionHistory = documentSelectionHistory.begin();
     // An edit invalidates the rectangle: its cells' content has changed, and the collapsed
@@ -3251,7 +3262,7 @@ export function mountPaginatedSurface(
     // nothing, so the surface still has to refresh the state it just changed. Under input
     // pressure the publish may hand layout+paint to the scheduler's own task — see
     // `publishAfterCommit`.
-    publishAfterCommit(rejected !== null);
+    publishAfterCommit(rejected !== null, options?.composed?.publish === false);
     return rejected;
   }
 
@@ -3328,7 +3339,7 @@ export function mountPaginatedSurface(
     // same-position set (the selection mirror re-adopting the caret it painted,
     // which a browser echoes after every keystroke) is not a move and must not
     // break the batch. A move also ends the typing run, even one that comes back later.
-    if (moved && typeBuffer.length > 0) flushTypeBuffer();
+    if (moved) flushTypeBuffer();
     const fieldSelection = textFormInteraction?.beforeSelect(next);
     if (fieldSelection === null) return;
     if (moved) clearPromptBoundary();
@@ -3436,6 +3447,12 @@ export function mountPaginatedSurface(
       publishLocalCollaborationSelection();
     },
     commit: (run) => commit(run),
+    commitComposed: (run, next, publish) =>
+      commit(run, () => (textFormInteraction ? textFormInteraction.beforeSelect(next) : next), {
+        composed: { publish },
+      }),
+    later: (task) => afterNextPaint(timers, fieldScope.wrap(landing.wrap(task))),
+    modelTextOf: (id) => paragraphTextOf(partOfNodeId(session, id) ?? session.part(), id),
     insertOwner: () => insertOwnerOf(contentControlAtCaret()),
     compositionUsesTyping: () => typingSelectionPlan().outsidePromptId !== undefined,
     promptLanding: typedLanding,
@@ -3468,7 +3485,21 @@ export function mountPaginatedSurface(
     // `surface` is assigned below; a composition can only end once a caller holds it.
     replaceSelectionWith: (text) => surface.type(text),
     discardPaint: () => discardRetainedPaint(pagesLayer),
+    // A revision of -1 says "not the model's": the readback then lands the model and rebases.
+    paintedText: (paragraphId) => {
+      const shown = paintedLayout ?? currentLayout;
+      const current = shown === currentLayout && !commitPaintOwed && scheduler.pending() === null;
+      // Through the open text box's projection, as `textOf` reads: its story is only there.
+      return {
+        text: paragraphTextFromLayout(textboxEditing?.layout(shown) ?? shown, paragraphId),
+        revision: current ? session.packageRevision() : -1,
+      };
+    },
+    holdPaint: (hold) => {
+      heldLayout = hold ? (paintedLayout ?? currentLayout) : null;
+    },
   });
+  landComposedText = selectionSync.landComposed;
 
   hfScope = createHeaderFooterScopeController({
     session,
@@ -3944,6 +3975,8 @@ export function mountPaginatedSurface(
       remoteSelectionLayer.replaceChildren();
       return;
     }
+    // Drawn from `currentLayout`, which the held page does not show: the end paints it.
+    if (heldLayout !== null && currentLayout !== heldLayout) return;
     paintRemoteSelections(remoteSelectionLayer, currentLayout, collaboration.remoteSelections(), {
       scale,
       pageOffsetX: materializedExtent?.pageOffsetX,
@@ -5189,7 +5222,7 @@ export function mountPaginatedSurface(
 
     revisionDisplayMode: reviewDisplayMode,
     replacementLanding,
-    applyAutomationOps: (staged, scope, packageEdits, requiresReview = false) => {
+    applyAutomationOps: (staged, scope, packageEdits, requiresReview = false, carry) => {
       // Automation shares edit gates and repainting but retains its capture policy.
       // Its explicit story remains independent of the reader's active story.
       let result: ReturnType<TreeDocxSession['applyTreeOps']> | null = null;
@@ -5254,7 +5287,7 @@ export function mountPaginatedSurface(
           // alone is right there, because a clamp with nothing to clamp to is a caret reset.
           const order = paragraphOrder();
           if (order.length === 0) return null;
-          return clampedToDocument(editingLayout(), order, selection);
+          return clampedToDocument(editingLayout(), order, carry?.(selection) ?? selection);
         },
         { automation: true }
       );
@@ -5425,6 +5458,11 @@ export function mountPaginatedSurface(
       options.onChange?.(currentState());
     },
 
+    caretClientRect: () => {
+      flushLayout();
+      return caret.clientRect();
+    },
+    remoteSelectionPending: () => remoteCaret.pending(),
     activeReviewKey: () => {
       const active = activeReviewAtCaret();
       return active ? reviewItemKey(active) : null;
@@ -5901,23 +5939,21 @@ export function mountPaginatedSurface(
   // surface-input.ts, the selection mirror and the IME lane in surface-selection-sync.ts.
   // The document-level selection listener runs in this editor's field-result mode too.
   const { onSelectionChange, onCompositionEnd } = fieldScope.methods({ ...selectionSync });
-  // The IME owns the DOM from compositionstart on; buffered plain typing must
-  // be in the document before that handover, not woven into the readback. The
-  // handover is of the PAINTED DOM, so a layout pass or paint a commit deferred
-  // under input pressure must land too: the readback at compositionend diffs the
-  // painted text against the model, and a composition that began over a stale
-  // paint would read the missing edit back as the IME's own.
+  // The IME owns the DOM from compositionstart on; buffered plain typing must be in the
+  // document before that handover, not woven into the readback. The handover is of the
+  // PAINTED DOM, so a layout pass or paint a commit deferred under input pressure must land
+  // too: the readback diffs the painted text against the model, and a composition begun over
+  // a stale paint reads the missing edit back as the IME's own (but not its own last commit).
   //
-  // The pending USER selection is taken up FIRST, exactly as `onKeyDown` does.
-  // The flush's render mirrors the model selection into the DOM — over the
-  // user's still-unadopted range — and its `applyingSelection` echo guard is
-  // still up (it clears on a microtask) when `onCompositionStart` performs its
-  // own mandatory adoption, which would skip it: the #383 lane choice would
-  // again be made from a selection the user no longer has.
+  // The pending USER selection is taken up FIRST, exactly as `onKeyDown` does. The flush's
+  // render mirrors the model selection into the DOM — over the user's still-unadopted range
+  // — and its `applyingSelection` echo guard is still up (it clears on a microtask) when
+  // `onCompositionStart` performs its own mandatory adoption, which would skip it: the #383
+  // lane choice would again be made from a selection the user no longer has.
   const onCompositionStart: typeof selectionSync.onCompositionStart = (...args) => {
     inputMethod.repair.stop();
     selectionSync.adoptBeforeInput();
-    flushToPaint();
+    if (!selectionSync.continuesComposition()) flushToPaint();
     selectionSync.onCompositionStart(...args);
   };
 

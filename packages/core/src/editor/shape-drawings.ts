@@ -1,6 +1,7 @@
 // Which selected drawings are DrawingML shapes, lines or groups: they paint their own geometry,
 // with no picture to replace, crop or transform, and their size also lives in that geometry.
 
+import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { holdsDiagramGraphic } from '../store/package/diagram-frame.ts';
 import type { DrawingProjection } from '../store/package/drawing-projection.ts';
@@ -34,6 +35,32 @@ export function isShapeDrawing(
 }
 
 /**
+ * The refusal of a picture command on a selected text box or shape, or null. A shape's turn and
+ * flips live in its own geometry and its VML fallback, as its size does, so it refuses a
+ * transform as it refuses a resize. The reason names the command.
+ */
+export function shapePictureCommandRefusal(
+  command: EditorCommand,
+  surface: PaginatedSurface,
+  record: InlineDrawingRecord | AnchoredDrawingRecord | null
+): ExecResult | null {
+  const hyperlink = command.type === 'setImageProperties' && command.hyperlink !== undefined;
+  if (command.type !== 'replaceImage' && command.type !== 'transformImage' && !hyperlink) {
+    return null;
+  }
+  const textbox = !!record && 'textboxStory' in record && !!record.textboxStory;
+  if (!textbox && !isShapeDrawing(surface, record)) return null;
+  const kind = textbox ? 'text boxes' : 'shapes';
+  const what =
+    command.type === 'transformImage'
+      ? 'rotate and flip are'
+      : command.type === 'replaceImage'
+        ? 'replacing the picture is'
+        : 'hyperlinks are';
+  return { ok: false, code: 'unsupported', reason: `${what} not supported for ${kind}` };
+}
+
+/**
  * Whether a drawing keeps its size in its own geometry too (`SHAPE_FRAME_EDITS`), so a resize
  * of its frame alone is refused. A legacy VML shape keeps its size in `style` alone.
  */
@@ -58,4 +85,29 @@ export function selectedShapeFormat(
   const targets = member ? (narrowedTargets(part, all, member) ?? all) : all;
   const theme = createPackageShapeThemeResolvers(surface.session.currentPackage());
   return Object.freeze(readShapeFormat(targets, theme));
+}
+
+/**
+ * The frame of a turned shape or line: its unturned extent, in points, and its clockwise turn
+ * in degrees. A selection overlay rings it turned about the centre of the box it covers.
+ *
+ * @public
+ */
+export interface OverlayFrameTurn {
+  /** Clockwise turn in degrees, never 0. */
+  readonly rotationDegrees: number;
+  /** Unturned extent width, in points. */
+  readonly width: number;
+  /** Unturned extent height, in points. */
+  readonly height: number;
+}
+
+/** The overlay turn fields of a laid-out drawing: `turn` for a turned shape, else nothing. */
+export function overlayFrameTurnOf(record: InlineDrawingRecord | AnchoredDrawingRecord): {
+  readonly turn?: OverlayFrameTurn;
+} {
+  const rotationDegrees = record.vectorShape?.rotationDegrees;
+  if (!rotationDegrees) return {};
+  const { width, height } = record.geometry.contentBounds;
+  return { turn: Object.freeze({ rotationDegrees, width, height }) };
 }

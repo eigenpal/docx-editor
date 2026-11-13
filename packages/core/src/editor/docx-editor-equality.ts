@@ -223,6 +223,8 @@ const SNAPSHOT_FIELDS = {
   // INSIDE one paragraph leaves it identical. Without this compare, a control gated on
   // the caret/range distinction would never see the moment it changed.
   selectionCollapsed: 'compared',
+  // Reference-stable by value in `selection-range-read.ts`; moves with every caret move.
+  selectionRange: 'compared',
   formatting: 'compared',
   table: 'compared',
   tocContext: 'compared',

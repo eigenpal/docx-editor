@@ -66,11 +66,14 @@ With the core package, use the instance from `createDocxEditor()`. Prevent the d
 | `findMatches(query, options)` | Find text in every document region. | No |
 | `selectMatch(match)` | Select a match and show it. | Yes |
 | `exec({ type: 'replaceMatch', match, text })` | Replace a match where it is. | No |
+| `exec({ type: 'replaceAllMatches', query, text })` | Replace every match in one undo step. | No |
 | `setHighlights(name, ranges, options)` | Mark text ranges, such as glossary terms. | No |
 | `clearHighlights(name)` | Remove one set of text highlights, or all of them. | No |
 | `getHighlightsAt(clientX, clientY)` | Read the text highlights under a pointer position. | No |
 | `getParagraphs()`, `getParagraphText(blockId)` | Read paragraph text in highlight offsets, such as for a spelling check. | No |
 | `exec({ type: 'setSelection', anchor })` | Move the caret to a paragraph reference. | Yes |
+| `getSelectionRange()` | Read the selection as paragraph IDs and offsets. | No |
+| `getCaretRect()` | Read the caret position in client coordinates. | No |
 
 <DocumentNavigationDemo />
 
@@ -156,6 +159,66 @@ if (result.ok) editor.focus();
 
 The caret goes to the start of the paragraph or the matched text.
 
+## Read the selection and the caret
+
+Call `getSelectionRange()` to read the selection as two positions. Each position has a `blockId` and an `offset`, so it compares directly with `TextMatch.blockId` and `HighlightRange.blockId`. Offsets count UTF-16 code units in the units that `TextMatch.start` and `HighlightRange.start` use. `head` is the caret, and `anchor` is where the selection started. `scope` names the open story that holds the selection. In viewing mode, text boxes do not open, so a selection in a text box names the story around it.
+
+The method returns `null` before a document opens, while a picture or another drawing is selected, and while table cells are selected as a block. The selection stays readable after focus moves to your own controls. Edits before the caret, including edits from other participants in a collaboration session, move the offset.
+
+To restore a selection later, pass the result to `setSelection` unchanged. The editor opens the header, footer, note, or text box that holds the selection. `setSelection` also accepts `paragraphId`, the older name for `blockId`:
+
+```ts
+const range = editor.getSelectionRange();
+// ... the user works in a side panel ...
+if (range) editor.exec({ type: 'setSelection', range });
+```
+
+Call `getCaretRect()` to place a popover or a menu at the caret. It returns a zero-width rectangle in client coordinates, in the same shape as `DOMRect`. The rectangle comes from the document layout, so it is available while focus is elsewhere. The method returns `null` when the caret's page is not painted or the editor is not attached. Read it again after the document scrolls or the zoom changes.
+
+The following example shows a suggestions popover below the caret:
+
+```ts
+const caret = editor.getCaretRect();
+if (caret) {
+  popover.style.left = `${caret.left}px`;
+  popover.style.top = `${caret.bottom}px`;
+}
+```
+
+To react to caret moves in a component, select `selectionRange` from the editor state. The value keeps its reference until the selection moves, so other state changes do not render the component again.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useEditorState } from '@docx-editor.dev/react';
+
+function CaretOffset() {
+  const range = useEditorState((s) => s.selectionRange);
+  return <span>{range ? `Offset ${range.head.offset}` : 'No text selected'}</span>;
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { useEditorState } from '@docx-editor.dev/vue';
+
+const range = useEditorState((s) => s.selectionRange);
+</script>
+
+<template>
+  <span>{{ range ? `Offset ${range.head.offset}` : 'No text selected' }}</span>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+With the core package, read `snapshot.selectionRange` in a `selectionChange` handler.
+
 ## Search and replace text
 
 `findMatches()` returns matches without moving the selection. `selectMatch()` selects one and returns an `ExecResult`.
@@ -172,7 +235,45 @@ if (second) {
 
 `selectMatch()` opens a header, footer, or note when needed and does not move focus.
 
-`replaceMatch` keeps the caret, selection, and scroll position. An empty `text` deletes the match. In suggesting mode, it records a tracked deletion and insertion with one undo step, and it refuses edits that cannot be tracked.
+`replaceMatch` keeps the active story, caret, selection, and scroll position. A caret later in the edited paragraph moves with its text. An empty `text` deletes the match. In suggesting mode, it records a tracked deletion and insertion with one undo step, and it refuses edits that cannot be tracked.
+
+### Replace a computed range
+
+`selectMatch()` and `replaceMatch` also take a range that you compute, such as a result from a grammar service. A range has `blockId`, `start`, and `length`, and optionally `expectedText` and `scope`. If you omit `scope`, the editor finds the story from `blockId`.
+
+Set `expectedText` to the text the range covers. If an edit moves that text before you apply the range, the command returns `notFound` and changes nothing. A match from `findMatches()` is checked the same way against its `text`.
+
+```ts
+const result = editor.exec({
+  type: 'replaceMatch',
+  match: { blockId, start: 3, length: 5, expectedText: 'go to' },
+  text: 'goes to',
+});
+if (!result.ok && result.code === 'notFound') {
+  // The text changed after the range was computed. Check the paragraph again.
+  refreshSuggestions();
+}
+```
+
+A range in a header, footer, or note that is not open is replaced without opening that story. `selectMatch()` is a navigation command, so it opens the story that holds the range. To apply several replacements as one undo step, pass the same `historyGroup` to each call. Apply them from the end of a paragraph to the start, so that earlier offsets stay valid.
+
+To replace every match, run `replaceAllMatches` with the query and the same options that `findMatches()` takes:
+
+```ts
+const result = editor.exec({
+  type: 'replaceAllMatches',
+  query: 'Supplier',
+  text: 'Vendor',
+  matchCase: true,
+  wholeWord: true,
+});
+if (result.ok) {
+  const { replaced = 0, skipped = 0 } = result.replacements ?? {};
+  status.textContent = `${replaced} replaced, ${skipped} skipped`;
+}
+```
+
+`replaceAllMatches` searches the same regions as `findMatches()`, and one undo step reverts every replacement. It keeps the selection and scroll position, and a caret after a replaced word moves with its text. In suggesting mode, each replacement is a tracked change. The command skips struck text from tracked deletions and matches that cannot take plain text, such as field results, locked content controls, and a table of contents. `result.replacements` counts the replaced and skipped matches. If only locked matches exist, the command fails with the first reason. If the command stops part-way, for example on a collaboration failure, it fails and still reports `replacements`; the replaced matches undo as one step.
 
 ### Search from code
 
@@ -432,7 +533,10 @@ The shortcuts work only while focus is in the same editor: its pages, pane, or c
 - Search caps results at 2,000. When `truncated` is `true`, show the count as a minimum, such as `2000+`.
 - Viewing mode searches body stories only. Editing mode also searches headers, footers, notes, and text boxes.
 - Matches go stale after document changes. Search again.
-- `replaceMatch` requires the match's story to be the active one. A text-box match returns `unsupported`.
+- `replaceMatch` and `selectMatch()` return `notFound` when the text at a match changed. A `scope` that names another story returns `invalidArgs`. A text-box match returns `unsupported` from `replaceMatch`.
+- Search also finds tracked deleted and moved text. `selectMatch()` selects it for review. `replaceMatch` returns `unsupported` for a match that overlaps it, and changes nothing.
+- A match inside a field result covers the whole field. If the match is only part of the shown result, `selectMatch()` selects the field and `replaceMatch` returns `unsupported`.
+- `replaceAllMatches` refuses a query with more than 2,000 matches with `unsupported`. Narrow the query, or replace in steps.
 - Text highlights allow 32 sets and 10,000 ranges per set. Ranges past the limit count as unavailable and do not throw. The name `search` is reserved.
 - Text highlights support the body, tables, headers, footers, notes, and text boxes in the body.
 - Highlights are not saved or shared, and they do not change selection or undo history. Give each one a text label.

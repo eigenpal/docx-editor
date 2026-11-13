@@ -67,6 +67,20 @@ updates:
       - dependency-name: 'tailwindcss'
         update-types: ['version-update:semver-major']
 
+  # Collaboration release fixtures are immutable: scripts/collaboration
+  # hashes each package-lock.json and fails on any change. Dependabot opens
+  # security PRs for directories this file does not list, so list them and
+  # ignore every dependency. `ignore` applies to security updates as well;
+  # the zero limit stops version updates.
+  - package-ecosystem: 'npm'
+    directories:
+      - '/.collaboration/releases/*'
+    schedule:
+      interval: 'monthly'
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: '*'
+
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:

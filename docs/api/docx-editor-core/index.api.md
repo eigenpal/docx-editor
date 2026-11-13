@@ -1802,15 +1802,12 @@ export type DocEdit = {
 
 // @public
 export interface DocEdits {
-    // (undocumented)
     acceptAllRevisions: Record<never, never>;
-    // (undocumented)
     acceptRevision: {
         id: number;
         noteId?: number;
         part?: 'body' | 'footnote' | 'endnote';
     };
-    // (undocumented)
     addComment: {
         author: string;
         target: DocTarget;
@@ -1825,12 +1822,10 @@ export interface DocEdits {
         direction: 'increase' | 'decrease';
         target: DocTarget;
     };
-    // (undocumented)
     applyFormatting: {
         marks: RunFormatting;
         target: DocTarget;
     };
-    // (undocumented)
     applyVariables: {
         values: Record<string, string>;
     };
@@ -1871,7 +1866,6 @@ export interface DocEdits {
         target: DocTarget;
         text: string;
     };
-    // (undocumented)
     mergeParagraphs: {
         target: DocTarget;
     };
@@ -1891,9 +1885,7 @@ export interface DocEdits {
         replaceWith: string;
         target: DocTarget;
     };
-    // (undocumented)
     rejectAllRevisions: Record<never, never>;
-    // (undocumented)
     rejectRevision: {
         id: number;
         noteId?: number;
@@ -1912,18 +1904,15 @@ export interface DocEdits {
         index: number;
         target: DocTarget;
     };
-    // (undocumented)
     replaceText: {
         target: DocTarget;
         text: string;
     };
-    // (undocumented)
     replyComment: {
         author: string;
         commentId: string;
         text: string;
     };
-    // (undocumented)
     resolveComment: {
         commentId: string;
     };
@@ -1937,12 +1926,10 @@ export interface DocEdits {
         styleId: string;
         target: DocTarget;
     };
-    // (undocumented)
     setVariable: {
         name: string;
         value: string;
     };
-    // (undocumented)
     splitParagraph: {
         target: DocTarget;
     };
@@ -2049,6 +2036,7 @@ export type DocumentEditingMode = 'editing' | 'suggesting' | 'viewing';
 
 // @public
 export interface DocumentHandle {
+    readonly loadId: string;
     readonly revision: number;
 }
 
@@ -2250,7 +2238,7 @@ export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'l
 export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.comment-author-required' | 'edit.comment-author-mismatch' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.tracked-deleted-text-only' | 'edit.tracked-foreign-revision-unsupported' | 'edit.tracked-own-pending-change' | 'edit.picture-selected' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.field-unsupported' | 'edit.field-result-unsupported' | 'edit.ooxml-unsupported' | 'edit.style-not-defined' | 'edit.no-styles-defined' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-merge-not-rectangle' | 'edit.table-split-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.preview-active' | 'edit.preview-unsupported' | 'edit.preview-composing' | 'edit.preview-diverged' | 'edit.read-after-commit' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
 
 // @public
-export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorParagraphText, EditorReviewHits {
+export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits, EditorSelectionReads {
     acceptReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
     addComment(text: string, options?: HistoryGroupOptions): ExecResult;
     addComment(text: string, author?: string, options?: HistoryGroupOptions): ExecResult;
@@ -2345,10 +2333,6 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
         readonly styleId?: string;
         readonly underline?: boolean;
     } | null;
-    getSelectionPlacement(): {
-        readonly anchorY: number;
-        readonly pageIndex: number;
-    } | null;
     getTableCellSelection(): {
         readonly cellIds: readonly string[];
         readonly columns: {
@@ -2399,7 +2383,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
     save(): Promise<ArrayBuffer>;
     scrollToBlock(blockId: string, options?: ScrollToAnchorOptions): boolean;
     scrollToPage(pageNumber: number): boolean;
-    selectMatch(match: TextMatch): ExecResult;
+    selectMatch(match: TextMatch | HighlightRange): ExecResult;
     setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
     setActiveScope(scope: ViewScope): void;
     setCommentResolved(key: string, resolved: boolean, options?: HistoryGroupOptions): ExecResult;
@@ -2587,6 +2571,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         text: string;
         wholeWord?: boolean;
     };
+    replaceDocument: ReplaceDocumentRequest;
     replaceImage: {
         data: Uint8Array;
         drawingNodeId?: string;
@@ -2594,7 +2579,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         mime?: SupportedImageMime;
     };
     replaceMatch: {
-        match: TextMatch;
+        match: TextMatch | HighlightRange;
         text: string;
     };
     resolveAllReviewChanges: ResolveReviewChangesOptions;
@@ -2916,12 +2901,6 @@ export interface EditorNoteCommands {
 }
 
 // @public
-export interface EditorParagraphText {
-    getParagraphs(): readonly ParagraphText[];
-    getParagraphText(blockId: string): ParagraphText | null;
-}
-
-// @public
 export interface EditorPointPosition {
     // (undocumented)
     readonly offset: number;
@@ -3043,10 +3022,30 @@ export type EditorScope = {
 };
 
 // @public
-export type EditorSelection = SemanticSelection | {
+export type EditorSelection = {
+    anchor: TextPosition;
+    head: TextPosition;
+} | SemanticSelection | {
     from: DocAnchor;
     to: DocAnchor;
 };
+
+// @public
+export interface EditorSelectionRange {
+    readonly anchor: TextPosition;
+    readonly head: TextPosition;
+    readonly scope: ViewScope;
+}
+
+// @public
+export interface EditorSelectionReads {
+    getCaretRect(): HighlightRect | null;
+    getSelectionPlacement(): {
+        readonly anchorY: number;
+        readonly pageIndex: number;
+    } | null;
+    getSelectionRange(): EditorSelectionRange | null;
+}
 
 // @public
 export interface EditorSnapshot {
@@ -3087,6 +3086,7 @@ export interface EditorSnapshot {
     // (undocumented)
     readonly selection: DocRange | null;
     readonly selectionCollapsed: boolean;
+    readonly selectionRange: EditorSelectionRange | null;
     readonly showBookmarks?: boolean;
     readonly showParagraphMarks?: boolean;
     // (undocumented)
@@ -3141,6 +3141,8 @@ export type ExecResult = {
     compareDocuments?: CompareDocumentsOutcome;
     history?: HistoryGroupOutcome;
     ok: true;
+    replaceDocument?: ReplaceDocumentOutcome;
+    replacements?: ReplaceAllMatchesOutcome;
     revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
 } | {
@@ -3148,6 +3150,8 @@ export type ExecResult = {
     compareDocuments?: CompareDocumentsOutcome;
     ok: false;
     reason: string;
+    replaceDocument?: ReplaceDocumentOutcome;
+    replacements?: ReplaceAllMatchesOutcome;
     revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
     target?: DocTarget;
@@ -3689,9 +3693,6 @@ export function isChromePrintShortcut(event: KeyboardEvent): boolean;
 export function isFontResolver(value: unknown): value is MarkedFontResolver;
 
 // @public
-export function keptTextRanges(paragraph: ParagraphText, from: number, to: number): HighlightRange[];
-
-// @public
 export function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult>;
 
 // @public
@@ -3942,30 +3943,6 @@ export interface ParagraphTabStop {
 }
 
 // @public
-export interface ParagraphText {
-    readonly blockId: string;
-    readonly keptSpans: readonly ParagraphTextSpan[];
-    readonly keptText: string;
-    readonly proofing: readonly ParagraphTextProofing[];
-    readonly text: string;
-}
-
-// @public
-export interface ParagraphTextProofing {
-    readonly keptStart: number;
-    readonly lang: string | null;
-    readonly length: number;
-    readonly noProof: boolean;
-}
-
-// @public
-export interface ParagraphTextSpan {
-    readonly keptStart: number;
-    readonly length: number;
-    readonly start: number;
-}
-
-// @public
 export interface PerformanceDiagnostic extends DiagnosticBase {
     readonly code?: PerformanceDiagnosticCode;
     readonly interaction?: TimingSummary;
@@ -4026,6 +4003,54 @@ export interface RelationshipRecord {
 
 // @public
 export type RenderableImageMime = SupportedImageMime | VectorImageMime;
+
+// @public
+export interface ReplaceAllMatchesOutcome {
+    readonly replaced: number;
+    readonly skipped: number;
+}
+
+// @public
+export type ReplaceDocumentErrorCode = 'invalidRequest' | 'invalidDocument' | 'staleDocument' | 'unavailable' | 'busy' | 'editNotPermitted' | 'editUnsupported';
+
+// @public
+export type ReplaceDocumentOutcome = {
+    readonly changed: boolean;
+    readonly ok: true;
+} | ReplaceDocumentRefusal;
+
+// @public
+export type ReplaceDocumentRefusal = {
+    readonly message: string;
+    readonly ok: false;
+} & ({
+    readonly code: 'editNotPermitted';
+    readonly reason: 'viewing' | 'suggesting' | 'protected';
+} | {
+    readonly code: 'editUnsupported';
+    readonly reason: 'differentMainPart' | 'unsupportedDifference' | 'collaborationRefused';
+} | {
+    readonly code: 'unavailable';
+    readonly reason?: 'collaborationUnavailable';
+} | {
+    readonly code: 'staleDocument';
+    readonly reason: 'otherDocument' | 'edited';
+} | {
+    readonly code: 'invalidRequest';
+    readonly reason?: undefined;
+} | {
+    readonly code: 'invalidDocument' | 'busy';
+    readonly reason?: undefined;
+});
+
+// @public
+export type ReplaceDocumentRefusalReason = 'viewing' | 'suggesting' | 'protected' | 'collaborationUnavailable' | 'differentMainPart' | 'unsupportedDifference' | 'collaborationRefused' | 'otherDocument' | 'edited';
+
+// @public
+export interface ReplaceDocumentRequest {
+    readonly docx: Uint8Array | ArrayBuffer;
+    readonly expected?: DocumentHandle;
+}
 
 // @public
 export type ResolvedChromePrintSettings = Required<ChromePrintSettings>;
@@ -4725,7 +4750,6 @@ export interface SelectedImageState {
     readonly position: DrawingPositionInput | null;
     // (undocumented)
     readonly resourceStatus: ImageResourceState['kind'];
-    // (undocumented)
     readonly rotationDegrees: number;
     readonly shapeFormat: ShapeFormatState | null;
     // (undocumented)
@@ -5065,6 +5089,12 @@ export interface TextMatch {
     readonly scope?: ViewScope;
     readonly start: number;
     readonly text: string;
+}
+
+// @public
+export interface TextPosition {
+    readonly blockId: string;
+    readonly offset: number;
 }
 
 // @public

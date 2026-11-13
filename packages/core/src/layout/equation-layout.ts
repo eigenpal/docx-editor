@@ -9,6 +9,11 @@ import { fitEquationLineExtent, type EquationTextBand } from './equation-line-ex
 import { attachScripts, box, naryLimitsBeside, shifted } from './equation-scripts.ts';
 import { layoutBorderBox } from './equation-border-box.ts';
 import {
+  layoutDelimiter,
+  type EquationDelimiterGeometry,
+  type EquationStretch,
+} from './equation-delimiter.ts';
+import {
   equationAtomSpaces,
   equationTextAtoms,
   equationTextHasOperators,
@@ -77,6 +82,8 @@ export interface EquationTextGeometry extends EquationGeometryBase {
   readonly fontSizePt: number;
   /** The same resolved face used by measurement and the trusted paint sink. */
   readonly runStyle?: ResolvedRunStyle;
+  /** A delimiter character grown to the height of its arguments. */
+  readonly stretch?: EquationStretch;
 }
 
 export interface EquationRowGeometry extends EquationGeometryBase {
@@ -145,6 +152,7 @@ export type EquationGeometry =
   | EquationRadicalGeometry
   | EquationBarGeometry
   | EquationBorderBoxGeometry
+  | EquationDelimiterGeometry
   | EquationScriptGeometry
   | EquationNaryGeometry;
 
@@ -497,7 +505,10 @@ function layoutArgument(
       continue;
     }
     parts.push(null);
-    atoms.push({ atomClass: structureClass(leaf), sizePt: style.fontSizePt });
+    // A delimiter opens and closes like its characters do in text.
+    if (leaf.kind === 'delimiter')
+      atoms.push({ atomClass: 'open', endClass: 'close', sizePt: style.fontSizePt });
+    else atoms.push({ atomClass: structureClass(leaf), sizePt: style.fontSizePt });
   }
   const spaces = equationAtomSpaces(atoms);
   if (spaces.every((space) => space === 0)) {
@@ -732,6 +743,14 @@ function layoutExpression(
         baseline: -top,
       });
     }
+    case 'delimiter':
+      return layoutDelimiter(
+        expression,
+        expression.items.map((item) => layoutExpression(item, measurer, style, scale, cache)),
+        (character) => textGeometry('text', character, measurer, style, scale, cache),
+        MATH_AXIS_HEIGHT * structureSizePt(expression, scale, cache),
+        measurer
+      );
     case 'borderBox':
       return layoutBorderBox(
         expression,

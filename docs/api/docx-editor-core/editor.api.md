@@ -2120,6 +2120,12 @@ export function defineFontResolver<T extends FontResolver>(resolve: T): MarkedFo
 export function disposeLayoutShaping(shaping: LayoutShapingOptions): void;
 
 // @public
+export interface DocumentHandle {
+    readonly loadId: string;
+    readonly revision: number;
+}
+
+// @public
 export interface DocumentRefresh {
     applyUpdate(update: RefreshUpdate): Promise<RefreshResult>;
     cancel(): void;
@@ -3396,6 +3402,20 @@ export interface OutsidePressOptions {
 }
 
 // @public
+export function overlayFrameCssBox(rect: {
+    readonly height: number;
+    readonly left: number;
+    readonly top: number;
+    readonly width: number;
+}, turn: OverlayFrameTurn | undefined, paintScale: number): {
+    readonly height: number;
+    readonly left: number;
+    readonly top: number;
+    readonly transform?: string;
+    readonly width: number;
+};
+
+// @public
 export interface OverlayFrameRect {
     // (undocumented)
     readonly height: number;
@@ -3418,6 +3438,13 @@ export function overlayFrameToSheetCssPixels(layout: SemanticLayout, frame: Over
 };
 
 // @public
+export interface OverlayFrameTurn {
+    readonly height: number;
+    readonly rotationDegrees: number;
+    readonly width: number;
+}
+
+// @public
 export function overlayHostOrigin(surfaceElement: HTMLElement | null): {
     readonly left: number;
     readonly top: number;
@@ -3432,7 +3459,8 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     }): void;
     activeReviewKey(): string | null;
     activeScope(): ViewScope;
-    applyAutomationOps(staged: (relate: (url: string) => string | null) => readonly TreeDocOp[] | null, scope?: StoryScope, packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[], requiresReview?: boolean): TreeApplyResult;
+    applyAutomationOps(staged: (relate: (url: string) => string | null) => readonly TreeDocOp[] | null, scope?: StoryScope, packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[], requiresReview?: boolean,
+    carry?: (selection: SemanticSelection) => SemanticSelection): TreeApplyResult;
     // (undocumented)
     applyDrawingOps(ops: readonly DrawingTreeDocOp[]): TreeApplyResult;
     applyHeaderFooterLifecycle(op: {
@@ -3463,6 +3491,7 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     canInsertTable(rows: number, cols: number): boolean;
     canInsertToc(): boolean;
     canRefreshToc(tocId?: string): boolean;
+    caretClientRect(): HighlightRect | null;
     clearFormatting(): void;
     collaborationSession(): EditorCollaborationSession | null;
     commitReviewOps(run: (historyToken: symbol | undefined) => {
@@ -3584,6 +3613,7 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
     releaseSelection(pin: SelectionPin): void;
     remotePresenceColor(name: string): string | undefined;
+    remoteSelectionPending(): boolean;
     removeToc(tocId?: string): boolean;
     removeTocRefusal(tocId?: string): TocRemovalRefusal | null;
     repaintHighlights(): void;
@@ -3657,6 +3687,10 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     setRevisionMarkup(settings: ResolvedRevisionMarkup): void;
     // (undocumented)
     setRevisionStyles(colors: RevisionStyles | undefined): void;
+    setRunProperties(entries: readonly {
+        attributes?: Record<string, string>;
+        localName: string;
+    }[]): string | null;
     setRunProperty(localName: string, attributes?: Record<string, string>): string | null;
     setSectionProperties(update: {
         readonly anchorParagraphId?: string;
@@ -4190,7 +4224,7 @@ export interface RefreshChangeInput {
 }
 
 // @public
-export type RefreshFailureCode = 'unavailable' | 'collaboration' | 'busy' | 'cancelled' | 'superseded' | 'document-changed' | 'local-edits' | 'out-of-order' | 'invalid-result' | 'invalid-document' | 'input-failed' | 'load-failed' | 'recovery-failed';
+export type RefreshFailureCode = 'unavailable' | 'collaboration' | 'busy' | 'cancelled' | 'superseded' | 'document-changed' | 'local-edits' | 'out-of-order' | 'invalid-result' | 'invalid-document' | 'input-failed' | 'load-failed' | 'recovery-failed' | 'edit-not-permitted' | 'edit-unsupported';
 
 // @public
 export type RefreshHighlightAnimation = AnchorHighlightAnimation;
@@ -4212,18 +4246,42 @@ export interface RefreshLocation {
 }
 
 // @public
+export type RefreshRefusal = (RefreshRefusalFields & {
+    readonly code: 'edit-not-permitted';
+    readonly reason: 'viewing' | 'protected';
+}) | (RefreshRefusalFields & {
+    readonly code: 'edit-unsupported';
+    readonly reason: 'different-main-part' | 'unsupported-difference' | 'collaboration-refused';
+}) | (RefreshRefusalFields & {
+    readonly code: 'unavailable';
+    readonly reason?: 'collaboration-unavailable';
+}) | (RefreshRefusalFields & {
+    readonly code: Exclude<RefreshFailureCode, 'edit-not-permitted' | 'edit-unsupported' | 'unavailable'>;
+    readonly reason?: undefined;
+});
+
+// @public
+export interface RefreshRefusalFields {
+    readonly message: string;
+    // (undocumented)
+    readonly ok: false;
+    readonly recovered?: boolean;
+    // (undocumented)
+    readonly resultId: string;
+}
+
+// @public
+export type RefreshRefusalReason = 'viewing' | 'protected' | 'collaboration-unavailable' | 'different-main-part' | 'unsupported-difference' | 'collaboration-refused';
+
+// @public
 export type RefreshResult = {
     readonly changeInformation: 'available' | 'unavailable';
     readonly changes: readonly RefreshChange[];
     readonly failures: readonly string[];
+    readonly mode: RefreshUpdateMode;
     readonly ok: true;
     readonly resultId: string;
-} | {
-    readonly code: RefreshFailureCode;
-    readonly ok: false;
-    readonly recovered?: boolean;
-    readonly resultId: string;
-};
+} | RefreshRefusal;
 
 // @public
 export interface RefreshSubmission {
@@ -4239,11 +4297,15 @@ export interface RefreshUpdate {
     readonly bytes: ArrayBuffer | Uint8Array;
     readonly changes?: readonly RefreshChangeInput[];
     readonly failures?: readonly string[];
+    readonly mode?: RefreshUpdateMode;
     // (undocumented)
     readonly sequence: number;
     // (undocumented)
     readonly submission: RefreshSubmission;
 }
+
+// @public
+export type RefreshUpdateMode = 'reload' | 'edit';
 
 // @public
 export interface RemoteCaretLabelAnchor {
@@ -4260,6 +4322,54 @@ export interface RemoteCaretLabelHost {
 
 // @public
 export type RenderableImageMime = SupportedImageMime | VectorImageMime;
+
+// @public
+export interface ReplaceAllMatchesOutcome {
+    readonly replaced: number;
+    readonly skipped: number;
+}
+
+// @public
+export type ReplaceDocumentErrorCode = 'invalidRequest' | 'invalidDocument' | 'staleDocument' | 'unavailable' | 'busy' | 'editNotPermitted' | 'editUnsupported';
+
+// @public
+export type ReplaceDocumentOutcome = {
+    readonly changed: boolean;
+    readonly ok: true;
+} | ReplaceDocumentRefusal;
+
+// @public
+export type ReplaceDocumentRefusal = {
+    readonly message: string;
+    readonly ok: false;
+} & ({
+    readonly code: 'editNotPermitted';
+    readonly reason: 'viewing' | 'suggesting' | 'protected';
+} | {
+    readonly code: 'editUnsupported';
+    readonly reason: 'differentMainPart' | 'unsupportedDifference' | 'collaborationRefused';
+} | {
+    readonly code: 'unavailable';
+    readonly reason?: 'collaborationUnavailable';
+} | {
+    readonly code: 'staleDocument';
+    readonly reason: 'otherDocument' | 'edited';
+} | {
+    readonly code: 'invalidRequest';
+    readonly reason?: undefined;
+} | {
+    readonly code: 'invalidDocument' | 'busy';
+    readonly reason?: undefined;
+});
+
+// @public
+export type ReplaceDocumentRefusalReason = 'viewing' | 'suggesting' | 'protected' | 'collaborationUnavailable' | 'differentMainPart' | 'unsupportedDifference' | 'collaborationRefused' | 'otherDocument' | 'edited';
+
+// @public
+export interface ReplaceDocumentRequest {
+    readonly docx: Uint8Array | ArrayBuffer;
+    readonly expected?: DocumentHandle;
+}
 
 // @public
 export function reportAutomationException(editor: object, error: unknown, tracked: boolean): void;
@@ -4779,6 +4889,7 @@ export interface SelectedDrawingOverlayTarget {
     readonly textEditable?: boolean;
     // (undocumented)
     readonly transform: DrawingTransform;
+    readonly turn?: OverlayFrameTurn;
     // (undocumented)
     readonly width: number;
     // (undocumented)
@@ -4827,7 +4938,6 @@ export interface SelectedImageState {
     readonly position: DrawingPositionInput | null;
     // (undocumented)
     readonly resourceStatus: ImageResourceState['kind'];
-    // (undocumented)
     readonly rotationDegrees: number;
     readonly shapeFormat: ShapeFormatState | null;
     // (undocumented)
@@ -5345,7 +5455,7 @@ export interface TableBorderStyleOption {
     readonly labelKey: string;
     readonly previewClass: string;
     // (undocumented)
-    readonly value: TableBorderStyle_2;
+    readonly value: TableBorderStyle;
 }
 
 // @public
@@ -5358,7 +5468,7 @@ export interface TableBorderTargetOption {
 }
 
 // @public
-export type TableBorderTargetValue = TableBorderEdgeTarget_2 | 'none';
+export type TableBorderTargetValue = TableBorderEdgeTarget$1 | 'none';
 
 // @public
 export interface TableBorderWidthOption {
@@ -5383,7 +5493,7 @@ export interface TableCellAddress {
 // @public
 export interface TableChromeDraft {
     // (undocumented)
-    readonly activeTarget: TableBorderEdgeTarget_2;
+    readonly activeTarget: TableBorderEdgeTarget$1;
     // (undocumented)
     readonly spec: TableBorderSpec;
 }
@@ -5392,7 +5502,7 @@ export interface TableChromeDraft {
 export function tableChromeIconPaths(name: keyof typeof GENERATED_ICON_PATHS): readonly string[];
 
 // @public
-export function tableChromeLabelKeyForTarget(target: TableBorderEdgeTarget_2): string;
+export function tableChromeLabelKeyForTarget(target: TableBorderEdgeTarget$1): string;
 
 // @public
 export interface TableChromePick {
@@ -5700,6 +5810,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     applyDrawingFrameOps(scope: StoryScope, ops: readonly DrawingTreeDocOp[]): ImageIntentResult;
     applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
+    applyPackageUpdate(pkg: OoxmlPackage): PackageUpdateResult;
     applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope, options?: TreeApplyOptions): TreeApplyResult;
     applyTreeOpsAtomic(groups: readonly {
         readonly ops: readonly TreeDocOp[];

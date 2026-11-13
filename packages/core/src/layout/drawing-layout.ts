@@ -1031,7 +1031,7 @@ export function buildAnchoredDrawingRecord(options: {
   // Turned text or a turned text box reaches past its box; the painted area holds the turn.
   const turned = textArt
     ? textArtPaintBounds(geometry.paintBounds, textArt)
-    : turnedTextboxBounds(geometry.paintBounds, options.textboxStory);
+    : turnedTextboxBounds(geometry.paintBounds, options.textboxStory, geometry.contentBounds);
   const paintBounds = options.clipRegion ? clipBoxToRegion(turned, options.clipRegion) : turned;
   const hitBounds = hitBoundsOf(paintBounds);
   return Object.freeze({
@@ -1311,7 +1311,7 @@ export function buildInlineDrawingRecord(options: {
   // clip keeps that reach.
   const reach = textArt
     ? textArtPaintBounds(geometry.paintBounds, textArt)
-    : turnedTextboxBounds(geometry.paintBounds, textboxStory);
+    : turnedTextboxBounds(geometry.paintBounds, textboxStory, geometry.contentBounds);
   const horizontalClip = options.deferHorizontalClip
     ? { x: reach.x, width: reach.width }
     : { x: options.contentLeft, width: Math.max(0, options.contentRight - options.contentLeft) };
@@ -1350,7 +1350,9 @@ export function buildInlineDrawingRecord(options: {
     baselineOffset: options.baseline,
     paintBounds,
     hitBounds,
-    geometry: clipGeometryToRegion(geometry, clipRegion),
+    // The line and column clip is no region a shape stays cut at: a shape that paints past its
+    // extent paints over the margins, and a cell clips it again (semantic-table-layout.ts).
+    geometry: clipGeometryToRegion(geometry, clipRegion, false),
     resource: options.input.resource,
     accessibility: drawingAccessibility(options.input.projection),
     ...drawingPaintFields(options.input.projection),

@@ -306,7 +306,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Document settings control spacing between scripts, punctuation compression, and punctuation at line ends. Behavior depends on document fonts, language, and compatibility settings. The editor has no typography controls or vertical Japanese composition.',
+      'Document settings control spacing between scripts, balanced space widths, punctuation compression, and line-end punctuation. Behavior depends on document fonts, language, and compatibility settings. The editor has no typography controls or vertical Japanese composition.',
     docsLink: '/docs/2.x/guides/cjk',
   },
   {
@@ -687,7 +687,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Preset shapes and supported custom shapes display with fills, outlines, and outer shadows. You can set solid fills and outline colors, widths, and dash types, and move or delete shapes. Resizing, shape text, and gradient or pattern fills stay read-only, and unsupported shapes show a placeholder.',
+      'Preset and supported custom shapes and groups display with fills, outlines, outer shadows, rotation, and flips. You can set solid fills and outline colors, widths, and dash types, and move or delete shapes. Resizing, rotation, shape text, gradients, and patterns are read-only, and some rotated or flipped groups show placeholders.',
   },
   {
     id: 'images.legacy-vml',
@@ -1352,7 +1352,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Load server-generated DOCX updates without replacing the editor instance, with optional change highlights. Updates preserve scroll but reset selection and undo history. Local edits, stale results, and collaborative sessions prevent replacement; this API does not compare or merge files.',
+      'Load server-generated DOCX updates without replacing the editor instance, with optional change highlights. An update can apply as one undoable edit that keeps selection and works in collaborative sessions. A reload resets selection and undo history.',
     docsLink: '/docs/2.x/guides/document-refresh',
   },
   {

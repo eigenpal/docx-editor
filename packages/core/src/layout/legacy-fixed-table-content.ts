@@ -3,7 +3,8 @@ import type { SemanticTableCell, SemanticTableRow } from './semantic-table.ts';
 import type { TableBorderBox } from './table-borders.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
 import { cellSpacingGeometry } from './table-cell-spacing.ts';
-import { outerBandPt, withSpacingFrame } from './table-spacing-frame.ts';
+import { withSpacingFrame } from './table-spacing-frame.ts';
+import { outerBandPt } from './table-spacing-band.ts';
 import type { SideRuleTableShape } from './legacy-table-side-rules.ts';
 import { hasSupportedLegacyTableMargins } from './legacy-table-margins.ts';
 import { readTableIndentPt } from './table-widths.ts';
@@ -84,8 +85,12 @@ export function legacyFixedTableContentOffset(
     (spaced && (!tableBorders || shape.bidiVisual || shape.textBox)) ||
     (shape.alignment !== 'left' && shape.alignment !== 'right') ||
     // AutoFit takes it with an absolute width only; captured controls cover no other. A
-    // spaced table takes it with an automatic width too.
-    !(shape.widthType === 'dxa' || ((shape.layoutFixed || spaced) && shape.widthType === 'auto')) ||
+    // spaced table takes it with an automatic or a percentage width too.
+    !(
+      shape.widthType === 'dxa' ||
+      ((shape.layoutFixed || spaced) && shape.widthType === 'auto') ||
+      (spaced && shape.widthType === 'pct')
+    ) ||
     // In a text box only a leading alignment aligns the content; a trailing one keeps the
     // outer edge on the trailing text edge.
     (shape.textBox && shape.alignment !== 'left') ||
@@ -215,6 +220,9 @@ function spacedContentInsetPt(
   const total = shape.columnWidthsPt.reduce((sum, width) => sum + width, 0);
   const right =
     geometry.cellLeft(cell.gridColumn) + geometry.cellWidth(cell.gridColumn, cell.gridSpan);
-  const inset = total - right + insets.right;
+  // The content ends past the text edge by the first column's frame part less the last
+  // column's: measured with 0.5 and 6pt outer rules on either side, absolute and percentage
+  // widths, to within 0.25pt. Equal outer rules leave the content on the text edge.
+  const inset = total - right + insets.right + geometry.leadPt - geometry.trailPt;
   return Number.isFinite(inset) ? inset : undefined;
 }

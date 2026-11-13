@@ -18,9 +18,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * the step that wrote it is still on its undo stack, so it did not undo it. The new write joins
  * that step, so the replica's own undo of the delete still takes the node back out. A replica
  * that reloaded has no undo stack and leaves the key as it is.
+ *
+ * A removal that names a survivor, as a cell merge does, writes the survivor that shows the
+ * removed node's remaining children in a second key, in the same step. That key is lost the same
+ * way, with the deletion or alone, and it is written again the same way, with the survivor this
+ * replica named.
  */
 import * as Y from 'yjs';
-import { NODE_DELETED_FIELD } from './schema.ts';
+import { NODE_DELETED_FIELD, NODE_REPLACED_BY_FIELD } from './schema.ts';
 import { deleteSetRuns, structAt } from './yjs-items.ts';
 
 /** The transaction origin of the writes; no undo stack tracks it, the step it joins does. */
@@ -45,32 +50,123 @@ export function restoreLostTombstones(
   nodes: unknown,
   history: HistoryShape
 ): void {
-  if (transaction.local || history.undoStack.length === 0) return;
+  if (transaction.local) {
+    noteOwnSurvivors(transaction, nodes);
+    return;
+  }
+  if (history.undoStack.length === 0) return;
   const doc = transaction.doc;
-  const records = new Set<Y.Map<unknown>>();
+  // The two keys resolve apart in Yjs, so an update can empty either one of them.
+  const emptied = new Map<Y.Map<unknown>, { deletion: boolean }>();
   Y.iterateDeletedStructs(transaction, transaction.deleteSet, (struct) => {
-    if (!(struct instanceof Y.Item) || struct.parentSub !== NODE_DELETED_FIELD) return;
+    if (!(struct instanceof Y.Item)) return;
+    const deletion = struct.parentSub === NODE_DELETED_FIELD;
+    if (!deletion && struct.parentSub !== NODE_REPLACED_BY_FIELD) return;
     const record = struct.parent as unknown;
-    if (record instanceof Y.Map && record._item?.parent === nodes) {
-      records.add(record as Y.Map<unknown>);
-    }
+    if (!(record instanceof Y.Map) || record._item?.parent !== nodes) return;
+    const seen = emptied.get(record as Y.Map<unknown>);
+    emptied.set(record as Y.Map<unknown>, { deletion: deletion || seen?.deletion === true });
   });
-  const lost: { record: Y.Map<unknown>; step: StackItemShape }[] = [];
-  for (const record of records) {
-    if (record.get(NODE_DELETED_FIELD) !== undefined) continue;
-    const step = ownLostDelete(record, doc.clientID, history);
-    if (step) lost.push({ record, step });
+  const lost: {
+    record: Y.Map<unknown>;
+    step: StackItemShape;
+    deletion: boolean;
+    survivor: string | null;
+  }[] = [];
+  for (const [record, { deletion }] of emptied) {
+    const deleted = record.get(NODE_DELETED_FIELD);
+    if (deletion && deleted === undefined) {
+      const step = ownLostWrite(record, doc.clientID, history, NODE_DELETED_FIELD);
+      if (step) {
+        const survivor = ownLostSurvivor(record, doc.clientID, step.insertions);
+        lost.push({ record, step, deletion: true, survivor });
+        continue;
+      }
+    }
+    // The deletion stands and only the survivor it named is gone: write the survivor again.
+    if (deleted !== true || record.get(NODE_REPLACED_BY_FIELD) !== undefined) continue;
+    const step = ownLostWrite(record, doc.clientID, history, NODE_REPLACED_BY_FIELD);
+    const survivor = step ? ownLostSurvivor(record, doc.clientID, step.insertions) : null;
+    if (step && survivor !== null) lost.push({ record, step, deletion: false, survivor });
   }
   if (lost.length === 0) return;
   doc.transact(() => {
-    for (const { record } of lost) record.set(NODE_DELETED_FIELD, true);
+    for (const { record, deletion, survivor } of lost) writeDeletion(record, deletion, survivor);
   }, TOMBSTONE_ORIGIN);
-  for (const { record, step } of lost) joinStep(step, record);
+  for (const { record, step, deletion, survivor } of lost) {
+    joinWrites(step, record, deletion, survivor);
+  }
 }
 
-/** Add the current deletion write on `record` to `step`, so the step's undo removes it. */
-function joinStep(step: StackItemShape, record: Y.Map<unknown>): void {
-  const written = record._map.get(NODE_DELETED_FIELD);
+/**
+ * The survivors this replica named on each record, by the ID of the `replacedBy` write.
+ *
+ * A cell merge writes the survivor beside the deletion, in one step. The two keys resolve apart,
+ * so an undo from elsewhere can empty both or only the survivor. Left without it, the node
+ * stays deleted with no survivor, and the children only it lists, such as a paragraph a peer
+ * split there at the same time, show nowhere. Yjs collects the content of a write
+ * another client's write replaced, so the value is kept here when this replica writes it.
+ */
+const ownSurvivors = new WeakMap<Y.Map<unknown>, Map<string, string>>();
+
+/** At most this many survivors are kept per record; a dropped one is only not written again. */
+const MAX_SURVIVORS_PER_RECORD = 64;
+
+const writeKey = (id: Y.ID): string => `${id.client}:${id.clock}`;
+
+/** Keep the survivors a local transaction names on node records. */
+function noteOwnSurvivors(transaction: Y.Transaction, nodes: unknown): void {
+  for (const [type, keys] of transaction.changed) {
+    if (!keys.has(NODE_REPLACED_BY_FIELD) || !(type instanceof Y.Map)) continue;
+    if (type._item?.parent !== nodes) continue;
+    const record = type as Y.Map<unknown>;
+    const item = record._map.get(NODE_REPLACED_BY_FIELD);
+    const value = record.get(NODE_REPLACED_BY_FIELD);
+    if (!item || item.deleted || item.id.client !== transaction.doc.clientID) continue;
+    if (typeof value !== 'string' || value.length === 0) continue;
+    let kept = ownSurvivors.get(record);
+    if (!kept) ownSurvivors.set(record, (kept = new Map()));
+    if (kept.size >= MAX_SURVIVORS_PER_RECORD) kept.delete(kept.keys().next().value!);
+    kept.set(writeKey(item.id), value);
+  }
+}
+
+/**
+ * The survivor this replica's lost write named, unless its own survivor holds the key: its own
+ * `replacedBy` write that `writes` holds.
+ */
+function ownLostSurvivor(record: Y.Map<unknown>, client: number, writes: unknown): string | null {
+  // A peer's survivor can hold the key: it goes when that peer undoes, and this one stays.
+  if (ownValueStands(record, client, NODE_REPLACED_BY_FIELD)) return null;
+  const kept = ownSurvivors.get(record);
+  if (!kept) return null;
+  for (let item = record._map.get(NODE_REPLACED_BY_FIELD) ?? null; item; item = item.left) {
+    if (item.parentSub !== NODE_REPLACED_BY_FIELD) continue;
+    if (item.id.client !== client || !item.deleted) continue;
+    if (!Y.isDeleted(writes as never, item.id)) continue;
+    return kept.get(writeKey(item.id)) ?? null;
+  }
+  return null;
+}
+
+function writeDeletion(record: Y.Map<unknown>, deletion: boolean, survivor: string | null): void {
+  if (deletion) record.set(NODE_DELETED_FIELD, true);
+  if (survivor !== null) record.set(NODE_REPLACED_BY_FIELD, survivor);
+}
+
+function joinWrites(
+  step: StackItemShape,
+  record: Y.Map<unknown>,
+  deletion: boolean,
+  survivor: string | null
+): void {
+  if (deletion) joinStep(step, record, NODE_DELETED_FIELD);
+  if (survivor !== null) joinStep(step, record, NODE_REPLACED_BY_FIELD);
+}
+
+/** Add the current write of `field` on `record` to `step`, so the step's undo removes it. */
+function joinStep(step: StackItemShape, record: Y.Map<unknown>, field: string): void {
+  const written = record._map.get(field);
   if (!written) return;
   const added = Y.createDeleteSet();
   added.clients.set(written.id.client, [{ clock: written.id.clock, len: written.length }] as never);
@@ -125,21 +221,22 @@ export function redoRefusedDeletes(
   if (records.size === 0) return;
   const step = pushed();
   for (const record of records) {
-    record.set(NODE_DELETED_FIELD, true);
-    joinStep(step, record);
+    const survivor = ownLostSurvivor(record, doc.clientID, redone.deletions);
+    writeDeletion(record, true, survivor);
+    joinWrites(step, record, true, survivor);
   }
 }
 
-/** The undo step of this replica's deletion write on `record` that Yjs dropped, or null. */
-function ownLostDelete(
+/** The undo step of this replica's write of `field` on `record` that Yjs dropped, or null. */
+function ownLostWrite(
   record: Y.Map<unknown>,
   client: number,
-  history: HistoryShape
+  history: HistoryShape,
+  field: string
 ): StackItemShape | null {
-  for (let item = record._map.get(NODE_DELETED_FIELD) ?? null; item; item = item.left) {
-    if (item.parentSub !== NODE_DELETED_FIELD) continue;
-    // This replica only ever writes `true` here. A dropped write's content can already be
-    // collected, so its value is not read.
+  for (let item = record._map.get(field) ?? null; item; item = item.left) {
+    if (item.parentSub !== field) continue;
+    // A dropped write's content can already be collected, so its value is not read here.
     if (item.id.client !== client || !item.deleted) continue;
     const step = history.undoStack.find((candidate) =>
       Y.isDeleted(candidate.insertions as never, item.id)
@@ -149,9 +246,13 @@ function ownLostDelete(
   return null;
 }
 
-/** Whether this replica's own deletion value holds the key: nothing to write again. */
-function ownValueStands(record: Y.Map<unknown>, client: number): boolean {
-  const holder = record._map.get(NODE_DELETED_FIELD);
+/** Whether this replica's own value holds the key: nothing to write again. */
+function ownValueStands(
+  record: Y.Map<unknown>,
+  client: number,
+  field: string = NODE_DELETED_FIELD
+): boolean {
+  const holder = record._map.get(field);
   return !!holder && !holder.deleted && holder.id.client === client;
 }
 

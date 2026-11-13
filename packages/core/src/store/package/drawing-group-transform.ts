@@ -1,6 +1,8 @@
 // Group-space to shape-space mapping for the children of one `wpg:wgp` group.
 import type { VectorShapeComponent } from './drawing-shape-projection.ts';
-import { compose } from './drawing-gradient.ts';
+import { compose, shapeAffine, type AffineMatrix } from './drawing-gradient.ts';
+import type { GroupTurn } from './drawing-group-frame.ts';
+import { shapePointTransform } from './drawing-shape-geometry.ts';
 
 /**
  * Map a group child's component from child coordinates into the group's extent. A zero scale
@@ -116,4 +118,107 @@ function groupArrowhead(
     const across = -(point.x - end.x) * uy + (point.y - end.y) * ux;
     return { x: endX + along * newUx - across * newUy, y: endY + along * newUy + across * newUx };
   });
+}
+
+/**
+ * Where a member lands in its group, as the extent to project it at, and the offset and
+ * scale that map that projection into the group extent. An upright member projects at its
+ * own extent and scales with the group. A turned member's box maps into the group extent
+ * first, and the member turns about the centre of that box, so a group that scales its axes
+ * unevenly never skews it. A member turned nearer a quarter turn ([45, 135) or [225, 315)
+ * degrees) takes the scale of the other axis on each side, as its turned box lies across
+ * them.
+ */
+export function groupMemberPlacement(
+  child: Readonly<{
+    offset: Readonly<{ x: number; y: number }>;
+    extent: Readonly<{ cx: number; cy: number }>;
+  }>,
+  childOffset: Readonly<{ x: number; y: number }>,
+  scaleX: number,
+  scaleY: number,
+  rotationDegrees: number
+): {
+  readonly extent: Readonly<{ cx: number; cy: number }>;
+  readonly offset: Readonly<{ x: number; y: number }>;
+  readonly scaleX: number;
+  readonly scaleY: number;
+} {
+  const offset = {
+    x: (child.offset.x - childOffset.x) * scaleX,
+    y: (child.offset.y - childOffset.y) * scaleY,
+  };
+  if (rotationDegrees === 0 || !(scaleX > 0) || !(scaleY > 0)) {
+    return { extent: child.extent, offset, scaleX, scaleY };
+  }
+  const across =
+    (rotationDegrees >= 45 && rotationDegrees < 135) ||
+    (rotationDegrees >= 225 && rotationDegrees < 315);
+  const cx = child.extent.cx * (across ? scaleY : scaleX);
+  const cy = child.extent.cy * (across ? scaleX : scaleY);
+  const centreX = offset.x + (child.extent.cx * scaleX) / 2;
+  const centreY = offset.y + (child.extent.cy * scaleY) / 2;
+  return {
+    extent: { cx, cy },
+    offset: { x: centreX - cx / 2, y: centreY - cy / 2 },
+    scaleX: 1,
+    scaleY: 1,
+  };
+}
+
+/**
+ * A group's members under its own turn: flipped, then turned clockwise, about the centre of
+ * the group extent. Null when a member's paint does not follow the turn here yet: a shadow or
+ * a pattern fill. The group then keeps its placeholder.
+ */
+export function turnGroupComponents(
+  components: readonly VectorShapeComponent[],
+  extent: Readonly<{ cx: number; cy: number }>,
+  turn: GroupTurn
+): VectorShapeComponent[] | null {
+  if (components.some((c) => c.shadow || c.shadowOnly || c.fillPattern)) return null;
+  const place = shapePointTransform(extent, turn.flipH, turn.flipV, turn.rotationDegrees);
+  const map = (paths: readonly (readonly Readonly<{ x: number; y: number }>[])[]) =>
+    paths.map((path) => path.map(place));
+  const affine = shapeAffine(extent.cx, extent.cy, turn.flipH, turn.flipV, turn.rotationDegrees);
+  return components.map((component) => ({
+    ...component,
+    subpathsEmu: map(component.subpathsEmu),
+    ...(component.arrowheadsEmu ? { arrowheadsEmu: map(component.arrowheadsEmu) } : {}),
+    ...(component.clipEmu ? { clipEmu: map(component.clipEmu) } : {}),
+    ...(component.fillGradient
+      ? {
+          fillGradient: {
+            ...component.fillGradient,
+            matrix:
+              component.fillGradient.turnsWithShape === false
+                ? movedUpright(component.fillGradient, place)
+                : compose(affine, component.fillGradient.matrix),
+          },
+        }
+      : {}),
+  }));
+}
+
+/**
+ * The matrix of a gradient that keeps its direction (`rotWithShape="0"`) in a turned group:
+ * its box centre moves where the group turn takes it, and its axes stay as they were.
+ */
+function movedUpright(
+  gradient: NonNullable<VectorShapeComponent['fillGradient']>,
+  place: (point: Readonly<{ x: number; y: number }>) => Readonly<{ x: number; y: number }>
+): AffineMatrix {
+  const [a, b, c, d, e, f] = gradient.matrix;
+  // A linear gradient spans its box in point units, centred on its coordinates' midpoint; a
+  // radial one spans the unit square.
+  const [x, y] =
+    gradient.kind === 'linear'
+      ? [
+          (gradient.coords[0]! + gradient.coords[2]!) / 2,
+          (gradient.coords[1]! + gradient.coords[3]!) / 2,
+        ]
+      : [0.5, 0.5];
+  const centre = { x: a * x + c * y + e, y: b * x + d * y + f };
+  const moved = place(centre);
+  return [a, b, c, d, e + moved.x - centre.x, f + moved.y - centre.y];
 }

@@ -56,7 +56,11 @@ import {
   startPlacedChild,
   warnPackagedRowsIn,
 } from './start';
-import { isDocumentContextMenuTarget } from './menu-target';
+import {
+  contextMenuAnchorOf,
+  isDocumentContextMenuTarget,
+  isKeyboardContextMenu,
+} from './menu-target';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
   ContextMenuCopy,
@@ -441,14 +445,11 @@ export const DocxEditorContextMenu = defineComponent({
         // Chrome in the scroller, such as the link popover, keeps the browser's own menu.
         if (!isDocumentContextMenuTarget(scroller, event.target)) return;
         event.preventDefault();
-        const keyboard = event.button === -1 || (event.clientX === 0 && event.clientY === 0);
-        const box = scroller.getBoundingClientRect();
+        const keyboard = isKeyboardContextMenu(event);
         menuScroller = scroller;
         tocId.value = editorRef.value?.snapshot().tocContext?.id ?? null;
         target.value = keyboard || !isHTMLElementNode(event.target) ? null : event.target;
-        anchor.value = keyboard
-          ? { x: box.left + 16, y: box.top + 16 }
-          : { x: event.clientX, y: event.clientY };
+        anchor.value = contextMenuAnchorOf(event, keyboard, editorRef.value, scroller);
       };
       scroller.addEventListener('contextmenu', onContextMenu);
       onCleanup(() => scroller.removeEventListener('contextmenu', onContextMenu));

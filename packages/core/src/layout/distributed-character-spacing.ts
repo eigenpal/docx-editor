@@ -6,7 +6,7 @@
 // character. A line whose slack its spaces can absorb therefore sets as a justified line. The
 // gaps are real span geometry, as in East Asian justification, so paint, PDF export, the caret
 // and hit testing read one layout.
-import { isBalancedSpace } from './balanced-space-widths.ts';
+import { isBalancedSpace, unwidenedStyle } from './balanced-space-widths.ts';
 import { authoredCjkGapMetric } from './cjk-auto-spacing-metric-port.ts';
 import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
 import { knownFamilyReverseGap } from './authored-average-widths.ts';
@@ -39,8 +39,8 @@ export function spaceSlackCapacity(
     // Balanced width affects fitting, but the distribution limit uses the original glyph.
     // This capacity can be negative when balancing already exceeds that limit.
     if (isBalancedSpace(space)) {
-      const style = styleForFontSlot(space.style, space.fontSlot);
-      const natural = measureDisplayText(' ', { ...style, characterSpacingPt: 0 }, measurer);
+      const style = styleForFontSlot(unwidenedStyle(space.style), space.fontSlot);
+      const natural = measureDisplayText(' ', style, measurer);
       return (1 + SPACE_SHARE_LIMIT) * natural - own;
     }
     return SPACE_SHARE_LIMIT * own;

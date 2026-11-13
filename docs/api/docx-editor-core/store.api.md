@@ -1670,6 +1670,14 @@ export type EquationExpression = {
     readonly operator: string;
     readonly upperLimit?: EquationExpression;
 } & EquationControlSource) | ({
+    readonly closing: string;
+    readonly grow: boolean;
+    readonly items: readonly EquationExpression[];
+    readonly kind: 'delimiter';
+    readonly opening: string;
+    readonly separator: string;
+    readonly shape: 'centered' | 'match';
+} & EquationControlSource) | ({
     readonly body: EquationExpression;
     readonly hidden: EquationBoxEdges;
     readonly kind: 'borderBox';
@@ -6354,6 +6362,7 @@ export interface VectorGradient {
     readonly kind: 'linear' | 'radial';
     readonly matrix: AffineMatrix;
     readonly stops: readonly GradientStop[];
+    readonly turnsWithShape?: false;
 }
 
 // @public
@@ -6417,6 +6426,7 @@ export interface VectorShapeProjection {
     readonly fillAlpha?: number;
     readonly fillHex: string | null;
     readonly overflowVisible?: true;
+    readonly rotationDegrees?: number;
     // (undocumented)
     readonly strokeAlpha?: number;
     readonly strokeHex: string | null;

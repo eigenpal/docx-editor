@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A local caret beside text typed in a paragraph looked for that text only in the paragraph and where it followed one move. When one remote update joined a split paragraph back and also brought a concurrent split of the paragraph it joined into, the text showed in that split's new paragraph, the caret found no character, and text mapping put it at the start of the paragraph.",
+  "after": "The caret looks for its character along every move the text follows, up to a fixed number of paragraphs, so it stays beside the typed text in the paragraph that now shows it.",
+  "reason": "Only how this replica places its own caret changes. No shared field, operation, node identity, snapshot, or awareness payload changes.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-remote-caret.test.ts"],
+  "changeset": "caret-follows-moved-typing",
+  "migration": null
+}

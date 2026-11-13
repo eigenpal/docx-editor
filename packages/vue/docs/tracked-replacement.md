@@ -2,11 +2,11 @@
 
 # Replace as a tracked change
 
-Find text with `editor.findMatches` and replace a match with the `replaceMatch` command in suggesting mode. On a server, set `document.changeTrackingMode` and call `insertText(text, 'Replace')`.
+Find text with `editor.findMatches` and replace a match with the `replaceMatch` command in suggesting mode. To replace every match, use the `replaceAllMatches` command. On a server, set `document.changeTrackingMode` and call `insertText(text, 'Replace')`.
 
 ## Replace text in the editor
 
-The following button proposes a replacement for the first body match, so the body must be the open story. `replaceMatch` also accepts a match in the open header, footer, or note, and refuses text-box matches. The editor needs an `author` and `reviewModule()` in its modules, or `setEditingMode('suggesting')` refuses.
+The following button proposes a replacement for the first body match. `replaceMatch` also replaces a match in a header, footer, or note without opening that story. It refuses text-box matches, and it returns `notFound` when the matched text changed after the search. The editor needs an `author` and `reviewModule()` in its modules, or `setEditingMode('suggesting')` refuses.
 
 ```vue
 <script setup lang="ts">
@@ -17,7 +17,7 @@ const editor = useDocxEditor();
 function run() {
   const current = editor.value;
   if (!current || !current.setEditingMode('suggesting').ok) return;
-  // Body matches have no `scope`. replaceMatch needs the match's story open.
+  // Body matches have no `scope`.
   const match = current.findMatches(props.from, { matchCase: true }).find((found) => !found.scope);
   if (!match) return;
   const result = current.exec({ type: 'replaceMatch', match, text: props.to });
@@ -30,7 +30,38 @@ function run() {
 </template>
 ```
 
-The replacement is a tracked change by the editor's `author`. The button prevents its `mousedown` default, so the selection and scroll position do not move. To replace every match in one undo step, run `{ type: 'replaceAllMatches', query, text }` through `exec`.
+The replacement is a tracked change by the editor's `author`. The button prevents its `mousedown` default, so the selection and scroll position do not move.
+
+## Replace every match in the editor
+
+The following button proposes a replacement for every match in the body, tables, headers, footers, notes, and text boxes. One undo step reverts all of them.
+
+```vue
+<script setup lang="ts">
+import { useDocxEditor } from '@docx-editor.dev/vue';
+
+const props = defineProps<{ from: string; to: string }>();
+const editor = useDocxEditor();
+function run() {
+  const current = editor.value;
+  if (!current || !current.setEditingMode('suggesting').ok) return;
+  const result = current.exec({
+    type: 'replaceAllMatches',
+    query: props.from,
+    text: props.to,
+    matchCase: true,
+  });
+  if (result.ok) console.log(`${result.replacements?.replaced ?? 0} proposed`);
+  else console.warn(result.code, result.reason);
+}
+</script>
+
+<template>
+  <button @mousedown.prevent @click="run">Propose {{ to }} everywhere</button>
+</template>
+```
+
+No story needs to be open. The command skips struck text and matches that cannot take plain text, such as field results and locked content controls, and counts them in `result.replacements.skipped`.
 
 ## Replace text on a server
 

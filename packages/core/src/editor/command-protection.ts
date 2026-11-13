@@ -3,7 +3,10 @@ import { partOfNodeId } from './surface-scope.ts';
 import { paragraphTextOf } from '../store/store/tree-op-apply.ts';
 import { isTableEditorCommand } from './table-command-plan.ts';
 import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
-import { readDocumentProtection } from '../store/package/document-protection.ts';
+import {
+  readDocumentProtection,
+  trackedChangesProtectionRefusal,
+} from '../store/package/document-protection.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import {
   formsProtectionCommandRefusal,
@@ -42,8 +45,19 @@ export function contentLockPolicyFor(surface: PaginatedSurface): ContentLockPoli
   return contentLockPolicies.get(surface);
 }
 
-export const TRACKED_CHANGES_AUTHOR_REASON =
-  'this document is protected for tracked changes; their authors cannot change';
+export {
+  TRACKED_CHANGES_AUTHOR_REASON,
+  TRACKED_CHANGES_DECISION_REASON,
+} from '../store/package/document-protection.ts';
+
+/** The commands that accept or reject tracked changes. */
+const REVIEW_DECISION_COMMANDS: ReadonlySet<string> = new Set<EditorCommand['type']>([
+  'resolveAllReviewChanges',
+  'acceptAllRevisions',
+  'rejectAllRevisions',
+  'acceptRevision',
+  'rejectRevision',
+]);
 
 export const FORMS_WRITE_REASON = 'this document is protected; only form fields can be filled';
 
@@ -69,9 +83,14 @@ export function commandProtectionRefusal(
         protection.edit === 'comments' ? COMMENTS_PROTECTION_REASON : READ_ONLY_PROTECTION_REASON,
     };
   }
-  // Tracked-changes protection keeps every change attributed to the person who made it.
-  if (protection.edit === 'trackedChanges' && command.type === 'setReviewChangesAuthor')
-    return { ok: false, code: 'locked', reason: TRACKED_CHANGES_AUTHOR_REASON };
+  // Tracked-changes protection keeps every change pending and attributed to its author.
+  const tracked =
+    command.type === 'setReviewChangesAuthor'
+      ? trackedChangesProtectionRefusal(protection, 'attribute')
+      : REVIEW_DECISION_COMMANDS.has(command.type)
+        ? trackedChangesProtectionRefusal(protection, 'decide')
+        : null;
+  if (tracked) return { ok: false, code: 'locked', reason: tracked };
   if (protection.edit !== 'forms') return null;
   // Table commands check their complete planned ops, including explicit off-caret targets.
   if (isTableEditorCommand(command)) return null;
@@ -89,12 +108,18 @@ export function commandProtectionRefusal(
       text = command.text;
       paste = true;
       break;
+    case 'replaceText':
+      intent = 'text';
+      text = command.text;
+      paste = true;
+      break;
     case 'deleteText':
     case 'cut':
       intent = 'text';
       break;
     case 'toggleMark':
     case 'setMarkAttr':
+    case 'applyFormatting':
     case 'pasteFormatting':
       intent = 'runFormat';
       break;

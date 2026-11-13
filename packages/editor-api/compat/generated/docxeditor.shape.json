@@ -80,6 +80,26 @@
             }
           ]
         },
+        "insertFileFromBase64": {
+          "uid": "DocxEditor.Body#insertFileFromBase64",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "base64File",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Replace\" | \"Start\" | \"End\""
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
         "insertParagraph": {
           "uid": "DocxEditor.Body#insertParagraph",
           "kind": "method",

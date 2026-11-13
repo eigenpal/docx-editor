@@ -160,15 +160,15 @@ test('a selected shape refuses picture commands up front', async () => {
   try {
     pressAt(container, editor, 380, gapY(editor));
     expect(editor.getSelectedImage!()).not.toBeNull();
-    for (const command of [
-      { type: 'transformImage', action: 'rotateCW' },
-      { type: 'replaceImage', data: new Uint8Array([1]) },
-      { type: 'setImageProperties', hyperlink: 'https://example.com' },
+    for (const [command, reason] of [
+      [{ type: 'transformImage', action: 'rotateCW' }, 'rotate and flip are'],
+      [{ type: 'replaceImage', data: new Uint8Array([1]) }, 'replacing the picture is'],
+      [{ type: 'setImageProperties', hyperlink: 'https://example.com' }, 'hyperlinks are'],
     ] as const) {
       expect(editor.can(command as Parameters<typeof editor.can>[0])).toMatchObject({
         ok: false,
         code: 'unsupported',
-        reason: 'this operation is not supported for shapes',
+        reason: `${reason} not supported for shapes`,
       });
     }
   } finally {

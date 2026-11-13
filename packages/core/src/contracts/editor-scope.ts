@@ -117,7 +117,7 @@ export interface EditorExecOptions extends HistoryGroupOptions {
   readonly scope?: EditorScope;
   /**
    * An open handle from this editor. Supported for synchronous formatting commands, tracked
-   * proposals (`proposeInsertion`, `proposeDeletion`, `proposeReplacement`),
+   * proposals (`proposeInsertion`, `proposeDeletion`, `proposeReplacement`), `replaceMatch`,
    * `resolveAllReviewChanges`, and `setReviewChangesAuthor`. Other commands refuse a handle
    * with `code: 'unsupported'`.
    * Intervening writes and undo/redo can split a gesture; inspect `ExecResult.history`.

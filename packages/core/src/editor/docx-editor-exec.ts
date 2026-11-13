@@ -5,9 +5,9 @@ import { execBookmarkCommand } from './docx-editor-bookmarks.ts';
 import { CHART_CLIPBOARD_REASON, fragmentRefusalOf } from './clipboard-object-selection.ts';
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
-import { isMissingAuthorRefusal } from './docx-editor-author.ts';
-import { isCollaborationFailureCode } from '../collaboration/index.ts';
 import { execReplaceMatch } from './docx-editor-replace-match.ts';
+import { execReplaceAllMatches } from './docx-editor-replace-all.ts';
+import { execSelectionEdit, runFormatRefusal } from './docx-editor-selection-edits.ts';
 // Command dispatch for `createDocxEditor` (editor seam).
 //
 // One switch, one vocabulary: every `EditorCommand` the gate admitted lands here and is
@@ -20,11 +20,12 @@ import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { writeClipboardRich } from './clipboard-write.ts';
 import { hostElementOfEditor, hostWindowOf } from './host-realm.ts';
-import { MARKS, isSurfaceSelection, resolveMarkAttr } from './docx-editor-support.ts';
+import { MARKS, resolveMarkAttr, textSelectionOf } from './docx-editor-support.ts';
 import { NOTHING_TO_COPY_FORMATTING, NOTHING_TO_PAINT } from './surface-format-painter-contract.ts';
 import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import { storyScopeOfNodeId } from './surface-scope.ts';
+import { openTextboxForSelection, textboxSelectionRefusal } from './review-story-entry.ts';
 import type { StoryScope } from '@docx-editor.dev/core/store';
 import { paragraphFragmentsOfBlocks } from '@docx-editor.dev/core/layout';
 import {
@@ -59,20 +60,6 @@ import { execShapeFormatCommand, isShapeFormatCommand } from './shape-format-com
  * verb that changed nothing), and `null` when it completed normally — the caller then
  * derives `changed` from the model revision rather than trusting the verb.
  */
-/**
- * A refused run format as a command result. A missing author or the generated table of
- * contents is the caller's to fix, as `insertText` reports it; a collaboration session that
- * is not ready is a retry, as the contract documents; anything else is a lock.
- */
-function runFormatRefusal(reason: string): ExecResult {
-  if (isCollaborationFailureCode(reason)) return { ok: false, code: 'unsupported', reason };
-  const callerFixable =
-    isMissingAuthorRefusal(reason) ||
-    reason === 'the table of contents is generated and read-only' ||
-    reason === FIELD_CODE_INPUT_REFUSAL;
-  return { ok: false, code: callerFixable ? 'invalidArgs' : 'locked', reason };
-}
-
 export function execEditorCommand(
   mounted: PaginatedSurface,
   command: EditorCommand,
@@ -390,6 +377,12 @@ export function execEditorCommand(
     case 'setChartFormat':
     case 'setChartColor':
       return execChartCommand(mounted, command, options?.translate);
+    case 'replaceText':
+    case 'applyFormatting':
+    case 'splitParagraph':
+    case 'mergeParagraphs':
+    case 'removeTabMark':
+      return execSelectionEdit(mounted, command);
     case 'insertText':
       mounted.type(command.text);
       if (
@@ -438,6 +431,8 @@ export function execEditorCommand(
     }
     case 'replaceMatch':
       return execReplaceMatch(mounted, command);
+    case 'replaceAllMatches':
+      return execReplaceAllMatches(mounted, command);
     case 'undo':
       mounted.undo();
       break;
@@ -605,13 +600,19 @@ export function execEditorCommand(
       // host driving the editor from its own chrome. `'centerIfNeeded'` keeps an
       // already-visible target still and centres one it has to travel to, rather than
       // stopping the moment it clears the bottom edge.
-      if ('range' in command && isSurfaceSelection(command.range)) {
+      const text = 'range' in command ? textSelectionOf(command.range) : null;
+      if (text?.kind === 'invalid') return { ok: false, code: 'invalidArgs', reason: text.reason };
+      if (text?.kind === 'ok') {
+        const range = text.selection;
         // Open the story the range is in first, as the anchor form below does: a header,
         // footer or note range selected from the body would otherwise strand the caret.
-        const entered = enterStoryForSelection(mounted, command.range);
+        const boxRefusal = textboxSelectionRefusal(mounted, range);
+        if (boxRefusal) return { ok: false, code: 'unsupported', reason: boxRefusal };
+        const entered = enterStoryForSelection(mounted, range);
         if (!entered.ok) return entered;
-        mounted.setSelection(command.range);
-        mounted.revealPosition(command.range.head, { block: 'centerIfNeeded' });
+        openTextboxForSelection(mounted, range);
+        mounted.setSelection(range);
+        mounted.revealPosition(range.head, { block: 'centerIfNeeded' });
         // Selection is not document state: nothing to save changed.
         return { ok: true, changed: false };
       }

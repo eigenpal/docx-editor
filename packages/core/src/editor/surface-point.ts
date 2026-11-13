@@ -1,5 +1,8 @@
 import type { PointerHost, SurfacePointHit } from './surface-pointer.ts';
 import type { SemanticLayout } from '../layout/semantic-records.ts';
+import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
+import { turnedInlineDrawings } from '../layout/turned-inline-drawing-hit.ts';
+import { drawingPaintsPastBox } from '../layout/vector-shape-hit.ts';
 import {
   findDrawingOverlayFrameInLayout,
   pageAtY,
@@ -105,11 +108,14 @@ export type BehindDrawingHit = NonNullable<SemanticHit['drawing']> & {
 };
 
 /**
- * The body drawing behind the text that a press at a client point reaches, as the body's own
- * hit test resolves it: outside every text line, page margins included. Null in a note, on a
- * header or footer band, over a front drawing, and over a read-only position. With a header or
- * footer open, its own drawing that the press reaches instead, past its band too (a watermark).
- * That drawing names its page, which can be another page that shows the story.
+ * The body drawing that a press at a client point reaches by geometry, as the body's own hit
+ * test resolves it, page margins included: a drawing behind the text, outside every text line,
+ * or a turned shape, or a shape that paints past its box, on what it paints, which can lie past
+ * its box and past the text column.
+ * Null in a note, on a header or footer band, over another front drawing, and over a read-only
+ * position. With a header or footer open, its own drawing that the press reaches instead, past
+ * its band too (a watermark). That drawing names its page, which can be another page that
+ * shows the story.
  */
 export function behindDrawingAt(
   host: PointerHost,
@@ -130,7 +136,13 @@ export function behindDrawingAt(
   const sheet = { x: (clientX - rect.left) / scale, y: (clientY - rect.top) / scale };
   const index = pageAtY(layout, sheet.y);
   const page = layout.pages[index];
-  if (!page?.anchoredDrawings?.some((drawing) => drawing.behindDocument)) return null;
+  if (!page) return null;
+  const turned = turnedInlineDrawings(page.fragments);
+  const reachable = (drawing: AnchoredDrawingRecord) =>
+    drawing.behindDocument ||
+    !!drawing.vectorShape?.rotationDegrees ||
+    drawingPaintsPastBox(drawing);
+  if (!page.anchoredDrawings?.some(reachable) && turned.length === 0) return null;
   const x = sheet.x - host.pageOffsetX(index);
   const box = page.box;
   if (x < box.x || x >= box.x + box.width || sheet.y < box.y || sheet.y >= box.y + box.height)
@@ -149,6 +161,8 @@ export function behindDrawingAt(
   const hit = hitTestPage(layout, index, point, options);
   const drawing = hit?.drawing;
   if (!drawing || host.isReadOnlyPosition?.(hit.position)) return null;
-  const record = page.anchoredDrawings.find((d) => d.drawingNodeId === drawing.drawingNodeId);
-  return record?.behindDocument ? drawing : null;
+  const id = drawing.drawingNodeId;
+  const record = page.anchoredDrawings?.find((d) => d.drawingNodeId === id);
+  if (record) return reachable(record) ? drawing : null;
+  return turned.some((entry) => entry.drawing.drawingNodeId === id) ? drawing : null;
 }

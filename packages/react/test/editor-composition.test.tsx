@@ -33,6 +33,7 @@ import { useDocxEditor } from '../src/editor/context.ts';
 import { useEditorState } from '../src/editor/useEditorState.ts';
 import { useEditorCommand, type EditorCommandState } from '../src/editor/useEditorCommand.ts';
 import { useEditorEvent } from '../src/editor/useEditorEvent.ts';
+import { useEditorCaret, type EditorCaret } from '../src/editor/useEditorCaret.ts';
 import { useReviewAuthors } from '../src/editor/useReviewAuthors.ts';
 import {
   DocxEditorColorByChangeType,
@@ -274,6 +275,37 @@ describe('useEditorEvent', () => {
       instance!.exec({ type: 'insertText', text: 'X' });
     });
     expect(changes.length).toBe(countAfterMount + 1);
+  });
+});
+
+describe('useEditorCaret', () => {
+  test('names the caret paragraph as the selection read does', () => {
+    const carets: Array<EditorCaret | null> = [];
+    let instance: DocxEditorInstance | null = null;
+    function Probe() {
+      carets.push(useEditorCaret());
+      return null;
+    }
+    render(
+      <DocxEditorRoot
+        document={SOURCE}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <Probe />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    act(() => {
+      instance!.focus();
+      instance!.exec({ type: 'insertText', text: 'X' });
+    });
+    const caret = carets.at(-1)!;
+    const head = instance!.getSelectionRange()!.head;
+    expect(caret).toEqual({ blockId: head.blockId, paragraphId: head.blockId, offset: head.offset });
   });
 });
 

@@ -191,7 +191,7 @@ export interface SurfacePointHit {
 
 export interface PointerController {
   pointAt(clientX: number, clientY: number): SurfacePointHit | null;
-  /** The body drawing behind the text a press there reaches (`behindDrawingAt`). */
+  /** The body drawing a press there reaches by geometry (`behindDrawingAt`). */
   behindDrawingAt(clientX: number, clientY: number): ReturnType<typeof behindDrawingAt>;
   /**
    * True while a gesture owns the selection.

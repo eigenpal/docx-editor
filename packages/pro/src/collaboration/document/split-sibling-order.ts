@@ -191,10 +191,24 @@ export function splitSiblingRanks(
     let first = start;
     let relistings = 0;
     const members = blocks.flatMap((block) => block.items);
+    // Items listed after a put-back sibling later, as a paragraph split off it, sit between
+    // it and its removed entry. They go with the sibling once the walk reaches it.
+    let pending: Y.Item[] = [];
     for (let at = start; at > 1;) {
       const item = items[at - 1]!;
       const removed = members.find((member) => member.deleted && inItem(item.rightOrigin, member));
-      if (!removed) break;
+      if (!removed) {
+        // A later split of the put-back sibling, earlier in it, goes in right before the
+        // paragraph an earlier split put after it.
+        const splitAgain =
+          !item.deleted &&
+          pending.some((follower) => inItem(item.rightOrigin, follower)) &&
+          !(item.origin && head.origin && Y.compareIDs(item.origin, head.origin));
+        if (!splitAgain) break;
+        at -= 1;
+        pending.unshift(item);
+        continue;
+      }
       at -= 1;
       if (item.deleted) {
         members.push(item);
@@ -202,9 +216,19 @@ export function splitSiblingRanks(
       }
       // Its left origin is the paragraph the run follows, also when a paragraph listed later
       // went in between, as a split at the start of that paragraph puts one.
-      if (!item.origin || !head.origin || !Y.compareIDs(item.origin, head.origin)) break;
+      if (!item.origin || !head.origin || !Y.compareIDs(item.origin, head.origin)) {
+        pending.unshift(item);
+        continue;
+      }
       if (!listedAgain(nodes, item, removed)) break;
-      blocks.unshift({ head: item, items: [item] });
+      const block: Block = { head: item, items: [item] };
+      for (const follower of pending)
+        if (block.items.some((member) => inItem(follower.origin, member)))
+          block.items.push(follower);
+      // A listed item that follows no paragraph of the block is not the block's.
+      if (block.items.length !== pending.length + 1) break;
+      pending = [];
+      blocks.unshift(block);
       relistings += 1;
       first = at;
     }

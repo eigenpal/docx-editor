@@ -169,6 +169,135 @@ test('a standalone vertical line exports with a clip one stroke wide', async () 
   expect(commands).toContain('0 0 m 0 50 l\nS');
 });
 
+test('a turned shape paints turned about its extent centre, unclipped by its extent', async () => {
+  // A 100pt x 50pt rectangle turned a quarter turn: it paints 50pt wide and 100pt tall.
+  const bytes = docx(`<w:p><w:r><w:drawing
+    xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+    xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+    xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+    <wp:inline><wp:extent cx="1270000" cy="635000"/><wp:effectExtent l="0" t="0" r="0" b="0"/>
+    <wp:docPr id="1" name="Turned"/>
+    <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+    <wps:wsp><wps:spPr><a:xfrm rot="5400000"><a:off x="0" y="0"/><a:ext cx="1270000" cy="635000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>
+    </wps:spPr></wps:wsp></a:graphicData></a:graphic></wp:inline>
+    </w:drawing></w:r></w:p>`);
+  const result = await exportPdf(bytes, { useSystemFonts: false });
+  expect(result.diagnostics).toEqual([]);
+  const pdf = await PDFDocument.load(result.bytes);
+  const commands = pdf.context
+    .enumerateIndirectObjects()
+    .flatMap(([, value]) =>
+      value instanceof PDFRawStream
+        ? [new TextDecoder().decode(decodePDFRawStream(value).decode())]
+        : []
+    )
+    .find((text) => text.includes('ShapeAlpha'))!;
+  // Turned about (50, 25): x from 25 to 75, y from -25 to 75, above the extent's top.
+  expect(commands).toContain('75 -25 m 75 75 l 25 75 l 25 -25 l h');
+  // The clip spans the turned shape: 25pt above the 50pt extent and 25pt below it.
+  const match = /q (\S+) (\S+) (\S+) (\S+) re W n\n\S+ 0 0 \S+ \S+ (\S+) cm/.exec(commands)!;
+  const [, clipY, , clipHeight, top] = match.slice(1, 6).map(Number);
+  expect(clipHeight).toBeCloseTo(100, 3);
+  expect(clipY! + clipHeight!).toBeCloseTo(top! + 25, 3);
+});
+
+/** The PDF content stream of a one-drawing document whose inline shape is `graphic`. */
+async function inlineShapeCommands(effect: string, xfrmExtent: string, body: string) {
+  const bytes = docx(`<w:p><w:r><w:drawing
+    xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+    xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+    xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+    <wp:inline><wp:extent ${xfrmExtent}/><wp:effectExtent ${effect}/>
+    <wp:docPr id="1" name="Upright"/>
+    <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+    <wps:wsp><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext ${xfrmExtent}/></a:xfrm>
+    ${body}</wps:spPr></wps:wsp></a:graphicData></a:graphic></wp:inline>
+    </w:drawing></w:r></w:p>`);
+  const result = await exportPdf(bytes, { useSystemFonts: false });
+  expect(result.diagnostics).toEqual([]);
+  const pdf = await PDFDocument.load(result.bytes);
+  const commands = pdf.context
+    .enumerateIndirectObjects()
+    .flatMap(([, value]) =>
+      value instanceof PDFRawStream
+        ? [new TextDecoder().decode(decodePDFRawStream(value).decode())]
+        : []
+    )
+    .find((text) => text.includes('ShapeAlpha'))!;
+  const match = /q (\S+) (\S+) (\S+) (\S+) re W n\n\S+ 0 0 \S+ \S+ (\S+) cm/.exec(commands)!;
+  const [clipX, clipY, clipWidth, clipHeight, top] = match.slice(1, 6).map(Number);
+  return {
+    clipX: clipX!,
+    clipY: clipY!,
+    clipWidth: clipWidth!,
+    clipHeight: clipHeight!,
+    top: top!,
+  };
+}
+
+test('an upright callout paints its tail below its extent', async () => {
+  // A 100 x 40pt callout: its default tail reaches 45pt down, 5pt past the extent.
+  const clip = await inlineShapeCommands(
+    'l="0" t="0" r="0" b="0"',
+    'cx="1270000" cy="508000"',
+    '<a:prstGeom prst="wedgeRectCallout"><a:avLst/></a:prstGeom>' +
+      '<a:solidFill><a:srgbClr val="0080FF"/></a:solidFill>'
+  );
+  expect(clip.clipHeight).toBeCloseTo(45, 3);
+  expect(clip.clipWidth).toBeCloseTo(100, 3);
+});
+
+test('a negative effect extent does not cut an upright shape', async () => {
+  // A 100 x 40pt rectangle with a 10pt negative effect extent on every side paints whole.
+  const clip = await inlineShapeCommands(
+    'l="-127000" t="-127000" r="-127000" b="-127000"',
+    'cx="1270000" cy="508000"',
+    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+      '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>'
+  );
+  expect(clip.clipWidth).toBeCloseTo(100, 3);
+  expect(clip.clipHeight).toBeCloseTo(40, 3);
+});
+
+test('a turned group paints its members turned about its extent centre, unclipped', async () => {
+  // A 100pt x 50pt group, turned a quarter turn, holding one rectangle that fills it in 200 x
+  // 100 child units: the member paints 50pt wide and 100pt tall, as a turned shape does.
+  const bytes = docx(`<w:p><w:r><w:drawing
+    xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+    xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+    xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+    xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup">
+    <wp:inline><wp:extent cx="1270000" cy="635000"/><wp:effectExtent l="0" t="0" r="0" b="0"/>
+    <wp:docPr id="1" name="Turned group"/>
+    <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup">
+    <wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm rot="5400000"><a:off x="0" y="0"/>
+    <a:ext cx="1270000" cy="635000"/><a:chOff x="0" y="0"/><a:chExt cx="2540000" cy="1270000"/>
+    </a:xfrm></wpg:grpSpPr><wps:wsp><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="0" y="0"/>
+    <a:ext cx="2540000" cy="1270000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:ln><a:noFill/></a:ln></wps:spPr>
+    <wps:bodyPr/></wps:wsp></wpg:wgp></a:graphicData></a:graphic></wp:inline>
+    </w:drawing></w:r></w:p>`);
+  const result = await exportPdf(bytes, { useSystemFonts: false });
+  expect(result.diagnostics).toEqual([]);
+  const pdf = await PDFDocument.load(result.bytes);
+  const commands = pdf.context
+    .enumerateIndirectObjects()
+    .flatMap(([, value]) =>
+      value instanceof PDFRawStream
+        ? [new TextDecoder().decode(decodePDFRawStream(value).decode())]
+        : []
+    )
+    .find((text) => text.includes('ShapeAlpha'))!;
+  // Turned about (50, 25): x from 25 to 75, y from -25 to 75, above the extent's top.
+  expect(commands).toContain('75 -25 m 75 75 l 25 75 l 25 -25 l h');
+  // The clip spans the turned member: 25pt above the 50pt extent and 25pt below it.
+  const match = /q (\S+) (\S+) (\S+) (\S+) re W n\n\S+ 0 0 \S+ \S+ (\S+) cm/.exec(commands)!;
+  const [, clipY, , clipHeight, top] = match.slice(1, 6).map(Number);
+  expect(clipHeight).toBeCloseTo(100, 3);
+  expect(clipY! + clipHeight!).toBeCloseTo(top! + 25, 3);
+});
+
 test('geometry outside Core admission still refuses strict export', async () => {
   await expect(exportPdf(input(true, true))).rejects.toMatchObject({
     diagnostics: expect.arrayContaining([expect.objectContaining({ code: 'drawing' })]),

@@ -1,6 +1,9 @@
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
-import { readDocumentProtection } from '../package/document-protection.ts';
+import {
+  readDocumentProtection,
+  trackedChangesProtectionRefusal,
+} from '../package/document-protection.ts';
 import type { TreeDocOp } from './tree-op-types.ts';
 import type { TreeOpRejection } from './tree-op-validate.ts';
 
@@ -51,7 +54,11 @@ export function documentProtectionRefusal(
   if (protection.edit === 'readOnly') return 'locked';
   if (protection.edit === 'comments' && op?.op !== 'insertCommentMarker') return 'locked';
   // Tracked-changes protection keeps each change attributed to the person who made it.
-  if (protection.edit === 'trackedChanges' && op?.op === 'setRevisionAttribution') return 'locked';
+  if (
+    op?.op === 'setRevisionAttribution' &&
+    trackedChangesProtectionRefusal(protection, 'attribute')
+  )
+    return 'locked';
   return null;
 }
 

@@ -480,13 +480,13 @@ describe('wps vector shape projection', () => {
     }
   });
 
-  // `flipH`/`flipV` are `xsd:boolean`. Shapes now honor legal flips, while group-level
-  // transforms remain narrower. Invalid spellings refuse instead of painting unflipped.
+  // `flipH`/`flipV` are `xsd:boolean`. Shapes and groups honor legal flips. Invalid spellings
+  // refuse instead of painting unflipped.
   //
   // Four call sites read a flip: `flipH` and `flipV` on a shape's own `a:xfrm`, and the same
   // pair on a group's `wpg:grpSpPr/a:xfrm`. The group pair is the lane this file exists for,
   // so every spelling runs against all four.
-  test('legal shape flips paint; group flips and schema-invalid spellings still refuse', () => {
+  test('legal shape and group flips paint; schema-invalid spellings still refuse', () => {
     const spellings = [
       // Legal `xsd:boolean` false, including the forms the fixed `whiteSpace="collapse"`
       // facet makes valid. The XML reader does not trim, so the helper has to.
@@ -547,8 +547,7 @@ describe('wps vector shape projection', () => {
           }).values(),
         ][0]?.vectorShape;
         const label = `${site.name}=${JSON.stringify(value)}`;
-        const supportedShapeFlip =
-          site.name.startsWith('shape ') && ['1', 'true'].includes(value?.trim() ?? '');
+        const supportedShapeFlip = ['1', 'true'].includes(value?.trim() ?? '');
         expect(`${label}: ${shape !== null && shape !== undefined}`).toBe(
           `${label}: ${paints || supportedShapeFlip}`
         );
@@ -559,8 +558,9 @@ describe('wps vector shape projection', () => {
   // `rot` is `ST_Angle`, which derives from `xsd:int` — so it carries the same fixed
   // `whiteSpace="collapse"` facet as the flip flags, plus a sign and leading zeros. Every
   // spelling of zero below is a shape Word paints upright; comparing the raw string to `'0'`
-  // refused all but the bare one. Both `a:xfrm` sites read `rot`, so both are driven.
-  test('every legal spelling of a zero rotation paints, and any real angle refuses', () => {
+  // refused all but the bare one. Both `a:xfrm` sites read `rot`, so both are driven. A shape
+  // and a group turn by any legal angle.
+  test('every legal spelling of a rotation paints, on a shape and on a group', () => {
     const spellings = [
       [undefined, true],
       ['0', true],
@@ -570,7 +570,7 @@ describe('wps vector shape projection', () => {
       ['+0', true],
       ['-0', true],
       ['000000', true],
-      // A real angle: the engine cannot paint a rotated vector shape.
+      // A real angle: a shape turns, a group refuses.
       ['60000', false],
       ['-60000', false],
       ['1', false],
@@ -599,7 +599,10 @@ describe('wps vector shape projection', () => {
           }).values(),
         ][0]?.vectorShape;
         const label = `${site.name}=${JSON.stringify(value)}`;
-        expect(`${label}: ${shape !== null && shape !== undefined}`).toBe(`${label}: ${paints}`);
+        const turnedShape = /^[+-]?\d+$/.test(value ?? '');
+        expect(`${label}: ${shape !== null && shape !== undefined}`).toBe(
+          `${label}: ${paints || turnedShape}`
+        );
       }
     }
   });
@@ -817,6 +820,7 @@ describe('wps vector shape projection', () => {
     expect(shape.components?.[0]!.subpathsEmu[0]!.length).toBeGreaterThanOrEqual(8);
     expect(shape.components?.[1]!.subpathsEmu[0]![0]).toEqual({ x: 100000, y: 0 });
 
+    // A turned group paints turned (see drawing-turned-group-projection.test.ts).
     const rotated = parsePart(
       `<w:p><w:r>${drawing.replace('<a:xfrm><a:chOff', '<a:xfrm rot="60000"><a:chOff')}</w:r></w:p>`
     );
@@ -825,8 +829,8 @@ describe('wps vector shape projection', () => {
         ...indexInlineDrawingProjectionsInPart(rotated, {
           resolveSchemeColor: () => '4472C4',
         }).values(),
-      ][0]!.vectorShape
-    ).toBeNull();
+      ][0]!.vectorShape?.rotationDegrees
+    ).toBe(1);
 
     const childFlipped = parsePart(
       `<w:p><w:r>${drawing.replace(

@@ -209,7 +209,9 @@ function rendererLayout(
 
 /**
  * Paint bounds that hold a text box shape: grown by the outer half of a centred outline, then
- * turned about the box centre.
+ * turned about the frame centre. `frame` is the extent the outline's shares and the turn use;
+ * `bounds` is the paint box with its effect extents, which the result also holds. Without
+ * `frame`, `bounds` is the frame.
  */
 export function turnedTextboxBounds(
   bounds: LayoutBox,
@@ -223,7 +225,8 @@ export function turnedTextboxBounds(
         readonly shadow?: Readonly<{ dx: number; dy: number }>;
       }
     | null
-    | undefined
+    | undefined,
+  frame: LayoutBox = bounds
 ): LayoutBox {
   if (!story) return bounds;
   // An outline polygon can leave its box, as a callout's tail does.
@@ -243,14 +246,23 @@ export function turnedTextboxBounds(
   const grown =
     reach || left < 0 || top < 0 || right > 1 || bottom > 1
       ? Object.freeze({
-          x: bounds.x + left * bounds.width - reach,
-          y: bounds.y + top * bounds.height - reach,
-          width: (right - left) * bounds.width + 2 * reach,
-          height: (bottom - top) * bounds.height + 2 * reach,
+          x: frame.x + left * frame.width - reach,
+          y: frame.y + top * frame.height - reach,
+          width: (right - left) * frame.width + 2 * reach,
+          height: (bottom - top) * frame.height + 2 * reach,
         })
-      : bounds;
+      : frame;
+  // The shape turns about the frame's centre, which a tail moves off the grown box's centre.
   const degrees = story.chromeRotationDegrees;
-  const turned = degrees ? rotatedBounds(grown, degrees) : grown;
+  const shape = degrees ? boundsTurnedAbout(grown, degrees, frame) : grown;
+  // The painted area holds the shape, and the effect extents' box around the frame when the
+  // drawing has one.
+  const sameBox =
+    bounds.x === frame.x &&
+    bounds.y === frame.y &&
+    bounds.width === frame.width &&
+    bounds.height === frame.height;
+  const turned = shape === frame ? bounds : sameBox ? shape : unionOf(bounds, shape);
   // A shadow repeats the shape at a page offset; the painted area holds both.
   const shadow = story.shadow;
   if (!shadow || (shadow.dx === 0 && shadow.dy === 0)) return turned;
@@ -301,6 +313,43 @@ export function textArtPaintBounds(box: LayoutBox, textArt: DrawingTextArtRecord
     width: maxX - minX,
     height: maxY - minY,
   });
+}
+
+/** The smallest box holding both boxes. */
+function unionOf(a: LayoutBox, b: LayoutBox): LayoutBox {
+  const x = Math.min(a.x, b.x),
+    y = Math.min(a.y, b.y);
+  return Object.freeze({
+    x,
+    y,
+    width: Math.max(a.x + a.width, b.x + b.width) - x,
+    height: Math.max(a.y + a.height, b.y + b.height) - y,
+  });
+}
+
+/** The box holding `box` turned clockwise by `degrees` about the centre of `about`. */
+function boundsTurnedAbout(box: LayoutBox, degrees: number, about: LayoutBox): LayoutBox {
+  if (degrees % 360 === 0) return box;
+  const radians = (degrees * Math.PI) / 180;
+  const cos = Math.cos(radians),
+    sin = Math.sin(radians);
+  const cx = about.x + about.width / 2,
+    cy = about.y + about.height / 2;
+  let [left, top, right, bottom] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const [x, y] of [
+    [box.x, box.y],
+    [box.x + box.width, box.y],
+    [box.x, box.y + box.height],
+    [box.x + box.width, box.y + box.height],
+  ] as const) {
+    const tx = cx + (x - cx) * cos - (y - cy) * sin;
+    const ty = cy + (x - cx) * sin + (y - cy) * cos;
+    left = Math.min(left, tx);
+    top = Math.min(top, ty);
+    right = Math.max(right, tx);
+    bottom = Math.max(bottom, ty);
+  }
+  return Object.freeze({ x: left, y: top, width: right - left, height: bottom - top });
 }
 
 /** The box turned about its centre, as the axis-aligned box that holds it. */

@@ -174,6 +174,54 @@ A loop over `useReview().items` differs from the command:
 - It reaches only listed items, so filtered and hidden changes stay pending.
 - It never reaches formatting changes that leave the resolved formatting unchanged. These have no card. Run the command with `scope: 'document'` and no `keys` when the file must end up without them. With `scope: 'visible'`, the command keeps those of hidden authors, and all of them while a tracked change predicate is set.
 
+### Accept or reject every change
+
+The `acceptAllRevisions` and `rejectAllRevisions` commands decide every tracked change in the document in one undo step. They cover the body, tables, headers, footers, notes, and text boxes. Reviewer filters do not narrow them.
+
+```ts
+const result = editor.exec({ type: 'acceptAllRevisions' });
+if (result.ok) {
+  console.log(`${result.revisions?.resolved.length} changes accepted`);
+}
+```
+
+Each command runs `resolveAllReviewChanges` with `scope: 'document'` and returns the same result. Changes that cannot resolve, such as changes in locked content, stay pending and appear in `revisions.skipped`. Both commands accept a `historyGroup`.
+
+| Code | When |
+| --- | --- |
+| `unsupported` | The review module is not registered, or no change in the document can resolve. |
+| `locked` | The editor is in viewing mode, read-only, comments, or tracked-changes protection is enforced, or locked content holds every change. |
+| `bound` | Data-bound content holds every change. |
+| `notFound` | The document has no tracked changes. |
+
+A refused command writes nothing.
+
+### Comment and decide by id
+
+If you hold OOXML ids instead of review keys, run the document commands. Each one runs the matching review method, with the same gates and `historyGroup` support:
+
+| Command | Runs | Addresses |
+| --- | --- | --- |
+| `addComment` | `addComment` | The selection. A `target` is refused with `unsupported`. |
+| `replyComment` | `replyToReviewItem` | The comment whose `w:id` is `commentId`. |
+| `resolveComment` | `setCommentResolved` with `true` | The comment whose `w:id` is `commentId`. |
+| `acceptRevision`, `rejectRevision` | `acceptReviewItem`, `rejectReviewItem` | The change whose `w:id` is `id` in `part`. |
+
+```ts
+editor.exec({ type: 'replyComment', commentId: '7', text: 'Agreed.' });
+editor.exec({ type: 'acceptRevision', id: 12 });
+editor.exec({ type: 'rejectRevision', id: 3, part: 'footnote', noteId: 2 });
+```
+
+A revision `w:id` is unique only within a part. `part` defaults to `'body'`, the main document. Use `'footnote'` or `'endnote'` for a notes part, and `noteId` to name one note. Headers and footers have no `part` value; decide their changes by key.
+
+| Code | When |
+| --- | --- |
+| `notFound` | No listed comment or change has the id. Changes and comments that a reviewer filter hides are not listed. |
+| `invalidArgs` | The arguments are invalid, or the id names more than one change. Decide each change by key. |
+| `unsupported` | The review module is not registered. |
+| `locked` | The editor is in viewing mode, or protection refuses the write. Tracked-changes protection refuses every accept and reject but allows comments. |
+
 ## Read and reveal changes
 
 `useReview()` returns the same data and actions as the packaged rail. React returns plain values. Vue returns computed refs for the state fields.

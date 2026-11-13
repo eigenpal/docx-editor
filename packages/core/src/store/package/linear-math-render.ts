@@ -7,6 +7,7 @@ function reversible(value: EquationExpression): boolean {
     case 'fallback':
     case 'bar':
     case 'borderBox':
+    case 'delimiter':
       return false;
     case 'text':
       return value.format === undefined && !/[{}[\]^_√∑]/u.test(value.value);
@@ -45,6 +46,8 @@ function render(value: EquationExpression): string {
     case 'bar':
     case 'borderBox':
       return render(value.body);
+    case 'delimiter':
+      return value.opening + value.items.map(render).join(value.separator) + value.closing;
     case 'fraction':
       return `{${render(value.numerator)}}/{${render(value.denominator)}}`;
     case 'radical':

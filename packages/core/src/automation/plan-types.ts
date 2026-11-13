@@ -81,4 +81,16 @@ export type PlannedOperation =
       readonly story: AutomationStoryId;
       readonly answer: (post: AutomationPackageReads) => AutomationValue;
     }
+  | {
+      readonly ok: true;
+      /**
+       * A whole-document replacement: the decoded DOCX file, which the port opens and installs
+       * as one undoable package update. See `AutomationDocumentPort.replaceDocument`. Solitary,
+       * because every part changes.
+       */
+      readonly kind: 'documentReplace';
+      readonly docx: Uint8Array;
+      readonly story: AutomationStoryId;
+      readonly answer: (post: AutomationPackageReads) => AutomationValue;
+    }
   | { readonly ok: false; readonly error: AutomationError };

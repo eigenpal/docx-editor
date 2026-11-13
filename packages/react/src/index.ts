@@ -304,6 +304,8 @@ export {
   ContextMenuRefreshToc,
   ContextMenuRefreshTocPageNumbers,
   ContextMenuRemoveToc,
+  useContextMenuAnchor,
+  useContextMenuHighlights,
   useContextMenuTarget,
   type ContextMenuAnchor,
   type ContextMenuCommandProps,
@@ -402,7 +404,12 @@ export {
   useEditorHostDocument,
   type UseEditorHostDocumentReturn,
 } from './editor/useEditorHostDocument';
-export { HIGHLIGHT_REFRESH_MS, useHighlights, type HighlightSource } from './editor/useHighlights';
+export {
+  HIGHLIGHT_REFRESH_MS,
+  useHighlights,
+  type HighlightSource,
+  type UseHighlightsReturn,
+} from './editor/useHighlights';
 export { useHighlightAt } from './editor/useHighlightAt';
 export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';
 export {
@@ -692,6 +699,10 @@ export type {
   DocumentRefreshState,
   RefreshSubmission,
   RefreshUpdate,
+  RefreshRefusal,
+  RefreshRefusalFields,
+  RefreshRefusalReason,
+  RefreshUpdateMode,
   RefreshResult,
   RefreshFailureCode,
   RefreshChange,
@@ -748,6 +759,11 @@ export type {
   CompareDocumentsRefusalReason,
   CompareDocumentsOutcome,
   CompareDocumentsRequest,
+  ReplaceDocumentErrorCode,
+  ReplaceDocumentOutcome,
+  ReplaceDocumentRefusal,
+  ReplaceDocumentRefusalReason,
+  ReplaceDocumentRequest,
 } from '@docx-editor.dev/core/editor';
 
 export {

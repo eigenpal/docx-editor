@@ -100,6 +100,9 @@ function headerDocx(header: string, body: string): Uint8Array {
   });
 }
 
+/** The surface `withSurface` mounted, so a composition helper can land what it queued. */
+let mounted: PaginatedSurface | null = null;
+
 function withSurface(
   bytes: Uint8Array,
   run: (surface: PaginatedSurface, container: HTMLElement) => void
@@ -108,9 +111,11 @@ function withSurface(
   document.body.append(container);
   const opened = mountPaginatedSurface(container, bytes, { scale: 1 });
   if (!opened.ok) throw new Error(opened.reason);
+  mounted = opened.surface;
   try {
     run(opened.surface, container);
   } finally {
+    mounted = null;
     opened.surface.destroy();
     container.remove();
     document.getSelection()?.removeAllRanges();
@@ -148,6 +153,9 @@ function compose(container: HTMLElement, write: (scope: Element) => void): void 
   pages.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
   write(container.querySelector('[data-docx-hf-active]') ?? pages);
   pages.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+  // A plain composed insertion commits on a later task, as typed text does; the flush
+  // lands it, as any later edit or read would.
+  mounted?.flushPendingInput();
 }
 
 /** The painted line of a paragraph — the node an empty paragraph hands the browser. */
