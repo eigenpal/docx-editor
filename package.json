@@ -16,6 +16,7 @@
     "examples/telemetry-single-user",
     "examples/telemetry-collaboration",
     "examples/happy-path",
+    "examples/free-review",
     "examples/igloo",
     "examples/nextjs",
     "examples/nuxt",
