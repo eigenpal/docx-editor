@@ -25,10 +25,12 @@ import { findNode } from '../store/package/ooxml-edit.ts';
 import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import {
+  inheritedParagraphPropertyNodes,
   paragraphInheritsRtl,
   type DirectionSources,
 } from '../layout/paragraph-direction-inheritance.ts';
 import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
+import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { MAX_STYLE_NAME, styleDefinitionsOf } from './style-definitions.ts';
 
 /** What the document says its paragraph styles are. */
@@ -58,6 +60,42 @@ export interface AutomationStyleIndex {
    * layout resolves them. `styleId` resolves it as if it named that paragraph style.
    */
   inheritsRtl(part: OoxmlPart, paragraph: OoxmlNode, styleId?: string): boolean;
+  /**
+   * The `w:spacing` line attributes the paragraph inherits, ignoring its own: document defaults,
+   * an enclosing cell's table style, its style chain, and its numbering level, as layout resolves
+   * them, each attribute from the last level that states it. `styleId` resolves them as if the
+   * paragraph named that style.
+   */
+  inheritedLineSpacing(
+    part: OoxmlPart,
+    paragraph: OoxmlNode,
+    styleId?: string
+  ): InheritedLineSpacing;
+}
+
+/** Inherited `w:spacing` line attributes, as the file spells them. Absent = nothing states it. */
+export interface InheritedLineSpacing {
+  readonly line?: string;
+  readonly lineRule?: string;
+}
+
+/** The line attributes several `w:pPr` nodes state, folded attribute by attribute in order. */
+function foldedLineSpacing(nodes: readonly (OoxmlNode | undefined)[]): InheritedLineSpacing {
+  let line: string | undefined;
+  let lineRule: string | undefined;
+  for (const node of nodes) {
+    const spacing = node ? namedChild(node, 'spacing') : undefined;
+    if (!spacing) continue;
+    for (const attribute of spacing.attributes) {
+      if (attribute.namespaceUri !== WML_NAMESPACE_URI) continue;
+      if (attribute.localName === 'line') line = attribute.value;
+      else if (attribute.localName === 'lineRule') lineRule = attribute.value;
+    }
+  }
+  return {
+    ...(line === undefined ? {} : { line }),
+    ...(lineRule === undefined ? {} : { lineRule }),
+  };
 }
 
 /**
@@ -77,6 +115,10 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
   // Cell styles resolve as the proposed document shows them, like automation's run writes.
   const inheritsRtl = (target: OoxmlPart, paragraph: OoxmlNode, styleId?: string) =>
     paragraphInheritsRtl(sources, target, paragraph, 'proposed', styleId);
+  const inheritedLineSpacing = (target: OoxmlPart, paragraph: OoxmlNode, styleId?: string) =>
+    foldedLineSpacing(
+      inheritedParagraphPropertyNodes(sources, target, paragraph, 'proposed', 'spacing', styleId)
+    );
   if (!part) {
     return Object.freeze({
       nameOf: () => null,
@@ -85,6 +127,7 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
       defaultId: null,
       present: false,
       inheritsRtl,
+      inheritedLineSpacing,
     });
   }
   // The same cached definitions the style listing reads, so the two agree on every name.
@@ -97,6 +140,7 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
     defaultId,
     present: true,
     inheritsRtl,
+    inheritedLineSpacing,
   });
 }
 

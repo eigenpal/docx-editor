@@ -1176,6 +1176,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
     set leftIndent(value: number);
     get lineSpacing(): number;
     set lineSpacing(value: number);
+    get lineSpacingRule(): ParagraphLineSpacingRule;
+    set lineSpacingRule(value: ParagraphLineSpacingRule);
     get list(): List;
     get listItem(): ListItem;
     // @internal
@@ -1227,6 +1229,9 @@ export class ParagraphCollection extends ItemCollection<Paragraph> {
 
 // @public
 export type ParagraphInsertTextLocation = Extract<RangeInsertTextLocation, 'Replace' | 'Start' | 'End'>;
+
+// @public
+export type ParagraphLineSpacingRule = 'Single' | 'OnePointFive' | 'Double' | 'AtLeast' | 'Exactly' | 'Multiple';
 
 // @public
 export type ParagraphReadingOrder = 'LeftToRight' | 'RightToLeft';
