@@ -284,13 +284,13 @@ export class Paragraph extends ModelObject implements PromisedItem {
   }
 
   /**
-   * Line spacing in points, greater than 0 and at most 1584.
+   * Line spacing in points, from 0.05 to 1584.
    *
-   * A write keeps the line spacing rule in force, including one the style supplies; set
-   * {@link Paragraph.lineSpacingRule} to change it. Under the `Exactly` and `AtLeast` rules the
-   * value is the line height. Under the other rules 12 points is one line, so `18` on a
-   * single-spaced paragraph gives 1.5 lines. A read returns only the paragraph's own value, and
-   * `null` when it inherits its spacing.
+   * A read returns the spacing in force, including spacing the style supplies, so it pairs with
+   * {@link Paragraph.lineSpacingRule}. A write keeps the rule in force; set `lineSpacingRule` to
+   * change it. Under the `Exactly` and `AtLeast` rules the value is the line height. Under the
+   * other rules 12 points is one line, so `18` on a single-spaced paragraph gives 1.5 lines.
+   * Writing the spacing the paragraph already shows adds no formatting.
    */
   get lineSpacing(): number {
     return this.loadedProperty<number>('lineSpacing');
@@ -299,7 +299,9 @@ export class Paragraph extends ModelObject implements PromisedItem {
   set lineSpacing(value: number) {
     const target = `${this.path.label}.lineSpacing`;
     const points = requirePoints(value, target);
-    if (!(points > 0 && points <= MAX_LINE_SPACING)) fail({ code: 'InvalidArgument', target });
+    // Stored in twentieths of a point, so a value that rounds to 0 is refused here, not at sync.
+    if (!(Math.round(points * 20) >= 1 && points <= MAX_LINE_SPACING))
+      fail({ code: 'InvalidArgument', target });
     this.#authorFormat('lineSpacing', points);
   }
 
@@ -310,8 +312,10 @@ export class Paragraph extends ModelObject implements PromisedItem {
    * A DocxEditor addition: Office.js has no line spacing rule member. The read resolves the
    * paragraph's own spacing, then its style, as the page shows it. `Single`, `OnePointFive`, and
    * `Double` also set the spacing to 12, 18, or 24 points. The other rules keep the points in
-   * force, so `Exactly` on a 1.5-line paragraph gives exactly 18 points. When `lineSpacingRule`
-   * and `lineSpacing` share a sync, the rule applies first. With change tracking on, a write is
+   * force, so `Exactly` on a 1.5-line paragraph gives exactly 18 points. `Multiple` at 12, 18, or
+   * 24 points reads back as `Single`, `OnePointFive`, or `Double`. When `lineSpacingRule` and
+   * `lineSpacing` share a sync, the rule applies first. Writing the rule the paragraph already
+   * shows adds no formatting. With change tracking on, a write is
    * recorded as a paragraph property revision.
    */
   get lineSpacingRule(): ParagraphLineSpacingRule {

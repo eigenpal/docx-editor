@@ -177,6 +177,11 @@ export interface AutomationParagraphFormatRead {
   readonly firstLineIndent: number | null;
   readonly leftIndent: number | null;
   readonly rightIndent: number | null;
+  /**
+   * The line spacing in force, in points: the paragraph's own `w:line` over its style cascade's,
+   * else single spacing (12). Unlike the other spacing fields, never null, so it always pairs
+   * with `lineSpacingRule`.
+   */
   readonly lineSpacing: number | null;
   /**
    * How the line spacing in force is measured: the paragraph's own `w:spacing` line attributes
@@ -412,16 +417,19 @@ export function paragraphFormatRead(
   const pPr = paragraphPropertiesNodeOf(paragraph);
   const spacing = namedChild(pPr, 'spacing');
   const indent = namedChild(pPr, 'ind');
+  const lineInForce = lineSpacingInForce(
+    attributesOf(spacing),
+    styles.inheritedLineSpacing(part, paragraph)
+  );
   return {
     alignment: alignmentOf(pPr),
     style: paragraphStyleName(part, paragraphId, styles),
     firstLineIndent: firstLineIndentOf(indent),
     leftIndent: pointsFromTwips(attributeOf(indent, 'left') ?? attributeOf(indent, 'start')),
     rightIndent: pointsFromTwips(attributeOf(indent, 'right') ?? attributeOf(indent, 'end')),
-    lineSpacing: pointsFromTwips(attributeOf(spacing, 'line')),
-    lineSpacingRule: lineSpacingRuleOf(
-      lineSpacingInForce(attributesOf(spacing), styles.inheritedLineSpacing(part, paragraph))
-    ),
+    // The value and rule in force, so a style's exact spacing reads with its points.
+    lineSpacing: pointsFromTwips(lineInForce.line),
+    lineSpacingRule: lineSpacingRuleOf(lineInForce),
     spaceBefore: pointsFromTwips(attributeOf(spacing, 'before')),
     spaceAfter: pointsFromTwips(attributeOf(spacing, 'after')),
     widowControl: onOff(namedChild(pPr, 'widowControl')),
@@ -608,6 +616,7 @@ export function paragraphFormatProperties(
     spacingAttributes[attribute] = String(twips.value);
     touchedSpacing = true;
   }
+  let lineSatisfied = false;
   if (request.lineSpacing !== undefined || request.lineSpacingRule !== undefined) {
     // Against the line spacing in force, the style this same write applies included: a value
     // keeps the rule the paragraph shows, and a rule keeps the points the paragraph shows.
@@ -631,9 +640,12 @@ export function paragraphFormatProperties(
       if (twips.value <= 0) return { ok: false, detail: 'lineSpacing: out of range' };
       line = String(twips.value);
     }
-    spacingAttributes.line = line;
-    spacingAttributes.lineRule = lineRule;
-    touchedSpacing = true;
+    // Spacing the paragraph already shows is a request satisfied: no direct formatting added.
+    if (line !== inForce.line || lineRule !== inForce.lineRule) {
+      spacingAttributes.line = line;
+      spacingAttributes.lineRule = lineRule;
+      touchedSpacing = true;
+    } else lineSatisfied = true;
   }
   if (touchedSpacing) properties.push({ localName: 'spacing', attributes: spacingAttributes });
 
@@ -662,8 +674,13 @@ export function paragraphFormatProperties(
     }
   }
 
-  // A direction the paragraph already has is a request satisfied, not a refusal.
-  if (properties.length === 0 && !removeBidi && request.readingOrder === undefined)
+  // A direction or line spacing the paragraph already has is a request satisfied, not a refusal.
+  if (
+    properties.length === 0 &&
+    !removeBidi &&
+    request.readingOrder === undefined &&
+    !lineSatisfied
+  )
     return { ok: false, detail: 'no formatting was asked for' };
   // `setParagraphProperties` REPLACES the container: an authorable property the op does not name
   // is DROPPED. So the op has to carry the paragraph's existing bag forward, or setting alignment

@@ -1533,7 +1533,6 @@ export interface AutomationParagraphFormatRead {
     readonly firstLineIndent: number | null;
     // (undocumented)
     readonly leftIndent: number | null;
-    // (undocumented)
     readonly lineSpacing: number | null;
     readonly lineSpacingRule: AutomationLineSpacingRule;
     readonly readingOrder: AutomationReadingOrder;

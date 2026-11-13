@@ -457,7 +457,7 @@ describe("a paragraph's own paragraph formatting", () => {
       const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
-      return [0, -5, 100000].map((value) => {
+      return [0, 0.01, -5, 100000].map((value) => {
         try {
           paragraphs.items[0]!.lineSpacing = value;
         } catch (error) {

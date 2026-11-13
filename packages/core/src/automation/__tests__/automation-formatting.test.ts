@@ -318,7 +318,7 @@ describe('reading a paragraph format', () => {
       firstLineIndent: null,
       leftIndent: null,
       rightIndent: null,
-      lineSpacing: null,
+      lineSpacing: 12,
       lineSpacingRule: 'Single',
       spaceBefore: null,
       spaceAfter: null,
@@ -612,6 +612,38 @@ describe('a line spacing rule the style supplies', () => {
     const host = open(docx(p('bare'), styles));
     const [paragraph] = paragraphsOf(host, roots(host).body);
     expect(formatOf(host, paragraph!).lineSpacingRule).toBe('Single');
+  });
+
+  test('a style exact spacing reads with its points', () => {
+    const styles =
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/>' +
+      '<w:pPr><w:spacing w:line="280" w:lineRule="exact"/></w:pPr></w:style>';
+    const host = open(docx(p('styled'), styles));
+    const [paragraph] = paragraphsOf(host, roots(host).body);
+    expect(formatOf(host, paragraph!)).toMatchObject({
+      lineSpacing: 14,
+      lineSpacingRule: 'Exactly',
+    });
+  });
+
+  test('writing the spacing a paragraph already shows adds no formatting', () => {
+    const styles =
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/>' +
+      '<w:pPr><w:spacing w:line="280" w:lineRule="exact"/></w:pPr></w:style>';
+    const host = open(docx(p('styled'), styles));
+    const [paragraph] = paragraphsOf(host, roots(host).body);
+    const before = savedMainXml(host);
+    for (const format of [
+      { lineSpacingRule: 'Exactly' },
+      { lineSpacing: 14 },
+      { lineSpacingRule: 'Exactly', lineSpacing: 14 },
+    ] as const) {
+      const response = host.execute({
+        operations: [{ op: 'setParagraphFormat', paragraph: { paragraph: paragraph! }, format }],
+      });
+      expect(response.results[0]?.status).toBe('ok');
+    }
+    expect(savedMainXml(host)).toBe(before);
   });
 
   for (const name of ['toString', '__proto__', 'Triple']) {
