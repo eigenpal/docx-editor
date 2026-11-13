@@ -1,0 +1,6 @@
+@gw/docx-review
+Licensed under the Apache License, Version 2.0.
+
+Written against the public, Apache-2.0 licensed API of @docx-editor.dev/core and
+@docx-editor.dev/react (Copyright Eigenpal, Inc.). It contains no code from, and does
+not depend on, @docx-editor.dev/pro or any other package under the EigenPal Pro License.

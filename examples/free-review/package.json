@@ -12,7 +12,8 @@
     "@docx-editor.dev/i18n": "workspace:*",
     "@docx-editor.dev/react": "workspace:*",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "@gw/docx-review": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
