@@ -22,7 +22,7 @@
 // A failing scenario prints its seed. The same seed replays the same scenario.
 
 import { advanceClock, resetClock } from './scenario-clock.ts';
-import { TypedTokens } from './scenario-tokens.ts';
+import { TypedTokens, type TokenIdentity, type TokenRun } from './scenario-tokens.ts';
 import { DecisionOracle } from './scenario-decisions.ts';
 import { CaretWatch } from './scenario-presence.ts';
 import { sameShownState, shownStateOf, type ShownState } from './scenario-shown-state.ts';
@@ -38,7 +38,10 @@ import {
   readCollaborationDocument,
   type DocumentCollaborationHandle,
 } from '../../packages/pro/src/collaboration/document-session.ts';
-import { awaitingUpdates } from '../../packages/pro/src/collaboration/document/yjs-items.ts';
+import {
+  awaitingUpdates,
+  deleteSetRuns,
+} from '../../packages/pro/src/collaboration/document/yjs-items.ts';
 import { seededRandom } from './edit-model.ts';
 import {
   freshBuild,
@@ -381,6 +384,7 @@ class Simulation {
         const others = this.tokens.othersIn(before, replica.index);
         const sharedBefore = sharedTextOf(replica.ydoc);
         const pendingBefore = shownOrPending(replica);
+        const stepsBefore = historySteps(session);
         if (action.kind === 'redo' ? session.redo() : session.undo()) {
           this.undos += 1;
           this.decisions.undone(
@@ -389,10 +393,13 @@ class Simulation {
             before,
             replica.store.currentPackage()
           );
-          this.tokens.undoOn(action.replica, sharedBefore, sharedTextOf(replica.ydoc), {
-            before: pendingBefore,
-            after: shownOrPending(replica),
-          });
+          this.tokens.undoOn(
+            action.replica,
+            sharedBefore,
+            sharedTextOf(replica.ydoc),
+            { before: pendingBefore, after: shownOrPending(replica) },
+            revertedInsertions(stepsBefore, session)
+          );
           this.carets.moved(replica);
           this.problems.push(
             ...this.tokens.checkUndo(others, replica.store.currentPackage(), replica.index)
@@ -436,7 +443,12 @@ class Simulation {
             op.op === 'insertText' &&
             paragraphTextOf(editor.store.bodyStore().part, op.paragraphId)?.includes(tagged.token)
           ) {
-            this.tokens.typedInto(tagged.token, editor.index, op.paragraphId);
+            this.tokens.typedInto(
+              tagged.token,
+              editor.index,
+              op.paragraphId,
+              tokenIdentity(editor.ydoc, tagged.token)
+            );
             this.carets.typed(editor, op.paragraphId, tagged.token);
           } else {
             this.carets.moved(editor);
@@ -674,6 +686,40 @@ function seedRandomness(seed: number): () => void {
     crypto.getRandomValues = original.getRandomValues;
     crypto.randomUUID = original.randomUUID;
   };
+}
+
+/** The item ID of the one live character `token` in a replica's shared text, or undefined. */
+function tokenIdentity(ydoc: Y.Doc, token: string): TokenIdentity | undefined {
+  for (const [, text] of sharedTexts(ydoc)) {
+    for (let item = text._start; item !== null; item = item.right) {
+      if (item.deleted || !(item.content instanceof Y.ContentString)) continue;
+      const at = item.content.str.indexOf(token);
+      if (at >= 0) return { client: item.id.client, clock: item.id.clock + at };
+    }
+  }
+  return undefined;
+}
+
+/** The history steps of a session's undo and redo stacks, to tell which a step reverted. */
+function historySteps(session: DocumentCollaborationHandle['session']): Set<unknown> {
+  const { undoManager } = session as unknown as {
+    undoManager: { undoStack: unknown[]; redoStack: unknown[] };
+  };
+  return new Set([...undoManager.undoStack, ...undoManager.redoStack]);
+}
+
+/** The insertions of the steps that were in `before` and left the undo and redo stacks. */
+function revertedInsertions(
+  before: ReadonlySet<unknown>,
+  session: DocumentCollaborationHandle['session']
+): TokenRun[] {
+  const now = historySteps(session);
+  const runs: TokenRun[] = [];
+  for (const step of before) {
+    if (now.has(step)) continue;
+    runs.push(...deleteSetRuns((step as { insertions?: unknown }).insertions));
+  }
+  return runs;
 }
 
 /** Every paragraph's shared text in a replica's document, live characters only. */

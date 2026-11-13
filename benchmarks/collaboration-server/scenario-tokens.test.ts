@@ -18,7 +18,7 @@ function firstParagraph(node: OoxmlNode): string | null {
   return null;
 }
 
-function setup() {
+function setup(identity?: { client: number; clock: number }) {
   const store = storeFrom(new Uint8Array(readFileSync(DEFAULT_DOCUMENT)));
   const paragraphId = firstParagraph(store.bodyStore().part.root)!;
   const tokens = new TypedTokens();
@@ -31,7 +31,7 @@ function setup() {
   const op = tagged.addressed.op as TreeDocOp & { text: string };
   expect(op.text.length).toBe(3);
   expect(applyOp(store, op, 'replica-0').ok).toBe(true);
-  tokens.typedInto(tagged.token!, 0, paragraphId);
+  tokens.typedInto(tagged.token!, 0, paragraphId, identity);
   return { store, paragraphId, tokens };
 }
 
@@ -95,6 +95,128 @@ describe('typed-text oracle', () => {
     apply(store, { op: 'deleteText', paragraphId, start: 3, end: 4 } as TreeDocOp);
     expect(tokens.check([store.currentPackage()])).toEqual([
       'typed token 0 of replica 0 is lost, while the paragraph it was typed in remains',
+    ]);
+  });
+
+  test('an undo excuses the typing of the step it reverted, though no text held it', () => {
+    // The token is the third character of the item 7:10 typed: identity 7:12.
+    const { store, paragraphId, tokens } = setup({ client: 7, clock: 12 });
+    // A peer moved the typing, and the copies wait in a held-back update: neither the shared
+    // text nor the view holds the token when the undo runs, and the undo hides the copies.
+    apply(store, { op: 'deleteText', paragraphId, start: 2, end: 3 } as TreeDocOp);
+    tokens.undoOn(0, '', '', undefined, [{ client: 7, clock: 10, length: 3 }]);
+    expect(tokens.check([store.currentPackage()])).toEqual([]);
+  });
+
+  test('an undo excuses no typing of a step it did not revert', () => {
+    const { store, paragraphId, tokens } = setup({ client: 7, clock: 12 });
+    apply(store, { op: 'deleteText', paragraphId, start: 2, end: 3 } as TreeDocOp);
+    tokens.undoOn(0, '', '', undefined, [
+      { client: 7, clock: 13, length: 3 },
+      { client: 8, clock: 12, length: 1 },
+    ]);
+    // Another replica's undo of a step that held the same item ID excuses nothing either.
+    tokens.undoOn(1, '', '', undefined, [{ client: 7, clock: 10, length: 3 }]);
+    expect(tokens.check([store.currentPackage()])).toEqual([
+      'typed token 0 of replica 0 is lost, while the paragraph it was typed in remains',
+    ]);
+  });
+
+  test('typing an undo reverted must not show again', () => {
+    const { store, tokens } = setup({ client: 7, clock: 12 });
+    // The undo reverted the step, but a copy of its typing still shows once updates settle.
+    tokens.undoOn(0, '', '', undefined, [{ client: 7, clock: 10, length: 3 }]);
+    expect(tokens.check([store.currentPackage()])).toEqual([
+      'typed token 0 of replica 0 shows again after replica 0 deleted it',
+    ]);
+  });
+});
+
+describe('typed-text oracle, an undo of a block deletion', () => {
+  /** Replica 1 deletes the paragraph that holds replica 0's token. */
+  function deleted() {
+    const { store, paragraphId, tokens } = setup();
+    const typed = store.currentPackage();
+    const withToken = paragraphTextOf(store.bodyStore().part, paragraphId) ?? '';
+    const op = { op: 'deleteBlock', paragraphId, blockId: paragraphId } as TreeDocOp;
+    const before = tokens.beforeEdit(store, op);
+    apply(store, op);
+    tokens.afterEdit(store, before, 1);
+    // The paragraph as the deleter's undo brings it back while its token does not show.
+    const untyped = storeFrom(new Uint8Array(readFileSync(DEFAULT_DOCUMENT))).currentPackage();
+    return { tokens, typed, withToken, gone: store.currentPackage(), untyped };
+  }
+
+  test('brings the token back, also when it does not show right then', () => {
+    const { tokens, typed, gone, untyped } = deleted();
+    // A held-back update holds the paragraph a peer's split moved the text into.
+    tokens.undoOn(1, '', '', { before: gone, after: untyped });
+    expect(tokens.check([typed])).toEqual([]);
+  });
+
+  test('leaves the token out while its typist has undone the typing', () => {
+    const { tokens, typed, withToken, gone, untyped } = deleted();
+    // The typed text is "ab" and the token, at the start of the paragraph.
+    const without = withToken.slice(0, 2) + withToken.slice(3);
+    tokens.undoOn(0, withToken, without);
+    tokens.undoOn(1, '', '', { before: gone, after: untyped });
+    expect(tokens.check([typed])).toEqual([
+      'typed token 0 of replica 0 shows again after replica 0 deleted it',
+    ]);
+    // The typist's redo brings it back.
+    tokens.undoOn(0, without, withToken);
+    expect(tokens.check([typed])).toEqual([]);
+  });
+
+  test('keeps the deletion when the undo leaves the block out', () => {
+    const { tokens, typed, gone } = deleted();
+    tokens.undoOn(1, '', '', { before: gone, after: gone });
+    expect(tokens.check([typed])).toEqual([
+      'typed token 0 of replica 0 shows again after replica 1 deleted it',
+    ]);
+  });
+
+  test('takes the token out again on a redo of the deletion', () => {
+    const { tokens, typed, gone, untyped } = deleted();
+    tokens.undoOn(1, '', '', { before: gone, after: untyped });
+    tokens.undoOn(1, '', '', { before: untyped, after: gone });
+    expect(tokens.check([typed])).toEqual([
+      'typed token 0 of replica 0 shows again after replica 1 deleted it',
+    ]);
+  });
+
+  test("keeps a peer's earlier deletion of the token", () => {
+    const { store, paragraphId, tokens } = setup();
+    const typed = store.currentPackage();
+    // Replica 1 holds the typing too, offline. Replica 2 deletes the token as text.
+    const peer = storeFrom(new Uint8Array(readFileSync(DEFAULT_DOCUMENT)));
+    const text = (paragraphTextOf(store.bodyStore().part, paragraphId) ?? '').slice(0, 3);
+    apply(peer, { op: 'insertText', paragraphId, offset: 0, text } as TreeDocOp);
+    const cut = { op: 'deleteText', paragraphId, start: 0, end: 3 } as TreeDocOp;
+    const shown = tokens.beforeEdit(store, cut);
+    apply(store, cut);
+    tokens.afterEdit(store, shown, 2);
+    // Replica 1, offline, deleted the block from the typed text.
+    const op = { op: 'deleteBlock', paragraphId, blockId: paragraphId } as TreeDocOp;
+    const before = tokens.beforeEdit(peer, op);
+    apply(peer, op);
+    tokens.afterEdit(peer, before, 1);
+    const untyped = storeFrom(new Uint8Array(readFileSync(DEFAULT_DOCUMENT))).currentPackage();
+    tokens.undoOn(1, '', '', { before: peer.currentPackage(), after: untyped });
+    expect(tokens.check([typed])).toEqual([
+      'typed token 0 of replica 0 shows again after replica 2 deleted it',
+    ]);
+  });
+
+  test('takes the token out again on a redo of the deletion after the typist undid it', () => {
+    const { tokens, typed, withToken, gone, untyped } = deleted();
+    const without = withToken.slice(0, 2) + withToken.slice(3);
+    tokens.undoOn(0, withToken, without);
+    tokens.undoOn(1, '', '', { before: gone, after: untyped });
+    tokens.undoOn(1, '', '', { before: untyped, after: gone });
+    tokens.undoOn(0, without, withToken);
+    expect(tokens.check([typed])).toEqual([
+      'typed token 0 of replica 0 shows again after replica 1 deleted it',
     ]);
   });
 });
