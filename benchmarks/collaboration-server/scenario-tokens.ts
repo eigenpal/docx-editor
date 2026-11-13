@@ -106,7 +106,12 @@ export class TypedTokens {
    */
   private readonly removedWith = new Map<
     string,
-    { readonly replica: number; readonly block: string }
+    {
+      readonly replica: number;
+      readonly block: string;
+      /** A peer that deleted the token before, whose deletion stands after the undo. */
+      readonly earlier: number | undefined;
+    }
   >();
   /** Tokens their typist's undo took back while a peer's deletion held them, by the typist. */
   private readonly takenBack = new Map<string, number>();
@@ -206,9 +211,14 @@ export class TypedTokens {
       this.excused.add(token);
       if (editing && STRUCTURE_DELETING.has(editing.op.op)) this.structureDeleted.add(token);
       else this.removedOtherwise.add(token);
+      const earlier = this.deletedBy.get(token);
       this.deletedBy.set(token, replica);
       if (editing?.op.op === 'deleteBlock') {
-        this.removedWith.set(token, { replica, block: editing.op.blockId });
+        this.removedWith.set(token, {
+          replica,
+          block: editing.op.blockId,
+          earlier: earlier === replica ? undefined : earlier,
+        });
       } else {
         this.removedWith.delete(token);
       }
@@ -278,9 +288,10 @@ export class TypedTokens {
         !hasNode(shown.before, removed.block) &&
         hasNode(shown.after, removed.block)
       ) {
-        const typist = this.takenBack.get(token);
-        if (typist === undefined) this.deletedBy.delete(token);
-        else this.deletedBy.set(token, typist);
+        // A peer's earlier deletion of the token stands, and so does the typist's undo.
+        const holder = removed.earlier ?? this.takenBack.get(token);
+        if (holder === undefined) this.deletedBy.delete(token);
+        else this.deletedBy.set(token, holder);
       }
     }
     // A redo of the typist's typing brings the token back, whatever a peer's undo does.
@@ -294,7 +305,7 @@ export class TypedTokens {
     for (const [token, removed] of this.removedWith) {
       if (
         removed.replica === replica &&
-        !this.deletedBy.has(token) &&
+        this.deletedBy.get(token) !== replica &&
         hasNode(shown.before, removed.block) &&
         !hasNode(shown.after, removed.block)
       ) {
