@@ -5,6 +5,21 @@
 ```ts
 
 // @public
+export function acceptedOffsetFromText(paragraph: ParagraphText, offset: number): number;
+
+// @public
+export interface AcceptedTextRange {
+    readonly blockId: string;
+    readonly expectedText?: string;
+    readonly length: number;
+    readonly scope?: ViewScope;
+    readonly start: number;
+}
+
+// @public
+export function acceptedTextRanges(paragraph: ParagraphText, from: number, to: number): HighlightRange[];
+
+// @public
 export function alignColorPickerPopover(grid: HTMLElement | null): void;
 
 // @public
@@ -4046,6 +4061,35 @@ export interface ParagraphTabStop {
 }
 
 // @public
+export interface ParagraphText {
+    readonly acceptedSpans: readonly ParagraphTextSpan[];
+    readonly acceptedText: string;
+    readonly blockId: string;
+    readonly proofing: readonly ParagraphTextProofing[];
+    readonly text: string;
+}
+
+// @public
+export interface ParagraphTextProofing {
+    readonly acceptedStart: number;
+    readonly lang: string | null;
+    readonly length: number;
+    readonly noProof: boolean;
+}
+
+// @public
+export interface ParagraphTextReadOptions {
+    readonly fields?: 'object' | 'result';
+}
+
+// @public
+export interface ParagraphTextSpan {
+    readonly acceptedStart: number;
+    readonly length: number;
+    readonly start: number;
+}
+
+// @public
 export function parseChartValue(text: string): number | null | undefined;
 
 // @public
@@ -4295,6 +4339,12 @@ export interface RemoteCaretLabelHost {
 
 // @public
 export type RenderableImageMime = SupportedImageMime | VectorImageMime;
+
+// @public
+export interface ReplaceAcceptedTextCommand {
+    readonly match: AcceptedTextRange;
+    readonly text: string;
+}
 
 // @public
 export interface ReplaceAllMatchesOutcome {
@@ -5582,6 +5632,9 @@ export interface TextMeasurer {
     syntheticBold?(style: ResolvedRunStyle): boolean;
     textOutline?(text: string, style: ResolvedRunStyle): TextOutline | undefined;
 }
+
+// @public
+export function textOffsetFromAccepted(paragraph: ParagraphText, offset: number): number;
 
 // @public
 export interface TocRemovalRefusal {

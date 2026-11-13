@@ -5,6 +5,21 @@
 ```ts
 
 // @public
+export function acceptedOffsetFromText(paragraph: ParagraphText, offset: number): number;
+
+// @public
+export interface AcceptedTextRange {
+    readonly blockId: string;
+    readonly expectedText?: string;
+    readonly length: number;
+    readonly scope?: ViewScope;
+    readonly start: number;
+}
+
+// @public
+export function acceptedTextRanges(paragraph: ParagraphText, from: number, to: number): HighlightRange[];
+
+// @public
 export interface AnchorHighlightAnimation {
     readonly durationMs?: number;
     readonly easing?: string;
@@ -2238,7 +2253,7 @@ export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'l
 export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.comment-author-required' | 'edit.comment-author-mismatch' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.tracked-deleted-text-only' | 'edit.tracked-foreign-revision-unsupported' | 'edit.tracked-own-pending-change' | 'edit.picture-selected' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.field-unsupported' | 'edit.field-result-unsupported' | 'edit.ooxml-unsupported' | 'edit.style-not-defined' | 'edit.no-styles-defined' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-merge-not-rectangle' | 'edit.table-split-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.preview-active' | 'edit.preview-unsupported' | 'edit.preview-composing' | 'edit.preview-diverged' | 'edit.read-after-commit' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
 
 // @public
-export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits, EditorSelectionReads {
+export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorParagraphText, EditorReviewHits, EditorSelectionReads {
     acceptReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
     addComment(text: string, options?: HistoryGroupOptions): ExecResult;
     addComment(text: string, author?: string, options?: HistoryGroupOptions): ExecResult;
@@ -2565,6 +2580,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     removeToc: {
         tocId?: string;
     };
+    replaceAcceptedText: ReplaceAcceptedTextCommand;
     replaceAllMatches: {
         matchCase?: boolean;
         query: string;
@@ -2898,6 +2914,12 @@ export interface EditorNoteCommands {
         scope?: 'document' | 'section';
         sectionIndex?: number;
     };
+}
+
+// @public
+export interface EditorParagraphText {
+    getParagraphs(options?: ParagraphTextReadOptions): readonly ParagraphText[];
+    getParagraphText(blockId: string, options?: ParagraphTextReadOptions): ParagraphText | null;
 }
 
 // @public
@@ -3943,6 +3965,35 @@ export interface ParagraphTabStop {
 }
 
 // @public
+export interface ParagraphText {
+    readonly acceptedSpans: readonly ParagraphTextSpan[];
+    readonly acceptedText: string;
+    readonly blockId: string;
+    readonly proofing: readonly ParagraphTextProofing[];
+    readonly text: string;
+}
+
+// @public
+export interface ParagraphTextProofing {
+    readonly acceptedStart: number;
+    readonly lang: string | null;
+    readonly length: number;
+    readonly noProof: boolean;
+}
+
+// @public
+export interface ParagraphTextReadOptions {
+    readonly fields?: 'object' | 'result';
+}
+
+// @public
+export interface ParagraphTextSpan {
+    readonly acceptedStart: number;
+    readonly length: number;
+    readonly start: number;
+}
+
+// @public
 export interface PerformanceDiagnostic extends DiagnosticBase {
     readonly code?: PerformanceDiagnosticCode;
     readonly interaction?: TimingSummary;
@@ -4003,6 +4054,12 @@ export interface RelationshipRecord {
 
 // @public
 export type RenderableImageMime = SupportedImageMime | VectorImageMime;
+
+// @public
+export interface ReplaceAcceptedTextCommand {
+    readonly match: AcceptedTextRange;
+    readonly text: string;
+}
 
 // @public
 export interface ReplaceAllMatchesOutcome {
@@ -5090,6 +5147,9 @@ export interface TextMatch {
     readonly start: number;
     readonly text: string;
 }
+
+// @public
+export function textOffsetFromAccepted(paragraph: ParagraphText, offset: number): number;
 
 // @public
 export interface TextPosition {

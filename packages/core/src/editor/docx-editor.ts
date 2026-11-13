@@ -35,6 +35,7 @@ import { createEditorScrolling } from './docx-editor-scroll.ts';
 import { createAnchorNavigation } from './docx-editor-anchor-navigation.ts';
 import { createTextHighlights } from './text-highlights.ts';
 import { createReviewItemsAt } from './review-items-at.ts';
+import { createParagraphTextReads } from './paragraph-text-read.ts';
 import { reviewItemPlacement } from './review-placement-cache.ts';
 import {
   findReviewPlacement,
@@ -124,7 +125,8 @@ import {
 } from './docx-editor-support.ts';
 import { createDocumentOpenFailureState } from './document-open-failure.ts';
 import { execEditorCommand } from './docx-editor-exec.ts';
-import { replaceMatchTarget } from './docx-editor-replace-match.ts';
+import { replaceCommandRefusal } from './replace-command-capability.ts';
+import { reviewItemSpan } from './review-item-span.ts';
 import type { TextTarget } from './text-target.ts';
 import { createMountHistoryGroups } from './editor-history-groups.ts';
 import { createPublishSignal } from './surface-publish-signal.ts';
@@ -1584,28 +1586,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     return index;
   }
 
-  /**
-   * The whole span a card covers. Content kinds (insert/delete/replace) span first range
-   * start to last range end — their ranges are contiguous by construction, a replacement's
-   * two halves included. Everything else anchors at its first range only.
-   */
-  function reviewItemSpan(
-    item: ReviewItem
-  ): { readonly start: SemanticPosition; readonly end: SemanticPosition } | null {
-    if (item.kind === 'revision') {
-      const ranges = item.ranges;
-      if (ranges.length === 0) return null;
-      const contiguous =
-        item.revisionKind === 'replace' ||
-        item.revisionKind === 'insert' ||
-        item.revisionKind === 'delete';
-      const last = contiguous ? ranges[ranges.length - 1]! : ranges[0]!;
-      return { start: ranges[0]!.start, end: last.end };
-    }
-    const range = firstReviewRange(item);
-    return range ? { start: range.start, end: range.end } : null;
-  }
-
   /** Where a comment on the current selection would sit. */
   function selectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null {
     // STILL LOAD-BEARING, though it covers less than it used to. Activation leaves a
@@ -2095,10 +2075,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
       const gated = gateCommand(command, surface, hostConfig.modeForGate(), options);
       if (!gated.ok) return gated.refusal;
-      if (command.type === 'replaceMatch') {
-        const target = replaceMatchTarget(surface!, command.match);
-        if (!target.ok) return target;
-      }
+      const replaceRefusal = replaceCommandRefusal(command, surface!, (id) =>
+        editor.getParagraphText(id)
+      );
+      if (replaceRefusal) return replaceRefusal;
       const proposal = proposalCapabilityRefusal(command, surface!, author);
       if (proposal) return proposal;
       if (isImageCommand(command) && imageCommandHasIdentityFields(command)) {
@@ -2485,7 +2465,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     ...highlights.members,
     ...selectionRead.members,
     ...createReviewItemsAt({ frame: highlights.frame, placements: reviewPlacements }),
-
+    ...createParagraphTextReads({ surface: () => surface, fieldResults: fieldScope.mode }),
     ...createEditorPointMembers(
       () => surface,
       () => !!container && !destroyed

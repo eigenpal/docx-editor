@@ -74,6 +74,7 @@ const COMMANDS: Readonly<Record<EditorCommand['type'], true>> = {
   removeHyperlink: true,
   removeRepeatingSectionItem: true,
   removeTabMark: true,
+  replaceAcceptedText: true,
   replaceAllMatches: true,
   replaceDocument: true,
   replaceImage: true,

@@ -4,6 +4,10 @@
 // after edits once typing pauses (at most one second while edits keep arriving). An array
 // source applies again after a refresh or recovery, which remove every set. Between runs,
 // the engine keeps each mark on its text through edits.
+//
+// A large document lays out its pages in the background after it opens, and a range in a
+// paragraph that layout has not reached yet counts as unavailable. Each time the page total
+// grows, the counts are taken again from the same ranges, without running the source again.
 
 import type {
   Editor,
@@ -28,7 +32,10 @@ const HIGHLIGHT_REFRESH_MAX_WAIT_MS = 1000;
 
 /** Options for {@link watchHighlights}. @public */
 export interface WatchHighlightsOptions extends HighlightOptions {
-  /** Called when the applied and unavailable counts change. */
+  /**
+   * Called when the applied and unavailable counts change, also when background layout of a
+   * large document reaches ranges that were unavailable before.
+   */
   readonly onResult?: (result: HighlightResult) => void;
 }
 
@@ -74,6 +81,10 @@ export function watchHighlights(
   const timers = hostTimers(() => hostElementOfEditor(editor));
   let timer: number | undefined;
   let firstAt = 0;
+  // The ranges of the last application, to count again when background layout adds pages.
+  let applied: readonly HighlightRange[] = [];
+  let pageTotal = -1;
+  let recountTimer: number | undefined;
 
   const report = (next: HighlightResult) => {
     if (next.applied === result.applied && next.unavailable === result.unavailable) return;
@@ -86,7 +97,13 @@ export function watchHighlights(
     firstAt = 0;
     if (stopped) return;
     const ranges = typeof currentSource === 'function' ? currentSource(editor) : currentSource;
+    applied = ranges;
     report(editor.setHighlights(name, ranges, currentOptions));
+  };
+  const recount = () => {
+    recountTimer = undefined;
+    if (stopped || result.unavailable === 0) return;
+    report(editor.setHighlights(name, applied, currentOptions));
   };
   const schedule = () => {
     const now = Date.now();
@@ -96,6 +113,14 @@ export function watchHighlights(
     timer = timers.setTimeout(apply, Math.max(0, wait));
   };
 
+  const offPages = editor.on('selectionChange', (snapshot) => {
+    const total = snapshot.page.total;
+    if (total === pageTotal) return;
+    pageTotal = total;
+    // Coalesced: background layout can add pages in many small steps.
+    if (result.unavailable > 0 && recountTimer === undefined)
+      recountTimer = timers.setTimeout(recount, 0);
+  });
   const off = editor.on('change', (change) => {
     if (typeof currentSource === 'function') {
       if (change.source) apply();
@@ -124,7 +149,9 @@ export function watchHighlights(
       if (stopped) return;
       stopped = true;
       timers.clearTimeout(timer);
+      timers.clearTimeout(recountTimer);
       off();
+      offPages();
       editor.clearHighlights(name);
     },
   };

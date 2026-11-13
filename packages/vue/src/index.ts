@@ -398,6 +398,11 @@ export type {
 } from '@docx-editor.dev/core/editor';
 // The chart names a custom chart pane needs (`useSelectedChart`), so it imports from one package.
 export { CHART_TYPE_CHOICES, chartTypeLabelKey } from '@docx-editor.dev/core/editor';
+export {
+  acceptedOffsetFromText,
+  acceptedTextRanges,
+  textOffsetFromAccepted,
+} from '@docx-editor.dev/core/editor';
 export type {
   ChartColor,
   ChartData,
@@ -599,6 +604,12 @@ export type {
   EditorSnapshot,
   EditorScope,
   PageSetup,
+  AcceptedTextRange,
+  ParagraphText,
+  ParagraphTextProofing,
+  ParagraphTextReadOptions,
+  ParagraphTextSpan,
+  ReplaceAcceptedTextCommand,
   ScrollToAnchorOptions,
   Watermark,
   WatermarkState,

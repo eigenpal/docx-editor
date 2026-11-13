@@ -33,6 +33,12 @@ export {
   type DocxEditorInstance,
   type DocxEditorConfig,
 } from './editor/index.ts';
+// Map a range of `ParagraphText.acceptedText` to highlight ranges, for proofing tools.
+export {
+  acceptedOffsetFromText,
+  acceptedTextRanges,
+  textOffsetFromAccepted,
+} from './editor/index.ts';
 
 // What `DocxEditorConfig` accepts and `DocxEditorInstance` answers with, beyond the contract.
 //

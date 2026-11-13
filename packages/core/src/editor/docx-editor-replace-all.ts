@@ -29,6 +29,7 @@ import { searchStoriesForSurface } from './docx-editor-story-navigation.ts';
 import { runWithHistoryGroup, takeHistoryGroup } from './history-group-scope.ts';
 import type { PaginatedSurface, ScaleMutableSurface } from './paginated-surface-contract.ts';
 import { mapSelectionAcrossText } from './surface-remote-caret.ts';
+import { replacementOps } from './replacement-ops.ts';
 import { partOfNodeId, storyScopeOfNodeId } from './surface-scope.ts';
 
 type ReplaceAllCommand = Extract<EditorCommand, { type: 'replaceAllMatches' }>;
@@ -94,9 +95,7 @@ function planMatch(surface: PaginatedSurface, match: TextMatch, text: string): P
   const end = start + length;
   // Non-null exactly when the edit is tracked: the struck text stays, the insertion follows it.
   const landing = surface.replacementLanding(paragraphId, start, end);
-  const ops: TreeDocOp[] = [];
-  if (end > start) ops.push({ op: 'deleteText', paragraphId, start, end });
-  if (text.length > 0) ops.push({ op: 'insertText', paragraphId, offset: landing ?? start, text });
+  const ops = replacementOps(paragraphId, start, end, text, landing);
   const removes = landing === null;
   const delta = text.length - (removes ? length : 0);
   return { paragraphId, start, end, landing: landing ?? start, ops, delta, removes };

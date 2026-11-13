@@ -703,6 +703,9 @@ export function createListCounterState(index: NumberingIndex): ListCounterState;
 // @public
 export function createParagraphLayoutCache<T>(options?: ParagraphLayoutCacheOptions): ParagraphLayoutCache<T>;
 
+// @internal
+export function createRunProofingReader(styles: StyleCascadeTable | undefined): (paragraph: OoxmlNode, run: OoxmlNode, cellStyle?: TableCellStyleFormatting) => RunProofing;
+
 // @public
 export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasurer;
 
@@ -1025,6 +1028,12 @@ export interface DrawingTransform {
 
 // @public (undocumented)
 export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
+
+// @internal
+export function eastAsianTextRanges(text: string): readonly {
+    readonly from: number;
+    readonly to: number;
+}[];
 
 // @public
 export function effectiveBorderSide(authored: TableBorderSide, tableSide: TableBorderSide, _options?: {
@@ -3622,6 +3631,14 @@ export const roundFontUnitToFixedPoint: (fontUnits: number, denominator: number,
 
 // @public
 export function runBorderStrokesForLine(line: LineRecord): readonly ParagraphBorderStrokeRecord[];
+
+// @internal
+export interface RunProofing {
+    readonly eastAsiaLang: string | null;
+    readonly hidden: boolean;
+    readonly lang: string | null;
+    readonly noProof: boolean;
+}
 
 // @public
 export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolean;

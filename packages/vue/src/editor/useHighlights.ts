@@ -71,6 +71,21 @@ export function useHighlights(
   // Bumped after a refresh or recovery, and by `refresh()`, so any source applies again.
   const refreshTick = shallowRef(0);
   let owned: { readonly editor: Editor; readonly name: string } | null = null;
+  // The last application, counted again when background layout adds pages.
+  let last: {
+    readonly editor: Editor;
+    readonly name: string;
+    readonly ranges: readonly HighlightRange[];
+    readonly options: HighlightOptions | undefined;
+  } | null = null;
+  const report = (applied: HighlightResult) => {
+    if (
+      applied.applied !== result.value.applied ||
+      applied.unavailable !== result.value.unavailable
+    ) {
+      result.value = applied;
+    }
+  };
   // Drops a run that waits for typing to pause; `refresh()` replaces it.
   let cancelPending = () => {};
   scopeDispose(() => owned?.editor.clearHighlights(owned.name));
@@ -115,17 +130,13 @@ export function useHighlights(
         owned = null;
       }
       if (!next) {
+        last = null;
         result.value = EMPTY_RESULT;
         return;
       }
       owned = { editor: next.editor, name: next.name };
-      const applied = next.editor.setHighlights(next.name, next.ranges, next.options);
-      if (
-        applied.applied !== result.value.applied ||
-        applied.unavailable !== result.value.unavailable
-      ) {
-        result.value = applied;
-      }
+      last = next;
+      report(next.editor.setHighlights(next.name, next.ranges, next.options));
     },
     { immediate: true, flush: 'post' }
   );
@@ -154,6 +165,21 @@ export function useHighlights(
         firstAt = 0;
         documentTick.value += 1;
       };
+      // A large document lays out in the background after it opens, and a range that layout
+      // has not reached counts as unavailable: count the same ranges again as pages arrive.
+      let pageTotal = -1;
+      let recountTimer: number | undefined;
+      const offPages = editor.on('selectionChange', (snapshot) => {
+        if (snapshot.page.total === pageTotal) return;
+        pageTotal = snapshot.page.total;
+        if (result.value.unavailable === 0 || recountTimer !== undefined) return;
+        recountTimer = timers.setTimeout(() => {
+          recountTimer = undefined;
+          const current = last;
+          if (!current || current.editor !== editor || result.value.unavailable === 0) return;
+          report(editor.setHighlights(current.name, current.ranges, current.options));
+        }, 0);
+      });
       const off = editor.on('change', (change) => {
         cancel();
         if (change.source === 'refresh' || change.source === 'recovery') {
@@ -183,6 +209,8 @@ export function useHighlights(
       });
       onCleanup(() => {
         off();
+        offPages();
+        timers.clearTimeout(recountTimer);
         cancel();
         if (cancelPending === drop) cancelPending = () => {};
       });
