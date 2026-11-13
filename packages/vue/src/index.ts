@@ -607,6 +607,7 @@ export type {
   PageSetup,
   AcceptedTextRange,
   ParagraphText,
+  ParagraphsChangeEvent,
   ParagraphTextProofing,
   ParagraphTextReadOptions,
   ParagraphTextSpan,

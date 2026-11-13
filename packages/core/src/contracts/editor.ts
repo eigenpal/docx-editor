@@ -57,6 +57,7 @@ export type {
   EditorEvents,
   EditorHostChange,
   EditorHostDocument,
+  ParagraphsChangeEvent,
   ReviewChangesResolvedEvent,
   ReviewItemRevealEvent,
   ReviewItemRevealSource,

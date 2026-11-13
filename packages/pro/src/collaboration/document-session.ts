@@ -697,11 +697,12 @@ class DocumentSession implements DocumentCollaborationSession {
     // This update has already integrated, so applying a journal now would address the wrong
     // offset or the wrong sibling — inside bounds, so admitted, so agreed on by every replica.
     // Journals reach shared state in the frame that commits them instead, which is why there
-    // is nothing left to publish at this point.
-    this.publishSharedToPort();
+    // is nothing left to publish at this point. This replica's own undo or redo publishes
+    // under its actor, so the editor can tell it from a peer's change.
+    this.publishSharedToPort(false, transaction.origin === this.undoManager);
   };
 
-  private publishSharedToPort(full = false): void {
+  private publishSharedToPort(full = false, localHistory = false): void {
     const port = this.port;
     if (!port || this.applyingRemote) return;
     this.applyingRemote = true;
@@ -746,7 +747,7 @@ class DocumentSession implements DocumentCollaborationSession {
         this.remoteCounter += 1;
         return port.applyRemotePackage(pkg, {
           origin: ORIGIN_IDS.mutationRemote,
-          actorId: 'remote',
+          actorId: localHistory ? this.currentIdentity.actorId : 'remote',
           operationId: `${this.sessionId}:remote:${this.remoteCounter}`,
         });
       };

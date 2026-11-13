@@ -1,7 +1,8 @@
 // The facade's `documentChange` events, from one mounted session's commits.
 
-import type { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
+import type { DocumentChange, ParagraphsChangeEvent } from '@docx-editor.dev/core/contracts/editor';
 import type { PaginatedSurface } from './paginated-surface.ts';
+import { createParagraphChangeTracker } from './paragraph-changes.ts';
 import { refreshEditActive } from './refresh-edit-source.ts';
 
 export interface DocumentChangeHooks {
@@ -10,6 +11,9 @@ export interface DocumentChangeHooks {
   /** Move the snapshot version. */
   bump(): void;
   emit(change: DocumentChange): void;
+  /** Whether anything listens to `paragraphsChange`, so a commit nobody reads costs nothing. */
+  wantsParagraphs(): boolean;
+  emitParagraphs(event: ParagraphsChangeEvent): void;
 }
 
 /** Report every commit of `surface`'s session as a `documentChange`. Returns the unsubscribe. */
@@ -17,6 +21,11 @@ export function subscribeDocumentChanges(
   surface: PaginatedSurface,
   hooks: DocumentChangeHooks
 ): () => void {
+  // Created with the subscription, so it starts from the revision this session mounted.
+  const paragraphs = createParagraphChangeTracker(
+    surface.session,
+    () => surface.collaborationSession()?.identity.actorId
+  );
   return surface.session.subscribe((change) => {
     const documentChange: DocumentChange = {
       // The PACKAGE revision, never `change.toRevision`: a header/footer or notes change
@@ -38,5 +47,8 @@ export function subscribeDocumentChanges(
     // Bump BEFORE dispatch, so a handler reading `snapshot()` sees the new state.
     hooks.bump();
     hooks.emit(documentChange);
+    // After `change`, as documented: a handler of either sees the same snapshot.
+    const event = paragraphs.note(change, documentChange.revision, hooks.wantsParagraphs());
+    if (event) hooks.emitParagraphs(event);
   });
 }

@@ -655,6 +655,7 @@ export type {
   HighlightResult,
   AcceptedTextRange,
   ParagraphText,
+  ParagraphsChangeEvent,
   ReviewItemHit,
   ScrollPlacement,
   ScrollToAnchorOptions,

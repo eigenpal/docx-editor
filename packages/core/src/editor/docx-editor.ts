@@ -868,6 +868,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       refitIfPageResized: () => zoomLane.refitIfPageResized(),
       bump,
       emit: emitDocumentChange,
+      wantsParagraphs: events.hasParagraphsChangeHandlers,
+      emitParagraphs: events.emitParagraphsChange,
     });
     refreshHost?.contentMounted(bytes);
     // The page's size is only knowable now — it comes from this document's section properties
