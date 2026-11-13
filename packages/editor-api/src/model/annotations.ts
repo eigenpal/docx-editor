@@ -97,6 +97,21 @@ function readParagraph(
   return gate;
 }
 
+// The store's records stay out of the published declarations: the classes keep their record
+// members private and hand this module these accessors from their static blocks.
+let recordOf: (annotation: Annotation, target: string) => AnnotationRecord;
+let refreshOf: (
+  annotation: Annotation,
+  label: string,
+  onRecord?: (record: AnnotationRecord) => void
+) => ObjectPath;
+let fillAnnotation: (
+  annotation: Annotation,
+  record: AnnotationRecord,
+  names: readonly string[]
+) => void;
+let fillCritique: (critique: CritiqueAnnotation, record: AnnotationRecord) => void;
+
 /**
  * One proofing annotation on a paragraph. Load `id`, `state`, and `critiqueAnnotation`
  * before you read them.
@@ -109,6 +124,12 @@ function readParagraph(
 export class Annotation extends ModelObject {
   #id: string | undefined;
   #critique: CritiqueAnnotation | undefined;
+
+  static {
+    recordOf = (annotation, target) => annotation.#record(target);
+    refreshOf = (annotation, label, onRecord) => annotation.#refresh(label, onRecord);
+    fillAnnotation = (annotation, record, names) => annotation.#fill(record, names);
+  }
 
   /** @internal An annotation a read has already named. */
   static at(
@@ -146,23 +167,23 @@ export class Annotation extends ModelObject {
     this.path.resolveNull();
   }
 
-  /** @internal The record, or the refusal for one the document no longer holds. */
-  record(target: string): AnnotationRecord {
+  /** The record, or the refusal for one the document no longer holds. */
+  #record(target: string): AnnotationRecord {
     const record =
       this.#id === undefined ? undefined : storeOf(this.context, target).record(this.#id);
     if (!record) gone(target);
     return record;
   }
 
-  /** @internal Queue the text read that brings this annotation up to date; answers its gate. */
-  refresh(label: string, onRecord?: (record: AnnotationRecord) => void): ObjectPath {
+  /** Queue the text read that brings this annotation up to date; answers its gate. */
+  #refresh(label: string, onRecord?: (record: AnnotationRecord) => void): ObjectPath {
     const store = storeOf(this.context, label);
     return readParagraph(
       (action) => this.enqueue(action),
       store,
       label,
-      () => this.record(label).paragraph,
-      () => onRecord?.(this.record(label))
+      () => this.#record(label).paragraph,
+      () => onRecord?.(this.#record(label))
     );
   }
 
@@ -192,20 +213,20 @@ export class Annotation extends ModelObject {
    */
   delete(): void {
     const target = `${this.path.label}.delete`;
-    const gate = this.refresh(target);
+    const gate = this.#refresh(target);
     const store = storeOf(this.context, target);
     this.enqueue({
       sort: 'read',
       label: target,
       dependencies: [gate],
       plan: () => this.#check(target),
-      settle: () => store.delete(this.record(target).id),
+      settle: () => store.delete(this.#record(target).id),
     });
   }
 
   /** @internal Refuse unless the annotation is still on its paragraph; answers a harmless read. */
   #check(target: string): AutomationOperation {
-    const record = this.record(target);
+    const record = this.#record(target);
     if (!record.live) gone(target);
     return {
       op: 'getParagraphTextIfPresent',
@@ -214,18 +235,18 @@ export class Annotation extends ModelObject {
     };
   }
 
-  /** @internal Fill the loaded properties a load asked for, from the store. */
-  fill(record: AnnotationRecord, names: readonly string[]): void {
+  /** Fill the loaded properties a load asked for, from the store. */
+  #fill(record: AnnotationRecord, names: readonly string[]): void {
     if (names.includes('id')) this.setLoadedProperty('id', record.id);
     if (names.includes('state')) this.setLoadedProperty('state', record.state);
-    if (names.includes('critiqueAnnotation')) this.critiqueAnnotation.fill(record);
+    if (names.includes('critiqueAnnotation')) fillCritique(this.critiqueAnnotation, record);
   }
 
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     const names = this.selection(request, ANNOTATION_PROPERTIES);
     const label = `${this.path.label}.load`;
-    this.refresh(label, (record) => this.fill(record, names));
+    this.#refresh(label, (record) => this.#fill(record, names));
   }
 }
 
@@ -236,6 +257,10 @@ export class Annotation extends ModelObject {
  */
 export class CritiqueAnnotation extends ModelObject {
   readonly #annotation: Annotation;
+
+  static {
+    fillCritique = (critique, record) => critique.#fill(record);
+  }
   #range: Range | undefined;
 
   /** @internal The critique of `annotation`, addressed through its path. */
@@ -265,14 +290,14 @@ export class CritiqueAnnotation extends ModelObject {
     const target = `${this.path.label}.range`;
     const range = Range.promised(this.context, target, false);
     this.#range = range;
-    const gate = this.#annotation.refresh(target);
+    const gate = refreshOf(this.#annotation, target);
     const store = storeOf(this.context, target);
     this.enqueue({
       sort: 'read',
       label: target,
       dependencies: [gate],
       plan: () => {
-        const record = this.#annotation.record(target);
+        const record = recordOf(this.#annotation, target);
         if (!record.live) gone(target);
         return {
           op: 'getParagraphTextSpan',
@@ -306,13 +331,13 @@ export class CritiqueAnnotation extends ModelObject {
     const store = storeOf(this.context, target);
     let modelText: string | null = null;
     let found: { span: AutomationSpan; record: AnnotationRecord } | undefined;
-    const gate = this.#annotation.refresh(target);
+    const gate = refreshOf(this.#annotation, target);
     this.enqueue({
       sort: 'read',
       label: target,
       plan: () => ({
         op: 'getParagraphTextIfPresent',
-        paragraph: this.#annotation.record(target).paragraph,
+        paragraph: recordOf(this.#annotation, target).paragraph,
         projection: 'model',
       }),
       settle: (value) => {
@@ -325,7 +350,7 @@ export class CritiqueAnnotation extends ModelObject {
       label: target,
       dependencies: [gate],
       plan: () => {
-        const record = this.#annotation.record(target);
+        const record = recordOf(this.#annotation, target);
         if (!record.live) gone(target);
         return {
           op: 'getParagraphTextSpan',
@@ -336,7 +361,7 @@ export class CritiqueAnnotation extends ModelObject {
         };
       },
       settle: (value) => {
-        const record = this.#annotation.record(target);
+        const record = recordOf(this.#annotation, target);
         found = { span: hydratedSpan(value, target), record };
         mapped.resolveTo(record.paragraph);
       },
@@ -375,13 +400,13 @@ export class CritiqueAnnotation extends ModelObject {
   reject(): void {
     const target = `${this.path.label}.reject`;
     const store = storeOf(this.context, target);
-    const gate = this.#annotation.refresh(target);
+    const gate = refreshOf(this.#annotation, target);
     this.enqueue({
       sort: 'read',
       label: target,
       dependencies: [gate],
       plan: () => {
-        const record = this.#annotation.record(target);
+        const record = recordOf(this.#annotation, target);
         if (!record.live) gone(target);
         return {
           op: 'getParagraphTextIfPresent',
@@ -389,19 +414,19 @@ export class CritiqueAnnotation extends ModelObject {
           projection: store.view,
         };
       },
-      settle: () => store.decide(this.#annotation.record(target).id, 'Rejected'),
+      settle: () => store.decide(recordOf(this.#annotation, target).id, 'Rejected'),
     });
   }
 
-  /** @internal Fill `critique` from the store. */
-  fill(record: AnnotationRecord): void {
+  /** Fill `critique` from the store. */
+  #fill(record: AnnotationRecord): void {
     this.setLoadedProperty('critique', critiqueOf(record));
   }
 
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     this.selection(request, ['critique']);
-    this.#annotation.refresh(`${this.path.label}.load`, (record) => this.fill(record));
+    refreshOf(this.#annotation, `${this.path.label}.load`, (record) => this.#fill(record));
   }
 }
 
@@ -490,7 +515,7 @@ export class AnnotationCollection extends ModelObject {
           record.paragraph,
           record.id
         );
-        item.fill(record, names);
+        fillAnnotation(item, record, names);
         return item;
       });
       this.setLoadedProperty('items', items);

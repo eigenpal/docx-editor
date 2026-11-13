@@ -84,21 +84,13 @@ interface ParagraphEntry {
   readonly ids: Set<string>;
 }
 
-/** An opaque id prefix, unique to one store, from the platform random source. */
-function storeToken(): string {
-  const source = (globalThis as { crypto?: { getRandomValues?: unknown } }).crypto;
-  const fill = source?.getRandomValues;
-  if (typeof fill !== 'function') return Date.now().toString(16);
-  const bytes = (fill as (array: Uint8Array) => Uint8Array).call(source, new Uint8Array(6));
-  let hex = '';
-  for (const byte of bytes) hex += byte.toString(16).padStart(2, '0');
-  return hex;
-}
+/** Stores made in this process, so each store's ids carry their own prefix. */
+let stores = 0;
 
 export class AnnotationStore {
   readonly #records = new Map<string, AnnotationRecord>();
   readonly #paragraphs = new Map<string, ParagraphEntry>();
-  readonly #token = storeToken();
+  readonly #token = `a${String((stores += 1))}`;
   readonly #host: AutomationHost;
   readonly #view: RevisionTextView;
   readonly #painter: AnnotationPainter | undefined;
