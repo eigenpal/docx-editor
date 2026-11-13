@@ -97,10 +97,7 @@ describe('display modes equal what resolving would produce', () => {
 });
 
 describe('the differential holds on a real document', () => {
-  const FIXTURE = resolvePath(
-    import.meta.dir,
-    '../../../../../e2e/fixtures/issue-319-sections.docx'
-  );
+  const FIXTURE = resolvePath(import.meta.dir, '../../../../../fixtures/issue-319-sections.docx');
 
   function bodyPart(): OoxmlPart {
     const pkg = readOoxmlPackage(new Uint8Array(readFileSync(FIXTURE)));

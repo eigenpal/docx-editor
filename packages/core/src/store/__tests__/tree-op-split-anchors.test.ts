@@ -18,7 +18,7 @@ import {
 } from '../package/ooxml-tree.ts';
 import { applyTreeOp, paragraphTextOf, type TreeDocOp } from '../store/tree-ops.ts';
 
-const FIXTURE = `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`;
+const FIXTURE = `${import.meta.dir}/../../../../../fixtures/comprehensive-word-element-test.docx`;
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
 // Read once: the package is a zip of trees, and every test here reads the same document.

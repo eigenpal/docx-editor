@@ -1,5 +1,0 @@
-__pycache__/
-*.pyc
-
-# Local validation inputs, references, scores, and previews.
-.local-validation/

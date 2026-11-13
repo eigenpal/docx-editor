@@ -14,7 +14,7 @@ import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surfa
 
 const BYTES = new Uint8Array(
   readFileSync(
-    new URL('../../../../../e2e/fixtures/comprehensive-word-element-test.docx', import.meta.url)
+    new URL('../../../../../fixtures/comprehensive-word-element-test.docx', import.meta.url)
   )
 );
 

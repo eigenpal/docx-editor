@@ -2,7 +2,7 @@
  * Generates a DOCX with the three interactive content-control widget types
  * (checkbox, dropdown, date) for e2e testing the UI widgets (#622 phase 3).
  *
- *   bun run scripts/make-widget-fixture.mjs e2e/fixtures/block-sdt-widgets.docx
+ *   bun run scripts/make-widget-fixture.mjs fixtures/block-sdt-widgets.docx
  */
 
 import JSZip from 'jszip';

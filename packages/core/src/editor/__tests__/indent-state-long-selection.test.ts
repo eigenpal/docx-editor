@@ -37,7 +37,7 @@ function docx(body: string): Uint8Array {
 
 const FIXTURE = new Uint8Array(
   readFileSync(
-    new URL('../../../../../e2e/fixtures/comprehensive-word-element-test.docx', import.meta.url)
+    new URL('../../../../../fixtures/comprehensive-word-element-test.docx', import.meta.url)
   )
 );
 

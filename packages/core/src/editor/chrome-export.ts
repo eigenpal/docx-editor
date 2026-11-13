@@ -48,7 +48,7 @@ export interface ChromePrintSettings {
 export interface ChromeExportHandlers {
   /** Returns continuous document Markdown. Page output is not downloaded. */
   readonly markdown?: (source: Uint8Array) => Promise<{ readonly markdown: string }>;
-  /** Returns PDF bytes from `@docx-editor.dev/docx-to-pdf` on Node.js. */
+  /** Returns PDF bytes from a converter the host provides. */
   readonly pdf?: (
     source: Uint8Array,
     view?: ChromeExportView

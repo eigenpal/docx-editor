@@ -188,7 +188,7 @@ export type {
   ReplaceDocumentRequest,
 } from './contracts/replace-document.ts';
 
-// ─── Capability modules (what `@docx-editor.dev/pro` implements) ─────────────
+// ─── Capability modules (what a review module such as `@gw/docx-review` implements) ─────────────
 export type {
   CollectReviewItems,
   CompareDocumentsBackgroundEngine,

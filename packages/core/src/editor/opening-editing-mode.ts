@@ -45,15 +45,13 @@ export type CommandRefusal = Extract<ExecResult, { ok: false }>;
  * One string, quoted verbatim by `toolbarCommandState` as the disabled tooltip — the
  * same "the engine's own reason" channel every other unavailable control uses.
  */
-export const PRO_REVIEW_REASON =
-  'comments and tracked changes require the pro review module (@docx-editor.dev/pro)';
+export const PRO_REVIEW_REASON = 'comments and tracked changes require a review module';
 
 /**
  * The refusal any attach or undo-takeover path gets when no collaboration
  * module is registered.
  */
-export const PRO_COLLABORATION_REASON =
-  'realtime collaboration requires the pro collaboration module (@docx-editor.dev/pro)';
+export const PRO_COLLABORATION_REASON = 'realtime collaboration requires a collaboration module';
 
 /**
  * The refusal a HOST request for suggesting gets when no author is configured.

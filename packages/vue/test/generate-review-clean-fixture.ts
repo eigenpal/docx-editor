@@ -24,4 +24,4 @@ const bytes = zipSync({
   ),
 });
 
-writeFileSync(resolve(import.meta.dirname, '../../../e2e/fixtures/review-clean-demo.docx'), bytes);
+writeFileSync(resolve(import.meta.dirname, '../../../fixtures/review-clean-demo.docx'), bytes);

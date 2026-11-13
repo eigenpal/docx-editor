@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import JSZip from 'jszip';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const out = resolve(root, 'e2e/fixtures/synthetic-long-edit.docx');
+const out = resolve(root, 'fixtures/synthetic-long-edit.docx');
 const fixedDate = new Date(Date.UTC(2020, 0, 1));
 const paragraphCount = 3_200;
 const sectionBreaks = new Set([777, 1_555, 2_333]);

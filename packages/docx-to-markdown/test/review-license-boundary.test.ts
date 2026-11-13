@@ -7,7 +7,7 @@ import { docx } from './fixture.ts';
 // Pro editing module or license configuration, including for revision projections.
 test('exports comments through the one-shot API without Pro configuration', async () => {
   const docxBytes = new Uint8Array(
-    await readFile(new URL('../../../examples/vite/public/sample.docx', import.meta.url))
+    await readFile(new URL('../../../fixtures/sample.docx', import.meta.url))
   );
   const result = await exportMarkdown(docxBytes);
   expect(result.reviewArtifacts.some((artifact) => artifact.kind === 'comment')).toBe(true);

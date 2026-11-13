@@ -1,7 +1,7 @@
 // Deterministic TIFF bytes for tests.
 //
 // `baselineRgbTiff` is a real, decodable baseline TIFF — uncompressed RGB in a single
-// strip, the shape `e2e/fixtures/images-tiff.docx` carries. `buildTiff` exposes the
+// strip, the shape `fixtures/images-tiff.docx` carries. `buildTiff` exposes the
 // header knobs the structural validator is supposed to refuse: byte order, magic,
 // directory offset, entry count, and the field type of the extent tags.
 

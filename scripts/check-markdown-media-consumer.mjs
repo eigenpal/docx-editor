@@ -46,7 +46,7 @@ try {
   );
   run('bun', ['install', '--ignore-scripts']);
   await cp(
-    path.join(root, 'e2e/fixtures/example-with-image.docx'),
+    path.join(root, 'fixtures/example-with-image.docx'),
     path.join(consumer, 'input.docx')
   );
 

@@ -202,7 +202,7 @@ describe('the stricter oracle still passes a real save and reopen', () => {
   for (const name of FIXTURES) {
     test(`${name}: every part digests identically after save and reopen`, () => {
       const bytes = new Uint8Array(
-        readFileSync(new URL(`../../../../../e2e/fixtures/${name}`, import.meta.url))
+        readFileSync(new URL(`../../../../../fixtures/${name}`, import.meta.url))
       );
       const opened = readOoxmlPackage(bytes);
       if (!opened.ok) throw new Error(`${name}: ${opened.reason}`);

@@ -117,7 +117,7 @@ export interface DocxEditorRootProps {
   /** Live drawing and form-control labels; defaults to the active catalogue. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
   /**
-   * Capability modules to register (`@docx-editor.dev/pro`'s review module, custom nodes,
+   * Capability modules to register (a review module such as `@gw/docx-review`, custom nodes,
    * collaboration). Sampled at mount only because registration is construction-time.
    */
   modules?: readonly EditorModule[];

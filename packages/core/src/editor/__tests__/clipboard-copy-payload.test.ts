@@ -137,9 +137,7 @@ describe('copy degrade tiers', () => {
 
 test('the drawing showcase reports unsupported content instead of silently omitting its charts', () => {
   const loaded = readOoxmlPackage(
-    new Uint8Array(
-      readFileSync(`${import.meta.dir}/../../../../../examples/vite/public/sample.docx`)
-    )
+    new Uint8Array(readFileSync(`${import.meta.dir}/../../../../../fixtures/sample.docx`))
   );
   if (!loaded.ok) throw new Error(loaded.reason);
   const pkg = loaded.package;

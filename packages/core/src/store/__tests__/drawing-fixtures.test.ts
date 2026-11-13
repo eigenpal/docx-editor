@@ -38,7 +38,7 @@ import { paintSemanticLayout } from '../../output/semantic-paint.ts';
 import type { PaintImageUrlPort } from '../../output/semantic-paint-drawings.ts';
 import { FIXTURE_ORACLES } from './drawing-fixture-oracles.ts';
 
-const FIXTURES_DIR = resolve(import.meta.dir, '../../../../../e2e/fixtures');
+const FIXTURES_DIR = resolve(import.meta.dir, '../../../../../fixtures');
 const MANIFEST_PATH = resolve(FIXTURES_DIR, 'drawings-fixtures.md');
 const OWNER = '/word/document.xml';
 

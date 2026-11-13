@@ -255,9 +255,7 @@ test('duplicate oversized faces cannot invalidate an earlier winning face', asyn
 
 test('later optional fallback supplies missing glyphs after an execution-limit rejection', async () => {
   const fallbackBytes = new Uint8Array(
-    readFileSync(
-      new URL('../../../../docx-to-pdf/test/fixtures/Devanagari.subset.ttf', import.meta.url)
-    )
+    readFileSync(new URL('./fixtures/Devanagari.subset.ttf', import.meta.url))
   );
   const opened = await openFontBackedDocumentForExport(documentBytes('नमस्ते'), {
     fonts: [

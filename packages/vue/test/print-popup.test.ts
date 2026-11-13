@@ -158,7 +158,7 @@ for (const packaged of [false, true]) {
     expect(dialog.getAttribute('role')).toBe('alertdialog');
     expect(dialog.getAttribute('aria-label')).toBe('Print failed');
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      'Install @docx-editor.dev/docx-to-pdf on your Node.js server and configure menu.exporters.pdf.'
+      'Install a PDF converter on your Node.js server and configure menu.exporters.pdf.'
     );
     expect(container.querySelector('dialog a')).toBeNull();
     button(container, 'Close')!.click();

@@ -99,27 +99,9 @@ async function main() {
   const gates = [];
   const notes = [];
 
-  // The collaboration policy CI job needs a decision record for any change under the covered
-  // implementation paths. It reads the working tree and untracked files too, so it sees what
-  // this commit adds. A checkout without a main ref (a shallow clone, a fork) leaves it to CI.
-  const base = await mergeBase();
-  if (base) {
-    gates.push(
-      run('collaboration policy', 'node', [
-        'scripts/collaboration/cli.mjs',
-        'check',
-        '--base',
-        base,
-      ])
-    );
-  } else {
-    notes.push('Skipped collaboration policy: no main ref to compare against.');
-  }
 
   // bun check keeps no cache, so every commit checks every workspace from source.
   gates.push(run('TypeScript type check', 'bun', ['run', 'typecheck']));
-  gates.push(run('parity gates', 'bun', ['run', 'check:parity']));
-  gates.push(run('license header checks', 'bun', ['run', 'check:license-headers']));
 
   const { fresh, stale } = apiPackagesByFreshness();
   if (stale.length > 0) {

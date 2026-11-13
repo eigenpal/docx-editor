@@ -5,8 +5,7 @@
 // which cut the band in two and left the toolbar with no ground of its own. The
 // toolbar paints a rounded pill, so flush against the band's edges the radius
 // never showed and the row read as a second flat bar. Hosts worked around it
-// with their own wrapper; the composed demo in `examples/vite` is where this
-// layout came from.
+// with their own wrapper.
 
 // MUST be first: happy-dom registration happens on import.
 import './dom-setup.ts';

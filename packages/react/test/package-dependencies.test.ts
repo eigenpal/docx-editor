@@ -12,7 +12,7 @@
 // exact pin, so the ranges diverge as soon as the engine ships a version this adapter was not
 // built against. A peer makes the manager resolve one, and say so at install when it cannot.
 //
-// `packages/pro/src/__tests__/package-dependencies.test.ts` asserts the same thing for the module
+// The same rule holds for any review module
 // package, for the same reason. Neither file is decoration: moving the engine back to a regular
 // dependency is the failure both were written to catch.
 

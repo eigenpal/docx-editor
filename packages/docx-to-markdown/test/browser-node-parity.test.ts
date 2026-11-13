@@ -143,7 +143,7 @@ describe('browser/server semantic layout parity', () => {
     ],
     [
       'shared comprehensive fixture',
-      new URL('../../../e2e/fixtures/comprehensive-word-element-test.docx', import.meta.url),
+      new URL('../../../fixtures/comprehensive-word-element-test.docx', import.meta.url),
     ],
   ])(
     '%s',
@@ -196,7 +196,7 @@ function performanceMeasurement(
     env: childEnvironment({
       DOCX_EDITOR_WORKER_MODE: mode,
       DOCX_EDITOR_WORKER_FIXTURE: fileURLToPath(
-        new URL('../../../e2e/fixtures/typing-perf-521pp.docx', import.meta.url)
+        new URL('../../../fixtures/typing-perf-521pp.docx', import.meta.url)
       ),
     }),
     encoding: 'utf8',

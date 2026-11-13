@@ -98,7 +98,7 @@ interface SettleReport {
 
 function parseArgs(argv: string[]): Args {
   const args: Args = {
-    fixture: resolve(import.meta.dir, '../../e2e/fixtures', DEFAULT_FIXTURE),
+    fixture: resolve(import.meta.dir, '../../fixtures', DEFAULT_FIXTURE),
     keystrokes: 25,
     warmup: 3,
     json: false,

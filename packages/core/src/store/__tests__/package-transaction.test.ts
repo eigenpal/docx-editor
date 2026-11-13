@@ -31,7 +31,7 @@ import { PackageEditRefusal } from '../store/package-edit-refusal.ts';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const FIXTURE = resolve(
   import.meta.dir,
-  '../../../../../e2e/fixtures/comprehensive-word-element-test.docx'
+  '../../../../../fixtures/comprehensive-word-element-test.docx'
 );
 const COMMENTS_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
 const COMMENTS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';

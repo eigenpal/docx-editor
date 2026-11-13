@@ -1,7 +1,0 @@
-/* Import editor styles
-   In standalone usage: @import '@docx-editor.dev/core/styles/editor.css'; */
-@import '../../../packages/react/src/styles/editor.css';
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;

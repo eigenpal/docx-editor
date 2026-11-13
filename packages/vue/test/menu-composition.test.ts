@@ -222,7 +222,7 @@ test('File > Export reports missing converters after the menu closes', async () 
     await flush();
     for (const [slot, packageName] of [
       ['file.exportMarkdown', 'docx-to-markdown'],
-      ['file.exportPdf', 'docx-to-pdf'],
+      ['file.exportPdf', 'PDF converter'],
     ]) {
       (
         view.container.querySelector(

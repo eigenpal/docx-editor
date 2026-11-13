@@ -1,5 +1,5 @@
 /**
- * Generate e2e/fixtures/header-vml-emf.docx — a generated fixture for the
+ * Generate fixtures/header-vml-emf.docx — a generated fixture for the
  * "first-page header with a VML→EMF letterhead image" code path.
  *
  * Structure mirrors what Word emits for an OLE picture in a header:
@@ -141,5 +141,5 @@ zip.file('word/media/image1.emf', emf);
 zip.file('word/embeddings/oleObject1.bin', Buffer.from([0xd0, 0xcf, 0x11, 0xe0]));
 
 const out = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
-writeFileSync('e2e/fixtures/header-vml-emf.docx', out);
-console.log(`wrote e2e/fixtures/header-vml-emf.docx (${out.length} bytes, EMF ${emf.length}b wrapping PNG ${png.length}b)`);
+writeFileSync('fixtures/header-vml-emf.docx', out);
+console.log(`wrote fixtures/header-vml-emf.docx (${out.length} bytes, EMF ${emf.length}b wrapping PNG ${png.length}b)`);

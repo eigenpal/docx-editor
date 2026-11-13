@@ -22,7 +22,7 @@ const NS = 'http://docx-editor.dev/ns';
 function storeFixture(): { pkg: OoxmlPackage; partName: string } {
   const path = resolve(
     import.meta.dir,
-    '../../../../../../e2e/fixtures/comprehensive-word-element-test.docx'
+    '../../../../../../fixtures/comprehensive-word-element-test.docx'
   );
   const read = readOoxmlPackage(new Uint8Array(readFileSync(path)));
   if (!read.ok) throw new Error(read.reason);

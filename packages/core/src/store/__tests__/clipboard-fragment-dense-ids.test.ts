@@ -4,8 +4,7 @@
 // seeds from "one past the highest in the target" and counts up, which is Word's own
 // sequence. With no collaboration actor bound that sequence must not move: a solo author's
 // saved file is the fidelity baseline, and two concurrent peers are the only reason to
-// leave it. Its striped twin lives in
-// `packages/pro/src/collaboration/__tests__/document-paste-actor-ids.test.ts`.
+// leave it.
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';

@@ -10,7 +10,7 @@ import { strFromU8, unzipSync } from 'fflate';
 import { readOoxmlPart, type OoxmlReadResult } from '../package/ooxml-tree.ts';
 import { readOoxmlPartSteps, setSteppedPartReadForTest } from '../package/ooxml-part-steps.ts';
 
-const FIXTURES = join(import.meta.dir, '../../../../../e2e/fixtures');
+const FIXTURES = join(import.meta.dir, '../../../../../fixtures');
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const metadata = { name: '/word/document.xml', contentType: 'application/xml' } as const;
 

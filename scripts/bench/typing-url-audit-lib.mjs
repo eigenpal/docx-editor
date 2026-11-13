@@ -122,7 +122,7 @@ export function assertSafeFixtureBasename(fixture) {
 export function loadTypingPerfFixtureManifest(fixture = DEFAULT_FIXTURE) {
   const manifestPath = join(
     dirname(fileURLToPath(import.meta.url)),
-    '../../e2e/fixtures/typing-perf-521pp.manifest.json'
+    '../../fixtures/typing-perf-521pp.manifest.json'
   );
   /** @type {TypingPerfFixtureManifest} */
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));

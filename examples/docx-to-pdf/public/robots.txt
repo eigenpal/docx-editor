@@ -1,5 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /api/
-
-Sitemap: https://docx-to-pdf.docx-editor.dev/sitemap.xml

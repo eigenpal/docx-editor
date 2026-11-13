@@ -772,7 +772,7 @@ describe('patchTblGridColumn', () => {
 
 describe('topology on real fixtures', () => {
   test('with-tables.docx outer table reads without nested cell leakage', () => {
-    const bytes = readFileSync(`${import.meta.dir}/../../../../../e2e/fixtures/with-tables.docx`);
+    const bytes = readFileSync(`${import.meta.dir}/../../../../../fixtures/with-tables.docx`);
     const pkg = readOoxmlPackage(bytes);
     if (!pkg.ok) throw new Error(pkg.reason);
     const part = pkg.package.parts.get(pkg.package.mainDocumentPart)!;

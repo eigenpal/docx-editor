@@ -59,7 +59,7 @@ const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawi
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 
-const FIXTURES_DIR = resolve(import.meta.dir, '../../../../../e2e/fixtures');
+const FIXTURES_DIR = resolve(import.meta.dir, '../../../../../fixtures');
 const measurer = createFixedMeasurer(6, 14);
 
 /** Anchored, page-positioned, wrap-none textbox drawing with the given story content. */

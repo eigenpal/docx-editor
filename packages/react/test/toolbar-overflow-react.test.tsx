@@ -658,8 +658,8 @@ describe('toolbar overflow integration', () => {
     for (const [id, items] of full) {
       const group = toolbar.querySelector<HTMLElement>(`[data-toolbar-group="${id}"]`);
       const shown = group
-        ? [...group.querySelectorAll<HTMLElement>(':scope > [data-toolbar-item]')].map(
-            (item) => item.getAttribute('data-toolbar-item')!
+        ? [...group.querySelectorAll<HTMLElement>(':scope > [data-toolbar-item]')].map((item) =>
+            item.getAttribute('data-toolbar-item')!
           )
         : [];
       // What stays is a prefix of the group, in bar order.
@@ -672,8 +672,10 @@ describe('toolbar overflow integration', () => {
     expect(partial.length).toBe(1);
     // A separator stands only between drawn groups.
     for (const rule of toolbar.querySelectorAll('.docx-toolbar__separator')) {
-      expect(rule.previousElementSibling?.hasAttribute('data-toolbar-group') ||
-        rule.previousElementSibling?.hasAttribute('data-toolbar-fixed')).toBe(true);
+      expect(
+        rule.previousElementSibling?.hasAttribute('data-toolbar-group') ||
+          rule.previousElementSibling?.hasAttribute('data-toolbar-fixed')
+      ).toBe(true);
     }
 
     await act(async () => {
@@ -837,16 +839,6 @@ describe('toolbar overflow integration', () => {
     expect(tableMenuRule).toContain('inset-inline-start: auto');
     expect(tableMenuRule).not.toContain('top: auto');
     expect(tableMenuRule).not.toContain('bottom: 100%');
-
-    const demoCss = readFileSync(
-      new URL('../../../examples/vite/src/styles.css', import.meta.url),
-      'utf8'
-    );
-    const mobileToolbarRule =
-      demoCss.match(
-        /@media \(max-width: 768px\)\s*\{[\s\S]*?\.docx-editor \[role='toolbar'\]\s*\{[^}]+\}/
-      )?.[0] ?? '';
-    expect(mobileToolbarRule).not.toContain('overflow');
   });
 });
 

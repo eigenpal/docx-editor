@@ -2,8 +2,8 @@
 // sits beside the page, which is the one question the tree cannot answer.
 //
 // The split is deliberate (pro-review-and-custom-nodes): deriving the queue from a document —
-// walking revisions, stitching comment anchors, threading replies — is the pro review module's
-// implementation and lives in `@docx-editor.dev/pro`. The review-item VOCABULARY — the typed
+// walking revisions, stitching comment anchors, threading replies — is a review module's
+// implementation and lives in a review module (ours: `@gw/docx-review`). The review-item VOCABULARY — the typed
 // item shapes, stable keys and position resolution — lives in the store lane
 // (`store/store/review-items.ts`), where the binding lane can reach it too; this module
 // re-exports it so `@docx-editor.dev/core/layout` keeps publishing the whole review surface,

@@ -8,7 +8,7 @@ import type { TableFragmentRecord } from '../semantic-records.ts';
 
 function layoutFixture() {
   const bytes = readFileSync(
-    `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`
+    `${import.meta.dir}/../../../../../fixtures/comprehensive-word-element-test.docx`
   );
   const result = readOoxmlPackage(bytes);
   if (!result.ok) throw new Error(result.reason);

@@ -60,8 +60,8 @@ export const cache = (hits: number, misses: number, size: number) => ({
 // The 500+ page fixtures are generated on demand (they are too large to commit); the
 // generator is byte-deterministic, so the sha still pins the content.
 export function ensureMassiveFixtures(): void {
-  const multi = resolve(root, 'e2e/fixtures/generated/synthetic-massive-multisection.docx');
-  const single = resolve(root, 'e2e/fixtures/generated/synthetic-massive-singlesection.docx');
+  const multi = resolve(root, 'fixtures/generated/synthetic-massive-multisection.docx');
+  const single = resolve(root, 'fixtures/generated/synthetic-massive-singlesection.docx');
   if (existsSync(multi) && existsSync(single)) return;
   const run = Bun.spawnSync({
     cmd: [process.execPath, 'scripts/create-synthetic-massive-edit-fixture.mjs'],

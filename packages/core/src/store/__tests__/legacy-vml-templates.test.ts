@@ -20,7 +20,7 @@ beforeAll(() => installDrawingRenderers({ legacyTextArt }));
 afterAll(() => installDrawingRenderers({ legacyTextArt: installed }));
 
 function template(file: string, part: string, type: number): string {
-  const fixture = new URL(`../../../../../e2e/fixtures/${file}`, import.meta.url);
+  const fixture = new URL(`../../../../../fixtures/${file}`, import.meta.url);
   const xml = strFromU8(unzipSync(readFileSync(fixture))[part]!);
   const value = xml.match(
     new RegExp(`<v:shapetype[^>]*id="_x0000_t${type}"[\\s\\S]*?</v:shapetype>`)

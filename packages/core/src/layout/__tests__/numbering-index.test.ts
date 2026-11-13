@@ -7,7 +7,7 @@ import { buildNumberingIndex, resolveNumberingLevel } from '../numbering-index.t
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const FIXTURE = resolve(
   import.meta.dir,
-  '../../../../../e2e/fixtures/comprehensive-word-element-test.docx'
+  '../../../../../fixtures/comprehensive-word-element-test.docx'
 );
 
 describe('numbering index', () => {

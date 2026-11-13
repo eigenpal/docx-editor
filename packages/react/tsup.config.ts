@@ -34,10 +34,10 @@ export default defineConfig(
     // the real build output rather than from `dependencies` is what keeps the
     // notice honest when `external` below changes.
     metafile: true,
-    // The engine stays external. It is a published package, and `@docx-editor.dev/pro`
-    // imports it directly, so inlining a copy here would give a page running both
-    // packages two engines: pro's modules would register against one instance while
-    // the adapter painted from another.
+    // The engine stays external. It is a published package, and a review module (such as
+    // `@gw/docx-review`) imports it directly, so inlining a copy here would give a page two
+    // engines: the module would register against one instance while the adapter painted
+    // from another.
     external: ['react', 'react-dom'],
   })
 );

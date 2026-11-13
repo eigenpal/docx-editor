@@ -6,7 +6,7 @@ import { cache, ensureMassiveFixtures, runBench, workByName } from './edit-bench
 // unchanged tail is reused by whole-sheet remap instead of being re-placed.
 test('500-page single-section: whole-page shifts reuse the tail', () => {
   ensureMassiveFixtures();
-  const report = runBench('e2e/fixtures/generated/synthetic-massive-singlesection.docx');
+  const report = runBench('fixtures/generated/synthetic-massive-singlesection.docx');
   expect(report.fixtureSha256).toBe(
     'dea67b65d100a30c203c87b4845163af8d955d59e06ee4f6f82c69eab11cb8db'
   );

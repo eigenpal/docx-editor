@@ -20,7 +20,7 @@ import { decodePort, PNG_1X1, settle } from './image-decode-harness.ts';
 import { createContentControlPictureWidget } from '../content-control-picture-widget.ts';
 
 const catalog = new Uint8Array(
-  readFileSync(new URL('../../../../../e2e/fixtures/form-controls-catalog.docx', import.meta.url))
+  readFileSync(new URL('../../../../../fixtures/form-controls-catalog.docx', import.meta.url))
 );
 function changed(
   main: (xml: string) => string = (x) => x,

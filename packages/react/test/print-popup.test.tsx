@@ -142,7 +142,7 @@ for (const packaged of [false, true]) {
     await selectPrint(view);
     expect(view.getByRole('alertdialog').getAttribute('aria-label')).toBe('Print failed');
     expect(view.getByRole('alert').textContent).toContain(
-      'Install @docx-editor.dev/docx-to-pdf on your Node.js server and configure menu.exporters.pdf.'
+      'Install a PDF converter on your Node.js server and configure menu.exporters.pdf.'
     );
     expect(view.queryByRole('link', { name: 'Open PDF' })).toBeNull();
     act(() => {

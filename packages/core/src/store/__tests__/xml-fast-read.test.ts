@@ -158,7 +158,7 @@ describe('mutations of a part', () => {
 });
 
 describe('fixture parts', () => {
-  const fixtures = join(import.meta.dir, '../../../../../e2e/fixtures');
+  const fixtures = join(import.meta.dir, '../../../../../fixtures');
   test('read the same tree from every XML part of every fixture', () => {
     let fast = 0;
     for (const file of readdirSync(fixtures).filter((name) => name.endsWith('.docx'))) {

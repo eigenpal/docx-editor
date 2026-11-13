@@ -15,7 +15,7 @@ import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { DocxEditorContextMenu } from '../src/editor/contextmenu/index.ts';
 import { docx, flush } from './helpers/fixtures.ts';
 import { en } from '@docx-editor.dev/i18n';
-import { reviewModule } from '../../pro/src/index';
+import { stubReviewModule as reviewModule } from '../../core/src/editor/__tests__/review-test-module';
 
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 

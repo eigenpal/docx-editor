@@ -2,7 +2,7 @@
  * Generates a DOCX with a real w15:repeatingSection containing two
  * w15:repeatingSectionItem instances — for testing add/remove (#622 phase 3).
  *
- *   bun run scripts/make-repeating-fixture.mjs e2e/fixtures/block-sdt-repeating.docx
+ *   bun run scripts/make-repeating-fixture.mjs fixtures/block-sdt-repeating.docx
  */
 
 import JSZip from 'jszip';

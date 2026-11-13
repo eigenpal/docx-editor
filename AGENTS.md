@@ -1,5 +1,7 @@
 # docx-editor.dev
 
+> This fork holds only Apache-2.0 code. The EigenPal Pro License packages (`pro`, `editor-api`, `docx-to-pdf`, `telemetry`) were removed; never add them back or import them. Comments and tracked changes come from `@gw/docx-review` in `extensions/review`.
+
 WYSIWYG editor and rendering engine for DOCX. Output must match MS Word: fonts, theme colors, styles, tables, headers/footers, section layout.
 
 ## Local instructions
@@ -22,15 +24,9 @@ Write all replies in ASD-STE100 Simplified Technical English.
 
 Keep technical items exact. File paths, function names, flags, and numbers do not change. For example, write `packages/core/src/layout/semantic-layout.ts` and `w:contextualSpacing` in full.
 
-In user-facing text, always use the name `EigenPal Pro License`. Do not rename the legal license files or `LicenseRef-EigenPal-Pro-Evaluation-1.0` metadata.
-
 ## Public API compatibility
 
 All public document automation APIs must keep the Microsoft Word Office.js shape. Match member names, signatures, enum values, return types, and `load()` / `context.sync()` behavior. Use existing Office.js members when they express the operation. Do not add competing convenience methods. This includes server agents: set `document.changeTrackingMode`, then use standard edits such as `range.insertText(text, 'Replace')` and `range.delete()` to create redlines.
-
-Compatibility includes behavior. Explicitly refuse unsupported modes or operations; never silently approximate them. Record supported subsets and differences in `packages/editor-api/compat/manifest.json` and public documentation. Extend the pinned Office.js reference, conformance fixtures, and runtime tests when adding public members. Keep host creation, collaboration transport, and job orchestration separate from the Office-shaped document model. These infrastructure APIs have no Office.js equivalent. Do not claim full Office.js compatibility from subset conformance.
-
-Run `bun run --filter '@docx-editor.dev/editor-api' compat:report` to check document editing methods and property writes against pinned Office.js signatures. The command checks both the broad editing inventory and an 81-member profile. Reads and host setup are excluded. See [Compatibility reports](packages/editor-api/compat/README.md) for scope definitions and maintenance. CI reports editing percentages without blocking merges. Full results are in `packages/editor-api/compat/reports/`. Record per-endpoint runtime differences in `packages/editor-api/compat/runtime-notes.json`; signature matches do not prove runtime equivalence.
 
 ### Office.js developer experience
 
@@ -43,8 +39,6 @@ Run `bun run --filter '@docx-editor.dev/editor-api' compat:report` to check docu
 - Make supported host and operation limits visible in types, JSDoc, examples, and compatibility documentation.
 - Never disable tracking automatically to make an unsupported tracked edit succeed.
 
-Use `packages/editor-api/OFFICE_JS_GUIDE.md` as the reference for agent-facing examples. Dedicated API guides and the complete public member directory live in `docs/site/content/editor-api/`. Keep the relevant guide and `reference.mdx` current when adding or changing public API behavior.
-
 ## Packages
 
 One engine. Thin chrome on top.
@@ -54,17 +48,12 @@ One engine. Thin chrome on top.
 | `core` | **The engine.** `store/` (canonical tree, ops, OPC read/write), `layout/` (DOM-free), `output/` (paint), `editor/` (facade, surface, chrome registry), `contracts/`, `binding/`, `automation/` | published, external to `react` |
 | `react` | The adapter: provider + hooks, holds no editing state | published |
 | `i18n` | Shared strings | published |
-| `editor-api` | `DocxEditor` automation object model, headless/server | published, Pro license |
-| `pro` | Review module (comments, tracked changes) + custom nodes, as `EditorModule`s | published, Pro license |
 | `docx-to-markdown` | DOCX to Markdown conversion with pages and media | published |
-| `docx-to-pdf` | DOCX to PDF conversion on Node.js | release-enabled, EigenPal Pro License |
 | `fonts` | Metric-compatible substitutes for Word's defaults | published |
 | `vue` | The Vue 3 adapter twin, parity-gated against `react` | published |
 | `nuxt` | Nuxt module over the Vue adapter | WIP, private |
 
 React and Vue both ship; the parity gates below keep them from drifting.
-
-**The engine must resolve to ONE copy.** It holds module-level state — the HarfBuzz shaper and its cache budget, the grapheme boundary strategy, layout caches keyed by object identity. Two copies in a tree do not crash; they load the shaper twice and miss every identity-keyed cache, quietly. So `core` is external to `react` (not inlined) and a **peer** of both `react` and `pro`, which makes the package manager resolve one and say so at install when it cannot. Both adapters assert their own dependency shape: `packages/{react,pro}/src/__tests__/package-dependencies.test.ts`. Never move `core` back to a regular `dependency`.
 
 Inside `core`, each directory is a guarded lane with a declared dependency edge and environment (`store` and `layout` are DOM-free, `binding` is the only PM-aware one). The DAG is machine-readable in `packages/core/src/__tests__/core-lane-graph.ts` and documented in `docs/architecture/production-engine-packages.md`. A lane taking a new dependency edits that DAG.
 
@@ -131,7 +120,6 @@ openspec validate typed-ooxml-paragraph-editor --strict
 - `bun run lint` runs oxlint with `.oxlintrc.json`. Its errors are the `max-lines` caps (1000 lines for most files, per-file caps up to 3500 for the handful already past it) and the repository rules in `scripts/oxlint/docx-rules.mjs` (HTML-from-strings sinks in `packages/*/src` non-test code, global `@keyframes` names, varargs array spread in `core/src/{store,layout}`, raw Word compatibility-mode comparisons outside `core/src/layout/compatibility/`) plus the framework-isolation `no-restricted-imports`. Nothing else catches the caps, so adding to a large file passes typecheck and the whole suite and fails CI. Extract; do not raise the cap — `scripts/check-max-lines-caps.mjs` also fails a cap that drifts more than 150 lines above its file. `scripts/__tests__/oxlint-rules.test.ts` keeps the repository rules firing; extend it when you add one. Lint covers `examples/*/src` as well as `packages/*/src` — the demos hit the same line caps.
 - `bun run test` shards the suite one process per file across a worker pool (`scripts/test/run-parallel.mjs`, `--jobs N` to pin the width). That is also what CI runs. `bun test` still works and is the one to reach for when you want a single file, `-t`, or `--watch`; `bun run test:serial` is the whole suite the old way.
 - `bun run test:changed` runs only the test files that import a changed file, directly or through other imports, compared with the merge base with `main`. `--list` prints the selection. It runs the whole suite when a change is outside what the import graph can follow, such as `bun.lock`, a `package.json`, a `tsconfig`, or the test runner. A change in `core` still selects most of the suite, because most tests import the `core` entry point.
-- `bun run test:no-collab` runs the suite without the collaboration tests: the collaboration server scenarios in `benchmarks/`, the `pro` and `core` collaboration folders, the collaboration scripts, and the collaboration example. Use it for engine changes that do not touch shared state, operations, or the editor. It finishes in a fraction of the full run. CI still runs the full suite.
 - The pool is machine-aware, and must stay that way: the heavy OOXML-oracle files peak at multiple GiB each and slowest-first starts them together, which once froze a 48 GiB machine (fourteen workers, ~94 GiB footprint, WindowServer watchdog death). The runner caps width by installed memory, splits width and budget between concurrent runs on the machine (tmpdir registry), and gates dispatch on each file's measured peak footprint plus live memory pressure. `--jobs` pins the width but never lifts the gate. A single test file that needs more than a few GiB is a bug to file, not a budget to raise.
 - A file that leaves state on `document` can only be caught by the serial run — per-file processes hide it. Scope DOM queries to the container you mounted.
 - The pre-commit hook runs `lint-staged`, then its other gates side by side (`scripts/precommit/gates.mjs`). The API snapshot gate skips packages whose `dist/` is older than their sources, because a stale build fails correct commits; CI checks every package on a fresh build.

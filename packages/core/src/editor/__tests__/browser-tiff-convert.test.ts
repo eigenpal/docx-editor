@@ -14,7 +14,7 @@ import { resolveImageResourceLimits } from '../../store/runtime/limits.ts';
 import { baselineRgbTiff, extentOnlyTiff } from '../../store/__tests__/tiff-test-bytes.ts';
 
 const LIMITS = resolveImageResourceLimits();
-const FIXTURES_DIR = resolve(import.meta.dir, '../../../../../e2e/fixtures');
+const FIXTURES_DIR = resolve(import.meta.dir, '../../../../../fixtures');
 
 function fixtureMedia(name: string): Record<string, Uint8Array> {
   return unzipSync(new Uint8Array(readFileSync(resolve(FIXTURES_DIR, name))));

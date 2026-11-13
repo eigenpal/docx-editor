@@ -10,7 +10,7 @@ import { cache, ensureMassiveFixtures, runBench, workByName } from './edit-bench
 // ~8.4k blocks (a full ~600ms relayout per keypress); they must stay at a handful.
 test('500-page multi-section: Enter and Backspace stay incremental', () => {
   ensureMassiveFixtures();
-  const report = runBench('e2e/fixtures/generated/synthetic-massive-multisection.docx');
+  const report = runBench('fixtures/generated/synthetic-massive-multisection.docx');
   expect(report.fixtureSha256).toBe(
     '3462da9f2918283b2fa1a02494deb987823e8b118b62c65e7a69184a3b780e0e'
   );

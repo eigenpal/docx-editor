@@ -16,7 +16,7 @@
 // live session. Any move of the live revision after BEGIN, local or remote, is the caller's to
 // see: it marks the preview stale.
 //
-// Committing is not this module's job. The editor-api runtime replays the preview's recorded
+// Committing is not this module's job. The automation runtime replays the preview's recorded
 // batches against the live host as one history group. This module only forks, paints and ends.
 
 import type { AutomationCapabilities, AutomationHost } from '../automation/protocol.ts';

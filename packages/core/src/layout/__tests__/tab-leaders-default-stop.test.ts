@@ -61,7 +61,7 @@ const lay = (part: OoxmlPart, defaultTabStopPt?: number) =>
 
 const FIXTURE = resolve(
   import.meta.dir,
-  '../../../../../e2e/fixtures/comprehensive-word-element-test.docx'
+  '../../../../../fixtures/comprehensive-word-element-test.docx'
 );
 
 describe('w:tab/@w:leader is read and carried', () => {

@@ -17,7 +17,7 @@ import type {
   TableRowFragmentRecord,
 } from '../semantic-records.ts';
 
-const FIXTURE = new URL('../../../../../e2e/fixtures/vmerge-row-span.docx', import.meta.url);
+const FIXTURE = new URL('../../../../../fixtures/vmerge-row-span.docx', import.meta.url);
 
 /** `w:trHeight` minimums the fixture authors, in points. */
 const SHORT_MINIMUMS_PT = [60, 120, 80];

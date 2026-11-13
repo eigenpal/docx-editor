@@ -3,7 +3,7 @@
  * rich text, table-wrapping, checkbox, dropdown, date, a repeating section with
  * items, plus locked and data-bound controls (whose widgets are suppressed).
  *
- *   bun run scripts/make-showcase-fixture.mjs e2e/fixtures/block-sdt-showcase.docx
+ *   bun run scripts/make-showcase-fixture.mjs fixtures/block-sdt-showcase.docx
  */
 
 import JSZip from 'jszip';

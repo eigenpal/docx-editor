@@ -96,7 +96,7 @@ export interface DocxEditorConfig {
   /** Drawing and form-control UI labels; defaults to English when omitted. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
   /**
-   * Capability modules to register — the seam `@docx-editor.dev/pro` plugs in
+   * Capability modules to register — the seam a review module (such as `@gw/docx-review`) plugs in
    * through. Omitted, the editor runs the free tier: lossless round-trip,
    * final-state revision rendering, review chrome disabled with the engine's
    * reason. See {@link EditorModule}.
@@ -580,7 +580,7 @@ export interface DocxEditorInstance extends Editor {
    * change or a comment, so this is a narrow fallback rather than the way to reach a
    * commenter.
    *
-   * @internal The seam `@docx-editor.dev/pro`'s review rail resolves those authors
+   * @internal The seam a review rail resolves those authors
    * through. A consumer reads `useReviewAuthor` (pro) or `useReviewAuthors` (react)
    * instead; nothing here answers a question those two do not.
    */

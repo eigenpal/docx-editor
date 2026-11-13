@@ -22,7 +22,7 @@ import { piecesOfParagraph } from '../field-projection.ts';
 import { isRevisionWrapper, revisionAttributionOf } from '../revision-projection.ts';
 import { storyBlocks } from '../story-roots.ts';
 
-const FIXTURES = resolve(import.meta.dir, '../../../../../e2e/fixtures');
+const FIXTURES = resolve(import.meta.dir, '../../../../../fixtures');
 
 /**
  * Text a run child contributes, `w:t` and `w:delText` alike.
@@ -141,7 +141,7 @@ function describeGap(gap: AttributionGap): string {
 /**
  * Bun's 5 s default is the wrong bar for a whole-corpus oracle.
  *
- * This test opens and lays out every `.docx` in `e2e/fixtures/` — around a hundred of them,
+ * This test opens and lays out every `.docx` in `fixtures/` — around a hundred of them,
  * about 3.1 s in one process on a developer machine. That is close enough to the default
  * that a loaded runner tips it over, and a timing failure here reddens `bun run test:serial`,
  * which is the only run that catches a test leaving state on `document`. A ceiling wide

@@ -28,7 +28,7 @@ const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
-const FIXTURE = resolve(import.meta.dir, '../../../../../e2e/fixtures/title-page-furniture.docx');
+const FIXTURE = resolve(import.meta.dir, '../../../../../fixtures/title-page-furniture.docx');
 
 const measurer = createFixedMeasurer(6, 14);
 

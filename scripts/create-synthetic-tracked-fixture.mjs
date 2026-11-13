@@ -27,7 +27,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const huge = process.argv.includes('--huge');
 const out = resolve(
   root,
-  huge ? 'e2e/fixtures/synthetic-huge-tracked.docx' : 'e2e/fixtures/synthetic-tracked-numbered.docx'
+  huge ? 'fixtures/synthetic-huge-tracked.docx' : 'fixtures/synthetic-tracked-numbered.docx'
 );
 const fixedDate = new Date(Date.UTC(2020, 0, 1));
 const clauseCount = huge ? 4_250 : 620;

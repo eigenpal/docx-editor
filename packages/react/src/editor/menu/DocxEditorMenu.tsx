@@ -115,7 +115,7 @@ const MENU_PARTS: Record<ChromeMenuId, MenuPartComponent> = {
 /** Props for `DocxEditor.Menu`. @public */
 export interface DocxEditorMenuProps {
   /**
-   * Converter handlers. Markdown requires docx-to-markdown; PDF requires docx-to-pdf on Node.js.
+   * Converter handlers. Markdown requires docx-to-markdown; PDF requires a converter the host provides.
    * File > Print also uses the PDF handler. Missing handlers show an error.
    */
   exporters?: ChromeExportHandlers;

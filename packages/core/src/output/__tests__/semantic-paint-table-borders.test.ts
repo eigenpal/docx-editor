@@ -496,7 +496,7 @@ describe('table cell border paint', () => {
 
   test('§18.5 explicit cell none suppresses painted table frame', () => {
     const bytes = readFileSync(
-      `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`
+      `${import.meta.dir}/../../../../../fixtures/comprehensive-word-element-test.docx`
     );
     const result = readOoxmlPackage(bytes);
     if (!result.ok) throw new Error(result.reason);
@@ -524,7 +524,7 @@ describe('table cell border paint', () => {
 
   test('§5.3 comprehensive fixture double blue corners are concentric Ls', () => {
     const bytes = readFileSync(
-      `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`
+      `${import.meta.dir}/../../../../../fixtures/comprehensive-word-element-test.docx`
     );
     const result = readOoxmlPackage(bytes);
     if (!result.ok) throw new Error(result.reason);

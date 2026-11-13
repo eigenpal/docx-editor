@@ -213,7 +213,7 @@ function positiveInteger(value: string | undefined, fallback: number, flag: stri
 }
 
 function parseArgs(argv: readonly string[]): Args {
-  let fixture = 'e2e/fixtures/synthetic-long-edit.docx';
+  let fixture = 'fixtures/synthetic-long-edit.docx';
   let runs = 9;
   let warmup = 2;
   let json = false;

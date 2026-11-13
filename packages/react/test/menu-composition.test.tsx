@@ -846,7 +846,7 @@ test('File > Export reports missing converters after the menu closes', async () 
   const { view } = mountMenu(<DocxEditorMenu />);
   for (const [slot, packageName] of [
     ['file.exportMarkdown', 'docx-to-markdown'],
-    ['file.exportPdf', 'docx-to-pdf'],
+    ['file.exportPdf', 'PDF converter'],
   ]) {
     openMenu(view, 'toolbar.file');
     openSubmenu(view, 'toolbar.export');

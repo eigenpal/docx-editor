@@ -13,7 +13,7 @@ import { piecesOfParagraph } from '../field-projection.ts';
 import type { RevisionAttribution, RevisionDisplayMode } from '../revision-projection.ts';
 import { storyBlocks } from '../story-roots.ts';
 
-const FIXTURES = resolve(import.meta.dir, '../../../../../e2e/fixtures');
+const FIXTURES = resolve(import.meta.dir, '../../../../../fixtures');
 
 function partOf(fixture: string, partName: string): OoxmlPart {
   const bytes = new Uint8Array(readFileSync(resolve(FIXTURES, fixture)));

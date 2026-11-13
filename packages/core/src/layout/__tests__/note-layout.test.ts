@@ -26,7 +26,7 @@ import { paintSemanticLayout } from '../../output/semantic-paint.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 import type { OoxmlPart } from '../../store/package/ooxml-tree.ts';
 
-const FIXTURES = resolve(import.meta.dir, '../../../../../e2e/fixtures');
+const FIXTURES = resolve(import.meta.dir, '../../../../../fixtures');
 const COMPREHENSIVE = resolve(FIXTURES, 'comprehensive-word-element-test.docx');
 const OVERFLOW = resolve(FIXTURES, 'footnote-bottom-overflow.docx');
 const OVERLAP = resolve(FIXTURES, 'footnote-overlap-regression.docx');

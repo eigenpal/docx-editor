@@ -123,7 +123,6 @@ e2e/fixtures/synthetic-massive-singlesection.docx
 # Rooms the collaboration example's Hocuspocus server persists.
 examples/collaboration-hocuspocus/server/.data/
 # Generated informational Office.js reports (the reference inventory is committed).
-packages/editor-api/compat/reports/
 
 # Isolated collaboration candidates and diagnostic traces.
 .cache/collaboration/

@@ -91,7 +91,7 @@ describe('server-first defaults', () => {
   test('pins shaped pagination and translation for the shared comprehensive layout fixture', async () => {
     const bytes = new Uint8Array(
       await readFile(
-        new URL('../../../e2e/fixtures/comprehensive-word-element-test.docx', import.meta.url)
+        new URL('../../../fixtures/comprehensive-word-element-test.docx', import.meta.url)
       )
     );
     const opened = await openDocumentForExport(bytes);

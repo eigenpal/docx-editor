@@ -29,7 +29,7 @@ import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts'
 import type { OoxmlNode, OoxmlPackage, OoxmlPart } from '../package/ooxml-tree.ts';
 import type { TreeDocOp } from '../store/tree-op-validate.ts';
 
-const FIXTURE = `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`;
+const FIXTURE = `${import.meta.dir}/../../../../../fixtures/comprehensive-word-element-test.docx`;
 const original = readFileSync(FIXTURE);
 
 /** A freshly read package, so each case starts from the same bytes. */

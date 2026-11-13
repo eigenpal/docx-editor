@@ -1,7 +1,7 @@
 // A STUB collaboration module for core's seam tests.
 //
 // Core tests exercise attach gating, first-registration-wins, and undo handover.
-// The real Yjs replica lives in `@docx-editor.dev/pro`.
+// A real replica is supplied by a collaboration module.
 
 import type { EditorCollaborationSession } from '../../collaboration/index.ts';
 import type { CollaborationDocumentPort } from '../../collaboration/replication.ts';

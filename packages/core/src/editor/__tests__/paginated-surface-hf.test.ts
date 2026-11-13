@@ -20,7 +20,7 @@ import {
 
 const COMPREHENSIVE_FIXTURE = resolve(
   import.meta.dir,
-  '../../../../../e2e/fixtures/comprehensive-word-element-test.docx'
+  '../../../../../fixtures/comprehensive-word-element-test.docx'
 );
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

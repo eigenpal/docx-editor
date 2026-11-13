@@ -14,7 +14,7 @@ function report(overrides: {
   const medianMs = overrides.medianMs ?? 10;
   return {
     schema: 1,
-    fixture: 'e2e/fixtures/synthetic-long-edit.docx',
+    fixture: 'fixtures/synthetic-long-edit.docx',
     fixtureBytes: 27000,
     fixtureSha256: overrides.fixtureSha256 ?? 'abc123',
     environment: { runtime: 'bun', arch: 'arm64' },

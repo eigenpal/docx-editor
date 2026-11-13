@@ -247,7 +247,7 @@ describe('a floated table lays out at its anchored position', () => {
 
   test('the comprehensive fixture §16 callout table centres on the margin', () => {
     const bytes = readFileSync(
-      `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`
+      `${import.meta.dir}/../../../../../fixtures/comprehensive-word-element-test.docx`
     );
     const opened = readOoxmlPackage(bytes);
     if (!opened.ok) throw new Error(opened.reason);

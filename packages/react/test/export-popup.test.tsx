@@ -96,7 +96,7 @@ for (const packaged of [false, true]) {
     });
     await exportPdf(view);
     expect(view.getByRole('alert').textContent).toContain(
-      'Install @docx-editor.dev/docx-to-pdf on your Node.js server and configure menu.exporters.pdf.'
+      'Install a PDF converter on your Node.js server and configure menu.exporters.pdf.'
     );
     expect(view.getByRole('alertdialog').classList.contains('callback-export')).toBe(true);
     act(() => {

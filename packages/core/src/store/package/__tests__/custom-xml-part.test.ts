@@ -22,9 +22,7 @@ const STORY = '/word/document.xml';
 const NS = 'http://docx-editor.dev/ns';
 
 function fixtureBytes(name: string): Uint8Array {
-  return new Uint8Array(
-    readFileSync(resolve(import.meta.dir, '../../../../../../e2e/fixtures', name))
-  );
+  return new Uint8Array(readFileSync(resolve(import.meta.dir, '../../../../../../fixtures', name)));
 }
 
 function fixture(name: string): OoxmlPackage {

@@ -56,10 +56,7 @@ const payload = Citation.parse({
   url: 'https://example.test/papers/9f3.pdf',
 });
 
-const source = resolve(
-  import.meta.dirname,
-  '../e2e/fixtures/comprehensive-word-element-test.docx'
-);
+const source = resolve(import.meta.dirname, '../fixtures/comprehensive-word-element-test.docx');
 const read = readOoxmlPackage(new Uint8Array(readFileSync(source)));
 if (!read.ok) throw new Error(`could not open the source document: ${read.reason}`);
 
@@ -105,9 +102,15 @@ const paragraph = storyParagraphs(body).find(
 );
 if (!paragraph) throw new Error('the document has no paragraph to put the control in');
 
-const spliced = insertChildren(story, paragraph.id, paragraph.children.length, [parsedSdt.part.root], {
-  deferValidation: true,
-});
+const spliced = insertChildren(
+  story,
+  paragraph.id,
+  paragraph.children.length,
+  [parsedSdt.part.root],
+  {
+    deferValidation: true,
+  }
+);
 if (!spliced.ok) throw new Error('the control could not be spliced into the body');
 pkg = withPart(pkg, spliced.part);
 

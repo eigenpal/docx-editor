@@ -11,7 +11,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = path.join(ROOT, 'e2e/fixtures/table-cell-selection-drag.docx');
+const OUT = path.join(ROOT, 'fixtures/table-cell-selection-drag.docx');
 const ZIP_DATE = new Date('2026-01-01T00:00:00Z');
 
 const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

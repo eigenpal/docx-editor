@@ -7,7 +7,7 @@ import type { EditorCommand } from '../../contracts/editor.ts';
 import { createDocxEditor } from '../docx-editor.ts';
 import { SUGGESTING_TABLE_DELETE_REFUSAL } from '../surface-suggesting-structure.ts';
 import { docx, selectCellRectangle } from './paginated-surface-fixtures.ts';
-import { reviewModule } from '../../../../pro/src/review/review-module.ts';
+import { stubReviewModule as reviewModule } from './review-test-module';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {

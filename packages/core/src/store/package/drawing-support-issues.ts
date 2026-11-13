@@ -7,7 +7,7 @@ import { DRAWINGML_MAIN_NAMESPACE_URI as A, type OoxmlElement } from './ooxml-tr
  * - `unsupported-effect`: the editor ignores an explicit effect, such as `a:blur`, `a:duotone`,
  *   or `a14:imgProps`. The drawing renders without it.
  * - `renderer-required`: an optional effect, such as `a:glow`, needs the drawing module:
- *   `drawingModule()` or `installDrawing()` from `@docx-editor.dev/pro/drawing`. It appears
+ *   a drawing module. It appears
  *   only while that module is not installed in the current process, for occurrences and
  *   reports alike.
  * - `unverified-3d`: the drawing has 3-D properties (`a:scene3d`, `a:sp3d`), which render flat.

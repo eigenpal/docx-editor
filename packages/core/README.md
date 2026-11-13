@@ -30,7 +30,6 @@ Node.js requires `^20.16.0 || >=22.3.0`.
 ## Features
 
 - [Read and save DOCX files](https://www.docx-editor.dev/docs/2.x/guides/loading-and-saving).
-- [Lay out and render document pages](https://www.docx-editor.dev/docs/2.x/docx-fidelity). Charts, DrawingML diagrams saved without their drawing, shape effects, and VML text paths need [`@docx-editor.dev/pro/drawing`](https://www.docx-editor.dev/docs/2.x/pro/drawing).
 - [Build an editor with shared commands and controls](https://www.docx-editor.dev/docs/2.x/guides/chrome-slots).
 - [Configure fonts for text measurement](https://www.docx-editor.dev/docs/2.x/guides/fonts).
 
@@ -55,12 +54,12 @@ The root exports editor creation, contracts, font helpers, control definitions, 
 | `./contracts/document` | The document-level edit and query vocabulary. |
 | `./contracts/interaction` | Semantic addressing (`SemanticTarget`) and the `InteractionOutcome` an attempt answers with. |
 | `./contracts/types` | Document model types. |
-| `./contracts/modules` | `EditorModule` — the shape `@docx-editor.dev/pro` implements. |
+| `./contracts/modules` | `EditorModule` — the shape a review module (such as `@gw/docx-review`) implements. |
 | `./store` | The canonical tree and its transactional store. |
 | `./layout` | The DOM-free layout pass. |
 | `./output` | Paint layouts and selection overlays into the DOM. |
 | `./export` | Document layout sessions for exporters. No DOM required. |
-| `./automation` | The object model behind `@docx-editor.dev/editor-api`. |
+| `./automation` | The document automation object model. |
 | `./collaboration` | Provider-neutral collaboration session contracts. |
 | `./collaboration/replication` | Replication helpers for collaboration providers. |
 | `./styles/editor.css` | The one editor stylesheet, shared by packaged and custom chrome. |
@@ -116,14 +115,10 @@ Anything you render from document data (a font name, a hyperlink target, a comme
 
 ## Which API for which job
 
-Use the React or Vue adapter hooks, the review hooks, and `DocxEditorReview` from `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue` to build browser review controls. Use the editing API in `@docx-editor.dev/editor-api` for document automation. It follows the Office.js object model and runs in browser and server hosts.
-
 | Task | Browser controls (React or Vue) | Document automation |
 | --- | --- | --- |
 | [Comment on found text](https://www.docx-editor.dev/docs/2.x/recipes/comment-on-found-text) | `editor.findMatches`, `editor.selectMatch`, then `useReview().comment` | `body.search`, then `Range.insertComment` |
-| [Reply to a thread](https://www.docx-editor.dev/docs/2.x/pro/comments) | `useReview().reply(item, text)` | `Comment.reply(text)` |
 | [Record a tracked replacement](https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement) | Suggesting mode, then `editor.exec({ type: 'replaceMatch', match, text })` | `document.changeTrackingMode = 'TrackMineOnly'`, then `Range.insertText(text, 'Replace')` |
-| [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite) | `prepareRewrite` through `DocxEditor.createBrowser` | `prepareRewrite` from `@docx-editor.dev/editor-api/agent` |
 | [Accept or reject a change](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().accept(item)` or `useReview().reject(item)` | `Revision.accept()` or `Revision.reject()` |
 | [Open a change without scrolling](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().setActive(key, { reveal: false })` | Not applicable: no viewport |
 | [Highlight ranges](https://www.docx-editor.dev/docs/2.x/recipes/highlight-ranges) | `useHighlights(name, source, options)` | Not applicable |

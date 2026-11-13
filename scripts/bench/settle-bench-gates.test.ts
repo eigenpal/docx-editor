@@ -24,7 +24,7 @@ interface Report {
 }
 
 const root = resolve(import.meta.dir, '../..');
-const fixture = resolve(root, 'e2e/fixtures/typing-perf-521pp.docx');
+const fixture = resolve(root, 'fixtures/typing-perf-521pp.docx');
 
 test('a keystroke on the huge document performs the pinned amount of work', () => {
   expect(existsSync(fixture)).toBe(true);

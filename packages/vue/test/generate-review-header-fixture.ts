@@ -30,4 +30,4 @@ const bytes = zipSync({
   'word/header1.xml': strToU8(`<w:hdr xmlns:w="${W}">${p('Header')}</w:hdr>`),
 });
 
-writeFileSync(resolve(import.meta.dirname, '../../../e2e/fixtures/review-header-demo.docx'), bytes);
+writeFileSync(resolve(import.meta.dirname, '../../../fixtures/review-header-demo.docx'), bytes);

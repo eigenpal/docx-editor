@@ -26,7 +26,7 @@ const W15 = 'http://schemas.microsoft.com/office/word/2012/wordml';
 const MAIN_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
 
-const COMPREHENSIVE = `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`;
+const COMPREHENSIVE = `${import.meta.dir}/../../../../../fixtures/comprehensive-word-element-test.docx`;
 
 const KIND_CONTROL = 'contentControl';
 const KIND_CONTENT = 'contentControlContent';

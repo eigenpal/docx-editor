@@ -35,4 +35,4 @@ const bytes = zipSync({
   ),
 });
 
-writeFileSync(resolve(import.meta.dirname, '../../../e2e/fixtures/hyperlink-demo.docx'), bytes);
+writeFileSync(resolve(import.meta.dirname, '../../../fixtures/hyperlink-demo.docx'), bytes);

@@ -29,9 +29,7 @@ import { createDocxEditor } from '../docx-editor.ts';
 import { createKeyDownHandler } from '../surface-input.ts';
 
 const sample = (): Uint8Array =>
-  new Uint8Array(
-    readFileSync(new URL('../../../../../examples/vite/public/sample.docx', import.meta.url))
-  );
+  new Uint8Array(readFileSync(new URL('../../../../../fixtures/sample.docx', import.meta.url)));
 
 function* walk(node: OoxmlNode): Generator<OoxmlNode> {
   yield node;

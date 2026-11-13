@@ -10,7 +10,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createDocxEditor } from '../docx-editor.ts';
 import { toolbarCommandState } from '../toolbar-commands.ts';
 import { trackedDocx, selectCellRectangle } from './paginated-surface-fixtures.ts';
-import { reviewModule } from '../../../../pro/src/review/review-module.ts';
+import { stubReviewModule as reviewModule } from './review-test-module';
 import { addComment, TreeDocumentStore, readOoxmlPackage } from '../../store/index.ts';
 
 const cleanups: (() => void)[] = [];

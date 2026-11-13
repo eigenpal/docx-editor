@@ -420,7 +420,7 @@ export interface Editor
    * Pass a match to `exec({ type: 'replaceMatch', match, text })` to replace it, which records a
    * tracked replacement in suggesting mode, or to {@link selectMatch} and then
    * {@link addComment} to comment on it. For headless or server use, see `body.search` in
-   * `@docx-editor.dev/editor-api`.
+   * a server-side automation API.
    *
    * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement | Replace as a tracked change}
    */
@@ -598,7 +598,7 @@ export interface Editor
    * To comment on found text, select it first with {@link findMatches} and
    * {@link selectMatch}. In a React or Vue host with the review module, `useReview().comment`
    * calls this. For headless or server use, see `Range.insertComment` in
-   * `@docx-editor.dev/editor-api`.
+   * a server-side automation API.
    *
    * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/comment-on-found-text | Comment on found text}
    */
@@ -684,7 +684,7 @@ export interface Editor
    *
    * Neither call scrolls. In a React or Vue host with the review module, `useReview().accept`
    * and `useReview().reject` call these. For headless or server use, see `Revision.accept()`
-   * and `Revision.reject()` in `@docx-editor.dev/editor-api`.
+   * and `Revision.reject()` in a server-side automation API.
    *
    * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling | Accept or reject without scrolling}
    */
@@ -749,7 +749,7 @@ export interface Editor
    * Other refusals name their cause, as {@link addComment} describes.
    *
    * In a React or Vue host with the review module, `useReview().reply` calls this. For
-   * headless or server use, see `Comment.reply` in `@docx-editor.dev/editor-api`.
+   * headless or server use, see `Comment.reply` in a server-side automation API.
    */
   replyToReviewItem(key: string, text: string, options?: HistoryGroupOptions): ExecResult;
   /** {@link replyToReviewItem} with an author for this call, overriding the configured author. */
@@ -1181,7 +1181,7 @@ export interface EditorCommands
    * text (`expectedText`, else `text`) that the offsets no longer hold, or an unknown `blockId`,
    * returns `notFound` and changes nothing; find it again.
    *
-   * On a server, use `range.insertText(text, 'Replace')` from `@docx-editor.dev/editor-api`.
+   * On a server, use `range.insertText(text, 'Replace')` from a server-side automation API.
    *
    * @example
    * ```ts
@@ -1635,7 +1635,7 @@ export interface EditorSnapshot {
    * collaboration module is registered.
    *
    * The free tier's honest upsell signal: a host can render from this value
-   * without importing `@docx-editor.dev/pro`. When a module is registered the
+   * without importing a review module. When a module is registered the
    * field follows the session's `status()`.
    */
   readonly collaborationStatus: CollaborationStatus | 'inactive';

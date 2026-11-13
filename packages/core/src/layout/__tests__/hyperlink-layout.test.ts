@@ -26,7 +26,7 @@ const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
-const FIXTURE = `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`;
+const FIXTURE = `${import.meta.dir}/../../../../../fixtures/comprehensive-word-element-test.docx`;
 const measurer = createFixedMeasurer(6, 14);
 
 /** The projector the real surface installs, over a package's own relationships. */

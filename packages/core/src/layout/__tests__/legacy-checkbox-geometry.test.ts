@@ -4,7 +4,7 @@ import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import { layoutSemanticDocument, createFixedMeasurer } from '../semantic-layout.ts';
 import { caretAt, caretStops } from '../semantic-interaction.ts';
 
-const fixture = new URL('../../../../../e2e/fixtures/form-controls-catalog.docx', import.meta.url);
+const fixture = new URL('../../../../../fixtures/form-controls-catalog.docx', import.meta.url);
 
 test('catalog checkbox reserves its field size independently of font glyph metrics and caret edges', () => {
   const loaded = readOoxmlPackage(new Uint8Array(readFileSync(fixture)));

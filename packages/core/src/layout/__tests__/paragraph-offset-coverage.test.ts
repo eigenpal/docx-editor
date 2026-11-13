@@ -34,7 +34,7 @@ import { storyBlocks } from '../story-roots.ts';
 
 import { PERFORMANCE_FIXTURE_BASENAMES } from '../../__tests__/performance-fixture-registry.ts';
 
-const FIXTURES = resolve(import.meta.dir, '../../../../../e2e/fixtures');
+const FIXTURES = resolve(import.meta.dir, '../../../../../fixtures');
 const NON_CORPUS_FIXTURES = PERFORMANCE_FIXTURE_BASENAMES;
 
 interface OffsetDefect {

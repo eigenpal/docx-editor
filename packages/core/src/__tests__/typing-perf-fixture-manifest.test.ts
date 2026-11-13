@@ -9,13 +9,13 @@ import { PERFORMANCE_FIXTURE_BASENAMES } from './performance-fixture-registry.ts
 const FIXTURE = 'typing-perf-521pp.docx';
 
 function fixtureBytes() {
-  return readFileSync(new URL(`../../../../e2e/fixtures/${FIXTURE}`, import.meta.url));
+  return readFileSync(new URL(`../../../../fixtures/${FIXTURE}`, import.meta.url));
 }
 
 describe('typing-perf-521pp fixture manifest', () => {
   test('matches the committed manifest fields', () => {
     const manifestPath = new URL(
-      '../../../../e2e/fixtures/typing-perf-521pp.manifest.json',
+      '../../../../fixtures/typing-perf-521pp.manifest.json',
       import.meta.url
     );
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {

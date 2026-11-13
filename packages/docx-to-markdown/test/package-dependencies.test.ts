@@ -68,64 +68,13 @@ describe('engine dependency integrity', () => {
     expect(requiresSameMinor(undefined, '2.13.0')).toBe(false);
   });
 
-  test('owns the Markdown API and has a public guide', () => {
+  test('owns the Markdown API', () => {
     const coreExportSource = readFileSync(
       join(repositoryRoot, 'packages', 'core', 'src', 'export', 'index.ts'),
       'utf8'
     );
     expect(coreExportSource).not.toMatch(/Markdown|\.\/markdown/);
     expect(existsSync(join(repositoryRoot, 'packages/core/src/export/markdown.ts'))).toBe(false);
-    expect(existsSync(join(repositoryRoot, 'docs/site/content/export/markdown/index.mdx'))).toBe(
-      true
-    );
-    const navigation = JSON.parse(
-      readFileSync(join(repositoryRoot, 'docs/site/content/meta.json'), 'utf8')
-    );
-    const exportNavigation = JSON.parse(
-      readFileSync(join(repositoryRoot, 'docs/site/content/export/meta.json'), 'utf8')
-    );
-    const markdownNavigation = JSON.parse(
-      readFileSync(join(repositoryRoot, 'docs/site/content/export/markdown/meta.json'), 'utf8')
-    );
-    const exportSectionIndex = navigation.pages.indexOf('---Export formats---');
-    expect(exportSectionIndex).toBeGreaterThan(navigation.pages.indexOf('guides/dark-mode'));
-    const nextSectionIndex = navigation.pages.findIndex(
-      (page: string, index: number) => index > exportSectionIndex && page.startsWith('---')
-    );
-    expect(nextSectionIndex).toBeGreaterThan(exportSectionIndex);
-    // Keep each format's child guides after its overview in the root sidebar.
-    expect(navigation.pages.slice(exportSectionIndex + 1, nextSectionIndex)).toEqual([
-      'guides/export',
-      'guides/print',
-      'export/markdown',
-      'export/markdown/fonts',
-      'export/markdown/images',
-      'export/markdown/api',
-      'export/markdown/integrations',
-      'export/pdf',
-      'export/pdf/fonts',
-      'export/pdf/api',
-      'export/pdf/integrations',
-      'export/pdf/markdown-contract',
-    ]);
-    expect(navigation.pages).not.toContain('export');
-    expect(exportNavigation.title).toBe('Export formats');
-    expect(exportNavigation.pages).toContain('markdown');
-    expect(markdownNavigation.pagesIndex).toBe('index');
-    for (const format of ['markdown', 'pdf']) {
-      const directory = join(repositoryRoot, 'docs/site/content/export', format);
-      const group = JSON.parse(readFileSync(join(directory, 'meta.json'), 'utf8'));
-      expect(group.pagesIndex).toBe('index');
-      expect(group.pages).not.toContain(group.pagesIndex);
-      const overviewIndex = navigation.pages.indexOf(`export/${format}`);
-      expect(overviewIndex).toBeGreaterThan(exportSectionIndex);
-      expect(
-        navigation.pages.slice(overviewIndex + 1, overviewIndex + 1 + group.pages.length)
-      ).toEqual(group.pages.map((page: string) => `export/${format}/${page}`));
-      for (const page of [group.pagesIndex, ...group.pages]) {
-        expect(existsSync(join(directory, `${page}.mdx`))).toBe(true);
-      }
-    }
   });
 
   test('confines packaged fonts through the fonts package asset-root contract', () => {

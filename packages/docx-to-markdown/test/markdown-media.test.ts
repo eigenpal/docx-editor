@@ -209,7 +209,7 @@ describe('portable image conversion', () => {
 
   test('converts the checked-in image fixture with default font-backed pagination', async () => {
     const result = await exportMarkdown(
-      await readFile(new URL('../../../e2e/fixtures/example-with-image.docx', import.meta.url)),
+      await readFile(new URL('../../../fixtures/example-with-image.docx', import.meta.url)),
       { images: true }
     );
     expect(result.media[0]!.byteLength).toBe(789);

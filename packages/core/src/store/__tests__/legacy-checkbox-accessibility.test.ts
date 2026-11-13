@@ -7,9 +7,7 @@ import { legacyCheckboxAccessibleName } from '../package/legacy-checkbox-accessi
 function catalogField(): OoxmlNode {
   const loaded = readOoxmlPackage(
     new Uint8Array(
-      readFileSync(
-        new URL('../../../../../e2e/fixtures/form-controls-catalog.docx', import.meta.url)
-      )
+      readFileSync(new URL('../../../../../fixtures/form-controls-catalog.docx', import.meta.url))
     )
   );
   if (!loaded.ok) throw new Error(loaded.reason);

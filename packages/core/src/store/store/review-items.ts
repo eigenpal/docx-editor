@@ -246,7 +246,7 @@ export interface ReviewCustomItem {
  * custom-node card. Discriminate on `kind`.
  *
  * The store's own derivation (`collectReviewItems`) only ever produces the first two; the
- * `kind: 'custom'` card is contributed by the pro review module, which recognizes the node.
+ * `kind: 'custom'` card is contributed by a review module, which recognizes the node.
  */
 export type ReviewItem = ReviewRevisionItem | ReviewCommentItem | ReviewCustomItem;
 

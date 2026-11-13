@@ -221,7 +221,7 @@ describe('live host configuration', () => {
     try {
       editor.setMode('suggesting');
       expect(editor.getEditingMode()).toBe('editing');
-      expect(editor.snapshot().lastRejection).toContain('pro review module');
+      expect(editor.snapshot().lastRejection).toContain('require a review module');
     } finally {
       dispose();
     }

@@ -133,7 +133,7 @@ describe('free tier: no modules registered', () => {
 
 describe('with a review module registered', () => {
   // The seam's mechanics only: a STUB module flips the gates. What the real
-  // derivation produces is pinned by @docx-editor.dev/pro's own tests.
+  // derivation produces is pinned by the review module's own tests.
   test('markup rendering and the review gates come back', () => {
     const { editor, container } = mount(TRACKED, [stubReviewModule()]);
     const painted = container.textContent ?? '';

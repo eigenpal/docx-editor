@@ -1,9 +1,8 @@
 /**
  * `@docx-editor.dev/fonts-cjk` carries Noto Sans CJK JP, the fallback face for Chinese,
- * Japanese, and Korean text in `@docx-editor.dev/docx-to-pdf`.
+ * Japanese, and Korean text.
  *
- * The face is about 16 MB, so it ships in its own package. When this package is installed
- * next to `@docx-editor.dev/docx-to-pdf`, PDF export finds it without configuration.
+ * The face is about 16 MB, so it ships in its own package.
  *
  * Node.js only: the face is a file beside this module, not a bundled asset. For the editor in
  * a browser, use `cjkFonts()` from `@docx-editor.dev/fonts-cjk/browser`.

@@ -1,5 +1,5 @@
 /**
- * Generator for the watermark example documents in `e2e/fixtures/`.
+ * Generator for the watermark example documents in `fixtures/`.
  *
  * Each document is a repository fixture with a watermark written by the engine's own
  * `setWatermark` package operation, so the markup is exactly what the editor writes. Open one
@@ -16,7 +16,7 @@ import {
 } from '../packages/core/src/store/package/ooxml-package.ts';
 import { applyHeaderFooterLifecycleOp } from '../packages/core/src/store/package/hf-lifecycle.ts';
 
-const fixtures = path.resolve('e2e/fixtures');
+const fixtures = path.resolve('fixtures');
 
 /** A text watermark at the dialog defaults; `box` is the shape size in points. */
 const text = (value, box, options = {}) => ({
@@ -89,12 +89,12 @@ function emblemPng() {
 const examples = [
   {
     name: 'watermark-text-diagonal.docx',
-    base: 'e2e/fixtures/section-inheritance-header-footer.docx',
+    base: 'fixtures/section-inheritance-header-footer.docx',
     watermark: text('DRAFT', [412, 206]),
   },
   {
     name: 'watermark-text-horizontal.docx',
-    base: 'e2e/fixtures/editable-sample.docx',
+    base: 'fixtures/editable-sample.docx',
     watermark: text('CONFIDENTIAL', [468, 76], {
       colorHex: 'C00000',
       opacity: 0.35,
@@ -104,12 +104,12 @@ const examples = [
   },
   {
     name: 'watermark-text-fixed-size.docx',
-    base: 'e2e/fixtures/editable-sample.docx',
+    base: 'fixtures/editable-sample.docx',
     watermark: text('DO NOT COPY', [459, 88], { fontSizePt: 72, italic: true }),
   },
   {
     name: 'watermark-picture.docx',
-    base: 'e2e/fixtures/editable-sample.docx',
+    base: 'fixtures/editable-sample.docx',
     watermark: {
       kind: 'picture',
       washout: true,
@@ -130,5 +130,5 @@ for (const example of examples) {
   if (!result.ok) throw new Error(`${example.name}: ${result.reason} ${result.detail ?? ''}`);
   const bytes = writeOoxmlPackage(result.package);
   writeFileSync(path.join(fixtures, example.name), bytes);
-  console.log(`Wrote e2e/fixtures/${example.name} (${bytes.byteLength} bytes)`);
+  console.log(`Wrote fixtures/${example.name} (${bytes.byteLength} bytes)`);
 }

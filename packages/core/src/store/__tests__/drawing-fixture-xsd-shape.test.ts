@@ -9,7 +9,7 @@ import { schemaAttributeValue } from '../package/ooxml-drawing-rules.ts';
 import { validateRasterHeader } from '../package/image-resources.ts';
 import { IMAGE_RELATIONSHIP_TYPE } from '../package/relationships.ts';
 
-const FIXTURES_DIR = resolve(import.meta.dir, '../../../../../e2e/fixtures');
+const FIXTURES_DIR = resolve(import.meta.dir, '../../../../../fixtures');
 const PIC_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';

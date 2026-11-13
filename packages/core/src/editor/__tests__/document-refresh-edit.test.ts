@@ -99,7 +99,7 @@ describe('applyUpdate with mode: edit', () => {
       await refresh.applyUpdate({ submission, sequence: 1, bytes: returned, mode: 'edit' })
     ).toMatchObject({ ok: true });
     expect(await savedXml(editor)).toEqual(await reloadedXml(returned));
-    // The review module's view of these comments and changes is covered in `packages/pro`.
+    // The review module's view of these comments and changes is covered by the review module's tests.
     const reopened = open(new Uint8Array(await editor.save()));
     expect(await savedXml(reopened.editor)).toEqual(await reloadedXml(returned));
   });

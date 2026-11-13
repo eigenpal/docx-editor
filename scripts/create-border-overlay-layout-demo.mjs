@@ -12,7 +12,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = path.join(ROOT, 'e2e/fixtures/border-overlay-layout-demo.docx');
+const OUT = path.join(ROOT, 'fixtures/border-overlay-layout-demo.docx');
 
 function svgEmblem(label, fill, stroke) {
   return `<?xml version="1.0" encoding="UTF-8"?>

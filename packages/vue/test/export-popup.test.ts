@@ -128,7 +128,7 @@ for (const packaged of [false, true]) {
     await flush();
     await exportPdf(container);
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      'Install @docx-editor.dev/docx-to-pdf on your Node.js server and configure menu.exporters.pdf.'
+      'Install a PDF converter on your Node.js server and configure menu.exporters.pdf.'
     );
     expect(
       container.querySelector('[role="alertdialog"]')?.classList.contains('callback-export')

@@ -21,7 +21,7 @@ import { escapeXmlChecked, isValidXmlText } from '../package/sinks.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
-const FIXTURE = `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`;
+const FIXTURE = `${import.meta.dir}/../../../../../fixtures/comprehensive-word-element-test.docx`;
 
 const FIELD_INSTRUCTIONS = [
   'PAGE',

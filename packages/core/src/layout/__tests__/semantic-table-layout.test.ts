@@ -28,7 +28,7 @@ import {
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
 function fixturePart(name: string): OoxmlPart {
-  const bytes = readFileSync(`${import.meta.dir}/../../../../../e2e/fixtures/${name}`);
+  const bytes = readFileSync(`${import.meta.dir}/../../../../../fixtures/${name}`);
   const result = readOoxmlPackage(bytes);
   if (!result.ok) throw new Error(`package read failed: ${result.reason}`);
   return result.package.parts.get(result.package.mainDocumentPart)!;

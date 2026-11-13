@@ -8,7 +8,7 @@ describe('documents whose theme lacks optional font schemes', () => {
   // comparator behind the hash refused them, so headless export failed outright.
   test('export instead of failing in the style cascade cache key', async () => {
     const bytes = await readFile(
-      new URL('../../../e2e/fixtures/harfbuzz-text-fidelity.docx', import.meta.url)
+      new URL('../../../fixtures/harfbuzz-text-fidelity.docx', import.meta.url)
     );
     const result = await exportMarkdown(bytes);
     expect(result.pages.length).toBeGreaterThan(0);

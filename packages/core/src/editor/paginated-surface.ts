@@ -312,7 +312,7 @@ import { createSurfaceSelectionSync } from './surface-selection-sync.ts';
 import { createSurfaceStructure } from './surface-structure.ts';
 import { listDefinitionReads } from './list-level-geometry.ts';
 // Deep import, not the store barrel: re-exporting a bound from there pulls the whole store
-// namespace into the published editor-api surface for one number.
+// namespace into a published automation surface for one number.
 import { MIN_TABLE_COLUMN_WIDTH_TWIPS } from '../store/store/table-constraints.ts';
 import { createFieldLinkRegistry } from './surface-field-links.ts';
 import { createHyperlinkOps } from './surface-hyperlinks.ts';

@@ -189,7 +189,7 @@ function bundledDependencies({ dir, entry }) {
         `${entry}: dist/${metafile} is not valid JSON (${error.message}) — tsup names this ` +
           `file after the build FORMAT alone, so two configs in one array config that share ` +
           `a format write the same path at the same time and can interleave. Give one of ` +
-          `them a name of its own; \`writeMetafileAs\` in packages/pro/tsup.config.ts does that`
+          `them a name of its own`
       );
       continue;
     }

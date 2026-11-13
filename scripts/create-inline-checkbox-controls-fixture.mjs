@@ -1,7 +1,7 @@
 /**
  * Generates a DOCX with inline Word checkbox content controls (`w14:checkbox`).
  *
- *   bun scripts/create-inline-checkbox-controls-fixture.mjs e2e/fixtures/inline-checkbox-controls.docx
+ *   bun scripts/create-inline-checkbox-controls-fixture.mjs fixtures/inline-checkbox-controls.docx
  */
 
 import JSZip from 'jszip';
@@ -142,7 +142,7 @@ zip.file('word/_rels/document.xml.rels', documentRels);
 zip.file('word/document.xml', documentXml);
 zip.file('word/styles.xml', stylesXml);
 
-const outPath = process.argv[2] ?? 'e2e/fixtures/inline-checkbox-controls.docx';
+const outPath = process.argv[2] ?? 'fixtures/inline-checkbox-controls.docx';
 const buf = await zip.generateAsync({
   type: 'nodebuffer',
   compression: 'DEFLATE',

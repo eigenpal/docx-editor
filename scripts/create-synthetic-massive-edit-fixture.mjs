@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import JSZip from 'jszip';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const outDir = resolve(root, process.argv[2] ?? 'e2e/fixtures/generated');
+const outDir = resolve(root, process.argv[2] ?? 'fixtures/generated');
 const fixedDate = new Date(Date.UTC(2020, 0, 1));
 
 export const UNITS = 105;

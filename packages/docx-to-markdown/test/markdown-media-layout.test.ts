@@ -217,7 +217,7 @@ test('supports SVG and existing raster/positioned-image corpus without placement
     'images-zorder.docx',
   ]) {
     const result = await exportMarkdown(
-      await readFile(new URL(`../../../e2e/fixtures/${name}`, import.meta.url)),
+      await readFile(new URL(`../../../fixtures/${name}`, import.meta.url)),
       fast
     );
     expect(result.media.length).toBeGreaterThan(0);
@@ -226,7 +226,7 @@ test('supports SVG and existing raster/positioned-image corpus without placement
 });
 
 test('preserved-format conversion exports the validated replacement raster', async () => {
-  const source = await readFile(new URL('../../../e2e/fixtures/images-tiff.docx', import.meta.url));
+  const source = await readFile(new URL('../../../fixtures/images-tiff.docx', import.meta.url));
   const result = await exportMarkdown(source, {
     ...fast,
     convertPreservedImage: async () => ({ bytes: PNG, mime: 'image/png' }),

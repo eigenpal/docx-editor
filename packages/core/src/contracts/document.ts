@@ -184,7 +184,6 @@ export interface DocEdits {
    * editor does not take a `target`: a command with one is refused with `unsupported`.
    * Requires the review module, as every comment and revision command does.
    *
-   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#comment-and-decide-by-id | Comment and decide by id}
    */
   addComment: { target: DocTarget; text: string; author: string };
   /**
@@ -193,7 +192,6 @@ export interface DocEdits {
    * comment's card. An unknown id, or a comment that a reviewer filter hides, is refused
    * with `notFound`.
    *
-   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#comment-and-decide-by-id | Comment and decide by id}
    */
   replyComment: { commentId: string; text: string; author: string };
   /**
@@ -201,7 +199,6 @@ export interface DocEdits {
    * `Editor.setCommentResolved` on that comment's card, with the same rules as
    * `replyComment`. Resolving a resolved thread succeeds with `changed: false`.
    *
-   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#comment-and-decide-by-id | Comment and decide by id}
    */
   resolveComment: { commentId: string };
 
@@ -216,14 +213,12 @@ export interface DocEdits {
    * changes), with `invalidArgs` when the id names more than one change (decide each with
    * `acceptReviewItem`), and with `locked` under tracked-changes protection.
    *
-   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#comment-and-decide-by-id | Comment and decide by id}
    */
   acceptRevision: { id: number; part?: 'body' | 'footnote' | 'endnote'; noteId?: number };
   /**
    * Reject the tracked change whose `w:id` is `id`. Addressing, gates, and refusals are the
    * same as for `acceptRevision`; the editor runs `Editor.rejectReviewItem`.
    *
-   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#comment-and-decide-by-id | Comment and decide by id}
    */
   rejectRevision: { id: number; part?: 'body' | 'footnote' | 'endnote'; noteId?: number };
   /**
@@ -233,20 +228,18 @@ export interface DocEdits {
    * `revisions` result. A change that cannot be accepted, such as one in locked content, is
    * left pending and listed in `revisions.skipped`.
    *
-   * Requires the review module from `@docx-editor.dev/pro`; without it the command is refused
+   * Requires a review module (such as `@gw/docx-review`); without it the command is refused
    * with `unsupported`. Also refused with `locked` while viewing or under read-only, comments,
    * or tracked-changes protection, with `notFound` when the document has no tracked
    * changes, and, when no change can be accepted, with `locked`, `bound`, or `unsupported`
    * for the cause. A refusal writes nothing.
    *
-   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#accept-or-reject-every-change | Accept or reject every change}
    */
   acceptAllRevisions: Record<never, never>;
   /**
    * Reject every tracked change in the document in one undo step. The scope, gates, and
    * result are the same as for `acceptAllRevisions`.
    *
-   * @see {@link https://www.docx-editor.dev/docs/2.x/pro/tracked-changes#accept-or-reject-every-change | Accept or reject every change}
    */
   rejectAllRevisions: Record<never, never>;
 

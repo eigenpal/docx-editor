@@ -26,7 +26,7 @@ const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
 const FIXTURE = resolve(
   import.meta.dir,
-  '../../../../../e2e/fixtures/comprehensive-word-element-test.docx'
+  '../../../../../fixtures/comprehensive-word-element-test.docx'
 );
 
 function pageText(layout: ReturnType<typeof layoutSemanticDocument>, pageIndex: number): string {

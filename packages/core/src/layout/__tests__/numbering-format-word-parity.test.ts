@@ -21,7 +21,7 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
 const LETTERHEAD = resolve(
   import.meta.dir,
-  '../../../../../e2e/fixtures/issue-705-anchored-header-letterhead.docx'
+  '../../../../../fixtures/issue-705-anchored-header-letterhead.docx'
 );
 
 function numbering(body: string) {

@@ -126,7 +126,7 @@ describe('full-document fidelity through the real surface', () => {
 
   test('select-all copy of the drawing showcase refuses chart content explicitly', () => {
     const bytes = new Uint8Array(
-      readFileSync(`${import.meta.dir}/../../../../../examples/vite/public/sample.docx`)
+      readFileSync(`${import.meta.dir}/../../../../../fixtures/sample.docx`)
     );
     const container = document.createElement('div');
     const mounted = mountPaginatedSurface(container, bytes, { scale: 1 });

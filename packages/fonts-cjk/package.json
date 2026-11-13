@@ -1,7 +1,7 @@
 {
   "name": "@docx-editor.dev/fonts-cjk",
   "version": "2.37.0",
-  "description": "Noto Sans CJK JP fallback font for Chinese, Japanese, and Korean text in @docx-editor.dev/docx-to-pdf and the editor.",
+  "description": "Noto Sans CJK JP fallback font for Chinese, Japanese, and Korean text in the editor.",
   "sideEffects": false,
   "type": "module",
   "engines": {

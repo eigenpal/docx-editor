@@ -21,7 +21,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = path.join(ROOT, 'e2e/fixtures/title-page-furniture.docx');
+const OUT = path.join(ROOT, 'fixtures/title-page-furniture.docx');
 
 const W_NS =
   'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +

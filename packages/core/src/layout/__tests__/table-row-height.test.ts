@@ -184,7 +184,7 @@ describe('w:trHeight layout', () => {
 
 describe('Form025U row-height regression', () => {
   test('authored 14.2pt atLeast rows never render below their minimum', () => {
-    const bytes = readFileSync(`${import.meta.dir}/../../../../../e2e/fixtures/Form025U.docx`);
+    const bytes = readFileSync(`${import.meta.dir}/../../../../../fixtures/Form025U.docx`);
     const result = readOoxmlPackage(bytes);
     if (!result.ok) throw new Error(result.reason);
     const part = result.package.parts.get(result.package.mainDocumentPart)!;

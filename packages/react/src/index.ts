@@ -179,7 +179,7 @@ export {
   type UseOpenFailureOptions,
   type UseOpenFailureReturn,
 } from './editor/DocxEditorOpenFailure';
-// The review PANE lives in `@docx-editor.dev/pro/react` (the review capability is
+// The review PANE lives in a review package (ours: `@gw/docx-review`) (the review capability is
 // module-gated). What this package exports are the integration points the pro pane —
 // or any external chrome — composes with: the rail registry the Viewport and rulers
 // reserve gutter space through, the in-tree Slot, and the locale binding.

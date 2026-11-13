@@ -3,7 +3,7 @@
 // These tests exercise seam mechanics (the editing-mode pill enabling, review
 // slots lighting up) which key on a review contribution being registered, not
 // on what it derives. The real module and the review pane live in
-// `@docx-editor.dev/pro`, whose own tests cover the derived queue.
+// the review module, whose own tests cover the derived queue.
 
 import type { EditorModule } from '@docx-editor.dev/core/editor';
 

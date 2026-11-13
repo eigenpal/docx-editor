@@ -2021,7 +2021,7 @@ describe('comprehensive fixture drawing round trip', () => {
     const { readFileSync } = await import('node:fs');
     const { readOoxmlPackage, writeOoxmlPackage } = await import('../package/ooxml-package.ts');
     const bytes = readFileSync(
-      `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`
+      `${import.meta.dir}/../../../../../fixtures/comprehensive-word-element-test.docx`
     );
     const loaded = readOoxmlPackage(bytes);
     if (!loaded.ok) throw new Error(loaded.reason);

@@ -182,7 +182,7 @@ describe('a table stays when nothing else could host the caret', () => {
 describe('the comprehensive fixture', () => {
   const FIXTURE = resolve(
     import.meta.dir,
-    '../../../../../e2e/fixtures/comprehensive-word-element-test.docx'
+    '../../../../../fixtures/comprehensive-word-element-test.docx'
   );
 
   interface Census {

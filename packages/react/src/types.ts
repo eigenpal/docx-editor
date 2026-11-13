@@ -315,14 +315,14 @@ export interface DocxEditorProps {
   locale?: string;
   author?: string;
   /**
-   * Capability modules to register (`@docx-editor.dev/pro`'s review module, custom nodes).
+   * Capability modules to register (a review module such as `@gw/docx-review`, custom nodes).
    * Applied at mount only.
    */
   modules?: readonly EditorModule[];
   /**
    * Extra chrome rendered INSIDE the viewport, after the painted pages — the
    * slot pro or host chrome mounts into without leaving the sugar (e.g.
-   * `DocxEditorReview` from `@docx-editor.dev/pro/react`). For more control,
+   * `ReviewPanel` from `@gw/docx-review`). For more control,
    * compose `DocxEditor.Root`/`Viewport`/`Content` directly.
    */
   children?: DocxEditorChildren;

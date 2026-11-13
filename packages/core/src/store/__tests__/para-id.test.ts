@@ -29,7 +29,7 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
 const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 
-const FIXTURES = join(import.meta.dir, '../../../../../e2e/fixtures');
+const FIXTURES = join(import.meta.dir, '../../../../../fixtures');
 
 function loadDocument(xml: string): OoxmlPart {
   const result = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });

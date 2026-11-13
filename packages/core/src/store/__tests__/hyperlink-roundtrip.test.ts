@@ -14,7 +14,7 @@ import { canonicalOoxmlFingerprint } from '../package/ooxml-serialize.ts';
 import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts';
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 
-const FIXTURE = `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`;
+const FIXTURE = `${import.meta.dir}/../../../../../fixtures/comprehensive-word-element-test.docx`;
 
 function mainPartOf(bytes: Uint8Array): { part: OoxmlPart; externalCount: number } {
   const loaded = readOoxmlPackage(bytes);

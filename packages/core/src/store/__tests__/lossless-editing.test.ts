@@ -24,7 +24,7 @@ import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import type { TreeDocOp } from '../store/tree-op-validate.ts';
 
 const fixture = (name: string): Uint8Array =>
-  new Uint8Array(readFileSync(new URL(`../../../../../e2e/fixtures/${name}`, import.meta.url)));
+  new Uint8Array(readFileSync(new URL(`../../../../../fixtures/${name}`, import.meta.url)));
 
 function open(name: string) {
   const result = readOoxmlPackage(fixture(name));

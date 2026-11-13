@@ -37,7 +37,7 @@ Responsibilities:
 - **`binding`** — the ONLY ProseMirror-aware lane: projects a tree revision into a PM doc, and maps an edited doc back into tree ops or refuses.
 - **`layout`** — resolved caches, shaping, convergent pagination, positioned semantic layout records. Emits geometry, never paints.
 - **`output`** — the painter over those records. Never rederives geometry or interprets CSS.
-- **`automation`** — the transport-neutral host port an automation object model programs against (`@docx-editor.dev/editor-api`). It reaches the store, collaboration, layout and export lanes, and contracts only for DOM-free public types such as the editor's `HistoryGroup` handle. A server has to be able to run it, so reaching into binding, output or editor would put a DOM in a headless host.
+- **`automation`** — the transport-neutral host port an automation object model programs against. It reaches the store, collaboration, layout and export lanes, and contracts only for DOM-free public types such as the editor's `HistoryGroup` handle. A server has to be able to run it, so reaching into binding, output or editor would put a DOM in a headless host.
 - **`editor`** — the browser composition root. Composes the tree session, pagination and the paginated surface into the `Editor`/`EditorHost` contract.
 
 Layout, output, and export share revision markup settings through the runtime-neutral contracts lane. This keeps settings validation and defaults consistent.

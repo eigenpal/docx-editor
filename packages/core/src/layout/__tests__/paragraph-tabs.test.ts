@@ -51,7 +51,7 @@ const lay = (part: OoxmlPart) =>
 
 const FIXTURE = resolve(
   import.meta.dir,
-  '../../../../../e2e/fixtures/comprehensive-word-element-test.docx'
+  '../../../../../fixtures/comprehensive-word-element-test.docx'
 );
 
 describe('paragraphTabStops sanitises authored stops', () => {

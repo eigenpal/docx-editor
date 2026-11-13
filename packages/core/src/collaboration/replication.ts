@@ -9,7 +9,7 @@
  * `@docx-editor.dev/core/collaboration` should not offer `putXmlPart` and `spliceChildren` to
  * somebody wiring up an avatar stack.
  *
- * Reach for this when you are writing a provider. `@docx-editor.dev/pro` is one.
+ * Reach for this when you are writing a provider.
  *
  * @packageDocumentation
  * @public

@@ -81,7 +81,7 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
   'edit.suggesting-needs-author':
     'Suggesting (tracking changes) needs an author to attribute each change to. Pass the author option or call setAuthor.',
   'edit.review-module-required':
-    'This operation needs the review module. Register reviewModule() from @docx-editor.dev/pro in modules.',
+    'This operation needs the review module. Register a review module (such as reviewModule() from @gw/docx-review) in modules.',
   'edit.tracked-drawing-delete-unsupported':
     'This operation cannot record a drawing deletion as a tracked change, so nothing was deleted. Leave the drawing and report it, or ask a person to delete it in the editor, which records the deletion as a tracked change.',
   'edit.tracked-structure-unsupported':
