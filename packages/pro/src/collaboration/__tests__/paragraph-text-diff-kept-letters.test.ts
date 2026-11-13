@@ -78,6 +78,21 @@ test('rejecting insertions on both sides of a letter keeps that letter', () => {
   expect(keptFrom(diffTokens(before, after), after.length)).toEqual([0, 1, 4]);
 });
 
+test('a letter between a removed embed and a removed tail keeps its place', () => {
+  // Enter moves the tail away, and the head drops a second copy of a comment marker that
+  // shared text held. The last letter of the head stays: written again, it would be a new
+  // character that a peer's concurrent deletion of it does not reach.
+  const marker: Token = {
+    key: 'emarker',
+    strong: 'emarker',
+    insert: { n: 'marker' },
+    attributes: {},
+  };
+  const before = [...word('sit', 'a'), marker, marker, ...word('k', 'b'), ...word(' tail', 'b')];
+  const after = [...word('sit', 'a'), marker, ...word('k', 'b')];
+  expect(keptFrom(diffTokens(before, after), after.length)).toEqual([0, 1, 2, 3, 5]);
+});
+
 test('a run split whose text element stays on its tail keeps every letter', () => {
   // "lore" and "l" were one run; formatting split it and the tail kept the element.
   const before = [...word('lore', 'run'), ...word('lk', 'next')];

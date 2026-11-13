@@ -444,6 +444,8 @@ function dropScatteredLetters(steps: Step[], before: readonly Token[]): Step[] {
         const token = before[step.before]!;
         return !isStruck(token) && kept.has(token.trail ?? '');
       });
+    const inserts = (group: Step[] | undefined): boolean =>
+      group !== undefined && group.some((step) => step.op === 'ins');
     let changed = false;
     const out: Step[] = [];
     groups.forEach((group, index) => {
@@ -456,6 +458,9 @@ function dropScatteredLetters(steps: Step[], before: readonly Token[]): Step[] {
         group.length <= size(groups[index + 1]) &&
         // Only a replacement scatters letters: text typed in between deletes nothing.
         (deletes(groups[index - 1], kept) || deletes(groups[index + 1], kept)) &&
+        // Only new text can take the place of the kept letters. A letter between two
+        // deletions, as the end of a paragraph's head when Enter moves its tail away, stays.
+        (inserts(groups[index - 1]) || inserts(groups[index + 1])) &&
         group.every((step) => step.op === 'eq' && isPlainLetter(before[step.before]!));
       if (!scattered) {
         for (const step of group) out.push(step);
