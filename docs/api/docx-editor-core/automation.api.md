@@ -1540,7 +1540,33 @@ export interface AutomationPaginationSnapshot {
 }
 
 // @public
+export type AutomationParagraphBorderAssignment = {
+    readonly edge: AutomationParagraphBorderEdge;
+    readonly property: 'isVisible';
+    readonly value: boolean;
+} | {
+    readonly edge: AutomationParagraphBorderEdge;
+    readonly property: 'lineStyle';
+    readonly value: AutomationBorderLineStyle;
+} | {
+    readonly edge: AutomationParagraphBorderEdge;
+    readonly property: 'lineWidth';
+    readonly value: AutomationBorderLineWidth;
+} | {
+    readonly edge: AutomationParagraphBorderEdge;
+    readonly property: 'color';
+    readonly value: string;
+} | {
+    readonly edge: AutomationParagraphBorderEdge;
+    readonly property: 'colorIndex';
+    readonly value: AutomationBorderColorIndex;
+};
+
+// @public
 export type AutomationParagraphBorderEdge = 'top' | 'left' | 'bottom' | 'right' | 'between';
+
+// @public
+export type AutomationParagraphBorderProperty = 'isVisible' | 'lineStyle' | 'lineWidth' | 'color' | 'colorIndex';
 
 // @public
 export interface AutomationParagraphBorderRead {
@@ -1555,20 +1581,7 @@ export interface AutomationParagraphBorderRead {
 }
 
 // @public
-export type AutomationParagraphBordersWrite = Readonly<Partial<Record<AutomationParagraphBorderEdge, AutomationParagraphBorderWrite>>>;
-
-// @public
-export interface AutomationParagraphBorderWrite {
-    readonly color?: string;
-    // (undocumented)
-    readonly colorIndex?: AutomationBorderColorIndex;
-    // (undocumented)
-    readonly isVisible?: boolean;
-    // (undocumented)
-    readonly lineStyle?: AutomationBorderLineStyle;
-    // (undocumented)
-    readonly lineWidth?: AutomationBorderLineWidth;
-}
+export type AutomationParagraphBordersWrite = readonly AutomationParagraphBorderAssignment[];
 
 // @public
 export interface AutomationParagraphFormatRead {

@@ -135,7 +135,7 @@ describe('paragraph borders between two editors', () => {
     expect(await lineStyles(bob, 0)).toEqual(['None', 'None', 'Double', 'None', 'None']);
     expect(bob.container.querySelector('.docx-paragraph-border-bottom')).not.toBeNull();
     expect(await savedXml(bob)).toContain(
-      '<w:bottom w:color="auto" w:space="1" w:sz="4" w:val="double"/>'
+      '<w:bottom w:color="auto" w:space="0" w:sz="4" w:val="double"/>'
     );
     await converged(alice, bob);
 

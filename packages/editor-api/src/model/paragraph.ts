@@ -197,11 +197,13 @@ export class Paragraph extends ModelObject implements PromisedItem {
   }
 
   /**
-   * The paragraph's borders: top, left, bottom, right, then the border between paragraphs.
+   * The paragraph's borders. `items` holds five borders in a fixed order: `0` top, `1` left,
+   * `2` bottom, `3` right, and `4` the border between paragraphs.
    *
-   * Reads answer the borders the page shows, including ones the paragraph's style supplies.
-   * Border writes join this paragraph's other formatting writes in the same sync as one write.
-   * With change tracking on, they are recorded as one paragraph formatting revision.
+   * Reads return the borders the paragraph shows, including ones its style supplies. Load
+   * `items` and sync before you write. Border writes apply in the order you make them and join
+   * this paragraph's other formatting writes in the same sync. With change tracking on, they are
+   * recorded as one paragraph property revision.
    */
   get borders(): BorderUniversalCollection {
     this.#borders ??= BorderUniversalCollection.of(
@@ -711,32 +713,16 @@ export class Paragraph extends ModelObject implements PromisedItem {
   }
 
   /**
-   * Fold one border assignment into this paragraph's pending write.
+   * Queue one border assignment on this paragraph's pending write.
    *
-   * One sync carries the last value of each property, not the order they were set in, so a later
-   * assignment drops an earlier one it overrides: a line style or visibility replaces the other
-   * where they disagree, and `color` and `colorIndex` replace each other.
+   * Border assignments keep their order: the host applies them in sequence, where a line style
+   * resets the width, so `lineWidth` before `lineStyle` and after it give different results.
    */
   #authorBorder(edge: BorderEdge, field: BorderWritableField, value: unknown): void {
-    const pending = (this.#format?.borders ?? {}) as Record<string, Record<string, unknown>>;
-    const current = { ...(pending[edge] ?? {}) };
-    if (field === 'lineStyle') {
-      delete current.isVisible;
-      if (value === 'None') {
-        current.isVisible = false;
-        delete current.lineStyle;
-      } else current.lineStyle = value;
-    } else if (field === 'isVisible') {
-      if (value === false) {
-        delete current.lineStyle;
-        current.isVisible = false;
-      } else if (current.lineStyle === undefined) current.isVisible = true;
-    } else {
-      if (field === 'color') delete current.colorIndex;
-      if (field === 'colorIndex') delete current.color;
-      current[field] = value;
-    }
-    this.#authorFormat('borders', { ...pending, [edge]: current });
+    const assignment = { edge, property: field, value };
+    const queued = this.#format?.borders;
+    if (Array.isArray(queued)) queued.push(assignment);
+    else this.#authorFormat('borders', [assignment]);
   }
 
   #listAt(label: string): List {

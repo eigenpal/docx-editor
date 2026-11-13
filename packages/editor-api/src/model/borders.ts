@@ -18,8 +18,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //
 // WRITES JOIN THE PARAGRAPH'S OWN WRITE. Every border and paragraph-format assignment in one sync
 // is one operation on the paragraph, because each rewrites the same `w:pPr` and the host refuses a
-// second write planned from the tree the first already changed. Within one edge, a later
-// assignment replaces an earlier one that disagrees with it, as the calls would in order.
+// second write planned from the tree the first already changed. Border assignments keep their
+// order: the host applies them in sequence, where a line style resets the width.
+//
+// VALUES ARE CHECKED WHEN ASSIGNED, so a bad value throws at the line that set it, naming the
+// exact property, instead of failing the whole sync later.
 
 import {
   ObjectPath,
@@ -49,6 +52,50 @@ const WRITABLE = ['isVisible', 'lineStyle', 'lineWidth', 'color', 'colorIndex'] 
 
 /** @internal One property a border writes. */
 export type BorderWritableField = (typeof WRITABLE)[number];
+
+/** Values each enum-typed property accepts. */
+const LINE_STYLES: ReadonlySet<unknown> = new Set(Object.values(BorderLineStyle));
+const LINE_WIDTHS: ReadonlySet<unknown> = new Set(Object.values(LineWidth));
+const COLOR_INDEXES: ReadonlySet<unknown> = new Set(Object.values(ColorIndex));
+/** Palette entries that depend on the reading application or on revision authors. */
+const UNSUPPORTED_COLOR_INDEXES: ReadonlySet<unknown> = new Set([
+  ColorIndex.classicRed,
+  ColorIndex.classicBlue,
+  ColorIndex.byAuthor,
+]);
+const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
+/** Page-border members a load may name, which a paragraph border does not support. */
+const ART_FIELDS: ReadonlySet<string> = new Set(['artStyle', 'artWidth']);
+
+/** Throw `NotSupported` for a load that names an art-border property. */
+function refuseArtLoad(names: readonly string[], target: string): void {
+  const art = names.find((name) => ART_FIELDS.has(name));
+  if (art !== undefined) fail({ code: 'NotSupported', target: `${target}.${art}` });
+}
+
+/** Throw unless `value` is one this property accepts. */
+function requireBorderValue(field: BorderWritableField, value: unknown, target: string): void {
+  let ok: boolean;
+  switch (field) {
+    case 'isVisible':
+      ok = typeof value === 'boolean';
+      break;
+    case 'lineStyle':
+      ok = LINE_STYLES.has(value);
+      break;
+    case 'lineWidth':
+      ok = LINE_WIDTHS.has(value);
+      break;
+    case 'color':
+      ok = typeof value === 'string' && HEX_COLOR.test(value);
+      break;
+    case 'colorIndex':
+      if (UNSUPPORTED_COLOR_INDEXES.has(value)) fail({ code: 'NotSupported', target });
+      ok = COLOR_INDEXES.has(value);
+      break;
+  }
+  if (!ok) fail({ code: 'InvalidArgument', target });
+}
 
 /** @internal How a border hands an assignment to its paragraph's write. */
 export type BorderAuthor = (edge: BorderEdge, field: BorderWritableField, value: unknown) => void;
@@ -359,6 +406,7 @@ export class BorderUniversalCollection extends ModelObject {
   /** @internal One read fills every edge with every property asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     const names = collectionItemSelection(request);
+    refuseArtLoad(names, `${this.path.label}.items`);
     for (const name of names) {
       if (!FIELDS.includes(name as BorderField))
         fail({ code: 'InvalidArgument', target: `${this.path.label}.items/${name}` });
@@ -386,10 +434,12 @@ export class BorderUniversalCollection extends ModelObject {
  * `color`, and `colorIndex` read `null` where no line shows or no value names the stored one;
  * `colorIndex` reads `Auto` for an automatic color.
  *
- * A write that shows a line on an edge with none draws a single half-point automatic line, then
- * applies the other properties you set. Setting `lineWidth`, `color`, or `colorIndex` on an edge
- * with no line, without `lineStyle` or `isVisible` in the same sync, fails the sync. Art borders
- * belong to pages: `artStyle` and `artWidth` throw `NotSupported`.
+ * Writes apply in the order you make them. A `lineStyle` write draws the line at `Pt050` and
+ * keeps the edge's color and gap, so set `lineWidth` after it. `isVisible = true` draws a single
+ * `Pt050` automatic line on an edge with none. A `lineWidth` on an edge with no line has no
+ * effect. Values are checked when you assign them: an invalid value throws `InvalidArgument`,
+ * and `ClassicRed`, `ClassicBlue`, and `ByAuthor` throw `NotSupported`. Art borders belong to
+ * pages: `artStyle` and `artWidth` throw `NotSupported`, also in `load()`.
  *
  * @public
  */
@@ -613,14 +663,17 @@ export class BorderUniversal extends ModelObject {
     return this.loadedProperty<string | null>('color');
   }
 
-  /** Write `#RRGGBB`. Any other value fails the sync with `InvalidArgument`. */
+  /**
+   * Write `#RRGGBB`; any other value throws `InvalidArgument`. On an edge with no line, the color
+   * applies to the next line drawn there in the same sync.
+   */
   set color(value: string) {
     this.#assign('color', value, `${this.path.label}.color`);
   }
 
   /**
    * The palette color, `Auto` for an automatic color, or `null` for no line or a color outside
-   * the palette. Writing `ClassicRed`, `ClassicBlue`, or `ByAuthor` fails the sync.
+   * the palette. Writing `ClassicRed`, `ClassicBlue`, or `ByAuthor` throws `NotSupported`.
    */
   get colorIndex():
     | ColorIndex
@@ -820,6 +873,7 @@ export class BorderUniversal extends ModelObject {
 
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
+    refuseArtLoad(request.select, this.path.label);
     const selected = this.selection(request, FIELDS) as readonly BorderField[];
     if (selected.length === 0) return;
     const label = `${this.path.label}.border`;
@@ -845,8 +899,7 @@ export class BorderUniversal extends ModelObject {
 
   #assign(field: BorderWritableField, value: unknown, target: string): void {
     this.requireUsablePath();
-    if (field === 'isVisible' ? typeof value !== 'boolean' : typeof value !== 'string')
-      fail({ code: 'InvalidArgument', target });
+    requireBorderValue(field, value, target);
     this.#author(this.#edge, field, value);
   }
 }

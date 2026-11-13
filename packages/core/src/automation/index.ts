@@ -94,9 +94,10 @@ export type {
   AutomationBorderColorIndex,
   AutomationBorderLineStyle,
   AutomationBorderLineWidth,
+  AutomationParagraphBorderAssignment,
   AutomationParagraphBorderEdge,
+  AutomationParagraphBorderProperty,
   AutomationParagraphBorderRead,
-  AutomationParagraphBorderWrite,
   AutomationParagraphBordersWrite,
 } from './paragraph-borders.ts';
 

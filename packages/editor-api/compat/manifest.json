@@ -12,7 +12,7 @@
       "DocumentProperties"
     ],
     "collectionsAndSearch": ["ParagraphCollection", "RangeCollection", "SearchOptions"],
-    "fontAndParagraphFormatting": ["Font"],
+    "fontAndParagraphFormatting": ["Font", "BorderUniversalCollection", "BorderUniversal"],
     "contentControls": ["ContentControl", "ContentControlCollection"],
     "listsAndNumbering": ["List", "ListCollection", "ListItem"],
     "bookmarks": ["Bookmark", "BookmarkCollection"],
@@ -109,6 +109,7 @@
     },
     "Paragraph": {
       "members": [
+        "borders",
         "font",
         "contentControls",
         "alignment",
@@ -246,6 +247,12 @@
     },
     "StyleCollection": {
       "members": ["items", "getByNameOrNullObject", "getCount"]
+    },
+    "BorderUniversalCollection": {
+      "members": ["items"]
+    },
+    "BorderUniversal": {
+      "members": ["color", "colorIndex", "inside", "isVisible", "lineStyle", "lineWidth"]
     }
   },
   "omissions": [
@@ -540,6 +547,22 @@
     {
       "uid": "Word.Style#set",
       "reason": "Not published. Setting several style properties at once is a styles-part write."
+    },
+    {
+      "uid": "Word.BorderUniversal#artStyle",
+      "reason": "Art borders belong to pages. On a paragraph border, reads, writes, and loads throw NotSupported, so the member is not declared for conformance. runtime-notes.json records it as unsupported."
+    },
+    {
+      "uid": "Word.BorderUniversal#artWidth",
+      "reason": "Art borders belong to pages. On a paragraph border, reads, writes, and loads throw NotSupported, so the member is not declared for conformance. runtime-notes.json records it as unsupported."
+    },
+    {
+      "uid": "Word.BorderUniversal#set",
+      "reason": "Implemented with both upstream overloads. Not selected for exact conformance, because the update-data parameter carries artStyle and artWidth, which this subset refuses with NotSupported. runtime-notes.json records the supported subset."
+    },
+    {
+      "uid": "Word.BorderUniversalCollection#applyPageBordersToAllSections",
+      "reason": "Paragraph borders are not page borders. The member exists and throws NotSupported; it is not declared for conformance."
     }
   ],
   "divergences": [

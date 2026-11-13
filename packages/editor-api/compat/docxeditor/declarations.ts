@@ -260,6 +260,7 @@ export declare namespace DocxEditor {
 
   export class Paragraph {
     alignment: 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
+    readonly borders: BorderUniversalCollection;
     readonly contentControls: ContentControlCollection;
     firstLineIndent: number;
     readonly font: Font;
@@ -316,6 +317,67 @@ export declare namespace DocxEditor {
     italic: boolean;
     name: string;
     size: number;
+  }
+
+  // Five items in a fixed order: top, left, bottom, right, then the border between paragraphs.
+  // `applyPageBordersToAllSections`, `artStyle`, `artWidth`, and `set` are recorded omissions.
+  export class BorderUniversalCollection {
+    readonly items: BorderUniversal[];
+  }
+
+  export class BorderUniversal {
+    color: string;
+    colorIndex:
+      | 'Auto'
+      | 'Black'
+      | 'Blue'
+      | 'Turquoise'
+      | 'BrightGreen'
+      | 'Pink'
+      | 'Red'
+      | 'Yellow'
+      | 'White'
+      | 'DarkBlue'
+      | 'Teal'
+      | 'Green'
+      | 'Violet'
+      | 'DarkRed'
+      | 'DarkYellow'
+      | 'Gray50'
+      | 'Gray25'
+      | 'ClassicRed'
+      | 'ClassicBlue'
+      | 'ByAuthor';
+    readonly inside: boolean;
+    isVisible: boolean;
+    lineStyle:
+      | 'None'
+      | 'Single'
+      | 'Dot'
+      | 'DashSmallGap'
+      | 'DashLargeGap'
+      | 'DashDot'
+      | 'DashDotDot'
+      | 'Double'
+      | 'Triple'
+      | 'ThinThickSmallGap'
+      | 'ThickThinSmallGap'
+      | 'ThinThickThinSmallGap'
+      | 'ThinThickMedGap'
+      | 'ThickThinMedGap'
+      | 'ThinThickThinMedGap'
+      | 'ThinThickLargeGap'
+      | 'ThickThinLargeGap'
+      | 'ThinThickThinLargeGap'
+      | 'SingleWavy'
+      | 'DoubleWavy'
+      | 'DashDotStroked'
+      | 'Emboss3D'
+      | 'Engrave3D'
+      | 'Outset'
+      | 'Inset';
+    lineWidth:
+      'Pt025' | 'Pt050' | 'Pt075' | 'Pt100' | 'Pt150' | 'Pt225' | 'Pt300' | 'Pt450' | 'Pt600';
   }
 
   // ---------------------------------------------------------------------

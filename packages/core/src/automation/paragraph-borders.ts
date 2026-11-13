@@ -5,19 +5,18 @@
 // the `CT_PBdr` sequence without `w:bar`, which no Office-shaped member addresses and which every
 // write carries through unchanged.
 //
-// A READ ANSWERS WHAT THE PAGE SHOWS. Borders very often come from a style (a title's rule, a
-// quote's box), so answering only the paragraph's own `w:pBdr` would report "no border" under a
-// visible line. The read resolves the same cascade layout paints from: the paragraph's own
-// `w:pBdr` when it has one, else the last one its style chain states. Writing back a value read
-// here changes nothing: a write that lands on what is already in force writes no op.
+// BORDERS CASCADE EDGE BY EDGE. Each level of the cascade (document defaults, the style chain,
+// the paragraph's own `w:pBdr`) overrides only the edges it states. A read answers what the page
+// shows, folded the same way layout paints it, so a style's rule reads as a line on the
+// paragraph. A write states only the edges it changes, and writing back a value read here
+// changes nothing.
 //
-// A WRITE STATES THE WHOLE ELEMENT. A paragraph's own `w:pBdr` replaces the style's borders as a
-// unit, so changing one edge of a style border means copying the style's other edges into the
-// paragraph first. An edge turned off that a style would otherwise show is written as
-// `w:val="nil"`, so the result is the same whether a reader merges edges or replaces them.
+// ASSIGNMENTS APPLY IN ORDER, as the same calls do in sequence: a line style resets the width,
+// so `lineWidth` before `lineStyle` is lost and after it is kept (see `applied`).
 //
 // UNTRUSTED VALUES. Every request value is checked against a fixed table before it becomes an
-// attribute; every attribute read from the file is checked before it becomes an answer.
+// attribute; every attribute read from the file is checked before it becomes an answer or is
+// carried into a write.
 
 import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
@@ -28,7 +27,10 @@ import type {
   ParagraphBorderEdgeName,
   ParagraphBorderEdgeWrite,
 } from '../store/store/tree-op-paragraph-borders.ts';
-import { PARAGRAPH_BORDER_EDGES } from '../store/store/tree-op-paragraph-borders.ts';
+import {
+  admissibleBorderAttributes,
+  PARAGRAPH_BORDER_EDGES,
+} from '../store/store/tree-op-paragraph-borders.ts';
 
 /** One edge the object model addresses. */
 export type AutomationParagraphBorderEdge = 'top' | 'left' | 'bottom' | 'right' | 'between';
@@ -193,35 +195,55 @@ export interface AutomationParagraphBorderRead {
   readonly inside: boolean;
 }
 
-/** A change to one edge. Every field is optional; an omitted one keeps its value. */
-export interface AutomationParagraphBorderWrite {
-  readonly isVisible?: boolean;
-  readonly lineStyle?: AutomationBorderLineStyle;
-  readonly lineWidth?: AutomationBorderLineWidth;
-  /** `#RRGGBB`. */
-  readonly color?: string;
-  readonly colorIndex?: AutomationBorderColorIndex;
-}
+/** A border property a write assigns. */
+export type AutomationParagraphBorderProperty =
+  'isVisible' | 'lineStyle' | 'lineWidth' | 'color' | 'colorIndex';
 
-/** Changes to a paragraph's borders, by edge. */
-export type AutomationParagraphBordersWrite = Readonly<
-  Partial<Record<AutomationParagraphBorderEdge, AutomationParagraphBorderWrite>>
->;
+/**
+ * One assignment to one edge, in the order the caller made it.
+ *
+ * Order matters, as it does for the same assignments in sequence: a `lineStyle` resets the width
+ * to `Pt050`, so a width set before it is lost and a width set after it stays.
+ */
+export type AutomationParagraphBorderAssignment =
+  | {
+      readonly edge: AutomationParagraphBorderEdge;
+      readonly property: 'isVisible';
+      readonly value: boolean;
+    }
+  | {
+      readonly edge: AutomationParagraphBorderEdge;
+      readonly property: 'lineStyle';
+      readonly value: AutomationBorderLineStyle;
+    }
+  | {
+      readonly edge: AutomationParagraphBorderEdge;
+      readonly property: 'lineWidth';
+      readonly value: AutomationBorderLineWidth;
+    }
+  | {
+      readonly edge: AutomationParagraphBorderEdge;
+      /** `#RRGGBB`. */
+      readonly property: 'color';
+      readonly value: string;
+    }
+  | {
+      readonly edge: AutomationParagraphBorderEdge;
+      readonly property: 'colorIndex';
+      readonly value: AutomationBorderColorIndex;
+    };
 
-/** The `w:space` a new line takes: the gap a newly drawn paragraph border has, in points. */
-const DEFAULT_SPACE: Readonly<Record<AutomationParagraphBorderEdge, string>> = {
-  top: '1',
-  left: '4',
-  bottom: '1',
-  right: '4',
-  between: '1',
-};
+/** Border assignments to one paragraph, applied in order. */
+export type AutomationParagraphBordersWrite = readonly AutomationParagraphBorderAssignment[];
+
+/** Most assignments one write carries: a bound on the work an untyped caller can ask for. */
+const MAX_ASSIGNMENTS = 1024;
 
 const NO_LINE: ReadonlySet<string> = new Set(['nil', 'none']);
 const FILE_HEX = /^[0-9A-Fa-f]{6}$/;
 const REQUEST_HEX = /^#([0-9A-Fa-f]{6})$/;
 const THEME_ATTRIBUTES = ['themeColor', 'themeTint', 'themeShade'] as const;
-const WRITE_FIELDS: ReadonlySet<string> = new Set([
+const PROPERTIES: ReadonlySet<string> = new Set([
   'isVisible',
   'lineStyle',
   'lineWidth',
@@ -229,20 +251,30 @@ const WRITE_FIELDS: ReadonlySet<string> = new Set([
   'colorIndex',
 ]);
 
-type EdgeAttributes = Record<string, string>;
+/** An edge turned off over a style edge that shows: the form an off edge is written in. */
+const OFF_EDGE: Readonly<Record<string, string>> = Object.freeze({
+  val: 'none',
+  sz: '0',
+  space: '0',
+  color: 'auto',
+});
 
-/** Where the inherited `w:pBdr` comes from: the style index, which owns the cascade. */
+type EdgeAttributes = Record<string, string>;
+type EdgeMap = Map<ParagraphBorderEdgeName, EdgeAttributes>;
+
+/** Where the inherited borders come from: the style index, which owns the cascade. */
 export interface InheritedParagraphBorders {
   /**
-   * The last `w:pBdr` the paragraph's style chain and document defaults state, ignoring the
-   * paragraph's own. `styleId` resolves it as if the paragraph named that style.
+   * The `w:pBdr` elements the paragraph's document defaults and style chain state, in cascade
+   * order, ignoring the paragraph's own. `styleId` resolves them as if the paragraph named that
+   * style.
    */
-  inheritedBorders(paragraph: OoxmlNode, styleId?: string): OoxmlNode | undefined;
+  inheritedBorders(paragraph: OoxmlNode, styleId?: string): readonly OoxmlNode[];
 }
 
-/** The `w:`-namespace attributes of one element, with logical names folded to physical ones. */
-function edgesOf(pBdr: OoxmlNode | undefined): Map<ParagraphBorderEdgeName, EdgeAttributes> {
-  const edges = new Map<ParagraphBorderEdgeName, EdgeAttributes>();
+/** The `w:`-namespace attributes of one element's edges, with logical names folded to physical. */
+function edgesOf(pBdr: OoxmlNode | undefined): EdgeMap {
+  const edges: EdgeMap = new Map();
   if (!pBdr || pBdr.kind === 'textValue') return edges;
   for (const child of pBdr.children) {
     if (child.kind === 'textValue' || child.namespaceUri !== WML_NAMESPACE_URI) continue;
@@ -261,8 +293,38 @@ function edgesOf(pBdr: OoxmlNode | undefined): Map<ParagraphBorderEdgeName, Edge
   return edges;
 }
 
+/** The edges several elements state, folded in order: each overrides only the edges it states. */
+function foldedEdges(elements: readonly (OoxmlNode | undefined)[]): EdgeMap {
+  const folded: EdgeMap = new Map();
+  for (const element of elements) {
+    for (const [edge, attributes] of edgesOf(element)) folded.set(edge, attributes);
+  }
+  return folded;
+}
+
 function visible(attributes: EdgeAttributes | undefined): attributes is EdgeAttributes {
   return attributes !== undefined && attributes.val !== undefined && !NO_LINE.has(attributes.val);
+}
+
+/**
+ * One edge reduced to what it shows. Absent attributes take the values layout paints with, so
+ * `<w:bottom w:val="single"/>` and the same line with `w:sz="4"` and `w:color="auto"` compare
+ * equal, and every edge with no line compares equal to every other.
+ */
+function meaningOf(attributes: EdgeAttributes | undefined): string {
+  if (!visible(attributes)) return 'off';
+  const color = attributes.color === undefined ? 'auto' : attributes.color.toLowerCase();
+  return [
+    attributes.val,
+    attributes.sz ?? '4',
+    attributes.space ?? '0',
+    color,
+    attributes.themeColor ?? '',
+    attributes.themeTint?.toLowerCase() ?? '',
+    attributes.themeShade?.toLowerCase() ?? '',
+    attributes.shadow ?? '',
+    attributes.frame ?? '',
+  ].join('|');
 }
 
 function readEdge(
@@ -298,14 +360,12 @@ function readEdge(
   };
 }
 
-/** The `w:pBdr` in force for a paragraph: its own, else the one its style chain states. */
-function borderElementInForce(
-  paragraph: OoxmlNode,
-  styles: InheritedParagraphBorders
-): OoxmlNode | undefined {
-  return (
-    namedChild(paragraphPropertiesNodeOf(paragraph), 'pBdr') ?? styles.inheritedBorders(paragraph)
-  );
+/** The edges a paragraph shows: its style chain's, folded with its own, edge by edge. */
+function edgesInForce(paragraph: OoxmlNode, styles: InheritedParagraphBorders): EdgeMap {
+  return foldedEdges([
+    ...styles.inheritedBorders(paragraph),
+    namedChild(paragraphPropertiesNodeOf(paragraph), 'pBdr'),
+  ]);
 }
 
 /** The five edges the object model reads, in collection order, or null for no paragraph. */
@@ -316,7 +376,7 @@ export function paragraphBordersRead(
 ): readonly AutomationParagraphBorderRead[] | null {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return null;
-  const edges = edgesOf(borderElementInForce(paragraph, styles));
+  const edges = edgesInForce(paragraph, styles);
   return AUTOMATION_PARAGRAPH_BORDER_EDGES.map((edge) => readEdge(edge, edges.get(edge)));
 }
 
@@ -333,23 +393,81 @@ function refuse(detail: string): ParagraphBordersPlan {
   return { ok: false, detail };
 }
 
-function sameEdges(
-  left: ReadonlyMap<ParagraphBorderEdgeName, EdgeAttributes>,
-  right: ReadonlyMap<ParagraphBorderEdgeName, EdgeAttributes>
-): boolean {
-  if (left.size !== right.size) return false;
-  for (const [edge, attributes] of left) {
-    const other = right.get(edge);
-    if (!other) return false;
-    const names = Object.keys(attributes);
-    if (names.length !== Object.keys(other).length) return false;
-    if (names.some((name) => attributes[name] !== other[name])) return false;
+/** The `w:color` one colour assignment writes, or null for a value this lane refuses. */
+function requestedColor(property: 'color' | 'colorIndex', value: unknown): string | null {
+  if (property === 'color') {
+    const match = typeof value === 'string' ? REQUEST_HEX.exec(value) : null;
+    return match ? match[1]!.toUpperCase() : null;
   }
-  return true;
+  if (value === 'Auto') return 'auto';
+  return typeof value === 'string' && Object.hasOwn(COLOR_INDEX_HEX, value)
+    ? COLOR_INDEX_HEX[value as Exclude<AutomationBorderColorIndex, 'Auto'>]
+    : null;
+}
+
+/**
+ * One assignment applied to the edge as it stands, as the same assignment behaves in sequence:
+ *
+ * - a line style draws the line at `Pt050`, keeping the edge's colour and gap; a new line takes
+ *   an automatic colour and no gap;
+ * - `isVisible = true` draws a single line where there is none and leaves a line alone;
+ * - `lineStyle = 'None'` and `isVisible = false` take the line away;
+ * - a width on an edge with no line changes nothing;
+ * - a colour on an edge with no line is kept for the next line drawn there.
+ */
+function applied(
+  current: EdgeAttributes | undefined,
+  property: AutomationParagraphBorderProperty,
+  value: unknown
+): EdgeAttributes | undefined | string {
+  const shown = visible(current);
+  switch (property) {
+    case 'isVisible':
+      if (typeof value !== 'boolean') return 'isVisible: not a boolean';
+      if (!value) return undefined;
+      return shown ? current : applied(current, 'lineStyle', 'Single');
+    case 'lineStyle': {
+      if (value === 'None') return undefined;
+      if (typeof value !== 'string' || !Object.hasOwn(LINE_STYLE_VALUES, value))
+        return `lineStyle: ${String(value)}`;
+      const base = current ? admissibleBorderAttributes(current) : nullRecord<string>();
+      return {
+        ...base,
+        val: LINE_STYLE_VALUES[value as Exclude<AutomationBorderLineStyle, 'None'>],
+        sz: '4',
+        space: base.space ?? '0',
+        color: base.color ?? 'auto',
+      };
+    }
+    case 'lineWidth':
+      if (typeof value !== 'string' || !Object.hasOwn(LINE_WIDTH_EIGHTHS, value))
+        return `lineWidth: ${String(value)}`;
+      if (!shown) return current;
+      return {
+        ...admissibleBorderAttributes(current),
+        sz: String(LINE_WIDTH_EIGHTHS[value as AutomationBorderLineWidth]),
+      };
+    case 'color':
+    case 'colorIndex': {
+      const color = requestedColor(property, value);
+      if (color === null)
+        return `${property}: ${property === 'color' ? 'not #RRGGBB' : String(value)}`;
+      const next = shown ? admissibleBorderAttributes(current) : { ...OFF_EDGE };
+      next.color = color;
+      // A theme colour overrides `w:color`, so a stated colour has to drop it to show.
+      for (const name of THEME_ATTRIBUTES) delete next[name];
+      return next;
+    }
+  }
 }
 
 /**
  * The paragraph's own border edges after a write, or why the write is refused.
+ *
+ * Only the edges the write changes are stated, as minimal as the cascade allows: a line the
+ * style already draws is not restated, an edge turned off over a style line is written off
+ * (`none`), and an edge turned off with no style line under it is removed. Untouched edges,
+ * including `w:bar`, keep their attributes.
  *
  * `styleId` is the style the same write applies, if any, so a style and a border can share a
  * sync and the border resolves against the new style.
@@ -360,112 +478,47 @@ export function paragraphBordersPlan(
   styles: InheritedParagraphBorders,
   styleId?: string
 ): ParagraphBordersPlan {
-  if (typeof request !== 'object' || request === null || Array.isArray(request))
-    return refuse('borders: not an object');
-  const own = namedChild(paragraphPropertiesNodeOf(paragraph), 'pBdr');
-  const inheritedElement = styles.inheritedBorders(paragraph, styleId);
-  const inherited = edgesOf(inheritedElement);
-  const before = own ? edgesOf(own) : inherited;
-  const next = new Map(before);
-  for (const [key, change] of Object.entries(request)) {
-    if (!AUTOMATION_PARAGRAPH_BORDER_EDGES.includes(key as AutomationParagraphBorderEdge))
-      return refuse(`borders: ${key} is not an edge`);
-    const edge = key as AutomationParagraphBorderEdge;
-    const label = `borders.${edge}`;
-    if (typeof change !== 'object' || change === null || Array.isArray(change))
-      return refuse(`${label}: not an object`);
-    const fields = change as Record<string, unknown>;
-    for (const field of Object.keys(fields)) {
-      if (!WRITE_FIELDS.has(field)) return refuse(`${label}.${field}: not a border property`);
-    }
-    const current = before.get(edge);
-    let shown = visible(current);
-    let val = shown ? current!.val! : undefined;
-    if (fields.lineStyle !== undefined) {
-      if (fields.lineStyle === 'None') {
-        shown = false;
-      } else {
-        const mapped =
-          LINE_STYLE_VALUES[fields.lineStyle as Exclude<AutomationBorderLineStyle, 'None'>];
-        if (
-          typeof fields.lineStyle !== 'string' ||
-          !Object.hasOwn(LINE_STYLE_VALUES, fields.lineStyle)
-        )
-          return refuse(`${label}.lineStyle: ${String(fields.lineStyle)}`);
-        shown = true;
-        val = mapped;
-      }
-    }
-    if (fields.isVisible !== undefined) {
-      if (typeof fields.isVisible !== 'boolean') return refuse(`${label}.isVisible: not a boolean`);
-      // One sync carries the last value of each property, not their order, so a line style
-      // and a visibility that disagree cannot both be honored.
-      if (fields.lineStyle !== undefined && (fields.lineStyle !== 'None') !== fields.isVisible)
-        return refuse(`${label}: isVisible and lineStyle disagree`);
-      if (fields.isVisible && !shown) val = 'single';
-      shown = fields.isVisible;
-    }
-    if (fields.color !== undefined && fields.colorIndex !== undefined)
-      return refuse(`${label}: color and colorIndex both set`);
-    const restyles =
-      fields.lineWidth !== undefined ||
-      fields.color !== undefined ||
-      fields.colorIndex !== undefined;
-    if (!shown) {
-      // A width or colour on an edge with no line would be stored on nothing and read back
-      // as no line. Refused rather than silently dropped.
-      if (restyles) return refuse(`${label}: no line is shown; set lineStyle or isVisible`);
-      next.delete(edge);
-      continue;
-    }
-    const attributes: EdgeAttributes = visible(current)
-      ? { ...current }
-      : { sz: '4', space: DEFAULT_SPACE[edge], color: 'auto' };
-    attributes.val = val!;
-    if (fields.lineWidth !== undefined) {
-      if (
-        typeof fields.lineWidth !== 'string' ||
-        !Object.hasOwn(LINE_WIDTH_EIGHTHS, fields.lineWidth)
-      )
-        return refuse(`${label}.lineWidth: ${String(fields.lineWidth)}`);
-      attributes.sz = String(LINE_WIDTH_EIGHTHS[fields.lineWidth as AutomationBorderLineWidth]);
-    }
-    let color: string | undefined;
-    if (fields.color !== undefined) {
-      const match = typeof fields.color === 'string' ? REQUEST_HEX.exec(fields.color) : null;
-      if (!match) return refuse(`${label}.color: not #RRGGBB`);
-      color = match[1]!.toUpperCase();
-    }
-    if (fields.colorIndex !== undefined) {
-      if (fields.colorIndex === 'Auto') color = 'auto';
-      else if (
-        typeof fields.colorIndex === 'string' &&
-        Object.hasOwn(COLOR_INDEX_HEX, fields.colorIndex)
-      )
-        color = COLOR_INDEX_HEX[fields.colorIndex as Exclude<AutomationBorderColorIndex, 'Auto'>];
-      else return refuse(`${label}.colorIndex: ${String(fields.colorIndex)}`);
-    }
-    if (color !== undefined) {
-      attributes.color = color;
-      // A theme colour overrides `w:color`, so a stated colour has to drop it to show.
-      for (const name of THEME_ATTRIBUTES) delete attributes[name];
-    }
-    next.set(edge, attributes);
+  if (!Array.isArray(request)) return refuse('borders: not a list of assignments');
+  if (request.length > MAX_ASSIGNMENTS) return refuse('borders: too many assignments');
+  const own = edgesOf(namedChild(paragraphPropertiesNodeOf(paragraph), 'pBdr'));
+  const inherited = foldedEdges(styles.inheritedBorders(paragraph, styleId));
+  const state = new Map<ParagraphBorderEdgeName, EdgeAttributes | undefined>();
+  for (const assignment of request as readonly unknown[]) {
+    if (typeof assignment !== 'object' || assignment === null)
+      return refuse('borders: an assignment is not an object');
+    const { edge, property, value } = assignment as Record<string, unknown>;
+    if (!AUTOMATION_PARAGRAPH_BORDER_EDGES.includes(edge as AutomationParagraphBorderEdge))
+      return refuse(`borders: ${String(edge)} is not an edge`);
+    if (typeof property !== 'string' || !PROPERTIES.has(property))
+      return refuse(`borders.${String(edge)}: ${String(property)} is not a border property`);
+    const name = edge as AutomationParagraphBorderEdge;
+    const current = state.has(name) ? state.get(name) : (own.get(name) ?? inherited.get(name));
+    const next = applied(current, property as AutomationParagraphBorderProperty, value);
+    if (typeof next === 'string') return refuse(`borders.${name}.${next}`);
+    state.set(name, next);
   }
-  // Every edge the style shows and this write does not keep is stated off. A reader that
-  // replaces the style's element and one that merges edges then both show the same borders,
-  // and dropping the paragraph's own element can never bring a hidden style edge back.
-  for (const [edge, attributes] of inherited) {
-    if (visible(attributes) && !visible(next.get(edge))) next.set(edge, { val: 'nil' });
+  const after: EdgeMap = new Map(own);
+  let changed = false;
+  for (const [edge, final] of state) {
+    const before = own.get(edge);
+    const style = inherited.get(edge);
+    let stated: EdgeAttributes | undefined;
+    if (visible(final)) stated = meaningOf(final) === meaningOf(style) ? undefined : final;
+    else stated = visible(style) ? { ...OFF_EDGE } : undefined;
+    // What the paragraph shows decides whether anything moved, not the attribute spelling.
+    const showsBefore = meaningOf(before ?? style);
+    const showsAfter = meaningOf(stated ?? style);
+    if (showsBefore === showsAfter) continue;
+    changed = true;
+    if (stated) after.set(edge, stated);
+    else after.delete(edge);
   }
-  // No write when nothing moves: neither the paragraph's own element, nor, for a paragraph
-  // with none, the style's — restating that would freeze inherited values into the paragraph.
-  if (sameEdges(next, own ? before : inherited)) return { ok: true, edges: null };
+  if (!changed) return { ok: true, edges: null };
   return {
     ok: true,
     edges: PARAGRAPH_BORDER_EDGES.flatMap((edge) => {
-      const attributes = next.get(edge);
-      return attributes ? [{ edge, attributes: { ...attributes } }] : [];
+      const attributes = after.get(edge);
+      return attributes ? [{ edge, attributes: admissibleBorderAttributes(attributes) }] : [];
     }),
   };
 }

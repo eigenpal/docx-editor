@@ -4,10 +4,10 @@
 // in CHILDREN (`w:top`, `w:bottom`, …), and `OoxmlProperty` is flat. A property write keeps the
 // children of the node it replaces, so it can preserve a border but never author one.
 //
-// The op states the WHOLE element. A paragraph's own `w:pBdr` replaces the style's borders as a
-// unit (see `cascadedParagraphBorders`), so a partial edit would have to know the cascade to mean
-// anything. The caller resolves that and hands over the edges as they now stand; this module
-// validates them and writes them in `CT_PBdr` order.
+// The op states the paragraph's WHOLE own element. Layout folds it over the style's borders edge
+// by edge (see `cascadedParagraphBorders`), so an edge the op leaves out inherits. The caller
+// decides which edges the paragraph states; this module validates them and writes them in
+// `CT_PBdr` order.
 
 import {
   WML_NAMESPACE_URI,
@@ -21,7 +21,7 @@ import {
   replaceChildren,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
-import { isDangerousKey } from '../package/safe-record.ts';
+import { isDangerousKey, nullRecord } from '../package/safe-record.ts';
 import type {
   RevisionAttributionInput,
   TreeOpEffect,
@@ -185,6 +185,27 @@ function validBorderAttribute(name: string, value: unknown): boolean {
     default:
       return false;
   }
+}
+
+/**
+ * The attributes of a file's edge that a `setParagraphBorders` write can carry forward.
+ *
+ * Another producer may write a width or a gap past the schema's range, or an attribute this op
+ * does not take. A write that keeps such an edge would be refused for something its caller never
+ * touched, so the width and the gap clamp to their range and anything else invalid is dropped.
+ */
+export function admissibleBorderAttributes(
+  attributes: Readonly<Record<string, string>>
+): Record<string, string> {
+  const kept = nullRecord<string>();
+  for (const name of BORDER_ATTRIBUTES) {
+    const value = attributes[name];
+    if (value === undefined) continue;
+    if (validBorderAttribute(name, value)) kept[name] = value;
+    else if ((name === 'sz' || name === 'space') && /^\d{1,9}$/.test(value))
+      kept[name] = String(name === 'sz' ? MAX_BORDER_EIGHTHS : MAX_BORDER_SPACE);
+  }
+  return kept;
 }
 
 /**

@@ -7,7 +7,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //
 // FIVE ITEMS IN A FIXED ORDER: top, left, bottom, right, then the border between paragraphs. Reads
 // answer what the page shows, including a style's border. Every border assignment in one sync joins
-// the paragraph's own formatting write, so borders and alignment set together are one operation.
+// the paragraph's own formatting write, so borders and alignment set together are one operation,
+// and border assignments apply in the order they were made.
 
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
@@ -177,7 +178,7 @@ describe('writing paragraph borders', () => {
       await context.sync();
     });
     expect(await mainXmlOf(runtime)).toContain(
-      '<w:pBdr><w:bottom w:color="1F4E79" w:space="1" w:sz="6" w:val="single"/></w:pBdr>'
+      '<w:pBdr><w:bottom w:color="1F4E79" w:space="0" w:sz="6" w:val="single"/></w:pBdr>'
     );
     const reopened = await reopen(runtime);
     const read = await reopened.run(async (context) => {
@@ -206,13 +207,13 @@ describe('writing paragraph borders', () => {
     });
     const xml = await mainXmlOf(runtime);
     expect(xml).toContain('<w:jc w:val="center"/>');
-    expect(xml).toContain('<w:top w:color="auto" w:space="1" w:sz="4" w:val="single"/>');
-    expect(xml).toContain('<w:bottom w:color="auto" w:space="1" w:sz="4" w:val="double"/>');
+    expect(xml).toContain('<w:top w:color="auto" w:space="0" w:sz="4" w:val="single"/>');
+    expect(xml).toContain('<w:bottom w:color="auto" w:space="0" w:sz="4" w:val="double"/>');
     expect(xml).toContain('w:after="120"');
     runtime.dispose();
   });
 
-  test('the last assignment on an edge wins where two disagree', async () => {
+  test('assignments apply in order, and a line style resets the width', async () => {
     const runtime = await serverRuntime(docx(p('plain')));
     await runtime.run(async (context) => {
       const borders = (await first(context)).borders;
@@ -224,13 +225,17 @@ describe('writing paragraph borders', () => {
       top.colorIndex = 'Blue';
       top.color = '#00FF00';
       const bottom = borders.items[2]!;
+      bottom.lineWidth = 'Pt300';
       bottom.lineStyle = 'Single';
-      bottom.lineStyle = 'None';
+      const right = borders.items[3]!;
+      right.lineStyle = 'Single';
+      right.lineStyle = 'None';
       await context.sync();
     });
     const xml = await mainXmlOf(runtime);
     expect(xml).toContain(
-      '<w:pBdr><w:top w:color="00FF00" w:space="1" w:sz="4" w:val="triple"/></w:pBdr>'
+      '<w:pBdr><w:top w:color="00FF00" w:space="0" w:sz="4" w:val="triple"/>' +
+        '<w:bottom w:color="auto" w:space="0" w:sz="4" w:val="single"/></w:pBdr>'
     );
     runtime.dispose();
   });
@@ -251,12 +256,12 @@ describe('writing paragraph borders', () => {
     });
     const xml = await mainXmlOf(runtime);
     const body = xml.slice(xml.indexOf('<w:t>title</w:t>'));
-    expect(body).toContain('<w:top w:color="FF0000" w:space="1" w:sz="6" w:val="double"/>');
-    expect(body).toContain('<w:bottom w:color="008000" w:space="1" w:sz="18" w:val="dotted"/>');
+    expect(body).toContain('<w:top w:color="FF0000" w:space="0" w:sz="6" w:val="double"/>');
+    expect(body).toContain('<w:bottom w:color="008000" w:space="0" w:sz="18" w:val="dotted"/>');
     runtime.dispose();
   });
 
-  test('changing a style border copies its other edge, and writing back changes nothing', async () => {
+  test('writing back a style border changes nothing, and turning it off states one edge', async () => {
     const runtime = await serverRuntime(TITLED);
     const before = await mainXmlOf(runtime);
     await runtime.run(async (context) => {
@@ -265,6 +270,7 @@ describe('writing paragraph borders', () => {
       await context.sync();
       const top = borders.items[0]!;
       top.lineStyle = top.lineStyle as 'Double';
+      top.lineWidth = top.lineWidth!;
       top.color = top.color!;
       top.isVisible = top.isVisible;
       await context.sync();
@@ -278,7 +284,7 @@ describe('writing paragraph borders', () => {
       await context.sync();
     });
     expect(await mainXmlOf(runtime)).toContain(
-      '<w:pBdr><w:top w:val="nil"/><w:bottom w:color="auto" w:space="1" w:sz="12" w:val="single"/></w:pBdr>'
+      '<w:pBdr><w:top w:color="auto" w:space="0" w:sz="0" w:val="none"/></w:pBdr>'
     );
     runtime.dispose();
   });
@@ -326,51 +332,37 @@ describe('writing paragraph borders', () => {
     runtime.dispose();
   });
 
-  const syncRefusals: readonly [
-    string,
-    (items: import('../borders.ts').BorderUniversal[]) => void,
-  ][] = [
-    [
-      'an unknown line style',
-      (items) => ((items[0] as unknown as { lineStyle: string }).lineStyle = 'Zigzag'),
-    ],
-    [
-      'a colour without a hash',
-      (items) => {
-        items[0]!.lineStyle = 'Single';
-        items[0]!.color = 'FF0000';
-      },
-    ],
-    [
-      'a palette entry the host cannot resolve',
-      (items) => {
-        items[0]!.lineStyle = 'Single';
-        items[0]!.colorIndex = 'ByAuthor';
-      },
-    ],
-    ['a width on an edge with no line', (items) => (items[0]!.lineWidth = 'Pt100')],
-  ];
-  for (const [name, edit] of syncRefusals) {
-    test(`${name} fails the sync with InvalidArgument and changes nothing`, async () => {
-      const runtime = await serverRuntime(docx(p('plain')));
-      const before = await mainXmlOf(runtime);
-      const refused = await refusalOf(runtime, async (context) => {
-        const borders = (await first(context)).borders;
-        borders.load('items');
-        await context.sync();
-        edit(borders.items);
-      });
-      expect(refused.code).toBe('InvalidArgument');
-      expect(await mainXmlOf(runtime)).toBe(before);
-      runtime.dispose();
+  test('a width on an edge with no line changes nothing', async () => {
+    const runtime = await serverRuntime(docx(p('plain')));
+    const before = await mainXmlOf(runtime);
+    const refused = await refusalOf(runtime, async (context) => {
+      const borders = (await first(context)).borders;
+      borders.load('items');
+      await context.sync();
+      borders.items[0]!.lineWidth = 'Pt100';
     });
-  }
+    expect(refused.code).toBe('accepted');
+    expect(await mainXmlOf(runtime)).toBe(before);
+    runtime.dispose();
+  });
 
   const callRefusals: readonly [
     string,
     string,
     (items: import('../borders.ts').BorderUniversal[]) => void,
   ][] = [
+    [
+      'an unknown line style',
+      'InvalidArgument',
+      (items) => ((items[0] as unknown as { lineStyle: string }).lineStyle = 'Zigzag'),
+    ],
+    ['a colour without a hash', 'InvalidArgument', (items) => (items[0]!.color = 'FF0000')],
+    [
+      'a palette entry the host cannot resolve',
+      'NotSupported',
+      (items) => (items[0]!.colorIndex = 'ByAuthor'),
+    ],
+    ['an artStyle load', 'NotSupported', (items) => void items[0]!.load('artStyle')],
     ['artStyle', 'NotSupported', (items) => (items[0]!.artStyle = 'Apples')],
     ['artWidth', 'NotSupported', (items) => (items[0]!.artWidth = 12)],
     ['an artStyle read', 'NotSupported', (items) => void items[0]!.artStyle],
@@ -419,8 +411,34 @@ describe('writing paragraph borders', () => {
       await context.sync();
     });
     expect(await mainXmlOf(runtime)).toContain(
-      '<w:between w:color="auto" w:space="1" w:sz="4" w:val="dotted"/>'
+      '<w:between w:color="auto" w:space="0" w:sz="4" w:val="dotted"/>'
     );
+    runtime.dispose();
+  });
+
+  test('a collection load naming artStyle throws NotSupported', async () => {
+    const runtime = await serverRuntime(docx(p('plain')));
+    const refused = await refusalOf(runtime, async (context) => {
+      (await first(context)).borders.load('items/artStyle');
+    });
+    expect(refused.code).toBe('NotSupported');
+    runtime.dispose();
+  });
+
+  test('a rejected value throws at the assignment, naming the property', async () => {
+    const runtime = await serverRuntime(docx(p('plain')));
+    const location = await runtime.run(async (context) => {
+      const borders = (await first(context)).borders;
+      borders.load('items');
+      await context.sync();
+      try {
+        borders.items[2]!.color = 'red';
+      } catch (error) {
+        return isDocxEditorError(error) ? error.debugInfo.errorLocation : 'untyped';
+      }
+      return 'accepted';
+    });
+    expect(location).toMatch(/borders\.items\[2\]\.color$/);
     runtime.dispose();
   });
 

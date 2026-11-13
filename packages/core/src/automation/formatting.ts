@@ -157,8 +157,8 @@ export interface AutomationParagraphFormatWrite {
    */
   readonly readingOrder?: AutomationReadingOrder;
   /**
-   * Changes to the paragraph's borders, by edge. In the same request as the rest because a
-   * border write rewrites the same `w:pPr`, and two ops naming it in one batch are refused.
+   * Border assignments, applied in order. In the same request as the rest because a border
+   * write rewrites the same `w:pPr`, and two ops naming it in one batch are refused.
    */
   readonly borders?: AutomationParagraphBordersWrite;
 }

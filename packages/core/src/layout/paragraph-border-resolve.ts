@@ -36,7 +36,7 @@ function styleCascadeDeclaresBorders(table: StyleCascadeTable): boolean {
  * Resolve `w:pBdr` for one paragraph, through the style cascade when a style could contribute.
  *
  * Direct `w:pPr` is enough when no style in the table declares a border; otherwise the same
- * last-`w:pBdr`-wins cascade as spacing/indent is walked for all six edges.
+ * edge-by-edge `w:pBdr` cascade is walked for all six edges.
  */
 export function resolveParagraphBorders(
   pPr: OoxmlNode | undefined,
@@ -93,22 +93,24 @@ function withoutOwnBorders(pPr: OoxmlNode | undefined, styleId: string | undefin
 }
 
 /**
- * The last `w:pBdr` a paragraph inherits from its style chain and the document defaults,
- * ignoring its own. The same cascade `resolveParagraphBorders` paints from.
+ * The `w:pBdr` elements a paragraph inherits from the document defaults and its style chain,
+ * in cascade order, ignoring its own. Folding them edge by edge gives the borders the
+ * paragraph shows without its own element, the same cascade `resolveParagraphBorders` paints.
  *
- * `styleId` resolves it as if the paragraph named that style, for a write that changes the
+ * `styleId` resolves them as if the paragraph named that style, for a write that changes the
  * style and the borders together.
  */
-export function inheritedParagraphBorderElement(
+export function inheritedParagraphBorderElements(
   styleCascade: StyleCascadeTable,
   pPr: OoxmlNode | undefined,
   styleId?: string
-): OoxmlNode | undefined {
-  if (!styleCascadeDeclaresBorders(styleCascade)) return undefined;
+): readonly OoxmlNode[] {
+  if (!styleCascadeDeclaresBorders(styleCascade)) return [];
   const direct = withoutOwnBorders(pPr, styleId);
-  let found: OoxmlNode | undefined;
+  const found: OoxmlNode[] = [];
   for (const node of cascadeParagraphFormatting(styleCascade, direct).paragraphPropertyNodes) {
-    if (node) found = pBdrOf(node) ?? found;
+    const pBdr = node ? pBdrOf(node) : undefined;
+    if (pBdr) found.push(pBdr);
   }
   return found;
 }
