@@ -66,6 +66,7 @@ export {
 
 // Reads and payloads the operation vocabulary hands back.
 export type { AutomationAuthoringOperation } from './authoring-operations.ts';
+export type { AutomationContentControlOperation } from './content-control-operations.ts';
 export type { AutomationInlinePictureRead, AutomationInlinePictureWrite } from './pictures.ts';
 export type { AutomationShapeRead, AutomationShapeType } from './shapes.ts';
 export type {

@@ -840,7 +840,9 @@
     "documentViewport": "Páginas del documento",
     "showDocumentOutline": "Mostrar esquema del documento",
     "linkCopied": "Vínculo copiado al portapapeles",
-    "fontSubstitutionNotice": "Algunas fuentes de este documento no están disponibles y se muestran sustitutas: {fonts}"
+    "fontSubstitutionNotice": "Algunas fuentes de este documento no están disponibles y se muestran sustitutas: {fonts}",
+    "grammarIssueCount": "{count, plural, =0 {No hay errores gramaticales.} one {# error gramatical.} other {# errores gramaticales.}}",
+    "spellingIssueCount": "{count, plural, =0 {No hay errores ortográficos.} one {# error ortográfico.} other {# errores ortográficos.}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Texto que se mostrará",

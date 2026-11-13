@@ -25,7 +25,7 @@ import {
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
-import { createHandleTable } from './handles.ts';
+import { createHandleTable, type AutomationHandleTable } from './handles.ts';
 import { createBatchPlanner, type PlannedOperation } from './plan.ts';
 import { documentReads, type AutomationPackageReads } from './reads.ts';
 import { createReadTexts, stampEndpoints, staleEndpointDetail } from './stale-spans.ts';
@@ -534,7 +534,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     }
   };
 
-  return {
+  const created: AutomationHost = {
     capabilities,
     revision: () => port.revision(),
     execute,
@@ -575,4 +575,21 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       texts.clear();
     },
   };
+  HANDLE_TABLES.set(created, handles);
+  return created;
+}
+
+/** Each host's handle table, for the in-process lanes that translate a host's answers. */
+const HANDLE_TABLES = new WeakMap<AutomationHost, AutomationHandleTable>();
+
+/**
+ * The canonical paragraph id a paragraph handle of `host` names, or `null` for a handle the
+ * host did not mint or that names no paragraph. For in-process adapters only, such as the
+ * browser editor's text highlights: the protocol itself never answers engine identity.
+ *
+ * @internal
+ */
+export function automationParagraphNodeId(host: AutomationHost, handle: unknown): string | null {
+  const target = HANDLE_TABLES.get(host)?.resolve(handle, 'paragraph');
+  return target?.kind === 'paragraph' ? target.paragraphId : null;
 }

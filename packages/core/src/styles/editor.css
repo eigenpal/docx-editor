@@ -264,6 +264,15 @@
   /* Text highlights (Find results, host marks). Opaque, because the layer multiplies. */
   --doc-text-highlight-color: #fff176;
   --doc-text-highlight-active-color: #ff9632;
+  /* Proofing marks the browser paints through the CSS Custom Highlight API. */
+  --doc-proofing-spelling-color: #e53935;
+  --doc-proofing-grammar-color: #1e88e5;
+  /* Proofing annotation marks, one per critique color scheme. Opaque, as above. */
+  --doc-critique-red-color: #ffcdd2;
+  --doc-critique-green-color: #c8e6c9;
+  --doc-critique-blue-color: #bbdefb;
+  --doc-critique-lavender-color: #e1d5f5;
+  --doc-critique-berry-color: #f8bbd9;
   --doc-motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
   /* ----------------------------------------------------------------------
@@ -401,6 +410,11 @@
   /* The text highlight layer screens in dark mode, so these lift the dark sheet. */
   --doc-text-highlight-color: rgba(255, 214, 0, 0.32);
   --doc-text-highlight-active-color: rgba(255, 150, 50, 0.62);
+  --doc-critique-red-color: rgba(244, 67, 54, 0.34);
+  --doc-critique-green-color: rgba(76, 175, 80, 0.34);
+  --doc-critique-blue-color: rgba(33, 150, 243, 0.34);
+  --doc-critique-lavender-color: rgba(149, 117, 205, 0.34);
+  --doc-critique-berry-color: rgba(216, 27, 96, 0.34);
   /* NOT the author ramp. It used to be lifted here, back when only the review cards read
      it — but the ramp now colours the painted DOCUMENT too, and the dark page is rendered
      through `invert(1) hue-rotate(180deg)` (see `.docx-page-content` below). A colour
@@ -7123,6 +7137,20 @@ p.docx-review__refused {
     --doc-text-highlight-set-active-color,
     var(--doc-text-highlight-active-color)
   );
+}
+
+/* Highlight sets with a `kind`: the covered text joins a shared `spelling-error` or
+ * `grammar-error` highlight where the browser has the CSS Custom Highlight API. The browser
+ * exposes that type to assistive technology; this rule draws the usual wavy underline. The
+ * overlay marks above still paint the set's own color and classes in every browser. */
+.docx-editor ::highlight(docx-spelling-error) {
+  text-decoration: underline wavy var(--doc-proofing-spelling-color);
+  text-decoration-skip-ink: none;
+}
+
+.docx-editor ::highlight(docx-grammar-error) {
+  text-decoration: underline wavy var(--doc-proofing-grammar-color);
+  text-decoration-skip-ink: none;
 }
 
 /* The editing-mode control: a pill that shows the current mode and a menu that changes it.

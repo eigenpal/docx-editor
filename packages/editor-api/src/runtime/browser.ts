@@ -16,6 +16,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // This is the only module in the runtime that reaches the browser side of the engine. Everything
 // else — the queue, the context, the object lifetime, the errors — is neutral and compiles without
 // the DOM lib, which is what `__tests__/runtime-boundaries.test.ts` holds in place.
+//
+// PROOFING ANNOTATIONS PAINT HERE TOO, as editor text highlights. One highlight set per critique
+// color scheme, because a set has one color: `docx-critique-<scheme>`, filled from the core
+// stylesheet tokens, with the spelling and grammar schemes declaring their meaning through the
+// set's `kind`. Two runtimes over one editor keep separate annotations but paint into the same
+// sets, so each editor keeps every runtime's contribution and paints their union; disposing a
+// runtime removes only its own marks.
 
 import {
   beginEditorPreview,
@@ -24,8 +31,17 @@ import {
   reportAutomationException,
   reportAutomationRefusal,
   reportAutomationReviewSkip,
+  type BrowserAutomationHost,
   type DocxEditorInstance,
+  type HighlightKind,
+  type HighlightRange,
 } from '@docx-editor.dev/core/editor';
+import {
+  CRITIQUE_COLOR_SCHEMES,
+  type AnnotationPaint,
+  type AnnotationPainter,
+  type CritiqueColorSchemeName,
+} from './annotation-store.ts';
 import {
   classifyRefusal,
   reviewOperationOf,
@@ -92,6 +108,8 @@ export function createBrowser(
     },
     onException: (error, operations) =>
       reportAutomationException(editor, error, trackedDuring(host, operations)),
+    // Proofing annotations paint as the editor's text highlights.
+    annotationPainter: editorAnnotationPainter(editor, host),
     // The editor validates the handle at each batch: only its own open groups bind.
     historyGroups: { begin: (group) => host.beginHistoryGroupRun(group) },
     // The editor forks and paints; the runtime records and replays. See `preview.ts`.
@@ -106,4 +124,80 @@ export function createBrowser(
       ? {}
       : { revisionTextView: options.revisionTextView }),
   });
+}
+
+/** The highlight set a color scheme paints in, its fill token, and its meaning. */
+const SCHEME_SETS: Readonly<
+  Record<
+    CritiqueColorSchemeName,
+    { readonly name: string; readonly color: string; readonly kind?: HighlightKind }
+  >
+> = Object.freeze({
+  Red: { name: 'docx-critique-red', color: 'var(--doc-critique-red-color)', kind: 'spelling' },
+  Green: { name: 'docx-critique-green', color: 'var(--doc-critique-green-color)', kind: 'grammar' },
+  Blue: { name: 'docx-critique-blue', color: 'var(--doc-critique-blue-color)', kind: 'grammar' },
+  Lavender: { name: 'docx-critique-lavender', color: 'var(--doc-critique-lavender-color)' },
+  Berry: { name: 'docx-critique-berry', color: 'var(--doc-critique-berry-color)' },
+});
+
+/** Below the shared search marks, which paint at priority 10. */
+const CRITIQUE_PRIORITY = 5;
+
+type Contribution = ReadonlyMap<CritiqueColorSchemeName, readonly HighlightRange[]>;
+
+const CONTRIBUTIONS = new WeakMap<DocxEditorInstance, Map<object, Contribution>>();
+
+function apply(editor: DocxEditorInstance, contributions: Map<object, Contribution>): void {
+  for (const scheme of CRITIQUE_COLOR_SCHEMES) {
+    const set = SCHEME_SETS[scheme];
+    const ranges: HighlightRange[] = [];
+    for (const contribution of contributions.values())
+      ranges.push(...(contribution.get(scheme) ?? []));
+    try {
+      if (ranges.length === 0) editor.clearHighlights(set.name);
+      else
+        editor.setHighlights(set.name, ranges, {
+          color: set.color,
+          priority: CRITIQUE_PRIORITY,
+          ...(set.kind === undefined ? {} : { kind: set.kind }),
+        });
+    } catch {
+      // An editor between documents refuses highlights; the next paint tries again.
+    }
+  }
+}
+
+/** A painter for one runtime over `editor`, mapping spans through `host`. */
+export function editorAnnotationPainter(
+  editor: DocxEditorInstance,
+  host: BrowserAutomationHost
+): AnnotationPainter {
+  let contributions = CONTRIBUTIONS.get(editor);
+  if (!contributions) {
+    contributions = new Map();
+    CONTRIBUTIONS.set(editor, contributions);
+  }
+  const shared = contributions;
+  const token = {};
+  return {
+    paint(spans: AnnotationPaint) {
+      const contribution = new Map<CritiqueColorSchemeName, HighlightRange[]>();
+      for (const [scheme, list] of spans) {
+        const ranges: HighlightRange[] = [];
+        for (const span of list) {
+          const range = host.highlightRangeOf(span);
+          if (range) ranges.push(range);
+        }
+        if (ranges.length) contribution.set(scheme, ranges);
+      }
+      if (contribution.size === 0 && !shared.has(token)) return;
+      if (contribution.size === 0) shared.delete(token);
+      else shared.set(token, contribution);
+      apply(editor, shared);
+    },
+    dispose() {
+      if (!shared.delete(token)) return;
+      apply(editor, shared);
+    },
+  };
 }

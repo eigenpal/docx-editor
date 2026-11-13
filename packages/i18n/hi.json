@@ -594,7 +594,9 @@
     "fontSubstitutionNotice": "इस दस्तावेज़ के कुछ फ़ॉन्ट उपलब्ध नहीं हैं, इसलिए विकल्प दिखाए जा रहे हैं: {fonts}",
     "documentContent": "दस्तावेज़ सामग्री",
     "previewContent": "प्रस्तावित परिवर्तनों का पूर्वावलोकन",
-    "documentViewport": "दस्तावेज़ पृष्ठ"
+    "documentViewport": "दस्तावेज़ पृष्ठ",
+    "grammarIssueCount": "{count, plural, =0 {व्याकरण की कोई त्रुटि नहीं।} one {व्याकरण की # त्रुटि।} other {व्याकरण की # त्रुटियाँ।}}",
+    "spellingIssueCount": "{count, plural, =0 {वर्तनी की कोई त्रुटि नहीं।} one {वर्तनी की # त्रुटि।} other {वर्तनी की # त्रुटियाँ।}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "दिखाया जाने वाला टेक्स्ट",

@@ -592,7 +592,9 @@
     "fontSubstitutionNotice": "חלק מהגופנים במסמך זה אינם זמינים, ולכן מוצגים גופנים חלופיים: {fonts}",
     "documentContent": "תוכן המסמך",
     "previewContent": "תצוגה מקדימה של השינויים המוצעים",
-    "documentViewport": "עמודי המסמך"
+    "documentViewport": "עמודי המסמך",
+    "grammarIssueCount": "{count, plural, =0 {אין שגיאות דקדוק.} one {שגיאת דקדוק אחת.} other {# שגיאות דקדוק.}}",
+    "spellingIssueCount": "{count, plural, =0 {אין שגיאות כתיב.} one {שגיאת כתיב אחת.} other {# שגיאות כתיב.}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "טקסט לתצוגה",

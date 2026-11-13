@@ -2,7 +2,7 @@
 title: 'API member directory'
 description: 'Find every public editing API class, member group, enum, support type, and host extension.'
 category: 'Editing API'
-order: 64
+order: 65
 ---
 
 This directory maps every public symbol to the guide that documents it. For exact signatures and enum values, see the [generated API reference](/docs/2.x/api/editor-api) or the declarations for the [root](https://github.com/eigenpal/docx-editor/blob/main/docs/api/docx-editor-editor-api/index.api.md), [browser](https://github.com/eigenpal/docx-editor/blob/main/docs/api/docx-editor-editor-api/browser.api.md), and [agent](https://github.com/eigenpal/docx-editor/blob/main/docs/api/docx-editor-editor-api/agent.api.md) entries.
@@ -44,13 +44,13 @@ Every model object inherits `ClientObject` members, and every collection exposes
 
 | Object | Public members beyond inherited members | Guide |
 | --- | --- | --- |
-| `Document` | `compareFromBase64`, `compare` (always refuses with `NotSupported`), `removeDocumentInformation`, `properties`, `body`, `paragraphs`, `sections`, `contentControls`, `comments`, `revisions`, `footnotes`, `endnotes`, `changeTrackingMode`, `deleteBookmark`, `getBookmarkRange`, `getBookmarkRangeOrNullObject`, `getStyles` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories), [Tracked changes](/docs/2.x/editor-api/revisions), [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
+| `Document` | `compareFromBase64`, `compare` (always refuses with `NotSupported`), `removeDocumentInformation`, `properties`, `body`, `paragraphs`, `sections`, `contentControls`, `comments`, `revisions`, `footnotes`, `endnotes`, `changeTrackingMode`, `deleteBookmark`, `getBookmarkRange`, `getBookmarkRangeOrNullObject`, `getStyles`, `getAnnotationById` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories), [Tracked changes](/docs/2.x/editor-api/revisions), [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
 | `CompareTarget` | `compareTargetCurrent`, `compareTargetNew`, `compareTargetSelected`; only `compareTargetCurrent` is supported | [Compare two documents](/docs/2.x/editor-api/revisions#compare-two-documents) |
 | `DocumentCompareOptions` | `authorName`, `compareTarget`, `detectFormatChanges`, `removeDateAndTime`, `removePersonalInformation`, `addToRecentFiles`, `ignoreAllComparisonWarnings` | [Compare two documents](/docs/2.x/editor-api/revisions#compare-two-documents) |
 | `RemoveDocInfoType` | All standard enum values; only `documentProperties` removal is supported | [Remove document properties](#remove-document-properties) |
 | `DocumentProperties` | `author`, `title`, `subject`, `keywords`, `comments`, `category`, read-only `lastAuthor` | [Document properties](#document-properties) |
 | `Body` | `text`, `footnotes`, `endnotes`, `paragraphs`, `getRange`, `search`, `clear`, `insertText`, `insertParagraph`, `insertTable`, `insertFileFromBase64` (`Replace` on the main body only); `font`, `style`, `lists`, `bookmarks`, `contentControls`, `getComments`, `revisions`, `tables`, `inlinePictures`, `shapes`, `fields` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
-| `Paragraph` | `text`, `uniqueLocalId`, `getRange`, `getTextRanges`, `getReviewedText`, `contentControls`, `search`, `insertText`, `insertParagraph`, `insertTable`, `split`, `clear`, `delete`; `font`, `style`, paragraph formatting; `list`, `listItem`, `startNewList`, `attachToList`, `detachFromList`; `shapes` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Formatting and styles](/docs/2.x/editor-api/formatting), [Lists and numbering](/docs/2.x/editor-api/lists) |
+| `Paragraph` | `text`, `uniqueLocalId`, `getRange`, `getTextRanges`, `getReviewedText`, `insertAnnotations`, `getAnnotations`, `contentControls`, `search`, `insertText`, `insertParagraph`, `insertTable`, `split`, `clear`, `delete`; `font`, `style`, paragraph formatting; `list`, `listItem`, `startNewList`, `attachToList`, `detachFromList`; `shapes` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Formatting and styles](/docs/2.x/editor-api/formatting), [Lists and numbering](/docs/2.x/editor-api/lists) |
 | `Range` | `text`, `paragraphs`, `getRange`, `getTextRanges`, `expandTo`, `getReviewedText`, `contentControls`, `search`, `insertText`, `insertParagraph`, `clear`, `delete`, `select`; `font`, `style`, `hyperlink`, `bookmarks`, `getBookmarks`, `revisions`, `tables`, `inlinePictures`, `fields`; `insertTable`, `insertInlinePictureFromBase64`, `insertField`, `insertOoxml` (one equation), `insertBreak`, `insertContentControl`, `insertComment`, `insertBookmark` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges) and the dedicated insertion guides |
 | `ParagraphCollection` | `getFirst`, `getLast`, `getFirstOrNullObject`, `getLastOrNullObject` | [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
 | `RangeCollection` | `getFirst`, `getLast`, `getFirstOrNullObject` | [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
@@ -111,6 +111,9 @@ For tracked operations and collaboration limits, see [Supported tracked edits](/
 | `RevisionCollection` | `resolve`, `setAuthor`, `acceptAll`, `rejectAll` | [Tracked changes](/docs/2.x/editor-api/revisions) |
 | `getReviewItemRevisions`, `getReviewItemRange`, `getReviewItemRangeOrNullObject` | DocxEditor functions that return the changes a review item `key` names, or the range it covers | [Work with review items](/docs/2.x/editor-api/revisions#work-with-review-items) |
 | `ChangeTrackingMode`, `ChangeTrackingVersion`, `RevisionTextView`, `RevisionType` | Runtime tracking modes, `getReviewedText` versions, read views, and published revision types | [Tracked changes](/docs/2.x/editor-api/revisions) |
+| `Annotation`, `AnnotationCollection` | `Paragraph.insertAnnotations`, `Paragraph.getAnnotations`, `Document.getAnnotationById`; annotation `id`, `state`, `critiqueAnnotation`, `delete`; collection `getFirst`, `getFirstOrNullObject` | [Proofing annotations](/docs/2.x/editor-api/proofing-annotations) |
+| `CritiqueAnnotation` | `critique`, `range`, `accept`, `reject` | [Proofing annotations](/docs/2.x/editor-api/proofing-annotations) |
+| `AnnotationSet`, `Critique`, `CritiquePopupOptions`, `CritiqueColorScheme`, `AnnotationState` | Critique data, suggestions, color schemes, and annotation states | [Proofing annotations](/docs/2.x/editor-api/proofing-annotations) |
 
 ## Find host extensions
 

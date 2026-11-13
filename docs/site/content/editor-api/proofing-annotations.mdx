@@ -1,0 +1,123 @@
+---
+title: 'Proofing annotations'
+description: 'Mark spelling and grammar issues in paragraphs, list them, and apply or dismiss suggestions.'
+category: 'Editing API'
+order: 64
+---
+
+A proofing tool reads paragraph text, checks it, and marks each issue as an annotation. The browser runtime paints annotations in the page. A server runtime keeps them as data that your code reads and decides.
+
+Annotations are view state. They are not saved in the file, not shared with collaborators, and gone when the runtime is disposed.
+
+## Mark issues in a paragraph
+
+`Paragraph.insertAnnotations()` takes an `AnnotationSet` and returns the new annotation ids after the next sync. The following example checks every paragraph with your own `check()` service:
+
+```ts
+await runtime.run(async (context) => {
+  const paragraphs = context.document.body.paragraphs;
+  paragraphs.load('items/text');
+  await context.sync();
+
+  const inserted = [];
+  for (const paragraph of paragraphs.items) {
+    const issues = await check(paragraph.text); // Your proofing service.
+    if (issues.length === 0) continue;
+    inserted.push(
+      paragraph.insertAnnotations({
+        critiques: issues.map((issue) => ({
+          colorScheme: 'Red',
+          start: issue.start,
+          length: issue.length,
+          popupOptions: {
+            brandingTextResourceId: '',
+            subtitleResourceId: '',
+            titleResourceId: '',
+            suggestions: issue.suggestions,
+          },
+        })),
+      })
+    );
+  }
+  await context.sync();
+  console.log(inserted.flatMap((result) => result.value));
+});
+```
+
+- `start` and `length` count UTF-16 code units of `Paragraph.text`, as the runtime reads it in its [revision view](/docs/2.x/editor-api/revisions). With the default `allMarkup` view, tracked deletions and insertions both count, and a field counts as its displayed result.
+- `length` must be at least 1, and the range must lie inside the text. Otherwise the sync fails with `InvalidArgument`.
+- The three resource ids name strings in an add-in manifest, which this runtime cannot resolve. Pass empty strings. Any other value fails with `NotSupported` and `edit.operation-unsupported`.
+- One call takes at most 1,000 critiques, and one runtime keeps at most 10,000 live annotations.
+
+## Read annotations
+
+`Paragraph.getAnnotations()` lists the paragraph's live annotations in text order. Load `id`, `state`, and `critiqueAnnotation` on the items. The following example lists the issues of the first paragraph:
+
+```ts
+const issues = await runtime.run(async (context) => {
+  const annotations = context.document.body.paragraphs.getFirst().getAnnotations();
+  annotations.load('items/id,items/state,items/critiqueAnnotation');
+  await context.sync();
+  return annotations.items.map((annotation) => ({
+    id: annotation.id,
+    state: annotation.state,
+    critique: annotation.critiqueAnnotation.critique,
+  }));
+});
+```
+
+| Member | Behavior |
+| --- | --- |
+| `Document.getAnnotationById(id)` | Finds a live or decided annotation of this runtime. An unknown, deleted, or removed id fails with `ItemNotFound`. |
+| `AnnotationCollection.getFirst()` | Fails with `ItemNotFound` on a paragraph without annotations. `getFirstOrNullObject()` returns a null object instead. |
+| `Annotation.state` | `Created`, `Accepted`, or `Rejected`. |
+| `CritiqueAnnotation.critique` | The critique data with its current `start`. Resource ids read as empty strings. |
+| `CritiqueAnnotation.range` | The critiqued text as a `Range`. Load its properties and sync before you read them. |
+
+An annotation follows edits to its paragraph. An edit before the critique moves `start`, and an edit that changes the critiqued text removes the annotation. A held `Annotation` whose annotation is gone fails with `InvalidObjectPath` and `edit.stale-target`.
+
+## Apply or dismiss an issue
+
+`accept()` replaces the critiqued text with the first suggestion. `reject()` and `delete()` remove the mark and leave the document unchanged. The following example applies one issue and dismisses another:
+
+```ts
+await runtime.run(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  context.document.getAnnotationById(fixId).critiqueAnnotation.accept();
+  context.document.getAnnotationById(skipId).critiqueAnnotation.reject();
+  await context.sync();
+});
+```
+
+- `accept()` edits only the characters that differ. With `TrackMineOnly`, the fix is a tracked change. The state becomes `Accepted`, and other annotations in the paragraph move with the fix.
+- With `TrackMineOnly`, use one `context.sync()` for each `accept()` in the same paragraph. A second tracked fix in that paragraph and sync fails with `ConflictingChanges`, and nothing changes.
+- `reject()` sets the state to `Rejected`. `delete()` forgets the annotation.
+- The following table lists the refusals of `accept()`. Nothing changes after a refusal.
+
+| Condition | Code | `debugInfo.innerError.code` |
+| --- | --- | --- |
+| The critique has no suggestion | `NotSupported` | `edit.operation-unsupported` |
+| The critiqued text holds an object, such as a field result, or hidden text | `NotSupported` | `edit.indivisible-content` |
+| The suggestion holds a paragraph mark or U+FFFC | `InvalidArgument` | `edit.invalid-argument` |
+| An edit removed the annotation, or it was decided or deleted | `InvalidObjectPath` | `edit.stale-target` |
+
+## Show annotations in the editor
+
+The browser runtime paints live annotations as [text highlights](/docs/2.x/recipes/highlight-ranges). Each color scheme paints in its own reserved highlight set, `docx-critique-red` through `docx-critique-berry`. `Red` marks spelling issues and `Blue` and `Green` mark grammar issues for assistive technology. `Lavender` and `Berry` have no proofing meaning.
+
+Restyle the marks with the `--doc-critique-<scheme>-color` tokens of the editor stylesheet. To show a popup for a mark under the pointer, call `editor.getHighlightsAt()` from your own pointer handler.
+
+Marks repaint after each sync of the runtime. Between syncs, the editor moves a mark with its text and hides a mark whose text changed.
+
+## Limits
+
+- The runtime raises no annotation or paragraph events, such as `onAnnotationClicked` or `onParagraphChanged`. Read annotations again after a sync.
+- The runtime shows no popup. Use `editor.getHighlightsAt()` in the browser to build one.
+- A preview refuses annotation members with `NotSupported` and `edit.preview-unsupported`.
+- Text is read as a batch starts. Annotations inserted in a sync that also edits the same paragraph count in the text before the edit, then follow the edit.
+
+## See also
+
+- [Highlight ranges](/docs/2.x/recipes/highlight-ranges)
+- [Office.js compatibility](/docs/2.x/editor-api/office-js-api)
+- [API member directory](/docs/2.x/editor-api/reference)

@@ -67,6 +67,14 @@ export {
   type ParagraphReadingOrder,
 } from './paragraph.ts';
 export { Range } from './range.ts';
+export { Annotation, AnnotationCollection, CritiqueAnnotation } from './annotations.ts';
+export {
+  AnnotationState,
+  CritiqueColorScheme,
+  type AnnotationSet,
+  type Critique,
+  type CritiquePopupOptions,
+} from './annotation-input.ts';
 export {
   getReviewItemRange,
   getReviewItemRangeOrNullObject,

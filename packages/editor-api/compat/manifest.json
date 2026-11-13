@@ -31,7 +31,15 @@
       "Revision",
       "RevisionCollection"
     ],
-    "styles": ["Style", "StyleCollection"]
+    "styles": ["Style", "StyleCollection"],
+    "proofingAnnotations": [
+      "Annotation",
+      "AnnotationCollection",
+      "AnnotationSet",
+      "Critique",
+      "CritiquePopupOptions",
+      "CritiqueAnnotation"
+    ]
   },
   "symbols": {
     "run": {
@@ -61,7 +69,8 @@
         "deleteBookmark",
         "getBookmarkRange",
         "getBookmarkRangeOrNullObject",
-        "getStyles"
+        "getStyles",
+        "getAnnotationById"
       ]
     },
     "Body": {
@@ -130,7 +139,9 @@
         "search",
         "split",
         "getTextRanges",
-        "getReviewedText"
+        "getReviewedText",
+        "insertAnnotations",
+        "getAnnotations"
       ]
     },
     "ParagraphCollection": {
@@ -253,6 +264,24 @@
     },
     "BorderUniversal": {
       "members": ["color", "colorIndex", "inside", "isVisible", "lineStyle", "lineWidth"]
+    },
+    "Annotation": {
+      "members": ["critiqueAnnotation", "id", "state", "delete"]
+    },
+    "AnnotationCollection": {
+      "members": ["items", "getFirst", "getFirstOrNullObject"]
+    },
+    "AnnotationSet": {
+      "members": ["critiques"]
+    },
+    "Critique": {
+      "members": ["colorScheme", "length", "popupOptions", "start"]
+    },
+    "CritiquePopupOptions": {
+      "members": ["brandingTextResourceId", "subtitleResourceId", "suggestions", "titleResourceId"]
+    },
+    "CritiqueAnnotation": {
+      "members": ["critique", "range", "accept", "reject"]
     }
   },
   "omissions": [
@@ -567,6 +596,38 @@
     {
       "uid": "Word.BorderUniversalCollection#applyPageBordersToAllSections",
       "reason": "Paragraph borders are not page borders. The member exists and throws NotSupported; it is not declared for conformance."
+    },
+    {
+      "uid": "Word.Document#onAnnotationClicked",
+      "reason": "The automation runtime has no event model: requests are batches a caller sends, and nothing in the object model raises events to it. Declaring an EventHandlers member that never fires would be a silent approximation, so the member is not implemented. Read getAnnotations() or getAnnotationById() after a sync instead. The runtime shows no annotation popup either: a browser host can hit-test the painted marks with editor.getHighlightsAt()."
+    },
+    {
+      "uid": "Word.Document#onAnnotationHovered",
+      "reason": "The automation runtime has no event model: requests are batches a caller sends, and nothing in the object model raises events to it. Declaring an EventHandlers member that never fires would be a silent approximation, so the member is not implemented. Read getAnnotations() or getAnnotationById() after a sync instead. The runtime shows no annotation popup either: a browser host can hit-test the painted marks with editor.getHighlightsAt()."
+    },
+    {
+      "uid": "Word.Document#onAnnotationInserted",
+      "reason": "The automation runtime has no event model: requests are batches a caller sends, and nothing in the object model raises events to it. Declaring an EventHandlers member that never fires would be a silent approximation, so the member is not implemented. Read getAnnotations() or getAnnotationById() after a sync instead."
+    },
+    {
+      "uid": "Word.Document#onAnnotationRemoved",
+      "reason": "The automation runtime has no event model: requests are batches a caller sends, and nothing in the object model raises events to it. Declaring an EventHandlers member that never fires would be a silent approximation, so the member is not implemented. Read getAnnotations() or getAnnotationById() after a sync instead."
+    },
+    {
+      "uid": "Word.Document#onAnnotationPopupAction",
+      "reason": "The automation runtime has no event model: requests are batches a caller sends, and nothing in the object model raises events to it. Declaring an EventHandlers member that never fires would be a silent approximation, so the member is not implemented. Read getAnnotations() or getAnnotationById() after a sync instead. The runtime shows no annotation popup either: a browser host can hit-test the painted marks with editor.getHighlightsAt()."
+    },
+    {
+      "uid": "Word.Document#onParagraphAdded",
+      "reason": "The automation runtime has no event model: requests are batches a caller sends, and nothing in the object model raises events to it. Declaring an EventHandlers member that never fires would be a silent approximation, so the member is not implemented. A browser host can listen to the editor's own change events and read paragraphs again in a run."
+    },
+    {
+      "uid": "Word.Document#onParagraphChanged",
+      "reason": "The automation runtime has no event model: requests are batches a caller sends, and nothing in the object model raises events to it. Declaring an EventHandlers member that never fires would be a silent approximation, so the member is not implemented. A browser host can listen to the editor's own change events and read paragraphs again in a run."
+    },
+    {
+      "uid": "Word.Document#onParagraphDeleted",
+      "reason": "The automation runtime has no event model: requests are batches a caller sends, and nothing in the object model raises events to it. Declaring an EventHandlers member that never fires would be a silent approximation, so the member is not implemented. A browser host can listen to the editor's own change events and read paragraphs again in a run."
     }
   ],
   "divergences": [
@@ -877,6 +938,14 @@
     {
       "uid": "Word.Style#unhideWhenUsed",
       "note": "Published read-only where the reference declares a setter, for the same reason as Word.Style#baseStyle. Reads w:unhideWhenUsed; false when the style does not state it."
+    },
+    {
+      "uid": "Word.CritiquePopupOptions#brandingTextResourceId / #subtitleResourceId / #titleResourceId",
+      "note": "Declared with the upstream type, but these name strings in an add-in manifest, which this runtime cannot resolve. An empty string is accepted; any other value refuses insertAnnotations with NotSupported (edit.operation-unsupported) instead of being ignored. A critique reads back with empty strings."
+    },
+    {
+      "uid": "Word.Critique#start / Word.CritiqueAnnotation#critique",
+      "note": "start and length count UTF-16 code units of Paragraph.text in the runtime revision view. A critique read answers the current start: an edit before the critique moves it, and an edit that touches the critiqued text removes the annotation."
     }
   ],
   "$divergencesComment": "Members that ARE selected but differ from upstream in a documented source shape or observable behaviour. Kept apart from \"omissions\" on purpose: an omission is a member this subset does not publish, and one of these is a member it publishes and answers differently. The authored compatibility declarations remain the exact upstream reference shape; runtime conformance assertions explicitly account for any listed source-shape divergence."

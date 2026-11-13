@@ -22,6 +22,34 @@ export interface EditorEvents {
   /** A document mutation committed, with the ids it touched. */
   change: (change: DocumentChange) => void;
   /**
+   * A committed change added, changed, or deleted paragraphs. The ids are the `blockId`s that
+   * `getParagraphs()` lists, across every story: body, tables, content controls, headers,
+   * footers, notes, and text boxes. Re-check only these paragraphs instead of the whole
+   * document.
+   *
+   * It fires once per commit, after the `change` event of the same commit, and only when at
+   * least one list is not empty. It never fires for a selection, view, or highlight change.
+   * `source` is `'remote'` for a change applied from a collaboration peer, and `'local'` for
+   * every other commit, including undo and redo.
+   *
+   * The `replaceDocument` command is an undoable edit, so it fires: the paragraphs it removes
+   * are in `deleted`, and the paragraphs it brings are in `added` or `changed`. `load()`, a
+   * refresh, and a recovery do not fire it: the `change` event reports them with `source`,
+   * and every paragraph needs a check then.
+   *
+   * @example
+   * ```ts
+   * editor.on('paragraphsChange', ({ added, changed, deleted }) => {
+   *   for (const id of deleted) results.delete(id);
+   *   for (const id of [...added, ...changed]) {
+   *     const paragraph = editor.getParagraphText(id);
+   *     if (paragraph) results.set(id, check(paragraph.acceptedText));
+   *   }
+   * });
+   * ```
+   */
+  paragraphsChange: (event: ParagraphsChangeEvent) => void;
+  /**
    * Observable editor state moved without a document change: the selection or its derived
    * formatting, the armed typing format, the open header or footer, the collaboration
    * session's status, or the page count when pages finish laying out in the background.
@@ -94,6 +122,28 @@ export interface EditorEvents {
    * ```
    */
   hostChange: (event: EditorHostChange) => void;
+}
+
+/**
+ * The payload of the `paragraphsChange` event. Each id appears in at most one list.
+ *
+ * @public
+ */
+export interface ParagraphsChangeEvent {
+  /** Paragraphs that the change created, such as the new half of a split paragraph. */
+  readonly added: readonly string[];
+  /**
+   * Paragraphs that still exist with the same id and whose text, properties, or content can
+   * differ. A paragraph that holds a changed text box can be listed with the text box
+   * paragraph. A change to the document styles lists every paragraph.
+   */
+  readonly changed: readonly string[];
+  /** Paragraphs that the change removed, such as the second paragraph of a merge. */
+  readonly deleted: readonly string[];
+  /** `'remote'` for a change from a collaboration peer, `'local'` for every other commit. */
+  readonly source: 'local' | 'remote';
+  /** Package revision after the change, the same number as the `change` event's `revision`. */
+  readonly revision: number;
 }
 
 /**

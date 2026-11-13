@@ -14,6 +14,7 @@ import { findNode, paragraphTextOf } from '@docx-editor.dev/core/store';
 import type {
   EditorHighlights,
   HighlightHit,
+  HighlightKind,
   HighlightOptions,
   HighlightRange,
   HighlightResult,
@@ -30,6 +31,7 @@ import type { SurfaceOverlayFrame } from './surface-overlay-sheet.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import { textboxPresenceLayout } from './textbox-presence-layout.ts';
 import { withoutUnplacedFrameMatches } from './search-frame-matches.ts';
+import { createHighlightAccessibility, type AccessibleSet } from './highlight-accessibility.ts';
 
 const NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 const CLASS_TOKEN = /^-?[A-Za-z_][A-Za-z0-9_-]*$/;
@@ -54,6 +56,8 @@ interface HighlightSet {
   readonly activeIndex: number;
   readonly classes: readonly string[];
   readonly priority: number;
+  /** The proofing meaning of the marks, for assistive technology. */
+  readonly kind?: HighlightKind;
   /** First-set order, for stable stacking between equal priorities. */
   readonly order: number;
   /** Model text each range covered when captured; `null` for a range that did not resolve. */
@@ -136,11 +140,12 @@ function buildSet(
       Number.isSafeInteger(range.length) &&
       range.length >= 0 &&
       range.start + range.length <= 0x7fffffff &&
-      (range.expectedText === undefined || typeof range.expectedText === 'string');
+      (range.expectedText === undefined || typeof range.expectedText === 'string') &&
+      (range.description === undefined || typeof range.description === 'string');
     if (!valid) {
       throw new TypeError(
         `ranges[${index}] must have a blockId string, nonnegative integer start and length, ` +
-          'and an optional expectedText string.'
+          'and optional expectedText and description strings.'
       );
     }
     blockIds.push(range.blockId);
@@ -165,6 +170,10 @@ function buildSet(
   if (classes.some((token) => !CLASS_TOKEN.test(token))) {
     throw new TypeError('className must hold space-separated CSS class names.');
   }
+  const kind = options?.kind;
+  if (kind !== undefined && kind !== 'spelling' && kind !== 'grammar') {
+    throw new TypeError("kind must be 'spelling' or 'grammar'.");
+  }
   const color = colorOption(options?.color, 'color', container);
   const activeColor = colorOption(options?.activeColor, 'activeColor', container);
   return {
@@ -179,6 +188,7 @@ function buildSet(
     activeIndex,
     classes,
     priority,
+    ...(kind !== undefined ? { kind } : {}),
     order,
     expected: null,
     seen: new Array<string | null>(copy.length).fill(null),
@@ -408,6 +418,8 @@ export function createTextHighlights(deps: {
   container(): HTMLElement | null;
   /** Mount a document whose open is still scheduled, so ranges resolve against it. */
   flushOpen(): void;
+  /** The host's strings, for the issue count the live region reads. */
+  translate?(): ((key: string, params?: Record<string, string | number>) => string) | null;
 }) {
   const sets = new Map<string, HighlightSet>();
   let nextOrder = 0;
@@ -417,6 +429,7 @@ export function createTextHighlights(deps: {
   let lastPaint: string | null = null;
   let lastLayout: SemanticLayout | null = null;
   let lastFrame: SurfaceOverlayFrame | null = null;
+  const accessibility = createHighlightAccessibility(deps);
 
   const ordered = () =>
     [...sets.values()].sort((a, b) => a.priority - b.priority || a.order - b.order);
@@ -429,10 +442,13 @@ export function createTextHighlights(deps: {
       if (frame.layer.childElementCount > 0) frame.layer.replaceChildren();
       painted = [];
       lastPaint = null;
+      accessibility.apply(frame.layer.parentElement, []);
+      accessibility.noteCounts(new Map());
       return;
     }
     const list = ordered();
     for (const set of list) check(set, surface, frame.layout);
+    describe(frame, list);
     const layout = textboxPresenceLayout(frame.layout);
     const key = [
       version,
@@ -526,6 +542,38 @@ export function createTextHighlights(deps: {
       rects.sort((a, b) => Number(a.key === set.activeIndex) - Number(b.key === set.activeIndex));
     }
     return rects;
+  }
+
+  /**
+   * Give the painted text the meaning of each `kind` set. Runs on every paint, also when the
+   * marks stay, because the page painter can replace the spans the attributes are on.
+   */
+  function describe(frame: SurfaceOverlayFrame, list: readonly HighlightSet[]): void {
+    const described: AccessibleSet[] = [];
+    const counts = new Map<HighlightKind, number>();
+    for (const set of list) {
+      if (!set.kind) continue;
+      const marks = [];
+      let resolved = 0;
+      for (let index = 0; index < set.ranges.length; index += 1) {
+        resolved += set.resolved[index]!;
+        if (!set.live[index]) continue;
+        const description = set.ranges[index]!.description;
+        marks.push({
+          blockId: set.blockIds[index]!,
+          start: set.starts[index]!,
+          end: set.ends[index]!,
+          ...(description ? { description } : {}),
+        });
+      }
+      described.push({ kind: set.kind, marks });
+      counts.set(set.kind, (counts.get(set.kind) ?? 0) + resolved);
+    }
+    accessibility.apply(frame.layer.parentElement, described, [
+      frame.layout,
+      pagesKey(frame.pages),
+    ]);
+    accessibility.noteCounts(counts);
   }
 
   /** One persistent sheet per set object, so a repaint updates marks in place. */
@@ -689,6 +737,30 @@ export function createTextHighlights(deps: {
       lastFrame = null;
       if (replaced) sets.clear();
       surface?.setHighlightPainter(paint);
+    },
+    /**
+     * The current offsets of a set's ranges that still cover their text, in range order, or
+     * null for an unknown set. Checked against the published layout.
+     */
+    marksOf(name: string): { blockId: string; start: number; end: number }[] | null {
+      const set = sets.get(name);
+      const surface = deps.surface();
+      if (!set || !surface) return null;
+      check(set, surface, surface.publishedLayout());
+      const marks: { blockId: string; start: number; end: number }[] = [];
+      for (let index = 0; index < set.ranges.length; index += 1) {
+        if (!set.resolved[index]) continue;
+        marks.push({
+          blockId: set.blockIds[index]!,
+          start: set.starts[index]!,
+          end: set.ends[index]!,
+        });
+      }
+      return marks;
+    },
+    /** Remove the accessibility attributes, highlights and live region. */
+    dispose() {
+      accessibility.dispose();
     },
     /** Drop every set: node ids name one loaded document. */
     reset() {

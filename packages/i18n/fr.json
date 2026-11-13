@@ -594,7 +594,9 @@
     "fontSubstitutionNotice": "Certaines polices de ce document ne sont pas disponibles ; des polices de substitution sont affichées : {fonts}",
     "documentContent": "Contenu du document",
     "previewContent": "Aperçu des modifications proposées",
-    "documentViewport": "Pages du document"
+    "documentViewport": "Pages du document",
+    "grammarIssueCount": "{count, plural, =0 {Aucune faute de grammaire.} one {# faute de grammaire.} other {# fautes de grammaire.}}",
+    "spellingIssueCount": "{count, plural, =0 {Aucune faute d'orthographe.} one {# faute d'orthographe.} other {# fautes d'orthographe.}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Texte à afficher",

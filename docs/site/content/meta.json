@@ -132,6 +132,7 @@
     "editor-api/content-controls",
     "editor-api/comments",
     "editor-api/revisions",
+    "editor-api/proofing-annotations",
     "editor-api/reference",
     "editor-api/office-js-api",
     "---Reference---",

@@ -30,6 +30,8 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getText',
   'getSpanText',
   'getTextRanges',
+  'getParagraphTextIfPresent',
+  'getParagraphTextSpan',
   'expandSpan',
   'getReviewedText',
   'getParagraphId',
