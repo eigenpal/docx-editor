@@ -143,6 +143,34 @@ describe('highlight sets with a kind', () => {
     await wait(ISSUE_ANNOUNCE_DELAY_MS + 150);
     expect(region()).toBe('2 spelling issues.');
   });
+
+  test('a repaint with the same count keeps the announcement timer', async () => {
+    const { editor, host } = mount();
+    const region = () => host.querySelector(`.${EDITOR_ANNOUNCER_CLASS}`)?.textContent ?? null;
+    editor.setHighlights('spelling', editor.findMatches('Teh'), { kind: 'spelling' });
+    await wait(ISSUE_ANNOUNCE_DELAY_MS - 400);
+    editor.surface!.repaintHighlights();
+    await wait(600);
+    expect(region()).toBe('1 spelling issue.');
+  });
+
+  test('a repaint that changes nothing queries no painted spans', () => {
+    const { editor, host } = mount();
+    editor.setHighlights('spelling', editor.findMatches('Teh'), { kind: 'spelling' });
+    const real = Element.prototype.querySelectorAll;
+    let queries = 0;
+    Element.prototype.querySelectorAll = function (this: Element, selector: string) {
+      if (selector.includes('data-paragraph-id')) queries += 1;
+      return real.call(this, selector);
+    } as Element['querySelectorAll'];
+    cleanups.push(() => {
+      Element.prototype.querySelectorAll = real;
+    });
+    editor.surface!.repaintHighlights();
+    editor.setHighlights('search', editor.findMatches('cat'));
+    expect(queries).toBe(0);
+    expect(host.querySelectorAll('[aria-invalid]')).toHaveLength(1);
+  });
 });
 
 describe('navigateHighlight', () => {

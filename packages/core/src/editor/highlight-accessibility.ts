@@ -8,8 +8,10 @@
 // that type to assistive technology and paints it with the core stylesheet's tokens. A polite
 // live region says how many issues each kind has once the count settles.
 //
-// Painted spans are pictures of the tree: the page painter can replace them on any render, so
-// every paint applies the attributes again and removes them from spans no mark covers now.
+// Painted spans are pictures of the tree: the page painter can replace them on any render. A
+// paint whose marks, layout and pages are the last ones, and whose marked spans are all still in
+// the page, changes nothing. Any other paint queries the spans of the marked paragraphs only,
+// applies the attributes again, and removes them from spans no mark covers now.
 
 import { createT, en } from '@docx-editor.dev/i18n';
 import type { HighlightKind } from '../contracts/editor-highlights.ts';
@@ -108,6 +110,32 @@ function spanRange(span: HTMLElement, start: number, from: number, to: number): 
   return null;
 }
 
+/** A selector value for an attribute, quoted. Node ids come from the engine, never the file. */
+function quoted(value: string): string {
+  return `"${value.replace(/[\\"]/g, '\\$&').replace(/[\n\r\f]/g, ' ')}"`;
+}
+
+/** The painted text spans of `ids` under `root`, by paragraph id, in one query. */
+function spansOf(root: HTMLElement, ids: ReadonlySet<string>): Map<string, HTMLElement[]> {
+  const spans = new Map<string, HTMLElement[]>();
+  if (ids.size === 0) return spans;
+  const selector = [...ids].map((id) => `[data-paragraph-id=${quoted(id)}][data-start]`).join(',');
+  for (const span of root.querySelectorAll<HTMLElement>(selector)) {
+    const id = span.dataset.paragraphId!;
+    const list = spans.get(id) ?? [];
+    list.push(span);
+    spans.set(id, list);
+  }
+  return spans;
+}
+
+/** One string per set list, so an unchanged paint can be recognised. */
+function setsKey(sets: readonly AccessibleSet[]): string {
+  return JSON.stringify(
+    sets.map((set) => [set.kind, set.marks.map((m) => [m.blockId, m.start, m.end, m.description])])
+  );
+}
+
 /** Distinct id prefixes for editors that share a document. */
 let editorCount = 0;
 
@@ -137,6 +165,8 @@ export function createHighlightAccessibility(deps: {
   let announced = new Map<HighlightKind, number>();
   let pending = new Map<HighlightKind, number>();
   let announceTimer: number | undefined;
+  /** What the last application used: its root, marks, and the frame it painted in. */
+  let last: { root: HTMLElement | null; key: string; frame: readonly unknown[] } | null = null;
 
   /** The off-screen element that holds `text`, created on first use. */
   function descriptionId(document: Document, text: string): string | null {
@@ -192,9 +222,29 @@ export function createHighlightAccessibility(deps: {
   }
 
   return {
-    /** Apply the sets' meaning to the painted text under `root`, replacing the last one. */
-    apply(root: HTMLElement | null, sets: readonly AccessibleSet[]): void {
+    /**
+     * Apply the sets' meaning to the painted text under `root`, replacing the last one.
+     * `frame` names what the painted spans depend on (the layout and the painted pages); with
+     * the same root, marks and frame, and every marked span still in the page, nothing runs.
+     */
+    apply(
+      root: HTMLElement | null,
+      sets: readonly AccessibleSet[],
+      frame: readonly unknown[] = []
+    ): void {
       if (sets.length === 0 && marked.size === 0 && owned.length === 0) return;
+      const key = setsKey(sets);
+      if (
+        last !== null &&
+        last.root === root &&
+        last.key === key &&
+        last.frame.length === frame.length &&
+        last.frame.every((item, at) => item === frame[at]) &&
+        [...marked.keys()].every((span) => span.isConnected)
+      ) {
+        return;
+      }
+      last = { root, key, frame };
       const previous = marked;
       used = new Set();
       for (const { highlight, range } of owned) highlight.delete(range);
@@ -202,15 +252,10 @@ export function createHighlightAccessibility(deps: {
       marked = new Map();
       const states = new Map<HTMLElement, SpanState>();
       if (root && sets.length > 0) {
-        const wanted = new Set(sets.flatMap((set) => set.marks.map((mark) => mark.blockId)));
-        const spans = new Map<string, HTMLElement[]>();
-        for (const span of root.querySelectorAll<HTMLElement>('[data-paragraph-id][data-start]')) {
-          const id = span.dataset.paragraphId!;
-          if (!wanted.has(id)) continue;
-          const list = spans.get(id) ?? [];
-          list.push(span);
-          spans.set(id, list);
-        }
+        const spans = spansOf(
+          root,
+          new Set(sets.flatMap((set) => set.marks.map((mark) => mark.blockId)))
+        );
         for (const set of sets) {
           const highlight = nativeHighlight(root.ownerDocument, set.kind);
           for (const mark of set.marks) {
@@ -269,13 +314,20 @@ export function createHighlightAccessibility(deps: {
     noteCounts(counts: ReadonlyMap<HighlightKind, number>): void {
       for (const kind of [...announced.keys()]) if (!counts.has(kind)) announced.delete(kind);
       const changed = [...counts].some(([kind, count]) => announced.get(kind) !== count);
+      const waiting =
+        announceTimer !== undefined &&
+        pending.size === counts.size &&
+        [...counts].every(([kind, count]) => pending.get(kind) === count);
       pending = new Map(counts);
+      // A repaint with the counts already waiting keeps their timer: it is the same count.
+      if (changed && waiting) return;
       timers.clearTimeout(announceTimer);
       announceTimer = changed ? timers.setTimeout(announce, ISSUE_ANNOUNCE_DELAY_MS) : undefined;
     },
     /** Remove everything this module added. */
     dispose(): void {
       release();
+      last = null;
       timers.clearTimeout(announceTimer);
       announceTimer = undefined;
       announced = new Map();

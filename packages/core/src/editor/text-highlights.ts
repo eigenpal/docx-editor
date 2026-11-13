@@ -569,7 +569,10 @@ export function createTextHighlights(deps: {
       described.push({ kind: set.kind, marks });
       counts.set(set.kind, (counts.get(set.kind) ?? 0) + resolved);
     }
-    accessibility.apply(frame.layer.parentElement, described);
+    accessibility.apply(frame.layer.parentElement, described, [
+      frame.layout,
+      pagesKey(frame.pages),
+    ]);
     accessibility.noteCounts(counts);
   }
 
