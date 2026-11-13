@@ -34,6 +34,34 @@ export interface EquationDelimiterGeometry {
 }
 
 /**
+ * The characters that grow: brackets, braces, and vertical bars. A grown glyph scales
+ * vertically, which keeps these shapes. Any other character, such as a letter, an operator,
+ * a slash, or an arrow, keeps its own size.
+ */
+const GROWING_CHARACTERS: ReadonlySet<string> = new Set([
+  '(',
+  ')',
+  '[',
+  ']',
+  '{',
+  '}',
+  '|',
+  '‖', // ‖ double vertical line
+  '∣', // ∣ divides
+  '∥', // ∥ parallel to
+  '⌈', // ⌈ left ceiling
+  '⌉', // ⌉ right ceiling
+  '⌊', // ⌊ left floor
+  '⌋', // ⌋ right floor
+  '⟦', // ⟦ left white square bracket
+  '⟧', // ⟧ right white square bracket
+  '⟨', // ⟨ left angle bracket
+  '⟩', // ⟩ right angle bracket
+  '⟪', // ⟪ left double angle bracket
+  '⟫', // ⟫ right double angle bracket
+]);
+
+/**
  * Stretch `fence` so that its ink spans from `bottom` to `top`, heights above its baseline.
  * The character keeps its own size when its ink is already as tall.
  */
@@ -57,8 +85,8 @@ function grown(
 }
 
 /**
- * Lay out `items` between the characters that `fence` draws, on one baseline. A character
- * grows to the ink of the arguments when `expression.grow` is on: centred on the math axis
+ * Lay out `items` between the characters that `fence` draws, on one baseline. A bracket,
+ * brace, or bar grows to the ink of the arguments when `expression.grow` is on: centred on the math axis
  * `axis`, or matched to the ink when `expression.shape` is `match`.
  */
 export function layoutDelimiter(
@@ -81,7 +109,9 @@ export function layoutDelimiter(
   const character = (value: string) => {
     if (!value) return null;
     const drawn = fence(value);
-    return expression.grow ? grown(drawn, top, bottom, measurer) : drawn;
+    return expression.grow && GROWING_CHARACTERS.has(value)
+      ? grown(drawn, top, bottom, measurer)
+      : drawn;
   };
   // Drawing order: the opening character, each argument after its separator, the closing one.
   const parts: { readonly node: EquationGeometry; readonly fence: boolean }[] = [];

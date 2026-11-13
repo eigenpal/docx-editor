@@ -215,6 +215,62 @@ describe('m:d', () => {
     expect(fixed.fences.every((fence) => !fence.stretch)).toBe(true);
   });
 
+  test('only brackets, braces, and bars grow; any other character keeps its size', () => {
+    const characters = (begin: string, end: string) =>
+      `<m:dPr><m:begChr m:val="${begin}"/><m:endChr m:val="${end}"/></m:dPr>`;
+    const growing = [
+      ['(', ')'],
+      ['[', ']'],
+      ['{', '}'],
+      ['|', '‖'],
+      ['∣', '∥'],
+      ['⌈', '⌉'],
+      ['⌊', '⌋'],
+      ['⟦', '⟧'],
+      ['⟨', '⟩'],
+      ['⟪', '⟫'],
+    ];
+    for (const [begin, end] of growing) {
+      const geometry = delimiterOf(delimited(characters(begin!, end!), fraction));
+      expect(geometry.fences.map((fence) => [fence.text, (fence.stretch?.scale ?? 1) > 1])).toEqual(
+        [
+          [begin, true],
+          [end, true],
+        ]
+      );
+    }
+    // Letters, operators, slashes, arrows, and box-drawing or CJK brackets draw as text.
+    const fixedSize = [
+      ['a', '−'],
+      ['_', '.'],
+      ['/', '\\'],
+      ['&lt;', '&gt;'],
+      ['〈', '〉'],
+      ['↑', '→'],
+      ['│', '∫'],
+    ];
+    for (const [begin, end] of fixedSize) {
+      const geometry = delimiterOf(delimited(characters(begin!, end!), fraction));
+      expect(geometry.fences).toHaveLength(2);
+      expect(geometry.fences.every((fence) => fence.stretch === undefined)).toBe(true);
+    }
+    // A separator follows the same rule: a bar grows, a semicolon does not.
+    const separated = delimiterOf(
+      delimited('<m:dPr><m:sepChr m:val=";"/></m:dPr>', fraction, fraction)
+    );
+    expect(separated.fences.map((fence) => fence.stretch !== undefined)).toEqual([
+      true,
+      false,
+      true,
+    ]);
+  });
+
+  test('a character that keeps its size claims only its own line height', () => {
+    const lineOf = (body: string) => linesOf(layout(body))[0]!.box.height;
+    const fixed = delimited('<m:dPr><m:begChr m:val="a"/><m:endChr m:val="/"/></m:dPr>', fraction);
+    expect(lineOf(paragraph(fixed))).toBeCloseTo(lineOf(paragraph(`${run('a')}${fraction}`)), 6);
+  });
+
   test('the structure opens and closes like its characters do in text', () => {
     const geometry = equationSpan(paragraph(`${run('2')}${delimited('', run('x'))}${run('+1')}`))
       .equation!.geometry;

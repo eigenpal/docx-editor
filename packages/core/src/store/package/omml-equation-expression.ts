@@ -113,7 +113,7 @@ export type EquationExpression =
       readonly items: readonly EquationExpression[];
       /**
        * `m:grow`: the characters stretch to the height of the arguments. An omitted `m:grow`
-       * is on for a delimiter (ISO/IEC 29500-1), and Word applies it to delimiters.
+       * is on for a delimiter (ISO/IEC 29500-1). Only brackets, braces, and vertical bars grow.
        */
       readonly grow: boolean;
       /**
