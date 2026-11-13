@@ -228,6 +228,167 @@ export interface AutomationChangeEvent {
 export type AutomationContentControlLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
 
 // @public
+export type AutomationContentControlOperation =
+/**
+* The content controls a scope holds, outermost first and in document order.
+*
+* A control INSIDE another is reached through the one that holds it, never listed beside it:
+* a flat list of a document's controls makes a form field and the section wrapping it look
+* like siblings, and a caller iterating to fill a form would write into both.
+*/
+    {
+    readonly op: 'getContentControls';
+    readonly scope: AutomationContentControlScope;
+}
+/**
+* The first control in a scope whose `w:id` is the one asked for.
+*
+* FIRST, not "the" — `w:id` is not unique in OOXML and a file may write the same number
+* twice. Both controls remain reachable by listing; only this lookup has to choose, and
+* choosing document order is the choice a caller can predict.
+*/
+| {
+    readonly id: number;
+    readonly op: 'getContentControlById';
+    readonly scope: AutomationContentControlScope;
+}
+/** Every control in a scope carrying a tag, in document order. */
+| {
+    readonly op: 'getContentControlsByTag';
+    readonly scope: AutomationContentControlScope;
+    readonly tag: string;
+}
+/** Every control in a scope carrying a title (`w:alias`), in document order. */
+| {
+    readonly op: 'getContentControlsByTitle';
+    readonly scope: AutomationContentControlScope;
+    readonly title: string;
+}
+/** `w:tag`, or empty where the file wrote none. Never invented. */
+| {
+    readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlTag';
+}
+/** `w:alias` — what Word's UI calls the title. Empty where absent. */
+| {
+    readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlTitle';
+}
+/**
+* `w:id` as a STRING, and empty where the file wrote none.
+*
+* Metadata, deliberately: the identity a caller holds is the handle. A file id answered as a
+* number would invite a caller to treat it as one, and an optional non-unique attribute is
+* not an identity however it is spelled.
+*/
+| {
+    readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlFileId';
+}
+/** The control's type: `richText`, `plainText`, `dropDownList`, `comboBox`, `date`, … */
+| {
+    readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlSubtype';
+}
+/** The `ST_Lock` in force, INCLUDING what an enclosing control imposes. */
+| {
+    readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlLock';
+}
+/**
+* Whether the control declares `w:dataBinding`.
+*
+* Presence only: no XPath, namespace mapping, store id, or custom XML content crosses this
+* protocol boundary, and the binding target is never resolved or fetched.
+*/
+| {
+    readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlIsBound';
+}
+/** Whether the control is showing its placeholder rather than a value (`w:showingPlcHdr`). */
+| {
+    readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlPlaceholderShown';
+}
+/** Whether the control removes itself on the first edit (`w:temporary`). */
+| {
+    readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlTemporary';
+}
+/** The text the control encloses, as the document reads it. */
+| {
+    readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlText';
+    readonly projection?: AutomationTextProjection;
+}
+/** The paragraphs the control holds, in reading order. Empty for an inline control's own. */
+| {
+    readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlParagraphs';
+}
+/**
+* The span the control's content covers, so a caller can read or format it.
+*
+* `location` narrows it: `start`/`end` collapse onto the content's edges, and `before`/`after`
+* answer those same edges because a control's boundary marks occupy no offset here.
+*/
+| {
+    readonly contentControl: AutomationHandle;
+    readonly location?: AutomationContentControlRangeLocation;
+    readonly op: 'getContentControlRange';
+}
+/**
+* Write the control's value in the vocabulary its own type accepts.
+*
+* The refusals are the store's: `locked`, `bound`, `type-mismatch`, `invalid-value`. This
+* operation adds none of its own, because a script and a keystroke must be refused for the
+* same reasons or a form is only as protected as the path a caller happened to take.
+*/
+| {
+    readonly contentControl: AutomationHandle;
+    readonly op: 'setContentControlValue';
+    readonly value: AutomationContentControlValue;
+}
+/** Author tag, title or lock. An omitted member is left as it is; `null` removes it. */
+| {
+    readonly cannotDelete?: boolean;
+    readonly cannotEdit?: boolean;
+    readonly contentControl: AutomationHandle;
+    readonly lock?: AutomationContentControlLock;
+    readonly op: 'setContentControlProperties';
+    readonly tag?: string | null;
+    readonly title?: string | null;
+}
+/** Remove the control. `keepContent` is Word's own "Remove content control". */
+| {
+    readonly contentControl: AutomationHandle;
+    readonly keepContent: boolean;
+    readonly op: 'deleteContentControl';
+}
+/**
+* Put text into the control, at `replace` (its value) or at one edge of its content.
+*
+* The edge is resolved HERE and not by the caller: a script that read the span first and wrote
+* to it second could only write to where the control was when it asked, and the read and the
+* write would be two refusals instead of one.
+*/
+| {
+    readonly at: 'replace' | 'start' | 'end';
+    readonly contentControl: AutomationHandle;
+    readonly op: 'insertContentControlText';
+    readonly text: string;
+}
+/** Wrap a span in a new control of the named type. */
+| {
+    readonly op: 'insertContentControl';
+    readonly returnHandle?: boolean;
+    readonly span: AutomationSpanRef;
+    readonly subtype: AutomationContentControlSubtype;
+    readonly tag?: string;
+    readonly title?: string;
+};
+
+// @public
 export type AutomationContentControlRangeLocation = 'whole' | 'content' | 'start' | 'end' | 'before' | 'after';
 
 // @public
@@ -460,7 +621,7 @@ export type AutomationListNumbering = 'None' | 'Arabic' | 'UpperRoman' | 'LowerR
 export type AutomationObjectKind = 'document' | 'body' | 'paragraph' | 'section' | 'note' | 'comment' | 'revision' | 'bookmark' | 'list' | 'contentControl' | 'table' | 'tableRow' | 'tableCell' | 'field' | 'inlinePicture' | 'shape';
 
 // @public
-export type AutomationOperation = AutomationAuthoringOperation | {
+export type AutomationOperation = AutomationAuthoringOperation | AutomationContentControlOperation | {
     readonly op: 'getChangeTrackingMode';
 } | {
     readonly author?: string;
@@ -1290,164 +1451,6 @@ export type AutomationOperation = AutomationAuthoringOperation | {
     readonly bookmark: AutomationHandle;
     readonly mode: AutomationSelectionMode;
     readonly op: 'selectBookmark';
-}
-/**
-* The content controls a scope holds, outermost first and in document order.
-*
-* A control INSIDE another is reached through the one that holds it, never listed beside it:
-* a flat list of a document's controls makes a form field and the section wrapping it look
-* like siblings, and a caller iterating to fill a form would write into both.
-*/
-| {
-    readonly op: 'getContentControls';
-    readonly scope: AutomationContentControlScope;
-}
-/**
-* The first control in a scope whose `w:id` is the one asked for.
-*
-* FIRST, not "the" — `w:id` is not unique in OOXML and a file may write the same number
-* twice. Both controls remain reachable by listing; only this lookup has to choose, and
-* choosing document order is the choice a caller can predict.
-*/
-| {
-    readonly id: number;
-    readonly op: 'getContentControlById';
-    readonly scope: AutomationContentControlScope;
-}
-/** Every control in a scope carrying a tag, in document order. */
-| {
-    readonly op: 'getContentControlsByTag';
-    readonly scope: AutomationContentControlScope;
-    readonly tag: string;
-}
-/** Every control in a scope carrying a title (`w:alias`), in document order. */
-| {
-    readonly op: 'getContentControlsByTitle';
-    readonly scope: AutomationContentControlScope;
-    readonly title: string;
-}
-/** `w:tag`, or empty where the file wrote none. Never invented. */
-| {
-    readonly contentControl: AutomationHandle;
-    readonly op: 'getContentControlTag';
-}
-/** `w:alias` — what Word's UI calls the title. Empty where absent. */
-| {
-    readonly contentControl: AutomationHandle;
-    readonly op: 'getContentControlTitle';
-}
-/**
-* `w:id` as a STRING, and empty where the file wrote none.
-*
-* Metadata, deliberately: the identity a caller holds is the handle. A file id answered as a
-* number would invite a caller to treat it as one, and an optional non-unique attribute is
-* not an identity however it is spelled.
-*/
-| {
-    readonly contentControl: AutomationHandle;
-    readonly op: 'getContentControlFileId';
-}
-/** The control's type: `richText`, `plainText`, `dropDownList`, `comboBox`, `date`, … */
-| {
-    readonly contentControl: AutomationHandle;
-    readonly op: 'getContentControlSubtype';
-}
-/** The `ST_Lock` in force, INCLUDING what an enclosing control imposes. */
-| {
-    readonly contentControl: AutomationHandle;
-    readonly op: 'getContentControlLock';
-}
-/**
-* Whether the control declares `w:dataBinding`.
-*
-* Presence only: no XPath, namespace mapping, store id, or custom XML content crosses this
-* protocol boundary, and the binding target is never resolved or fetched.
-*/
-| {
-    readonly contentControl: AutomationHandle;
-    readonly op: 'getContentControlIsBound';
-}
-/** Whether the control is showing its placeholder rather than a value (`w:showingPlcHdr`). */
-| {
-    readonly contentControl: AutomationHandle;
-    readonly op: 'getContentControlPlaceholderShown';
-}
-/** Whether the control removes itself on the first edit (`w:temporary`). */
-| {
-    readonly contentControl: AutomationHandle;
-    readonly op: 'getContentControlTemporary';
-}
-/** The text the control encloses, as the document reads it. */
-| {
-    readonly contentControl: AutomationHandle;
-    readonly op: 'getContentControlText';
-    readonly projection?: AutomationTextProjection;
-}
-/** The paragraphs the control holds, in reading order. Empty for an inline control's own. */
-| {
-    readonly contentControl: AutomationHandle;
-    readonly op: 'getContentControlParagraphs';
-}
-/**
-* The span the control's content covers, so a caller can read or format it.
-*
-* `location` narrows it: `start`/`end` collapse onto the content's edges, and `before`/`after`
-* answer those same edges because a control's boundary marks occupy no offset here.
-*/
-| {
-    readonly contentControl: AutomationHandle;
-    readonly location?: AutomationContentControlRangeLocation;
-    readonly op: 'getContentControlRange';
-}
-/**
-* Write the control's value in the vocabulary its own type accepts.
-*
-* The refusals are the store's: `locked`, `bound`, `type-mismatch`, `invalid-value`. This
-* operation adds none of its own, because a script and a keystroke must be refused for the
-* same reasons or a form is only as protected as the path a caller happened to take.
-*/
-| {
-    readonly contentControl: AutomationHandle;
-    readonly op: 'setContentControlValue';
-    readonly value: AutomationContentControlValue;
-}
-/** Author tag, title or lock. An omitted member is left as it is; `null` removes it. */
-| {
-    readonly cannotDelete?: boolean;
-    readonly cannotEdit?: boolean;
-    readonly contentControl: AutomationHandle;
-    readonly lock?: AutomationContentControlLock;
-    readonly op: 'setContentControlProperties';
-    readonly tag?: string | null;
-    readonly title?: string | null;
-}
-/** Remove the control. `keepContent` is Word's own "Remove content control". */
-| {
-    readonly contentControl: AutomationHandle;
-    readonly keepContent: boolean;
-    readonly op: 'deleteContentControl';
-}
-/**
-* Put text into the control, at `replace` (its value) or at one edge of its content.
-*
-* The edge is resolved HERE and not by the caller: a script that read the span first and wrote
-* to it second could only write to where the control was when it asked, and the read and the
-* write would be two refusals instead of one.
-*/
-| {
-    readonly at: 'replace' | 'start' | 'end';
-    readonly contentControl: AutomationHandle;
-    readonly op: 'insertContentControlText';
-    readonly text: string;
-}
-/** Wrap a span in a new control of the named type. */
-| {
-    readonly op: 'insertContentControl';
-    readonly returnHandle?: boolean;
-    readonly span: AutomationSpanRef;
-    readonly subtype: AutomationContentControlSubtype;
-    readonly tag?: string;
-    readonly title?: string;
 }
 /**
 * Insert a custom node: a tagged inline control, optionally bound to a payload.

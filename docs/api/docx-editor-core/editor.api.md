@@ -74,6 +74,38 @@ export interface AttachOptions {
 // @public
 export const AUTO_ZOOM_MODE: ZoomMode;
 
+// @public
+export interface AutomationEndpoint {
+    // (undocumented)
+    readonly offset: number;
+    readonly paragraph: AutomationHandle;
+    readonly readAt?: number;
+}
+
+// @public
+export interface AutomationHandle<K extends AutomationObjectKind = AutomationObjectKind> {
+    // (undocumented)
+    readonly kind: K;
+    // (undocumented)
+    readonly ref: AutomationHandleRef;
+}
+
+// @public
+export type AutomationHandleRef = string & {
+    readonly [AUTOMATION_HANDLE_BRAND]: 'handle';
+};
+
+// @public
+export type AutomationObjectKind = 'document' | 'body' | 'paragraph' | 'section' | 'note' | 'comment' | 'revision' | 'bookmark' | 'list' | 'contentControl' | 'table' | 'tableRow' | 'tableCell' | 'field' | 'inlinePicture' | 'shape';
+
+// @public
+export interface AutomationSpan {
+    // (undocumented)
+    readonly end: AutomationEndpoint;
+    // (undocumented)
+    readonly start: AutomationEndpoint;
+}
+
 // @internal
 export interface BarRoomInput {
     readonly chrome: number;
