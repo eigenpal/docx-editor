@@ -14,6 +14,7 @@ import { findNode, paragraphTextOf } from '@docx-editor.dev/core/store';
 import type {
   EditorHighlights,
   HighlightHit,
+  HighlightKind,
   HighlightOptions,
   HighlightRange,
   HighlightResult,
@@ -54,6 +55,8 @@ interface HighlightSet {
   readonly activeIndex: number;
   readonly classes: readonly string[];
   readonly priority: number;
+  /** The proofing meaning of the marks, for assistive technology. */
+  readonly kind?: HighlightKind;
   /** First-set order, for stable stacking between equal priorities. */
   readonly order: number;
   /** Model text each range covered when captured; `null` for a range that did not resolve. */
@@ -165,6 +168,10 @@ function buildSet(
   if (classes.some((token) => !CLASS_TOKEN.test(token))) {
     throw new TypeError('className must hold space-separated CSS class names.');
   }
+  const kind = options?.kind;
+  if (kind !== undefined && kind !== 'spelling' && kind !== 'grammar') {
+    throw new TypeError("kind must be 'spelling' or 'grammar'.");
+  }
   const color = colorOption(options?.color, 'color', container);
   const activeColor = colorOption(options?.activeColor, 'activeColor', container);
   return {
@@ -179,6 +186,7 @@ function buildSet(
     activeIndex,
     classes,
     priority,
+    ...(kind !== undefined ? { kind } : {}),
     order,
     expected: null,
     seen: new Array<string | null>(copy.length).fill(null),

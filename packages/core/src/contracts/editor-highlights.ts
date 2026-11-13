@@ -49,7 +49,18 @@ export interface HighlightOptions {
    * The built-in Find pane uses the set name `search` with priority `10`.
    */
   readonly priority?: number;
+  /**
+   * What the marks mean, for assistive technology. `'spelling'` and `'grammar'` mark proofing
+   * issues: the covered text reports `aria-invalid` with that value, browsers with the CSS
+   * Custom Highlight API also paint the set as a `spelling-error` or `grammar-error`
+   * highlight, and the editor announces a change of the issue count in a polite live region.
+   * Omit it for marks without a proofing meaning, such as search results. Default: none.
+   */
+  readonly kind?: HighlightKind;
 }
+
+/** The proofing meaning of a highlight set. See {@link HighlightOptions.kind}. @public */
+export type HighlightKind = 'spelling' | 'grammar';
 
 /** What `setHighlights()` resolved against the open document. @public */
 export interface HighlightResult {
