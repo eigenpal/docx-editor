@@ -34,7 +34,7 @@ Call `editor.getParagraphs()` to read every paragraph, including paragraphs on p
 
 The list is empty until a document opens. A large document opens in steps, so read the list again after each `change` event. A function source of `useHighlights` does this for you.
 
-To check only what an edit touched, listen for the `paragraphsChange` event. It lists the `blockId` of each paragraph that a commit added, changed, or deleted, in every story. It fires after the `change` event of the same commit, and never for a selection or highlight change. Its `source` is `remote` for an edit from a collaboration peer, and `local` for other edits, including undo and redo. It does not fire when a document loads, so check every paragraph when `getDocumentHandle().loadId` changes.
+To check only what an edit touched, listen for the `paragraphsChange` event. It lists the `blockId` of each paragraph that a commit added, changed, or deleted, in every story. It fires after the `change` event of the same commit, and never for a selection or highlight change. Its `source` is `remote` for an edit from a collaboration peer, and `local` for other edits, including undo and redo. It fires for the undoable `replaceDocument` command, but not for `load()`, so check every paragraph when `getDocumentHandle().loadId` changes.
 
 ### Choose the text to check
 

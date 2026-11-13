@@ -32,8 +32,10 @@ export interface EditorEvents {
    * `source` is `'remote'` for a change applied from a collaboration peer, and `'local'` for
    * every other commit, including undo and redo.
    *
-   * It does not fire when a document loads or is replaced: the `change` event reports that
-   * with `source`, and every paragraph needs a check then.
+   * The `replaceDocument` command is an undoable edit, so it fires: the paragraphs it removes
+   * are in `deleted`, and the paragraphs it brings are in `added` or `changed`. `load()`, a
+   * refresh, and a recovery do not fire it: the `change` event reports them with `source`,
+   * and every paragraph needs a check then.
    *
    * @example
    * ```ts

@@ -145,6 +145,19 @@ describe('paragraphsChange', () => {
     expect(events).toMatchObject([{ added: [], changed: [idOf(editor, 'ybravo')], deleted: [] }]);
   });
 
+  test('replaceDocument fires it as an undoable edit, unlike load', () => {
+    const { editor, events } = mount(docx(p('alpha') + p('bravo')));
+    const before = editor.getParagraphs().map(({ blockId }) => blockId);
+    expect(editor.exec({ type: 'replaceDocument', docx: docx(p('other text')) }).ok).toBe(true);
+    expect(events).toHaveLength(1);
+    const [event] = events;
+    const now = editor.getParagraphs().map(({ blockId }) => blockId);
+    for (const id of now) expect([...event!.added, ...event!.changed]).toContain(id);
+    for (const id of before.filter((id) => !now.includes(id))) {
+      expect(event!.deleted).toContain(id);
+    }
+  });
+
   test('selection, highlights and loads never fire it', async () => {
     const { editor, events } = mount(docx(p('alpha beta')));
     caretAt(editor, 'alpha', 2);
