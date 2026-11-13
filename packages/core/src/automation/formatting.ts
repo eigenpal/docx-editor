@@ -142,11 +142,15 @@ function lineSpacingInForce(
   own: Readonly<Record<string, string>>,
   inherited: InheritedLineSpacing
 ): { line: string; lineRule: string } {
-  const line = [own.line, inherited.line].find((value) => value && LINE_VALUE.test(value));
-  const lineRule = [own.lineRule, inherited.lineRule].find(
-    (value) => value === 'auto' || value === 'atLeast' || value === 'exact'
-  );
-  return { line: line ?? '240', lineRule: lineRule ?? 'auto' };
+  // The nearest statement decides, as layout reads it. With no usable `w:line` the paragraph
+  // shows single spacing, whatever rule a level states on its own.
+  const line = own.line ?? inherited.line;
+  if (line === undefined || !LINE_VALUE.test(line)) return { line: '240', lineRule: 'auto' };
+  const lineRule = own.lineRule ?? inherited.lineRule;
+  return {
+    line,
+    lineRule: lineRule === 'atLeast' || lineRule === 'exact' ? lineRule : 'auto',
+  };
 }
 
 /** The rule a `w:line` and `w:lineRule` pair reads as. */
@@ -416,7 +420,7 @@ export function paragraphFormatRead(
     rightIndent: pointsFromTwips(attributeOf(indent, 'right') ?? attributeOf(indent, 'end')),
     lineSpacing: pointsFromTwips(attributeOf(spacing, 'line')),
     lineSpacingRule: lineSpacingRuleOf(
-      lineSpacingInForce(attributesOf(spacing), styles.inheritedLineSpacing(paragraph))
+      lineSpacingInForce(attributesOf(spacing), styles.inheritedLineSpacing(part, paragraph))
     ),
     spaceBefore: pointsFromTwips(attributeOf(spacing, 'before')),
     spaceAfter: pointsFromTwips(attributeOf(spacing, 'after')),
@@ -609,18 +613,17 @@ export function paragraphFormatProperties(
     // keeps the rule the paragraph shows, and a rule keeps the points the paragraph shows.
     const inForce = lineSpacingInForce(
       spacingAttributes,
-      styles.inheritedLineSpacing(paragraph, styleId)
+      styles.inheritedLineSpacing(part, paragraph, styleId)
     );
     let { line, lineRule } = inForce;
     // The rule applies first, then the value, so `lineSpacingRule` and `lineSpacing` in one
     // write give the asked rule at the asked points.
     if (request.lineSpacingRule !== undefined) {
-      const fixed = FIXED_LINE_BY_RULE[request.lineSpacingRule as AutomationLineSpacingRule];
-      const rule = LINE_RULE_BY_RULE[request.lineSpacingRule as AutomationLineSpacingRule];
-      if (rule === undefined)
-        return { ok: false, detail: `lineSpacingRule: ${String(request.lineSpacingRule)}` };
-      lineRule = rule;
-      if (fixed !== undefined) line = fixed;
+      const asked = request.lineSpacingRule as AutomationLineSpacingRule;
+      if (typeof asked !== 'string' || !Object.hasOwn(LINE_RULE_BY_RULE, asked))
+        return { ok: false, detail: `lineSpacingRule: ${String(asked)}` };
+      lineRule = LINE_RULE_BY_RULE[asked];
+      if (Object.hasOwn(FIXED_LINE_BY_RULE, asked)) line = FIXED_LINE_BY_RULE[asked]!;
     }
     if (request.lineSpacing !== undefined) {
       const twips = twipsFor(request.lineSpacing, 'lineSpacing');

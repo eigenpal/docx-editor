@@ -25,20 +25,12 @@ import { findNode } from '../store/package/ooxml-edit.ts';
 import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import {
+  inheritedParagraphPropertyNodes,
   paragraphInheritsRtl,
   type DirectionSources,
 } from '../layout/paragraph-direction-inheritance.ts';
-import {
-  attributeValueOf,
-  namedChild,
-  paragraphPropertiesNodeOf,
-} from '../store/store/tree-op-nodes.ts';
+import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
-import {
-  buildStyleCascadeTable,
-  cascadeParagraphFormatting,
-  type StyleCascadeTable,
-} from '../layout/style-cascade.ts';
 import { MAX_STYLE_NAME, styleDefinitionsOf } from './style-definitions.ts';
 
 /** What the document says its paragraph styles are. */
@@ -69,50 +61,22 @@ export interface AutomationStyleIndex {
    */
   inheritsRtl(part: OoxmlPart, paragraph: OoxmlNode, styleId?: string): boolean;
   /**
-   * The `w:spacing` line attributes the paragraph inherits from the document defaults and its
-   * style chain, ignoring its own: each attribute from the last level that states it. `styleId`
-   * resolves them as if the paragraph named that style.
+   * The `w:spacing` line attributes the paragraph inherits, ignoring its own: document defaults,
+   * an enclosing cell's table style, its style chain, and its numbering level, as layout resolves
+   * them, each attribute from the last level that states it. `styleId` resolves them as if the
+   * paragraph named that style.
    */
-  inheritedLineSpacing(paragraph: OoxmlNode, styleId?: string): InheritedLineSpacing;
+  inheritedLineSpacing(
+    part: OoxmlPart,
+    paragraph: OoxmlNode,
+    styleId?: string
+  ): InheritedLineSpacing;
 }
 
 /** Inherited `w:spacing` line attributes, as the file spells them. Absent = nothing states it. */
 export interface InheritedLineSpacing {
   readonly line?: string;
   readonly lineRule?: string;
-}
-
-const NO_LINE_SPACING: InheritedLineSpacing = Object.freeze({});
-
-/** A `w:pPr` that names only `styleId`, for resolving what a paragraph inherits from it. */
-function stylePropertiesNode(styleId: string | null): OoxmlNode {
-  const children =
-    styleId === null
-      ? []
-      : [
-          {
-            kind: 'generic',
-            id: '',
-            namespaceUri: WML_NAMESPACE_URI,
-            localName: 'pStyle',
-            prefix: 'w',
-            namespaceBindings: [],
-            attributes: [
-              { namespaceUri: WML_NAMESPACE_URI, localName: 'val', prefix: 'w', value: styleId },
-            ],
-            children: [],
-          },
-        ];
-  return {
-    kind: 'generic',
-    id: '',
-    namespaceUri: WML_NAMESPACE_URI,
-    localName: 'pPr',
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes: [],
-    children,
-  } as unknown as OoxmlNode;
 }
 
 /** The line attributes several `w:pPr` nodes state, folded attribute by attribute in order. */
@@ -151,16 +115,10 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
   // Cell styles resolve as the proposed document shows them, like automation's run writes.
   const inheritsRtl = (target: OoxmlPart, paragraph: OoxmlNode, styleId?: string) =>
     paragraphInheritsRtl(sources, target, paragraph, 'proposed', styleId);
-  // Built on first use: most runs never read or write a line rule.
-  let cascade: StyleCascadeTable | undefined;
-  const inheritedLineSpacing = (paragraph: OoxmlNode, styleId?: string) => {
-    if (!sources.styles) return NO_LINE_SPACING;
-    cascade ??= buildStyleCascadeTable(sources.styles, undefined, sources.settings);
-    const own =
-      attributeValueOf(namedChild(paragraphPropertiesNodeOf(paragraph), 'pStyle'), 'val') ?? null;
-    const direct = stylePropertiesNode(styleId ?? own);
-    return foldedLineSpacing(cascadeParagraphFormatting(cascade, direct).paragraphPropertyNodes);
-  };
+  const inheritedLineSpacing = (target: OoxmlPart, paragraph: OoxmlNode, styleId?: string) =>
+    foldedLineSpacing(
+      inheritedParagraphPropertyNodes(sources, target, paragraph, 'proposed', 'spacing', styleId)
+    );
   if (!part) {
     return Object.freeze({
       nameOf: () => null,

@@ -579,6 +579,58 @@ describe('a line spacing rule the style supplies', () => {
     expect(savedMainXml(host)).toContain('<w:spacing w:line="280" w:lineRule="atLeast"/>');
   });
 
+  test('a table style line spacing reaches a cell paragraph, as layout paints it', () => {
+    const styles =
+      '<w:docDefaults><w:pPrDefault><w:pPr><w:spacing w:line="259" w:lineRule="auto"/></w:pPr>' +
+      '</w:pPrDefault></w:docDefaults>' +
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+      '<w:style w:type="table" w:styleId="Grid"><w:name w:val="Grid"/>' +
+      '<w:pPr><w:spacing w:line="240" w:lineRule="exact"/></w:pPr></w:style>';
+    const host = open(
+      docx(
+        '<w:tbl><w:tblPr><w:tblStyle w:val="Grid"/></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
+          '<w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
+        styles
+      )
+    );
+    const cell = paragraphsOf(host, roots(host).body).find(
+      (paragraph) => formatOf(host, paragraph).lineSpacingRule === 'Exactly'
+    );
+    expect(cell).toBeDefined();
+    host.execute({
+      operations: [
+        { op: 'setParagraphFormat', paragraph: { paragraph: cell! }, format: { lineSpacing: 14 } },
+      ],
+    });
+    expect(savedMainXml(host)).toContain('<w:spacing w:line="280" w:lineRule="exact"/>');
+  });
+
+  test('a rule stated without a line reads as single spacing', () => {
+    const styles =
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/>' +
+      '<w:pPr><w:spacing w:lineRule="exact"/></w:pPr></w:style>';
+    const host = open(docx(p('bare'), styles));
+    const [paragraph] = paragraphsOf(host, roots(host).body);
+    expect(formatOf(host, paragraph!).lineSpacingRule).toBe('Single');
+  });
+
+  for (const name of ['toString', '__proto__', 'Triple']) {
+    test(`refuses the rule ${name} by name`, () => {
+      const host = open(tight);
+      const [paragraph] = paragraphsOf(host, roots(host).body);
+      const response = host.execute({
+        operations: [
+          {
+            op: 'setParagraphFormat',
+            paragraph: { paragraph: paragraph! },
+            format: { lineSpacingRule: name as 'Single' },
+          },
+        ],
+      });
+      expect(refusal(response)).toBe('unsupported-content');
+    });
+  }
+
   test('an unknown rule is refused', () => {
     const host = open(tight);
     const [paragraph] = paragraphsOf(host, roots(host).body);
