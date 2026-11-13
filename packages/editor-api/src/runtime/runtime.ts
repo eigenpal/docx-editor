@@ -299,12 +299,12 @@ export interface CreateRuntimeOptions {
     /** Whether a preview is open on the editor, from any runtime. */
     active(): boolean;
   };
+  /** Paints this runtime's proofing annotations. Only the browser runtime has one. */
+  readonly annotationPainter?: AnnotationPainter;
   /**
    * Runs a batch inside an editor history group, answering `null` for a handle that is not
    * open on the editor. Only the browser runtime has one; without it `historyGroup` refuses.
    */
-  /** Paints this runtime's proofing annotations. Only the browser runtime has one. */
-  readonly annotationPainter?: AnnotationPainter;
   readonly historyGroups?: {
     /** One run's frames of `group`, or `null` when it is not an open handle of the editor. */
     begin(group: HistoryGroup): {
