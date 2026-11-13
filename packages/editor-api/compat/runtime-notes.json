@@ -998,5 +998,37 @@
   "Word.BorderUniversalCollection#applyPageBordersToAllSections": {
     "status": "unsupported",
     "notes": "Paragraph borders are not page borders. Throws NotSupported."
+  },
+  "Word.Paragraph#insertAnnotations": {
+    "status": "partial",
+    "notes": "Annotations are view state of one runtime: never saved in the file, never shared with collaborators, and gone when the runtime is disposed or a new runtime opens the document. start and length count UTF-16 code units of Paragraph.text as this runtime reads it, in its revisionTextView: with allMarkup, tracked deletions and insertions both count, hidden text counts, and a field counts as its displayed result. length must be at least 1 and the range must lie inside the text (InvalidArgument). A non-empty brandingTextResourceId, subtitleResourceId, or titleResourceId refuses with NotSupported (edit.operation-unsupported): add-in manifest resources do not exist here. At most 1000 critiques per call and 10000 live annotations per runtime (NotSupported, edit.resource-limit). The text is read as the batch starts, before the batch's writes. The browser runtime paints one highlight set per color scheme; a server or collaborative runtime keeps the annotations as data. A preview refuses (NotSupported, edit.preview-unsupported). No onAnnotationInserted event is raised."
+  },
+  "Word.Paragraph#getAnnotations": {
+    "status": "partial",
+    "notes": "Annotations are view state of one runtime: never saved in the file, never shared with collaborators, and gone when the runtime is disposed or a new runtime opens the document. Each read compares the paragraph's text with the text the annotation was placed on: an annotation inside the unchanged start keeps its offset, one inside the unchanged end moves by the length difference, and one that touches the changed text is removed. Edits made outside a run are seen at the next read. Lists live annotations in text order; decided and deleted ones are not listed. A paragraph an edit removed refuses with InvalidObjectPath (edit.stale-target)."
+  },
+  "Word.Document#getAnnotationById": {
+    "status": "partial",
+    "notes": "Finds live and decided annotations of this runtime. An id from another runtime, a deleted annotation, or one an edit removed refuses the sync with ItemNotFound."
+  },
+  "Word.Annotation#delete": {
+    "status": "partial",
+    "notes": "Annotations are view state of one runtime: never saved in the file, never shared with collaborators, and gone when the runtime is disposed or a new runtime opens the document. Removes the mark and forgets the annotation; the document does not change. A later read of the proxy refuses with InvalidObjectPath (edit.stale-target). No onAnnotationRemoved event is raised."
+  },
+  "Word.CritiqueAnnotation#accept": {
+    "status": "partial",
+    "notes": "Replaces the critiqued text with the first suggestion, editing only the graphemes that differ, as one write of the sync. With document.changeTrackingMode set to TrackMineOnly, the fix is a tracked change; tracking is never turned off. Then the state is Accepted and the mark is removed. Refusals, after which nothing changes: no suggestion (NotSupported, edit.operation-unsupported; the reference does not define this case); critiqued text that holds an object, such as a field result, or text the revision view hides (NotSupported, edit.indivisible-content); a suggestion with a paragraph mark or U+FFFC (InvalidArgument); an annotation that an edit removed or that was decided or deleted (InvalidObjectPath, edit.stale-target). Other annotations in the paragraph move with the fix."
+  },
+  "Word.CritiqueAnnotation#reject": {
+    "status": "partial",
+    "notes": "Sets the state to Rejected and removes the mark; the document does not change. An annotation that an edit removed or that was decided or deleted refuses with InvalidObjectPath (edit.stale-target)."
+  },
+  "Word.CritiqueAnnotation#range": {
+    "status": "partial",
+    "notes": "The range of the critiqued text as it is now. The read refuses with InvalidObjectPath (edit.stale-target) when the annotation is gone."
+  },
+  "Word.CritiqueAnnotation#critique": {
+    "status": "partial",
+    "notes": "Answers the critique data with its current start. The three popup resource ids read back as empty strings."
   }
 }
