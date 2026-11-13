@@ -1,5 +1,17 @@
 # @docx-editor.dev/editor-api
 
+## 2.38.0
+
+### Minor Changes
+
+- 42baafa: Read and write paragraph borders through `Paragraph.borders` in the editing API. A paragraph's own border edges no longer hide the other edges its style draws. Fixes #1956
+- 43b48a6: Read and set how line spacing is measured through `Paragraph.lineSpacingRule` in the editing API, and keep a line rule from the paragraph's style when you set `lineSpacing`. `Paragraph.lineSpacing` now reads the spacing in force, including spacing from the style, instead of `null`. Fixes #1957
+
+### Patch Changes
+
+- 84f4036: Mark each editing API member that Office.js does not have with the `@docxEditorExtension` TSDoc tag, so editors and coding agents can see which calls do not run in an Office.js host.
+- Updated dependencies: @docx-editor.dev/core@2.38.0
+
 ## 2.37.0
 
 ### Patch Changes

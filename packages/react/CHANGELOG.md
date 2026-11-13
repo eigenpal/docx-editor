@@ -1,5 +1,17 @@
 # @eigenpal/docx-js-editor
 
+## 2.38.0
+
+### Minor Changes
+
+- 05f76a2: `useEditorCaret()` returns `blockId`, the paragraph id that selection reads, search matches, and highlight ranges use. `paragraphId` stays as a deprecated alias for `at` parameters.
+- c6dcb77: Add `ContextMenu.Start` to the React and Vue context menus. Rows inside it render above the default rows, followed by a separator.
+- e5d9167: `useHighlights` now returns `refresh()` to run a highlight source again when your own state changes. Context menu rows can read the highlights under the right-click, or at the caret for a keyboard open, with `useContextMenuHighlights()`.
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.38.0, @docx-editor.dev/i18n@2.38.0
+
 ## 2.37.0
 
 ### Patch Changes
