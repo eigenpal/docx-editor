@@ -58,13 +58,13 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .gw-review__card {
   background: var(--gw-review-card);
   border: 1px solid var(--gw-review-border);
   border-radius: 6px;
-  padding: 8px 10px;
+  padding: 7px 10px;
   cursor: pointer;
 }
 .gw-review__card.is-active {
@@ -81,10 +81,11 @@
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .gw-review__author {
   font-weight: 600;
+  font-size: 12px;
 }
 .gw-review__date {
   color: var(--gw-review-muted);
@@ -132,6 +133,25 @@
   padding: 3px 10px;
   font: inherit;
   cursor: pointer;
+}
+.gw-review__actions--quiet {
+  gap: 14px;
+  margin-top: 4px;
+}
+/* Thread actions are quiet text buttons: the comment is what matters. */
+.gw-review__actions--quiet .gw-review__button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--gw-review-muted);
+  font-size: 12px;
+}
+.gw-review__actions--quiet .gw-review__button:hover {
+  color: var(--gw-review-accent);
+  text-decoration: underline;
+}
+.gw-review__actions--quiet .gw-review__button--danger:hover {
+  color: var(--gw-review-delete);
 }
 .gw-review__button:disabled {
   opacity: 0.5;

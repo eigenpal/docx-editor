@@ -390,7 +390,7 @@ function ThreadCard({
             }}
           />
         ) : (
-          <div className="gw-review__actions">
+          <div className="gw-review__actions gw-review__actions--quiet">
             <button
               type="button"
               className="gw-review__button"
