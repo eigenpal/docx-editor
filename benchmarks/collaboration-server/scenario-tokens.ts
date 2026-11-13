@@ -73,6 +73,12 @@ function paragraphIds(root: OoxmlNode): Set<string> {
   return ids;
 }
 
+/** Whether any part of `pkg` holds a node with `id`. */
+function hasNode(pkg: OoxmlPackage, id: string): boolean {
+  for (const part of pkg.parts.values()) if (findNode(part.root, id)) return true;
+  return false;
+}
+
 /** Whether any part of `pkg` holds a paragraph with `id`. */
 function hasParagraph(pkg: OoxmlPackage, id: string): boolean {
   for (const part of pkg.parts.values()) {
@@ -92,6 +98,18 @@ export class TypedTokens {
   private readonly excused = new Set<string>();
   /** Each token a replica deleted, by the replica, until that replica's undo puts it back. */
   private readonly deletedBy = new Map<string, number>();
+  /**
+   * The block a replica's block deletion took each token out with. That replica's undo that
+   * brings the block back takes the deletion back, also for a token it does not show right
+   * then: the typist's own undo can hold the token out, or a held-back update can hold the
+   * paragraph a peer's split moved the text into.
+   */
+  private readonly removedWith = new Map<
+    string,
+    { readonly replica: number; readonly block: string }
+  >();
+  /** Tokens their typist's undo took back while a peer's deletion held them, by the typist. */
+  private readonly takenBack = new Map<string, number>();
   /** Every replica that ever deleted each token: its redo may delete the token again. */
   private readonly deleters = new Map<string, Set<number>>();
   /** Tokens already reported as vanished, so each is reported once. */
@@ -189,6 +207,11 @@ export class TypedTokens {
       if (editing && STRUCTURE_DELETING.has(editing.op.op)) this.structureDeleted.add(token);
       else this.removedOtherwise.add(token);
       this.deletedBy.set(token, replica);
+      if (editing?.op.op === 'deleteBlock') {
+        this.removedWith.set(token, { replica, block: editing.op.blockId });
+      } else {
+        this.removedWith.delete(token);
+      }
       const deleters = this.deleters.get(token) ?? new Set<number>();
       deleters.add(replica);
       this.deleters.set(token, deleters);
@@ -216,7 +239,11 @@ export class TypedTokens {
       // time can show it until the undo arrives there, and the peer's own undo of that copy
       // then removes nothing the typist kept. It must not show again once updates settle. A
       // peer that deleted it first stays its deleter, so a redo that brings it back still fails.
-      if (!this.deletedBy.has(token)) this.deletedBy.set(token, replica);
+      // The typist's undo still holds the token out once that peer's undo takes its deletion
+      // back.
+      const deleter = this.deletedBy.get(token);
+      if (deleter === undefined) this.deletedBy.set(token, replica);
+      else if (deleter !== replica) this.takenBack.set(token, replica);
     }
     // An undo of a replica's own deletion puts the token back. A deleted paragraph keeps its
     // text, so the undo shows in the view, not in the shared text.
@@ -239,7 +266,40 @@ export class TypedTokens {
       const back =
         (after.includes(token) && !before.includes(token)) ||
         (viewAfter.has(token) && !viewBefore.has(token));
-      if (back) this.deletedBy.delete(token);
+      if (back) {
+        this.deletedBy.delete(token);
+        this.takenBack.delete(token);
+        continue;
+      }
+      const removed = this.removedWith.get(token);
+      if (
+        shown &&
+        removed?.replica === replica &&
+        !hasNode(shown.before, removed.block) &&
+        hasNode(shown.after, removed.block)
+      ) {
+        const typist = this.takenBack.get(token);
+        if (typist === undefined) this.deletedBy.delete(token);
+        else this.deletedBy.set(token, typist);
+      }
+    }
+    // A redo of the typist's typing brings the token back, whatever a peer's undo does.
+    for (const [token, typist] of this.takenBack) {
+      if (typist === replica && after.includes(token) && !before.includes(token)) {
+        this.takenBack.delete(token);
+      }
+    }
+    // A redo of a block deletion takes out again the tokens it took out before.
+    if (!shown) return;
+    for (const [token, removed] of this.removedWith) {
+      if (
+        removed.replica === replica &&
+        !this.deletedBy.has(token) &&
+        hasNode(shown.before, removed.block) &&
+        !hasNode(shown.after, removed.block)
+      ) {
+        this.deletedBy.set(token, replica);
+      }
     }
   }
 
