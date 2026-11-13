@@ -34,7 +34,7 @@ import { formattingCommandActive } from './docx-editor-active.ts';
 import { createEditorScrolling } from './docx-editor-scroll.ts';
 import { createAnchorNavigation } from './docx-editor-anchor-navigation.ts';
 import { createTextHighlights } from './text-highlights.ts';
-import { navigateHighlight } from './highlight-navigation.ts';
+import { layoutReadingOrder, navigateHighlight } from './highlight-navigation.ts';
 import { createReviewItemsAt } from './review-items-at.ts';
 import { createParagraphTextReads } from './paragraph-text-read.ts';
 import { reviewItemPlacement } from './review-placement-cache.ts';
@@ -1965,7 +1965,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return navigateHighlight(
           command,
           marks,
-          paragraphReads.getParagraphs(),
+          layoutReadingOrder(surface?.publishedLayout() ?? null),
           selectionRead.members.getSelectionRange(),
           (range) =>
             surface
