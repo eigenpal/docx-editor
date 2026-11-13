@@ -231,6 +231,28 @@ export type AutomationOperation =
       readonly trimSpacing?: boolean;
       readonly projection?: AutomationTextProjection;
     }
+  /**
+   * A paragraph's text in a view, as `texts` with one text, or with none when the paragraph
+   * left its story. A paragraph that is gone is an answer here, not a refusal, so a client that
+   * checks many paragraphs it read earlier keeps the rest of its batch.
+   */
+  | {
+      readonly op: 'getParagraphTextIfPresent';
+      readonly paragraph: AutomationHandle;
+      readonly projection?: AutomationTextProjection;
+    }
+  /**
+   * The model span of a non-empty range of a paragraph's text in a view. `start` and `length`
+   * count UTF-16 code units of the text `getText` answers with the same projection. A range
+   * inside an expanded field result answers the whole field.
+   */
+  | {
+      readonly op: 'getParagraphTextSpan';
+      readonly paragraph: AutomationHandle;
+      readonly start: number;
+      readonly length: number;
+      readonly projection?: AutomationTextProjection;
+    }
   /** The smallest span covering both spans. Both must be in one story. */
   | { readonly op: 'expandSpan'; readonly span: AutomationSpanRef; readonly to: AutomationSpanRef }
   /**

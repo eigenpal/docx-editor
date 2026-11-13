@@ -1565,6 +1565,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           return pinWrite(plan) ?? claim(plan, paragraphId);
         });
       case 'getTextRanges':
+      case 'getParagraphTextIfPresent':
+      case 'getParagraphTextSpan':
       case 'expandSpan':
       case 'getReviewedText':
         return planTextRanges(operation, handles, packageReads);
