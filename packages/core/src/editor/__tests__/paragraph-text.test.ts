@@ -45,7 +45,7 @@ describe('getParagraphText', () => {
       expect(paragraph.text).toBe(
         fieldResults === 'editable' ? 'Date 11 November 😀 recieve' : 'Date \uFFFC 😀 recieve'
       );
-      expect(paragraph.keptText).toBe(paragraph.text);
+      expect(paragraph.acceptedText).toBe(paragraph.text);
       expect(editor.getParagraphs()[0]).toBe(paragraph);
       expect(
         editor.setHighlights('spelling', [
@@ -61,7 +61,7 @@ describe('getParagraphText', () => {
   );
 
   test.each(['del', 'moveFrom'])(
-    'maps kept text across %s without marking deleted characters',
+    'maps accepted text across %s without marking deleted characters',
     (kind) => {
       const editor = mount(
         p(
@@ -73,15 +73,15 @@ describe('getParagraphText', () => {
       );
       const paragraph = editor.getParagraphText(blockOf(editor, 'rec'))!;
       expect(paragraph.text).toBe('😀 recieeive');
-      expect(paragraph.keptText).toBe('😀 receive');
-      expect(paragraph.keptSpans).toEqual([
-        { start: 0, length: 6, keptStart: 0 },
-        { start: 8, length: 4, keptStart: 6 },
+      expect(paragraph.acceptedText).toBe('😀 receive');
+      expect(paragraph.acceptedSpans).toEqual([
+        { start: 0, length: 6, acceptedStart: 0 },
+        { start: 8, length: 4, acceptedStart: 6 },
       ]);
       expect(
         editor.setHighlights(
           'kept',
-          paragraph.keptSpans.map(({ start, length }) => ({
+          paragraph.acceptedSpans.map(({ start, length }) => ({
             blockId: paragraph.blockId,
             start,
             length,
@@ -90,10 +90,10 @@ describe('getParagraphText', () => {
         )
       ).toEqual({ applied: 2, unavailable: 0 });
       expect(
-        paragraph.keptSpans
+        paragraph.acceptedSpans
           .map(({ start, length }) => paragraph.text.slice(start, start + length))
           .join('')
-      ).toBe(paragraph.keptText);
+      ).toBe(paragraph.acceptedText);
     }
   );
 
@@ -110,19 +110,19 @@ describe('getParagraphText', () => {
     );
     const [paragraph] = editor.getParagraphs();
     expect(paragraph?.text).toBe('co\u001foperate well\u001eknown (');
-    expect(paragraph?.keptText).toBe('cooperate well\u2011known \uFFFC');
-    expect(paragraph?.keptSpans).toEqual([
-      { start: 0, length: 2, keptStart: 0 },
-      { start: 3, length: 20, keptStart: 2 },
+    expect(paragraph?.acceptedText).toBe('cooperate well\u2011known \uFFFC');
+    expect(paragraph?.acceptedSpans).toEqual([
+      { start: 0, length: 2, acceptedStart: 0 },
+      { start: 3, length: 20, acceptedStart: 2 },
     ]);
   });
 
   test.each(['', 'Plain text'])('maps an unchanged paragraph: %s', (text) => {
     const editor = mount(p(run(text)));
     const [paragraph] = editor.getParagraphs();
-    expect(paragraph?.keptText).toBe(text);
-    expect(paragraph?.keptSpans).toEqual(
-      text ? [{ start: 0, length: text.length, keptStart: 0 }] : []
+    expect(paragraph?.acceptedText).toBe(text);
+    expect(paragraph?.acceptedSpans).toEqual(
+      text ? [{ start: 0, length: text.length, acceptedStart: 0 }] : []
     );
   });
 
@@ -130,8 +130,10 @@ describe('getParagraphText', () => {
     const deleted = `<w:del w:id="1" ${byReviewer}><w:r><w:delText>x</w:delText></w:r></w:del>`;
     const editor = mount(p(deleted, deleted, run(kept), deleted));
     const [paragraph] = editor.getParagraphs();
-    expect(paragraph?.keptText).toBe(kept);
-    expect(paragraph?.keptSpans).toEqual(kept ? [{ start: 2, length: 4, keptStart: 0 }] : []);
+    expect(paragraph?.acceptedText).toBe(kept);
+    expect(paragraph?.acceptedSpans).toEqual(
+      kept ? [{ start: 2, length: 4, acceptedStart: 0 }] : []
+    );
   });
 
   test('returns null for an id the document does not hold', () => {
@@ -157,18 +159,18 @@ describe('getParagraphs', () => {
     const match = editor.findMatches('First')[0]!;
     expect(editor.exec({ type: 'replaceMatch', match, text: 'Changed' }).ok).toBe(true);
     const after = editor.getParagraphs();
-    expect(after[0]?.keptText).toBe('Changed');
+    expect(after[0]?.acceptedText).toBe('Changed');
     expect(after[0]).not.toBe(before[0]);
     expect(after[1]).toBe(before[1]);
     expect(Object.isFrozen(after)).toBe(true);
     expect(Object.isFrozen(after[0])).toBe(true);
-    expect(Object.isFrozen(after[0]!.keptSpans)).toBe(true);
-    expect(Object.isFrozen(after[0]!.keptSpans[0])).toBe(true);
+    expect(Object.isFrozen(after[0]!.acceptedSpans)).toBe(true);
+    expect(Object.isFrozen(after[0]!.acceptedSpans[0])).toBe(true);
     expect(editor.getParagraphText(after[0]!.blockId)).toBe(after[0]);
     expect(editor.exec({ type: 'undo' }).ok).toBe(true);
-    expect(editor.getParagraphs()[0]?.keptText).toBe('First');
+    expect(editor.getParagraphs()[0]?.acceptedText).toBe('First');
     expect(editor.exec({ type: 'redo' }).ok).toBe(true);
-    expect(editor.getParagraphs()[0]?.keptText).toBe('Changed');
+    expect(editor.getParagraphs()[0]?.acceptedText).toBe('Changed');
   });
 
   test('reads headers, footers and notes once, independent of the active story', () => {

@@ -61,24 +61,24 @@ test('paragraph reads follow concurrent edits, remote undo/redo and save/reopen'
   pair.resume();
   converge();
   const after = bob.getParagraphs();
-  expect(after[0]?.keptText).toContain('First');
-  expect(after[0]?.keptText).toContain('A');
-  expect(after[0]?.keptText).toContain('B');
+  expect(after[0]?.acceptedText).toContain('First');
+  expect(after[0]?.acceptedText).toContain('A');
+  expect(after[0]?.acceptedText).toContain('B');
   expect(after[0]).not.toBe(before[0]);
   expect(after[1]).toBe(before[1]);
   expect(bob.getParagraphText(after[0]!.blockId)).toBe(after[0]);
   expect(alice.exec({ type: 'undo' }).ok).toBe(true);
   converge();
-  expect(bob.getParagraphs()[0]?.keptText).toBe('BFirst');
+  expect(bob.getParagraphs()[0]?.acceptedText).toBe('BFirst');
   expect(alice.exec({ type: 'redo' }).ok).toBe(true);
   converge();
   const reopened = mount({ document: await bob.save() });
-  expect(reopened.getParagraphs().map(({ keptText }) => keptText)).toEqual(
-    bob.getParagraphs().map(({ keptText }) => keptText)
+  expect(reopened.getParagraphs().map(({ acceptedText }) => acceptedText)).toEqual(
+    bob.getParagraphs().map(({ acceptedText }) => acceptedText)
   );
 });
 
-test('a remote tracked replacement leaves deleted text out of kept text', async () => {
+test('a remote tracked replacement leaves deleted text out of accepted text', async () => {
   const pair = await harness.pair(
     zipDocument('<w:p><w:r><w:t xml:space="preserve">I recieve mail</w:t></w:r></w:p>')
   );
@@ -96,10 +96,10 @@ test('a remote tracked replacement leaves deleted text out of kept text', async 
   pair.alice.room.session.flushPendingJournals();
   pair.bob.room.session.flushPendingJournals();
   const [paragraph] = bob.getParagraphs();
-  expect(paragraph?.keptText).toBe('I receive mail');
-  expect(paragraph?.text.length).toBeGreaterThan(paragraph!.keptText.length);
+  expect(paragraph?.acceptedText).toBe('I receive mail');
+  expect(paragraph?.text.length).toBeGreaterThan(paragraph!.acceptedText.length);
   expect(alice.getParagraphs()).toEqual(bob.getParagraphs());
-  const ranges = paragraph!.keptSpans.map(({ start, length }) => ({
+  const ranges = paragraph!.acceptedSpans.map(({ start, length }) => ({
     blockId: paragraph!.blockId,
     start,
     length,
@@ -110,6 +110,6 @@ test('a remote tracked replacement leaves deleted text out of kept text', async 
   expect(alice.exec({ type: 'undo' }).ok).toBe(true);
   pair.alice.room.session.flushPendingJournals();
   pair.bob.room.session.flushPendingJournals();
-  expect(bob.getParagraphs()[0]?.keptText).toBe('I recieve mail');
-  expect(bob.getParagraphs()[0]?.keptSpans).toHaveLength(1);
+  expect(bob.getParagraphs()[0]?.acceptedText).toBe('I recieve mail');
+  expect(bob.getParagraphs()[0]?.acceptedSpans).toHaveLength(1);
 });
