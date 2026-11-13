@@ -2,11 +2,13 @@
   "impact": "compatible",
   "fields": [],
   "before": "A host could not read paragraph text in the offsets that setHighlights takes without internal store functions, and could fix a word only with replaceMatch over model offsets.",
-  "after": "Editor.getParagraphText and Editor.getParagraphs return immutable paragraph text, accepted text and spans mapping accepted text to model offsets across document stories. The replaceAcceptedText command fixes a range of accepted text by editing only the letters that differ, in a story that need not be open, and refuses a stale range on the peer that issues it.",
+  "after": "Editor.getParagraphText and Editor.getParagraphs return immutable paragraph text, accepted text and spans mapping accepted text to model offsets across document stories. The replaceAcceptedText command fixes a range of accepted text by editing only the letters that differ, in a story that need not be open, and refuses a stale range on the peer that issues it. replaceMatch, replaceAllMatches and replaceAcceptedText put the new text in the container of the text it replaces.",
   "reason": "No shared format fields or operations change. The reads only read the canonical tree. The command plans ordinary text operations and commits them through the existing automation commit path, so fixes synchronize, undo, and reopen as ordinary text edits.",
   "tests": [
     "packages/core/src/editor/__tests__/paragraph-text.test.ts",
+    "packages/core/src/editor/__tests__/replace-accepted-text-locks.test.ts",
     "packages/core/src/editor/__tests__/replace-accepted-text.test.ts",
+    "packages/core/src/editor/__tests__/replacement-containers.test.ts",
     "packages/pro/src/collaboration/__tests__/document-paragraph-text.test.ts",
     "packages/pro/src/collaboration/__tests__/document-replace-accepted-text.test.ts"
   ],

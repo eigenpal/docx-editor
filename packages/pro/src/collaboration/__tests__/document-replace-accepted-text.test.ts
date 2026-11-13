@@ -18,6 +18,7 @@ import {
   canonicalOoxmlFingerprint,
   readOoxmlPackage,
   revisionItemsOf,
+  serializeOoxmlPart,
 } from '@docx-editor.dev/core/store';
 import { reviewModule } from '../../review/review-module.ts';
 import { collaborationModule } from '../collaboration-module.ts';
@@ -31,7 +32,7 @@ const fixture = zipDocument(
     '<w:p><w:r><w:t>Second paragraph.</w:t></w:r></w:p>'
 );
 
-async function peer(name: string, host?: { ydoc: Y.Doc }) {
+async function peer(name: string, host?: { ydoc: Y.Doc }, bytes = fixture) {
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
   if (host) Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(host.ydoc));
@@ -40,7 +41,7 @@ async function peer(name: string, host?: { ydoc: Y.Doc }) {
     awareness,
     documentId: 'replace-accepted-text',
     identity: { actorId: name, name },
-    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: fixture },
+    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: bytes },
     offlineEditing: true,
   });
   const container = document.createElement('div');
@@ -97,11 +98,8 @@ const first = (peer: Peer) => peer.editor.getParagraphs()[0]!;
 function fix(peer: Peer, expectedText = 'agrement') {
   return peer.editor.exec({
     type: 'replaceAcceptedText',
-    blockId: first(peer).blockId,
-    start: 4,
-    length: 8,
+    match: { blockId: first(peer).blockId, start: 4, length: 8, expectedText },
     text: 'agreement',
-    expectedText,
   });
 }
 
@@ -196,11 +194,8 @@ test('a peer deleting the paragraph while it is fixed converges, and a stale fix
     const revision = a.editor.getDocumentHandle().revision;
     const again = a.editor.exec({
       type: 'replaceAcceptedText',
-      blockId: paragraph!.blockId,
-      start: 4,
-      length: 9,
+      match: { blockId: paragraph!.blockId, start: 4, length: 9, expectedText: 'agreement' },
       text: 'agreement',
-      expectedText: 'agreement',
     });
     expect(again).toMatchObject({ ok: false, code: 'notFound' });
     expect(a.editor.getDocumentHandle().revision).toBe(revision);
@@ -218,9 +213,7 @@ test('a fix made stale by a remote edit refuses on the peer that issues it', asy
     expect(
       b.editor.exec({
         type: 'replaceAcceptedText',
-        blockId,
-        start: 0,
-        length: 3,
+        match: { blockId, start: 0, length: 3 },
         text: 'This',
       }).ok
     ).toBe(true);
@@ -233,16 +226,39 @@ test('a fix made stale by a remote edit refuses on the peer that issues it', asy
     expect(
       a.editor.exec({
         type: 'replaceAcceptedText',
-        blockId,
-        start: at,
-        length: 8,
+        match: { blockId, start: at, length: 8, expectedText: 'agrement' },
         text: 'agreement',
-        expectedText: 'agrement',
       }).ok
     ).toBe(true);
     sync(a, b);
     await converged(a, b);
     expect(first(b).acceptedText).toBe('This agreement holds.');
+  } finally {
+    b.close();
+    a.close();
+  }
+});
+
+test('a fix at the end of a hyperlink stays in the link for every peer', async () => {
+  const linked = zipDocument(
+    '<w:p><w:hyperlink w:anchor="target"><w:r><w:t xml:space="preserve">see teh</w:t></w:r>' +
+      '</w:hyperlink><w:r><w:t xml:space="preserve"> cat</w:t></w:r></w:p>'
+  );
+  const a = await peer('Alice', undefined, linked);
+  const b = await peer('Bob', a);
+  try {
+    const result = a.editor.exec({
+      type: 'replaceAcceptedText',
+      match: { blockId: first(a).blockId, start: 4, length: 3, expectedText: 'teh' },
+      text: 'the',
+    });
+    expect(result.ok).toBe(true);
+    sync(a, b);
+    await converged(a, b);
+    expect(first(b).acceptedText).toBe('see the cat');
+    expect(serializeOoxmlPart(await savedPart(b))).toMatch(
+      /<w:hyperlink[^>]*>.*see the<\/w:t><\/w:r><\/w:hyperlink>/
+    );
   } finally {
     b.close();
     a.close();

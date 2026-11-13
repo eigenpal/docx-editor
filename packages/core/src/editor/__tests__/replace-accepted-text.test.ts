@@ -3,22 +3,17 @@
 // A word that a tracked deletion splits reads as one word to a checker, and its fix names a
 // range of that text. Replacing the whole range struck letters that were never wrong and moved
 // the other author's deletion out of the word; stitching a fix per part took several undo
-// steps. The command edits only the letters that differ, in one commit.
+// steps. The command edits only the graphemes that differ, in one commit.
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import {
-  collectReviewItems as engineCollectReviewItems,
-  findNode,
-  revisionItemsOf,
-  serializeOoxmlPart,
-} from '@docx-editor.dev/core/store';
-import type { EditorModule } from '../../contracts/modules.ts';
+import { strFromU8, unzipSync } from 'fflate';
+import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import { docx } from './paginated-surface-fixtures.ts';
-import { mountAnchorEditor, replacePart } from './scroll-to-anchor-fixture.ts';
+import { replacePart } from './scroll-to-anchor-fixture.ts';
 import { textboxDocx } from './textbox-editing-fixture.ts';
 import { storyParityDocx } from './story-parity-fixture.ts';
-import { strFromU8, unzipSync } from 'fflate';
-import { differingRange } from '../docx-editor-replace-accepted-text.ts';
+import { differingRange } from '../grapheme-diff.ts';
+import { fix, openReviewEditor } from './replace-accepted-text-fixture.ts';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -31,23 +26,8 @@ const deleted = (text: string, id = 1) =>
   `<w:del w:id="${id}" w:author="Reviewer" w:date="2026-10-07T00:00:00Z">` +
   `<w:r><w:delText xml:space="preserve">${text}</w:delText></w:r></w:del>`;
 
-function reviewModule(): EditorModule {
-  return {
-    id: 'review',
-    review: {
-      displayModes: ['all-markup', 'proposed', 'original'],
-      collectReviewItems: engineCollectReviewItems,
-      revisionItemsOfParagraph: (part, paragraphId) => {
-        const paragraph = findNode(part, paragraphId);
-        if (!paragraph || paragraph.kind !== 'paragraph') return [];
-        return revisionItemsOf({ ...part, root: paragraph });
-      },
-    },
-  };
-}
-
 function open(bytes: Uint8Array) {
-  const mounted = mountAnchorEditor(bytes, { author: 'Grace Hopper', modules: [reviewModule()] });
+  const mounted = openReviewEditor(bytes);
   cleanups.push(mounted.destroy);
   return mounted.editor;
 }
@@ -64,7 +44,10 @@ describe('differingRange', () => {
     ['same', 'same', { from: 4, to: 4, text: '' }],
     ['teh cat', 'the cat', { from: 1, to: 3, text: 'he' }],
     // A cut never splits a surrogate pair: both emoji share their high surrogate.
-    ['a😀b', 'a😁b', { from: 1, to: 3, text: '😁' }],
+    ['a\u{1F600}b', 'a\u{1F601}b', { from: 1, to: 3, text: '\u{1F601}' }],
+    // A cut never splits a base letter from its combining mark.
+    ['café', 'cafè', { from: 3, to: 5, text: 'è' }],
+    ['éx', 'éy', { from: 2, to: 3, text: 'y' }],
   ])('%s to %s', (before, after, expected) => {
     expect(differingRange(before, after)).toEqual(expected);
   });
@@ -75,14 +58,7 @@ describe('replaceAcceptedText in editing mode', () => {
     const editor = mount(p(run('agre'), deleted('e'), run('ment')));
     const paragraph = first(editor);
     expect(paragraph.acceptedText).toBe('agrement');
-    const result = editor.exec({
-      type: 'replaceAcceptedText',
-      blockId: paragraph.blockId,
-      start: 0,
-      length: 8,
-      text: 'agreement',
-      expectedText: 'agrement',
-    });
+    const result = editor.exec(fix(paragraph.blockId, 0, 8, 'agreement', 'agrement'));
     expect(result).toEqual({ ok: true, changed: true });
     const fixed = first(editor);
     expect(fixed.acceptedText).toBe('agreement');
@@ -100,16 +76,7 @@ describe('replaceAcceptedText in editing mode', () => {
 
   test('edits every part of a range from the end to the start in one undo step', () => {
     const editor = mount(p(run('ab'), deleted('X'), run('cd')));
-    const paragraph = first(editor);
-    expect(
-      editor.exec({
-        type: 'replaceAcceptedText',
-        blockId: paragraph.blockId,
-        start: 0,
-        length: 4,
-        text: 'aZd',
-      }).ok
-    ).toBe(true);
+    expect(editor.exec(fix(first(editor).blockId, 0, 4, 'aZd')).ok).toBe(true);
     expect(first(editor).acceptedText).toBe('aZd');
     expect(first(editor).text).toBe('aZXd');
     editor.exec({ type: 'undo' });
@@ -121,8 +88,7 @@ describe('replaceAcceptedText in editing mode', () => {
     const blockId = first(editor).blockId;
     const group = editor.beginHistoryGroup();
     for (const start of [0, 12]) {
-      const command = { type: 'replaceAcceptedText', blockId, start, length: 3, text: 'the' };
-      expect(editor.exec(command as never, { historyGroup: group }).ok).toBe(true);
+      expect(editor.exec(fix(blockId, start, 3, 'the'), { historyGroup: group }).ok).toBe(true);
     }
     group.end();
     expect(first(editor).acceptedText).toBe('the cat and the dog');
@@ -135,10 +101,7 @@ describe('replaceAcceptedText in editing mode', () => {
     const blockId = first(editor).blockId;
     const caret = { paragraphId: blockId, offset: 11 };
     editor.surface!.setSelection({ anchor: caret, head: caret });
-    expect(
-      editor.exec({ type: 'replaceAcceptedText', blockId, start: 0, length: 7, text: 'received' })
-        .ok
-    ).toBe(true);
+    expect(editor.exec(fix(blockId, 0, 7, 'received')).ok).toBe(true);
     expect(editor.surface!.state().selection.head).toEqual({ paragraphId: blockId, offset: 12 });
   });
 
@@ -146,18 +109,10 @@ describe('replaceAcceptedText in editing mode', () => {
     const editor = mount(p(run('teh cat')));
     const blockId = first(editor).blockId;
     const revision = editor.getDocumentHandle().revision;
-    const stale = {
-      type: 'replaceAcceptedText' as const,
-      blockId,
-      start: 0,
-      length: 3,
-      text: 'the',
-      expectedText: 'tha',
-    };
     for (const command of [
-      stale,
-      { ...stale, expectedText: undefined, start: 5, length: 9 },
-      { ...stale, expectedText: undefined, blockId: '/word/document.xml#0.0.999' },
+      fix(blockId, 0, 3, 'the', 'tha'),
+      fix(blockId, 5, 9, 'the'),
+      fix('/word/document.xml#0.0.999', 0, 3, 'the'),
     ]) {
       expect(editor.can(command).ok).toBe(false);
       const result = editor.exec(command);
@@ -170,23 +125,72 @@ describe('replaceAcceptedText in editing mode', () => {
   test('refuses malformed arguments and edits while viewing', () => {
     const editor = mount(p(run('teh cat')));
     const blockId = first(editor).blockId;
-    const command = { type: 'replaceAcceptedText' as const, blockId, start: 0, length: 3 };
-    const lineBreak = editor.exec({ ...command, text: 'the\nnew' });
+    const lineBreak = editor.exec(fix(blockId, 0, 3, 'the\nnew'));
     expect(lineBreak.ok ? null : lineBreak.code).toBe('invalidArgs');
-    const negative = editor.can({ ...command, start: -1, text: 'the' });
+    const negative = editor.can(fix(blockId, -1, 3, 'the'));
     expect(negative.ok ? null : negative.code).toBe('invalidArgs');
-    expect(editor.can({ ...command, text: 'the' }).ok).toBe(true);
+    expect(editor.can(fix(blockId, 0, 3, 'the')).ok).toBe(true);
     expect(editor.setEditingMode('viewing').ok).toBe(true);
-    const viewing = editor.exec({ ...command, text: 'the' });
+    const viewing = editor.exec(fix(blockId, 0, 3, 'the'));
     expect(viewing.ok ? null : viewing.code).toBe('locked');
   });
 
   test('an unchanged range changes nothing', () => {
     const editor = mount(p(run('the cat')));
+    expect(editor.exec(fix(first(editor).blockId, 0, 3, 'the'))).toEqual({
+      ok: true,
+      changed: false,
+    });
+  });
+
+  test('a scope that does not hold the paragraph returns invalidArgs', () => {
+    const editor = mount(p(run('teh cat')));
     const blockId = first(editor).blockId;
-    expect(
-      editor.exec({ type: 'replaceAcceptedText', blockId, start: 0, length: 3, text: 'the' })
-    ).toEqual({ ok: true, changed: false });
+    const frame = {
+      kind: 'frame' as const,
+      id: 'x',
+      drawingNodeId: 'y',
+      hostParagraphId: blockId,
+    };
+    for (const scope of [{ kind: 'headerFooter' as const, rId: 'rId9' }, frame]) {
+      const command = fix(blockId, 0, 3, 'the');
+      const scoped = { ...command, match: { ...command.match, scope } };
+      expect(editor.can(scoped)).toMatchObject({ ok: false, code: 'invalidArgs' });
+      const result = editor.exec(scoped);
+      expect(result.ok ? null : result.reason).toContain('scope');
+      expect(result.ok ? null : result.code).toBe('invalidArgs');
+    }
+    expect(first(editor).acceptedText).toBe('teh cat');
+  });
+});
+
+describe('objects in the range', () => {
+  const body = p(
+    run('a '),
+    '<w:fldSimple w:instr="PAGE">' + run('1') + '</w:fldSimple>',
+    run(' b')
+  );
+
+  test('refuses a fix that writes U+FFFC or removes an object', () => {
+    const editor = mount(body);
+    const paragraph = first(editor);
+    expect(paragraph.acceptedText).toBe('a \uFFFC b');
+    const before = xmlOf(editor);
+    const added = fix(paragraph.blockId, 0, 5, 'a \uFFFC\uFFFC b');
+    expect(editor.can(added)).toMatchObject({ ok: false, code: 'invalidArgs' });
+    expect(editor.exec(added)).toMatchObject({ ok: false, code: 'invalidArgs' });
+    const removed = fix(paragraph.blockId, 0, 5, 'A c');
+    expect(editor.can(removed)).toMatchObject({ ok: false, code: 'unsupported' });
+    expect(editor.exec(removed)).toMatchObject({ ok: false, code: 'unsupported' });
+    expect(xmlOf(editor)).toBe(before);
+  });
+
+  test('edits the letters on both sides of an object and keeps the object', () => {
+    const editor = mount(body);
+    expect(editor.exec(fix(first(editor).blockId, 0, 5, 'A \uFFFC c')).ok).toBe(true);
+    expect(first(editor).acceptedText).toBe('A \uFFFC c');
+    expect(xmlOf(editor)).toContain('w:instr="PAGE"');
+    expect(xmlOf(editor)).not.toContain('\uFFFC');
   });
 });
 
@@ -194,16 +198,7 @@ describe('replaceAcceptedText in suggesting mode', () => {
   test('inserts only the missing letter as a tracked insertion under the author', () => {
     const editor = mount(p(run('agre'), deleted('e'), run('ment')));
     expect(editor.setEditingMode('suggesting').ok).toBe(true);
-    const paragraph = first(editor);
-    expect(
-      editor.exec({
-        type: 'replaceAcceptedText',
-        blockId: paragraph.blockId,
-        start: 0,
-        length: 8,
-        text: 'agreement',
-      }).ok
-    ).toBe(true);
+    expect(editor.exec(fix(first(editor).blockId, 0, 8, 'agreement')).ok).toBe(true);
     const xml = xmlOf(editor);
     expect(xml.match(/<w:ins [^>]*w:author="Grace Hopper"/g)).toHaveLength(1);
     expect(xml).toMatch(/<w:ins [^>]*><w:r><w:t[^>]*>e<\/w:t><\/w:r><\/w:ins>/);
@@ -214,12 +209,8 @@ describe('replaceAcceptedText in suggesting mode', () => {
   test('strikes the wrong letters and inserts the fix after them', () => {
     const editor = mount(p(run('recieve')));
     expect(editor.setEditingMode('suggesting').ok).toBe(true);
-    const blockId = first(editor).blockId;
-    expect(
-      editor.exec({ type: 'replaceAcceptedText', blockId, start: 0, length: 7, text: 'receive' }).ok
-    ).toBe(true);
-    const xml = xmlOf(editor);
-    expect(xml).toContain('<w:delText>ie</w:delText>');
+    expect(editor.exec(fix(first(editor).blockId, 0, 7, 'receive')).ok).toBe(true);
+    expect(xmlOf(editor)).toContain('<w:delText>ie</w:delText>');
     expect(first(editor).acceptedText).toBe('receive');
     expect(first(editor).text).toBe('recieeive');
   });
@@ -235,14 +226,7 @@ describe('replaceAcceptedText in text boxes', () => {
           paragraph.acceptedText === 'boxed needle' &&
           paragraph.blockId.includes(inHeader ? 'header' : 'document')
       )!;
-    const command = {
-      type: 'replaceAcceptedText' as const,
-      blockId: box.blockId,
-      start: 0,
-      length: 5,
-      text: 'boxes',
-      expectedText: 'boxed',
-    };
+    const command = fix(box.blockId, 0, 5, 'boxes', 'boxed');
     expect(editor.can(command).ok).toBe(true);
     expect(editor.exec(command).ok).toBe(true);
     expect(editor.getParagraphText(box.blockId)?.acceptedText).toBe('boxes needle');
@@ -267,14 +251,7 @@ describe('replaceAcceptedText in text boxes', () => {
         (candidate) => candidate.blockId.includes('footnotes') && candidate.text === 'boxed needle'
       );
     expect(paragraph).toBeDefined();
-    const command = {
-      type: 'replaceAcceptedText' as const,
-      blockId: paragraph!.blockId,
-      start: 0,
-      length: 5,
-      text: 'boxes',
-    };
-    expect(editor.exec(command).ok).toBe(true);
+    expect(editor.exec(fix(paragraph!.blockId, 0, 5, 'boxes')).ok).toBe(true);
     expect(editor.getParagraphText(paragraph!.blockId)?.acceptedText).toBe('boxes needle');
     expect(editor.surface!.activeScope()).toEqual({ kind: 'body' });
   });

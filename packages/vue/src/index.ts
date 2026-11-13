@@ -604,6 +604,7 @@ export type {
   EditorSnapshot,
   EditorScope,
   PageSetup,
+  AcceptedTextRange,
   ParagraphText,
   ParagraphTextProofing,
   ParagraphTextReadOptions,

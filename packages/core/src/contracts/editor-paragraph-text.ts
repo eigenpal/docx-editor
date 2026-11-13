@@ -98,48 +98,68 @@ export interface EditorParagraphText {
 }
 
 /**
- * Replace a range of `ParagraphText.acceptedText` with `text`, for a spelling or grammar fix.
- *
- * The command compares the range with `text` and edits only the letters that differ, so the
- * tracked changes of other authors around them stay where they are. A word that a tracked
- * deletion splits into several parts is one range: the command edits each part, from the
- * end to the start. A pure insertion lands at the end of the accepted text before it.
- *
- * It is one undo step, which joins an open `historyGroup`. In suggesting mode it is a tracked
- * change under the editor's author. The selection, the active story and the scroll position
- * stay put. A paragraph in a header, footer, note, or text box is edited without opening it.
- * A range that the paragraph no longer holds (`expectedText`), an unknown `blockId`, or offsets
- * outside `acceptedText` return `notFound`. Other refusals are the ones `replaceMatch` gives.
- *
- * @example
- * ```ts
- * // "agre" + a deleted "e" + "ment" reads "agrement"; the fix inserts one "e".
- * editor.exec({
- *   type: 'replaceAcceptedText',
- *   blockId: paragraph.blockId,
- *   start: 0,
- *   length: 8,
- *   text: 'agreement',
- *   expectedText: 'agrement',
- * });
- * ```
- * @public
+ * A range of `ParagraphText.acceptedText`, for `replaceAcceptedText`. Offsets count in the
+ * default read, without `{ fields: 'result' }`. @public
  */
-export interface ReplaceAcceptedTextCommand {
+export interface AcceptedTextRange {
   /** The paragraph's `ParagraphText.blockId`. */
   readonly blockId: string;
-  /** UTF-16 offset in `ParagraphText.acceptedText`, read without `{ fields: 'result' }`. */
+  /** UTF-16 offset in `ParagraphText.acceptedText`. */
   readonly start: number;
-  /** Number of UTF-16 code units of `acceptedText` to replace. Zero inserts at `start`. */
+  /** Number of UTF-16 code units of `acceptedText`. Zero is a point for an insertion. */
   readonly length: number;
-  /** The new text, without a paragraph mark. An empty string deletes the range. */
-  readonly text: string;
   /**
    * The `acceptedText` you checked at the range. When the paragraph no longer holds it, the
    * command returns `notFound` and changes nothing. Pass it for any result that arrives
    * after the document could change, such as a result from a server.
    */
   readonly expectedText?: string;
-  /** The story that holds the paragraph. Omitted, the story comes from `blockId`. */
+  /**
+   * The story that holds the paragraph, such as the `frame` scope of its text box. Omitted,
+   * the story comes from `blockId`. A scope that does not hold the paragraph returns
+   * `invalidArgs`.
+   */
   readonly scope?: ViewScope;
+}
+
+/**
+ * Replace a range of `ParagraphText.acceptedText` with `text`, for a spelling or grammar fix.
+ *
+ * The command compares the range with `text` and edits only the graphemes that differ, so the
+ * tracked changes of other authors around them stay where they are. A word that a tracked
+ * deletion splits into several parts is one range: the command edits each part, from the
+ * end to the start. The new text joins the hyperlink, content control and run formatting of
+ * the first character it replaces. A pure insertion lands at the end of the accepted text
+ * before it.
+ *
+ * An object, such as a field, a picture, a note reference or a symbol, reads as U+FFFC. An
+ * object stays in place when `text` keeps its U+FFFC at the same position. A fix that would
+ * remove an object returns `unsupported`, and `text` that adds U+FFFC returns `invalidArgs`.
+ *
+ * It is one undo step, which joins an open `historyGroup`. In suggesting mode it is a tracked
+ * change under the editor's author. The selection, the active story and the scroll position
+ * stay put. A paragraph in a header, footer, note, or text box is edited without opening it.
+ * A range that the paragraph no longer holds (`expectedText`), an unknown `blockId`, or offsets
+ * outside `acceptedText` return `notFound`. Locked or bound content returns `locked` or
+ * `bound`. Other refusals are the ones `replaceMatch` gives.
+ *
+ * @example
+ * ```ts
+ * // "agre" + a deleted "e" + "ment" reads "agrement"; the fix inserts one "e".
+ * editor.exec({
+ *   type: 'replaceAcceptedText',
+ *   match: { blockId: paragraph.blockId, start: 0, length: 8, expectedText: 'agrement' },
+ *   text: 'agreement',
+ * });
+ * ```
+ * @public
+ */
+export interface ReplaceAcceptedTextCommand {
+  /** The range to replace. */
+  readonly match: AcceptedTextRange;
+  /**
+   * The new text, without a paragraph mark. It holds U+FFFC only where the range keeps an
+   * object. An empty string deletes the range.
+   */
+  readonly text: string;
 }

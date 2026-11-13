@@ -227,7 +227,11 @@ export function resolveTextTarget(
     declared.kind !== 'headerFooter' &&
     declared.kind !== 'note'
   ) {
-    return { ok: false, code: 'unsupported', reason: 'the match scope cannot be opened' };
+    return {
+      ok: false,
+      code: 'invalidArgs',
+      reason: 'the match scope does not hold the paragraph; omit scope or name its story',
+    };
   }
   if (!found) return NOT_IN_DOCUMENT;
   const story = storyOfParagraph(surface, target.blockId, found, declared);

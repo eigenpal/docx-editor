@@ -9,7 +9,8 @@
 // a proofing panel that fixes one word must not drop the reader into header editing. A match
 // whose expected text is no longer at its offsets is refused before anything changes.
 
-import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
+import type { StoryScope } from '@docx-editor.dev/core/store';
+import { replacementOps } from './replacement-ops.ts';
 import type { EditorCommand, ExecResult, ViewScope } from '../contracts/editor.ts';
 import { isCollaborationFailureCode } from '../collaboration/failure.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
@@ -97,9 +98,7 @@ function replaceInClosedStory(
   }
   // Non-null exactly when the edit is tracked: the struck text stays, the insertion follows it.
   const landing = surface.replacementLanding(paragraphId, start, end);
-  const ops: TreeDocOp[] = [];
-  if (end > start) ops.push({ op: 'deleteText', paragraphId, start, end });
-  if (text.length > 0) ops.push({ op: 'insertText', paragraphId, offset: landing ?? start, text });
+  const ops = replacementOps(paragraphId, start, end, text, landing);
   if (ops.length === 0) return null;
   const outcome = surface.applyAutomationOps(() => ops, story);
   if (!outcome.rejected) return null;

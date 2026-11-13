@@ -652,6 +652,7 @@ export type {
   HighlightRange,
   HighlightRect,
   HighlightResult,
+  AcceptedTextRange,
   ParagraphText,
   ReviewItemHit,
   ScrollPlacement,
