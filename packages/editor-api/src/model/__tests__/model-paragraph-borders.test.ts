@@ -442,6 +442,23 @@ describe('writing paragraph borders', () => {
     runtime.dispose();
   });
 
+  test('a rejected value in set() names the property', async () => {
+    const runtime = await serverRuntime(docx(p('plain')));
+    const location = await runtime.run(async (context) => {
+      const borders = (await first(context)).borders;
+      borders.load('items');
+      await context.sync();
+      try {
+        borders.items[2]!.set({ lineStyle: 'Single', color: 'red' });
+      } catch (error) {
+        return isDocxEditorError(error) ? error.debugInfo.errorLocation : 'untyped';
+      }
+      return 'accepted';
+    });
+    expect(location).toMatch(/borders\.items\[2\]\.set\.color$/);
+    runtime.dispose();
+  });
+
   test('applyPageBordersToAllSections throws NotSupported', async () => {
     const runtime = await serverRuntime(docx(p('plain')));
     const refused = await refusalOf(runtime, async (context) => {

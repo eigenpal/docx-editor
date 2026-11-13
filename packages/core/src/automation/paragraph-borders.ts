@@ -9,7 +9,7 @@
 // style, the style chain, the numbering level, the paragraph's own `w:pBdr`) overrides only the
 // edges it states. A read answers what the page shows, folded the same way layout paints it, so
 // a style's rule reads as a line on the paragraph. A write states only the edges it changes, and
-// writing back a value read here changes nothing.
+// writing back what an edge shows changes nothing (a line style write still resets the width).
 //
 // ASSIGNMENTS APPLY IN ORDER, as the same calls do in sequence: a line style resets the width,
 // so `lineWidth` before `lineStyle` is lost and after it is kept (see `applied`).

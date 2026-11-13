@@ -14,7 +14,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // paragraph's path, so a border reached from a deleted paragraph refuses when the paragraph does.
 //
 // READS ANSWER WHAT THE PAGE SHOWS, through the style cascade: a heading whose rule comes from its
-// style reads that rule. Writing back a value read here changes nothing.
+// style reads that rule. Writing back a visibility or color read here changes nothing; a line
+// style write resets the width, so write the width back after it.
 //
 // WRITES JOIN THE PARAGRAPH'S OWN WRITE. Every border and paragraph-format assignment in one sync
 // is one operation on the paragraph, because each rewrites the same `w:pPr` and the host refuses a
@@ -845,14 +846,18 @@ export class BorderUniversal extends ModelObject {
    * `NotSupported`.
    */
   set(properties: BorderUniversalUpdateData, options?: UpdateOptions): void;
-  /** Copy the writable properties another border has loaded. */
+  /**
+   * Copy the writable properties another border has loaded, in the same order. A loaded `null`
+   * is skipped, so a width with no `LineWidth` member is not copied and the line style write
+   * leaves `Pt050`.
+   */
   set(properties: BorderUniversal): void;
   set(properties: BorderUniversalUpdateData | BorderUniversal, options?: UpdateOptions): void {
     const target = `${this.path.label}.set`;
     if (properties instanceof BorderUniversal) {
       for (const field of WRITABLE) {
         const value = properties.#loadedOrUndefined(field);
-        if (value !== undefined && value !== null) this.#assign(field, value, target);
+        if (value !== undefined && value !== null) this.#assign(field, value, `${target}.${field}`);
       }
       return;
     }
@@ -867,7 +872,7 @@ export class BorderUniversal extends ModelObject {
         fail({ code: 'InvalidArgument', target: `${target}.${name}` });
     }
     for (const field of WRITABLE) {
-      if (data[field] !== undefined) this.#assign(field, data[field], target);
+      if (data[field] !== undefined) this.#assign(field, data[field], `${target}.${field}`);
     }
   }
 
