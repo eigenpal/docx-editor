@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The pin that keeps actor striping honest on the paste path.
 //
 // Bookmark `@w:id`, revision `@w:id` and `wp:docPr/@id` are all minted by a counter that

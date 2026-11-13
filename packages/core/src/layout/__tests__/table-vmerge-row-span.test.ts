@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // A vertically merged cell is as tall as the ROWS IT COVERS (17.4.85 `w:vMerge`), not as
 // tall as the row that starts it.
 //

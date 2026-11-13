@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 /**
  * `@docx-editor.dev/core/contracts/document` — the document-level edit and query vocabulary.
  *

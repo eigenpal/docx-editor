@@ -1,6 +1,6 @@
-// Semantic table conformance: crash-free layout, row-sized cell boxes, nested-table
-// geometry, `w:tblHeader` repetition across pages, vMerge deduplication, grid-driven
-// column widths, bounded hostile-input handling, and incremental-layout invariants.
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
+// Semantic table conformance: crash-free layout, row-sized cells, nested tables, `w:tblHeader`
+// repeats, vMerge dedup, grid widths, hostile-input bounds and incremental-layout invariants.
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';

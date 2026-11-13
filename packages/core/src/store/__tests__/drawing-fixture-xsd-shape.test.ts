@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // ECMA XSD-shape oracles for deterministic drawing fixtures (Word compatibility gate).
 
 import { describe, expect, test } from 'bun:test';

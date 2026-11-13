@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 import type { DocxEditorInstance } from './docx-editor-types.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 import {

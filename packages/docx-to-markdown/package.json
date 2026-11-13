@@ -36,7 +36,8 @@
     "!dist/metafile-*.json",
     "README.md",
     "docs",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "NOTICE"
   ],
   "scripts": {
     "build": "node ../../scripts/check-built-siblings.mjs && tsup",

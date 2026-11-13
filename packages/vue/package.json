@@ -19,7 +19,8 @@
     "docs",
     "src/styles",
     "!dist/metafile-*.json",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "NOTICE"
   ],
   "scripts": {
     "build": "node ../../scripts/check-built-siblings.mjs && tsup",

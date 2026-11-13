@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Number formats Word paints that we used to render as a plain decimal (ST_NumberFormat,
 // §17.18.59) plus `w:isLgl` legal numbering (§17.9.9).
 

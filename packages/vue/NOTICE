@@ -1,0 +1,20 @@
+@docx-editor.dev/vue
+Copyright Eigenpal, Inc. Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This copy was modified in 2026 in the Grant Workbench fork of docx-editor
+(https://github.com/eigenpal/docx-editor, forked at commit e2cbc55).
+Comments, documentation and tests that referred to the EigenPal Pro packages were changed. No functional change.
+
+Changed files:
+  README.md
+  docs/index.md
+  test/export-popup.test.ts
+  test/generate-hyperlink-fixture.ts
+  test/generate-review-clean-fixture.ts
+  test/generate-review-header-fixture.ts
+  test/generate-review-nav-fixture.ts
+  test/menu-composition.test.ts
+  test/print-popup.test.ts
+  test/split-cell-dialog.test.ts
+
+See FORK-CHANGES.md in the fork's repository for the full list.

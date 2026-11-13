@@ -1,0 +1,24 @@
+@docx-editor.dev/react
+Copyright Eigenpal, Inc. Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This copy was modified in 2026 in the Grant Workbench fork of docx-editor
+(https://github.com/eigenpal/docx-editor, forked at commit e2cbc55).
+Comments and documentation that referred to the EigenPal Pro packages were reworded. No functional change.
+
+Changed files:
+  README.md
+  docs/index.md
+  src/editor/DocxEditorRoot.tsx
+  src/editor/menu/DocxEditorMenu.tsx
+  src/index.ts
+  src/types.ts
+  test/export-popup.test.tsx
+  test/menu-composition.test.tsx
+  test/package-dependencies.test.ts
+  test/print-popup.test.tsx
+  test/review-test-module.ts
+  test/sugar-chrome-band.test.tsx
+  test/toolbar-overflow-react.test.tsx
+  tsup.config.ts
+
+See FORK-CHANGES.md in the fork's repository for the full list.

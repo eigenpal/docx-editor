@@ -88,7 +88,8 @@
     "dist",
     "!dist/metafile-*.json",
     "README.md",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsup && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/i18n",

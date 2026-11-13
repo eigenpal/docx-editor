@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Anonymous diagnostics: what the facade reports when a document opens, fails to open, or an
 // edit is refused, and what it must never report. The document text, part names, relationship
 // targets and author names are user data, so every assertion on a refusal also scans the
@@ -10,11 +11,7 @@ import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import type { EditorDiagnostic } from '../../contracts/diagnostics.ts';
 import { DIAGNOSTIC_SCHEMA_VERSION } from '../../contracts/diagnostics.ts';
-import {
-  diagnosticAnchor,
-  diagnosticCodes,
-  explainDiagnostic,
-} from '../../automation/diagnostic-hints.ts';
+import { diagnosticCodes, explainDiagnostic } from '../../automation/diagnostic-hints.ts';
 import { createDocxEditor } from '../docx-editor.ts';
 import { executeImageCommand } from '../docx-editor-images.ts';
 import { byteSizeBucket, countBucket } from '../../automation/diagnostics.ts';

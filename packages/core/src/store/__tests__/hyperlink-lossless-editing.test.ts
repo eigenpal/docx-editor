@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // EDITING a link on a real Word document loses nothing else in it.
 //
 // `hyperlink-roundtrip.test.ts` proves an UNEDITED load -> save -> reopen is faithful. That is

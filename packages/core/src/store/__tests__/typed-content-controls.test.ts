@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Typed content-control canonical nodes: kinds at every level, `CT_SdtPr` projection,
 // identity independent of `w:id`, and the D9 fingerprint over the fixtures' controls.
 

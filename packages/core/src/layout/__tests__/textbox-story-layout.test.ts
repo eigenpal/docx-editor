@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Textbox story layout: extent-bounded flow, per-page PAGE/NUMPAGES projection, bounds,
 // and clipped furniture paint at the resolved anchor position.
 

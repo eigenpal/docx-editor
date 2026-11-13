@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Round-trip regression: w:fldSimple/@w:instr must stay an exact string scalar.
 // A non-scalar coerced with String(value) becomes the literal "[object Object]" and
 // then survives save as if it were authored — Word Online rejects that package shape

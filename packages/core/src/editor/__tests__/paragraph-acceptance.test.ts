@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Paragraph acceptance through the private harness (tasks 8.2, 8.3).
 //
 // One document, one gate, the whole slice: load a fixture covering known AND unknown ordered

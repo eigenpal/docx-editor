@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The pre-commit gates, run side by side.
 //
 // Every gate here reads the working tree and none writes it, so they need no order. Run one after

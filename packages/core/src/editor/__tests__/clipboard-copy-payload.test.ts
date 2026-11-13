@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Copy-side degrade tiers (rich-clipboard-fidelity 3.5): over budget, media leaves the
 // fragment first; still over, the fragment attribute drops — and the interop HTML plus
 // plain text always ship.

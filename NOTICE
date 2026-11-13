@@ -1,0 +1,13 @@
+docx-editor (Grant Workbench fork)
+
+This product includes software developed by Eigenpal, Inc.
+(docx-editor, https://github.com/eigenpal/docx-editor), licensed under the
+Apache License, Version 2.0.
+
+Modified in 2026 for Grant Workbench: the EigenPal Pro License packages were
+removed and wording that referred to them was changed. FORK-CHANGES.md lists
+every change. extensions/review (@gw/docx-review) is new work under the
+Apache License, Version 2.0.
+
+Third-party notices for bundled components are in each package's
+THIRD_PARTY_NOTICES.md and licenses/ folder.

@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The node lifecycle inside a store, and the sweep that is the only answer to a control
 // deleted in Word.
 import { describe, expect, test } from 'bun:test';

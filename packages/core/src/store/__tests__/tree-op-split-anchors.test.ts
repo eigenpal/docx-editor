@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Where a paragraph's ZERO-LENGTH children land when the paragraph is split.
 //
 // A hyperlink, a comment range marker, a bookmark marker and a run holding only a picture

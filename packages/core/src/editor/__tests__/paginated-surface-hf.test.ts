@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Headers and footers on the paginated surface (phase 2, read-only).
 //
 // The furniture renders inside every sheet, sized to its FLOW height (#856), pushes the

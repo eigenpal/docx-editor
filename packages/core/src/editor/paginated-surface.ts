@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 import { pointerStoryTransitions } from './surface-pointer-stories.ts';
 import { invalidatePointTargets } from './editor-point-target.ts';
 import { bindSurfaceDragControllers } from './surface-drag-controllers.ts';

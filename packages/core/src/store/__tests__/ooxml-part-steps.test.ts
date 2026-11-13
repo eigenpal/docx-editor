@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The stepped part read must produce exactly the one-shot read's answer: the same tree, ids
 // included, for every part of every fixture document, and the same rejection for hostile and
 // malformed input. The body is cut every few hundred characters here, so the fixtures cross

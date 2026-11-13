@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Deterministic gates for the huge-document settle benchmark.
 //
 // Wall-clock settle numbers are hardware-sensitive and stay a manual comparison; what CI can

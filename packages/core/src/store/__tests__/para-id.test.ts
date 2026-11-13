@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // `w14:paraId` value rules, deterministic minting, and load-time normalization
 // (para-id.ts): every paragraph of an opened main part carries a valid, part-unique
 // identity; documents that already do are returned by reference, byte-stable.

@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The data part this authors has to be the one Word already accepts. `sdt-custom-tag-word-roundtrip.docx`
 // is Word for the web's own output for a document carrying one, so it is the reference: the
 // same part names, the same two relationship types, the same content type, and properties

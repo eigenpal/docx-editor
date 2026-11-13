@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Keystroke-to-settled latency through the FULL mounted surface, on a huge document.
 //
 // `bench:edit` measures the store and layout pipeline in isolation; this measures what a

@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Single source of truth for every published package's API Extractor
 // configuration. Consumed by `scripts/api-extractor.mjs` (the root
 // driver behind `api:extract` / `api:check`) and `scripts/build-docs-json.mjs`

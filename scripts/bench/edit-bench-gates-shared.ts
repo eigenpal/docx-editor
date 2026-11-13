@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Shared by the edit-bench gate files. Each gate is its own test file so the suite runner can
 // run the three benchmark processes at the same time instead of one after another.
 import { expect } from 'bun:test';

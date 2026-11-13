@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // `w:trHeight` / `w:hRule` (17.4.81): auto, atLeast, exact — parse + layout + pagination.
 
 import { describe, expect, test } from 'bun:test';

@@ -22,4 +22,4 @@ bun run build     # i18n, core, fonts, react, @gw/docx-review
 bun run test
 ```
 
-Licence: [Apache-2.0](LICENSE). Upstream copyright notices are kept in [NOTICE](NOTICE) where present.
+Licence: [Apache-2.0](LICENSE). Copyright Eigenpal, Inc. for the upstream code; see [NOTICE](NOTICE) and [FORK-CHANGES.md](FORK-CHANGES.md) for what this fork changed.

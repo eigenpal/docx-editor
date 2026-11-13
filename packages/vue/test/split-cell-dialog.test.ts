@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The Vue twin of `packages/react/test/split-cell-dialog.test.tsx`: the table context menu
 // carries Merge cells and Split cells, the Split cells dialog checks each count with the
 // engine, Split applies it, and Escape dismisses the dialog.

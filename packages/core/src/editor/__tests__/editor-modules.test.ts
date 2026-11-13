@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The module seam's FREE-TIER contract (pro-review-and-custom-nodes, task 1.6).
 //
 // A bare `createDocxEditor` — no modules — must: render a tracked-changes document

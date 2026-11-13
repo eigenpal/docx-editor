@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Hyperlink runs are ordinary paragraph content: measured, broken, painted, addressable.
 //
 // The regression these guard is not subtle. While `w:hyperlink` was an opaque child its runs

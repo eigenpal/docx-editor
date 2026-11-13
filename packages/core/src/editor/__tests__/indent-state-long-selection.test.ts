@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Decrease Indent's enabled state over a long selection.
 //
 // The state asks, per selected paragraph, for the fragment that holds it. That lookup walked

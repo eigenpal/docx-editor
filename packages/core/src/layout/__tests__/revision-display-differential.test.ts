@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The differential that ties the display modes to accept/reject.
 //
 // Specifying the resolved modes as equal to accept-all and reject-all OUTPUT is what makes them

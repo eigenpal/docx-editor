@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Task 17 — drawing fixture manifest, round-trip oracles, and table-driven open/layout/paint.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';

@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Tab leaders (ECMA-376 §17.3.1.38) and the document-wide default tab interval (§17.15.1.25).
 //
 // Both are Word-fidelity features the tab lane used to drop: a table of contents lost its dot

@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Range deletion that reaches across blocks, and where the caret lands after it.
 //
 // A body paragraph and a cell paragraph have different parents, so the paragraph lane can

@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Regression guard against the real comprehensive fixture.
 //
 // Its "Simple Bullet List" and "Upper Roman" list both use a `w:abstractNum` that declares

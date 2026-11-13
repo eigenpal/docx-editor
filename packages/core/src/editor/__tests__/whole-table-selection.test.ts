@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Whole-table deletion: Backspace on a whole-table selection, and the suggesting-mode routes
 // that used to remove a table without a tracked change.
 

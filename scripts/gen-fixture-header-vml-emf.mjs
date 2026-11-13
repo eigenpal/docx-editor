@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 /**
  * Generate fixtures/header-vml-emf.docx — a generated fixture for the
  * "first-page header with a VML→EMF letterhead image" code path.

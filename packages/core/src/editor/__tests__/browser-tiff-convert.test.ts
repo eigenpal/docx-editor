@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The browser decode port rasterizes TIFF before handing it back as PNG. Encoding needs a
 // real Canvas, which headless DOMs lack, so these tests cover the decode half — the part
 // that reads attacker-controlled bytes — plus the port's never-invalid-bytes-out contract.

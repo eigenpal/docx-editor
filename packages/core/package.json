@@ -139,6 +139,7 @@
     "licenses",
     "!dist/metafile-*.json",
     "README.md",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "NOTICE"
   ]
 }

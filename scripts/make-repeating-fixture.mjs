@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 /**
  * Generates a DOCX with a real w15:repeatingSection containing two
  * w15:repeatingSectionItem instances — for testing add/remove (#622 phase 3).

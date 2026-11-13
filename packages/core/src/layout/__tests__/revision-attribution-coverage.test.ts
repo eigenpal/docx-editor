@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Every tracked character reaches the page still wearing its revision.
 //
 // The review rail derives from the STORE and the page derives from LAYOUT. Two independent

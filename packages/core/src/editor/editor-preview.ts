@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // A preview: other wording painted over the document, before anyone writes it.
 //
 // A FORK, NOT A TRANSACTION. The preview's writes go to a scratch package store opened over the

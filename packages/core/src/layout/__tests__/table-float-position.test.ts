@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // `w:tblpPr` (17.4.57): a table positioned against an anchor box rather than at the point
 // in the text where it was authored.
 //

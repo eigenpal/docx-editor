@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The review-item VOCABULARY and its pure helpers: the typed item shapes, stable keys, and
 // position resolution over the paragraph order.
 //

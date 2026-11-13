@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Regenerates fixtures/embedded-font.docx — a minimal DOCX that embeds a
 // font under a distinctive family name ("Embedded Demo Sans") that is NOT
 // installed on any system. The only way the text renders correctly, or the

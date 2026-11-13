@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The one-pass XML reader against the bounded reader. Whatever it accepts, the bounded reader
 // accepts with the same tree; whatever is outside its subset, it hands back.
 

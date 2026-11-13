@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // What the save/reopen oracle must NOTICE.
 //
 // The digest is the only oracle that can catch a serializer losing meaning: the

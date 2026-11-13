@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 /**
  * Pure helpers for `typing-url-audit.mjs` — parser, validation, and run verdict logic.
  * Unit-tested without a browser.

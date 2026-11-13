@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 /**
  * Build a minimal DOCX fixture exercising tab + non-text content preservation
  * inside a `<w:hyperlink>`. The body has one TOC-style paragraph:

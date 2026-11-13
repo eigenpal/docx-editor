@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // A STUB collaboration module for core's seam tests.
 //
 // Core tests exercise attach gating, first-registration-wins, and undo handover.

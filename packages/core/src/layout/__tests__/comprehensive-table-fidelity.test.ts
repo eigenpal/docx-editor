@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Comprehensive fixture §5.1–§5.3 table fidelity: gray hairlines, vMerge span, mixed borders.
 
 import { describe, expect, test } from 'bun:test';

@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 /**
  * Synthetic DOCX fixture: a paragraph whose run contains an
  * <mc:AlternateContent> wrapping a wps:wsp floating text box, with a

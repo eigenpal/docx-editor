@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Build packages first. Test installed tarballs, never workspace source aliases.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';

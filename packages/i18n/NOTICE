@@ -1,0 +1,24 @@
+@docx-editor.dev/i18n
+Copyright Eigenpal, Inc. Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This copy was modified in 2026 in the Grant Workbench fork of docx-editor
+(https://github.com/eigenpal/docx-editor, forked at commit e2cbc55).
+The PDF export messages no longer name @docx-editor.dev/docx-to-pdf; they say "PDF converter".
+
+Changed files:
+  ar.json
+  de.json
+  en.json
+  es.json
+  fr.json
+  he.json
+  hi.json
+  id.json
+  ja.json
+  pl.json
+  pt-BR.json
+  ru.json
+  tr.json
+  zh-CN.json
+
+See FORK-CHANGES.md in the fork's repository for the full list.

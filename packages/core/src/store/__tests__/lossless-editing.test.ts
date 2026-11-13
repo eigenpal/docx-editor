@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Lossless editing, as a standing guard.
 //
 // Two properties, asserted against REAL documents rather than synthetic ones:

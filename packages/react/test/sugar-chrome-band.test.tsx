@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The packaged frame's chrome band: the title bar and the toolbar sit on ONE
 // `--doc-surface` surface, and the seam that closes it is under the TOOLBAR.
 //

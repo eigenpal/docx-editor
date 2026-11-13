@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Responsive toolbar overflow: measured one-row collapse, More dialog, and opt-outs.
 //
 // MUST be first: happy-dom registration happens on import.

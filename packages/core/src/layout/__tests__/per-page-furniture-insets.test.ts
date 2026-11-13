@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Per-page header/footer variant resolution, and the content box each page derives from it.
 //
 // The fixture's section sets `w:titlePg`, references a DEFAULT header and a FIRST-page footer,

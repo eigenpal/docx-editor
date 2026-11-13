@@ -1,0 +1,98 @@
+@docx-editor.dev/core
+Copyright Eigenpal, Inc. Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This copy was modified in 2026 in the Grant Workbench fork of docx-editor
+(https://github.com/eigenpal/docx-editor, forked at commit e2cbc55).
+Comments, documentation and three user-facing messages that referred to the EigenPal Pro packages were reworded. No functional change.
+
+Changed files:
+  README.md
+  docs/index.md
+  src/__tests__/part-for-call-sites.test.ts
+  src/__tests__/typing-perf-fixture-manifest.test.ts
+  src/automation/diagnostic-hints.ts
+  src/collaboration/replication.ts
+  src/contracts/document.ts
+  src/contracts/editor.ts
+  src/editor/__tests__/browser-tiff-convert.test.ts
+  src/editor/__tests__/clipboard-copy-payload.test.ts
+  src/editor/__tests__/clipboard-rich-surface.test.ts
+  src/editor/__tests__/collaboration-test-module.ts
+  src/editor/__tests__/content-control-round3.test.ts
+  src/editor/__tests__/document-refresh-edit.test.ts
+  src/editor/__tests__/editor-diagnostics.test.ts
+  src/editor/__tests__/editor-modules.test.ts
+  src/editor/__tests__/equation-sample-integration.test.ts
+  src/editor/__tests__/fixture-list-indent.test.ts
+  src/editor/__tests__/image-overlay-frame.test.ts
+  src/editor/__tests__/image-resize-published-layout.test.ts
+  src/editor/__tests__/indent-state-long-selection.test.ts
+  src/editor/__tests__/live-author.test.ts
+  src/editor/__tests__/paginated-surface-hf.test.ts
+  src/editor/__tests__/paragraph-acceptance.test.ts
+  src/editor/__tests__/protected-document-commands.test.ts
+  src/editor/__tests__/review-test-module.ts
+  src/editor/__tests__/scoped-header-footer-editing.test.ts
+  src/editor/__tests__/structural-block-deletion.test.ts
+  src/editor/__tests__/whole-table-selection.test.ts
+  src/editor/chrome-export.ts
+  src/editor/docx-editor-types.ts
+  src/editor/editor-preview.ts
+  src/editor/index.ts
+  src/editor/opening-editing-mode.ts
+  src/editor/paginated-surface.ts
+  src/export/__tests__/export-font-admission-limit.test.ts
+  src/index.ts
+  src/layout/__tests__/comprehensive-table-fidelity.test.ts
+  src/layout/__tests__/hyperlink-layout.test.ts
+  src/layout/__tests__/legacy-checkbox-geometry.test.ts
+  src/layout/__tests__/list-layout.test.ts
+  src/layout/__tests__/multi-column-layout.test.ts
+  src/layout/__tests__/note-layout.test.ts
+  src/layout/__tests__/numbering-format-word-parity.test.ts
+  src/layout/__tests__/numbering-index.test.ts
+  src/layout/__tests__/paragraph-offset-coverage.test.ts
+  src/layout/__tests__/paragraph-tabs.test.ts
+  src/layout/__tests__/per-page-furniture-insets.test.ts
+  src/layout/__tests__/revision-attribution-coverage.test.ts
+  src/layout/__tests__/revision-display-differential.test.ts
+  src/layout/__tests__/revision-fixtures.test.ts
+  src/layout/__tests__/section-aware-pagination.test.ts
+  src/layout/__tests__/semantic-table-layout.test.ts
+  src/layout/__tests__/tab-leaders-default-stop.test.ts
+  src/layout/__tests__/table-float-position.test.ts
+  src/layout/__tests__/table-row-height.test.ts
+  src/layout/__tests__/table-vmerge-row-span.test.ts
+  src/layout/__tests__/textbox-story-layout.test.ts
+  src/layout/review-support.ts
+  src/output/__tests__/semantic-paint-table-borders.test.ts
+  src/store/__tests__/clipboard-fragment-dense-ids.test.ts
+  src/store/__tests__/comment-reap.test.ts
+  src/store/__tests__/content-control-roundtrip.test.ts
+  src/store/__tests__/digest-blind-spots.test.ts
+  src/store/__tests__/drawing-fixture-xsd-shape.test.ts
+  src/store/__tests__/drawing-fixtures.test.ts
+  src/store/__tests__/fldsimple-roundtrip.test.ts
+  src/store/__tests__/hyperlink-lossless-editing.test.ts
+  src/store/__tests__/hyperlink-roundtrip.test.ts
+  src/store/__tests__/legacy-checkbox-accessibility.test.ts
+  src/store/__tests__/legacy-vml-templates.test.ts
+  src/store/__tests__/lossless-editing.test.ts
+  src/store/__tests__/ooxml-part-steps.test.ts
+  src/store/__tests__/ooxml-tree-tables.test.ts
+  src/store/__tests__/ooxml-tree.test.ts
+  src/store/__tests__/package-transaction.test.ts
+  src/store/__tests__/para-id.test.ts
+  src/store/__tests__/review-reads.test.ts
+  src/store/__tests__/table-op-topology.test.ts
+  src/store/__tests__/tiff-test-bytes.ts
+  src/store/__tests__/tree-op-split-anchors.test.ts
+  src/store/__tests__/typed-content-controls.test.ts
+  src/store/__tests__/typed-note-nodes.test.ts
+  src/store/__tests__/xml-fast-read.test.ts
+  src/store/package/__tests__/custom-xml-nodes.test.ts
+  src/store/package/__tests__/custom-xml-part.test.ts
+  src/store/package/drawing-support-issues.ts
+  src/store/store/review-items.ts
+
+See FORK-CHANGES.md in the fork's repository for the full list.

@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The store and layout agree on where every offset is — checked over real documents.
 //
 // This is the invariant three separate bugs violated in three different places, which is what

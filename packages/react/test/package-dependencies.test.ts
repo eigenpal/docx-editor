@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // How this package asks for the engine, which decides whether a page ends up with one of it.
 //
 // The engine carries module-level state: the HarfBuzz shaper and its cache budget, the grapheme

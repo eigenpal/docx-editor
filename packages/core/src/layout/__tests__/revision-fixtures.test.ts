@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The revision projection against real documents.
 //
 // Hand-written XML proves the rules; it does not prove they survive a document Word actually

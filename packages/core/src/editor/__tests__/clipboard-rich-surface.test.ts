@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The rich clipboard, end to end on the painted surface (rich-clipboard-fidelity 3.3/4.2).
 //
 // Copy assembles both flavours from the live selection; paste routes the embedded

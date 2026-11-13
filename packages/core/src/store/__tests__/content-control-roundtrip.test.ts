@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Round-trip regression: typed content controls (`w:sdt` / `w:sdtContent` / `w:sdtPr`).
 //
 // Production still types these as `generic`; this suite pins the OpenSpec contract from

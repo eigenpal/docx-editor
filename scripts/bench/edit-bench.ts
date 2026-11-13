@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Deterministic long-document editing benchmark.
 //
 // Unlike the browser HUD, this uses a fixed measurer and fixed paragraph positions. Timings

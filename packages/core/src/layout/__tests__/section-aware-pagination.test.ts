@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Section-aware pagination: cover geometry, next-page section breaks, and per-section furniture.
 //
 // The comprehensive fixture opens with a cover section (2-inch top margin, no HF refs) ended by

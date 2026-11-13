@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 //
 // Writes a `.docx` carrying a bound custom node, for testing against Word by hand.
 //

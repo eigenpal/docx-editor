@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // The layout lane's half of the review model: GEOMETRY over layout records — where a card
 // sits beside the page, which is the one question the tree cannot answer.
 //

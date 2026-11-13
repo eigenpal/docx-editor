@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 /**
  * Generates a single DOCX showcasing every content-control UI (#622):
  * rich text, table-wrapping, checkbox, dropdown, date, a repeating section with

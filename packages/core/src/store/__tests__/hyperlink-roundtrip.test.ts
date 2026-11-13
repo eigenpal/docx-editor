@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Links and bookmarks survive an unedited load -> save -> reopen unchanged.
 //
 // Typing `w:hyperlink` and the bookmark markers changed how the reader CLASSIFIES them, and

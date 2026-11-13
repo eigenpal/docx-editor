@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Typed table vocabulary on the canonical tree (legacy-lane retirement, phase 1a).
 //
 // Promoting w:tbl/w:tr/w:tc/w:tblGrid/w:tblPr from `generic` to typed kinds must be

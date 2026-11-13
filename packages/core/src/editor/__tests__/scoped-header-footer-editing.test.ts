@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Scoped header/footer editing on the paginated surface.
 //
 // Entering a painted furniture story binds EditorScope { kind: 'headerFooter', rId },

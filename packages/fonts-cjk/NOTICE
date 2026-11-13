@@ -1,0 +1,13 @@
+@docx-editor.dev/fonts-cjk
+Copyright Eigenpal, Inc. Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This copy was modified in 2026 in the Grant Workbench fork of docx-editor
+(https://github.com/eigenpal/docx-editor, forked at commit e2cbc55).
+Package description, README and comments no longer refer to @docx-editor.dev/docx-to-pdf. No functional change.
+
+Changed files:
+  README.md
+  package.json
+  src/index.ts
+
+See FORK-CHANGES.md in the fork's repository for the full list.

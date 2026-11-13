@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // `partFor` call sites are pinned, because a partFor read is a write in disguise.
 //
 // `partFor(partName)` opens a story store and PERMANENTLY retains its slot — the store

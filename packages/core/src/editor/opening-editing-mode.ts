@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 /**
  * How a document's opening editing mode is decided — pure decisions over the facade's
  * state, kept out of `docx-editor.ts` so the composition root stays under its line cap.

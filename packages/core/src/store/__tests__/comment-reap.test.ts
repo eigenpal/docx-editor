@@ -1,3 +1,4 @@
+// Modified in the Grant Workbench fork of docx-editor (Eigenpal, Inc., Apache-2.0), 2026. See FORK-CHANGES.md.
 // Deleting the words a comment covers deletes the comment — the way Word does it.
 //
 // The failure this pins: the rail went on drawing a card for a remark whose text was gone, with
