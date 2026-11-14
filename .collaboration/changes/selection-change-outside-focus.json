@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A repaint while a context menu or other chrome held focus collapsed the browser selection onto the pages, and the selection sync moved the local caret to the document start and took focus back to the pages.",
+  "after": "The selection sync ignores a browser selection change while focus is outside the pages, so the local caret and the focused chrome stay where they were.",
+  "reason": "No shared format fields or operations change. The fix only stops the local selection sync from reading a collapsed browser selection back into the local caret, so remote selections, operations, and saved documents are unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/repaint-selection-authority.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-remote-caret-stale-dom.test.ts"
+  ],
+  "changeset": "proofing-follow-ups",
+  "migration": null
+}

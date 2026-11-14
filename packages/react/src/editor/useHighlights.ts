@@ -36,8 +36,8 @@ export interface UseHighlightsReturn extends HighlightResult {
 
 function optionsKey(options: HighlightOptions | undefined): string {
   if (!options) return '';
-  const { color, activeColor, activeIndex, className, priority } = options;
-  return JSON.stringify([color, activeColor, activeIndex, className, priority]);
+  const { color, activeColor, activeIndex, className, priority, kind } = options;
+  return JSON.stringify([color, activeColor, activeIndex, className, priority, kind]);
 }
 
 /**

@@ -5,6 +5,7 @@ import type {
   EditorEvents,
   EditorHostChange,
   EditorSnapshot,
+  ParagraphsChangeEvent,
   ReviewChangesResolvedEvent,
   ReviewItemRevealEvent,
   Unsubscribe,
@@ -24,6 +25,7 @@ export function createEditorEvents(
     dragOver: new Set(),
     drop: new Set(),
     change: new Set(),
+    paragraphsChange: new Set(),
     selectionChange: new Set(),
     error: new Set(),
     historyDiagnostic: new Set(),
@@ -100,6 +102,11 @@ export function createEditorEvents(
         for (const handler of [...handlers.change]) handler(change);
       });
     },
+    emitParagraphsChange(event: ParagraphsChangeEvent) {
+      dispatch(() => {
+        for (const handler of [...handlers.paragraphsChange]) handler(event);
+      });
+    },
     emitSelectionChange() {
       dispatch(() => {
         // `hostChange` rides on this: every mount, move, heal and detach reports the selection,
@@ -138,6 +145,7 @@ export function createEditorEvents(
       });
     },
     hasErrorHandlers: () => handlers.error.size > 0,
+    hasParagraphsChangeHandlers: () => handlers.paragraphsChange.size > 0,
     hasDiagnosticHandlers: () => handlers.diagnostic.size > 0,
     hasReviewChangesResolvedHandlers: () => handlers.reviewChangesResolved.size > 0,
     clear() {

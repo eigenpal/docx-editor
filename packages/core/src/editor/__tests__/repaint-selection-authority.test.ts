@@ -185,6 +185,56 @@ describe('a repaint never invents a selection the user did not make', () => {
   });
 });
 
+// FOCUS IN OTHER CHROME IS NOT A GESTURE IN THE PAGES.
+//
+// An open context menu holds focus, and a background layout pass can repaint the pages under
+// it. The repaint replaces the page the browser's selection sat in, so the browser collapses
+// that selection onto the pages layer and queues a `selectionchange`. Adopting it moved the
+// caret to the document start, and the claimed write that followed took focus out of the menu
+// in one engine, which then closed on the scroll.
+describe('a selection change while other chrome holds focus', () => {
+  const twoParagraphs =
+    '<w:p><w:r><w:t xml:space="preserve">alpha</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t xml:space="preserve">beta</w:t></w:r></w:p>';
+
+  test('keeps the caret and leaves focus where it is', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const opened = mountPaginatedSurface(container, docx(twoParagraphs), { scale: 1 });
+    if (!opened.ok) throw new Error(opened.reason);
+    const surface = opened.surface;
+    const menu = document.createElement('div');
+    menu.tabIndex = -1;
+    menu.setAttribute('role', 'menu');
+    document.body.append(menu);
+    try {
+      const second = surface.session.paragraphIds()[1]!;
+      const caret = { paragraphId: second, offset: 2 };
+      surface.setSelection({ anchor: caret, head: caret });
+      menu.focus();
+      expect(document.activeElement).toBe(menu);
+      // A repaint while the menu holds focus. Then a later task, so the echo guard of the
+      // last mirror has cleared, as it has when a real layout pass lands.
+      surface.contentControls.setShowAll(true);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // What the repaint leaves behind: the selection collapsed onto the pages layer itself.
+      const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+      document.getSelection()!.setBaseAndExtent(pages, 0, pages, 0);
+      document.dispatchEvent(new Event('selectionchange'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(surface.state().selection.head).toEqual(caret);
+      expect(document.activeElement).toBe(menu);
+    } finally {
+      surface.destroy();
+      menu.remove();
+      container.remove();
+      document.getSelection()?.removeAllRanges();
+    }
+  });
+});
+
 const FIELD_PARAGRAPH =
   '<w:p><w:r><w:t xml:space="preserve">alpha </w:t></w:r>' +
   '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +

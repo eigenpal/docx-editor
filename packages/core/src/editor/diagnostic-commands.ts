@@ -53,6 +53,7 @@ const COMMANDS: Readonly<Record<EditorCommand['type'], true>> = {
   linkHeaderFooterToPrevious: true,
   mergeCells: true,
   mergeParagraphs: true,
+  navigateHighlight: true,
   navigateReviewChange: true,
   openBookmarkDialog: true,
   openGoTo: true,

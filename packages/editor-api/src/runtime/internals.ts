@@ -23,6 +23,7 @@ import type {
   AutomationHost,
 } from '@docx-editor.dev/core/automation';
 import type { ActionQueue } from './queue.ts';
+import type { AnnotationStore } from './annotation-store.ts';
 import type { RequestContext } from './request-context.ts';
 import type { RevisionTextView } from './runtime.ts';
 
@@ -65,6 +66,8 @@ export interface ContextInternals {
   readonly author?: string;
   /** Revision view used by standard Office-compatible text reads and searches. */
   readonly revisionTextView: RevisionTextView;
+  /** The runtime's proofing annotations, or absent where they are refused, as in a preview. */
+  readonly annotations?: AnnotationStore;
   readonly queue: ActionQueue;
   /**
    * Identity of the runtime session behind this context.

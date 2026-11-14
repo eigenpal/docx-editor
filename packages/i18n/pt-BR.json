@@ -591,7 +591,9 @@
     "fontSubstitutionNotice": "Algumas fontes deste documento não estão disponíveis, então substitutas estão sendo exibidas: {fonts}",
     "documentContent": "Conteúdo do documento",
     "previewContent": "Pré-visualização das alterações propostas",
-    "documentViewport": "Páginas do documento"
+    "documentViewport": "Páginas do documento",
+    "grammarIssueCount": "{count, plural, =0 {Nenhum erro gramatical.} one {# erro gramatical.} other {# erros gramaticais.}}",
+    "spellingIssueCount": "{count, plural, =0 {Nenhum erro de ortografia.} one {# erro de ortografia.} other {# erros de ortografia.}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Texto de exibição",

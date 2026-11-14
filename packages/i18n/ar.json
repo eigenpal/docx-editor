@@ -840,7 +840,9 @@
     "documentViewport": "صفحات المستند",
     "showDocumentOutline": "إظهار مخطط المستند",
     "linkCopied": "تم نسخ الارتباط إلى الحافظة",
-    "fontSubstitutionNotice": "بعض الخطوط في هذا المستند غير متوفرة، لذا تُعرض خطوط بديلة: {fonts}"
+    "fontSubstitutionNotice": "بعض الخطوط في هذا المستند غير متوفرة، لذا تُعرض خطوط بديلة: {fonts}",
+    "grammarIssueCount": "{count, plural, =0 {لا توجد أخطاء نحوية.} one {خطأ نحوي واحد.} two {خطآن نحويان.} few {# أخطاء نحوية.} many {# خطأً نحويًا.} other {# خطأ نحوي.}}",
+    "spellingIssueCount": "{count, plural, =0 {لا توجد أخطاء إملائية.} one {خطأ إملائي واحد.} two {خطآن إملائيان.} few {# أخطاء إملائية.} many {# خطأً إملائيًا.} other {# خطأ إملائي.}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "النص المعروض",

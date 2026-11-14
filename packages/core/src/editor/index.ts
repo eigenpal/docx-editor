@@ -306,6 +306,14 @@ export {
   type BrowserAutomationHost,
   type HistoryGroupRun,
 } from './automation-host.ts';
+// `BrowserAutomationHost.highlightRangeOf` takes a span, which these types spell out.
+export type {
+  AutomationEndpoint,
+  AutomationHandle,
+  AutomationHandleRef,
+  AutomationObjectKind,
+  AutomationSpan,
+} from '../automation/index.ts';
 // The fork a browser automation preview paints from. Internal to the editor-api runtime.
 export {
   beginEditorPreview,
@@ -648,12 +656,15 @@ export type {
   AnchorHighlightOptions,
   ClearAnchorHighlightOptions,
   HighlightHit,
+  HighlightKind,
+  NavigateHighlightCommand,
   HighlightOptions,
   HighlightRange,
   HighlightRect,
   HighlightResult,
   AcceptedTextRange,
   ParagraphText,
+  ParagraphsChangeEvent,
   ReviewItemHit,
   ScrollPlacement,
   ScrollToAnchorOptions,

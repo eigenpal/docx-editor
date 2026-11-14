@@ -24,6 +24,12 @@ export interface HighlightRange {
    * `selectMatch()` and `replaceMatch` refuse a range whose text differs, with `notFound`.
    */
   readonly expectedText?: string;
+  /**
+   * What the mark says, for assistive technology, such as `Possible spelling mistake`. In a
+   * set with a `kind`, the covered text references this text with `aria-describedby`.
+   * Other sets ignore it.
+   */
+  readonly description?: string;
 }
 
 /** Presentation for one named highlight set. Every field is optional. @public */
@@ -49,6 +55,28 @@ export interface HighlightOptions {
    * The built-in Find pane uses the set name `search` with priority `10`.
    */
   readonly priority?: number;
+  /**
+   * What the marks mean, for assistive technology. `'spelling'` and `'grammar'` mark proofing
+   * issues: the covered text reports `aria-invalid` with that value, browsers with the CSS
+   * Custom Highlight API also paint the set as a `spelling-error` or `grammar-error`
+   * highlight, and the editor announces a change of the issue count in a polite live region.
+   * Omit it for marks without a proofing meaning, such as search results. Default: none.
+   */
+  readonly kind?: HighlightKind;
+}
+
+/** The proofing meaning of a highlight set. See {@link HighlightOptions.kind}. @public */
+export type HighlightKind = 'spelling' | 'grammar';
+
+/**
+ * Move the selection to the next or previous mark of one highlight set. See the
+ * `navigateHighlight` command. @public
+ */
+export interface NavigateHighlightCommand {
+  /** The highlight set name passed to `setHighlights()`. */
+  readonly name: string;
+  /** `'next'` selects the first mark after the selection, `'previous'` the last one before it. */
+  readonly direction: 'next' | 'previous';
 }
 
 /** What `setHighlights()` resolved against the open document. @public */

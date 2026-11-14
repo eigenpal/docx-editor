@@ -840,7 +840,9 @@
     "documentViewport": "文書のページ",
     "showDocumentOutline": "文書のアウトラインを表示",
     "linkCopied": "リンクをクリップボードにコピーしました",
-    "fontSubstitutionNotice": "この文書の一部のフォントが使用できないため、代替フォントで表示しています: {fonts}"
+    "fontSubstitutionNotice": "この文書の一部のフォントが使用できないため、代替フォントで表示しています: {fonts}",
+    "grammarIssueCount": "{count, plural, =0 {文法の問題はありません。} other {文法の問題が # 件あります。}}",
+    "spellingIssueCount": "{count, plural, =0 {スペルの問題はありません。} other {スペルの問題が # 件あります。}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "表示文字列",

@@ -591,7 +591,9 @@
     "fontSubstitutionNotice": "Einige Schriftarten in diesem Dokument sind nicht verfügbar, daher werden Ersatzschriftarten angezeigt: {fonts}",
     "documentContent": "Dokumentinhalt",
     "previewContent": "Vorschau der vorgeschlagenen Änderungen",
-    "documentViewport": "Dokumentseiten"
+    "documentViewport": "Dokumentseiten",
+    "grammarIssueCount": "{count, plural, =0 {Keine Grammatikfehler.} one {# Grammatikfehler.} other {# Grammatikfehler.}}",
+    "spellingIssueCount": "{count, plural, =0 {Keine Rechtschreibfehler.} one {# Rechtschreibfehler.} other {# Rechtschreibfehler.}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Anzuzeigender Text",

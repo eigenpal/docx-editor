@@ -307,6 +307,49 @@ describe('useEditorEvent', () => {
       readyApp.unmount();
     }
   });
+
+  test('reports the paragraphs an edit changed', async () => {
+    const changed: string[][] = [];
+    let instance: DocxEditorInstance | null = null;
+    const Probe = defineComponent({
+      setup() {
+        useEditorEvent('paragraphsChange', (event) => changed.push([...event.changed]));
+        return () => null;
+      },
+    });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      render: () =>
+        h(
+          DocxEditorRoot,
+          {
+            document: SOURCE,
+            onReady: (editor: Editor) => {
+              instance = editor as DocxEditorInstance;
+            },
+          },
+          {
+            default: () =>
+              h(DocxEditorViewport, null, {
+                default: () => [h(Probe), h(DocxEditorContent)],
+              }),
+          }
+        ),
+    });
+    try {
+      app.mount(container);
+      await flush();
+      expect(changed).toEqual([]);
+      instance!.exec({ type: 'insertText', text: 'X' });
+      await flush();
+      const [first] = instance!.getParagraphs();
+      expect(changed).toEqual([[first!.blockId]]);
+    } finally {
+      app.unmount();
+      container.remove();
+    }
+  });
 });
 
 describe('facade listeners', () => {

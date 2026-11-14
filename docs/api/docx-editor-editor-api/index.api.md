@@ -47,6 +47,52 @@ export enum Alignment {
 }
 
 // @public
+export class Annotation extends ModelObject {
+    // @internal
+    static at(context: RequestContext, label: string, paragraph: AutomationHandle, id: string): Annotation;
+    get critiqueAnnotation(): CritiqueAnnotation;
+    delete(): void;
+    // @internal
+    hydrate(paragraph: AutomationHandle, id: string): void;
+    // @internal
+    hydrateNull(): void;
+    get id(): string;
+    // @internal
+    protected onLoad(request: ResolvedLoadOptions): void;
+    // @internal
+    static promised(context: RequestContext, label: string, nullable: boolean, id?: string): Annotation;
+    get state(): AnnotationState | 'Created' | 'Accepted' | 'Rejected';
+}
+
+// @public
+export class AnnotationCollection extends ModelObject {
+    getFirst(): Annotation;
+    getFirstOrNullObject(): Annotation;
+    get items(): Annotation[];
+    // @internal
+    protected get loadsItemPaths(): boolean;
+    // @internal
+    static of(context: RequestContext, label: string, owner: ObjectPath): AnnotationCollection;
+    // @internal
+    protected onLoad(request: ResolvedLoadOptions): void;
+}
+
+// @public
+export interface AnnotationSet {
+    critiques: Critique[];
+}
+
+// @public
+export enum AnnotationState {
+    // (undocumented)
+    accepted = "Accepted",
+    // (undocumented)
+    created = "Created",
+    // (undocumented)
+    rejected = "Rejected"
+}
+
+// @public
 export type BesideLocation = Extract<RangeInsertTextLocation, 'Before' | 'After'>;
 
 // @public
@@ -551,6 +597,48 @@ export interface CreateServerOptions {
 }
 
 // @public
+export interface Critique {
+    colorScheme: CritiqueColorScheme | 'Red' | 'Green' | 'Blue' | 'Lavender' | 'Berry';
+    length: number;
+    popupOptions?: CritiquePopupOptions;
+    start: number;
+}
+
+// @public
+export class CritiqueAnnotation extends ModelObject {
+    accept(): void;
+    get critique(): Critique;
+    // @internal
+    static of(context: RequestContext, path: ObjectPath, annotation: Annotation): CritiqueAnnotation;
+    // @internal
+    protected onLoad(request: ResolvedLoadOptions): void;
+    get range(): Range_2;
+    reject(): void;
+}
+
+// @public
+export enum CritiqueColorScheme {
+    // (undocumented)
+    berry = "Berry",
+    // (undocumented)
+    blue = "Blue",
+    // (undocumented)
+    green = "Green",
+    // (undocumented)
+    lavender = "Lavender",
+    // (undocumented)
+    red = "Red"
+}
+
+// @public
+export interface CritiquePopupOptions {
+    brandingTextResourceId: string;
+    subtitleResourceId: string;
+    suggestions: string[];
+    titleResourceId: string;
+}
+
+// @public
 class Document_2 extends ModelObject {
     get body(): Body_2;
     get changeTrackingMode(): ChangeTrackingMode | 'Off' | 'TrackAll' | 'TrackMineOnly';
@@ -562,6 +650,7 @@ class Document_2 extends ModelObject {
     deleteBookmark(name: string): void;
     get endnotes(): NoteItemCollection;
     get footnotes(): NoteItemCollection;
+    getAnnotationById(id: string): Annotation;
     getBookmarkRange(name: string): Range_2;
     getBookmarkRangeOrNullObject(name: string): Range_2;
     getStyles(): StyleCollection;
@@ -1671,6 +1760,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
     get firstLineIndent(): number;
     set firstLineIndent(value: number);
     get font(): Font;
+    getAnnotations(): AnnotationCollection;
     getRange(rangeLocation?: 'Whole' | 'Content' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
     getReviewedText(changeTrackingVersion?: ChangeTrackingVersion): ClientResult<string>;
     getReviewedText(changeTrackingVersion?: 'Original' | 'Current'): ClientResult<string>;
@@ -1679,6 +1769,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
     hydrateAddress(address: ObjectAddress): void;
     // @internal
     hydrateNull(): void;
+    insertAnnotations(annotations: AnnotationSet): ClientResult<string[]>;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
     insertTable(rowCount: number, columnCount: number, insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After', values?: string[][]): Table;
     insertText(text: string, insertLocation: InsertLocation.replace | InsertLocation.start | InsertLocation.end | 'Replace' | 'Start' | 'End'): Range_2;

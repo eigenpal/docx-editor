@@ -39,7 +39,8 @@ import type {
   AutomationStagedOps,
 } from '../automation/document-port.ts';
 import type { ReviewWriteIntent } from './paginated-surface-contract.ts';
-import { createAutomationHost } from '../automation/host.ts';
+import { automationParagraphNodeId, createAutomationHost } from '../automation/host.ts';
+import type { HighlightRange } from '../contracts/editor-highlights.ts';
 import { replaceDocumentError } from '../automation/plan-replace-document.ts';
 import { runAsAutomation } from './editor-diagnostics.ts';
 import { publicRefusal } from './diagnostic-codes.ts';
@@ -48,7 +49,11 @@ import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session.ts';
 import type { DocxEditorInstance } from './docx-editor-types.ts';
-import type { AutomationBatchRequest, AutomationBatchResponse } from '../automation/index.ts';
+import type {
+  AutomationBatchRequest,
+  AutomationBatchResponse,
+  AutomationSpan,
+} from '../automation/index.ts';
 import type { HistoryGroup } from '../contracts/editor.ts';
 import {
   editorAutomationFrames,
@@ -84,6 +89,14 @@ export interface BrowserAutomationHost extends AutomationHost {
    * @internal
    */
   beginHistoryGroupRun(group: HistoryGroup): HistoryGroupRun | null;
+  /**
+   * The editor highlight range for a span this host answered, or `null` when the span is empty,
+   * crosses a paragraph boundary, or names a paragraph this host did not mint. The browser
+   * runtime paints proofing annotations through it.
+   *
+   * @internal
+   */
+  highlightRangeOf(span: AutomationSpan): HighlightRange | null;
 }
 
 /**
@@ -178,6 +191,13 @@ export function createBrowserAutomationHost(editor: DocxEditorInstance): Browser
       host.dispose();
     },
     execute,
+    highlightRangeOf: (span) => {
+      const blockId = automationParagraphNodeId(host, span.start.paragraph);
+      if (blockId === null || automationParagraphNodeId(host, span.end.paragraph) !== blockId)
+        return null;
+      const length = span.end.offset - span.start.offset;
+      return length > 0 ? { blockId, start: span.start.offset, length } : null;
+    },
     beginHistoryGroupRun: (group) => {
       const frames = disposed ? null : editorAutomationFrames(editor, group);
       if (frames === null) return null;

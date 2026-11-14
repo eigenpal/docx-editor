@@ -840,7 +840,9 @@
     "documentViewport": "Document pages",
     "showDocumentOutline": "Show document outline",
     "linkCopied": "Link copied to clipboard",
-    "fontSubstitutionNotice": "Some fonts in this document aren't available, so substitutes are shown: {fonts}"
+    "fontSubstitutionNotice": "Some fonts in this document aren't available, so substitutes are shown: {fonts}",
+    "spellingIssueCount": "{count, plural, =0 {No spelling issues.} one {# spelling issue.} other {# spelling issues.}}",
+    "grammarIssueCount": "{count, plural, =0 {No grammar issues.} one {# grammar issue.} other {# grammar issues.}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Display text",

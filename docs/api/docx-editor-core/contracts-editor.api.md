@@ -1207,6 +1207,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     insertToc: Record<never, never>;
     // (undocumented)
     mergeCells: Record<never, never>;
+    navigateHighlight: NavigateHighlightCommand;
     navigateReviewChange: {
         direction: 'next' | 'previous';
     };
@@ -1435,6 +1436,7 @@ export interface EditorEvents {
     // (undocumented)
     historyDiagnostic: (diagnostic: HistoryDiagnostic) => void;
     hostChange: (event: EditorHostChange) => void;
+    paragraphsChange: (event: ParagraphsChangeEvent) => void;
     reviewChangesResolved: (event: ReviewChangesResolvedEvent) => void;
     reviewItemReveal: (event: ReviewItemRevealEvent) => void;
     revisionMarkupChange: (settings: ResolvedRevisionMarkup) => void;
@@ -1959,17 +1961,22 @@ export interface HighlightHit<R extends HighlightRange = HighlightRange> {
 }
 
 // @public
+export type HighlightKind = 'spelling' | 'grammar';
+
+// @public
 export interface HighlightOptions {
     readonly activeColor?: string;
     readonly activeIndex?: number;
     readonly className?: string;
     readonly color?: string;
+    readonly kind?: HighlightKind;
     readonly priority?: number;
 }
 
 // @public
 export interface HighlightRange {
     readonly blockId: string;
+    readonly description?: string;
     readonly expectedText?: string;
     readonly length: number;
     readonly scope?: ViewScope;
@@ -2134,6 +2141,12 @@ export type InteractionOutcome<T> = {
 export type InteractionOutcomeCode = 'pendingLayout' | 'pendingSelection' | 'readOnly' | 'invalidTarget' | 'unsupported';
 
 // @public
+export interface NavigateHighlightCommand {
+    readonly direction: 'next' | 'previous';
+    readonly name: string;
+}
+
+// @public
 export interface NewChartData {
     // (undocumented)
     readonly categories: readonly string[];
@@ -2274,6 +2287,15 @@ export interface ParagraphFormatCommand {
     tabStops?: readonly ParagraphTabStop[];
     // (undocumented)
     widowControl?: boolean;
+}
+
+// @public
+export interface ParagraphsChangeEvent {
+    readonly added: readonly string[];
+    readonly changed: readonly string[];
+    readonly deleted: readonly string[];
+    readonly revision: number;
+    readonly source: 'local' | 'remote';
 }
 
 // @public

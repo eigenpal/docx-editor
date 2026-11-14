@@ -591,7 +591,9 @@
     "fontSubstitutionNotice": "此文档中的某些字体不可用，已显示替代字体：{fonts}",
     "documentContent": "文档内容",
     "previewContent": "建议更改的预览",
-    "documentViewport": "文档页面"
+    "documentViewport": "文档页面",
+    "grammarIssueCount": "{count, plural, =0 {没有语法问题。} other {# 个语法问题。}}",
+    "spellingIssueCount": "{count, plural, =0 {没有拼写问题。} other {# 个拼写问题。}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "显示文本",

@@ -58,8 +58,9 @@ import { planBreakOperation, planLineBreak } from './plan-breaks.ts';
 import { planParagraphBreaks } from './plan-paragraph-breaks.ts';
 import { insertTextOps, lineBreakRefusal, PARAGRAPH_MARK_IN_TEXT } from './line-break-text.ts';
 import { edgeTableOf, paragraphTextRefusal, storyKeeper } from './plan-story-edge.ts';
-import { automationListLevelExists } from './list-authoring.ts';
 import { planListAuthoring } from './plan-list-authoring.ts';
+import { planSetListLevel } from './plan-list-level.ts';
+import { createControlLookup } from './plan-control-lookup.ts';
 import { hyperlinkStyleFor } from '../store/package/hyperlink-style-edit.ts';
 // What each operation MEANS, as reads off a snapshot and `TreeDocOp`s for one transaction.
 // The planner is pure with respect to the document: it reads a snapshot and produces ops. Every
@@ -149,14 +150,7 @@ import {
   stagedCommentDate,
   validatePlannedCommentFields,
 } from './comment-create-plan.ts';
-import {
-  contentControlNodeOf,
-  contentControlReadOf,
-  contentControlReads,
-  contentControlSpan,
-  contentControlText,
-  type AutomationContentControlRead,
-} from './content-controls.ts';
+import { contentControlReads, contentControlSpan, contentControlText } from './content-controls.ts';
 import { contentControlPropertiesOf } from '../store/package/content-control-nodes.ts';
 import {
   CONTENT_CONTROL_LOCKS,
@@ -171,7 +165,6 @@ import {
   customNodeRequestRefusal,
   customNodeWriteOf,
 } from './custom-node-plan.ts';
-import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 
 /** A position in the symbolic story order. Bound to a real id after the commit. */
 interface Slot {
@@ -1157,104 +1150,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return { ok: true, plan: planFor(reads), list: found };
   };
 
-  /**
-   * The scope a control query looks in: a story root, or one control's own content.
-   *
-   * Both answer the story their controls live in, because a nested control is in the same story
-   * as the control holding it — a handle carries its story so the walk never has to guess.
-   */
-  const controlScope = (
-    scope: unknown
-  ): { reads: AutomationStoryReads; node: OoxmlNode } | PlannedOperation => {
-    if (typeof scope !== 'object' || scope === null) {
-      return refuse('invalid-handle', 'that is not a scope a control lives in', 'scope');
-    }
-    const named = scope as Record<string, AutomationHandle>;
-    if ('body' in scope) {
-      const story = storyOfHandle(named.body as AutomationHandle, 'body', handles, packageReads);
-      if (!story.ok) return refuse(story.code, 'that handle does not name a body', story.detail);
-      return { reads: story.value, node: story.value.root };
-    }
-    if ('contentControl' in scope) {
-      const found = controlOf(named.contentControl);
-      if (!('control' in found)) return found;
-      return { reads: found.reads, node: found.node };
-    }
-    return refuse('invalid-handle', 'that is not a scope a control lives in', 'scope');
-  };
-
-  /**
-   * The control a handle names, re-derived from the current package.
-   *
-   * A handle to a control the document no longer holds is `invalid-handle` rather than a read of
-   * whatever moved into its place: a script that deleted a control and then asked its old
-   * reference for text must not be answered with a neighbour's.
-   */
-  const controlOf = (
-    handle: unknown
-  ):
-    | { reads: AutomationStoryReads; control: AutomationContentControlRead; node: OoxmlNode }
-    | PlannedOperation => {
-    const target = handles.resolve(handle, 'contentControl');
-    if (!target || target.kind !== 'contentControl') {
-      return refuse(
-        'invalid-handle',
-        'that handle does not name a content control',
-        'contentControl'
-      );
-    }
-    const reads = packageReads.story(target.story);
-    if (!reads) return refuse('invalid-handle', 'that story is not in this document');
-    const control = contentControlReadOf(reads, target.nodeId);
-    const node = contentControlNodeOf(reads, target.nodeId);
-    if (!control || !node) {
-      return removed('this document no longer holds that content control');
-    }
-    return { reads, control, node };
-  };
-
-  const planSetListLevel = (
-    plan: StoryPlan,
-    paragraphId: string,
-    level: number
-  ): PlannedOperation => {
-    if (!Number.isInteger(level) || level < 0 || level > MAX_LIST_LEVEL) {
-      return refuse(
-        'invalid-offset',
-        `a list level is 0 to ${String(MAX_LIST_LEVEL)}`,
-        String(level)
-      );
-    }
-    // REFUSED FOR PROSE, not silently numbered: `setListLevel` writes `w:ilvl` inside an existing
-    // `w:numPr`, and a paragraph with none is not a list item. Numbering it here would need a
-    // `w:numId` this operation was never given.
-    const membership = membershipIn(plan.reads, paragraphId);
-    if (!membership)
-      return refuse('unsupported-content', 'that paragraph is not in a list', paragraphId);
-    if (
-      !packageReads.package ||
-      !automationListLevelExists(packageReads.package, membership.numId, level)
-    ) {
-      return refuse(
-        'unsupported-content',
-        'list level is not defined; configure that level first',
-        paragraphId
-      );
-    }
-    const pin = pinWrite(plan);
-    if (pin) return pin;
-    // The paragraph's PROPERTIES container, the same one a paragraph-format write claims: both
-    // rewrite `w:pPr`, so two of them in one batch would carry each other's children away.
-    const conflict = claimFormatting(plan, paragraphId, 'paragraph');
-    if (conflict) return conflict;
-    return {
-      ok: true,
-      kind: 'command',
-      ops: [{ op: 'setListLevel', paragraphId, level }],
-      story: plan.reads.story,
-      answer: () => APPLIED,
-    };
-  };
+  const { controlOf, controlScope } = createControlLookup(handles, packageReads);
 
   /**
    * Add an item at one edge of a list.
@@ -1565,6 +1461,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           return pinWrite(plan) ?? claim(plan, paragraphId);
         });
       case 'getTextRanges':
+      case 'getParagraphTextIfPresent':
+      case 'getParagraphTextSpan':
       case 'expandSpan':
       case 'getReviewedText':
         return planTextRanges(operation, handles, packageReads);
@@ -2172,7 +2070,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           return refuse(paragraph.code, 'that handle does not name a paragraph', paragraph.detail);
         const reads = packageReads.story(paragraph.value.story);
         if (!reads) return refuse('invalid-handle', 'that story is not in this document');
-        return planSetListLevel(planFor(reads), paragraph.value.paragraphId, operation.level);
+        const plan = planFor(reads);
+        const { paragraphId } = paragraph.value;
+        // The paragraph's PROPERTIES container, the one a paragraph-format write claims.
+        return planSetListLevel(packageReads, reads, paragraphId, operation.level, () => {
+          return pinWrite(plan) ?? claimFormatting(plan, paragraphId, 'paragraph');
+        });
       }
 
       case 'insertListParagraph': {

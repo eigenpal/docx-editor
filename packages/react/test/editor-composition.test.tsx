@@ -276,6 +276,36 @@ describe('useEditorEvent', () => {
     });
     expect(changes.length).toBe(countAfterMount + 1);
   });
+
+  test('reports the paragraphs an edit changed', () => {
+    const changed: string[][] = [];
+    let instance: DocxEditorInstance | null = null;
+    function Probe() {
+      useEditorEvent('paragraphsChange', (event) => {
+        changed.push([...event.changed]);
+      });
+      return null;
+    }
+    render(
+      <DocxEditorRoot
+        document={SOURCE}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <Probe />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    expect(changed).toEqual([]);
+    act(() => {
+      instance!.exec({ type: 'insertText', text: 'X' });
+    });
+    const [first] = instance!.getParagraphs();
+    expect(changed).toEqual([[first!.blockId]]);
+  });
 });
 
 describe('useEditorCaret', () => {
@@ -305,7 +335,11 @@ describe('useEditorCaret', () => {
     });
     const caret = carets.at(-1)!;
     const head = instance!.getSelectionRange()!.head;
-    expect(caret).toEqual({ blockId: head.blockId, paragraphId: head.blockId, offset: head.offset });
+    expect(caret).toEqual({
+      blockId: head.blockId,
+      paragraphId: head.blockId,
+      offset: head.offset,
+    });
   });
 });
 

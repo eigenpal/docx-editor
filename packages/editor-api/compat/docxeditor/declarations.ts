@@ -194,6 +194,7 @@ export declare namespace DocxEditor {
     getBookmarkRange(name: string): Range;
     getBookmarkRangeOrNullObject(name: string): Range;
     getStyles(): StyleCollection;
+    getAnnotationById(id: string): Annotation;
   }
 
   export class DocumentProperties {
@@ -277,7 +278,9 @@ export declare namespace DocxEditor {
     delete(): void;
     getReviewedText(changeTrackingVersion?: ChangeTrackingVersion): ClientResult<string>;
     getReviewedText(changeTrackingVersion?: 'Original' | 'Current'): ClientResult<string>;
+    getAnnotations(): AnnotationCollection;
     getTextRanges(endingMarks: string[], trimSpacing?: boolean): RangeCollection;
+    insertAnnotations(annotations: AnnotationSet): ClientResult<string[]>;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range;
     search(searchText: string, searchOptions?: SearchOptions): RangeCollection;
@@ -601,5 +604,50 @@ export declare namespace DocxEditor {
     readonly items: Style[];
     getByNameOrNullObject(name: string): Style;
     getCount(): ClientResult<number>;
+  }
+
+  // ---------------------------------------------------------------------
+  // proofingAnnotations
+  // ---------------------------------------------------------------------
+
+  // Annotations are runtime view state: never saved, never shared with collaborators. The three
+  // popup resource ids are declared with the upstream type; only an empty string is accepted.
+  // The annotation and paragraph events are recorded omissions: the runtime has no event model.
+  export interface AnnotationSet {
+    critiques: Critique[];
+  }
+
+  export interface Critique {
+    colorScheme: 'Red' | 'Green' | 'Blue' | 'Lavender' | 'Berry';
+    length: number;
+    popupOptions?: CritiquePopupOptions;
+    start: number;
+  }
+
+  export interface CritiquePopupOptions {
+    brandingTextResourceId: string;
+    subtitleResourceId: string;
+    suggestions: string[];
+    titleResourceId: string;
+  }
+
+  export class Annotation extends ClientObject {
+    readonly critiqueAnnotation: CritiqueAnnotation;
+    readonly id: string;
+    readonly state: 'Created' | 'Accepted' | 'Rejected';
+    delete(): void;
+  }
+
+  export class AnnotationCollection {
+    readonly items: Annotation[];
+    getFirst(): Annotation;
+    getFirstOrNullObject(): Annotation;
+  }
+
+  export class CritiqueAnnotation {
+    readonly critique: Critique;
+    readonly range: Range;
+    accept(): void;
+    reject(): void;
   }
 }

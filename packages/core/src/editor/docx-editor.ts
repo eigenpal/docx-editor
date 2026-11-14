@@ -34,6 +34,7 @@ import { formattingCommandActive } from './docx-editor-active.ts';
 import { createEditorScrolling } from './docx-editor-scroll.ts';
 import { createAnchorNavigation } from './docx-editor-anchor-navigation.ts';
 import { createTextHighlights } from './text-highlights.ts';
+import { layoutReadingOrder, navigateHighlight } from './highlight-navigation.ts';
 import { createReviewItemsAt } from './review-items-at.ts';
 import { createParagraphTextReads } from './paragraph-text-read.ts';
 import { reviewItemPlacement } from './review-placement-cache.ts';
@@ -643,8 +644,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     surface: () => surface,
     container: () => container,
     flushOpen: () => openScheduler.flush(),
+    translate: () => hostConfig.translate() ?? null,
   });
   const selectionRead = createSelectionRangeRead(() => surface);
+  const paragraphReads = createParagraphTextReads({
+    surface: () => surface,
+    fieldResults: fieldScope.mode,
+  });
 
   function mountBytes(...args: Parameters<typeof mountBytesNow>): void {
     const refreshing = refreshHost?.source !== undefined;
@@ -868,6 +874,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       refitIfPageResized: () => zoomLane.refitIfPageResized(),
       bump,
       emit: emitDocumentChange,
+      wantsParagraphs: events.hasParagraphsChangeHandlers,
+      emitParagraphs: events.emitParagraphsChange,
     });
     refreshHost?.contentMounted(bytes);
     // The page's size is only knowable now — it comes from this document's section properties
@@ -1952,6 +1960,19 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const dialog = views.dialog(command, true);
       if (dialog) return dialog;
       if (command.type === 'replaceDocument') return replacing.exec(command, surface, container);
+      if (command.type === 'navigateHighlight') {
+        const marks = surface ? highlights.marksOf(command.name) : null;
+        return navigateHighlight(
+          command,
+          marks,
+          layoutReadingOrder(surface?.publishedLayout() ?? null),
+          selectionRead.members.getSelectionRange(),
+          (range) =>
+            surface
+              ? selectDocumentSearchMatch(surface, range)
+              : { ok: false, code: 'notFound', reason: 'no document is loaded' }
+        );
+      }
       historyGroups.note(command);
       // A view command: it edits nothing, so it runs before the document gate, and it works
       // on a document that failed to open — the pane is still the reader's to close. Not on a
@@ -2465,7 +2486,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     ...highlights.members,
     ...selectionRead.members,
     ...createReviewItemsAt({ frame: highlights.frame, placements: reviewPlacements }),
-    ...createParagraphTextReads({ surface: () => surface, fieldResults: fieldScope.mode }),
+    ...paragraphReads,
     ...createEditorPointMembers(
       () => surface,
       () => !!container && !destroyed
@@ -2502,6 +2523,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       disposeShapedFonts();
       disposeShapedFonts = () => {};
       teardownSurface();
+      highlights.dispose();
       container = null;
       pendingBytes = null;
       pendingTextFormInputs = new WeakMap();

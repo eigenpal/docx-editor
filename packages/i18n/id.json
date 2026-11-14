@@ -648,7 +648,9 @@
     "fontSubstitutionNotice": "Beberapa font dalam dokumen ini tidak tersedia, jadi font pengganti ditampilkan: {fonts}",
     "documentContent": "Konten dokumen",
     "previewContent": "Pratinjau perubahan yang diusulkan",
-    "documentViewport": "Halaman dokumen"
+    "documentViewport": "Halaman dokumen",
+    "grammarIssueCount": "{count, plural, =0 {Tidak ada kesalahan tata bahasa.} other {# kesalahan tata bahasa.}}",
+    "spellingIssueCount": "{count, plural, =0 {Tidak ada kesalahan ejaan.} other {# kesalahan ejaan.}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Teks yang ditampilkan",

@@ -5,6 +5,119 @@
     "version": "1.0.605"
   },
   "symbols": {
+    "Annotation": {
+      "uid": "Word.Annotation",
+      "kind": "class",
+      "requirementSet": "WordApi 1.7",
+      "members": {
+        "critiqueAnnotation": {
+          "uid": "Word.Annotation#critiqueAnnotation",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CritiqueAnnotation"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "Word.Annotation#delete",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "id": {
+          "uid": "Word.Annotation#id",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "state": {
+          "uid": "Word.Annotation#state",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Created\" | \"Accepted\" | \"Rejected\""
+            }
+          ]
+        }
+      }
+    },
+    "AnnotationCollection": {
+      "uid": "Word.AnnotationCollection",
+      "kind": "class",
+      "requirementSet": "WordApi 1.7",
+      "members": {
+        "getFirst": {
+          "uid": "Word.AnnotationCollection#getFirst",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Annotation"
+            }
+          ]
+        },
+        "getFirstOrNullObject": {
+          "uid": "Word.AnnotationCollection#getFirstOrNullObject",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Annotation"
+            }
+          ]
+        },
+        "items": {
+          "uid": "Word.AnnotationCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Annotation[]"
+            }
+          ]
+        }
+      }
+    },
+    "AnnotationSet": {
+      "uid": "Word.AnnotationSet",
+      "kind": "interface",
+      "requirementSet": "WordApi 1.7",
+      "members": {
+        "critiques": {
+          "uid": "Word.AnnotationSet#critiques",
+          "kind": "property",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Critique[]"
+            }
+          ]
+        }
+      }
+    },
     "Body": {
       "uid": "Word.Body",
       "kind": "class",
@@ -819,6 +932,161 @@
         }
       }
     },
+    "Critique": {
+      "uid": "Word.Critique",
+      "kind": "interface",
+      "requirementSet": "WordApi 1.7",
+      "members": {
+        "colorScheme": {
+          "uid": "Word.Critique#colorScheme",
+          "kind": "property",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Red\" | \"Green\" | \"Blue\" | \"Lavender\" | \"Berry\""
+            }
+          ]
+        },
+        "length": {
+          "uid": "Word.Critique#length",
+          "kind": "property",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "popupOptions": {
+          "uid": "Word.Critique#popupOptions",
+          "kind": "property",
+          "requirementSet": "WordApi 1.8",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CritiquePopupOptions"
+            }
+          ]
+        },
+        "start": {
+          "uid": "Word.Critique#start",
+          "kind": "property",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        }
+      }
+    },
+    "CritiqueAnnotation": {
+      "uid": "Word.CritiqueAnnotation",
+      "kind": "class",
+      "requirementSet": "WordApi 1.7",
+      "members": {
+        "accept": {
+          "uid": "Word.CritiqueAnnotation#accept",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "critique": {
+          "uid": "Word.CritiqueAnnotation#critique",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Critique"
+            }
+          ]
+        },
+        "range": {
+          "uid": "Word.CritiqueAnnotation#range",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Range"
+            }
+          ]
+        },
+        "reject": {
+          "uid": "Word.CritiqueAnnotation#reject",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        }
+      }
+    },
+    "CritiquePopupOptions": {
+      "uid": "Word.CritiquePopupOptions",
+      "kind": "interface",
+      "requirementSet": "WordApi 1.8",
+      "members": {
+        "brandingTextResourceId": {
+          "uid": "Word.CritiquePopupOptions#brandingTextResourceId",
+          "kind": "property",
+          "requirementSet": "WordApi 1.8",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "subtitleResourceId": {
+          "uid": "Word.CritiquePopupOptions#subtitleResourceId",
+          "kind": "property",
+          "requirementSet": "WordApi 1.8",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "suggestions": {
+          "uid": "Word.CritiquePopupOptions#suggestions",
+          "kind": "property",
+          "requirementSet": "WordApi 1.8",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string[]"
+            }
+          ]
+        },
+        "titleResourceId": {
+          "uid": "Word.CritiquePopupOptions#titleResourceId",
+          "kind": "property",
+          "requirementSet": "WordApi 1.8",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        }
+      }
+    },
     "Document": {
       "uid": "Word.Document",
       "kind": "class",
@@ -926,6 +1194,22 @@
                 }
               ],
               "returns": "void"
+            }
+          ]
+        },
+        "getAnnotationById": {
+          "uid": "Word.Document#getAnnotationById",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "id",
+                  "type": "string"
+                }
+              ],
+              "returns": "Annotation"
             }
           ]
         },
@@ -1577,6 +1861,17 @@
             }
           ]
         },
+        "getAnnotations": {
+          "uid": "Word.Paragraph#getAnnotations",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "AnnotationCollection"
+            }
+          ]
+        },
         "getReviewedText": {
           "uid": "Word.Paragraph#getReviewedText",
           "kind": "method",
@@ -1622,6 +1917,22 @@
                 }
               ],
               "returns": "RangeCollection"
+            }
+          ]
+        },
+        "insertAnnotations": {
+          "uid": "Word.Paragraph#insertAnnotations",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "annotations",
+                  "type": "AnnotationSet"
+                }
+              ],
+              "returns": "ClientResult<string[]>"
             }
           ]
         },

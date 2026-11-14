@@ -546,6 +546,41 @@ await runtime.run(async (context) => {
 
 Batch independent comment and reply content edits in one sync. Keep other mutations in a separate sync. Main-body comments support plain-text replacement; empty text and unsupported body structures refuse. A replacement removes body formatting and preserves author, date, anchors, replies, and resolved state. Browser edits require the review module and an editable document. On `StaleDocument`, read the current content and reconsider the replacement. Never replay an old draft without checking it.
 
+## Mark proofing issues
+
+A checker marks issues with `Paragraph.insertAnnotations()` and applies a fix with `CritiqueAnnotation.accept()`. Read all paragraph text in one sync, check the plain strings, then insert every paragraph's critiques in one sync:
+
+```ts
+const ids = await runtime.run(async (context) => {
+  const paragraphs = context.document.body.paragraphs;
+  paragraphs.load('items/text');
+  await context.sync();
+
+  const issues = await checkAll(paragraphs.items.map((paragraph) => paragraph.text));
+  const results = paragraphs.items.map((paragraph, index) =>
+    paragraph.insertAnnotations({
+      critiques: issues[index]!.map((issue) => ({
+        colorScheme: 'Red',
+        start: issue.start,
+        length: issue.length,
+        popupOptions: {
+          brandingTextResourceId: '',
+          subtitleResourceId: '',
+          titleResourceId: '',
+          suggestions: issue.suggestions,
+        },
+      })),
+    })
+  );
+  await context.sync();
+  return results.flatMap((result) => result.value);
+});
+```
+
+Offsets count UTF-16 code units of `Paragraph.text` in the runtime's revision view. The three resource ids must be empty strings; any other value fails with `NotSupported`. Annotations are runtime view state: they are not saved, not shared with collaborators, and the browser runtime paints them as editor highlights. Pass ids, not proxies, to later runs and use `document.getAnnotationById(id)` there.
+
+`accept()` replaces the critiqued text with the first suggestion and edits only the characters that differ; with `TrackMineOnly` the fix is a tracked change. An edit that changed the critiqued text removes the annotation, and a held annotation then fails with `InvalidObjectPath` (`edit.stale-target`). Check the paragraph again instead of replaying an old fix. The runtime raises no annotation or paragraph events.
+
 ## Review changes in a range
 
 Use `range.revisions` to reach the tracked changes inside a search result, a comment range, or any other range. The collection lists the changes the range overlaps in its own story, including a nested change or another author's change beside it. A partly covered change is listed whole, and a replacement lists its deletion and insertion separately. Load the members and decide on each one:

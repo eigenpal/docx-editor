@@ -594,7 +594,9 @@
     "fontSubstitutionNotice": "Bu belgedeki bazı yazı tipleri kullanılamıyor; bunların yerine şunlar gösteriliyor: {fonts}",
     "documentContent": "Belge içeriği",
     "previewContent": "Önerilen değişikliklerin önizlemesi",
-    "documentViewport": "Belge sayfaları"
+    "documentViewport": "Belge sayfaları",
+    "grammarIssueCount": "{count, plural, =0 {Dil bilgisi hatası yok.} one {# dil bilgisi hatası.} other {# dil bilgisi hatası.}}",
+    "spellingIssueCount": "{count, plural, =0 {Yazım hatası yok.} one {# yazım hatası.} other {# yazım hatası.}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Görüntülenen metin",

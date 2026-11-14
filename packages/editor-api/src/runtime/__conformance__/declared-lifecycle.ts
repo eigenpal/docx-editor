@@ -49,6 +49,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // declared one, in the position a consumer would use it.
 
 import type { DocxEditor as Declared } from '../../../compat/docxeditor/declarations.ts';
+import type { AnnotationSet } from '../../model/annotation-input.ts';
+import type {
+  Annotation,
+  AnnotationCollection,
+  CritiqueAnnotation,
+} from '../../model/annotations.ts';
 import type { Body } from '../../model/body.ts';
 import type { Bookmark, BookmarkCollection } from '../../model/bookmarks.ts';
 import type { ParagraphCollection, RangeCollection } from '../../model/collections.ts';
@@ -591,3 +597,43 @@ const rangeDeletesAndClears: Satisfies<
 > = true;
 void documentTracksChanges;
 void rangeDeletesAndClears;
+
+// Proofing annotations. The argument shapes are compared both ways, so an Office.js critique set
+// compiles against this package and a set typed with this package's names is a declared one.
+const annotationsAreInserted: TakesTheSameArguments<
+  Paragraph['insertAnnotations'],
+  Declared.Paragraph['insertAnnotations']
+> = true;
+const annotationSetsAreDeclaredSets: Satisfies<AnnotationSet, Declared.AnnotationSet> = true;
+const declaredSetsAreAnnotationSets: Satisfies<Declared.AnnotationSet, AnnotationSet> = true;
+const annotationsAreFoundById: TakesTheSameArguments<
+  Document['getAnnotationById'],
+  Declared.Document['getAnnotationById']
+> = true;
+const annotationMatchesTheDeclaredAnnotation: Satisfies<
+  Pick<Annotation, 'id' | 'state' | 'delete'>,
+  Pick<Declared.Annotation, 'id' | 'state' | 'delete'>
+> = true;
+const critiqueMatchesTheDeclaredCritique: Satisfies<
+  Pick<CritiqueAnnotation, 'critique' | 'accept' | 'reject'>,
+  Pick<Declared.CritiqueAnnotation, 'critique' | 'accept' | 'reject'>
+> = true;
+const annotationsAnswerTheirOwnObjects: Satisfies<
+  [
+    ReturnType<Paragraph['getAnnotations']>,
+    ReturnType<Document['getAnnotationById']>,
+    Annotation['critiqueAnnotation'],
+    CritiqueAnnotation['range'],
+    AnnotationCollection['items'][number],
+    ReturnType<AnnotationCollection['getFirst']>,
+    ReturnType<AnnotationCollection['getFirstOrNullObject']>,
+  ],
+  [AnnotationCollection, Annotation, CritiqueAnnotation, Range, Annotation, Annotation, Annotation]
+> = true;
+void annotationsAreInserted;
+void annotationSetsAreDeclaredSets;
+void declaredSetsAreAnnotationSets;
+void annotationsAreFoundById;
+void annotationMatchesTheDeclaredAnnotation;
+void critiqueMatchesTheDeclaredCritique;
+void annotationsAnswerTheirOwnObjects;

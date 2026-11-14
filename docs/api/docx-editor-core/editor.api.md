@@ -74,6 +74,38 @@ export interface AttachOptions {
 // @public
 export const AUTO_ZOOM_MODE: ZoomMode;
 
+// @public
+export interface AutomationEndpoint {
+    // (undocumented)
+    readonly offset: number;
+    readonly paragraph: AutomationHandle;
+    readonly readAt?: number;
+}
+
+// @public
+export interface AutomationHandle<K extends AutomationObjectKind = AutomationObjectKind> {
+    // (undocumented)
+    readonly kind: K;
+    // (undocumented)
+    readonly ref: AutomationHandleRef;
+}
+
+// @public
+export type AutomationHandleRef = string & {
+    readonly [AUTOMATION_HANDLE_BRAND]: 'handle';
+};
+
+// @public
+export type AutomationObjectKind = 'document' | 'body' | 'paragraph' | 'section' | 'note' | 'comment' | 'revision' | 'bookmark' | 'list' | 'contentControl' | 'table' | 'tableRow' | 'tableCell' | 'field' | 'inlinePicture' | 'shape';
+
+// @public
+export interface AutomationSpan {
+    // (undocumented)
+    readonly end: AutomationEndpoint;
+    // (undocumented)
+    readonly start: AutomationEndpoint;
+}
+
 // @internal
 export interface BarRoomInput {
     readonly chrome: number;
@@ -171,6 +203,8 @@ export const BROWSER_AUTOMATION_CAPABILITIES: AutomationCapabilities;
 export interface BrowserAutomationHost extends AutomationHost {
     // @internal
     beginHistoryGroupRun(group: HistoryGroup): HistoryGroupRun | null;
+    // @internal
+    highlightRangeOf(span: AutomationSpan): HighlightRange | null;
 }
 
 // @public
@@ -2778,17 +2812,22 @@ export interface HighlightHit<R extends HighlightRange = HighlightRange> {
 }
 
 // @public
+export type HighlightKind = 'spelling' | 'grammar';
+
+// @public
 export interface HighlightOptions {
     readonly activeColor?: string;
     readonly activeIndex?: number;
     readonly className?: string;
     readonly color?: string;
+    readonly kind?: HighlightKind;
     readonly priority?: number;
 }
 
 // @public
 export interface HighlightRange {
     readonly blockId: string;
+    readonly description?: string;
     readonly expectedText?: string;
     readonly length: number;
     readonly scope?: ViewScope;
@@ -3284,6 +3323,12 @@ export const moveChartSwatchFocus: (grid: HTMLElement | null, key: string) => bo
 
 // @public
 export function moveColorSwatchFocus(grid: HTMLElement | null, key: string): boolean;
+
+// @public
+export interface NavigateHighlightCommand {
+    readonly direction: 'next' | 'previous';
+    readonly name: string;
+}
 
 // @public
 export interface NavigateToChangeOptions extends ScrollToAnchorOptions {
@@ -4048,6 +4093,15 @@ export interface ParagraphPropertyEdit {
     readonly paragraphDirection?: 'ltr' | 'rtl';
     readonly physicalAlignment?: boolean;
     readonly remove?: boolean;
+}
+
+// @public
+export interface ParagraphsChangeEvent {
+    readonly added: readonly string[];
+    readonly changed: readonly string[];
+    readonly deleted: readonly string[];
+    readonly revision: number;
+    readonly source: 'local' | 'remote';
 }
 
 // @public

@@ -429,11 +429,14 @@ Without an adapter, call `watchHighlights(editor, name, source)` from `@docx-edi
 | `activeColor` | `var(--doc-text-highlight-active-color)` | CSS color for the active range. |
 | `className` | None | CSS classes for every highlight. |
 | `priority` | `0` | Integer from `-1000` to `1000`. Higher sets paint on top. |
+| `kind` | None | `spelling` or `grammar`. Exposes the marks to assistive technology. For more information, see [Make marks accessible](/docs/2.x/recipes/highlight-ranges#make-marks-accessible). |
 
 `setHighlights()` returns `{ applied, unavailable }`. Invalid input throws `TypeError` or `RangeError` and keeps the existing set.
 
 - Custom ranges take `blockId`, `start`, and `length` in UTF-16 units.
 - Add `expectedText` to ranges computed outside the editor.
+- Add `description` to a range in a `kind` set to give screen readers a short explanation.
+- To select the next or previous mark of a set, run `exec({ type: 'navigateHighlight', name, direction })`.
 - To compute ranges from paragraph text, such as spelling marks, see [Highlight ranges that you compute](/docs/2.x/recipes/highlight-ranges#highlight-ranges-that-you-compute).
 
 Each set renders in a `[data-highlight-set]` element. Highlights have the `docx-text-highlight` class; the active one also has `docx-text-highlight--active`.
