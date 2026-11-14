@@ -356,7 +356,6 @@ export {
   captureImageMutationPreconditions,
   executeImageCommand,
   selectedImageStateOf,
-  selectedDrawingOverlayTargetOf,
   computeMovedImagePosition,
   computeResizedImageExtentEmu,
   isStaleImageInteractionCommit,
@@ -372,6 +371,7 @@ export {
   type ImageResizeHandle,
   type SelectedDrawingOverlayTarget,
 } from './docx-editor-images.ts';
+export { selectedDrawingOverlayTargetOf } from './drawing-overlay-target.ts';
 export { historyShortcutOf, type HistoryShortcutKeys } from './history-shortcut.ts';
 export { surfaceExtent, type SurfaceExtent } from './surface-pages.ts';
 // The fit's vocabulary — only the part an adapter actually needs, so the published surface

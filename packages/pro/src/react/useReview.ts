@@ -614,7 +614,8 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
 }
 
 /**
- * Non-overlapping Y positions for cards you have measured.
+ * Non-overlapping Y positions for cards you have measured. Measure them with
+ * {@link useReviewCardHeights}.
  *
  * Separate from `useReview` because only the CALLER knows how tall its cards are — a host
  * rendering its own markup can be told where each anchor is, but not how much room its card

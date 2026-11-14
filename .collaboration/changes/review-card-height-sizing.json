@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The review rail wrote card heights on every commit, and the snapshot table context and drawing overlay target were new objects on every read.",
+  "after": "Card heights are written only when they change, and the table context and overlay target keep their object while their values are equal.",
+  "reason": "Only local view state and object identity change. Shared nodes, text offsets, operations, awareness, and package serialization remain unchanged.",
+  "tests": [
+    "packages/pro/src/__tests__/review-slot-sizing.test.tsx",
+    "packages/core/src/editor/__tests__/snapshot-table-reuse.test.ts",
+    "packages/core/src/editor/__tests__/inline-textbox-editing.test.ts"
+  ],
+  "changeset": "review-slot-measure-loop",
+  "migration": null
+}

@@ -94,8 +94,11 @@ export interface ReviewRailValue {
   readonly draftAuthorSlot: number;
   /** Comment items by id, so a card can render its replies without walking the list. */
   readonly byId: ReadonlyMap<string, ReviewItemView>;
-  /** Report a slot element so the rail can keep its measured height current. */
-  readonly measure: (node: HTMLElement | null, key: string) => void;
+  /**
+   * The ref callback for a slot element, by key: the same function on every render, so React
+   * attaches the slot once. The rail updates only when a height changes.
+   */
+  readonly slotRef: (key: string) => (node: HTMLElement | null) => void;
   /** Open the compose box for the current selection. */
   readonly beginDraft: () => void;
   /** Close it, committed or not, and unpin the range. */
@@ -152,6 +155,8 @@ export function useReviewLabel(): (key: TranslationKey, params?: ReviewLabelPara
   );
 }
 
+const NO_SLOT_REF = (): void => {};
+
 export const INERT_RAIL: ReviewRailValue = {
   t: undefined,
   cardClassName: undefined,
@@ -184,7 +189,7 @@ export const INERT_RAIL: ReviewRailValue = {
   draftAuthorInfo: undefined,
   draftAuthorSlot: 0,
   byId: new Map(),
-  measure: () => {},
+  slotRef: () => NO_SLOT_REF,
   beginDraft: () => {},
   endDraft: () => {},
   drafting: false,

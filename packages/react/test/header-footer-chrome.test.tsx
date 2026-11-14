@@ -54,11 +54,14 @@ function AnchorProbe({
   active,
   clientLeft = 0,
   clientTop = 0,
+  renders,
 }: {
   active: 'first' | 'second';
   clientLeft?: number;
   clientTop?: number;
+  renders?: { count: number };
 }): ReactNode {
+  if (renders) renders.count += 1;
   const anchor = useScopedChromeAnchor(findActiveProbe, 'story-label');
   return (
     <div
@@ -220,6 +223,24 @@ describe('DocxEditor.HeaderFooterChrome', () => {
     });
     expect(view.getByTestId('anchor-probe').style.left).toBe('105px');
     expect(view.getByTestId('anchor-probe').style.top).toBe('46px');
+  });
+
+  test('story bar renders nothing for a frame that does not move it', async () => {
+    const renders = { count: 0 };
+    const view = render(<AnchorProbe active="first" renders={renders} />);
+    const viewport = view.container.querySelector('.docx-editor__scroll-container') as HTMLElement;
+    const frame = () =>
+      act(async () => {
+        fireEvent.scroll(viewport);
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      });
+    // Two frames to settle: placement, then the one render React may spend before it skips
+    // an unchanged state.
+    await frame();
+    await frame();
+    const settled = renders.count;
+    for (let i = 0; i < 3; i += 1) await frame();
+    expect(renders.count).toBe(settled);
   });
 
   test('story bar scrolls away with its focused occurrence', async () => {

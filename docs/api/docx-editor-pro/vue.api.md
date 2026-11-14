@@ -11,6 +11,7 @@ import { MaybeRefOrGetter as MaybeRefOrGetter_2 } from '@docx-editor.dev/vue';
 import { PropType } from 'vue';
 import { Ref } from 'vue';
 import { ReviewAuthorInfo } from '@docx-editor.dev/vue';
+import { ShallowRef } from 'vue';
 import { VNode } from 'vue';
 import * as vue from 'vue';
 import * as vue_jsx_runtime from 'vue/jsx-runtime';
@@ -1251,6 +1252,17 @@ export function useReview(query?: MaybeRefOrGetter_2<ReviewItemQuery | undefined
 
 // @public
 export function useReviewAuthor(author: MaybeRefOrGetter<string | undefined>): ComputedRef<ReviewAuthorInfo | undefined>;
+
+// @public
+export function useReviewCardHeights(items?: MaybeRefOrGetter<readonly {
+    readonly key: string;
+}[]>): UseReviewCardHeightsReturn;
+
+// @public
+export interface UseReviewCardHeightsReturn {
+    readonly cardRef: (key: string) => (el: unknown) => void;
+    readonly heights: Readonly<ShallowRef<ReadonlyMap<string, number>>>;
+}
 
 // @public (undocumented)
 export function useReviewItem(): ComputedRef<ReviewItemView | null>;

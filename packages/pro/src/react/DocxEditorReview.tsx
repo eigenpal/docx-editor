@@ -62,7 +62,7 @@ import {
 import { cloneReviewCard, listCardTemplate, partitionReviewChildren } from './review-composition';
 import { COMPACT_CARD_WIDTH, RAIL_OVERSCAN, useRailMetrics } from './use-rail-geometry';
 import { useRailWindow } from './use-rail-window';
-import { useReviewSlotSizing } from './use-review-slot-sizing';
+import { useCardSizer } from './use-review-card-heights.ts';
 import { useReview, type ReviewItemView } from './useReview';
 import { useReviewAuthorInfo } from './review-author-styles';
 import { ResolvedDisclosureProvider } from './review-comment-resolution.tsx';
@@ -287,27 +287,20 @@ function ReviewRoot({
 
   // Card heights are the CALLER's to report: only the rendered card knows how tall it is, and
   // a rail that guessed would overlap the moment a comment ran to three lines.
-  const [heights, setHeights] = useState<ReadonlyMap<string, number>>(() => new Map());
-  const measure = useCallback((key: string, height: number) => {
-    // A real card is never 0px tall — zero is a layout-less read (a DOM without a
-    // renderer, or a mid-transition detach), and recording it collapses the stacking run
-    // to gaps. The content-derived estimate keeps standing in until a real height lands.
-    if (height <= 0) return;
-    setHeights((previous) => {
-      if (previous.get(key) === height) return previous;
-      const next = new Map(previous);
-      next.set(key, height);
-      return next;
-    });
-  }, []);
-
+  //
   // OBSERVED, not read once on render. A card changes height on its own — the reply box opens
   // when it becomes active, a web font lands, a summary rewraps — and a height read during
   // commit and never revisited left the stack spacing every card below it by a size that card
   // no longer was. The visible symptom was a band of empty rail under a card that had just
   // collapsed. A key keeps its last height when virtualization unmounts its card, which is
   // deliberate: dropping it would collapse the run and jump every card on screen.
-  const observeSlot = useReviewSlotSizing(measure);
+  // Against every item the rail can show: a host filter, `structural` or `formatting` hides a
+  // card without forgetting its height; a deleted item leaves both lists.
+  const sizedItems = useMemo(
+    () => [...review.items, ...allReview.items],
+    [review.items, allReview.items]
+  );
+  const { heights, cardRef: slotRef } = useCardSizer(sizedItems);
 
   // Where the rail sits and which band of the scroller is on screen — the DOM-measurement
   // half of the rail, in `use-rail-geometry.ts` and `use-rail-window.ts`.
@@ -478,7 +471,7 @@ function ReviewRoot({
       draftAuthorInfo,
       draftAuthorSlot,
       byId,
-      measure: observeSlot,
+      slotRef,
       beginDraft,
       endDraft,
       drafting: draftAnchorY !== null,
@@ -500,7 +493,7 @@ function ReviewRoot({
       draftAuthorInfo,
       draftAuthorSlot,
       byId,
-      observeSlot,
+      slotRef,
       beginDraft,
       endDraft,
       draftAnchorY,

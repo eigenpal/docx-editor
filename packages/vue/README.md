@@ -106,7 +106,7 @@ Use the React or Vue adapter hooks, the review hooks, and `DocxEditorReview` fro
 | [Accept or reject a change](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().accept(item)` or `useReview().reject(item)` | `Revision.accept()` or `Revision.reject()` |
 | [Open a change without scrolling](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().setActive(key, { reveal: false })` | Not applicable: no viewport |
 | [Highlight ranges](https://www.docx-editor.dev/docs/2.x/recipes/highlight-ranges) | `useHighlights(name, source, options)` | Not applicable |
-| [Custom review rail cards](https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards) | `DocxEditorReview` with `preset` set to `false`, `useStackedReviewPositions`, and `useReviewRailMetrics` | Not applicable |
+| [Custom review rail cards](https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards) | `DocxEditorReview` with `preset` set to `false`, `useReviewCardHeights`, `useStackedReviewPositions`, and `useReviewRailMetrics` | Not applicable |
 | Comment-on-selection button | `DocxEditorReview.AddComment` as a direct child of `DocxEditorReview`, or `useEditorCommand('review.addComment')` | Not applicable |
 | [Page setup and paragraph dialogs](https://www.docx-editor.dev/docs/2.x/customization/dialogs) | `DocxEditor.PageSetupDialog` or `DocxEditor.ParagraphDialog` | `Section.pageSetup`, and `Paragraph` properties such as `alignment` |
 
@@ -127,8 +127,7 @@ Apache-2.0
 
 ### Custom unsupported content
 
-Register components under `DocxEditor` or `DocxEditor.Root`. Each declaration
-handles matching unsupported content, including opaque inline and block elements.
+Register components under `DocxEditor` or `DocxEditor.Root`. Each declaration handles matching unsupported content, including opaque inline and block elements.
 
 ```vue
 <DocxEditor :document="bytes">
@@ -148,30 +147,10 @@ handles matching unsupported content, including opaque inline and block elements
 </DocxEditor>
 ```
 
-The first mounted matching declaration wins. Prop updates retain its priority.
-Removing and mounting a declaration again gives it a later priority. To disable a
-specific renderer temporarily, keep it mounted and change `match`, or use
-matchers that do not overlap.
-Omit `match` for a catch-all. Use source metadata in predicates; geometry is not
-available before pagination. Return empty slot content to keep the default placeholder.
-An empty result does not select the next declaration.
+The first mounted matching declaration wins. Prop updates retain its priority. Removing and mounting a declaration again gives it a later priority. To disable a specific renderer temporarily, keep it mounted and change `match`, or use matchers that do not overlap. Omit `match` for a catch-all. Use source metadata in predicates; geometry is not available before pagination. Return empty slot content to keep the default placeholder. An empty result does not select the next declaration.
 
-`UnsupportedElement` exposes `nodeId`, `ownerPartName`, `namespaceUri`,
-`localName`, `source`, `placement`, and `label`. `bounds` describes the reserved
-box after layout. Optional `drawing` and `equation` records provide specialized
-metadata. Treat source content as read-only and untrusted.
+`UnsupportedElement` exposes `nodeId`, `ownerPartName`, `namespaceUri`, `localName`, `source`, `placement`, and `label`. `bounds` describes the reserved box after layout. Optional `drawing` and `equation` records provide specialized metadata. Treat source content as read-only and untrusted.
 
-`layout` reserves width and height in document points for opaque elements.
-Source placement determines inline or block flow. Without `layout`, opaque
-inline elements reserve 120 × 24 points; blocks reserve 240 × 96 points.
-Dimensions must be positive, finite, and at most 100,000 points.
-Drawing and equation fallbacks retain their existing geometry.
-Unmatched opaque content retains its existing invisible behavior.
-Properties, metadata, and nested payloads inside unsupported elements are not
-independent content occurrences.
+`layout` reserves width and height in document points for opaque elements. Source placement determines inline or block flow. Without `layout`, opaque inline elements reserve 120 × 24 points; blocks reserve 240 × 96 points. Dimensions must be positive, finite, and at most 100,000 points. Drawing and equation fallbacks retain their existing geometry. Unmatched opaque content retains its existing invisible behavior. Properties, metadata, and nested payloads inside unsupported elements are not independent content occurrences.
 
-Components retain framework context and local state across same-page repaints.
-They can remount when pagination, virtualization, or document changes remove an
-occurrence. Keep durable application data outside the component.
-Prop updates and declaration removal preserve document edits and undo history.
-Custom rendering does not change saved DOCX content.
+Components retain framework context and local state across same-page repaints. They can remount when pagination, virtualization, or document changes remove an occurrence. Keep durable application data outside the component. Prop updates and declaration removal preserve document edits and undo history. Custom rendering does not change saved DOCX content.

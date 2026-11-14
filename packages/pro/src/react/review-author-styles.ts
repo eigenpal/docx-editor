@@ -123,6 +123,10 @@ export function useReviewAuthorInfo(
       synthetic.current.set(author, resolved);
       byAuthor.set(author, resolved);
     }
+    // Only authors still in the queue keep their entry: deleted comments take theirs along.
+    for (const author of synthetic.current.keys()) {
+      if (!byAuthor.has(author)) synthetic.current.delete(author);
+    }
     return byAuthor;
   }, [roster, items, authorSlots, editor]);
 }

@@ -408,7 +408,8 @@ function useReviewOfInternal(
 }
 
 /**
- * Non-overlapping Y positions for cards you have measured.
+ * Non-overlapping Y positions for cards you have measured. Measure them with
+ * {@link useReviewCardHeights}.
  *
  * Pass entries in document order, each with a key and an anchor, and the measured card heights.
  * An entry with `isActive: true` stays at its own anchor, and the entries before it move up.

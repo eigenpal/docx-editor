@@ -6,7 +6,7 @@ import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { findDrawingOverlayFrameInLayout } from '../../layout/semantic-hit-test.ts';
 import { createDocxEditor } from '../docx-editor.ts';
-import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
+import { selectedDrawingOverlayTargetOf } from '../drawing-overlay-target.ts';
 import { overlayFrameToSheetCssPixels } from '../surface-overlay-coordinates.ts';
 import { decodePort } from './image-decode-harness.ts';
 

@@ -527,6 +527,17 @@ export function useReview(query?: ReviewItemQuery): UseReviewReturn;
 export function useReviewAuthor(author: string | undefined): ReviewAuthorInfo | undefined;
 
 // @public
+export function useReviewCardHeights(items?: readonly {
+    readonly key: string;
+}[]): UseReviewCardHeightsReturn;
+
+// @public
+export interface UseReviewCardHeightsReturn {
+    readonly cardRef: (key: string) => (node: HTMLElement | null) => void;
+    readonly heights: ReadonlyMap<string, number>;
+}
+
+// @public
 export function useReviewItem(): ReviewItemView | null;
 
 // @public

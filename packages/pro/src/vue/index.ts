@@ -49,6 +49,10 @@ export {
 } from './useReviewRailMetrics.ts';
 export type { ReviewRailMetrics } from '../review/rail-metrics.ts';
 export {
+  useReviewCardHeights,
+  type UseReviewCardHeightsReturn,
+} from './use-review-card-heights.ts';
+export {
   useReview,
   useReviewOf,
   useStackedReviewPositions,
