@@ -697,9 +697,15 @@ export const ReviewCard = markPart(
                 resolvedDetailsNode = null;
               },
               onToggle: (event: Event) => {
-                const next = (event.currentTarget as HTMLDetailsElement).open;
-                setExpandedResolvedKey(next ? entry.key : null);
-                review.setActive(next ? entry.key : null);
+                if ((event.currentTarget as HTMLDetailsElement).open) {
+                  setExpandedResolvedKey(entry.key);
+                  review.setActive(entry.key);
+                } else if (rail.value.expandedResolvedKey === entry.key) {
+                  // Only this card's own close. Opening another resolved card closes this
+                  // one, and the browser reports that close too: it must not undo the open.
+                  setExpandedResolvedKey(null);
+                  review.setActive(null);
+                }
               },
             },
             [

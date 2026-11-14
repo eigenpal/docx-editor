@@ -92,8 +92,8 @@ export function createSelectionRangeRead(surface: () => PaginatedSurface | null)
    * between would pair new text with an old offset. Only that case runs the pass early. A
    * local edit has already moved the selection, so a read during typing forces neither a
    * deferred layout nor a flush of buffered keystrokes; buffered characters are not in the
-   * document text yet, and the offsets describe that text. The snapshot never flushes: the
-   * publish that carries the caret ticks it again.
+   * document text yet, and the offsets describe that text. Other snapshot reads can land the
+   * buffered keystrokes; the snapshot then derives again from the state they moved to.
    */
   function currentSelectionRange(): EditorSelectionRange | null {
     const mounted = surface();

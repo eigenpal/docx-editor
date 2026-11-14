@@ -1,0 +1,20 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The review rail wrote card heights on every commit and rebuilt its observers on every review change, and the snapshot table context, drawing overlay target, and content-control state were new objects on every read.",
+  "after": "Card heights are written only when they change, the rail keeps its observers, and the table context, overlay target, and content-control state keep their object while their values are equal. A snapshot read that lands buffered typing reports the typed state.",
+  "reason": "Only local view state and object identity change. Shared nodes, text offsets, operations, awareness, and package serialization remain unchanged.",
+  "tests": [
+    "packages/pro/src/__tests__/review-slot-sizing.test.tsx",
+    "packages/core/src/editor/__tests__/snapshot-table-reuse.test.ts",
+    "packages/core/src/editor/__tests__/inline-textbox-editing.test.ts",
+    "packages/core/src/editor/__tests__/snapshot-buffered-typing.test.ts",
+    "packages/pro/src/__tests__/review-rail-observers.test.tsx",
+    "packages/pro/src/__tests__/review-rail-observers-vue.test.ts",
+    "packages/pro/src/__tests__/review-comment-subscribe-vue.test.ts",
+    "packages/pro/src/__tests__/review-resolved-switch.test.tsx",
+    "packages/pro/src/__tests__/review-resolved-switch-vue.test.ts"
+  ],
+  "changeset": "review-slot-measure-loop",
+  "migration": null
+}

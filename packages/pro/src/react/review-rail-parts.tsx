@@ -122,7 +122,7 @@ export function ReviewList({
   className,
   hidden,
 }: ReviewListProps) {
-  const { review, measure, cardClassName } = useRail();
+  const { review, slotRef, cardClassName } = useRail();
   if (hidden) return null;
 
   const listChildren =
@@ -153,9 +153,7 @@ export function ReviewList({
               // full summary there reads as annotating the wrong text. Clicking it makes
               // the item active, and the active card always renders in full.
               {...(collapsed?.has(entry.key) ? { 'data-collapsed': '' } : {})}
-              ref={(node) => {
-                measure(node, entry.key);
-              }}
+              ref={slotRef(entry.key)}
             >
               {typeof children === 'function' ? (
                 children(entry)
@@ -531,10 +529,16 @@ export function ReviewBalloon({ className, hidden }: ReviewBalloonProps) {
   // or a resize of the scroll container, or it drifts away from its text.
   const zoom = useEditorState((snapshot) => snapshot.zoom);
   const [layoutTick, setLayoutTick] = useState(0);
-  useEditorEvent('change', () => setLayoutTick((tick) => tick + 1));
+  const balloonOpen = anchor !== null;
+  const balloonOpenRef = useRef(balloonOpen);
+  balloonOpenRef.current = balloonOpen;
+  // Only an open balloon re-measures, so a closed one does not re-render on each keystroke.
+  // Opening measures anyway: the effect below runs when `balloonOpen` turns true.
+  useEditorEvent('change', () => {
+    if (balloonOpenRef.current) setLayoutTick((tick) => tick + 1);
+  });
   const servedRef = useRef(served);
   servedRef.current = served;
-  const balloonOpen = anchor !== null;
   useEffect(() => {
     if (!balloonOpen) return undefined;
     const rail = rootRef.current?.closest('.docx-review') as HTMLElement | null;

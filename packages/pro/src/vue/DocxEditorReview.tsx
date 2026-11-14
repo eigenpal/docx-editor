@@ -87,7 +87,7 @@ import {
 } from './review-context.ts';
 import type { ReviewActions } from './review-types.ts';
 import { stackRailCards } from '../review/rail-stack.ts';
-import { useReviewSlotSizing } from './use-review-slot-sizing.ts';
+import { useCardSizer } from './use-review-card-heights.ts';
 import { resolveReviewAuthorInfo } from './review-author-styles.ts';
 import {
   ReviewAccept,
@@ -337,15 +337,12 @@ const ReviewRoot = defineComponent({
       return map;
     });
 
-    const heights = ref<ReadonlyMap<string, number>>(new Map());
-    const measureHeight = (key: string, height: number) => {
-      if (height <= 0) return;
-      if (heights.value.get(key) === height) return;
-      const next = new Map(heights.value);
-      next.set(key, height);
-      heights.value = next;
-    };
-    const observeSlot = useReviewSlotSizing(measureHeight);
+    // Against every item the rail can show: a host filter, `structural` or `formatting` hides
+    // a card without forgetting its height; a deleted item leaves both lists.
+    const { heights, observe: observeSlot } = useCardSizer(() => [
+      ...reviewHook.items.value,
+      ...allReview.items.value,
+    ]);
 
     // Where the rail sits, from the shared `../review/rail-metrics.ts`. The viewport's
     // reserved gutter is read on the same pass, so `compact` follows a style change at once.

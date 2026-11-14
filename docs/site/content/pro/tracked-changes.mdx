@@ -344,7 +344,7 @@ Use the same query for activation and item reads. To pick the items a custom sid
 | `compact` | `true` when the viewport is too narrow for a full column. |
 | `compactCardLeft` | The `left` of a 300-pixel card that stays inside a narrow viewport. |
 
-To stack cards, pass measured heights to `useStackedReviewPositions(items, heights, { gap, scale })`. The active card stays at its anchor, and the cards before it move up. Inside `<DocxEditorReview preset={false}>`, call `useReviewRailMetrics()` without arguments. For a complete example, see [Custom cards in the review rail](/docs/2.x/recipes/custom-review-cards).
+To stack cards, measure them with `useReviewCardHeights()` and pass the heights to `useStackedReviewPositions(items, heights, { gap, scale })`. The active card stays at its anchor, and the cards before it move up. Inside `<DocxEditorReview preset={false}>`, call `useReviewRailMetrics()` without arguments. For a complete example, see [Custom cards in the review rail](/docs/2.x/recipes/custom-review-cards).
 
 For a column of your own, pass a ref to `useReviewRailMetrics(ref)`. The column element must meet these conditions:
 

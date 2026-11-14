@@ -32,11 +32,13 @@ export function useMenuPanelPlacement(
         panelWidth: panel.offsetWidth,
         viewportWidth: view.innerWidth,
       });
-      setStyle({
-        left: next.left - root.getBoundingClientRect().left,
-        right: 'auto',
-        maxInlineSize: next.maxWidth,
-      });
+      const left = next.left - root.getBoundingClientRect().left;
+      // Every resize event lands here; an unchanged placement keeps the same object.
+      setStyle((current) =>
+        current?.left === left && current.maxInlineSize === next.maxWidth
+          ? current
+          : { left, right: 'auto', maxInlineSize: next.maxWidth }
+      );
     };
     place();
     const view = triggerRef.current?.ownerDocument.defaultView;

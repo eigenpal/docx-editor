@@ -760,11 +760,27 @@ describe('previews pointer gestures and commits once', () => {
     );
     expect(handle).not.toBeNull();
     const beforeRevision = editor().surface!.session.packageRevision();
+    // The drag binds its window listeners once, not once per pointer move.
+    const addListener = window.addEventListener.bind(window);
+    let moveBinds = 0;
+    window.addEventListener = ((type: string, ...rest: [never, never?]) => {
+      if (type === 'pointermove') moveBinds += 1;
+      return addListener(type, ...rest);
+    }) as typeof window.addEventListener;
     fireEvent.pointerDown(handle!, { clientX: 100, clientY: 100, pointerId: 1, button: 0 });
-    fireEvent(
-      window,
-      new PointerEvent('pointermove', { clientX: 140, clientY: 140, bubbles: true, pointerId: 1 })
-    );
+    for (const point of [120, 130, 140]) {
+      fireEvent(
+        window,
+        new PointerEvent('pointermove', {
+          clientX: point,
+          clientY: point,
+          bubbles: true,
+          pointerId: 1,
+        })
+      );
+    }
+    window.addEventListener = addListener;
+    expect(moveBinds).toBe(1);
     expect(editor().surface!.session.packageRevision()).toBe(beforeRevision);
     fireEvent(
       window,

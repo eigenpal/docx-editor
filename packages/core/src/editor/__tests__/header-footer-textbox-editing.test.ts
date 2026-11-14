@@ -8,7 +8,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createDocxEditor } from '../docx-editor.ts';
-import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
+import { selectedDrawingOverlayTargetOf } from '../drawing-overlay-target.ts';
 import { findDrawingOverlayFrameInLayout } from '../../layout/semantic-hit-test.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

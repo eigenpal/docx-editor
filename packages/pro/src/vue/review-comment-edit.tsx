@@ -31,7 +31,9 @@ export const ReviewCommentText = defineComponent({
     const state = shallowRef<CommentEditDraft | null>(null);
     let unsubscribe: (() => void) | undefined;
     watch(
-      () => [editor.value, props.entry.key] as const,
+      // Two sources, compared one by one: `props.entry` is a new object on every review
+      // change, and a getter returning a fresh array would re-subscribe on each one.
+      [() => editor.value, () => props.entry.key] as const,
       ([current, key]) => {
         unsubscribe?.();
         const store = current ? commentEditDrafts(current) : null;

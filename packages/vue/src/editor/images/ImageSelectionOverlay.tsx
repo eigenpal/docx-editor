@@ -203,8 +203,18 @@ export const ImageSelectionOverlay = defineComponent({
         const syncAfterCommit = (): void => {
           queueMicrotask(sync);
         };
+        // A selection of a drawing measures the origin again, as a new target used to: the
+        // target keeps its object while its values hold, and content above the pages can
+        // move the origin without resizing what the observer watches.
+        const onSelectionChange = (): void => {
+          sync();
+          if (target.value) refreshOrigin();
+        };
         sync();
-        const off = [editor.on('change', syncAfterCommit), editor.on('selectionChange', sync)];
+        const off = [
+          editor.on('change', syncAfterCommit),
+          editor.on('selectionChange', onSelectionChange),
+        ];
         onCleanup(() => {
           for (const unsubscribe of off) unsubscribe();
         });
@@ -457,10 +467,12 @@ export const ImageSelectionOverlay = defineComponent({
       editor.exec({ type: 'setImagePosition', ...moved });
     };
 
+    // Keyed on the drag being active, not on each preview: every pointer move sets a new
+    // preview, and the handlers read the current one through `previewRef`.
     watch(
-      [preview, editorRef, () => props.containerRef.value],
-      ([currentPreview, editor, container], _, onCleanup) => {
-        if (!currentPreview || !editor?.surface) return;
+      [() => preview.value !== null, editorRef, () => props.containerRef.value],
+      ([dragging, editor, container], _, onCleanup) => {
+        if (!dragging || !editor?.surface) return;
         const coordinates = editor.surface.overlayCoordinates();
         const onPointerMove = (event: PointerEvent) => {
           const current = previewRef.value;

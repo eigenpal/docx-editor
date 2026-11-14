@@ -3,7 +3,7 @@ Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-import { useRef, useSyncExternalStore } from 'react';
+import { useCallback, useRef, useSyncExternalStore } from 'react';
 import type { CollaborationParticipant } from '@docx-editor.dev/core/collaboration';
 import type { CollaborationSession } from '../collaboration/types.ts';
 import { useCollaborationSession } from './useCollaborationSession.ts';
@@ -63,8 +63,14 @@ export function useCollaborationParticipants(
   const fromContext = useCollaborationSession();
   const active = session === undefined ? fromContext : session;
   const cache = useRef<readonly CollaborationParticipant[]>(NO_PARTICIPANTS);
+  // Stable per session: an inline subscribe makes React unsubscribe and subscribe again on
+  // every render.
+  const subscribe = useCallback(
+    (notify: () => void) => active?.subscribeParticipants(() => notify()) ?? (() => {}),
+    [active]
+  );
   return useSyncExternalStore(
-    (notify) => active?.subscribeParticipants(() => notify()) ?? (() => {}),
+    subscribe,
     () => readParticipants(active, cache),
     () => readParticipants(active, cache)
   );

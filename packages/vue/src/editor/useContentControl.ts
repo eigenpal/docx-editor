@@ -68,9 +68,8 @@ function reasonFromCan(result: CanResult, code: 'locked' | 'bound' | 'notFound')
 
 /** @public */
 export function useContentControl(): UseContentControlResult {
-  const provided = inject(ContentControlContext, null);
-  const own = useContentControlInstance();
-  return provided ?? own;
+  // Under a provider, no own state: it would follow every editor change for nothing.
+  return inject(ContentControlContext, null) ?? useContentControlInstance();
 }
 
 /** @public */
@@ -95,7 +94,9 @@ export function useContentControlInstance(): UseContentControlResult {
     { immediate: true, flush: 'post' }
   );
 
-  const control = computed((): ContentControlInspectorState | null => {
+  // Both reads run on every editor change and build new objects. The previous object stays
+  // while every value is the same, so dependents do not re-run on each keystroke.
+  const freshControl = computed((): ContentControlInspectorState | null => {
     void tick.value;
     const contentControls = cc.value;
     if (!editorRef.value) return null;
@@ -137,9 +138,16 @@ export function useContentControlInstance(): UseContentControlResult {
     };
   });
 
-  const controls = computed((): readonly ContentControlSummary[] => {
+  const control = computed((previous?: ContentControlInspectorState | null) =>
+    previous !== undefined && sameFlatRecord(previous, freshControl.value)
+      ? previous
+      : freshControl.value
+  );
+
+  const controls = computed((previous?: readonly ContentControlSummary[]) => {
     void tick.value;
-    return editorRef.value?.query({ type: 'contentControls' }) ?? [];
+    const next = editorRef.value?.query({ type: 'contentControls' }) ?? [];
+    return previous !== undefined && sameFlatRecords(previous, next) ? previous : next;
   });
 
   const setShowAll = (show: boolean) => {
@@ -272,3 +280,20 @@ export function useContentControlInstance(): UseContentControlResult {
 /** @internal */
 export const ContentControlContext: InjectionKey<UseContentControlResult> =
   Symbol('ContentControlContext');
+
+/** Same own keys with `Object.is` values: the flat records a content-control read returns. */
+function sameFlatRecord(a: object | null, b: object | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every(
+    (key) =>
+      Object.prototype.hasOwnProperty.call(b, key) &&
+      Object.is((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])
+  );
+}
+
+function sameFlatRecords(a: readonly object[], b: readonly object[]): boolean {
+  return a.length === b.length && a.every((entry, index) => sameFlatRecord(entry, b[index]!));
+}

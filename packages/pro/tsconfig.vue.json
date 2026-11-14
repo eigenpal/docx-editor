@@ -28,18 +28,10 @@
       "@docx-editor.dev/vue": ["../vue/src/index.ts"]
     }
   },
-  // Every Vue-side file, wherever it lives. The main config CANNOT hold these — it compiles
+  // Every Vue-side file, wherever it lives. The main config CANNOT hold these: it compiles
   // JSX as React, and one of these reaching `@docx-editor.dev/vue` drags the Vue package's
-  // `.tsx` into a React program. So each name excluded there has to appear here, or it is
-  // type-checked by nothing at all.
-  "include": [
-    "src/vue/**/*",
-    "src/__tests__/*-vue.test.ts",
-    "src/__tests__/custom-node-vue-chrome.test.ts",
-    "src/__tests__/review-vue-harness.ts",
-    "src/__tests__/vue-runtime-audit.ts",
-    "src/collaboration/__tests__/use-collaboration-status-vue.test.ts",
-    "src/collaboration/__tests__/link-popover-remote-target-vue.test.ts"
-  ],
+  // `.tsx` into a React program. It excludes the same `src/**/*vue*` pattern, so a file with
+  // `vue` in its path is checked here, once.
+  "include": ["src/vue/**/*", "src/**/*vue*"],
   "exclude": ["node_modules", "dist"]
 }

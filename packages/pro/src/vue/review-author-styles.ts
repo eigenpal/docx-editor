@@ -51,5 +51,10 @@ export function resolveReviewAuthorInfo(
     synthetic.set(author, resolved);
     byAuthor.set(author, resolved);
   }
+  // Only authors this pass resolved keep their entry: deleted comments take theirs along,
+  // and an author who joined the roster no longer needs one.
+  for (const [author, info] of synthetic) {
+    if (byAuthor.get(author) !== info) synthetic.delete(author);
+  }
   return byAuthor;
 }

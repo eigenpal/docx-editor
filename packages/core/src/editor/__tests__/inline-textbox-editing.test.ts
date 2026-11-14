@@ -6,7 +6,8 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createDocxEditor } from '../docx-editor.ts';
-import { selectedDrawingOverlayTargetOf, selectedImageStateOf } from '../docx-editor-images.ts';
+import { selectedImageStateOf } from '../docx-editor-images.ts';
+import { selectedDrawingOverlayTargetOf } from '../drawing-overlay-target.ts';
 import { mountAnchorEditor } from './scroll-to-anchor-fixture.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -135,6 +136,30 @@ test('selecting a match selects the inline box, which resizes but does not move'
     expect(editor.findMatches('boxed needle')[0]?.scope?.kind).toBe('frame');
     const xml = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
     expect(xml).toContain('cx="2286000"');
+  } finally {
+    editor.destroy();
+  }
+});
+
+test('the overlay target keeps its object while nothing moves, and changes when the box resizes', () => {
+  const editor = createDocxEditor({
+    container: document.createElement('div'),
+    document: inlineTextboxDocx(),
+  });
+  try {
+    const match = editor.findMatches('boxed needle')[0]!;
+    expect(editor.selectMatch(match).ok).toBe(true);
+    const first = selectedDrawingOverlayTargetOf(editor.surface!);
+    expect(first).not.toBeNull();
+    // The overlay asks after each keystroke inside the box; an unchanged answer is the same
+    // object, so the overlay renders nothing.
+    expect(selectedDrawingOverlayTargetOf(editor.surface!)).toBe(first);
+    expect(
+      editor.exec({ type: 'setImageProperties', widthEmu: 2286000, heightEmu: 571500 }).ok
+    ).toBe(true);
+    const resized = selectedDrawingOverlayTargetOf(editor.surface!);
+    expect(resized).not.toBe(first);
+    expect(resized?.widthEmu).toBe(2286000);
   } finally {
     editor.destroy();
   }

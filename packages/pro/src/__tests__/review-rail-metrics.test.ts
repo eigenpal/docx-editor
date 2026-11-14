@@ -203,9 +203,18 @@ describe('observeReviewRailMetrics', () => {
     frames[0]!();
     expect(seen.length).toBe(3);
 
+    // A measure request reads again on the existing observers.
+    scale = 3;
+    stop.measure();
+    expect(seen.at(-1)).toBe(3);
+    expect(resizeCallbacks.length).toBe(1);
+
     stop();
     expect(disconnected).toBe(2);
     expect(listeners.has('scroll')).toBe(false);
+    const count = seen.length;
+    stop.measure();
+    expect(seen.length).toBe(count);
   });
 });
 

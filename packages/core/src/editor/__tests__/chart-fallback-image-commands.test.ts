@@ -10,7 +10,7 @@ import { createT, en, localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { chartexDocx, waterfallChartSpace } from '../../store/__tests__/chartex-fixture.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
-import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
+import { selectedDrawingOverlayTargetOf } from '../drawing-overlay-target.ts';
 import { CHART_DRAWING_REASON } from '../image-state-rules.ts';
 import { toolbarCommandState } from '../toolbar-commands.ts';
 import type { EditorCommand } from '../../contracts/editor.ts';
