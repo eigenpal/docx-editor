@@ -17,7 +17,8 @@ import {
   mountWithImages,
 } from './image-decode-harness.ts';
 import { createDocxEditor } from '../docx-editor.ts';
-import { selectedDrawingOverlayTargetOf, selectedImageStateOf } from '../docx-editor-images.ts';
+import { selectedImageStateOf } from '../docx-editor-images.ts';
+import { selectedDrawingOverlayTargetOf } from '../drawing-overlay-target.ts';
 import { paragraphTextOf } from '../../store/store/tree-ops.ts';
 import type { InlineDrawingRecord } from '../../layout/drawing-layout.ts';
 import type { PaginatedSurface } from '../paginated-surface.ts';

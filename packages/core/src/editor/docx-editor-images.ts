@@ -1193,13 +1193,14 @@ function overlayCapabilityFlags(
 }
 
 /**
- * The painted geometry of the selected drawing, for the resize/move overlay — or null.
+ * The painted geometry of the selected drawing, built anew on each call. Read it through
+ * `selectedDrawingOverlayTargetOf`, which keeps the previous object when nothing changed.
  *
  * Stricter than {@link selectedImageStateOf}: it also requires a COLLAPSED selection, because a
  * range that merely contains a drawing is a text selection, and drawing handles over it would
  * claim an object the user did not single out.
  */
-export function selectedDrawingOverlayTargetOf(
+export function freshSelectedDrawingOverlayTarget(
   surface: PaginatedSurface | null
 ): SelectedDrawingOverlayTarget | null {
   if (!surface) return null;

@@ -122,7 +122,7 @@ export function ReviewList({
   className,
   hidden,
 }: ReviewListProps) {
-  const { review, measure, cardClassName } = useRail();
+  const { review, slotRef, cardClassName } = useRail();
   if (hidden) return null;
 
   const listChildren =
@@ -153,9 +153,7 @@ export function ReviewList({
               // full summary there reads as annotating the wrong text. Clicking it makes
               // the item active, and the active card always renders in full.
               {...(collapsed?.has(entry.key) ? { 'data-collapsed': '' } : {})}
-              ref={(node) => {
-                measure(node, entry.key);
-              }}
+              ref={slotRef(entry.key)}
             >
               {typeof children === 'function' ? (
                 children(entry)

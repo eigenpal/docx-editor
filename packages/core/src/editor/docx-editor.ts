@@ -122,6 +122,7 @@ import {
   pageSetupEqual,
   selectionsMatch,
   snapshotsEqual,
+  tableContextEqual,
 } from './docx-editor-support.ts';
 import { createDocumentOpenFailureState } from './document-open-failure.ts';
 import { execEditorCommand } from './docx-editor-exec.ts';
@@ -1406,6 +1407,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ? previous.selection
         : fresh.selection;
       const image = imageContextEqual(fresh.image, previous.image) ? previous.image : fresh.image;
+      const table = tableContextEqual(fresh.table, previous.table) ? previous.table : fresh.table;
       const fontSubstitutions =
         previous.fontSubstitutions !== undefined &&
         fresh.fontSubstitutions !== undefined &&
@@ -1413,7 +1415,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         fresh.fontSubstitutions.every((family, i) => previous.fontSubstitutions![i] === family)
           ? previous.fontSubstitutions
           : fresh.fontSubstitutions;
-      next = { ...fresh, formatting, page, pageSetup, selection, image, fontSubstitutions };
+      next = { ...fresh, formatting, page, pageSetup, selection, image, table, fontSubstitutions };
       // Reuse the previous REFERENCE only when neither the caret NOR the document moved.
       //
       // The snapshot is a lossy projection: `selection` is paragraph-granular (a

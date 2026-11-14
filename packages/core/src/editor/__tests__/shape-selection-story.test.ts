@@ -7,7 +7,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { expect, test } from 'bun:test';
 import { drawingFramePressTarget, passDrawingFramePress } from '../drawing-overlay-press.ts';
 import type { DocxEditorInstance } from '../docx-editor.ts';
-import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
+import { selectedDrawingOverlayTargetOf } from '../drawing-overlay-target.ts';
 import type { AnchoredDrawingRecord } from '../../layout/drawing-layout.ts';
 import { headerFooterAnchoredDrawingOrigin } from '../../layout/header-footer-drawing-origin.ts';
 import type { HeaderFooterStoryRecord, PageRecord } from '../../layout/semantic-records.ts';

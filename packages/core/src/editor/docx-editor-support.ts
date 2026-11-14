@@ -918,4 +918,5 @@ export {
   pageEqual,
   pageSetupEqual,
   snapshotsEqual,
+  tableContextEqual,
 } from './docx-editor-equality.ts';

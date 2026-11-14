@@ -170,7 +170,8 @@ function generatedColor(xml: string): OoxmlElement | null {
       break;
     }
   }
-  parsedColors.set(xml, element);
+  // Bounded, as the chartex twin is: a long-lived server process renders many documents.
+  if (parsedColors.size < 4_096) parsedColors.set(xml, element);
   return element;
 }
 
