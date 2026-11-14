@@ -36,6 +36,7 @@ import {
   type RenderScaleSource,
   type ReviewRailGeometry,
   type ReviewRailMetrics,
+  type ReviewRailObservation,
 } from '../review/rail-metrics.ts';
 
 /**
@@ -65,23 +66,31 @@ export function bindReviewRailMetrics(
   binding: ReviewRailMetricsBinding
 ): Readonly<ShallowRef<ReviewRailGeometry>> {
   const metrics = shallowRef<ReviewRailGeometry>(INITIAL_REVIEW_RAIL_METRICS);
+  let observation: ReviewRailObservation | null = null;
+  // The observers live as long as the rail, the editor and the scroll mode. A `remeasure`
+  // change (every review edit) only measures again: rebuilding the observers on each one
+  // re-read every rect twice and churned observer state for nothing.
   watch(
-    [binding.rail, binding.editor, binding.trackScroll, binding.remeasure],
+    [binding.rail, binding.editor, binding.trackScroll],
     ([rail, editor, trackScroll], _previous, onCleanup) => {
       if (!rail || !editor) return;
-      onCleanup(
-        observeReviewRailMetrics(
-          rail,
-          editor,
-          (next) => {
-            if (!sameReviewRailMetrics(metrics.value, next)) metrics.value = next;
-          },
-          { trackScroll, beforeMeasure: binding.beforeMeasure }
-        )
+      const current = observeReviewRailMetrics(
+        rail,
+        editor,
+        (next) => {
+          if (!sameReviewRailMetrics(metrics.value, next)) metrics.value = next;
+        },
+        { trackScroll, beforeMeasure: binding.beforeMeasure }
       );
+      observation = current;
+      onCleanup(() => {
+        current();
+        if (observation === current) observation = null;
+      });
     },
     { flush: 'post', immediate: true }
   );
+  watch(binding.remeasure, () => observation?.measure(), { flush: 'post' });
   return metrics;
 }
 

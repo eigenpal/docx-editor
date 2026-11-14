@@ -164,6 +164,13 @@ export function ImageSelectionOverlay({
     return () => container.removeEventListener('pointerdown', onPointerDown, { capture: true });
   }, [containerRef, editor, target?.id]);
 
+  const refreshOrigin = useCallback(() => {
+    setOrigin((previous) => {
+      const next = overlayHostOrigin(containerRef.current);
+      return next.left === previous.left && next.top === previous.top ? previous : next;
+    });
+  }, [containerRef]);
+
   useEffect(() => {
     if (!editor) {
       setTarget(null);
@@ -171,6 +178,14 @@ export function ImageSelectionOverlay({
     }
     const sync = (): void => {
       setTarget(selectedDrawingOverlayTargetOf(editor.surface));
+    };
+    // A selection of a drawing measures the origin again, as a new target used to: the
+    // target keeps its object while its values hold, and content above the pages can move
+    // the origin without resizing what the observer watches.
+    const onSelectionChange = (): void => {
+      const next = selectedDrawingOverlayTargetOf(editor.surface);
+      setTarget(next);
+      if (next) refreshOrigin();
     };
     // Document `change` can fire synchronously from inside a surface commit (the facade
     // listens on the session and emits before `selectionAfter` runs). Running overlay
@@ -181,22 +196,19 @@ export function ImageSelectionOverlay({
       queueMicrotask(sync);
     };
     sync();
-    const off = [editor.on('change', syncAfterCommit), editor.on('selectionChange', sync)];
+    const off = [
+      editor.on('change', syncAfterCommit),
+      editor.on('selectionChange', onSelectionChange),
+    ];
     return () => {
       for (const unsubscribe of off) unsubscribe();
     };
-  }, [editor]);
-
-  const refreshOrigin = useCallback(() => {
-    setOrigin((previous) => {
-      const next = overlayHostOrigin(containerRef.current);
-      return next.left === previous.left && next.top === previous.top ? previous : next;
-    });
-  }, [containerRef]);
+  }, [editor, refreshOrigin]);
 
   useEffect(() => {
-    // Once per selection too: keyed on `target`, so a portal that mounted after the first
-    // pass still gets its observer, and a fresh selection re-measures a moved origin.
+    // Once per target too: keyed on `target`, so a portal that mounted after the first pass
+    // still gets its observer. A repeated selection of the same drawing re-measures in the
+    // `selectionChange` handler, since its target keeps the same object.
     refreshOrigin();
     const portal = portalRef.current;
     const Observer = hostWindowOf(portal).ResizeObserver;
@@ -441,8 +453,11 @@ export function ImageSelectionOverlay({
     [clearPreview, editor]
   );
 
+  // Keyed on the drag being active, not on each preview: every pointer move sets a new
+  // preview, and the handlers read the current one through `previewRef`.
+  const dragging = preview !== null;
   useEffect(() => {
-    if (!preview || !editor?.surface) return undefined;
+    if (!dragging || !editor?.surface) return undefined;
     const coordinates = editor.surface.overlayCoordinates();
     const onPointerMove = (event: PointerEvent) => {
       const current = previewRef.current;
@@ -555,7 +570,7 @@ export function ImageSelectionOverlay({
       win.removeEventListener('pointerup', finish);
       win.removeEventListener('pointercancel', finish);
     };
-  }, [clearPreview, commitSession, containerRef, editor, preview]);
+  }, [clearPreview, commitSession, containerRef, dragging, editor]);
 
   useEffect(() => {
     if (!target || focusRequestedForDrawingRef.current !== target.id) return;

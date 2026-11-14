@@ -13,10 +13,8 @@ import {
   findDrawingOverlayFrameInLayout,
   hitTestFragments,
 } from '../../layout/semantic-hit-test.ts';
-import {
-  selectedDrawingOverlayTargetOf,
-  type ImageInteractionSession,
-} from '../docx-editor-images.ts';
+import { type ImageInteractionSession } from '../docx-editor-images.ts';
+import { selectedDrawingOverlayTargetOf } from '../drawing-overlay-target.ts';
 import {
   finalizeImageOverlayInteraction,
   overlayFrameCssBox,

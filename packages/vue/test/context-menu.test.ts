@@ -94,6 +94,39 @@ describe('DocxEditorContextMenu', () => {
     }
   });
 
+  test('editor state changes keep the one contextmenu listener', async () => {
+    const mounted = mountMenu();
+    try {
+      await flush();
+      const scroller = mounted.container.querySelector<HTMLElement>(
+        '.docx-editor__scroll-container'
+      )!;
+      const added: string[] = [];
+      const removed: string[] = [];
+      const add = scroller.addEventListener.bind(scroller);
+      const remove = scroller.removeEventListener.bind(scroller);
+      scroller.addEventListener = ((type: string, ...rest: [never, never?]) => {
+        added.push(type);
+        return add(type, ...rest);
+      }) as typeof scroller.addEventListener;
+      scroller.removeEventListener = ((type: string, ...rest: [never, never?]) => {
+        removed.push(type);
+        return remove(type, ...rest);
+      }) as typeof scroller.removeEventListener;
+      const editor = mounted.editor();
+      editor.setZoom(1.25);
+      await flush();
+      editor.setZoom(1.5);
+      await flush();
+      expect(added.filter((type) => type === 'contextmenu')).toEqual([]);
+      expect(removed.filter((type) => type === 'contextmenu')).toEqual([]);
+      await openMenu(mounted.container);
+      expect(panel(mounted.container)).not.toBeNull();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   test('the default set is the packaged rows; Add comment needs a review rail', async () => {
     const mounted = mountMenu();
     try {

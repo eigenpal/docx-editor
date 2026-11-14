@@ -8,7 +8,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // scroller is on screen is `use-rail-window.ts`. Split out of `DocxEditorReview.tsx`, which is
 // at its max-lines cap.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import {
   INITIAL_REVIEW_RAIL_METRICS,
@@ -16,6 +16,7 @@ import {
   sameReviewRailMetrics,
   type RenderScaleSource,
   type ReviewRailGeometry,
+  type ReviewRailObservation,
 } from '../review/rail-metrics.ts';
 
 export { COMPACT_CARD_WIDTH } from '../review/rail-metrics.ts';
@@ -25,8 +26,9 @@ export { RAIL_OVERSCAN } from '../review/rail-window.ts';
 /**
  * Where the rail sits; the measurement itself is `measureReviewRailMetrics`.
  *
- * `remeasure` re-runs the binding whenever the queue could have moved: a new page above an
- * anchor changes where its card belongs, and zoom changes every anchor at once. `mounted`
+ * `remeasure` measures again whenever the queue could have moved: a new page above an
+ * anchor changes where its card belongs, and zoom changes every anchor at once. It does not
+ * rebuild the observers, which live as long as the rail, the editor and `trackScroll`. `mounted`
  * must be false while the rail element does not exist (document absent, `hidden`), so a
  * binding pass that ran against the null ref runs again once there is a rail to measure.
  *
@@ -41,6 +43,7 @@ export function useRailMetrics(
   trackScroll = false
 ): ReviewRailGeometry {
   const [metrics, setMetrics] = useState<ReviewRailGeometry>(INITIAL_REVIEW_RAIL_METRICS);
+  const observation = useRef<ReviewRailObservation | null>(null);
   useEffect(() => {
     const rail = railRef.current;
     if (!editor || !rail) return undefined;
@@ -70,7 +73,18 @@ export function useRailMetrics(
       { trackScroll }
     );
     bound = true;
-    return stop;
-  }, [editor, railRef, remeasure, mounted, trackScroll]);
+    observation.current = stop;
+    return () => {
+      stop();
+      if (observation.current === stop) observation.current = null;
+    };
+  }, [editor, railRef, mounted, trackScroll]);
+  // The first pass skips: the binding effect just measured.
+  const measuredFor = useRef(remeasure);
+  useEffect(() => {
+    if (Object.is(measuredFor.current, remeasure)) return;
+    measuredFor.current = remeasure;
+    observation.current?.measure();
+  }, [remeasure]);
   return metrics;
 }

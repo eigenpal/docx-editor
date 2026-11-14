@@ -40,6 +40,10 @@ export function useScopedChromeAnchor(
     let observedAnchor: HTMLElement | null = null;
     const resizeObserver = new view.ResizeObserver(() => schedule());
 
+    // Frames, scrolls and repaints call this constantly; most of them move nothing.
+    const place = (next: CSSProperties) =>
+      setStyle((previous) => (sameStyle(previous, next) ? previous : next));
+
     const update = () => {
       frame = 0;
       const anchor = findAnchor(viewport);
@@ -51,7 +55,7 @@ export function useScopedChromeAnchor(
         observedAnchor = anchor;
       }
       if (!anchor || !anchor.isConnected) {
-        setStyle({ visibility: 'hidden' });
+        place({ visibility: 'hidden' });
         return;
       }
 
@@ -80,7 +84,7 @@ export function useScopedChromeAnchor(
       const documentTop = documentPoint.top;
       const viewportEdge = attachedInsideViewport ? viewport.scrollLeft + 8 : 8;
 
-      setStyle({
+      place({
         position: attachedInsideViewport ? 'absolute' : 'fixed',
         left: placement === 'story-label' ? documentLeft : Math.max(viewportEdge, documentLeft + 8),
         top:
@@ -124,4 +128,11 @@ export function useScopedChromeAnchor(
   }, [chrome, findAnchor, placement]);
 
   return { ref, style };
+}
+
+/** Whether two placement styles hold the same values, so an unchanged frame renders nothing. */
+function sameStyle(a: CSSProperties, b: CSSProperties): boolean {
+  const keys = Object.keys(a) as (keyof CSSProperties)[];
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((key) => a[key] === b[key]);
 }

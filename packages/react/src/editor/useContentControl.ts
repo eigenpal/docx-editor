@@ -6,7 +6,15 @@
 // — `runToolbarCommand('contentControl.inspector')` only validates that a control is
 // at the caret; opening the panel is this hook's job.
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { ContentControlSummary, ContentControlType } from '@docx-editor.dev/core';
 import type { CanResult, EditorSnapshot, ExecResult } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
@@ -109,7 +117,9 @@ function reasonFromCan(result: CanResult, code: 'locked' | 'bound' | 'notFound')
  */
 export function useContentControl(): UseContentControlResult {
   const provided = useContext(ContentControlContext);
-  const own = useContentControlInstance();
+  // Hooks cannot be skipped, so the own state is built either way. Under a provider it does
+  // not follow the editor, or every consumer would re-render on each keystroke.
+  const own = useContentControlState(provided === null);
   return provided ?? own;
 }
 
@@ -120,6 +130,14 @@ export function useContentControl(): UseContentControlResult {
  * @public
  */
 export function useContentControlInstance(): UseContentControlResult {
+  return useContentControlState(true);
+}
+
+const selectSnapshot = (snapshot: EditorSnapshot): EditorSnapshot | null => snapshot;
+const selectNothing = (): EditorSnapshot | null => null;
+
+/** The chrome state; while `active` is false it does not follow editor changes. */
+function useContentControlState(active: boolean): UseContentControlResult {
   const editor = useDocxEditor();
   const [inspectorOpen, setInspectorOpen] = useState(false);
   // Show-all / form-fill live on the surface and often move without a document revision or
@@ -129,7 +147,7 @@ export function useContentControlInstance(): UseContentControlResult {
   const [formFill, setFormFillState] = useState(false);
 
   // Snapshot is the change signal; surface content-control state moves with it.
-  const tick = useEditorState((snapshot: EditorSnapshot) => snapshot);
+  const tick = useEditorState(active ? selectSnapshot : selectNothing);
 
   const surface = editor?.surface ?? null;
   const cc = surface?.contentControls;
@@ -140,7 +158,12 @@ export function useContentControlInstance(): UseContentControlResult {
     setFormFillState(cc?.formFill() ?? surface?.state().contentControls.formFill ?? false);
   }, [tick, cc, surface]);
 
-  const control = useMemo((): ContentControlInspectorState | null => {
+  // Both reads run on every editor change and build new objects. The previous object stays
+  // while every value is the same, so this context does not re-render its consumers on
+  // each keystroke.
+  const lastControl = useRef<ContentControlInspectorState | null>(null);
+  const lastControls = useRef<readonly ContentControlSummary[]>([]);
+  const freshControl = useMemo((): ContentControlInspectorState | null => {
     void tick;
     if (!editor) return null;
 
@@ -187,12 +210,22 @@ export function useContentControlInstance(): UseContentControlResult {
       effectiveLock: null,
     };
   }, [editor, tick, cc]);
+  const control = sameFlatRecord(lastControl.current, freshControl)
+    ? lastControl.current
+    : freshControl;
 
-  const controls = useMemo((): readonly ContentControlSummary[] => {
+  const freshControls = useMemo((): readonly ContentControlSummary[] => {
     void tick;
     if (!editor) return [];
     return editor.query({ type: 'contentControls' });
   }, [editor, tick]);
+  const controls = sameFlatRecords(lastControls.current, freshControls)
+    ? lastControls.current
+    : freshControls;
+  useEffect(() => {
+    lastControl.current = control;
+    lastControls.current = controls;
+  });
 
   const setShowAll = useCallback(
     (show: boolean) => {
@@ -351,3 +384,20 @@ export function useContentControlInstance(): UseContentControlResult {
 
 /** Shared chrome state — one per `DocxEditor.Root`. @internal */
 export const ContentControlContext = createContext<UseContentControlResult | null>(null);
+
+/** Same own keys with `Object.is` values: the flat records a content-control read returns. */
+function sameFlatRecord(a: object | null, b: object | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every(
+    (key) =>
+      Object.prototype.hasOwnProperty.call(b, key) &&
+      Object.is((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])
+  );
+}
+
+function sameFlatRecords(a: readonly object[], b: readonly object[]): boolean {
+  return a.length === b.length && a.every((entry, index) => sameFlatRecord(entry, b[index]!));
+}

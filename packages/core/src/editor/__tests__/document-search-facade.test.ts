@@ -5,10 +5,8 @@ import { describe, expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { findDrawingOverlayFrameInLayout } from '../../layout/semantic-hit-test.ts';
 import { createDocxEditor } from '../docx-editor.ts';
-import {
-  resolveSelectedDrawingRecord,
-  selectedDrawingOverlayTargetOf,
-} from '../docx-editor-images.ts';
+import { resolveSelectedDrawingRecord } from '../docx-editor-images.ts';
+import { selectedDrawingOverlayTargetOf } from '../drawing-overlay-target.ts';
 import { FOOTNOTE_SCOPE_ID, HEADER_R_ID, storyParityDocx } from './story-parity-fixture.ts';
 import { mountAnchorEditor } from './scroll-to-anchor-fixture.ts';
 

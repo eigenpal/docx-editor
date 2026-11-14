@@ -18,10 +18,8 @@ import type { OoxmlDrawingNode, OoxmlElement } from '../../store/package/ooxml-t
 import { createInlineDrawingLayoutBundle } from '../../layout/inline-drawing-source.ts';
 import { findDrawingOverlayFrameInLayout } from '../../layout/semantic-hit-test.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
-import {
-  PICTURE_SELECTED_INSERT_REASON,
-  selectedDrawingOverlayTargetOf,
-} from '../docx-editor-images.ts';
+import { PICTURE_SELECTED_INSERT_REASON } from '../docx-editor-images.ts';
+import { selectedDrawingOverlayTargetOf } from '../drawing-overlay-target.ts';
 import { toolbarCommandState } from '../toolbar-commands.ts';
 import { stubReviewModule } from './review-test-module.ts';
 import type { EditorDiagnostic } from '../../contracts/diagnostics.ts';

@@ -23,10 +23,16 @@ import { useChromeDark } from './color-mode-context';
 
 const selectShowLoading = (snapshot: EditorSnapshot) =>
   snapshot.isLoading || snapshot.isOpening === true;
-const selectLoadingPageSize = (snapshot: EditorSnapshot) => ({
+interface LoadingPageSize {
+  readonly width: number;
+  readonly height: number;
+}
+const selectLoadingPageSize = (snapshot: EditorSnapshot): LoadingPageSize => ({
   width: twipsToPixels(snapshot.pageSetup?.pageWidthTwips ?? 12_240) * snapshot.zoom,
   height: twipsToPixels(snapshot.pageSetup?.pageHeightTwips ?? 15_840) * snapshot.zoom,
 });
+const sameLoadingPageSize = (a: LoadingPageSize, b: LoadingPageSize) =>
+  a.width === b.width && a.height === b.height;
 
 /**
  * Props for `DocxEditor.Loading`. Two slots replace parts of the packaged screen: `indicator`
@@ -121,7 +127,7 @@ const DocxEditorLoadingImpl = defineComponent({
   },
   setup(props, { slots }) {
     const showLoading = useEditorState(selectShowLoading);
-    const pageSize = useEditorState(selectLoadingPageSize);
+    const pageSize = useEditorState(selectLoadingPageSize, sameLoadingPageSize);
     const below = useOpeningIndicator(() => props.overlay);
     const chromeDark = useChromeDark();
     const editor = useDocxEditor();

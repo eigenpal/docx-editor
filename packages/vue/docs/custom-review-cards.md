@@ -2,56 +2,38 @@
 
 # Custom cards in the review rail
 
-Render `DocxEditorReview` with `preset` set to `false` and put your card component inside it. The component reads items from `useReview()`, stacks measured cards with `useStackedReviewPositions`, and converts positions to pixels with `useReviewRailMetrics()`.
+Render `DocxEditorReview` with `preset` set to `false` and put your card component inside it. The component reads items from `useReview()`, measures cards with `useReviewCardHeights()`, stacks them with `useStackedReviewPositions`, and converts positions to pixels with `useReviewRailMetrics()`.
 
 ## Render custom cards
 
-The following example measures each card with a `ResizeObserver`, stacks the cards, and shows a refused decision:
+The following example measures each card, stacks the cards, and shows a refused decision:
 
 ```vue
 <!-- MyCards.vue -->
 <script setup lang="ts">
-import { onBeforeUnmount, shallowReactive } from 'vue';
 import {
   DocxEditorReview,
   useReview,
+  useReviewCardHeights,
   useReviewRailMetrics,
   useStackedReviewPositions,
 } from '@docx-editor.dev/pro/vue';
 
 const { items, selectionAnchorY, accept, lastRefusal } = useReview();
 const { metrics } = useReviewRailMetrics();
-// Reactive, so a new measurement restacks the cards.
-const heights = shallowReactive(new Map<string, number>());
+const { heights, cardRef } = useReviewCardHeights(items);
 const positions = useStackedReviewPositions(items, heights, () => ({
   scale: metrics.value.scale,
   defaultHeight: 96,
 }));
 const top = (y: number) => `${metrics.value.top + y * metrics.value.scale}px`;
-
-const observed = new Map<string, { el: HTMLElement; observer: ResizeObserver }>();
-function measure(key: string, el: unknown) {
-  const node = el as HTMLElement | null;
-  const current = observed.get(key);
-  if (current?.el === node) return;
-  current?.observer.disconnect();
-  observed.delete(key);
-  if (!node) {
-    heights.delete(key);
-    return;
-  }
-  const observer = new ResizeObserver(() => heights.set(key, node.offsetHeight));
-  observer.observe(node);
-  observed.set(key, { el: node, observer });
-}
-onBeforeUnmount(() => observed.forEach(({ observer }) => observer.disconnect()));
 </script>
 
 <template>
   <div
     v-for="item in items"
     :key="item.key"
-    :ref="(el) => measure(item.key, el)"
+    :ref="cardRef(item.key)"
     :style="{ position: 'absolute', top: top(positions.get(item.key) ?? 0) }"
   >
     {{ item.text }}
@@ -77,8 +59,6 @@ import MyCards from './MyCards.vue';
 </template>
 ```
 
-A plain `Map` is not reactive. Use `shallowReactive(new Map())`, or a ref that you replace on each change.
-
 `accept` returns `false` when the editor refuses, and `lastRefusal` names the item and the diagnostic code. `DocxEditorReview` already announces each refusal in a live region, so show it in the card as plain text. For a translated sentence, call `useReviewRefusalMessage()`.
 
 ## Position cards and drafts
@@ -87,7 +67,7 @@ Convert a layout position to CSS pixels with `metrics.top + position * metrics.s
 
 | Input to `useStackedReviewPositions` | Description |
 | --- | --- |
-| `heights` | Measured card heights in CSS pixels, by item key. A card without a height reserves `defaultHeight`, and a taller card overlaps the next one. |
+| `heights` | Measured card heights in CSS pixels, by item key, from `useReviewCardHeights(items)`. A card without a height reserves `defaultHeight`, and a taller card overlaps the next one until it is measured. |
 | `scale` | `metrics.scale`, CSS pixels per layout point. |
 | `defaultHeight` | The height to reserve before a card is measured. |
 
@@ -107,8 +87,9 @@ With `preset` set to `false`, the rail adds no defaults, but recognized parts ke
 
 ## Limits
 
-- Disconnect each observer when its card unmounts or its item changes.
-- In React, keep the heights map reference-stable. In Vue, keep it reactive.
+- `useReviewCardHeights()` observes each card in its own window, so it works in a pop-out window. It stops observing when the component unmounts, and drops the height of each item that leaves `items`. Pass the full item list, not only the cards on screen. In Vue, put `cardRef` on an element, or on a component with one root element that does not change.
+- To hide a card, unmount it. A card hidden with `display: none` measures zero, so it keeps its last height and its space in the stack.
+- If you measure cards yourself, compare each height with the last one you recorded outside component state, and write state only when it differs. In React, also pass a stable ref callback. A state write on every commit can cause a render loop.
 - In the compact rail, `metrics.compact` is `true`. Place cards at `metrics.compactCardLeft`; `Draft` does this itself.
 - Keep the column hidden while `metrics.left` is `null`.
 

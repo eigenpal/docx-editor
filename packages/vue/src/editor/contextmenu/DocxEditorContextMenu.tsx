@@ -8,7 +8,6 @@ import {
   ref,
   shallowRef,
   watch,
-  watchEffect,
   type CSSProperties,
   type PropType,
   type VNode,
@@ -425,35 +424,44 @@ export const DocxEditorContextMenu = defineComponent({
 
     /** The scroller the open menu came from: its document and window own the menu. */
     let menuScroller: HTMLElement | null = null;
-    watchEffect((onCleanup) => {
+    // Re-resolved on each state change, so a scroller that mounts later is found. The listener
+    // below follows only the element: a keystroke that leaves it in place re-binds nothing.
+    const listenScroller = computed(() => {
       void stateTick.value;
-      if (props.disabled) return;
-      const scroller =
+      if (props.disabled) return null;
+      return (
         scrollerFor(hostRef.value) ??
         (hostRef.value
           ? hostDocumentOf(hostRef.value).querySelector<HTMLElement>(
               '.docx-editor__scroll-container'
             )
-          : null);
-      if (!scroller) return;
-      const onContextMenu = (event: MouseEvent) => {
-        // A second right-click on the open panel neither moves it nor shows the browser's menu.
-        if (panelRef.value?.contains(event.target as Node | null)) {
-          event.preventDefault();
-          return;
-        }
-        // Chrome in the scroller, such as the link popover, keeps the browser's own menu.
-        if (!isDocumentContextMenuTarget(scroller, event.target)) return;
-        event.preventDefault();
-        const keyboard = isKeyboardContextMenu(event);
-        menuScroller = scroller;
-        tocId.value = editorRef.value?.snapshot().tocContext?.id ?? null;
-        target.value = keyboard || !isHTMLElementNode(event.target) ? null : event.target;
-        anchor.value = contextMenuAnchorOf(event, keyboard, editorRef.value, scroller);
-      };
-      scroller.addEventListener('contextmenu', onContextMenu);
-      onCleanup(() => scroller.removeEventListener('contextmenu', onContextMenu));
+          : null)
+      );
     });
+    watch(
+      listenScroller,
+      (scroller, _previous, onCleanup) => {
+        if (!scroller) return;
+        const onContextMenu = (event: MouseEvent) => {
+          // A second right-click on the open panel neither moves it nor shows the browser's menu.
+          if (panelRef.value?.contains(event.target as Node | null)) {
+            event.preventDefault();
+            return;
+          }
+          // Chrome in the scroller, such as the link popover, keeps the browser's own menu.
+          if (!isDocumentContextMenuTarget(scroller, event.target)) return;
+          event.preventDefault();
+          const keyboard = isKeyboardContextMenu(event);
+          menuScroller = scroller;
+          tocId.value = editorRef.value?.snapshot().tocContext?.id ?? null;
+          target.value = keyboard || !isHTMLElementNode(event.target) ? null : event.target;
+          anchor.value = contextMenuAnchorOf(event, keyboard, editorRef.value, scroller);
+        };
+        scroller.addEventListener('contextmenu', onContextMenu);
+        onCleanup(() => scroller.removeEventListener('contextmenu', onContextMenu));
+      },
+      { immediate: true }
+    );
 
     watch(
       anchor,

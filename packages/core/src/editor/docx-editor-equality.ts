@@ -12,6 +12,7 @@ import type {
   EditorSnapshot,
   PageSetup,
   RunFormatting,
+  TableContext,
 } from '@docx-editor.dev/core/contracts/editor';
 import { isDocAnchorRange } from './anchor-resolution.ts';
 
@@ -137,6 +138,21 @@ export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null
 /** Value equality for the snapshot's `page` sub-object. */
 export function pageEqual(a: EditorSnapshot['page'], b: EditorSnapshot['page']): boolean {
   return a.current === b.current && a.total === b.total;
+}
+
+/**
+ * Value equality for the snapshot's `table` sub-object. Without the reuse it enables, every
+ * tick with the caret in a table derived a new snapshot, and each table control re-rendered.
+ */
+export function tableContextEqual(a: TableContext | null, b: TableContext | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.rows === b.rows &&
+    a.columns === b.columns &&
+    a.rowIndex === b.rowIndex &&
+    a.columnIndex === b.columnIndex
+  );
 }
 
 /** Value equality for the snapshot's `pageSetup` sub-object. */

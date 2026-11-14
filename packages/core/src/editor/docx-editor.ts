@@ -123,6 +123,7 @@ import {
   pageSetupEqual,
   selectionsMatch,
   snapshotsEqual,
+  tableContextEqual,
 } from './docx-editor-support.ts';
 import { createDocumentOpenFailureState } from './document-open-failure.ts';
 import { execEditorCommand } from './docx-editor-exec.ts';
@@ -1386,6 +1387,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * value-equal, so references only change when values do.
    */
   let cachedFontConfiguration: FontConfigurationBase | undefined;
+  let snapshotRetries = 0;
   function snapshotNow(): EditorSnapshot {
     if (cachedSnapshot && cachedVersion === stateVersion) return cachedSnapshot;
     const previous = cachedSnapshot;
@@ -1400,7 +1402,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const revision = surface?.session.packageRevision() ?? -1;
     const documentUnmoved = revision === cachedRevision;
     cachedRevision = revision;
+    const entryVersion = stateVersion;
     const fresh = deriveSnapshot();
+    // A derive that reads layout can land buffered typing, which moves state it already read.
+    // Derive the moved state instead of caching a torn one. Bounded: a flush lands once.
+    if (stateVersion !== entryVersion && snapshotRetries < 2) {
+      snapshotRetries += 1;
+      try {
+        return snapshotNow();
+      } finally {
+        snapshotRetries -= 1;
+      }
+    }
     let next: EditorSnapshot = fresh;
     if (previous) {
       const formatting = formattingEqual(fresh.formatting, previous.formatting)
@@ -1414,6 +1427,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ? previous.selection
         : fresh.selection;
       const image = imageContextEqual(fresh.image, previous.image) ? previous.image : fresh.image;
+      const table = tableContextEqual(fresh.table, previous.table) ? previous.table : fresh.table;
       const fontSubstitutions =
         previous.fontSubstitutions !== undefined &&
         fresh.fontSubstitutions !== undefined &&
@@ -1421,7 +1435,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         fresh.fontSubstitutions.every((family, i) => previous.fontSubstitutions![i] === family)
           ? previous.fontSubstitutions
           : fresh.fontSubstitutions;
-      next = { ...fresh, formatting, page, pageSetup, selection, image, fontSubstitutions };
+      next = { ...fresh, formatting, page, pageSetup, selection, image, table, fontSubstitutions };
       // Reuse the previous REFERENCE only when neither the caret NOR the document moved.
       //
       // The snapshot is a lossy projection: `selection` is paragraph-granular (a

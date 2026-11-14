@@ -5,7 +5,8 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { expect, test } from 'bun:test';
 import { createDocxEditor } from '../docx-editor.ts';
-import { selectedImageStateOf, selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
+import { selectedImageStateOf } from '../docx-editor-images.ts';
+import { selectedDrawingOverlayTargetOf } from '../drawing-overlay-target.ts';
 import { textboxDocx } from './textbox-editing-fixture.ts';
 
 test('textbox typing uses its story and supports undo', () => {

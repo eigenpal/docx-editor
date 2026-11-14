@@ -89,6 +89,10 @@ export {
   type ResolvedCustomNodeActivation,
 } from './custom-node-activation.ts';
 export {
+  useReviewCardHeights,
+  type UseReviewCardHeightsReturn,
+} from './use-review-card-heights.ts';
+export {
   useReview,
   useReviewOf,
   useStackedReviewPositions,

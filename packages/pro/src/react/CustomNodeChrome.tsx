@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // Chip chrome for custom nodes: per-definition colour, plus click and hover.
 // Mount once inside `DocxEditor.Root`.
 
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useDocxEditor, useEditorHostDocument } from '@docx-editor.dev/react';
 import {
   CUSTOM_NODE_IDENTITY_PATTERN,
@@ -84,10 +84,11 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
   const hostDocument = useEditorHostDocument();
 
   // Colours are host-authored; validated anyway so a typo cannot produce a broken rule.
-  useEffect(() => {
-    if (!hostDocument) return undefined;
+  // Keyed on the rule text, so an inline `nodes` array with the same definitions keeps the
+  // element in place instead of removing and re-adding it on every host render.
+  const css = useMemo(() => {
+    if (!hostDocument) return '';
     const CSSApi = hostDocument.defaultView?.CSS ?? CSS;
-    const style = hostDocument.createElement('style');
     const rules: string[] = [];
     for (const definition of nodes) {
       const selectors = layerSelectors(definition);
@@ -107,10 +108,23 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
         '}'
       );
     }
-    style.textContent = rules.join('\n');
+    return rules.join('\n');
+  }, [nodes, hostDocument]);
+  useEffect(() => {
+    if (!hostDocument) return undefined;
+    const style = hostDocument.createElement('style');
+    style.textContent = css;
     hostDocument.head.append(style);
     return () => style.remove();
-  }, [nodes, hostDocument]);
+  }, [css, hostDocument]);
+
+  // The listeners read the latest props through refs. Re-binding them on each host render
+  // (an inline `onNodeClick`, as the example passes) dropped the press state between
+  // `pointerdown` and `pointerup`, so a render in between lost the click.
+  const latest = useRef({ nodes, onNodeClick, onNodeHover });
+  useLayoutEffect(() => {
+    latest.current = { nodes, onNodeClick, onNodeHover };
+  });
 
   useEffect(() => {
     if (!hostDocument) return undefined;
@@ -123,7 +137,7 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
     const controlAt = (event: PointerEvent) =>
       resolveCustomNodeActivation(
         hostDocument.elementFromPoint(event.clientX, event.clientY),
-        nodes
+        latest.current.nodes
       );
     const onDown = (event: PointerEvent) => {
       // Primary button only: a right-click belongs to the context menu.
@@ -144,17 +158,17 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
       const node = activatedCustomNodeOf(resolved, editor);
       if (!node) return;
       resolved.definition.onClick?.(node);
-      onNodeClick?.(node);
+      latest.current.onNodeClick?.(node);
     };
     const onOver = (event: MouseEvent) => {
-      const resolved = resolveCustomNodeActivation(event.target, nodes);
+      const resolved = resolveCustomNodeActivation(event.target, latest.current.nodes);
       if (!resolved) return;
       const related = (event.relatedTarget as HTMLElement | null)?.closest?.(BOUNDARY);
       if (related === (event.target as HTMLElement).closest(BOUNDARY)) return;
       const node = activatedCustomNodeOf(resolved, editor);
       if (!node) return;
       resolved.definition.onHover?.(node);
-      onNodeHover?.(node);
+      latest.current.onNodeHover?.(node);
     };
     hostDocument.addEventListener('pointerdown', onDown, true);
     hostDocument.addEventListener('pointerup', onUp, true);
@@ -164,7 +178,7 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
       hostDocument.removeEventListener('pointerup', onUp, true);
       hostDocument.removeEventListener('mouseover', onOver);
     };
-  }, [nodes, editor, onNodeClick, onNodeHover, hostDocument]);
+  }, [editor, hostDocument]);
 
   return null;
 }
