@@ -19,11 +19,7 @@
 **DOCX Editor** is a complete document ecosystem featuring a **WYSIWYG editor** with real-time collaboration, tracked changes, and rich editing capabilities, a **headless layout engine** that runs on both client and server, and a **PDF generation engine**. Together, they provide a unified foundation for document editing, rendering, and export.
 
 <p align="center">
-  <a href="https://docx-editor.dev/editor">Live demo</a> | <a href="https://www.docx-editor.dev/docs">Documentation</a> | <a href="https://github.com/orgs/eigenpal/projects/2">Roadmap</a>
-</p>
-
-<p align="center">
-  <a href="https://www.docx-editor.dev/"><img src="./.github/assets/docx-editor-icon.svg" alt="" width="14" height="20" /> DOCX Editor</a> · <a href="https://pptx-editor.dev/"><img src="./.github/assets/pptx-editor-icon.svg" alt="" width="24" height="20" /> PPTX Editor</a>
+  <a href="https://docx-editor.dev/editor">Live demo</a> | <a href="https://www.docx-editor.dev/docs">Documentation</a> | <a href="https://github.com/orgs/eigenpal/projects/2">Roadmap</a> | <a href="https://pptx-editor.dev/"><img src="./.github/assets/pptx-editor-icon.svg" alt="" width="24" height="20" /> PPTX Editor</a>
 </p>
 
 ## Quick start
