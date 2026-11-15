@@ -76,6 +76,12 @@ export function createLateFontArrival(options: {
   readonly report: (cause: unknown) => void;
   /** Overrides {@link LATE_FONT_WAIT_MS}; for tests. */
   readonly waitMs?: number;
+  /**
+   * When the document last changed (`performance.now()`). An install lays the document out
+   * again, so late faces wait for a pause in editing (`whenEditsPause`) and never interrupt
+   * typing. Omitted, they install when they arrive.
+   */
+  readonly editedAt?: () => number;
 }) {
   const timers = new Map<object, ReturnType<typeof globalThis.setTimeout>>();
   /** Stop waiting for `token`; `quiet` when the caller announces the change itself. */
@@ -134,10 +140,29 @@ export function createLateFontArrival(options: {
             options.report(cause);
             return settle(token);
           }
-          options.deliver(generation, { full, token });
+          if (!options.editedAt) return options.deliver(generation, { full, token });
+          void whenEditsPause(options.editedAt).then(() =>
+            current() ? options.deliver(generation, { full, token }) : settle(token)
+          );
         },
         () => settle(token)
       );
     },
   };
+}
+
+/** How long editing must pause before late faces install. */
+export const EDIT_PAUSE_MS = 1000;
+
+/** Resolves once `changedAt()` (a `performance.now()` time) is `pauseMs` in the past. */
+export function whenEditsPause(changedAt: () => number, pauseMs = EDIT_PAUSE_MS): Promise<void> {
+  return new Promise((resolve) => {
+    const check = (): void => {
+      const wait = changedAt() + pauseMs - performance.now();
+      // A timer, not DOM work: any window's clock will do.
+      if (wait > 0) globalThis.setTimeout(check, wait);
+      else resolve();
+    };
+    check();
+  });
 }

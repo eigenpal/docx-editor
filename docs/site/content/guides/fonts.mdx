@@ -125,7 +125,7 @@ The preferred names `DefaultFontFamily`, `DEFAULT_FONT_FAMILIES`, and `ALL_DEFAU
 
 `packagedFonts()` and `googleFonts()` first load only the faces that the laid-out text uses. For example, a document with only regular Arial text shows after one file arrives, not four.
 
-After those faces arrive, both resolvers load the other faces of the same families when the browser is idle, at low priority. The editor installs them in one step and lays out the document once more. A later bold or italic edit then needs no download and no second layout. A face of a family that no text used before, such as a font that you pick in the toolbar, loads when the text first uses it.
+After those faces arrive, both resolvers load the other faces of the same families when the browser is idle, at low priority. The editor installs them in one step, after a 1-second pause in editing, and lays out the document once more. Typing is never interrupted. A later bold or italic edit then needs no download and no second layout. A face of a family that no text used before, such as a font that you pick in the toolbar, loads when the text first uses it.
 
 To load a face only when text uses it, pass `otherFaces: 'on-demand'`. Each new face then lays out the document again when it arrives.
 

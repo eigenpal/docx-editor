@@ -496,6 +496,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     deliver: (generation, delivery) => liveFonts.deliver(generation, delivery),
     changed: () => (bump(), emitSelectionChange()),
     report: (cause) => reportFontError(toEditorFontError(cause)),
+    editedAt: () => events.documentChangedAt(),
   });
   /**
    * Local-resolution probe for the compatibility notice, created against the attached
