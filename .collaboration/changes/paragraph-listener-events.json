@@ -1,0 +1,18 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Listener edits can suppress paragraph notifications. The first observed replacement can omit removed stories, and style removal can omit changed proofing text.",
+  "after": "The editor captures and queues each commit before listeners run, ignores notifications from replaced sessions, and compares referenced stories and effective styles across replacements. Ordinary commits retain synchronous listener errors after queued notifications drain.",
+  "reason": "Only local notification capture and dispatch change. Shared state, operation formats, and repair rules remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/paragraph-changes.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-paragraph-changes-editors.test.ts",
+    "packages/core/src/editor/__tests__/zoom-controller.test.ts",
+    "packages/core/src/editor/__tests__/editor-events.test.ts",
+    "packages/core/src/editor/__tests__/text-form-field-save.test.ts",
+    "packages/core/src/editor/__tests__/text-form-field-sync-save.test.ts",
+    "packages/core/src/editor/__tests__/composition-commit-queue.test.ts"
+  ],
+  "changeset": "paragraph-listener-events",
+  "migration": null
+}

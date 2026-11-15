@@ -640,7 +640,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'WMF and EMF images display as raster images in the editor and as vectors in PDF export. Failed conversions show a placeholder in the editor; PDF export omits them and reports a diagnostic. Saving preserves the original image bytes.',
+      'WMF and EMF images display as editor raster images up to 2,048 pixels per side and as PDF vectors. Failed conversions show a placeholder in the editor; PDF export omits them and reports a diagnostic. Saving preserves the original image bytes.',
   },
   {
     id: 'images.tiff',

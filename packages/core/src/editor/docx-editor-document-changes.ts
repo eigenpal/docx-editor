@@ -13,7 +13,9 @@ export interface DocumentChangeHooks {
   emit(change: DocumentChange): void;
   /** Whether anything listens to `paragraphsChange`, so a commit nobody reads costs nothing. */
   wantsParagraphs(): boolean;
-  emitParagraphs(event: ParagraphsChangeEvent): void;
+  emitParagraphs(event: ParagraphsChangeEvent, isCurrent: () => boolean): void;
+  /** Queue one commit's notifications before a host listener can make another edit. */
+  defer<T>(run: () => T): T;
 }
 
 /** Report every commit of `surface`'s session as a `documentChange`. Returns the unsubscribe. */
@@ -26,7 +28,8 @@ export function subscribeDocumentChanges(
     surface.session,
     () => surface.collaborationSession()?.identity.actorId
   );
-  return surface.session.subscribe((change) => {
+  let active = true;
+  const unsubscribe = surface.session.subscribe((change) => {
     const documentChange: DocumentChange = {
       // The PACKAGE revision, never `change.toRevision`: a header/footer or notes change
       // carries THAT part's counter, which starts at zero, so reporting it sent this
@@ -38,17 +41,24 @@ export function subscribeDocumentChanges(
       // An undoable document update is the processor's result, not a user edit.
       ...(refreshEditActive(surface.session) ? { source: 'refresh' as const } : {}),
     };
-    // A commit can move a fit's numerator: `setPageSetup` directly, and undo by both of its
-    // routes (the keymap's `surface.undo()` and `exec`), neither of which passes a command
-    // hook. Guarded on the authored page width. Reading that width enumerates the sections,
-    // and a text-local change edits only run content, never a `w:sectPr`, so a keystroke
-    // skips it.
-    if (change.impact !== 'text-local') hooks.refitIfPageResized();
-    // Bump BEFORE dispatch, so a handler reading `snapshot()` sees the new state.
-    hooks.bump();
-    hooks.emit(documentChange);
-    // After `change`, as documented: a handler of either sees the same snapshot.
-    const event = paragraphs.note(change, documentChange.revision, hooks.wantsParagraphs());
-    if (event) hooks.emitParagraphs(event);
+    hooks.defer(() => {
+      // Capture this commit before host code can edit the document again.
+      const event = paragraphs.note(change, documentChange.revision, hooks.wantsParagraphs());
+      // A commit can move a fit's numerator: `setPageSetup` directly, and undo by both of its
+      // routes (the keymap's `surface.undo()` and `exec`), neither of which passes a command
+      // hook. Guarded on the authored page width. Reading that width enumerates the sections,
+      // and a text-local change edits only run content, never a `w:sectPr`, so a keystroke
+      // skips it. Refitting can notify selection listeners, so defer those callbacks too.
+      if (change.impact !== 'text-local') hooks.refitIfPageResized();
+      // Bump BEFORE dispatch, so a handler reading `snapshot()` sees the new state.
+      hooks.bump();
+      hooks.emit(documentChange);
+      // Queue both notifications together so listener edits follow this commit's event.
+      if (event) hooks.emitParagraphs(event, () => active);
+    });
   });
+  return () => {
+    active = false;
+    unsubscribe();
+  };
 }

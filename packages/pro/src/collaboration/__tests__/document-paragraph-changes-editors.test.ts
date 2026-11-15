@@ -13,6 +13,7 @@ import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { collaborationModule } from '../collaboration-module.ts';
 import { createPeerHarness, zipDocument } from './document-peer-support.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
+import { storyParityDocx } from '../../../../core/src/editor/__tests__/story-parity-fixture.ts';
 
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 const harness = createPeerHarness('paragraph-changes-room', { offlineEditing: true });
@@ -69,8 +70,8 @@ function mount(
   return { editor, container, ...follow(editor) };
 }
 
-async function pair() {
-  const peers = await harness.pair(zipDocument(BODY));
+async function pair(document_ = zipDocument(BODY)) {
+  const peers = await harness.pair(document_);
   const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
     peer.detach();
     return mount(peer.room.document, peer.room.session);
@@ -114,6 +115,49 @@ test('a peer types: the other editor gets a remote change for that paragraph', a
   expect(remote.flatMap((event) => event.changed)).toContain(second);
   expect(remote.flatMap((event) => [...event.added, ...event.deleted])).toEqual([]);
   expect(alice.events.every((event) => event.source === 'remote')).toBe(true);
+});
+
+test('an edit from a remote change listener retains both paragraph notifications', async () => {
+  const { alice, bob, converged } = await pair();
+  const first = alice.editor.findMatches('First')[0]!.blockId;
+  const second = alice.editor.findMatches('Second')[0]!.blockId;
+  let edited = false;
+  let accepted = false;
+  alice.editor.on('change', () => {
+    if (edited) return;
+    edited = true;
+    accepted = alice.editor.exec({
+      type: 'replaceAcceptedText',
+      match: { blockId: first, start: 0, length: 5, expectedText: 'First' },
+      text: 'Opening',
+    }).ok;
+  });
+  caret(bob.editor, 'Second', 6);
+  expect(bob.editor.exec({ type: 'insertText', text: 'X' }).ok).toBe(true);
+  converged();
+  expect(accepted).toBe(true);
+  const remote = alice.events.filter((event) => event.source === 'remote');
+  const local = alice.events.filter((event) => event.source === 'local');
+  expect(remote.flatMap((event) => event.changed)).toContain(second);
+  expect(local.flatMap((event) => event.changed)).toContain(first);
+  expect(remote[0]!.revision).toBeLessThan(local[0]!.revision);
+});
+
+test('a first replacement removes story paragraphs from both followed views', async () => {
+  const { alice, bob, converged } = await pair(storyParityDocx());
+  const before = new Set(ids(alice.editor));
+  expect(bob.editor.exec({ type: 'replaceDocument', docx: zipDocument(BODY) }).ok).toBe(true);
+  converged();
+  const after = new Set(ids(alice.editor));
+  const removed = [...before].filter((id) => !after.has(id));
+  expect(removed.length).toBeGreaterThan(0);
+  for (const peer of [alice, bob]) {
+    expect(new Set(peer.events.flatMap((event) => event.deleted))).toEqual(new Set(removed));
+  }
+  expect(bob.editor.exec({ type: 'undo' }).ok).toBe(true);
+  converged();
+  expect(bob.editor.exec({ type: 'redo' }).ok).toBe(true);
+  converged();
 });
 
 test('remote split, merge, undo and redo keep the followed paragraphs current', async () => {

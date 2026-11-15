@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Right-to-left tables with cell spacing now get the correct percentage width and placement, including tables aligned to the visual left edge. Fixes #1948
+Correct percentage widths and placement for right-to-left tables with cell spacing, including tables aligned to the visual left edge. Fixes #1948

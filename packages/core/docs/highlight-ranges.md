@@ -69,9 +69,11 @@ In `acceptedText`, a tab reads as `\t` and a line break as `\n`. An object, such
 
 A tracked change can make a word misspelled, for example a deletion of one letter in the middle of the word. If `acceptedTextRanges()` returns more than one range for a word, a tracked change or hidden text splits it. Tell the reader that the word reads this way after the changes are accepted.
 
+Loading or destroying the editor in a listener cancels remaining paragraph notifications for the previous document.
+
 ### Mark misspelled words
 
-The following module, `spelling.ts`, checks every paragraph when a document opens. After that, it checks only the paragraphs that `paragraphsChange` lists. It finds words with `Intl.Segmenter` in the language of each `proofing` stretch, so `don’t` is one word. It normalizes each word to NFC before the lookup, and keeps the offsets of the original text. Each word gets one mark from the start of its first part to the end of its last part, so a word that a deletion splits shows one mark.
+The following module, `spelling.ts`, checks every paragraph when a document opens. After that, it checks only paragraphs whose text object changed. It uses `Intl.Segmenter` with each proofing language to find words, including words with apostrophes. An invalid language tag uses the runtime's default language. The checker receives NFC-normalized words, but marks keep the original offsets. Each mark covers every visible part of its word.
 
 The source skips the word at the caret only while the reader types in that paragraph. It counts an edit as typing when the caret paragraph changed since the last run. When a document opens, the caret is at the start of the first paragraph, and the first word still gets its mark.
 
@@ -106,7 +108,12 @@ function wordSegmenter(lang: string | null): Intl.Segmenter {
   const key = lang ?? '';
   let segmenter = segmenters.get(key);
   if (!segmenter) {
-    segmenter = new Intl.Segmenter(lang ?? undefined, { granularity: 'word' });
+    try {
+      segmenter = new Intl.Segmenter(lang ?? undefined, { granularity: 'word' });
+    } catch {
+      // A document can contain an invalid language tag.
+      segmenter = new Intl.Segmenter(undefined, { granularity: 'word' });
+    }
     segmenters.set(key, segmenter);
   }
   return segmenter;
@@ -152,44 +159,38 @@ function check(paragraph: ParagraphText, checker: SpellChecker): SpellingRange[]
 
 /**
  * A highlight source that marks each misspelled word. It checks every paragraph when a
- * document opens, and then only the paragraphs that an edit added or changed. While the
+ * document opens, and then only paragraphs whose text object changed. While the
  * reader types in a paragraph, it skips the word at the caret.
  */
 export function spellingSource(checker: SpellChecker) {
   const marks = new Map<string, SpellingRange[]>();
-  // Paragraphs to check on the next run. Null means every paragraph.
-  let pending: Set<string> | null = null;
-  let watched: Editor | null = null;
+  const checked = new Map<string, ParagraphText>();
   let loadId: string | null = null;
   let seen: ParagraphText | null = null;
   let typing = false;
-  return (editor: Editor): SpellingRange[] => {
-    if (watched !== editor) {
-      watched = editor;
-      editor.on('paragraphsChange', ({ added, changed, deleted }) => {
-        for (const id of deleted) marks.delete(id);
-        for (const id of [...added, ...changed]) pending?.add(id);
-      });
-    }
+  const source = (editor: Editor): SpellingRange[] => {
     // A new document can reuse block IDs, so check all of it.
     const current = editor.getDocumentHandle().loadId;
     if (current !== loadId) {
       loadId = current;
-      pending = null;
-    }
-    if (pending === null) {
+      checked.clear();
       marks.clear();
-      for (const paragraph of editor.getParagraphs()) {
-        marks.set(paragraph.blockId, check(paragraph, checker));
-      }
-    } else {
-      for (const id of pending) {
-        const paragraph = editor.getParagraphText(id);
-        if (paragraph) marks.set(id, check(paragraph, checker));
-        else marks.delete(id);
+      seen = null;
+      typing = false;
+    }
+    const paragraphs = editor.getParagraphs();
+    const present = new Set(paragraphs.map(({ blockId }) => blockId));
+    for (const id of checked.keys()) {
+      if (!present.has(id)) {
+        checked.delete(id);
+        marks.delete(id);
       }
     }
-    pending = new Set();
+    for (const paragraph of paragraphs) {
+      if (checked.get(paragraph.blockId) === paragraph) continue;
+      checked.set(paragraph.blockId, paragraph);
+      marks.set(paragraph.blockId, check(paragraph, checker));
+    }
     const caret = editor.getSelectionRange()?.head;
     const here = caret ? editor.getParagraphText(caret.blockId) : null;
     // Typing starts with an edit in the caret paragraph and ends when the caret leaves it.
@@ -204,6 +205,12 @@ export function spellingSource(checker: SpellChecker) {
       );
     });
   };
+  return Object.assign(source, {
+    invalidate() {
+      checked.clear();
+      marks.clear();
+    },
+  });
 }
 
 /**
@@ -304,25 +311,51 @@ export function SpellingMarks({ checker }: { checker: SpellChecker }) {
 
 **Vue**
 
+Save the suggestion rows in `SpellingRows.vue`. This child reads the context supplied by `ContextMenu.Start`.
+
+```vue
+<!-- SpellingRows.vue -->
+<script setup lang="ts">
+import { DocxEditor, useContextMenuHighlights, useDocxEditor } from '@docx-editor.dev/vue';
+import { fixWord, type SpellingRange } from './spelling';
+
+const props = defineProps<{ recheck: () => void }>();
+const editor = useDocxEditor();
+const hits = useContextMenuHighlights<SpellingRange>('spelling');
+
+function fix(suggestion: string) {
+  const hit = hits.value[0];
+  if (!hit || !editor.value) return;
+  if (!fixWord(editor.value, hit.range, suggestion, hit)) props.recheck();
+}
+</script>
+
+<template>
+  <template v-if="hits[0]">
+    <DocxEditor.ContextMenu.Item
+      v-for="suggestion in hits[0].range.suggestions"
+      :key="suggestion"
+      :label="suggestion"
+      @select="fix(suggestion)"
+    />
+  </template>
+</template>
+```
+
+Render this parent inside `DocxEditor.Viewport`. Pass a stable `checker`.
+
 ```vue
 <script setup lang="ts">
-import {
-  DocxEditor,
-  useContextMenuHighlights,
-  useDocxEditor,
-  useEditorEvent,
-  useHighlights,
-} from '@docx-editor.dev/vue';
-import { fixWord, spellingSource, type SpellChecker, type SpellingRange } from './spelling';
+import { DocxEditor, useEditorEvent, useHighlights } from '@docx-editor.dev/vue';
+import { spellingSource, type SpellChecker } from './spelling';
+import SpellingRows from './SpellingRows.vue';
 
-// Render inside DocxEditor.Viewport. Pass a stable `checker`.
 const props = defineProps<{ checker: SpellChecker }>();
-const editor = useDocxEditor();
-const marks = useHighlights('spelling', spellingSource(props.checker), {
+const source = spellingSource(props.checker);
+const marks = useHighlights('spelling', source, {
   kind: 'spelling',
   className: 'spelling-error',
 });
-const hits = useContextMenuHighlights<SpellingRange>('spelling');
 
 let caretParagraph: string | undefined;
 useEditorEvent('selectionChange', (snapshot) => {
@@ -331,32 +364,20 @@ useEditorEvent('selectionChange', (snapshot) => {
   caretParagraph = blockId;
   marks.value.refresh();
 });
-
-function fix(suggestion: string) {
-  const hit = hits.value[0];
-  if (!hit || !editor.value) return;
-  // The hit says where the mark is now, after edits before it.
-  if (!fixWord(editor.value, hit.range, suggestion, hit)) marks.value.refresh();
-}
 </script>
 
 <template>
   <DocxEditor.ContextMenu>
     <DocxEditor.ContextMenu.Start>
-      <template v-if="hits[0]">
-        <DocxEditor.ContextMenu.Item
-          v-for="suggestion in hits[0].range.suggestions"
-          :key="suggestion"
-          :label="suggestion"
-          @select="fix(suggestion)"
-        />
-      </template>
+      <SpellingRows :recheck="marks.refresh" />
     </DocxEditor.ContextMenu.Start>
   </DocxEditor.ContextMenu>
 </template>
 ```
 
 To fix words from a side list, keep the marks that the source returned, and call `fixWord(editor, mark, suggestion)` from the list. Build the list again after each `change` event. If `fixWord` returns false, the word changed, so check the document again.
+
+If your dictionary changes, call `source.invalidate()`, then `refresh()` in React or `marks.value.refresh()` in Vue. This clears cached checks before the highlight source runs again.
 
 ### Make marks accessible
 
@@ -410,8 +431,10 @@ import { checkRemotely } from './check-remotely';
 export function watchGrammar(
   editor: Editor,
   request: (text: string) => Promise<readonly { start: number; length: number }[]>,
-  report: (ranges: readonly HighlightRange[]) => void
+  report: (ranges: readonly HighlightRange[]) => void,
+  onError: (error: unknown) => void
 ): () => void {
+  let stopped = false;
   const results = new Map<string, readonly HighlightRange[]>();
   const publish = () => report([...results.values()].flat());
   const check = async (blockId: string) => {
@@ -419,7 +442,7 @@ export function watchGrammar(
     if (!paragraph) return;
     const issues = await checkRemotely(editor, paragraph, request);
     // Null: the paragraph changed, and a newer check of it is on its way.
-    if (!issues) return;
+    if (stopped || !issues) return;
     results.set(
       blockId,
       issues.flatMap(({ start, length }) =>
@@ -431,16 +454,27 @@ export function watchGrammar(
     );
     publish();
   };
-  for (const paragraph of editor.getParagraphs()) void check(paragraph.blockId);
-  return editor.on('paragraphsChange', ({ added, changed, deleted }) => {
-    for (const id of deleted) results.delete(id);
-    if (deleted.length > 0) publish();
-    for (const id of [...added, ...changed]) void check(id);
+  const schedule = (id: string) => {
+    void check(id).catch((error: unknown) => {
+      if (!stopped) onError(error);
+    });
+  };
+  for (const paragraph of editor.getParagraphs()) schedule(paragraph.blockId);
+  const off = editor.on('paragraphsChange', ({ added, changed, deleted }) => {
+    for (const id of [...changed, ...deleted]) results.delete(id);
+    publish();
+    for (const id of [...added, ...changed]) schedule(id);
   });
+  return () => {
+    stopped = true;
+    off();
+    results.clear();
+    report([]);
+  };
 }
 ```
 
-Pass a `report` function that calls `editor.setHighlights('grammar', ranges, { kind: 'grammar' })`. After a new `load()`, stop the watch and start a new one.
+Pass a `report` function that calls `editor.setHighlights('grammar', ranges, { kind: 'grammar' })`. Pass `onError` to report request failures in your application. Call the returned function on unmount to remove marks and ignore pending answers. After a new `load()`, stop the watch and start a new one.
 
 A result can still go stale between the check and a fix. Pass the checked text as `expectedText` to `replaceAcceptedText`, so a stale fix returns `notFound` and changes nothing.
 
@@ -453,6 +487,7 @@ import { acceptedTextRanges, type Editor, type HighlightRange } from '@docx-edit
 
 export function termMarks(editor: Editor, term: string): HighlightRange[] {
   const marks: HighlightRange[] = [];
+  if (term.length === 0) return marks;
   for (const paragraph of editor.getParagraphs()) {
     for (let at = paragraph.acceptedText.indexOf(term); at >= 0;) {
       const parts = acceptedTextRanges(paragraph, at, at + term.length);

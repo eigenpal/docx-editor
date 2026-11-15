@@ -548,34 +548,57 @@ Batch independent comment and reply content edits in one sync. Keep other mutati
 
 ## Mark proofing issues
 
-A checker marks issues with `Paragraph.insertAnnotations()` and applies a fix with `CritiqueAnnotation.accept()`. Read all paragraph text in one sync, check the plain strings, then insert every paragraph's critiques in one sync:
+A checker marks issues with `Paragraph.insertAnnotations()` and applies a fix with `CritiqueAnnotation.accept()`. Read paragraph text and ids in one sync. Pass plain data to your checker, then reload paragraphs before inserting annotations. Apply a result only when its paragraph id and text still match. Check changed paragraphs again. Cancel pending checks when you load or replace the document.
 
 ```ts
+const snapshot = await runtime.run(async (context) => {
+  const paragraphs = context.document.body.paragraphs;
+  paragraphs.load('items/uniqueLocalId,items/text');
+  await context.sync();
+  return paragraphs.items.map((paragraph) => ({
+    id: paragraph.uniqueLocalId,
+    text: paragraph.text,
+  }));
+});
+
+// Your checker takes plain strings and returns issues per paragraph. Limit its concurrency.
+const issues = await checkAll(snapshot.map((paragraph) => paragraph.text));
+const byId = new Map(
+  snapshot.map((paragraph, index) => [paragraph.id, { ...paragraph, issues: issues[index]! }])
+);
+
 const ids = await runtime.run(async (context) => {
   const paragraphs = context.document.body.paragraphs;
-  paragraphs.load('items/text');
+  paragraphs.load('items/uniqueLocalId,items/text');
   await context.sync();
 
-  const issues = await checkAll(paragraphs.items.map((paragraph) => paragraph.text));
-  const results = paragraphs.items.map((paragraph, index) =>
-    paragraph.insertAnnotations({
-      critiques: issues[index]!.map((issue) => ({
-        colorScheme: 'Red',
-        start: issue.start,
-        length: issue.length,
-        popupOptions: {
-          brandingTextResourceId: '',
-          subtitleResourceId: '',
-          titleResourceId: '',
-          suggestions: issue.suggestions,
-        },
-      })),
-    })
-  );
+  const inserted = [];
+  for (const paragraph of paragraphs.items) {
+    const result = byId.get(paragraph.uniqueLocalId);
+    // Skip a paragraph whose text changed during the check; check it again instead.
+    if (!result || result.text !== paragraph.text || result.issues.length === 0) continue;
+    inserted.push(
+      paragraph.insertAnnotations({
+        critiques: result.issues.map((issue) => ({
+          colorScheme: 'Red',
+          start: issue.start,
+          length: issue.length,
+          popupOptions: {
+            brandingTextResourceId: '',
+            subtitleResourceId: '',
+            titleResourceId: '',
+            suggestions: issue.suggestions,
+          },
+        })),
+      })
+    );
+  }
   await context.sync();
-  return results.flatMap((result) => result.value);
+  return inserted.flatMap((result) => result.value);
 });
 ```
+
+For more information, see [Proofing annotations](https://www.docx-editor.dev/docs/2.x/editor-api/proofing-annotations).
 
 Offsets count UTF-16 code units of `Paragraph.text` in the runtime's revision view. The three resource ids must be empty strings; any other value fails with `NotSupported`. Annotations are runtime view state: they are not saved, not shared with collaborators, and the browser runtime paints them as editor highlights. Pass ids, not proxies, to later runs and use `document.getAnnotationById(id)` there.
 

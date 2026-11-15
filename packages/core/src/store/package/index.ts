@@ -592,7 +592,7 @@ export type { DrawingImageEffects } from './drawing-image-effects.ts';
 // Drawing renderers a capability package installs, and the drawing readers they build on.
 export {
   installDrawingRenderers,
-  metafileRasterScale,
+  metafileRasterOptions,
   type ChartRenderContext,
   type DiagramLayoutOptions,
   type DiagramLayoutParts,

@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': minor
 ---
 
-Support the `replaceAllMatches` command, which replaces every match of a query across the body, tables, headers, footers, notes, and text boxes in one undo step, and records tracked changes in suggesting mode. The result reports the replaced and skipped matches as `replacements`.
+Add `replaceAllMatches` to replace matches across document stories in one undo step, with tracking in suggesting mode. Report replaced and skipped matches in `replacements`.

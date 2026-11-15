@@ -2,4 +2,4 @@
 '@docx-editor.dev/react': minor
 ---
 
-`useHighlights` now returns `refresh()` to run a highlight source again when your own state changes. Context menu rows can read the highlights under the right-click, or at the caret for a keyboard open, with `useContextMenuHighlights()`.
+Add `useHighlights().refresh()` to refresh marks after application state changes. Add `useContextMenuHighlights()` to read marks under the pointer or keyboard menu anchor.

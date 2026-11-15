@@ -36,6 +36,7 @@ if (result.ok) {
 | External `r:link` or `TargetMode="External"` | No | Placeholder; never loaded automatically |
 
 - The editor refuses insertion while another picture is selected. Place the caret in text first. The toolbar shows this reason when it disables insertion.
+- EMF and WMF previews use at most 2,048 pixels per side. Saving preserves the original image bytes.
 - PDF export of EMF and WMF needs the drawing module. For more information, see [Advanced drawing rendering](/docs/2.x/pro/drawing).
 - To use your own image decoder, pass an `ImageDecodePort` through the `imageDecodePort` prop on `DocxEditor` or the adapter's root component.
 

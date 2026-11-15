@@ -210,6 +210,29 @@ export function stylesPartOf(pkg: OoxmlPackage): OoxmlPart | undefined {
   return [...pkg.parts.values()].find((part) => STYLES_PART_RE.test(part.name));
 }
 
+/**
+ * The styles root an editing session reads: the main document's styles relationship, then
+ * `/word/styles.xml`. Unlike {@link stylesPartOf}, it does not search other part names. The
+ * session and its change tracker share this rule, so they agree on when styles change.
+ */
+export function sessionStylesRootOf(pkg: OoxmlPackage): OoxmlElement | null {
+  const record = pkg.relationships
+    .get(pkg.mainDocumentPart)
+    ?.find(
+      (relationship) =>
+        relationship.type ===
+        'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles'
+    );
+  if (record) {
+    const resolved = resolveRelationship(record);
+    if (resolved.mode === 'Internal' && resolved.target.ok) {
+      const part = pkg.parts.get(resolved.target.partName);
+      if (part) return part.root;
+    }
+  }
+  return pkg.parts.get('/word/styles.xml')?.root ?? null;
+}
+
 const NUMBERING_REL =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
 

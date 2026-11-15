@@ -2,4 +2,4 @@
 '@docx-editor.dev/pro': patch
 ---
 
-In a collaborative session, undoing your picture resize no longer stops the session with an error when another participant resized the same picture at the same time. Fixes #1965
+Prevent collaboration errors when undoing a picture resize after another participant resizes the same picture. Fixes #1965

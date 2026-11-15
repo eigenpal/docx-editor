@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Rotate, flip, replace, and hyperlink commands on a selected shape or text box now refuse with a reason that names the command. Fixes #1944
+Report command-specific refusal reasons for rotation, flipping, replacement, and hyperlinks on selected shapes and text boxes. Fixes #1944
