@@ -100,7 +100,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'none',
     tier: 'premium',
     notes:
-      'Export PDF on Node.js with a configured menu.exporters.pdf handler and the EigenPal Pro License. Export supports review markup and comments, with font and drawing limits. Missing handlers show a setup error.',
+      'Export PDF on Node.js with a configured menu.exporters.pdf handler and the EigenPal Pro License. Export supports review markup and comments; empty shape geometry adds no paint. Font and drawing limits apply, and missing handlers show a setup error.',
     docsLink: '/docs/2.x/guides/export',
   },
   {
