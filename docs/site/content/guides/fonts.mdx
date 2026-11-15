@@ -80,9 +80,9 @@ In Vue, a function argument is always the value, never a getter. Use `computed((
 | Source | Third-party requests | Loads |
 | --- | --- | --- |
 | Fonts embedded in the DOCX | No | The faces in the file, automatically |
-| `packagedFonts()` | No | The packaged families the document uses, plus its default face |
+| `packagedFonts()` | No | The packaged faces the document's text uses |
 | `defaultFonts()` | No | All 20 faces of the five defaults, before the document opens |
-| `googleFonts()` | Yes, for cataloged families | The catalog families the document uses, plus its default face |
+| `googleFonts()` | Yes, for cataloged families | The catalog faces the document's text uses |
 | `customFonts()` | Depends on your URLs | All configured faces when the editor resolves fonts |
 | `loadFonts()` | Depends on your URLs | The URLs you list, immediately |
 | No usable source | No | Nothing; fallback measurement |
@@ -117,9 +117,17 @@ The preferred names `DefaultFontFamily`, `DEFAULT_FONT_FAMILIES`, and `ALL_DEFAU
 | --- | --- | --- |
 | Runs | After the document is parsed | Before the document opens |
 | Covers | All seven packaged families | The five common DOCX default fonts |
-| Loads | The families in the document, plus the default face | All 20 faces, 7.4 MB |
+| Loads | The faces the document's text uses | All 20 faces, 7.4 MB |
 | First layout | Fallback measurement, then re-paginates | Correct on the first pass |
 | Undo history across the swap | Kept | Kept |
+
+### Load only the faces the text uses
+
+`packagedFonts()` and `googleFonts()` load only the faces that the laid-out text uses. For example, a document with only regular Arial text loads one file, not four. When an edit makes text use another face, such as bold, the editor asks for that face, and the text lays out again when it arrives.
+
+After the needed faces arrive, both resolvers fetch the other faces of the same families when the browser is idle, at low priority. The bytes stay in memory and are not installed, so they cause no layout. A later bold or italic edit then reads its face from memory and does not wait for the network. Pass `prefetch: false` to fetch only the faces in use. To fetch packaged faces ahead in your own code, call `prefetchDefaultFonts({ families, faces })`.
+
+A large document (over about 512 KB of uncompressed content) resolves its fonts before its first layout, so it loads every face of its families and lays out once.
 
 Pass `defaultFonts` when a visible re-pagination is worse than the extra bytes. `useDocxSource` then waits for fonts before it returns the document.
 
@@ -197,7 +205,8 @@ Wrap a resolver in `defineFontResolver`. `useDocxSource` uses the marker to tell
 import { defineFontResolver } from '@docx-editor.dev/core/editor';
 
 const brandFonts = defineFontResolver(async ({ families, defaultFamily, resolvedFaces }) => {
-  // Match names against a closed set. Skip faces in resolvedFaces.
+  // Match names against a closed set. Skip faces in resolvedFaces. To load less, read
+  // `faces` from the request: the faces the text uses.
   const wanted = [defaultFamily, ...families].filter((family) => BRAND.has(family));
   return { sources: await loadBrandFaces(wanted) };
 });
@@ -208,12 +217,13 @@ const brandFonts = defineFontResolver(async ({ families, defaultFamily, resolved
 | `families` | Families the document declares, including `w:sym`, `SYMBOL` field, and numbering marker faces |
 | `defaultFamily` | The face for runs that name no font |
 | `resolvedFaces` | Faces that earlier sources already supplied |
+| `faces` | Faces the laid-out text uses, by family, weight, and style. Absent before the first layout: load every face then. |
 
 A resolver can also return `supportedFamilies` to add catalog entries to the font picker without bytes.
 
 ## Control loading and caching
 
-Resolvers run when the editor resolves fonts and again when an edit adds a family that is not loaded. Font arrivals keep the selection, pending formatting, and undo history.
+Resolvers run when the editor resolves fonts and again when an edit adds a family or a face that is not loaded. Font arrivals keep the selection, pending formatting, and undo history.
 
 | Rule | Behavior |
 | --- | --- |

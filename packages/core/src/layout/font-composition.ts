@@ -86,6 +86,16 @@ export interface FontResolutionRequest {
   /** Cancels document-scoped resolution; network-backed resolvers should pass it to fetch. */
   readonly signal?: AbortSignal;
   /**
+   * The faces that the document's laid-out text uses: each family with the weight and style
+   * that its runs ask for. A resolver can load only these faces, and load the regular face of
+   * a family in `families` that has no face here. When an edit makes text use another face,
+   * such as bold, the engine asks again with that face.
+   *
+   * Absent when the engine has laid out no text yet, such as for a large document that
+   * resolves its fonts before the first layout. Load every face of each family then.
+   */
+  readonly faces?: readonly FontFaceRequest[];
+  /**
    * Faces an EARLIER origin in the same composition can already PAINT — either because it
    * supplied the bytes, or because it mapped that face onto one it did supply.
    *

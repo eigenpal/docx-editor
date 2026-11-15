@@ -15,7 +15,11 @@ import { reviewChangesLocked } from './command-protection.ts';
 import { createPlacementKeeper, createReviewRanker } from './review-ranking.ts';
 import { browserFallbackMeasurer, resolvedFontMeasurement } from './resolved-font-measurement.ts';
 import { updateSurfaceMeasurement } from './surface-measurement.ts';
-import { createLiveFontResolution, liveFontFamilies } from './live-font-resolution.ts';
+import {
+  createLiveFontResolution,
+  liveFontFamilies,
+  requestFaces,
+} from './live-font-resolution.ts';
 import { createFontResolutionLifetime } from './font-resolution-lifetime.ts';
 import { composeFontOrigins, defineFontResolver } from './font-resolver.ts';
 import {
@@ -70,6 +74,7 @@ import {
 } from './revision-author-visibility.ts';
 import type {
   DocumentEditingMode,
+  FontFaceRequest,
   ReviewActivationOptions,
   ReviewItemPlacement,
   ReviewItemQuery,
@@ -461,18 +466,22 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const session = preparedFontSession ?? surface?.session;
       if (destroyed || !session) return null;
       const caret = preparedFontSession ? undefined : snapshotNow().formatting?.fontFamily;
+      const defaultFamily = configuredDefaultFontFamily(fontConfiguration());
       return {
         generation: fontLifetime.generation,
         dynamic: typeof configuredFonts === 'function',
-        families: () =>
-          liveFontFamilies(session, caret, configuredDefaultFontFamily(fontConfiguration())),
+        families: () => liveFontFamilies(session, caret, defaultFamily),
+        // A document still preparing has laid out nothing: the surface is the previous one.
+        faces: () =>
+          requestFaces(preparedFontSession ? undefined : surface?.usedFontFaces?.(), defaultFamily),
+        defaultFamily,
       };
     },
-    async (families, late?: LateFontDelivery) => {
+    async ({ families, faces }, late?: LateFontDelivery) => {
       const target = preparedFontSession ? { session: preparedFontSession } : surface;
       lateFonts.settle(late); // quietly; every install exit announces below, refused or thrown
       try {
-        if (target) await resolveDocumentFonts(loadSeq, target, families, late?.full);
+        if (target) await resolveDocumentFonts(loadSeq, target, families, late?.full, faces);
       } finally {
         if (late && !destroyed) (bump(), emitSelectionChange());
       }
@@ -1000,7 +1009,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     seq: number,
     mounted: { readonly session: preparedOpen.FontSession },
     families: readonly string[],
-    late?: FontConfigurationFragment
+    late?: FontConfigurationFragment,
+    faces?: readonly FontFaceRequest[]
   ): Promise<void> {
     const lifetime = fontLifetime.capture();
     const current = () => !destroyed && seq === loadSeq && lifetime.current();
@@ -1025,7 +1035,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         families,
         fontConfiguration()
       );
-      const request = { ...documentRequest, signal: lifetime.signal };
+      const request = { ...documentRequest, ...(faces ? { faces } : {}), signal: lifetime.signal };
       // Installed families keep their own face; only missing ones fall back. Without a canvas
       // to probe with (headless), nothing counts as installed.
       const canProbe =

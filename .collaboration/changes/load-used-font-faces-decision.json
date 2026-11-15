@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Font resolvers loaded every face of each family that a document names.",
+  "after": "Font resolvers load the faces that each client's laid-out text uses, and more faces when an edit needs them.",
+  "reason": "Font loading is local to each client. Shared nodes, text offsets, operations, and package serialization stay unchanged, and each client lays out with its own fonts as before.",
+  "tests": [
+    "packages/core/src/editor/__tests__/live-font-resolution.test.ts",
+    "packages/core/src/editor/__tests__/font-face-usage.test.ts",
+    "packages/fonts/src/__tests__/engine-request.test.ts"
+  ],
+  "changeset": "load-used-font-faces",
+  "migration": null
+}

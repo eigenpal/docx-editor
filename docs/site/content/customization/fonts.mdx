@@ -165,7 +165,7 @@ Earlier sources win for the same family, weight, and style. A supplied face wins
 | `epoch`             | Identifies the font byte set.                                           |
 | `maxFontBytes`      | Per-face admission limit.                                               |
 
-A `FontResolver` receives `families`, `defaultFamily`, and optional `signal` and `resolvedFaces`. It returns a configuration, a fragment, or `undefined`. Map family names to URLs through your own lookup, and pass `signal` to your fetch calls so cancellation stops network work.
+A `FontResolver` receives `families`, `defaultFamily`, and optional `signal`, `resolvedFaces`, and `faces`. `faces` lists the faces that the laid-out text uses, so a resolver can load only those. It returns a configuration, a fragment, or `undefined`. Map family names to URLs through your own lookup, and pass `signal` to your fetch calls so cancellation stops network work.
 
 ### Render Chinese, Japanese, and Korean text
 

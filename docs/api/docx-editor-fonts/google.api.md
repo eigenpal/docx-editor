@@ -47,6 +47,7 @@ export interface DefaultFontSubstitution {
 // @public
 export interface FontOriginRequest {
     readonly defaultFamily: string;
+    readonly faces?: readonly ResolvedFontFace[];
     readonly families: readonly string[];
     readonly resolvedFaces?: readonly ResolvedFontFace[];
     readonly signal?: AbortSignal;
@@ -114,6 +115,7 @@ export interface GoogleFontsOptions {
     readonly cjk?: boolean | GoogleCjkOptions;
     readonly fetcher?: typeof fetch;
     readonly onFailure?: (failure: GoogleFontLoadFailure) => void;
+    readonly prefetch?: boolean;
     readonly substitute?: Readonly<Record<string, string>>;
 }
 

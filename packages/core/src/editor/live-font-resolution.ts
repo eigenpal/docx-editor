@@ -1,4 +1,6 @@
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
+import type { FontFaceRequest } from '../contracts/editor-fonts.ts';
+import type { UsedFontFace } from './font-face-usage.ts';
 import { supportedFontFamilies } from '../layout/supported-font-families.ts';
 import { drawingPartFontFamilies } from '../store/package/drawing-part-fonts.ts';
 import { fontResolverFamilies } from './font-availability.ts';
@@ -29,10 +31,52 @@ export function liveFontFamilies(
   );
 }
 
+/**
+ * The faces that laid-out text uses, as a resolver request names them: a run that names no
+ * font uses `defaultFamily`. Undefined before any text is laid out, so the resolver loads every
+ * face of the families it serves, as it did before it was told the faces.
+ */
+export function requestFaces(
+  used: readonly UsedFontFace[] | undefined,
+  defaultFamily: string
+): readonly FontFaceRequest[] | undefined {
+  if (!used || used.length === 0) return undefined;
+  const faces: FontFaceRequest[] = [];
+  const seen = new Set<string>();
+  for (const face of used) {
+    const family = face.family?.trim() ? face.family : defaultFamily;
+    const request = { family, weight: face.weight, style: face.style };
+    const key = faceKey(request);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    faces.push(request);
+  }
+  return faces;
+}
+
+/** The case-folded identity of a face, as `FontResolutionRequest.resolvedFaces` keys it. */
+const faceKey = (face: FontFaceRequest): string =>
+  `${face.family.trim().toLowerCase()}\u0000${face.weight}\u0000${face.style}`;
+
+/** What one resolution asks for: the families, and the faces of them that text uses. */
+export interface LiveFontRequest {
+  readonly families: readonly string[];
+  /** Absent when no text is laid out yet: the resolver then loads every face. */
+  readonly faces?: readonly FontFaceRequest[];
+}
+
 /** Serialize font updates within a document. A new document can supersede a pending fetch. */
 export function createLiveFontResolution<Late>(
-  read: () => { generation: number; families: () => readonly string[]; dynamic: boolean } | null,
-  resolve: (families: readonly string[], late?: Late) => Promise<void>
+  read: () => {
+    generation: number;
+    families: () => readonly string[];
+    /** The faces that laid-out text uses, or undefined before any text is laid out. */
+    faces?: () => readonly FontFaceRequest[] | undefined;
+    /** The family of a run that names no font: the request names it apart (`defaultFamily`). */
+    defaultFamily?: string;
+    dynamic: boolean;
+  } | null,
+  resolve: (request: LiveFontRequest, late?: Late) => Promise<void>
 ): {
   /** Queue a resolution; `initial` runs it now and returns its work, if it started any. */
   schedule(initial?: boolean): Promise<void> | undefined;
@@ -43,7 +87,16 @@ export function createLiveFontResolution<Late>(
   deliver(generation: number, late: Late): void;
 } {
   let current:
-    { generation: number; requested: Set<string>; running: boolean; late: Late[] } | undefined;
+    | {
+        generation: number;
+        requested: Set<string>;
+        requestedFaces: Set<string>;
+        /** Families asked for with no faces: the resolver loaded every face of them. */
+        everyFace: Set<string>;
+        running: boolean;
+        late: Late[];
+      }
+    | undefined;
   let queued = false;
   const pump = (): Promise<void> | undefined => {
     queued = false;
@@ -51,14 +104,22 @@ export function createLiveFontResolution<Late>(
     if (!state) return;
     const initial = current?.generation !== state.generation;
     if (initial) {
-      current = { generation: state.generation, requested: new Set(), running: false, late: [] };
+      current = {
+        generation: state.generation,
+        requested: new Set(),
+        requestedFaces: new Set(),
+        everyFace: new Set(),
+        running: false,
+        late: [],
+      };
     }
     const active = current!;
     if (active.running) return;
+    const faces = state.faces?.();
     const late = active.late.shift();
     if (late !== undefined) {
       active.running = true;
-      const work = resolve(state.families(), late);
+      const work = resolve({ families: state.families(), ...(faces ? { faces } : {}) }, late);
       void work.finally(() => {
         active.running = false;
         if (current === active) schedule();
@@ -71,12 +132,42 @@ export function createLiveFontResolution<Late>(
     const families = state
       .families()
       .filter((family) => !active.requested.has(family.toLowerCase()));
-    if (!initial && families.length === 0) return;
+    // A face that text uses for the first time (an edit made a word bold) asks again for its
+    // family, even when the family was asked for before.
+    const newFaces = (faces ?? []).filter(
+      (face) =>
+        !active.requestedFaces.has(faceKey(face)) &&
+        !active.everyFace.has(face.family.toLowerCase())
+    );
+    if (!initial && families.length === 0 && newFaces.length === 0) return;
     for (const family of families) active.requested.add(family.toLowerCase());
+    // A request with no faces loads every face of its families and of the default family, so
+    // a face of one of them that layout records later needs nothing more.
+    if (!faces) {
+      for (const family of families) active.everyFace.add(family.toLowerCase());
+      if (state.defaultFamily) active.everyFace.add(state.defaultFamily.toLowerCase());
+    }
+    for (const face of newFaces) active.requestedFaces.add(faceKey(face));
+    const asked = [...families];
+    const folded = new Set(families.map((family) => family.toLowerCase()));
+    const defaultFold = state.defaultFamily?.toLowerCase();
+    for (const face of newFaces) {
+      const fold = face.family.toLowerCase();
+      if (folded.has(fold) || fold === defaultFold) continue;
+      folded.add(fold);
+      asked.push(face.family);
+    }
+    // The default family's faces go along when one of them is new: the request names that
+    // family apart, in `defaultFamily`.
+    if (newFaces.some((face) => face.family.toLowerCase() === defaultFold))
+      folded.add(defaultFold!);
     active.running = true;
     // Failed families stay attempted until the next document load. A failing provider
     // must not retry on every keystroke. resolve owns error reporting and degradation.
-    const work = resolve(families);
+    const work = resolve({
+      families: asked,
+      ...(faces ? { faces: faces.filter((face) => folded.has(face.family.toLowerCase())) } : {}),
+    });
     void work.finally(() => {
       active.running = false;
       if (current === active) schedule();

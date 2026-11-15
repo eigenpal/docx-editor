@@ -103,6 +103,15 @@ export type SectionBreakInsertType = 'nextPage' | 'continuous';
  */
 export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartOps {
   readonly session: TreeDocxSessionView;
+  /**
+   * The font faces that layout measured, for an on-demand font resolver
+   * (`FontResolutionRequest.faces`). @internal
+   */
+  usedFontFaces?(): readonly {
+    readonly family: string | null;
+    readonly weight: 400 | 700;
+    readonly style: 'normal' | 'italic';
+  }[];
   /** The collaboration replica a `collaborationModule` attached, or null. */
   collaborationSession(): import('../collaboration/index.ts').EditorCollaborationSession | null;
   storyScope(): import('@docx-editor.dev/core/store').StoryScope;

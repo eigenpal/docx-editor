@@ -65,6 +65,12 @@ export interface DefaultFontSource {
 }
 
 // @public
+export interface DefaultFontStyle {
+    readonly style: 'normal' | 'italic';
+    readonly weight: number;
+}
+
+// @public
 export interface DefaultFontSubstitution {
     // (undocumented)
     readonly from: DefaultFontFaceRequest;
@@ -93,6 +99,7 @@ export interface FontAssetManifestEntry {
 // @public
 export interface FontOriginRequest {
     readonly defaultFamily: string;
+    readonly faces?: readonly ResolvedFontFace[];
     readonly families: readonly string[];
     readonly resolvedFaces?: readonly ResolvedFontFace[];
     readonly signal?: AbortSignal;
@@ -114,6 +121,7 @@ export function loadDefaultFonts(options?: LoadDefaultFontsOptions): Promise<Def
 
 // @public
 export interface LoadDefaultFontsOptions {
+    readonly faces?: readonly DefaultFontStyle[];
     readonly families?: readonly DefaultFontFamily[];
     readonly fetcher?: typeof fetch;
     readonly signal?: AbortSignal;
@@ -138,10 +146,14 @@ export interface PackagedFontsOptions {
     // @deprecated
     readonly install?: boolean;
     readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
+    readonly prefetch?: boolean;
 }
 
 // @public
 export type PackagedFontsResolver = ((request: FontOriginRequest) => Promise<PackagedFontsFragment>) & FontResolverMark;
+
+// @public
+export function prefetchDefaultFonts(options?: Pick<LoadDefaultFontsOptions, 'families' | 'faces' | 'fetcher'>): void;
 
 // @public
 export interface ResolvedFontFace {

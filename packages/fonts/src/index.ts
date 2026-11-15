@@ -61,10 +61,19 @@
 // `FontSourceSubstitution` — assignable by shape — so this package has no runtime or
 // type dependency on the engine and the engine has none on it.
 
-import { FACES, FAMILY_PLANS, planFaceFile, planLineBox, planSourceFace } from './family-plans.ts';
-import type { DefaultFontFamily } from './family-plans.ts';
+import {
+  FACES,
+  FAMILY_PLANS,
+  facesNeeded,
+  packagedFaces,
+  planFaceFile,
+  planLineBox,
+  planSourceFace,
+} from './family-plans.ts';
+import type { DefaultFontFamily, FamilyPlan } from './family-plans.ts';
 import { packagedAssetRootOverride, resolvePackagedAssetRoot } from './asset-root.ts';
 import { FONT_ASSET_MANIFEST, FONT_ASSET_URLS } from './manifest.generated.ts';
+import { fetchFontFile, prefetchFontFile } from './byte-cache.ts';
 
 export type { DefaultFontFamily } from './family-plans.ts';
 
@@ -75,6 +84,14 @@ export type WordDefaultFamily = DefaultFontFamily;
 export interface DefaultFontFaceRequest {
   readonly family: string;
   readonly weight: number;
+  readonly style: 'normal' | 'italic';
+}
+
+/** One face of a family, by weight and style. */
+export interface DefaultFontStyle {
+  /** CSS numeric weight. The packaged faces are 400 and 700: 600 or more selects 700. */
+  readonly weight: number;
+  /** Whether this is the upright or the italic face. */
   readonly style: 'normal' | 'italic';
 }
 
@@ -136,6 +153,12 @@ export interface LoadDefaultFontsOptions {
    * add the families this package substitutes for that Word does not apply by default.
    */
   readonly families?: readonly DefaultFontFamily[];
+  /**
+   * The faces to load of each family, by weight and style. A weight of 600 or more selects
+   * the bold face, and a lower weight the regular face. Omitted, all four faces load:
+   * regular, bold, italic, and bold italic. The fragment maps only the faces it loads.
+   */
+  readonly faces?: readonly DefaultFontStyle[];
   /** Injectable for tests; defaults to global `fetch`. */
   readonly fetcher?: typeof fetch;
   /**
@@ -246,81 +269,134 @@ export async function loadDefaultFonts(
   options: LoadDefaultFontsOptions = {}
 ): Promise<DefaultFontsFragment> {
   const families = options.families ?? DEFAULT_FONT_FAMILIES;
-  const fetcher = options.fetcher ?? fetch;
+  const faces = options.faces ? packagedFaces(options.faces) : FACES;
+  return loadPackagedFaces(
+    families.map((family) => ({ family, faces })),
+    options.fetcher ?? fetch,
+    options.signal
+  );
+}
 
+/** The packaged file of each face to load, with its family and manifest entry. */
+function packagedFiles(
+  entries: readonly { family: DefaultFontFamily; faces: readonly (typeof FACES)[number][] }[]
+): { family: DefaultFontFamily; file: string; face: (typeof FACES)[number] }[] {
+  const files = new Map<
+    string,
+    { family: DefaultFontFamily; file: string; face: (typeof FACES)[number] }
+  >();
+  for (const { family, faces } of entries) {
+    const plan = FAMILY_PLANS.get(family);
+    if (!plan) continue;
+    for (const face of faces) {
+      // An italic served by its upright twin loads the upright file.
+      const source = planSourceFace(plan, face);
+      const file = planFaceFile(plan, source.suffix);
+      if (!files.has(file)) files.set(file, { family, file, face: source });
+    }
+  }
+  return [...files.values()];
+}
+
+/**
+ * Load `faces` of each family: the shared engine of {@link loadDefaultFonts} and
+ * {@link packagedFonts}. Bytes come from the cache that {@link prefetchDefaultFonts} fills,
+ * or from the network.
+ */
+async function loadPackagedFaces(
+  entries: readonly { family: DefaultFontFamily; faces: readonly (typeof FACES)[number][] }[],
+  fetcher: typeof fetch,
+  signal: AbortSignal | undefined
+): Promise<DefaultFontsFragment> {
   const sources: DefaultFontSource[] = [];
   const substitutions: DefaultFontSubstitution[] = [];
   const failures: DefaultFontLoadFailure[] = [];
+  const failedFiles = new Set<string>();
 
-  const jobs: Promise<void>[] = [];
-  for (const family of families) {
+  const jobs = packagedFiles(entries).map(async ({ family, file, face }) => {
+    const manifest = manifestByFile.get(file);
+    if (!manifest) {
+      failures.push({ family, file, diagnostic: 'face missing from packaged manifest' });
+      failedFiles.add(file);
+      return;
+    }
+    try {
+      const bytes = await fetchFontFile(
+        { url: assetUrl(file), byteLength: manifest.byteLength, source: 'packaged' },
+        fetcher,
+        signal
+      );
+      sources.push({
+        request: {
+          family: FAMILY_PLANS.get(family)!.substitute,
+          weight: face.weight,
+          style: face.style,
+        },
+        id: sourceIdForFile(file),
+        bytes,
+        // Baked at packaging time and CI-verified; the engine's admission path
+        // re-derives and compares, so a swapped asset still fails loudly there.
+        hash: manifest.hash,
+        faceIndex: 0,
+      });
+    } catch (error) {
+      // Cancellation belongs to the caller's operation, not to any individual face.
+      // Propagate it so superseded exports do not report every concurrent fetch as a
+      // separate font failure (or seed a partial fragment from an abandoned load).
+      if (signal?.aborted) throw signal.reason ?? error;
+      failedFiles.add(file);
+      failures.push({
+        family,
+        file,
+        diagnostic: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+  await Promise.all(jobs);
+
+  for (const { family, faces } of entries) {
     const plan = FAMILY_PLANS.get(family);
-    if (!plan) continue; // Unknown name: nothing to stand in for.
-    for (const face of FACES) {
+    if (!plan) continue;
+    for (const face of faces) {
       const source = planSourceFace(plan, face);
-      const file = planFaceFile(plan, source.suffix);
-      const manifest = manifestByFile.get(file);
-      if (!manifest) {
-        failures.push({ family, file, diagnostic: 'face missing from packaged manifest' });
-        continue;
-      }
+      if (!manifestByFile.has(planFaceFile(plan, source.suffix))) continue;
       const lineMetrics = planLineBox(plan, face.weight);
       substitutions.push({
         from: { family, weight: face.weight, style: face.style },
         to: { family: plan.substitute, weight: source.weight, style: source.style },
         ...(lineMetrics ? { lineMetrics } : {}),
       });
-      // An italic served by its upright twin loads no bytes of its own.
-      if (source !== face) continue;
-      jobs.push(
-        (async () => {
-          try {
-            const response = await fetcher(assetUrl(file) as unknown as RequestInfo, {
-              signal: options.signal,
-            });
-            if (!response.ok) {
-              failures.push({ family, file, diagnostic: `HTTP ${response.status}` });
-              return;
-            }
-            const bytes = new Uint8Array(await response.arrayBuffer());
-            if (bytes.byteLength !== manifest.byteLength) {
-              failures.push({
-                family,
-                file,
-                diagnostic: `unexpected byte length ${bytes.byteLength}, packaged ${manifest.byteLength}`,
-              });
-              return;
-            }
-            sources.push({
-              request: { family: plan.substitute, weight: face.weight, style: face.style },
-              id: sourceIdForFile(file),
-              bytes,
-              // Baked at packaging time and CI-verified; the engine's admission path
-              // re-derives and compares, so a swapped asset still fails loudly there.
-              hash: manifest.hash,
-              faceIndex: 0,
-            });
-          } catch (error) {
-            // Cancellation belongs to the caller's operation, not to any individual face.
-            // Propagate it so superseded exports do not report every concurrent fetch as a
-            // separate font failure (or seed a partial fragment from an abandoned load).
-            if (options.signal?.aborted) throw options.signal.reason ?? error;
-            failures.push({
-              family,
-              file,
-              diagnostic: error instanceof Error ? error.message : String(error),
-            });
-          }
-        })()
-      );
     }
   }
-  await Promise.all(jobs);
-
   // Deterministic order regardless of fetch completion, so composed configurations
   // fingerprint stably across loads.
   sources.sort((a, b) => a.id.localeCompare(b.id));
   return { sources, substitutions, failures };
+}
+
+/**
+ * Fetch packaged faces into memory at low priority, without returning them: a later
+ * {@link loadDefaultFonts} or {@link packagedFonts} call that needs them reads them from
+ * memory. Use it for faces that an edit can need soon, such as the bold of a family the
+ * document uses, so the edit does not wait for the network.
+ *
+ * It starts each fetch at once and returns. A fetch that fails is forgotten, and a later load
+ * fetches the file again. Cached bytes stay within the package's cache budget.
+ */
+export function prefetchDefaultFonts(
+  options: Pick<LoadDefaultFontsOptions, 'families' | 'faces' | 'fetcher'> = {}
+): void {
+  const families = options.families ?? DEFAULT_FONT_FAMILIES;
+  const faces = options.faces ? packagedFaces(options.faces) : FACES;
+  const fetcher = options.fetcher ?? fetch;
+  for (const { file } of packagedFiles(families.map((family) => ({ family, faces })))) {
+    const manifest = manifestByFile.get(file);
+    if (manifest)
+      prefetchFontFile(
+        { url: assetUrl(file), byteLength: manifest.byteLength, source: 'packaged' },
+        fetcher
+      );
+  }
 }
 
 /**
@@ -439,6 +515,12 @@ export interface FontOriginRequest {
   readonly signal?: AbortSignal;
   /** Faces an earlier origin in the same composition can already paint. */
   readonly resolvedFaces?: readonly ResolvedFontFace[];
+  /**
+   * The faces the document's text uses. When present, the resolvers in this package load only
+   * these faces. The engine asks again when text starts to use another face. Absent, they load
+   * every face of each family they serve.
+   */
+  readonly faces?: readonly ResolvedFontFace[];
 }
 
 /** Case-folded face identity, matching how the engine keys `resolvedFaces`. */
@@ -465,6 +547,13 @@ export interface PackagedFontsOptions {
    * them. Caller cancellation rejects the resolver without invoking this callback.
    */
   readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
+  /**
+   * When the request names the faces the document uses (`faces`), fetch the other faces of
+   * the same families into memory when the browser is idle, at low priority. An edit that
+   * makes text bold or italic then reads its face from memory instead of waiting for the
+   * network. Defaults to `true`. Outside a browser, nothing is fetched ahead.
+   */
+  readonly prefetch?: boolean;
   /**
    * Legacy registration option, retained for source compatibility.
    *
@@ -583,99 +672,98 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     const already = new Set(
       (request.resolvedFaces ?? []).map((face) => faceKey(face.family, face.weight, face.style))
     );
-    // ALL FOUR faces, or none. This loads a family at a time, so skipping one whose
-    // regular is covered but whose bold is not would leave the bold with neither bytes nor
-    // a substitution — which is exactly what the family-grained version of this check did.
-    const fullyCovered = (family: DefaultFontFamily): boolean => {
-      const plan = FAMILY_PLANS.get(family)!;
-      return FACES.every((face) => {
-        // Under the Word name the document wrote, or under the face this would load: an
-        // earlier origin may have reported either.
-        const source = planSourceFace(plan, face);
-        return (
-          already.has(faceKey(family, face.weight, face.style)) ||
-          already.has(faceKey(plan.substitute, source.weight, source.style))
-        );
+    // The faces the document uses under one declared name, or every face when the request
+    // does not say.
+    const neededFaces = facesNeeded(request.faces);
+    /** Faces to load, by Word family. */
+    const toLoad = new Map<DefaultFontFamily, Set<(typeof FACES)[number]>>();
+    const load = (family: DefaultFontFamily, face: (typeof FACES)[number]): void => {
+      const faces = toLoad.get(family) ?? new Set();
+      faces.add(face);
+      toLoad.set(family, faces);
+    };
+    /** Families whose text uses a face this resolver serves, for the prefetch. */
+    const used = new Set<DefaultFontFamily>();
+    // Substitutions for faces an earlier origin covers under the SUBSTITUTE's own name. The
+    // bytes are there, but nothing maps the Word name to them: a caller who registers Carlito
+    // by name has not said it stands in for Calibri, and without this record the Word name
+    // resolves to nothing at all. No bytes load for these.
+    const aliasOnly: DefaultFontSubstitution[] = [];
+    const redirect = (
+      from: string,
+      plan: FamilyPlan,
+      face: (typeof FACES)[number],
+      to?: string
+    ): void => {
+      const source = to ? face : planSourceFace(plan, face);
+      const lineMetrics = planLineBox(plan, face.weight);
+      aliasOnly.push({
+        from: { family: from, weight: face.weight, style: face.style },
+        to: { family: to ?? plan.substitute, weight: source.weight, style: source.style },
+        ...(lineMetrics ? { lineMetrics } : {}),
       });
     };
     // The default family counts as declared: a document whose runs name no font still
     // renders in one, and leaving it out would load nothing for a file that is entirely
     // default-styled.
-    const wanted = new Set<DefaultFontFamily>();
-    const seen = new Set<DefaultFontFamily>();
-    // Substitutions for families an earlier origin covers under the SUBSTITUTE's own name.
-    // The bytes are there, but nothing maps the Word name to them: a caller who registers
-    // Carlito by name has not said it stands in for Calibri, and without this record the
-    // Word name resolves to nothing at all. No bytes load for these.
-    const aliasOnly: DefaultFontSubstitution[] = [];
-    /** Alias names a document declared (`Helvetica`), with the family whose bytes serve them. */
-    const aliasesDeclared = new Map<string, DefaultFontFamily>();
+    const seen = new Set<string>();
     for (const declared of [request.defaultFamily, ...request.families]) {
       const fold = declared.toLowerCase();
+      if (seen.has(fold)) continue;
+      seen.add(fold);
       const aliasOf = aliasesByFoldedName.get(fold);
       if (aliasOf) {
         if (allowed && !allowed.has(fold) && !allowed.has(aliasOf.toLowerCase())) continue;
-        aliasesDeclared.set(declared, aliasOf);
-        // Its bytes load with the family it shares, unless an earlier origin paints the alias.
-        if (FACES.every((face) => already.has(faceKey(declared, face.weight, face.style)))) {
-          aliasesDeclared.delete(declared);
-          continue;
+        const plan = FAMILY_PLANS.get(aliasOf)!;
+        // Each face of the alias points where its family's face is painted: at bytes an
+        // earlier origin supplies under the family's own name (a host's real Arial), or else
+        // at the packaged substitute, which loads unless an earlier origin paints it.
+        for (const face of neededFaces(declared)) {
+          if (already.has(faceKey(declared, face.weight, face.style))) continue;
+          used.add(aliasOf);
+          const own = already.has(faceKey(aliasOf, face.weight, face.style));
+          redirect(declared, plan, face, own ? aliasOf : undefined);
+          const source = planSourceFace(plan, face);
+          if (!own && !already.has(faceKey(plan.substitute, source.weight, source.style)))
+            load(aliasOf, face);
         }
-        if (!seen.has(aliasOf) && !fullyCovered(aliasOf)) wanted.add(aliasOf);
         continue;
       }
       const family = wordFamiliesByFoldedName.get(fold);
-      if (!family || seen.has(family)) continue;
-      seen.add(family);
+      if (!family) continue;
       if (allowed && !allowed.has(family.toLowerCase())) continue;
-      if (fullyCovered(family)) {
-        const plan = FAMILY_PLANS.get(family)!;
-        for (const face of FACES) {
-          if (already.has(faceKey(family, face.weight, face.style))) continue;
-          const lineMetrics = planLineBox(plan, face.weight);
-          const source = planSourceFace(plan, face);
-          aliasOnly.push({
-            from: { family, weight: face.weight, style: face.style },
-            to: { family: plan.substitute, weight: source.weight, style: source.style },
-            ...(lineMetrics ? { lineMetrics } : {}),
-          });
-        }
-        continue;
-      }
-      wanted.add(family);
-    }
-    // Every face of a declared alias points where its family's face is painted: at bytes an
-    // earlier origin supplies under the family's own name (a host's real Arial), or else at
-    // the packaged substitute this resolver loads.
-    for (const [alias, family] of aliasesDeclared) {
       const plan = FAMILY_PLANS.get(family)!;
-      for (const face of FACES) {
-        const lineMetrics = planLineBox(plan, face.weight);
-        const own = already.has(faceKey(family, face.weight, face.style));
-        const source = own ? face : planSourceFace(plan, face);
-        aliasOnly.push({
-          from: { family: alias, weight: face.weight, style: face.style },
-          to: {
-            family: own ? family : plan.substitute,
-            weight: source.weight,
-            style: source.style,
-          },
-          ...(lineMetrics ? { lineMetrics } : {}),
-        });
+      for (const face of neededFaces(declared)) {
+        // Under the Word name the document wrote, or under the face this would load: an
+        // earlier origin may have reported either. Every face ends with bytes, a redirect to
+        // bytes, or a load: none is left with neither.
+        if (already.has(faceKey(family, face.weight, face.style))) continue;
+        used.add(family);
+        const source = planSourceFace(plan, face);
+        if (already.has(faceKey(plan.substitute, source.weight, source.style)))
+          redirect(family, plan, face);
+        else load(family, face);
       }
     }
     // Stable order regardless of how the document happened to declare them, so the same
     // file composes to the same configuration on every load.
-    const families = ALL_DEFAULT_FONT_FAMILIES.filter((family) => wanted.has(family));
-    if (families.length === 0)
+    const families = ALL_DEFAULT_FONT_FAMILIES.filter((family) => toLoad.has(family));
+    // The other faces wait for the faces the document needs: they never share its bandwidth.
+    const prefetch = request.faces && options.prefetch !== false;
+    if (families.length === 0) {
+      if (prefetch) prefetchLater(used, already);
       return { sources: [], substitutions: aliasOnly, failures: [], families, supportedFamilies };
+    }
 
-    const loadOptions = {
-      families,
-      ...(options.fetcher ? { fetcher: options.fetcher } : {}),
-      ...(request.signal ? { signal: request.signal } : {}),
-    };
-    const fragment = await loadDefaultFonts(loadOptions);
+    const fragment = await loadPackagedFaces(
+      families.map((family) => ({
+        family,
+        faces: FACES.filter((face) => toLoad.get(family)!.has(face)),
+      })),
+      options.fetcher ?? fetch,
+      request.signal
+    );
+    if (prefetch) prefetchLater(used, already);
     for (const failure of fragment.failures) {
       if (options.onFailure) options.onFailure(failure);
       else console.warn(`[fonts] ${failure.family} (${failure.file}): ${failure.diagnostic}`);
@@ -687,6 +775,37 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
       families,
       supportedFamilies,
     };
+  }
+
+  /**
+   * Once the browser is idle, fetch the faces of `families` that the document does not use
+   * yet into memory, except those an earlier origin paints.
+   */
+  function prefetchLater(
+    families: ReadonlySet<DefaultFontFamily>,
+    already: ReadonlySet<string>
+  ): void {
+    const idle = (globalThis as { requestIdleCallback?: (run: () => void) => unknown })
+      .requestIdleCallback;
+    if (families.size === 0 || typeof idle !== 'function') return;
+    idle(() => {
+      for (const family of families) {
+        const plan = FAMILY_PLANS.get(family)!;
+        const faces = FACES.filter((face) => {
+          const source = planSourceFace(plan, face);
+          return (
+            !already.has(faceKey(family, face.weight, face.style)) &&
+            !already.has(faceKey(plan.substitute, source.weight, source.style))
+          );
+        });
+        if (faces.length > 0)
+          prefetchDefaultFonts({
+            families: [family],
+            faces,
+            ...(options.fetcher ? { fetcher: options.fetcher } : {}),
+          });
+      }
+    });
   }
 
   return markResolver(resolvePackagedFonts);

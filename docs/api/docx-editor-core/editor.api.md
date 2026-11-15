@@ -2706,6 +2706,7 @@ export interface FontOriginFailure {
 // @public
 export interface FontResolutionRequest {
     readonly defaultFamily: string;
+    readonly faces?: readonly FontFaceRequest[];
     readonly families: readonly string[];
     readonly resolvedFaces?: readonly FontFaceRequest[];
     readonly signal?: AbortSignal;
@@ -3779,6 +3780,12 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     // (undocumented)
     type(text: string): void;
     undo(): void;
+    // @internal
+    usedFontFaces?(): readonly {
+        readonly family: string | null;
+        readonly style: 'normal' | 'italic';
+        readonly weight: 400 | 700;
+    }[];
 }
 
 // @public
