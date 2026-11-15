@@ -70,6 +70,7 @@ import {
   PACKAGED_ONLY_FAMILIES,
   facesNeeded,
   planSourceFace,
+  uncoveredFaces,
   type DefaultFontFamily,
 } from './family-plans.ts';
 import {
@@ -77,7 +78,7 @@ import {
   GOOGLE_FONT_CATALOG,
   type GoogleFontFace,
 } from './google-catalog.generated.ts';
-import { fetchFontFile, prefetchFontFile } from './byte-cache.ts';
+import { fetchFontFile, prefetchFontFile, whenIdle } from './byte-cache.ts';
 import { GOOGLE_CJK_FAMILY_NAMES, googleCjkFaceFor } from './google-cjk.ts';
 import { loadDefaultFonts, prefetchDefaultFonts } from './index.ts';
 import type {
@@ -191,7 +192,8 @@ export interface GoogleFontsOptions {
    * When the request names the faces the document uses (`faces`), fetch the other faces of
    * the same families into memory when the browser is idle, at low priority. An edit that
    * makes text bold or italic then reads its face from memory instead of waiting for the
-   * network. Defaults to `true`. Outside a browser, nothing is fetched ahead.
+   * network. Defaults to `true`. A browser without `requestIdleCallback` waits one second
+   * instead. Outside a browser, nothing is fetched ahead.
    */
   readonly prefetch?: boolean;
   /**
@@ -575,21 +577,22 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
       cjkWanted.size > 0 && !deferCjk ? loadCjk() : undefined,
     ]);
     // The other faces wait for the faces the document needs: they never share its bandwidth.
-    if (request.faces && options.prefetch !== false) {
-      const idle = (globalThis as { requestIdleCallback?: (run: () => void) => unknown })
-        .requestIdleCallback;
-      if (typeof idle === 'function')
-        idle(() => {
-          for (const face of prefetchable) {
-            if (already.has(faceKey(face.family, face.weight, face.style))) continue;
-            prefetchFontFile(
-              { url: face.url, byteLength: face.byteLength, source: 'catalogued' },
-              fetcher
-            );
-          }
-          for (const family of new Set(packaged.values()))
-            prefetchDefaultFonts({ families: [family], fetcher });
-        });
+    if (request.faces && options.prefetch !== false && !request.signal?.aborted) {
+      const covered = (family: string, weight: number, style: string): boolean =>
+        already.has(faceKey(family, weight, style));
+      whenIdle(() => {
+        for (const face of prefetchable) {
+          if (covered(face.family, face.weight, face.style)) continue;
+          prefetchFontFile(
+            { url: face.url, byteLength: face.byteLength, source: 'catalogued' },
+            fetcher
+          );
+        }
+        for (const family of new Set(packaged.values())) {
+          const faces = uncoveredFaces(family, FAMILY_PLANS.get(family)!, covered);
+          if (faces.length > 0) prefetchDefaultFonts({ families: [family], faces, fetcher });
+        }
+      });
     }
     if (cjkNow) {
       sources.push(...cjkNow.sources);

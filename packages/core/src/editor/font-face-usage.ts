@@ -83,3 +83,15 @@ export function createFontFaceUsage(): FontFaceUsage {
     faces: () => list,
   };
 }
+
+const usageBySurface = new WeakMap<object, () => readonly UsedFontFace[]>();
+
+/** Record where a surface's used faces come from. Kept off the public surface type. */
+export function registerUsedFontFaces(surface: object, faces: () => readonly UsedFontFace[]): void {
+  usageBySurface.set(surface, faces);
+}
+
+/** The faces that a surface's layout measured, or undefined for a surface with no record. */
+export function usedFontFacesOf(surface: object): readonly UsedFontFace[] | undefined {
+  return usageBySurface.get(surface)?.();
+}

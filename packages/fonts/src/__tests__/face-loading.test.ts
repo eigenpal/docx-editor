@@ -42,9 +42,13 @@ function fakeFetcher() {
 
 /** Run idle callbacks by hand. */
 const idle: (() => void)[] = [];
-const host = globalThis as { requestIdleCallback?: (run: () => void) => number };
+const host = globalThis as {
+  requestIdleCallback?: (run: () => void) => number;
+  document?: unknown;
+};
 afterEach(() => {
   delete host.requestIdleCallback;
+  delete host.document;
   idle.length = 0;
 });
 const withIdle = () => (host.requestIdleCallback = (run) => idle.push(run));
@@ -190,6 +194,42 @@ describe('packagedFonts with faces', () => {
     expect(idle).toHaveLength(1);
   });
 
+  test('a browser without requestIdleCallback prefetches after a short delay', async () => {
+    host.document = {};
+    const { fetcher, files } = fakeFetcher();
+    const timers: (() => void)[] = [];
+    const realSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((run: () => void) => timers.push(run)) as typeof setTimeout;
+    try {
+      await packagedFonts({ fetcher })({
+        families: [],
+        defaultFamily: 'Cambria',
+        faces: [{ family: 'Cambria', weight: 400, style: 'normal' }],
+      });
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
+    expect(files()).toEqual(['Caladea-Regular.ttf']);
+    expect(timers).toHaveLength(1);
+    timers[0]!();
+    expect(files()).toHaveLength(4);
+  });
+
+  test('a cancelled resolution prefetches nothing', async () => {
+    withIdle();
+    const { fetcher } = fakeFetcher();
+    const controller = new AbortController();
+    controller.abort(new Error('superseded'));
+    await packagedFonts({ fetcher })({
+      families: [],
+      defaultFamily: 'Calibri',
+      resolvedFaces: [{ family: 'Calibri', weight: 400, style: 'normal' }],
+      faces: [{ family: 'Calibri', weight: 400, style: 'normal' }],
+      signal: controller.signal,
+    });
+    expect(idle).toHaveLength(0);
+  });
+
   test('prefetch: false fetches nothing ahead', async () => {
     withIdle();
     const { fetcher } = fakeFetcher();
@@ -219,6 +259,32 @@ describe('prefetchDefaultFonts', () => {
     release();
     expect((await load).sources).toHaveLength(1);
     expect(files()).toEqual(['Caladea-BoldItalic.ttf']);
+  });
+
+  test('a load does not join a fetch that its last waiter aborted', async () => {
+    const { fetcher, files, hold, release } = fakeFetcher();
+    hold();
+    const first = new AbortController();
+    const abandoned = loadDefaultFonts({
+      families: ['Arial'],
+      faces: [{ weight: 400, style: 'normal' }],
+      fetcher,
+      signal: first.signal,
+    });
+    first.abort(new Error('superseded'));
+    // In the same tick: the aborted fetch has not settled yet when the next document asks.
+    const next = loadDefaultFonts({
+      families: ['Arial'],
+      faces: [{ weight: 400, style: 'normal' }],
+      fetcher,
+      signal: new AbortController().signal,
+    });
+    await expect(abandoned).rejects.toThrow('superseded');
+    release();
+    const fragment = await next;
+    expect(fragment.failures).toEqual([]);
+    expect(fragment.sources).toHaveLength(1);
+    expect(files()).toEqual(['LiberationSans-Regular.ttf', 'LiberationSans-Regular.ttf']);
   });
 
   test('a failed prefetch is forgotten, so a later load fetches the file', async () => {
@@ -307,5 +373,19 @@ describe('googleFonts with faces', () => {
     const roboto = GOOGLE_FONT_CATALOG.filter((face) => face.family === 'Roboto');
     expect(requested).toHaveLength(roboto.length);
     expect(requested.slice(1).every((entry) => entry.priority === 'low')).toBe(true);
+  });
+
+  test('prefetches no bundled face that an earlier origin paints', async () => {
+    withIdle();
+    const { fetcher, files } = fakeFetcher();
+    await googleFonts({ fetcher, onFailure: () => {} })({
+      families: ['Calibri'],
+      defaultFamily: 'Calibri',
+      resolvedFaces: [{ family: 'Carlito', weight: 700, style: 'normal' }],
+      faces: [{ family: 'Calibri', weight: 400, style: 'normal' }],
+    });
+    expect(idle).toHaveLength(1);
+    idle[0]!();
+    expect(files()).not.toContain('Carlito-Bold.ttf');
   });
 });

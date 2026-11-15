@@ -33,17 +33,28 @@ export function liveFontFamilies(
 
 /**
  * The faces that laid-out text uses, as a resolver request names them: a run that names no
- * font uses `defaultFamily`. Undefined before any text is laid out, so the resolver loads every
- * face of the families it serves, as it did before it was told the faces.
+ * font uses `defaultFamily`. The caret's face goes first, so the face a user picks loads
+ * before they type. Undefined before any text is laid out, so the resolver loads every face
+ * of the families it serves, as it did before it was told the faces.
  */
 export function requestFaces(
   used: readonly UsedFontFace[] | undefined,
-  defaultFamily: string
+  defaultFamily: string,
+  caret?: {
+    readonly fontFamily?: string;
+    readonly bold?: boolean;
+    readonly italic?: boolean;
+  } | null
 ): readonly FontFaceRequest[] | undefined {
   if (!used || used.length === 0) return undefined;
   const faces: FontFaceRequest[] = [];
   const seen = new Set<string>();
-  for (const face of used) {
+  const caretFace: UsedFontFace | null | undefined = caret && {
+    family: caret.fontFamily ?? null,
+    weight: caret.bold ? 700 : 400,
+    style: caret.italic ? 'italic' : 'normal',
+  };
+  for (const face of caretFace ? [caretFace, ...used] : used) {
     const family = face.family?.trim() ? face.family : defaultFamily;
     const request = { family, weight: face.weight, style: face.style };
     const key = faceKey(request);
@@ -154,6 +165,7 @@ export function createLiveFontResolution<Late>(
     for (const face of newFaces) {
       const fold = face.family.toLowerCase();
       if (folded.has(fold) || fold === defaultFold) continue;
+      if (asked.length >= MAX_RESOLVER_FAMILIES) break;
       folded.add(fold);
       asked.push(face.family);
     }

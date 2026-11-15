@@ -69,11 +69,12 @@ import {
   planFaceFile,
   planLineBox,
   planSourceFace,
+  uncoveredFaces,
 } from './family-plans.ts';
 import type { DefaultFontFamily, FamilyPlan } from './family-plans.ts';
 import { packagedAssetRootOverride, resolvePackagedAssetRoot } from './asset-root.ts';
 import { FONT_ASSET_MANIFEST, FONT_ASSET_URLS } from './manifest.generated.ts';
-import { fetchFontFile, prefetchFontFile } from './byte-cache.ts';
+import { fetchFontFile, prefetchFontFile, whenIdle } from './byte-cache.ts';
 
 export type { DefaultFontFamily } from './family-plans.ts';
 
@@ -260,7 +261,9 @@ const sourceIdForFile = (file: string): string => `default-fonts:${file}`;
  * substitute substitution map, so a document naming "Calibri" resolves without the host
  * mapping anything.
  *
- * Only the requested families' assets are fetched, in parallel. A face that fails to
+ * Only the requested families' assets are fetched, in parallel. Fetched bytes stay in memory
+ * for later calls with the same `fetcher`, and calls share one `Uint8Array` for each file. Do
+ * not change or transfer these bytes: copy them first. A face that fails to
  * load appears in `failures` and the rest of the fragment stays usable — compose it
  * anyway and the missing face measures via the engine's fixed fallback. Caller cancellation is
  * different: the promise rejects with `signal.reason` and returns no partial failure report.
@@ -482,8 +485,9 @@ function markResolver<T extends object>(resolve: T): T & FontResolverMark {
 }
 
 /**
- * One face an earlier origin can already paint, structurally identical to the editor
- * contract's `FontFaceRequest`.
+ * One face of a family, structurally identical to the editor contract's `FontFaceRequest`.
+ * {@link FontOriginRequest.resolvedFaces} uses it for faces an earlier origin can already
+ * paint, and {@link FontOriginRequest.faces} for faces the document's text uses.
  */
 export interface ResolvedFontFace {
   /** The family name, matched case-insensitively as Word matches font names. */
@@ -551,7 +555,8 @@ export interface PackagedFontsOptions {
    * When the request names the faces the document uses (`faces`), fetch the other faces of
    * the same families into memory when the browser is idle, at low priority. An edit that
    * makes text bold or italic then reads its face from memory instead of waiting for the
-   * network. Defaults to `true`. Outside a browser, nothing is fetched ahead.
+   * network. Defaults to `true`. A browser without `requestIdleCallback` waits one second
+   * instead. Outside a browser, nothing is fetched ahead.
    */
   readonly prefetch?: boolean;
   /**
@@ -631,13 +636,15 @@ const aliasesByFoldedName: ReadonlyMap<string, DefaultFontFamily> = new Map(
  * Prefer this to {@link defaultFonts} unless you need the eager guarantee. `defaultFonts()`
  * loads all 20 faces of {@link DEFAULT_FONT_FAMILIES} — 7.4 MB — whichever
  * document opens, because it is called before there is a document to ask. This is called
- * AFTER the parse, so a file using only Times New Roman costs Liberation Serif plus the
- * four Carlito faces instead.
+ * AFTER the parse, and the editor names the faces that the laid-out text uses
+ * ({@link FontOriginRequest.faces}). A file whose text is only regular Times New Roman costs
+ * one Liberation Serif face. When text starts to use another face, such as a bold word, the
+ * editor asks again and this loads that face. The other faces of the families in use load
+ * into memory when the browser is idle (see {@link PackagedFontsOptions.prefetch}).
  *
- * A family loads when a document NAMES it, or when it is that document's DEFAULT face. The
- * default counts because a run that authors no font still has to be measured in one. The
- * engine reports Calibri as the default, so Carlito is a floor here: even a document
- * naming none of the six loads it. Narrow that with {@link PackagedFontsOptions.allow} if a
+ * A request without `faces` loads every face of each family that the document NAMES, and of
+ * its DEFAULT family. The default counts because a run that authors no font still has to be
+ * measured in one. Narrow the families with {@link PackagedFontsOptions.allow} if a
  * document's families are known in advance.
  *
  * What you trade for that is one reflow. The eager form settles before the first layout, so
@@ -749,7 +756,7 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     // file composes to the same configuration on every load.
     const families = ALL_DEFAULT_FONT_FAMILIES.filter((family) => toLoad.has(family));
     // The other faces wait for the faces the document needs: they never share its bandwidth.
-    const prefetch = request.faces && options.prefetch !== false;
+    const prefetch = request.faces && options.prefetch !== false && !request.signal?.aborted;
     if (families.length === 0) {
       if (prefetch) prefetchLater(used, already);
       return { sources: [], substitutions: aliasOnly, failures: [], families, supportedFamilies };
@@ -785,19 +792,12 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     families: ReadonlySet<DefaultFontFamily>,
     already: ReadonlySet<string>
   ): void {
-    const idle = (globalThis as { requestIdleCallback?: (run: () => void) => unknown })
-      .requestIdleCallback;
-    if (families.size === 0 || typeof idle !== 'function') return;
-    idle(() => {
+    if (families.size === 0) return;
+    const covered = (family: string, weight: number, style: string): boolean =>
+      already.has(faceKey(family, weight, style));
+    whenIdle(() => {
       for (const family of families) {
-        const plan = FAMILY_PLANS.get(family)!;
-        const faces = FACES.filter((face) => {
-          const source = planSourceFace(plan, face);
-          return (
-            !already.has(faceKey(family, face.weight, face.style)) &&
-            !already.has(faceKey(plan.substitute, source.weight, source.style))
-          );
-        });
+        const faces = uncoveredFaces(family, FAMILY_PLANS.get(family)!, covered);
         if (faces.length > 0)
           prefetchDefaultFonts({
             families: [family],

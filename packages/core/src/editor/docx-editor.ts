@@ -14,7 +14,8 @@ import { registerRefreshHost, type RefreshHost } from './document-refresh-host.t
 import { reviewChangesLocked } from './command-protection.ts';
 import { createPlacementKeeper, createReviewRanker } from './review-ranking.ts';
 import { browserFallbackMeasurer, resolvedFontMeasurement } from './resolved-font-measurement.ts';
-import { updateSurfaceMeasurement } from './surface-measurement.ts';
+import { updateSurfaceMeasurement, usedFontFacesOf } from './surface-measurement.ts';
+import { fontInstallKey } from './font-install-key.ts';
 import {
   createLiveFontResolution,
   liveFontFamilies,
@@ -465,15 +466,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     () => {
       const session = preparedFontSession ?? surface?.session;
       if (destroyed || !session) return null;
-      const caret = preparedFontSession ? undefined : snapshotNow().formatting?.fontFamily;
+      // A document still preparing has laid out nothing: the surface is the previous one.
+      const laidOut = preparedFontSession ? undefined : surface;
+      const caret = laidOut && (snapshotNow().formatting ?? undefined);
       const defaultFamily = configuredDefaultFontFamily(fontConfiguration());
       return {
         generation: fontLifetime.generation,
         dynamic: typeof configuredFonts === 'function',
-        families: () => liveFontFamilies(session, caret, defaultFamily),
-        // A document still preparing has laid out nothing: the surface is the previous one.
+        families: () => liveFontFamilies(session, caret?.fontFamily, defaultFamily),
         faces: () =>
-          requestFaces(preparedFontSession ? undefined : surface?.usedFontFaces?.(), defaultFamily),
+          requestFaces(laidOut ? usedFontFacesOf(laidOut) : undefined, defaultFamily, caret),
         defaultFamily,
       };
     },
@@ -488,6 +490,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
   );
   let fontsResolving = false;
+  let installedFontKey: string | undefined;
+  const fontsDone = (): void => ((fontsResolving = false), bump());
   const lateFonts = createLateFontArrival({
     deliver: (generation, delivery) => liveFonts.deliver(generation, delivery),
     changed: () => (bump(), emitSelectionChange()),
@@ -1033,9 +1037,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const { plan: documentFonts, request: documentRequest } = documentFontResolutionRequest(
         mounted.session,
         families,
-        fontConfiguration()
+        fontConfiguration(),
+        faces
       );
-      const request = { ...documentRequest, ...(faces ? { faces } : {}), signal: lifetime.signal };
+      const request = { ...documentRequest, signal: lifetime.signal };
       // Installed families keep their own face; only missing ones fall back. Without a canvas
       // to probe with (headless), nothing counts as installed.
       const canProbe =
@@ -1073,8 +1078,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         embedded.length === 0 &&
         (!explicit || (raw?.supportedFamilies?.length && !normalizeFontResolverResult(raw)))
       ) {
-        fontsResolving = false;
-        bump();
+        fontsDone();
         emitSelectionChange();
         return;
       }
@@ -1112,14 +1116,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         documentFonts,
         fallbacks
       );
+      // A face request that brought no new bytes keeps the installed fonts: no relayout.
+      const installKey = `${seq}\u0001${lifetime.generation}\u0001${fontInstallKey(fonts)}`;
+      if (installKey === installedFontKey) return (reportDocumentDrops(), fontsDone());
       // Nothing to shape: the fixed measurer stays. An app that DID supply a
       // configuration deserves to hear that it contributed no usable source (every
       // fetch failed, or the fragment was substitutions-only against no document
       // faces) rather than a byte-limit error from the validator.
       if (fonts.sources.length === 0) {
         reportDocumentDrops();
-        fontsResolving = false;
-        bump();
+        fontsDone();
         if (explicit) {
           reportForLoad(
             new EditorFontError(
@@ -1147,8 +1153,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const bailToFixed = (superseded?: typeof shaping): void => {
         reportDocumentDrops();
         if (superseded) disposeLayoutShaping(superseded);
-        fontsResolving = false;
-        bump();
+        fontsDone();
       };
       // Per-face degradation, reported: an embedded face the validator refused still
       // resolves — to a typed error. Probing here (map lookups, no shaping work) is what
@@ -1307,14 +1312,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         throw error;
       }
       disposeShapedFonts = () => disposeLayoutShaping(shaping);
+      installedFontKey = installKey;
       previous.disposeShapedFonts();
       previous.embeddedFaces?.dispose();
       bump();
       emitSelectionChange();
     } catch (error) {
       if (!current()) return;
-      fontsResolving = false;
-      bump();
+      fontsDone();
       reportForLoad(toEditorFontError(error));
     }
   }

@@ -3780,12 +3780,6 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     // (undocumented)
     type(text: string): void;
     undo(): void;
-    // @internal
-    usedFontFaces?(): readonly {
-        readonly family: string | null;
-        readonly style: 'normal' | 'italic';
-        readonly weight: 400 | 700;
-    }[];
 }
 
 // @public

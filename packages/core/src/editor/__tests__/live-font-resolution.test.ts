@@ -160,3 +160,15 @@ test('a family first asked for with no faces never asks again for a face of it',
   await tick();
   expect(requests).toEqual([{ families: ['Arial'] }]);
 });
+
+test('requestFaces names the caret face first, so a picked face loads before typing', () => {
+  expect(
+    requestFaces([{ family: 'Arial', weight: 400, style: 'normal' }], 'Calibri', {
+      fontFamily: 'Georgia',
+      bold: true,
+    })
+  ).toEqual([
+    { family: 'Georgia', weight: 700, style: 'normal' },
+    { family: 'Arial', weight: 400, style: 'normal' },
+  ]);
+});

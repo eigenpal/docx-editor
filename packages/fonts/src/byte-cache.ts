@@ -101,10 +101,13 @@ export async function fetchFontFile(
   const byteCache = cacheFor(fetcher, cjk);
   const inFlight = byteCache.entries.get(face.url);
   const inFlightState = inFlight ? byteCache.pending.get(face.url) : undefined;
+  // A fetch whose last waiter aborted it rejects a little later: until then its entry is still
+  // here, and a new caller that joined it would fail with an abort that is not its own.
+  const doomed = inFlightState?.controller.signal.aborted === true;
   // Reuse a settled entry, or join a shared in-flight fetch. The one refusal: a signal-scoped
   // caller never joins a PINNED fetch (one an unsigned caller owns), because that fetch may be
   // stranded and nothing can cancel it — the caller replaces it with work it can cancel.
-  if (inFlight && (!inFlightState || !signal || !inFlightState.pinned)) {
+  if (inFlight && !doomed && (!inFlightState || !signal || !inFlightState.pinned)) {
     // Map insertion order is the LRU order. Pending entries can move too; successful byte
     // accounting is unchanged until their completion records the actual size.
     byteCache.entries.delete(face.url);
@@ -250,4 +253,25 @@ function raceWithAbort<T>(work: Promise<T>, signal: AbortSignal | undefined): Pr
       }
     );
   });
+}
+
+/** The delay before a prefetch in a browser that has no `requestIdleCallback`. */
+const IDLE_FALLBACK_MS = 1000;
+
+/**
+ * Run `run` when the browser is idle: through `requestIdleCallback`, or after a short delay
+ * in a browser without it. Outside a browser, run nothing and return false.
+ */
+export function whenIdle(run: () => void): boolean {
+  const host = globalThis as {
+    requestIdleCallback?: (run: () => void, options?: { timeout: number }) => unknown;
+    document?: unknown;
+  };
+  if (typeof host.requestIdleCallback === 'function') {
+    host.requestIdleCallback(run, { timeout: 5000 });
+    return true;
+  }
+  if (host.document === undefined) return false;
+  setTimeout(run, IDLE_FALLBACK_MS);
+  return true;
 }

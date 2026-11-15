@@ -68,6 +68,7 @@ import {
   browserDefaultMeasurer,
   createFontFaceUsage,
   registerSurfaceMeasurement,
+  registerUsedFontFaces,
 } from './surface-measurement.ts';
 import {
   PROGRESSIVE_OPEN_FIRST_BLOCKS,
@@ -6292,7 +6293,7 @@ export function mountPaginatedSurface(
     tableInteraction.refreshLabels();
     tableSelectHandle?.update();
   };
-  surface.usedFontFaces = () => faceUsage.faces();
+  registerUsedFontFaces(surface, faceUsage.faces);
   surface.refreshTableInteractionLabels = () => {
     tableInteraction.refreshLabels();
     tableSelectHandle?.update();

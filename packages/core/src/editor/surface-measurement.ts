@@ -2,8 +2,8 @@ import type { PaginatedSurface, PaginatedSurfaceOptions } from './paginated-surf
 import { resolveDefaultSurfaceMeasurer, type CanvasMeasurerOptions } from '../layout/index.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 
-/** The faces a surface's layout measures (`PaginatedSurface.usedFontFaces`). */
-export { createFontFaceUsage } from './font-face-usage.ts';
+/** The faces a surface's layout measures (`usedFontFacesOf`). */
+export { createFontFaceUsage, registerUsedFontFaces, usedFontFacesOf } from './font-face-usage.ts';
 
 type Measurement = Pick<
   PaginatedSurfaceOptions,

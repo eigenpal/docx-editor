@@ -165,3 +165,21 @@ export function facesNeeded(
   }
   return (declared) => packagedFaces(byFamily.get(declared.trim().toLowerCase()) ?? []);
 }
+
+/**
+ * The packaged faces of `family` that no earlier origin paints, under the Word name or under
+ * the substitute's own name. `covered` answers for one face key.
+ */
+export function uncoveredFaces(
+  family: string,
+  plan: FamilyPlan,
+  covered: (family: string, weight: number, style: string) => boolean
+): readonly (typeof FACES)[number][] {
+  return FACES.filter((face) => {
+    const source = planSourceFace(plan, face);
+    return (
+      !covered(family, face.weight, face.style) &&
+      !covered(plan.substitute, source.weight, source.style)
+    );
+  });
+}
