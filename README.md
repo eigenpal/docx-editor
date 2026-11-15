@@ -168,7 +168,7 @@ bun run build
 bun run typecheck
 ```
 
-Try unreleased changes in the [preview of `main`](https://latest.docx-editor.dev/).
+Try unreleased changes in the [preview of `main`](https://preview.docx-editor.dev/).
 
 Examples: [Vite](examples/vite) | [DOCX to Markdown](examples/docx-to-markdown) | [DOCX to PDF](examples/docx-to-pdf) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue) | [Collaboration](examples/collaboration) | [Server agent review](examples/server-agent-review) | [Document refresh](examples/document-refresh) | [Telemetry](examples/telemetry-single-user) | [Collaboration telemetry](examples/telemetry-collaboration)
 
