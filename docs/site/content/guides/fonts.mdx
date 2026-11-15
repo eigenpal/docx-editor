@@ -217,7 +217,7 @@ const brandFonts = defineFontResolver(async ({ families, defaultFamily, resolved
 | `families` | Families the document declares, including `w:sym`, `SYMBOL` field, and numbering marker faces |
 | `defaultFamily` | The face for runs that name no font |
 | `resolvedFaces` | Faces that earlier sources already supplied |
-| `faces` | Faces the laid-out text uses, by family, weight, and style. Absent before the first layout: load every face then. |
+| `faces` | Faces to load, by family, weight, and style: the faces the laid-out text uses and the same faces of their fallback families. A later request names only the new faces. Absent before the first layout: load every face then. |
 
 A resolver can also return `supportedFamilies` to add catalog entries to the font picker without bytes.
 
