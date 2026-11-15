@@ -25,12 +25,20 @@ const snapshot = await runtime.run(async (context) => {
 });
 
 // Your service returns issues with start, length, and suggestions.
-const checked = await Promise.all(
-  snapshot.map(async (paragraph) => ({
-    ...paragraph,
-    issues: await check(paragraph.text),
-  }))
-);
+// Send a few requests at a time so a long document does not flood it.
+const BATCH_SIZE = 8;
+const checked = [];
+for (let index = 0; index < snapshot.length; index += BATCH_SIZE) {
+  const batch = snapshot.slice(index, index + BATCH_SIZE);
+  checked.push(
+    ...(await Promise.all(
+      batch.map(async (paragraph) => ({
+        ...paragraph,
+        issues: await check(paragraph.text),
+      }))
+    ))
+  );
+}
 const byId = new Map(checked.map((paragraph) => [paragraph.id, paragraph]));
 
 const ids = await runtime.run(async (context) => {
@@ -64,7 +72,7 @@ const ids = await runtime.run(async (context) => {
 });
 ```
 
-This example skips changed paragraphs. Check them again instead of applying offsets from earlier text. Cancel pending checks when you load or replace the document. Remove earlier annotations before you insert results for the same text again.
+This example sends at most eight checks at a time. Set the limit that your service allows. It skips changed paragraphs. Check them again instead of applying offsets from earlier text. Cancel pending checks when you load or replace the document. Remove earlier annotations before you insert results for the same text again.
 
 - `start` and `length` count UTF-16 code units of `Paragraph.text`, as the runtime reads it in its [revision view](/docs/2.x/editor-api/revisions). With the default `allMarkup` view, tracked deletions and insertions both count, and a field counts as its displayed result.
 - `length` must be at least 1, and the range must lie inside the text. Otherwise the sync fails with `InvalidArgument`.

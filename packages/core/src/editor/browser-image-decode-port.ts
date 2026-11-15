@@ -14,8 +14,11 @@ import { decodeTiffFrame } from '../store/package/tiff-frame.ts';
 
 export { decodeTiffFrame, type DecodedTiffFrame } from '../store/package/tiff-frame.ts';
 
-/** Output bounds handed to the metafile rasterizer — well under every resource pixel cap. */
-const MAX_METAFILE_RASTER_EDGE = 4096;
+/**
+ * Output bounds handed to every metafile rasterizer, well under every resource pixel cap. It
+ * matches the 2048-pixel preview limit in `metafileRasterOptions` and the documentation.
+ */
+const MAX_METAFILE_RASTER_EDGE = 2048;
 
 /** A converted raster, or null when the format was declined and the placeholder stands. */
 type ConvertedRaster = Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }> | null;

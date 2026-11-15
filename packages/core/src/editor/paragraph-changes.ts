@@ -11,7 +11,7 @@ import type { ParagraphsChangeEvent } from '../contracts/editor-events.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { ooxmlTreesEqual } from '../store/package/ooxml-serialize.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import {
   collectStoryParagraphs,
   storyParagraphs,
@@ -20,7 +20,7 @@ import {
 import { textboxStoriesInPart } from '../store/package/textbox-stories.ts';
 import { resolveHeaderFooterResolutionBySection } from '../store/package/hf-references.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
-import { resolveRelationship } from '../store/package/relationships.ts';
+import { sessionStylesRootOf } from '../store/package/ooxml-indexes.ts';
 import { ORIGIN_IDS } from '../store/registry/frozen-ids.ts';
 import type { TreeModelChange } from '../store/store/tree-store.ts';
 
@@ -187,25 +187,6 @@ function frozenList(ids: Set<string>): readonly string[] {
   return Object.freeze([...ids]);
 }
 
-/** The styles root selected by the session, including its conventional-name fallback. */
-function stylesRootOf(pkg: OoxmlPackage): OoxmlElement | null {
-  const record = pkg.relationships
-    .get(pkg.mainDocumentPart)
-    ?.find(
-      (relationship) =>
-        relationship.type ===
-        'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles'
-    );
-  if (record) {
-    const resolved = resolveRelationship(record);
-    if (resolved.mode === 'Internal' && resolved.target.ok) {
-      const part = pkg.parts.get(resolved.target.partName);
-      if (part) return part.root;
-    }
-  }
-  return pkg.parts.get('/word/styles.xml')?.root ?? null;
-}
-
 /** The same referenced story parts that the session lists, from an earlier package. */
 function storyNamesOf(pkg: OoxmlPackage): ReadonlySet<string> {
   const names = new Set([pkg.mainDocumentPart]);
@@ -263,7 +244,7 @@ export function createParagraphChangeTracker(
       }
       // Every read depends on the styles part, so new styles can change every paragraph.
       const styles = session.stylesRoot();
-      const stylesChanged = stylesRootOf(before) !== styles;
+      const stylesChanged = sessionStylesRootOf(before) !== styles;
       const single = changedParts.length === 1 && !stylesChanged;
       for (const [old, part] of changedParts) {
         if (!old) compare(new Map(), allListed(part!), lists);

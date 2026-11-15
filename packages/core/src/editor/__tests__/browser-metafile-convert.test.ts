@@ -33,7 +33,7 @@ test('the port rasterizes through the installed renderer', async () => {
   });
   const converted = await convertBrowserMetafile(new Uint8Array(12), 'image/x-wmf', LIMITS);
   expect(converted).toEqual({ bytes: png, mime: 'image/png' });
-  expect(calls).toEqual([[12, 'image/x-wmf', 4096]]);
+  expect(calls).toEqual([[12, 'image/x-wmf', 2048]]);
 });
 
 test('metafile raster options bound both dimensions while allowing fourfold rendering', () => {
