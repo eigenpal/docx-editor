@@ -329,6 +329,12 @@
       "id": 68622691,
       "signed_at": "2026-11-12T14:11:46Z",
       "pull_request_no": 1908
+    },
+    {
+      "name": "Hiutaky",
+      "id": 10051436,
+      "signed_at": "2026-11-15T18:36:50Z",
+      "pull_request_no": 1987
     }
   ]
 }
