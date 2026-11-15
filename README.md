@@ -226,5 +226,3 @@ See the [public roadmap](https://github.com/orgs/eigenpal/projects/2) for planne
   &nbsp;&nbsp;&nbsp;&nbsp;
   <a href="https://www.pptx-editor.dev/"><img src="./.github/assets/pptx-editor-icon.svg" alt="" width="36" height="30" /> <b>PPTX Editor</b></a>
 </p>
-
-<p align="center"><sub>Built by <a href="https://www.eigenpal.com">EigenPal</a></sub></p>
