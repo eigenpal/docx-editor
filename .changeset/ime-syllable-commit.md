@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Typing with an input method stays responsive in long documents, because each composed syllable commits after the frame that shows it. Fixes #1931
+Keep input method typing responsive in long documents by committing composed syllables after their display frame. Fixes #1931

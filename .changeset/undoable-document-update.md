@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': minor
 ---
 
-Add the `replaceDocument` editor command and `Body.insertFileFromBase64(base64File, 'Replace')`, which replace the document with a DOCX file as one undoable edit, and an undoable `mode: 'edit'` for document refresh. Undoing a comment reply in a collaboration session now also removes its thread record. Fixes #1907, fixes #1934
+Add undoable DOCX replacement through `replaceDocument`, `Body.insertFileFromBase64(base64File, 'Replace')`, and document refresh `mode: 'edit'`. Remove collaborative comment thread records when undoing their replies. Fixes #1907, fixes #1934

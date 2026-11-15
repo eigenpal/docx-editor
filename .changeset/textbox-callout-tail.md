@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-A press on the tail of a callout text box now selects the text box, and a turned text box paints its whole tail. Fixes #1953
+Select callout text boxes through their tails and render complete tails on rotated text boxes. Fixes #1953

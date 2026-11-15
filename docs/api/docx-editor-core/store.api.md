@@ -3021,7 +3021,11 @@ export interface MetafileRasterImage {
 }
 
 // @internal
-export function metafileRasterScale(longEdge: number): number;
+export function metafileRasterOptions(maxEdge: number): Readonly<{
+    dpiScale: number;
+    maxHeight: number;
+    maxWidth: number;
+}>;
 
 // @internal
 export interface MetafileRenderer {

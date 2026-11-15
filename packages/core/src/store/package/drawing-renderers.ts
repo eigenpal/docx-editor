@@ -94,16 +94,18 @@ const METAFILE_SHARP_EDGE = 2048;
 const METAFILE_MAX_SCALE = 4;
 
 /**
- * The resolution multiplier for a metafile raster whose long edge is `longEdge` pixels at
- * scale 1. A metafile's own size is its recording device's pixels, often far smaller than the
- * picture shows on the page, so a small one scales up, at most 4x, toward a 2048-pixel long
- * edge. A picture already that large keeps scale 1. 1 for an unknown size.
+ * Rasterizer options for a metafile raster no larger than `maxEdge` pixels on a side. A
+ * metafile's own size is its recording device's pixels, often far smaller than the picture
+ * shows on the page, so it renders at up to 4x toward a 2048-pixel long edge. The converter
+ * lowers the render scale itself to fit the bounds, so no separate size read is needed.
  *
  * @internal
  */
-export function metafileRasterScale(longEdge: number): number {
-  if (!(Number.isFinite(longEdge) && longEdge > 0)) return 1;
-  return Math.min(METAFILE_MAX_SCALE, Math.max(1, METAFILE_SHARP_EDGE / longEdge));
+export function metafileRasterOptions(
+  maxEdge: number
+): Readonly<{ dpiScale: number; maxWidth: number; maxHeight: number }> {
+  const edge = Math.max(1, Math.min(METAFILE_SHARP_EDGE, Math.floor(maxEdge)));
+  return { dpiScale: METAFILE_MAX_SCALE, maxWidth: edge, maxHeight: edge };
 }
 
 /** A metafile raster for the editor: PNG bytes the image pipeline validates again. @internal */

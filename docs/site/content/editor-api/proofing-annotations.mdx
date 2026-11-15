@@ -11,21 +11,41 @@ Annotations are view state. They are not saved in the file, not shared with coll
 
 ## Mark issues in a paragraph
 
-`Paragraph.insertAnnotations()` takes an `AnnotationSet` and returns the new annotation ids after the next sync. The following example checks every paragraph with your own `check()` service:
+`Paragraph.insertAnnotations()` takes an `AnnotationSet` and returns annotation ids after the next sync. Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Read plain data before you call your proofing service. Check the paragraph text again before you apply returned offsets:
 
 ```ts
-await runtime.run(async (context) => {
+const snapshot = await runtime.run(async (context) => {
   const paragraphs = context.document.body.paragraphs;
-  paragraphs.load('items/text');
+  paragraphs.load('items/uniqueLocalId,items/text');
+  await context.sync();
+  return paragraphs.items.map((paragraph) => ({
+    id: paragraph.uniqueLocalId,
+    text: paragraph.text,
+  }));
+});
+
+// Your service returns issues with start, length, and suggestions.
+const checked = await Promise.all(
+  snapshot.map(async (paragraph) => ({
+    ...paragraph,
+    issues: await check(paragraph.text),
+  }))
+);
+const byId = new Map(checked.map((paragraph) => [paragraph.id, paragraph]));
+
+const ids = await runtime.run(async (context) => {
+  const paragraphs = context.document.body.paragraphs;
+  paragraphs.load('items/uniqueLocalId,items/text');
   await context.sync();
 
   const inserted = [];
   for (const paragraph of paragraphs.items) {
-    const issues = await check(paragraph.text); // Your proofing service.
-    if (issues.length === 0) continue;
+    const result = byId.get(paragraph.uniqueLocalId);
+    if (!result || result.text !== paragraph.text) continue;
+    if (result.issues.length === 0) continue;
     inserted.push(
       paragraph.insertAnnotations({
-        critiques: issues.map((issue) => ({
+        critiques: result.issues.map((issue) => ({
           colorScheme: 'Red',
           start: issue.start,
           length: issue.length,
@@ -40,14 +60,17 @@ await runtime.run(async (context) => {
     );
   }
   await context.sync();
-  console.log(inserted.flatMap((result) => result.value));
+  return inserted.flatMap((result) => result.value);
 });
 ```
+
+This example skips changed paragraphs. Check them again instead of applying offsets from earlier text. Cancel pending checks when you load or replace the document. Remove earlier annotations before you insert results for the same text again.
 
 - `start` and `length` count UTF-16 code units of `Paragraph.text`, as the runtime reads it in its [revision view](/docs/2.x/editor-api/revisions). With the default `allMarkup` view, tracked deletions and insertions both count, and a field counts as its displayed result.
 - `length` must be at least 1, and the range must lie inside the text. Otherwise the sync fails with `InvalidArgument`.
 - The three resource ids name strings in an add-in manifest, which this runtime cannot resolve. Pass empty strings. Any other value fails with `NotSupported` and `edit.operation-unsupported`.
 - One call takes at most 1,000 critiques, and one runtime keeps at most 10,000 live annotations.
+- Each critique accepts at most 32 suggestions. Each suggestion has at most 4,096 UTF-16 code units.
 
 ## Read annotations
 

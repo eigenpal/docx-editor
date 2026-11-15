@@ -2,4 +2,4 @@
 '@docx-editor.dev/pro': patch
 ---
 
-In a collaborative session, text you delete no longer shows again when another participant splits the same paragraph right after it. Fixes #1964
+Keep deleted text hidden when another collaborator splits the same paragraph immediately after it. Fixes #1964

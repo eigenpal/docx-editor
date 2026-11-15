@@ -2,4 +2,4 @@
 '@docx-editor.dev/pro': patch
 ---
 
-In a collaborative session, text in a paragraph split inside a table cell that two participants merge away at once is no longer lost when one of them undoes the merge. Fixes #1940
+Preserve split paragraph text when collaborators merge the same table cell and undo a merge. Fixes #1940

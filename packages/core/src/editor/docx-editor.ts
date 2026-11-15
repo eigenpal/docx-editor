@@ -877,6 +877,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       emit: emitDocumentChange,
       wantsParagraphs: events.hasParagraphsChangeHandlers,
       emitParagraphs: events.emitParagraphsChange,
+      defer: (run) => events.defer(run, true),
     });
     refreshHost?.contentMounted(bytes);
     // The page's size is only knowable now — it comes from this document's section properties

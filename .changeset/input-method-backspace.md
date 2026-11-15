@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Fix fast Backspace from mobile keyboards that delete through the platform text service, which removed the wrong characters or brought erased words back. Fixes #1896
+Fix mobile keyboard Backspace actions that removed incorrect characters or restored deleted words. Fixes #1896

@@ -32,7 +32,7 @@ Each part is also a named export with the `DocxEditor` prefix, such as `DocxEdit
 
 ## Customize a part in the toolbar
 
-A part placed in `DocxEditor.Toolbar` replaces its slot in the default arrangement. The colour parts and the toggle parts also take `icon` and `asChild`. The following toolbar changes the fill control, puts your own button on the data labels toggle, and removes the outline dash:
+A part placed in `DocxEditor.Toolbar` replaces its slot in the default arrangement. The color parts and the toggle parts also take `icon` and `asChild`. The following toolbar changes the fill control, puts your own button on the data labels toggle, and removes the outline dash:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -77,6 +77,7 @@ function LegendButtons() {
           type="button"
           disabled={!legend.isEnabled}
           aria-pressed={legend.value === position}
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => legend.execute(position)}
         >
           {position}
@@ -86,6 +87,8 @@ function LegendButtons() {
   );
 }
 ```
+
+The mouse handler keeps the editor selection when you press a button.
 
 Outside React, run a slot with `runToolbarCommand`, and read its state with `toolbarCommandState`:
 

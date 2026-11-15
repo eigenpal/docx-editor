@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Metafile previews read metadata separately before rasterization and could render above the target resolution.",
+  "after": "The converter bounds previews during rasterization and retains embedded image decoding.",
+  "reason": "Only derived local preview pixels change. Original image bytes, shared operations, and document serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/browser-metafile-convert.test.ts",
+    "packages/pro/src/drawing/__tests__/metafile-raster.test.ts",
+    "packages/pro/src/drawing/__tests__/metafile-wmf-bitmaps.test.ts"
+  ],
+  "changeset": "bounded-metafile-previews",
+  "migration": null
+}

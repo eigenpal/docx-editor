@@ -18,6 +18,9 @@ import {
   storyRootsOf,
 } from '../store/package/story-blocks.ts';
 import { textboxStoriesInPart } from '../store/package/textbox-stories.ts';
+import { resolveHeaderFooterResolutionBySection } from '../store/package/hf-references.ts';
+import { resolveNotesPart } from '../store/package/note-references.ts';
+import { resolveRelationship } from '../store/package/relationships.ts';
 import { ORIGIN_IDS } from '../store/registry/frozen-ids.ts';
 import type { TreeModelChange } from '../store/store/tree-store.ts';
 
@@ -184,10 +187,38 @@ function frozenList(ids: Set<string>): readonly string[] {
   return Object.freeze([...ids]);
 }
 
-/** Whether a part of `pkg` holds `root`. */
-function holdsRoot(pkg: OoxmlPackage, root: OoxmlElement): boolean {
-  for (const part of pkg.parts.values()) if (part.root === root) return true;
-  return false;
+/** The styles root selected by the session, including its conventional-name fallback. */
+function stylesRootOf(pkg: OoxmlPackage): OoxmlElement | null {
+  const record = pkg.relationships
+    .get(pkg.mainDocumentPart)
+    ?.find(
+      (relationship) =>
+        relationship.type ===
+        'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles'
+    );
+  if (record) {
+    const resolved = resolveRelationship(record);
+    if (resolved.mode === 'Internal' && resolved.target.ok) {
+      const part = pkg.parts.get(resolved.target.partName);
+      if (part) return part.root;
+    }
+  }
+  return pkg.parts.get('/word/styles.xml')?.root ?? null;
+}
+
+/** The same referenced story parts that the session lists, from an earlier package. */
+function storyNamesOf(pkg: OoxmlPackage): ReadonlySet<string> {
+  const names = new Set([pkg.mainDocumentPart]);
+  for (const section of resolveHeaderFooterResolutionBySection(pkg)) {
+    for (const slots of [section.headers, section.footers]) {
+      for (const slot of slots.values()) names.add(slot.partName);
+    }
+  }
+  for (const kind of ['footnote', 'endnote'] as const) {
+    const part = resolveNotesPart(pkg, kind);
+    if (part) names.add(part.name);
+  }
+  return names;
 }
 
 /**
@@ -214,7 +245,7 @@ export function createParagraphChangeTracker(
       }
       const storyParts = session.storyParts();
       const story = new Set(storyParts.map((part) => part.name));
-      const wasStory = previousStory ?? story;
+      const wasStory = previousStory ?? storyNamesOf(before);
       previousStory = story;
       if (before === after) return null;
       if (change.origin === ORIGIN_IDS.projection || change.origin === ORIGIN_IDS.awareness) {
@@ -232,7 +263,7 @@ export function createParagraphChangeTracker(
       }
       // Every read depends on the styles part, so new styles can change every paragraph.
       const styles = session.stylesRoot();
-      const stylesChanged = styles !== null && !holdsRoot(before, styles);
+      const stylesChanged = stylesRootOf(before) !== styles;
       const single = changedParts.length === 1 && !stylesChanged;
       for (const [old, part] of changedParts) {
         if (!old) compare(new Map(), allListed(part!), lists);

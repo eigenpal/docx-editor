@@ -22,7 +22,7 @@ const text = await runtime.run(async (context) => {
 });
 ```
 
-`Body.text` joins paragraphs with `\r`. Text reads follow the runtime's `revisionTextView` option. `Paragraph.uniqueLocalId` is valid within one runtime only.
+`Body.text` joins paragraphs with `\r`. Text reads follow the runtime's `revisionTextView` option. `Paragraph.uniqueLocalId` stays stable across unrelated edits and save and reopen. Discard pending work when you load another document.
 
 ## Address existing content
 

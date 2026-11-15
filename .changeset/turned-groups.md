@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Rotated and flipped shape groups now paint with every member turned, and a press on a painted member selects the group. Rotated members in a group that scales its axes unevenly no longer skew. Fixes #1945
+Render rotated and flipped shape groups with transformed members, and select the group through any painted member. Rotated members in a group that scales its axes unevenly no longer skew. Fixes #1945
