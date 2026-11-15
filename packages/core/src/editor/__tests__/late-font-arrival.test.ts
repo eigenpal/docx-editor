@@ -193,3 +193,11 @@ test('whenEditsPause resolves at once when nothing was edited', async () => {
   await tick();
   expect(resolved).toBe(true);
 });
+
+test('late faces install after the longest wait, even while editing goes on', async () => {
+  let resolved = false;
+  // An edit "now", on every check: editing never pauses.
+  void whenEditsPause(() => performance.now(), 1000, 50).then(() => (resolved = true));
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  expect(resolved).toBe(true);
+});

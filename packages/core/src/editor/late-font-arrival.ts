@@ -77,9 +77,9 @@ export function createLateFontArrival(options: {
   /** Overrides {@link LATE_FONT_WAIT_MS}; for tests. */
   readonly waitMs?: number;
   /**
-   * When the document last changed (`performance.now()`). An install lays the document out
-   * again, so late faces wait for a pause in editing (`whenEditsPause`) and never interrupt
-   * typing. Omitted, they install when they arrive.
+   * When this user last changed the document (`performance.now()`). An install lays the
+   * document out again, so late faces wait for a pause in editing (`whenEditsPause`), for at
+   * most {@link EDIT_PAUSE_MAX_MS}. Omitted, they install when they arrive.
    */
   readonly editedAt?: () => number;
 }) {
@@ -154,11 +154,22 @@ export function createLateFontArrival(options: {
 /** How long editing must pause before late faces install. */
 export const EDIT_PAUSE_MS = 1000;
 
-/** Resolves once `changedAt()` (a `performance.now()` time) is `pauseMs` in the past. */
-export function whenEditsPause(changedAt: () => number, pauseMs = EDIT_PAUSE_MS): Promise<void> {
+/** The longest late faces wait for a pause: text that needs them must not wait forever. */
+export const EDIT_PAUSE_MAX_MS = 3000;
+
+/**
+ * Resolves once `changedAt()` (a `performance.now()` time) is `pauseMs` in the past, or after
+ * `maxMs` at most.
+ */
+export function whenEditsPause(
+  changedAt: () => number,
+  pauseMs = EDIT_PAUSE_MS,
+  maxMs = EDIT_PAUSE_MAX_MS
+): Promise<void> {
+  const deadline = performance.now() + maxMs;
   return new Promise((resolve) => {
     const check = (): void => {
-      const wait = changedAt() + pauseMs - performance.now();
+      const wait = Math.min(changedAt() + pauseMs, deadline) - performance.now();
       // A timer, not DOM work: any window's clock will do.
       if (wait > 0) globalThis.setTimeout(check, wait);
       else resolve();

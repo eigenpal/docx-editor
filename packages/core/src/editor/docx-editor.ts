@@ -33,7 +33,7 @@ import { isGroupedReviewWrite } from './review-document-decisions.ts';
 import { canEditorViewCommand, createEditorViews } from './docx-editor-view-commands.ts';
 import { bindPopupChromeRequests } from './text-form-field-chrome.ts';
 import { completePendingSuggesting } from './opening-editing-mode.ts';
-import { subscribeDocumentChanges } from './docx-editor-document-changes.ts';
+import { localEditAt, subscribeDocumentChanges } from './docx-editor-document-changes.ts';
 import { attachTargetRefusal, hostWindowOf, registerEditorHost } from './host-realm.ts';
 import { continueOpeningLayout, withOpeningRefresh } from './docx-editor-opening-layout.ts';
 import { formattingCommandActive } from './docx-editor-active.ts';
@@ -496,7 +496,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     deliver: (generation, delivery) => liveFonts.deliver(generation, delivery),
     changed: () => (bump(), emitSelectionChange()),
     report: (cause) => reportFontError(toEditorFontError(cause)),
-    editedAt: () => events.documentChangedAt(),
+    editedAt: () => localEditAt(surface),
   });
   /**
    * Local-resolution probe for the compatibility notice, created against the attached

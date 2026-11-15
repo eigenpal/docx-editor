@@ -51,7 +51,6 @@ export function createEditorEvents(
   let deferring = 0;
   let draining = false;
   let pending: Array<() => void> = [];
-  let documentChangedAt = -Infinity;
   const dispatch = (notify: () => void): void => {
     if (deferring > 0 || draining) pending.push(notify);
     else notify();
@@ -109,10 +108,7 @@ export function createEditorEvents(
         }
       });
     },
-    /** When the document last changed (`performance.now()`), or `-Infinity`. */
-    documentChangedAt: (): number => documentChangedAt,
     emitDocumentChange(change: DocumentChange) {
-      documentChangedAt = performance.now();
       dispatch(() => {
         for (const handler of [...handlers.change]) handler(change);
       });

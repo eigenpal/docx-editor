@@ -18,6 +18,16 @@ export interface DocumentChangeHooks {
   defer<T>(run: () => T): T;
 }
 
+const localEdits = new WeakMap<PaginatedSurface, number>();
+
+/**
+ * When this user last changed the document on `surface` (`performance.now()`), or `-Infinity`.
+ * Commits from other collaboration participants do not count.
+ */
+export function localEditAt(surface: PaginatedSurface | null | undefined): number {
+  return (surface && localEdits.get(surface)) ?? -Infinity;
+}
+
 /** Report every commit of `surface`'s session as a `documentChange`. Returns the unsubscribe. */
 export function subscribeDocumentChanges(
   surface: PaginatedSurface,
@@ -30,6 +40,9 @@ export function subscribeDocumentChanges(
   );
   let active = true;
   const unsubscribe = surface.session.subscribe((change) => {
+    // Another participant's commit is not this user typing: it never holds late fonts back.
+    const actor = surface.collaborationSession()?.identity.actorId;
+    if (!change.actorId || change.actorId === actor) localEdits.set(surface, performance.now());
     const documentChange: DocumentChange = {
       // The PACKAGE revision, never `change.toRevision`: a header/footer or notes change
       // carries THAT part's counter, which starts at zero, so reporting it sent this
