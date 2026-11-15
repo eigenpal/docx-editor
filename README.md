@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  See also: <a href="https://pptx-editor.dev/"><img src="./.github/assets/pptx-editor-icon.svg" alt="" width="24" height="20" /> PPTX Editor</a>
+  <a href="https://www.docx-editor.dev/"><img src="./.github/assets/docx-editor-icon.svg" alt="" width="14" height="20" /> DOCX Editor</a> · <a href="https://pptx-editor.dev/"><img src="./.github/assets/pptx-editor-icon.svg" alt="" width="24" height="20" /> PPTX Editor</a>
 </p>
 
 ## Quick start
