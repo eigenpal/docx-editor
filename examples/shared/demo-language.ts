@@ -17,6 +17,7 @@ export const DEMO_LANGUAGES: ReadonlyArray<{ readonly code: LocaleCode; readonly
   { code: 'he', name: 'עברית' },
   { code: 'hi', name: 'हिन्दी' },
   { code: 'id', name: 'Bahasa Indonesia' },
+  { code: 'it', name: 'Italiano' },
   { code: 'ja', name: '日本語' },
   { code: 'pl', name: 'Polski' },
   { code: 'pt-BR', name: 'Português (Brasil)' },

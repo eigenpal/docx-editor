@@ -40,6 +40,7 @@ import frJson from '../fr.json';
 import heJson from '../he.json';
 import hiJson from '../hi.json';
 import idJson from '../id.json';
+import itJson from '../it.json';
 import jaJson from '../ja.json';
 import plJson from '../pl.json';
 import ptBRJson from '../pt-BR.json';
@@ -65,7 +66,7 @@ export type LocaleStrings = typeof enJson;
  * @public
  */
 // prettier-ignore
-export type LocaleCode = 'en' | 'ar' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'ja' | 'pl' | 'pt-BR' | 'ru' | 'tr' | 'zh-CN';
+export type LocaleCode = 'en' | 'ar' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'it' | 'ja' | 'pl' | 'pt-BR' | 'ru' | 'tr' | 'zh-CN';
 
 /** English (`en`) — the source of truth, 100% covered. @public */
 export const en: LocaleStrings = enJson;
@@ -90,6 +91,9 @@ export const hi: PartialLocaleStrings = hiJson;
 
 /** Indonesian (`id`). Community-maintained; null leaves fall back to English. @public */
 export const id: PartialLocaleStrings = idJson;
+
+/** Italian (`it`). Community-maintained; null leaves fall back to English. @public */
+export const it: PartialLocaleStrings = itJson;
 
 /** Japanese (`ja`). Community-maintained; null leaves fall back to English. @public */
 export const ja: PartialLocaleStrings = jaJson;
@@ -132,6 +136,7 @@ export const locales: Record<LocaleCode, PartialLocaleStrings> = {
   he,
   hi,
   id,
+  it,
   ja,
   pl,
   'pt-BR': ptBR,

@@ -55,10 +55,13 @@ export const id: PartialLocaleStrings;
 export function isApplePlatform(): boolean;
 
 // @public
+export const it: PartialLocaleStrings;
+
+// @public
 export const ja: PartialLocaleStrings;
 
 // @public
-export type LocaleCode = 'en' | 'ar' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'ja' | 'pl' | 'pt-BR' | 'ru' | 'tr' | 'zh-CN';
+export type LocaleCode = 'en' | 'ar' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'it' | 'ja' | 'pl' | 'pt-BR' | 'ru' | 'tr' | 'zh-CN';
 
 // @public
 export function localeDirection(tag: string | null | undefined): 'ltr' | 'rtl';

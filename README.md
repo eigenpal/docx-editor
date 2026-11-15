@@ -186,6 +186,7 @@ See [Contributing](CONTRIBUTING.md) for setup, tests, and the Contributor Licens
 | `he`    | Hebrew               |
 | `hi`    | Hindi                |
 | `id`    | Indonesian           |
+| `it`    | Italian              |
 | `ja`    | Japanese             |
 | `pl`    | Polish               |
 | `pt-BR` | Portuguese (Brazil)  |
