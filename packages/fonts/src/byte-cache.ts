@@ -1,5 +1,5 @@
 // The font bytes this package has fetched, shared by `loadDefaultFonts`, `packagedFonts()`, and
-// `googleFonts()`, with the prefetch that fills it ahead of need (`prefetchFontFile`).
+// `googleFonts()`, and the idle wait before the faces that load in the background.
 
 /** One font file to fetch: its URL, its expected size, and the word that names its source. */
 export interface FontFile {
@@ -95,7 +95,8 @@ export async function fetchFontFile(
   file: FontFile,
   fetcher: typeof fetch,
   signal?: AbortSignal,
-  cjk = false
+  cjk = false,
+  low = false
 ): Promise<Uint8Array> {
   const face = { url: String(file.url) };
   const byteCache = cacheFor(fetcher, cjk);
@@ -121,25 +122,9 @@ export async function fetchFontFile(
   // failed or cancelled fetch is forgotten below, so it can never poison retries.
   const controller = new AbortController();
   const state: PendingFontFetch = { waiters: 0, pinned: !signal, controller };
-  const pending = startFetch(file, fetcher, controller.signal, false);
+  const pending = startFetch(file, fetcher, controller.signal, low);
   track(byteCache, face.url, pending, state);
   return joinPendingFetch(pending, state, signal);
-}
-
-/**
- * Fetch `file` into the cache at low priority, unless it is cached or on the way. Nothing
- * waits for it and it never rejects. A later `fetchFontFile` of the same file joins it, and
- * the abort of that caller can cancel it, as it cancels any fetch it joined last.
- */
-export function prefetchFontFile(file: FontFile, fetcher: typeof fetch, cjk = false): void {
-  const byteCache = cacheFor(fetcher, cjk);
-  const url = String(file.url);
-  if (byteCache.entries.has(url)) return;
-  const controller = new AbortController();
-  const state: PendingFontFetch = { waiters: 0, pinned: false, controller };
-  const pending = startFetch(file, fetcher, controller.signal, true);
-  track(byteCache, url, pending, state);
-  pending.catch(() => {});
 }
 
 /** The fetch of one file, checked for its size. */
@@ -255,7 +240,7 @@ function raceWithAbort<T>(work: Promise<T>, signal: AbortSignal | undefined): Pr
   });
 }
 
-/** The delay before a prefetch in a browser that has no `requestIdleCallback`. */
+/** The delay before a background load in a browser that has no `requestIdleCallback`. */
 const IDLE_FALLBACK_MS = 1000;
 
 /**
@@ -274,4 +259,23 @@ export function whenIdle(run: () => void): boolean {
   if (host.document === undefined) return false;
   setTimeout(run, IDLE_FALLBACK_MS);
   return true;
+}
+
+/** Whether `whenIdle` runs anything here: in a browser. */
+export function canIdle(): boolean {
+  const host = globalThis as { requestIdleCallback?: unknown; document?: unknown };
+  return typeof host.requestIdleCallback === 'function' || host.document !== undefined;
+}
+
+/** Resolves when the browser is idle (`whenIdle`). Rejects with the reason when `signal` aborts. */
+export function idle(signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+    const abort = (): void => reject(signal!.reason);
+    signal?.addEventListener('abort', abort, { once: true });
+    whenIdle(() => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    });
+  });
 }

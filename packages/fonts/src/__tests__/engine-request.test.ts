@@ -164,7 +164,7 @@ describe('packagedFonts under that request', () => {
     'loads Carlito Regular for a document that names none of the six',
     async () => {
       const { fetcher, files } = countingFetcher();
-      await open(docxNaming('Montserrat'), packagedFonts({ fetcher, prefetch: false }));
+      await open(docxNaming('Montserrat'), packagedFonts({ fetcher, otherFaces: 'on-demand' }));
 
       // The floor: the default family's regular face, for the paragraph mark. "Costs nothing
       // at all" was never true through the engine.
@@ -200,7 +200,7 @@ describe('packagedFonts under that request', () => {
       const { fetcher, files } = countingFetcher();
       const editor = await open(
         docxNaming('Times New Roman'),
-        packagedFonts({ fetcher, prefetch: false })
+        packagedFonts({ fetcher, otherFaces: 'on-demand' })
       );
       expect(files).not.toContain('LiberationSerif-Bold.ttf');
       editor.surface!.selectAll();
@@ -215,11 +215,43 @@ describe('packagedFonts under that request', () => {
     TEST_BUDGET
   );
 
+  for (const family of ['Times New Roman', 'Helvetica'])
+    test(
+      `installs the other faces of ${family} in the background, so a bold edit lays out nothing again`,
+      async () => {
+        const { fetcher, files } = countingFetcher();
+        const editor = await open(docxNaming(family), packagedFonts({ fetcher }));
+        const deadline = Date.now() + RESOLVE_GIVE_UP;
+        const boldInstalled = () =>
+          editor.surface!.textMeasurer!().hasResolvedFont?.({
+            fontFamily: family,
+            bold: true,
+            italic: false,
+          } as never) === true;
+        while (!boldInstalled() && Date.now() < deadline)
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        expect(boldInstalled()).toBe(true);
+        const measurer = editor.surface!.textMeasurer!();
+        const fetched = files.length;
+        editor.surface!.selectAll();
+        expect(editor.exec({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        // The bold face was already installed: no download, and the same measurer measures.
+        expect(files).toHaveLength(fetched);
+        expect(editor.surface!.textMeasurer!()).toBe(measurer);
+        expect(boldInstalled()).toBe(true);
+      },
+      TEST_BUDGET
+    );
+
   test(
     'loads the named family ON TOP of the default one',
     async () => {
       const { fetcher, files } = countingFetcher();
-      await open(docxNaming('Times New Roman'), packagedFonts({ fetcher, prefetch: false }));
+      await open(
+        docxNaming('Times New Roman'),
+        packagedFonts({ fetcher, otherFaces: 'on-demand' })
+      );
 
       // Liberation Serif for what the document names, Carlito for the default it inherits.
       // A file using only Times New Roman does not cost Liberation Serif alone.
@@ -232,7 +264,7 @@ describe('packagedFonts under that request', () => {
     'serves Century Gothic, the family the two default lists were split for',
     async () => {
       const { fetcher, files } = countingFetcher();
-      await open(docxNaming('Century Gothic'), packagedFonts({ fetcher, prefetch: false }));
+      await open(docxNaming('Century Gothic'), packagedFonts({ fetcher, otherFaces: 'on-demand' }));
 
       // `defaultFonts()` deliberately does NOT load this one — it would cost every
       // document ~709 KB for a family most never name. On demand is the other half of

@@ -123,9 +123,11 @@ The preferred names `DefaultFontFamily`, `DEFAULT_FONT_FAMILIES`, and `ALL_DEFAU
 
 ### Load only the faces the text uses
 
-`packagedFonts()` and `googleFonts()` load only the faces that the laid-out text uses. For example, a document with only regular Arial text loads one file, not four. When an edit makes text use another face, such as bold, the editor asks for that face, and the text lays out again when it arrives.
+`packagedFonts()` and `googleFonts()` first load only the faces that the laid-out text uses. For example, a document with only regular Arial text shows after one file arrives, not four.
 
-After the needed faces arrive, both resolvers fetch the other faces of the same families when the browser is idle, at low priority. The bytes stay in memory and are not installed, so they cause no layout. A later bold or italic edit then reads its face from memory and does not wait for the network. Pass `prefetch: false` to fetch only the faces in use. To fetch packaged faces ahead in your own code, call `prefetchDefaultFonts({ families, faces })`.
+After those faces arrive, both resolvers load the other faces of the same families when the browser is idle, at low priority. The editor installs them in one step and lays out the document once more. A later bold or italic edit then needs no download and no second layout. A face of a family that no text used before, such as a font that you pick in the toolbar, loads when the text first uses it.
+
+To load a face only when text uses it, pass `otherFaces: 'on-demand'`. Each new face then lays out the document again when it arrives.
 
 A large document (over about 512 KB of uncompressed content) resolves its fonts before its first layout, so it loads every face of its families and lays out once.
 
@@ -217,7 +219,7 @@ const brandFonts = defineFontResolver(async ({ families, defaultFamily, resolved
 | `families` | Families the document declares, including `w:sym`, `SYMBOL` field, and numbering marker faces |
 | `defaultFamily` | The face for runs that name no font |
 | `resolvedFaces` | Faces that earlier sources already supplied |
-| `faces` | Faces to load, by family, weight, and style: the faces the laid-out text uses and the same faces of their fallback families. A later request names only the new faces. Absent before the first layout: load every face then. |
+| `faces` | Faces to load, by family, weight, and style: the faces the laid-out text uses and the same faces of their fallback families. A later request names the faces of the families it asks about. Absent before the first layout: load every face then. |
 
 A resolver can also return `supportedFamilies` to add catalog entries to the font picker without bytes.
 
@@ -284,11 +286,11 @@ These are the common codes. For the full list, see the `EditorFontErrorCode` typ
 
 Read `editor.fontMeasurement()` to inspect measurement.
 
-| Field       | Meaning                           |
-| ----------- | --------------------------------- |
-| `measurer`  | `'shaped'` or `'fixed'`           |
-| `resolving` | `true` while font resolution runs |
-| `producer`  | Optional source identifier        |
+| Field | Meaning |
+| --- | --- |
+| `measurer` | `'shaped'` or `'fixed'` |
+| `resolving` | `true` while font resolution runs, also while background faces load, for at most 10 seconds |
+| `producer` | Optional source identifier |
 
 `{ measurer: 'fixed', resolving: false }` means no usable font source remains.
 

@@ -74,7 +74,7 @@ import {
 import type { DefaultFontFamily, FamilyPlan } from './family-plans.ts';
 import { packagedAssetRootOverride, resolvePackagedAssetRoot } from './asset-root.ts';
 import { FONT_ASSET_MANIFEST, FONT_ASSET_URLS } from './manifest.generated.ts';
-import { fetchFontFile, prefetchFontFile, whenIdle } from './byte-cache.ts';
+import { canIdle, fetchFontFile, idle } from './byte-cache.ts';
 
 export type { DefaultFontFamily } from './family-plans.ts';
 
@@ -303,13 +303,14 @@ function packagedFiles(
 
 /**
  * Load `faces` of each family: the shared engine of {@link loadDefaultFonts} and
- * {@link packagedFonts}. Bytes come from the cache that {@link prefetchDefaultFonts} fills,
- * or from the network.
+ * {@link packagedFonts}. Bytes come from the shared byte cache (`byte-cache.ts`), or from
+ * the network.
  */
 async function loadPackagedFaces(
   entries: readonly { family: DefaultFontFamily; faces: readonly (typeof FACES)[number][] }[],
   fetcher: typeof fetch,
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  low = false
 ): Promise<DefaultFontsFragment> {
   const sources: DefaultFontSource[] = [];
   const substitutions: DefaultFontSubstitution[] = [];
@@ -327,7 +328,9 @@ async function loadPackagedFaces(
       const bytes = await fetchFontFile(
         { url: assetUrl(file), byteLength: manifest.byteLength, source: 'packaged' },
         fetcher,
-        signal
+        signal,
+        false,
+        low
       );
       sources.push({
         request: {
@@ -375,31 +378,6 @@ async function loadPackagedFaces(
   // fingerprint stably across loads.
   sources.sort((a, b) => a.id.localeCompare(b.id));
   return { sources, substitutions, failures };
-}
-
-/**
- * Fetch packaged faces into memory at low priority, without returning them: a later
- * {@link loadDefaultFonts} or {@link packagedFonts} call that needs them reads them from
- * memory. Use it for faces that an edit can need soon, such as the bold of a family the
- * document uses, so the edit does not wait for the network.
- *
- * It starts each fetch at once and returns. A fetch that fails is forgotten, and a later load
- * fetches the file again. Cached bytes stay within the package's cache budget.
- */
-export function prefetchDefaultFonts(
-  options: Pick<LoadDefaultFontsOptions, 'families' | 'faces' | 'fetcher'> = {}
-): void {
-  const families = options.families ?? DEFAULT_FONT_FAMILIES;
-  const faces = options.faces ? packagedFaces(options.faces) : FACES;
-  const fetcher = options.fetcher ?? fetch;
-  for (const { file } of packagedFiles(families.map((family) => ({ family, faces })))) {
-    const manifest = manifestByFile.get(file);
-    if (manifest)
-      prefetchFontFile(
-        { url: assetUrl(file), byteLength: manifest.byteLength, source: 'packaged' },
-        fetcher
-      );
-  }
 }
 
 /**
@@ -527,6 +505,25 @@ export interface FontOriginRequest {
   readonly faces?: readonly ResolvedFontFace[];
 }
 
+/**
+ * Map `face` of the name `from` onto the face that paints it: `to` under the same weight and
+ * style, or the packaged substitute of `plan`, with the substitute's line box.
+ */
+function aliasSubstitution(
+  from: string,
+  plan: FamilyPlan,
+  face: (typeof FACES)[number],
+  to?: string
+): DefaultFontSubstitution {
+  const source = to ? face : planSourceFace(plan, face);
+  const lineMetrics = planLineBox(plan, face.weight);
+  return {
+    from: { family: from, weight: face.weight, style: face.style },
+    to: { family: to ?? plan.substitute, weight: source.weight, style: source.style },
+    ...(lineMetrics ? { lineMetrics } : {}),
+  };
+}
+
 /** Case-folded face identity, matching how the engine keys `resolvedFaces`. */
 const faceKey = (family: string, weight: number, style: string): string =>
   `${family.trim().toLowerCase()} ${weight} ${style}`;
@@ -552,13 +549,17 @@ export interface PackagedFontsOptions {
    */
   readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
   /**
-   * When the request names the faces the document uses (`faces`), fetch the other faces of
-   * the same families into memory when the browser is idle, at low priority. An edit that
-   * makes text bold or italic then reads its face from memory instead of waiting for the
-   * network. Defaults to `true`. A browser without `requestIdleCallback` waits one second
-   * instead. Outside a browser, nothing is fetched ahead.
+   * What happens to the faces of a family in use that no text uses yet, such as its bold, when
+   * the request names the faces (`faces`).
+   *
+   * - `'background'` (default): after the faces in use arrive, load the others when the
+   *   browser is idle, at low priority, and install them in one step
+   *   ({@link PackagedFontsFragment.deferred}). A later bold or italic edit then needs no
+   *   download and no second layout. Outside a browser, they load on demand.
+   * - `'on-demand'`: load a face only when text starts to use it. The text lays out again
+   *   when the face arrives.
    */
-  readonly prefetch?: boolean;
+  readonly otherFaces?: 'background' | 'on-demand';
   /**
    * Legacy registration option, retained for source compatibility.
    *
@@ -587,6 +588,11 @@ export interface PackagedFontsFragment extends DefaultFontsFragment {
   readonly supportedFamilies?: readonly string[];
   /** The Word families this call actually loaded, in {@link ALL_DEFAULT_FONT_FAMILIES} order. */
   readonly families: readonly DefaultFontFamily[];
+  /**
+   * The other faces of the families in use, settled after they load in the background
+   * ({@link PackagedFontsOptions.otherFaces}). The editor installs them when they arrive.
+   */
+  readonly deferred?: Promise<PackagedFontsFragment>;
 }
 
 /**
@@ -637,10 +643,11 @@ const aliasesByFoldedName: ReadonlyMap<string, DefaultFontFamily> = new Map(
  * loads all 20 faces of {@link DEFAULT_FONT_FAMILIES} — 7.4 MB — whichever
  * document opens, because it is called before there is a document to ask. This is called
  * AFTER the parse, and the editor names the faces that the laid-out text uses
- * ({@link FontOriginRequest.faces}). A file whose text is only regular Times New Roman costs
- * one Liberation Serif face. When text starts to use another face, such as a bold word, the
- * editor asks again and this loads that face. The other faces of the families in use load
- * into memory when the browser is idle (see {@link PackagedFontsOptions.prefetch}).
+ * ({@link FontOriginRequest.faces}). A file whose text is only regular Times New Roman shows
+ * after one Liberation Serif face arrives. The other faces of the families in use then load in
+ * the background and install in one step (see {@link PackagedFontsOptions.otherFaces}), so a
+ * later bold or italic edit needs no download. A face of a family that no text used before,
+ * such as a font picked in the toolbar, loads when the editor asks for it.
  *
  * A request without `faces` loads every face of each family that the document NAMES, and of
  * its DEFAULT family. The default counts because a run that authors no font still has to be
@@ -689,7 +696,7 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
       faces.add(face);
       toLoad.set(family, faces);
     };
-    /** Families whose text uses a face this resolver serves, for the prefetch. */
+    /** Families whose text uses a face this resolver serves, for the background load. */
     const used = new Set<DefaultFontFamily>();
     // Substitutions for faces an earlier origin covers under the SUBSTITUTE's own name. The
     // bytes are there, but nothing maps the Word name to them: a caller who registers Carlito
@@ -701,19 +708,13 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
       plan: FamilyPlan,
       face: (typeof FACES)[number],
       to?: string
-    ): void => {
-      const source = to ? face : planSourceFace(plan, face);
-      const lineMetrics = planLineBox(plan, face.weight);
-      aliasOnly.push({
-        from: { family: from, weight: face.weight, style: face.style },
-        to: { family: to ?? plan.substitute, weight: source.weight, style: source.style },
-        ...(lineMetrics ? { lineMetrics } : {}),
-      });
-    };
+    ): void => void aliasOnly.push(aliasSubstitution(from, plan, face, to));
     // The default family counts as declared: a document whose runs name no font still
     // renders in one, and leaving it out would load nothing for a file that is entirely
     // default-styled.
     const seen = new Set<string>();
+    /** The alias names the document wrote, by the family whose faces serve them. */
+    const aliases = new Map<DefaultFontFamily, string[]>();
     for (const declared of [request.defaultFamily, ...request.families]) {
       const fold = declared.toLowerCase();
       if (seen.has(fold)) continue;
@@ -725,14 +726,21 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
         // Each face of the alias points where its family's face is painted: at bytes an
         // earlier origin supplies under the family's own name (a host's real Arial), or else
         // at the packaged substitute, which loads unless an earlier origin paints it.
+        aliases.set(aliasOf, [...(aliases.get(aliasOf) ?? []), declared]);
         for (const face of neededFaces(declared)) {
           if (already.has(faceKey(declared, face.weight, face.style))) continue;
           used.add(aliasOf);
-          const own = already.has(faceKey(aliasOf, face.weight, face.style));
-          redirect(declared, plan, face, own ? aliasOf : undefined);
+          // The packaged face first: it is bytes for certain. A painted face under the family's
+          // own name can itself be a redirect, such as the Arial bold of an earlier answer.
           const source = planSourceFace(plan, face);
-          if (!own && !already.has(faceKey(plan.substitute, source.weight, source.style)))
+          if (already.has(faceKey(plan.substitute, source.weight, source.style)))
+            redirect(declared, plan, face);
+          else if (already.has(faceKey(aliasOf, face.weight, face.style)))
+            redirect(declared, plan, face, aliasOf);
+          else {
+            redirect(declared, plan, face);
             load(aliasOf, face);
+          }
         }
         continue;
       }
@@ -755,57 +763,101 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     // Stable order regardless of how the document happened to declare them, so the same
     // file composes to the same configuration on every load.
     const families = ALL_DEFAULT_FONT_FAMILIES.filter((family) => toLoad.has(family));
-    // The other faces wait for the faces the document needs: they never share its bandwidth.
-    const prefetch = request.faces && options.prefetch !== false && !request.signal?.aborted;
-    if (families.length === 0) {
-      if (prefetch) prefetchLater(used, already);
-      return { sources: [], substitutions: aliasOnly, failures: [], families, supportedFamilies };
-    }
+    const fetcher = options.fetcher ?? fetch;
+    const deferred = (): { deferred?: Promise<PackagedFontsFragment> } => {
+      const later = otherFacesLater(request, used, toLoad, already, aliases);
+      return later ? { deferred: later } : {};
+    };
+    if (families.length === 0)
+      return {
+        sources: [],
+        substitutions: aliasOnly,
+        failures: [],
+        families,
+        supportedFamilies,
+        ...deferred(),
+      };
 
     const fragment = await loadPackagedFaces(
       families.map((family) => ({
         family,
         faces: FACES.filter((face) => toLoad.get(family)!.has(face)),
       })),
-      options.fetcher ?? fetch,
+      fetcher,
       request.signal
     );
-    if (prefetch) prefetchLater(used, already);
-    for (const failure of fragment.failures) {
-      if (options.onFailure) options.onFailure(failure);
-      else console.warn(`[fonts] ${failure.family} (${failure.file}): ${failure.diagnostic}`);
-    }
+    report(fragment.failures);
     // Core registers private aliases, preserving native glyph fallback and host-page fonts.
     return {
       ...fragment,
       substitutions: [...aliasOnly, ...fragment.substitutions],
       families,
       supportedFamilies,
+      ...deferred(),
     };
   }
 
+  function report(failures: readonly DefaultFontLoadFailure[]): void {
+    for (const failure of failures) {
+      if (options.onFailure) options.onFailure(failure);
+      else console.warn(`[fonts] ${failure.family} (${failure.file}): ${failure.diagnostic}`);
+    }
+  }
+
   /**
-   * Once the browser is idle, fetch the faces of `families` that the document does not use
-   * yet into memory, except those an earlier origin paints.
+   * The faces of the families in use that no text uses yet and no earlier origin paints,
+   * loaded when the browser is idle after the faces in use: they never share its bandwidth.
    */
-  function prefetchLater(
-    families: ReadonlySet<DefaultFontFamily>,
-    already: ReadonlySet<string>
-  ): void {
-    if (families.size === 0) return;
+  function otherFacesLater(
+    request: FontOriginRequest,
+    used: ReadonlySet<DefaultFontFamily>,
+    loading: ReadonlyMap<DefaultFontFamily, ReadonlySet<(typeof FACES)[number]>>,
+    already: ReadonlySet<string>,
+    aliases: ReadonlyMap<DefaultFontFamily, readonly string[]>
+  ): Promise<PackagedFontsFragment> | undefined {
+    if (!request.faces || options.otherFaces === 'on-demand' || request.signal?.aborted) return;
+    if (!canIdle()) return;
     const covered = (family: string, weight: number, style: string): boolean =>
       already.has(faceKey(family, weight, style));
-    whenIdle(() => {
-      for (const family of families) {
-        const faces = uncoveredFaces(family, FAMILY_PLANS.get(family)!, covered);
-        if (faces.length > 0)
-          prefetchDefaultFonts({
-            families: [family],
-            faces,
-            ...(options.fetcher ? { fetcher: options.fetcher } : {}),
-          });
-      }
+    const entries = [...used].flatMap((family) => {
+      const faces = uncoveredFaces(family, FAMILY_PLANS.get(family)!, covered).filter(
+        (face) => !loading.get(family)?.has(face)
+      );
+      return faces.length > 0 ? [{ family, faces }] : [];
     });
+    if (entries.length === 0) return;
+    const later = idle(request.signal).then(async (): Promise<PackagedFontsFragment> => {
+      const fragment = await loadPackagedFaces(
+        entries,
+        options.fetcher ?? fetch,
+        request.signal,
+        true
+      );
+      report(fragment.failures);
+      // An alias (Helvetica) reaches the new faces of its family too.
+      const loaded = new Set(fragment.sources.map((source) => source.id));
+      const aliasSubstitutions = entries.flatMap(({ family, faces }) => {
+        const plan = FAMILY_PLANS.get(family)!;
+        return faces
+          .filter((face) =>
+            loaded.has(sourceIdForFile(planFaceFile(plan, planSourceFace(plan, face).suffix)))
+          )
+          .flatMap((face) =>
+            (aliases.get(family) ?? []).map((alias) => aliasSubstitution(alias, plan, face))
+          );
+      });
+      return {
+        ...fragment,
+        substitutions: [...fragment.substitutions, ...aliasSubstitutions],
+        families: ALL_DEFAULT_FONT_FAMILIES.filter((family) =>
+          entries.some((entry) => entry.family === family)
+        ),
+        supportedFamilies,
+      };
+    });
+    // Nothing may wait on it: a cancelled or failed background load is not an error.
+    later.catch(() => {});
+    return later;
   }
 
   return markResolver(resolvePackagedFonts);

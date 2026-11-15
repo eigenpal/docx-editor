@@ -32,20 +32,33 @@ function view(primary: string, alternate: string) {
 }
 
 test('a face of a family goes to its font-table alternate too', () => {
-  const { request } = documentFontResolutionRequest(
-    view('Foo Sans', 'Arial'),
-    ['Foo Sans'],
-    undefined,
-    [{ family: 'Foo Sans', weight: 700, style: 'normal' }]
-  );
+  const { request } = documentFontResolutionRequest(view('Foo Sans', 'Arial'), {
+    families: ['Foo Sans'],
+    faces: [{ family: 'Foo Sans', weight: 700, style: 'normal' }],
+  });
   expect(request.families).toContain('Arial');
   expect(request.faces).toContainEqual({ family: 'Arial', weight: 700, style: 'normal' });
   expect(request.faces).toContainEqual({ family: 'Foo Sans', weight: 700, style: 'normal' });
 });
 
 test('without faces, the request names no faces', () => {
-  const { request } = documentFontResolutionRequest(view('Foo Sans', 'Arial'), ['Foo Sans']);
+  const { request } = documentFontResolutionRequest(view('Foo Sans', 'Arial'), {
+    families: ['Foo Sans'],
+  });
   expect('faces' in request).toBe(false);
+});
+
+test('a follow-up asks about its new faces, and the plan keeps every document family', () => {
+  // A bold word in the default family: no new family, but Foo Sans keeps its alternate.
+  const { plan, request } = documentFontResolutionRequest(view('Foo Sans', 'Arial'), {
+    families: [],
+    faces: [{ family: 'Calibri', weight: 700, style: 'normal' }],
+    documentFamilies: ['Foo Sans'],
+  });
+  expect(request.families).toEqual([]);
+  expect(request.faces).toEqual([{ family: 'Calibri', weight: 700, style: 'normal' }]);
+  expect(plan.families).toEqual(['Foo Sans', 'Arial']);
+  expect(plan.alternates.get('foo sans')).toBe('Arial');
 });
 
 test('a requested family that no text uses gets its regular face', () => {

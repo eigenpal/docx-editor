@@ -271,21 +271,35 @@ export function documentFontSubstitutionPlan(
 }
 
 /**
- * Keep the resolver request and document fallback plan on the same configured default. With
- * `faces`, the request names the faces of the planned families too (`plannedFontFaces`).
+ * Keep the resolver request and document fallback plan on the same configured default. The
+ * request names `asked.families` and, with `asked.faces`, the faces of the planned families
+ * (`plannedFontFaces`). The plan covers `asked.documentFamilies` too: a follow-up asks about a
+ * few families, but the document's substitutions still cover every family it uses.
  */
 export function documentFontResolutionRequest(
   view: Pick<HeadlessDocumentView, 'currentPackage' | 'stylesRoot' | 'documentThemeFonts'>,
-  families: readonly string[],
-  configuration?: FontCatalogConfiguration,
-  faces?: readonly FontFaceRequest[]
+  asked: {
+    readonly families: readonly string[];
+    readonly faces?: readonly FontFaceRequest[];
+    readonly documentFamilies?: readonly string[];
+  },
+  configuration?: FontCatalogConfiguration
 ) {
   const defaultFamily = configuredDefaultFontFamily(configuration);
-  const plan = documentFontSubstitutionPlan(view, families, [], defaultFamily);
-  const planned = faces ? plannedFontFaces(plan, defaultFamily, faces) : undefined;
+  const requested = documentFontSubstitutionPlan(view, asked.families, [], defaultFamily);
+  const folded = new Set(asked.families.map((family) => family.trim().toLowerCase()));
+  const plan = asked.documentFamilies?.some((family) => !folded.has(family.trim().toLowerCase()))
+    ? documentFontSubstitutionPlan(
+        view,
+        [...asked.families, ...asked.documentFamilies],
+        [],
+        defaultFamily
+      )
+    : requested;
+  const faces = asked.faces && plannedFontFaces(requested, defaultFamily, asked.faces);
   return {
     plan,
-    request: { families: plan.families, defaultFamily, ...(planned ? { faces: planned } : {}) },
+    request: { families: requested.families, defaultFamily, ...(faces ? { faces } : {}) },
   };
 }
 

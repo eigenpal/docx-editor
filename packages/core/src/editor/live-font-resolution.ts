@@ -74,6 +74,11 @@ export interface LiveFontRequest {
   readonly families: readonly string[];
   /** Absent when no text is laid out yet: the resolver then loads every face. */
   readonly faces?: readonly FontFaceRequest[];
+  /**
+   * Every family the document uses, also those asked for before. A follow-up asks about a few
+   * families, but the document's substitutions still cover all of them.
+   */
+  readonly documentFamilies?: readonly string[];
 }
 
 /** Serialize font updates within a document. A new document can supersede a pending fetch. */
@@ -140,9 +145,10 @@ export function createLiveFontResolution<Late>(
     if (!initial && !state.dynamic) return;
     // A fixed configuration asks nothing of a resolver, but the document's substitution plan
     // still needs its families: without them no family the configuration lacks falls back.
-    const families = state
-      .families()
-      .filter((family) => !active.requested.has(family.toLowerCase()));
+    const documentFamilies = state.families();
+    const families = documentFamilies.filter(
+      (family) => !active.requested.has(family.toLowerCase())
+    );
     // A face that text uses for the first time (an edit made a word bold) asks again for its
     // family, even when the family was asked for before.
     const newFaces = (faces ?? []).filter(
@@ -178,6 +184,7 @@ export function createLiveFontResolution<Late>(
     // must not retry on every keystroke. resolve owns error reporting and degradation.
     const work = resolve({
       families: asked,
+      documentFamilies,
       ...(faces ? { faces: faces.filter((face) => folded.has(face.family.toLowerCase())) } : {}),
     });
     void work.finally(() => {

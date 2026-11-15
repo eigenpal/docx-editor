@@ -78,7 +78,7 @@ test('a face that text uses for the first time asks again for its family', async
   );
   queue.schedule(true);
   await tick();
-  expect(requests).toEqual([{ families: ['Arial'], faces }]);
+  expect(requests).toEqual([{ families: ['Arial'], faces, documentFamilies: ['Arial'] }]);
   // An edit with no new face asks nothing.
   queue.schedule();
   await tick();
@@ -90,6 +90,7 @@ test('a face that text uses for the first time asks again for its family', async
   await tick();
   expect(requests[1]).toEqual({
     families: ['Arial'],
+    documentFamilies: ['Arial'],
     faces: [
       { family: 'Arial', weight: 400, style: 'normal' },
       { family: 'Arial', weight: 700, style: 'normal' },
@@ -100,6 +101,7 @@ test('a face that text uses for the first time asks again for its family', async
   await tick();
   expect(requests[2]).toEqual({
     families: [],
+    documentFamilies: ['Arial'],
     faces: [
       { family: 'Calibri', weight: 400, style: 'normal' },
       { family: 'Calibri', weight: 400, style: 'italic' },
@@ -115,7 +117,7 @@ test('before any layout, the request names no faces', async () => {
   );
   queue.schedule(true);
   await tick();
-  expect(requests).toEqual([{ families: ['Arial'] }]);
+  expect(requests).toEqual([{ families: ['Arial'], documentFamilies: ['Arial'] }]);
 });
 
 test('requestFaces names a run with no font by the default family, once', () => {
@@ -158,7 +160,7 @@ test('a family first asked for with no faces never asks again for a face of it',
   ];
   queue.schedule();
   await tick();
-  expect(requests).toEqual([{ families: ['Arial'] }]);
+  expect(requests).toEqual([{ families: ['Arial'], documentFamilies: ['Arial'] }]);
 });
 
 test('requestFaces names the caret face first, so a picked face loads before typing', () => {

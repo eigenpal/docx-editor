@@ -78,9 +78,9 @@ import {
   GOOGLE_FONT_CATALOG,
   type GoogleFontFace,
 } from './google-catalog.generated.ts';
-import { fetchFontFile, prefetchFontFile, whenIdle } from './byte-cache.ts';
+import { canIdle, fetchFontFile, idle } from './byte-cache.ts';
 import { GOOGLE_CJK_FAMILY_NAMES, googleCjkFaceFor } from './google-cjk.ts';
-import { loadDefaultFonts, prefetchDefaultFonts } from './index.ts';
+import { loadDefaultFonts } from './index.ts';
 import type {
   DefaultFontSource,
   DefaultFontSubstitution,
@@ -189,13 +189,17 @@ export interface GoogleFontsOptions {
   /** Per-face failures. Defaults to a console warning; pass a handler to route them. */
   readonly onFailure?: (failure: GoogleFontLoadFailure) => void;
   /**
-   * When the request names the faces the document uses (`faces`), fetch the other faces of
-   * the same families into memory when the browser is idle, at low priority. An edit that
-   * makes text bold or italic then reads its face from memory instead of waiting for the
-   * network. Defaults to `true`. A browser without `requestIdleCallback` waits one second
-   * instead. Outside a browser, nothing is fetched ahead.
+   * What happens to the faces of a family in use that no text uses yet, such as its bold, when
+   * the request names the faces (`faces`).
+   *
+   * - `'background'` (default): after the faces in use arrive, load the others when the
+   *   browser is idle, at low priority, and install them in one step
+   *   ({@link GoogleFontsFragment.deferred}). A later bold or italic edit then needs no
+   *   download and no second layout. Outside a browser, they load on demand.
+   * - `'on-demand'`: load a face only when text starts to use it. The text lays out again
+   *   when the face arrives.
    */
-  readonly prefetch?: boolean;
+  readonly otherFaces?: 'background' | 'on-demand';
   /**
    * Serve Chinese, Japanese, and Korean families, such as SimSun, MS Mincho, and Malgun
    * Gothic, with the regional Noto Sans face for each: JP, SC, TC, or KR. Off by default.
@@ -254,7 +258,11 @@ export interface GoogleFontsFragment {
   readonly sources: readonly DefaultFontSource[];
   readonly substitutions: readonly DefaultFontSubstitution[];
   readonly failures: readonly GoogleFontLoadFailure[];
-  /** With `cjk` loading in the background: the CJK faces, settled after they download. */
+  /**
+   * The faces that load in the background, settled after they download: the CJK faces with
+   * `cjk.background`, and the other faces of the families in use
+   * ({@link GoogleFontsOptions.otherFaces}).
+   */
   readonly deferred?: Promise<GoogleFontsFragment>;
 }
 
@@ -353,8 +361,8 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
     // renders in one, and leaving it out would fetch nothing for a file that is entirely
     // default-styled.
     const wanted = new Map<string, readonly GoogleFontFace[]>();
-    /** Catalog faces of the families the document uses, for the prefetch. */
-    const prefetchable = new Set<GoogleFontFace>();
+    /** Catalog faces of the families in use that no text uses yet, with their Word names. */
+    const otherCatalogFaces = new Map<GoogleFontFace, string[]>();
     // The faces the document uses under one declared name, or every face when the request
     // does not say.
     const neededFaces = facesNeeded(request.faces);
@@ -437,7 +445,9 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
       );
       if (covered) continue;
       wanted.set(faces[0]!.family, used);
-      for (const face of faces) if (!used.includes(face)) prefetchable.add(face);
+      for (const face of faces)
+        if (!used.includes(face))
+          otherCatalogFaces.set(face, [...(otherCatalogFaces.get(face) ?? []), declared]);
       // Only when the document's own name differs from the face being loaded: a run
       // saying "Carlito" needs the bytes, not a Carlito -> Carlito redirect.
       //
@@ -457,10 +467,15 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
     }
 
     const sources: DefaultFontSource[] = [];
-    const packagedJob = async (): Promise<void> => {
-      if (packaged.size === 0) return;
+    /** Load packaged faces, and map them onto the names the document wrote. */
+    const loadPackaged = async (
+      entries: readonly (readonly [DefaultFontFamily, ReadonlySet<(typeof FACES)[number]>])[],
+      into: { sources: DefaultFontSource[]; substitutions: DefaultFontSubstitution[] },
+      failed: GoogleFontLoadFailure[]
+    ): Promise<void> => {
+      if (entries.length === 0) return;
       const fragments = await Promise.all(
-        [...packagedStyles].map(([family, styles]) =>
+        entries.map(([family, styles]) =>
           loadDefaultFonts({
             families: [family],
             faces: FACES.filter((face) => styles.has(face)),
@@ -474,13 +489,13 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
         substitutions: fragments.flatMap((part) => part.substitutions),
         failures: fragments.flatMap((part) => part.failures),
       };
-      sources.push(...fragment.sources);
+      into.sources.push(...fragment.sources);
       // Re-keyed onto the DOCUMENT's spelling for the same reason the catalog path does
       // it: the painter finds a face's alias under the name the run actually wrote.
       for (const [declared, family] of packaged) {
         for (const entry of fragment.substitutions) {
           if (entry.from.family !== family) continue;
-          substitutions.push({ ...entry, from: { ...entry.from, family: declared } });
+          into.substitutions.push({ ...entry, from: { ...entry.from, family: declared } });
         }
       }
       for (const failure of fragment.failures) {
@@ -489,23 +504,27 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
           url: failure.file,
           diagnostic: failure.diagnostic,
         };
-        failures.push(record);
+        failed.push(record);
         if (options.onFailure) options.onFailure(record);
         else console.warn(`[fonts] ${record.family} (${record.url}): ${record.diagnostic}`);
       }
     };
+    const packagedJob = (): Promise<void> =>
+      loadPackaged([...packagedStyles], { sources, substitutions }, failures);
     const fetchInto = async (
       face: GoogleFontFace,
       into: DefaultFontSource[],
       failed: GoogleFontLoadFailure[],
-      cjkFace = false
+      cjkFace = false,
+      low = false
     ): Promise<void> => {
       try {
         const bytes = await fetchFontFile(
           { url: face.url, byteLength: face.byteLength, source: 'catalogued' },
           fetcher,
           request.signal,
-          cjkFace
+          cjkFace,
+          low
         );
         into.push({
           request: { family: face.family, weight: face.weight, style: face.style },
@@ -576,24 +595,7 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
       immediate,
       cjkWanted.size > 0 && !deferCjk ? loadCjk() : undefined,
     ]);
-    // The other faces wait for the faces the document needs: they never share its bandwidth.
-    if (request.faces && options.prefetch !== false && !request.signal?.aborted) {
-      const covered = (family: string, weight: number, style: string): boolean =>
-        already.has(faceKey(family, weight, style));
-      whenIdle(() => {
-        for (const face of prefetchable) {
-          if (covered(face.family, face.weight, face.style)) continue;
-          prefetchFontFile(
-            { url: face.url, byteLength: face.byteLength, source: 'catalogued' },
-            fetcher
-          );
-        }
-        for (const family of new Set(packaged.values())) {
-          const faces = uncoveredFaces(family, FAMILY_PLANS.get(family)!, covered);
-          if (faces.length > 0) prefetchDefaultFonts({ families: [family], faces, fetcher });
-        }
-      });
-    }
+    const otherLater = loadOtherFacesLater();
     if (cjkNow) {
       sources.push(...cjkNow.sources);
       substitutions.push(...cjkNow.substitutions);
@@ -608,12 +610,82 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
       substitutions,
       failures,
       supportedFamilies,
-      ...(cjkLater ? { deferred: cjkLater } : {}),
+      ...(cjkLater || otherLater ? { deferred: bothLater(cjkLater, otherLater)! } : {}),
     };
+
+    /**
+     * The faces of the families in use that no text uses yet and no earlier origin paints,
+     * loaded when the browser is idle after the faces in use: they never share its bandwidth.
+     */
+    function loadOtherFacesLater(): Promise<GoogleFontsFragment> | undefined {
+      if (!request.faces || options.otherFaces === 'on-demand' || request.signal?.aborted) return;
+      if (!canIdle()) return;
+      const covered = (family: string, weight: number, style: string): boolean =>
+        already.has(faceKey(family, weight, style));
+      const catalog = [...otherCatalogFaces].filter(
+        ([face]) => !covered(face.family, face.weight, face.style)
+      );
+      const bundled = [...new Set(packaged.values())].flatMap((family) => {
+        const faces = uncoveredFaces(family, FAMILY_PLANS.get(family)!, covered).filter(
+          (face) => !packagedStyles.get(family)?.has(face)
+        );
+        return faces.length > 0 ? [[family, new Set(faces)] as const] : [];
+      });
+      if (catalog.length === 0 && bundled.length === 0) return;
+      const later = idle(request.signal).then(async (): Promise<GoogleFontsFragment> => {
+        const into = {
+          sources: [] as DefaultFontSource[],
+          substitutions: [] as DefaultFontSubstitution[],
+        };
+        const failed: GoogleFontLoadFailure[] = [];
+        await Promise.all([
+          ...catalog.map(([face]) => fetchInto(face, into.sources, failed, false, true)),
+          loadPackaged(bundled, into, failed),
+        ]);
+        const loaded = new Set(into.sources.map((source) => fontKey(source.request)));
+        for (const [face, declaredNames] of catalog) {
+          if (!loaded.has(fontKey(face))) continue;
+          for (const declared of declaredNames)
+            if (face.family !== declared)
+              into.substitutions.push({
+                from: { family: declared, weight: face.weight, style: face.style },
+                to: { family: face.family, weight: face.weight, style: face.style },
+              });
+        }
+        into.sources.sort((left, right) => left.id.localeCompare(right.id));
+        return { ...into, failures: failed, supportedFamilies };
+      });
+      // Nothing may wait on it: a cancelled or failed background load is not an error.
+      later.catch(() => {});
+      return later;
+    }
   }
 
   const descriptor = { value: true, enumerable: false, configurable: true } as const;
   Object.defineProperty(resolveGoogleFonts, FONT_RESOLVER_BRAND, descriptor);
   Object.defineProperty(resolveGoogleFonts, FONT_RESOLVER_MARK_KEY, descriptor);
   return resolveGoogleFonts as typeof resolveGoogleFonts & FontResolverMark;
+}
+
+const fontKey = (face: { family: string; weight: number; style: string }): string =>
+  `${face.family}\u0000${face.weight}\u0000${face.style}`;
+
+/**
+ * The background loads as one late answer: the load that settles first installs first, and
+ * carries the other one as its own `deferred`, so neither waits for the other.
+ */
+function bothLater(
+  first: Promise<GoogleFontsFragment> | undefined,
+  second: Promise<GoogleFontsFragment> | undefined
+): Promise<GoogleFontsFragment> | undefined {
+  if (!first || !second) return first ?? second;
+  const carry = (
+    settled: Promise<GoogleFontsFragment>,
+    other: Promise<GoogleFontsFragment>
+  ): Promise<GoogleFontsFragment> =>
+    settled.then(
+      (fragment) => ({ ...fragment, deferred: other }),
+      () => other
+    );
+  return Promise.race([carry(first, second), carry(second, first)]);
 }

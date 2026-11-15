@@ -21,6 +21,7 @@ import {
   liveFontFamilies,
   requestFaces,
 } from './live-font-resolution.ts';
+import type { LiveFontRequest } from './live-font-resolution.ts';
 import { createFontResolutionLifetime } from './font-resolution-lifetime.ts';
 import { composeFontOrigins, defineFontResolver } from './font-resolver.ts';
 import {
@@ -75,7 +76,6 @@ import {
 } from './revision-author-visibility.ts';
 import type {
   DocumentEditingMode,
-  FontFaceRequest,
   ReviewActivationOptions,
   ReviewItemPlacement,
   ReviewItemQuery,
@@ -479,11 +479,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         defaultFamily,
       };
     },
-    async ({ families, faces }, late?: LateFontDelivery) => {
+    async (request, late?: LateFontDelivery) => {
       const target = preparedFontSession ? { session: preparedFontSession } : surface;
       lateFonts.settle(late); // quietly; every install exit announces below, refused or thrown
       try {
-        if (target) await resolveDocumentFonts(loadSeq, target, families, late?.full, faces);
+        if (target) await resolveDocumentFonts(loadSeq, target, request, late?.full);
       } finally {
         if (late && !destroyed) (bump(), emitSelectionChange());
       }
@@ -1012,9 +1012,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   async function resolveDocumentFonts(
     seq: number,
     mounted: { readonly session: preparedOpen.FontSession },
-    families: readonly string[],
-    late?: FontConfigurationFragment,
-    faces?: readonly FontFaceRequest[]
+    asked: LiveFontRequest,
+    late?: FontConfigurationFragment
   ): Promise<void> {
     const lifetime = fontLifetime.capture();
     const current = () => !destroyed && seq === loadSeq && lifetime.current();
@@ -1036,9 +1035,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // fixed measurer, exactly like a failed byte source.
       const { plan: documentFonts, request: documentRequest } = documentFontResolutionRequest(
         mounted.session,
-        families,
-        fontConfiguration(),
-        faces
+        asked,
+        fontConfiguration()
       );
       const request = { ...documentRequest, signal: lifetime.signal };
       // Installed families keep their own face; only missing ones fall back. Without a canvas
@@ -1118,7 +1116,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       );
       // A face request that brought no new bytes keeps the installed fonts: no relayout.
       const installKey = `${seq}\u0001${lifetime.generation}\u0001${fontInstallKey(fonts)}`;
-      if (installKey === installedFontKey) return (reportDocumentDrops(), fontsDone());
+      if (installKey === installedFontKey)
+        return (reportDocumentDrops(), fontsDone(), emitSelectionChange());
       // Nothing to shape: the fixed measurer stays. An app that DID supply a
       // configuration deserves to hear that it contributed no usable source (every
       // fetch failed, or the fragment was substitutions-only against no document

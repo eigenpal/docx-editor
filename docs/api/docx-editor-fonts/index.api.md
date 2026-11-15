@@ -135,6 +135,7 @@ export function packagedFonts(options?: PackagedFontsOptions): PackagedFontsReso
 
 // @public
 export interface PackagedFontsFragment extends DefaultFontsFragment {
+    readonly deferred?: Promise<PackagedFontsFragment>;
     readonly families: readonly DefaultFontFamily[];
     readonly supportedFamilies?: readonly string[];
 }
@@ -146,14 +147,11 @@ export interface PackagedFontsOptions {
     // @deprecated
     readonly install?: boolean;
     readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
-    readonly prefetch?: boolean;
+    readonly otherFaces?: 'background' | 'on-demand';
 }
 
 // @public
 export type PackagedFontsResolver = ((request: FontOriginRequest) => Promise<PackagedFontsFragment>) & FontResolverMark;
-
-// @public
-export function prefetchDefaultFonts(options?: Pick<LoadDefaultFontsOptions, 'families' | 'faces' | 'fetcher'>): void;
 
 // @public
 export interface ResolvedFontFace {

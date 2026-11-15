@@ -204,7 +204,11 @@ export interface DocxEditorConfig {
 export interface FontMeasurementState {
   /** `fixed` estimates advance widths; `shaped` measures real font bytes with HarfBuzz. */
   readonly measurer: 'fixed' | 'shaped';
-  /** True while font resolution for the current document is still running. */
+  /**
+   * True while font resolution for the current document is still running, also while faces
+   * that a resolver loads in the background are on the way. A stalled background load holds
+   * it for at most 10 seconds. The text can measure in shaped faces before it turns false.
+   */
   readonly resolving: boolean;
   /** The shaped measurer's identity (admitted face hashes); absent while fixed. */
   readonly producer?: string;

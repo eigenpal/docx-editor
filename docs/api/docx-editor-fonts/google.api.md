@@ -115,7 +115,7 @@ export interface GoogleFontsOptions {
     readonly cjk?: boolean | GoogleCjkOptions;
     readonly fetcher?: typeof fetch;
     readonly onFailure?: (failure: GoogleFontLoadFailure) => void;
-    readonly prefetch?: boolean;
+    readonly otherFaces?: 'background' | 'on-demand';
     readonly substitute?: Readonly<Record<string, string>>;
 }
 

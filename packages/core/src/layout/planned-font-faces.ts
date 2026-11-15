@@ -25,7 +25,7 @@ export function plannedFontFaces(
   defaultFamily: string,
   faces: readonly FontFaceRequest[]
 ): readonly FontFaceRequest[] {
-  // Only the families the request names: a face of a family past the family cap goes too.
+  // Only the families the request names: a face of a family past the family cap stays out.
   const asked = new Set([...plan.families, defaultFamily].map(fold));
   const planned = new Map<string, FontFaceRequest>();
   const withFace = new Set<string>();
