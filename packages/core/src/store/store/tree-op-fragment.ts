@@ -219,15 +219,16 @@ function paragraphLengthIn(part: OoxmlPart, paragraphId: string): number | null 
 /**
  * The end of the pasted content, where Word leaves the caret: in the paragraph that now holds
  * the host's trailing text, just before that text. The trailing text keeps its length through
- * the landing, so the end is that paragraph's length minus it. Null breaks the invariant.
+ * the landing, so the end is that paragraph's length minus it. The end is only a caret hint:
+ * when it cannot be measured, the content still lands and the op reports no caret.
  */
 function pasteEnd(
   part: OoxmlPart,
   paragraphId: string,
-  trailing: number
+  trailing: number | null
 ): { readonly paragraphId: string; readonly offset: number } | null {
   const length = paragraphLengthIn(part, paragraphId);
-  if (length === null || length < trailing) return null;
+  if (length === null || trailing === null || length < trailing) return null;
   return { paragraphId, offset: length - trailing };
 }
 
@@ -286,7 +287,6 @@ export function applyInsertFragment(
     const head = findNode(split.part, host.id);
     if (!head || head.kind !== 'paragraph') return { ok: false, reason: 'tree-invariant' };
     const hostTrailing = paragraphLengthIn(split.part, tailId);
-    if (hostTrailing === null) return { ok: false, reason: 'tree-invariant' };
     const appended = replaceChildren(
       split.part,
       head.id,
@@ -304,12 +304,11 @@ export function applyInsertFragment(
     );
     if (!joined.ok) return joined;
     const caret = pasteEnd(joined.part, host.id, hostTrailing);
-    if (!caret) return { ok: false, reason: 'tree-invariant' };
     const effect: TreeOpEffect = {
       dirty: [host.id],
       created: [],
       deleted: [],
-      caret,
+      ...(caret ? { caret } : {}),
       dependencyKeys: TEXT_DEPS,
       impact: 'flow-structural',
     };
@@ -327,7 +326,6 @@ export function applyInsertFragment(
   if (!tailId) return { ok: false, reason: 'tree-invariant' };
   let current = split.part;
   const hostTrailing = paragraphLengthIn(current, tailId);
-  if (hostTrailing === null) return { ok: false, reason: 'tree-invariant' };
 
   const middle: OoxmlNode[] = [...blocks];
   const created: string[] = [tailId];
@@ -397,12 +395,11 @@ export function applyInsertFragment(
   }
 
   const caret = pasteEnd(current, tailId, hostTrailing);
-  if (!caret) return { ok: false, reason: 'tree-invariant' };
   const effect: TreeOpEffect = {
     dirty: [host.id, tailId],
     created,
     deleted: [],
-    caret,
+    ...(caret ? { caret } : {}),
     dependencyKeys: TEXT_DEPS,
     impact: 'flow-structural',
   };

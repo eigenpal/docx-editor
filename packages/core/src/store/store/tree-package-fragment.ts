@@ -20,7 +20,9 @@ import {
   MAX_FRAGMENT_INSERT_BLOCKS,
   MAX_FRAGMENT_NODES,
 } from './tree-op-fragment.ts';
-import type { OoxmlNode } from '../package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import { findNode } from '../package/ooxml-edit.ts';
+import { storyParagraphs, storyRootsOf } from '../package/story-blocks.ts';
 import type { PackageTransactResult, StoryScope, TreePackageStore } from './tree-package-store.ts';
 import type { TreeDocOp } from './tree-op-types.ts';
 import type { RevisionAttributionInput } from './tree-op-validate.ts';
@@ -56,10 +58,8 @@ export interface FragmentPasteInput {
 /**
  * The end of the pasted content: where Word leaves the caret after a paste.
  *
- * The id is the one the paste transaction gave the paragraph. A collaboration session can
- * re-key a paragraph that the paste created when it publishes the change. If the story no
- * longer holds `paragraphId`, the end is in the last paragraph that the paste created, at the
- * same offset.
+ * The id names a paragraph the story holds after the change published, including when a
+ * collaboration session re-keyed the paragraphs that the paste created.
  */
 export interface FragmentPasteEnd {
   /** The paragraph that holds the end: the host's trailing text follows it. */
@@ -166,7 +166,8 @@ export function applyFragmentPaste(
   let blockCount = 0;
   let refusalDetail = '';
 
-  return runObservedStoreTransaction(
+  const partBefore = store.partFor(scope);
+  const outcome: FragmentPasteResult = runObservedStoreTransaction(
     store,
     () => {
       const result = storyStore.transact(
@@ -249,4 +250,36 @@ export function applyFragmentPaste(
     },
     (outcome) => packageTransactionPublished(outcome)
   );
+  if (!outcome.ok || !outcome.end) return outcome;
+  const { end: transactionEnd, ...rest } = outcome;
+  const end = publishedPasteEnd(transactionEnd, partBefore, store.partFor(scope));
+  return end ? { ...rest, end } : rest;
+}
+
+/** The paragraphs of every story in a part, in the order the editor addresses them. */
+function paragraphIdsOf(part: OoxmlPart | null): readonly string[] {
+  if (!part) return [];
+  return storyRootsOf(part).flatMap((story) => storyParagraphs(story.root).map((node) => node.id));
+}
+
+/**
+ * The paste end in the ids the story holds after the change published.
+ *
+ * A collaboration session re-keys the paragraphs a paste creates when it publishes the change,
+ * so the transaction's id for the landing paragraph can be gone. `insertFragment` lands every
+ * block, cell paragraphs included, before the split tail, and the tail holds the end. So the
+ * tail is the last paragraph the paste created, and the offset stands.
+ */
+function publishedPasteEnd(
+  end: FragmentPasteEnd,
+  before: OoxmlPart | null,
+  after: OoxmlPart | null
+): FragmentPasteEnd | undefined {
+  if (!after) return undefined;
+  const landing = findNode(after, end.paragraphId);
+  if (landing && landing.kind === 'paragraph') return end;
+  const known = new Set(paragraphIdsOf(before));
+  const created = paragraphIdsOf(after).filter((id) => !known.has(id));
+  const tail = created[created.length - 1];
+  return tail ? { paragraphId: tail, offset: end.offset } : undefined;
 }

@@ -387,8 +387,6 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     let landed = false;
     let unsupported = false;
     let end: FragmentPasteEnd | undefined;
-    const paragraphIds = () => deps.paragraphIds?.() ?? session.paragraphIdsIn({ kind: 'body' });
-    const before = new Set(paragraphIds());
     deps.commit(
       () => {
         // The readiness gate the typing lane asks. A fragment paste reaches the store
@@ -445,30 +443,12 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
             break;
           }
         }
-        return collapsedAt(pasteEndIn(end, before, paragraphIds()) ?? target);
+        // Word leaves the caret at the END of the pasted content, as the plain lane does.
+        // The landing paragraph is created inside the transaction, so the store reports it.
+        return collapsedAt(end ?? target);
       }
     );
     return unsupported ? 'unsupported-content' : landed;
-  }
-
-  /**
-   * Word leaves the caret at the END of the pasted content, as the plain lane does. The
-   * store reports that end, because the landing paragraph is minted inside the transaction.
-   * A collaboration session can re-key a minted paragraph when it publishes, so an id the
-   * story no longer holds names the last new paragraph instead: `insertFragment` lands every
-   * block, cell paragraphs included, before the split tail, and the tail is where the paste
-   * ends. This is the minted-tail diff the plain lane and Enter use.
-   */
-  function pasteEndIn(
-    end: FragmentPasteEnd | undefined,
-    before: ReadonlySet<string>,
-    ids: readonly string[]
-  ): FragmentPasteEnd | undefined {
-    if (!end) return undefined;
-    if (ids.includes(end.paragraphId)) return end;
-    const minted = ids.filter((id) => !before.has(id));
-    const landing = minted[minted.length - 1];
-    return landing ? { paragraphId: landing, offset: end.offset } : undefined;
   }
 
   /** The paste router entry — fidelity order with continuous degrade to plain. */

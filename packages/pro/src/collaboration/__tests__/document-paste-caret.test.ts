@@ -13,7 +13,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { DocxEditor as ServerDocxEditor } from '@docx-editor.dev/editor-api';
 import { collaborationModule, reviewModule } from '../../index';
-import { createPeerHarness } from './document-peer-support';
+import { createPeerHarness, walk } from './document-peer-support';
 import { docx } from '../../../../core/src/editor/__tests__/paginated-surface-fixtures.ts';
 
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -123,4 +123,33 @@ test('a multi-paragraph paste ends after its last line while the peer deletes ne
   r.sync();
   expect(text(r.alice)).toBe('Jlloone\ntwoXworld');
   expect(text(r.bob)).toBe(text(r.alice));
+});
+
+test('the store reports a paste end the session still holds after it re-keys', async () => {
+  const harness = createPeerHarness('rich-paste-end-store');
+  cleanups.push(() => harness.cleanup());
+  const { alice, bob } = await harness.pair(
+    docx('<w:p><w:r><w:t>helloworld</w:t></w:r></w:p><w:sectPr/>')
+  );
+  const paragraphId = harness.paragraphIdAt(alice, 0);
+  const fragment = docx('<w:p><w:r><w:t>one</w:t></w:r></w:p><w:p><w:r><w:t>two</w:t></w:r></w:p>');
+  const pasted = alice.store.applyFragmentPaste(
+    { kind: 'body' },
+    { paragraphId, offset: 5, fragmentBytes: fragment, lastMarkCovered: false }
+  );
+  if (!pasted.ok) throw new Error(pasted.detail ?? pasted.reason);
+  const end = pasted.end!;
+  expect(harness.paragraphIdAt(alice, 1)).toBe(end.paragraphId);
+  expect(end.offset).toBe(3);
+  harness.apply(alice, [{ op: 'insertText', ...end, text: 'X' }]);
+  alice.port.flushPendingJournals();
+  harness.expectConverged(alice, bob);
+  const texts = (ydocPeer: typeof bob) => {
+    const out: string[] = [];
+    walk(ydocPeer.store.bodyStore().part.root, (node) => {
+      if (node.kind === 'textValue') out.push(node.value);
+    });
+    return out.join('');
+  };
+  expect(texts(bob)).toBe('helloonetwoXworld');
 });
