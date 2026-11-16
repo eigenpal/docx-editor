@@ -74,7 +74,7 @@
     "lockedSectionBreak": "Un controllo contenuto bloccato o collegato contiene la sezione successiva, quindi questa interruzione non può modificarla.",
     "lockedContentBreak": "Un controllo contenuto blocca questo testo, quindi qui non puoi interrompere una sezione.",
     "nothingToCopyFormatting": "Seleziona del testo per copiarne la formattazione",
-    "nothingToPaint": "Seleziona del testo da applicare con lo strumento pennello",
+    "nothingToPaint": "Seleziona il testo a cui applicare la formattazione",
     "nothingToUndo": "Non c’è nulla da annullare",
     "nothingToRedo": "Non c’è nulla da ripristinare",
     "outermostLevel": "La selezione è già al livello più esterno",
@@ -431,7 +431,7 @@
       "special": "Speciale",
       "specialNone": "(nessuno)",
       "specialFirstLine": "Prima riga",
-      "specialHanging": "Sospeso",
+      "specialHanging": "Sporgente",
       "by": "Di",
       "spacing": "Spaziatura",
       "spaceBefore": "Prima",
@@ -550,7 +550,7 @@
       "leftIndent": "Rientro sinistro",
       "rightIndent": "Rientro destro",
       "firstLineIndent": "Rientro prima riga",
-      "hangingIndent": "Rientro sospeso",
+      "hangingIndent": "Rientro sporgente",
       "spaceBefore": "Spazio prima",
       "spaceAfter": "Spazio dopo",
       "direction": "Direzione del testo",
@@ -757,7 +757,7 @@
     "flipVertical": "Capovolgi verticalmente"
   },
   "imageWrap": {
-    "inline": "Sul testo",
+    "inline": "In linea con il testo",
     "square": "Quadrata",
     "tight": "Aderente",
     "through": "Attraverso",
@@ -768,7 +768,7 @@
     "inFrontOfText": "Davanti al testo",
     "tooltipPrefix": "Disposizione: {label}",
     "targets": {
-      "inline": "Sul testo",
+      "inline": "In linea con il testo",
       "square": "Quadrata",
       "squareLeft": "Quadrata a sinistra",
       "squareRight": "Quadrata a destra",
@@ -779,7 +779,7 @@
       "inFront": "Davanti al testo"
     },
     "menu": {
-      "inLineWithText": "Sul testo",
+      "inLineWithText": "In linea con il testo",
       "squareLeft": "Quadrata a sinistra",
       "squareRight": "Quadrata a destra",
       "ariaLabel": "Opzioni di disposizione dell’immagine"
@@ -993,7 +993,7 @@
     "horizontal": "Righello orizzontale",
     "vertical": "Righello verticale",
     "firstLineIndent": "Rientro prima riga",
-    "hangingIndent": "Rientro sospeso",
+    "hangingIndent": "Rientro sporgente",
     "leftIndent": "Rientro sinistro",
     "rightIndent": "Rientro destro",
     "topMargin": "Margine superiore",
