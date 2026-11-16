@@ -65,6 +65,26 @@ test('a second check of an unchanged table reads none of its rows', () => {
   expect(reads()).toBe(first);
 });
 
+test('after typing in one cell, a check reads none of the other rows', () => {
+  const { part, reads } = countingRowReads(opened(200));
+  const [table] = all(part.root, 'tbl');
+  expect(healedTableProperties(part, table!.id)).toBe(part);
+  const paragraph = all(part.root, 'p')[100]!;
+  const typed = applyTreeOp(part, {
+    op: 'insertText',
+    paragraphId: paragraph.id,
+    offset: 0,
+    text: 'X',
+  });
+  if (!typed.ok) throw new Error(typed.reason);
+  const [edited] = all(typed.part.root, 'tbl');
+  // The edit made a new table node, so the table-level answer no longer applies.
+  expect(edited).not.toBe(table);
+  const before = reads();
+  expect(healedTableProperties(typed.part, edited!.id)).toBe(typed.part);
+  expect(reads()).toBe(before);
+});
+
 test('a container that a merge repeats later in a checked table is still merged', () => {
   const part = opened(3);
   const [table] = all(part.root, 'tbl');

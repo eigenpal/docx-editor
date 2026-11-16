@@ -88,11 +88,13 @@ export function tableIdOf(op: TreeDocOp): string | null {
   return typeof id === 'string' ? id : null;
 }
 
-// Tables whose rows and cells repeat no property container. Nodes never change in place, so
-// the answer holds for as long as the node does, and an edited table is a new node. Without
-// it, every check of a table edit scans every row: a toolbar asks about each of its table
-// controls whenever the caret enters another cell.
+// Tables, and rows, whose rows and cells repeat no property container. Nodes never change in
+// place, so the answer holds for as long as the node does. An edit makes new nodes only on its
+// path: typing in one cell makes a new table and a new row, and the other rows keep theirs.
+// Without these, every check of a table edit scans every row: a toolbar asks about each of
+// its table controls whenever the caret enters another cell.
 const tablesWithoutRepeats = new WeakSet<OoxmlElement>();
+const rowsWithoutRepeats = new WeakSet<OoxmlElement>();
 
 /**
  * `part` with the rows and cells of table `tableId` merged to one of each property container,
@@ -112,13 +114,17 @@ export function healedTableProperties(
   let nextId: (() => string) | null = null;
   const mint = () => (nextId ??= createNodeIdAllocator(part, 'new'))();
   const writes: Write[] = [];
+  // Rows that need no container write; each keeps its node, so the repeat pass meets it again.
+  const merged = new Set<OoxmlElement>();
   for (const row of table.children) {
-    if (!isWmlElement(row, 'tr')) continue;
+    if (!isWmlElement(row, 'tr') || rowsWithoutRepeats.has(row)) continue;
+    const before = writes.length;
     containerWrites(row, mint, writes);
     for (const cell of row.children) {
       if (!isWmlElement(cell, 'tc')) continue;
       containerWrites(cell, mint, writes);
     }
+    if (writes.length === before) merged.add(row);
   }
   // A cell's repeats are read after its containers merge, so they follow those writes.
   let healed = part;
@@ -134,8 +140,10 @@ export function healedTableProperties(
   if (!after || after.kind === 'textValue') return null;
   const repeats: Write[] = [];
   for (const row of after.children) {
-    if (!isWmlElement(row, 'tr')) continue;
+    if (!isWmlElement(row, 'tr') || rowsWithoutRepeats.has(row)) continue;
+    const before = repeats.length;
     for (const cell of row.children) if (isWmlElement(cell, 'tc')) repeatWrites(cell, repeats);
+    if (repeats.length === before && merged.has(row)) rowsWithoutRepeats.add(row);
   }
   if (writes.length === 0 && repeats.length === 0) {
     tablesWithoutRepeats.add(table);
