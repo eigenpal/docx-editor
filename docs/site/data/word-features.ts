@@ -1322,14 +1322,14 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'collab.i18n',
-    name: 'Editor UI in 14 languages',
+    name: 'Editor UI in 15 languages',
     category: 'collaboration',
     editing: 'full',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Use @docx-editor.dev/i18n to translate editor controls into 14 languages. Arabic and Hebrew interfaces use right-to-left layouts. LocaleProvider also accepts an explicit direction for other languages.',
+      'Use @docx-editor.dev/i18n to translate editor controls into 15 languages, including Italian. Arabic and Hebrew interfaces use right-to-left layouts. LocaleProvider also accepts an explicit direction for other languages.',
     docsLink: '/docs/2.x/i18n',
   },
   {

@@ -67,6 +67,7 @@ Neither setting infers the other. For date input, see [form fields](/docs/2.x/gu
 | `he`    | Hebrew               | `he`         | RTL       |
 | `hi`    | Hindi                | `hi`         | LTR       |
 | `id`    | Indonesian           | `id`         | LTR       |
+| `it`    | Italian              | `it`         | LTR       |
 | `ja`    | Japanese             | `ja`         | LTR       |
 | `ru`    | Russian              | `ru`         | LTR       |
 | `tr`    | Turkish              | `tr`         | LTR       |
@@ -75,6 +76,8 @@ Neither setting infers the other. For date input, see [form fields](/docs/2.x/gu
 - Hyphenated codes use camelCase exports: `ptBR` and `zhCN`.
 - A named import (`import { es } from '@docx-editor.dev/i18n'`) suits a fixed set of locales.
 - A dynamic subpath import loads a locale on demand: `(await import('@docx-editor.dev/i18n/es')).default`. A static subpath import bundles it.
+
+For Italian, import `it` from `@docx-editor.dev/i18n/it` and pass it to `i18n`. Set `locale="it-IT"` separately for Italian regional formatting. Try the [Italian demo](https://docx-editor.dev/editor?lang=it).
 
 ## Configure providers and imports
 

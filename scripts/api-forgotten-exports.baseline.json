@@ -454,6 +454,9 @@
       "DotPath",
       "enJson"
     ],
+    "it": [
+      "PartialLocaleStrings"
+    ],
     "ja": [
       "PartialLocaleStrings"
     ],
