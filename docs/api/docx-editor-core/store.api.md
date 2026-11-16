@@ -1954,6 +1954,7 @@ export type FragmentPasteResult = (Extract<PackageTransactResult, {
     ok: true;
 }> & {
     readonly blockCount: number;
+    readonly caret?: SelectionMark;
 }) | Extract<PackageTransactResult, {
     ok: false;
 }>;

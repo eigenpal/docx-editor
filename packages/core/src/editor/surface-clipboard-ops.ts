@@ -388,6 +388,8 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     // Only the store knows where the pasted content ends: the landing paragraph is minted
     // inside the transaction, after the selection-clearing ops have moved the offsets.
     let pastedEnd: { readonly paragraphId: string; readonly start: number } | undefined;
+    const paragraphIdsNow = () => deps.paragraphIds?.() ?? session.paragraphIdsIn({ kind: 'body' });
+    const before = new Set(paragraphIdsNow());
     deps.commit(
       () => {
         // The readiness gate the typing lane asks. A fragment paste reaches the store
@@ -430,7 +432,15 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       () => {
         deps.retainPromptBoundary?.(plan.outsidePromptId);
         if (pastedEnd) {
-          return collapsedAt({ paragraphId: pastedEnd.paragraphId, offset: pastedEnd.start });
+          // A collaboration session renames minted paragraphs in the same commit, so the id
+          // the store reported can already be gone. The landing paragraph follows every other
+          // minted block, which makes it the last unfamiliar id in document order.
+          const after = paragraphIdsNow();
+          const minted = after.filter((id) => !before.has(id));
+          const paragraphId = after.includes(pastedEnd.paragraphId)
+            ? pastedEnd.paragraphId
+            : minted[minted.length - 1];
+          if (paragraphId) return collapsedAt({ paragraphId, offset: pastedEnd.start });
         }
         if (plan.outsidePromptId) {
           const part = session.part();

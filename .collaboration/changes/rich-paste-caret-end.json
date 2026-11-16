@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A rich paste left the local caret at the start of the pasted content.",
+  "after": "A rich paste leaves the local caret after the pasted content. Peers show that caret through the existing remote selection.",
+  "reason": "Only the local selection changes. The fragment paste writes the same tree mutations through the existing transaction journal. The optional caret on the insertFragment effect and on FragmentPasteResult is local metadata that is not shared or persisted.",
+  "tests": [
+    "packages/core/src/editor/__tests__/clipboard-rich-paste-caret.test.ts",
+    "packages/pro/src/collaboration/__tests__/rich-paste-caret-editors.test.ts"
+  ],
+  "changeset": "rich-paste-caret-end",
+  "migration": null
+}
