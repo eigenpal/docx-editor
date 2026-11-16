@@ -8,6 +8,7 @@ import {
 } from './style-cascade.ts';
 import { propertiesOf } from './paragraph-flow.ts';
 import { hiddenMarkNeighboursOf } from './hidden-paragraph-mark.ts';
+import type { CellEdgeNeighbours } from './cell-edge-neighbours.ts';
 
 /** An unnamed paragraph uses the same implicit default style as its unnamed neighbours. */
 export function contextualParagraphSpacing(
@@ -38,22 +39,28 @@ export function neighbourParagraphStyle(
         null);
 }
 
+/**
+ * `w:contextualSpacing` (17.3.1.9) for a paragraph in cell flow. A side with no paragraph
+ * in the cell compares with `edges` from `cell-edge-neighbours.ts`, passed only for a real
+ * `w:tc`; with none, nothing matches on that side.
+ */
 export function cellContextualSpacing(
   spacing: ParagraphSpacing,
   enabled: boolean,
   styleId: string | null,
   neighbours: { readonly previous?: OoxmlElement; readonly next?: OoxmlElement } | undefined,
   styles: StyleCascadeTable | undefined,
-  cellStyle?: TableCellStyleFormatting
+  cellStyle?: TableCellStyleFormatting,
+  edges?: CellEdgeNeighbours
 ): ParagraphSpacing {
   if (!enabled) return spacing;
-  return contextualParagraphSpacing(
-    spacing,
-    true,
-    styleId,
-    neighbourParagraphStyle(neighbours?.previous, styles, cellStyle),
-    neighbourParagraphStyle(neighbours?.next, styles, cellStyle)
-  );
+  const previous = neighbours?.previous
+    ? neighbourParagraphStyle(neighbours.previous, styles, cellStyle)
+    : edges?.previous?.style;
+  const next = neighbours?.next
+    ? neighbourParagraphStyle(neighbours.next, styles, cellStyle)
+    : edges?.next?.style;
+  return contextualParagraphSpacing(spacing, true, styleId, previous, next);
 }
 
 /** A prepared body block, as far as its neighbours' contextual spacing reads it. */

@@ -1,4 +1,5 @@
 import { withStoryLineGrid } from './line-grid.ts';
+import { cellEdgeNeighbours } from './cell-edge-neighbours.ts';
 import { listLayoutToken } from './list-marker-reuse.ts';
 import { reuseParagraphAtWidth } from './paragraph-cache-width-reuse.ts';
 import { cellParagraphInputs, cellParagraphBreakInputs } from './cell-paragraph-inputs.ts';
@@ -226,6 +227,9 @@ export interface TableFlowDeps {
   /** Stable visual occurrence for repeated header rows on the current page. */
   readonly pageOccurrenceKey?: () => string;
   readonly styleCascade?: StyleCascadeTable;
+  /** Body tables' lead paragraphs by first row id, and the row being placed's cell edges. */
+  readonly tableTopLeads?: ReadonlyMap<string, import('./cell-edge-neighbours.ts').EdgeNeighbour>;
+  readonly cellEdges?: ReadonlyMap<string, import('./cell-edge-neighbours.ts').CellEdgeNeighbours>;
   /** When set (header/footer page projection), PAGE/NUMPAGES resolve against this context. */
   readonly pageContext?: FieldPageContext;
   /** Derived footnote/endnote marks for noteReference / noteRef projection. */
@@ -428,7 +432,8 @@ function placeCellParagraph(
     styleId,
     contextualCellNeighbours(paragraph, options?.borderNeighbours),
     deps.styleCascade,
-    options?.tableCellStyle
+    options?.tableCellStyle,
+    options?.inTableCell === true ? deps.cellEdges?.get(paragraph.id) : undefined
   );
   const rtl = paragraphIsRtl(props);
   // `w:between` (§17.3.1.24): consecutive paragraphs with IDENTICAL border settings are ONE
@@ -1317,8 +1322,9 @@ export function layoutRowFragmentBounded(
   const deferredRowAnchors: DeferredRowAnchor[] = [];
   // Exact rows clip to their authored box; never flow past it even when the page allows more.
   const { flowMaxBottom, pageBottom } = rowFlowBounds(maxBottom, rowTop, exactHeightPt);
+  const cellEdges = cellEdgeNeighbours(row, deps.styleCascade, deps.tableTopLeads?.get(row.id));
   const { rowDeps, flushDeferred } = rowDepsForAnchors(
-    { ...deps, cellPageBottom: pageBottom },
+    { ...deps, cellPageBottom: pageBottom, cellEdges },
     deferredRowAnchors
   );
   const flowDeps: TableFlowDeps =
