@@ -116,9 +116,9 @@
     "harfbuzzjs": "1.6.4",
     "prosemirror-commands": "^1.7.1",
     "prosemirror-keymap": "^1.2.3",
-    "prosemirror-model": "^1.25.4",
+    "prosemirror-model": "^1.25.13",
     "prosemirror-state": "^1.4.4",
-    "prosemirror-view": "^1.42.3",
+    "prosemirror-view": "^1.42.9",
     "utif2": "4.1.0"
   },
   "peerDependencies": {
