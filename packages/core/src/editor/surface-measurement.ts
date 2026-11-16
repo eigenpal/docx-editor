@@ -1,4 +1,9 @@
 import type { PaginatedSurface, PaginatedSurfaceOptions } from './paginated-surface.ts';
+import { resolveDefaultSurfaceMeasurer, type CanvasMeasurerOptions } from '../layout/index.ts';
+import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
+
+/** The faces a surface's layout measures (`usedFontFacesOf`). */
+export { createFontFaceUsage, registerUsedFontFaces, usedFontFacesOf } from './font-face-usage.ts';
 
 type Measurement = Pick<
   PaginatedSurfaceOptions,
@@ -40,4 +45,22 @@ export function updateSurfaceMeasurement(
   const update = updates.get(surface);
   if (!update) throw new Error('Surface does not support measurement updates');
   update(next, restoreOnFailure);
+}
+
+/**
+ * The measurer a surface uses when the host supplies none: the browser canvas of `container`'s
+ * document, measuring with the faces that paint draws with (`fontAlias`). The editor creates the
+ * canvas; layout only consumes the injected context.
+ */
+export function browserDefaultMeasurer(
+  container: HTMLElement,
+  scale: number,
+  fontAlias: PaginatedSurfaceOptions['fontAlias'],
+  serifHangulFace: CanvasMeasurerOptions['serifHangulFace']
+) {
+  return resolveDefaultSurfaceMeasurer(scale, {
+    context: tryCreateBrowserCanvasContext(container.ownerDocument),
+    ...(fontAlias ? { fontAlias } : {}),
+    serifHangulFace,
+  });
 }

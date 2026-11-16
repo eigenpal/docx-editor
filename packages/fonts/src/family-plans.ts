@@ -132,3 +132,54 @@ export const PACKAGED_ONLY_FAMILIES: readonly DefaultFontFamily[] = Object.freez
   'Century Gothic',
   'Segoe UI',
 ]);
+
+/** One of the four packaged faces for each requested weight and style, in `FACES` order. */
+export function packagedFaces(
+  styles: readonly { readonly weight: number; readonly style: 'normal' | 'italic' }[]
+): readonly (typeof FACES)[number][] {
+  return FACES.filter((face) =>
+    styles.some(
+      (style) => (style.weight >= 600 ? 700 : 400) === face.weight && style.style === face.style
+    )
+  );
+}
+
+/**
+ * The packaged faces that `faces` asks for under a declared family name, matched
+ * case-insensitively, or all four faces when the request lists none.
+ */
+export function facesNeeded(
+  faces:
+    | readonly {
+        readonly family: string;
+        readonly weight: number;
+        readonly style: 'normal' | 'italic';
+      }[]
+    | undefined
+): (declared: string) => readonly (typeof FACES)[number][] {
+  if (!faces) return () => FACES;
+  const byFamily = new Map<string, { weight: number; style: 'normal' | 'italic' }[]>();
+  for (const face of faces) {
+    const fold = face.family.trim().toLowerCase();
+    byFamily.set(fold, [...(byFamily.get(fold) ?? []), face]);
+  }
+  return (declared) => packagedFaces(byFamily.get(declared.trim().toLowerCase()) ?? []);
+}
+
+/**
+ * The packaged faces of `family` that no earlier origin paints, under the Word name or under
+ * the substitute's own name. `covered` answers for one face key.
+ */
+export function uncoveredFaces(
+  family: string,
+  plan: FamilyPlan,
+  covered: (family: string, weight: number, style: string) => boolean
+): readonly (typeof FACES)[number][] {
+  return FACES.filter((face) => {
+    const source = planSourceFace(plan, face);
+    return (
+      !covered(family, face.weight, face.style) &&
+      !covered(plan.substitute, source.weight, source.style)
+    );
+  });
+}

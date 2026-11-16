@@ -80,9 +80,9 @@ In Vue, a function argument is always the value, never a getter. Use `computed((
 | Source | Third-party requests | Loads |
 | --- | --- | --- |
 | Fonts embedded in the DOCX | No | The faces in the file, automatically |
-| `packagedFonts()` | No | The packaged families the document uses, plus its default face |
+| `packagedFonts()` | No | The packaged faces the document's text uses |
 | `defaultFonts()` | No | All 20 faces of the five defaults, before the document opens |
-| `googleFonts()` | Yes, for cataloged families | The catalog families the document uses, plus its default face |
+| `googleFonts()` | Yes, for cataloged families | The catalog faces the document's text uses |
 | `customFonts()` | Depends on your URLs | All configured faces when the editor resolves fonts |
 | `loadFonts()` | Depends on your URLs | The URLs you list, immediately |
 | No usable source | No | Nothing; fallback measurement |
@@ -109,7 +109,7 @@ A DOCX file can embed a font with a bold slot that holds a copy of the regular f
 
 The preferred names `DefaultFontFamily`, `DEFAULT_FONT_FAMILIES`, and `ALL_DEFAULT_FONT_FAMILIES` replace the deprecated `WordDefaultFamily`, `WORD_DOCUMENT_DEFAULT_FAMILIES`, and `ALL_WORD_DEFAULT_FAMILIES`. The deprecated aliases still work.
 
-### Choose between lazy and eager loading
+### Load fonts before or after the document opens
 
 `packagedFonts()` and `defaultFonts()` measure the same for the families they share.
 
@@ -117,9 +117,27 @@ The preferred names `DefaultFontFamily`, `DEFAULT_FONT_FAMILIES`, and `ALL_DEFAU
 | --- | --- | --- |
 | Runs | After the document is parsed | Before the document opens |
 | Covers | All seven packaged families | The five common DOCX default fonts |
-| Loads | The families in the document, plus the default face | All 20 faces, 7.4 MB |
+| Loads | The faces the document's text uses | All 20 faces, 7.4 MB |
 | First layout | Fallback measurement, then re-paginates | Correct on the first pass |
 | Undo history across the swap | Kept | Kept |
+
+### Choose how font faces load
+
+A font family has up to four faces: regular, bold, italic, and bold italic. Set `loading` on `packagedFonts()` or `googleFonts()`:
+
+```ts
+packagedFonts({ loading: 'eager' });
+```
+
+| `loading` | Behavior |
+| --- | --- |
+| `'progressive'` (default) | The text switches to its own fonts when the faces it uses arrive, and the other faces load in the background. |
+| `'eager'` | The text switches to its own fonts when every face of its families arrives. |
+| `'lazy'` | Each face loads when the text first uses it. |
+
+A font that you pick in the toolbar keeps the text in its previous font until the new font loads.
+
+A large document (over about 512 KB of uncompressed content) resolves its fonts before its first layout, so it loads every face of its families and lays out once.
 
 Pass `defaultFonts` when a visible re-pagination is worse than the extra bytes. `useDocxSource` then waits for fonts before it returns the document.
 
@@ -197,7 +215,8 @@ Wrap a resolver in `defineFontResolver`. `useDocxSource` uses the marker to tell
 import { defineFontResolver } from '@docx-editor.dev/core/editor';
 
 const brandFonts = defineFontResolver(async ({ families, defaultFamily, resolvedFaces }) => {
-  // Match names against a closed set. Skip faces in resolvedFaces.
+  // Match names against a closed set. Skip faces in resolvedFaces. To load less, read
+  // `faces` from the request: the faces the text uses.
   const wanted = [defaultFamily, ...families].filter((family) => BRAND.has(family));
   return { sources: await loadBrandFaces(wanted) };
 });
@@ -208,12 +227,13 @@ const brandFonts = defineFontResolver(async ({ families, defaultFamily, resolved
 | `families` | Families the document declares, including `w:sym`, `SYMBOL` field, and numbering marker faces |
 | `defaultFamily` | The face for runs that name no font |
 | `resolvedFaces` | Faces that earlier sources already supplied |
+| `faces` | Faces to load, by family, weight, and style: the faces the laid-out text uses and the same faces of their fallback families. A later request names the faces of the families it asks about. Absent before the first layout: load every face then. |
 
 A resolver can also return `supportedFamilies` to add catalog entries to the font picker without bytes.
 
 ## Control loading and caching
 
-Resolvers run when the editor resolves fonts and again when an edit adds a family that is not loaded. Font arrivals keep the selection, pending formatting, and undo history.
+Resolvers run when the editor resolves fonts and again when an edit adds a family or a face that is not loaded. Font arrivals keep the selection, pending formatting, and undo history.
 
 | Rule | Behavior |
 | --- | --- |
@@ -274,11 +294,11 @@ These are the common codes. For the full list, see the `EditorFontErrorCode` typ
 
 Read `editor.fontMeasurement()` to inspect measurement.
 
-| Field       | Meaning                           |
-| ----------- | --------------------------------- |
-| `measurer`  | `'shaped'` or `'fixed'`           |
-| `resolving` | `true` while font resolution runs |
-| `producer`  | Optional source identifier        |
+| Field | Meaning |
+| --- | --- |
+| `measurer` | `'shaped'` or `'fixed'` |
+| `resolving` | `true` until the text shows in its own fonts. Faces that load in the background do not count. |
+| `producer` | Optional source identifier |
 
 `{ measurer: 'fixed', resolving: false }` means no usable font source remains.
 

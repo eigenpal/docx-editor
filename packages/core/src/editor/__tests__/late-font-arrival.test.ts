@@ -13,8 +13,10 @@ import type { FontConfigurationFragment } from '../font-composition.ts';
 import { composeFontOrigins } from '../font-resolver.ts';
 import {
   createLateFontArrival,
+  EDIT_PAUSE_MS,
   lateFacesInstalled,
   lateFontOrigins,
+  whenEditsPause,
   type LateFontDelivery,
 } from '../late-font-arrival.ts';
 
@@ -165,4 +167,37 @@ test('a malformed late answer is reported and ends the wait', async () => {
   expect(delivered).toEqual([]);
   expect(reported).toHaveLength(1);
   expect(arrival.pending()).toBe(false);
+});
+
+test('late faces wait for a pause in editing, so an install never interrupts typing', async () => {
+  const delivered: LateFontDelivery[] = [];
+  let editedAt = performance.now();
+  const arrival = createLateFontArrival({
+    deliver: (_generation, delivery) => delivered.push(delivery),
+    changed: () => {},
+    report: () => {},
+    editedAt: () => editedAt,
+  });
+  arrival.track(Promise.resolve(someFaces), undefined, 1, () => true);
+  await tick();
+  // An edit a moment ago: the faces wait.
+  expect(delivered).toHaveLength(0);
+  editedAt = performance.now() - EDIT_PAUSE_MS;
+  await new Promise((resolve) => setTimeout(resolve, EDIT_PAUSE_MS + 50));
+  expect(delivered).toHaveLength(1);
+});
+
+test('whenEditsPause resolves at once when nothing was edited', async () => {
+  let resolved = false;
+  void whenEditsPause(() => -Infinity).then(() => (resolved = true));
+  await tick();
+  expect(resolved).toBe(true);
+});
+
+test('late faces install after the longest wait, even while editing goes on', async () => {
+  let resolved = false;
+  // An edit "now", on every check: editing never pauses.
+  void whenEditsPause(() => performance.now(), 1000, 50).then(() => (resolved = true));
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  expect(resolved).toBe(true);
 });

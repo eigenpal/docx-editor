@@ -14,8 +14,15 @@ import { registerRefreshHost, type RefreshHost } from './document-refresh-host.t
 import { reviewChangesLocked } from './command-protection.ts';
 import { createPlacementKeeper, createReviewRanker } from './review-ranking.ts';
 import { browserFallbackMeasurer, resolvedFontMeasurement } from './resolved-font-measurement.ts';
-import { updateSurfaceMeasurement } from './surface-measurement.ts';
-import { createLiveFontResolution, liveFontFamilies } from './live-font-resolution.ts';
+import { updateSurfaceMeasurement, usedFontFacesOf } from './surface-measurement.ts';
+import { usedFamiliesCovered } from './font-face-usage.ts';
+import { fontInstallKey } from './font-install-key.ts';
+import {
+  createLiveFontResolution,
+  liveFontFamilies,
+  requestFaces,
+} from './live-font-resolution.ts';
+import type { LiveFontRequest } from './live-font-resolution.ts';
 import { createFontResolutionLifetime } from './font-resolution-lifetime.ts';
 import { composeFontOrigins, defineFontResolver } from './font-resolver.ts';
 import {
@@ -27,7 +34,7 @@ import { isGroupedReviewWrite } from './review-document-decisions.ts';
 import { canEditorViewCommand, createEditorViews } from './docx-editor-view-commands.ts';
 import { bindPopupChromeRequests } from './text-form-field-chrome.ts';
 import { completePendingSuggesting } from './opening-editing-mode.ts';
-import { subscribeDocumentChanges } from './docx-editor-document-changes.ts';
+import { localEditAt, subscribeDocumentChanges } from './docx-editor-document-changes.ts';
 import { attachTargetRefusal, hostWindowOf, registerEditorHost } from './host-realm.ts';
 import { continueOpeningLayout, withOpeningRefresh } from './docx-editor-opening-layout.ts';
 import { formattingCommandActive } from './docx-editor-active.ts';
@@ -197,6 +204,7 @@ import {
 } from './late-font-arrival.ts';
 import { initializeHarfBuzz } from '../layout/harfbuzz-shaper.ts';
 import { availableFontFamilies, configuredDefaultFontFamily } from './font-catalog.ts';
+import { createFontPickHold } from './font-pick-hold.ts';
 import {
   documentFontResolutionRequest,
   admittedDocumentSubstitutions,
@@ -456,33 +464,53 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let resolvedFontConfiguration: FontConfigurationBase | undefined;
   const fontConfiguration = (): FontConfigurationBase | undefined =>
     typeof configuredFonts === 'function' ? resolvedFontConfiguration : configuredFonts;
+  const liveFontDefaultFamily = () => configuredDefaultFontFamily(fontConfiguration());
+  const textInOwnFonts = () =>
+    usedFamiliesCovered(surface, liveFontDefaultFamily(), (family) => fontFamilyCovered(family));
   const liveFonts = createLiveFontResolution(
     () => {
       const session = preparedFontSession ?? surface?.session;
       if (destroyed || !session) return null;
-      const caret = preparedFontSession ? undefined : snapshotNow().formatting?.fontFamily;
+      // A document still preparing has laid out nothing: the surface is the previous one.
+      const laidOut = preparedFontSession ? undefined : surface;
+      const caret = laidOut && (snapshotNow().formatting ?? undefined);
+      const defaultFamily = liveFontDefaultFamily();
       return {
         generation: fontLifetime.generation,
         dynamic: typeof configuredFonts === 'function',
-        families: () =>
-          liveFontFamilies(session, caret, configuredDefaultFontFamily(fontConfiguration())),
+        families: () => liveFontFamilies(session, caret?.fontFamily, defaultFamily),
+        faces: () =>
+          requestFaces(laidOut ? usedFontFacesOf(laidOut) : undefined, defaultFamily, caret),
+        defaultFamily,
       };
     },
-    async (families, late?: LateFontDelivery) => {
+    async (request, late?: LateFontDelivery) => {
       const target = preparedFontSession ? { session: preparedFontSession } : surface;
       lateFonts.settle(late); // quietly; every install exit announces below, refused or thrown
       try {
-        if (target) await resolveDocumentFonts(loadSeq, target, families, late?.full);
+        if (target) await resolveDocumentFonts(loadSeq, target, request, late?.full);
       } finally {
         if (late && !destroyed) (bump(), emitSelectionChange());
       }
     }
   );
   let fontsResolving = false;
+  let installedFontKey: string | undefined;
+  const fontsDone = (): void => ((fontsResolving = false), bump());
   const lateFonts = createLateFontArrival({
     deliver: (generation, delivery) => liveFonts.deliver(generation, delivery),
     changed: () => (bump(), emitSelectionChange()),
     report: (cause) => reportFontError(toEditorFontError(cause)),
+    editedAt: () => localEditAt(surface),
+  });
+  const fontHold = createFontPickHold({
+    dynamic: () => typeof configuredFonts === 'function',
+    shaping: () => !!shapedMeasurer,
+    covered: (family) => fontFamilyCovered(family),
+    served: () => fontConfiguration()?.supportedFamilies,
+    asked: (family) => liveFonts.asked(family),
+    requested: () =>
+      surface ? liveFontFamilies(surface.session, undefined, liveFontDefaultFamily()) : [],
   });
   /**
    * Local-resolution probe for the compatibility notice, created against the attached
@@ -524,7 +552,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       fontFamilyCovered,
       probeLocalFont,
       documentSubstitutedFamilies
-    );
+    ).filter((family) => !fontHold.loading(family));
   };
 
   // ── State tick + cached snapshot ─────────────────────────────────────────────────────
@@ -705,7 +733,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),
-      ...(embeddedFaces ? { fontAlias: embeddedFaces.alias } : {}),
+      ...(embeddedFaces ? { fontAlias: fontHold.alias(embeddedFaces.alias) } : {}),
       ...configSurfaceOptions(config),
       ...(fieldScope.mode === 'editable' ? { fieldResults: fieldScope.mode } : {}),
     };
@@ -964,7 +992,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     disposeEmbeddedFaces();
     disposeShapedFonts();
     disposeShapedFonts = () => {};
-    fontsResolving = false;
+    ((fontsResolving = false), fontHold.clear());
   }
 
   /** {@link forgetFonts}, then measure the mounted document with the fallback measurer. */
@@ -999,7 +1027,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   async function resolveDocumentFonts(
     seq: number,
     mounted: { readonly session: preparedOpen.FontSession },
-    families: readonly string[],
+    asked: LiveFontRequest,
     late?: FontConfigurationFragment
   ): Promise<void> {
     const lifetime = fontLifetime.capture();
@@ -1022,7 +1050,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // fixed measurer, exactly like a failed byte source.
       const { plan: documentFonts, request: documentRequest } = documentFontResolutionRequest(
         mounted.session,
-        families,
+        asked,
         fontConfiguration()
       );
       const request = { ...documentRequest, signal: lifetime.signal };
@@ -1063,8 +1091,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         embedded.length === 0 &&
         (!explicit || (raw?.supportedFamilies?.length && !normalizeFontResolverResult(raw)))
       ) {
-        fontsResolving = false;
-        bump();
+        fontsDone();
         emitSelectionChange();
         return;
       }
@@ -1102,14 +1129,17 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         documentFonts,
         fallbacks
       );
+      // A face request that brought no new bytes keeps the installed fonts: no relayout.
+      const installKey = `${seq}\u0001${lifetime.generation}\u0001${fontInstallKey(fonts)}`;
+      if (installKey === installedFontKey)
+        return (reportDocumentDrops(), fontsDone(), emitSelectionChange());
       // Nothing to shape: the fixed measurer stays. An app that DID supply a
       // configuration deserves to hear that it contributed no usable source (every
       // fetch failed, or the fragment was substitutions-only against no document
       // faces) rather than a byte-limit error from the validator.
       if (fonts.sources.length === 0) {
         reportDocumentDrops();
-        fontsResolving = false;
-        bump();
+        fontsDone();
         if (explicit) {
           reportForLoad(
             new EditorFontError(
@@ -1137,8 +1167,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const bailToFixed = (superseded?: typeof shaping): void => {
         reportDocumentDrops();
         if (superseded) disposeLayoutShaping(superseded);
-        fontsResolving = false;
-        bump();
+        fontsDone();
       };
       // Per-face degradation, reported: an embedded face the validator refused still
       // resolves — to a typed error. Probing here (map lookups, no shaping work) is what
@@ -1212,16 +1241,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       } finally {
         reportDocumentDrops();
       }
-      // Paint-side twin, BEFORE the remount so the first shaped paint already carries the
-      // glyphs. Only faces the validator ADMITTED are handed over, and each resolves
-      // through the shaping snapshot so the bytes registered are the validated, owned
-      // copies — never the raw file view.
-      //
-      // App-supplied sources register alongside the embedded ones. They measure shaped
-      // either way, but unregistered they PAINT in whatever the platform picks for the
-      // name, so a document laid out on Carlito metrics would be drawn in something else
-      // — correct pagination, wrong glyphs. Aliasing (rather than registering the family
-      // name itself) is what keeps that safe; see `embedded-font-faces.ts`.
+      // Paint-side twin, BEFORE the remount: only ADMITTED faces, as the validated copies.
+      // App sources register too, or paint would draw a name in whatever the platform picks
+      // over shaped metrics. Aliases keep that safe; see `embedded-font-faces.ts`.
       const admitted = admittedFontSources(fonts.sources, shaping.fonts);
       const registration = await registerEmbeddedFontFaces(
         admitted,
@@ -1251,11 +1273,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           shaping.fonts,
           explicit?.substitutions
         );
+        fontHold.release(fontFamilyCovered); // a picked family whose face arrived shows in it
+        const paintAlias = fontHold.alias(embeddedFaces?.alias);
         const fallbackResolution = browserFallbackMeasurer(
           container,
           scaleOf(),
           mounted.session,
-          embeddedFaces?.alias
+          paintAlias
         );
         const measurement = resolvedFontMeasurement(
           shaping,
@@ -1263,7 +1287,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           fallbackResolution,
           scaleOf(),
           ++fontMeasurementEpoch,
-          (error) => current() && reportForLoad(error)
+          (error) => current() && reportForLoad(error),
+          fontHold.family
         );
         shapedMeasurer = measurement.measurer;
         shapedProducer = measurement.producer;
@@ -1272,7 +1297,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           updateSurfaceMeasurement(surface, {
             measurer: shapedMeasurer,
             producer: shapedProducer,
-            fontAlias: embeddedFaces?.alias,
+            fontAlias: paintAlias,
             defaultFontFamily: configuredDefaultFontFamily(fontConfiguration()),
           });
         }
@@ -1297,14 +1322,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         throw error;
       }
       disposeShapedFonts = () => disposeLayoutShaping(shaping);
+      installedFontKey = installKey;
       previous.disposeShapedFonts();
       previous.embeddedFaces?.dispose();
       bump();
       emitSelectionChange();
     } catch (error) {
       if (!current()) return;
-      fontsResolving = false;
-      bump();
+      fontsDone();
       reportForLoad(toEditorFontError(error));
     }
   }
@@ -1318,12 +1343,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const scope = surface?.activeScope?.() ?? SCOPE_BODY;
     return {
       scope,
-      // "No document to work with, and nothing went wrong" — deliberately NOT "nothing
-      // painted". Bytes count from the moment they are handed over, whether they are
-      // still waiting for `attach` (`pendingBytes`) or already mounted (`surface`), so
-      // this survives a detach/remount and never depends on a mount point existing.
-      //
-      // That distinction is load-bearing: a host may legitimately gate its
+      // "No document to work with, and nothing went wrong" — NOT "nothing painted". Bytes
+      // count once handed over, pending (`pendingBytes`) or mounted (`surface`), so this
+      // survives a detach/remount. That is load-bearing: a host may legitimately gate its
       // `DocxEditor.Content` on this flag, and a definition that only cleared once pages
       // painted would deadlock — nothing paints until Content mounts, and Content never
       // mounts while the flag is set. A parse failure clears it too; a document that
@@ -1446,14 +1468,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // snapshots, and a host subscribed through `useSyncExternalStore` never re-renders —
       // freezing every control whose state is a question the snapshot does not carry,
       // because `toolbarCommandState` re-asks `Editor.can`/`isActive` only on a store tick.
-      //
-      // Caret: Decrease Indent stayed live on a list item already at the outermost level,
-      // and the bullet button stayed pressed after the caret moved into a numbered one.
-      //
-      // Revision: an edit that changes only STRUCTURE leaves formatting, page, canUndo and
-      // canRedo all equal at an unmoved caret. Toggling a bullet OFF (a second press) left
-      // the button pressed, and one Increase Indent that reached the deepest level a
-      // definition declares left the button live for a press that could only be refused.
+      // A structure-only edit at an unmoved caret leaves every compared field equal.
       if (
         snapshotsEqual(next, previous) &&
         caretUnmoved &&
@@ -1846,7 +1861,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     fontMeasurement: () => ({
       measurer: shapedMeasurer && !stillOpening() ? ('shaped' as const) : ('fixed' as const),
-      resolving: fontsResolving || lateFonts.pending() || stillOpening(),
+      resolving: fontsResolving || stillOpening() || (lateFonts.pending() && !textInOwnFonts()),
       ...(shapedMeasurer && shapedProducer && !stillOpening() ? { producer: shapedProducer } : {}),
     }),
 
@@ -1989,6 +2004,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         );
       }
       historyGroups.note(command);
+      if (command.type === 'setMarkAttr' && command.mark === 'fontFamily')
+        fontHold.pick(command.value, snapshotNow().formatting?.fontFamily);
       // A view command: it edits nothing, so it runs before the document gate, and it works
       // on a document that failed to open — the pane is still the reader's to close. Not on a
       // DESTROYED editor, though: there is no reader left.
@@ -2399,19 +2416,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // selection below gets clamped inside the open story and no body card can ever
         // become active again. A change in a text box opens that box (`review-story-entry.ts`).
         openBodyStoryOf(surface, (reviewItemSpan(item!) ?? range).start);
-        // A CARET AT THE START, not a selection over the span.
-        //
-        // Opening a card is a request to look at a change, not a request to select its
-        // text — and selecting it took the reader's own selection away to say something
-        // the page already said: the open item draws its own `--active` band, at full
-        // tint with a rule under it, which is what marks the change while the card is
-        // open. The selection added a second, competing highlight and left the reader
-        // holding a range they never made, one keystroke from replacing the text under review.
-        //
-        // The caret still MOVES, to the start of the span. That is what keeps the keyboard
-        // where the reader is looking, what `activeReviewKey` classifies at, and what the
-        // reveal below scrolls to; a header, footer or note card has always landed a bare
-        // caret this way, so the body branch now agrees with them.
+        // A CARET AT THE START, not a selection over the span. Opening a card asks to look at
+        // a change: the open item draws its own `--active` band, and a selection would add a
+        // second highlight and leave the reader holding a range one keystroke from replacing
+        // the text under review. The caret still MOVES to the start of the span, so the
+        // keyboard, `activeReviewKey` and the reveal below follow it, as for header, footer
+        // and note cards.
         const span = reviewItemSpan(item!) ?? range;
         const caret = { paragraphId: span.start.paragraphId, offset: span.start.offset };
         // Through `activateReview`, not `setSelection`: the card this opens has to be named

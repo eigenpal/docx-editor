@@ -290,25 +290,49 @@ describe('packagedFonts', () => {
     expect(direct.substitutions).toHaveLength(0);
   });
 
-  test('a PARTLY covered family is loaded whole, so no face is left without bytes', async () => {
+  test('a PARTLY covered family loads the faces it lacks, so no face is left without bytes', async () => {
     const { fetcher, requested } = countingFetcher();
     // The composition an earlier origin of hand-supplied brand bytes produces: regular
     // Arial and nothing else. Reading that as "Arial is covered" left bold, italic and
     // bold-italic Arial with neither bytes nor a substitution.
-    const fragment = await packagedFonts({ fetcher, install: false })({
+    const fragment = await packagedFonts({ fetcher })({
       families: ['Arial'],
       defaultFamily: 'Arial',
       resolvedFaces: [{ family: 'Arial', weight: 400, style: 'normal' }],
     });
 
     expect(fragment.families).toEqual(['Arial']);
-    expect(requested).toHaveLength(4);
-    // A substitution for every face, including the one the earlier origin covers —
-    // first-wins composition drops that one, and keeps the three that matter.
-    expect(fragment.substitutions).toHaveLength(4);
+    // The three faces the earlier origin lacks, and not the regular it paints.
+    expect(requested.map((url) => url.slice(url.lastIndexOf('/') + 1)).sort()).toEqual([
+      'LiberationSans-Bold.ttf',
+      'LiberationSans-BoldItalic.ttf',
+      'LiberationSans-Italic.ttf',
+    ]);
     expect(
       fragment.substitutions.map((entry) => `${entry.from.weight}/${entry.from.style}`).sort()
-    ).toEqual(['400/italic', '400/normal', '700/italic', '700/normal']);
+    ).toEqual(['400/italic', '700/italic', '700/normal']);
+  });
+
+  test('a face covered only under the substitute name is redirected, not loaded', async () => {
+    const { fetcher, requested } = countingFetcher();
+    const fragment = await packagedFonts({ fetcher })({
+      families: [],
+      defaultFamily: 'Calibri',
+      resolvedFaces: [{ family: 'Carlito', weight: 400, style: 'normal' }],
+      faces: [
+        { family: 'Calibri', weight: 400, style: 'normal' },
+        { family: 'Calibri', weight: 700, style: 'normal' },
+      ],
+    });
+    expect(requested.map((url) => url.slice(url.lastIndexOf('/') + 1))).toEqual([
+      'Carlito-Bold.ttf',
+    ]);
+    expect(
+      fragment.substitutions.map(
+        (entry) =>
+          `${entry.from.family} ${entry.from.weight} -> ${entry.to.family} ${entry.to.weight}`
+      )
+    ).toEqual(['Calibri 400 -> Carlito 400', 'Calibri 700 -> Carlito 700']);
   });
 
   test('a face covered under only ONE of its two names still counts', async () => {

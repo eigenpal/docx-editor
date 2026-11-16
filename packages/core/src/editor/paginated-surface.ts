@@ -39,7 +39,6 @@ import { listParagraphStyleId } from './surface-list-style.ts';
 import { ensureSeparatorStyle } from './list-separator-style.ts';
 import { armContentControlMenuDismiss } from './content-control-widget-dismiss.ts';
 import { contentControlMenuAnchor } from './content-control-widget-anchor.ts';
-import { contentControlWidgetValue } from './content-control-widget-session.ts';
 import { createFormFieldShading } from './surface-form-field-shading.ts';
 import {
   FIELD_CODE_INPUT_REFUSAL,
@@ -65,7 +64,12 @@ import {
   registerFormFieldIdentity,
   writeRejectionReason,
 } from './command-protection.ts';
-import { registerSurfaceMeasurement } from './surface-measurement.ts';
+import {
+  browserDefaultMeasurer,
+  createFontFaceUsage,
+  registerSurfaceMeasurement,
+  registerUsedFontFaces,
+} from './surface-measurement.ts';
 import {
   PROGRESSIVE_OPEN_FIRST_BLOCKS,
   completeProgressiveOpen,
@@ -86,6 +90,7 @@ import {
   contentControlValueOps,
   contentControlWidgetItems,
   contentControlWidgetDate,
+  contentControlWidgetValue,
 } from './content-control-widget-session.ts';
 import { createContentControlPictureWidget } from './content-control-picture-widget.ts';
 import {
@@ -149,7 +154,6 @@ import {
   createLayoutScheduler,
   createLayoutSession,
   createParagraphLayoutCache,
-  resolveDefaultSurfaceMeasurer,
   cellSelectionRects,
   formatPageNumber,
   emptyTocPlaceholderParagraphIds,
@@ -195,7 +199,6 @@ import { afterNextPaint, landingGuard } from './surface-composition-commit.ts';
 import { createSurfaceHosting } from './surface-host-move.ts';
 import { reviewItemsAtSelection } from '../store/store/review-items.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
-import { surfaceSelectionMarkRects } from './surface-selection-ops.ts';
 import type { CaretGeometry } from '../layout/semantic-interaction.ts';
 import { paintSelectionOverlay, type OverlayRect } from '@docx-editor.dev/core/output';
 // By module path, like the roster walk below: dropping a retained paint is an engine
@@ -223,7 +226,6 @@ import {
   breakMarkStringsCacheToken,
   breakMarkStringsFromTranslate,
 } from '../output/semantic-break-marks.ts';
-import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import {
   collaborationParagraphAt,
   localCollaborationSelection,
@@ -253,6 +255,7 @@ import {
   cellsPlainText,
   orderedRangeOf,
   rangePlainText,
+  surfaceSelectionMarkRects,
   type RangeDeletionPlan,
 } from './surface-selection-ops.ts';
 import {
@@ -435,16 +438,11 @@ export function mountPaginatedSurface(
   let formattingOutsideToc = false;
   // The glyphs a serif Korean face lacks fall back to serif faces, in paint and measurement.
   const serifHangulFace = fontTableSerifHangulFace(session.currentPackage());
-  // Editor seam creates the canvas; layout only consumes the injected context.
-  let defaults = options.measurer
-    ? null
-    : resolveDefaultSurfaceMeasurer(scale, {
-        context: tryCreateBrowserCanvasContext(container.ownerDocument),
-        // Measure with the same face paint draws with.
-        ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
-        serifHangulFace,
-      });
-  let measurer = options.measurer ?? defaults!.measurer;
+  const defaultMeasurer = () =>
+    browserDefaultMeasurer(container, scale, options.fontAlias, serifHangulFace);
+  let defaults = options.measurer ? null : defaultMeasurer();
+  const faceUsage = createFontFaceUsage();
+  let measurer = faceUsage.wrap(options.measurer ?? defaults!.measurer);
   // Incremental layout machinery — without these every keystroke re-lays out the document.
   const layoutCache = createParagraphLayoutCache<never>();
   let layoutSession = createLayoutSession();
@@ -4467,12 +4465,8 @@ export function mountPaginatedSurface(
           : null;
         scale = nextScale;
         if (!options.measurer) {
-          defaults = resolveDefaultSurfaceMeasurer(scale, {
-            context: tryCreateBrowserCanvasContext(container.ownerDocument),
-            ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
-            serifHangulFace,
-          });
-          measurer = defaults.measurer;
+          defaults = defaultMeasurer();
+          measurer = faceUsage.wrap(defaults.measurer);
         }
         producer = producerIdentity();
         furnitureSource = createCurrentFurnitureSource(revisionFilter());
@@ -6299,6 +6293,7 @@ export function mountPaginatedSurface(
     tableInteraction.refreshLabels();
     tableSelectHandle?.update();
   };
+  registerUsedFontFaces(surface, faceUsage.faces);
   surface.refreshTableInteractionLabels = () => {
     tableInteraction.refreshLabels();
     tableSelectHandle?.update();
@@ -6313,7 +6308,7 @@ export function mountPaginatedSurface(
     }),
     (next) => {
       options = { ...options, ...next };
-      measurer = options.measurer ?? defaults!.measurer;
+      measurer = faceUsage.wrap(options.measurer ?? defaults!.measurer);
       producer = producerIdentity();
     },
     () => {

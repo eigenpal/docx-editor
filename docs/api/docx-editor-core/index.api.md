@@ -3316,6 +3316,7 @@ export interface FontOriginFailure {
 // @public
 export interface FontResolutionRequest {
     readonly defaultFamily: string;
+    readonly faces?: readonly FontFaceRequest[];
     readonly families: readonly string[];
     readonly resolvedFaces?: readonly FontFaceRequest[];
     readonly signal?: AbortSignal;

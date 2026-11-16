@@ -68,7 +68,9 @@ import {
   FACES,
   FAMILY_PLANS,
   PACKAGED_ONLY_FAMILIES,
+  facesNeeded,
   planSourceFace,
+  uncoveredFaces,
   type DefaultFontFamily,
 } from './family-plans.ts';
 import {
@@ -76,11 +78,13 @@ import {
   GOOGLE_FONT_CATALOG,
   type GoogleFontFace,
 } from './google-catalog.generated.ts';
+import { canIdle, fetchFontFile, idle } from './byte-cache.ts';
 import { GOOGLE_CJK_FAMILY_NAMES, googleCjkFaceFor } from './google-cjk.ts';
 import { loadDefaultFonts } from './index.ts';
 import type {
   DefaultFontSource,
   DefaultFontSubstitution,
+  FontLoading,
   FontOriginRequest,
   FontResolverMark,
 } from './index.ts';
@@ -119,6 +123,7 @@ export type {
   DefaultFontFaceRequest,
   DefaultFontSource,
   DefaultFontSubstitution,
+  FontLoading,
   FontOriginRequest,
   FontResolverMark,
   ResolvedFontFace,
@@ -186,6 +191,20 @@ export interface GoogleFontsOptions {
   /** Per-face failures. Defaults to a console warning; pass a handler to route them. */
   readonly onFailure?: (failure: GoogleFontLoadFailure) => void;
   /**
+   * How the faces of each font family load. A family has up to four faces: regular, bold,
+   * italic, and bold italic. The text shows with estimated measurements until its fonts arrive.
+   *
+   * - `'progressive'` (default): the text switches to its own fonts when the faces it uses
+   *   arrive. The other faces of the same families then load in the background, when the
+   *   browser is idle, and install in one step ({@link GoogleFontsFragment.deferred}). A later bold
+   *   or italic edit needs no download. Outside a browser, the other faces load when text
+   *   first uses them.
+   * - `'eager'`: the text switches to its own fonts when every face of its families arrives.
+   * - `'lazy'`: only the faces the text uses load. Another face loads when text first uses
+   *   it, and the text lays out again when it arrives.
+   */
+  readonly loading?: FontLoading;
+  /**
    * Serve Chinese, Japanese, and Korean families, such as SimSun, MS Mincho, and Malgun
    * Gothic, with the regional Noto Sans face for each: JP, SC, TC, or KR. Off by default.
    *
@@ -243,7 +262,11 @@ export interface GoogleFontsFragment {
   readonly sources: readonly DefaultFontSource[];
   readonly substitutions: readonly DefaultFontSubstitution[];
   readonly failures: readonly GoogleFontLoadFailure[];
-  /** With `cjk` loading in the background: the CJK faces, settled after they download. */
+  /**
+   * The faces that load in the background, settled after they download: the CJK faces with
+   * `cjk.background`, and the other faces of the families in use
+   * ({@link GoogleFontsOptions.loading}).
+   */
   readonly deferred?: Promise<GoogleFontsFragment>;
 }
 
@@ -258,203 +281,6 @@ const catalogByFamily = ((): ReadonlyMap<string, readonly GoogleFontFace[]> => {
   }
   return byFamily;
 })();
-
-/**
- * Bytes already fetched this session, keyed by pinned URL — and PER FETCHER.
- *
- * Immutable URLs make the cache trivially safe to share, and sharing is what makes a
- * second document naming the same family cost nothing; in-flight promises are cached too,
- * so two editors mounting at once fetch a face once. Keying on the fetcher keeps that
- * sharing where it belongs: hosts all using the global `fetch` share one cache, while a
- * host that supplied its own (a CSP-constrained proxy, a test double) never receives
- * bytes some other fetcher produced. A `WeakMap` so a discarded fetcher's bytes go too.
- */
-const MAX_CACHED_FONT_BYTES = 16 * 1024 * 1024;
-const MAX_CACHED_FONT_FACES = 64;
-/**
- * CJK faces cache apart, under a budget that holds all four regions (23.6 MB). In the shared
- * 16 MB cache one Chinese face would evict every Latin face, and two regions would never fit.
- */
-const MAX_CACHED_CJK_FONT_BYTES = 24 * 1024 * 1024;
-
-interface PendingFontFetch {
-  /** Signal-scoped waiters still racing this fetch; the last aborting one cancels it. */
-  waiters: number;
-  /** An unsigned waiter joined, so no abort may cancel the shared work under it. */
-  pinned: boolean;
-  readonly controller: AbortController;
-}
-
-interface FontByteCache {
-  readonly entries: Map<string, Promise<Uint8Array>>;
-  readonly sizes: Map<string, number>;
-  /** In-flight state per URL; absent once the entry holds settled bytes. */
-  readonly pending: Map<string, PendingFontFetch>;
-  totalBytes: number;
-  readonly maxBytes: number;
-}
-
-const byteCaches = new WeakMap<object, FontByteCache>();
-const cjkByteCaches = new WeakMap<object, FontByteCache>();
-
-function cacheFor(fetcher: typeof fetch, cjk: boolean): FontByteCache {
-  const caches = cjk ? cjkByteCaches : byteCaches;
-  let cache = caches.get(fetcher);
-  if (!cache) {
-    const maxBytes = cjk ? MAX_CACHED_CJK_FONT_BYTES : MAX_CACHED_FONT_BYTES;
-    cache = { entries: new Map(), sizes: new Map(), pending: new Map(), totalBytes: 0, maxBytes };
-    caches.set(fetcher, cache);
-  }
-  return cache;
-}
-
-function cacheSuccess(cache: FontByteCache, url: string, bytes: Uint8Array): void {
-  const previous = cache.sizes.get(url) ?? 0;
-  cache.entries.delete(url);
-  cache.sizes.delete(url);
-  cache.totalBytes -= previous;
-  if (bytes.byteLength > cache.maxBytes) return;
-  cache.entries.set(url, Promise.resolve(bytes));
-  cache.sizes.set(url, bytes.byteLength);
-  cache.totalBytes += bytes.byteLength;
-  while (cache.entries.size > MAX_CACHED_FONT_FACES || cache.totalBytes > cache.maxBytes) {
-    // Evict oldest SETTLED entries only. A pending entry has no recorded bytes to reclaim,
-    // and dropping its cache reference would both orphan the downloaded bytes (the settle
-    // handler declines to record a replaced entry) and break single-flight for new callers.
-    let oldest: string | undefined;
-    for (const key of cache.entries.keys()) {
-      if (cache.sizes.has(key)) {
-        oldest = key;
-        break;
-      }
-    }
-    if (oldest === undefined) break;
-    cache.entries.delete(oldest);
-    cache.totalBytes -= cache.sizes.get(oldest) ?? 0;
-    cache.sizes.delete(oldest);
-  }
-}
-
-async function fetchFace(
-  face: GoogleFontFace,
-  fetcher: typeof fetch,
-  signal?: AbortSignal,
-  cjk = false
-): Promise<Uint8Array> {
-  const byteCache = cacheFor(fetcher, cjk);
-  const inFlight = byteCache.entries.get(face.url);
-  const inFlightState = inFlight ? byteCache.pending.get(face.url) : undefined;
-  // Reuse a settled entry, or join a shared in-flight fetch. The one refusal: a signal-scoped
-  // caller never joins a PINNED fetch (one an unsigned caller owns), because that fetch may be
-  // stranded and nothing can cancel it — the caller replaces it with work it can cancel.
-  if (inFlight && (!inFlightState || !signal || !inFlightState.pinned)) {
-    // Map insertion order is the LRU order. Pending entries can move too; successful byte
-    // accounting is unchanged until their completion records the actual size.
-    byteCache.entries.delete(face.url);
-    byteCache.entries.set(face.url, inFlight);
-    if (!inFlightState) return raceWithAbort(inFlight, signal);
-    return joinPendingFetch(inFlight, inFlightState, signal);
-  }
-  // The fetch is cache-owned under its own controller: concurrent documents share ONE download
-  // per face instead of one each. Signal-scoped waiters are refcounted and the LAST aborting
-  // waiter cancels the shared request, so caller-owned work stays physically cancellable. A
-  // failed or cancelled fetch is forgotten below, so it can never poison retries.
-  const controller = new AbortController();
-  const state: PendingFontFetch = { waiters: 0, pinned: !signal, controller };
-  const pending = (async () => {
-    const response = await fetcher(face.url, { signal: controller.signal });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    // The cheap half of content-checking, done here so an error page served with 200
-    // never reaches the engine. The hash half is the engine's: it re-derives on admission
-    // and refuses a mismatch, so a tampered asset fails loudly there rather than silently.
-    if (bytes.byteLength !== face.byteLength) {
-      throw new Error(`unexpected byte length ${bytes.byteLength}, catalogued ${face.byteLength}`);
-    }
-    return bytes;
-  })();
-  byteCache.entries.set(face.url, pending);
-  byteCache.pending.set(face.url, state);
-  // A failed fetch must not be remembered as a failure forever: the next document gets to
-  // try again. Only successes stay cached. Identity checks keep a replaced fetch's late
-  // settlement from touching its successor's cache slot.
-  pending.then(
-    (bytes) => {
-      if (byteCache.pending.get(face.url) === state) byteCache.pending.delete(face.url);
-      if (byteCache.entries.get(face.url) === pending) cacheSuccess(byteCache, face.url, bytes);
-    },
-    () => {
-      if (byteCache.pending.get(face.url) === state) byteCache.pending.delete(face.url);
-      if (byteCache.entries.get(face.url) !== pending) return;
-      byteCache.entries.delete(face.url);
-      byteCache.sizes.delete(face.url);
-    }
-  );
-  return joinPendingFetch(pending, state, signal);
-}
-
-function joinPendingFetch(
-  work: Promise<Uint8Array>,
-  state: PendingFontFetch,
-  signal: AbortSignal | undefined
-): Promise<Uint8Array> {
-  if (!signal) {
-    // An unsigned waiter can never abandon the fetch, so no abort may cancel it either.
-    state.pinned = true;
-    return work;
-  }
-  if (signal.aborted) {
-    return Promise.reject(signal.reason ?? new Error('Font loading was aborted'));
-  }
-  state.waiters += 1;
-  let counted = true;
-  const leave = (abandoning: boolean): void => {
-    if (!counted) return;
-    counted = false;
-    state.waiters -= 1;
-    if (abandoning && state.waiters === 0 && !state.pinned) {
-      state.controller.abort(signal.reason ?? new Error('Font loading was aborted'));
-    }
-  };
-  return new Promise<Uint8Array>((resolve, reject) => {
-    const abort = (): void => {
-      reject(signal.reason ?? new Error('Font loading was aborted'));
-      leave(true);
-    };
-    signal.addEventListener('abort', abort, { once: true });
-    work.then(
-      (value) => {
-        signal.removeEventListener('abort', abort);
-        leave(false);
-        resolve(value);
-      },
-      (error: unknown) => {
-        signal.removeEventListener('abort', abort);
-        leave(false);
-        reject(error);
-      }
-    );
-  });
-}
-
-function raceWithAbort<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
-  if (!signal) return work;
-  if (signal.aborted) return Promise.reject(signal.reason ?? new Error('Font loading was aborted'));
-  return new Promise<T>((resolve, reject) => {
-    const abort = (): void => reject(signal.reason ?? new Error('Font loading was aborted'));
-    signal.addEventListener('abort', abort, { once: true });
-    work.then(
-      (value) => {
-        signal.removeEventListener('abort', abort);
-        resolve(value);
-      },
-      (error: unknown) => {
-        signal.removeEventListener('abort', abort);
-        reject(error);
-      }
-    );
-  });
-}
 
 /**
  * A {@link FontResolver} that serves the document's declared families from the pinned
@@ -539,10 +365,22 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
     // renders in one, and leaving it out would fetch nothing for a file that is entirely
     // default-styled.
     const wanted = new Map<string, readonly GoogleFontFace[]>();
+    /** Catalog faces of the families in use that no text uses yet, with their Word names. */
+    const otherCatalogFaces = new Map<GoogleFontFace, string[]>();
+    // The faces the document uses under one declared name, or every face when the request
+    // does not say.
+    // `'eager'` loads every face, as if the request named none.
+    const neededFaces = facesNeeded(options.loading === 'eager' ? undefined : request.faces);
+    const needs = (declared: string, face: { weight: number; style: string }): boolean =>
+      neededFaces(declared).some(
+        (need) => need.weight === face.weight && need.style === face.style
+      );
     const substitutions: DefaultFontSubstitution[] = [];
     const failures: GoogleFontLoadFailure[] = [];
     /** Declared spelling -> the packaged Word family whose bundled bytes answer it. */
     const packaged = new Map<string, DefaultFontFamily>();
+    /** The faces each bundled family loads. */
+    const packagedStyles = new Map<DefaultFontFamily, Set<(typeof FACES)[number]>>();
     /** Regional CJK faces to load, with the declared names each one stands in for. */
     const cjkWanted = new Map<GoogleFontFace, string[]>();
 
@@ -559,9 +397,10 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
         // EVERY packaged face, or none — the same rule the catalog path below applies, and
         // for the same reason: this reads a family whole, so skipping one whose regular is
         // covered but whose bold is not would leave the bold with no bytes at all.
+        const needed = neededFaces(declared);
         const bundledCovered =
           plan !== undefined &&
-          FACES.every((face) => {
+          needed.every((face) => {
             const source = planSourceFace(plan, face);
             return (
               already.has(faceKey(declared, face.weight, face.style)) ||
@@ -570,6 +409,9 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
           });
         if (plan && (!allowed || allowed.has(plan.substitute.toLowerCase())) && !bundledCovered) {
           packaged.set(declared, bundled);
+          const styles = packagedStyles.get(bundled) ?? new Set();
+          for (const face of needed) styles.add(face);
+          packagedStyles.set(bundled, styles);
         }
         continue;
       }
@@ -581,26 +423,36 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
           (!allowed || allowed.has(regional.family.toLowerCase())) &&
           // Every face, or none, as on the catalog path: a covered regular must not leave the
           // bold and italic with neither bytes nor a substitution.
-          !FACES.every((face) => already.has(faceKey(declared, face.weight, face.style)))
+          neededFaces(declared).length > 0 &&
+          !neededFaces(declared).every((face) =>
+            already.has(faceKey(declared, face.weight, face.style))
+          )
         ) {
           cjkWanted.set(regional, [...(cjkWanted.get(regional) ?? []), declared]);
         }
         continue;
       }
       if (allowed && !allowed.has(faces[0]!.family.toLowerCase())) continue;
+      // Only the faces the document uses. A face the catalog lacks (a family with no italic)
+      // stays unloaded, as before.
+      const used = faces.filter((face) => needs(declared, face));
+      if (used.length === 0) continue;
       // EVERY catalogued face, or none. A family is fetched whole, so skipping one whose
       // regular is covered but whose bold is not would leave the bold with neither bytes
       // nor a substitution. Each face counts as covered under the name the document wrote
       // OR under the catalog family this would fetch, because an earlier origin may have
       // reported either — `packagedFonts()` reports both, a raw byte fragment only the
       // face it supplied.
-      const covered = faces.every(
+      const covered = used.every(
         (face) =>
           already.has(faceKey(declared, face.weight, face.style)) ||
           already.has(faceKey(face.family, face.weight, face.style))
       );
       if (covered) continue;
-      wanted.set(faces[0]!.family, faces);
+      wanted.set(faces[0]!.family, used);
+      for (const face of faces)
+        if (!used.includes(face))
+          otherCatalogFaces.set(face, [...(otherCatalogFaces.get(face) ?? []), declared]);
       // Only when the document's own name differs from the face being loaded: a run
       // saying "Carlito" needs the bytes, not a Carlito -> Carlito redirect.
       //
@@ -610,7 +462,7 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
       // this the bytes would be fetched and measured but painted in a platform
       // substitute — the alias is only ever found under the name the run actually wrote.
       if (faces[0]!.family !== declared) {
-        for (const face of faces) {
+        for (const face of used) {
           substitutions.push({
             from: { family: declared, weight: face.weight, style: face.style },
             to: { family: face.family, weight: face.weight, style: face.style },
@@ -620,20 +472,35 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
     }
 
     const sources: DefaultFontSource[] = [];
-    const packagedJob = async (): Promise<void> => {
-      if (packaged.size === 0) return;
-      const fragment = await loadDefaultFonts({
-        families: [...new Set(packaged.values())],
-        fetcher,
-        signal: request.signal,
-      });
-      sources.push(...fragment.sources);
+    /** Load packaged faces, and map them onto the names the document wrote. */
+    const loadPackaged = async (
+      entries: readonly (readonly [DefaultFontFamily, ReadonlySet<(typeof FACES)[number]>])[],
+      into: { sources: DefaultFontSource[]; substitutions: DefaultFontSubstitution[] },
+      failed: GoogleFontLoadFailure[]
+    ): Promise<void> => {
+      if (entries.length === 0) return;
+      const fragments = await Promise.all(
+        entries.map(([family, styles]) =>
+          loadDefaultFonts({
+            families: [family],
+            faces: FACES.filter((face) => styles.has(face)),
+            fetcher,
+            signal: request.signal,
+          })
+        )
+      );
+      const fragment = {
+        sources: fragments.flatMap((part) => part.sources),
+        substitutions: fragments.flatMap((part) => part.substitutions),
+        failures: fragments.flatMap((part) => part.failures),
+      };
+      into.sources.push(...fragment.sources);
       // Re-keyed onto the DOCUMENT's spelling for the same reason the catalog path does
       // it: the painter finds a face's alias under the name the run actually wrote.
       for (const [declared, family] of packaged) {
         for (const entry of fragment.substitutions) {
           if (entry.from.family !== family) continue;
-          substitutions.push({ ...entry, from: { ...entry.from, family: declared } });
+          into.substitutions.push({ ...entry, from: { ...entry.from, family: declared } });
         }
       }
       for (const failure of fragment.failures) {
@@ -642,19 +509,28 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
           url: failure.file,
           diagnostic: failure.diagnostic,
         };
-        failures.push(record);
+        failed.push(record);
         if (options.onFailure) options.onFailure(record);
         else console.warn(`[fonts] ${record.family} (${record.url}): ${record.diagnostic}`);
       }
     };
+    const packagedJob = (): Promise<void> =>
+      loadPackaged([...packagedStyles], { sources, substitutions }, failures);
     const fetchInto = async (
       face: GoogleFontFace,
       into: DefaultFontSource[],
       failed: GoogleFontLoadFailure[],
-      cjkFace = false
+      cjkFace = false,
+      low = false
     ): Promise<void> => {
       try {
-        const bytes = await fetchFace(face, fetcher, request.signal, cjkFace);
+        const bytes = await fetchFontFile(
+          { url: face.url, byteLength: face.byteLength, source: 'catalogued' },
+          fetcher,
+          request.signal,
+          cjkFace,
+          low
+        );
         into.push({
           request: { family: face.family, weight: face.weight, style: face.style },
           id: `google-fonts:${face.family}#${face.weight}#${face.style}`,
@@ -724,6 +600,7 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
       immediate,
       cjkWanted.size > 0 && !deferCjk ? loadCjk() : undefined,
     ]);
+    const otherLater = loadOtherFacesLater();
     if (cjkNow) {
       sources.push(...cjkNow.sources);
       substitutions.push(...cjkNow.substitutions);
@@ -738,12 +615,88 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
       substitutions,
       failures,
       supportedFamilies,
-      ...(cjkLater ? { deferred: cjkLater } : {}),
+      ...(cjkLater || otherLater ? { deferred: bothLater(cjkLater, otherLater)! } : {}),
     };
+
+    /**
+     * The faces of the families in use that no text uses yet and no earlier origin paints,
+     * loaded when the browser is idle after the faces in use: they never share its bandwidth.
+     */
+    function loadOtherFacesLater(): Promise<GoogleFontsFragment> | undefined {
+      if (
+        !request.faces ||
+        options.loading === 'lazy' ||
+        options.loading === 'eager' ||
+        request.signal?.aborted
+      )
+        return;
+      if (!canIdle()) return;
+      const covered = (family: string, weight: number, style: string): boolean =>
+        already.has(faceKey(family, weight, style));
+      const catalog = [...otherCatalogFaces].filter(
+        ([face]) => !covered(face.family, face.weight, face.style)
+      );
+      const bundled = [...new Set(packaged.values())].flatMap((family) => {
+        const faces = uncoveredFaces(family, FAMILY_PLANS.get(family)!, covered).filter(
+          (face) => !packagedStyles.get(family)?.has(face)
+        );
+        return faces.length > 0 ? [[family, new Set(faces)] as const] : [];
+      });
+      if (catalog.length === 0 && bundled.length === 0) return;
+      const later = idle(request.signal).then(async (): Promise<GoogleFontsFragment> => {
+        const into = {
+          sources: [] as DefaultFontSource[],
+          substitutions: [] as DefaultFontSubstitution[],
+        };
+        const failed: GoogleFontLoadFailure[] = [];
+        await Promise.all([
+          ...catalog.map(([face]) => fetchInto(face, into.sources, failed, false, true)),
+          loadPackaged(bundled, into, failed),
+        ]);
+        const loaded = new Set(into.sources.map((source) => fontKey(source.request)));
+        for (const [face, declaredNames] of catalog) {
+          if (!loaded.has(fontKey(face))) continue;
+          for (const declared of declaredNames)
+            if (face.family !== declared)
+              into.substitutions.push({
+                from: { family: declared, weight: face.weight, style: face.style },
+                to: { family: face.family, weight: face.weight, style: face.style },
+              });
+        }
+        into.sources.sort((left, right) => left.id.localeCompare(right.id));
+        return { ...into, failures: failed, supportedFamilies };
+      });
+      // Nothing may wait on it: a cancelled or failed background load is not an error.
+      later.catch(() => {});
+      return later;
+    }
   }
 
   const descriptor = { value: true, enumerable: false, configurable: true } as const;
   Object.defineProperty(resolveGoogleFonts, FONT_RESOLVER_BRAND, descriptor);
   Object.defineProperty(resolveGoogleFonts, FONT_RESOLVER_MARK_KEY, descriptor);
   return resolveGoogleFonts as typeof resolveGoogleFonts & FontResolverMark;
+}
+
+const fontKey = (face: { family: string; weight: number; style: string }): string =>
+  `${face.family}\u0000${face.weight}\u0000${face.style}`;
+
+/**
+ * The background loads as one late answer: the load that settles first installs first, and
+ * carries the other one as its own `deferred`, so neither waits for the other.
+ */
+function bothLater(
+  first: Promise<GoogleFontsFragment> | undefined,
+  second: Promise<GoogleFontsFragment> | undefined
+): Promise<GoogleFontsFragment> | undefined {
+  if (!first || !second) return first ?? second;
+  const carry = (
+    settled: Promise<GoogleFontsFragment>,
+    other: Promise<GoogleFontsFragment>
+  ): Promise<GoogleFontsFragment> =>
+    settled.then(
+      (fragment) => ({ ...fragment, deferred: other }),
+      () => other
+    );
+  return Promise.race([carry(first, second), carry(second, first)]);
 }

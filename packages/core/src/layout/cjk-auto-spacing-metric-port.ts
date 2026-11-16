@@ -13,6 +13,15 @@ export function withAuthoredCjkGapMetric<T extends TextMeasurer>(
   return measurer;
 }
 
+/**
+ * Give `to` the metric of `from`, for a measurer that wraps another one and measures with it
+ * (`font-face-usage.ts`): the port keys its metric by measurer object.
+ */
+export function forwardAuthoredCjkGapMetric(from: TextMeasurer, to: TextMeasurer): void {
+  const metric = metrics.get(from);
+  if (metric) metrics.set(to, metric);
+}
+
 export function authoredCjkGapMetric(
   measurer: TextMeasurer | undefined,
   style: ResolvedRunStyle

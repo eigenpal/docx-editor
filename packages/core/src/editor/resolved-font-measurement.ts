@@ -39,7 +39,9 @@ export function resolvedFontMeasurement(
   fallback: ReturnType<typeof resolveDefaultSurfaceMeasurer>,
   scale: number,
   epoch: number,
-  onFontError?: (error: EditorFontError) => void
+  onFontError?: (error: EditorFontError) => void,
+  /** The family a run renders in while a pick holds its own family (`font-pick-hold.ts`). */
+  held?: (family: string) => string | undefined
 ) {
   const resolvedFonts = new Map<
     string,
@@ -101,7 +103,8 @@ export function resolvedFontMeasurement(
         // measurer calls this outside its own guard, so an unusable family must return
         // the fixed fallback here rather than throw through layout — which would fail
         // the remount and take the mounted document with it.
-        const family = style.fontFamily ?? fonts.defaultFont.family;
+        const authored = style.fontFamily ?? fonts.defaultFont.family;
+        const family = held?.(authored) ?? authored;
         if (family.trim().length === 0) return null;
         const request = {
           family,
