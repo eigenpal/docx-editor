@@ -1,5 +1,52 @@
 # @docx-editor.dev/core
 
+## 2.38.0
+
+### Minor Changes
+
+- 1f54ef6: Add the Format shape pane and `useSelectedShape` in React and Vue. Handle the added `EditorPaneId` value `shape` in exhaustive switches and `usePaneRequest` filters.
+- b742cb2: Documents show sooner because `packagedFonts()` and `googleFonts()` first load the font faces that the text uses and load the other faces in the background. Set `loading: 'eager'` to load every face before the text shows, or `loading: 'lazy'` to load each face when the text first uses it.
+- cdc64af: Add `editor.getParagraphs()`, `editor.getParagraphText()`, accepted-text offset helpers, and `replaceAcceptedText` for proofing tools. Update highlight counts as document layout completes.
+- 5793d02: Add paragraph change events, accessible proofing highlights, highlight navigation, and editing API critique annotations. Keep keyboard context menus open during background layout.
+- 24ce743: Add `replaceAllMatches` to replace matches across document stories in one undo step, with tracking in suggesting mode. Report replaced and skipped matches in `replacements`.
+- 3a49612: Let `replaceMatch` and `selectMatch` accept computed ranges and refuse stale targets with `notFound`. Resolve stories from paragraphs and replace matches in closed headers, footers, and notes.
+- 4e12c3c: Enable object selection for shapes, lines, groups, and drawings behind text where no text covers the pointer. Allow selection, movement, and deletion of anchor-locked drawings.
+- 24ce743: Enable `replaceText`, `applyFormatting`, `splitParagraph`, `mergeParagraphs`, and `removeTabMark` at the selection. Each command creates one undo step and supports suggesting mode.
+- ca0a4ad: Add `editor.getSelectionRange()`, `snapshot().selectionRange`, and `editor.getCaretRect()`, with `blockId` targets in `setSelection`. Place keyboard context menus at the caret and expose their trigger through `useContextMenuAnchor()`.
+- 3f13fec: Render separate table and cell borders when cell spacing applies, in the editor and PDF export.
+- fe49844: Render table and row exception shading in cell-spacing gaps, in the editor and PDF export. Fixes #1900
+- c249c34: Add undoable DOCX replacement through `replaceDocument`, `Body.insertFileFromBase64(base64File, 'Replace')`, and document refresh `mode: 'edit'`. Remove collaborative comment thread records when undoing their replies. Fixes #1907, fixes #1934
+
+### Patch Changes
+
+- 948475b: Enable revision and comment editor commands through the review module. Tracked-changes protection refuses revision decisions but permits comments.
+- f429ad2: Fix autofit table columns that widened for a long word in a compatibility mode 15 document with automatic hyphenation. The column now keeps its preferred width, and words in capitals stay whole when the document sets `w:doNotHyphenateCaps`.
+- 90f044b: Keep autofit columns wide enough for `w:caps` and `w:smallCaps` words when `w:doNotHyphenateCaps` prevents hyphenation.
+- dab9554: Preserve balanced spaces beside East Asian text when character spacing or scaling applies under `w:balanceSingleByteDoubleByteWidth`. Fixes #1913
+- e2cbc55: Correct percentage widths and placement for right-to-left tables with cell spacing, including tables aligned to the visual left edge. Fixes #1948
+- 0299e85: Bound EMF and WMF previews to 2,048 pixels per side while preserving embedded image conversion.
+- 5a6e15c: Preserve content types for parts added during collaboration, so saved comments and headers remain readable after reopening.
+- 313429a: Keep context menus above host controls and inside the window. Enable arrow-key scrolling when a menu exceeds the window height.
+- 845bd85: Render equation delimiters (`m:d`) with brackets and separators sized to their contents.
+- c92f662: End page content after a footnote reference when its note continues, moving later rows and paragraphs to the next page.
+- e2cbc55: A gradient whose `rotWithShape` spells false with surrounding spaces now keeps its direction in a rotated group.
+- 4644e6c: Keep input method composition visible at line ends and preserve it through collaborative edits. Fixes #1912
+- 5db571e: Keep input method typing responsive in long documents by committing composed syllables after their display frame. Fixes #1931
+- 59809e2: Fix mobile keyboard Backspace actions that removed incorrect characters or restored deleted words. Fixes #1896
+- c92f662: Correct table placement with cell spacing or skipped grid columns outside compatibility mode 15. Remove excess height from empty paragraphs after nested tables.
+- 0299e85: Keep paragraph notifications complete after listener edits, document replacement, and style removal. Ignore obsolete notifications after document loads.
+- f041510: Shape pane number fields now parse long digit strings in linear time.
+- e2cbc55: Report command-specific refusal reasons for rotation, flipping, replacement, and hyperlinks on selected shapes and text boxes. Fixes #1944
+- ca8b82c: Spaced tables with a thicker outer rule on one side lay out their column widths, frame width, and alignment correctly. Spaced percentage-width tables get the correct width in older compatibility modes.
+- 05856f6: Avoid unnecessary control renders and listener updates during typing and layout. Keep snapshot reads consistent with typed text.
+- cd04dcc: Preserve an editable empty paragraph after tables that end a body, note, or text box, including during save.
+- 414877c: Resolve table column widths correctly for stated table and cell widths, skipped grid columns, and tables with cell spacing.
+- e2cbc55: Select callout text boxes through their tails and render complete tails on rotated text boxes. Fixes #1953
+- e2cbc55: Render rotated and flipped shape groups with transformed members, and select the group through any painted member. Rotated members in a group that scales its axes unevenly no longer skew. Fixes #1945
+- 479c556: Render and select rotated shapes and lines. Keep zero-size lines invisible but selectable. Fixes #1917
+- e2cbc55: Render and select complete outlines and geometry outside text-free shape bounds, including callout tails and negative effect extents. Fixes #1946
+- Updated dependencies: @docx-editor.dev/i18n@2.38.0
+
 ## 2.37.0
 
 ### Minor Changes

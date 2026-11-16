@@ -1,5 +1,11 @@
 # @docx-editor.dev/i18n
 
+## 2.38.0
+
+### Minor Changes
+
+- db0e2ca: Add the Italian (`it`) locale catalog and its `@docx-editor.dev/i18n/it` subpath export.
+
 ## 2.37.0
 
 No changes in this release.
