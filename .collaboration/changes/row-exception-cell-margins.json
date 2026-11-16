@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Table layout ignored row-level cell margin exceptions, so those rows kept the table's cell margins.",
+  "after": "Table layout applies a row's cell margin exception to its cells, under any cell margins that a cell states.",
+  "reason": "The change affects only how each client lays out tables. Shared nodes, text offsets, operations, and package serialization stay unchanged, and every client derives the same layout from the same tree.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-row-exception-margins.test.ts",
+    "packages/core/src/layout/__tests__/legacy-fixed-table-content.test.ts"
+  ],
+  "changeset": "row-exception-cell-margins",
+  "migration": null
+}

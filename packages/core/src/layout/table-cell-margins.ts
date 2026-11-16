@@ -115,6 +115,20 @@ export function raiseRowTopMargins<Cell extends { readonly margins: CellMarginsP
     if (cell.margins.top < top) cells[index] = { ...cell, margins: { ...cell.margins, top } };
 }
 
+/**
+ * One row's cell-margin defaults: its `w:tblPrEx/w:tblCellMar` exception (17.4.60, 17.4.42)
+ * over the table's, side by side. A cell's own `w:tcMar` still merges over the result.
+ * Returns `tableDefaults` by identity when the row states no margin exception.
+ */
+export function rowExceptionMargins(
+  row: OoxmlElement,
+  tableDefaults: CellMarginsPt
+): CellMarginsPt {
+  const exception = childNamed(row, 'tblPrEx');
+  const box = exception && childNamed(exception, 'tblCellMar');
+  return box ? mergeMargins(tableDefaults, readMarginSides(box)) : tableDefaults;
+}
+
 /** A cell's own `w:tcMar` over the table's per-side defaults. */
 export function mergeMargins(
   tableDefaults: CellMarginsPt,

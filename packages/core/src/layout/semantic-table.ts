@@ -96,6 +96,7 @@ import {
   mergeMargins,
   raiseRowTopMargins,
   readMarginSides,
+  rowExceptionMargins,
   type CellMarginsPt,
 } from './table-cell-margins.ts';
 import { readCellTextDirection } from './table-cell-text-direction.ts';
@@ -698,6 +699,7 @@ function readTableStructureUncached(
     const rowConditions = rowConditionsFor(rowIndex, headerRows);
     const isHeader = tableRowIsHeader(tableStyle, rowConditions, rowProperties);
     const rowTableBorders = rowExceptionBorders(rowNode, tableBorders);
+    const rowMargins = rowExceptionMargins(rowNode, defaultMargins);
     let cellIndex = 0;
     const cells: SemanticTableCell[] = [];
     const mergedHere = new Set<number>();
@@ -738,7 +740,7 @@ function readTableStructureUncached(
       }
       const shading = cellShading(tableStyle, conditions, cellProperties);
       const cellMargins = mergeMargins(
-        defaultMargins,
+        rowMargins,
         readMarginSides(cellProperties && childNamed(cellProperties, 'tcMar'))
       );
       // Content controls inside a cell flatten transparently — same rule as body
