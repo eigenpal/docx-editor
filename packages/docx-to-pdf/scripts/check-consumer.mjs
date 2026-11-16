@@ -1,18 +1,19 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // Exercise packed artifacts outside workspace aliases. Build PDF, Pro, and Markdown first.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { strToU8, zipSync } from 'fflate';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
+const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const temporary = mkdtempSync(path.join(tmpdir(), 'pdf-consumer-'));
 const packs = path.join(temporary, 'packs');
 const consumer = path.join(temporary, 'consumer');
@@ -25,26 +26,34 @@ function run(command, args, cwd = consumer) {
 try {
   mkdirSync(packs);
   mkdirSync(consumer);
-  const tarballs = ['i18n', 'core', 'fonts', 'docx-to-markdown', 'pro', 'docx-to-pdf'].map((name) => {
-    const [packed] = JSON.parse(
-      run('npm', ['pack', path.join(root, 'packages', name), '--json', '--pack-destination', packs])
-    );
-    assert.ok(packed.filename);
-    if (name === 'docx-to-pdf') {
-      for (const guide of ['api', 'fonts', 'integrations', 'markdown-contract']) {
+  const tarballs = ['i18n', 'core', 'fonts', 'docx-to-markdown', 'pro', 'docx-to-pdf'].map(
+    (name) => {
+      const [packed] = JSON.parse(
+        run('npm', [
+          'pack',
+          path.join(root, 'packages', name),
+          '--json',
+          '--pack-destination',
+          packs,
+        ])
+      );
+      assert.ok(packed.filename);
+      if (name === 'docx-to-pdf') {
+        for (const guide of ['api', 'fonts', 'integrations', 'markdown-contract']) {
+          assert.ok(
+            packed.files.some((file) => file.path === `docs/${guide}.md`),
+            `Packed PDF package omits docs/${guide}.md`
+          );
+        }
+        // The CJK face ships in its own package, not in this one.
         assert.ok(
-          packed.files.some((file) => file.path === `docs/${guide}.md`),
-          `Packed PDF package omits docs/${guide}.md`
+          !packed.files.some((file) => /cjk/i.test(file.path)),
+          'Packed PDF package carries a CJK asset'
         );
       }
-      // The CJK face ships in its own package, not in this one.
-      assert.ok(
-        !packed.files.some((file) => /cjk/i.test(file.path)),
-        'Packed PDF package carries a CJK asset'
-      );
+      return path.join(packs, packed.filename);
     }
-    return path.join(packs, packed.filename);
-  });
+  );
   // Packed now, installed only after the conversions without it.
   const [cjkPacked] = JSON.parse(
     run('npm', [
@@ -133,6 +142,10 @@ async function main() {
   const report: ExportFontResolutionReport = result.fontResolution;
   assert.equal(Buffer.from(result.bytes.subarray(0, 5)).toString(), '%PDF-');
   assert.equal(result.pageCount, 1);
+  // The built package inlines its own version into the PDF Producer.
+  const { PDFDocument } = await import('pdf-lib');
+  const info = await PDFDocument.load(result.bytes, { updateMetadata: false });
+  assert.equal(info.getProducer(), 'EigenPal docx-editor.dev ${version}');
   assert.equal(result.diagnostics.length, 0);
   assert.ok(timings.openMs >= 0 && report.families.length > 0);
   const response = new Response(new Uint8Array(result.bytes), {

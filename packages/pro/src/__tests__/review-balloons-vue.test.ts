@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -163,6 +163,7 @@ describe('Vue review layout preferences', () => {
       expect(line.querySelector('[data-testid="review-reply-avatar"]')?.textContent).toBe('GH');
       expect(line.querySelector('[data-testid="review-reply-cancel"]')).toBeNull();
       const input = line.querySelector('[data-testid="review-reply-input"]')!;
+      expect(input.getAttribute('autocomplete')).toBe('off');
       await change(() =>
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
       );

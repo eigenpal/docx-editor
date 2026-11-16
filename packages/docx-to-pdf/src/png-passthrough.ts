@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -33,7 +33,7 @@ function readPlainPng(bytes: Uint8Array): PlainPng | null {
   if (!(width > 0 && height > 0)) return null;
   const parts: Uint8Array[] = [];
   let total = 0;
-  for (let at = 8; at + 12 <= bytes.length; ) {
+  for (let at = 8; at + 12 <= bytes.length;) {
     const length = view.getUint32(at);
     const type = String.fromCharCode(
       bytes[at + 4]!,

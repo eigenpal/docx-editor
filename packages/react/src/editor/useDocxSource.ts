@@ -148,8 +148,7 @@ async function resolveEagerOrigin(origin: DocxFontOrigin): Promise<DocxFontsInpu
   // `isOnDemand` already answered false for this list, so no function here is a marked
   // resolver and the loader form is the only one left.
   return (await (origin as unknown as () => DocxFontsInput | Promise<DocxFontsInput>)()) as
-    | DocxFontsInput
-    | undefined;
+    DocxFontsInput | undefined;
 }
 
 /**

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -19,6 +19,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import * as Y from 'yjs';
 import { changedKeysOf, mapEntry } from './yjs-items.ts';
+import { parseClientClock } from './identity.ts';
 
 /** The shared map of the deletions, at the document root. */
 export const TEXT_DELETIONS_KEY = 'docx-text-deletions-v1';
@@ -69,7 +70,7 @@ function recordOf(
 }
 
 /** Sorted, disjoint ranges of one client's identities, merged as they are added. */
-class Coverage {
+export class Coverage {
   private readonly starts: number[] = [];
   private readonly ends: number[] = [];
 
@@ -268,4 +269,21 @@ export function textDeletionsOf(doc: Y.Doc): TextDeletions {
   deletionsByDoc.set(doc, created);
   deletions = created;
   return deletions;
+}
+
+/** Identities as runs of consecutive clocks, sorted by client and clock. */
+export function deletedRunsOf(identities: readonly string[]): DeletedRun[] {
+  const parsed = identities
+    .flatMap((identity) => parseClientClock(identity) ?? [])
+    .sort((left, right) => left.client - right.client || left.clock - right.clock);
+  const runs: { client: number; from: number; to: number }[] = [];
+  for (const { client, clock } of parsed) {
+    const last = runs[runs.length - 1];
+    if (last && last.client === client && clock <= last.to) {
+      last.to = Math.max(last.to, clock + 1);
+    } else {
+      runs.push({ client, from: clock, to: clock + 1 });
+    }
+  }
+  return runs;
 }

@@ -79,8 +79,11 @@ export function openDiagnosticCode(reason: string, limit?: string): DocumentOpen
 /** Reasons the hosts write themselves, beside the store's. */
 type HostRejectionToken =
   | 'automation-structural-tracking-unsupported'
+  | 'unsupported-tracked-table-operation'
   | 'unsupported-story'
   | 'experimental-collaboration-body-text-only'
+  | 'comment-author-mismatch'
+  | 'unsupported-comment-body'
   | 'review-module-required'
   | 'no-document'
   | 'table-insert-refused'
@@ -127,6 +130,7 @@ const STORE_EDIT_CODES: Readonly<
   'style-not-defined': 'edit.style-not-defined',
   'no-styles-defined': 'edit.no-styles-defined',
   'carries-section-mark': 'edit.section-mark',
+  'story-end-paragraph': 'edit.operation-unsupported',
   'table-has-merge': 'edit.table-structure-unsupported',
   'row-hides-cell': 'edit.table-structure-unsupported',
   'unknown-grid-column': 'edit.table-structure-unsupported',
@@ -136,9 +140,11 @@ const STORE_EDIT_CODES: Readonly<
   'cell-too-narrow': 'edit.table-split-unsupported',
   'split-needs-grid': 'edit.table-split-unsupported',
   'cell-has-revision': 'edit.revision-unsupported',
+  'unsupported-cell-content': 'edit.unsupported-content',
   trackedDrawingDeletionUnsupported: 'edit.tracked-drawing-delete-unsupported',
   packageTransactionRequired: 'edit.tracked-structure-unsupported',
   'automation-structural-tracking-unsupported': 'edit.tracked-structure-unsupported',
+  'unsupported-tracked-table-operation': 'edit.tracked-structure-unsupported',
   'unsupported-revision': 'edit.revision-unsupported',
   'unsupported-revision:foreign-insertion': 'edit.tracked-foreign-revision-unsupported',
   'unknown-revision': 'edit.stale-target',
@@ -149,6 +155,8 @@ const STORE_EDIT_CODES: Readonly<
   unsupported: 'edit.unsupported-content',
   'unsupported-property': 'edit.unsupported-content',
   'not-a-picture-drawing': 'edit.unsupported-content',
+  'not-a-shape-drawing': 'edit.unsupported-content',
+  'no-solid-fill': 'edit.invalid-argument',
   'chart-drawing': 'edit.unsupported-content',
   'unknown-op': 'edit.invalid-argument',
   'invalid-range': 'edit.invalid-argument',
@@ -197,6 +205,8 @@ const STORE_EDIT_CODES: Readonly<
   'unsupported-story': 'edit.unsupported-story',
   'experimental-collaboration-body-text-only': 'edit.unsupported-story',
   'review-module-required': 'edit.review-module-required',
+  'comment-author-mismatch': 'edit.comment-author-mismatch',
+  'unsupported-comment-body': 'edit.unsupported-content',
   'no-document': 'edit.stale-target',
   'table-insert-refused': 'edit.table-insert-refused',
   'table-of-contents-refused': 'edit.table-of-contents-refused',

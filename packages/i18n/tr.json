@@ -60,7 +60,10 @@
     "bookmarkShortcut": "Ctrl+Shift+F5",
     "goToBookmark": "Yer işaretine git…",
     "goToBookmarkShortcut": "Ctrl+G",
-    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G",
+    "printComments": "Yorumları yazdır",
+    "printCommentsNote": "{mode} dışında yorumlar, yorumlanan metnin üzerinde not olarak yazdırılır.",
+    "printMarkup": "İşaretleme"
   },
   "formattingBar": {
     "groups": {
@@ -75,7 +78,9 @@
       "image": "Görsel",
       "table": "Tablo",
       "format": "Biçim",
-      "direction": "Metin yönü"
+      "direction": "Metin yönü",
+      "chart": "Grafik",
+      "shape": "Şekil"
     },
     "undo": "Geri al",
     "undoShortcut": "Geri al (Ctrl+Z)",
@@ -223,7 +228,11 @@
       "background2": "Arka Plan 2",
       "text1": "Metin 1",
       "text2": "Metin 2"
-    }
+    },
+    "lighterPercent": "{color}, %{percent} daha açık",
+    "darkerPercent": "{color}, %{percent} daha koyu",
+    "hexColor": "Onaltılık renk",
+    "invalidHex": "Rengi #RRGGBB olarak yazın."
   },
   "dialogs": {
     "imageProperties": {
@@ -420,7 +429,20 @@
     "addComment": "Açıklama ekle...",
     "replyPlaceholder": "Yanıtla veya @ ile başkalarını ekle",
     "reopen": "Yeniden aç",
-    "resolve": "Çözümle"
+    "resolve": "Çözümle",
+    "edit": "Düzenle",
+    "editConflict": "Bu yorum değişti. Taslağınız korundu. En son metni görmek için iptal edin.",
+    "editEmpty": "Kaydetmeden önce yorum metnini girin.",
+    "editPermission": "Yalnızca kendi yorumlarınızı düzenleyebilirsiniz.",
+    "editRefused": "Bu yorum kaydedilemedi. Taslağınız korundu.",
+    "editText": "Yorum metni",
+    "saveEdit": "Değişiklikleri kaydet",
+    "deletedDraft": "Bu yorum artık burada mevcut değil. Kaydedilmemiş taslağınız, kopyalayabilmeniz için korundu.",
+    "discardDraft": "Taslağı sil",
+    "recoveredDraft": "Kaydedilmemiş yorum taslağı",
+    "actions": "Yorum işlemleri",
+    "replyActions": "Yanıt işlemleri",
+    "delete": "Sil"
   },
   "contextMenu": {
     "ariaLabel": "Yapay zekâ işlemleri menüsü",
@@ -572,7 +594,9 @@
     "fontSubstitutionNotice": "Bu belgedeki bazı yazı tipleri kullanılamıyor; bunların yerine şunlar gösteriliyor: {fonts}",
     "documentContent": "Belge içeriği",
     "previewContent": "Önerilen değişikliklerin önizlemesi",
-    "documentViewport": "Belge sayfaları"
+    "documentViewport": "Belge sayfaları",
+    "grammarIssueCount": "{count, plural, =0 {Dil bilgisi hatası yok.} one {# dil bilgisi hatası.} other {# dil bilgisi hatası.}}",
+    "spellingIssueCount": "{count, plural, =0 {Yazım hatası yok.} one {# yazım hatası.} other {# yazım hatası.}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Görüntülenen metin",
@@ -675,7 +699,8 @@
     },
     "selection": "Seçili görüntü",
     "locked": "Bu kutu taşınamaz veya yeniden boyutlandırılamaz",
-    "textLocked": "Bu kutudaki metin düzenlenemez"
+    "textLocked": "Bu kutudaki metin düzenlenemez",
+    "selectionShape": "Seçili şekil"
   },
   "revisions": {
     "paragraphMarkInserted": "Paragraf işareti eklendi",
@@ -702,6 +727,7 @@
       "fontFamily": "Yazı tipi",
       "fontSize": "Yazı tipi boyutu",
       "hangingIndent": "Asılı girinti",
+      "highlight": "Vurgulama",
       "italic": "İtalik",
       "left": "Sol",
       "leftIndent": "Sol girinti",
@@ -732,7 +758,8 @@
   },
   "toc": {
     "refresh": "Tüm tabloyu güncelle",
-    "refreshPageNumbers": "Yalnızca sayfa numaralarını güncelle"
+    "refreshPageNumbers": "Yalnızca sayfa numaralarını güncelle",
+    "remove": "İçindekiler tablosunu kaldır"
   },
   "reviewers": {
     "label": "Gözden geçirenler",
@@ -920,12 +947,20 @@
     "replyCount": "Yanıtlar: {count}",
     "trackedChange": "İzlenen değişiklik",
     "changeAnnouncement": "{author} tarafından {change}: {text}",
-    "replyTargetResolved": "Değişiklik çözümlendiği için yanıt gönderilmedi."
+    "replyTargetResolved": "Değişiklik çözümlendiği için yanıt gönderilmedi.",
+    "compareDocuments": "Belgeleri karşılaştır"
   },
   "imageAltText": {
     "description": "Açıklama",
     "panelTitle": "Alternatif metin",
     "title": "Başlık"
+  },
+  "drop": {
+    "errors": {
+      "readOnly": "Bu belge salt okunurdur.",
+      "noTarget": "Düzenlenebilir metnin üzerine bırakın.",
+      "unsupported": "PNG, JPEG, GIF görseli veya metin bırakın."
+    }
   },
   "imageInsert": {
     "errors": {
@@ -934,7 +969,8 @@
       "invalidSignature": "Dosya desteklenen bir PNG, JPEG veya GIF görüntüsü değil.",
       "oversize": "Görüntü izin verilen en büyük boyutu aşıyor.",
       "refused": "Görüntü eklenemedi.",
-      "unsupportedFormat": "Bu görüntü biçimi ekleme için desteklenmiyor."
+      "unsupportedFormat": "Bu görüntü biçimi ekleme için desteklenmiyor.",
+      "staleTarget": "Belge veya bırakma konumu değişti. Görseli yeniden bırakın."
     }
   },
   "imageProperties": {
@@ -1008,6 +1044,7 @@
     "trackedOnly": "Bu belge yalnızca izlenen değişikliklere izin verir",
     "unavailable": "Bu komut kullanılamıyor",
     "viewing": "Bu belge görüntüleme için açık",
+    "compareCollaboration": "Belgeleri karşılaştırma, paylaşılan bir düzenleme oturumunda kullanılamaz.",
     "bodyOnlyNote": "Dipnotlar ve son notlar belgenin gövdesinden eklenir.",
     "bodyOnlySectionBreak": "Bölüm sonları belgenin gövdesine eklenir.",
     "bodyOnlyToc": "İçindekiler tablosu belgenin gövdesine eklenir.",
@@ -1023,13 +1060,19 @@
     "suggestingNeedsAuthor": "Öneri modu için bir yazar gerekir. Düzenleyici yapılandırmasında yazarı ayarlayın.",
     "pictureSelected": "Bir resim seçili. Resim eklemek için imleci metne yerleştirin.",
     "chartDrawing": "Bu bir grafik. Silebilirsiniz ancak resim olarak düzenleyemezsiniz.",
-    "chartClipboard": "Seçim bir grafik içeriyor. Grafikler kopyalanamaz, kesilemez veya yapıştırılamaz.",
+    "chartFrame": "Bu bir grafik. Boyutunu, konumunu, metin kaydırmasını ve alternatif metnini değiştirebilirsiniz.",
+    "diagramFrame": "Bu bir diyagram. Boyutunu, konumunu, metin kaydırmasını ve alternatif metnini değiştirebilirsiniz.",
+    "diagramRescale": "Bu diyagram yeniden boyutlandırılamaz. Kaydedilmiş çizimi başka bir diyagramla paylaşılıyor veya bu boyuta ölçeklenemiyor.",
+    "chartClipboard": "Bir grafik yalnızca tek başına kopyalanabilir, kesilebilir veya yapıştırılabilir; başka içerikle birlikte olamaz.",
+    "chartClipboardStale": "Kopyalanan grafik artık kullanılamıyor. Grafiği yeniden kopyalayın.",
     "nothingToUndo": "Geri alınacak bir şey yok",
     "nothingToRedo": "Yinelenecek bir şey yok",
     "outermostLevel": "Seçim zaten en dış düzeyde",
     "cannotIndentFurther": "Seçimin girintisi daha fazla artırılamaz",
     "noGoToView": "Git burada kullanılamıyor",
-    "noBookmarkDialog": "Buraya yer işareti eklenemez"
+    "noBookmarkDialog": "Buraya yer işareti eklenemez",
+    "groupMemberMove": "Grup içindeki bir şekil tek başına taşınamaz, yeniden boyutlandırılamaz veya silinemez. Grubu seçmek için Esc tuşuna basın.",
+    "groupMemberProperties": "Grup içindeki bir şekil kaydırma, alternatif metin ve özelliklerini gruptan alır. Grubu seçmek için Esc tuşuna basın."
   },
   "equationPopup": {
     "apply": "Uygula",
@@ -1168,5 +1211,230 @@
     "sectionBreakNextColumn": "Bölüm Sonu (Yeni Sütun)",
     "sectionBreakNextPage": "Bölüm Sonu (Sonraki Sayfa)",
     "sectionBreakOddPage": "Bölüm Sonu (Tek Sayfa)"
+  },
+  "compareDocuments": {
+    "author": "Değişikliklerin yazarı",
+    "cancel": "İptal",
+    "compare": "Karşılaştır",
+    "comparing": "Karşılaştırılıyor…",
+    "description": "Bu belgenin başka bir sürümünü seçin. Farklar burada izlenen değişiklikler olarak görünür.",
+    "trackedChangesAccepted": "Açık belgede izlenen değişiklikler var. Karşılaştırma bunları kabul edilmiş sayar.",
+    "detectFormatting": "Biçimlendirme değişikliklerini dahil et",
+    "fileRequired": "Önce karşılaştırılacak bir belge seçin.",
+    "readFailed": "Seçilen dosya okunamadı.",
+    "revisedFile": "Karşılaştırılacak belge",
+    "title": "Belgeleri karşılaştır",
+    "noDifferences": "Belgeler arasında fark yok.",
+    "recorded": "{count, plural, one {Karşılaştırma # değişiklik kaydetti.} other {Karşılaştırma # değişiklik kaydetti.}}",
+    "recordedNoRevisions": "Karşılaştırma belgeyi izlenen değişiklik olmadan güncelledi.",
+    "phases": {
+      "reading": "Belgeler okunuyor…",
+      "comparing": "Karşılaştırılıyor…",
+      "checking": "Sonuç denetleniyor…",
+      "applying": "Değişiklikler uygulanıyor…"
+    },
+    "errors": {
+      "invalidOptions": "Karşılaştırma seçenekleri geçerli değil.",
+      "invalidOriginal": "Açık belge karşılaştırma için okunamıyor.",
+      "invalidRevised": "Seçilen dosya karşılaştırılabilecek bir belge değil.",
+      "tooLarge": "Belgeler karşılaştırmak için çok büyük.",
+      "unsupportedContent": "Belgeler, izlenen değişiklikler olarak gösterilemeyen içerikte farklılık gösteriyor.",
+      "unavailable": "Belgeleri karşılaştırma bu belge için kullanılamıyor.",
+      "protected": "Bu belge düzenlemeye karşı korumalı.",
+      "collaboration": "Belgeleri karşılaştırma, paylaşılan bir düzenleme oturumunda kullanılamaz.",
+      "viewing": "Belge yalnızca görüntüleme için açık.",
+      "closed": "Karşılaştırma iptal edildi.",
+      "empty": "Seçilen dosya boş.",
+      "busy": "Başka bir karşılaştırma, önizleme veya belge yenilemesi çalışıyor. Bittiğinde yeniden deneyin.",
+      "documentChanged": "Belge karşılaştırılırken değişti. Yeniden karşılaştırın.",
+      "failed": "Belgeler karşılaştırılamadı."
+    },
+    "reasons": {
+      "headerFooter": "Belgeler, önceki bir bölümün üst veya alt bilgisinde farklılık gösteriyor ve bu bölümün diğer belgede eşleşen bir bölümü yok.",
+      "lockedContent": "Belgeler, kilitli veya veriye bağlı bir içerik denetiminin içinde farklılık gösteriyor; bu nedenle oradaki değişiklikler gözden geçirilemez. Kilidi veya bağlantıyı kaldırıp yeniden karşılaştırın.",
+      "packageStructure": "Açık belge bu karşılaştırmanın sonucunu tutamaz.",
+      "unrecordedSettings": "Diğer sürüm, değişiklikler reddedilerek geri alınamayan bölüm veya tablo ayarları ekliyor.",
+      "unresolvedRevisions": "Bir belge, kabul edilemeyen izlenen değişiklikler içeriyor. Bunları o belgede kabul edin veya reddedin, ardından yeniden karşılaştırın.",
+      "untrackedContent": "Belgeler, gömülü bir dosya gibi izlenen değişiklik olarak gösterilemeyen içerikte farklılık gösteriyor.",
+      "unverified": "Karşılaştırma sonucu iki belgeyi de yeniden üretmeyeceği için uygulanmadı."
+    }
+  },
+  "chart": {
+    "insert": "Grafik",
+    "insertType": "{type} grafiği ekle",
+    "edit": "Grafiği düzenle…",
+    "sample": {
+      "category": "Kategori {number}",
+      "series": "Seri {number}",
+      "name": "Grafik {number}"
+    },
+    "pane": {
+      "title": "Grafik",
+      "close": "Grafik bölmesini kapat",
+      "emptyTitle": "Grafik seçilmedi",
+      "emptyBody": "Düzenlemek için belgede bir grafik seçin.",
+      "notEditableTitle": "Bu grafik düzenlenemez"
+    },
+    "types": {
+      "columnClustered": "Sütun",
+      "columnStacked": "Yığılmış sütun",
+      "columnPercentStacked": "%100 yığılmış sütun",
+      "barClustered": "Çubuk",
+      "barStacked": "Yığılmış çubuk",
+      "barPercentStacked": "%100 yığılmış çubuk",
+      "line": "Çizgi",
+      "lineMarkers": "İşaretçili çizgi",
+      "area": "Alan",
+      "areaStacked": "Yığılmış alan",
+      "areaPercentStacked": "%100 yığılmış alan",
+      "pie": "Pasta",
+      "doughnut": "Halka",
+      "radar": "Radar",
+      "scatter": "Dağılım",
+      "scatterLines": "Çizgili dağılım",
+      "other": "Diğer tür"
+    },
+    "format": {
+      "type": "Grafik türü",
+      "elements": "Grafik öğeleri",
+      "showTitle": "Başlık",
+      "titleText": "Başlık metni",
+      "defaultTitle": "Grafik Başlığı",
+      "legend": "Gösterge",
+      "legendPositions": {
+        "none": "Yok",
+        "top": "Üst",
+        "bottom": "Alt",
+        "left": "Sol",
+        "right": "Sağ"
+      },
+      "dataLabels": "Veri etiketleri",
+      "gridlines": "Kılavuz çizgileri",
+      "axes": "Eksenler",
+      "categoryAxisTitle": "Kategori ekseni başlığı",
+      "valueAxisTitle": "Değer ekseni başlığı",
+      "xAxisTitle": "X ekseni başlığı",
+      "yAxisTitle": "Y ekseni başlığı",
+      "axisTitleHelp": "Başlık olmaması için eksen başlığını boş bırakın.",
+      "axesOff": "Bunu kullanmak için Eksenler seçeneğini açın.",
+      "typeChangeRemoved": "Bu grafik türü ayarladığınız renkleri ve eksen başlıklarını korumaz. Geri al bunları geri getirir.",
+      "typeChangeHint": "Bazı grafik türleri ayarladığınız renkleri ve eksen başlıklarını korumaz.",
+      "pieFirstSeries": "Pasta grafiği yalnızca ilk seriyi gösterir.",
+      "colors": "Renkler",
+      "seriesColor": "{name} rengi",
+      "openColors": "{name} için renk seçin",
+      "colorLighter": "{color}, %{percent} daha açık",
+      "colorDarker": "{color}, %{percent} daha koyu"
+    },
+    "data": {
+      "categories": "Kategoriler",
+      "xValues": "X değerleri",
+      "seriesName": "{number}. serinin adı",
+      "categoryLabel": "Kategori {number}",
+      "xValueLabel": "X değeri {number}",
+      "cellLabel": "{series}, {category}",
+      "addCategory": "Kategori ekle",
+      "addSeries": "Seri ekle",
+      "help": "Uygulamak için Enter tuşuna basın veya alandan çıkın. Değer olmaması için değeri boş bırakın.",
+      "workbookKept": "Katıştırılmış çalışma kitabı eski değerlerini korur. Grafik girdiğiniz değerleri gösterir.",
+      "workbookExternal": "Grafik verilerini bağlı bir çalışma kitabından alır. Grafik girdiğiniz değerleri gösterir ve bağlantıdan güncellenmeyi bırakır.",
+      "name": "Ad",
+      "series": "Seri",
+      "unnamed": "Adsız seri",
+      "removeCategoryNamed": "{name} kategorisini kaldır",
+      "removeSeriesNamed": "{name} serisini kaldır",
+      "fieldErrors": {
+        "number": "Bir sayı girin veya hücreyi boş bırakın.",
+        "xNumber": "Her X değeri için bir sayı girin.",
+        "tooLong": "En fazla 255 karakter kullanın.",
+        "limit": "Bir grafikte en az bir seri ve bir kategori, en fazla 255 seri ve 4.000 kategori bulunur."
+      },
+      "removeSeries": "Seriyi kaldır"
+    },
+    "errors": {
+      "noChart": "Bir grafik seçin.",
+      "noData": "Grafikte veri serisi yok.",
+      "combination": "Grafik birden fazla grafik türünü birleştiriyor.",
+      "unsupportedType": "Düzenleyici bu grafik türünün verilerini düzenlemez.",
+      "filtered": "Grafik serilerinden bazılarını gizliyor.",
+      "multiLevel": "Grafikte birden fazla düzeyde kategori var.",
+      "mixedCategories": "Grafiğin serileri farklı kategoriler kullanıyor.",
+      "tooLarge": "Grafikte düzenleyicinin düzenleyebileceğinden fazla veri var.",
+      "empty": "Bir grafik en az bir seri ve bir kategori gerektirir.",
+      "invalidText": "Bir ad veya etikette grafiğin koruyamayacağı karakterler var.",
+      "notNumber": "Her değer bir sayı olmalıdır.",
+      "layout": "Grafiğin hücre başvuruları tek bir tablo oluşturmuyor, bu nedenle yalnızca adları ve değerleri değiştirebilirsiniz.",
+      "workbook": "Katıştırılmış çalışma kitabı bu değişikliği kabul edemez. Her seriye farklı bir ad verin ve verilerin yanındaki hücreleri boş tutun.",
+      "noAxes": "Bu grafik türünde eksen yok.",
+      "sameType": "Grafik zaten bu türde.",
+      "unsupported": "Düzenleyici bu grafik değişikliğini desteklemiyor.",
+      "invalidValue": "Grafik bu değeri kullanamaz.",
+      "suggesting": "Düzenleme önerirken grafikler değiştirilemez. Bu grafiği değiştirmek için Düzenleme moduna geçin."
+    }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "Bu eski şekil türünün saydamlık ayarı yok.",
+      "noShape": "Bir şekil, metin kutusu veya çizgi seçin.",
+      "noSolidFill": "Şeklin düz dolgusu yok. Önce bir dolgu rengi seçin.",
+      "outOfRange": "Değer aralığın dışında.",
+      "staleSelection": "Seçim değişti. Şekli yeniden seçin.",
+      "mixedFill": "Bu gruptaki şekillerin dolguları farklı. Hepsine uygulamak için bir renk seçin."
+    },
+    "formatShape": "Şekli biçimlendir…",
+    "pane": {
+      "close": "Şekli biçimlendir bölmesini kapat",
+      "emptyBody": "Biçimlendirmek için belgede bir şekil, metin kutusu veya çizgi seçin.",
+      "emptyTitle": "Şekil seçilmedi",
+      "errors": {
+        "color": "Rengi #RRGGBB biçiminde veya renk adı olarak yazın.",
+        "noSolidFill": "Önce bir dolgu rengi seçin.",
+        "transparency": "0 ile 100 arasında bir sayı yazın.",
+        "width": "0,25 ile 1584 punto arasında bir kalınlık yazın.",
+        "dash": "Listeden bir kesik çizgi türü seçin."
+      },
+      "fill": "Dolgu",
+      "fillColor": "Dolgu rengi",
+      "fillHex": "Dolgu onaltılık rengi",
+      "fillTypes": {
+        "gradient": "Degrade",
+        "mixed": "Karışık",
+        "none": "Dolgu yok",
+        "pattern": "Desen",
+        "picture": "Resim",
+        "solid": "Düz"
+      },
+      "hexHelp": "#RRGGBB veya bir renk adı yazın, ardından Enter tuşuna basın.",
+      "mixedOutline": "Bu gruptaki şekillerin anahatları farklı.",
+      "noFill": "Dolgu yok",
+      "noOutline": "Çizgi yok",
+      "openFillColors": "Dolgu rengi seçin",
+      "openOutlineColors": "Anahat rengi seçin",
+      "otherWidth": "Diğer kalınlık",
+      "outline": "Anahat",
+      "outlineColor": "Anahat rengi",
+      "outlineHex": "Anahat onaltılık rengi",
+      "readOnlyFill": "Dolgu türü: {fill}. Değiştirmek için bir renk veya Dolgu yok seçin.",
+      "title": "Şekli biçimlendir",
+      "transparency": "Saydamlık (%)",
+      "width": "Kalınlık (pt)",
+      "widthPoints": "{value} pt",
+      "widthPreset": "Hazır kalınlık",
+      "dash": "Kesik çizgi türü",
+      "dashes": {
+        "custom": "Özel",
+        "dash": "Kesik çizgi",
+        "dashDot": "Çizgi nokta",
+        "dot": "Nokta",
+        "lgDash": "Uzun çizgi",
+        "lgDashDot": "Uzun çizgi nokta",
+        "lgDashDotDot": "Uzun çizgi nokta nokta",
+        "solid": "Düz",
+        "sysDash": "Kare nokta",
+        "sysDashDot": "Kare çizgi nokta",
+        "sysDashDotDot": "Kare çizgi nokta nokta",
+        "sysDot": "Yuvarlak nokta"
+      }
+    }
   }
 }

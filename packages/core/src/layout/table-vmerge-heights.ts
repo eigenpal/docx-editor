@@ -319,7 +319,7 @@ export function planVMergeRowHeights(
   /** Spans that cover exactly the same rows, in head-cell order; see `groupOf`. */
   const coextensive = new Map<VMergeSpan, readonly VMergeSpan[]>();
   for (const at of spansByRow.values()) {
-    for (let start = 0; start < at.length; ) {
+    for (let start = 0; start < at.length;) {
       let end = start + 1;
       while (end < at.length && at[end]!.endRow === at[start]!.endRow) end += 1;
       const group = at.slice(start, end);

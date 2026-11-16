@@ -134,3 +134,47 @@ describe('review.addComment', () => {
     group.end();
   });
 });
+
+describe('review.addComment at a collapsed caret', () => {
+  const PID = '/word/document.xml#0.0.0';
+  function mountWithRealPlacement(): DocxEditorInstance {
+    const editor = mount();
+    // A collapsed selection has no comment range, so it has no placement either; a range has one.
+    (editor as unknown as { getSelectionPlacement: () => unknown }).getSelectionPlacement = () => {
+      const { anchor, head } = editor.surface!.state().selection;
+      return anchor.paragraphId === head.paragraphId && anchor.offset === head.offset
+        ? null
+        : { anchorY: 10 };
+    };
+    return editor;
+  }
+  const caretAt = (editor: DocxEditorInstance, offset: number) =>
+    editor.surface!.setSelection({
+      anchor: { paragraphId: PID, offset },
+      head: { paragraphId: PID, offset },
+    });
+
+  test('a caret inside a word enables the control, and the press selects that word', () => {
+    const editor = mountWithRealPlacement();
+    let opened = 0;
+    editor.setCommentDraftChrome({ onRequest: () => (opened += 1) });
+    caretAt(editor, 2);
+    expect(toolbarCommandState(editor, 'review.addComment').enabled).toBe(true);
+    expect(runToolbarCommand(editor, 'review.addComment')).toEqual({ ok: true, changed: false });
+    expect(opened).toBe(1);
+    expect(editor.surface!.state().selection).toEqual({
+      anchor: { paragraphId: PID, offset: 0 },
+      head: { paragraphId: PID, offset: 5 },
+    });
+  });
+
+  test('a caret between words still needs a selected range', () => {
+    const editor = mountWithRealPlacement();
+    editor.setCommentDraftChrome({ onRequest: () => undefined });
+    caretAt(editor, 5);
+    expect(toolbarCommandState(editor, 'review.addComment')).toMatchObject({
+      enabled: false,
+      disabledReason: 'a comment needs a selected range',
+    });
+  });
+});

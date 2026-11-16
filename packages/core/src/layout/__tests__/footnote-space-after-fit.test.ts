@@ -22,10 +22,12 @@ const AREA_TOP = PAGE - 24;
 const LINE = 12;
 
 const run = (text: string) => `<w:r><w:rPr><w:sz w:val="22"/></w:rPr>${text}</w:r>`;
-const p = (text: string, after = 0, height = LINE) =>
-  `<w:p><w:pPr><w:spacing w:before="0" w:after="${after * 20}" w:line="${height * 20}" w:lineRule="exact"/></w:pPr>${run(text)}</w:p>`;
+const p = (text: string, after = 0, height = LINE, keepNext = false) =>
+  `<w:p><w:pPr>${keepNext ? '<w:keepNext/>' : ''}<w:spacing w:before="0" w:after="${after * 20}" w:line="${height * 20}" w:lineRule="exact"/></w:pPr>${run(text)}</w:p>`;
 
-function load(body: string) {
+/** `null` stands for a document that declares no compatibility mode. */
+function load(body: string, declared: number | null = 15) {
+  const compatibilityMode = declared ?? undefined;
   const entries = {
     '[Content_Types].xml': `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/></Types>`,
     '_rels/.rels': `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`,
@@ -45,7 +47,9 @@ function load(body: string) {
   const options = (session = createLayoutSession()) => ({
     measurer,
     session,
+    compatibilityMode,
     notes: {
+      compatibilityMode,
       footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
       endnotesPart: null,
       documentFootnoteProps: fn,
@@ -59,8 +63,8 @@ function load(body: string) {
   return { part, options };
 }
 
-function layout(body: string) {
-  const { part, options } = load(body);
+function layout(body: string, declared: number | null = 15) {
+  const { part, options } = load(body, declared);
   return layoutSemanticDocument(part, 1, options());
 }
 
@@ -97,6 +101,73 @@ describe('space after above a footnote area', () => {
     expect(pageOf(plain(12, 10).pages, 'Closing')).toBe(0);
   });
 
+  test('a kept heading moves with a successor whose space after does not fit', () => {
+    // Opening, spacer, heading and body leave `room` points above the note area.
+    const kept = (room: number, cite = true) =>
+      layout(
+        p(`<w:t>Opening</w:t>${cite ? '<w:footnoteReference w:id="1"/>' : ''}`) +
+          p('<w:t>Spacer</w:t>', 0, AREA_TOP - room - 3 * LINE) +
+          p('<w:t>Heading</w:t>', 0, LINE, true) +
+          p('<w:t>Body</w:t>', 10) +
+          p('<w:t>Next</w:t>')
+      ).pages;
+    const moved = kept(5);
+    expect(pageOf(moved, 'Heading')).toBe(1);
+    expect(pageOf(moved, 'Body')).toBe(1);
+    const stays = kept(12);
+    expect(pageOf(stays, 'Heading')).toBe(0);
+    expect(pageOf(stays, 'Body')).toBe(0);
+    // Without a citation there is no note area, and the space after stays out of the fit.
+    expect(pageOf(kept(5, false), 'Heading')).toBe(0);
+  });
+
+  test('a kept heading moves with a successor that cites the page note', () => {
+    // The body carries the page's only citation, so its own line makes the page cite it.
+    const pages = layout(
+      p('<w:t>Opening</w:t>') +
+        p('<w:t>Spacer</w:t>', 0, AREA_TOP - 5 - 3 * LINE) +
+        p('<w:t>Heading</w:t>', 0, LINE, true) +
+        p('<w:t>Body</w:t><w:footnoteReference w:id="1"/>', 10) +
+        p('<w:t>Next</w:t>')
+    ).pages;
+    expect(pageOf(pages, 'Heading')).toBe(1);
+    expect(pageOf(pages, 'Body')).toBe(1);
+  });
+
+  test('a kept pair before a page break keeps the space after of its last member', () => {
+    const pages = layout(
+      p('<w:t>Opening</w:t><w:footnoteReference w:id="1"/>') +
+        p('<w:t>Spacer</w:t>', 0, AREA_TOP - 5 - 3 * LINE) +
+        p('<w:t>Heading</w:t>', 0, LINE, true) +
+        p('<w:t>Body</w:t>', 10, LINE, true) +
+        '<w:p><w:pPr><w:pageBreakBefore/></w:pPr><w:r><w:t>Later</w:t></w:r></w:p>'
+    ).pages;
+    expect(pageOf(pages, 'Heading')).toBe(1);
+    expect(pageOf(pages, 'Body')).toBe(1);
+  });
+
+  test('a kept paragraph gives its last line to a successor whose space after does not fit', () => {
+    // From compatibility mode 15 a kept paragraph that may split gives its successor its last
+    // line rather than moving whole; the successor's space after decides it here too.
+    const pages = layout(
+      p('<w:t>Opening</w:t><w:footnoteReference w:id="1"/>') +
+        p('<w:t>Spacer</w:t>', 0, AREA_TOP - 2 - 6 * LINE) +
+        p(
+          '<w:t>Ka</w:t><w:br/><w:t>Kb</w:t><w:br/><w:t>Kc</w:t><w:br/><w:t>Kd</w:t>',
+          0,
+          LINE,
+          true
+        ) +
+        p('<w:t>Body</w:t>', 10) +
+        p('<w:t>Next</w:t>'),
+      15
+    ).pages;
+    expect(pageOf(pages, 'Ka')).toBe(0);
+    expect(pageOf(pages, 'Kc')).toBe(1);
+    expect(pageOf(pages, 'Kd')).toBe(1);
+    expect(pageOf(pages, 'Body')).toBe(1);
+  });
+
   test('a page without a citation keeps the space after out of the fit', () => {
     const pages = layout(
       p('<w:t>Spacer</w:t>', 0, PAGE - 2 * LINE) +
@@ -105,6 +176,49 @@ describe('space after above a footnote area', () => {
     ).pages;
     expect(pageOf(pages, 'Closing')).toBe(0);
   });
+});
+
+describe('space after above a footnote area in legacy modes', () => {
+  // Legacy modes let a paragraph that cites nothing carry its space after into the area.
+  for (const mode of [null, 12, 14]) {
+    test(`mode ${mode}: a plain closing line keeps its place`, () => {
+      const pages = layout(
+        p('<w:t>Opening</w:t><w:footnoteReference w:id="1"/>') +
+          p('<w:t>Spacer</w:t>', 0, AREA_TOP - 4 - 2 * LINE) +
+          p('<w:t>Closing</w:t>', 10) +
+          p('<w:t>Next</w:t>'),
+        mode
+      ).pages;
+      expect(pageOf(pages, 'Closing')).toBe(0);
+      expect(pageOf(pages, 'Next')).toBe(1);
+    });
+
+    test(`mode ${mode}: a kept heading stays with a successor that stays`, () => {
+      const pages = layout(
+        p('<w:t>Opening</w:t><w:footnoteReference w:id="1"/>') +
+          p('<w:t>Spacer</w:t>', 0, AREA_TOP - 4 - 3 * LINE) +
+          p('<w:t>Heading</w:t>', 0, LINE, true) +
+          p('<w:t>Body</w:t>', 10) +
+          p('<w:t>Next</w:t>'),
+        mode
+      ).pages;
+      expect(pageOf(pages, 'Heading')).toBe(0);
+      expect(pageOf(pages, 'Body')).toBe(0);
+    });
+
+    test(`mode ${mode}: a citing line still needs its space after`, () => {
+      const pages = layout(
+        p('<w:t>Opening</w:t>') +
+          p('<w:t>Spacer</w:t>', 0, AREA_TOP - 4 - 3 * LINE) +
+          p('<w:t>Heading</w:t>', 0, LINE, true) +
+          p('<w:t>Body</w:t><w:footnoteReference w:id="1"/>', 10) +
+          p('<w:t>Next</w:t>'),
+        mode
+      ).pages;
+      expect(pageOf(pages, 'Heading')).toBe(1);
+      expect(pageOf(pages, 'Body')).toBe(1);
+    });
+  }
 });
 
 test('a retained session matches a cold pass as a citing paragraph grows', () => {
@@ -135,3 +249,38 @@ test('a retained session matches a cold pass as a citing paragraph grows', () =>
   }
   expect(pageOf(result.pages, 'Closing')).toBe(1);
 });
+
+for (const mode of [15, 14]) {
+  test(`mode ${mode}: a retained session matches a cold pass as a kept pair nears the area`, () => {
+    // The citing opening paragraph wraps as it grows and pushes a kept heading and its
+    // successor down across the successor's space-after threshold above the note area.
+    const doc = load(
+      p('<w:t xml:space="preserve">Opening </w:t><w:footnoteReference w:id="1"/>') +
+        p('<w:t>Spacer</w:t>', 0, AREA_TOP - 20 - 3 * LINE) +
+        p('<w:t>Heading</w:t>', 0, LINE, true) +
+        p('<w:t>Body</w:t>', 10) +
+        p('<w:t>Next</w:t>'),
+      mode
+    );
+    let part = doc.part;
+    const session = createLayoutSession();
+    let result = layoutSemanticDocument(part, 1, doc.options(session));
+    const opening = result.pages[0]!.fragments[0]!;
+    if (opening.kind !== 'paragraph') throw new Error('expected a paragraph');
+    for (let index = 0; index < 50; index++) {
+      const edit = applyTreeOp(part, {
+        op: 'insertText',
+        paragraphId: opening.paragraphId,
+        offset: index,
+        text: 'w',
+      });
+      if (!edit.ok) throw new Error(edit.reason);
+      part = edit.part;
+      result = layoutSemanticDocument(part, 2 + index, doc.options(session));
+      expect(result.pages).toEqual(layoutSemanticDocument(part, 2 + index, doc.options()).pages);
+      expect(pageOf(result.pages, 'Heading')).toBe(pageOf(result.pages, 'Body'));
+    }
+    // Legacy modes let the successor's space after cross the area, so the pair stays.
+    expect(pageOf(result.pages, 'Heading')).toBe(mode === 15 ? 1 : 0);
+  });
+}

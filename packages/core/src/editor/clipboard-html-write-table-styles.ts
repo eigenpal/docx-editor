@@ -3,17 +3,16 @@ import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import { readTwipsMeasure } from '../store/units.ts';
 import { wordBorderCss } from './clipboard-html-word-elements.ts';
 import { tableSide } from './clipboard-table-direction.ts';
-import { wmlChild } from './clipboard-html-write-tree.ts';
+import { cssShading, wmlChild } from './clipboard-html-write-tree.ts';
 
 function twipsAttribute(element: OoxmlElement | null, name: string): number | null {
   if (element === null) return null;
   return readTwipsMeasure(attributeValueOf(element, name, WML_NAMESPACE_URI));
 }
 
-function colorAttribute(element: OoxmlElement | null, name: string): string | null {
-  if (element === null) return null;
-  const raw = attributeValueOf(element, name, WML_NAMESPACE_URI);
-  return raw !== undefined && /^[0-9A-Fa-f]{6}$/.test(raw) ? `#${raw.toLowerCase()}` : null;
+/** A `w:tcPr`'s stated fill (null for no colour), or undefined when it states no shading. */
+function statedShading(tcPr: OoxmlElement | null): string | null | undefined {
+  return cssShading(wmlChild(tcPr, 'shd'));
 }
 
 function pointsFromTwips(value: number): string {
@@ -24,7 +23,8 @@ function pointsFromTwips(value: number): string {
  *  paragraph properties, so a styled header row keeps its bold/white text in the
  *  copied HTML, not just its fill. */
 export interface TableConditionalFormat {
-  readonly fill: string | null;
+  /** The condition's cell fill: null when it states no colour, undefined when it states none. */
+  readonly fill: string | null | undefined;
   readonly rPr: OoxmlElement | null;
   readonly pPr: OoxmlElement | null;
 }
@@ -48,6 +48,8 @@ type ConditionType = (typeof CONDITION_TYPES)[number];
 
 export interface TableConditionalFormats {
   readonly byType: ReadonlyMap<ConditionType, TableConditionalFormat>;
+  /** The style's own whole-table `w:tcPr` fill, the derived style's over its base's. */
+  readonly styleFill: string | null;
   readonly firstRowEnabled: boolean;
   readonly lastRowEnabled: boolean;
   readonly firstColumnEnabled: boolean;
@@ -80,7 +82,10 @@ export function tableConditionalFormats(
 ): TableConditionalFormats {
   const byType = new Map<ConditionType, TableConditionalFormat>();
   const known = new Set<string>(CONDITION_TYPES);
+  let styleFill: string | null = null;
   for (const style of chain) {
+    const ownShading = statedShading(wmlChild(style, 'tcPr'));
+    if (ownShading !== undefined) styleFill = ownShading;
     for (const child of style.children) {
       if (
         child.kind === 'textValue' ||
@@ -93,7 +98,7 @@ export function tableConditionalFormats(
       if (type === undefined || !known.has(type)) continue;
       // Later chain entries (the derived style) override the base's condition.
       byType.set(type as ConditionType, {
-        fill: colorAttribute(wmlChild(wmlChild(child, 'tcPr'), 'shd'), 'fill'),
+        fill: statedShading(wmlChild(child, 'tcPr')),
         rPr: wmlChild(child, 'rPr'),
         pPr: wmlChild(child, 'pPr'),
       });
@@ -101,6 +106,7 @@ export function tableConditionalFormats(
   }
   return {
     byType,
+    styleFill,
     firstRowEnabled: tblLookFlag(tblLook, 'firstRow', 0x0020) ?? false,
     lastRowEnabled: tblLookFlag(tblLook, 'lastRow', 0x0040) ?? false,
     firstColumnEnabled: tblLookFlag(tblLook, 'firstColumn', 0x0080) ?? false,
@@ -188,7 +194,9 @@ export function wordTableCellCss(
         : wordBorderCss(wmlChild(tblBorders, tableEdge) ?? wmlChild(tblBorders, tableRelative));
     if (border) rules.push(`border-${tableSide(edge, rtl)}:${border}`);
   }
-  const fill = colorAttribute(wmlChild(tcPr, 'shd'), 'fill') ?? conditionalFill;
+  // A cell's own `w:shd` wins even with an `auto` fill, which paints no colour; `nil` states none.
+  const own = statedShading(tcPr);
+  const fill = own !== undefined ? own : conditionalFill;
   if (fill) rules.push(`background-color:${fill}`);
   const vAlignNode = wmlChild(tcPr, 'vAlign');
   const vAlign =

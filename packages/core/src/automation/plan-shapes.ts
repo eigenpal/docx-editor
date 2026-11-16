@@ -8,7 +8,8 @@
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationOperation } from './operations.ts';
 import type { PlannedOperation } from './plan.ts';
-import type { AutomationPackageReads } from './reads.ts';
+import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
+import { planShapeFill } from './plan-shape-fill.ts';
 import type { AutomationShapeEntry } from './shapes.ts';
 import { resolveSpanRef, spanParagraphIds, storyOfSpanRef } from './spans.ts';
 import { isShapeOwnerStory, storyKey, type AutomationStoryId } from './stories.ts';
@@ -24,7 +25,7 @@ const SHAPE_TYPES: ReadonlySet<string> = new Set([
 
 type ShapeOperation = Extract<
   AutomationOperation,
-  { op: 'getShapes' | 'getShape' | 'getShapeBody' }
+  { op: 'getShapes' | 'getShape' | 'getShapeBody' | 'getShapeFill' | 'setShapeFill' }
 >;
 
 const refuse = (
@@ -68,7 +69,8 @@ function shapeOfHandle(
 export function planShapes(
   operation: ShapeOperation,
   handles: AutomationHandleTable,
-  reads: AutomationPackageReads
+  reads: AutomationPackageReads,
+  claim: (story: AutomationStoryReads, paragraphId: string) => PlannedOperation | null
 ): PlannedOperation {
   if (operation.op === 'getShapes') {
     // A shape belongs to the paragraph that anchors it. A partial range would have to decide
@@ -113,6 +115,8 @@ export function planShapes(
     const { id, name, type } = found.shape;
     return query({ kind: 'shape', shape: { id, name, type } });
   }
+  if (operation.op === 'getShapeFill' || operation.op === 'setShapeFill')
+    return planShapeFill(operation, found, reads, claim);
   // A text box the file gives no story still has an empty body (`empty-text-frame.ts`).
   if (!found.shape.textboxRoot && !found.shape.emptyFrame)
     return refuse(

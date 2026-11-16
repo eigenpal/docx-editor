@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "An emptied inline control took the first glossary block of its name that held text, and that block's first paragraph with text. The open path takes the first block and its first paragraph, so the two could show different prompts.",
+  "after": "An emptied inline control takes the first glossary block of its name and that block's first paragraph, as the open path does.",
+  "reason": "The editing peer still writes the restored prompt as ordinary run text, which the canonical primitive journal replicates. Only the chosen text changes, and every peer holds the same glossary. Stored fields, operation encoding, identities, and repair rules do not change.",
+  "tests": [
+    "packages/core/src/editor/__tests__/content-control-glossary-prompt.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-control-glossary-prompt.test.ts"
+  ],
+  "changeset": "glossary-prompt-first-block",
+  "migration": null
+}

@@ -129,6 +129,34 @@ test('a family of no stated class keeps the document default, through its host s
   expect(fallbackOf('Lexington')).toBe('Carlito');
 });
 
+test('a host substitute keeps its family when the host also has the class fallback face', () => {
+  // The host maps the family to a metric twin and also supplies the document default
+  // (Calibri) under its own name. The class fallback must not replace the twin.
+  const host = hostFonts();
+  const installedCalibri = FACES.map(([weight, style]) => source('Calibri', weight, style));
+  const twin = FACES.map(([weight, style]) => source('Twin Sans', weight, style));
+  const fonts = composeFontConfiguration({
+    sources: [...host.sources, ...installedCalibri, ...twin],
+    substitutions: [
+      ...FACES.map(([weight, style]) => ({
+        from: { family: 'Lexington Sans', weight, style },
+        to: { family: 'Twin Sans', weight, style },
+      })),
+      ...(host.substitutions ?? []),
+    ],
+  });
+  const document = documentWith(
+    'Lexington Sans',
+    '<w:font w:name="Lexington Sans"><w:family w:val="swiss"/></w:font>'
+  );
+  const plan = documentFontSubstitutionPlan(document, ['Lexington Sans']);
+  const applied = applyDocumentFontSubstitutions(fonts, plan);
+  const first = applied.substitutions?.find(
+    (substitution) => substitution.from.family === 'Lexington Sans'
+  );
+  expect(first?.to.family).toBe('Twin Sans');
+});
+
 test('a family that falls back is still reported as substituted', () => {
   const document = documentWith('Lexington Serif');
   const plan = documentFontSubstitutionPlan(document, ['Lexington Serif']);
@@ -208,4 +236,34 @@ test('a family the platform has installed keeps its own face', () => {
   expect(fonts.substitutions?.some((substitution) => substitution.from.family === 'Georgia')).toBe(
     false
   );
+});
+
+test('Garamond falls back to the serif face and keeps its own line box there', () => {
+  const document = documentWith('Garamond');
+  const plan = documentFontSubstitutionPlan(document, ['Garamond']);
+  const fonts = applyDocumentFontSubstitutions(hostFonts(), plan);
+  const garamond = fonts.substitutions?.filter(
+    (substitution) => substitution.from.family === 'Garamond'
+  );
+  expect(garamond?.length).toBe(4);
+  for (const substitution of garamond ?? []) {
+    expect(substitution.to.family).toBe('Liberation Serif');
+    // hhea ascent 1765 and descent 539 over 2048 units per em.
+    expect(substitution.lineMetrics?.heightEm).toBeCloseTo(2304 / 2048, 9);
+    expect(substitution.lineMetrics?.baselineEm).toBeCloseTo(1765 / 2048, 9);
+  }
+});
+
+test('a listed font name reads its font table entry under its first family', () => {
+  const listed = 'Lexington, Georgia, serif';
+  const entry = `<w:font w:name="${listed}"><w:family w:val="roman"/></w:font>`;
+  expect(fallbackOf('Lexington', entry, `w:ascii="${listed}" w:hAnsi="${listed}"`)).toBe(
+    'Liberation Serif'
+  );
+  // A name that names no face describes nothing, not the face it paints in.
+  const stray = documentWith(
+    'Lexington',
+    '<w:font w:name="&quot;Stray&quot;, serif"><w:family w:val="modern"/></w:font>'
+  );
+  expect([...fontTableClasses(stray.currentPackage()).keys()]).toEqual([]);
 });

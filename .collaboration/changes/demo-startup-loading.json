@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The demo imports the room transport during startup.",
+  "after": "The demo imports the room transport when a user starts or joins a room.",
+  "reason": "The change preserves room data, transport messages, and editing operations.",
+  "tests": ["e2e/collaboration.interaction.spec.ts", "e2e/collaboration.resilience.spec.ts"],
+  "changeset": "browser-font-startup",
+  "migration": null
+}

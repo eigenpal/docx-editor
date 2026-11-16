@@ -4,12 +4,7 @@ import type { LayoutBox } from './semantic-records.ts';
 
 /** Published root story containing an artifact occurrence. @public */
 export type SemanticArtifactRootStoryKind =
-  | 'body'
-  | 'header'
-  | 'footer'
-  | 'footnote'
-  | 'endnote'
-  | 'note-separator';
+  'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'note-separator';
 
 /** Exact story in which a review artifact's source anchor was laid out. @public */
 export type SemanticArtifactStoryKind = SemanticArtifactRootStoryKind | 'textbox';
@@ -77,12 +72,7 @@ export interface SemanticTrackedChangeArtifactRecord {
     | 'structural';
   /** Structural changes represented by this review artifact. */
   readonly structuralChanges?: readonly (
-    | 'rowInsert'
-    | 'rowDelete'
-    | 'cellInsert'
-    | 'cellDelete'
-    | 'cellMerge'
-    | 'numberingInsert'
+    'rowInsert' | 'rowDelete' | 'cellInsert' | 'cellDelete' | 'cellMerge' | 'numberingInsert'
   )[];
   readonly markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
   readonly author: string;
@@ -104,7 +94,16 @@ export interface SemanticCommentArtifactRecord {
   readonly kind: 'comment';
   readonly id: string;
   readonly author: string;
+  /** Initials to show for the author: the document's, or ones made from the author name. */
   readonly initials: string;
+  /** The initials the document itself declares, trimmed; absent when it declares none. */
+  readonly declaredInitials?: string;
+  /**
+   * The place of the comment's reference mark among the reference marks in the main document
+   * body, counting from 0; absent when the body holds no reference mark for it. Comments are
+   * numbered in this order.
+   */
+  readonly referenceOrder?: number;
   readonly date?: string;
   readonly text: string;
   readonly resolved: boolean;
@@ -117,5 +116,4 @@ export interface SemanticCommentArtifactRecord {
 
 /** Exporter-neutral review artifact normalized by core. @public */
 export type SemanticReviewArtifactRecord =
-  | SemanticTrackedChangeArtifactRecord
-  | SemanticCommentArtifactRecord;
+  SemanticTrackedChangeArtifactRecord | SemanticCommentArtifactRecord;

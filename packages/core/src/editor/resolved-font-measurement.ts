@@ -8,6 +8,30 @@ import {
 } from '../layout/index.ts';
 import type { LayoutShapingOptions, ResolvedFont, ShapeInput } from '../layout/index.ts';
 import { markFacePreservingShaper, preservesShapingFace } from '../layout/shaped-run.ts';
+import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
+import { fontTableSerifHangulFace } from '../store/package/font-table-alternates.ts';
+import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
+
+/**
+ * The measurer for the runs that shaping cannot measure. HarfBuzz can only shape faces whose
+ * bytes reached its resource snapshot. A run may still name a locally installed browser face
+ * (Helvetica is the common macOS case), and a face can lack a glyph: paint resolves those
+ * through CSS, so falling back to the deterministic monospace grid makes caret geometry drift.
+ * This measures them on the browser canvas with the font stacks that paint uses. Headless
+ * environments still receive the fixed measurer.
+ */
+export function browserFallbackMeasurer(
+  container: HTMLElement | null,
+  scale: number,
+  session: { currentPackage(): OoxmlPackage },
+  fontAlias?: (family: string) => string | undefined
+) {
+  return resolveDefaultSurfaceMeasurer(scale, {
+    context: container ? tryCreateBrowserCanvasContext(container.ownerDocument) : null,
+    ...(fontAlias ? { fontAlias } : {}),
+    serifHangulFace: fontTableSerifHangulFace(session.currentPackage()),
+  });
+}
 
 export function resolvedFontMeasurement(
   shaping: LayoutShapingOptions,
@@ -15,7 +39,9 @@ export function resolvedFontMeasurement(
   fallback: ReturnType<typeof resolveDefaultSurfaceMeasurer>,
   scale: number,
   epoch: number,
-  onFontError?: (error: EditorFontError) => void
+  onFontError?: (error: EditorFontError) => void,
+  /** The family a run renders in while a pick holds its own family (`font-pick-hold.ts`). */
+  held?: (family: string) => string | undefined
 ) {
   const resolvedFonts = new Map<
     string,
@@ -77,7 +103,8 @@ export function resolvedFontMeasurement(
         // measurer calls this outside its own guard, so an unusable family must return
         // the fixed fallback here rather than throw through layout — which would fail
         // the remount and take the mounted document with it.
-        const family = style.fontFamily ?? fonts.defaultFont.family;
+        const authored = style.fontFamily ?? fonts.defaultFont.family;
+        const family = held?.(authored) ?? authored;
         if (family.trim().length === 0) return null;
         const request = {
           family,

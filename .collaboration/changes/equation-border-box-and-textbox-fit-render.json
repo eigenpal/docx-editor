@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Border box equations showed a text fallback, and DrawingML text boxes that fit their text kept their authored height.",
+  "after": "Border box equations and fitted text boxes render from the same unchanged document tree; border box equations stay read-only.",
+  "reason": "The change reads the shared tree for layout and paint only; it adds no operation, no shared field, and no editable region, and the editor refuses edits inside border boxes as it does for bars.",
+  "tests": [
+    "packages/core/src/layout/__tests__/equation-border-box.test.ts",
+    "packages/core/src/layout/__tests__/textbox-unwrapped-layout.test.ts"
+  ],
+  "changeset": "equation-border-box-and-textbox-fit-render",
+  "migration": null
+}

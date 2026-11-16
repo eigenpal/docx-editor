@@ -188,3 +188,98 @@ test('a remote caret and range paint inside the VML box', () => {
     editor.destroy();
   }
 });
+
+test('suggesting enters a pressed box and tracks its typing there, not at the anchor', async () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const editor = createDocxEditor({ container, document: vmlDocx(floatingBox('boxed needle')) });
+  try {
+    editor.surface!.setEditingMode('suggest');
+    editor.surface!.setAuthor('Reviewer');
+    container
+      .querySelector('.docx-drawing-textbox-content')!
+      .dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 })
+      );
+    expect(editor.surface!.activeScope().kind).toBe('frame');
+    expect(editor.exec({ type: 'insertText', text: 'New ' }).ok).toBe(true);
+    const xml = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    const story = xml.slice(xml.indexOf('<w:txbxContent>'), xml.indexOf('</w:txbxContent>'));
+    expect(story).toContain('<w:ins ');
+    expect(story).toContain('New ');
+    // The only insertion is the one in the box: nothing lands beside the anchor.
+    expect(xml.split('<w:ins ')).toHaveLength(2);
+  } finally {
+    editor.destroy();
+    container.remove();
+  }
+});
+
+test('switching to suggesting inside a box keeps the box, and its typing is tracked there', async () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const editor = createDocxEditor({ container, document: vmlDocx(floatingBox('boxed needle')) });
+  try {
+    editor.surface!.setAuthor('Reviewer');
+    container
+      .querySelector('.docx-drawing-textbox-content')!
+      .dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 })
+      );
+    expect(editor.surface!.activeScope().kind).toBe('frame');
+    editor.surface!.setEditingMode('suggest');
+    expect(editor.surface!.activeScope().kind).toBe('frame');
+    expect(editor.exec({ type: 'insertText', text: 'New ' }).ok).toBe(true);
+    const xml = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    const story = xml.slice(xml.indexOf('<w:txbxContent>'), xml.indexOf('</w:txbxContent>'));
+    expect(story).toContain('<w:ins ');
+    expect(xml.split('<w:ins ')).toHaveLength(2);
+    // Viewing leaves the box: it takes no caret there.
+    editor.surface!.setEditingMode('view');
+    expect(editor.surface!.activeScope().kind).toBe('body');
+  } finally {
+    editor.destroy();
+    container.remove();
+  }
+});
+
+test('suggesting moves and resizes the box frame directly, with no tracked change', async () => {
+  const editor = createDocxEditor({
+    container: document.createElement('div'),
+    document: vmlDocx(floatingBox('boxed needle')),
+  });
+  try {
+    editor.surface!.setAuthor('Reviewer');
+    editor.surface!.setEditingMode('suggest');
+    expect(editor.selectMatch(editor.findMatches('boxed needle')[0]!).ok).toBe(true);
+    expect(selectedImageStateOf(editor.surface!)).toMatchObject({
+      canMove: true,
+      canResize: true,
+    });
+    expect(editor.exec({ type: 'setImagePosition', horizontalEmu: 3175000 }).ok).toBe(true);
+    expect(
+      editor.exec({ type: 'setImageProperties', widthEmu: 2540000, heightEmu: 762000 }).ok
+    ).toBe(true);
+    const xml = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    expect(xml).toContain('margin-left:250pt;margin-top:0;width:200pt;height:60pt;');
+    expect(xml).not.toContain('<w:ins ');
+    expect(xml).not.toContain('<w:del ');
+    expect(xml).not.toContain('Change ');
+  } finally {
+    editor.destroy();
+  }
+});
+
+test('viewing still refuses to enter a box', () => {
+  const editor = createDocxEditor({
+    container: document.createElement('div'),
+    document: vmlDocx(floatingBox('boxed needle')),
+  });
+  try {
+    editor.surface!.setEditingMode('view');
+    const scope = editor.findMatches('boxed needle')[0]!.scope!;
+    expect(editor.surface!.setActiveScope(scope)).toBe(false);
+  } finally {
+    editor.destroy();
+  }
+});

@@ -1,8 +1,15 @@
-import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
+import {
+  expect,
+  test,
+  type Browser,
+  type BrowserContext,
+  type Locator,
+  type Page,
+} from '@playwright/test';
 import { execFileSync } from 'node:child_process';
+// The shared join closes the room dialog that stays open after a join.
+import { ORIGIN, createRoom, joinRoom, waitForEditor } from './collaboration-review-helpers';
 
-const PORT = process.env.COLLAB_E2E_PORT ?? '5276';
-const ORIGIN = `http://localhost:${PORT}`;
 const CONNECT = /^Connect$/;
 const OUT_OF_SYNC = 'Out of sync. Reload to rejoin.';
 const SCROLLER = '.docx-editor__scroll-container';
@@ -10,39 +17,6 @@ const SCROLLER = '.docx-editor__scroll-container';
 interface Peer {
   readonly page: Page;
   readonly context: BrowserContext;
-}
-
-async function waitForEditor(page: Page, url = ORIGIN): Promise<void> {
-  await page.goto(url, { waitUntil: 'commit' });
-  await expect(page.getByRole('button', { name: CONNECT })).toBeEnabled({ timeout: 180_000 });
-  await expect(page.locator('[data-paragraph-id]:visible').first()).toBeVisible({
-    timeout: 180_000,
-  });
-}
-
-async function createRoom(page: Page, name: string): Promise<string> {
-  await page.getByRole('button', { name: CONNECT }).click();
-  const dialog = page.getByRole('dialog', { name: /Collaborate on this document/i });
-  await expect(dialog).toBeVisible();
-  await dialog.getByLabel('Display name').fill(name);
-  await dialog.getByRole('button', { name: /Share this document/i }).click();
-  const connected = page.getByRole('dialog', { name: 'Collaboration room' });
-  await expect(connected.getByText('Connected', { exact: true })).toBeVisible({
-    timeout: 45_000,
-  });
-  const invite = await connected.getByLabel('Invite link').inputValue();
-  await connected.getByRole('button', { name: 'Done' }).click();
-  await expect(connected).toHaveCount(0);
-  return invite;
-}
-
-async function joinRoom(page: Page, invite: string, name: string): Promise<void> {
-  await waitForEditor(page, invite);
-  const dialog = page.getByRole('dialog', { name: /Collaborate on this document/i });
-  await expect(dialog).toBeVisible();
-  await dialog.getByLabel('Display name').fill(name);
-  await dialog.getByRole('button', { name: 'Join room' }).click();
-  await expect(dialog).toHaveCount(0, { timeout: 45_000 });
 }
 
 async function expectParticipantCount(page: Page, count: number, timeout = 20_000): Promise<void> {
@@ -82,7 +56,9 @@ async function maxFontWeight(paragraph: Locator): Promise<number> {
 async function joinedParagraphText(page: Page, id: string): Promise<string> {
   return page.evaluate((paragraphId) => {
     const nodes = [
-      ...document.querySelectorAll('.docx-page-content .docx-paragraph-fragment[data-paragraph-id]'),
+      ...document.querySelectorAll(
+        '.docx-page-content .docx-paragraph-fragment[data-paragraph-id]'
+      ),
     ].filter(
       (node) =>
         node.getAttribute('data-paragraph-id') === paragraphId && !node.closest('[data-docx-hf]')
@@ -143,7 +119,8 @@ async function connectedPeers(
   browser: Browser,
   creator: Page
 ): Promise<{ readonly peer: Peer; readonly invite: string }> {
-  await waitForEditor(creator);
+  // Plain paragraphs open the file, so the typing targets are not contents entries.
+  await waitForEditor(creator, `${ORIGIN}/?fixture=editable-sample.docx`);
   const invite = await createRoom(creator, 'Alice');
   const remote = await openPeer(browser, invite, 'Bob');
   await expectParticipantCount(creator, 2);
@@ -212,10 +189,13 @@ async function leaveRoom(page: Page): Promise<void> {
 }
 
 async function firstPageFingerprint(page: Page): Promise<string> {
-  await page.locator(SCROLLER).first().evaluate((element) => {
-    element.scrollTop = 0;
-    element.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, bubbles: true }));
-  });
+  await page
+    .locator(SCROLLER)
+    .first()
+    .evaluate((element) => {
+      element.scrollTop = 0;
+      element.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, bubbles: true }));
+    });
   return page.evaluate(() => {
     const seen = new Set<string>();
     const rows: string[] = [];
@@ -328,7 +308,9 @@ test('a peer that leaves and rejoins receives later edits', async ({ browser, pa
   await expectJoinedText(creator, firstId, expected);
 
   await joinRoom(bob.page, invite, 'Bob');
-  await expectParticipantCount(creator, 2);
+  // The unload removal can be lost with the page, so the old presence may stay
+  // until the 30 s presence timeout clears it.
+  await expectParticipantCount(creator, 2, 45_000);
   await expectParticipantCount(bob.page, 2);
   await expectJoinedText(bob.page, firstId, expected, 30_000);
   expect(await joinedParagraphText(bob.page, firstId)).not.toBe(`${firstText} [before-leave]`);
@@ -350,7 +332,9 @@ test('a reloaded peer rejoins with the newer document', async ({ browser, page: 
   await expectJoinedText(creator, firstId, expected);
 
   await joinRoom(bob.page, invite, 'Bob');
-  await expectParticipantCount(creator, 2);
+  // The unload removal can be lost with the page, so the old presence may stay
+  // until the 30 s presence timeout clears it.
+  await expectParticipantCount(creator, 2, 45_000);
   await expectParticipantCount(bob.page, 2);
   await expectJoinedText(bob.page, firstId, expected, 30_000);
   await expectHealthySession(creator);

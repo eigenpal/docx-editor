@@ -81,8 +81,9 @@ describe('opaque unsupported content layout projection', () => {
     expect(result.map((span) => span.unsupported!.element.localName)).toEqual(['panel', 'widget']);
     expect(result.every((span) => span.range.start === span.range.end)).toBe(true);
     expect(result.every((span) => span.box.height === 45)).toBe(true);
-    expect(storyBlocks(source).length).toBe(2);
-    expect(storyBlocks(projected).length).toBe(3);
+    // The two blocks, then the empty paragraph the body reads after its final table.
+    expect(storyBlocks(source).length).toBe(3);
+    expect(storyBlocks(projected).length).toBe(4);
   });
 
   test('the shared walker supports header and note content slots', () => {

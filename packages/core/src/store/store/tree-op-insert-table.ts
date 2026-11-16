@@ -213,7 +213,7 @@ export function emptyParagraph(
 }
 
 /** The attribution one tracked table insertion stamps on every marker it writes. */
-interface TableRevision {
+export interface TableRevision {
   readonly id: string;
   readonly revision: RevisionAttributionInput;
 }
@@ -227,7 +227,7 @@ function revisionMarker(
 }
 
 /** `w:pPr` holding an inserted paragraph mark. */
-function insertedMarkProperties(
+export function insertedMarkProperties(
   revision: TableRevision,
   nextId: () => string,
   wml: WmlFreshNamespaceContext

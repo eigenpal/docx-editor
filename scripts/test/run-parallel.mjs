@@ -16,9 +16,11 @@
 //     [--only LIST_FILE]
 //     [-- <args passed to every `bun test`>]
 //
-// `--exclude` drops files whose repository-relative path starts with the prefix, after shards
-// are assigned, so a shard holds the same files with or without it and CI duration caches stay
-// valid across both. Pull request CI uses it to leave the seeded collaboration scenarios to main.
+// `--exclude` drops files whose repository-relative path starts with the prefix, before shards
+// are assigned, so the remaining files spread evenly over every shard. Every shard of one run
+// passes the same prefixes, so the shards still partition what is left. Pull request CI uses it
+// to leave the seeded collaboration scenarios to main. They are close to half of the measured
+// time, and dropping them after assignment left one shard with a third more work than the rest.
 //
 // `--balance` assigns shards by the durations in the cache file instead of by file count. Only
 // use it where every shard reads an identical cache file, as CI does; otherwise shards overlap.
@@ -43,6 +45,7 @@ import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'nod
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { createOutputCapture } from './output-capture.mjs';
 import { selectShard } from './shard.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -389,9 +392,21 @@ function runFile(file, passthrough, failFast, onRss) {
         onRss(rss);
       });
     }, PEAK_SAMPLE_INTERVAL_MS);
-    let output = '';
-    child.stdout.on('data', (chunk) => (output += chunk));
-    child.stderr.on('data', (chunk) => (output += chunk));
+    // Bounded: a file that logs in a loop fails with its output's start and end, instead of
+    // growing one string until it throws and takes the runner down with it.
+    // Past the limit the file has already failed, so it is stopped: a log line in an endless
+    // loop would otherwise run until the CI job's own timeout.
+    const output = createOutputCapture();
+    let stopped = false;
+    const capture = (chunk) => {
+      output.write(chunk);
+      if (output.overLimit && !stopped) {
+        stopped = true;
+        stopWorker(child);
+      }
+    };
+    child.stdout.on('data', capture);
+    child.stderr.on('data', capture);
     child.on('error', (error) => {
       children.delete(child);
       clearInterval(sampler);
@@ -415,7 +430,7 @@ function runFile(file, passthrough, failFast, onRss) {
       // A file that finished before the sampler ever fired cannot have grown large; record the
       // floor so it is charged as small next time instead of falling back to "unknown" forever.
       if (peak === 0 && code !== null && ms <= PEAK_SAMPLE_INTERVAL_MS * 2) peak = PEAK_FLOOR_BYTES;
-      settle({ file, output, code: code ?? 1, ms, peak });
+      settle({ file, output: output.text(), code: output.overLimit ? 1 : (code ?? 1), ms, peak });
     });
   });
 }
@@ -437,13 +452,12 @@ async function main() {
     ? Object.fromEntries(Object.entries(durations).map(([file, entry]) => [file, entry.ms]))
     : undefined;
   const queue = selectShard(
-    SEARCH_ROOTS.flatMap((searchRoot) => discover(searchRoot)),
+    SEARCH_ROOTS.flatMap((searchRoot) => discover(searchRoot)).filter(
+      (file) => !exclude.some((prefix) => file.startsWith(prefix))
+    ),
     shard,
     weights
-  ).filter(
-    (file) =>
-      !exclude.some((prefix) => file.startsWith(prefix)) && (!selected || selected.has(file))
-  );
+  ).filter((file) => !selected || selected.has(file));
   if (queue.length === 0) {
     console.error(`no test files found for shard ${shard}`);
     process.exit(1);

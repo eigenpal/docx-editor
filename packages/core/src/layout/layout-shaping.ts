@@ -8,6 +8,7 @@ import {
   fontByteLength,
   fontRequestKey,
   prepareFontResourceDefinition,
+  prepareFontResourceDefinitionAsync,
   preparedFontResourceActualHash,
   sha256FontBytes,
   type FontRequest,
@@ -95,17 +96,15 @@ const LAYOUT_FONT_CONFIGURATION_ROLES = {
 void LAYOUT_FONT_CONFIGURATION_ROLES;
 
 type LayoutFontConfigurationKeysWithRole<Role extends LayoutFontConfigurationRole> = {
-  [Key in keyof typeof LAYOUT_FONT_CONFIGURATION_ROLES]: (typeof LAYOUT_FONT_CONFIGURATION_ROLES)[Key] extends Role
-    ? Key
-    : never;
+  [
+    Key in keyof typeof LAYOUT_FONT_CONFIGURATION_ROLES
+  ]: (typeof LAYOUT_FONT_CONFIGURATION_ROLES)[Key] extends Role ? Key : never;
 }[keyof typeof LAYOUT_FONT_CONFIGURATION_ROLES];
 
 type SharedShapingConfigurationKey = LayoutFontConfigurationKeysWithRole<'shaping-content'>;
 
 type FontSourceConfigurationRole =
-  | 'shared-shaping-content'
-  | 'operation-context'
-  | 'verified-byte-content';
+  'shared-shaping-content' | 'operation-context' | 'verified-byte-content';
 
 /** Nested evolution gate for source metadata and its owned-byte representation. @internal */
 const FONT_SOURCE_CONFIGURATION_ROLES = {
@@ -140,9 +139,9 @@ const DEFAULT_FONT_CONFIGURATION_ROLES = {
 void DEFAULT_FONT_CONFIGURATION_ROLES;
 
 type DefaultFontKeysWithRole<Role extends DefaultFontConfigurationRole> = {
-  [Key in keyof typeof DEFAULT_FONT_CONFIGURATION_ROLES]: (typeof DEFAULT_FONT_CONFIGURATION_ROLES)[Key] extends Role
-    ? Key
-    : never;
+  [
+    Key in keyof typeof DEFAULT_FONT_CONFIGURATION_ROLES
+  ]: (typeof DEFAULT_FONT_CONFIGURATION_ROLES)[Key] extends Role ? Key : never;
 }[keyof typeof DEFAULT_FONT_CONFIGURATION_ROLES];
 
 /** Optional measurements for resource-budget tests and host diagnostics. @public */
@@ -551,6 +550,25 @@ function shapingAlgorithmFingerprint(
   return `shaping:${sha256FontBytes(bytes)}`;
 }
 
+/** Keep caller mutation outside the asynchronous hashing boundary. */
+async function prepareBrowserLayoutFontConfiguration(
+  configuration: LayoutFontConfiguration,
+  instrumentation: LayoutShapingInstrumentation | undefined
+): Promise<PreparedLayoutFontConfiguration> {
+  const snapshot = snapshotLayoutFontConfigurationInternal(configuration, false);
+  // Every call copies its bytes before returning a promise. All sources are owned
+  // before this function yields, including sources later in the list.
+  const sources = await Promise.all(
+    snapshot.sources.map((source) =>
+      prepareFontResourceDefinitionAsync(source, {
+        onOwnedByteCopy: instrumentation?.onFontByteCopy,
+        onHash: instrumentation?.onFontHash,
+      })
+    )
+  );
+  return prepareOwnedLayoutFontConfiguration({ ...snapshot, sources }, instrumentation);
+}
+
 async function createLayoutShapingInternal(
   configuration: LayoutFontConfiguration | PreparedLayoutFontConfiguration,
   instrumentation: LayoutShapingInstrumentation | undefined,
@@ -564,7 +582,7 @@ async function createLayoutShapingInternal(
   const alreadyPrepared = isPreparedLayoutFontConfiguration(configuration);
   const prepared = alreadyPrepared
     ? configuration
-    : prepareLayoutFontConfiguration(configuration, instrumentation);
+    : await prepareBrowserLayoutFontConfiguration(configuration, instrumentation);
   const snapshot = configurationOfPreparedLayoutFonts(prepared);
   const { epoch, maxFontBytes, sources, substitutions, defaultFont } = snapshot;
   const language = snapshot.language || 'en';

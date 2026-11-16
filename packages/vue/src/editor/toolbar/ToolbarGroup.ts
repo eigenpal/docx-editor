@@ -198,6 +198,15 @@ export function useToolbarPlacement(): ToolbarPlacement {
   return inject(ToolbarPlacementKey, 'bar');
 }
 
+/** Renders one built-in part as its own "⋯" panel row, with no host wrapper. */
+export const ToolbarPanelRow = defineComponent({
+  name: 'ToolbarPanelRow',
+  setup(_, { slots }) {
+    provide(ToolbarPlacementKey, 'panel');
+    return () => slots.default?.();
+  },
+});
+
 /** Renders its children as rows of the "⋯" panel. */
 export const ToolbarPanelPlacement = defineComponent({
   name: 'ToolbarPanelPlacement',

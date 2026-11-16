@@ -21,7 +21,7 @@ function source(columns: readonly number[], texts: readonly string[], jc: string
     `<w:document xmlns:w="${W}"><w:body><w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>` +
       `<w:jc w:val="${jc}"/><w:tblBorders>${edges.map((edge) => `<w:${edge} w:val="single" w:sz="24"/>`).join('')}</w:tblBorders>` +
       `</w:tblPr><w:tblGrid>${columns.map((width) => `<w:gridCol w:w="${width}"/>`).join('')}</w:tblGrid>` +
-      `<w:tr>${cells}</w:tr></w:tbl><w:sectPr><w:pgSz w:w="12240" w:h="15840"/>` +
+      `<w:tr>${cells}</w:tr></w:tbl><w:p/><w:sectPr><w:pgSz w:w="12240" w:h="15840"/>` +
       '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>',
     { name: '/word/document.xml', contentType: 'app/xml' }
   );

@@ -4,17 +4,11 @@ description: Return PDF responses, configure Node.js deployments, and convert ba
 category: Export formats
 ---
 
-The converter runs on Node.js and returns PDF bytes. Keep conversion on the server for browser applications. The package uses the EigenPal Pro License.
-
-Install the converter and its engine peer:
-
-```sh
-npm install @docx-editor.dev/docx-to-pdf @docx-editor.dev/core
-```
+The converter runs on Node.js and returns PDF bytes, so browser applications convert on a server. The package uses the EigenPal Pro License. For installation, see [DOCX to PDF](/docs/2.x/export/pdf#install-the-converter).
 
 ## Return a PDF response
 
-A Node.js route can return the bytes in a web `Response`. This handler accepts raw DOCX bytes, not multipart form data:
+The following route accepts raw DOCX bytes, not multipart form data, and maps expected errors to HTTP status codes:
 
 ```ts
 import {
@@ -61,15 +55,15 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
-Configure your server's request size limit before `request.arrayBuffer()` reads the body. The output byte limit does not limit uploaded bytes.
+## Deploy with Next.js
 
-Limit concurrent conversions to fit your available memory.
+Place the handler in `app/api/convert/route.ts` and declare the Node.js runtime:
 
-## Next.js
+```ts
+export const runtime = 'nodejs';
+```
 
-Use `export const runtime = 'nodejs'` in the route file. Place the handler in `app/api/convert/route.ts`.
-
-Keep packages external so Node.js resolves their font and WebAssembly assets:
+Keep the packages external so Node.js resolves their font and WebAssembly assets:
 
 ```js
 // next.config.mjs
@@ -83,11 +77,13 @@ export default {
 };
 ```
 
-For a standalone deployment, include the `assets/` directories from the converter and `@docx-editor.dev/fonts`. If you install `@docx-editor.dev/fonts-cjk`, include its `assets/` directory too. Keep the package directory structure intact. Test the deployment artifact with a real conversion before release.
+- For a standalone deployment, include the `assets/` directories of the converter and `@docx-editor.dev/fonts`, and of `@docx-editor.dev/fonts-cjk` when installed.
+- Keep the package directory structure intact.
+- Test the deployment artifact with a real conversion before release.
 
 ## Convert a batch
 
-Process a batch sequentially when memory use matters more than throughput:
+The following loop converts files in sequence, which keeps memory use low:
 
 ```ts
 import { readFile, writeFile } from 'node:fs/promises';
@@ -100,9 +96,17 @@ for (const name of ['first', 'second']) {
 }
 ```
 
-The exporter disposes its document session after each call, including failed calls.
+The exporter disposes its session after each call, including failed calls.
+
+## Limits
+
+- Set the server request size limit before `request.arrayBuffer()` reads the body.
+- `maxOutputBytes` limits output, not uploaded bytes or process memory.
+- Limit concurrent conversions to fit available memory.
+- For deadlines and memory isolation, see [PDF export API limits](/docs/2.x/export/pdf/api#limits).
 
 ## Next steps
 
-- Export both formats with [Compare PDF and Markdown conversion](/docs/2.x/export/pdf/markdown-contract#reuse-one-session).
-- Configure deadlines and memory isolation with [PDF export API](/docs/2.x/export/pdf/api#resource-boundaries).
+- [PDF export API](/docs/2.x/export/pdf/api)
+- [Compare PDF and Markdown conversion](/docs/2.x/export/pdf/markdown-contract)
+- [Markdown integrations](/docs/2.x/export/markdown/integrations)

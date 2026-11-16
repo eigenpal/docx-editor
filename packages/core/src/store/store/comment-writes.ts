@@ -1,3 +1,4 @@
+import { commentTextEditRefusal } from './comment-text-support.ts';
 import { commentPackageContext } from './comment-package-edit.ts';
 // Adding a comment, and replying to one.
 //
@@ -36,7 +37,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
-import { W14_NAMESPACE_URI, XML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import { isValidParaId, mintParaId, usedParaIds, w14RootPrefix } from '../package/para-id.ts';
 import {
   collectUsedParaIds,
@@ -53,6 +54,9 @@ import {
   validateCommentText,
 } from './comment-input-validate.ts';
 import { nextCommentId } from './comment-id-mint.ts';
+import { commentParagraph, element, wmlAttr, normalizeCommentBodyText } from './comment-body.ts';
+import { commentsOfPart } from './comment-reads.ts';
+import { commentBodyText } from './review-text.ts';
 import { rewriteExtendedRoot, stampThreadParaIds } from './comment-resolution-rewrites.ts';
 import type { TreeDocumentStore, TreeModelChange } from './tree-store.ts';
 import type { TreeOpRejection } from './tree-op-types.ts';
@@ -131,45 +135,6 @@ function attribute(
     if (entry.localName === localName && entry.namespaceUri === namespaceUri) return entry.value;
   }
   return undefined;
-}
-
-function wmlAttr(localName: string, value: string): OoxmlElement['attributes'][number] {
-  return {
-    kind: 'genericExtension' as const,
-    namespaceUri: WML_NAMESPACE_URI,
-    localName,
-    prefix: 'w',
-    value,
-  };
-}
-
-/**
- * Build an element with an explicit KIND.
- *
- * Typed rather than generic on purpose: everything that reads comments matches on kind, so a
- * body written as generic nodes would serialize correctly and be invisible to the reader in the
- * same session — the comment would appear only after a save and reopen.
- */
-function element(
-  id: string,
-  kind: OoxmlElement['kind'],
-  namespaceUri: string,
-  prefix: string,
-  localName: string,
-  attributes: OoxmlElement['attributes'],
-  children: readonly OoxmlNode[],
-  bindings: readonly { prefix: string; namespaceUri: string }[] = []
-): OoxmlElement {
-  return {
-    id,
-    kind,
-    namespaceUri,
-    localName,
-    prefix,
-    namespaceBindings: bindings,
-    attributes,
-    children,
-  } as OoxmlElement;
 }
 
 /**
@@ -415,88 +380,7 @@ function commentElement(
   paraIdPrefix: string
 ): OoxmlElement {
   const base = `${COMMENTS_PART}#comment-${commentId}`;
-  // `xml:space="preserve"` when the body has an edge space, which is what a conformant
-  // reader is entitled to drop — Word writes the attribute for exactly this case. Omitted
-  // otherwise, so an ordinary reply adds no attribute the file did not need.
-  const preservesSpace = request.text !== request.text.trim();
-  const text = element(
-    `${base}.t`,
-    'text',
-    WML_NAMESPACE_URI,
-    'w',
-    't',
-    preservesSpace
-      ? [
-          {
-            kind: 'xmlSpace' as const,
-            namespaceUri: XML_NAMESPACE_URI,
-            localName: 'space' as const,
-            prefix: 'xml' as const,
-            value: 'preserve' as const,
-          },
-        ]
-      : [],
-    [{ id: `${base}.tv`, kind: 'textValue', value: request.text }]
-  );
-  // Word's own shape: the body carries `CommentText`, and the run carries
-  // `CommentReference`. Without them a comment renders in body formatting and the pane loses
-  // the styling every other editor gives it.
-  const runProperties = element(
-    `${base}.rPr`,
-    'runProperties',
-    WML_NAMESPACE_URI,
-    'w',
-    'rPr',
-    [],
-    [
-      element(
-        `${base}.rStyle`,
-        'generic',
-        WML_NAMESPACE_URI,
-        'w',
-        'rStyle',
-        [wmlAttr('val', 'CommentReference')],
-        []
-      ),
-    ]
-  );
-  const run = element(`${base}.r`, 'run', WML_NAMESPACE_URI, 'w', 'r', [], [runProperties, text]);
-  const paragraphProperties = element(
-    `${base}.pPr`,
-    'paragraphProperties',
-    WML_NAMESPACE_URI,
-    'w',
-    'pPr',
-    [],
-    [
-      element(
-        `${base}.pStyle`,
-        'generic',
-        WML_NAMESPACE_URI,
-        'w',
-        'pStyle',
-        [wmlAttr('val', 'CommentText')],
-        []
-      ),
-    ]
-  );
-  const paragraph = element(
-    `${base}.p`,
-    'paragraph',
-    WML_NAMESPACE_URI,
-    'w',
-    'p',
-    [
-      {
-        kind: 'genericExtension' as const,
-        namespaceUri: W14_NAMESPACE_URI,
-        localName: 'paraId',
-        prefix: paraIdPrefix,
-        value: paraId,
-      },
-    ],
-    [paragraphProperties, run]
-  );
+  const paragraph = commentParagraph(base, paraId, request.text, paraIdPrefix);
   return element(
     base,
     'comment',
@@ -968,6 +852,116 @@ export function setCommentResolvedWithBudget(
     });
   });
 
+  if (!result.ok) return { ok: false, reason: result.reason };
+  return { ok: true, changed: true, change: result.change };
+}
+
+/** Whether editing a comment's text applied. Unchanged text is a success that writes nothing. */
+export type SetCommentTextResult =
+  | {
+      readonly ok: true;
+      readonly changed: boolean;
+      /** The story transaction's change, for the coordinator to publish — see {@link AddCommentResult}. */
+      readonly change: TreeModelChange | null;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: TreeOpRejection | 'unknown-comment' | 'unsupported-comment-body';
+    };
+
+/** Every `w:comment` in the part that carries `commentId`. */
+function commentsWithId(part: OoxmlPart, commentId: string): OoxmlElement[] {
+  const found: OoxmlElement[] = [];
+  const visit = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    if (node.kind === 'comment') {
+      if (attribute(node, WML_NAMESPACE_URI, 'id') === commentId) found.push(node);
+      return;
+    }
+    for (const child of node.children) visit(child);
+  };
+  visit(part.root);
+  return found;
+}
+
+/**
+ * Replace the text of one comment, or of one reply, in ONE transaction.
+ *
+ * Only the body changes. The `w:comment` keeps its id, author, initials, date and any other
+ * attribute, and the new paragraph keeps the `w14:paraId` of the old LAST paragraph as written:
+ * that is the key `commentsExtended.xml` uses for the resolved state and for a reply's parent, so
+ * a new one would detach the thread in Word. The body becomes one paragraph of plain text, as
+ * `addComment` writes it. The story's range markers are not touched.
+ *
+ * Unchanged means unchanged on the card: text equal to what the card reads succeeds and writes
+ * nothing, so a body that already says it keeps its formatting.
+ */
+export function setCommentText(
+  store: TreeDocumentStore,
+  commentId: string,
+  text: string
+): SetCommentTextResult {
+  return setCommentTexts(store, [{ commentId, text }]);
+}
+
+/** Replace several comment bodies in one transaction after validating every target. */
+export function setCommentTexts(
+  store: TreeDocumentStore,
+  edits: readonly { readonly commentId: string; readonly text: string }[]
+): SetCommentTextResult {
+  const pkg = store.package;
+  const commentsName = commentsPartNameFor(pkg, store.part.name);
+  const part = pkg.parts.get(commentsName);
+  const records = part ? commentsOfPart(part) : [];
+  const pending: { commentId: string; text: string; paraId: string }[] = [];
+  for (const { commentId, text } of edits) {
+    const rejection = validateCommentText(text);
+    if (rejection)
+      return {
+        ok: false,
+        reason: rejection === 'resource-limit' ? 'resource-limit' : 'invalid-text',
+      };
+    const matches = records.filter((record) => record.id === commentId);
+    if (matches.length !== 1) return { ok: false, reason: 'unknown-comment' };
+    const unsupported = part && commentTextEditRefusal(part, commentId);
+    if (unsupported) return { ok: false, reason: unsupported };
+    const comment = matches[0]!;
+    const normalized = normalizeCommentBodyText(text);
+    const prior = pending.findIndex((edit) => edit.commentId === commentId);
+    if (prior >= 0) pending.splice(prior, 1);
+    if (commentBodyText(comment) === normalized) continue;
+    const paraId =
+      comment.paraId ?? mintParaId(`${commentsName}#text-${commentId}`, paraIdsInPackage(pkg));
+    pending.push({ commentId, text: normalized, paraId });
+  }
+  if (pending.length === 0) return { ok: true, changed: false, change: null };
+  const result = store.transact((transaction) => {
+    const ctx = commentPackageContext(transaction);
+    ctx.applyPackage((current) => {
+      const currentPart = current.parts.get(commentsName);
+      if (!currentPart) return current;
+      let next = withW14Binding(currentPart);
+      for (const { commentId, text, paraId } of pending) {
+        const target = commentsWithId(next.part, commentId)[0];
+        if (!target) return current;
+        const paragraph = commentParagraph(
+          `${target.id}.edit-${store.revision}`,
+          paraId,
+          text,
+          next.prefix
+        );
+        const replaced = replaceNode(
+          next.part,
+          target.id,
+          { ...target, children: [paragraph] } as OoxmlElement,
+          { deferValidation: true }
+        );
+        if (!replaced.ok) return current;
+        next = { ...next, part: replaced.part };
+      }
+      return withPart(current, next.part);
+    });
+  });
   if (!result.ok) return { ok: false, reason: result.reason };
   return { ok: true, changed: true, change: result.change };
 }

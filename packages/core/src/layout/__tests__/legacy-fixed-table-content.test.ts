@@ -32,7 +32,8 @@ function document(
   cell = '',
   indent = 108,
   width = 'auto',
-  text = 'abcdefghij klmnopqrst'
+  text = 'abcdefghij klmnopqrst',
+  lastCell = cell
 ) {
   const edges = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
     .map((side) => `<w:${side} w:val="single" w:sz="4"/>`)
@@ -42,8 +43,8 @@ function document(
 <w:tblBorders>${edges}</w:tblBorders><w:tblLayout w:type="fixed"/>${extra}</w:tblPr>
 <w:tblGrid><w:gridCol w:w="1000"/><w:gridCol w:w="1000"/></w:tblGrid><w:tr>${[0, 1]
     .map(
-      () =>
-        `<w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/>${cell}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`
+      (index) =>
+        `<w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/>${index === 0 ? cell : lastCell}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`
     )
     .join('')}</w:tr></w:tbl><w:p/></w:body></w:document>`);
 }
@@ -142,38 +143,84 @@ describe('legacy fixed table content edges', () => {
       expect(p.lines[0]!.box.x).toBeCloseTo(11.05, 8);
     }
   });
+  test('a right-to-left table aligns the content edge of its aligned outer cell', () => {
+    // Leading-aligned (`left`) puts the visual right cell's text edge on the right text edge;
+    // trailing-aligned (`right`) puts the visual left cell's text edge on the left text edge.
+    expect(structure(document('<w:bidiVisual/>')).outerRuleOffsetPt).toBe(5.4);
+    expect(structure(document('<w:bidiVisual/><w:jc w:val="right"/>')).outerRuleOffsetPt).toBe(
+      -5.4
+    );
+  });
+  test('a right-to-left table reads the margin of its visual outer cell', () => {
+    const wide = (side: string) => `<w:tcMar><w:${side} w:w="200" w:type="dxa"/></w:tcMar>`;
+    // The first cell in document order is the visually rightmost one, and a right-to-left
+    // table puts w:left on the physical right side.
+    const leading = document('<w:bidiVisual/>', wide('left'), 108, 'auto', undefined, '');
+    expect(structure(leading).outerRuleOffsetPt).toBe(10);
+    const trailing = document(
+      '<w:bidiVisual/><w:jc w:val="right"/>',
+      '',
+      108,
+      'auto',
+      undefined,
+      wide('right')
+    );
+    expect(structure(trailing).outerRuleOffsetPt).toBe(-10);
+  });
+
+  test('a text-box table aligns the content of a leading alignment only', () => {
+    const s = (extra: string) =>
+      readTableStructure(
+        (
+          document(extra).root.children.find((node) => node.kind === 'body') as OoxmlElement
+        ).children.find((node) => node.kind === 'table') as OoxmlElement,
+        300,
+        0,
+        styles,
+        'proposed',
+        undefined,
+        14,
+        undefined,
+        true
+      )!;
+    expect(s('').outerRuleOffsetPt).toBe(-5.4);
+    expect(s('<w:jc w:val="right"/>').outerRuleOffsetPt).toBeUndefined();
+    // A right-to-left table leads from its visual right, so its content moves right there.
+    expect(s('<w:bidiVisual/>').outerRuleOffsetPt).toBe(5.4);
+    expect(s('<w:bidiVisual/><w:jc w:val="right"/>').outerRuleOffsetPt).toBeUndefined();
+  });
+
+  test('a right-aligned table aligns the content edge of its last cell', () => {
+    expect(structure(document('<w:jc w:val="right"/>')).outerRuleOffsetPt).toBe(5.4);
+  });
   test('table boundaries retain their prior origin', () => {
-    for (const extra of [
-      '<w:bidiVisual/>',
-      '<w:tblCellSpacing w:w="20" w:type="dxa"/>',
-      '<w:jc w:val="center"/>',
-    ]) {
-      expect(structure(document(extra)).outerRuleOffsetPt).toBeUndefined();
-    }
-    expect(structure(document(), 14, 1).outerRuleOffsetPt).toBeUndefined();
+    expect(structure(document('<w:jc w:val="center"/>')).outerRuleOffsetPt).toBeUndefined();
     expect(structure(document('', '', 108, 'pct')).outerRuleOffsetPt).toBeUndefined();
+    // A nested table shares its grid lines instead: half its 0.5pt rule in from the cell edge.
+    expect(structure(document(), 14, 1).outerRuleOffsetPt).toBe(0.25);
+  });
+  test('a leading margin narrower than half the rule starts the text at the half', () => {
+    const cell = '<w:tcMar><w:left w:w="0" w:type="dxa"/></w:tcMar>';
+    expect(structure(document('', cell)).outerRuleOffsetPt).toBe(-0.25);
   });
   test('invalid margins and unsupported border clearances keep the original geometry', () => {
     for (const cell of [
       '<w:tcMar><w:left w:w="20" w:type="pct"/></w:tcMar>',
-      '<w:tcMar><w:left w:w="0" w:type="dxa"/></w:tcMar>',
       '<w:tcBorders><w:left w:val="double" w:sz="4"/></w:tcBorders>',
       '<w:tcBorders><w:left w:val="single" w:sz="8"/></w:tcBorders>',
     ])
       expect(structure(document('', cell)).outerRuleOffsetPt).toBeUndefined();
   });
-  test('incomplete row grids and different leading margins keep the original origin', () => {
+  test('different leading margins keep the original origin', () => {
     const xml = serializeOoxmlPart(document());
     const row = xml.match(/<w:tr>[\s\S]*?<\/w:tr>/)![0];
-    for (const changed of [
-      row.replace('<w:tr>', '<w:tr><w:trPr><w:gridBefore w:val="1"/></w:trPr>'),
-      row.replace('<w:tr>', '<w:tr><w:trPr><w:gridAfter w:val="1"/></w:trPr>'),
-      row.replace('</w:tcPr>', '<w:tcMar><w:left w:w="240" w:type="dxa"/></w:tcMar></w:tcPr>'),
-    ]) {
-      expect(
-        structure(part(xml.replace('</w:tbl>', changed + '</w:tbl>'))).outerRuleOffsetPt
-      ).toBeUndefined();
-    }
+    const changed = row.replace(
+      '</w:tcPr>',
+      '<w:tcMar><w:left w:w="240" w:type="dxa"/></w:tcMar></w:tcPr>'
+    );
+    expect(
+      structure(part(xml.replace('</w:tbl>', changed + '</w:tbl>'))).outerRuleOffsetPt
+    ).toBeUndefined();
   });
   test('unresolved row geometry exceptions retain the original table origin', () => {
     const xml = serializeOoxmlPart(document());

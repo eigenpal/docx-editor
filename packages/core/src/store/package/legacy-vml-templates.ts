@@ -2,7 +2,7 @@ import { readOoxmlPart, type OoxmlElement } from './ooxml-tree.ts';
 import { attribute, children, OFFICE, VML } from './legacy-vml-values.ts';
 
 // Namespace-aware signatures of the standard Office templates already in the
-// upstream demo.docx (t75) and watermark-confidential.docx (t136) fixtures, and the text box
+// watermark-picture.docx (t75) and watermark-confidential.docx (t136) fixtures, and the text box
 // template (t202).
 // Matching only the type id would silently discard custom formulas/geometry.
 const sources = [

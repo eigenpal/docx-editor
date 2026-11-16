@@ -24,11 +24,14 @@ type RevisionCapableOp = Extract<
       | 'insertTable'
       | 'insertTableRow'
       | 'deleteTableRow'
+      | 'mergeTableCells'
+      | 'splitTableCell'
       | 'setRunProperties'
       | 'setParagraphProperties'
       | 'setParagraphMarkProperties'
       | 'setListNumbering'
-      | 'setListLevel';
+      | 'setListLevel'
+      | 'setContentControlValue';
   }
 >;
 const REVISION_CAPABLE_OPS: ReadonlySet<TreeDocOp['op']> = new Set<RevisionCapableOp['op']>([
@@ -46,6 +49,9 @@ const REVISION_CAPABLE_OPS: ReadonlySet<TreeDocOp['op']> = new Set<RevisionCapab
   'insertTable',
   'insertTableRow',
   'deleteTableRow',
+  // Only inside the author's own proposed table: suggesting refuses them anywhere else.
+  'mergeTableCells',
+  'splitTableCell',
   'setRunProperties',
   'setParagraphProperties',
   'setParagraphMarkProperties',
@@ -53,6 +59,8 @@ const REVISION_CAPABLE_OPS: ReadonlySet<TreeDocOp['op']> = new Set<RevisionCapab
   // is a `w:pPrChange` a reviewer can reject, like any other paragraph property.
   'setListNumbering',
   'setListLevel',
+  // A dropdown, date, checkbox or text value becomes a strike and an insertion in the control.
+  'setContentControlValue',
 ]);
 
 export function isRevisionCapable(op: TreeDocOp): op is RevisionCapableOp {
@@ -156,4 +164,15 @@ export function trackedReplacementLanding(
   // then places at the aim, and so must this.
   const strikes = past - start > retracted;
   return (strikes ? landing : past) - retracted;
+}
+
+/** Ops that change the DOCUMENT, as opposed to reading or resolving it. */
+export function isDocumentEdit(op: TreeDocOp): boolean {
+  return (
+    op.op !== 'acceptRevision' &&
+    op.op !== 'rejectRevision' &&
+    op.op !== 'acceptAllRevisions' &&
+    op.op !== 'rejectAllRevisions' &&
+    op.op !== 'setRevisionAttribution'
+  );
 }

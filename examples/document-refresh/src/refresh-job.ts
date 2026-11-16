@@ -3,6 +3,7 @@ import type {
   RefreshChangeInput,
   RefreshResult,
   RefreshSubmission,
+  RefreshUpdateMode,
 } from '@docx-editor.dev/react';
 
 export interface ServerUpdate {
@@ -19,7 +20,9 @@ export async function runRefreshJob(
   refresh: DocumentRefresh,
   signal: AbortSignal,
   receive: (submission: RefreshSubmission) => AsyncIterable<ServerUpdate>,
-  report: (result: RefreshResult) => void
+  report: (result: RefreshResult) => void,
+  /** `'edit'` adds each result as one undo step; `'reload'` resets undo history. */
+  mode: RefreshUpdateMode = 'reload'
 ): Promise<void> {
   const submission = await refresh.capture();
   try {
@@ -28,13 +31,17 @@ export async function runRefreshJob(
       if (signal.aborted) break;
       if (update.documentId !== 'schedule' || update.submissionId !== submission.id)
         throw new Error('identity-mismatch');
-      const result = await refresh.applyUpdate({
+      const accepted = {
         submission,
         sequence: update.sequence,
         bytes: Uint8Array.from(atob(update.bytes), (c) => c.charCodeAt(0)),
         changes: update.changes,
         failures: update.failures,
-      });
+      };
+      let result = await refresh.applyUpdate({ ...accepted, mode });
+      // Nothing changed, so the same result can still reload the document.
+      if (!result.ok && result.code === 'edit-unsupported')
+        result = await refresh.applyUpdate(accepted);
       if (signal.aborted) break;
       report(result);
       // A late result cannot replace newer output. Keep receiving the job's remaining results.

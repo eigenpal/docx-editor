@@ -58,6 +58,28 @@ function rule(
   return element;
 }
 
+/** A diagonal strike: a thin bar from one corner of the box to the other, turned. */
+function diagonal(
+  document: Document,
+  line: { readonly x1: number; readonly y1: number; readonly x2: number; readonly y2: number },
+  x: number,
+  y: number,
+  thickness: number,
+  scale: number
+): HTMLElement {
+  const length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
+  const angle = Math.atan2(line.y2 - line.y1, line.x2 - line.x1);
+  const element = rule(
+    document,
+    'docx-equation-box-strike',
+    { x: x + line.x1, y: y + line.y1 - thickness / 2, width: length, height: thickness },
+    scale
+  );
+  element.style.transformOrigin = `0 ${(thickness / 2) * scale}px`;
+  element.style.transform = `rotate(${angle}rad)`;
+  return element;
+}
+
 /** Text atoms that one span can draw: one face and size on one line box, left to right. */
 function continuesTextRun(previous: EquationGeometry, next: EquationGeometry): boolean {
   return (
@@ -175,6 +197,11 @@ function paintNode(
       element.style.fontSize = `${node.fontSizePt * scale}px`;
       element.style.lineHeight = `${node.box.height * scale}px`;
       element.style.whiteSpace = 'pre';
+      if (node.kind === 'text' && node.stretch) {
+        // A grown delimiter character keeps its font box and scales its glyph vertically.
+        element.style.transformOrigin = `0 ${node.stretch.originY * scale}px`;
+        element.style.transform = `scaleY(${node.stretch.scale})`;
+      }
       if (node.kind === 'fallback') {
         // A text fallback is an unsupported element whose slot takes its own presses.
         element.style.pointerEvents = 'auto';
@@ -338,6 +365,61 @@ function paintNode(
           scale
         )
       );
+      break;
+    case 'delimiter':
+      node.fences.forEach((fence, index) =>
+        paintNode(
+          document,
+          host,
+          fence,
+          equation,
+          scale,
+          x,
+          y,
+          classes,
+          `${path}.fences.${index}`,
+          applyFace
+        )
+      );
+      node.items.forEach((item, index) =>
+        paintNode(
+          document,
+          host,
+          item,
+          equation,
+          scale,
+          x,
+          y,
+          classes,
+          `${path}.items.${index}`,
+          applyFace
+        )
+      );
+      break;
+    case 'borderBox':
+      paintNode(
+        document,
+        host,
+        node.body,
+        equation,
+        scale,
+        x,
+        y,
+        classes,
+        `${path}.body`,
+        applyFace
+      );
+      for (const stroke of node.rules)
+        host.append(
+          rule(
+            document,
+            'docx-equation-box-rule',
+            { ...stroke, x: x + stroke.x, y: y + stroke.y },
+            scale
+          )
+        );
+      for (const line of node.diagonals)
+        host.append(diagonal(document, line, x, y, node.thickness, scale));
       break;
     case 'script':
       paintNode(

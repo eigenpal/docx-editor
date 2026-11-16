@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A run font written as a list or with an unusable name requested and painted its whole authored string, so the text could disappear from PDF export.",
+  "after": "A listed name paints in its first family, and an unusable name paints in Cambria. Font table entries are read under the same first family.",
+  "reason": "The change only reads the document: run font resolution for layout, paint, and font requests. Authored w:rFonts values, shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/run-style.test.ts",
+    "packages/core/src/binding/__tests__/document-run-defaults.test.ts",
+    "packages/core/src/binding/__tests__/document-rendered-fonts.test.ts",
+    "packages/core/src/layout/__tests__/class-font-fallback.test.ts"
+  ],
+  "changeset": "font-name-lists",
+  "migration": null
+}

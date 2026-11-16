@@ -254,7 +254,7 @@ export function wordBoundaries(text: string, ideographic: boolean): number[] {
   if (ideographic) {
     const cjk: number[] = [];
     const clusterCutAt = clusterCutTester(text);
-    for (let index = 0; index < text.length; ) {
+    for (let index = 0; index < text.length;) {
       const before = text.codePointAt(index)!;
       const next = index + (before > 0xffff ? 2 : 1);
       if (next >= text.length) break;

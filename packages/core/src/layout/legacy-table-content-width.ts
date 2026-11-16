@@ -123,6 +123,7 @@ export function legacyTableContentWidth(input: {
     input.floating ||
     input.cellSpacingPt !== 0 ||
     (input.tableWidth.type !== 'auto' &&
+      input.tableWidth.type !== 'nil' &&
       (input.tableWidth.type !== 'pct' || input.tableWidth.value <= 0)) ||
     !Number.isFinite(contentWidthPt) ||
     contentWidthPt <= 0 ||
@@ -146,12 +147,13 @@ export function legacyTableContentWidth(input: {
   // without a usable width (none, auto, or a count past its range) shares the same box, and
   // so does a percentage stated past its range, which lays the table out at its narrowest.
   const automatic =
-    input.tableWidth.type === 'auto' &&
-    (!width ||
-      attr(width, 'type') === 'auto' ||
-      (attr(width, 'type') === 'pct' &&
-        /^\d{1,9}$/.test(rawWidth ?? '') &&
-        wrappedTablePercentUnits(Number(rawWidth)) === undefined));
+    (input.tableWidth.type === 'nil' && attr(width, 'type') === 'nil') ||
+    (input.tableWidth.type === 'auto' &&
+      (!width ||
+        attr(width, 'type') === 'auto' ||
+        (attr(width, 'type') === 'pct' &&
+          /^\d{1,9}$/.test(rawWidth ?? '') &&
+          wrappedTablePercentUnits(Number(rawWidth)) === undefined)));
   if (
     !automatic &&
     (attr(width, 'type') !== 'pct' ||
@@ -189,7 +191,7 @@ export function legacyTableContentWidth(input: {
   const last = rows[0]?.cells.at(-1);
   if (!first || !last) return undefined;
   if (!hasSupportedLegacyTableMargins(table, input.propertyNodes)) return undefined;
-  if (hasUnsupportedRowGeometry(table)) return undefined;
+  if (hasUnsupportedRowGeometry(table, true)) return undefined;
   // A fallback margin alone is no evidence for moving the table into the margin.
   if (!statesOuterMargins([properties, ...input.propertyNodes])) return undefined;
   const left = first.margins.left;
@@ -207,19 +209,20 @@ export function legacyTableContentWidth(input: {
     target > MAX_WIDTH_PT
   )
     return undefined;
+  // Rows that skip grid columns (`w:gridBefore`, `w:gridAfter`) follow the grid: the cells on
+  // each outer grid edge must agree, and some row must reach both edges.
+  let reachesBoth = false;
   for (const row of rows) {
     const leading = row.cells[0];
     const trailing = row.cells.at(-1);
-    if (
-      !leading ||
-      !trailing ||
-      leading.gridColumn !== 0 ||
-      trailing.gridColumn + trailing.gridSpan !== columnCount ||
-      leading.margins.left !== left ||
-      trailing.margins.right !== right
-    )
+    if (!leading || !trailing) return undefined;
+    const atLeft = leading.gridColumn === 0;
+    const atRight = trailing.gridColumn + trailing.gridSpan === columnCount;
+    if ((atLeft && leading.margins.left !== left) || (atRight && trailing.margins.right !== right))
       return undefined;
+    reachesBoth ||= atLeft && atRight;
   }
+  if (!reachesBoth) return undefined;
 
   return { widthPt: target, gridConfirmed: gridConfirms(table, columnCount, target, input) };
 }

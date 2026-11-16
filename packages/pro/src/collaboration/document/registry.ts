@@ -1,16 +1,19 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { subscribeTextReads } from './registry-text-reads.ts';
 import { TEXT_DELETIONS_KEY } from './paragraph-text-deletions.ts';
+import { TEXT_DECISIONS_KEY } from './paragraph-text-decisions.ts';
 import { keepFormattingMarkers } from './yjs-items.ts';
 import { compareDocumentOrder } from './registry-document-order.ts';
 import { RegistryHistory } from './registry-history.ts';
 import { observeDirtyPaths } from './registry-dirty-paths.ts';
 import { captureInsertionBoundary } from './split-text-boundaries.ts';
 import { SplitTextSources, type SplitTextRange } from './split-text-sources.ts';
+import { SplitSiblingOrders } from './split-sibling-order.ts';
+import { NODE_SPLIT_POINTS_FIELD } from './split-points.ts';
 import * as Y from 'yjs';
 import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaboration/replication';
 import { partNameKey } from '@docx-editor.dev/core/store';
@@ -80,7 +83,12 @@ import {
   readString,
   type NodeShape,
 } from './registry-node-reads.ts';
-import { addListing, syncChildListings, type ChildListings } from './registry-listings.ts';
+import {
+  addListing,
+  syncChildListings,
+  unlistChildIds,
+  type ChildListings,
+} from './registry-listings.ts';
 import { AdoptionIndex } from './registry-adoption.ts';
 import { InlineIndex } from './paragraph-inline-index.ts';
 import { INLINE_FIELD } from './paragraph-text.ts';
@@ -112,6 +120,12 @@ export class DocumentRegistry {
   private readonly adoption: AdoptionIndex;
   /** Which paragraph's shared text holds each inline ID. */
   readonly inline: InlineIndex;
+  /** The order concurrent splits of one paragraph show their new paragraphs in. */
+  readonly splitSiblings = new SplitSiblingOrders(
+    (id) => this.schema.nodes.get(id),
+    (id) => this.inline.textOf(id),
+    (id) => this.childrenSnapshot.get(id)
+  );
   private readonly stopMarks: () => void;
   private readonly stopKeepingMarkers: () => void;
   private readonly markListeners = new Set<(ids: ReadonlySet<LogicalId>) => void>();
@@ -150,12 +164,13 @@ export class DocumentRegistry {
         compareDocumentOrder(
           {
             parentOf: (id) => this.parentIndex.get(id),
-            childrenOf: (id) => this.childrenSnapshot.get(id),
+            childrenOf: (id) => this.splitSiblings.shownChildren(id),
             maxDepth: this.limits.maxTreeDepth,
           },
           a,
           b
-        )
+        ),
+      (id) => this.splitSiblings.textChanged(id)
     );
     this.adoption = new AdoptionIndex(this.schema.nodes, {
       kindOf: (id) => this.kindOf(id),
@@ -230,8 +245,9 @@ export class DocumentRegistry {
       asTrackedType(this.schema.binaries),
       asTrackedType(this.schema.attributes),
       asTrackedType(this.schema.bindings),
-      // An undo of a deletion withdraws its record, so the text shows again.
+      // An undo of a deletion or a decision withdraws its record, so the text shows again.
       asTrackedType(this.doc.getMap(TEXT_DELETIONS_KEY)),
+      asTrackedType(this.doc.getMap(TEXT_DECISIONS_KEY)),
     ];
   }
 
@@ -620,19 +636,8 @@ export class DocumentRegistry {
    * its place in the array, and still reaches the survivor.
    */
   unlistChildren(parentId: LogicalId, childIds: readonly LogicalId[]): void {
-    if (childIds.length === 0) return;
     const rec = this.schema.nodes.get(parentId);
-    const children = rec ? childArrayOf(rec) : null;
-    if (!children) return;
-    const remaining = new Map<LogicalId, number>();
-    for (const childId of childIds) remaining.set(childId, (remaining.get(childId) ?? 0) + 1);
-    for (let index = children.length - 1; index >= 0; index -= 1) {
-      const value = children.get(index);
-      const left = remaining.get(value) ?? 0;
-      if (left === 0) continue;
-      remaining.set(value, left - 1);
-      children.delete(index, 1);
-    }
+    unlistChildIds(rec ? childArrayOf(rec) : null, childIds);
   }
 
   putXmlPart(entry: PartDirectoryEntry): void {
@@ -843,26 +848,22 @@ export class DocumentRegistry {
         }
         continue;
       }
-      if (
-        event.target instanceof Y.Map &&
-        event.path.length === 1 &&
-        event.changes.keys.has(NODE_UNDONE_FIELD)
-      ) {
-        this.history.noteMarkChanged(keyId(event.path[0]!));
-      }
-      // Undo retains record containers. Redo restores scalar provenance on those existing
-      // maps, so a late joiner must index field changes as well as new map entries.
-      if (
-        event.target instanceof Y.Map &&
-        event.path.length === 1 &&
-        (event.changes.keys.has('splitFrom') || event.changes.keys.has('splitLineage'))
-      ) {
-        this.splitDedup.indexExisting(keyId(event.path[0]!));
+      if (event.target instanceof Y.Map && event.path.length === 1) {
+        const id = keyId(event.path[0]!);
+        const keys = event.changes.keys;
+        if (keys.has(NODE_UNDONE_FIELD)) this.history.noteMarkChanged(id);
+        // Undo retains record containers. Redo restores scalar provenance on those existing
+        // maps, so a late joiner must index field changes as well as new map entries.
+        if (keys.has('splitFrom') || keys.has('splitLineage')) this.splitDedup.indexExisting(id);
+        // An undo or redo can name a paragraph's new listing entry in its split points after
+        // it listed the paragraph, so the order of each parent that lists it is read again.
+        if (keys.has(NODE_SPLIT_POINTS_FIELD))
+          for (const parentId of this.listings.get(id) ?? []) this.splitSiblings.forget(parentId);
       }
       if (event.target instanceof Y.Array && event.path.length > 0) {
         structural = true;
         const parentId = keyId(event.path[0]!);
-        for (const childId of this.syncChildListings(parentId)) changed.add(childId);
+        for (const childId of this.syncChildListings(parentId, true)) changed.add(childId);
         if (this.isTombstoned(parentId)) this.adoption.sync(parentId);
         continue;
       }
@@ -914,7 +915,8 @@ export class DocumentRegistry {
     applyBindingMapEvent(this.schema, this.bindingsByNode, event);
   }
 
-  private syncChildListings(parentId: LogicalId): LogicalId[] {
+  private syncChildListings(parentId: LogicalId, arrayChanged = false): LogicalId[] {
+    if (arrayChanged) this.splitSiblings.forget(parentId);
     const rec = this.schema.nodes.get(parentId);
     const next = rec ? (childArrayOf(rec)?.toArray() ?? []) : [];
     return syncChildListings(this.listingIndex(), parentId, next);

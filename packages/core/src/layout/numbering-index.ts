@@ -100,6 +100,11 @@ export interface NumberingLevel {
    * drawn INSTEAD of `w:lvlText`. Absent on every ordinary level.
    */
   readonly picBulletId?: string;
+  /**
+   * `w:pStyle` (§17.9.23): the paragraph style this level is linked to, as in a heading
+   * numbering. A paragraph that joins the list at this level takes that style.
+   */
+  readonly pStyle?: string;
   /** Level `w:rPr` as flat properties (for marker face / vanish). */
   readonly runProperties: readonly OoxmlProperty[];
   /** True when level run props request vanish — marker must not paint. */
@@ -334,6 +339,7 @@ function parseLevel(lvl: OoxmlElement): NumberingLevel | null {
       ? picBulletRaw
       : undefined;
 
+  const pStyle = linkTarget(lvl, 'pStyle');
   const pPr = child(lvl, 'pPr');
   const rPr = child(lvl, 'rPr');
   const runProperties = rPr ? propertiesOfRunContainer(rPr) : [];
@@ -349,6 +355,7 @@ function parseLevel(lvl: OoxmlElement): NumberingLevel | null {
       indent: parseIndent(pPr),
       ...(lvlRestart !== undefined ? { lvlRestart } : {}),
       ...(picBulletId !== undefined ? { picBulletId } : {}),
+      ...(pStyle !== undefined ? { pStyle } : {}),
       isLgl: onOffChild(lvl, 'isLgl'),
       runProperties,
       vanish: toggleOn(runProperties, 'vanish'),

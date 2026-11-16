@@ -11,6 +11,7 @@ import { MaybeRefOrGetter as MaybeRefOrGetter_2 } from '@docx-editor.dev/vue';
 import { PropType } from 'vue';
 import { Ref } from 'vue';
 import { ReviewAuthorInfo } from '@docx-editor.dev/vue';
+import { ShallowRef } from 'vue';
 import { VNode } from 'vue';
 import * as vue from 'vue';
 import * as vue_jsx_runtime from 'vue/jsx-runtime';
@@ -1103,6 +1104,7 @@ export function reviewModule(options?: ReviewModuleOptions): EditorModule;
 
 // @public
 export interface ReviewModuleOptions extends ProLicenseOptions {
+    readonly compareWorker?: (() => Worker) | false;
     readonly pane?: ReviewPaneOptions;
 }
 
@@ -1170,7 +1172,7 @@ export interface ReviewRailMetrics {
 }
 
 // @public
-export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment';
+export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment' | 'edit';
 
 // @public
 export interface ReviewWriteRefusal {
@@ -1251,6 +1253,17 @@ export function useReview(query?: MaybeRefOrGetter_2<ReviewItemQuery | undefined
 // @public
 export function useReviewAuthor(author: MaybeRefOrGetter<string | undefined>): ComputedRef<ReviewAuthorInfo | undefined>;
 
+// @public
+export function useReviewCardHeights(items?: MaybeRefOrGetter<readonly {
+    readonly key: string;
+}[]>): UseReviewCardHeightsReturn;
+
+// @public
+export interface UseReviewCardHeightsReturn {
+    readonly cardRef: (key: string) => (el: unknown) => void;
+    readonly heights: Readonly<ShallowRef<ReadonlyMap<string, number>>>;
+}
+
 // @public (undocumented)
 export function useReviewItem(): ComputedRef<ReviewItemView | null>;
 
@@ -1289,6 +1302,7 @@ export interface UseReviewReturn {
     readonly comment: (text: string, author?: string) => boolean;
     // (undocumented)
     readonly commentResolutionDisabledReason: ComputedRef<string | null>;
+    readonly edit: (item: ReviewItemView, text: string, expectedText?: string) => boolean;
     // (undocumented)
     readonly items: ComputedRef<readonly ReviewItemView[]>;
     readonly lastRefusal: ComputedRef<ReviewWriteRefusal | null>;

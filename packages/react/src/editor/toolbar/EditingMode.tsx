@@ -42,9 +42,7 @@ interface ModeOption {
   readonly mode: DocumentEditingMode;
   readonly labelKey: 'editingMode.editing' | 'editingMode.suggesting' | 'editingMode.viewing';
   readonly hintKey:
-    | 'editingMode.editingHint'
-    | 'editingMode.suggestingHint'
-    | 'editingMode.viewingHint';
+    'editingMode.editingHint' | 'editingMode.suggestingHint' | 'editingMode.viewingHint';
   readonly path: string;
 }
 

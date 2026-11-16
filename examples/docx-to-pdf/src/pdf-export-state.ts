@@ -1,18 +1,12 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import type { ConversionTimings } from './conversion-response';
 
 export type PdfStatus =
-  | 'idle'
-  | 'preparing'
-  | 'starting'
-  | 'converting'
-  | 'ready'
-  | 'stale'
-  | 'error';
+  'idle' | 'preparing' | 'starting' | 'converting' | 'ready' | 'stale' | 'error';
 
 export function isPdfBusy(status: PdfStatus): boolean {
   return status === 'preparing' || status === 'starting' || status === 'converting';

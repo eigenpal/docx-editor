@@ -38,6 +38,10 @@ const WORD_PARAGRAPH_CLASSES: Readonly<Record<string, string>> = {
   IntenseQuote: 'MsoIntenseQuote',
   BodyText: 'MsoBodyText',
   FootnoteText: 'MsoFootnoteText',
+  TOCHeading: 'MsoTocHeading',
+  ...Object.fromEntries(
+    Array.from({ length: 9 }, (_, index) => [`TOC${index + 1}`, `MsoToc${index + 1}`])
+  ),
 };
 
 /**

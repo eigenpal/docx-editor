@@ -1,4 +1,8 @@
+import type { EditorPointPosition } from './editor-drop.ts';
+export type { EditorPointPosition, EditorDropEvent, EditorHostDragEvent } from './editor-drop.ts';
 import type { ResolvedRevisionMarkup } from './revision-markup.ts';
+import type { CompareDocumentsRequest } from './compare-documents.ts';
+import type { ReplaceDocumentRequest } from './replace-document.ts';
 import type { ResolvedReviewPane } from './review-pane.ts';
 /**
  * `@docx-editor.dev/core/contracts/editor` — the `Editor` contract adapters are written against.
@@ -14,40 +18,28 @@ import type { ZoomMode } from './editor-zoom.ts';
 
 /** Keys for the table furniture's accessible names, resolved by `tableInteractionLabel`. */
 export type TableInteractionLabelKey =
-  | 'table.insertRowBelow'
-  | 'table.insertColumnRight'
-  | 'table.selectTable';
+  'table.insertRowBelow' | 'table.insertColumnRight' | 'table.selectTable';
 
 export type { ZoomFitTarget, ZoomMode } from './editor-zoom.ts';
 import type { TextMatch } from './editor-text-match.ts';
-export type { TextMatch } from './editor-text-match.ts';
+export type { ReplaceAllMatchesOutcome, TextMatch } from './editor-text-match.ts';
 import type { EditorFontErrorCode, FontFaceRequest } from './editor-fonts.ts';
-export type {
-  EditorFontErrorCode,
-  FontConfiguration,
-  FontFaceRequest,
-  FontSource,
-  FontSourceSubstitution,
-} from './editor-fonts.ts';
+export type * from './editor-fonts.ts';
 import type { EditorEvents } from './editor-events.ts';
 import type { EditorAnchorNavigation, ScrollToAnchorOptions } from './editor-anchor.ts';
-export type {
-  AnchorHighlightAnimation,
-  AnchorHighlightOptions,
-  ClearAnchorHighlightOptions,
-  EditorAnchorNavigation,
-  ScrollPlacement,
-  ScrollToAnchorOptions,
-} from './editor-anchor.ts';
-import type { EditorHighlights } from './editor-highlights.ts';
-export type {
+export type * from './editor-anchor.ts';
+import type {
   EditorHighlights,
-  HighlightHit,
-  HighlightOptions,
   HighlightRange,
-  HighlightRect,
-  HighlightResult,
+  NavigateHighlightCommand,
 } from './editor-highlights.ts';
+import type { EditorSelectionRange, EditorSelectionReads } from './editor-selection-range.ts';
+export type * from './editor-selection-range.ts';
+export type * from './editor-highlights.ts';
+import type { EditorParagraphText, ReplaceAcceptedTextCommand } from './editor-paragraph-text.ts';
+export type * from './editor-paragraph-text.ts';
+import type { HyperlinkInfo, PageSetup } from './editor-read-models.ts';
+export type { HyperlinkInfo, PageSetup } from './editor-read-models.ts';
 import type { EditorReviewHits } from './editor-review-hits.ts';
 import type { ReviewItemQuery } from './editor-review-query.ts';
 export type { ReviewItemQuery } from './editor-review-query.ts';
@@ -69,6 +61,7 @@ export type {
   EditorEvents,
   EditorHostChange,
   EditorHostDocument,
+  ParagraphsChangeEvent,
   ReviewChangesResolvedEvent,
   ReviewItemRevealEvent,
   ReviewItemRevealSource,
@@ -84,6 +77,7 @@ export type { RevisionBatchResult } from '../store/store/revision-batch.ts';
 export type { RevisionAuthorResult } from '../store/store/revision-author-change.ts';
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';
 import type {
+  CommentTextOptions,
   EditorExecOptions,
   EditorScope,
   HistoryGroup,
@@ -91,6 +85,7 @@ import type {
   ViewScope,
 } from './editor-scope.ts';
 export type {
+  CommentTextOptions,
   EditorExecOptions,
   EditorScope,
   HistoryGroup,
@@ -110,7 +105,8 @@ import type { InteractionOutcome } from './interaction';
 // The selection vocabulary the painted surface actually speaks. Type-only, and re-exported
 // below for the same reason the review types are: an adapter is not allowed to import the
 // layout lane, so a form it must construct has to be nameable from this contract.
-import type { SemanticPosition, SemanticSelection } from '../layout/semantic-interaction.ts';
+import type { EditorSelection } from './editor-position.ts';
+export type { EditorPosition, EditorSelection } from './editor-position.ts';
 import type { CollaborationStatus } from '../collaboration/index.ts';
 import type {
   ColorValue,
@@ -143,6 +139,14 @@ import type { DocumentProtectionState } from '../store/package/document-protecti
 import type { SupportedImageMime } from '../store/package/image-resources.ts';
 import type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 import type { ImageContext, SelectedImageState } from './editor-image-state.ts';
+import type { SetShapeFillCommand, SetShapeOutlineCommand } from './editor-shape-format.ts';
+export type * from './editor-shape-format.ts';
+import type {
+  EditorChartCommands,
+  EditorChartQueries,
+  EditorChartQueryResults,
+  SelectedChartState,
+} from './chart.ts';
 import type { BookmarkSummary, EditorBookmarkCommands } from './editor-bookmarks.ts';
 export type * from './types';
 export type * from './interaction';
@@ -151,6 +155,7 @@ export type * from './editor-format-painter.ts';
 export type * from './editor-bookmarks.ts';
 export type * from './editor-image-state.ts';
 export type * from './diagnostics.ts';
+export type * from './chart.ts';
 export type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 
 // Everything below is named by a signature IN this file, so it has to be nameable FROM this
@@ -203,6 +208,8 @@ export type {
 export interface DocumentHandle {
   /** Package revision: rises for every edit, wherever it landed. Safe to compare. */
   readonly revision: number;
+  /** The loaded document's identity: new on every `load()` (a reload too), kept across edits. */
+  readonly loadId: string;
 }
 
 /**
@@ -248,30 +255,6 @@ export class EditorFontError extends Error {
 }
 
 /**
- * A selection endpoint, in either vocabulary the engine resolves.
- *
- * {@link DocAnchor} addresses a paragraph by its `w14:paraId`, which is what an LLM or an
- * automation script can name in a payload. {@link SemanticPosition} addresses it by the
- * paragraph id the painted surface and the ops already use, with a UTF-16 offset inside it.
- *
- * Neither subsumes the other. A paraId survives being written to a file and read back, so it
- * is the one an out-of-process caller can hold; but it is OPTIONAL in the document, and
- * `ParagraphSummary.paraId` says so — a paragraph the file gave no `w14:paraId` cannot be
- * reached by a `DocAnchor` at all. The paragraph id reaches every paragraph.
- */
-export type EditorPosition = DocAnchor | SemanticPosition;
-
-/**
- * A selection, in one endpoint vocabulary or the other.
- *
- * The two do NOT mix: a range is a pair of paraId anchors, or a semantic anchor/head pair,
- * and `can()` refuses anything else with the engine's own reason. Spelled as two arms rather
- * than `{ from: EditorPosition; to: EditorPosition }` for exactly that reason — the looser
- * shape would type a mixed pair the engine rejects at runtime.
- */
-export type EditorSelection = SemanticSelection | { from: DocAnchor; to: DocAnchor };
-
-/**
  * Whether a command would be accepted, and why not when it would not.
  *
  * The `reason` is the ENGINE's own words, which is what lets disabled chrome explain itself
@@ -296,7 +279,13 @@ export type CanResult = { ok: true } | { ok: false; code: ExecErrorCode; reason:
  * const bytesOut = await editor.save();
  * ```
  */
-export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits {
+export interface Editor
+  extends
+    EditorAnchorNavigation,
+    EditorHighlights,
+    EditorParagraphText,
+    EditorReviewHits,
+    EditorSelectionReads {
   /**
    * Load a new document (DOCX bytes, `'blank'`, or a handle), replacing the current one.
    *
@@ -454,12 +443,12 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
   ): readonly (readonly TextMatch[])[];
 
   /**
-   * Move the selection to a found match — what a find dialog's next/previous do.
-   *
-   * Separate from `findMatches` because finding is a read and selecting is a write, and
-   * a caller may want the count without moving the caret.
+   * Move the selection to a match — what a find dialog's next/previous do. Takes a
+   * {@link TextMatch} or a {@link HighlightRange} you computed, and opens the header, footer,
+   * or note that holds it, unlike `replaceMatch`, which edits a closed story in place. Refusals
+   * match: `notFound` when the expected text moved, `invalidArgs` when `scope` is wrong.
    */
-  selectMatch(match: TextMatch): ExecResult;
+  selectMatch(match: TextMatch | HighlightRange): ExecResult;
 
   /** The image at the selection, for the image toolbar and transform controls. */
   getSelectedImage(): SelectedImageState | null;
@@ -626,15 +615,6 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
   addComment(text: string, author?: string, options?: HistoryGroupOptions): ExecResult;
 
   /**
-   * Where a comment on the current selection would sit, in the same space as
-   * {@link ReviewItemPlacement.anchorY}, or null when nothing is selected.
-   *
-   * Published so a host can place an "add a comment" affordance beside the selected text
-   * without deriving document geometry, which is the one thing an adapter must not do.
-   */
-  getSelectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null;
-
-  /**
    * Card to document: a COLLAPSED caret at the range start, and a scroll to it. `null` clears it.
    *
    * REPORTS, like {@link acceptReviewItem} and for the same reason. Activation is refused for
@@ -729,6 +709,22 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * as {@link addComment} describes.
    */
   setCommentResolved(key: string, resolved: boolean, options?: HistoryGroupOptions): ExecResult;
+
+  /**
+   * Replace the text of the comment, or of the reply, behind a review card.
+   *
+   * The body becomes one paragraph of plain text, as {@link addComment} writes it; a line break in
+   * `text` does not start a new paragraph. The author, the date, the thread state, the replies and
+   * the range the comment covers stay, so the comment keeps its place in its thread when the file
+   * opens again. The write is one package transaction and one undo step, and it joins an open
+   * history group. Text the card already shows succeeds without adding an undo entry.
+   *
+   * Requires the configured nonempty author to match the comment author exactly. This host
+   * identity policy is not authentication. Refused on blank text, in viewing mode, and for
+   * bodies with revisions or unsupported structures. Formatting becomes plain text.
+   * Use {@link CommentTextOptions.expectedText} to preserve a draft when another edit arrives.
+   */
+  setCommentText(key: string, text: string, options?: CommentTextOptions): ExecResult;
 
   /**
    * Discard the item behind a card: the destructive half of the review verbs.
@@ -863,6 +859,12 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
   // layout lane (`layout/semantic-hit-test.ts`) and the paginated surface calls it directly.
   // Re-exposing any of it here is a small wiring job on the day a host actually needs it.
 
+  /**
+   * Resolve client pixels in the active story without moving the selection.
+   * Returns null outside that story, while detached, and for unsupported text boxes.
+   * Pass the exact result to `insertImage.at` before the document or scope changes.
+   */
+  positionAtPoint(clientX: number, clientY: number): EditorPointPosition | null;
   /** Page boxes in stack coordinates, each with the text area the engine laid out.
    * `contentBox` is the page inset by the section margin. Rulers use it for margin zones.
    * The engine's margin is uniform, so do not present this as per-side fidelity.
@@ -964,7 +966,8 @@ export interface EditorCommands
     EditorHeaderFooterCommands,
     EditorNoteCommands,
     EditorFormatPainterCommands,
-    EditorBookmarkCommands {
+    EditorBookmarkCommands,
+    EditorChartCommands {
   /** Switch how edits are written. A view command: it changes no document state. */
   setEditingMode: { mode: DocumentEditingMode };
   /**
@@ -977,6 +980,17 @@ export interface EditorCommands
   toggleReviewPane: Record<never, never>;
   /** Open the local review settings dialog supplied by the review module. */
   openRevisionMarkupDialog: Record<never, never>;
+  /** Open the Compare documents dialog supplied by the review module. */
+  openCompareDocumentsDialog: Record<never, never>;
+  /**
+   * Compare the open document (the original) with a revised DOCX and record the differences in
+   * it as tracked changes, as one undoable step. For hosts with their own file picker. The
+   * result's `compareDocuments` field carries the revision count, or the refusal as a code to
+   * translate (`compareDocuments.errors.<code>`).
+   */
+  compareDocuments: CompareDocumentsRequest;
+  /** Replace the document with a DOCX file as one undoable edit; see {@link ReplaceDocumentRequest}. */
+  replaceDocument: ReplaceDocumentRequest;
   /** Word's Show/Hide paragraph marks; presentation only. */
   toggleParagraphMarks: Record<never, never>;
   /** Word's Protect Document: enforce filling-in-forms protection, or lift the enforced one. */
@@ -993,6 +1007,22 @@ export interface EditorCommands
    * replacement, the other half is a stop of its own.
    */
   navigateReviewChange: { direction: 'next' | 'previous' };
+  /**
+   * Select the next or previous mark of a highlight set, such as the next spelling issue, and
+   * scroll it into view. Marks are taken in reading order across stories, as `getParagraphs()`
+   * lists paragraphs, and navigation wraps at the end. Only marks that still cover their text
+   * count. A collapsed caret at the start of a mark selects that mark first. With a mark
+   * selected, open the context menu from the keyboard with Shift+F10 or the menu key.
+   *
+   * Returns `notFound` for an unknown set or a set without marks. It changes no document
+   * content and no highlight.
+   *
+   * @example
+   * ```ts
+   * editor.exec({ type: 'navigateHighlight', name: 'spelling', direction: 'next' });
+   * ```
+   */
+  navigateHighlight: NavigateHighlightCommand;
   /** Resolve eligible changes shown by the active filters, or an explicit scope, in one undo step. */
   resolveAllReviewChanges: ResolveReviewChangesOptions;
   /** Attribute eligible changes to another author, keeping them pending, in one undo step. */
@@ -1161,33 +1191,43 @@ export interface EditorCommands
     scope?: 'document' | 'section';
   };
 
-  /** Remove the tab stop at this position (twips) from the current paragraph. */
+  /** Remove the selection paragraphs' tab stop at this position (twips); none there: `notFound`. */
   removeTabMark: { positionTwips: number };
 
   /**
-   * Replace one found match with `text`, addressed by the {@link TextMatch} `findMatches`
-   * returns. An empty `text` deletes it. The selection and scroll position stay put. In
-   * suggesting mode it is a tracked replacement under the editor's author, refused where
-   * `proposeReplacement` would be. The match must be in the open story, not a text box.
+   * Replace one match with `text`: a {@link TextMatch}, or a {@link HighlightRange} you
+   * computed. An empty `text` deletes it. One undo step, which joins an open `historyGroup`.
+   * In suggesting mode it is a tracked replacement under the editor's author, refused where
+   * `proposeReplacement` would be. The active story, selection, and scroll stay put: a header,
+   * footer, or note that is not open is edited in place, without opening it.
+   * Without `scope`, the story comes from `blockId`; a `scope` naming another story returns
+   * `invalidArgs`. A text box, or tracked deleted or moved text, returns `unsupported`. Expected
+   * text (`expectedText`, else `text`) that the offsets no longer hold, or an unknown `blockId`,
+   * returns `notFound` and changes nothing; find it again.
    *
-   * For headless or server use, see `range.insertText(text, 'Replace')` with
-   * `document.changeTrackingMode` set to `'TrackMineOnly'` in `@docx-editor.dev/editor-api`.
+   * On a server, use `range.insertText(text, 'Replace')` from `@docx-editor.dev/editor-api`.
    *
    * @example
    * ```ts
    * const [match] = editor.findMatches('30 days', { matchCase: true });
    * if (match) editor.exec({ type: 'replaceMatch', match, text: '45 days' });
+   * const range = { blockId, start: 3, length: 5, expectedText: 'go to' };
+   * const result = editor.exec({ type: 'replaceMatch', match: range, text: 'goes to' });
+   * if (!result.ok && result.code === 'notFound') refreshSuggestions();
    * ```
    *
    * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement | Replace as a tracked change}
    */
-  replaceMatch: { match: TextMatch; text: string };
+  replaceMatch: { match: TextMatch | HighlightRange; text: string };
+
+  /** Fix a range of `ParagraphText.acceptedText`, editing only the letters that differ. */
+  replaceAcceptedText: ReplaceAcceptedTextCommand;
 
   /**
-   * Replace EVERY match of `query` in one undoable step. Separate from looping
-   * `replaceMatch` because each replacement shifts the offsets of the ones after it —
-   * legacy applied its edits back-to-front for exactly this reason, and that ordering
-   * belongs with whoever owns the offsets.
+   * Replace every match of `query` with `text` (empty deletes) in one undo step, across the
+   * stories {@link Editor.findMatches} searches; tracked in suggesting mode. Skips and refusals:
+   * {@link ReplaceAllMatchesOutcome}. Refused past the search limit (`unsupported`).
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement | Replace as a tracked change}
    */
   replaceAllMatches: {
     query: string;
@@ -1235,6 +1275,11 @@ export interface EditorCommands
     relativeToV?: string;
   };
 
+  /** Fill of the selected shape, text box, line or group. See {@link SetShapeFillCommand}. */
+  setShapeFill: SetShapeFillCommand;
+  /** Outline of the selected shape, text box, line or group. */
+  setShapeOutline: SetShapeOutlineCommand;
+
   /** Size, alt text, crop, position, and border of the selected image, from the properties dialog. */
   setImageProperties: {
     /** Expected drawing node id captured when the dialog opened. */
@@ -1275,6 +1320,8 @@ export interface EditorCommands
   insertTextBox: Record<never, never>;
 
   insertImage: {
+    /** Exact result from `positionAtPoint` or a drop event; stale targets refuse the insert. */
+    at?: EditorPointPosition;
     data: Uint8Array;
     mime: SupportedImageMime;
     widthPoints: number;
@@ -1310,12 +1357,22 @@ export interface EditorCommands
   /** Open options for the selected or context-clicked legacy text form. */
   editTextFormField: Record<never, never>;
   refreshToc: { tocId?: string; mode?: 'entire' | 'pageNumbers' };
+  /**
+   * Remove a table of contents: its field, or the table of contents control around it with
+   * its heading. Text before and after the field stays. Without `tocId`, removes the table of
+   * contents last right-clicked, the one at the selection, or the only one. One undo step.
+   * Refuses with `notFound` when there is none, and while suggesting.
+   */
+  removeToc: { tocId?: string };
 
   undo: Record<never, never>;
   redo: Record<never, never>;
   /**
    * Move the selection. Three accepted forms, and `can()` names all three when it refuses:
-   * a collapsed paraId anchor, a range of two paraId anchors, or a semantic anchor/head pair.
+   * a collapsed paraId anchor, a range of two paraId anchors, or an anchor/head pair of
+   * text positions. A text position takes `blockId`, or the older name `paragraphId`; a
+   * position with neither, or with both naming different paragraphs, refuses `invalidArgs`.
+   * A {@link EditorSelectionRange} read passes here unchanged.
    *
    * `{ anchor }` takes a {@link DocAnchor} rather than an {@link EditorPosition} because a
    * collapsed SEMANTIC position is spelled as a range whose anchor and head are equal, which
@@ -1396,7 +1453,7 @@ export type EditorCommand = {
  * Extends {@link DocQueries} with the reads that only mean something against a live, laid-out
  * document: the selection, its formatting, the table or hyperlink under the caret.
  */
-export interface EditorQueries extends DocQueries {
+export interface EditorQueries extends DocQueries, EditorChartQueries {
   selection: Record<never, never>;
   selectionFormatting: Record<never, never>;
   tableContext: Record<never, never>;
@@ -1421,7 +1478,7 @@ export type EditorQuery = {
 }[keyof EditorQueries];
 
 /** What each editor query returns. Keyed identically to `EditorQueries`. */
-export interface EditorQueryResults extends DocQueryResults {
+export interface EditorQueryResults extends DocQueryResults, EditorChartQueryResults {
   selection: DocRange | null;
   selectionFormatting: RunFormatting | null;
   tableContext: TableContext | null;
@@ -1433,43 +1490,6 @@ export interface EditorQueryResults extends DocQueryResults {
   isInsideToc: boolean;
   trackedChanges: readonly Revision[];
   bookmarks: readonly BookmarkSummary[];
-}
-
-/**
- * The hyperlink under a position: where it points, how far it reaches, and what Word shows on
- * hover.
- *
- * `href` has already been through `sanitizeHref` — it comes from a file, so a `javascript:` or
- * `data:` target is dropped at the parse boundary rather than here.
- */
-export interface HyperlinkInfo {
-  readonly href: string;
-  readonly range: DocRange;
-  /**
-   * `w:tooltip` on the `w:hyperlink` — the text Word shows on hover, and what the
-   * hyperlink dialog seeds its tooltip field with when editing an existing link.
-   */
-  readonly tooltip?: string;
-}
-
-/**
- * Section page setup — size, orientation and margins, in twips — as `getPageSetup()`
- * and `snapshot().pageSetup` report it and the `setPageSetup` command writes it. In a
- * multi-section document this is the setup of the section the SELECTION is in, which
- * is what a ruler or a dialog reflects — Word's behaviour.
- */
-export interface PageSetup {
-  readonly pageWidthTwips: number;
-  readonly pageHeightTwips: number;
-  readonly orientation: 'portrait' | 'landscape';
-  readonly marginsTwips: {
-    readonly top: number;
-    readonly right: number;
-    readonly bottom: number;
-    readonly left: number;
-  };
-  /** Binding gutter (`w:gutter`), folded into the left margin by layout. */
-  readonly gutterTwips?: number;
 }
 
 /**
@@ -1528,18 +1548,25 @@ export interface EditorSnapshot {
    * to produce one bit, on every tick a host's selector runs.
    */
   readonly selectionCollapsed: boolean;
+  /**
+   * The selection with offsets, as {@link EditorSelectionReads.getSelectionRange} returns it.
+   * Reference-stable while the selection does not move.
+   */
+  readonly selectionRange: EditorSelectionRange | null;
   readonly formatting: RunFormatting | null;
   readonly table: TableContext | null;
   /**
    * The table of contents the last right-click landed on, or null.
    *
-   * NOT caret context, unlike `table`: a right-click leaves the selection where it was, and
-   * a generated TOC refuses the caret outright, so a host's context menu could otherwise
+   * NOT caret context, unlike `table`: a generated TOC refuses the caret outright, so a
+   * right-click on it leaves the selection where it was, and a host's context menu could otherwise
    * never tell which table of contents it was opened over. Cleared by a right-click
    * anywhere else.
    */
   readonly tocContext: { readonly id: string } | null;
   readonly image: ImageContext | null;
+  /** The selected chart, while exactly one chart drawing is selected; else null. */
+  readonly chart: SelectedChartState | null;
   readonly page: { readonly current: number; readonly total: number };
   /**
    * Whether undo/redo have anything to apply, derived from the session's history.
@@ -1626,8 +1653,10 @@ export interface EditorSnapshot {
    * A family the app answers with a metric-compatible stand-in — Word's Times New Roman
    * with Liberation Serif — is AVAILABLE and stays out: the outlines differ, the advance
    * widths do not, so wrap and pagination land where Word puts them. The face a `w:sym`
-   * names (MS Gothic for a checkbox, Wingdings for a bullet) stays out too, because it
-   * paints one code point rather than text, and has no metric twin an app could supply.
+   * names (MS Gothic for a checkbox, Wingdings for a bullet) stays out while each glyph it
+   * draws has a Unicode equivalent, because any face can paint that. A `w:sym` face joins
+   * when one of its glyphs is a private-use code point with no equivalent, because that
+   * glyph shows as a missing-glyph box in every other face.
    *
    * Optional and additive like `canUndo`: absent means the implementation has not derived
    * it; empty means every family resolved (or no document is loaded).

@@ -19,6 +19,10 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'not wired to an editor command': 'disabledReason.notWired',
   'this document was opened for viewing': 'disabledReason.viewing',
   'the document is open for viewing': 'disabledReason.viewing',
+  // Keyed on `COMPARE_COLLABORATION_REASON` in the engine's `compare-documents-state.ts`; the
+  // sentences must stay the same.
+  'documents cannot be compared while a collaboration session is attached':
+    'disabledReason.compareCollaboration',
   'this document permits editing only as tracked changes': 'disabledReason.trackedOnly',
   'no document is loaded': 'disabledReason.noDocument',
   'no document is open': 'disabledReason.noDocument',
@@ -34,6 +38,12 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'there is nothing at the selection to copy': 'disabledReason.nothingToCopyFormatting',
   'the selection has nothing to paint': 'disabledReason.nothingToPaint',
   'no drawing is selected': 'disabledReason.noDrawing',
+  // Keyed on `GROUP_MEMBER_REASON` and `GROUP_MEMBER_PROPERTIES_REASON` in the engine's
+  // `group-member-selection.ts`; the sentences must stay the same.
+  'a shape inside a group does not move, resize, or delete on its own; press Escape to select the group':
+    'disabledReason.groupMemberMove',
+  'a shape inside a group takes its wrap, alt text, and properties from the group; press Escape to select the group':
+    'disabledReason.groupMemberProperties',
   'the drawing is locked': 'disabledReason.drawingLocked',
   'a comment needs a selected range': 'disabledReason.commentSelection',
   // Keyed on `NO_COMMENT_DRAFT_VIEW` in the engine's comment draft chrome.
@@ -91,13 +101,29 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   // Keyed on `PICTURE_SELECTED_INSERT_REASON` in the engine's image lane.
   'a picture is selected; place the caret in text to insert a picture':
     'disabledReason.pictureSelected',
+  'the drop target is stale; drop the image again': 'imageInsert.errors.staleTarget',
+  'the drop target story is no longer active': 'imageInsert.errors.staleTarget',
+  'the drop target is no longer attached': 'imageInsert.errors.staleTarget',
   // Keyed on `CHART_DRAWING_REASON` in the engine's image lane (`image-state-rules.ts`).
   'this drawing is a chart; only delete applies, and it removes the whole chart':
     'disabledReason.chartDrawing',
+  // Keyed on `CHART_FRAME_REASON` in the engine's image lane (`image-state-rules.ts`).
+  'this drawing is a chart; only its size, position, wrap and alt text change':
+    'disabledReason.chartFrame',
+  // Keyed on `DIAGRAM_FRAME_REASON` in the engine's image lane (`image-state-rules.ts`).
+  'this drawing is a diagram; only its size, position, wrap and alt text change':
+    'disabledReason.diagramFrame',
+  // Keyed on `DIAGRAM_RESCALE_REFUSAL` in the engine's diagram lane (`tree-op-diagram-drawing.ts`).
+  'this diagram cannot be resized: its saved drawing is shared or cannot scale to that size':
+    'disabledReason.diagramRescale',
   // Keyed on `CHART_CLIPBOARD_REASON` in the engine's clipboard lane
   // (`clipboard-object-selection.ts`).
-  'the selection contains a chart; a chart cannot be copied, cut or pasted':
+  'a chart can be copied, cut or pasted only on its own, not with other content':
     'disabledReason.chartClipboard',
+  // Keyed on `CHART_CLIPBOARD_STALE_REASON` in the engine's chart clipboard
+  // (`chart-clipboard.ts`).
+  'the copied chart is no longer available; copy the chart again':
+    'disabledReason.chartClipboardStale',
   'invalid table chrome value': 'disabledReason.invalidValue',
   'invalid value for toolbar command': 'disabledReason.invalidValue',
   'unsupported table command': 'disabledReason.unavailable',
@@ -135,6 +161,17 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'content controls lock every remaining change; remove the locks to decide them':
     'disabledReason.reviewLockedChanges',
   'every remaining change is in a data-bound content control': 'disabledReason.reviewBoundChanges',
+  // Keyed on the refusals of the engine's `shape-format-commands.ts`; the sentences must stay
+  // the same.
+  'this drawing has no fill or outline to set': 'shape.errors.noShape',
+  'the shape has no solid fill to change; set a color': 'shape.errors.noSolidFill',
+  'the shapes in this group have different fills; pick a color to set them all':
+    'shape.errors.mixedFill',
+  'a legacy shape has no transparency': 'shape.errors.legacyTransparency',
+  'the fill or outline value is out of range': 'shape.errors.outOfRange',
+  'stale drawing selection': 'shape.errors.staleSelection',
+  // Keyed on `CHART_SUGGESTING_REFUSAL` in the engine's `surface-chart-ops.ts`.
+  'chart changes are not supported in suggesting mode': 'chart.errors.suggesting',
 });
 
 /**
@@ -151,5 +188,10 @@ export function localizeDisabledReason(reason: string | null, t: TFunction): str
   const key = Object.prototype.hasOwnProperty.call(DISABLED_REASON_KEYS, reason)
     ? DISABLED_REASON_KEYS[reason]
     : undefined;
-  return key ? t(key) : reason;
+  if (key) return t(key);
+  // The chart lane and the Format shape pane state their refusals as `chart.errors.*` and
+  // `shape.pane.errors.*` keys, which name themselves.
+  return /^(chart\.errors|shape\.pane\.errors)\.[a-zA-Z]+$/.test(reason)
+    ? t(reason as TranslationKey)
+    : reason;
 }

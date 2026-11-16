@@ -22,7 +22,7 @@ function part(xml: string, name: string) {
 }
 const cascade = buildStyleCascadeTable(
   part(
-    `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="Hiragino Mincho ProN"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`,
+    `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="MS Mincho"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`,
     '/word/styles.xml'
   ).root,
   undefined,

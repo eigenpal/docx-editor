@@ -1,8 +1,11 @@
 import {
+  applySyntheticBoldSpacing,
   fieldAnchorStart,
+  paintUnspacedBlanks,
   followingGapPaint,
   paintedGapBetween,
   letterGapSpacing,
+  syntheticBoldSpacingPt,
 } from './semantic-paint-letter-gap.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { paintUnsupportedContent } from './unsupported-elements.ts';
@@ -159,6 +162,8 @@ export interface PaintContext {
    * `undefined` when that family has no aliased face. Engine-minted values only.
    */
   readonly fontAlias?: (family: string) => string | undefined;
+  /** See {@link PaintOptions.serifHangulFace}. */
+  readonly serifHangulFace?: (family: string) => boolean;
   /**
    * The family painted for a run whose cascade authors no font — the SAME face the
    * measurer falls back to. Without it such a run inherits the page's CSS font, and the
@@ -213,12 +218,12 @@ export interface PaintContext {
 }
 
 /**
- * A stable per-function token so the paint-reuse key can tell one alias lookup from
+ * A stable per-function token so the paint-reuse key can tell one font lookup from
  * another. Identity is what matters (a new lookup means new fonts); the value is opaque.
  */
 const aliasTokens = new WeakMap<object, string>();
 let nextAliasToken = 0;
-function aliasIdentity(alias: (family: string) => string | undefined): string {
+function aliasIdentity(alias: (family: string) => unknown): string {
   let token = aliasTokens.get(alias);
   if (!token) {
     nextAliasToken += 1;
@@ -263,6 +268,13 @@ export interface PaintOptions {
    * family, so a file can never shadow a family name the host page uses.
    */
   readonly fontAlias?: (family: string) => string | undefined;
+  /**
+   * Whether the document's font table records a family as a serif Korean face. The glyphs
+   * that such a face lacks then paint in a serif Hangul face. Give the canvas measurer the
+   * same lookup.
+   * @internal
+   */
+  readonly serifHangulFace?: (family: string) => boolean;
   /** See {@link PaintContext.defaultFontFamily}. */
   readonly defaultFontFamily?: string;
   /** See {@link PaintContext.fieldShading}. */
@@ -691,7 +703,7 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
     const alias = ctx.fontAlias?.(family);
     // The measurer's fallback stack trails the family so an unresolvable name falls
     // back to the SAME face measurement fell back to — not to the inherited font.
-    const stack = fallbackStackForFamily(family);
+    const stack = fallbackStackForFamily(family, undefined, ctx.serifHangulFace);
     css.fontFamily = alias ? `"${alias}", "${family}", ${stack}` : `"${family}", ${stack}`;
   }
   if (style.color && HEX.test(style.color)) css.color = `#${style.color}`;
@@ -741,6 +753,8 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
  *
  * Tab advances apply underline via {@link applyTabAdvanceUnderline} on the outer run; this
  * path must not also set `text-decoration` on `\t` or the two mechanisms fight.
+ *
+ * Returns the element that holds the text.
  */
 function mountRunText(
   document: Document,
@@ -748,7 +762,7 @@ function mountRunText(
   text: string,
   style: ResolvedRunStyle,
   scale: number
-): void {
+): HTMLElement {
   const underline = text === '\t' ? null : underlineDecorationOf(style);
   const strike = strikeKindOf(style);
   let host: HTMLElement = run;
@@ -770,6 +784,7 @@ function mountRunText(
   }
 
   host.textContent = text; // SAFE: textContent, never innerHTML
+  return host;
 }
 
 function positioned(
@@ -904,6 +919,7 @@ function paintSpan(
     element.contentEditable = 'false';
   }
   applyRunFaceStyle(element, faceStyle, ctx);
+  applySyntheticBoldSpacing(element, span, ctx.scale);
   if (!kernsText(faceStyle, span.text)) element.style.fontKerning = 'none';
   applyFieldShading(element, span, ctx);
   applyRevisionPresentation(element, span, ctx);
@@ -935,7 +951,14 @@ function paintSpan(
       applyTabAdvanceUnderline(element.style, tabUnderline, ctx.scale);
     }
   }
-  mountRunText(document, textHost, paintedSpanText(span), span.style, ctx.scale);
+  const textElement = mountRunText(
+    document,
+    textHost,
+    paintedSpanText(span),
+    span.style,
+    ctx.scale
+  );
+  paintUnspacedBlanks(document, element, textElement, span, ctx.scale);
   paintLegacyCheckbox(element, span, ctx.scale);
   paintLegacyDropdown(element, span);
   if (span.projected) {
@@ -1245,9 +1268,12 @@ function paintLine(
       // Paint hosts may reserve a pre-scaled width plus a compensating margin.
       if (!painted.style.width) painted.style.width = `${span.box.width * scale}px`;
       painted.style.direction = span.style.shaping?.direction ?? 'ltr';
-      painted.style.unicodeBidi = 'isolate';
+      // A `w:bdo` override keeps every character in the span's direction, as layout placed it.
+      painted.style.unicodeBidi = span.style.shaping?.override ? 'isolate-override' : 'isolate';
       if (span.style.shaping?.wordSpacingPt)
-        painted.style.wordSpacing = `${span.style.shaping.wordSpacingPt * scale}px`;
+        painted.style.wordSpacing = `${
+          (span.style.shaping.wordSpacingPt - syntheticBoldSpacingPt(span)) * scale
+        }px`;
       logicalAdvance += span.box.width;
     }
     const margin = pendingGap !== 0 && !previousSpanAbsorbedGap ? pendingGap : slackAfterPicture;
@@ -1259,9 +1285,10 @@ function paintLine(
     const gapAfter = bidi ? 0 : interSpanGapBefore(line, spanIndex + 1, rankOf);
     const owner = gapAfter !== 0 && next !== undefined ? followingGapPaint(span, next) : null;
     previousSpanAbsorbedGap = owner !== null;
-    if (owner === 'wordSpacing') painted.style.wordSpacing = `${gapAfter * scale}px`;
+    if (owner === 'wordSpacing')
+      painted.style.wordSpacing = `${(gapAfter - syntheticBoldSpacingPt(span)) * scale}px`;
     else if (owner === 'letterSpacing')
-      painted.style.letterSpacing = letterGapSpacing(span, gapAfter, scale);
+      painted.style.letterSpacing = letterGapSpacing(painted, span, gapAfter, scale);
     pendingGap = gapAfter;
     const link = span.link;
     if (!link) {
@@ -1688,6 +1715,7 @@ import { markTrackedRow } from './table-row-revision-paint.ts';
 import { changedPageParts } from './semantic-paint-page-diff.ts';
 import { replaceHeaderFooterLayer } from './semantic-paint-hf-adopt.ts';
 import { tableCellContentHost } from './table-cell-text-direction-paint.ts';
+import { paintTableSpacingLayers } from './table-spacing-shading-paint.ts';
 
 function paintTableCell(
   document: Document,
@@ -1788,9 +1816,11 @@ function paintTableFragment(
   previous?: HTMLElement
 ): HTMLElement {
   // Rows, cells and cell paragraphs whose paint inputs are unchanged, or moved only, are kept.
+  // Gap bands are cut around every cell of the fragment; a band that paints the same is kept.
   const retained =
     previous &&
     reflowTableFragment(previous, fragment, {
+      leading: () => paintTableSpacingLayers(document, fragment, ctx.scale, previous),
       scale: ctx.scale,
       showParagraphMarks: ctx.showParagraphMarks === true,
       row: (row) => paintTableRow(document, row, fragment, ctx),
@@ -1809,6 +1839,7 @@ function paintTableFragment(
   element.dataset.tableId = fragment.tableId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
   element.style.overflow = 'visible';
+  element.append(...paintTableSpacingLayers(document, fragment, scale));
   const rows = new Map<TableRowFragmentRecord, HTMLElement>();
   for (const row of fragment.rows) {
     const painted = paintTableRow(document, row, fragment, ctx);
@@ -2076,6 +2107,15 @@ export function discardRetainedPaint(container: HTMLElement): void {
   retainedPaints.delete(container);
 }
 
+/** Forget only the pages holding `nodes` (all of them when no page does): see above. */
+export function discardRetainedPaintOf(container: HTMLElement, nodes: readonly Node[]): void {
+  const retained = retainedPaints.get(container);
+  if (!retained) return;
+  const pages = retained.pages.filter((page) => !nodes.some((node) => page.element.contains(node)));
+  if (pages.length === retained.pages.length) retainedPaints.delete(container);
+  else retainedPaints.set(container, { ...retained, pages });
+}
+
 function sameBox(left: PageRecord['box'], right: PageRecord['box']): boolean {
   return (
     left.x === right.x &&
@@ -2273,6 +2313,7 @@ export function paintSemanticLayoutWithAuthorSlots(
     ...(options.unsupportedSource ? { unsupportedSource: options.unsupportedSource } : {}),
     urlRegistry,
     ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+    ...(options.serifHangulFace ? { serifHangulFace: options.serifHangulFace } : {}),
     ...(options.readOnlyParagraphIds ? { readOnlyParagraphIds: options.readOnlyParagraphIds } : {}),
     ...(options.emptyTocPlaceholderIds
       ? { emptyTocPlaceholderIds: options.emptyTocPlaceholderIds }
@@ -2313,6 +2354,7 @@ export function paintSemanticLayoutWithAuthorSlots(
   const parameters =
     `${resolved.scale}|${resolved.ariaHidden}|${options.includePartial ?? false}|` +
     `${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|` +
+    `${resolved.serifHangulFace ? aliasIdentity(resolved.serifHangulFace) : ''}|` +
     `${resolved.defaultFontFamily ?? ''}|` +
     `cc:${chromeKey}:${additionalKey}|toc:${tocKey}|` +
     `ro:${readOnlyKey}|tocEmpty:${emptyTocKey}|` +

@@ -23,6 +23,8 @@ export interface FormsProtectionCommand {
   /** Absent means deletion. An empty string is also the clipboard toolbar's probe. */
   readonly text?: string;
   readonly fieldId?: string;
+  /** The control that owns text inserted at a caret, as the keyboard names it. */
+  readonly inside?: string;
   /** The host's lock policy, so restyling a content-locked control is answered as the commit. */
   readonly contentLockPolicy?: ContentLockPolicy | undefined;
   readonly paste?: boolean;
@@ -103,6 +105,7 @@ export function formsProtectionCommandRefusal(
     offset: from.offset,
     text,
     ...(fieldId === undefined ? {} : { textFormFieldId: fieldId }),
+    ...(command.inside === undefined ? {} : { inside: command.inside }),
   };
   const field = textFormFieldForEdit(part, op, fieldId);
   if (command.paste && field) {

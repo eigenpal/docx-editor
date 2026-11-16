@@ -1,6 +1,8 @@
 import { flattenChromeMenuSlots } from './chrome-menu-slots.ts';
 import { FILE_CHROME_GROUP } from './file-chrome-controls.ts';
 import { REVIEW_CHROME_GROUP } from './review-chrome-controls.ts';
+import { INSERT_CHROME_GROUP } from './insert-chrome-controls.ts';
+import { CHART_CHROME_GROUP, SHAPE_CHROME_GROUP } from './object-chrome-controls.ts';
 import type { ChromeMenu } from './chrome-menu-entries.ts';
 // Legacy editor chrome, expressed as data (interactive-paginated-editing M6V.1).
 //
@@ -17,9 +19,8 @@ import type { ChromeMenu } from './chrome-menu-entries.ts';
 // previous round of this change grew 24 React-only exports precisely by ignoring
 // that, and no test caught it until a full-repo export-parity sweep.
 //
-// Icon paths are the Material Symbols set the legacy UI already bundled, lifted
-// verbatim (viewBox "0 -960 960 960"). They were extracted programmatically from
-// the reference commit rather than retyped, because a hand-copied path is a silent
+// Icon paths are the Material Symbols set (viewBox "0 -960 960 960"), extracted
+// programmatically rather than retyped, because a hand-copied path is a silent
 // visual regression that no assertion would catch.
 //
 // SLOT IDS ARE THE STABLE PUBLIC CONTRACT.
@@ -499,6 +500,20 @@ export const CHROME_GROUPS = [
         state: { kind: 'command' },
       },
       {
+        // Opens the Chart pane for the selected chart (`requestPane`).
+        id: 'editChart',
+        labelKey: 'chart.edit',
+        paths: GENERATED_ICON_PATHS['insert_chart'],
+        state: { kind: 'command' },
+      },
+      {
+        // Opens the Format shape pane for the selected shape (`requestPane`).
+        id: 'formatShape',
+        labelKey: 'shape.formatShape',
+        paths: GENERATED_ICON_PATHS['format_color_fill'],
+        state: { kind: 'command' },
+      },
+      {
         id: 'wrap',
         shape: 'dropdown',
         labelKey: 'formattingBar.imageWrap',
@@ -516,6 +531,8 @@ export const CHROME_GROUPS = [
       },
     ],
   },
+  SHAPE_CHROME_GROUP,
+  CHART_CHROME_GROUP,
   {
     id: 'table',
     labelKey: 'formattingBar.groups.table',
@@ -609,106 +626,7 @@ export const CHROME_GROUPS = [
     ],
   },
   FILE_CHROME_GROUP,
-  {
-    // The Insert menu's own controls: the ones that are not already slots elsewhere.
-    // Image and table insertion live in the `image` and `table` groups above and are
-    // REFERENCED by the Insert menu rather than duplicated here — a slot is one control,
-    // and the menu is an arrangement over slots, not a second registry.
-    id: 'insert',
-    labelKey: 'toolbar.insert',
-    contextual: true,
-    controls: [
-      {
-        id: 'textBox',
-        labelKey: 'toolbar.insertTextBox',
-        paths: GENERATED_ICON_PATHS['format_shapes'],
-        state: { kind: 'command' },
-      },
-      {
-        id: 'footnote',
-        labelKey: 'toolbar.insertFootnote',
-        paths: GENERATED_ICON_PATHS['superscript'],
-        state: { kind: 'command' },
-      },
-      {
-        id: 'endnote',
-        labelKey: 'toolbar.insertEndnote',
-        paths: GENERATED_ICON_PATHS['edit_note'],
-        state: { kind: 'command' },
-      },
-      {
-        id: 'pageNumber',
-        labelKey: 'headerFooter.insertPageNumber',
-        paths: GENERATED_ICON_PATHS['format_list_numbered'],
-        state: { kind: 'command' },
-      },
-      {
-        id: 'totalPages',
-        labelKey: 'headerFooter.insertTotalPages',
-        paths: GENERATED_ICON_PATHS['format_list_numbered'],
-        state: { kind: 'command' },
-      },
-      {
-        id: 'sectionPages',
-        labelKey: 'headerFooter.insertSectionPages',
-        paths: GENERATED_ICON_PATHS['format_list_numbered'],
-        state: { kind: 'command' },
-      },
-      {
-        id: 'pageXofY',
-        labelKey: 'headerFooter.insertPageXofY',
-        paths: GENERATED_ICON_PATHS['format_list_numbered'],
-        state: { kind: 'command' },
-      },
-      {
-        id: 'pageBreak',
-        labelKey: 'toolbar.pageBreak',
-        paths: GENERATED_ICON_PATHS['page_break'],
-        state: { kind: 'command' },
-      },
-      {
-        id: 'sectionBreakNextPage',
-        labelKey: 'toolbar.sectionBreakNextPage',
-        paths: GENERATED_ICON_PATHS['horizontal_rule'],
-        state: { kind: 'command' },
-      },
-      {
-        // The section that starts here keeps the sheet the previous one ended, which is
-        // how Word authors a mid-page column or margin change.
-        id: 'sectionBreakContinuous',
-        labelKey: 'toolbar.sectionBreakContinuous',
-        paths: GENERATED_ICON_PATHS['border_horizontal'],
-        state: { kind: 'command' },
-      },
-      {
-        id: 'toc',
-        labelKey: 'toolbar.tableOfContents',
-        paths: GENERATED_ICON_PATHS['toc'],
-        state: { kind: 'command' },
-      },
-      {
-        // Opens the Bookmark dialog; the dialog supplies the name.
-        id: 'bookmark',
-        labelKey: 'toolbar.bookmark',
-        paths: GENERATED_ICON_PATHS['bookmark'],
-        state: { kind: 'command' },
-      },
-      {
-        // Opens Go To on bookmarks (the Go to tab of the navigation pane).
-        id: 'goToBookmark',
-        labelKey: 'toolbar.goToBookmark',
-        paths: GENERATED_ICON_PATHS['bookmarks'],
-        state: { kind: 'command' },
-      },
-      {
-        // Opens the Watermark dialog; the dialog supplies the command's values.
-        id: 'watermark',
-        labelKey: 'toolbar.watermark',
-        paths: GENERATED_ICON_PATHS['branding_watermark'],
-        state: { kind: 'command' },
-      },
-    ],
-  },
+  INSERT_CHROME_GROUP,
 ] as const;
 
 // `satisfies`-style conformance check, phrased as a plain annotated alias because the
@@ -746,6 +664,8 @@ export type ChromeGroupId =
   | 'review'
   | 'contentControl'
   | 'image'
+  | 'shape'
+  | 'chart'
   | 'table'
   | 'paragraph'
   | 'file'
@@ -793,6 +713,7 @@ export type ChromeSlotId =
   | 'review.paragraphMarks'
   | 'review.bookmarks'
   | 'review.protectDocument'
+  | 'review.compareDocuments'
   | 'review.simpleMarkup'
   | 'review.allMarkup'
   | 'review.noMarkup'
@@ -809,8 +730,25 @@ export type ChromeSlotId =
   | 'contentControl.remove'
   | 'image.insert'
   | 'image.properties'
+  | 'image.editChart'
+  | 'image.formatShape'
   | 'image.wrap'
   | 'image.altText'
+  | 'shape.fill'
+  | 'shape.fillTransparency'
+  | 'shape.outlineColor'
+  | 'shape.outlineWidth'
+  | 'shape.outlineDash'
+  | 'chart.type'
+  | 'chart.title'
+  | 'chart.legend'
+  | 'chart.dataLabels'
+  | 'chart.axes'
+  | 'chart.gridlines'
+  | 'chart.categoryAxisTitle'
+  | 'chart.valueAxisTitle'
+  | 'chart.seriesColor'
+  | 'chart.data'
   | 'table.insert'
   | 'table.borderTarget'
   | 'table.borderColor'
@@ -827,6 +765,7 @@ export type ChromeSlotId =
   | 'paragraph.dialog'
   | 'file.pageSetup'
   | 'insert.textBox'
+  | 'insert.chart'
   | 'insert.footnote'
   | 'insert.endnote'
   | 'insert.pageNumber'
@@ -898,11 +837,26 @@ export function defaultChromeGroups(): readonly ChromeGroup[] {
 export interface FormattingBarOptions {
   /** Show `direction.ltr` and `direction.rtl` after alignment, as for a right-to-left UI. */
   readonly direction?: boolean;
+  /** Whether the selected drawing is a chart, which shows `image.editChart`. */
+  readonly chart?: boolean;
+  /** Whether the selected drawing has a fill or outline to set, which shows `image.formatShape`. */
+  readonly shape?: boolean;
+  /**
+   * Whether a shape with a fill or outline is selected, which appends the toolbar controls of
+   * the contextual `shape` group (fill, outline colour, width, and dash).
+   */
+  readonly shapeControls?: boolean;
+  /**
+   * Whether a chart is selected, which appends the toolbar controls of the contextual `chart`
+   * group (type, title, legend, and data labels).
+   */
+  readonly chartControls?: boolean;
 }
 
 /**
  * The formatting-bar groups for one editor snapshot: the default bar, the contextual `image`
- * group when a drawing is selected, and the direction group when `options.direction` asks.
+ * group when a drawing is selected (with Edit chart for a chart and Format shape for a shape), and
+ * the direction group when `options.direction` asks.
  * Insertion without a selection lives in the packaged Insert menu (`CHROME_MENUS`), not in
  * the bar — a host that wants a bar button places `DocxEditor.Toolbar.ImageInsert` itself.
  *
@@ -920,7 +874,22 @@ export function formattingBarChromeGroups(
   if (direction && at > 0) groups = [...groups.slice(0, at), direction, ...groups.slice(at)];
   if (!image) return groups;
   const imageGroup = CHROME_GROUPS_CONFORMANCE.find((group) => group.id === 'image');
-  return imageGroup ? [...groups, imageGroup] : groups;
+  if (!imageGroup) return groups;
+  const controls = imageGroup.controls.filter(
+    (control) =>
+      (control.id !== 'editChart' || options?.chart) &&
+      (control.id !== 'formatShape' || options?.shape)
+  );
+  // The object's own controls follow the image group, as a contextual tab would.
+  const objectGroups = CHROME_GROUPS_CONFORMANCE.filter(
+    (group) =>
+      (group.id === 'shape' && options?.shapeControls) ||
+      (group.id === 'chart' && options?.chartControls)
+  ).map((group) => ({
+    ...group,
+    controls: group.controls.filter((control) => control.defaultToolbar !== false),
+  }));
+  return [...groups, { ...imageGroup, controls }, ...objectGroups];
 }
 
 // ── The menu region above the toolbar ─────────────────────────────────────────────────
@@ -1018,6 +987,7 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
     entries: [
       { kind: 'item', slot: 'image.insert' },
       { kind: 'item', slot: 'insert.textBox' },
+      { kind: 'item', slot: 'insert.chart', picker: 'chartType' },
       { kind: 'item', slot: 'table.insert', picker: 'tableGrid' },
       { kind: 'separator' },
       { kind: 'item', slot: 'insert.footnote' },
@@ -1067,6 +1037,8 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
       { kind: 'item', slot: 'review.bookmarks' },
       { kind: 'separator' },
       { kind: 'item', slot: 'review.protectDocument' },
+      { kind: 'separator' },
+      { kind: 'item', slot: 'review.compareDocuments' },
     ],
   },
   {

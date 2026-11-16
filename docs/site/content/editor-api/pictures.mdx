@@ -5,17 +5,11 @@ category: 'Editing API'
 order: 58
 ---
 
-The API edits inline PNG and JPEG pictures. Use `Body.inlinePictures` or `Range.inlinePictures` to discover pictures. Floating picture writes, picture bullets, and embedded object previews are outside this subset.
+The API inserts and edits inline PNG and JPEG pictures. For runtime setup, see [Runtime and setup](/docs/2.x/editor-api/runtime).
 
-`Body.shapes` and `Paragraph.shapes` enumerate supported inline and floating shapes. Use a supported shape's `body` to edit its text story. For more information, see [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories#read-and-edit-text-boxes).
+## Insert and size a picture
 
-Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
-
-## Insert image bytes
-
-`Range.insertInlinePictureFromBase64(base64EncodedImage, location)` accepts `Replace`, `Start`, `End`, `Before`, or `After`. Pass the base64 image bytes, and sync before configuring the returned `InlinePicture`.
-
-This server example reads a PNG file and inserts it after the first paragraph's content:
+The following server example inserts a PNG after the first paragraph and sizes it:
 
 ```ts
 import { readFile } from 'node:fs/promises';
@@ -36,50 +30,55 @@ await runtime.run(async (context) => {
 });
 ```
 
-The runtime validates the image format and bytes. The runtime rejects unsupported formats and invalid image bytes. The API adds package media resources through its document transaction.
+`Range.insertInlinePictureFromBase64(base64EncodedImage, location)` follows these rules:
 
-The same code works on a collaborative runtime, from `DocxEditor.createCollaborative()` or from `DocxEditor.createBrowser()` over an editor in a collaboration session. The picture, its media part, and its relationship replicate to every participant. Each participant allocates picture identifiers and media part names from its own range, so pictures that two participants insert at the same time rarely collide.
+- It accepts the locations `Replace`, `Start`, `End`, `Before`, and `After`.
+- It takes base64 PNG or JPEG bytes. Invalid or unsupported bytes refuse.
+- Sync the insertion before you configure the returned `InlinePicture`.
+
+For loads and failures around that sync, see [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
 
 ## Read picture properties
 
-Load the collection, then load individual properties:
+The following example reads sizes and descriptions:
 
 ```ts
-const descriptions = await runtime.run(async (context) => {
-  const pictures = context.document.body.inlinePictures;
-  pictures.load('items');
+const pictures = await runtime.run(async (context) => {
+  const collection = context.document.body.inlinePictures;
+  collection.load('items/width,items/height,items/altTextDescription');
   await context.sync();
-  for (const picture of pictures.items) {
-    picture.load(['width', 'height', 'altTextDescription']);
-  }
-  await context.sync();
-  return pictures.items.map((picture) => ({
-    width: picture.width,
-    height: picture.height,
-    description: picture.altTextDescription,
+  return collection.items.map(({ width, height, altTextDescription }) => ({
+    width,
+    height,
+    altTextDescription,
   }));
 });
 ```
 
-`InlinePictureCollection` exposes `items`, `getFirst()`, `getLast()`, `getFirstOrNullObject()`, and `getLastOrNullObject()`. Check `isNullObject` after sync when using a nullable accessor. A range collection includes pictures fully contained within that range.
+`Body.inlinePictures` and `Range.inlinePictures` return an `InlinePictureCollection` with `items`, `getFirst()`, `getLast()`, `getFirstOrNullObject()`, and `getLastOrNullObject()`. A range collection includes pictures fully inside the range.
 
-## Resize and describe a picture
+## Configure a picture
 
-| `InlinePicture` member | Behavior                                              |
-| ---------------------- | ----------------------------------------------------- |
-| `width`, `height`      | Read or write positive supported dimensions in points |
-| `lockAspectRatio`      | Read or write the aspect-ratio lock                   |
-| `altTextDescription`   | Read or write the alternative description             |
-| `delete()`             | Delete the addressed picture                          |
+| `InlinePicture` member | Behavior                                                  |
+| ---------------------- | --------------------------------------------------------- |
+| `width`, `height`      | Positive dimensions in points                             |
+| `lockAspectRatio`      | Aspect-ratio lock; changing one dimension keeps the ratio |
+| `altTextDescription`   | Alternative description for readers                       |
+| `delete()`             | Deletes the picture                                       |
 
-When aspect locking applies, changing one dimension preserves the ratio. If aspect ratio is locked, the runtime rejects conflicting width and height assignments. Batch compatible settings on the same picture proxy. Use a description that conveys the image's purpose to a reader.
+When the aspect ratio is locked, conflicting `width` and `height` assignments refuse.
 
-## Handle errors
+## Limits
 
-Newly inserted pictures need sync before resizing, loading, or deleting them. Edits can fail if the target is protected, unsupported, or contains pending revisions. The runtime's tracking mode does not support image insertion, removal, or formatting. A failed write batch applies none of its document changes. Earlier successful syncs remain committed.
+- Queue a picture insertion as the only write in its sync.
+- Tracking does not support picture insertion, removal, or formatting.
+- Protected targets and pending revisions can refuse edits.
+- No URL replacement, cropping, rotation, floating picture writes, or picture bullets exist.
+- Server, browser, and collaborative runtimes all insert pictures. In collaboration, the picture, its media part, and its relationship replicate to every participant.
+- To list floating shapes and edit text boxes, see [Read and edit text boxes](/docs/2.x/editor-api/page-layout-and-stories#read-and-edit-text-boxes).
 
-For another picture variant, prepare supported PNG or JPEG bytes before insertion. This API does not expose cropping, rotation, replacement-by-URL, or floating-picture positioning methods.
+## See also
 
-## Next steps
-
-See [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors), and [API member directory](/docs/2.x/editor-api/reference).
+- [Text and ranges](/docs/2.x/editor-api/text-and-ranges)
+- [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors)
+- [API member directory](/docs/2.x/editor-api/reference)

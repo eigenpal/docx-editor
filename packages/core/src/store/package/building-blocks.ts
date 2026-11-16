@@ -220,3 +220,51 @@ export function buildingBlocksForControl(
         left.category.localeCompare(right.category) || left.name.localeCompare(right.name)
     );
 }
+
+/** Bounded walk for a block's text: a hostile glossary cannot make one lookup unbounded. */
+const MAX_PROMPT_NODES = 4096;
+
+/**
+ * The text of a block's first paragraph, or undefined when it holds none. For an inline
+ * control, the same paragraph that `materializeGlossaryPlaceholders` shows when a document
+ * opens with the control empty; a block-level control shows every paragraph of the block there.
+ */
+function promptTextOf(block: BuildingBlock): string | undefined {
+  let visited = 0;
+  const textOf = (node: OoxmlNode, depth: number): string => {
+    if (++visited > MAX_PROMPT_NODES || depth > 8) return '';
+    if (node.kind === 'textValue') return '';
+    if (isWml(node, 't')) {
+      return node.children.map((child) => (child.kind === 'textValue' ? child.value : '')).join('');
+    }
+    return node.children.map((child) => textOf(child, depth + 1)).join('');
+  };
+  const first = block.blocks.find((node) => node.kind === 'paragraph' || isWml(node, 'p'));
+  if (!first || first.kind === 'textValue') return undefined;
+  const text = textOf(first, 0);
+  return text.length > 0 ? text : undefined;
+}
+
+const promptTexts = new WeakMap<OoxmlPackage, ReadonlyMap<string, string>>();
+
+/**
+ * The prompt text a control's `w:placeholder/w:docPart` names: the text of the block's first
+ * paragraph, which a control shows when the user empties it. Read once per package.
+ */
+export function placeholderTextOf(pkg: OoxmlPackage, docPart: string): string | undefined {
+  let texts = promptTexts.get(pkg);
+  if (!texts) {
+    const found = new Map<string, string>();
+    const named = new Set<string>();
+    for (const block of buildingBlocksOf(pkg)) {
+      // The first block with a name answers for it, as on open, even when it holds no text.
+      if (named.has(block.name)) continue;
+      named.add(block.name);
+      const text = promptTextOf(block);
+      if (text !== undefined) found.set(block.name, text);
+    }
+    texts = found;
+    promptTexts.set(pkg, texts);
+  }
+  return texts.get(docPart);
+}

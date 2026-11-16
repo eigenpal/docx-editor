@@ -85,14 +85,26 @@ test('re-evaluates and re-centers multi-digit PAGE results per page', () => {
   }
 });
 
+/** The general story frame lane places the number out of flow, beside the anchor's text. */
+function expectPlacedBeside(content: string): void {
+  const [first, second] = layoutHeaderFooterStory(
+    partOf(content),
+    400,
+    measurer,
+    'beside'
+  ).fragments;
+  if (first?.kind !== 'paragraph' || second?.kind !== 'paragraph')
+    throw new Error('paragraphs required');
+  expect(first.outOfFlow).toBe(true);
+  expect(second.box.y).toBe(0);
+}
+
 test('leaves other frame structures in ordinary flow', () => {
   const samples = [
-    body.replace('w:xAlign="center"', 'w:xAlign="left"'),
     body.replace('w:y="1"', 'w:y="200"'),
     body.replace('w:y="1"', 'w:y="1" w:w="200"'),
     body.replace(' PAGE ', ' NUMPAGES '),
     body.replace(' PAGE ', ' PAGEREF anchor '),
-    body.replace('</w:pPr></w:p>', '</w:pPr><w:r><w:t>not empty</w:t></w:r></w:p>'),
     body.replace('<w:t>1</w:t>', '<w:t>Page 1</w:t>'),
     body.replace(frame, frame + '<w:spacing w:after="200"/>'),
     body.replace(frame, frame + frame),
@@ -103,6 +115,11 @@ test('leaves other frame structures in ordinary flow', () => {
     const story = layoutHeaderFooterStory(partOf(content), 400, measurer, 'test');
     expect(story.fragments[1]!.box.y).toBeGreaterThan(0);
   }
+  // A number that stays clear of the anchor's text takes the general story frame lane.
+  expectPlacedBeside(body.replace('w:xAlign="center"', 'w:xAlign="left"'));
+  expectPlacedBeside(
+    body.replace('</w:pPr></w:p>', '</w:pPr><w:r><w:t>not empty</w:t></w:r></w:p>')
+  );
   // A header takes the header frame lane, not this footer lane.
   const header = layoutHeaderFooterStory(partOf(body, true), 400, measurer, 'test');
   expect(header.fragments[1]!.box.y).toBe(0);
@@ -137,7 +154,6 @@ test('centers PAGE over a middle-dot anchor without moving or merging its text',
 test('does not overlay meaningful, left-aligned or field-bearing anchor content', () => {
   for (const [content, align] of [
     ['· note ·', 'center'],
-    ['·   ·', 'left'],
     ['·'.repeat(40), 'center'],
   ]) {
     const decorated = body.replace(
@@ -147,10 +163,11 @@ test('does not overlay meaningful, left-aligned or field-bearing anchor content'
     const story = layoutHeaderFooterStory(partOf(decorated), 400, measurer, 'refused');
     expect(story.fragments[1]!.box.y).toBeGreaterThan(0);
   }
-  const fieldAnchor = body.replace('</w:pPr></w:p>', `</w:pPr>${field}</w:p>`);
-  expect(
-    layoutHeaderFooterStory(partOf(fieldAnchor), 400, measurer, 'field-anchor').fragments[1]!.box.y
-  ).toBeGreaterThan(0);
+  // Left-aligned or field-bearing anchor content clear of the number does not meet it.
+  expectPlacedBeside(
+    body.replace('</w:pPr></w:p>', '<w:jc w:val="left"/></w:pPr><w:r><w:t>·   ·</w:t></w:r></w:p>')
+  );
+  expectPlacedBeside(body.replace('</w:pPr></w:p>', `</w:pPr>${field}</w:p>`));
 });
 
 test('accepts the switches Word writes after PAGE without moving the frame', () => {

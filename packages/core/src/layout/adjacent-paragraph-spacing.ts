@@ -2,7 +2,7 @@
 //
 // By default the larger of one paragraph's after-spacing and the next one's before-spacing
 // separates them, and automatic spacing is the HTML `<p>` margin. With the setting on, the two
-// gaps add up, and automatic spacing is a fixed 5pt before and 10pt after (`paragraphSpacing`).
+// gaps add up, and automatic spacing keeps the authored measurement (`paragraphSpacing`).
 // The setting lives in `settings.xml`, outside every paragraph's property chain, so the style
 // cascade reads it once (the `fixedParagraphSpacing` compatibility rule) and carries it; its
 // cache token covers it.
@@ -11,7 +11,7 @@
 export interface AdjacentParagraphSpacingSettings {
   /**
    * Adjacent after- and before-spacing add up rather than collapse to the larger one, and
-   * automatic spacing resolves to fixed values.
+   * automatic spacing keeps the authored measurement.
    */
   readonly fixedParagraphSpacing?: true;
 }

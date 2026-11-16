@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -7,9 +7,18 @@ import { describe, expect, test } from 'bun:test';
 import { PDFDocument } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { exportPdf, PdfDocumentOpenError, PdfFidelityError } from '../src/index.ts';
+import { PDF_PRODUCER } from '../src/export-pdf.ts';
 import { docx, paragraph } from './fixture.ts';
 
 describe('exact PDF export', () => {
+  test('the Producer names the converter release', async () => {
+    const result = await exportPdf(docx(paragraph('Hello')), { useSystemFonts: false });
+    const doc = await PDFDocument.load(result.bytes, { updateMetadata: false });
+    expect(doc.getProducer()).toBe(PDF_PRODUCER);
+    // A run from source has no inlined version; the build inlines the package version.
+    expect(PDF_PRODUCER).toBe('EigenPal docx-editor.dev source');
+    expect(doc.getCreator()).toBe('docx-editor.dev');
+  });
   test('strict text export embeds glyphs with extractable Unicode', async () => {
     const result = await exportPdf(docx(paragraph('Hello office café!')), {
       useSystemFonts: false,
@@ -26,7 +35,7 @@ describe('exact PDF export', () => {
           .join('')
       ).toBe('Hello office café!');
     } finally {
-      await pdf.destroy();
+      await pdf.loadingTask.destroy();
     }
     const parsed = await PDFDocument.load(result.bytes);
     expect(parsed.getPageCount()).toBe(1);
@@ -71,7 +80,7 @@ describe('exact PDF export', () => {
       expect(content).toContain('Item 0');
       expect(content).toContain('Item 1');
     } finally {
-      await pdf.destroy();
+      await pdf.loadingTask.destroy();
     }
   });
   test('abort and output limit', async () => {

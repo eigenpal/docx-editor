@@ -451,6 +451,13 @@ describe('table cells', () => {
     layout.pages[0]!.fragments.flatMap((fragment) =>
       fragment.kind === 'table' ? fragment.rows.map((row) => row.box.height) : []
     );
+  // The cell's lines: the empty paragraph the body reads after the table comes last.
+  const cellLines = (layout: SemanticLayout) => linesOf(layout).slice(0, -1);
+  const heights = (layout: SemanticLayout) => cellLines(layout).map((record) => record.box.height);
+  const tops = (layout: SemanticLayout) => {
+    const lines = cellLines(layout);
+    return lines.map((record) => record.box.y - lines[0]!.box.y);
+  };
 
   test('text paragraphs in a cell keep their lines; under text the end mark sets no floor', () => {
     const twoLines = lay(cell(paragraph(run('Alpha')) + paragraph(run('Beta'))));

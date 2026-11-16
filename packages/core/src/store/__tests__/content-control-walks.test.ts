@@ -135,7 +135,8 @@ describe('store projections descend block content controls', () => {
   test('digest reaches paragraphs inside generic block SDTs and table cells', () => {
     const digest = semanticDigest([load(BLOCK_XML)]);
     const texts = digest.stories[0]!.paragraphs.map((paragraph) => paragraph.text);
-    expect(texts).toEqual(['before', 'inside control', 'cell control']);
+    // The body ends with a table, so it reads an empty paragraph after it.
+    expect(texts).toEqual(['before', 'inside control', 'cell control', '']);
   });
 
   test('digest reaches paragraphs inside typed block controls', () => {
@@ -150,7 +151,8 @@ describe('store projections descend block content controls', () => {
     const typedPart = { ...part, root: { ...part.root, children: [typedBody] } };
     const digest = semanticDigest([typedPart]);
     const texts = digest.stories[0]!.paragraphs.map((paragraph) => paragraph.text);
-    expect(texts).toEqual(['before', 'inside control', 'cell control']);
+    // The body ends with a table, so it reads an empty paragraph after it.
+    expect(texts).toEqual(['before', 'inside control', 'cell control', '']);
   });
 
   test('digest collects text inside block and inline controls', () => {

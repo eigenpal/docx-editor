@@ -41,6 +41,8 @@ import {
 } from '@docx-editor.dev/core/layout';
 
 import { paragraphDeletedRanges } from '../layout/paragraph-lines.ts';
+import { caretWordSelection } from '../layout/caret-word.ts';
+import { hyperlinkStyleFor } from '../store/package/hyperlink-style-edit.ts';
 
 /** WordprocessingML, for the demoted controls the reader preserves as generic nodes. */
 const WML = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -271,6 +273,8 @@ export function fieldLinkAtomIdAtPosition(
 
 export interface HyperlinkOpsDeps {
   readonly session: TreeDocxSessionView;
+  /** In a collaboration session, a new link never creates the styles part. */
+  readonly collaborative?: boolean;
   /** The current layout projection, for resolving a field link at the caret. */
   readonly layout: () => SemanticLayout;
   /** Resolve a field-link id minted by the field-link registry back to its record. */
@@ -358,6 +362,14 @@ export interface HyperlinkOps {
    */
   selectionIsPendingDeletion(): boolean;
   /**
+   * The word a new link takes when the caret is collapsed inside it, or null.
+   *
+   * A link panel opened at such a caret selects this word first, so the word becomes the
+   * display text and the linked text. Null at a word edge, in a link, inside tracked deleted
+   * text, and for a range selection. Inside means the same as for formatting at the caret.
+   */
+  wordAtCaret(): { readonly from: SemanticPosition; readonly to: SemanticPosition } | null;
+  /**
    * Apply a link to the selection, or retarget the one the caret is already in.
    *
    * `text` replaces the display text when supplied. Returns whether anything committed;
@@ -381,8 +393,16 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
   const applyOps = (
     ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
     before?: Parameters<TreeDocxSessionView['applyTreeOps']>[1],
-    after?: Parameters<TreeDocxSessionView['applyTreeOps']>[2]
-  ) => deps.session.applyTreeOps(ops, before, after, scope());
+    after?: Parameters<TreeDocxSessionView['applyTreeOps']>[2],
+    packageEdits?: NonNullable<Parameters<TreeDocxSessionView['applyTreeOps']>[4]>['packageEdits']
+  ) =>
+    deps.session.applyTreeOps(
+      ops,
+      before,
+      after,
+      scope(),
+      packageEdits?.length ? { packageEdits } : undefined
+    );
 
   const linksIn = (paragraphId: string): SurfaceHyperlink[] => {
     const part = storyPart();
@@ -449,6 +469,11 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
     linkById,
     selectionIsPendingDeletion,
 
+    wordAtCaret() {
+      if (linkAtCaret() || fieldLinkAtCaret()) return null;
+      return caretWordSelection(deps.layout(), deps.selection());
+    },
+
     applyHyperlink(requested) {
       // Labels are shown and selected with visible hyphens; they write the hyphen elements.
       const input =
@@ -494,6 +519,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
       // `w:history` / `w:tgtFrame` and its identity.
       if (existing && (collapsed || withinLink(existing, range))) {
         const ops: TreeDocOp[] = [];
+        let retargetEdits: Parameters<typeof applyOps>[3];
         // Replacing the display text is a delete plus an insert over the link's own range;
         // both land inside the link because the range is strictly inside it.
         if (input.text !== undefined && input.text !== fromHyphenGlyphs(existing.text)) {
@@ -551,7 +577,10 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
             // A copy left bare comes out unlinked once the strikes are accepted — so
             // propose a FRESH link over the copy, and still retarget the old one in case
             // a zero-length marker keeps it alive.
-            const styleId = hyperlinkStyleId(deps.session);
+            const style = hyperlinkStyleFor(deps.session.currentPackage(), {
+              createPart: !deps.collaborative,
+            });
+            if (style.edit) retargetEdits = [style.edit];
             ops.push(
               { op: 'setHyperlinkTarget', linkId: existing.id, ...target },
               ...suggestReplaceOps(existing, landing, input.text),
@@ -561,7 +590,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
                 start: landing,
                 end: landing + input.text.length,
                 ...target,
-                ...(styleId ? { styleId } : {}),
+                ...(style.styleId ? { styleId: style.styleId } : {}),
               }
             );
           } else {
@@ -583,7 +612,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
         let committed = false;
         deps.commit(
           () => {
-            const result = applyOps(ops, deps.selectionMark());
+            const result = applyOps(ops, deps.selectionMark(), undefined, retargetEdits);
             committed = result.committed;
             return result;
           },
@@ -639,13 +668,16 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
         }
       }
       if (end <= start) return false;
-      // Word marks a new link's text with the `Hyperlink` CHARACTER STYLE, and without it
-      // the user gets a link indistinguishable from the words around it — no way to tell
-      // the command worked. The op carries it, so wrapping and marking are one step and one
-      // undo. Only when the document actually declares the style: a reference to a style
-      // that is not there is a dangling one, and a link with the surrounding appearance is
-      // the honest fallback.
-      const styleId = hyperlinkStyleId(deps.session);
+      // A new link's text takes the `Hyperlink` CHARACTER STYLE; without it the link looks
+      // like the words around it and nothing shows that the command worked. The op carries
+      // the style, so wrapping and marking are one step and one undo. A document that does
+      // not define the style gets the built-in definition in the same transaction, so the
+      // reference never dangles. The definition is document setup: in a collaboration
+      // session it commits outside shared undo (see `surface-journaled-apply.ts`).
+      const { styleId, edit } = hyperlinkStyleFor(deps.session.currentPackage(), {
+        createPart: !deps.collaborative,
+      });
+      const packageEdits = edit ? [edit] : undefined;
       ops.push({
         op: 'insertHyperlink',
         paragraphId,
@@ -659,11 +691,12 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
       const after = { paragraphId, offset: end };
       deps.commit(
         () => {
-          const result = applyOps(ops, deps.selectionMark(), {
-            paragraphId,
-            start: end,
-            end,
-          });
+          const result = applyOps(
+            ops,
+            deps.selectionMark(),
+            { paragraphId, start: end, end },
+            packageEdits
+          );
           committed = result.committed;
           return result;
         },
@@ -694,22 +727,6 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
       return committed;
     },
   };
-}
-
-/**
- * The document's own hyperlink character style, or null when it declares none.
- *
- * Matched by STYLE ID (`Hyperlink`, Word's own, case-insensitively) among the character
- * styles. Creating the style when it is absent belongs to a styles-editing lane; until then
- * a document without it gets a working link with the surrounding appearance, which is
- * lossless and honest — rather than a reference to a style that does not exist.
- */
-function hyperlinkStyleId(session: TreeDocxSessionView): string | null {
-  for (const style of session.documentStyles()) {
-    if (style.type !== 'character') continue;
-    if (style.styleId.toLowerCase() === 'hyperlink') return style.styleId;
-  }
-  return null;
 }
 
 /** Whether a selection lies entirely within one link's display text. */

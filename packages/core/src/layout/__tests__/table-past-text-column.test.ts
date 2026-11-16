@@ -77,12 +77,14 @@ test('a table no wider than the column fits its content into the column', () => 
   expect(width(table(9000, ['A'.repeat(120)]))).toBeCloseTo(451.3, 0);
 });
 
-test('a fixed-layout table keeps its grid', () => {
+test('a fixed-layout table stretches its grid to its width too', () => {
+  // Measured: a fixed 475pt grid under 490pt and 550pt widths lays out at those widths.
   const fixed = table(10000, ['A'.repeat(120)], { tblPr: '<w:tblLayout w:type="fixed"/>' });
-  expect(width(fixed)).toBeCloseTo(489.7, 0);
+  expect(width(fixed)).toBeCloseTo(500, 0);
 });
 
-test('a nested table keeps its grid', () => {
+test('a nested table stretches its grid to its width past the cell', () => {
+  // Measured: a 144pt nested grid under a 350pt width in a 300pt cell lays out at 350pt.
   const inner = table(10000, ['A'.repeat(120)]);
   const outer =
     '<w:tbl><w:tblPr><w:tblW w:w="6000" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr>' +
@@ -91,15 +93,16 @@ test('a nested table keeps its grid', () => {
   const layout = lay(outer);
   const cell = (layout.pages[0]!.fragments.find((f) => f.kind === 'table') as any).rows[0].cells[0];
   const nested = cell.blocks.find((block: { kind: string }) => block.kind === 'table');
-  expect(nested.box.width).toBeCloseTo(489.7, 0);
+  expect(nested.box.width).toBeCloseTo(500, 0);
 });
 
 test('the rule starts just past the column, whatever the indent', () => {
   const url = `https://example.com/${'a'.repeat(99)}`;
   const indent = '<w:tblInd w:w="-108" w:type="dxa"/>';
   // The 451.3pt column is 9026 twips: a table exactly as wide breaks the URL to fit the
-  // column plus the 5.4pt its indent moves it into the margin.
-  expect(width(table(9026, [url], { tblPr: indent }))).toBeCloseTo(456.7, 0);
+  // column, plus the 5.4pt its indent moves it into the margin, plus its two 0.5pt outer
+  // cell margins, since its outer cells' content meets the text edges.
+  expect(width(table(9026, [url], { tblPr: indent }))).toBeCloseTo(457.7, 0);
   // 10.8pt wider, it grows to hold the URL, with or without a negative indent.
   expect(width(table(9242, [url], { tblPr: indent }))).toBeGreaterThan(600);
   expect(width(table(9242, [url]))).toBeGreaterThan(600);

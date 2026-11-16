@@ -7,6 +7,7 @@
 // register, what the painter is told, disposal) exists to make that safe AND useful.
 
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import type { FontSource } from '../../contracts/editor.ts';
 import {
   registerEmbeddedFontFaces,
@@ -14,16 +15,25 @@ import {
   type FontFaceSetLike,
 } from '../embedded-font-faces.ts';
 
+const fontFixture = (name: string): Uint8Array =>
+  new Uint8Array(
+    readFileSync(new URL(`../../layout/__tests__/fixtures/fonts/${name}`, import.meta.url))
+  );
+const regularFace = fontFixture('DejaVuSans.ttf');
+const boldFace = fontFixture('DejaVuSans-Bold.ttf');
+
+/** A face in a bold slot holds a bold face unless `bytes` says otherwise. */
 function source(
   family: string,
   weight = 400,
   style: 'normal' | 'italic' = 'normal',
-  hash = `sha256:${family}-${weight}-${style}`
+  hash = `sha256:${family}-${weight}-${style}`,
+  bytes = weight >= 600 ? boldFace : new Uint8Array([1, 2, 3])
 ): FontSource {
   return {
     request: { family, weight, style },
     id: `${family}#${weight}#${style}`,
-    bytes: new Uint8Array([1, 2, 3]),
+    bytes,
     hash,
     faceIndex: 0,
   };
@@ -224,5 +234,71 @@ describe('registerEmbeddedFontFaces', () => {
     const registration = await registerEmbeddedFontFaces([], env.environment);
     expect(registration.installed).toBe(0);
     expect(env.created).toHaveLength(0);
+  });
+});
+
+// A document embeds the face that draws bold text in the bold slot. For a family without a
+// bold face, that slot holds a copy of the regular face, and bold text in it draws with a
+// synthesized bold. A browser synthesizes bold only for a face whose weight descriptor is below
+// 600.
+describe('a bold slot that holds a regular face', () => {
+  const descriptorsOf = async (sources: FontSource[]) => {
+    const env = fakeEnvironment();
+    const registration = await registerEmbeddedFontFaces(sources, env.environment);
+    expect(registration.installed).toBe(sources.length);
+    return env.created.map((face) => face.descriptors);
+  };
+
+  test('registers below the bold threshold, so bold text selects it and the browser emboldens it', async () => {
+    const sources = [
+      source('Single Weight', 400, 'normal', 'sha256:r', regularFace),
+      source('Single Weight', 700, 'normal', 'sha256:b', regularFace),
+      source('Single Weight', 400, 'italic', 'sha256:i', regularFace),
+      source('Single Weight', 700, 'italic', 'sha256:bi', regularFace),
+    ];
+    expect(await descriptorsOf(sources)).toEqual([
+      { weight: '400', style: 'normal' },
+      { weight: '599', style: 'normal' },
+      { weight: '400', style: 'italic' },
+      { weight: '599', style: 'italic' },
+    ]);
+  });
+
+  test('a real bold face keeps its bold weight', async () => {
+    const sources = [
+      source('Two Weights', 400, 'normal', 'sha256:r', regularFace),
+      source('Two Weights', 700, 'normal', 'sha256:b', boldFace),
+    ];
+    expect(await descriptorsOf(sources)).toEqual([
+      { weight: '400', style: 'normal' },
+      { weight: '700', style: 'normal' },
+    ]);
+  });
+
+  test('another window gets the same descriptors', async () => {
+    const registration = await registerEmbeddedFontFaces(
+      [source('Single Weight', 700, 'normal', 'sha256:b', regularFace)],
+      fakeEnvironment().environment
+    );
+    const created: { readonly descriptors: unknown }[] = [];
+    class OtherWindowFontFace {
+      constructor(
+        _family: string,
+        _bytes: ArrayBuffer,
+        readonly descriptors: unknown
+      ) {
+        created.push(this);
+      }
+      load(): Promise<unknown> {
+        return Promise.resolve(this);
+      }
+    }
+    const otherDocument = {
+      fonts: { add: () => {}, delete: () => true },
+      defaultView: { FontFace: OtherWindowFontFace },
+    } as unknown as Document;
+    registration.showIn(otherDocument);
+    expect(created.map((face) => face.descriptors)).toEqual([{ weight: '599', style: 'normal' }]);
+    registration.dispose();
   });
 });

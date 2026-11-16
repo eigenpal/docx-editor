@@ -50,3 +50,37 @@ export function styleChain(
   }
   return tipFirst.reverse();
 }
+
+/**
+ * The paragraph style chain a paragraph inherits. A `w:pStyle` that names no style, or names a
+ * style of another type, applies the default paragraph style instead, as no `w:pStyle` does.
+ */
+export function paragraphStyleChain(
+  table: {
+    readonly styles: ReadonlyMap<string, StyleDefinition>;
+    readonly defaultParagraphStyleId: string | null;
+  },
+  styleId: string | null
+): readonly StyleDefinition[] {
+  const authored = styleId ? styleChain(table, styleId, 'paragraph') : [];
+  if (authored.length > 0 || !table.defaultParagraphStyleId) return authored;
+  return styleChain(table, table.defaultParagraphStyleId, 'paragraph');
+}
+
+/**
+ * The run properties a character style chain contributes. The document's default character
+ * style (`w:default="1"`, normally "Default Paragraph Font") contributes nothing: not on a run
+ * without `w:rStyle`, not when a run names it, and not as the base of another character style.
+ * A style based on it still applies its own properties.
+ */
+export function characterStyleRunProperties(
+  table: {
+    readonly styles: ReadonlyMap<string, StyleDefinition>;
+    readonly defaultCharacterStyleId?: string | null;
+  },
+  styleId: string
+): readonly OoxmlProperty[] {
+  return styleChain(table, styleId, 'character')
+    .filter((style) => style.styleId !== table.defaultCharacterStyleId)
+    .flatMap((style) => style.runProperties);
+}

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -60,7 +60,7 @@ test('the editor demo exports with only packaged fonts and multilingual drawings
         .length
     ).toBeGreaterThan(0);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -80,6 +80,6 @@ test('synthetic small caps retain source Unicode and fit their layout width', as
     const sizes = content.items.flatMap((item) => ('transform' in item ? [item.transform[3]] : []));
     expect(Math.min(...sizes)).toBeLessThan(Math.max(...sizes));
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

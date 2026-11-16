@@ -85,3 +85,18 @@ export async function flush(): Promise<void> {
   for (let i = 0; i < 10; i++) await new Promise((r) => queueMicrotask(r));
   await new Promise((r) => setTimeout(r, 150));
 }
+
+/**
+ * Flush until `check` passes or `timeoutMs` runs out.
+ *
+ * A deferred open takes a variable time on a busy machine, so a fixed number of flushes can end
+ * before it does.
+ */
+export async function flushUntil(check: () => boolean, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  await flush();
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error(`condition not met within ${timeoutMs} ms`);
+    await flush();
+  }
+}

@@ -273,13 +273,18 @@ test('two framed paragraphs cannot masquerade as a floating frame and empty anch
 test('unsupported anchors and extra wrapping attributes preserve ordinary flow', () => {
   for (const f of [
     frame.replace('w:vAnchor="text"', 'w:vAnchor="page"'),
-    frame.replace('w:wrap="around"', 'w:wrap="none"'),
     frame.replace('/>', ' w:hSpace="20"/>'),
   ]) {
     const s = layout(body(f));
     expect(first(s).outOfFlow).not.toBe(true);
     expect(s.flowHeight).toBeGreaterThan(anchor(s).box.height);
   }
+});
+test('a frame that wraps nothing takes the story frame lane at the same page x', () => {
+  const s = layout(body(frame.replace('w:wrap="around"', 'w:wrap="none"')));
+  expect(first(s).outOfFlow).toBe(true);
+  expect(ink(s).box.x + geometry.marginLeft).toBe(300);
+  expect(s.flowHeight).toBe(anchor(s).box.height);
 });
 test('out of bounds dimensions and signed offsets do not enter the floating lane', () => {
   for (const f of [

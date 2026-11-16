@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -21,7 +21,7 @@ import { NoteItemCollection } from './notes.ts';
 import { InsertLocation } from './editing-enums.ts';
 import { FieldCollection } from './fields.ts';
 import { InlinePictureCollection } from './pictures.ts';
-import { TableCollection } from './tables.ts';
+import { Table, TableCollection, tableInsertion } from './tables.ts';
 import {
   ObjectPath,
   fail,
@@ -159,6 +159,8 @@ export class Body extends ModelObject {
    * This is story-scoped: `document.body.bookmarks` covers only the main body story. A header,
    * footer or note body answers its own bookmarks through that body's accessor; this collection
    * does not aggregate bookmarks from other stories.
+   *
+   * @docxEditorExtension
    */
   get bookmarks(): BookmarkCollection {
     const handle = this.#handle();
@@ -256,6 +258,8 @@ export class Body extends ModelObject {
    * collection is what makes a header's, footer's, or note's changes reachable at all. Recorded in
    * `compat/manifest.json`. `items` may omit a structural card with no single type; collection-wide decisions still
    * resolve every store-resolvable revision in this story.
+   *
+   * @docxEditorExtension
    */
   get revisions(): RevisionCollection {
     this.#revisions ??= RevisionCollection.of(
@@ -353,6 +357,63 @@ export class Body extends ModelObject {
   }
 
   /**
+   * Replace the whole document with the DOCX file in `base64File`. Answers the new body's range.
+   *
+   * Only `Replace` on the main body is supported: the file's body, headers, footers, styles,
+   * comments, and tracked changes replace this document's as one undoable edit, and a
+   * collaboration session shares it as an ordinary edit. `Start` and `End` refuse with
+   * `NotSupported`, and so does a header, footer, or note body. Must be the only write in its
+   * sync. Refused while `changeTrackingMode` tracks changes, because the replacement records
+   * no revisions. Refused with `NotImplemented` when the document holds a locked or data-bound
+   * content control, as every other write that would overwrite one is.
+   *
+   * Invalid base64 or a file that is not a DOCX package refuses with `InvalidArgument`. Every
+   * refusal leaves the document and its undo history unchanged.
+   *
+   * You can load the returned range in the same sync. Objects read before the replacement can
+   * refuse with `InvalidObjectPath` afterward when their content is gone: read them again.
+   *
+   * @example
+   * ```ts
+   * const range = context.document.body.insertFileFromBase64(docxBase64, 'Replace');
+   * range.load('text');
+   * await context.sync();
+   * ```
+   */
+  insertFileFromBase64(
+    base64File: string,
+    insertLocation:
+      | InsertLocation.replace
+      | InsertLocation.start
+      | InsertLocation.end
+      | 'Replace'
+      | 'Start'
+      | 'End'
+  ): Range {
+    const target = `${this.path.label}.insertFileFromBase64`;
+    this.requireUsablePath();
+    const created = Range.promised(this.context, target, false);
+    this.commandCreating(
+      created,
+      target,
+      () => {
+        if (typeof base64File !== 'string' || base64File.length === 0)
+          fail({ code: 'InvalidArgument', target });
+        if (bodyTextLocation(insertLocation, target) !== 'Replace')
+          fail({ code: 'NotSupported', target });
+        // The main body only: a header, footer, or note body is not the whole document.
+        if (this.path.handle().ref !== this.internals.roots().body.ref)
+          fail({ code: 'NotSupported', target });
+        return { op: 'replaceDocumentFromBase64', base64: base64File };
+      },
+      (value) => {
+        created.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) });
+      }
+    );
+    return created;
+  }
+
+  /**
    * Add a paragraph at the start or the end of the story. Answers the new paragraph.
    * You can load the returned paragraph in the same sync. Editing it needs a sync first.
    */
@@ -380,6 +441,34 @@ export class Body extends ModelObject {
       }
     );
     return created;
+  }
+
+  /**
+   * Insert a rectangular table at the start or the end of this body.
+   * TrackMineOnly marks rows, cell marks, and values inserted, as `Range.insertTable` does.
+   * Sync before configuring the returned table. A table inside a table cell refuses.
+   */
+  insertTable(
+    rowCount: number,
+    columnCount: number,
+    insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End',
+    values?: string[][]
+  ): Table {
+    const target = `${this.path.label}.insertTable`;
+    if (insertLocation !== 'Start' && insertLocation !== 'End')
+      fail({ code: 'InvalidArgument', target });
+    this.requireUsablePath();
+    const { table, plan, settle } = tableInsertion(
+      this.context,
+      target,
+      () => ({ body: this.#handle() }),
+      insertLocation === 'Start' ? 'Before' : 'After',
+      rowCount,
+      columnCount,
+      values
+    );
+    this.commandCreating(table, target, plan, settle);
+    return table;
   }
 
   /** @internal Plan the read this object's `load(...)` asked for. */

@@ -1,0 +1,125 @@
+---
+title: 'Compare documents'
+description: 'Compare two DOCX files and record their differences as tracked changes, in the editor, through the document API, or with a server function.'
+category: 'Pro'
+order: 64
+---
+
+Compare documents records the differences between an original and a revised DOCX file as tracked changes. It requires `reviewModule()` and the EigenPal Pro License.
+
+## Compare from code
+
+Register `reviewModule()`, then run the `compareDocuments` command on the open document:
+
+```ts
+import { createDocxEditor, compareDocumentsErrorKey } from '@docx-editor.dev/core/editor';
+import { reviewModule } from '@docx-editor.dev/pro';
+
+declare const originalBytes: Uint8Array;
+declare const revisedBytes: Uint8Array;
+declare function t(key: string): string;
+declare function showError(message: string): void;
+declare function showMessage(message: string): void;
+
+// The command needs a mounted document, so pass a container.
+const editor = createDocxEditor({
+  container: document.getElementById('editor')!,
+  document: originalBytes,
+  modules: [reviewModule()],
+});
+
+const outcome = editor.exec({
+  type: 'compareDocuments',
+  revised: revisedBytes,
+  authorName: 'Legal review',
+}).compareDocuments;
+
+if (!outcome?.ok) showError(t(compareDocumentsErrorKey(outcome ?? { code: 'failed' })));
+else if (!outcome.changed) showMessage(t('compareDocuments.noDifferences'));
+```
+
+The command runs on the main thread. The changes apply as one step, so one undo restores the original.
+
+To compare two files without an editor, call `compareDocuments`. It returns DOCX bytes:
+
+```ts
+import { readFile, writeFile } from 'node:fs/promises';
+import { compareDocuments } from '@docx-editor.dev/pro';
+
+const originalBytes = await readFile('original.docx');
+const revisedBytes = await readFile('revised.docx');
+const result = compareDocuments(originalBytes, revisedBytes, { authorName: 'Legal review' });
+if (!result.ok) console.error(result.code, result.message);
+else if (result.changed) await writeFile('redline.docx', result.bytes);
+```
+
+<CompareDocumentsDemo />
+
+## Compare through the document API
+
+Register `reviewModule()` on the runtime, then call `Document.compareFromBase64`:
+
+```ts
+import { DocxEditor } from '@docx-editor.dev/editor-api';
+import { reviewModule } from '@docx-editor.dev/pro';
+
+const runtime = await DocxEditor.createServer(originalBytes, { modules: [reviewModule()] });
+try {
+  await runtime.run(async (context) => {
+    context.document.compareFromBase64(revisedBase64, { authorName: 'Legal review' });
+    await context.sync();
+  });
+  const redline = await runtime.save();
+} finally {
+  runtime.dispose();
+}
+```
+
+For Office.js option details, see [Compare two documents](/docs/2.x/editor-api/revisions#compare-two-documents).
+
+## Configure comparison
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `authorName` | The editor's author, else the revised document's last author | The author of every tracked change. |
+| `detectFormatChanges` | `true` | Records formatting changes as tracked changes. |
+| `removeDateAndTime` | `false` | Writes the tracked changes without dates. |
+
+## Handle errors
+
+A refused compare changes nothing and returns a `code`. Pass the outcome to `compareDocumentsErrorKey` for a translated message from `@docx-editor.dev/i18n`.
+
+| Code | Cause |
+| --- | --- |
+| `invalidRevised`, `invalidOriginal` | A file is not a readable DOCX file. |
+| `tooLarge` | The documents together exceed 100,000 blocks, such as paragraphs and table cells, or about 3,000,000 characters. |
+| `protected` | The open document is protected against edits. |
+| `unsupportedContent` | A difference has no tracked-change form, for example inside a locked content control. `reason` names the case. |
+| `collaboration` | A collaboration session is attached. |
+| `busy` | Another compare, a preview, or a document refresh is running. |
+
+## Configure the dialog
+
+With `reviewModule()` registered, the **Review** menu shows **Compare documents**. The dialog compares in a web worker, and **Cancel** stops a running compare.
+
+If the worker cannot start, the dialog compares on the main thread. If your bundler cannot load the packaged worker, pass your own. This example uses a Vite worker import:
+
+```ts
+import CompareWorker from '@docx-editor.dev/pro/compare-worker?worker';
+
+const modules = [reviewModule({ compareWorker: () => new CompareWorker() })];
+```
+
+To always compare on the main thread, pass `compareWorker: false`. To replace the dialog, pass your component as `popups.compareDocuments`. For more information, see [Customize dialogs](/docs/2.x/customization/dialogs).
+
+## Limits
+
+- Tracked changes already in either document count as accepted. The dialog shows a notice when the open document has them.
+- Accept all gives the revised text. Reject all gives the original text, but not its style definitions, content control properties, or comments. Use undo to restore the complete original.
+- Comparison is unavailable while a collaboration session is attached.
+
+## See also
+
+- [Compare two documents](/docs/2.x/editor-api/revisions#compare-two-documents)
+- [Tracked changes](/docs/2.x/pro/tracked-changes)
+- [Customize dialogs](/docs/2.x/customization/dialogs)

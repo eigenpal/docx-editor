@@ -3,8 +3,13 @@ import type { OoxmlPart } from '@docx-editor.dev/core/store';
 import { drainLayoutSteps, type LayoutSteps } from './layout-steps.ts';
 import { stableHash } from '../store/comparators/canonical.ts';
 import { characterStyleFields, type CharacterStyleField } from './field-character-style.ts';
-import { characterStyleIndex, characterStylePageValues } from './character-style-index.ts';
+import {
+  characterStyleIndex,
+  characterStylePageValues,
+  styleNamed,
+} from './character-style-index.ts';
 import { registerCharacterHeaderPages } from './character-header-pages.ts';
+import { headersWithStyleValues } from './character-header-swap.ts';
 import type { PageFurniture } from './page-furniture-insets.ts';
 import type { SemanticLayout } from './semantic-records.ts';
 import type { SemanticLayoutOptions } from './semantic-layout-options.ts';
@@ -42,24 +47,7 @@ export function layoutWithCharacterHeaders(
   const setup = characterHeaderSetup(part, options);
   if (!setup) return run(options);
   const { furniture, dynamic, queries, index } = setup;
-  const candidateSeed = options.session ? sessionSeeds.get(options.session) : undefined;
-  const sameOptions = (previous: SemanticLayoutOptions): boolean => {
-    const keys = new Set([...Object.keys(previous), ...Object.keys(options)]);
-    for (const key of keys) {
-      if (key === 'session') continue;
-      const before = previous[key as keyof SemanticLayoutOptions];
-      const after = options[key as keyof SemanticLayoutOptions];
-      if (key === 'sectionFurniture' && Array.isArray(before) && Array.isArray(after)) {
-        if (before.length !== after.length || before.some((value, i) => value !== after[i]))
-          return false;
-      } else if (before !== after) return false;
-    }
-    return true;
-  };
-  const seed =
-    candidateSeed?.index === index && sameOptions(candidateSeed.options)
-      ? candidateSeed
-      : undefined;
+  const seed = resumableSeed(options, index);
   // Only live projections enter this history. A stale saved result is not a reserve floor.
   const reserves: number[] = seed ? [...seed.reserves] : [];
   let admittedReserves: number[] = seed ? [...seed.reserves] : [];
@@ -147,8 +135,16 @@ export function layoutWithCharacterHeaders(
   if (previousToken) seen.add(previousToken);
   for (let pass = 0; pass < MAX_CHARACTER_HEADER_PASSES; pass += 1) {
     const values = characterStylePageValues(index, current, [...queries.values()]);
-    if (pass === 0 && !previousToken && values.every((value) => value.size === 0)) return current;
     const contexts = contextsOf(current);
+    // The first pass showed saved results. When no header changes height under the values it
+    // selects, that pass already placed the body the projected passes would place, so only
+    // the header fragments change. A pass reused from an earlier revision can carry headers
+    // that showed other values, so this also runs when every value is empty.
+    if (pass === 0 && !previousToken) {
+      const settled = headersWithStyleValues(current, values, contexts, furniture, dynamic);
+      if (settled) return settled;
+    }
+    if (pass === 0 && !previousToken && values.every((value) => value.size === 0)) return current;
     const token = tokenOf(values, contexts);
     const valuesToken = tokenOf(values, contexts, false);
     // The inset reader raises and consumes the reserve together. Do not
@@ -177,6 +173,24 @@ export function layoutWithCharacterHeaders(
   throw new Error('character-style header layout exceeded its pass limit');
 }
 
+/** The same revision's settled state, when this pass repeats it with identical options. */
+function resumableSeed(options: SemanticLayoutOptions, index: object) {
+  const candidate = options.session ? sessionSeeds.get(options.session) : undefined;
+  if (candidate?.index !== index) return undefined;
+  const previous = candidate.options;
+  const keys = new Set([...Object.keys(previous), ...Object.keys(options)]);
+  for (const key of keys) {
+    if (key === 'session') continue;
+    const before = previous[key as keyof SemanticLayoutOptions];
+    const after = options[key as keyof SemanticLayoutOptions];
+    if (key === 'sectionFurniture' && Array.isArray(before) && Array.isArray(after)) {
+      if (before.length !== after.length || before.some((value, i) => value !== after[i]))
+        return undefined;
+    } else if (before !== after) return undefined;
+  }
+  return candidate;
+}
+
 /** The header queries a pass must project, or null when none apply and one pass suffices. */
 function characterHeaderSetup(part: OoxmlPart, options: SemanticLayoutOptions) {
   if (options.showFieldCodes) return null;
@@ -195,28 +209,38 @@ function characterHeaderSetup(part: OoxmlPart, options: SemanticLayoutOptions) {
   }
   const styles = options.styleCascade;
   if (!styles) return null;
-  const supportedNames = new Set<string>();
-  for (const style of styles.styles.values()) {
-    if (style.type !== 'character') continue;
-    if (style.name) supportedNames.add(style.name.toLowerCase());
+  const paragraphStyles = new Set<string>();
+  for (const [key, query] of queries) {
+    const style = styleNamed(styles, query.name);
+    if (!style) queries.delete(key);
+    else if (style.type === 'paragraph') paragraphStyles.add(style.styleId);
   }
-  for (const [key, query] of queries) if (!supportedNames.has(query.name)) queries.delete(key);
   if (!queries.size) return null;
   if (queries.size > 128) throw new Error('character-style header queries exceed their bound');
-  const index = characterStyleIndex(part, options);
+  const index = characterStyleIndex(part, options, paragraphStyles);
   if (!index) return null;
   return { furniture, dynamic, queries, index };
 }
 
 /**
- * {@link layoutWithCharacterHeaders} over a body run that may pause. A document whose headers
- * project character styles keeps the synchronous passes; see `layout-steps.ts`.
+ * {@link layoutWithCharacterHeaders} over a body run that may pause. A pass that does not repeat
+ * a settled revision lays out the saved header results first, and that pass may pause; the
+ * passes that settle the projected headers run synchronously. See `layout-steps.ts`.
  */
 export function* layoutWithCharacterHeadersSteps(
   part: OoxmlPart,
   options: SemanticLayoutOptions,
   run: (options: SemanticLayoutOptions) => LayoutSteps<SemanticLayout>
 ): LayoutSteps<SemanticLayout> {
-  if (!characterHeaderSetup(part, options)) return yield* run(options);
-  return layoutWithCharacterHeaders(part, options, (opts) => drainLayoutSteps(run(opts)));
+  const setup = characterHeaderSetup(part, options);
+  if (!setup) return yield* run(options);
+  let first = resumableSeed(options, setup.index) ? undefined : yield* run(options);
+  return layoutWithCharacterHeaders(part, options, (opts) => {
+    if (opts === options && first) {
+      const layout = first;
+      first = undefined;
+      return layout;
+    }
+    return drainLayoutSteps(run(opts));
+  });
 }

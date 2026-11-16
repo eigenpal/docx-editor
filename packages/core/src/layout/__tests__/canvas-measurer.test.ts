@@ -560,3 +560,18 @@ test('canvas kerning uses authored thresholds and separates width-cache entries'
   expect(m.measure('アイ', kerned)).toBe(kana);
   expect(context.fontKerning).toBe('none');
 });
+
+test('the canvas measures the unhinted advances that paint draws', () => {
+  const context: CanvasTextContext = {
+    font: '',
+    textRendering: 'auto',
+    measureText: () => ({ width: context.textRendering === 'geometricPrecision' ? 40.3 : 44 }),
+  };
+  const m = tryCreateCanvasMeasurer({ context })!;
+  expect(context.textRendering).toBe('geometricPrecision');
+  expect(m.measure('53.227', DEFAULT_RUN_STYLE)).toBeCloseTo(40.3, 5);
+  // A context without the control measures as before.
+  const older: CanvasTextContext = { font: '', measureText: () => ({ width: 10 }) };
+  expect(tryCreateCanvasMeasurer({ context: older })!.measure('a', DEFAULT_RUN_STYLE)).toBe(10);
+  expect('textRendering' in older).toBe(false);
+});

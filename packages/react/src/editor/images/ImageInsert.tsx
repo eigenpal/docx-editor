@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import {
   editorHostDocument,
+  type EditorPointPosition,
   executeImageCommand,
   toolbarCommandState,
 } from '@docx-editor.dev/core/editor';
@@ -19,6 +20,7 @@ import { normalizeImageBytes } from './normalizeImageFile';
 import { useToolbarLabel } from '../toolbar/toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { Slot } from '../toolbar/Slot';
+import { PanelRowContent, triggerClassName, usePanelRow } from '../toolbar/panel-row';
 import { usePopupConfig } from '../popup-config-context';
 import { renderPopup } from '../popup-renderer';
 import { DocxEditorImageInsertErrorDialog } from './ImageInsertErrorDialog';
@@ -27,8 +29,16 @@ const ACCEPT = 'image/png,image/jpeg,image/gif';
 
 export interface ImageInsertContextValue {
   readonly openFilePicker: () => void;
-  readonly insertFromFileList: (files: FileList | File[] | null | undefined) => Promise<void>;
-  readonly insertFromDataTransfer: (data: DataTransfer | null) => Promise<void>;
+  /** Pass the exact point result to retain a drop target during the file read. */
+  readonly insertFromFileList: (
+    files: FileList | File[] | null | undefined,
+    at?: EditorPointPosition
+  ) => Promise<void>;
+  /** Pass the exact point result to retain a drop target during the file read. */
+  readonly insertFromDataTransfer: (
+    data: DataTransfer | null,
+    at?: EditorPointPosition
+  ) => Promise<void>;
   readonly isEnabled: boolean;
   readonly disabledReason: string | null;
   readonly inputRef: React.RefObject<HTMLInputElement | null>;
@@ -77,8 +87,12 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
   const disabledReason = localizeDisabledReason(insertState.disabledReason, t);
 
   const insertBytes = useCallback(
-    async (bytes: Uint8Array) => {
-      if (!editor || busyRef.current) return;
+    async (bytes: Uint8Array, at?: EditorPointPosition) => {
+      if (!editor) return;
+      if (busyRef.current) {
+        setRefusal(t('imageInsert.errors.refused'));
+        return;
+      }
       const normalized = normalizeImageBytes(bytes);
       if (!normalized.ok) {
         setRefusal(t(normalized.reasonKey as TranslationKey));
@@ -90,6 +104,7 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
         mime: normalized.mime,
         widthPoints: normalized.widthPoints,
         heightPoints: normalized.heightPoints,
+        ...(at ? { at } : {}),
       };
       // `executeImageCommand` applies the same checks and reports a refusal to diagnostics.
       busyRef.current = true;
@@ -100,7 +115,7 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
             localizeDisabledReason(readableReason(result.reason) ?? null, t) ??
               t('imageInsert.errors.refused')
           );
-        } else {
+        } else if (!at) {
           editor.focus();
         }
       } finally {
@@ -111,29 +126,34 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
   );
 
   const insertFromFileList = useCallback(
-    async (files: FileList | File[] | null | undefined) => {
+    async (files: FileList | File[] | null | undefined, at?: EditorPointPosition) => {
       const file = files?.[0];
       if (!file) return;
-      const buffer = await file.arrayBuffer();
-      await insertBytes(new Uint8Array(buffer));
+      let buffer: ArrayBuffer;
+      try {
+        buffer = await file.arrayBuffer();
+      } catch {
+        setRefusal(t('imageInsert.errors.refused'));
+        return;
+      }
+      await insertBytes(new Uint8Array(buffer), at);
     },
-    [insertBytes]
+    [insertBytes, t]
   );
 
   const insertFromDataTransfer = useCallback(
-    async (data: DataTransfer | null) => {
+    async (data: DataTransfer | null, at?: EditorPointPosition) => {
       if (!data) return;
       const file = [...data.files].find((candidate) => candidate.type.startsWith('image/'));
       if (file) {
-        await insertFromFileList([file]);
+        await insertFromFileList([file], at);
         return;
       }
       for (const item of data.items) {
         if (item.kind !== 'file' || !item.type.startsWith('image/')) continue;
         const blob = item.getAsFile();
         if (!blob) continue;
-        const buffer = await blob.arrayBuffer();
-        await insertBytes(new Uint8Array(buffer));
+        await insertFromFileList([blob], at);
         return;
       }
     },
@@ -242,12 +262,13 @@ export function ImageInsertTrigger({
 }: ImageInsertTriggerProps) {
   const { openFilePicker, isEnabled, disabledReason } = useImageInsert();
   const label = useToolbarLabel();
+  const panelRow = usePanelRow(asChild, children);
   if (hidden) return null;
   const control = chromeControlForSlot('image.insert');
   const text = label(control?.labelKey ?? 'toolbar.image');
   const shared = {
     type: 'button' as const,
-    className: `docx-toolbar__button${className ? ` ${className}` : ''}`,
+    className: `${triggerClassName(panelRow)}${className ? ` ${className}` : ''}`,
     'data-slot': 'image.insert',
     disabled: !isEnabled,
     ...(!isEnabled ? { 'data-disabled': '' } : {}),
@@ -257,7 +278,12 @@ export function ImageInsertTrigger({
     onClick: openFilePicker,
   };
   if (asChild) return <Slot {...shared}>{children}</Slot>;
-  return <button {...shared}>{children ?? chromeIcon(control?.paths)}</button>;
+  const icon = chromeIcon(control?.paths);
+  return (
+    <button {...shared}>
+      {panelRow ? <PanelRowContent icon={icon} label={text} /> : (children ?? icon)}
+    </button>
+  );
 }
 
 ImageInsertTrigger.docxSlot = 'image.insert' as const;

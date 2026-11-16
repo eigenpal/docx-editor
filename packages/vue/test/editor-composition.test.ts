@@ -13,7 +13,7 @@ import { useDocxEditor } from '../src/editor/context';
 import { useEditorState } from '../src/editor/useEditorState';
 import { useEditorCommand } from '../src/editor/useEditorCommand';
 import { useEditorEvent } from '../src/editor/useEditorEvent';
-import { useEditorCaret } from '../src/editor/useEditorCaret';
+import { useEditorCaret, type EditorCaret } from '../src/editor/useEditorCaret';
 import { docxEditorFacadeListenerCount } from '../src/editor/DocxEditorRoot';
 import {
   DocxEditorAuthorStyle,
@@ -307,6 +307,49 @@ describe('useEditorEvent', () => {
       readyApp.unmount();
     }
   });
+
+  test('reports the paragraphs an edit changed', async () => {
+    const changed: string[][] = [];
+    let instance: DocxEditorInstance | null = null;
+    const Probe = defineComponent({
+      setup() {
+        useEditorEvent('paragraphsChange', (event) => changed.push([...event.changed]));
+        return () => null;
+      },
+    });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      render: () =>
+        h(
+          DocxEditorRoot,
+          {
+            document: SOURCE,
+            onReady: (editor: Editor) => {
+              instance = editor as DocxEditorInstance;
+            },
+          },
+          {
+            default: () =>
+              h(DocxEditorViewport, null, {
+                default: () => [h(Probe), h(DocxEditorContent)],
+              }),
+          }
+        ),
+    });
+    try {
+      app.mount(container);
+      await flush();
+      expect(changed).toEqual([]);
+      instance!.exec({ type: 'insertText', text: 'X' });
+      await flush();
+      const [first] = instance!.getParagraphs();
+      expect(changed).toEqual([[first!.blockId]]);
+    } finally {
+      app.unmount();
+      container.remove();
+    }
+  });
 });
 
 describe('facade listeners', () => {
@@ -441,7 +484,7 @@ describe('DocxEditorRoot reactive props', () => {
 
 describe('useEditorCaret', () => {
   test('caret position updates after typing', async () => {
-    const positions: Array<{ paragraphId: string; offset: number } | null> = [];
+    const positions: Array<EditorCaret | null> = [];
     const Probe = defineComponent({
       setup() {
         const caret = useEditorCaret();
@@ -458,6 +501,11 @@ describe('useEditorCaret', () => {
       editor.exec({ type: 'insertText', text: '!' });
       await flush();
       expect(positions.some((pos) => pos !== null)).toBe(true);
+      const last = positions.at(-1)!;
+      const head = editor.getSelectionRange()!.head;
+      expect(last.blockId).toBe(head.blockId);
+      expect(last.paragraphId).toBe(head.blockId);
+      expect(last.offset).toBe(head.offset);
     } finally {
       app.unmount();
     }

@@ -88,13 +88,18 @@ export function supportsTrackedAutomationOperation(operation: AutomationOperatio
   // refuses the forms it has no tracked shape for.
   if (['insertField', 'insertOoxml', 'setFieldResult', 'deleteField'].includes(operation.op))
     return true;
-  if (operation.op === 'updateTable' || operation.op === 'updateTableCell') return true;
+  // The table planner allows structure only inside the author's own pending table.
+  if (['updateTable', 'updateTableCell', 'splitTableCell'].includes(operation.op)) return true;
   if (operation.op === 'replaceSpan' && !('body' in operation.span)) return true;
   // Strikes the paragraph's text and mark; the planner refuses a paragraph with no next one.
   if (operation.op === 'deleteParagraph') return true;
   return [
     'insertContentControl',
     'setContentControlProperties',
+    // A control's value is struck and the new value inserted inside it; text at an edge of
+    // its content is an ordinary tracked insertion there.
+    'setContentControlValue',
+    'insertContentControlText',
     'startNewList',
     'setListLevelFormat',
     'attachToList',
@@ -111,6 +116,7 @@ export function supportsTrackedAutomationOperation(operation: AutomationOperatio
     'replyToComment',
     'deleteComment',
     'setCommentResolved',
+    'setCommentText',
     'acceptRevision',
     'rejectRevision',
     'resolveRevisionBatch',
@@ -162,7 +168,8 @@ export function trackPlannedChanges(
   return {
     ...plan,
     ops: plan.ops.map((op) => {
-      if (op.op === 'insertText') return { ...op, revision };
+      if (op.op === 'insertText' || op.op === 'insertParagraphBesideTable')
+        return { ...op, revision };
       if (op.op === 'splitParagraph')
         return {
           op: 'splitParagraphMany' as const,
@@ -174,6 +181,7 @@ export function trackPlannedChanges(
       if (
         op.op === 'setRunProperties' ||
         op.op === 'setParagraphProperties' ||
+        op.op === 'setParagraphBorders' ||
         op.op === 'setParagraphMarkProperties' ||
         op.op === 'setListNumbering' ||
         op.op === 'setListLevel'

@@ -1,0 +1,94 @@
+{
+  "config": "trackedStructuresEverything",
+  "seed": 28,
+  "replicas": 4,
+  "delivery": "peer",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 22,
+          "text": "t ",
+          "revision": {
+            "author": "Author 1",
+            "date": "2026-01-01T01:40:34Z"
+          }
+        },
+        "paragraphs": [4]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 0,
+          "text": "lo",
+          "revision": {
+            "author": "Author 1",
+            "date": "2026-01-01T13:47:29Z"
+          }
+        },
+        "paragraphs": [9]
+      }
+    },
+    {
+      "kind": "toggle",
+      "replica": 1
+    },
+    {
+      "kind": "undo",
+      "replica": 1
+    },
+    {
+      "kind": "redo",
+      "replica": 1
+    },
+    {
+      "kind": "toggle",
+      "replica": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 3,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 3,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 3,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "acceptAllRevisions",
+          "siteNodeIds": []
+        },
+        "targets": [
+          {
+            "field": "siteNodeIds",
+            "localName": "ins",
+            "index": 0,
+            "array": true,
+            "identity": {
+              "id": "98589",
+              "author": "Author 1",
+              "date": "2026-01-01T13:47:29Z"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

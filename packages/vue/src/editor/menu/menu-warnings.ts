@@ -28,6 +28,22 @@ export function warnUnmatchedHiddenRow(id: string): void {
   );
 }
 
+/** A packaged row inside `ContextMenu.Start`, which renders it a second time above its default. */
+export function warnPackagedRowInStart(id: string): void {
+  menuDevWarning(
+    `ContextMenu.Start holds the packaged row "${id}", which also renders in its default ` +
+      `place, so it shows twice. Start is for the host's own rows.`
+  );
+}
+
+/** A `ContextMenu.Start` the menu could not hoist, such as one a host component returned. */
+export function warnStartNotDirectChild(): void {
+  menuDevWarning(
+    `A ContextMenu.Start is not a direct child of ContextMenu, so it renders after the ` +
+      `default rows. Put your component inside Start instead of returning Start from it.`
+  );
+}
+
 /** A `Menu.Item` or `ContextMenu.Slot` with neither `slotId` nor `slot`, so it renders nothing. */
 export function warnMissingSlotId(): void {
   menuDevWarning('A Menu.Item or ContextMenu.Slot has no slotId, so it renders nothing.');

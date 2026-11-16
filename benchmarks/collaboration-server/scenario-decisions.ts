@@ -8,7 +8,9 @@
 // same identity. A replica that undoes or redoes after its decision may have brought the
 // change back, so its earlier decisions are not checked. The undo restores the change as new
 // content, so a peer's decision on the same change that did not see the undo misses it too,
-// and is not checked either.
+// and is not checked either. An undo or redo of typing writes the typed text again as new
+// content too, so a peer's decision that did not see it does not reach that text, and is not
+// checked for the changes the text came back in.
 
 import type {
   OoxmlNode,
@@ -152,13 +154,24 @@ export class DecisionOracle {
     if (decision && decision.tokens.size > 0) this.decisions.push(decision);
   }
 
-  /** An undo or redo on `replica`: its earlier decisions may come back. */
-  undone(replica: number, ydoc: Y.Doc): void {
+  /**
+   * An undo or redo on `replica`, from `before` to `after`: its earlier decisions may come
+   * back, and so may typing in a change, which the undo or redo writes again as new content.
+   */
+  undone(replica: number, ydoc: Y.Doc, before: OoxmlPackage, after: OoxmlPackage): void {
     const identities = new Set<string>();
     for (const decision of this.decisions) {
       if (decision.replica !== replica) continue;
       decision.excused = true;
       for (const identity of decidedIdentities(decision)) identities.add(identity);
+    }
+    const root = bodyOf(before);
+    const held = root ? tokensInChanges(root) : new Map<string, Set<string>>();
+    const restored = bodyOf(after);
+    for (const [token, around] of restored ? tokensInChanges(restored) : []) {
+      for (const identity of around) {
+        if (!held.get(token)?.has(identity)) identities.add(identity);
+      }
     }
     const client = ydoc.clientID;
     this.restores.push({ replica, client, clock: Y.getState(ydoc.store, client), identities });

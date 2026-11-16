@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -50,4 +50,15 @@ test('a point outline preserves the automatic series color when colors do not va
 test('a point outline keeps its point color when colors vary', () => {
   const components = bars(true, '');
   expect(components.find((component) => component.strokeHex === '123456')?.fillHex).toBe('ED7D31');
+});
+
+test('a document without a theme part gives each series its default accent', async () => {
+  const { styleSeriesColor, withDefaultSchemeColors } = await import('../chart-style.ts');
+  // The resolver of a document with no theme part answers no scheme color.
+  const noTheme = withDefaultSchemeColors(() => null);
+  expect([0, 1, 2].map((index) => styleSeriesColor(2, index, 3, noTheme).hex)).toEqual([
+    '4472C4',
+    'ED7D31',
+    'A5A5A5',
+  ]);
 });

@@ -202,6 +202,15 @@ export interface StyleSpanRecord {
    * with `styleForFontSlot(span.style, span.fontSlot)`.
    */
   readonly fontSlot?: FontSlot;
+  /**
+   * Set when the text is bold and its face is not, so the bold is synthesized. Layout gave each
+   * inked glyph `SYNTHETIC_BOLD_ADVANCE_EM` of extra advance, and each inked grapheme of text
+   * that draws in a fallback face. A browser draws a synthesized bold at the face's own
+   * advances, so screen paint adds the extra itself. The only blanks in such a span are U+0020
+   * and U+00A0, whose extra paint takes back (`markSyntheticBoldSpans`).
+   * @internal
+   */
+  readonly syntheticBold?: true;
   readonly box: LayoutBox;
   /** Authored trailing spaces that layout may clip at the line's right edge. */
   readonly lineEndWhitespace?: true;
@@ -731,8 +740,60 @@ export interface TableRowFragmentRecord {
   readonly hasContinuation?: boolean;
   /** True for a `w:cantSplit` or exact-height row: it stays whole where a page holds it. */
   readonly placesWhole?: boolean;
+  /** The table fill this row shows in its cell-spacing gaps; see `table-spacing-shading.ts`. */
+  readonly spacingShading?: TableSpacingShading;
+  /** The frame of a spaced table, which paint draws around the fragment. */
+  readonly spacingFrame?: TableSpacingFrame;
   readonly cells: readonly TableCellFragmentRecord[];
   readonly box: LayoutBox;
+}
+
+/**
+ * What a spaced row paints in its gaps: never inside a cell, whose own fill stands. Below the
+ * table's last row the band runs on to the bottom of the fragment box, which holds the gap
+ * the table closes there.
+ */
+export interface TableSpacingShading {
+  /** Validated `RRGGBB` fill. */
+  readonly fill: string;
+  /** The gap on each side of the row's cells, in points. */
+  readonly gapPt: number;
+}
+
+/**
+ * The frame of a table with `w:tblCellSpacing`: its outer borders, drawn once around each
+ * fragment, and how far they move the outer cells in beyond the spacing gap, in points.
+ * Shared by the rows of one table, one record for each position (`table-spacing-frame.ts`).
+ */
+export interface TableSpacingFrame {
+  /** The cell spacing `s`: the gap between neighbouring cells is twice this. */
+  readonly spacingPt: number;
+  /** Extra space between the table's left edge and its first cells. */
+  readonly leftPt: number;
+  /** Extra space between the table's last cells and its right edge. */
+  readonly rightPt: number;
+  /** Extra space above the table's first row. */
+  readonly topPt: number;
+  /** Extra space below the table's last row. */
+  readonly bottomPt: number;
+  /**
+   * Extra space between the frame and the first row of a fragment that continues the table
+   * from an earlier page. Negative when the rows sit closer to the frame than the gap.
+   */
+  readonly breakTopPt: number;
+  /** The same below the last row of a fragment that the table continues after. */
+  readonly breakBottomPt: number;
+  /** This row opens the table, so `topPt` applies above it. */
+  readonly first?: true;
+  /** This row closes the table, so `bottomPt` applies below it. */
+  readonly last?: true;
+  /** The table's outer borders, which draw the frame. */
+  readonly borders: Pick<
+    import('./table-borders.ts').TableBorderBox,
+    'top' | 'left' | 'bottom' | 'right'
+  >;
+  /** A row's `w:tblPrEx` side borders, drawn beside that row only, centred on the edge. */
+  readonly rowBorders?: Pick<import('./table-borders.ts').TableBorderBox, 'left' | 'right'>;
 }
 
 /**

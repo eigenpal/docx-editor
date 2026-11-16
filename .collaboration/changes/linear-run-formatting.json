@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Formatting a paragraph of many runs emitted the same per-run operations and journal primitives, at quadratic or worse cost.",
+  "after": "The same operations, primitives, and resulting trees are produced in time proportional to the paragraph length.",
+  "reason": "Only memoization and the straddling-run search change. Operation shapes, primitive journals, node identities, and serialized output stay the same; formatting output is byte-identical to the previous release on the test fixtures.",
+  "tests": [
+    "packages/core/src/store/__tests__/run-formatting-scale.test.ts",
+    "packages/pro/src/collaboration/__tests__/many-run-formatting.test.ts",
+    "packages/pro/src/collaboration/__tests__/format-text-identity.test.ts"
+  ],
+  "changeset": "linear-run-formatting",
+  "migration": null
+}

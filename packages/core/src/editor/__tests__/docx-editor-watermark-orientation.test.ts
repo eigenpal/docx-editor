@@ -112,8 +112,8 @@ describe('watermark page orientation', () => {
 
     const picture = PNG_1X1;
     editor.exec({ type: 'setWatermark', watermark: { imageData: picture } });
-    const expected = [PORTRAIT_AREA, LANDSCAPE_AREA, PORTRAIT_AREA].map(
-      (area) => watermarkShapeBox({ imageData: picture }, area)!
+    const expected = [PORTRAIT_AREA, LANDSCAPE_AREA, PORTRAIT_AREA].map((area) =>
+      watermarkShapeBox({ imageData: picture }, area)!
     );
     const pictures = await shapeSizes(editor);
     pictures.forEach(([width, height], index) => {

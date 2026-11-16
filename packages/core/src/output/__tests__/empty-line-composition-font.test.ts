@@ -36,7 +36,10 @@ for (const cell of [false, true]) {
     expect(empty.style.backgroundColor).toBe('');
     const populated = container.querySelector('.layout-run')!.closest<HTMLElement>('.layout-line')!;
     expect(populated.style.fontSize).toBe('0px');
-    expect(container.querySelectorAll('br')).toHaveLength(1);
+    // One composition anchor, on the empty line. The populated paragraph's own `<br>` is its
+    // paragraph-end break for the browser's text services, held apart in its own furniture.
+    expect(container.querySelectorAll('.layout-line > br')).toHaveLength(1);
+    expect(populated.querySelectorAll('.docx-paragraph-boundary > br')).toHaveLength(1);
     expect(empty.textContent).toBe('');
   });
 }

@@ -115,8 +115,7 @@ function errorCodeAt(
   index: number
 ): string {
   const result = response.results[index] as
-    | { status: 'error'; error: { code: string } }
-    | undefined;
+    { status: 'error'; error: { code: string } } | undefined;
   if (result?.status !== 'error') throw new Error(`expected an error at ${index}`);
   return result.error.code;
 }
@@ -196,6 +195,8 @@ describe('the operation vocabulary declares which operations write', () => {
     // drift from the union the host actually treats as a command.
     expect([...AUTOMATION_COMMAND_OPERATIONS]).toEqual([
       'removeDocumentInformation',
+      'compareFromBase64',
+      'replaceDocumentFromBase64',
       'setDocumentProperties',
       'insertTableRows',
       'insertTable',
@@ -203,6 +204,7 @@ describe('the operation vocabulary declares which operations write', () => {
       'updateTableCell',
       'splitTableCell',
       'setInlinePicture',
+      'setShapeFill',
       'deleteInlinePicture',
       'insertField',
       'insertOoxml',
@@ -240,6 +242,7 @@ describe('the operation vocabulary declares which operations write', () => {
       'setHyperlink',
       'insertComment',
       'setCommentResolved',
+      'setCommentText',
       'replyToComment',
       'deleteComment',
       'acceptRevision',
@@ -258,6 +261,8 @@ describe('the operation vocabulary declares which operations write', () => {
     // And the ones that commit as a PACKAGE transaction, which is why they travel alone.
     expect([...AUTOMATION_SOLITARY_OPERATIONS]).toEqual([
       'removeDocumentInformation',
+      'compareFromBase64',
+      'replaceDocumentFromBase64',
       'insertTableRows',
       'resolveRevisionBatch',
       'setRevisionAuthorBatch',

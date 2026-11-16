@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "In a collaboration session, a new link in a document without a hyperlink character style named no style and added none.",
+  "after": "In a session, the first new link, from the editor or from browser automation, adds the built-in Hyperlink character style to an existing styles part as document setup: a separate commit published without an undo entry, so no participant's undo removes it. A session never creates the styles part, so a document without one gets an unstyled link. When participants who added the style while apart reconnect, each editor that may write removes later exact copies of a style with the same id, keeping the first in document order.",
+  "reason": "Setup travels as ordinary styles-part changes that replicas already exchange, under the existing local origin while the undo manager does not track it. The duplicate repair deletes the same elements on every replica, because element order converges, and an exact copy changes nothing a reader resolves. Not creating the styles part in a session avoids two styles relationships after a merge. A replica on an earlier version applies these changes as any other styles-part edit. No shared field, mark, identity, or format version changes. sharedSchemaVersion and repairVersion do not change.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-hyperlink-style.test.ts"],
+  "changeset": "link-style-in-collaboration",
+  "migration": null
+}

@@ -87,8 +87,7 @@ function sourceContent(cell: OoxmlElement): SourceContent | null {
   if (paragraph) {
     const pPr = paragraphPropertiesNodeOf(paragraph);
     const ownMark = pPr?.children.find((child) => isWmlElement(child, 'rPr')) as
-      | OoxmlElement
-      | undefined;
+      OoxmlElement | undefined;
     // The mark copies as the source mark is: list markers and the empty line take their face
     // from it. A mark holding only revision markers has no formatting of its own.
     const ownChildren = ownMark ? wmlChildren(ownMark, MARK_DROPPED) : [];

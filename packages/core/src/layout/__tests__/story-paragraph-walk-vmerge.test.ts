@@ -44,13 +44,13 @@ test('the walk skips paragraphs in a continuation cell below a merged cell', () 
     row(cell('hidden too', ' w:val="continue"'), cell('c')),
     row(cell('shown'), cell('d'))
   );
-  expect(walkedText(xml)).toEqual(['head', 'a', 'b', 'c', 'shown', 'd']);
+  expect(walkedText(xml)).toEqual(['head', 'a', 'b', 'c', 'shown', 'd', '']);
 });
 
 test('a continuation with nothing merged above keeps its paragraphs', () => {
   const xml = table(row(cell('first', ''), cell('a')), row(cell('under', ''), cell('b')));
   // Row 0 has nothing above; row 1 continues row 0's merge.
-  expect(walkedText(xml)).toEqual(['first', 'a', 'b']);
+  expect(walkedText(xml)).toEqual(['first', 'a', 'b', '']);
 });
 
 test('a spanned cell moves the grid column of the cells after it', () => {
@@ -62,7 +62,7 @@ test('a spanned cell moves the grid column of the cells after it', () => {
     ) +
     row(cell('x'), cell('y'), cell('below', '')) +
     '</w:tbl>';
-  expect(walkedText(xml)).toEqual(['', 'top', 'x', 'y']);
+  expect(walkedText(xml)).toEqual(['', 'top', 'x', 'y', '']);
 });
 
 test('plain and merged walks keep independent answers for unchanged rows', () => {

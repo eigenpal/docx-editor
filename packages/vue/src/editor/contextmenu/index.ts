@@ -28,17 +28,22 @@ export {
   ContextMenuInsertRowBelow,
   ContextMenuRefreshToc,
   ContextMenuRefreshTocPageNumbers,
+  ContextMenuRemoveToc,
   useTableContextMenuVisible,
   TABLE_CONTEXT_ROWS,
   TOC_CONTEXT_ROWS,
   type ContextMenuCommandProps,
   type ContextMenuItemProps,
+  type ContextMenuStartProps,
   type ContextMenuTableRowProps,
 } from './parts';
 export {
   ContextMenuContext,
   useContextMenuContext,
+  useContextMenuAnchor,
+  useContextMenuHighlights,
   useContextMenuTarget,
   type ContextMenuAnchor,
   type ContextMenuContextValue,
 } from './contextmenu-context';
+export { ContextMenuStart } from './start';

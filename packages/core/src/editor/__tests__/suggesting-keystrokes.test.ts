@@ -222,7 +222,8 @@ describe('Enter then Backspace, in suggesting mode', () => {
       surface.splitParagraph();
       expect(surface.session.paragraphIds()).toHaveLength(3);
 
-      // The new item is a list item, so the first Backspace removes its number.
+      // The new item is a list item, so the first Backspace removes its number. It is empty,
+      // so the next joins at once, with no indent step.
       surface.deleteBackward();
       expect(surface.session.paragraphIds()).toHaveLength(3);
       expect(surface.isListParagraph()).toBe(false);
@@ -248,9 +249,12 @@ describe('Enter then Backspace, in suggesting mode', () => {
         listItem('Analysis'),
       (surface) => {
         caretTo(surface, 1, 0);
-        // The first Backspace removes the list number; the second reaches the break.
+        // The first Backspace removes the list number, the second the indent the list gave
+        // the text; the third reaches the break.
         surface.deleteBackward();
         expect(surface.isListParagraph()).toBe(false);
+        surface.deleteBackward();
+        expect(serializeOoxmlPart(surface.session.part())).not.toMatch(/<w:del\b/);
         surface.deleteBackward();
         expect(surface.state().lastRejection).toBeNull();
         expect(surface.session.paragraphIds()).toHaveLength(2);

@@ -52,9 +52,11 @@ describe('w:bidiVisual table grid', () => {
   test('reverses unequal-width columns while preserving document order and canonical edit targets', () => {
     const result = layout(table());
     const t = tables(result)[0]!;
+    // A trailing-aligned legacy table puts its last content edge on the text edge, which moves
+    // the grid 0.5pt out (`fixedTableContentEdgeOrigin`).
     expect(t.columnEdges).toEqual([0, 120, 210, 270]);
     const [a, b, c] = t.rows[0]!.cells;
-    expect([a!.box.x, b!.box.x, c!.box.x]).toEqual([210, 120, 0]);
+    expect([a!.box.x, b!.box.x, c!.box.x]).toEqual([209.5, 119.5, -0.5]);
     expect([a!.box.width, b!.box.width, c!.box.width]).toEqual([60, 90, 120]);
     expect(a!.gridColumn).toBe(2);
     expect(a!.logicalGridColumn).toBe(0);
@@ -73,9 +75,8 @@ describe('w:bidiVisual table grid', () => {
     if (hit?.kind !== 'columnDivider') throw new Error('missing divider');
     expect(hit.leftGridColumnId).toBe(b!.gridColumnId!);
     expect(hit.rightGridColumnId).toBe(a!.gridColumnId!);
-    expect(
-      hitTestPage(result, 0, { x: 10 + a!.box.x + 10, y: 10 + a!.box.y + 5 })?.cell?.cellId
-    ).toBe(a!.id);
+    // Content coordinates, inside the first cell.
+    expect(hitTestPage(result, 0, { x: a!.box.x + 10, y: a!.box.y + 5 })?.cell?.cellId).toBe(a!.id);
   });
 
   test.each(['0', 'false', 'off'])('explicit %s keeps LTR columns', (value) => {
@@ -165,7 +166,7 @@ describe('w:bidiVisual table grid', () => {
     expect(fragments.length).toBeGreaterThan(1);
     expect(fragments.slice(1).every((t) => t.rows[0]!.isHeaderRepeat)).toBe(true);
     for (const t of fragments)
-      for (const r of t.rows) expect(r.cells.map((c) => c.box.x)).toEqual([210, 120, 0]);
+      for (const r of t.rows) expect(r.cells.map((c) => c.box.x)).toEqual([209.5, 119.5, -0.5]);
   });
   test('mirrors border ownership onto the real perimeter and keeps nested tables independent', () => {
     const border = '<w:tcBorders><w:left w:val="single" w:sz="8" w:color="AA0000"/></w:tcBorders>';
@@ -189,8 +190,9 @@ describe('w:bidiVisual table grid', () => {
     const t = tables(
       layout(table(undefined, '<w:bidiVisual/><w:tblInd w:w="200" w:type="dxa"/>'))
     )[0]!;
-    expect(t.box.x).toBe(100);
-    expect(t.rows[0]!.cells[0]!.box.x + t.rows[0]!.cells[0]!.box.width).toBe(370);
+    // The stated indent aligns the leading content edge, 0.5pt past the grid edge.
+    expect(t.box.x).toBe(100.5);
+    expect(t.rows[0]!.cells[0]!.box.x + t.rows[0]!.cells[0]!.box.width).toBe(370.5);
   });
   test.each([false, true])(
     'clipboard keeps logical cell order and span gaps (merged=%s)',
@@ -214,8 +216,14 @@ describe('w:bidiVisual table grid', () => {
       ).toBe(merged ? 'first\t\tthird' : 'first\tsecond\tthird');
     }
   );
-  test('sparse RTL rows report the full grid with valid logical column indices', () => {
-    const result = layout(table(row(cell('second') + cell('third'), '<w:gridBefore w:val="1"/>')));
+  test('sparse RTL rows report the reached grid with valid logical column indices', () => {
+    // Another row reaches the first column; a column no row reaches takes no width or index.
+    const result = layout(
+      table(
+        row(cell('second') + cell('third'), '<w:gridBefore w:val="1"/>') +
+          row(cell('a') + cell('b') + cell('c'))
+      )
+    );
     const t = tables(result)[0]!;
     for (const [index, c] of t.rows[0]!.cells.entries()) {
       const paragraph = c.blocks[0]!;

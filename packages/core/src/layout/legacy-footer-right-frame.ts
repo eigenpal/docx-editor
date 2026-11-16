@@ -63,8 +63,18 @@ function rightFramePair(part: OoxmlPart): { framed: string; anchor: string; y: n
     count(anchorPr, 'ind') > 1
   )
     return null;
-  const style = attr(elements(props).find((node) => isW(node, 'pStyle'))!, 'val');
-  if (!style || style !== attr(elements(anchorPr).find((node) => isW(node, 'pStyle'))!, 'val'))
+  const style = attr(
+    elements(props).find((node) => isW(node, 'pStyle'))!,
+    'val'
+  );
+  if (
+    !style ||
+    style !==
+      attr(
+        elements(anchorPr).find((node) => isW(node, 'pStyle'))!,
+        'val'
+      )
+  )
     return null;
   const frame = elements(props).find((node) => isW(node, 'framePr'))!;
   if (

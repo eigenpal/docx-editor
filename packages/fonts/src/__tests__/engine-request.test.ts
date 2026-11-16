@@ -14,8 +14,11 @@
 //
 // UNCONDITIONALLY, for this form. `defaultFont` lives on the font configuration the
 // resolver has not produced yet, and `createDocxEditor` has no `defaultFont` option, so no
-// host setting reaches it. Carlito is a floor under `packagedFonts()`, not something only
-// a Calibri document pays for.
+// host setting reaches it.
+//
+// The request also names the FACES that the laid-out text uses (`faces`), so
+// `packagedFonts()` loads one file per face in use, not four per family. A paragraph mark
+// that names no font is laid out in the default family, so Carlito Regular is a floor.
 //
 // core is a devDependency here strictly FOR THIS TEST; the shipped module has no engine
 // dependency in either direction.
@@ -158,41 +161,98 @@ describe('the request the engine sends', () => {
 
 describe('packagedFonts under that request', () => {
   test(
-    'loads Carlito for a document that names none of the six',
+    'loads Carlito Regular for a document that names none of the six',
     async () => {
       const { fetcher, files } = countingFetcher();
-      await open(docxNaming('Montserrat'), packagedFonts({ fetcher, install: false }));
+      await open(docxNaming('Montserrat'), packagedFonts({ fetcher, loading: 'lazy' }));
 
-      // The floor: four Carlito faces for the default family alone. "Costs nothing at all"
-      // was never true through the engine.
-      expect([...files].sort()).toEqual([
-        'Carlito-Bold.ttf',
-        'Carlito-BoldItalic.ttf',
-        'Carlito-Italic.ttf',
-        'Carlito-Regular.ttf',
-      ]);
+      // The floor: the default family's regular face, for the paragraph mark. "Costs nothing
+      // at all" was never true through the engine.
+      expect([...files].sort()).toEqual(['Carlito-Regular.ttf']);
     },
     TEST_BUDGET
   );
 
   test(
+    'names the faces the laid-out text uses',
+    async () => {
+      const seen: FontResolutionRequest[] = [];
+      await open(docxNaming('Times New Roman'), async (request) => {
+        seen.push(request);
+        return undefined;
+      });
+      expect(seen[0]!.faces).toEqual(
+        expect.arrayContaining([
+          { family: 'Times New Roman', weight: 400, style: 'normal' },
+          { family: 'Calibri', weight: 400, style: 'normal' },
+        ])
+      );
+      expect(seen[0]!.faces!.every((face) => face.weight === 400 && face.style === 'normal')).toBe(
+        true
+      );
+    },
+    TEST_BUDGET
+  );
+
+  test(
+    'loads the bold face when an edit makes text bold',
+    async () => {
+      const { fetcher, files } = countingFetcher();
+      const editor = await open(
+        docxNaming('Times New Roman'),
+        packagedFonts({ fetcher, loading: 'lazy' })
+      );
+      expect(files).not.toContain('LiberationSerif-Bold.ttf');
+      editor.surface!.selectAll();
+      expect(editor.exec({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
+      const deadline = Date.now() + RESOLVE_GIVE_UP;
+      while (!files.includes('LiberationSerif-Bold.ttf') && Date.now() < deadline)
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(files).toContain('LiberationSerif-Bold.ttf');
+      // Each face loads once.
+      expect(files.filter((file) => file === 'LiberationSerif-Regular.ttf')).toHaveLength(1);
+    },
+    TEST_BUDGET
+  );
+
+  for (const family of ['Times New Roman', 'Helvetica'])
+    test(
+      `installs the other faces of ${family} in the background, so a bold edit lays out nothing again`,
+      async () => {
+        const { fetcher, files } = countingFetcher();
+        const editor = await open(docxNaming(family), packagedFonts({ fetcher }));
+        const deadline = Date.now() + RESOLVE_GIVE_UP;
+        const boldInstalled = () =>
+          editor.surface!.textMeasurer!().hasResolvedFont?.({
+            fontFamily: family,
+            bold: true,
+            italic: false,
+          } as never) === true;
+        while (!boldInstalled() && Date.now() < deadline)
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        expect(boldInstalled()).toBe(true);
+        const measurer = editor.surface!.textMeasurer!();
+        const fetched = files.length;
+        editor.surface!.selectAll();
+        expect(editor.exec({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        // The bold face was already installed: no download, and the same measurer measures.
+        expect(files).toHaveLength(fetched);
+        expect(editor.surface!.textMeasurer!()).toBe(measurer);
+        expect(boldInstalled()).toBe(true);
+      },
+      TEST_BUDGET
+    );
+
+  test(
     'loads the named family ON TOP of the default one',
     async () => {
       const { fetcher, files } = countingFetcher();
-      await open(docxNaming('Times New Roman'), packagedFonts({ fetcher, install: false }));
+      await open(docxNaming('Times New Roman'), packagedFonts({ fetcher, loading: 'lazy' }));
 
       // Liberation Serif for what the document names, Carlito for the default it inherits.
       // A file using only Times New Roman does not cost Liberation Serif alone.
-      expect([...files].sort()).toEqual([
-        'Carlito-Bold.ttf',
-        'Carlito-BoldItalic.ttf',
-        'Carlito-Italic.ttf',
-        'Carlito-Regular.ttf',
-        'LiberationSerif-Bold.ttf',
-        'LiberationSerif-BoldItalic.ttf',
-        'LiberationSerif-Italic.ttf',
-        'LiberationSerif-Regular.ttf',
-      ]);
+      expect([...files].sort()).toEqual(['Carlito-Regular.ttf', 'LiberationSerif-Regular.ttf']);
     },
     TEST_BUDGET
   );
@@ -201,22 +261,13 @@ describe('packagedFonts under that request', () => {
     'serves Century Gothic, the family the two default lists were split for',
     async () => {
       const { fetcher, files } = countingFetcher();
-      await open(docxNaming('Century Gothic'), packagedFonts({ fetcher, install: false }));
+      await open(docxNaming('Century Gothic'), packagedFonts({ fetcher, loading: 'lazy' }));
 
       // `defaultFonts()` deliberately does NOT load this one — it would cost every
       // document ~709 KB for a family most never name. On demand is the other half of
       // that bargain, and it comes from bundled bytes rather than a CDN. `.otf`, unlike
       // the other five.
-      expect([...files].sort()).toEqual([
-        'Carlito-Bold.ttf',
-        'Carlito-BoldItalic.ttf',
-        'Carlito-Italic.ttf',
-        'Carlito-Regular.ttf',
-        'TeXGyreAdventor-Bold.otf',
-        'TeXGyreAdventor-BoldItalic.otf',
-        'TeXGyreAdventor-Italic.otf',
-        'TeXGyreAdventor-Regular.otf',
-      ]);
+      expect([...files].sort()).toEqual(['Carlito-Regular.ttf', 'TeXGyreAdventor-Regular.otf']);
     },
     TEST_BUDGET
   );

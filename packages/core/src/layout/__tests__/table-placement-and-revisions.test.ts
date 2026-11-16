@@ -164,13 +164,12 @@ describe('w:tblCellSpacing separates adjacent cells', () => {
       `<w:tbl><w:tblPr><w:tblCellSpacing w:w="120" w:type="dxa"/></w:tblPr>${narrow}</w:tbl>`
     );
     const [first, second] = fragment.rows[0]!.cells;
-    // 120tw = 6pt on each side of every cell: 12pt gaps at the three column edges come out
-    // of the 144pt table, and each 72pt column keeps (144 - 36) / 144 of its width.
+    // 120tw = 6pt on each side of every cell: 12pt gaps at the three column edges. A table
+    // that states no width keeps its 72pt cells and grows by the gaps (measured).
     expect(first!.box.x).toBeCloseTo(12, 6);
-    expect(first!.box.width).toBeCloseTo(54, 6);
+    expect(first!.box.width).toBeCloseTo(72, 6);
     expect(second!.box.x - (first!.box.x + first!.box.width)).toBeCloseTo(12, 6);
-    // The grid itself does not move: the table still spans its resolved columns.
-    expect(fragment.box.width).toBeCloseTo(144, 6);
+    expect(fragment.box.width).toBeCloseTo(144 + 36, 6);
   });
 
   test('spacing wider than the column still leaves a positive cell box', () => {

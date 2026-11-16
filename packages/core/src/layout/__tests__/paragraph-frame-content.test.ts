@@ -63,6 +63,31 @@ for (const wrap of ['auto', 'around']) {
   }
 }
 
+test('a manual page break stays inside its text frame and opens no page', () => {
+  const framed = `<w:p><w:pPr><w:framePr ${frame}/></w:pPr><w:r><w:t>one</w:t></w:r><w:r><w:br w:type="page"/></w:r><w:r><w:t>two</w:t></w:r></w:p>`;
+  const part = read(framed + p('after'));
+  const before = serializeOoxmlPart(part);
+  const layout = layoutSemanticDocument(part, 0, options);
+  expect(layout.pages).toHaveLength(1);
+  const [frameParagraph] = paras(layout).filter((paragraph) => paragraph.positionedFrame);
+  expect(frameParagraph).toBeDefined();
+  // The text after the break continues on the same line; the break keeps its model offset.
+  expect(frameParagraph!.lines).toHaveLength(1);
+  const spans = frameParagraph!.lines[0]!.spans;
+  expect(spans.map((span) => span.text).join('')).toBe('one\ftwo');
+  expect(spans.find((span) => span.text === '\f')?.range.start).toBe(3);
+  expect(serializeOoxmlPart(part)).toBe(before);
+});
+
+test('a page break outside a frame, or a column break in one, still breaks the page', () => {
+  const plain = `<w:p><w:r><w:t>one</w:t></w:r><w:r><w:br w:type="page"/></w:r><w:r><w:t>two</w:t></w:r></w:p>`;
+  expect(layoutSemanticDocument(read(plain), 0, options).pages).toHaveLength(2);
+  const column = `<w:p><w:pPr><w:framePr ${frame}/></w:pPr><w:r><w:t>one</w:t></w:r><w:r><w:br w:type="column"/></w:r><w:r><w:t>two</w:t></w:r></w:p>`;
+  const layout = layoutSemanticDocument(read(column), 0, options);
+  expect(paras(layout).some((paragraph) => paragraph.positionedFrame)).toBe(false);
+  expect(layout.pages).toHaveLength(2);
+});
+
 test('unavailable inline pictures retain ordinary paragraph flow', () => {
   const picture =
     '<w:pict><v:shape id="picture" style="width:40pt;height:30pt"><v:imagedata r:id="rId1"/></v:shape></w:pict>';

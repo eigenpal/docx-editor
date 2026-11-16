@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import type { InlineDrawingRecord } from '../drawing-layout.ts';
 import type { LayoutBox } from '../semantic-records.ts';
 import { EMU_PER_POINT } from '../drawing-layout.ts';
+import { clipGeometryToRegion } from '../drawing-geometry.ts';
 import { vectorShapeInkClip } from '../vector-shape-ink.ts';
 
 const EXTENT = 100 * EMU_PER_POINT;
@@ -314,4 +315,114 @@ describe('vectorShapeInkClip', () => {
     expect(grown.top).toBe(0);
     expect(grown.right).toBe(0);
   });
+
+  // Measured: an upright shape with a 20pt negative effect extent on every side paints whole,
+  // fill and outline; only a region cuts a shape that paints outside its extent.
+  test('a negative effect extent cuts nothing from a shape that paints outside its extent', () => {
+    const rect: Path = [
+      { x: 0, y: 0 },
+      { x: EXTENT, y: 0 },
+      { x: EXTENT, y: EXTENT },
+      { x: 0, y: EXTENT },
+    ];
+    const effect = { top: -20, right: -20, bottom: -20, left: -20 };
+    const cut = record([rect], { closed: true, stroke: false, effect });
+    // Without overflow the negative effect extent still cuts the shape.
+    expect(growth(cut)).toEqual(NONE);
+    const open = {
+      ...cut,
+      vectorShape: { ...cut.vectorShape!, overflowVisible: true },
+    } as InlineDrawingRecord;
+    const grown = growth(open);
+    for (const side of ['left', 'top', 'right', 'bottom'] as const)
+      expect(grown[side]).toBeCloseTo(20, 9);
+    // A region that cuts further than the effect extent still cuts.
+    const regionCut = clipped(open, {
+      x: CONTENT.x + 30,
+      y: CONTENT.y + 25,
+      width: 200,
+      height: 200,
+    });
+    expect(growth(regionCut).left).toBe(0);
+    expect(growth(regionCut).top).toBe(0);
+    expect(growth(regionCut).right).toBeCloseTo(20, 9);
+  });
+
+  test('a region that cuts less deep than a negative effect extent cuts at its own edge', () => {
+    const open = record([TAIL], { closed: true, stroke: false });
+    const shape = { ...open.vectorShape!, overflowVisible: true };
+    const effect = { top: 0, right: -10, bottom: 0, left: 0 };
+    const cut = record([TAIL], { closed: true, stroke: false, effect });
+    // The region's right edge sits 3pt inside the extent, the effect extent's 10pt inside.
+    const region = { x: 0, y: 0, width: CONTENT.x + CONTENT.width - 3, height: 500 };
+    const regionOverEffect = clipped({ ...cut, vectorShape: shape } as InlineDrawingRecord, region);
+    expect(regionOverEffect.geometry.regionCuts?.right).toBeCloseTo(3, 9);
+    // The effect extent cuts nothing, so the clip grows back from 10pt inside to the region
+    // edge, 3pt inside.
+    expect(growth(regionOverEffect).right).toBeCloseTo(7, 9);
+    // A record that layout clips again from its extent keeps the cut too.
+    const reclipped = clipped(
+      { ...open, vectorShape: shape, paintBounds: CONTENT } as InlineDrawingRecord,
+      region
+    );
+    expect(growth(reclipped).right).toBe(0);
+    // A cell edge on the effect extent's edge cuts there, as it does 0.05pt further in.
+    const onEffect = { x: 0, y: 0, width: CONTENT.x + CONTENT.width - 10, height: 500 };
+    const cellEdge = clipped({ ...cut, vectorShape: shape } as InlineDrawingRecord, onEffect);
+    expect(cellEdge.geometry.regionCuts?.right).toBeCloseTo(10, 9);
+    expect(growth(cellEdge).right).toBe(0);
+    const nearEdge = { ...onEffect, width: onEffect.width - 0.05 };
+    const cellNear = clipped({ ...cut, vectorShape: shape } as InlineDrawingRecord, nearEdge);
+    expect(growth(cellNear).right).toBe(0);
+    // An inline drawing's own line or column clip records no cut: the shape grows past it.
+    const lineEdge = clipped(
+      { ...cut, vectorShape: shape } as InlineDrawingRecord,
+      onEffect,
+      false
+    );
+    expect(lineEdge.geometry.regionCuts).toBeUndefined();
+    expect(growth(lineEdge).right).toBeCloseTo(60, 9);
+    // Nested regions: the deepest cut wins, whichever comes first.
+    const deep = { ...onEffect, width: onEffect.width - 20 };
+    const nested = clipped(
+      clipped({ ...open, vectorShape: shape } as InlineDrawingRecord, deep),
+      region
+    );
+    expect(nested.geometry.regionCuts?.right).toBeCloseTo(30, 9);
+    // A region edge outside the extent cuts nothing: the tail paints past a cell or a margin.
+    const wide = { x: 0, y: 0, width: CONTENT.x + CONTENT.width + 5, height: 500 };
+    const past = clipped({ ...open, vectorShape: shape } as InlineDrawingRecord, wide);
+    expect(past.geometry.regionCuts).toBeUndefined();
+    expect(growth(past).right).toBeCloseTo(50, 9);
+  });
 });
+
+/** A tail that reaches 50pt past the right extent edge. */
+const TAIL: Path = [
+  { x: 0, y: 0 },
+  { x: EXTENT, y: 0 },
+  { x: EXTENT * 1.5, y: EXTENT / 2 },
+  { x: EXTENT, y: EXTENT },
+  { x: 0, y: EXTENT },
+];
+
+/** `drawing` clipped to `region` the way layout clips a placed drawing. */
+function clipped(
+  drawing: InlineDrawingRecord,
+  region: LayoutBox,
+  recordCut = true
+): InlineDrawingRecord {
+  const geometry = clipGeometryToRegion(
+    {
+      ...drawing.geometry,
+      paintBounds: drawing.paintBounds,
+      hitBounds: drawing.paintBounds,
+      transformedCorners: [],
+      clipPolygon: null,
+      clipFallback: 'none',
+    },
+    region,
+    recordCut
+  );
+  return { ...drawing, paintBounds: geometry.paintBounds, geometry } as InlineDrawingRecord;
+}

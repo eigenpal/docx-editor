@@ -17,6 +17,17 @@ const DEFAULT_DOCUMENT = params.get('textboxes') === '1' ? 'textboxes.docx' : 's
 const fixtureParam = params.get('fixture') ?? '';
 const documentName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : DEFAULT_DOCUMENT;
 
+// Fetch the selected document while the editor modules download. The source hook
+// consumes the same request after mount, including its normal error handling.
+if (params.get('refresh') !== '1' && params.get('dialogs') !== '1') {
+  const documentPreload = document.createElement('link');
+  documentPreload.rel = 'preload';
+  documentPreload.as = 'fetch';
+  documentPreload.crossOrigin = 'anonymous';
+  documentPreload.href = `${base}${documentName}`;
+  document.head.append(documentPreload);
+}
+
 // `?treeFirst=1` is a Playwright harness, not a demo surface — see the header of
 // `./test-harness/TreeSurfaceHarness`. Dynamically imported, so it stays out of the
 // demo bundle.

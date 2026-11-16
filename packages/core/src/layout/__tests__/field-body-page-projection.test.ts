@@ -2,7 +2,7 @@
 //
 // The value depends on a pagination that has not happened when the paragraph is measured, so the
 // walk reserves one model unit and paints a placeholder digit marked with the field kind. Document
-// finalize substitutes the real value per page. A cached result still wins, and a hidden field
+// finalize substitutes the real value per page. A cached result never wins, and a hidden field
 // paints nothing — exactly as it would in a header or footer.
 
 import { describe, expect, test } from 'bun:test';
@@ -17,6 +17,7 @@ import {
   type StyleSpanRecord,
 } from '../index.ts';
 import { piecesOfParagraph } from '../field-projection.ts';
+import { PAGE_FIELD_PLACEHOLDER } from '../field-page-furniture.ts';
 import type { RevisionDisplayMode } from '../revision-projection.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -127,14 +128,33 @@ describe('a body page field at the piece level', () => {
     }
   });
 
-  test('a cached result wins: no placeholder marker, the cache paints', () => {
+  test('a cached result is marked for substitution and measured at its own width', () => {
+    for (const body of [
+      '<w:p><w:fldSimple w:instr=" PAGE "><w:r><w:t>15</w:t></w:r></w:fldSimple></w:p>',
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> PAGE </w:instrText>' +
+        '<w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>15</w:t></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>',
+    ]) {
+      const field = project(body).find((piece) => piece.fieldAtom?.pageField);
+      expect(field?.fieldAtom?.pageField?.kind).toBe('PAGE');
+      expect(field?.text).toBe('15');
+      expect(field!.end - field!.start).toBe(1);
+    }
+  });
+
+  test('a cached result holding whitespace is measured at the placeholder', () => {
+    const field = project(
+      '<w:p><w:fldSimple w:instr=" PAGE "><w:r><w:t>page 5</w:t></w:r></w:fldSimple></w:p>'
+    ).find((piece) => piece.fieldAtom?.pageField);
+    expect(field?.text).toBe(PAGE_FIELD_PLACEHOLDER);
+  });
+
+  test('a hidden cached result keeps the field hidden', () => {
     const pieces = project(
-      '<w:p><w:fldSimple w:instr=" PAGE "><w:r><w:t>5</w:t></w:r></w:fldSimple></w:p>'
+      '<w:p><w:fldSimple w:instr=" PAGE "><w:r><w:rPr><w:vanish/></w:rPr><w:t>5</w:t></w:r>' +
+        '</w:fldSimple></w:p>'
     );
-    const marked = pieces.find((piece) => piece.fieldAtom?.pageField);
-    expect(marked).toBeUndefined();
-    const field = pieces.find((piece) => piece.projected);
-    expect(field?.text).toBe('5');
+    expect(pieces.find((piece) => piece.fieldAtom?.pageField)).toBeUndefined();
   });
 
   test('a vanished body PAGE paints nothing', () => {
@@ -222,14 +242,31 @@ describe('a body page field in a laid-out document', () => {
     expect(span.text).toBe('5');
   });
 
-  test('a cached result wins over substitution', () => {
-    const cached =
-      '<w:p><w:fldSimple w:instr=" PAGE "><w:r><w:t>cached</w:t></w:r></w:fldSimple></w:p>';
-    const layout = layoutSemanticDocument(partOf(cached), 1, { measurer, producer: 'test' });
-    const marked = bodySpans(layout).find((entry) => entry.span.fieldAtom?.pageField);
-    expect(marked).toBeUndefined();
-    const projected = bodySpans(layout).find((entry) => entry.span.projected);
-    expect(projected?.span.text).toBe('cached');
+  test('a stale cached result never paints: the page value replaces it', () => {
+    const stale = (instr: string, cached: string) =>
+      `<w:p><w:fldSimple w:instr=" ${instr} "><w:r><w:t>${cached}</w:t></w:r></w:fldSimple></w:p>`;
+    const complexStale = (instr: string, cached: string) =>
+      `<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> ${instr} </w:instrText>` +
+      `<w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>${cached}</w:t></w:r>` +
+      `<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>`;
+    const pageBreak = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+    const body =
+      stale('PAGE', 'cached') +
+      pageBreak +
+      stale('PAGE \\* MERGEFORMAT', '1') +
+      complexStale('NUMPAGES', '9') +
+      complexStale('PAGE \\* roman', 'x');
+    const layout = layoutSemanticDocument(partOf(body), 1, { measurer, producer: 'test' });
+    expect(layout.pages.length).toBe(2);
+    const painted = bodySpans(layout)
+      .filter((entry) => entry.span.fieldAtom?.pageField)
+      .map((entry) => [entry.page.index, entry.span.text]);
+    expect(painted).toEqual([
+      [0, '1'],
+      [1, '2'],
+      [1, '2'],
+      [1, 'ii'],
+    ]);
   });
 
   test('a body PAGE inside a table cell paints', () => {

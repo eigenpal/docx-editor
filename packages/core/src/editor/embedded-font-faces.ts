@@ -23,6 +23,7 @@ import {
   FontResolutionError,
   type FontResourceSnapshot,
 } from '../layout/font-resource.ts';
+import { sfntFaceIsBold } from '../layout/synthetic-bold.ts';
 import { materializeCollectionFace } from './font-collection-face.ts';
 
 /** The slice of `FontFace` this module needs; injectable for tests. */
@@ -71,6 +72,18 @@ const NO_REGISTRATION: EmbeddedFontFaceRegistration = Object.freeze({
 });
 
 type FaceDescriptors = { readonly weight: string; readonly style: 'normal' | 'italic' };
+
+/**
+ * The weight descriptor of a face.
+ *
+ * A face in a bold slot whose own outlines are not bold registers at 599, below the CSS bold
+ * threshold of 600. Bold text still selects it before the regular face, and the browser then
+ * synthesizes the bold. At 700, the face matched bold text exactly, so the browser drew it at
+ * its own regular weight. `bytes` holds the face first, as the browser gets it.
+ */
+function weightDescriptor(weight: number, bytes: Uint8Array): string {
+  return weight >= 600 && !sfntFaceIsBold(bytes, 0) ? '599' : String(weight);
+}
 
 /**
  * The alias for one document's face set.
@@ -182,7 +195,7 @@ export async function registerEmbeddedFontFaces(
           try {
             const browserBytes = browserBytesOf(face);
             const descriptors: FaceDescriptors = {
-              weight: String(face.request.weight),
+              weight: weightDescriptor(face.request.weight, browserBytes),
               style: face.request.style,
             };
             const fontFace = createFontFace(alias, browserBytes, descriptors);

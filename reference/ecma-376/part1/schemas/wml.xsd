@@ -581,7 +581,7 @@
       <xsd:enumeration value="middleDot"/>
     </xsd:restriction>
   </xsd:simpleType>
-  <xsd:complexType name="CT_TabMark">
+  <xsd:complexType name="CT_TabStop">
     <xsd:attribute name="val" type="ST_TabJc" use="required"/>
     <xsd:attribute name="leader" type="ST_TabTlc" use="optional"/>
     <xsd:attribute name="pos" type="ST_SignedTwipsMeasure" use="required"/>
@@ -1020,7 +1020,7 @@
   </xsd:complexType>
   <xsd:complexType name="CT_Tabs">
     <xsd:sequence>
-      <xsd:element name="tab" type="CT_TabMark" minOccurs="1" maxOccurs="unbounded"/>
+      <xsd:element name="tab" type="CT_TabStop" minOccurs="1" maxOccurs="unbounded"/>
     </xsd:sequence>
   </xsd:complexType>
   <xsd:simpleType name="ST_TextboxTightWrap">
@@ -1590,7 +1590,7 @@
     <xsd:attribute name="type" type="ST_BrType" use="optional"/>
     <xsd:attribute name="clear" type="ST_BrClear" use="optional"/>
   </xsd:complexType>
-  <xsd:simpleType name="ST_PTabJustify">
+  <xsd:simpleType name="ST_PTabAlignment">
     <xsd:restriction base="xsd:string">
       <xsd:enumeration value="left"/>
       <xsd:enumeration value="center"/>
@@ -1613,7 +1613,7 @@
     </xsd:restriction>
   </xsd:simpleType>
   <xsd:complexType name="CT_PTab">
-    <xsd:attribute name="alignment" type="ST_PTabJustify" use="required"/>
+    <xsd:attribute name="alignment" type="ST_PTabAlignment" use="required"/>
     <xsd:attribute name="relativeTo" type="ST_PTabRelativeTo" use="required"/>
     <xsd:attribute name="leader" type="ST_PTabLeader" use="required"/>
   </xsd:complexType>
@@ -2771,7 +2771,7 @@
       <xsd:element name="autoFormatOverride" type="CT_OnOff" minOccurs="0"/>
       <xsd:element name="styleLockTheme" type="CT_OnOff" minOccurs="0"/>
       <xsd:element name="styleLockQFSet" type="CT_OnOff" minOccurs="0"/>
-      <xsd:element name="defaultTabMark" type="CT_TwipsMeasure" minOccurs="0"/>
+      <xsd:element name="defaultTabStop" type="CT_TwipsMeasure" minOccurs="0"/>
       <xsd:element name="autoHyphenation" type="CT_OnOff" minOccurs="0"/>
       <xsd:element name="consecutiveHyphenLimit" type="CT_DecimalNumber" minOccurs="0"/>
       <xsd:element name="hyphenationZone" type="CT_TwipsMeasure" minOccurs="0"/>

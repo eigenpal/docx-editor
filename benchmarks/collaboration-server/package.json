@@ -13,10 +13,10 @@
   "dependencies": {
     "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/pro": "workspace:*",
-    "@hocuspocus/provider": "^4.6.0",
-    "@hocuspocus/server": "^4.6.0",
+    "@hocuspocus/provider": "^4.8.0",
+    "@hocuspocus/server": "^4.8.0",
     "y-protocols": "^1.0.7",
-    "yjs": "^13.6.32"
+    "yjs": "^13.6.33"
   },
   "devDependencies": {
     "typescript": "^6.0.3"

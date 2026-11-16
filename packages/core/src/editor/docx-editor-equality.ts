@@ -12,6 +12,7 @@ import type {
   EditorSnapshot,
   PageSetup,
   RunFormatting,
+  TableContext,
 } from '@docx-editor.dev/core/contracts/editor';
 import { isDocAnchorRange } from './anchor-resolution.ts';
 
@@ -139,6 +140,21 @@ export function pageEqual(a: EditorSnapshot['page'], b: EditorSnapshot['page']):
   return a.current === b.current && a.total === b.total;
 }
 
+/**
+ * Value equality for the snapshot's `table` sub-object. Without the reuse it enables, every
+ * tick with the caret in a table derived a new snapshot, and each table control re-rendered.
+ */
+export function tableContextEqual(a: TableContext | null, b: TableContext | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.rows === b.rows &&
+    a.columns === b.columns &&
+    a.rowIndex === b.rowIndex &&
+    a.columnIndex === b.columnIndex
+  );
+}
+
 /** Value equality for the snapshot's `pageSetup` sub-object. */
 export function pageSetupEqual(a: PageSetup | null, b: PageSetup | null): boolean {
   if (a === b) return true;
@@ -223,10 +239,13 @@ const SNAPSHOT_FIELDS = {
   // INSIDE one paragraph leaves it identical. Without this compare, a control gated on
   // the caret/range distinction would never see the moment it changed.
   selectionCollapsed: 'compared',
+  // Reference-stable by value in `selection-range-read.ts`; moves with every caret move.
+  selectionRange: 'compared',
   formatting: 'compared',
   table: 'compared',
   tocContext: 'compared',
   image: 'compared',
+  chart: 'compared',
   page: 'compared',
   canUndo: 'compared',
   canRedo: 'compared',

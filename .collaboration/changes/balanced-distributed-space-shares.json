@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Distributed lines count balanced space widths when allocating extra width to spaces and characters.",
+  "after": "Distributed character spacing uses the original space advance before sharing the remaining width between characters.",
+  "reason": "Only derived layout changes. Canonical text, operations, source offsets, and collaboration formats stay unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/balanced-space-widths.test.ts",
+    "packages/core/src/layout/__tests__/distributed-character-spacing.test.ts",
+    "packages/pro/src/collaboration/__tests__/korean-justified-spaces-editors.test.ts"
+  ],
+  "changeset": "balanced-distributed-space-shares",
+  "migration": null
+}

@@ -55,6 +55,32 @@ test('successive jobs apply cumulative files, summaries, and partial failures; l
   }
 });
 
+test('undoable updates add one undo step per accepted result', async () => {
+  const { editor, refresh } = open();
+  const original = editor.surface!.session.bodyText();
+  const results: RefreshResult[] = [];
+  await runRefreshJob(
+    refresh,
+    new AbortController().signal,
+    async function* (submission) {
+      yield sampleUpdate(submission.id, 1, 1);
+      yield sampleUpdate(submission.id, 1, 2);
+    },
+    (result) => results.push(result),
+    'edit'
+  );
+  expect(results.map((result) => result.ok && result.mode)).toEqual(['edit', 'edit']);
+  const second = editor.surface!.session.bodyText();
+  expect(second).toContain('Review date: October 12.');
+  expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+  expect(editor.surface!.session.bodyText()).not.toBe(second);
+  expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+  expect(editor.surface!.session.bodyText()).toBe(original);
+  expect(editor.exec({ type: 'redo' }).ok).toBe(true);
+  expect(editor.exec({ type: 'redo' }).ok).toBe(true);
+  expect(editor.surface!.session.bodyText()).toBe(second);
+});
+
 test('local edits stop a job and survive the refused replacement', async () => {
   const { editor, refresh } = open();
   const results: RefreshResult[] = [];

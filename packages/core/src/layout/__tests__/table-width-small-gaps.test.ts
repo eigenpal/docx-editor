@@ -231,6 +231,10 @@ describe('legacy percentage reference box', () => {
   });
 });
 
+// Mode-15 reference renderings of right-to-left percentage tables with 0.5 to 3pt rules
+// mirror the left-to-right shared grid lines, then move half a rule toward the visual left:
+// a leading grid ends one rule short of the right edge, a centred one sits half a rule left
+// of centre, and a trailing one starts on the left edge.
 test('a mode-15 right-to-left table moves half its outer rule toward its visual left', () => {
   const xml = table({
     width: '<w:tblW w:w="5000" w:type="pct"/>',
@@ -238,8 +242,9 @@ test('a mode-15 right-to-left table moves half its outer rule toward its visual 
     rules: true,
   });
   const modern = structure(xml, 15);
-  expect(modern.read.outerRuleOffsetPt).toBe(-0.25);
-  expect(modern.x).toBeCloseTo(CONTENT_PT - modern.width - 0.25, 6);
+  expect(modern.read.outerRuleOffsetPt).toBe(-0.5);
+  expect(modern.width).toBeCloseTo(CONTENT_PT - 0.5, 6);
+  expect(modern.x).toBeCloseTo(CONTENT_PT - modern.width - 0.5, 6);
   expect(structure(xml, 14).read.outerRuleOffsetPt).toBeUndefined();
   const aligned = (jc: string) =>
     structure(
@@ -250,10 +255,9 @@ test('a mode-15 right-to-left table moves half its outer rule toward its visual 
       }),
       15
     );
-  // Centered, and aligned to either edge, every placement moves by the same half rule.
   const centered = aligned('center');
   expect(centered.x).toBeCloseTo((CONTENT_PT - centered.width) / 2 - 0.25, 6);
   const leading = aligned('left');
-  expect(leading.x).toBeCloseTo(CONTENT_PT - leading.width - 0.25, 6);
-  expect(aligned('right').x).toBeCloseTo(-0.25, 6);
+  expect(leading.x).toBeCloseTo(CONTENT_PT - leading.width - 0.5, 6);
+  expect(aligned('right').x).toBeCloseTo(0, 6);
 });

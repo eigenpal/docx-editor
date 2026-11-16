@@ -101,6 +101,13 @@ export interface DocxEditorMenuProps {
    * File > Print also uses the PDF handler. Missing handlers show an error.
    */
   exporters?: ChromeExportHandlers;
+  /**
+   * Whether File > Print first asks which markup to print and whether comments print.
+   * Defaults to `true` with the packaged print dialog. A custom `popups.print` component
+   * opts in with `true` and renders the `choosing` state, or `DocxEditor.PrintDialog`
+   * without children. `popups.print: false` prints the current view without asking.
+   */
+  printSettings?: boolean;
   className?: string;
   t?: ToolbarTranslate;
   fileName?: string;
@@ -185,6 +192,7 @@ const DocxEditorMenuRoot = defineComponent({
     className: { type: String, default: undefined },
     t: { type: Function as PropType<ToolbarTranslate>, default: undefined },
     exporters: { type: Object as PropType<ChromeExportHandlers>, default: undefined },
+    printSettings: { type: Boolean, default: undefined },
     fileName: { type: String, default: undefined },
     onOpen: { type: Function as PropType<() => void>, default: undefined },
     /** Prefer over {@link onOpen} — Vue TSX treats `onOpen` as a listener. */
@@ -222,7 +230,8 @@ const DocxEditorMenuRoot = defineComponent({
     const printState = useMenuPrint(
       editorRef,
       () => props.exporters,
-      () => popups.value?.print !== false
+      () => popups.value?.print !== false,
+      () => props.printSettings ?? popups.value?.print === undefined
     );
     const activeMenu = ref<MenuId | null>(null);
     const pageSetupOpen = ref(false);
@@ -617,6 +626,10 @@ const DocxEditorMenuRoot = defineComponent({
                       error: printState.error.value,
                       url: printState.url.value,
                       onClose: printState.close,
+                      choosing: printState.choosing.value,
+                      settings: printState.settings.value,
+                      onSettingsChange: printState.changeSettings,
+                      onPrint: printState.confirm,
                     },
                     printState.session.value
                   )
@@ -627,6 +640,10 @@ const DocxEditorMenuRoot = defineComponent({
                     error={printState.error.value}
                     url={printState.url.value}
                     onClose={printState.close}
+                    choosing={printState.choosing.value}
+                    settings={printState.settings.value}
+                    onSettingsChange={printState.changeSettings}
+                    onPrint={printState.confirm}
                   />
                 )
               ) : null

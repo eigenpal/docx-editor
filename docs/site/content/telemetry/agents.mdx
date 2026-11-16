@@ -6,7 +6,9 @@ category: 'Telemetry'
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-A `DocxEditor.createServer` runtime reports document-open diagnostics and a diagnostic code for each refused batch. A refusal counts as tracked when the batch enables tracking before the refusal. Create one telemetry client per process and pass its module to every runtime:
+## Register agent telemetry
+
+Create one telemetry client per process and pass its module to every `DocxEditor.createServer` runtime:
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api';
@@ -26,8 +28,29 @@ try {
 }
 ```
 
-In a long-running worker, call `await telemetry.shutdown()` once when the process exits. In a serverless function or single-run job, call `await telemetry.flush()` before returning to send buffered data. Do not flush after each job in a long-running worker. Each flush forces an export and closes the deduplication windows for all jobs.
+The runtime reports document-open diagnostics and a code for each refused batch.
 
-Each runtime has a separate `editorSessionId`, which lets you follow one agent run. A `DocxEditor.createBrowser` runtime reports refused batches through its host editor with `origin: 'automation'`. The editor's telemetry module therefore covers browser agents too.
+## Flush or shut down
 
-On a server, the Sentry Node SDK can attach the incoming request body to an issue. If an agent endpoint receives instructions or document bytes, remove `event.request.data` in `beforeSend`. For refusal details, read `error.debugInfo.innerError`. For more information, see [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
+| Deployment                            | Call                                               |
+| ------------------------------------- | -------------------------------------------------- |
+| Long-running worker                   | `await telemetry.shutdown()` once, at process exit |
+| Serverless function or single-run job | `await telemetry.flush()` before returning         |
+
+Do not flush per job in a worker. Each flush closes the deduplication windows for all jobs.
+
+## Interpret runtime diagnostics
+
+- A refusal counts as tracked when the batch enables tracking first.
+- `editorSessionId` identifies one runtime, not necessarily one agent job.
+- A `DocxEditor.createBrowser` runtime reports through its host editor with `origin: 'automation'`.
+- Read refusal details from `error.debugInfo.innerError`. See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
+
+## Limits
+
+- The Sentry Node SDK can attach request bodies with instructions or document bytes. Remove `event.request.data` in `beforeSend`, as shown in [Sentry](/docs/2.x/telemetry/sentry).
+
+## See also
+
+- [Set up an editor](/docs/2.x/telemetry/editors)
+- [OpenTelemetry](/docs/2.x/telemetry/opentelemetry)

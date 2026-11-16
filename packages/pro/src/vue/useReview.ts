@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -120,6 +120,8 @@ export interface UseReviewReturn {
    * `@docx-editor.dev/editor-api`.
    */
   readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
+  /** Edit your own comment or reply. Pass its displayed text to reject stale edits. */
+  readonly edit: (item: ReviewItemView, text: string, expectedText?: string) => boolean;
   /** Where a comment on the current selection would sit, in layout points, or null. */
   readonly selectionAnchorY: ComputedRef<number | null>;
   /**
@@ -335,6 +337,15 @@ function useReviewOfInternal(
     return settle(action, item.key, editor.deleteReviewItem(item.key));
   };
 
+  const edit = (item: ReviewItemView, text: string, expectedText?: string): boolean => {
+    if (!editorRef.value || item.kind !== 'comment') return false;
+    return settle(
+      'edit',
+      item.key,
+      editorRef.value.setCommentText(item.key, text, { expectedText })
+    );
+  };
+
   const reply = (item: ReviewItemView, text: string, author?: string): boolean => {
     if (text.trim().length === 0 || !editorRef.value) return false;
     return settle('reply', item.key, editorRef.value.replyToReviewItem(item.key, text, author));
@@ -386,6 +397,7 @@ function useReviewOfInternal(
     commentResolutionDisabledReason,
     remove,
     reply,
+    edit,
     selectionAnchorY,
     comment,
     lastRefusal,
@@ -396,7 +408,8 @@ function useReviewOfInternal(
 }
 
 /**
- * Non-overlapping Y positions for cards you have measured.
+ * Non-overlapping Y positions for cards you have measured. Measure them with
+ * {@link useReviewCardHeights}.
  *
  * Pass entries in document order, each with a key and an anchor, and the measured card heights.
  * An entry with `isActive: true` stays at its own anchor, and the entries before it move up.

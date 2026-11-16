@@ -4,6 +4,9 @@
 
 ```ts
 
+import { acceptedOffsetFromText } from '@docx-editor.dev/core/editor';
+import { AcceptedTextRange } from '@docx-editor.dev/core/contracts/editor';
+import { acceptedTextRanges } from '@docx-editor.dev/core/editor';
 import { AllowedComponentProps } from 'vue';
 import { AnchorHighlightAnimation } from '@docx-editor.dev/core/contracts/editor';
 import { AnchorHighlightOptions } from '@docx-editor.dev/core/contracts/editor';
@@ -11,6 +14,14 @@ import { BookmarkSortOrder } from '@docx-editor.dev/core/editor';
 import { BookmarkSummary } from '@docx-editor.dev/core/contracts/editor';
 import { CalendarDay } from '@docx-editor.dev/core/editor';
 import { CalendarMonth } from '@docx-editor.dev/core/editor';
+import { CHART_TYPE_CHOICES } from '@docx-editor.dev/core/editor';
+import { ChartColor } from '@docx-editor.dev/core/editor';
+import { ChartData } from '@docx-editor.dev/core/editor';
+import { ChartFormat } from '@docx-editor.dev/core/editor';
+import { ChartFormatChange } from '@docx-editor.dev/core/editor';
+import { ChartPaneChange } from '@docx-editor.dev/core/editor';
+import { ChartType } from '@docx-editor.dev/core/editor';
+import { chartTypeLabelKey } from '@docx-editor.dev/core/editor';
 import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
 import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
 import { ChromeExportFormat } from '@docx-editor.dev/core/editor';
@@ -23,11 +34,21 @@ import { ChromeMenuItemEntry } from '@docx-editor.dev/core/editor';
 import { ChromeMenuSeparatorEntry } from '@docx-editor.dev/core/editor';
 import { chromeMenuSlots } from '@docx-editor.dev/core/editor';
 import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core/editor';
+import { ChromePrintSettings } from '@docx-editor.dev/core/editor';
 import { ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { ClearAnchorHighlightOptions } from '@docx-editor.dev/core/contracts/editor';
 import { ClearRefreshHighlightsOptions } from '@docx-editor.dev/core/editor';
+import { ColorPick } from '@docx-editor.dev/core/editor';
 import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsChromeHandlers } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsDialogSession } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsEngineErrorCode } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsErrorCode } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsOutcome } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsProgress } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsRefusalReason } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsRequest } from '@docx-editor.dev/core/editor';
 import { Component } from 'vue';
 import { ComponentCustomProps } from 'vue';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
@@ -57,7 +78,7 @@ import { DocumentSearchNavigateOptions } from '@docx-editor.dev/core/editor';
 import { DocumentSearchOptions } from '@docx-editor.dev/core/editor';
 import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
 import * as _docx_editor_dev_core from '@docx-editor.dev/core';
-import * as _docx_editor_dev_core_editor from '@docx-editor.dev/core/editor';
+import * as _docx_editor_dev_core_layout from '@docx-editor.dev/core/layout';
 import * as _docx_editor_dev_i18n from '@docx-editor.dev/i18n';
 import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
@@ -72,6 +93,7 @@ import { EditorExecOptions } from '@docx-editor.dev/core/contracts/editor';
 import { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 import { EditorFontErrorCode } from '@docx-editor.dev/core/contracts/editor';
 import { EditorModule } from '@docx-editor.dev/core/editor';
+import { EditorPaneId } from '@docx-editor.dev/core/editor';
 import { EditorQuery } from '@docx-editor.dev/core/contracts/editor';
 import { EditorScope } from '@docx-editor.dev/core/contracts/editor';
 import { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
@@ -95,6 +117,7 @@ import { FunctionalComponent } from 'vue';
 import { generateRulerTicks } from '@docx-editor.dev/core/editor';
 import { HIGHLIGHT_REFRESH_MS } from '@docx-editor.dev/core/editor';
 import { HighlightHit } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightKind } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightOptions } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightRange } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightRect } from '@docx-editor.dev/core/contracts/editor';
@@ -117,16 +140,32 @@ import { MarkedFontResolver } from '@docx-editor.dev/core/editor';
 import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
 import { MaybeRef } from 'vue';
 import { MaybeRefOrGetter as MaybeRefOrGetter_2 } from 'vue';
+import { NavigateHighlightCommand } from '@docx-editor.dev/core/contracts/editor';
 import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
+import { ObjectSlotReadValueMap } from '@docx-editor.dev/core/editor';
+import { ObjectSlotValueMap } from '@docx-editor.dev/core/editor';
+import { ObjectToggleSlotId } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
+import { PANE_SECTIONS } from '@docx-editor.dev/core/editor';
+import { PaneRequest } from '@docx-editor.dev/core/editor';
+import { PaneRequestListenerOptions } from '@docx-editor.dev/core/editor';
+import { PaneSection } from '@docx-editor.dev/core/editor';
+import { PaneSectionId } from '@docx-editor.dev/core/editor';
+import { PaneSectionIds } from '@docx-editor.dev/core/editor';
+import { paneSections } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogFields } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogMixed } from '@docx-editor.dev/core/editor';
 import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
 import { ParagraphFormatRead } from '@docx-editor.dev/core/editor';
 import { ParagraphFormatUpdate } from '@docx-editor.dev/core/editor';
+import { ParagraphsChangeEvent } from '@docx-editor.dev/core/contracts/editor';
 import { ParagraphTabStop } from '@docx-editor.dev/core/editor';
+import { ParagraphText } from '@docx-editor.dev/core/contracts/editor';
+import { ParagraphTextProofing } from '@docx-editor.dev/core/contracts/editor';
+import { ParagraphTextReadOptions } from '@docx-editor.dev/core/contracts/editor';
+import { ParagraphTextSpan } from '@docx-editor.dev/core/contracts/editor';
 import { PropType } from 'vue';
 import { PX_PER_CM } from '@docx-editor.dev/core/editor';
 import { PX_PER_INCH } from '@docx-editor.dev/core/editor';
@@ -137,9 +176,20 @@ import { RefreshFailureCode } from '@docx-editor.dev/core/editor';
 import { RefreshHighlightAnimation } from '@docx-editor.dev/core/editor';
 import { RefreshHighlightOptions } from '@docx-editor.dev/core/editor';
 import { RefreshLocation } from '@docx-editor.dev/core/editor';
+import { RefreshRefusal } from '@docx-editor.dev/core/editor';
+import { RefreshRefusalFields } from '@docx-editor.dev/core/editor';
+import { RefreshRefusalReason } from '@docx-editor.dev/core/editor';
 import { RefreshResult } from '@docx-editor.dev/core/editor';
 import { RefreshSubmission } from '@docx-editor.dev/core/editor';
 import { RefreshUpdate } from '@docx-editor.dev/core/editor';
+import { RefreshUpdateMode } from '@docx-editor.dev/core/editor';
+import { ReplaceAcceptedTextCommand } from '@docx-editor.dev/core/contracts/editor';
+import { ReplaceDocumentErrorCode } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentOutcome } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentRefusal } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentRefusalReason } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentRequest } from '@docx-editor.dev/core/editor';
+import { ResolvedChromePrintSettings } from '@docx-editor.dev/core/editor';
 import { ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
 import { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
 import { ReviewDisplayMode } from '@docx-editor.dev/core/editor';
@@ -165,7 +215,17 @@ import { SEARCH_HIGHLIGHT_PRIORITY } from '@docx-editor.dev/core/editor';
 import { SEARCH_HIGHLIGHT_SET } from '@docx-editor.dev/core/editor';
 import { SEARCH_MATCH_LIMIT } from '@docx-editor.dev/core/editor';
 import { SectionProperties } from '@docx-editor.dev/core/editor';
+import { SelectedChartCommand } from '@docx-editor.dev/core/editor';
+import { SelectedChartState } from '@docx-editor.dev/core/editor';
+import { SelectedShapeCommand } from '@docx-editor.dev/core/editor';
 import { ShallowRef } from 'vue';
+import { SHAPE_OUTLINE_DASHES } from '@docx-editor.dev/core/editor';
+import { SHAPE_OUTLINE_WIDTHS } from '@docx-editor.dev/core/editor';
+import { ShapeFillState } from '@docx-editor.dev/core/editor';
+import { ShapeFormatState } from '@docx-editor.dev/core/editor';
+import { ShapeOutlineDash } from '@docx-editor.dev/core/editor';
+import { ShapeOutlineState } from '@docx-editor.dev/core/editor';
+import { ShapePaneChange } from '@docx-editor.dev/core/editor';
 import { SlotsType } from 'vue';
 import { SplitCellLimits } from '@docx-editor.dev/core/editor';
 import { SupportedImageMime } from '@docx-editor.dev/core/editor';
@@ -176,6 +236,7 @@ import { TableInteractionLabelKey } from '@docx-editor.dev/core/contracts/editor
 import { TextFormFieldDialogSession } from '@docx-editor.dev/core/editor';
 import { TextMatch } from '@docx-editor.dev/core/contracts/editor';
 import { TextMeasurer } from '@docx-editor.dev/core/editor';
+import { textOffsetFromAccepted } from '@docx-editor.dev/core/editor';
 import { TFunction } from '@docx-editor.dev/i18n';
 import { Theme } from '@docx-editor.dev/core/contracts/editor';
 import { ToolbarCommandState } from '@docx-editor.dev/core/editor';
@@ -197,6 +258,12 @@ import { WatermarkState } from '@docx-editor.dev/core/contracts/editor';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
 import { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
 
+export { acceptedOffsetFromText }
+
+export { AcceptedTextRange }
+
+export { acceptedTextRanges }
+
 export { AnchorHighlightAnimation }
 
 export { AnchorHighlightOptions }
@@ -208,6 +275,85 @@ export interface BookmarkDialogFields {
     // (undocumented)
     sortBy: BookmarkSortOrder;
 }
+
+export { CHART_TYPE_CHOICES }
+
+export { ChartColor }
+
+export { ChartData }
+
+export { ChartFormat }
+
+export { ChartFormatChange }
+
+// @public
+export const ChartInsert: vue.DefineComponent<vue.ExtractPropTypes<{
+    asChild: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    asChild: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+}>> & Readonly<{}>, {
+    asChild: boolean;
+    className: string;
+    hidden: boolean;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public (undocumented)
+export interface ChartInsertPartComponent {
+    // (undocumented)
+    (props: ChartInsertProps): VNode | null;
+    // (undocumented)
+    readonly docxSlot: 'insert.chart';
+}
+
+// @public
+export interface ChartInsertProps {
+    // (undocumented)
+    asChild?: boolean;
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+}
+
+export { ChartPaneChange }
+
+// @public
+export type ChartPartProps = ObjectControlProps;
+
+// @public
+export interface ChartSeriesColorsProps extends ChartPartProps {
+    index?: number;
+}
+
+// @public
+export type ChartTogglePartProps = ObjectButtonPartProps;
+
+export { ChartType }
+
+export { chartTypeLabelKey }
 
 export { CHROME_GROUPS }
 
@@ -240,7 +386,314 @@ export { ClearAnchorHighlightOptions }
 
 export { ClearRefreshHighlightsOptions }
 
+export { ColorPick }
+
+// @public
+export const ColorPicker: {
+    Content: vue.DefineComponent<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        container: {
+            default: undefined;
+            type: PropType<Element | null>;
+        };
+        hexInput: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        inline: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        container: {
+            default: undefined;
+            type: PropType<Element | null>;
+        };
+        hexInput: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        inline: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+    }>> & Readonly<{}>, {
+        className: string;
+        container: Element | null;
+        hexInput: boolean;
+        inline: boolean;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    Grid: vue.DefineComponent<{}, () => vue_jsx_runtime.JSX.Element[], {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    HexInput: vue.DefineComponent<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+    }>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+    }>> & Readonly<{}>, {
+        className: string;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    NoColor: vue.DefineComponent<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+    }>> & Readonly<{}>, {
+        className: string;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    Root: vue.DefineComponent<vue.ExtractPropTypes<{
+        asChild: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        automaticHex: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        disabled: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        noColor: {
+            default: string;
+            type: PropType<'none' | 'auto' | false>;
+        };
+        onOpenChange: {
+            default: undefined;
+            type: PropType<(open: boolean) => void>;
+        };
+        onPick: {
+            required: true;
+            type: PropType<(pick: ColorPick | 'none') => void>;
+        };
+        open: {
+            default: undefined;
+            type: PropType<boolean | undefined>;
+        };
+        themeHexes: {
+            default: undefined;
+            type: PropType<readonly string[]>;
+        };
+        value: {
+            default: null;
+            type: PropType<ColorPickerValue>;
+        };
+    }>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        asChild: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        automaticHex: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        disabled: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        noColor: {
+            default: string;
+            type: PropType<'none' | 'auto' | false>;
+        };
+        onOpenChange: {
+            default: undefined;
+            type: PropType<(open: boolean) => void>;
+        };
+        onPick: {
+            required: true;
+            type: PropType<(pick: ColorPick | 'none') => void>;
+        };
+        open: {
+            default: undefined;
+            type: PropType<boolean | undefined>;
+        };
+        themeHexes: {
+            default: undefined;
+            type: PropType<readonly string[]>;
+        };
+        value: {
+            default: null;
+            type: PropType<ColorPickerValue>;
+        };
+    }>> & Readonly<{}>, {
+        asChild: boolean;
+        automaticHex: string;
+        className: string;
+        disabled: boolean;
+        noColor: "auto" | "none" | false;
+        onOpenChange: (open: boolean) => void;
+        open: boolean | undefined;
+        themeHexes: readonly string[];
+        value: ColorPickerValue;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    Swatch: vue.DefineComponent<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        hex: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        pick: {
+            required: true;
+            type: PropType<ColorPick>;
+        };
+    }>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        hex: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        pick: {
+            required: true;
+            type: PropType<ColorPick>;
+        };
+    }>> & Readonly<{}>, {
+        className: string;
+        hex: string;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    Trigger: vue.DefineComponent<vue.ExtractPropTypes<{
+        asChild: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+    }>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        asChild: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+    }>> & Readonly<{}>, {
+        asChild: boolean;
+        className: string;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+};
+
+// @public
+export type ColorPickerCompound = typeof ColorPicker;
+
+// @public
+export interface ColorPickerContentProps {
+    // (undocumented)
+    className?: string;
+    container?: Element | null;
+    hexInput?: boolean;
+    inline?: boolean;
+}
+
+// @public
+export interface ColorPickerHexInputProps {
+    className?: string;
+}
+
+// @public
+export interface ColorPickerNoColorProps {
+    // (undocumented)
+    className?: string;
+}
+
+// @public
+export interface ColorPickerRootProps {
+    asChild?: boolean;
+    // (undocumented)
+    automaticHex?: string;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    disabled?: boolean;
+    // (undocumented)
+    noColor?: 'none' | 'auto' | false;
+    // (undocumented)
+    onOpenChange?: (open: boolean) => void;
+    // (undocumented)
+    onPick: (pick: ColorPick | 'none') => void;
+    // (undocumented)
+    open?: boolean;
+    // (undocumented)
+    themeHexes?: readonly string[];
+    // (undocumented)
+    value: ColorPickerValue;
+}
+
+// @public
+export interface ColorPickerSwatchProps {
+    // (undocumented)
+    className?: string;
+    hex?: string;
+    // (undocumented)
+    pick: ColorPick;
+}
+
+// @public
+export interface ColorPickerTriggerProps {
+    asChild?: boolean;
+    // (undocumented)
+    className?: string;
+}
+
+// @public
+export type ColorPickerValue = ColorPick | 'none' | null;
+
 export { commandForSlot }
+
+export { CompareDocumentsChromeHandlers }
+
+export { CompareDocumentsDialogSession }
+
+// @public
+export interface CompareDocumentsDialogValues {
+    // (undocumented)
+    readonly authorName: string;
+    // (undocumented)
+    readonly detectFormatChanges: boolean;
+    readonly removeDateAndTime: boolean;
+    readonly revised: File | null;
+}
+
+export { CompareDocumentsEngineErrorCode }
+
+export { CompareDocumentsErrorCode }
+
+export { CompareDocumentsOutcome }
+
+export { CompareDocumentsRefusalReason }
+
+export { CompareDocumentsRequest }
 
 export { composeFontConfiguration }
 
@@ -330,11 +783,10 @@ export interface ContentControlWidgetPictureProps extends DocxEditorContentContr
     autoOpen?: boolean;
 }
 
-// @public (undocumented)
+// @public
 export interface ContextMenuAnchor {
-    // (undocumented)
+    readonly trigger: 'pointer' | 'keyboard';
     readonly x: number;
-    // (undocumented)
     readonly y: number;
 }
 
@@ -2121,6 +2573,95 @@ export const ContextMenuRefreshTocPageNumbers: {
 };
 
 // @public (undocumented)
+export const ContextMenuRemoveToc: {
+    new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
+        hidden: boolean;
+        icon: VNode<vue.RendererNode, vue.RendererElement, {
+            [key: string]: any;
+        }>;
+        labelKey: string;
+    }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
+        B: {};
+        C: {};
+        D: {};
+        Defaults: {};
+        M: {};
+        P: {};
+    }, Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
+        hidden: boolean;
+        icon: VNode<vue.RendererNode, vue.RendererElement, {
+            [key: string]: any;
+        }>;
+        labelKey: string;
+    }>;
+    __isFragment?: never;
+    __isTeleport?: never;
+    __isSuspense?: never;
+} & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
+    hidden: boolean;
+    icon: VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }>;
+    labelKey: string;
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
+    docxRow: string;
+};
+
+// @public (undocumented)
 export const ContextMenuSelectAll: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
         className: {
@@ -2417,6 +2958,35 @@ export const ContextMenuSplitCell: {
     docxRow: string;
 };
 
+// @public
+export const ContextMenuStart: {
+    new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<{}> & Readonly<{}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }>[], {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {}, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
+        B: {};
+        C: {};
+        D: {};
+        Defaults: {};
+        M: {};
+        P: {};
+    }, Readonly<{}> & Readonly<{}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }>[], {}, {}, {}, {}>;
+    __isFragment?: never;
+    __isTeleport?: never;
+    __isSuspense?: never;
+} & vue.ComponentOptionsBase<Readonly<{}> & Readonly<{}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>[], {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
+    docxRowPlacement: 'start';
+};
+
+// @public
+export interface ContextMenuStartProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+}
+
 // @public (undocumented)
 export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
     // (undocumented)
@@ -2710,10 +3280,592 @@ export interface DocxEditorBookmarkDialogProps extends DialogCustomizationProps 
 }
 
 // @public
+export const DocxEditorChartAxes: ObjectPartComponent<vue.DefineComponent<vue.ExtractPropTypes<{
+    readonly asChild: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly icon: {
+        readonly default: undefined;
+        readonly type: PropType<DocxEditorChildren>;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    readonly asChild: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly icon: {
+        readonly default: undefined;
+        readonly type: PropType<DocxEditorChildren>;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>> & Readonly<{}>, {
+    readonly asChild: boolean;
+    readonly className: string;
+    readonly hidden: boolean;
+    readonly icon: DocxEditorChildren;
+    readonly label: string;
+    readonly variant: ObjectControlVariant;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>, "chart.axes">;
+
+// @public
+export const DocxEditorChartCategoryAxisTitle: ObjectPartComponent<vue.DefineComponent<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>> & Readonly<{}>, {
+    readonly className: string;
+    readonly hidden: boolean;
+    readonly label: string;
+    readonly variant: ObjectControlVariant;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>, "chart.categoryAxisTitle">;
+
+// @public
+export const DocxEditorChartData: ObjectPartComponent<vue.DefineComponent<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: vue.PropType<ObjectControlVariant>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: vue.PropType<ObjectControlVariant>;
+    };
+}>> & Readonly<{}>, {
+    readonly className: string;
+    readonly hidden: boolean;
+    readonly label: string;
+    readonly variant: ObjectControlVariant;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>, "chart.data">;
+
+// @public
+export const DocxEditorChartDataLabels: ObjectPartComponent<vue.DefineComponent<vue.ExtractPropTypes<{
+    readonly asChild: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly icon: {
+        readonly default: undefined;
+        readonly type: PropType<DocxEditorChildren>;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    readonly asChild: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly icon: {
+        readonly default: undefined;
+        readonly type: PropType<DocxEditorChildren>;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>> & Readonly<{}>, {
+    readonly asChild: boolean;
+    readonly className: string;
+    readonly hidden: boolean;
+    readonly icon: DocxEditorChildren;
+    readonly label: string;
+    readonly variant: ObjectControlVariant;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>, "chart.dataLabels">;
+
+// @public
+export const DocxEditorChartGridlines: ObjectPartComponent<vue.DefineComponent<vue.ExtractPropTypes<{
+    readonly asChild: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly icon: {
+        readonly default: undefined;
+        readonly type: PropType<DocxEditorChildren>;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    readonly asChild: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly icon: {
+        readonly default: undefined;
+        readonly type: PropType<DocxEditorChildren>;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>> & Readonly<{}>, {
+    readonly asChild: boolean;
+    readonly className: string;
+    readonly hidden: boolean;
+    readonly icon: DocxEditorChildren;
+    readonly label: string;
+    readonly variant: ObjectControlVariant;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>, "chart.gridlines">;
+
+// @public
+export const DocxEditorChartLegend: ObjectPartComponent<vue.DefineComponent<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>> & Readonly<{}>, {
+    readonly className: string;
+    readonly hidden: boolean;
+    readonly label: string;
+    readonly variant: ObjectControlVariant;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>, "chart.legend">;
+
+// @public
+export const DocxEditorChartPane: vue.DefineComponent<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>> & Readonly<{}>, {
+    className: string;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorChartPaneProps {
+    className?: string;
+}
+
+// @public
+export const DocxEditorChartSeriesColors: ObjectPartComponent<vue.DefineComponent<vue.ExtractPropTypes<{
+    className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    index: {
+        default: undefined;
+        type: NumberConstructor;
+    };
+    label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>, () => vue.VNodeChild, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    index: {
+        default: undefined;
+        type: NumberConstructor;
+    };
+    label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>> & Readonly<{}>, {
+    className: string;
+    hidden: boolean;
+    index: number;
+    label: string;
+    variant: ObjectControlVariant;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>, "chart.seriesColor">;
+
+// @public
+export const DocxEditorChartTitle: ObjectPartComponent<vue.DefineComponent<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>, () => void | string | number | boolean | vue_jsx_runtime.JSX.Element | vue.VNodeArrayChildren | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>> & Readonly<{}>, {
+    readonly className: string;
+    readonly hidden: boolean;
+    readonly label: string;
+    readonly variant: ObjectControlVariant;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>, "chart.title">;
+
+// @public
+export const DocxEditorChartType: ObjectPartComponent<vue.DefineComponent<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>> & Readonly<{}>, {
+    readonly className: string;
+    readonly hidden: boolean;
+    readonly label: string;
+    readonly variant: ObjectControlVariant;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>, "chart.type">;
+
+// @public
+export const DocxEditorChartValueAxisTitle: ObjectPartComponent<vue.DefineComponent<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: PropType<ObjectControlVariant>;
+    };
+}>> & Readonly<{}>, {
+    readonly className: string;
+    readonly hidden: boolean;
+    readonly label: string;
+    readonly variant: ObjectControlVariant;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>, "chart.valueAxisTitle">;
+
+// @public
 export type DocxEditorChildren = VNode;
 
 // @public (undocumented)
 export const DocxEditorColorByChangeType: vue.DefineComponent<{}, () => null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export const DocxEditorCompareDocumentsDialog: {
+    new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
+        children: PropType<DocxEditorChildren>;
+        className: StringConstructor;
+        preset: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        session: {
+            default: null;
+            type: PropType<CompareDocumentsDialogSession | null>;
+        };
+        style: PropType<CSSProperties>;
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        preset: boolean;
+        session: CompareDocumentsDialogSession | null;
+    }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
+        B: {};
+        C: {};
+        D: {};
+        Defaults: {};
+        M: {};
+        P: {};
+    }, Readonly<vue.ExtractPropTypes<{
+        children: PropType<DocxEditorChildren>;
+        className: StringConstructor;
+        preset: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        session: {
+            default: null;
+            type: PropType<CompareDocumentsDialogSession | null>;
+        };
+        style: PropType<CSSProperties>;
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        preset: boolean;
+        session: CompareDocumentsDialogSession | null;
+    }>;
+    __isFragment?: never;
+    __isTeleport?: never;
+    __isSuspense?: never;
+} & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
+    children: PropType<DocxEditorChildren>;
+    className: StringConstructor;
+    preset: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
+    session: {
+        default: null;
+        type: PropType<CompareDocumentsDialogSession | null>;
+    };
+    style: PropType<CSSProperties>;
+}>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    preset: boolean;
+    session: CompareDocumentsDialogSession | null;
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
+    Apply: vue.DefineComponent<DialogPartProps>;
+    Body: vue.DefineComponent<DialogPartProps>;
+    Cancel: vue.DefineComponent<DialogPartProps>;
+    Error: vue.DefineComponent<DialogPartProps>;
+    Field: vue.DefineComponent<DialogPartProps & {
+        name: keyof CompareDocumentsDialogValues;
+    }>;
+    Footer: vue.DefineComponent<DialogPartProps>;
+    Header: vue.DefineComponent<DialogPartProps>;
+    Notice: vue.DefineComponent<DialogPartProps>;
+    Progress: vue.DefineComponent<DialogPartProps>;
+    Title: vue.DefineComponent<DialogPartProps>;
+};
+
+// @public
+export interface DocxEditorCompareDocumentsDialogProps extends DialogCustomizationProps {
+    // (undocumented)
+    session: CompareDocumentsDialogSession | null;
+}
 
 // @public (undocumented)
 export const DocxEditorContent: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -2946,6 +4098,8 @@ export interface DocxEditorContextMenuNamespace {
     // (undocumented)
     readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
     // (undocumented)
+    readonly RemoveToc: typeof ContextMenuRemoveToc;
+    // (undocumented)
     readonly Row: typeof MenuRow;
     // (undocumented)
     readonly SelectAll: typeof ContextMenuSelectAll;
@@ -2957,6 +4111,7 @@ export interface DocxEditorContextMenuNamespace {
     readonly Slot: typeof MenuItem;
     // (undocumented)
     readonly SplitCell: typeof ContextMenuSplitCell;
+    readonly Start: typeof ContextMenuStart;
     // (undocumented)
     readonly Submenu: typeof MenuSubmenu;
 }
@@ -3538,6 +4693,7 @@ export interface DocxEditorMenuProps {
     overflow?: boolean;
     // (undocumented)
     preset?: boolean;
+    printSettings?: boolean;
     // (undocumented)
     reportIssue?: boolean;
     // (undocumented)
@@ -3558,8 +4714,23 @@ export interface DocxEditorNamespace {
     // (undocumented)
     readonly AuthorStyle: typeof DocxEditorAuthorStyle;
     readonly BookmarkDialog: typeof DocxEditorBookmarkDialog;
+    readonly ChartAxes: typeof DocxEditorChartAxes;
+    readonly ChartCategoryAxisTitle: typeof DocxEditorChartCategoryAxisTitle;
+    readonly ChartData: typeof DocxEditorChartData;
+    readonly ChartDataLabels: typeof DocxEditorChartDataLabels;
+    readonly ChartGridlines: typeof DocxEditorChartGridlines;
+    readonly ChartInsert: typeof ChartInsert;
+    readonly ChartLegend: typeof DocxEditorChartLegend;
+    readonly ChartPane: typeof DocxEditorChartPane;
+    readonly ChartSeriesColors: typeof DocxEditorChartSeriesColors;
+    readonly ChartTitle: typeof DocxEditorChartTitle;
+    readonly ChartType: typeof DocxEditorChartType;
+    readonly ChartValueAxisTitle: typeof DocxEditorChartValueAxisTitle;
     // (undocumented)
     readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
+    readonly ColorPicker: typeof ColorPicker;
+    // (undocumented)
+    readonly CompareDocumentsDialog: typeof DocxEditorCompareDocumentsDialog;
     // (undocumented)
     readonly Content: typeof DocxEditorContent;
     // (undocumented)
@@ -3591,7 +4762,7 @@ export interface DocxEditorNamespace {
     // (undocumented)
     readonly Menu: typeof DocxEditorMenu;
     // (undocumented)
-    readonly Navigation: typeof Navigation;
+    readonly Navigation: typeof Navigation_2;
     // (undocumented)
     readonly NotePreview: typeof DocxEditorNotePreview;
     // (undocumented)
@@ -3605,6 +4776,7 @@ export interface DocxEditorNamespace {
     readonly PageNumber: typeof DocxEditorPageNumber;
     // (undocumented)
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
+    readonly PaneSections: typeof DocxEditorPaneSections;
     readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
     readonly PrintDialog: typeof DocxEditorPrintDialog;
     // (undocumented)
@@ -3613,6 +4785,13 @@ export interface DocxEditorNamespace {
     readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
+    readonly ShapeFill: typeof DocxEditorShapeFill;
+    readonly ShapeFillTransparency: typeof DocxEditorShapeFillTransparency;
+    readonly ShapeOutlineColor: typeof DocxEditorShapeOutlineColor;
+    readonly ShapeOutlineDash: typeof DocxEditorShapeOutlineDash;
+    readonly ShapeOutlineWidth: typeof DocxEditorShapeOutlineWidth;
+    readonly ShapePane: typeof DocxEditorShapePane;
+    readonly SidePanel: typeof DocxEditorSidePanel;
     readonly SplitCellDialog: typeof DocxEditorSplitCellDialog;
     // (undocumented)
     readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
@@ -4127,6 +5306,45 @@ export interface DocxEditorPageSetupDialogProps extends DialogCustomizationProps
 }
 
 // @public
+export const DocxEditorPaneSections: vue.DefineComponent<vue.ExtractPropTypes<{
+    filter: {
+        default: undefined;
+        type: PropType<(section: PaneSection) => boolean>;
+    };
+    pane: {
+        required: true;
+        type: PropType<EditorPaneId>;
+    };
+    sections: {
+        default: undefined;
+        type: PropType<readonly PaneSectionId[]>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element[], {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    filter: {
+        default: undefined;
+        type: PropType<(section: PaneSection) => boolean>;
+    };
+    pane: {
+        required: true;
+        type: PropType<EditorPaneId>;
+    };
+    sections: {
+        default: undefined;
+        type: PropType<readonly PaneSectionId[]>;
+    };
+}>> & Readonly<{}>, {
+    filter: (section: PaneSection) => boolean;
+    sections: readonly PaneSectionId[];
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorPaneSectionsProps<P extends EditorPaneId = EditorPaneId> {
+    filter?: (section: PaneSection<P>) => boolean;
+    pane: P;
+    sections?: readonly PaneSectionId<P>[];
+}
+
+// @public
 export const DocxEditorParagraphDialog: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
         children: PropType<DocxEditorChildren>;
@@ -4225,6 +5443,7 @@ export type DocxEditorPopup<P extends object> = false | ((props: P) => DocxEdito
 // @public
 export interface DocxEditorPopups {
     bookmark?: DocxEditorPopup<DocxEditorBookmarkDialogProps>;
+    compareDocuments?: DocxEditorPopup<DocxEditorCompareDocumentsDialogProps>;
     // (undocumented)
     contentControl?: DocxEditorPopup<ContentControlProps>;
     contentControlCheckbox?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
@@ -4266,6 +5485,10 @@ export interface DocxEditorPopups {
 // @public
 export const DocxEditorPrintDialog: vue.DefineComponent<vue.ExtractPropTypes<{
     children: PropType<DocxEditorChildren>;
+    choosing: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
     className: StringConstructor;
     error: {
         required: true;
@@ -4275,6 +5498,14 @@ export const DocxEditorPrintDialog: vue.DefineComponent<vue.ExtractPropTypes<{
         required: true;
         type: PropType<() => void>;
     };
+    onPrint: {
+        default: undefined;
+        type: PropType<() => void>;
+    };
+    onSettingsChange: {
+        default: undefined;
+        type: PropType<(change: ChromePrintSettings) => void>;
+    };
     open: {
         required: true;
         type: BooleanConstructor;
@@ -4282,6 +5513,10 @@ export const DocxEditorPrintDialog: vue.DefineComponent<vue.ExtractPropTypes<{
     pending: {
         required: true;
         type: BooleanConstructor;
+    };
+    settings: {
+        default: undefined;
+        type: PropType<ResolvedChromePrintSettings>;
     };
     style: PropType<CSSProperties>;
     url: {
@@ -4290,6 +5525,10 @@ export const DocxEditorPrintDialog: vue.DefineComponent<vue.ExtractPropTypes<{
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     children: PropType<DocxEditorChildren>;
+    choosing: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
     className: StringConstructor;
     error: {
         required: true;
@@ -4299,6 +5538,14 @@ export const DocxEditorPrintDialog: vue.DefineComponent<vue.ExtractPropTypes<{
         required: true;
         type: PropType<() => void>;
     };
+    onPrint: {
+        default: undefined;
+        type: PropType<() => void>;
+    };
+    onSettingsChange: {
+        default: undefined;
+        type: PropType<(change: ChromePrintSettings) => void>;
+    };
     open: {
         required: true;
         type: BooleanConstructor;
@@ -4307,21 +5554,34 @@ export const DocxEditorPrintDialog: vue.DefineComponent<vue.ExtractPropTypes<{
         required: true;
         type: BooleanConstructor;
     };
+    settings: {
+        default: undefined;
+        type: PropType<ResolvedChromePrintSettings>;
+    };
     style: PropType<CSSProperties>;
     url: {
         required: true;
         type: StringConstructor;
     };
-}>> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+}>> & Readonly<{}>, {
+    choosing: boolean;
+    onPrint: () => void;
+    onSettingsChange: (change: ChromePrintSettings) => void;
+    settings: Required<ChromePrintSettings>;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public
 export interface DocxEditorPrintDialogProps {
     children?: DocxEditorChildren;
+    choosing?: boolean;
     className?: string;
     error: string;
     onClose(): void;
+    onPrint?: () => void;
+    onSettingsChange?: (change: ChromePrintSettings) => void;
     open: boolean;
     pending: boolean;
+    settings?: ResolvedChromePrintSettings;
     style?: CSSProperties;
     url: string;
 }
@@ -4741,8 +6001,305 @@ export interface DocxEditorRulerProps {
     unit?: 'inch' | 'cm';
 }
 
+// @public
+export const DocxEditorShapeFill: ObjectPartComponent<vue.DefineComponent<vue.ExtractPropTypes<{
+    readonly asChild: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly icon: {
+        readonly default: undefined;
+        readonly type: vue.PropType<DocxEditorChildren>;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: vue.PropType<ObjectControlVariant>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    readonly asChild: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly icon: {
+        readonly default: undefined;
+        readonly type: vue.PropType<DocxEditorChildren>;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: vue.PropType<ObjectControlVariant>;
+    };
+}>> & Readonly<{}>, {
+    readonly asChild: boolean;
+    readonly className: string;
+    readonly hidden: boolean;
+    readonly icon: DocxEditorChildren;
+    readonly label: string;
+    readonly variant: ObjectControlVariant;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>, "shape.fill">;
+
+// @public
+export const DocxEditorShapeFillTransparency: ObjectPartComponent<vue.DefineComponent<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: vue.PropType<ObjectControlVariant>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: vue.PropType<ObjectControlVariant>;
+    };
+}>> & Readonly<{}>, {
+    readonly className: string;
+    readonly hidden: boolean;
+    readonly label: string;
+    readonly variant: ObjectControlVariant;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>, "shape.fillTransparency">;
+
+// @public
+export const DocxEditorShapeOutlineColor: ObjectPartComponent<vue.DefineComponent<vue.ExtractPropTypes<{
+    readonly asChild: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly icon: {
+        readonly default: undefined;
+        readonly type: vue.PropType<DocxEditorChildren>;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: vue.PropType<ObjectControlVariant>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    readonly asChild: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly icon: {
+        readonly default: undefined;
+        readonly type: vue.PropType<DocxEditorChildren>;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: vue.PropType<ObjectControlVariant>;
+    };
+}>> & Readonly<{}>, {
+    readonly asChild: boolean;
+    readonly className: string;
+    readonly hidden: boolean;
+    readonly icon: DocxEditorChildren;
+    readonly label: string;
+    readonly variant: ObjectControlVariant;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>, "shape.outlineColor">;
+
+// @public
+export const DocxEditorShapeOutlineDash: ObjectPartComponent<vue.DefineComponent<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: vue.PropType<ObjectControlVariant>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: vue.PropType<ObjectControlVariant>;
+    };
+}>> & Readonly<{}>, {
+    readonly className: string;
+    readonly hidden: boolean;
+    readonly label: string;
+    readonly variant: ObjectControlVariant;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>, "shape.outlineDash">;
+
+// @public
+export const DocxEditorShapeOutlineWidth: ObjectPartComponent<vue.DefineComponent<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: vue.PropType<ObjectControlVariant>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly hidden: {
+        readonly default: false;
+        readonly type: BooleanConstructor;
+    };
+    readonly label: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly variant: {
+        readonly default: undefined;
+        readonly type: vue.PropType<ObjectControlVariant>;
+    };
+}>> & Readonly<{}>, {
+    readonly className: string;
+    readonly hidden: boolean;
+    readonly label: string;
+    readonly variant: ObjectControlVariant;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>, "shape.outlineWidth">;
+
+// @public
+export const DocxEditorShapePane: vue.DefineComponent<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>> & Readonly<{}>, {
+    className: string;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorShapePaneProps {
+    className?: string;
+}
+
 // @public @deprecated (undocumented)
 export const DocxEditorShell: DocxEditorNamespace;
+
+// @public
+export const DocxEditorSidePanel: vue.DefineComponent<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    onClose: {
+        default: undefined;
+        type: PropType<() => void>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    onClose: {
+        default: undefined;
+        type: PropType<() => void>;
+    };
+}>> & Readonly<{}>, {
+    className: string;
+    onClose: () => void;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorSidePanelProps {
+    children?: DocxEditorChildren;
+    className?: string;
+    onClose?: () => void;
+}
 
 // @public
 export const DocxEditorSplitCellDialog: {
@@ -4960,6 +6517,7 @@ export interface DocxEditorToolbarNamespace {
     readonly BulletList: ToolbarPartComponent;
     // (undocumented)
     readonly Button: typeof ToolbarButton$1;
+    readonly ChartInsert: ChartInsertPartComponent;
     // (undocumented)
     readonly ClearFormatting: ToolbarPartComponent;
     // (undocumented)
@@ -5101,7 +6659,7 @@ export const DocxEditorUnsupportedElement: vue.DefineComponent<vue.ExtractPropTy
     };
 }>> & Readonly<{}>, {
     includePartial: boolean;
-    layout: _docx_editor_dev_core_editor.UnsupportedElementLayout | undefined;
+    layout: _docx_editor_dev_core_layout.UnsupportedElementLayout | undefined;
     match: ((element: UnsupportedElement) => boolean) | undefined;
 }, SlotsType<{
     default: (props: {
@@ -5411,9 +6969,9 @@ export { Editor }
 
 // @public (undocumented)
 export interface EditorCaret {
-    // (undocumented)
+    readonly blockId: string;
     readonly offset: number;
-    // (undocumented)
+    // @deprecated
     readonly paragraphId: string;
 }
 
@@ -5572,6 +7130,8 @@ export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState'
 export { HIGHLIGHT_REFRESH_MS }
 
 export { HighlightHit }
+
+export { HighlightKind }
 
 export { HighlightOptions }
 
@@ -6178,6 +7738,8 @@ export interface MenuTableGridProps {
     slot?: ChromeSlotId;
 }
 
+export { NavigateHighlightCommand }
+
 export { NavigateToChangeOptions }
 
 // @public
@@ -6474,6 +8036,61 @@ export type NotePropertiesState = Exclude<ReturnType<Editor['getNotePropertiesSt
 
 // @internal
 export function notificationYieldsToTask(): boolean;
+
+// @public
+export const OBJECT_SLOT_PARTS: Readonly<Record<ObjectSlotId, Component>>;
+
+// @public
+export interface ObjectButtonPartProps extends ObjectControlProps {
+    asChild?: boolean;
+    children?: DocxEditorChildren;
+    icon?: DocxEditorChildren;
+}
+
+// @public
+export interface ObjectControlProps {
+    className?: string;
+    hidden?: boolean;
+    label?: string;
+    variant?: ObjectControlVariant;
+}
+
+// @public
+export interface ObjectControlState<K extends ObjectSlotId> {
+    readonly disabledReason: ComputedRef<string | null>;
+    readonly execute: (value: ObjectSlotValueMap[K], options?: EditorExecOptions) => ExecResult;
+    readonly isActive: ComputedRef<boolean>;
+    // (undocumented)
+    readonly isEnabled: ComputedRef<boolean>;
+    readonly label: ComputedRef<string>;
+    readonly options: ComputedRef<readonly ObjectSlotValueMap[K][]>;
+    // (undocumented)
+    readonly slotId: K;
+    readonly value: ComputedRef<ObjectSlotReadValueMap[K] | null>;
+}
+
+// @public
+export type ObjectControlVariant = 'field' | 'compact';
+
+// @public
+export type ObjectPartComponent<C, S extends ObjectSlotId> = C & {
+    readonly docxSlot: S;
+};
+
+// @public
+export type ObjectSlotId = keyof ObjectSlotValueMap;
+
+export { ObjectSlotReadValueMap }
+
+export { ObjectSlotValueMap }
+
+// @public
+export interface ObjectToggleControl {
+    // (undocumented)
+    readonly toggle: (options?: EditorExecOptions) => ExecResult;
+}
+
+export { ObjectToggleSlotId }
 
 // @public (undocumented)
 export const OUTLINE_BUTTON_LEFT_OFFSET = 12;
@@ -6843,6 +8460,16 @@ export interface PaginatedDocxEditorShellProps {
     readonly source: Uint8Array;
 }
 
+export { PANE_SECTIONS }
+
+export { PaneSection }
+
+export { PaneSectionId }
+
+export { PaneSectionIds }
+
+export { paneSections }
+
 // @public
 export type ParagraphAlignment = 'left' | 'center' | 'right' | 'both' | 'distribute';
 
@@ -6851,6 +8478,8 @@ export { ParagraphFlagState }
 export { ParagraphFormatRead }
 
 export { ParagraphFormatUpdate }
+
+export { ParagraphsChangeEvent }
 
 // @public (undocumented)
 export interface ParagraphStyleItemProps extends ParagraphStylePartProps {
@@ -6906,6 +8535,14 @@ export interface ParagraphStyleProps extends ParagraphStylePartProps {
 
 export { ParagraphTabStop }
 
+export { ParagraphText }
+
+export { ParagraphTextProofing }
+
+export { ParagraphTextReadOptions }
+
+export { ParagraphTextSpan }
+
 // @public
 export function provideDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorResult;
 
@@ -6937,11 +8574,31 @@ export { RefreshHighlightOptions }
 
 export { RefreshLocation }
 
+export { RefreshRefusal }
+
+export { RefreshRefusalFields }
+
+export { RefreshRefusalReason }
+
 export { RefreshResult }
 
 export { RefreshSubmission }
 
 export { RefreshUpdate }
+
+export { RefreshUpdateMode }
+
+export { ReplaceAcceptedTextCommand }
+
+export { ReplaceDocumentErrorCode }
+
+export { ReplaceDocumentOutcome }
+
+export { ReplaceDocumentRefusal }
+
+export { ReplaceDocumentRefusalReason }
+
+export { ReplaceDocumentRequest }
 
 // @public
 export type ResolvedColorMode = 'light' | 'dark';
@@ -7051,6 +8708,12 @@ export { SEARCH_HIGHLIGHT_SET }
 
 export { SEARCH_MATCH_LIMIT }
 
+export { SelectedChartCommand }
+
+export { SelectedChartState }
+
+export { SelectedShapeCommand }
+
 // @public @deprecated (undocumented)
 export interface SelectionFormatting {
     // (undocumented)
@@ -7086,6 +8749,26 @@ export interface SelectionFormatting {
     // (undocumented)
     underline?: boolean;
 }
+
+export { SHAPE_OUTLINE_DASHES }
+
+export { SHAPE_OUTLINE_WIDTHS }
+
+// @public
+export type ShapeColorPartProps = ObjectButtonPartProps;
+
+export { ShapeFillState }
+
+export { ShapeFormatState }
+
+export { ShapeOutlineDash }
+
+export { ShapeOutlineState }
+
+export { ShapePaneChange }
+
+// @public
+export type ShapePartProps = ObjectControlProps;
 
 // @public
 export const Slot: vue.DefineComponent<{}, () => VNode<vue.RendererNode, vue.RendererElement, {
@@ -7240,6 +8923,8 @@ export interface TextFormFieldDialogFields {
 
 export { TextMatch }
 
+export { textOffsetFromAccepted }
+
 // @public @deprecated (undocumented)
 export const TitleBar: vue.DefineComponent<{}, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
@@ -7369,6 +9054,9 @@ export interface ToolbarButtonProps {
     slot?: ChromeSlotId;
     slotId?: ChromeSlotId;
 }
+
+// @public (undocumented)
+export const ToolbarChartInsert: ChartInsertPartComponent;
 
 export { ToolbarCommandState }
 
@@ -7669,6 +9357,18 @@ export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): Com
 // @public
 export function useCommentDraftRequest(handler: (() => void) | null | undefined): void;
 
+// @public
+export function useCompareDocumentsDialog(): UseCompareDocumentsDialogReturn;
+
+// @public
+export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<CompareDocumentsDialogValues> {
+    readonly busy: Readonly<Ref<boolean>>;
+    readonly cancelable: Readonly<Ref<boolean>>;
+    readonly notice: Readonly<Ref<string | undefined>>;
+    readonly originalHasTrackedChanges: Readonly<Ref<boolean>>;
+    readonly progress: Readonly<Ref<CompareDocumentsProgress | null>>;
+}
+
 // @public (undocumented)
 export function useContentControl(): UseContentControlResult;
 
@@ -7757,7 +9457,13 @@ export interface UseContentControlWidgetResult {
     readonly value: Readonly<Ref<string>>;
 }
 
-// @public (undocumented)
+// @public
+export function useContextMenuAnchor(): ComputedRef<ContextMenuAnchor | null>;
+
+// @public
+export function useContextMenuHighlights<R extends HighlightRange = HighlightRange>(name?: string): Readonly<ShallowRef<readonly HighlightHit<R>[]>>;
+
+// @public
 export function useContextMenuTarget(): HTMLElement | null;
 
 // @public
@@ -7884,7 +9590,7 @@ export function useEditorSnapshot(editor: MaybeRefOrGetter<Editor | null>): Ref<
 export function useEditorState<T>(selector: (snapshot: EditorSnapshot) => T, isEqual?: (a: T, b: T) => boolean, options?: UseEditorStateOptions): Readonly<ShallowRef<T>>;
 
 // @public
-export function useEditorValueCommand<K extends keyof ToolbarValueMap>(slotId: K): EditorValueCommandState<ToolbarValueMap[K]>;
+export function useEditorValueCommand<K extends Exclude<keyof ToolbarValueMap, keyof ObjectSlotValueMap>>(slotId: K): EditorValueCommandState<ToolbarValueMap[K]>;
 
 // @public (undocumented)
 export function useFontFamily(): UseFontFamilyResult;
@@ -7943,7 +9649,12 @@ export function useHeaderFooterState(): ShallowRef<HeaderFooterState | null>;
 export function useHighlightAt<R extends HighlightRange = HighlightRange>(name?: MaybeRefOrGetter<string>): Readonly<ShallowRef<HighlightHit<R> | null>>;
 
 // @public
-export function useHighlights(name: MaybeRefOrGetter<string>, source: MaybeRefOrGetter<HighlightSource>, options?: MaybeRefOrGetter<HighlightOptions>): ComputedRef<HighlightResult>;
+export function useHighlights(name: MaybeRefOrGetter<string>, source: MaybeRefOrGetter<HighlightSource>, options?: MaybeRefOrGetter<HighlightOptions>): ComputedRef<UseHighlightsReturn>;
+
+// @public
+export interface UseHighlightsReturn extends HighlightResult {
+    readonly refresh: () => void;
+}
 
 // @public
 export function useHistoryGroup(input: HistoryGroupBindingOptions): UseHistoryGroupReturn;
@@ -8040,6 +9751,12 @@ export function useNoteScopeState(): ShallowRef<Extract<ViewScope, {
 }> | null>;
 
 // @public
+export function useObjectControl<K extends ObjectSlotId>(slotId: K): UseObjectControlReturn<K>;
+
+// @public
+export type UseObjectControlReturn<K extends ObjectSlotId> = ObjectControlState<K> & (K extends ObjectToggleSlotId ? ObjectToggleControl : unknown);
+
+// @public
 export function useOpenFailure(options?: UseOpenFailureOptions): UseOpenFailureReturn;
 
 // @public
@@ -8075,6 +9792,9 @@ export interface UsePageSetupReturn {
     // (undocumented)
     readonly pageSetup: ComputedRef<PageSetup | null>;
 }
+
+// @public
+export function usePaneRequest(listener: (request: PaneRequest) => void, options?: PaneRequestListenerOptions): void;
 
 // @public
 export function useParagraphDialog(): UseParagraphDialogReturn;
@@ -8146,6 +9866,41 @@ export function useScopeClassName(): '' | 'docx-editor ' | 'docx-editor dark ';
 
 // @public
 export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: ScopedChromeAnchorPlacement): ScopedChromeAnchor;
+
+// @public
+export function useSelectedChart(): UseSelectedChartReturn;
+
+// @public
+export interface UseSelectedChartReturn {
+    readonly canEditData: ComputedRef<boolean>;
+    readonly canEditFormat: ComputedRef<boolean>;
+    readonly chart: ComputedRef<SelectedChartState | null>;
+    readonly data: ComputedRef<ChartData | null>;
+    readonly dataDisabledReason: ComputedRef<string | null>;
+    readonly editData: (change: ChartPaneChange) => ExecResult;
+    readonly execute: (command: SelectedChartCommand) => ExecResult;
+    readonly format: ComputedRef<ChartFormat | null>;
+    readonly formatDisabledReason: ComputedRef<string | null>;
+    readonly readReason: ComputedRef<string | null>;
+}
+
+// @public
+export function useSelectedShape(): UseSelectedShapeReturn;
+
+// @public
+export interface UseSelectedShapeReturn {
+    readonly canEditFill: ComputedRef<boolean>;
+    readonly canEditOutline: ComputedRef<boolean>;
+    readonly canEditTransparency: ComputedRef<boolean>;
+    readonly drawingNodeId: ComputedRef<string | null>;
+    readonly edit: (change: ShapePaneChange) => ExecResult;
+    readonly execute: (command: SelectedShapeCommand) => ExecResult;
+    readonly fillDisabledReason: ComputedRef<string | null>;
+    readonly format: ComputedRef<ShapeFormatState | null>;
+    readonly memberId: ComputedRef<string | null>;
+    readonly outlineDisabledReason: ComputedRef<string | null>;
+    readonly transparencyDisabledReason: ComputedRef<string | null>;
+}
 
 // @public
 export function useSplitCellDialog(): UseSplitCellDialogReturn;

@@ -329,7 +329,7 @@ const HyperLinkFields = defineComponent({
             onKeydown={onKeyDown}
           />
           <label class="docx-editor-sr-only" for={urlId}>
-            {t('hyperlinkPopup.urlPlaceholder')}
+            {t('hyperlinkPopup.urlLabel')}
           </label>
           <input
             id={urlId}

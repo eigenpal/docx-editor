@@ -24,6 +24,8 @@ def test_vendored_licenses_are_complete():
         "THIRD_PARTY_NOTICES.md",
         "bun-LICENSE.md",
         "harfbuzz-COPYING.txt",
+        "LGPL-2.0.txt",
+        "LGPL-2.1.txt",
         "OFL-Carlito.txt",
         "OFL-Caladea.txt",
         "LICENSE-Liberation.txt",
@@ -34,7 +36,8 @@ def test_vendored_licenses_are_complete():
 
 @pytest.mark.parametrize(
     "package",
-    ["harfbuzzjs", "fflate", "fast-xml-parser", "prosemirror-model", "bidi-js"],
+    # Editor-only dependencies disappear when the converter bundle removes unused code.
+    ["harfbuzzjs", "fflate", "fast-xml-parser", "bidi-js"],
 )
 def test_notices_cover_bundled_packages(package):
     notices = (LICENSES / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
@@ -46,6 +49,9 @@ def test_notices_name_the_runtime_and_shaper():
     notices = (LICENSES / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
     assert "## Bun runtime" in notices
     assert "JavaScriptCore" in notices
+    assert "### LGPL libraries in the Bun runtime" in notices
+    assert "scripts/build/deps/webkit.ts" in notices
+    assert "scripts/build/deps/tinycc.ts" in notices
     assert "## HarfBuzz" in notices
     assert "Old MIT" in notices
 
@@ -60,6 +66,7 @@ def test_every_font_file_has_a_license():
         "LiberationSerif": "LICENSE-Liberation.txt",
         "LiberationMono": "LICENSE-Liberation.txt",
         "TeXGyreAdventor": "GUST-FONT-LICENSE.txt",
+        "Selawik": "OFL-Selawik.txt",
     }
     assert fonts == set(expected)
     for family, license_file in expected.items():

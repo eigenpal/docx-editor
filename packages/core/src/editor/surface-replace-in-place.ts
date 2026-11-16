@@ -8,6 +8,7 @@
 import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core/layout';
 import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import { mapSelectionAcrossText } from './surface-remote-caret.ts';
+import { replacementOps } from './replacement-ops.ts';
 
 type HistoryMark = { paragraphId: string; start: number; end: number };
 
@@ -59,9 +60,22 @@ export function createInPlaceReplacement(deps: InPlaceReplacementDeps) {
       end > start
         ? deps.rangePlan({ anchor, head: { paragraphId, offset: end } })
         : { ops: [], replaceAt: deps.insertionPoint(anchor) };
-    const ops: TreeDocOp[] = [...plan.ops];
     const { paragraphId: landingId, offset: landing } = plan.replaceAt;
-    if (text.length > 0)
+    const [only] = plan.ops;
+    // A plain deletion of exactly the range: the text joins the first replaced character's run.
+    const plain =
+      plan.ops.length === 1 &&
+      only?.op === 'deleteText' &&
+      only.revision === undefined &&
+      only.paragraphId === paragraphId &&
+      only.start === start &&
+      only.end === end &&
+      landingId === paragraphId &&
+      landing === start;
+    const ops: TreeDocOp[] = plain
+      ? replacementOps(paragraphId, start, end, text, null)
+      : [...plan.ops];
+    if (!plain && text.length > 0)
       ops.push({ op: 'insertText', paragraphId: landingId, offset: landing, text });
     if (ops.length === 0) return true;
     const kept = deps.selection();

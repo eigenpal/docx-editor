@@ -100,7 +100,18 @@ function displayOf(raw: string | undefined): PageBorderDisplay {
 }
 
 /**
- * Parse `w:pgBorders` off one `w:sectPr`.
+ * Page borders are not a tracked section property. A `w:pgBorders` that only the previous
+ * properties in `w:sectPrChange` hold still frames the pages, at the current page size and
+ * margins. The section's own `w:pgBorders`, when present, wins.
+ */
+function trackedPageBorders(sectPr: OoxmlNode): OoxmlElement | undefined {
+  const change = childElement(sectPr, 'sectPrChange');
+  const previous = change ? childElement(change, 'sectPr') : undefined;
+  return previous ? childElement(previous, 'pgBorders') : undefined;
+}
+
+/**
+ * Parse `w:pgBorders` off one `w:sectPr`, or off its `w:sectPrChange` when it has none.
  *
  * Undefined when the element is absent AND when it paints nothing — every edge off, or every
  * edge an art border. Unlike `w:pgNumType`, an empty-but-present element is not distinguished:
@@ -108,7 +119,7 @@ function displayOf(raw: string | undefined): PageBorderDisplay {
  * with no edges has exactly one meaning downstream.
  */
 export function parsePageBorders(sectPr: OoxmlNode): SectionPageBorders | undefined {
-  const pgBorders = childElement(sectPr, 'pgBorders');
+  const pgBorders = childElement(sectPr, 'pgBorders') ?? trackedPageBorders(sectPr);
   if (!pgBorders) return undefined;
 
   const top = strokedEdge(childElement(pgBorders, 'top'));

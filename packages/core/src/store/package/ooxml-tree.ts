@@ -121,9 +121,7 @@ export interface OoxmlGenericExtensionAttribute extends OoxmlAttributeBase {
 
 /** Any attribute on any node: the two typed ones, plus the verbatim catch-all. */
 export type OoxmlAttribute =
-  | OoxmlXmlSpaceAttribute
-  | OoxmlWmlValAttribute
-  | OoxmlGenericExtensionAttribute;
+  OoxmlXmlSpaceAttribute | OoxmlWmlValAttribute | OoxmlGenericExtensionAttribute;
 
 /**
  * Attributes a TYPED node may carry.
@@ -161,10 +159,7 @@ export interface OoxmlDocumentNode extends OoxmlElementBase<
 /** `w:body` — the main story's block content. */
 export interface OoxmlBodyNode extends OoxmlElementBase<
   readonly (
-    | OoxmlParagraphNode
-    | OoxmlTableNode
-    | OoxmlContentControlNode
-    | OoxmlGenericElementNode
+    OoxmlParagraphNode | OoxmlTableNode | OoxmlContentControlNode | OoxmlGenericElementNode
   )[],
   readonly OoxmlKnownNodeAttribute[]
 > {
@@ -199,10 +194,7 @@ export interface OoxmlTableRowNode extends OoxmlElementBase<
 
 export interface OoxmlTableCellNode extends OoxmlElementBase<
   readonly (
-    | OoxmlParagraphNode
-    | OoxmlTableNode
-    | OoxmlContentControlNode
-    | OoxmlGenericElementNode
+    OoxmlParagraphNode | OoxmlTableNode | OoxmlContentControlNode | OoxmlGenericElementNode
   )[],
   readonly OoxmlKnownNodeAttribute[]
 > {
@@ -576,9 +568,7 @@ export interface OoxmlDrawingSimplePosNode extends OoxmlElementBase<
 
 export interface OoxmlDrawingPositionHNode extends OoxmlElementBase<
   readonly (
-    | OoxmlDrawingPositionAlignNode
-    | OoxmlDrawingPositionOffsetNode
-    | OoxmlGenericElementNode
+    OoxmlDrawingPositionAlignNode | OoxmlDrawingPositionOffsetNode | OoxmlGenericElementNode
   )[],
   readonly OoxmlKnownNodeAttribute[]
 > {
@@ -589,9 +579,7 @@ export interface OoxmlDrawingPositionHNode extends OoxmlElementBase<
 
 export interface OoxmlDrawingPositionVNode extends OoxmlElementBase<
   readonly (
-    | OoxmlDrawingPositionAlignNode
-    | OoxmlDrawingPositionOffsetNode
-    | OoxmlGenericElementNode
+    OoxmlDrawingPositionAlignNode | OoxmlDrawingPositionOffsetNode | OoxmlGenericElementNode
   )[],
   readonly OoxmlKnownNodeAttribute[]
 > {
@@ -665,9 +653,7 @@ export interface OoxmlDrawingWrapTopBottomNode extends OoxmlElementBase<
 
 export interface OoxmlDrawingWrapPolygonNode extends OoxmlElementBase<
   readonly (
-    | OoxmlDrawingWrapPolygonStartNode
-    | OoxmlDrawingWrapPolygonLineToNode
-    | OoxmlGenericElementNode
+    OoxmlDrawingWrapPolygonStartNode | OoxmlDrawingWrapPolygonLineToNode | OoxmlGenericElementNode
   )[],
   readonly OoxmlKnownNodeAttribute[]
 > {
@@ -780,9 +766,7 @@ export interface OoxmlPictureShapePropertiesNode extends OoxmlElementBase<
 
 export interface OoxmlPictureTransformNode extends OoxmlElementBase<
   readonly (
-    | OoxmlPictureTransformOffsetNode
-    | OoxmlPictureTransformExtentNode
-    | OoxmlGenericElementNode
+    OoxmlPictureTransformOffsetNode | OoxmlPictureTransformExtentNode | OoxmlGenericElementNode
   )[],
   readonly OoxmlKnownNodeAttribute[]
 > {
@@ -1445,8 +1429,7 @@ export interface OoxmlInvariantIssue {
 
 /** Whether a tree satisfies its invariants, listing every violation when it does not. */
 export type OoxmlInvariantResult =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly issues: readonly OoxmlInvariantIssue[] };
+  { readonly ok: true } | { readonly ok: false; readonly issues: readonly OoxmlInvariantIssue[] };
 
 type LegacyElement = Extract<XmlNode, { type: 'element' }>;
 

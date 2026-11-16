@@ -1,11 +1,24 @@
+import {
+  PATH_HIT_REACH,
+  textboxPaintsPastFrame,
+  textboxPressReaches,
+  turnedShapeBounds,
+  unionBox,
+  vectorShapeHit,
+} from './vector-shape-hit.ts';
+import { vectorShapeInkClip } from './vector-shape-ink.ts';
+export {
+  findDrawingOverlayFrameInLayout,
+  type DrawingOverlayFrame,
+} from './drawing-overlay-frame.ts';
 import { beyondLine, gapOffset } from './line-edge-hit.ts';
+import { turnedInlineDrawingAt } from './turned-inline-drawing-hit.ts';
 import { endsWithSpaceSlot, withoutTrailingZeroWidthSpaces } from './trailing-spaces.ts';
 import { drawingAtOffset, pictureEdgeX, pictureIsRtl } from './inline-picture-caret.ts';
 import { bidiPrefixWidth } from './shaped-caret-advances.ts';
 import { nearestBidiSpan, paragraphIsRtl } from './rtl-paragraph.ts';
 import { lineContentEdges } from './pending-line.ts';
 import { snapToSoundMarkCluster } from './sound-mark-hit.ts';
-import { headerFooterAnchoredDrawingOrigin } from './header-footer-drawing-origin.ts';
 // Pointer hit testing in MODEL space, over semantic layout records.
 //
 // A pointer lands somewhere on a sheet; this answers which text position the person meant.
@@ -255,8 +268,13 @@ export function hitTestPage(
   const behindDrawings = (page.anchoredDrawings ?? []).filter((drawing) => drawing.behindDocument);
   const frontHit = hitAnchoredDrawingAtPoint(frontDrawings, point, context.pageIndex);
   if (frontHit) return { ...frontHit, contentControlId };
+  const turnedHit = turnedInlineHit(page.fragments, point, context, layout);
+  if (turnedHit) return turnedHit;
   const textHit = bottomToTopHit(layout, resolveBlocks(page.fragments, point, context, null));
-  if (textHit?.onGlyphs) return { ...textHit, contentControlId };
+  // Anywhere in a line's box is on the text, so a drawing behind it takes the press only
+  // outside every line: in the margins, or in the space between paragraphs.
+  if (textHit && (textHit.onGlyphs || pointInTextLine(page.fragments, point)))
+    return { ...textHit, contentControlId };
   const behindHit = hitAnchoredDrawingAtPoint(behindDrawings, point, context.pageIndex);
   if (behindHit) return { ...behindHit, contentControlId };
   if (textHit) return { ...textHit, contentControlId };
@@ -299,6 +317,89 @@ export function hitTestPage(
 }
 
 /**
+ * A press on the painted part of a turned inline shape: the shape turns about its extent's
+ * centre and paints over the lines around it, so the press is on the shape whatever line is
+ * under the pointer. Its caret is the shape's own position, before it on its line.
+ */
+function turnedInlineHit(
+  fragments: readonly BlockFragmentRecord[],
+  point: HitPoint,
+  context: HitContext,
+  controlsOf?: SemanticLayout
+): SemanticHit | null {
+  const found = turnedInlineDrawingAt(fragments, point, (drawing) =>
+    hitBoundsContainDrawing(drawing, point)
+  );
+  if (!found) return null;
+  const { drawing, line } = found;
+  const position: SemanticPosition = { paragraphId: drawing.paragraphId, offset: drawing.start };
+  return {
+    position,
+    caret: {
+      position,
+      x: pictureEdgeX(drawing, false),
+      y: line.box.y,
+      height: line.box.height,
+      lineId: line.id,
+      pageIndex: context.pageIndex,
+    },
+    pageIndex: context.pageIndex,
+    lineId: line.id,
+    cell: found.cell
+      ? addressOf(context.layout, found.cell.table, found.cell.row, found.cell.cell)
+      : null,
+    onGlyphs: true,
+    // The control that holds the shape, read at the middle of its advance on its own line,
+    // not one under a neighbouring line it paints over.
+    contentControlId: controlsOf
+      ? contentControlIdAtPoint(controlsOf, context.pageIndex, {
+          x: (drawing.advanceStart + drawing.advanceEnd) / 2,
+          y: line.box.y + line.box.height / 2,
+        })
+      : null,
+    drawing: drawingHitIdentity(drawing),
+  };
+}
+
+/**
+ * The turned inline shape of story-relative fragments that paints at `point`, or null. An open
+ * header or footer's turned shape can paint past the story band, where no text hit reaches.
+ */
+export function hitTestTurnedInlineDrawing(
+  layout: SemanticLayout,
+  pageIndex: number,
+  fragments: readonly BlockFragmentRecord[],
+  point: HitPoint
+): SemanticHit | null {
+  const context = {
+    layout,
+    pageIndex,
+    verticalWeight: DEFAULT_VERTICAL_WEIGHT,
+    measurer: undefined,
+  };
+  return turnedInlineHit(fragments, point, context);
+}
+
+/**
+ * Whether a point lies in the box of a text line: on its words, past its end, or in an empty
+ * paragraph's line. Table cells count their own lines.
+ */
+export function pointInTextLine(blocks: readonly BlockFragmentRecord[], point: HitPoint): boolean {
+  for (const block of blocks) {
+    if (block.kind === 'paragraph') {
+      if (!contains(paragraphContentBounds(block), point)) continue;
+      for (const line of block.lines)
+        if (point.y >= line.box.y && point.y < line.box.y + line.box.height) return true;
+    } else if (contains(block.box, point)) {
+      for (const row of block.rows)
+        for (const cell of row.cells)
+          if (contains(cell.box, point) && pointInTextLine(cell.blocks, point)) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Hit test story-relative fragments (header/footer boxes use this coordinate space).
  *
  * Unlike `hitTestPage`, there is no cross-page neighbour walk — furniture stories are
@@ -319,7 +420,10 @@ export function hitTestFragments(
     verticalWeight: options.verticalWeight ?? DEFAULT_VERTICAL_WEIGHT,
     measurer: options.measurer,
   };
-  return bottomToTopHit(layout, resolveBlocks(fragments, point, context, null));
+  return (
+    turnedInlineHit(fragments, point, context) ??
+    bottomToTopHit(layout, resolveBlocks(fragments, point, context, null))
+  );
 }
 
 /**
@@ -503,6 +607,7 @@ function resolveParagraph(
     fragment.clipToBox ? fragment.box : undefined
   );
   if (!caretBox) return null;
+  const inBand = point.y >= line.box.y && point.y < line.box.y + line.box.height;
   return {
     position,
     caret: {
@@ -518,11 +623,7 @@ function resolveParagraph(
     cell,
     // The LINE's band, not the block's: a paragraph with trailing space is taller than its
     // text, and a point in that space is not on a glyph however far inside the block it is.
-    onGlyphs:
-      insideBox &&
-      resolved.withinSpan &&
-      point.y >= line.box.y &&
-      point.y < line.box.y + line.box.height,
+    onGlyphs: insideBox && resolved.withinSpan && inBand,
     // Filled by {@link hitTestPage} once the point is known; keep null on the inner path.
     contentControlId: null,
     drawing: resolved.drawing && resolved.withinSpan ? drawingHitIdentity(resolved.drawing) : null,
@@ -621,15 +722,43 @@ function hitBoundsContainDrawing(
 ): boolean {
   if (drawing.accessibility.hidden) return false;
   const box = drawing.hitBounds;
+  // A vector shape takes a press on what it paints: its fill, and its path or outline within
+  // reach. A press beside a line, or inside a shape with no fill, goes to the text. A turned
+  // shape paints outside its box too, as far as its turned extent reaches, and a shape that
+  // paints outside its extent, such as a callout's tail, as far as its ink reaches.
+  const reach = PATH_HIT_REACH + maxStrokeHalfWidth(drawing);
+  const ink = drawing.vectorShape?.overflowVisible
+    ? vectorShapeInkClip(drawing, drawing.paintBounds)
+    : null;
+  const near = unionBox(unionBox(box, turnedShapeBounds(drawing)), ink);
+  if (
+    point.x < near.x - reach ||
+    point.x > near.x + near.width + reach ||
+    point.y < near.y - reach ||
+    point.y > near.y + near.height + reach
+  )
+    return false;
+  const vector = vectorShapeHit(drawing, point);
+  if (vector !== null) return vector;
   if (
     point.x < box.x ||
     point.x >= box.x + box.width ||
     point.y < box.y ||
     point.y >= box.y + box.height
-  ) {
+  )
     return false;
-  }
+  // A text box that paints past its frame takes a press on its frame, its text, or the shape
+  // it paints there, whatever its effect extent reserves; the gesture follows the same rule.
+  if (textboxPaintsPastFrame(drawing)) return textboxPressReaches(drawing, point);
   return pointInDrawingClip(point.x, point.y, drawing.geometry);
+}
+
+/** Half the widest outline a drawing's vector shape paints, in points; 0 for no shape. */
+function maxStrokeHalfWidth(drawing: InlineDrawingRecord | AnchoredDrawingRecord): number {
+  let widest = 0;
+  for (const component of drawing.vectorShape?.components ?? [])
+    widest = Math.max(widest, component.strokeWidthEmu);
+  return widest / 12_700 / 2;
 }
 
 /**
@@ -1262,129 +1391,4 @@ function originOf(
 ): MergedCellOrigin {
   if (cell.blocks.length > 0) return { row, cell };
   return hitIndex(context.layout).mergeOriginOf.get(cell) ?? { row, cell };
-}
-
-/** Page-content overlay rectangle for a drawing's painted extent. */
-export interface DrawingOverlayFrame {
-  readonly pageIndex: number;
-  /** Relative to {@link PageRecord.contentBox}. */
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-  readonly record: InlineDrawingRecord | AnchoredDrawingRecord;
-}
-
-function overlayFrameOf(
-  pageIndex: number,
-  record: InlineDrawingRecord | AnchoredDrawingRecord
-): DrawingOverlayFrame | null {
-  const bounds = record.paintBounds;
-  if (bounds.width <= 0 || bounds.height <= 0 || record.accessibility.hidden) return null;
-  return Object.freeze({
-    pageIndex,
-    x: bounds.x,
-    y: bounds.y,
-    width: bounds.width,
-    height: bounds.height,
-    record,
-  });
-}
-
-function findDrawingInParagraphFragment(
-  pageIndex: number,
-  fragment: ParagraphFragmentRecord,
-  drawingNodeId: string
-): DrawingOverlayFrame | null {
-  for (const line of fragment.lines) {
-    for (const drawing of line.drawings ?? []) {
-      if (drawing.drawingNodeId === drawingNodeId) return overlayFrameOf(pageIndex, drawing);
-    }
-  }
-  return null;
-}
-
-function findDrawingInBlock(
-  pageIndex: number,
-  block: BlockFragmentRecord,
-  drawingNodeId: string
-): DrawingOverlayFrame | null {
-  if (block.kind === 'paragraph') {
-    return findDrawingInParagraphFragment(pageIndex, block, drawingNodeId);
-  }
-  for (const row of block.rows) {
-    for (const cell of row.cells) {
-      for (const inner of cell.blocks) {
-        const found = findDrawingInBlock(pageIndex, inner, drawingNodeId);
-        if (found) return found;
-      }
-    }
-  }
-  return null;
-}
-
-function findDrawingInFragments(
-  pageIndex: number,
-  fragments: readonly BlockFragmentRecord[],
-  drawingNodeId: string
-): DrawingOverlayFrame | null {
-  for (const fragment of fragments) {
-    const found = findDrawingInBlock(pageIndex, fragment, drawingNodeId);
-    if (found) return found;
-  }
-  return null;
-}
-
-/**
- * Locate a drawing's painted extent on the published layout.
- *
- * Coordinates are page-content relative — the same space {@link hitTestPage} uses — so an
- * overlay can position from records without reading painted DOM geometry.
- */
-export function findDrawingOverlayFrameInLayout(
-  layout: SemanticLayout,
-  drawingNodeId: string
-): DrawingOverlayFrame | null {
-  for (const page of layout.pages) {
-    for (const drawing of page.anchoredDrawings ?? []) {
-      if (drawing.drawingNodeId === drawingNodeId) return overlayFrameOf(page.index, drawing);
-    }
-    const body = findDrawingInFragments(page.index, page.fragments, drawingNodeId);
-    if (body) return body;
-    for (const story of [page.header, page.footer]) {
-      if (!story) continue;
-      for (const drawing of story.anchoredDrawings ?? []) {
-        if (drawing.drawingNodeId !== drawingNodeId) continue;
-        const bounds = drawing.paintBounds;
-        if (bounds.width <= 0 || bounds.height <= 0 || drawing.accessibility.hidden) return null;
-        // A page-relative axis resolves against the page, a story-relative one against the
-        // story box, exactly as the furniture layer paints it.
-        const origin = headerFooterAnchoredDrawingOrigin(drawing, story.box, page.box);
-        return Object.freeze({
-          pageIndex: page.index,
-          x: origin.x + bounds.x - drawing.x - page.contentBox.x,
-          y: origin.y + bounds.y - drawing.y - page.contentBox.y,
-          width: bounds.width,
-          height: bounds.height,
-          record: drawing,
-        });
-      }
-      const furniture = findDrawingInFragments(page.index, story.fragments, drawingNodeId);
-      if (furniture) {
-        const bounds = furniture.record.paintBounds;
-        return Object.freeze({
-          pageIndex: page.index,
-          x:
-            page.header?.box.x === story.box.x || page.footer?.box.x === story.box.x
-              ? story.box.x + bounds.x - page.contentBox.x
-              : furniture.x,
-          y: story.box.y + bounds.y - page.contentBox.y,
-          width: furniture.width,
-          height: furniture.height,
-          record: furniture.record,
-        });
-      }
-    }
-  }
-  return null;
 }

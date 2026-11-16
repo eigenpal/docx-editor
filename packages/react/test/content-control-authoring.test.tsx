@@ -229,6 +229,34 @@ describe('content-control authoring surface', () => {
     expect(live.dataset.locked).toBe('0');
   });
 
+  test('the shared state keeps its object while the control is unchanged', async () => {
+    const seen: unknown[] = [];
+    function Track() {
+      seen.push(useContentControl());
+      return null;
+    }
+    const mounted = mount(PLAIN, <Track />);
+    caret(mounted, 2);
+    // Typing inside the control changes its text, not its state.
+    const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await act(async () => {
+      await frame();
+      await frame();
+    });
+    const settled = seen.at(-1);
+    const renders = seen.length;
+    for (const text of ['a', 'b']) {
+      await act(async () => {
+        mounted.editor().surface!.type(text);
+        await frame();
+        await frame();
+      });
+    }
+    expect(mounted.editor().surface!.session.bodyText()).toContain('Enab');
+    expect(seen.at(-1)).toBe(settled);
+    expect(seen.length).toBe(renders);
+  });
+
   test('inspector panel reports alias, tag, type, and lock', () => {
     const mounted = mount(PLAIN);
     caret(mounted, 2);

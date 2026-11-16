@@ -10,7 +10,8 @@ import { characterStyleFieldValue } from './field-character-style.ts';
 // Branch order (mutually exclusive keywords, cached result winning where Word trusts it):
 //   1. SYMBOL — synthesized glyph wins over any stale cached text.
 //   2. legacy form field — checkbox from ffData state, dropdown from the selected entry.
-//   3. allowlisted PAGE-family — live value from the page context.
+//   3. allowlisted PAGE-family — live value from the page context, or in the body a placeholder
+//      that document finalize substitutes. A stale cached result never wins.
 //   4. REF — the value resolved from the bookmark target wins over the stale cache; an
 //      unresolvable reference falls through to it instead.
 //   5. cached result — a non-empty cache is what Word last painted; it wins over synthesis.
@@ -23,7 +24,7 @@ import { docPropertyValue } from './field-doc-property.ts';
 import { formFieldResult } from './field-form.ts';
 import {
   pageFieldMarker,
-  pageFieldPlaceholder,
+  pageFieldMeasuredText,
   PAGE_FIELD_PLACEHOLDER,
   projectPageFieldValue,
   type BodyPageFieldContext,
@@ -64,7 +65,7 @@ export interface AtomicSynthesisContext {
   readonly themeFonts?: ThemeFonts;
   readonly documentProperties?: DocumentProperties;
   /**
-   * True in BODY flow, where an empty-cache PAGE/NUMPAGES/SECTIONPAGES paints a placeholder for
+   * True in BODY flow, where a PAGE/NUMPAGES/SECTIONPAGES paints a placeholder for
    * document finalize to substitute. Absent/false in headers, footers, notes and text boxes,
    * which keep their live path or deferral — a placeholder there would never be substituted.
    */
@@ -108,6 +109,26 @@ export function synthesizeAtomicField(
       text: projectPageFieldValue(pending.kind, ctx.pageContext, pending.pageSwitches),
       props: pending.props,
       style: pending.style,
+    };
+  }
+  // A BODY page field (no page context) paints the page it lands on, whatever the file cached:
+  // the value is a property of pagination, so a saved result is stale as soon as the layout
+  // moves. Paint a placeholder now and record the kind so document finalize substitutes the
+  // real value. A result that existed but was hidden stays hidden. Gated on `bodyPageFields`
+  // because headers/footers took the live branch above, and notes / text boxes have no
+  // substitute pass.
+  if (
+    pending.kind &&
+    ctx.bodyPageFields &&
+    (pending.cachedText.length > 0 || !pending.sawResultContent)
+  ) {
+    // The marker records the switches the placeholder was measured through, so finalize
+    // renders the value the same way. The switches do not depend on the section format.
+    return {
+      text: pageFieldMeasuredText(pending.pageSwitches, pending.cachedText),
+      props: pending.props,
+      style: pending.style,
+      pageField: pageFieldMarker(pending.kind, pending.pageSwitches),
     };
   }
   // A REF resolves live from its bookmark target and the resolved numbering — the cached
@@ -168,19 +189,6 @@ export function synthesizeAtomicField(
   }
   // Empty cache: synthesize. A result that existed but was hidden stays hidden.
   if (!pending.sawResultContent) {
-    // A BODY page field (no page context): paint a placeholder now and record the kind so
-    // document finalize substitutes the page's real value. Gated on `bodyPageFields` because
-    // headers/footers took the live branch above, and notes / text boxes have no substitute pass.
-    if (pending.kind && ctx.bodyPageFields) {
-      // The marker records the switches the placeholder was measured through, so finalize
-      // renders the value the same way. The switches do not depend on the section format.
-      return {
-        text: pageFieldPlaceholder(pending.pageSwitches),
-        props: pending.props,
-        style: pending.style,
-        pageField: pageFieldMarker(pending.kind, pending.pageSwitches),
-      };
-    }
     if (pending.docPropertySpec) {
       const value = docPropertyValue(pending.docPropertySpec, ctx.documentProperties);
       if (value !== null) return { text: value, props: pending.props, style: pending.style };

@@ -38,6 +38,7 @@ import { runObservedStoreTransaction } from '../store/package/canonical-primitiv
 import { normalizeParagraphIdentity } from '../store/package/para-id.ts';
 import type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
 import { materializeGlossaryPlaceholders } from '../store/store/placeholder-materialize.ts';
+import { refreshBoundContent } from '../store/store/bound-content-refresh.ts';
 import { TreePackageStore, type StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { ORIGIN_IDS } from '../store/registry/frozen-ids.ts';
@@ -51,10 +52,20 @@ import {
   addPackageComment,
   deletePackageComments,
   setPackageCommentResolved,
+  setPackageCommentTexts,
 } from '../store/store/comment-package-write.ts';
 import { insertPackageCustomNode } from '../store/store/custom-node-package-write.ts';
+import { settingsPartOf } from '../store/package/note-properties.ts';
+import { readTrackingSettings } from '../store/package/tracking-settings.ts';
+import { applyPackageUpdate, packageUpdateLanded } from '../store/store/tree-package-update.ts';
+import {
+  PACKAGE_UPDATE_REFUSALS,
+  replaceDocumentError,
+  type ReplaceDocumentRefusalLike,
+} from './plan-replace-document.ts';
 import type {
   AutomationCommentWriteResult,
+  AutomationDocumentReplaceResult,
   AutomationDocumentPort,
   AutomationPortApplyResult,
   AutomationStagedOps,
@@ -115,6 +126,11 @@ export interface ServerAutomationHostOptions {
    */
   readonly collaborationModel?: CollaborationModuleContribution;
   /**
+   * Document compare engine from the module registry (the review module's). Absent,
+   * `compareFromBase64` refuses.
+   */
+  readonly compareDocuments?: import('../contracts/document-compare.ts').CompareDocumentsEngine;
+  /**
    * Opt-in relaxation of `w:lock` for run-property writes (`setFont`): content-locked controls
    * can be restyled but not retyped. Absent, they refuse both.
    */
@@ -133,31 +149,15 @@ export function createServerAutomationHost(
   bytes: Uint8Array,
   options: ServerAutomationHostOptions = {}
 ): ServerAutomationHostResult {
-  const loaded = readOoxmlPackage(bytes, options.limits ?? {});
-  if (!loaded.ok) {
-    return {
-      ok: false,
-      reason: loaded.reason,
-      ...(loaded.limit === undefined ? {} : { limit: loaded.limit }),
-      ...(loaded.detail ? { detail: loaded.detail } : {}),
-    };
-  }
-  const main = loaded.package.parts.get(loaded.package.mainDocumentPart);
-  if (!main) {
-    return {
-      ok: false,
-      reason: 'no-main-document-part',
-      detail: loaded.package.mainDocumentPart,
-    };
-  }
-  const store = new TreePackageStore(
-    loaded.package,
-    materializeGlossaryPlaceholders(loaded.package, normalizeParagraphIdentity(main)),
-    options.contentLockPolicy ? { contentLockPolicy: options.contentLockPolicy } : {}
-  );
+  const opened = openPackageStore(bytes, options);
+  if (!opened.ok) return opened;
+  const { store } = opened;
   const collaboration = options.collaborationModel?.session;
   let detachCollaboration = (): void => {};
-  const port = packageStorePort(store, collaboration, () => detachCollaboration());
+  const storePort = packageStorePort(store, collaboration, () => detachCollaboration(), options);
+  const port: AutomationDocumentPort = options.compareDocuments
+    ? { ...storePort, compareDocuments: options.compareDocuments }
+    : storePort;
   if (options.pagination) {
     let snapshot: AutomationPaginationSnapshot | undefined;
     let atRevision = -1;
@@ -194,6 +194,103 @@ export function createServerAutomationHost(
     ok: true,
     host,
   };
+}
+
+/**
+ * Open bytes into a store the way this host opens its document: the bounded reader, bound
+ * content refreshed, paragraph identity normalized, and glossary placeholders shown. A
+ * replacement opens the same way, so it differs from the open document only where the file does.
+ */
+function openPackageStore(
+  bytes: Uint8Array,
+  options: Pick<ServerAutomationHostOptions, 'limits' | 'contentLockPolicy'>
+):
+  | { readonly ok: true; readonly store: TreePackageStore }
+  | Extract<ServerAutomationHostResult, { readonly ok: false }> {
+  const loaded = readOoxmlPackage(bytes, options.limits ?? {});
+  if (!loaded.ok) {
+    return {
+      ok: false,
+      reason: loaded.reason,
+      ...(loaded.limit === undefined ? {} : { limit: loaded.limit }),
+      ...(loaded.detail ? { detail: loaded.detail } : {}),
+    };
+  }
+  // Bound controls show their store's current value, not the text cached at save.
+  const pkg = refreshBoundContent(loaded.package);
+  const main = pkg.parts.get(pkg.mainDocumentPart);
+  if (!main) {
+    return {
+      ok: false,
+      reason: 'no-main-document-part',
+      detail: pkg.mainDocumentPart,
+    };
+  }
+  const store = new TreePackageStore(
+    pkg,
+    materializeGlossaryPlaceholders(pkg, normalizeParagraphIdentity(main)),
+    options.contentLockPolicy ? { contentLockPolicy: options.contentLockPolicy } : {}
+  );
+  return { ok: true, store };
+}
+
+/**
+ * Replace the store's document with `docx` as one package update, with the editor command's
+ * refusals. The headless twin of the editor's `replaceDocument`: no viewing or suggesting mode
+ * exists here, but enforced protection and the collaboration room refuse the same way.
+ */
+function replaceStoreDocument(
+  store: TreePackageStore,
+  docx: Uint8Array,
+  collaboration: EditorCollaborationSession | undefined,
+  options: Pick<ServerAutomationHostOptions, 'limits' | 'contentLockPolicy'>
+): AutomationDocumentReplaceResult {
+  const refused = (refusal: ReplaceDocumentRefusalLike): AutomationDocumentReplaceResult => ({
+    ok: false,
+    error: replaceDocumentError(refusal),
+  });
+  const settings = readTrackingSettings(settingsPartOf(store.currentPackage())?.root);
+  if (
+    settings.restrictedToComments ||
+    settings.restrictedToForms ||
+    settings.restrictedToTrackedChanges ||
+    settings.restrictedToReadOnly
+  )
+    return refused({
+      code: 'editNotPermitted',
+      reason: 'protected',
+      message: 'Document protection does not permit an untracked edit.',
+    });
+  const gate = collaboration?.gateOperations([], BODY);
+  if (gate)
+    return refused({
+      code: 'unavailable',
+      reason: 'collaborationUnavailable',
+      message: `The collaboration session cannot accept edits now (${gate}).`,
+    });
+  const opened = openPackageStore(docx, options);
+  if (!opened.ok)
+    return refused({ code: 'invalidDocument', message: 'The bytes are not a valid DOCX file.' });
+  const incoming = opened.store.currentPackage();
+  const result = runWithTransactionActor(collaboration?.identity.actorId, () =>
+    applyPackageUpdate(store, incoming)
+  );
+  if (!result.ok)
+    return refused({
+      code: 'editUnsupported',
+      reason: PACKAGE_UPDATE_REFUSALS[result.reason],
+      message: `The file cannot apply as an edit (${result.reason}).`,
+    });
+  if (!result.change) return { ok: true, changed: false };
+  // Shared state is the authority. A room that refused the edit realigned this replica.
+  collaboration?.flushPendingJournals();
+  if (collaboration && !packageUpdateLanded(store.currentPackage(), incoming))
+    return refused({
+      code: 'editUnsupported',
+      reason: 'collaborationRefused',
+      message: 'The collaboration session refused the edit. The document keeps the shared content.',
+    });
+  return { ok: true, changed: true };
 }
 
 /**
@@ -242,7 +339,8 @@ function mintExternalTarget(
 export function packageStorePort(
   store: TreePackageStore,
   collaboration?: EditorCollaborationSession,
-  detachCollaboration: () => void = () => {}
+  detachCollaboration: () => void = () => {},
+  openOptions: Pick<ServerAutomationHostOptions, 'limits' | 'contentLockPolicy'> = {}
 ): AutomationDocumentPort {
   let live = true;
   let operationCounter = 0;
@@ -377,6 +475,17 @@ export function packageStorePort(
         if (!changed) return { ok: false, reason: 'comment-delete-refused' };
         return published({ ok: true, changed });
       }
+      if (writes.every((write) => write.kind === 'edit')) {
+        const edited = runWithTransactionActor(collaboration?.identity.actorId, () =>
+          setPackageCommentTexts(
+            store,
+            writes.map((write) => ({ commentId: write.commentId, text: write.text }))
+          )
+        );
+        return edited.ok
+          ? published({ ok: true, changed: edited.changed })
+          : { ok: false, reason: edited.reason };
+      }
       if (writes.length !== 1) return { ok: false, reason: 'mixed-comment-writes' };
       const write = writes[0]!;
       // Through the package coordinator for create and reply, so the write enters an observed
@@ -437,6 +546,14 @@ export function packageStorePort(
         };
       }
       return published({ ok: true, changed: result.change !== null });
+    },
+    replaceDocument(docx) {
+      if (!live)
+        return {
+          ok: false,
+          error: replaceDocumentError({ code: 'unavailable', message: 'This host was disposed.' }),
+        };
+      return replaceStoreDocument(store, docx, collaboration, openOptions);
     },
     save: () => (live ? writeOoxmlPackage(store.currentPackage()) : null),
     subscribe: (listener) => store.subscribe(() => listener()),

@@ -145,7 +145,18 @@ export function color(value: string | undefined, fallback: string): string | nul
   if (/^#[\da-f]{6}$/.test(raw)) return raw;
   // The three-digit form doubles each digit, as in CSS.
   if (/^#[\da-f]{3}$/.test(raw)) return '#' + Array.from(raw.slice(1), (d) => d + d).join('');
-  return NAMED_COLORS.get(raw) ?? null;
+  return NAMED_COLORS.get(raw) ?? rgbColor(raw);
+}
+
+/** The CSS `rgb(r, g, b)` form, each channel 0 to 255; null otherwise. */
+function rgbColor(raw: string): string | null {
+  // Bounded digit runs and no nested repeats: no backtracking on a hostile value.
+  const match =
+    /^rgb\(\s{0,8}(\d{1,3})\s{0,8},\s{0,8}(\d{1,3})\s{0,8},\s{0,8}(\d{1,3})\s{0,8}\)$/.exec(raw);
+  if (!match) return null;
+  const channels = match.slice(1, 4).map(Number);
+  if (channels.some((channel) => channel > 255)) return null;
+  return '#' + channels.map((channel) => channel.toString(16).padStart(2, '0')).join('');
 }
 
 /** The sixteen basic color names a VML color attribute can spell. */

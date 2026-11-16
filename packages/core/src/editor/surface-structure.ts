@@ -25,12 +25,9 @@ import {
   type StyleCascadeTable,
 } from '@docx-editor.dev/core/layout';
 import { createListNumberingOps } from './list-numbering-ops.ts';
-import {
-  switchedListNumIds,
-  type ListSwitchDeps,
-  type ListSwitchReads,
-} from './surface-list-switch.ts';
-import { indentSidesOf, styleNumberedIndentSides } from './list-level-geometry.ts';
+import { type ListSwitchDeps, type ListSwitchReads } from './surface-list-switch.ts';
+import { indentSidesOf, isOutlineStyle, styleNumberedIndentSides } from './list-level-geometry.ts';
+import { listToggleOps } from './surface-list-toggle.ts';
 import { sectionAnchorParagraphFor, sectionIndexForCaret } from './section-scope.ts';
 import { isTableNested } from '../store/store/tree-op-section-address.ts';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
@@ -115,12 +112,16 @@ export interface SurfaceStructureDeps extends ListSwitchReads {
    * transaction deleted vetoes the whole transaction.
    */
   deleteSelectionPlan(): RangeDeletionPlan;
+  typingSelectionPlan?(): RangeDeletionPlan & { readonly outsidePromptId?: string };
+  retainPromptBoundary?(controlId?: string): void;
   /** The model text of one paragraph, for telling an empty list item from a filled one. */
   paragraphTextOf(paragraphId: string): string;
   /** Whether `numId` declares `level`, for refusing a demote that would erase the marker. */
   numberingLevelExists(numId: string, level: number): boolean;
   /** For telling whether a paragraph's style numbers it, its own `w:numPr` aside. */
   styleCascade(): StyleCascadeTable | undefined;
+  /** `w:defaultTabStop` in points: one list level per stop when a paragraph joins a list. */
+  defaultTabStopPt(): number;
   /** Paragraph ids in reading order for the active scope. */
   paragraphOrder(): readonly string[];
   /**
@@ -177,6 +178,7 @@ type StructureMethods = Pick<
   | 'canAdjustIndent'
   | 'exitListOnEmptyItem'
   | 'removeListNumber'
+  | 'removeParagraphIndent'
   | 'sectionProperties'
   | 'sectionPropertiesAt'
   | 'sectionAnchorParagraphAt'
@@ -404,9 +406,15 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   const listSwitch: ListSwitchDeps = {
     listGeometryOf: deps.listGeometryOf,
     listLevelKindOf: deps.listLevelKindOf,
+    listLevelStyleOf: deps.listLevelStyleOf,
+    listAbstractOf: deps.listAbstractOf,
     order: orderOf,
     markerOf,
     ensureListDefinition: (kind, geometry) => session.ensureListDefinition(kind, geometry),
+    headingLevel: (numId, level) => {
+      const styleId = deps.listLevelStyleOf(numId, level);
+      return styleId !== null && isOutlineStyle(deps.styleCascade(), styleId);
+    },
     indentOf: (paragraphId) => paragraphIndentOf(currentLayout.value, paragraphId)?.indent ?? null,
     directIndentSides: (paragraphId) =>
       indentSidesOf(directParagraphProperties(storyPart(), paragraphId)),
@@ -479,7 +487,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         const next = level + step;
         if (next < 0 || next > MAX_LIST_LEVEL) continue;
         if (!ensureListLevel(marker, next)) continue;
-        ops.push(listNumbering.levelOp(paragraphId, marker.numId, next));
+        ops.push(...listNumbering.levelOps(paragraphId, marker.numId, level, next));
         continue;
       }
       // The step moves from the EFFECTIVE indent (what the user sees, cascade included),
@@ -545,60 +553,48 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     return commitOverTarget(() => applyOps(ops, selectionMark()));
   }
 
+  function insertInlineUnit(op: 'insertTab' | 'insertHardBreak' | 'insertPageBreak'): void {
+    const plan: RangeDeletionPlan & { readonly outsidePromptId?: string } =
+      deps.typingSelectionPlan?.() ?? deleteSelectionPlan();
+    const start = plan.replaceAt ?? plan.collapseTo;
+    commit(
+      () =>
+        applyOps(
+          [
+            ...plan.ops,
+            {
+              op,
+              paragraphId: start.paragraphId,
+              offset: start.offset,
+              ...(plan.outsidePromptId ? { bias: 'left' as const } : {}),
+            },
+          ],
+          selectionMark()
+        ),
+      () => {
+        deps.retainPromptBoundary?.(plan.outsidePromptId);
+        return collapsedAt({ ...start, offset: start.offset + 1 });
+      }
+    );
+  }
+
   return {
     // The three inline units below REPLACE a selection, so they land at the plan's
     // `replaceAt`: in suggesting mode a deletion keeps the characters it strikes, and an
     // insert at the range start sat in FRONT of the struck words instead of after them.
     insertTab() {
-      const plan = deleteSelectionPlan();
-      const start = plan.replaceAt ?? plan.collapseTo;
-      commit(
-        () =>
-          applyOps(
-            [
-              ...plan.ops,
-              { op: 'insertTab', paragraphId: start.paragraphId, offset: start.offset },
-            ],
-            selectionMark()
-          ),
-        () => collapsedAt({ ...start, offset: start.offset + 1 })
-      );
+      insertInlineUnit('insertTab');
     },
-
     insertLineBreak() {
-      const plan = deleteSelectionPlan();
-      const start = plan.replaceAt ?? plan.collapseTo;
-      commit(
-        () =>
-          applyOps(
-            [
-              ...plan.ops,
-              { op: 'insertHardBreak', paragraphId: start.paragraphId, offset: start.offset },
-            ],
-            selectionMark()
-          ),
-        () => collapsedAt({ ...start, offset: start.offset + 1 })
-      );
+      insertInlineUnit('insertHardBreak');
     },
-
     insertPageBreak() {
-      const plan = deleteSelectionPlan();
-      const start = plan.replaceAt ?? plan.collapseTo;
-      commit(
-        () =>
-          applyOps(
-            [
-              ...plan.ops,
-              { op: 'insertPageBreak', paragraphId: start.paragraphId, offset: start.offset },
-            ],
-            selectionMark()
-          ),
-        () => collapsedAt({ ...start, offset: start.offset + 1 })
-      );
+      insertInlineUnit('insertPageBreak');
     },
 
     exitListOnEmptyItem: listExit.exitListOnEmptyItem,
     removeListNumber: listExit.removeListNumber,
+    removeParagraphIndent: listExit.removeParagraphIndent,
 
     isListParagraph() {
       const { paragraphId } = orderedStart();
@@ -617,31 +613,21 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     toggleList(kind) {
       const touched = targetParagraphs();
       if (touched === null || touched.length === 0) return false;
-      // Word toggles OFF only when the whole selection is already that list; a mixed
-      // selection becomes one list rather than clearing half of it.
-      const turningOff = touched.every((paragraphId) => listKindOf(paragraphId) === kind);
-      const numIds = turningOff ? null : switchedListNumIds(listSwitch, touched, kind);
-      if (!turningOff && numIds === null) return false;
-      // Turning a list OFF leaves the style alone, as Word does: an outdented item stays
-      // in List Paragraph until the user picks another style.
-      const ops: TreeDocOp[] = turningOff ? [] : listStyle.applyOps(touched);
-      for (const paragraphId of touched) {
-        if (turningOff) {
-          ops.push(listNumbering.leaveOp(paragraphId));
-          continue;
-        }
-        // `w:numPr` carries the level AND the definition, and the op mints a fresh one, so
-        // a call that names no level silently resets `w:ilvl` to 0. Word converts a bullet
-        // to a number IN PLACE: pressing Numbered on a level-2 item left it at level 2,
-        // where this flattened it to the left margin two levels out.
-        const level = listLevelOf(paragraphId);
-        ops.push({
-          op: 'setListNumbering',
-          paragraphId,
-          numId: numIds?.get(paragraphId) ?? null,
-          ...(level !== null ? { level } : {}),
-        });
-      }
+      const ops = listToggleOps(
+        {
+          listSwitch,
+          listStyle,
+          leaveOp: listNumbering.leaveOp,
+          levelOf: listLevelOf,
+          kindOf: listKindOf,
+          styleCascade: deps.styleCascade,
+          indentOf: listSwitch.indentOf,
+          defaultTabStopPt: deps.defaultTabStopPt,
+        },
+        touched,
+        kind
+      );
+      if (ops === null) return false;
       return commitOverTarget(() => applyOps(ops, selectionMark()));
     },
 

@@ -1,3 +1,4 @@
+import { DIAGRAM_RESCALE_REFUSAL, stageDiagramRescale } from './tree-op-diagram-drawing.ts';
 import { drawingAtomProjection } from '../package/drawing-atom-projection.ts';
 // Package-wide image intents: insert, replace, delete, external embed (task 12).
 //
@@ -53,6 +54,8 @@ import type { PackageTransactResult, StoryScope, TreePackageStore } from './tree
 import type { TransactionContext, TreeDocumentStore, TreeStoryRef } from './tree-store.ts';
 
 export interface InsertImageInput {
+  /** Explicit left bias inserts before a leading prompt. */
+  readonly bias?: 'left' | 'right';
   readonly paragraphId: string;
   readonly offset: number;
   readonly bytes: Uint8Array;
@@ -142,7 +145,8 @@ function resolveEmbedMediaPart(
   return resolved.mode === 'internal' ? resolved.partName : null;
 }
 
-interface ImageTransactOptions {
+/** Options of a package drawing transaction. */
+export interface ImageTransactOptions {
   readonly expectedPackageRevision?: number;
   readonly commitGuard?: () => boolean;
   /**
@@ -153,7 +157,11 @@ interface ImageTransactOptions {
   readonly actorId?: string;
 }
 
-function transactPackageImage(
+/**
+ * Commit one package edit and story op build as ONE package undo unit. `build` returns the new
+ * drawing node id, or null to abort. Shared by the picture and chart lanes.
+ */
+export function transactPackageImage(
   store: TreePackageStore,
   scope: StoryScope,
   build: (ctx: TransactionContext, ownerPartName: string) => string | null,
@@ -386,6 +394,7 @@ export async function insertImage(
       if (
         !ctx.apply({
           op: 'insertDrawing',
+          ...(input.bias ? { bias: input.bias } : {}),
           paragraphId: input.paragraphId,
           offset: input.offset,
           drawing: drawing as OoxmlDrawingNode,
@@ -517,7 +526,7 @@ export function deleteImage(
   const part = pkg.parts.get(ownerPartName);
   const projection =
     drawingProjection(pkg, ownerPartName, drawingNodeId) ??
-    (part ? drawingAtomProjection(part, drawingNodeId) : null);
+    (part ? drawingAtomProjection(part, drawingNodeId, pkg) : null);
   if (!projection) return { ok: false, reason: 'unknown-drawing' };
   const embedRel = projection.picture?.embeddedRelationshipId ?? null;
   const linkRel = projection.picture?.linkedRelationshipId ?? null;
@@ -771,7 +780,8 @@ export function applyImagePropertiesIntent(
   const blocked = imageIntentBlockedDuringComposition(store, resolved.store);
   if (blocked) return blocked;
 
-  return transactPackageImage(store, scope, (ctx, owner) => {
+  let rescaleRefused = false;
+  const outcome = transactPackageImage(store, scope, (ctx, owner) => {
     const previousHyperlinkRelId = drawingHyperlinkRelationshipId(
       store.currentPackage(),
       owner,
@@ -786,6 +796,11 @@ export function applyImagePropertiesIntent(
     }
 
     for (const op of input.ops) {
+      // A diagram resize also rescales the diagram's saved drawing part.
+      if (!stageDiagramRescale(ctx, owner, op)) {
+        rescaleRefused = true;
+        return null;
+      }
       if (!ctx.apply(op)) return null;
     }
 
@@ -817,6 +832,8 @@ export function applyImagePropertiesIntent(
 
     return input.drawingNodeId;
   });
+  if (!rescaleRefused) return outcome;
+  return { ok: false, reason: 'invalidArgs', detail: DIAGRAM_RESCALE_REFUSAL };
 }
 
 export type { ExternalImageFetchPort };

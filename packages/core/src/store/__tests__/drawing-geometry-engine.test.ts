@@ -8,6 +8,7 @@ import { PRESET_SHAPE_SOURCE } from '../package/drawing-preset-table.ts';
 import {
   customGeometryDefinition,
   evaluateGeometry,
+  FLATTEN_TOLERANCE_EMU,
   MAX_GEOMETRY_COMMANDS,
   presetGeometryDefinition,
   type EvaluatedGeometry,
@@ -250,7 +251,6 @@ describe('custom geometry', () => {
           '<a:quadBezTo><a:pt x="100000" y="200000"/><a:pt x="200000" y="0"/></a:quadBezTo>' +
           '<a:cubicBezTo><a:pt x="200000" y="100000"/><a:pt x="0" y="100000"/>' +
           '<a:pt x="0" y="0"/></a:cubicBezTo><a:close/>' +
-          '<a:lnTo><a:pt x="100" y="100"/></a:lnTo>' +
           '</a:path></a:pathLst>'
       )
     )!;
@@ -262,12 +262,132 @@ describe('custom geometry', () => {
     expect(peak).toBeLessThanOrEqual(200000 + 1e-6);
     expect(curve.at(-1)).toEqual({ x: 0, y: 0 });
     expect(geometry.paths[0]!.subpaths[0]!.closed).toBe(true);
-    // A command after close continues from the closed subpath's start.
-    expectPoints(points(geometry, 0, 1), [
-      [0, 0],
-      [200, 200],
-    ]);
     expect(geometry.textRect).toEqual({ left: 0, top: 0, right: 200000, bottom: 400000 });
+  });
+
+  test('a custom command without a current point leaves the shape with no paths', () => {
+    // ECMA-376 Part 1, 20.1.9: only moveTo sets the current point. The other cases are in
+    // drawing-vector-paths.test.ts.
+    const geometry = evaluateGeometry(
+      customGeometryDefinition(
+        custGeom(
+          '<a:rect l="l" t="t" r="r" b="b"/><a:pathLst><a:path>' +
+            '<a:lnTo><a:pt x="100" y="0"/></a:lnTo><a:lnTo><a:pt x="100" y="100"/></a:lnTo>' +
+            '<a:close/></a:path></a:pathLst>'
+        )
+      )!,
+      1000,
+      1000
+    )!;
+    expect(geometry.paths).toEqual([]);
+    expect(geometry.textRect).toEqual({ left: 0, top: 0, right: 1000, bottom: 1000 });
+  });
+
+  test('presets that draw after close continue from the closed subpath start', () => {
+    // The ECMA-376 annex writes the accent callout bar as `M x1 t Z L x1 b`.
+    const callout = preset('accentCallout1');
+    const bar = callout.paths[1]!;
+    expect(bar.subpaths.length).toBe(2);
+    expect(bar.subpaths[1]!.points[0]).toEqual(bar.subpaths[0]!.points[0]);
+    expect(bar.subpaths[1]!.points.at(-1)!.y).toBeCloseTo(H, 3);
+  });
+
+  test('arcTo sweeps beyond one turn keep the one-turn chord sag and the end point', () => {
+    // Circle of radius 500 000 EMU centred in a 1 000 000 EMU square, from 0°. Before the
+    // sweep was bounded, its worst chord sag was 622 EMU at 1 turn, 59 039 EMU at 10 turns
+    // and 402 455 EMU at 100 turns.
+    const arc = (swAng: number) => {
+      const definition = customGeometryDefinition(
+        custGeom(
+          '<a:pathLst><a:path><a:moveTo><a:pt x="1000000" y="500000"/></a:moveTo>' +
+            `<a:arcTo wR="500000" hR="500000" stAng="0" swAng="${swAng}"/></a:path></a:pathLst>`
+        )
+      )!;
+      return points(evaluateGeometry(definition, 1000000, 1000000)!);
+    };
+    const worstSag = (outline: readonly GeometryPoint[]) => {
+      let sag = 0;
+      for (let index = 1; index < outline.length; index += 1) {
+        const midX = (outline[index - 1]!.x + outline[index]!.x) / 2;
+        const midY = (outline[index - 1]!.y + outline[index]!.y) / 2;
+        sag = Math.max(sag, 500000 - Math.hypot(midX - 500000, midY - 500000));
+      }
+      return sag;
+    };
+    const turn = 21600000;
+    const oneTurn = worstSag(arc(turn));
+    expect(Math.round(oneTurn)).toBe(622);
+    for (const swAng of [10 * turn, 100 * turn, -10 * turn]) {
+      const outline = arc(swAng);
+      expect(worstSag(outline)).toBeCloseTo(oneTurn, 3);
+      expect(outline.length).toBeLessThanOrEqual(129);
+      expect(outline.at(-1)!.x).toBeCloseTo(1000000, 3);
+      expect(outline.at(-1)!.y).toBeCloseTo(500000, 3);
+    }
+    // 10.25 turns end a quarter turn on, at the bottom of the circle.
+    const quarterPast = arc(10 * turn + turn / 4);
+    expect(worstSag(quarterPast)).toBeLessThan(FLATTEN_TOLERANCE_EMU);
+    expect(quarterPast.at(-1)!.x).toBeCloseTo(500000, 3);
+    expect(quarterPast.at(-1)!.y).toBeCloseTo(1000000, 3);
+  });
+
+  test('arcTo of exactly one turn keeps one chord budget at every start angle', () => {
+    // At 112.5° the ellipse parameter span rounds to just above one turn; the chord count
+    // still follows the visual sweep, so the circle has the same points as one from 0°.
+    const circle = (stAng: number) =>
+      points(
+        evaluateGeometry(
+          customGeometryDefinition(
+            custGeom(
+              '<a:pathLst><a:path><a:moveTo><a:pt x="1000000" y="500000"/></a:moveTo>' +
+                `<a:arcTo wR="500000" hR="500000" stAng="${stAng}" swAng="21600000"/>` +
+                '</a:path></a:pathLst>'
+            )
+          )!,
+          1000000,
+          1000000
+        )!
+      );
+    const fromZero = circle(0).length;
+    for (const stAng of [6750000, 17550000, -21600000]) {
+      expect(circle(stAng).length).toBe(fromZero);
+    }
+  });
+
+  test('arcTo sweeps beyond one turn keep the parity of their turns', () => {
+    // An even-odd fill paints a region that the loops wind an odd number of times, so the
+    // bounded sweep drops turns only in pairs and keeps at least one full turn.
+    const turns = (swAng: number) => {
+      const outline = points(
+        evaluateGeometry(
+          customGeometryDefinition(
+            custGeom(
+              '<a:pathLst><a:path><a:moveTo><a:pt x="1000000" y="500000"/></a:moveTo>' +
+                `<a:arcTo wR="500000" hR="500000" stAng="0" swAng="${swAng}"/>` +
+                '</a:path></a:pathLst>'
+            )
+          )!,
+          1000000,
+          1000000
+        )!
+      );
+      // Count crossings of the ray from the centre along +y (x = 500 000, y > 500 000).
+      let crossings = 0;
+      for (let index = 1; index < outline.length; index += 1) {
+        const a = outline[index - 1]!;
+        const b = outline[index]!;
+        if (a.y > 500000 && b.y > 500000 && a.x < 500000 !== b.x < 500000) crossings += 1;
+      }
+      return crossings;
+    };
+    const turn = 21600000;
+    expect(turns(turn)).toBe(1);
+    expect(turns(2 * turn)).toBe(2);
+    expect(turns(3 * turn) % 2).toBe(1);
+    expect(turns(12 * turn) % 2).toBe(0);
+    expect(turns(13 * turn) % 2).toBe(1);
+    expect(turns(-12 * turn) % 2).toBe(0);
+    expect(turns(12 * turn)).toBeGreaterThan(0);
   });
 
   test('unknown verbs, operators and oversized command lists refuse', () => {

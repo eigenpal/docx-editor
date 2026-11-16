@@ -11,7 +11,8 @@ export type DefaultFontFamily =
   | 'Times New Roman'
   | 'Arial'
   | 'Courier New'
-  | 'Century Gothic';
+  | 'Century Gothic'
+  | 'Segoe UI';
 
 /** A line box as em ratios, matching the editor contract's `lineMetrics`. */
 export interface LineBox {
@@ -24,6 +25,11 @@ export interface FamilyPlan {
   readonly substitute: string;
   readonly filePrefix: string;
   readonly extension?: 'otf';
+  /**
+   * The substitute ships no italic faces. Italic runs map to its upright faces, which the
+   * renderer slants.
+   */
+  readonly uprightOnly?: true;
   /**
    * Word's line box for the REQUESTED family, when the substitute's own vertical metrics
    * differ. Omitted means the substitute's `hhea` already agrees.
@@ -73,6 +79,18 @@ export const FAMILY_PLANS: ReadonlyMap<DefaultFontFamily, FamilyPlan> = new Map(
       },
     },
   ],
+  [
+    'Segoe UI',
+    {
+      // Selawik's advance widths equal Segoe UI's (checked against the subsets Word embeds
+      // in its own PDF export). Its own `hhea` is 1.2 em; Segoe UI's line is
+      //   ascender 2210  descender -514  gap 0, over 2048 units per em.
+      substitute: 'Selawik',
+      filePrefix: 'Selawik',
+      uprightOnly: true,
+      lineMetrics: { 400: { heightEm: 2724 / 2048, baselineEm: 2210 / 2048 } },
+    },
+  ],
 ]);
 
 export const FACES: readonly {
@@ -85,6 +103,18 @@ export const FACES: readonly {
   { suffix: 'Italic', weight: 400, style: 'italic' },
   { suffix: 'BoldItalic', weight: 700, style: 'italic' },
 ];
+
+/**
+ * The packaged face that serves `face` of `plan`: the face itself, or its upright twin when
+ * the plan ships no italics.
+ */
+export const planSourceFace = (
+  plan: FamilyPlan,
+  face: (typeof FACES)[number]
+): (typeof FACES)[number] =>
+  plan.uprightOnly && face.style === 'italic'
+    ? FACES.find((upright) => upright.style === 'normal' && upright.weight === face.weight)!
+    : face;
 
 /** The asset filename for one face of one plan. */
 export const planFaceFile = (plan: FamilyPlan, suffix: string): string =>
@@ -100,4 +130,56 @@ export const planFaceFile = (plan: FamilyPlan, suffix: string): string =>
  */
 export const PACKAGED_ONLY_FAMILIES: readonly DefaultFontFamily[] = Object.freeze([
   'Century Gothic',
+  'Segoe UI',
 ]);
+
+/** One of the four packaged faces for each requested weight and style, in `FACES` order. */
+export function packagedFaces(
+  styles: readonly { readonly weight: number; readonly style: 'normal' | 'italic' }[]
+): readonly (typeof FACES)[number][] {
+  return FACES.filter((face) =>
+    styles.some(
+      (style) => (style.weight >= 600 ? 700 : 400) === face.weight && style.style === face.style
+    )
+  );
+}
+
+/**
+ * The packaged faces that `faces` asks for under a declared family name, matched
+ * case-insensitively, or all four faces when the request lists none.
+ */
+export function facesNeeded(
+  faces:
+    | readonly {
+        readonly family: string;
+        readonly weight: number;
+        readonly style: 'normal' | 'italic';
+      }[]
+    | undefined
+): (declared: string) => readonly (typeof FACES)[number][] {
+  if (!faces) return () => FACES;
+  const byFamily = new Map<string, { weight: number; style: 'normal' | 'italic' }[]>();
+  for (const face of faces) {
+    const fold = face.family.trim().toLowerCase();
+    byFamily.set(fold, [...(byFamily.get(fold) ?? []), face]);
+  }
+  return (declared) => packagedFaces(byFamily.get(declared.trim().toLowerCase()) ?? []);
+}
+
+/**
+ * The packaged faces of `family` that no earlier origin paints, under the Word name or under
+ * the substitute's own name. `covered` answers for one face key.
+ */
+export function uncoveredFaces(
+  family: string,
+  plan: FamilyPlan,
+  covered: (family: string, weight: number, style: string) => boolean
+): readonly (typeof FACES)[number][] {
+  return FACES.filter((face) => {
+    const source = planSourceFace(plan, face);
+    return (
+      !covered(family, face.weight, face.style) &&
+      !covered(plan.substitute, source.weight, source.style)
+    );
+  });
+}

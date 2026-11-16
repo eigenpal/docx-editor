@@ -4,7 +4,6 @@ import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
 } from '@docx-editor.dev/core/store';
-import { shadingFillFromElement } from './ooxml-shading.ts';
 import {
   MAX_TABLE_ROW_HEIGHT_PT,
   type TableRowHeight,
@@ -54,10 +53,6 @@ export function readVMerge(
   const vMerge = cellProperties && childNamed(cellProperties, 'vMerge');
   if (!vMerge) return 'none';
   return attributeValue(vMerge, 'val') === 'restart' ? 'restart' : 'continue';
-}
-
-export function readShading(cellProperties: OoxmlElement | undefined): string | undefined {
-  return shadingFillFromElement(cellProperties && childNamed(cellProperties, 'shd'));
 }
 
 /**

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -26,6 +26,8 @@ test('both public entries require nullable review dates to be narrowed', () => {
   expectTypeOf<ServerComment['creationDate']>().toEqualTypeOf<Date | null>();
   expectTypeOf<ServerCommentReply['creationDate']>().toEqualTypeOf<Date | null>();
   expectTypeOf<ServerRevision['date']>().toEqualTypeOf<Date | null>();
+  expectTypeOf<ServerComment['content']>().toEqualTypeOf<string>();
+  expectTypeOf<ServerCommentReply['content']>().toEqualTypeOf<string>();
   expectTypeOf<ServerComment['delete']>().toEqualTypeOf<() => void>();
   expectTypeOf<ServerCommentReply['delete']>().toEqualTypeOf<() => void>();
 

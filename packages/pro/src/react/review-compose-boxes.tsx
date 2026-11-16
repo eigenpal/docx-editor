@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -33,7 +33,7 @@ interface ComposePartDeps {
     readonly drafting: boolean;
     readonly composeTop: number | null;
     readonly composeLeft: number | null;
-    readonly measure: (node: HTMLElement | null, key: string) => void;
+    readonly slotRef: (key: string) => (node: HTMLElement | null) => void;
     readonly readOnly: boolean;
     readonly draftAuthor: string | null;
     readonly draftAuthorInfo: ReviewAuthorInfo | undefined;
@@ -99,7 +99,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
   ReviewDraft.docxReviewPart = 'Draft' as const;
 
   function ReviewDraftBox({ top, left = null, className }: ReviewDraftProps & { top: number }) {
-    const { review, endDraft, measure, readOnly, draftAuthor, draftAuthorInfo, draftAuthorSlot } =
+    const { review, endDraft, slotRef, readOnly, draftAuthor, draftAuthorInfo, draftAuthorSlot } =
       deps.useRail();
     const t = deps.useLabel();
     const [text, setText] = useState('');
@@ -146,9 +146,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
           top,
           ...(left === null ? {} : { left, width: COMPACT_CARD_WIDTH }),
         }}
-        ref={(node) => {
-          measure(node, deps.composeKey);
-        }}
+        ref={slotRef(deps.composeKey)}
       >
         <div
           className="docx-review__card"
@@ -177,6 +175,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
               ref={fieldRef}
               data-testid="review-draft-input"
               className="docx-review__input"
+              autoComplete="off"
               value={text}
               placeholder={t('comments.addComment')}
               readOnly={readOnly}
@@ -311,6 +310,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
           id={fieldId}
           data-testid="review-reply-input"
           className="docx-review__input"
+          autoComplete="off"
           value={draft}
           placeholder={t('comments.replyPlaceholder')}
           readOnly={readOnly}

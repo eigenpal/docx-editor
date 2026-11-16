@@ -174,9 +174,8 @@ function withAttributes(
   const plain = (a: OoxmlAttribute) => !a.namespaceUri && values.has(a.localName);
   const kept = attributes.filter((a) => !plain(a) || values.get(a.localName) !== '');
   // Only unqualified attributes are rewritten, and those are the generic kind.
-  const next = kept.map(
-    (a): OoxmlAttribute =>
-      plain(a) ? ({ ...a, value: values.get(a.localName)! } as OoxmlAttribute) : a
+  const next = kept.map((a): OoxmlAttribute =>
+    plain(a) ? ({ ...a, value: values.get(a.localName)! } as OoxmlAttribute) : a
   );
   for (const [localName, value] of values) {
     if (value === '' || next.some((a) => !a.namespaceUri && a.localName === localName)) continue;

@@ -437,8 +437,8 @@ test('an exact-height source is refused before any placement', () => {
     fragment.rows.every((row) => !row.isContinuation && !row.hasContinuation)
   );
   expect(complete.length).toBeGreaterThan(0);
-  const descriptors = complete.map(
-    (fragment) => Object.getOwnPropertyDescriptor(fragment, 'rows')!
+  const descriptors = complete.map((fragment) =>
+    Object.getOwnPropertyDescriptor(fragment, 'rows')!
   );
   for (const fragment of complete) {
     markTableWithoutSplitRows(fragment);

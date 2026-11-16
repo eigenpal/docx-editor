@@ -27,6 +27,18 @@ describe('every D8 run property resolves', () => {
     expect(resolve('rFonts', { asciiTheme: 'minorHAnsi' }).fontFamily).toBeNull();
   });
 
+  test('a name written as a list paints in its first item, an unusable one in Cambria', () => {
+    expect(resolve('rFonts', { ascii: 'Verdana, Geneva, sans-serif' }).fontFamily).toBe('Verdana');
+    // A quoted first item names no face, so the text paints in the unmatched face.
+    expect(resolve('rFonts', { ascii: '"Open Sans", sans-serif' }).fontFamily).toBe('Cambria');
+    expect(resolve('rFonts', { cs: '"Calibri", Arial' }).complexLane?.fontFamily).toBe('Cambria');
+    // Length alone does not change the face: a name past every bound paints in Cambria too.
+    expect(resolve('rFonts', { ascii: 'A'.repeat(100) }).fontFamily).toBe('Cambria');
+    expect(resolve('rFonts', { ascii: 'A'.repeat(2000) }).fontFamily).toBe('Cambria');
+    // A vertical-writing name is read as written.
+    expect(resolve('rFonts', { eastAsia: '@MS Gothic' }).fontFamilyEastAsia).toBe('@MS Gothic');
+  });
+
   test('half-point size becomes points', () => {
     expect(resolve('sz', { val: '22' }).fontSizePt).toBe(11);
     expect(resolve('sz', { val: '36' }).fontSizePt).toBe(18);

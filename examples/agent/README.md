@@ -1,6 +1,6 @@
 # Agent example: Roast My Doc
 
-This app uses a language model to read an open DOCX and add comments to selected phrases. Saving the document preserves those comments for Microsoft Word.
+This app uses a language model to read an open DOCX and add comments to selected phrases. Saving the document preserves those comments for other DOCX applications.
 
 The agent can read and comment. Its tool catalog does not expose text edits.
 

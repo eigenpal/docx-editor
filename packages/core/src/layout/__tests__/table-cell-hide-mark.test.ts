@@ -45,6 +45,9 @@ const styles = (body: string) =>
 const style = (id: string, content: string, base = '') =>
   `<w:style w:type="table" w:styleId="${id}">${base ? `<w:basedOn w:val="${base}"/>` : ''}${content}</w:style>`;
 const geometry = { width: 150, height: 100, margin: { top: 0, bottom: 0, left: 0, right: 0 } };
+/** The table's lines: the empty paragraph the body reads after its final table comes last. */
+const cellLinesOf = (result: Parameters<typeof linesOf>[0]) => linesOf(result).slice(0, -1);
+
 function run(body: string, styleCascade?: ReturnType<typeof styles>) {
   const source = documentPart(body),
     before = serializeOoxmlPart(source);
@@ -79,7 +82,7 @@ for (const [value, hidden] of [
 test('an empty cell keeps its line box when the end marker does not set a row minimum', () => {
   const result = run(table(row(cell(paragraph())) + row(cell(paragraph(text)))));
   expect(rows(result).map((r) => r.box.height)).toEqual([20, 5]);
-  expect(linesOf(result)).toHaveLength(2);
+  expect(cellLinesOf(result)).toHaveLength(2);
   expect(linesOf(result)[0]!.range).toMatchObject({ start: 0, end: 0 });
   expect(linesOf(result)[0]!.box.height).toBe(20);
   expect(linesOf(result)[0]!.baseline).toBe(16);
@@ -244,7 +247,7 @@ test('hidden markers retain manual line breaks and earlier printable text', () =
       row(cell(paragraph('<w:r><w:rPr><w:sz w:val="10"/></w:rPr><w:t>Small</w:t><w:br/></w:r>')))
     )
   );
-  expect(linesOf(result).map((line) => line.box.height)).toEqual([5, 20]);
+  expect(cellLinesOf(result).map((line) => line.box.height)).toEqual([5, 20]);
   expect(rows(result)[0]!.box.height).toBe(25);
 });
 
@@ -342,7 +345,7 @@ test('hideMark keeps a terminal inline picture and its source position', () => {
 test('empty paragraphs before a hidden mark take part in row pagination', () => {
   const result = run(table(row(cell(paragraph().repeat(7)))));
   expect(result.pages).toHaveLength(2);
-  const lines = linesOf(result);
+  const lines = cellLinesOf(result);
   expect(lines).toHaveLength(7);
   for (const [index, line] of lines.entries()) {
     expect(line.box.height).toBe(index === lines.length - 1 ? 0 : 20);

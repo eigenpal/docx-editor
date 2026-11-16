@@ -1,0 +1,207 @@
+{
+  "config": "trackedStructuresSequential",
+  "seed": 73,
+  "replicas": 3,
+  "delivery": "in-order",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 4,
+          "text": "m ",
+          "revision": {
+            "author": "Author 0",
+            "date": "2026-01-01T06:53:15Z"
+          }
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "acceptRevision",
+          "revision": {
+            "id": "30",
+            "author": "Counterparty",
+            "date": "2025-12-07T00:00:00Z"
+          },
+          "localName": "del"
+        },
+        "paragraphs": [8]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "acceptRevision",
+          "revision": {
+            "id": "51",
+            "author": "Counterparty",
+            "date": "2025-12-04T00:00:00Z"
+          },
+          "localName": "del"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 2,
+          "text": "r",
+          "revision": {
+            "author": "Author 0",
+            "date": "2026-01-01T11:04:24Z"
+          }
+        },
+        "paragraphs": [8]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "row",
+        "table": 0,
+        "row": 0,
+        "op": {
+          "op": "insertTableRow",
+          "tableId": "",
+          "rowId": "",
+          "where": "below"
+        }
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteBlock",
+          "blockId": ""
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteBlock",
+          "blockId": ""
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteBlock",
+          "blockId": ""
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 1,
+          "end": 3,
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T07:18:23Z"
+          }
+        },
+        "paragraphs": [7]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "acceptAllRevisions",
+          "siteNodeIds": []
+        },
+        "targets": [
+          {
+            "field": "siteNodeIds",
+            "localName": "ins",
+            "index": 0,
+            "array": true,
+            "identity": {
+              "id": "98186",
+              "author": "Author 0",
+              "date": "2026-01-01T11:04:24Z"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "row",
+        "table": 0,
+        "row": 2,
+        "op": {
+          "op": "insertTableRow",
+          "tableId": "",
+          "rowId": "",
+          "where": "above"
+        }
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 2,
+          "text": "rem",
+          "revision": {
+            "author": "Author 0",
+            "date": "2026-01-01T01:05:43Z"
+          }
+        },
+        "paragraphs": [8]
+      }
+    }
+  ]
+}

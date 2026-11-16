@@ -19,8 +19,7 @@ const SCHEME_RE = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
  * CSS, navigation or fetch, so `javascript:`, `data:` and `vbscript:` never leave the boundary.
  */
 export type HrefProjection =
-  | { readonly ok: true; readonly href: string }
-  | { readonly ok: false; readonly inert: true };
+  { readonly ok: true; readonly href: string } | { readonly ok: false; readonly inert: true };
 
 /**
  * Project a file-derived URL for a DOM/navigation sink. Strips embedded

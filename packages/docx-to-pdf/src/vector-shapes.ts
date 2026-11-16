@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -28,6 +28,10 @@ export function paintVectorShape(
 ): string {
   const d = visit.drawing;
   const shape = d.vectorShape!;
+  // An empty point has no paint, even when effect extents give it a nonempty clip.
+  // Keep nonzero extents on the normal path so transparent shapes retain their hyperlinks.
+  if (shape.components.length === 0 && shape.extentEmu.cx === 0 && shape.extentEmu.cy === 0)
+    return '';
   const painted = visit.absolutePaintBounds;
   // The clip grows past the paint bounds only where an outline reaches over the extent edge,
   // which also gives a straight line with no width of its own a box to paint in.

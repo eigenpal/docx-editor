@@ -1,5 +1,7 @@
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { withRuleWidths } from './horizontal-rule.ts';
+import type { TextboxStoryLayouter } from './inline-textbox-flow.ts';
+import { withFittedInlineTextboxes } from './textbox-placement.ts';
 
 /** Keep projected boundary content while trimming already placed model text. */
 export function paragraphContinuationPieces(
@@ -30,12 +32,23 @@ export function paragraphContinuationPieces(
   });
 }
 
-/** The continuation pieces, with each horizontal rule sized to the line width `widthPt`. */
+/**
+ * The continuation pieces, with each horizontal rule sized to the line width `widthPt` and
+ * each inline text box that fits its text sized to that text.
+ */
 export function continuationPiecesWithRules(
   pieces: readonly FieldAwarePiece[],
   startOffset: number,
-  showFieldCodes: boolean | undefined,
+  flow:
+    | {
+        readonly showFieldCodes?: boolean;
+        readonly layoutTextboxStory?: TextboxStoryLayouter;
+      }
+    | undefined,
   widthPt: number
 ): FieldAwarePiece[] {
-  return withRuleWidths(paragraphContinuationPieces(pieces, startOffset, showFieldCodes), widthPt);
+  return withFittedInlineTextboxes(
+    withRuleWidths(paragraphContinuationPieces(pieces, startOffset, flow?.showFieldCodes), widthPt),
+    flow?.layoutTextboxStory
+  );
 }

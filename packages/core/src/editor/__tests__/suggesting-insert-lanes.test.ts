@@ -146,12 +146,14 @@ describe('insert lanes in suggesting mode', () => {
       // placed beside the link meant accepting the pair emptied and swept it, silently
       // unlinking the accepted text.
       expect(xml).toMatch(
-        /<w:hyperlink[^>]*><w:del[^>]*><w:r><w:delText[^>]*>Docs<\/w:delText><\/w:r><\/w:del><w:ins[^>]*><w:r><w:t[^>]*>Guide<\/w:t><\/w:r><\/w:ins><\/w:hyperlink>/
+        /<w:hyperlink[^>]*><w:del[^>]*><w:r>(?:<w:rPr><w:rStyle w:val="Hyperlink"\/><\/w:rPr>)?<w:delText[^>]*>Docs<\/w:delText><\/w:r><\/w:del><w:ins[^>]*><w:r>(?:<w:rPr><w:rStyle w:val="Hyperlink"\/><\/w:rPr>)?<w:t[^>]*>Guide<\/w:t><\/w:r><\/w:ins><\/w:hyperlink>/
       );
       const accepted = surface.session.applyTreeOps([{ op: 'acceptAllRevisions' }]);
       expect(accepted.committed).toBe(true);
       const after = serializeOoxmlPart(surface.session.part());
-      expect(after).toMatch(/<w:hyperlink[^>]*><w:r><w:t[^>]*>Guide<\/w:t><\/w:r><\/w:hyperlink>/);
+      expect(after).toMatch(
+        /<w:hyperlink[^>]*><w:r>(?:<w:rPr><w:rStyle w:val="Hyperlink"\/><\/w:rPr>)?<w:t[^>]*>Guide<\/w:t><\/w:r><\/w:hyperlink>/
+      );
     });
   });
 
@@ -168,7 +170,7 @@ describe('insert lanes in suggesting mode', () => {
       // The tracked display text relocates past the deletion; the wrap must cover the SAME
       // landing, or the committed link slices the deletion and the fresh insertion.
       expect(xml).toMatch(
-        /<w:delText[^>]*>Beta<\/w:delText><\/w:r><\/w:del><w:hyperlink[^>]*><w:ins[^>]*><w:r><w:t[^>]*>docs<\/w:t><\/w:r><\/w:ins><\/w:hyperlink>/
+        /<w:delText[^>]*>Beta<\/w:delText><\/w:r><\/w:del><w:hyperlink[^>]*><w:ins[^>]*><w:r>(?:<w:rPr><w:rStyle w:val="Hyperlink"\/><\/w:rPr>)?<w:t[^>]*>docs<\/w:t><\/w:r><\/w:ins><\/w:hyperlink>/
       );
     });
   });
@@ -225,7 +227,7 @@ describe('insert lanes in suggesting mode', () => {
       // a plain retarget had nothing left to hold the new text — the renamed link came out
       // silently unlinked. A fresh proposal wraps the copy instead.
       expect(xml).toMatch(
-        /<w:hyperlink[^>]*><w:ins[^>]*><w:r><w:t[^>]*>guide<\/w:t><\/w:r><\/w:ins><\/w:hyperlink>/
+        /<w:hyperlink[^>]*><w:ins[^>]*><w:r>(?:<w:rPr><w:rStyle w:val="Hyperlink"\/><\/w:rPr>)?<w:t[^>]*>guide<\/w:t><\/w:r><\/w:ins><\/w:hyperlink>/
       );
       expect(xml).not.toContain('docs');
     });
@@ -299,7 +301,7 @@ describe('insert lanes in suggesting mode', () => {
         // deletion into the link inside it. The lane used to no-op the strike silently
         // and drop the copy beside the control.
         expect(xml).toMatch(
-          /<w:hyperlink[^>]*><w:del[^>]*><w:r><w:delText[^>]*>Docs<\/w:delText><\/w:r><\/w:del><w:ins[^>]*><w:r><w:t[^>]*>Guide<\/w:t><\/w:r><\/w:ins><\/w:hyperlink>/
+          /<w:hyperlink[^>]*><w:del[^>]*><w:r>(?:<w:rPr><w:rStyle w:val="Hyperlink"\/><\/w:rPr>)?<w:delText[^>]*>Docs<\/w:delText><\/w:r><\/w:del><w:ins[^>]*><w:r>(?:<w:rPr><w:rStyle w:val="Hyperlink"\/><\/w:rPr>)?<w:t[^>]*>Guide<\/w:t><\/w:r><\/w:ins><\/w:hyperlink>/
         );
       }
     );
@@ -354,7 +356,7 @@ describe('insert lanes in suggesting mode', () => {
         // The untracked insert relocates beside the deletion exactly as the tracked one
         // does; a wrap built on the raw caret offset sliced the w:del instead.
         expect(xml).toMatch(
-          /<\/w:del><w:hyperlink[^>]*><w:r><w:t[^>]*>docs<\/w:t><\/w:r><\/w:hyperlink>/
+          /<\/w:del><w:hyperlink[^>]*><w:r>(?:<w:rPr><w:rStyle w:val="Hyperlink"\/><\/w:rPr>)?<w:t[^>]*>docs<\/w:t><\/w:r><\/w:hyperlink>/
         );
       }
     );
@@ -427,7 +429,7 @@ describe('insert lanes in suggesting mode', () => {
       // Struck original first, then the linked copy as this author's proposal — the same
       // reading order every replacement writes. The link wraps ONLY the copy.
       expect(xml).toMatch(
-        /<w:del[^>]*><w:r><w:delText[^>]*>Beta<\/w:delText><\/w:r><\/w:del><w:hyperlink[^>]*r:id="[^"]+"[^>]*><w:ins[^>]*w:author="Ada Lovelace"[^>]*><w:r><w:t[^>]*>Beta<\/w:t><\/w:r><\/w:ins><\/w:hyperlink>/
+        /<w:del[^>]*><w:r>(?:<w:rPr><w:rStyle w:val="Hyperlink"\/><\/w:rPr>)?<w:delText[^>]*>Beta<\/w:delText><\/w:r><\/w:del><w:hyperlink[^>]*r:id="[^"]+"[^>]*><w:ins[^>]*w:author="Ada Lovelace"[^>]*><w:r>(?:<w:rPr><w:rStyle w:val="Hyperlink"\/><\/w:rPr>)?<w:t[^>]*>Beta<\/w:t><\/w:r><\/w:ins><\/w:hyperlink>/
       );
       // The caret lands after the linked copy, where the next keystroke belongs.
       expect(surface.state().selection.head.offset).toBe('Alpha BetaBeta'.length);
@@ -462,7 +464,9 @@ describe('insert lanes in suggesting mode', () => {
       expect(accepted.committed).toBe(true);
       expect(paragraphTexts(surface)).toEqual(['Alpha Beta Gamma']);
       const xml = serializeOoxmlPart(surface.session.part());
-      expect(xml).toMatch(/<w:hyperlink[^>]*><w:r><w:t[^>]*>Beta<\/w:t><\/w:r><\/w:hyperlink>/);
+      expect(xml).toMatch(
+        /<w:hyperlink[^>]*><w:r>(?:<w:rPr><w:rStyle w:val="Hyperlink"\/><\/w:rPr>)?<w:t[^>]*>Beta<\/w:t><\/w:r><\/w:hyperlink>/
+      );
       expect(xml).not.toMatch(/<w:del /);
     });
   });
@@ -475,7 +479,7 @@ describe('insert lanes in suggesting mode', () => {
       );
       const xml = serializeOoxmlPart(surface.session.part());
       expect(xml).toMatch(
-        /<w:hyperlink[^>]*><w:ins[^>]*w:author="Ada Lovelace"[^>]*><w:r><w:t[^>]*>docs<\/w:t><\/w:r><\/w:ins><\/w:hyperlink>/
+        /<w:hyperlink[^>]*><w:ins[^>]*w:author="Ada Lovelace"[^>]*><w:r>(?:<w:rPr><w:rStyle w:val="Hyperlink"\/><\/w:rPr>)?<w:t[^>]*>docs<\/w:t><\/w:r><\/w:ins><\/w:hyperlink>/
       );
     });
   });

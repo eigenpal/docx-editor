@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Paragraphs that concurrent splits of one paragraph added at one place show in an order that the split sibling rule reads from the whole run. When an edit deleted or joined one paragraph of the run, the rule read the remaining paragraphs differently, so they could change places, although the author's edit did not move them. A replica read the order of a run again only when its listing changed, a missing split character arrived, or a member without copies changed length. When a peer's update brought moved copies to a member that already held some, the replica kept its earlier order while a fresh read showed another, so replicas with the same shared state could show different orders.",
+  "after": "After a local edit, each parent that the edit changed and whose order the rule moves is read again. When the blocks the edit left show in another order than before the edit, the range that moved is listed again as one entry, in the order the author saw, right after the block shown before it. A block that the edit lists or moves itself is not held in place. The edit and that listing are one undo step. Each replica records which paragraphs the order of each parent read, and reads that parent again when the text or the marks of one of them change.",
+  "reason": "The listing is written with ordinary child splices in the edit's own undo step, which every replica of this format reads, and the rule shows a block listed again where it is listed, as it already does for moves and undos. No field, identity, or rule over shared state changes, so every replica that holds the same updates shows the same order. Reading a run again after a text or mark change is replica-local. An undo puts back the removed entries, and relistSplitEntries makes each name its split points again, as for any undo. sharedSchemaVersion and repairVersion do not change.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-split-sibling-removal.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-split-sibling-removal-sweep.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-concurrent-split-order.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-split-sibling-move.test.ts"
+  ],
+  "changeset": "collab-split-siblings-stay-in-order",
+  "migration": null
+}

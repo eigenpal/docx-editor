@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The paginated surface chose the class of each review band (comment, custom node, or revision) in a function inside the surface.",
+  "after": "The same function lives in surface-review-band-class.ts and the surface imports it. The bands paint with the same classes.",
+  "reason": "The code moved without a change in behavior. Review bands are local paint; no shared field, operation, node identity, snapshot, or awareness payload changes.",
+  "tests": [
+    "packages/pro/src/__tests__/review-author-band.test.tsx",
+    "packages/pro/src/__tests__/review-replacement-pairs.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-selection-beside-revision.test.ts"
+  ],
+  "changeset": null,
+  "migration": null
+}

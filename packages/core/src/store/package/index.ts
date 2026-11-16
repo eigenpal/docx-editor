@@ -123,6 +123,7 @@ export {
   ooxmlTreesEqual,
 } from './ooxml-tree.ts';
 export { readOnOffChild, isContentRevisionKind, isRangeMarkerKind } from './ooxml-shared.ts';
+export { sha256FontBytes as sha256Bytes } from './sha256.ts';
 export {
   relationshipsOf,
   relsPartNameFor,
@@ -181,6 +182,8 @@ export {
   linearMathToOmml,
   parseLinearMath,
   projectOmmlEquation,
+  type EquationBoxEdges,
+  type EquationBoxStrikes,
   type EquationControlSource,
   type EquationExpression,
   type LinearMathOmmlResult,
@@ -192,6 +195,7 @@ export {
 export {
   readOoxmlPackage,
   writeOoxmlPackage,
+  writeOoxmlPackageKeepingRevisionIds,
   withPart,
   DEFAULT_OOXML_PACKAGE_LIMITS,
   type OoxmlPackage,
@@ -309,6 +313,7 @@ export { resolveTocRowHeadings } from './toc-rows.ts';
 export {
   deriveOoxmlIndexes,
   indexStyles,
+  numberingRootOf,
   stylesPartOf,
   type OoxmlIndexes,
   type ParagraphIndexEntry,
@@ -479,6 +484,7 @@ export {
   hasAnyComment,
   type CommentDeletionOwner,
 } from './comment-lifecycle.ts';
+export { commentsPartNameForStory } from './comment-lifecycle-scan.ts';
 export {
   NO_TRACKING_SETTINGS,
   readTrackingSettings,
@@ -586,6 +592,7 @@ export type { DrawingImageEffects } from './drawing-image-effects.ts';
 // Drawing renderers a capability package installs, and the drawing readers they build on.
 export {
   installDrawingRenderers,
+  metafileRasterOptions,
   type ChartRenderContext,
   type DiagramLayoutOptions,
   type DiagramLayoutParts,

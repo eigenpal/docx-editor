@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A picture command on a selected shape or text box refused with the reason 'this operation is not supported for shapes' (or textboxes).",
+  "after": "The same commands refuse with the same 'unsupported' code and a reason that names the command, for example 'rotate and flip are not supported for shapes'.",
+  "reason": "Only the refusal text changes, before any operation is built. No shared field, operation, node identity, snapshot, or awareness payload changes.",
+  "tests": [
+    "packages/core/src/editor/__tests__/shape-transform-refusal.test.ts",
+    "packages/core/src/editor/__tests__/shape-selection-reach.test.ts"
+  ],
+  "changeset": "shape-transform-reason",
+  "migration": null
+}

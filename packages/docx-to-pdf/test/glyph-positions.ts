@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -42,7 +42,7 @@ export async function glyphPositions(bytes: Uint8Array): Promise<number[]> {
     }
     return positions;
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 }
 
@@ -68,6 +68,6 @@ export async function baselineYPositions(bytes: Uint8Array): Promise<number[]> {
     }
     return baselines;
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 }

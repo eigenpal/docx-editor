@@ -144,8 +144,12 @@ describe('explicit legacy full-width content alignment', () => {
           `<w:tr>${cell(1000, 'y', '<w:tcMar><w:left w:w="120" w:type="dxa"/></w:tcMar>')}${cell(3500, 'z')}</w:tr>`
       ),
     ],
-    ['incomplete row', fixture(properties, grid, `<w:tr>${cell(1000, 'x')}</w:tr>`)],
   ];
+  test('a lone short row aligns its content: the columns it leaves take no width', () => {
+    const structure = read(fixture(properties, grid, `<w:tr>${cell(1000, 'x')}</w:tr>`));
+    expect(structure.legacyContentAlignment).toBe(true);
+    expect(structure.columnWidthsPt).toHaveLength(1);
+  });
   for (const [name, xml] of controls) {
     test(`${name} stays on the ordinary width path`, () => {
       const structure = read(xml);

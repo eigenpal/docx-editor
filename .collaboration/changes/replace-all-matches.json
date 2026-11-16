@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The replaceAllMatches command was refused as unsupported.",
+  "after": "replaceAllMatches writes each story's matches as ordinary text deletions and insertions, one transaction per story under one history group.",
+  "reason": "The command reuses the existing text operations and commit lane. Shared nodes, operation shapes, offsets, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/replace-all-matches.test.ts",
+    "packages/core/src/editor/__tests__/replace-all-matches-skips.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-replace-all-matches.test.ts"
+  ],
+  "changeset": "replace-all-matches",
+  "migration": null
+}

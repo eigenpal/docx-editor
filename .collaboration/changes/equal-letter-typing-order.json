@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Typing a letter next to the same letter wrote it into shared text after that letter, even when the author typed it before. A concurrent peer's equal letter could then hold the author's caret, so later typing landed inside text the author already typed.",
+  "after": "The typed letter is written into shared text at the place the author typed it, so the author's view, the caret, and the shared order agree.",
+  "reason": "Only the place of an ordinary shared text insert changes. The insert, its attributes, and the update encoding are the same, so released participants read and merge it with their current rules.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-equal-letter-typing.test.ts",
+    "packages/core/src/store/__tests__/canonical-primitive-journal.test.ts"
+  ],
+  "changeset": "equal-letter-typing-order",
+  "migration": null
+}

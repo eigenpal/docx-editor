@@ -52,6 +52,131 @@ export type ColorValue = {
 export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
+export const COMPARE_DOCUMENTS_ACCEPT = ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+// @public
+export interface CompareDocumentsChromeHandlers {
+    // (undocumented)
+    readonly onRequest?: (session: CompareDocumentsDialogSession) => void;
+}
+
+// @public
+export interface CompareDocumentsDialogSession {
+    apply(request: CompareDocumentsRequest, options?: {
+        readonly onProgress?: (progress: CompareDocumentsProgress) => void;
+    }): Promise<CompareDocumentsOutcome>;
+    canApply(): boolean;
+    cancel(): void;
+    readonly cancelable: boolean;
+    readonly defaultAuthor: string;
+    readonly originalHasTrackedChanges: boolean;
+    readonly signal: AbortSignal;
+}
+
+// @public
+export type CompareDocumentsEngineErrorCode =
+/**
+* An option has a value of the wrong type, such as a `detectFormatChanges` that is not a
+* boolean, or the revised document is not a `Uint8Array`.
+*/
+'invalidOptions'
+/** The original document is not a readable DOCX package. */
+| 'invalidOriginal'
+/** The revised document is not a readable DOCX package. */
+| 'invalidRevised'
+/** The documents exceed the compare's size limits. */
+| 'tooLarge'
+/**
+* The original document enforces protection that the compare would break: read-only,
+* comments, forms, or tracked-changes protection. A compare also writes differences that
+* have no tracked form, such as style definitions and content control properties, so
+* tracked-changes protection refuses too.
+*/
+| 'protected'
+/** The differences include content that no tracked change can record. */
+| 'unsupportedContent';
+
+// @public
+export type CompareDocumentsErrorCode = CompareDocumentsEngineErrorCode
+/** Editor only: no review module, no open document, or no mount. */
+| 'unavailable'
+/** Editor only: a collaboration session is attached. */
+| 'collaboration'
+/** Editor only: the document is open for viewing only. */
+| 'viewing'
+/** Editor only: the dialog closed, or the compare was canceled, before it finished. */
+| 'closed'
+/** Editor only: the revised file is a `Uint8Array` with no bytes. */
+| 'empty'
+/**
+* Editor only: another compare of the same dialog runs, or a preview or an external document
+* refresh blocks writes to the document. Try again when it ends.
+*/
+| 'busy'
+/**
+* Editor only: the open document changed while a background compare ran, so its result
+* no longer applies. The editor never retries by itself.
+*/
+| 'documentChanged'
+/** Editor only: any other failure. */
+| 'failed';
+
+// @public
+export function compareDocumentsErrorKey(refusal: {
+    readonly code: CompareDocumentsErrorCode;
+    readonly reason?: CompareDocumentsRefusalReason;
+}): `compareDocuments.errors.${CompareDocumentsErrorCode}` | `compareDocuments.reasons.${CompareDocumentsRefusalReason}`;
+
+// @public
+export type CompareDocumentsOutcome = {
+    readonly changed: boolean;
+    readonly ok: true;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsErrorCode;
+    readonly message: string;
+    readonly ok: false;
+    readonly reason?: CompareDocumentsRefusalReason;
+};
+
+// @public
+export type CompareDocumentsPhase = 'reading' | 'comparing' | 'checking' | 'applying';
+
+// @public
+export interface CompareDocumentsProgress {
+    readonly fraction: number;
+    readonly phase: CompareDocumentsPhase;
+}
+
+// @public
+export type CompareDocumentsRefusalReason =
+/** The documents differ inside a content control that is locked or bound to data. */
+'lockedContent'
+/** A document holds tracked changes that cannot be accepted, so its final state is unknown. */
+| 'unresolvedRevisions'
+/** The documents differ in content with no tracked-change form, such as an embedded file. */
+| 'untrackedContent'
+/** The revised document adds section or table settings that a reject cannot restore. */
+| 'unrecordedSettings'
+/** A header or footer of an earlier section cannot be paired with one of the original. */
+| 'headerFooter'
+/** The result needs a part type that the original document does not declare. */
+| 'packageStructure'
+/**
+* The result fails the check: accepting all changes does not give the revised text, rejecting
+* them does not give the original text, or a tracked change cannot be accepted or rejected.
+*/
+| 'unverified';
+
+// @public
+export interface CompareDocumentsRequest {
+    readonly authorName?: string;
+    readonly detectFormatChanges?: boolean;
+    readonly removeDateAndTime?: boolean;
+    readonly revised: Uint8Array;
+}
+
+// @public
 export type ContainerRef = {
     part: 'body';
 } | {
@@ -165,6 +290,12 @@ export interface DocumentBody {
 }
 
 // @public
+export interface DocumentHandle {
+    readonly loadId: string;
+    readonly revision: number;
+}
+
+// @public
 export type DocumentProtectionEdit = 'none' | 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
 
 // @public
@@ -200,14 +331,20 @@ export type ExecErrorCode = 'notFound' | 'ambiguous' | 'locked' | 'bound' | 'typ
 // @public
 export type ExecResult = {
     changed: boolean;
+    compareDocuments?: CompareDocumentsOutcome;
     history?: HistoryGroupOutcome;
     ok: true;
+    replaceDocument?: ReplaceDocumentOutcome;
+    replacements?: ReplaceAllMatchesOutcome;
     revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
 } | {
     code: ExecErrorCode;
+    compareDocuments?: CompareDocumentsOutcome;
     ok: false;
     reason: string;
+    replaceDocument?: ReplaceDocumentOutcome;
+    replacements?: ReplaceAllMatchesOutcome;
     revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
     target?: DocTarget;
@@ -389,6 +526,54 @@ export interface Rect {
 }
 
 // @public
+export interface ReplaceAllMatchesOutcome {
+    readonly replaced: number;
+    readonly skipped: number;
+}
+
+// @public
+export type ReplaceDocumentErrorCode = 'invalidRequest' | 'invalidDocument' | 'staleDocument' | 'unavailable' | 'busy' | 'editNotPermitted' | 'editUnsupported';
+
+// @public
+export type ReplaceDocumentOutcome = {
+    readonly changed: boolean;
+    readonly ok: true;
+} | ReplaceDocumentRefusal;
+
+// @public
+export type ReplaceDocumentRefusal = {
+    readonly message: string;
+    readonly ok: false;
+} & ({
+    readonly code: 'editNotPermitted';
+    readonly reason: 'viewing' | 'suggesting' | 'protected';
+} | {
+    readonly code: 'editUnsupported';
+    readonly reason: 'differentMainPart' | 'unsupportedDifference' | 'collaborationRefused';
+} | {
+    readonly code: 'unavailable';
+    readonly reason?: 'collaborationUnavailable';
+} | {
+    readonly code: 'staleDocument';
+    readonly reason: 'otherDocument' | 'edited';
+} | {
+    readonly code: 'invalidRequest';
+    readonly reason?: undefined;
+} | {
+    readonly code: 'invalidDocument' | 'busy';
+    readonly reason?: undefined;
+});
+
+// @public
+export type ReplaceDocumentRefusalReason = 'viewing' | 'suggesting' | 'protected' | 'collaborationUnavailable' | 'differentMainPart' | 'unsupportedDifference' | 'collaborationRefused' | 'otherDocument' | 'edited';
+
+// @public
+export interface ReplaceDocumentRequest {
+    readonly docx: Uint8Array | ArrayBuffer;
+    readonly expected?: DocumentHandle;
+}
+
+// @public
 export interface ResolvedReviewPane {
     readonly commentMarkers: CommentMarkerStyle;
     readonly opening: ReviewPaneOpening;
@@ -479,7 +664,7 @@ export interface ReviewRevisionItem {
     // (undocumented)
     readonly date?: string;
     readonly formattingChanges?: readonly {
-        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
+        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'highlight' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
         readonly value: string | null;
     }[];
     readonly formattingKind?: string;

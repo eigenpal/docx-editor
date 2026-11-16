@@ -194,20 +194,23 @@ describe('the legacy reference box of a percentage-width table', () => {
 });
 
 describe('outside the legacy box, a percentage excludes the mean outer rule', () => {
-  // 0.5 pt rules: p × (container − 0.5) + 0.5.
+  // 0.5 pt rules: an outer box of p × (container − 0.5) + 0.5.
   const ruled = (percent: number) => (percent / 100) * (TEXT_PT - 0.5) + 0.5;
+  // With one rule width on every cell side the rules share the grid lines, so the grid is the
+  // share alone and the outer box adds half a rule on each side.
+  const SHARED_RULE_PT = 0.5;
 
   test('mode 15 tables, from below to far above 100%', () => {
     for (const percent of [50, 100, 150, 300]) {
       const { width } = read({ width: String(percent * 50), rules: true }, 15);
-      expect(width).toBeCloseTo(ruled(percent), 6);
+      expect(width + SHARED_RULE_PT).toBeCloseTo(ruled(percent), 6);
     }
   });
 
   test('nested tables in every mode', () => {
     for (const mode of [11, 14, 15]) {
       const { width } = read({ width: '15000', rules: true }, mode, 1);
-      expect(width).toBeCloseTo(ruled(300), 6);
+      expect(width + SHARED_RULE_PT).toBeCloseTo(ruled(300), 6);
     }
   });
 
@@ -243,7 +246,8 @@ describe('outside the legacy box, a percentage excludes the mean outer rule', ()
 
   test('a right-to-left table reads its visual outer sides', () => {
     for (const rtl of [false, true]) {
-      expect(read({ width: '15000', rules: true, rtl }, 15).width).toBeCloseTo(ruled(300), 6);
+      const { width } = read({ width: '15000', rules: true, rtl }, 15);
+      expect(width + SHARED_RULE_PT).toBeCloseTo(ruled(300), 6);
     }
   });
 

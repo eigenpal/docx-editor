@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A footnote pass after an edit started its reserve search from the previous answer, so pages could differ between peers with different edit histories and from a fresh open.",
+  "after": "Each pass decides the footnote reserves page by page from no reserve, so every peer and a fresh open lay out the same pages.",
+  "reason": "Only local layout changes. Shared nodes, text offsets, operations, awareness, and package serialization remain unchanged. Each peer derives layout from the shared tree.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-footnote-layout-history.test.ts",
+    "packages/core/src/layout/__tests__/footnote-warm-equals-fresh.test.ts"
+  ],
+  "changeset": "footnote-layout-edit-history",
+  "migration": null
+}

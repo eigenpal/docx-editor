@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -15,6 +15,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * A paragraph's stable id is its `w14:paraId`: two participants can mint the same one, and
  * the editor then renames one of them in its own tree while shared state keeps both.
  */
+import * as Y from 'yjs';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type {
   CollaborationEditorSelection,
@@ -31,8 +32,14 @@ import {
   paragraphLayout,
   type CaretAnchor,
 } from './document/selection-anchors.ts';
+import { structAt } from './document/yjs-items.ts';
 
 type EditorPoint = CollaborationEditorSelection['anchor'];
+
+/** How many items a caret beside deleted text walks past to find a character still shown. */
+const MAX_DELETED_WALK = 4096;
+/** How many paragraphs an endpoint looks in for its character, along the moves it followed. */
+const MAX_FOLLOW_CANDIDATES = 64;
 
 interface AnchoredPoint {
   /** The paragraph it was anchored in, or null when this replica no longer has it. */
@@ -103,18 +110,27 @@ export class CaretAnchors {
     this.carryOwed = false;
   }
 
-  /** Shared state is about to change: anchor the selection on what the editor shows. */
+  /**
+   * Shared state is about to change: anchor the selection on what the editor shows.
+   *
+   * A selection that cannot be anchored now is tried again at the next change. The editor can
+   * show a node that no build holds yet, as a tab this participant inserted, and the layout of
+   * its paragraph is then not trusted. The next build holds it, and the selection the editor
+   * still shows is anchored then. Anchoring only once left the selection to text mapping for
+   * every later change, which loses the caret when a change also joins or moves paragraphs.
+   */
   beforeChange(): void {
     this.carried = null;
     this.carryOwed = true;
     if (!this.stale) return;
-    this.stale = false;
     this.anchored = null;
     const selection = this.selection;
     if (!selection || !this.deps.viewIsCurrent()) return;
     const anchor = this.anchorOf(selection.anchor);
     const head = this.anchorOf(selection.head);
-    if (anchor && head) this.anchored = { anchor, head };
+    if (!anchor || !head) return;
+    this.anchored = { anchor, head };
+    this.stale = false;
   }
 
   /** The editor shows the change: carry the selection onto the characters it was beside. */
@@ -197,6 +213,19 @@ export class CaretAnchors {
     const shown = follow.shownCopy(identity);
     if (shown) candidates.add(shown);
     for (const holder of follow.holdersOf(identity)) candidates.add(holder);
+    // Text typed in a paragraph a peer removed shows where it follows the move.
+    if (point.paragraph) {
+      for (const target of follow.targetsFor(point.paragraph)) candidates.add(target);
+    }
+    // From there it can follow on: a join takes the text back into a paragraph that a
+    // concurrent split moves it out of again.
+    for (const candidate of candidates) {
+      if (candidates.size >= MAX_FOLLOW_CANDIDATES) break;
+      for (const target of follow.targetsFor(candidate)) {
+        if (candidates.size >= MAX_FOLLOW_CANDIDATES) break;
+        candidates.add(target);
+      }
+    }
     for (const candidate of candidates) {
       if (registry.inline.isDeletedParagraph(candidate)) continue;
       // After a publish, the editor's node id of a paragraph is its logical id.
@@ -205,6 +234,43 @@ export class CaretAnchors {
       const layout = paragraphLayout(registry, candidate, this.deps.embedOf, text);
       const offset = layout ? offsetIn(layout, point.anchor) : null;
       if (offset !== null) return { nodeId: candidate, offset };
+    }
+    return point.paragraph ? this.besideDeleted(point.paragraph, point.anchor) : null;
+  }
+
+  /**
+   * A peer deleted the character an endpoint stood beside, and no copy of it shows: the
+   * endpoint goes where the deleted text was, beside the nearest character still shown, the
+   * one before it first. Mapping by text instead guessed among the letters around the gap.
+   */
+  private besideDeleted(paragraph: LogicalId, anchor: CaretAnchor): EditorPoint | null {
+    const { registry } = this.deps;
+    const shared = registry.inline.textOf(paragraph);
+    const text = this.shownText(paragraph);
+    const match = /^(\d{1,16}):(\d{1,16})$/.exec(anchor.character.item);
+    if (!shared?.doc || text === null || !match || registry.inline.isDeletedParagraph(paragraph)) {
+      return null;
+    }
+    const start = structAt(shared.doc, { client: Number(match[1]), clock: Number(match[2]) });
+    if (!start || !start.deleted || start.parent !== shared) return null;
+    const layout = paragraphLayout(registry, paragraph, this.deps.embedOf, text);
+    if (!layout) return null;
+    if (text.length === 0) return { nodeId: paragraph, offset: 0 };
+    for (const after of [true, false]) {
+      let steps = 0;
+      for (
+        let item = after ? start.left : start.right;
+        item && steps < MAX_DELETED_WALK;
+        item = after ? item.left : item.right, steps += 1
+      ) {
+        if (item.deleted || !(item.content instanceof Y.ContentString)) continue;
+        const clock = after ? item.id.clock + item.length - 1 : item.id.clock;
+        const offset = offsetIn(layout, {
+          character: { item: `${item.id.client}:${clock}`, identity: null },
+          after,
+        });
+        if (offset !== null) return { nodeId: paragraph, offset };
+      }
     }
     return null;
   }

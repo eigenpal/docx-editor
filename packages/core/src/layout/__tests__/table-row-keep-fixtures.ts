@@ -19,9 +19,16 @@ export function read(xml: string, name: string): OoxmlPart {
 export const SECT =
   '<w:sectPr><w:pgSz w:w="7000" w:h="4200"/><w:pgMar w:top="400" w:bottom="400" ' +
   'w:left="400" w:right="400" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr>';
+/**
+ * A body ends with a paragraph. One a body ending with a table lacks is written here, as files
+ * write it, so a reparse gives it the same id as the first read.
+ */
+export const endsWithParagraph = (body: string): string =>
+  body.endsWith('</w:tbl>') ? `${body}<w:p/>` : body;
+
 export const load = (body: string) =>
   read(
-    `<w:document xmlns:w="${W}"><w:body>${body}${SECT}</w:body></w:document>`,
+    `<w:document xmlns:w="${W}"><w:body>${endsWithParagraph(body)}${SECT}</w:body></w:document>`,
     '/word/document.xml'
   );
 

@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Hosts read the selection only as paragraph references, and the caret position only from the surface internals.",
+  "after": "Hosts read the local selection as paragraph ids and offsets, and the caret rectangle from layout geometry.",
+  "reason": "The change adds local reads only. Shared nodes, operations, text offsets, presence payloads, and package serialization stay unchanged, so released clients share rooms as before.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/selection-range-read-editors.test.ts",
+    "packages/core/src/editor/__tests__/selection-range-read.test.ts"
+  ],
+  "changeset": "selection-range-read",
+  "migration": null
+}

@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Delimiter equations (m:d) showed a text fallback without their brackets.",
+  "after": "Delimiter equations render from the same unchanged document tree, with brackets that grow to their contents; they stay read-only.",
+  "reason": "The change reads the shared tree for layout and paint only; it adds no operation, no shared field, and no editable region, and the editor refuses edits inside delimiters as it does for bars and border boxes.",
+  "tests": [
+    "packages/core/src/layout/__tests__/equation-delimiter.test.ts",
+    "packages/core/src/editor/__tests__/surface-equation-source-format.test.ts"
+  ],
+  "changeset": "equation-delimiters",
+  "migration": null
+}

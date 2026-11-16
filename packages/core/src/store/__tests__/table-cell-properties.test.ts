@@ -14,6 +14,7 @@ import {
 } from '../package/ooxml-tree.ts';
 import { applyTreeOp, validateTreeOp } from '../store/tree-ops.ts';
 import { validateTableCellPropertyOp } from '../store/tree-op-tables.ts';
+import { withRepeated } from './repeated-node-support.ts';
 import {
   resetTestPhysicalGridSlotScanCount,
   resetTestVisualOwnerCounters,
@@ -491,9 +492,52 @@ describe('setTableCellFill', () => {
     });
     expect(cleared.ok).toBe(true);
     if (!cleared.ok) return;
+    // A `w:shd` left with no fill would still paint no colour over a table style, so the
+    // whole element goes.
     const shd = wmlChildNamed(wmlChildNamed(cellAt(cleared.part, 0, 0), 'tcPr')!, 'shd');
-    expect(shd).toBeDefined();
+    expect(shd ?? null).toBeNull();
     expect(shdFill(cleared.part, id)).toBeUndefined();
+  });
+
+  test('clearing removes a leftover w:shd that states no fill', () => {
+    const part = load(TABLE(ROW(CELL('a1', '<w:shd w:val="clear" w:color="auto"/>'))));
+    const table = collectByKind(part.root, 'table')[0]!;
+    const id = cellAt(part, 0, 0).id;
+    const cleared = applyTreeOp(part, {
+      op: 'setTableCellFill',
+      tableId: table.id,
+      cellIds: [id],
+      color: null,
+    });
+    expect(cleared.ok).toBe(true);
+    if (!cleared.ok) return;
+    const shd = wmlChildNamed(wmlChildNamed(cellAt(cleared.part, 0, 0), 'tcPr')!, 'shd');
+    expect(shd ?? null).toBeNull();
+  });
+
+  test('clearing the fill of a pattern keeps the pattern over white', () => {
+    const part = load(
+      TABLE(
+        ROW(
+          '<w:tc><w:tcPr><w:shd w:val="pct50" w:color="FF0000" w:fill="FFFF00"/></w:tcPr>' +
+            '<w:p><w:r><w:t>a1</w:t></w:r></w:p></w:tc>'
+        )
+      )
+    );
+    const table = collectByKind(part.root, 'table')[0]!;
+    const id = cellAt(part, 0, 0).id;
+    const cleared = applyTreeOp(part, {
+      op: 'setTableCellFill',
+      tableId: table.id,
+      cellIds: [id],
+      color: null,
+    });
+    expect(cleared.ok).toBe(true);
+    if (!cleared.ok) return;
+    const shd = wmlChildNamed(wmlChildNamed(cellAt(cleared.part, 0, 0), 'tcPr')!, 'shd')!;
+    expect(shd.attributes.find((a) => a.localName === 'val')?.value).toBe('pct50');
+    expect(shdFill(cleared.part, id)).toBeUndefined();
+    expect(structureOf(cleared.part, table.id).rows[0]!.cells[0]!.shading).toBe('FF7F7F');
   });
 
   test('writes theme fill metadata with literal fill for layout', () => {
@@ -860,8 +904,12 @@ describe('table cell property ownership and lossless patching', () => {
     expect(shdFill(result.part, id)).toBeUndefined();
   });
 
-  test('rejects duplicate tcBorders containers', () => {
-    const part = load(TABLE(ROW(CELL('a1', `<w:tcBorders/><w:tcBorders/>`), CELL('a2'))));
+  test('reads repeated tcBorders as the edit that heals them leaves them', () => {
+    // A file with two opens with one; a tree a merge left with two is judged healed.
+    const part = withRepeated(
+      load(TABLE(ROW(CELL('a1', `<w:tcBorders/>`), CELL('a2')))),
+      'tcBorders'
+    );
     const table = collectByKind(part.root, 'table')[0]!;
     const id = cellAt(part, 0, 0).id;
     expect(
@@ -871,7 +919,7 @@ describe('table cell property ownership and lossless patching', () => {
         cellIds: [id],
         color: { kind: 'hex', value: 'AABBCC' },
       })
-    ).toBe('duplicate-property-container');
+    ).toBeNull();
   });
 
   test('rejects restart selected without full vertical merge chain', () => {
@@ -1178,9 +1226,10 @@ describe('table cell property fix round 2', () => {
     expect(shdFill(fill.part, outerWrap.id)).toBeUndefined();
   });
 
-  test('rejects duplicate shd and duplicate side leaves', () => {
-    const duplicateShd = load(
-      TABLE(ROW(CELL('a1', `<w:shd w:fill="111111"/><w:shd w:fill="222222"/>`), CELL('a2')))
+  test('reads a repeated shd as healed, and rejects duplicate side leaves', () => {
+    const duplicateShd = withRepeated(
+      load(TABLE(ROW(CELL('a1', `<w:shd w:fill="111111"/>`), CELL('a2')))),
+      'shd'
     );
     const duplicateSide = load(
       TABLE(
@@ -1204,7 +1253,7 @@ describe('table cell property fix round 2', () => {
         cellIds: [shdId],
         color: { kind: 'hex', value: 'AABBCC' },
       })
-    ).toBe('duplicate-property-container');
+    ).toBeNull();
     expect(
       validateTableCellPropertyOp(duplicateSide, {
         op: 'setTableCellBorders',

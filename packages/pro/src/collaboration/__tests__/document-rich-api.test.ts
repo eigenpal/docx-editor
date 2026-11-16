@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -180,7 +180,12 @@ test('whole-file refresh refuses real collaborative editors while ordinary edits
     for (const [index, peer] of r.peers.entries()) {
       const refresh = createDocumentRefresh(peer.editor);
       const before = new Uint8Array(await peer.editor.save());
-      await expect(refresh.capture()).rejects.toMatchObject({ code: 'collaboration' });
+      // Capture works for undoable updates; a whole-file reload still refuses.
+      const submission = await refresh.capture();
+      expect(await refresh.applyUpdate({ submission, sequence: 1, bytes: sample() })).toMatchObject(
+        { ok: false, code: 'collaboration' }
+      );
+      refresh.finish(submission);
       expect(
         await refresh.applyUpdate({
           submission: { id: 'foreign', bytes: before.buffer as ArrayBuffer },

@@ -14,6 +14,7 @@
     "components/ui/FontPicker",
     "components/ui/FontSizePicker",
     "components/ui/IconGridDropdown",
+    "components/ui/IconsChart",
     "components/ui/IconsReview",
     "components/ui/ImageTransformDropdown",
     "components/ui/ImageWrapDropdown",
@@ -202,6 +203,12 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
+    "editor/DocxEditorCompareDocumentsDialog": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
     "editor/DocxEditorContent": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["class", "class", "inheritAttrs", "name", "props"],
@@ -268,12 +275,6 @@
       "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
-    },
-    "editor/DocxEditorPrintDialog": {
-      "propsAddedInReact": [],
-      "propsAddedInVue": ["inheritAttrs", "name", "onClose", "props"],
-      "emitsAddedInReact": [],
-      "emitsAddedInVue": ["close"]
     },
     "editor/DocxEditorRevisionMarkup": {
       "propsAddedInReact": [],
@@ -380,6 +381,34 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
+    "editor/charts/ChartInsert": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/charts/ChartPane": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/color/ColorPicker": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": [
+        "container",
+        "default",
+        "hex",
+        "hexInput",
+        "inline",
+        "name",
+        "pick",
+        "props",
+        "type"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
     "editor/content-control-widget/parts": {
       "propsAddedInReact": ["key"],
       "propsAddedInVue": ["class", "class", "class"],
@@ -471,6 +500,24 @@
       "emitsAddedInVue": []
     },
     "editor/note-popup-parts": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/objects/chart-parts": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["className", "hidden", "label", "variant"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/panes/SidePanel": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/shapes/ShapePane": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["name", "props"],
       "emitsAddedInReact": [],

@@ -93,8 +93,7 @@ export type CacheMiss =
  * invalidated by a dependency change.
  */
 export type CacheLookup<V> =
-  | { readonly hit: true; readonly value: V; readonly provenance: CacheProvenance }
-  | CacheMiss;
+  { readonly hit: true; readonly value: V; readonly provenance: CacheProvenance } | CacheMiss;
 
 /** Which field of an {@link OperationSnapshot} changed. */
 export type OperationSnapshotField = keyof OperationSnapshot;

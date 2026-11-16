@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -55,10 +55,13 @@ import { spineChildren } from './materialize-spine.ts';
 import { NodeCache } from './materialize-node-cache.ts';
 import { dedupeIssues, ListingContests } from './materialize-contests.ts';
 import { splitWinnerOrder } from './split-dedup.ts';
+import { splitSiblingOrder } from './split-sibling-order.ts';
+import { splitMarkMoves, splitSiblingChanges } from './split-mark-moves.ts';
 import { AdoptionTracker } from './materialize-adoption.ts';
 import { inlineChildren, reuseEqualNodes } from './paragraph-text-view.ts';
 import { reportOrphans } from './materialize-orphans.ts';
 import {
+  addShownAncestors,
   attributesMatch,
   countPass,
   countRecordRead,
@@ -245,17 +248,10 @@ export class PackageMaterializer {
       }
     }
     for (const id of this.splitProjection.update(this.registry)) rawDirty.add(id);
+    // Concurrent split siblings: a new order, and proposals shown on another paragraph mark.
+    splitSiblingChanges(this.registry, rawDirty);
     const dirty = expandAncestors(this.registry, rawDirty);
-    // Every ancestor of a changed node has to rebuild. The registry's parent index says
-    // where a node lives NOW; a node a peer moved or detached is still shown
-    // under its old ancestors, and they must rebuild too, or the view keeps the stale subtree.
-    for (const id of rawDirty) {
-      let at = this.shownUnder.get(id);
-      for (let depth = 0; at !== undefined && depth < this.registry.limits.maxTreeDepth; depth++) {
-        dirty.add(at);
-        at = this.shownUnder.get(at);
-      }
-    }
+    addShownAncestors(dirty, rawDirty, this.shownUnder, this.registry.limits.maxTreeDepth);
     // A relationship-only change dirties no nodes. Reuse the node cache, then project `.rels`.
     //
     // Membership does NOT disqualify the cache. Every child array that moved names its own
@@ -469,7 +465,7 @@ export class PackageMaterializer {
     path.add(logicalId);
     const issuesAtStart = this.issues.length;
     const seenChildren = new Set<LogicalId>();
-    let childIds = [...record.childIds];
+    let childIds = splitMarkMoves(this.registry).shownChildIds(logicalId, record.childIds);
     // A set for membership: a peer can give a merged copy as many children as a record holds.
     const listed = new Set(childIds);
     const addChild = (extra: LogicalId): void => {
@@ -496,9 +492,11 @@ export class PackageMaterializer {
             (id) => this.registry.splitLineageOf(id)
           );
     if (winnerOrder) childIds = winnerOrder.map((index) => childIds[index]!);
+    const siblings = splitSiblingOrder(childIds, this.registry.splitSiblings.ranksOf(logicalId));
+    if (siblings) childIds = siblings.map((index) => childIds[index]!);
     const children: OoxmlNode[] = [];
     // Concurrent peers can each write a child OOXML allows once; show one, in one order.
-    const order = partitionWithMerges(record.kind, childIds, (id) =>
+    const order = partitionWithMerges(record, childIds, (id) =>
       this.splitProjection.losers.has(id) ? null : sharedChildShell(this.registry, id)
     );
     for (const id of order.hidden) placed.add(id);
@@ -617,7 +615,7 @@ export class PackageMaterializer {
       previous.kind === 'textValue' ||
       this.rawDirty.has(logicalId) ||
       !this.cache.isComplete(logicalId) ||
-      hasSingletonRules(previous.kind) ||
+      hasSingletonRules(previous) ||
       this.builtMerges.has(logicalId) ||
       this.mergeSources.has(logicalId) ||
       this.splitProjection.losers.size > 0 ||
@@ -766,6 +764,11 @@ export class PackageMaterializer {
   /** The node the last pass built for `id`, or null. Reads the cache only; builds nothing. */
   builtNode(id: LogicalId): OoxmlNode | null {
     return this.cache.get(id) ?? null;
+  }
+
+  /** The node the last tree showed `id` under, or null when it did not show it. */
+  shownParentOf(id: LogicalId): LogicalId | null {
+    return this.shownUnder.get(id) ?? null;
   }
 
   /** The children a member part's root shows, in order, or null (`shownMemberChildren`). */

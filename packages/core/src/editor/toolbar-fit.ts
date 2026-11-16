@@ -21,8 +21,8 @@
  * Collapse order: the first id here is the first group to leave the bar.
  *
  * Zoom goes first (a document you cannot format is worse than one you cannot scale), then
- * the small standalone groups, then the paragraph controls, and text formatting and history
- * last. A group the registry has but this list does not is collapsed before all of these,
+ * the small standalone groups, then the paragraph controls, then text formatting and history, and the selected
+ * shape's or chart's controls last. A group the registry has but this list does not is collapsed before all of these,
  * in reverse bar order — a host-added group has no declared standing, and the alternative
  * is a new group that silently never collapses.
  *
@@ -38,7 +38,33 @@ export const TOOLBAR_COLLAPSE_ORDER: readonly string[] = [
   'font',
   'text',
   'history',
+  // The selected object's own controls leave last, and lead the overflow menu when they do.
+  'shape',
+  'chart',
 ];
+
+/**
+ * Groups that lead the overflow menu when they collapse: the controls of the selected object,
+ * which a host most often reaches for while the object is selected.
+ *
+ * @internal
+ */
+export const TOOLBAR_OVERFLOW_LEADING_GROUPS: ReadonlySet<string> = new Set(['shape', 'chart']);
+
+/**
+ * `sections` with the {@link TOOLBAR_OVERFLOW_LEADING_GROUPS} first, each side in its own order.
+ *
+ * @internal
+ */
+export function orderToolbarOverflowSections<T extends { readonly id: string }>(
+  sections: readonly T[]
+): T[] {
+  const leading = sections.filter((section) => TOOLBAR_OVERFLOW_LEADING_GROUPS.has(section.id));
+  return [
+    ...leading,
+    ...sections.filter((section) => !TOOLBAR_OVERFLOW_LEADING_GROUPS.has(section.id)),
+  ];
+}
 
 /**
  * Groups that never move into the overflow menu.

@@ -5,6 +5,10 @@
 // walks the stories never sees the faces they name. Theme font tokens (`+mn-lt`, `+mj-lt`)
 // name the theme's faces, which chart text also takes when it names none. The walk and the
 // result are bounded: family names are file-supplied.
+//
+// An East Asian or complex script face renders only text in its script. A chart template
+// names `+mn-ea` and `+mn-cs` on every label, so a part asks for those faces only when its
+// text has such characters: a Latin chart must not load a CJK face.
 
 import { CHART_NAMESPACE_URI } from './chart-parts.ts';
 import { DIAGRAM_DRAWING_NAMESPACE_URI } from './diagram-parts.ts';
@@ -12,6 +16,7 @@ import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 import { validFontFamily } from './run-defaults.ts';
+import { isEastAsianCodePoint } from './east-asian-code-points.ts';
 import { metafileFontFamilies } from './metafile-fonts.ts';
 
 const MAX_NODES = 200_000;
@@ -38,33 +43,71 @@ function themeTokenFace(typeface: string, theme: DrawingPartThemeFonts): string 
   return major ? theme.major : theme.minor;
 }
 
-/** The typefaces one part names, in order; parts are immutable, so this is kept per root. */
-const PART_TYPEFACES = new WeakMap<OoxmlElement, readonly string[]>();
+/** A face slot of DrawingML text: Latin, East Asian, or complex script. */
+type FaceSlot = 'latin' | 'ea' | 'cs';
 
-function partTypefaces(root: OoxmlElement): readonly string[] {
-  const cached = PART_TYPEFACES.get(root);
+/** The faces one part names, in order, and the scripts its text uses. */
+interface PartFaces {
+  readonly faces: readonly { readonly slot: FaceSlot; readonly typeface: string }[];
+  readonly eastAsian: boolean;
+  readonly complex: boolean;
+}
+
+/** Parts are immutable, so the walk is kept per root. */
+const PART_FACES = new WeakMap<OoxmlElement, PartFaces>();
+
+/**
+ * Whether a code point is complex script text: Hebrew through the Arabic extensions, the
+ * Indic scripts, Thai and Lao, and the Hebrew and Arabic presentation forms.
+ */
+function isComplexScriptCodePoint(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x0590 && codePoint <= 0x08ff) ||
+    (codePoint >= 0x0900 && codePoint <= 0x0eff) ||
+    (codePoint >= 0xfb1d && codePoint <= 0xfdff) ||
+    (codePoint >= 0xfe70 && codePoint <= 0xfeff)
+  );
+}
+
+function partFaces(root: OoxmlElement): PartFaces {
+  const cached = PART_FACES.get(root);
   if (cached) return cached;
-  const out: string[] = [];
+  const faces: { slot: FaceSlot; typeface: string }[] = [];
   const seen = new Set<string>();
+  let eastAsian = false;
+  let complex = false;
   const stack: OoxmlElement[] = [root];
   let visited = 0;
-  while (stack.length > 0 && ++visited <= MAX_NODES && out.length < MAX_FAMILIES) {
+  while (stack.length > 0 && ++visited <= MAX_NODES) {
     const node = stack.pop()!;
     if (node.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI && FACE_ELEMENTS.has(node.localName)) {
       const typeface = schemaAttributeValue(node.attributes, 'typeface');
-      if (typeface && !seen.has(typeface)) {
-        seen.add(typeface);
-        out.push(typeface);
+      const slot = node.localName as FaceSlot;
+      const key = `${slot}\u0000${typeface}`;
+      if (typeface && !seen.has(key) && faces.length < MAX_FAMILIES) {
+        seen.add(key);
+        faces.push({ slot, typeface });
       }
       continue;
     }
     for (let index = node.children.length - 1; index >= 0; index -= 1) {
       const child = node.children[index]!;
-      if (child.kind !== 'textValue') stack.push(child as OoxmlElement);
+      if (child.kind !== 'textValue') {
+        stack.push(child as OoxmlElement);
+        continue;
+      }
+      if (eastAsian && complex) continue;
+      for (const char of child.value) {
+        const codePoint = char.codePointAt(0)!;
+        if (!eastAsian && isEastAsianCodePoint(codePoint)) eastAsian = true;
+        else if (!complex && isComplexScriptCodePoint(codePoint)) complex = true;
+        if (eastAsian && complex) break;
+      }
     }
   }
-  PART_TYPEFACES.set(root, out);
-  return out;
+  const result: PartFaces = { faces, eastAsian, complex };
+  PART_FACES.set(root, result);
+  return result;
 }
 
 /** Faces named in chart and saved diagram parts, in part order. */
@@ -88,7 +131,10 @@ export function drawingPartFontFamilies(
       continue;
     // Text that names no face takes the theme's body face.
     add(theme.minor);
-    for (const typeface of partTypefaces(root)) {
+    const named = partFaces(root);
+    for (const { slot, typeface } of named.faces) {
+      if (slot === 'ea' && !named.eastAsian) continue;
+      if (slot === 'cs' && !named.complex) continue;
       if (typeface.startsWith('+')) add(themeTokenFace(typeface, theme));
       else add(typeface);
     }

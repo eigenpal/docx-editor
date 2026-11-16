@@ -432,8 +432,11 @@ test('a repeated table-header comment retains an occurrence on every continuatio
       (artifact) => artifact.kind === 'comment' && artifact.text === 'Repeat with the header'
     );
     expect(layout.pages.length).toBeGreaterThan(2);
+    // Every page the table reaches; the empty paragraph after it may start a page of its own.
     expect(comment?.occurrences.map(({ pageIndex }) => pageIndex)).toEqual(
-      layout.pages.map(({ index }) => index)
+      layout.pages
+        .filter(({ fragments }) => fragments.some((fragment) => fragment.kind === 'table'))
+        .map(({ index }) => index)
     );
     expect(comment?.occurrences.every(({ story }) => story === 'body')).toBe(true);
   } finally {
@@ -673,6 +676,7 @@ test('export publishes normalized comments with page provenance and retains orph
     expect(comments?.find((comment) => comment.text === 'Check this')).toMatchObject({
       author: 'Ada',
       initials: 'AL',
+      referenceOrder: 0,
       text: 'Check this',
       orphaned: false,
       occurrences: [{ pageIndex: 0, physicalPageNumber: 1, story: 'body' }],
@@ -681,6 +685,9 @@ test('export publishes normalized comments with page provenance and retains orph
       orphaned: true,
       occurrences: [],
     });
+    expect(comments?.find((comment) => comment.text === 'Unanchored')?.referenceOrder).toBe(
+      undefined
+    );
     expect(Object.isFrozen(comments?.[0])).toBe(true);
     expect(Object.isFrozen(comments?.[0]?.occurrences)).toBe(true);
     expect(Object.isFrozen(comments?.[0]?.occurrences[0]?.source)).toBe(true);

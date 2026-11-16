@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Hiragino, PingFang, and Heiti default faces counted as East Asian by name, and Osaka, Nanum Gothic, and names in East Asian characters did not count without a font table entry.",
+  "after": "The default face check counts Osaka, Nanum Gothic, and names in East Asian or full-width characters, and counts Hiragino, PingFang, and Heiti only by the font table.",
+  "reason": "The check is a pure function of the styles and font table parts that each participant lays out locally. It writes nothing to the shared document and adds no field or message, so every participant computes the same layout from the same shared parts.",
+  "tests": ["packages/core/src/layout/__tests__/default-font-faces.test.ts"],
+  "changeset": "east-asian-default-face-names",
+  "migration": null
+}

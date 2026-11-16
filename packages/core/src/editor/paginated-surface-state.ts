@@ -108,7 +108,12 @@ export interface RevealOptions {
  */
 export type DrawingSelectionIntent =
   | { readonly kind: 'none' }
-  | { readonly kind: 'pointer'; readonly drawingNodeId: string }
+  | {
+      readonly kind: 'pointer';
+      readonly drawingNodeId: string;
+      /** A shape inside the group `drawingNodeId`, selected by a second press on the group. */
+      readonly memberNodeId?: string;
+    }
   | { readonly kind: 'programmatic' };
 
 /**
@@ -156,8 +161,8 @@ export interface PaginatedSurfaceState {
   /**
    * The TOC the last right-click landed on, or null.
    *
-   * A right-click deliberately does not move the caret, and a TOC refuses the caret
-   * entirely, so `selection` can never say which table of contents the user is pointing at.
+   * A TOC refuses the caret entirely, so a right-click on one leaves the caret where it was
+   * and `selection` can never say which table of contents the user is pointing at.
    * This is how a host's context menu learns it. Surface chrome, not document state.
    */
   readonly contextTocId: string | null;

@@ -6,6 +6,7 @@
 // removing their markup and reporting success.
 
 import { describe, expect, test } from 'bun:test';
+import { storyEndsWithTable } from '../package/ooxml-story-end-repair.ts';
 import {
   applyTreeOp,
   readOoxmlPart,
@@ -498,6 +499,58 @@ describe('accept-all and reject-all', () => {
     expect(out.match(/<w:ins\b/g) ?? []).toHaveLength(2);
     expect(out).toMatch(/<w:txbxContent><w:p[^>]*><w:r><w:t>boxed<\/w:t>/);
   });
+});
+
+describe('a text box that ends with a table', () => {
+  test('accepting a deleted last paragraph keeps one paragraph after the table', () => {
+    const mark = `<w:pPr><w:rPr><w:del w:id="1" w:author="QA" w:date="${QA.date}"/></w:rPr></w:pPr>`;
+    const table = (inner: string) =>
+      `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>${inner}</w:tc></w:tr></w:tbl>`;
+    for (const block of [
+      table(`<w:p>${run('cell')}</w:p>`),
+      `<w:sdt><w:sdtPr/><w:sdtContent>${table(`<w:p>${run('cell')}</w:p>`)}</w:sdtContent></w:sdt>`,
+    ]) {
+      const part = load(
+        '<w:p><w:r><w:pict xmlns:v="urn:schemas-microsoft-com:vml"><v:shape><v:textbox><w:txbxContent>' +
+          `<w:p>${run('top')}</w:p>${block}<w:p>${mark}</w:p><w:p>${mark}</w:p>` +
+          '</w:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p>'
+      );
+      let box = '';
+      const visit = (node: OoxmlNode) => {
+        if (node.kind === 'textValue') return;
+        if (node.localName === 'txbxContent') box = node.id;
+        node.children.forEach(visit);
+      };
+      visit(part.root);
+      const out = xml(apply(part, { op: 'acceptAllRevisions', scopeRootId: box }));
+      expect(out).toMatch(/<\/w:(tbl|sdt)><w:p[ />][\s\S]*<\/w:txbxContent>/);
+    }
+  });
+});
+
+describe('a body that a decision would leave ending with a table', () => {
+  const mark = `<w:pPr><w:rPr><w:del w:id="1" w:author="QA" w:date="${QA.date}"/></w:rPr></w:pPr>`;
+  const table =
+    '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
+    `<w:tr><w:tc><w:p>${run('cell')}</w:p></w:tc></w:tr></w:tbl>`;
+  test.each([
+    [
+      'custom XML',
+      `<w:p/><w:customXml><w:p>${run('A')}</w:p>${table}<w:p>${mark}</w:p></w:customXml>`,
+    ],
+    [
+      'marker control',
+      `${table}<w:p>${mark}</w:p><w:sdt><w:sdtPr/><w:sdtContent><w:bookmarkStart w:id="1" w:name="m"/></w:sdtContent></w:sdt>`,
+    ],
+  ])(
+    'accepting a deleted paragraph after a table in a %s keeps a paragraph after it',
+    (_, body) => {
+      const part = load(body);
+      const out = apply(part, { op: 'acceptAllRevisions' });
+      const story = out.root.children[0]!;
+      expect(story.kind !== 'textValue' && storyEndsWithTable(story.children)).toBe(false);
+    }
+  );
 });
 
 describe('a move recorded on the paragraph mark', () => {

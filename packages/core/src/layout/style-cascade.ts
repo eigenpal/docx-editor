@@ -47,7 +47,6 @@ import {
 } from './paragraph-flow.ts';
 import {
   cascadedParagraphBorders,
-  paragraphBorders,
   paragraphContextualSpacing,
   paragraphLineSpacing,
   paragraphSpacing,
@@ -62,10 +61,16 @@ import { cascadedTabStops, tabStopsFingerprint, type ResolvedTabStops } from './
 import { withNumberingTabRule } from './numbering-tab-rule.ts';
 import { NO_THEME_FONTS, type ThemeFonts } from './run-style.ts';
 import { combineStyleToggles } from './style-toggles.ts';
-import { styleChain, styleIdFromProps } from './style-chain.ts';
+import {
+  characterStyleRunProperties,
+  paragraphStyleChain,
+  styleChain,
+  styleIdFromProps,
+} from './style-chain.ts';
 import { resolveParagraphOutlineLevel } from './paragraph-outline-level.ts';
 import { paragraphMarkRunProperties } from './paragraph-mark-run.ts';
 import { legacyTableDefaultProperties } from './table-style-compatibility.ts';
+import { autoHyphenationFromSettings } from './auto-hyphenation.ts';
 import {
   findParagraphProperties,
   findRunProperties,
@@ -112,8 +117,8 @@ export interface StyleCascadeTable {
   /** `w:doNotUseIndentAsNumberingTabStop`, carried onto each paragraph's tab stops. */
   readonly ignoreIndentAsNumberingTabStop?: true;
   /**
-   * `w:doNotUseHTMLParagraphAutoSpacing`: adjacent paragraph spacing adds up, and automatic
-   * spacing is a fixed 5pt before and 10pt after.
+   * `w:doNotUseHTMLParagraphAutoSpacing`: adjacent paragraph spacing adds up, and the automatic
+   * spacing flags are ignored, so the authored measurement stays.
    */
   readonly fixedParagraphSpacing?: true;
   /** `w:doNotExpandShiftReturn`: a justified line before a manual break keeps natural spacing. */
@@ -127,6 +132,10 @@ export interface StyleCascadeTable {
   readonly pageBreakMarkOnNextPage?: true;
   /** Explicit compatibility opt-in to the unmodified ISO table style hierarchy. */
   readonly strictTableStyleHierarchy?: boolean;
+  /** `w:autoHyphenation`: mode 15 autofit minimums let words break between letters. @internal */
+  readonly autoHyphenation?: true;
+  /** `w:doNotHyphenateCaps`: words in capitals keep whole under `autoHyphenation`. @internal */
+  readonly doNotHyphenateCaps?: true;
   readonly typography?: CjkTypographySettings;
   /**
    * Bounded fingerprint folded into layout cache producers so a different styles part cannot
@@ -460,10 +469,13 @@ export function buildStyleCascadeTable(
   let typography = cjkTypographyFromSettings(settingsRoot);
   if (compatibility.has('lineEndPunctuationAtEveryAlignment'))
     typography = Object.freeze({ ...typography, legacyLineEndPunctuation: true as const });
+  if (typography.balancedWidths && compatibility.has('balancedSpaceShrink'))
+    typography = Object.freeze({ ...typography, balancedSpaceShrink: true as const });
   const ligaturesEnabled = compatibility.has('optionalLigatures');
   const ligatureCompatibility = ligaturesEnabled ? {} : { disableOptionalLigatures: true as const };
   const strictTableHierarchy = compatibility.has('strictTableStyleHierarchy');
   const settingsCompatibility = cascadeCompatibility(compatibility);
+  const hyphenation = autoHyphenationFromSettings(settingsRoot);
   const spacing = readDistributedSpacing(stylesRoot, compatibility);
   const distribution = spacing ? { distributedSpacing: spacing } : {};
   const styles = new Map<string, StyleDefinition>();
@@ -484,8 +496,10 @@ export function buildStyleCascadeTable(
         strictTableHierarchy,
         ...settingsCompatibility,
         ...distribution,
+        ...hyphenation,
       }),
       ...settingsCompatibility,
+      ...hyphenation,
       ...ligatureCompatibility,
       ...distribution,
       strictTableStyleHierarchy: strictTableHierarchy,
@@ -541,6 +555,7 @@ export function buildStyleCascadeTable(
     ...settingsCompatibility,
     ...ligatureCompatibility,
     ...distribution,
+    ...hyphenation,
     strictTableHierarchy,
     typography,
     dR: propertiesFingerprint(defaults.run),
@@ -571,6 +586,7 @@ export function buildStyleCascadeTable(
   return {
     cacheToken,
     ...settingsCompatibility,
+    ...hyphenation,
     ...ligatureCompatibility,
     ...distribution,
     strictTableStyleHierarchy: strictTableHierarchy,
@@ -611,7 +627,7 @@ export function cascadeParagraphWithNumbering(
 ): CascadedParagraphFormatting {
   const directProps = propertiesOf(directPPr);
   const styleId = styleIdFromProps(directProps, 'pStyle') ?? table.defaultParagraphStyleId;
-  const chain = styleId ? styleChain(table, styleId, 'paragraph') : [];
+  const chain = paragraphStyleChain(table, styleId);
   // The level's `w:pPr` sits directly below the nearest `w:pPr` stating a `w:numPr`: above
   // the whole chain when that is the paragraph's own. List indents use the same rank
   // (`numberingLevelTiers`).
@@ -676,31 +692,20 @@ export function cascadeParagraphWithNumbering(
     paragraphPropertyNodes,
     runProperties: applyLigatureCompatibility(runProperties, table.disableOptionalLigatures),
     markRunProperties,
-    styleId: styleId ?? null,
+    // The style that applies: the default paragraph style when `w:pStyle` names no paragraph
+    // style, so contextual spacing compares that paragraph as a default-style neighbour.
+    styleId: chain.at(-1)?.styleId ?? styleId ?? null,
   };
 }
 
 /**
- * Bottom border after cascade: a later `w:pBdr` replaces an earlier one; absence inherits.
- * `nil`/`none` clear the edge via `paragraphBorders`.
+ * Bottom border after the cascade, folded edge by edge like `cascadedParagraphBorders`: the
+ * last level that states `w:bottom` decides it, and `nil`/`none` turn it off.
  */
 export function cascadedBottomBorder(
   paragraphPropertyNodes: readonly OoxmlNode[]
 ): ParagraphBorderEdge | undefined {
-  let edge: ParagraphBorderEdge | undefined;
-  for (const node of paragraphPropertyNodes) {
-    if (!node || node.kind === 'textValue') continue;
-    let hasPBdr = false;
-    for (const child of node.children) {
-      if (isElement(child) && child.localName === 'pBdr') {
-        hasPBdr = true;
-        break;
-      }
-    }
-    if (!hasPBdr) continue;
-    edge = paragraphBorders(node).bottom;
-  }
-  return edge;
+  return cascadedParagraphBorders(paragraphPropertyNodes).bottom;
 }
 
 /**
@@ -730,13 +735,9 @@ export function cascadeRunProperties(
     applyLigatureCompatibility(props, table?.disableOptionalLigatures);
   let characterProps: readonly OoxmlProperty[] = [];
   if (table) {
+    // Only a named character style applies; the default character style adds nothing.
     const rStyleId = styleIdFromProps(directRunProperties, 'rStyle');
-    const characterStyleId = rStyleId ?? table.defaultCharacterStyleId;
-    if (characterStyleId) {
-      characterProps = styleChain(table, characterStyleId, 'character').flatMap(
-        (style) => style.runProperties
-      );
-    }
+    if (rStyleId) characterProps = characterStyleRunProperties(table, rStyleId);
   }
 
   if (inheritedRunProperties.length === 0 && characterProps.length === 0) {
@@ -931,6 +932,7 @@ export function resolveParagraphLayoutInputs(
   const tabStops = withNumberingTabRule(cascadedTabStops(nodes), styleCascade);
   const styleId = cascaded ? cascaded.styleId : (styleIdFromProps(props, 'pStyle') ?? null);
   const outlineLevel = resolveParagraphOutlineLevel(props, styleCascade, styleId);
+  const borders = cascadedParagraphBorders(nodes);
   return {
     props,
     indent,
@@ -958,8 +960,8 @@ export function resolveParagraphLayoutInputs(
     contextualSpacing: paragraphContextualSpacing(props),
     styleId,
     outlineLevel,
-    bottomBorder: cascadedBottomBorder(nodes),
-    borders: cascadedParagraphBorders(nodes),
+    bottomBorder: borders.bottom,
+    borders,
     shading: paragraphShading(props),
     inheritedRunProperties,
     markRunProperties: lastInputs?.markRunProperties ?? markRunProperties,

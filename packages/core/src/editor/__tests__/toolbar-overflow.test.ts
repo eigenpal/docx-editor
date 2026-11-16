@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { TOOLBAR_COLLAPSE_ORDER, TOOLBAR_PINNED_GROUPS, collapseOrder } from '../toolbar-fit.ts';
+import {
+  TOOLBAR_COLLAPSE_ORDER,
+  TOOLBAR_PINNED_GROUPS,
+  collapseOrder,
+  orderToolbarOverflowSections,
+} from '../toolbar-fit.ts';
 
 const BAR_GROUPS = [
   'history',
@@ -11,6 +16,9 @@ const BAR_GROUPS = [
   'alignment',
   'list',
   'format',
+  'image',
+  'shape',
+  'chart',
 ] as const;
 
 describe('toolbar collapse policy', () => {
@@ -20,7 +28,20 @@ describe('toolbar collapse policy', () => {
   });
 
   test('collapseOrder follows the declared order for known groups', () => {
-    expect(collapseOrder([...BAR_GROUPS])).toEqual([...TOOLBAR_COLLAPSE_ORDER]);
+    expect(collapseOrder([...BAR_GROUPS])).toEqual(['image', ...TOOLBAR_COLLAPSE_ORDER]);
+  });
+
+  test('the selected shape or chart controls collapse last and lead the overflow menu', () => {
+    const order = collapseOrder([...BAR_GROUPS]);
+    expect(order.slice(-2)).toEqual(['shape', 'chart']);
+    const sections = ['text', 'image', 'chart', 'history', 'shape'].map((id) => ({ id }));
+    expect(orderToolbarOverflowSections(sections).map((s) => s.id)).toEqual([
+      'chart',
+      'shape',
+      'text',
+      'image',
+      'history',
+    ]);
   });
 
   test('pinned review is excluded from collapsible groups at the toolbar layer', () => {

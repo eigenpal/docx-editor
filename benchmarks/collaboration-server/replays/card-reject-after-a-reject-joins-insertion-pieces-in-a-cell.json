@@ -1,0 +1,87 @@
+{
+  "config": "trackedStructuresSequential",
+  "seed": 98,
+  "replicas": 3,
+  "delivery": "in-order",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteBlock",
+          "blockId": ""
+        },
+        "paragraphs": [3]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 1,
+          "text": "ore",
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T22:11:15Z"
+          }
+        },
+        "paragraphs": [8]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "rejectAllRevisions",
+          "siteNodeIds": []
+        },
+        "targets": [
+          {
+            "field": "siteNodeIds",
+            "localName": "ins",
+            "index": 0,
+            "array": true,
+            "identity": {
+              "id": "31844",
+              "author": "Author 2",
+              "date": "2026-01-01T22:11:15Z"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "rejectAllRevisions",
+          "siteNodeIds": []
+        },
+        "targets": [
+          {
+            "field": "siteNodeIds",
+            "localName": "ins",
+            "index": 0,
+            "array": true,
+            "identity": {
+              "id": "54",
+              "author": "Reviewer",
+              "date": "2025-12-07T00:00:00Z"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

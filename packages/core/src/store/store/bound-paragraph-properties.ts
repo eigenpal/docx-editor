@@ -1,7 +1,7 @@
 // What a data binding lets change in the paragraphs a bound control holds.
 //
 // A bound control mirrors a custom XML node as TEXT. A paragraph's own properties (style,
-// alignment, indents, spacing, keeps, numbering, tab stops, shading, direction) are not part of
+// alignment, indents, spacing, keeps, numbering, tab stops, borders, shading, direction) are not part of
 // that text, so a write that changes only them cannot put the control out of step with the part
 // it mirrors. Neither can accepting or rejecting a recorded paragraph property change. The
 // binding refuses neither; a content lock on the same control still applies its own rule.
@@ -13,6 +13,7 @@ import type { TreeDocOp } from './tree-op-types.ts';
 const PARAGRAPH_PROPERTY_OPS: ReadonlySet<TreeDocOp['op']> = new Set<TreeDocOp['op']>([
   'setParagraphProperties',
   'setParagraphTabStops',
+  'setParagraphBorders',
   'setListNumbering',
   'setListLevel',
 ]);

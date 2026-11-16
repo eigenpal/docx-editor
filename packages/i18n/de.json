@@ -60,7 +60,10 @@
     "bookmarkShortcut": "Strg+Umschalt+F5",
     "goToBookmark": "Gehe zu Textmarke…",
     "goToBookmarkShortcut": "Strg+G",
-    "goToBookmarkShortcutApple": "Strg+Alt+G"
+    "goToBookmarkShortcutApple": "Strg+Alt+G",
+    "printComments": "Kommentare drucken",
+    "printCommentsNote": "Außerhalb von {mode} werden Kommentare als Notizen am kommentierten Text gedruckt.",
+    "printMarkup": "Markup"
   },
   "formattingBar": {
     "groups": {
@@ -75,7 +78,9 @@
       "image": "Grafik",
       "table": "Tabelle",
       "format": "Format",
-      "direction": "Textrichtung"
+      "direction": "Textrichtung",
+      "chart": "Diagramm",
+      "shape": "Form"
     },
     "undo": "Rückgängig",
     "undoShortcut": "Rückgängig (Strg+Z)",
@@ -223,7 +228,11 @@
       "background2": "Hintergrund 2",
       "text1": "Text 1",
       "text2": "Text 2"
-    }
+    },
+    "lighterPercent": "{color}, {percent} % heller",
+    "darkerPercent": "{color}, {percent} % dunkler",
+    "hexColor": "Hex-Farbe",
+    "invalidHex": "Geben Sie eine Farbe als #RRGGBB ein."
   },
   "dialogs": {
     "imageProperties": {
@@ -420,7 +429,20 @@
     "addComment": "Kommentar hinzufügen...",
     "replyPlaceholder": "Antworten oder andere mit @ erwähnen",
     "reopen": "Erneut öffnen",
-    "resolve": "Auflösen"
+    "resolve": "Auflösen",
+    "edit": "Bearbeiten",
+    "editConflict": "Dieser Kommentar wurde geändert. Ihr Entwurf bleibt erhalten. Brechen Sie ab, um den aktuellen Text anzuzeigen.",
+    "editEmpty": "Geben Sie vor dem Speichern einen Kommentartext ein.",
+    "editPermission": "Sie können nur Ihre eigenen Kommentare bearbeiten.",
+    "editRefused": "Dieser Kommentar konnte nicht gespeichert werden. Ihr Entwurf bleibt erhalten.",
+    "editText": "Kommentartext",
+    "saveEdit": "Änderungen speichern",
+    "deletedDraft": "Dieser Kommentar ist hier nicht mehr verfügbar. Ihr ungespeicherter Entwurf bleibt zum Kopieren erhalten.",
+    "discardDraft": "Entwurf verwerfen",
+    "recoveredDraft": "Ungespeicherter Kommentarentwurf",
+    "actions": "Kommentaraktionen",
+    "replyActions": "Antwortaktionen",
+    "delete": "Löschen"
   },
   "contextMenu": {
     "ariaLabel": "KI-Aktionsmenü",
@@ -569,7 +591,9 @@
     "fontSubstitutionNotice": "Einige Schriftarten in diesem Dokument sind nicht verfügbar, daher werden Ersatzschriftarten angezeigt: {fonts}",
     "documentContent": "Dokumentinhalt",
     "previewContent": "Vorschau der vorgeschlagenen Änderungen",
-    "documentViewport": "Dokumentseiten"
+    "documentViewport": "Dokumentseiten",
+    "grammarIssueCount": "{count, plural, =0 {Keine Grammatikfehler.} one {# Grammatikfehler.} other {# Grammatikfehler.}}",
+    "spellingIssueCount": "{count, plural, =0 {Keine Rechtschreibfehler.} one {# Rechtschreibfehler.} other {# Rechtschreibfehler.}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Anzuzeigender Text",
@@ -675,7 +699,8 @@
     },
     "selection": "Ausgewähltes Bild",
     "locked": "Dieses Textfeld kann nicht verschoben oder in der Größe geändert werden",
-    "textLocked": "Der Text in diesem Textfeld kann nicht bearbeitet werden"
+    "textLocked": "Der Text in diesem Textfeld kann nicht bearbeitet werden",
+    "selectionShape": "Ausgewählte Form"
   },
   "revisions": {
     "paragraphMarkInserted": "Absatzmarke eingefügt",
@@ -702,6 +727,7 @@
       "fontFamily": "Schriftart",
       "fontSize": "Schriftgrad",
       "hangingIndent": "Hängender Einzug",
+      "highlight": "Hervorhebung",
       "italic": "Kursiv",
       "left": "Links",
       "leftIndent": "Linker Einzug",
@@ -732,7 +758,8 @@
   },
   "toc": {
     "refresh": "Gesamtes Verzeichnis aktualisieren",
-    "refreshPageNumbers": "Nur Seitenzahlen aktualisieren"
+    "refreshPageNumbers": "Nur Seitenzahlen aktualisieren",
+    "remove": "Inhaltsverzeichnis entfernen"
   },
   "reviewers": {
     "label": "Prüfer",
@@ -920,12 +947,20 @@
     "replyCount": "Antworten: {count}",
     "trackedChange": "Nachverfolgte Änderung",
     "changeAnnouncement": "{change} von {author}: {text}",
-    "replyTargetResolved": "Die Änderung wurde aufgelöst, daher wurde die Antwort nicht gesendet."
+    "replyTargetResolved": "Die Änderung wurde aufgelöst, daher wurde die Antwort nicht gesendet.",
+    "compareDocuments": "Dokumente vergleichen"
   },
   "imageAltText": {
     "description": "Beschreibung",
     "panelTitle": "Alternativtext",
     "title": "Titel"
+  },
+  "drop": {
+    "errors": {
+      "readOnly": "Dieses Dokument ist schreibgeschützt.",
+      "noTarget": "Ziehen Sie das Element auf bearbeitbaren Text.",
+      "unsupported": "Ziehen Sie ein PNG-, JPEG- oder GIF-Bild oder Text hierher."
+    }
   },
   "imageInsert": {
     "errors": {
@@ -934,7 +969,8 @@
       "invalidSignature": "Die Datei ist kein unterstütztes PNG-, JPEG- oder GIF-Bild.",
       "oversize": "Das Bild überschreitet die maximal zulässige Größe.",
       "refused": "Das Bild konnte nicht eingefügt werden.",
-      "unsupportedFormat": "Dieses Bildformat wird beim Einfügen nicht unterstützt."
+      "unsupportedFormat": "Dieses Bildformat wird beim Einfügen nicht unterstützt.",
+      "staleTarget": "Das Dokument oder die Ablageposition hat sich geändert. Ziehen Sie das Bild erneut an die gewünschte Stelle."
     }
   },
   "imageProperties": {
@@ -1008,6 +1044,7 @@
     "trackedOnly": "Dieses Dokument erlaubt Bearbeitungen nur mit Änderungsverfolgung",
     "unavailable": "Dieser Befehl ist nicht verfügbar",
     "viewing": "Dieses Dokument ist zur Ansicht geöffnet",
+    "compareCollaboration": "Dokumente vergleichen ist in einer gemeinsamen Bearbeitungssitzung nicht verfügbar.",
     "bodyOnlyNote": "Fußnoten und Endnoten werden im Haupttext des Dokuments hinzugefügt.",
     "bodyOnlySectionBreak": "Abschnittsumbrüche werden im Haupttext des Dokuments eingefügt.",
     "bodyOnlyToc": "Ein Inhaltsverzeichnis wird im Haupttext des Dokuments eingefügt.",
@@ -1023,13 +1060,19 @@
     "suggestingNeedsAuthor": "Vorschläge benötigen einen Autor. Legen Sie den Autor in der Editorkonfiguration fest.",
     "pictureSelected": "Ein Bild ist ausgewählt. Setzen Sie den Cursor in den Text, um ein Bild einzufügen.",
     "chartDrawing": "Dies ist ein Diagramm. Sie können es löschen, aber nicht wie ein Bild bearbeiten.",
-    "chartClipboard": "Die Auswahl enthält ein Diagramm. Diagramme können nicht kopiert, ausgeschnitten oder eingefügt werden.",
+    "chartFrame": "Dies ist ein Diagramm. Sie können Größe, Position, Textumbruch und Alternativtext ändern.",
+    "diagramFrame": "Dies ist ein Schaubild. Sie können Größe, Position, Textumbruch und Alternativtext ändern.",
+    "diagramRescale": "Die Größe dieses Schaubilds kann nicht geändert werden. Seine gespeicherte Zeichnung wird geteilt oder lässt sich nicht auf diese Größe skalieren.",
+    "chartClipboard": "Ein Diagramm kann nur allein kopiert, ausgeschnitten oder eingefügt werden, nicht zusammen mit anderen Inhalten.",
+    "chartClipboardStale": "Das kopierte Diagramm ist nicht mehr verfügbar. Kopieren Sie das Diagramm erneut.",
     "nothingToUndo": "Es gibt nichts rückgängig zu machen",
     "nothingToRedo": "Es gibt nichts wiederherzustellen",
     "outermostLevel": "Die Auswahl ist bereits auf der äußersten Ebene",
     "cannotIndentFurther": "Der Einzug der Auswahl kann nicht weiter vergrößert werden",
     "noGoToView": "Gehe zu ist hier nicht verfügbar",
-    "noBookmarkDialog": "Textmarken können hier nicht hinzugefügt werden"
+    "noBookmarkDialog": "Textmarken können hier nicht hinzugefügt werden",
+    "groupMemberMove": "Eine Form in einer Gruppe lässt sich nicht einzeln verschieben, skalieren oder löschen. Drücken Sie Esc, um die Gruppe auszuwählen.",
+    "groupMemberProperties": "Eine Form in einer Gruppe übernimmt Umbruch, Alternativtext und Eigenschaften von der Gruppe. Drücken Sie Esc, um die Gruppe auszuwählen."
   },
   "equationPopup": {
     "apply": "Übernehmen",
@@ -1168,5 +1211,230 @@
     "sectionBreakNextColumn": "Abschnittswechsel (Neue Spalte)",
     "sectionBreakNextPage": "Abschnittswechsel (Nächste Seite)",
     "sectionBreakOddPage": "Abschnittswechsel (Ungerade Seite)"
+  },
+  "compareDocuments": {
+    "author": "Autor der Änderungen",
+    "cancel": "Abbrechen",
+    "compare": "Vergleichen",
+    "comparing": "Wird verglichen…",
+    "description": "Wählen Sie eine andere Version dieses Dokuments. Die Unterschiede erscheinen hier als nachverfolgte Änderungen.",
+    "trackedChangesAccepted": "Das geöffnete Dokument enthält nachverfolgte Änderungen. Der Vergleich behandelt sie als angenommen.",
+    "detectFormatting": "Formatierungsänderungen einbeziehen",
+    "fileRequired": "Wählen Sie zuerst ein Dokument zum Vergleichen.",
+    "readFailed": "Die ausgewählte Datei konnte nicht gelesen werden.",
+    "revisedFile": "Vergleichen mit",
+    "title": "Dokumente vergleichen",
+    "noDifferences": "Die Dokumente unterscheiden sich nicht.",
+    "recorded": "{count, plural, one {Der Vergleich hat # Änderung aufgezeichnet.} other {Der Vergleich hat # Änderungen aufgezeichnet.}}",
+    "recordedNoRevisions": "Der Vergleich hat das Dokument ohne nachverfolgte Änderungen aktualisiert.",
+    "phases": {
+      "reading": "Die Dokumente werden gelesen…",
+      "comparing": "Wird verglichen…",
+      "checking": "Das Ergebnis wird geprüft…",
+      "applying": "Die Änderungen werden übernommen…"
+    },
+    "errors": {
+      "invalidOptions": "Die Vergleichsoptionen sind ungültig.",
+      "invalidOriginal": "Das geöffnete Dokument kann für einen Vergleich nicht gelesen werden.",
+      "invalidRevised": "Die ausgewählte Datei ist kein vergleichbares Dokument.",
+      "tooLarge": "Die Dokumente sind zu groß für einen Vergleich.",
+      "unsupportedContent": "Die Dokumente unterscheiden sich in Inhalten, die nicht als nachverfolgte Änderungen angezeigt werden können.",
+      "unavailable": "Dokumente vergleichen ist für dieses Dokument nicht verfügbar.",
+      "protected": "Dieses Dokument ist gegen Bearbeitung geschützt.",
+      "collaboration": "Dokumente vergleichen ist in einer gemeinsamen Bearbeitungssitzung nicht verfügbar.",
+      "viewing": "Das Dokument ist nur zum Lesen geöffnet.",
+      "closed": "Der Vergleich wurde abgebrochen.",
+      "empty": "Die ausgewählte Datei ist leer.",
+      "busy": "Ein anderer Vergleich, eine Vorschau oder eine Aktualisierung des Dokuments läuft. Versuchen Sie es erneut, wenn der Vorgang beendet ist.",
+      "documentChanged": "Das Dokument wurde während des Vergleichs geändert. Vergleichen Sie erneut.",
+      "failed": "Die Dokumente konnten nicht verglichen werden."
+    },
+    "reasons": {
+      "headerFooter": "Die Dokumente unterscheiden sich in einer Kopf- oder Fußzeile eines früheren Abschnitts, und dieser Abschnitt hat keinen passenden Abschnitt im anderen Dokument.",
+      "lockedContent": "Die Dokumente unterscheiden sich in einem Inhaltssteuerelement, das gesperrt oder mit Daten verknüpft ist. Die Änderungen dort können nicht überprüft werden. Entfernen Sie die Sperre oder die Verknüpfung und vergleichen Sie erneut.",
+      "packageStructure": "Das geöffnete Dokument kann das Ergebnis dieses Vergleichs nicht aufnehmen.",
+      "unrecordedSettings": "Die andere Version fügt Abschnitts- oder Tabelleneinstellungen hinzu, die sich durch Ablehnen der Änderungen nicht rückgängig machen lassen.",
+      "unresolvedRevisions": "Ein Dokument enthält nachverfolgte Änderungen, die nicht angenommen werden können. Nehmen Sie sie in diesem Dokument an oder lehnen Sie sie ab und vergleichen Sie erneut.",
+      "untrackedContent": "Die Dokumente unterscheiden sich in Inhalten, die nicht als nachverfolgte Änderungen angezeigt werden können, zum Beispiel einer eingebetteten Datei.",
+      "unverified": "Das Vergleichsergebnis würde nicht beide Dokumente wiedergeben und wurde daher nicht übernommen."
+    }
+  },
+  "chart": {
+    "insert": "Diagramm",
+    "insertType": "Diagramm vom Typ {type} einfügen",
+    "edit": "Diagramm bearbeiten…",
+    "sample": {
+      "category": "Kategorie {number}",
+      "series": "Reihe {number}",
+      "name": "Diagramm {number}"
+    },
+    "pane": {
+      "title": "Diagramm",
+      "close": "Diagrammbereich schließen",
+      "emptyTitle": "Kein Diagramm ausgewählt",
+      "emptyBody": "Wählen Sie ein Diagramm im Dokument aus, um es zu bearbeiten.",
+      "notEditableTitle": "Dieses Diagramm kann nicht bearbeitet werden"
+    },
+    "types": {
+      "columnClustered": "Säule",
+      "columnStacked": "Gestapelte Säule",
+      "columnPercentStacked": "Gestapelte Säule (100 %)",
+      "barClustered": "Balken",
+      "barStacked": "Gestapelter Balken",
+      "barPercentStacked": "Gestapelter Balken (100 %)",
+      "line": "Linie",
+      "lineMarkers": "Linie mit Datenpunkten",
+      "area": "Fläche",
+      "areaStacked": "Gestapelte Fläche",
+      "areaPercentStacked": "Gestapelte Fläche (100 %)",
+      "pie": "Kreis",
+      "doughnut": "Ring",
+      "radar": "Netz",
+      "scatter": "Punkt (XY)",
+      "scatterLines": "Punkt mit Linien",
+      "other": "Anderer Typ"
+    },
+    "format": {
+      "type": "Diagrammtyp",
+      "elements": "Diagrammelemente",
+      "showTitle": "Titel",
+      "titleText": "Titeltext",
+      "defaultTitle": "Diagrammtitel",
+      "legend": "Legende",
+      "legendPositions": {
+        "none": "Keine",
+        "top": "Oben",
+        "bottom": "Unten",
+        "left": "Links",
+        "right": "Rechts"
+      },
+      "dataLabels": "Datenbeschriftungen",
+      "gridlines": "Gitternetzlinien",
+      "axes": "Achsen",
+      "categoryAxisTitle": "Titel der Rubrikenachse",
+      "valueAxisTitle": "Titel der Größenachse",
+      "xAxisTitle": "Titel der X-Achse",
+      "yAxisTitle": "Titel der Y-Achse",
+      "axisTitleHelp": "Lassen Sie einen Achsentitel leer, um keinen Titel anzuzeigen.",
+      "axesOff": "Aktivieren Sie „Achsen“, um dies zu verwenden.",
+      "typeChangeRemoved": "Dieser Diagrammtyp behält die festgelegten Farben und Achsentitel nicht bei. Mit „Rückgängig“ stellen Sie sie wieder her.",
+      "typeChangeHint": "Einige Diagrammtypen behalten die festgelegten Farben und Achsentitel nicht bei.",
+      "pieFirstSeries": "Ein Kreisdiagramm zeigt nur die erste Reihe.",
+      "colors": "Farben",
+      "seriesColor": "Farbe von {name}",
+      "openColors": "Farbe für {name} auswählen",
+      "colorLighter": "{color}, {percent} % heller",
+      "colorDarker": "{color}, {percent} % dunkler"
+    },
+    "data": {
+      "categories": "Kategorien",
+      "xValues": "X-Werte",
+      "seriesName": "Name der Reihe {number}",
+      "categoryLabel": "Kategorie {number}",
+      "xValueLabel": "X-Wert {number}",
+      "cellLabel": "{series}, {category}",
+      "addCategory": "Kategorie hinzufügen",
+      "addSeries": "Reihe hinzufügen",
+      "help": "Drücken Sie die Eingabetaste oder verlassen Sie ein Feld, um es zu übernehmen. Lassen Sie einen Wert leer, um keinen Wert festzulegen.",
+      "workbookKept": "Die eingebettete Arbeitsmappe behält ihre alten Werte. Das Diagramm zeigt die eingegebenen Werte.",
+      "workbookExternal": "Das Diagramm bezieht seine Daten aus einer verknüpften Arbeitsmappe. Das Diagramm zeigt die eingegebenen Werte und wird nicht mehr über die Verknüpfung aktualisiert.",
+      "name": "Name",
+      "series": "Reihe",
+      "unnamed": "Unbenannte Reihe",
+      "removeCategoryNamed": "Kategorie {name} entfernen",
+      "removeSeriesNamed": "Reihe {name} entfernen",
+      "fieldErrors": {
+        "number": "Geben Sie eine Zahl ein oder lassen Sie die Zelle leer.",
+        "xNumber": "Geben Sie für jeden X-Wert eine Zahl ein.",
+        "tooLong": "Verwenden Sie höchstens 255 Zeichen.",
+        "limit": "Ein Diagramm hat mindestens eine Reihe und eine Kategorie sowie höchstens 255 Reihen und 4.000 Kategorien."
+      },
+      "removeSeries": "Reihe entfernen"
+    },
+    "errors": {
+      "noChart": "Wählen Sie ein Diagramm aus.",
+      "noData": "Das Diagramm hat keine Datenreihen.",
+      "combination": "Das Diagramm kombiniert mehrere Diagrammtypen.",
+      "unsupportedType": "Der Editor bearbeitet die Daten dieses Diagrammtyps nicht.",
+      "filtered": "Das Diagramm blendet einige seiner Reihen aus.",
+      "multiLevel": "Das Diagramm hat Kategorien auf mehreren Ebenen.",
+      "mixedCategories": "Die Reihen des Diagramms verwenden unterschiedliche Kategorien.",
+      "tooLarge": "Das Diagramm hat mehr Daten, als der Editor bearbeitet.",
+      "empty": "Ein Diagramm benötigt mindestens eine Reihe und eine Kategorie.",
+      "invalidText": "Ein Name oder eine Beschriftung enthält Zeichen, die ein Diagramm nicht speichern kann.",
+      "notNumber": "Jeder Wert muss eine Zahl sein.",
+      "layout": "Die Zellbezüge des Diagramms bilden keine zusammenhängende Tabelle. Sie können daher nur Namen und Werte ändern.",
+      "workbook": "Die eingebettete Arbeitsmappe kann diese Änderung nicht übernehmen. Geben Sie jeder Reihe einen anderen Namen und lassen Sie die Zellen neben den Daten leer.",
+      "noAxes": "Dieser Diagrammtyp hat keine Achsen.",
+      "sameType": "Das Diagramm hat bereits diesen Typ.",
+      "unsupported": "Der Editor unterstützt diese Diagrammänderung nicht.",
+      "invalidValue": "Das Diagramm kann diesen Wert nicht verwenden.",
+      "suggesting": "Diagramme können im Vorschlagsmodus nicht geändert werden. Wechseln Sie zu „Bearbeiten“, um dieses Diagramm zu ändern."
+    }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "Dieser ältere Formtyp hat keine Transparenzeinstellung.",
+      "noShape": "Wählen Sie eine Form, ein Textfeld oder eine Linie aus.",
+      "noSolidFill": "Die Form hat keine einfarbige Füllung. Wählen Sie zuerst eine Füllfarbe aus.",
+      "outOfRange": "Der Wert liegt außerhalb des Bereichs.",
+      "staleSelection": "Die Auswahl hat sich geändert. Wählen Sie die Form erneut aus.",
+      "mixedFill": "Die Formen in dieser Gruppe haben unterschiedliche Füllungen. Wählen Sie eine Farbe für alle."
+    },
+    "formatShape": "Form formatieren…",
+    "pane": {
+      "close": "Bereich „Form formatieren“ schließen",
+      "emptyBody": "Wählen Sie im Dokument eine Form, ein Textfeld oder eine Linie aus, um sie zu formatieren.",
+      "emptyTitle": "Keine Form ausgewählt",
+      "errors": {
+        "color": "Geben Sie eine Farbe als #RRGGBB oder als Farbnamen ein.",
+        "noSolidFill": "Wählen Sie zuerst eine Füllfarbe aus.",
+        "transparency": "Geben Sie eine Zahl von 0 bis 100 ein.",
+        "width": "Geben Sie eine Stärke von 0,25 bis 1584 Punkt ein.",
+        "dash": "Wählen Sie eine Strichart aus der Liste."
+      },
+      "fill": "Füllung",
+      "fillColor": "Füllfarbe",
+      "fillHex": "Hexwert der Füllfarbe",
+      "fillTypes": {
+        "gradient": "Farbverlauf",
+        "mixed": "Gemischt",
+        "none": "Keine Füllung",
+        "pattern": "Muster",
+        "picture": "Bild",
+        "solid": "Einfarbig"
+      },
+      "hexHelp": "Geben Sie #RRGGBB oder einen Farbnamen ein und drücken Sie die Eingabetaste.",
+      "mixedOutline": "Die Formen in dieser Gruppe haben unterschiedliche Konturen.",
+      "noFill": "Keine Füllung",
+      "noOutline": "Keine Linie",
+      "openFillColors": "Füllfarbe auswählen",
+      "openOutlineColors": "Konturfarbe auswählen",
+      "otherWidth": "Andere Stärke",
+      "outline": "Kontur",
+      "outlineColor": "Konturfarbe",
+      "outlineHex": "Hexwert der Konturfarbe",
+      "readOnlyFill": "Fülltyp: {fill}. Wählen Sie eine Farbe oder „Keine Füllung“, um ihn zu ersetzen.",
+      "title": "Form formatieren",
+      "transparency": "Transparenz (%)",
+      "width": "Stärke (pt)",
+      "widthPoints": "{value} pt",
+      "widthPreset": "Stärkenvorgabe",
+      "dash": "Strichart",
+      "dashes": {
+        "custom": "Benutzerdefiniert",
+        "dash": "Strich",
+        "dashDot": "Strich-Punkt",
+        "dot": "Punkt",
+        "lgDash": "Langer Strich",
+        "lgDashDot": "Langer Strich-Punkt",
+        "lgDashDotDot": "Langer Strich-Punkt-Punkt",
+        "solid": "Durchgezogen",
+        "sysDash": "Quadratischer Punkt",
+        "sysDashDot": "Quadratischer Strich-Punkt",
+        "sysDashDotDot": "Quadratischer Strich-Punkt-Punkt",
+        "sysDot": "Runder Punkt"
+      }
+    }
   }
 }

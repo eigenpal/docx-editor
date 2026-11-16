@@ -29,8 +29,9 @@ import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 //     not fit moves to the next page; a row taller than a fresh page fragments at
 //     paragraph/line boundaries (a w:cantSplit row first moves to a fresh page), or fails
 //     closed under hRule=exact / unsupported nested cuts;
-//   - nested tables retain their own geometry and may continue at ordinary row boundaries;
-//     cuts through nested rows, vertical merges and repeated headers remain atomic.
+//   - nested tables retain their own geometry and continue at row boundaries, also inside a
+//     vertical merge, or inside a row; a nested table with repeated headers stays whole while
+//     a page can hold it.
 //
 // All coordinates are points, relative to the page content box — exactly the space body
 // paragraph fragments already live in. Cell paragraph breaks go through the shared
@@ -44,13 +45,16 @@ import {
   type AnchoredDrawingRecord,
   type DrawingAnchorFrameContext,
 } from './drawing-layout.ts';
+import { authoredRowFields } from './table-row-record-fields.ts';
 import {
-  cellSpacingGapPt,
+  exactSpacingExtensionPt,
+  rowOpeningGapPt,
   cellSpacingGeometry,
+  spacedCellBox,
   closingCellSpacingPt,
   sumCols,
 } from './table-cell-spacing.ts';
-import { cellLineFits, clipsExactCellRow } from './table-cell-paragraph-options.ts';
+import { cellLineFits, clipsExactCellRow, rowFlowBounds } from './table-cell-paragraph-options.ts';
 import { exclusionLayoutToken } from './drawing-exclusion.ts';
 import type {
   FieldLinkProjector,
@@ -146,6 +150,7 @@ import {
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
 import { cellAnchorFlow, cellAnchorScope } from './cell-anchor-layout.ts';
 import { cellBottomWithAnchors, publishCellParagraphAnchors } from './cell-paragraph-anchors.ts';
+import { cellAnchorPageFit } from './cell-paragraph-anchors.ts';
 export { finalizeTableRows } from './table-fragment-finalize.ts';
 import type { RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
@@ -175,29 +180,7 @@ export const MAX_TABLE_ROW_FRAGMENTS = 4096;
 /** A cell box never narrows below this, however wide a `w:tblCellSpacing` gap is stated. */
 export const MIN_CELL_BOX_PT = 1;
 
-/**
- * Why a table could not be paginated as authored.
- *
- * Each is a bound: a row taller than a page, a row that cannot be split, or a row producing more
- * fragments than the limit allows.
- */
-export type TablePaginationErrorCode =
-  | 'table-row-overheight'
-  | 'table-row-split-unsupported'
-  | 'table-row-fragment-limit';
-
-/**
- * Bounded table pagination failure. Prefer this over emitting a fragment that overflows
- * the page content box.
- */
-export class TablePaginationError extends Error {
-  readonly code: TablePaginationErrorCode;
-  constructor(code: TablePaginationErrorCode, message: string) {
-    super(message);
-    this.name = 'TablePaginationError';
-    this.code = code;
-  }
-}
+export { TablePaginationError, type TablePaginationErrorCode } from './table-pagination-error.ts';
 
 /** Coupled text-box layout and cache invalidation for a hosted-story table flow lane. */
 export interface HostedStoryFlowDeps {
@@ -212,9 +195,13 @@ export interface TableFlowDeps {
   readonly exactOpeningExtension?: { readonly row: SemanticTableRow; readonly pt: number };
   /** The current row already has the full page band (possibly below repeated headers). */
   readonly rowAtPageStart?: boolean;
+  /** A spaced table's row below its first opens a fragment the table continues in. */
+  readonly opensTableBreak?: true;
   readonly paragraphLineUnitPt?: number;
   /** Story paragraphs outside cells snap to `paragraphLineUnitPt`; see {@link withStoryLineGrid}. */
   readonly snapsStoryLines?: true;
+  /** A header or footer story keeps its last automatic space after; cells and frames drop it. */
+  readonly keepsStoryEndAutoSpacing?: true;
   /** Whether a positioned table of this story carries `w:tblOverlap w:val="never"`. */
   readonly floatRefusesOverlap?: (tableId: string) => boolean;
   readonly measurer: TextMeasurer;
@@ -258,6 +245,8 @@ export interface TableFlowDeps {
   readonly tableNestingOffset?: 1;
   /** The story is a text box's content. */
   readonly textBoxStory?: true;
+  /** The cell content belongs to a fixed-layout table (`nestedAutofitStructure`). */
+  readonly parentTableFixed?: true | undefined;
   /**
    * Turns a typed `w:hyperlink` into the sanitized record its spans carry. A link in a
    * table cell is an ordinary link; without this it would paint its text and be dead.
@@ -285,6 +274,9 @@ export interface TableFlowDeps {
    */
   readonly refFields?: import('./field-ref.ts').RefFieldContext;
   readonly inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext;
+  /** Row page bottom, and the legacy crossing sink of row-start probes (`cellAnchorPageFit`). */
+  readonly cellPageBottom?: number;
+  readonly onCellAnchorCrossing?: () => void;
   /** Where inline pictures may paint sideways: the cell box, or a header's sheet; else the text. */
   readonly inlinePictureRoom?: InlinePictureRoom | undefined;
   /** Per-paragraph drawing projection/resource token for break cache keys. */
@@ -420,12 +412,11 @@ function placeCellParagraph(
     borders,
     shading,
   } = layoutInputs;
-  const edgeSpacing = cellEdgeAutoSpacing(
-    authoredSpacing,
-    props,
-    options?.firstInCell === true,
-    options?.lastInCell === true
-  );
+  const edgeSpacing = cellEdgeAutoSpacing(authoredSpacing, props, {
+    firstInCell: options?.firstInCell === true,
+    lastInCell: options?.lastInCell === true,
+    fixedAutoSpacing: deps.styleCascade?.fixedParagraphSpacing === true,
+  });
   const spacing = cellContextualSpacing(
     edgeSpacing,
     layoutInputs.contextualSpacing,
@@ -632,6 +623,7 @@ function placeCellParagraph(
   // Decide the cut before publishing line ids or drawings. A widow retreat must not
   // leave side effects from a line that will actually be placed on the following page.
   const lineTops: number[] = [];
+  const anchorFit = cellAnchorPageFit(paragraph, deps, top, options);
   let probeY = y;
   for (let lineIndex = lineStart; lineIndex < lines.length; lineIndex += 1) {
     const pendingLine = lines[lineIndex]!;
@@ -655,6 +647,7 @@ function placeCellParagraph(
       if (placesOversizedLine(options, deps, lineTops.length, skipBefore)) lineTops.push(probeY);
       break;
     }
+    if (anchorFit?.(pendingLine, probeY + skipBefore, lineTops.length)) break;
     lineTops.push(probeY + skipBefore);
     if (!collapseHeight) probeY += skipBefore + pendingLine.height;
   }
@@ -1144,7 +1137,8 @@ function flowBlocksInBoxBounded(
         includeAfter: true,
         includeBottomBorder: true,
         firstInCell: blockIndex === 0,
-        lastInCell: blockIndex === blocks.length - 1,
+        lastInCell:
+          blockIndex === blocks.length - 1 && (inTableCell || !deps.keepsStoryEndAutoSpacing),
         cellEndMark:
           (hideEndMark || cellEndMarkMinBottom !== undefined) && blockIndex === blocks.length - 1,
         hideEndMark: hideEndMark && blockIndex === blocks.length - 1,
@@ -1291,23 +1285,34 @@ export function layoutRowFragmentBounded(
   // `w:tblCellSpacing` (17.4.45) is the space on each side of every cell, so neighbouring
   // cells, and a cell and the table edge, sit twice that apart. The gaps come out of the
   // table's own width, and every column gives up its share in proportion to its width.
-  const gap = cellSpacingGeometry(cols, cellSpacingPt);
+  const gap = cellSpacingGeometry(cols, cellSpacingPt, row.spacingFrame);
   const defaultLineHeight = deps.measurer.lineMetrics(DEFAULT_RUN_STYLE).height;
   const heightRule = row.height;
   const exactHeightPt =
     heightRule.rule === 'exact'
-      ? heightRule.valuePt + exactOpeningExtensionPt(row, deps)
+      ? heightRule.valuePt +
+        exactOpeningExtensionPt(row, deps) +
+        exactSpacingExtensionPt(row, cellSpacingPt)
       : undefined;
   const atLeastHeightPt = heightRule.rule === 'atLeast' ? heightRule.valuePt : undefined;
   const terminalBorderPt =
     !isHeaderRepeat && !isContinuation && depth === 0 && cellSpacingPt === 0
       ? exactTerminalBorderPt(row, deps)
       : 0;
-  // The same spacing opens a gap above each row's cells: content starts that much lower and
-  // the table closes the gap below its last row. An exact row keeps its authored height.
-  const rowGapPt = exactHeightPt === undefined ? cellSpacingGapPt(cellSpacingPt) : 0;
+  // The same spacing opens a gap above each row's cells, so content starts that much lower.
+  const opening = isContinuation
+    ? 'remainder'
+    : isHeaderRepeat || deps.opensTableBreak
+      ? 'break'
+      : 'start';
+  const rowGapPt = rowOpeningGapPt(row, cellSpacingPt, opening);
   const deferredRowAnchors: DeferredRowAnchor[] = [];
-  const { rowDeps, flushDeferred } = rowDepsForAnchors(deps, deferredRowAnchors);
+  // Exact rows clip to their authored box; never flow past it even when the page allows more.
+  const { flowMaxBottom, pageBottom } = rowFlowBounds(maxBottom, rowTop, exactHeightPt);
+  const { rowDeps, flushDeferred } = rowDepsForAnchors(
+    { ...deps, cellPageBottom: pageBottom },
+    deferredRowAnchors
+  );
   const flowDeps: TableFlowDeps =
     isHeaderRepeat && deps.pageOccurrenceKey
       ? {
@@ -1316,11 +1321,6 @@ export function layoutRowFragmentBounded(
             rowDeps.nextLineId(paragraphId, start, lineIndex, deps.pageOccurrenceKey!()),
         }
       : rowDeps;
-  // Exact rows clip to their authored box; never flow past it even when the page allows more.
-  const flowMaxBottom =
-    exactHeightPt === undefined
-      ? maxBottom
-      : Math.min(maxBottom, rowTop + Math.max(0, exactHeightPt));
 
   interface FlowedCell {
     readonly cell: SemanticTableCell;
@@ -1357,9 +1357,12 @@ export function layoutRowFragmentBounded(
     const { gridSpan: span, gridColumn } = cell;
     const slotX = left + sumCols(cols, 0, gridColumn);
     const slotW = sumCols(cols, gridColumn, Math.min(gridColumn + span, cols.length)) || total;
-    const spaced = gap && gridColumn < cols.length ? gap : null;
-    const cellX = spaced ? left + spaced.cellLeft(gridColumn) : slotX;
-    const cellW = Math.max(spaced ? spaced.cellWidth(gridColumn, span) : slotW, MIN_CELL_BOX_PT);
+    const spaced =
+      gap && gridColumn < cols.length
+        ? spacedCellBox(gap, row.cells, gridColumn, span, cols.length)
+        : null;
+    const cellX = spaced ? left + spaced.x : slotX;
+    const cellW = Math.max(spaced ? spaced.width : slotW, MIN_CELL_BOX_PT);
     const ownInsets = endRowInsets(cell, deps, terminalBorderPt, rowTop, maxBottom, cellSpacingPt);
     const insets = rowGapPt > 0 ? { ...ownInsets, top: ownInsets.top + rowGapPt } : ownInsets;
     // Each page fragment retains the cell padding, even when its paragraph continues.
@@ -1608,11 +1611,7 @@ export function layoutRowFragmentBounded(
   return {
     record: {
       id: row.id,
-      ...(row.revisionKind ? { revisionKind: row.revisionKind } : {}),
-      ...(row.revisionId !== undefined ? { revisionId: row.revisionId } : {}),
-      ...(row.revisionAuthor !== undefined ? { revisionAuthor: row.revisionAuthor } : {}),
-      ...(row.revisionDate !== undefined ? { revisionDate: row.revisionDate } : {}),
-      ...(row.changeSites ? { changeSites: row.changeSites } : {}),
+      ...authoredRowFields(row),
       rowIndex: 0,
       isHeaderRow: row.isHeader,
       isHeaderRepeat,

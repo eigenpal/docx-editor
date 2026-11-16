@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -64,10 +64,7 @@ export type ContentControlValue =
 
 /** The lock a control carries. `ST_Lock`, spelled as the schema spells it. */
 export type ContentControlLockState =
-  | 'unlocked'
-  | 'sdtLocked'
-  | 'contentLocked'
-  | 'sdtContentLocked';
+  'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
 
 /** The control types this API can create. Picture and repeating section are deferred. */
 export type ContentControlSubtype = 'richText' | 'plainText' | 'dropDownList' | 'comboBox' | 'date';
@@ -179,6 +176,8 @@ export class ContentControl extends ModelObject implements PromisedItem {
    * after this property is loaded, so the atomic sync-time refusal remains the final authority.
    * Only binding presence is exposed: XPath, namespace mappings, store ids, and custom XML
    * content remain inside the untrusted-document boundary.
+   *
+   * @docxEditorExtension
    */
   get isBound(): boolean {
     return this.loadedProperty<boolean>('isBound');
@@ -216,12 +215,18 @@ export class ContentControl extends ModelObject implements PromisedItem {
    * STATE, not text. A control showing its placeholder holds the prompt in its runs, and the
    * first thing written into it replaces the whole prompt — so a caller that treats `text` as a
    * value must ask this before believing it.
+   *
+   * @docxEditorExtension
    */
   get placeholderShown(): boolean {
     return this.loadedProperty<boolean>('placeholderShown');
   }
 
-  /** Whether the control removes its own wrapper on the first content edit (`w:temporary`). */
+  /**
+   * Whether the control removes its own wrapper on the first content edit (`w:temporary`).
+   *
+   * @docxEditorExtension
+   */
   get temporary(): boolean {
     return this.loadedProperty<boolean>('temporary');
   }
@@ -277,6 +282,8 @@ export class ContentControl extends ModelObject implements PromisedItem {
    * engine's single write path, which is the same path a keystroke takes. {@link isBound} is an
    * advisory preflight only; this sync-time check remains authoritative if the document changed
    * after the flag was loaded.
+   *
+   * @docxEditorExtension
    */
   setValue(value: ContentControlValue): void {
     const target = `${this.path.label}.setValue`;
@@ -333,7 +340,9 @@ export class ContentControl extends ModelObject implements PromisedItem {
    * Remove the control.
    *
    * `keepContent` true is Word's own "Remove content control": the wrapper goes and the text it
-   * held stays exactly where it was. False takes the content with it.
+   * held stays exactly where it was. False takes the content with it. False refuses with
+   * `NotSupported` for a block control that follows a table at the end of a body, note, or
+   * text box, because that story keeps a paragraph after the table.
    */
   delete(keepContent: boolean): void {
     const target = `${this.path.label}.delete`;

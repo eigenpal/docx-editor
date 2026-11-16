@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -193,7 +193,7 @@ describe('the paragraphs of a story', () => {
       await context.sync();
       return paragraphs.items.map((paragraph) => paragraph.text);
     });
-    expect(texts).toEqual(['outer', 'deep']);
+    expect(texts).toEqual(['outer', 'deep', '']);
   });
 
   test('count an empty paragraph, and it reads as empty text', async () => {

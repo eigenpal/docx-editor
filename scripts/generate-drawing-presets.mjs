@@ -10,6 +10,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ecmaLegalComment } from './ecma-legal-comment.mjs';
 
 const input = process.argv[2];
 if (!input) {
@@ -124,18 +125,26 @@ const lines = presets
     return `${entry.name}|${entry.av.join(';')}|${entry.gd.join(';')}|${rect}|${paths}`;
   });
 
+const PREAMBLE =
+  'ECMA-376 preset shape geometry. The guide formulas and paths below are derived from ' +
+  'presetShapeDefinitions.xml in the electronic annex of ECMA-376 Part 1, (c) Ecma International. ' +
+  'They implement the functionality of the standard in a conformant product, item (iv) of the ' +
+  'Ecma copyright notice, and the Ecma terms below apply to them, not the Apache License of ' +
+  '@docx-editor.dev/core.';
+
 const header = `// GENERATED FILE. Do not edit. Regenerate with:
 //   node scripts/generate-drawing-presets.mjs presetShapeDefinitions.xml
 //
 // Preset shape geometry from presetShapeDefinitions.xml in the electronic annex of
 // ECMA-376 Part 1 (Office Open XML File Formats, Fundamentals and Markup Language Reference).
-// Copyright Ecma International. The Ecma notice in packages/core/licenses/ECMA-376.md applies
-// to this table. Adjust handles and connection sites are omitted.
+// Copyright Ecma International. The Ecma notice below and in packages/core/licenses/ECMA-376.md
+// applies to this table, not the Apache License. Adjust handles and connection sites are omitted.
 //
 // One line per preset: name|avLst|gdLst|text rect|paths. Guides are \`name=formula\` joined
 // by ';'. Paths are \`w h fill stroke:commands\` joined by '!', where a command is one of
 // M x y, L x y, A wR hR stAng swAng, Q x1 y1 x2 y2, C x1 y1 x2 y2 x3 y3, Z.
 `;
+const legal = ecmaLegalComment(PREAMBLE);
 const body = `export const PRESET_SHAPE_SOURCE = \`\n${lines.join('\n')}\n\`;\n`;
-writeFileSync(output, header + '\n' + body);
+writeFileSync(output, header + '\n' + legal + body);
 console.log(`wrote ${presets.length} presets to ${output}`);

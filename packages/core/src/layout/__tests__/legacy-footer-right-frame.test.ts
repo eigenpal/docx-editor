@@ -1,7 +1,8 @@
 // A footer whose first paragraph is a right-aligned PAGE frame (`w:wrap="none"`, anchored to
 // the text below it) and whose second paragraph is its text line. The frame shares that line's
 // band at the right margin and adds no flow height; the text paragraph lays out as if it opened
-// the footer. Every other structure keeps the ordinary flow.
+// the footer. Other frames that wrap nothing, and the same page number wrapping text, take the
+// general story frame lane; every other structure keeps the ordinary flow.
 
 import { describe, expect, test } from 'bun:test';
 import {
@@ -222,11 +223,23 @@ describe('structures that keep the ordinary flow', () => {
     return (story.fragments[1] as ParagraphFragmentRecord).box.y > 0;
   };
   const samples: [string, string][] = [
-    ['wrap around', body.replace('w:wrap="none"', 'w:wrap="around"')],
     ['wrap notBeside', body.replace('w:wrap="none"', 'w:wrap="notBeside"')],
+    ['page-anchored', body.replace('w:vAnchor="text"', 'w:vAnchor="page"')],
+    ['two frames', body.replace(frame, frame + frame)],
+  ];
+  for (const [label, content] of samples) {
+    test(label, () => {
+      expect(content).not.toBe(body);
+      expect(inFlow(content)).toBe(true);
+    });
+  }
+
+  // Other frames that wrap nothing, and a page number that wraps text, leave this lane for the
+  // general story frame lane, which also keeps them out of the footer's flow.
+  const placedElsewhere: [string, string][] = [
+    ['wrap around', body.replace('w:wrap="none"', 'w:wrap="around"')],
     ['centered', body.replace('w:xAlign="right"', 'w:xAlign="center"')],
     ['page-relative', body.replace('w:hAnchor="margin"', 'w:hAnchor="page"')],
-    ['page-anchored', body.replace('w:vAnchor="text"', 'w:vAnchor="page"')],
     ['a real offset', body.replace('w:y="1"', 'w:y="200"')],
     ['a frame width', body.replace('w:y="1"', 'w:y="1" w:w="600"')],
     ['a frame distance', body.replace('w:y="1"', 'w:y="1" w:hSpace="180"')],
@@ -248,12 +261,12 @@ describe('structures that keep the ordinary flow', () => {
     ],
     ['a field in the anchor', framedParagraph + anchorParagraph.replace(anchorText, field)],
     ['a third paragraph', body + anchorParagraph],
-    ['two frames', body.replace(frame, frame + frame)],
   ];
-  for (const [label, content] of samples) {
+  for (const [label, content] of placedElsewhere) {
     test(label, () => {
       expect(content).not.toBe(body);
-      expect(inFlow(content)).toBe(true);
+      expect(inFlow(content)).toBe(false);
+      expect(paragraphs(lay(content)).framed.outOfFlow).toBe(true);
     });
   }
 

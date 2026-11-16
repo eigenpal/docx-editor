@@ -777,11 +777,19 @@ function paintDrawingRecordElement(
     );
   }
 
-  // A group made only of text box members paints its text in its own layer. Its frame here is
-  // empty, but it keeps the group selectable and labelled like any other drawing.
-  if (drawing.groupTextboxStories && !drawing.groupPicture && !drawing.vectorShape) {
+  // A group made only of text box members paints its text in its own layer, and a shape whose
+  // custom geometry has no paths paints nothing. The frame here is empty, but it keeps the
+  // drawing selectable and labelled like any other drawing, and shows no placeholder card.
+  const groupFrame = !!drawing.groupTextboxStories && !drawing.groupPicture && !drawing.vectorShape;
+  const emptyShape =
+    drawing.vectorShape?.components.length === 0 &&
+    drawing.groupPicture === undefined &&
+    !isFramedPicture(drawing);
+  if (groupFrame || emptyShape) {
     const frame = document.createElement('div');
-    frame.className = 'docx-drawing docx-drawing-group-frame';
+    frame.className = groupFrame
+      ? 'docx-drawing docx-drawing-group-frame'
+      : 'docx-drawing docx-drawing-empty-frame';
     if (!ctx.unbound) frame.dataset.drawingNodeId = drawing.drawingNodeId;
     positionedBox(frame, drawing.paintBounds, ctx.scale, origin);
     applyAccessibility(frame, drawing, false);

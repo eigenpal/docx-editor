@@ -191,9 +191,12 @@ export const DocxEditorHorizontalRuler = defineComponent({
             style={{
               ...props.style,
               transform: `${props.style?.transform ? `${props.style.transform} ` : ''}translateX(${-scrollLeft.value}px)`,
+              // A right-to-left scroller counts below zero; its pane is on the right.
               clipPath:
-                shift.value > 0 && scrollLeft.value > 0
-                  ? `inset(0 0 0 ${scrollLeft.value}px)`
+                shift.value > 0 && scrollLeft.value !== 0
+                  ? scrollLeft.value > 0
+                    ? `inset(0 0 0 ${scrollLeft.value}px)`
+                    : `inset(0 ${-scrollLeft.value}px 0 0)`
                   : props.style?.clipPath,
             }}
           />

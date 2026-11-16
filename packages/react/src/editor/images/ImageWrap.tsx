@@ -10,6 +10,7 @@ import { useEditorValueCommand } from '../useEditorValueCommand';
 import { useToolbarLabel } from '../toolbar/toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { Slot } from '../toolbar/Slot';
+import { PanelRowContent, triggerClassName, usePanelRow } from '../toolbar/panel-row';
 import { hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
 
 const WRAP_OPTIONS: readonly {
@@ -50,6 +51,7 @@ export function ImageWrap({ className, hidden, asChild, children }: ImageWrapPro
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
+  const panelRow = usePanelRow(asChild, children);
 
   const current = useMemo(
     () => WRAP_OPTIONS.find((option) => option.value === value) ?? WRAP_OPTIONS[0]!,
@@ -95,7 +97,7 @@ export function ImageWrap({ className, hidden, asChild, children }: ImageWrapPro
   const shared = {
     type: 'button' as const,
     ref: triggerRef,
-    className: `docx-toolbar__button docx-toolbar__image-wrap-trigger${className ? ` ${className}` : ''}`,
+    className: `${triggerClassName(panelRow)} docx-toolbar__image-wrap-trigger${className ? ` ${className}` : ''}`,
     'data-slot': 'image.wrap',
     disabled: !isEnabled,
     ...(!isEnabled ? { 'data-disabled': '' } : {}),
@@ -113,7 +115,13 @@ export function ImageWrap({ className, hidden, asChild, children }: ImageWrapPro
       {asChild ? (
         <Slot {...shared}>{children}</Slot>
       ) : (
-        <button {...shared}>{children ?? chromeIcon(control?.paths)}</button>
+        <button {...shared}>
+          {panelRow ? (
+            <PanelRowContent icon={chromeIcon(control?.paths)} label={tooltip} />
+          ) : (
+            (children ?? chromeIcon(control?.paths))
+          )}
+        </button>
       )}
       {open ? (
         <div

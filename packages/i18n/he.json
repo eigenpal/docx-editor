@@ -61,7 +61,10 @@
     "bookmarkShortcut": "Ctrl+Shift+F5",
     "goToBookmark": "מעבר לסימניה…",
     "goToBookmarkShortcut": "Ctrl+G",
-    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G",
+    "printComments": "הדפס הערות",
+    "printCommentsNote": "מחוץ למצב {mode}, ההערות מודפסות כהערות על הטקסט שהוערה.",
+    "printMarkup": "סימון"
   },
   "formattingBar": {
     "groups": {
@@ -76,7 +79,9 @@
       "image": "תמונה",
       "table": "טבלה",
       "format": "עיצוב",
-      "direction": "כיוון טקסט"
+      "direction": "כיוון טקסט",
+      "chart": "תרשים",
+      "shape": "צורה"
     },
     "undo": "בטל",
     "undoShortcut": "בטל (Ctrl+Z)",
@@ -224,7 +229,11 @@
       "background2": "רקע 2",
       "text1": "טקסט 1",
       "text2": "טקסט 2"
-    }
+    },
+    "lighterPercent": "{color}, בהיר יותר ב-{percent}%",
+    "darkerPercent": "{color}, כהה יותר ב-{percent}%",
+    "hexColor": "צבע הקסדצימלי",
+    "invalidHex": "הקלד צבע בתבנית #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {
@@ -421,7 +430,20 @@
     "addComment": "הוסף תגובה...",
     "replyPlaceholder": "השב או הוסף אחרים עם @",
     "reopen": "פתח מחדש",
-    "resolve": "פתור"
+    "resolve": "פתור",
+    "edit": "עריכה",
+    "editConflict": "התגובה הזו השתנתה. הטיוטה שלך נשמרה. יש לבטל כדי לראות את הטקסט העדכני.",
+    "editEmpty": "יש להזין טקסט לתגובה לפני השמירה.",
+    "editPermission": "אפשר לערוך רק תגובות שלך.",
+    "editRefused": "לא ניתן לשמור את התגובה. הטיוטה שלך נשמרה.",
+    "editText": "טקסט התגובה",
+    "saveEdit": "שמירת שינויים",
+    "deletedDraft": "התגובה הזו כבר אינה זמינה כאן. הטיוטה שלא נשמרה נשארת זמינה להעתקה.",
+    "discardDraft": "מחיקת הטיוטה",
+    "recoveredDraft": "טיוטת תגובה שלא נשמרה",
+    "actions": "פעולות תגובה",
+    "replyActions": "פעולות תשובה",
+    "delete": "מחיקה"
   },
   "contextMenu": {
     "ariaLabel": "תפריט פעולות AI",
@@ -570,7 +592,9 @@
     "fontSubstitutionNotice": "חלק מהגופנים במסמך זה אינם זמינים, ולכן מוצגים גופנים חלופיים: {fonts}",
     "documentContent": "תוכן המסמך",
     "previewContent": "תצוגה מקדימה של השינויים המוצעים",
-    "documentViewport": "עמודי המסמך"
+    "documentViewport": "עמודי המסמך",
+    "grammarIssueCount": "{count, plural, =0 {אין שגיאות דקדוק.} one {שגיאת דקדוק אחת.} other {# שגיאות דקדוק.}}",
+    "spellingIssueCount": "{count, plural, =0 {אין שגיאות כתיב.} one {שגיאת כתיב אחת.} other {# שגיאות כתיב.}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "טקסט לתצוגה",
@@ -676,7 +700,8 @@
     },
     "selection": "תמונה נבחרת",
     "locked": "לא ניתן להזיז תיבה זו או לשנות את גודלה",
-    "textLocked": "לא ניתן לערוך את הטקסט בתיבה זו"
+    "textLocked": "לא ניתן לערוך את הטקסט בתיבה זו",
+    "selectionShape": "צורה נבחרת"
   },
   "revisions": {
     "paragraphMarkInserted": "סימן פסקה נוסף",
@@ -703,6 +728,7 @@
       "fontFamily": "גופן",
       "fontSize": "גודל גופן",
       "hangingIndent": "כניסה תלויה",
+      "highlight": "סימון טקסט",
       "italic": "נטוי",
       "left": "שמאל",
       "leftIndent": "כניסה שמאלית",
@@ -733,7 +759,8 @@
   },
   "toc": {
     "refresh": "עדכון הטבלה כולה",
-    "refreshPageNumbers": "עדכון מספרי עמודים בלבד"
+    "refreshPageNumbers": "עדכון מספרי עמודים בלבד",
+    "remove": "הסרת תוכן העניינים"
   },
   "reviewers": {
     "label": "סוקרים",
@@ -921,12 +948,20 @@
     "replyCount": "תשובות: {count}",
     "trackedChange": "שינוי במעקב",
     "changeAnnouncement": "{change} מאת {author}: {text}",
-    "replyTargetResolved": "השינוי נפתר, ולכן התשובה לא פורסמה."
+    "replyTargetResolved": "השינוי נפתר, ולכן התשובה לא פורסמה.",
+    "compareDocuments": "השוואת מסמכים"
   },
   "imageAltText": {
     "description": "תיאור",
     "panelTitle": "טקסט חלופי",
     "title": "כותרת"
+  },
+  "drop": {
+    "errors": {
+      "readOnly": "המסמך הזה הוא לקריאה בלבד.",
+      "noTarget": "שחררו על טקסט שניתן לעריכה.",
+      "unsupported": "שחררו תמונת PNG, JPEG, GIF או טקסט."
+    }
   },
   "imageInsert": {
     "errors": {
@@ -935,7 +970,8 @@
       "invalidSignature": "הקובץ אינו תמונת PNG, JPEG או GIF נתמכת.",
       "oversize": "התמונה חורגת מהגודל המרבי המותר.",
       "refused": "לא ניתן להוסיף את התמונה.",
-      "unsupportedFormat": "תבנית תמונה זו אינה נתמכת להוספה."
+      "unsupportedFormat": "תבנית תמונה זו אינה נתמכת להוספה.",
+      "staleTarget": "המסמך או מיקום השחרור השתנו. שחררו את התמונה שוב."
     }
   },
   "imageProperties": {
@@ -1009,6 +1045,7 @@
     "trackedOnly": "מסמך זה מאפשר עריכה רק באמצעות מעקב אחר שינויים",
     "unavailable": "פקודה זו אינה זמינה",
     "viewing": "מסמך זה פתוח לצפייה",
+    "compareCollaboration": "השוואת מסמכים אינה זמינה בסשן עריכה משותף.",
     "bodyOnlyNote": "הערות שוליים והערות סיום מתווספות מתוך גוף המסמך.",
     "bodyOnlySectionBreak": "מעברי מקטע מתווספים לגוף המסמך.",
     "bodyOnlyToc": "תוכן עניינים מתווסף לגוף המסמך.",
@@ -1024,13 +1061,19 @@
     "suggestingNeedsAuthor": "מצב הצעות מחייב מחבר. הגדר את המחבר בתצורת העורך.",
     "pictureSelected": "תמונה נבחרה. מקמו את הסמן בטקסט כדי להוסיף תמונה.",
     "chartDrawing": "זהו תרשים. אפשר למחוק אותו, אבל לא לערוך אותו כתמונה.",
-    "chartClipboard": "הבחירה מכילה תרשים. אי אפשר להעתיק, לגזור או להדביק תרשימים.",
+    "chartFrame": "זהו תרשים. אפשר לשנות את הגודל, המיקום, גלישת הטקסט והטקסט החלופי שלו.",
+    "diagramFrame": "זוהי דיאגרמה. אפשר לשנות את הגודל, המיקום, גלישת הטקסט והטקסט החלופי שלה.",
+    "diagramRescale": "אי אפשר לשנות את גודל הדיאגרמה הזו. הציור השמור שלה משותף עם דיאגרמה אחרת או שאי אפשר לשנות אותו לגודל הזה.",
+    "chartClipboard": "אפשר להעתיק, לגזור או להדביק תרשים רק לבדו, לא יחד עם תוכן אחר.",
+    "chartClipboardStale": "התרשים שהועתק כבר אינו זמין. העתק את התרשים שוב.",
     "nothingToUndo": "אין מה לבטל",
     "nothingToRedo": "אין מה לבצע שוב",
     "outermostLevel": "הבחירה כבר ברמה החיצונית ביותר",
     "cannotIndentFurther": "לא ניתן להגדיל עוד את הכניסה של הבחירה",
     "noGoToView": "מעבר אינו זמין כאן",
-    "noBookmarkDialog": "לא ניתן להוסיף סימניות כאן"
+    "noBookmarkDialog": "לא ניתן להוסיף סימניות כאן",
+    "groupMemberMove": "צורה בתוך קבוצה אינה זזה, משנה גודל או נמחקת בנפרד. הקש Escape כדי לבחור את הקבוצה.",
+    "groupMemberProperties": "צורה בתוך קבוצה מקבלת את הגלישה, הטקסט החלופי והמאפיינים מהקבוצה. הקש Escape כדי לבחור את הקבוצה."
   },
   "equationPopup": {
     "apply": "החלה",
@@ -1169,5 +1212,230 @@
     "sectionBreakNextColumn": "מעבר מקטע (טור חדש)",
     "sectionBreakNextPage": "מעבר מקטע (עמוד חדש)",
     "sectionBreakOddPage": "מעבר מקטע (עמוד אי-זוגי)"
+  },
+  "compareDocuments": {
+    "author": "מחבר השינויים",
+    "cancel": "ביטול",
+    "compare": "השוואה",
+    "comparing": "משווה…",
+    "description": "בחר גרסה אחרת של מסמך זה. ההבדלים יופיעו כאן כשינויים במעקב.",
+    "trackedChangesAccepted": "במסמך הפתוח יש שינויים במעקב. ההשוואה מתייחסת אליהם כאל מאושרים.",
+    "detectFormatting": "כלול שינויי עיצוב",
+    "fileRequired": "בחר תחילה מסמך להשוואה.",
+    "readFailed": "לא ניתן היה לקרוא את הקובץ שנבחר.",
+    "revisedFile": "השווה עם",
+    "title": "השוואת מסמכים",
+    "noDifferences": "אין הבדלים בין המסמכים.",
+    "recorded": "{count, plural, one {ההשוואה רשמה שינוי אחד.} two {ההשוואה רשמה שני שינויים.} other {ההשוואה רשמה # שינויים.}}",
+    "recordedNoRevisions": "ההשוואה עדכנה את המסמך ללא שינויים במעקב.",
+    "phases": {
+      "reading": "קורא את המסמכים…",
+      "comparing": "משווה…",
+      "checking": "בודק את התוצאה…",
+      "applying": "מחיל את השינויים…"
+    },
+    "errors": {
+      "invalidOptions": "אפשרויות ההשוואה אינן תקינות.",
+      "invalidOriginal": "לא ניתן לקרוא את המסמך הפתוח לצורך השוואה.",
+      "invalidRevised": "הקובץ שנבחר אינו מסמך שניתן להשוות.",
+      "tooLarge": "המסמכים גדולים מדי להשוואה.",
+      "unsupportedContent": "המסמכים שונים בתוכן שלא ניתן להציג כשינויים במעקב.",
+      "unavailable": "השוואת מסמכים אינה זמינה עבור מסמך זה.",
+      "protected": "מסמך זה מוגן מפני עריכה.",
+      "collaboration": "השוואת מסמכים אינה זמינה בסשן עריכה משותף.",
+      "viewing": "המסמך פתוח לצפייה בלבד.",
+      "closed": "ההשוואה בוטלה.",
+      "empty": "הקובץ שנבחר ריק.",
+      "busy": "השוואה אחרת, תצוגה מקדימה או רענון של המסמך פועלים כעת. נסו שוב כשהפעולה תסתיים.",
+      "documentChanged": "המסמך השתנה בזמן ההשוואה. השוו שוב.",
+      "failed": "לא ניתן היה להשוות את המסמכים."
+    },
+    "reasons": {
+      "headerFooter": "המסמכים שונים בכותרת עליונה או תחתונה של מקטע קודם, ולמקטע זה אין מקטע תואם במסמך השני.",
+      "lockedContent": "המסמכים שונים בתוך פקד תוכן נעול או מקושר לנתונים, ולכן אי אפשר לבדוק את השינויים שם. הסר את הנעילה או את הקישור והשווה שוב.",
+      "packageStructure": "המסמך הפתוח לא יכול להכיל את התוצאה של ההשוואה הזו.",
+      "unrecordedSettings": "הגרסה האחרת מוסיפה הגדרות מקטע או טבלה שלא ניתן לבטל על ידי דחיית השינויים.",
+      "unresolvedRevisions": "מסמך מכיל שינויים במעקב שאי אפשר לקבל. קבל או דחה אותם במסמך הזה והשווה שוב.",
+      "untrackedContent": "המסמכים שונים בתוכן שאי אפשר להציג כשינויים במעקב, למשל קובץ מוטבע.",
+      "unverified": "תוצאת ההשוואה לא הייתה משחזרת את שני המסמכים, ולכן היא לא הוחלה."
+    }
+  },
+  "chart": {
+    "insert": "תרשים",
+    "insertType": "הוספת תרשים מסוג {type}",
+    "edit": "עריכת תרשים…",
+    "sample": {
+      "category": "קטגוריה {number}",
+      "series": "סדרה {number}",
+      "name": "תרשים {number}"
+    },
+    "pane": {
+      "title": "תרשים",
+      "close": "סגירת חלונית התרשים",
+      "emptyTitle": "לא נבחר תרשים",
+      "emptyBody": "בחר תרשים במסמך כדי לערוך אותו.",
+      "notEditableTitle": "לא ניתן לערוך תרשים זה"
+    },
+    "types": {
+      "columnClustered": "עמודות",
+      "columnStacked": "עמודות מוערמות",
+      "columnPercentStacked": "עמודות מוערמות 100%",
+      "barClustered": "פסים",
+      "barStacked": "פסים מוערמים",
+      "barPercentStacked": "פסים מוערמים 100%",
+      "line": "קו",
+      "lineMarkers": "קו עם סמנים",
+      "area": "שטח",
+      "areaStacked": "שטח מוערם",
+      "areaPercentStacked": "שטח מוערם 100%",
+      "pie": "עוגה",
+      "doughnut": "טבעת",
+      "radar": "רדאר",
+      "scatter": "פיזור",
+      "scatterLines": "פיזור עם קווים",
+      "other": "סוג אחר"
+    },
+    "format": {
+      "type": "סוג תרשים",
+      "elements": "רכיבי תרשים",
+      "showTitle": "כותרת",
+      "titleText": "טקסט הכותרת",
+      "defaultTitle": "כותרת תרשים",
+      "legend": "מקרא",
+      "legendPositions": {
+        "none": "ללא",
+        "top": "למעלה",
+        "bottom": "למטה",
+        "left": "שמאל",
+        "right": "ימין"
+      },
+      "dataLabels": "תוויות נתונים",
+      "gridlines": "קווי רשת",
+      "axes": "צירים",
+      "categoryAxisTitle": "כותרת ציר הקטגוריות",
+      "valueAxisTitle": "כותרת ציר הערכים",
+      "xAxisTitle": "כותרת ציר X",
+      "yAxisTitle": "כותרת ציר Y",
+      "axisTitleHelp": "השאר כותרת ציר ריקה כדי שלא תוצג כותרת.",
+      "axesOff": "הפעל את \"צירים\" כדי להשתמש באפשרות זו.",
+      "typeChangeRemoved": "סוג תרשים זה אינו שומר את הצבעים או את כותרות הצירים שהגדרת. ביטול הפעולה מחזיר אותם.",
+      "typeChangeHint": "חלק מסוגי התרשימים אינם שומרים את הצבעים או את כותרות הצירים שהגדרת.",
+      "pieFirstSeries": "תרשים עוגה מציג רק את הסדרה הראשונה.",
+      "colors": "צבעים",
+      "seriesColor": "הצבע של {name}",
+      "openColors": "בחירת צבע עבור {name}",
+      "colorLighter": "{color}, בהיר יותר ב-{percent}%",
+      "colorDarker": "{color}, כהה יותר ב-{percent}%"
+    },
+    "data": {
+      "categories": "קטגוריות",
+      "xValues": "ערכי X",
+      "seriesName": "שם סדרה {number}",
+      "categoryLabel": "קטגוריה {number}",
+      "xValueLabel": "ערך X מספר {number}",
+      "cellLabel": "{series}, {category}",
+      "addCategory": "הוספת קטגוריה",
+      "addSeries": "הוספת סדרה",
+      "help": "הקש Enter או צא מהשדה כדי להחיל אותו. השאר ערך ריק כדי שלא יהיה ערך.",
+      "workbookKept": "חוברת העבודה המוטמעת שומרת על הערכים הישנים שלה. התרשים מציג את הערכים שהזנת.",
+      "workbookExternal": "התרשים מקבל את הנתונים שלו מחוברת עבודה מקושרת. התרשים מציג את הערכים שהזנת ומפסיק להתעדכן מהקישור.",
+      "name": "שם",
+      "series": "סדרה",
+      "unnamed": "סדרה ללא שם",
+      "removeCategoryNamed": "הסרת הקטגוריה {name}",
+      "removeSeriesNamed": "הסרת הסדרה {name}",
+      "fieldErrors": {
+        "number": "הזן מספר, או השאר את התא ריק.",
+        "xNumber": "הזן מספר עבור כל ערך X.",
+        "tooLong": "השתמש ב-255 תווים לכל היותר.",
+        "limit": "תרשים כולל לפחות סדרה אחת וקטגוריה אחת, ועד 255 סדרות ו-4,000 קטגוריות."
+      },
+      "removeSeries": "הסרת סדרה"
+    },
+    "errors": {
+      "noChart": "בחר תרשים אחד.",
+      "noData": "אין לתרשים סדרות נתונים.",
+      "combination": "התרשים משלב יותר מסוג תרשים אחד.",
+      "unsupportedType": "העורך אינו עורך את הנתונים של סוג תרשים זה.",
+      "filtered": "התרשים מסתיר חלק מהסדרות שלו.",
+      "multiLevel": "לתרשים יש קטגוריות ביותר מרמה אחת.",
+      "mixedCategories": "הסדרות של התרשים משתמשות בקטגוריות שונות.",
+      "tooLarge": "בתרשים יש יותר נתונים ממה שהעורך עורך.",
+      "empty": "תרשים צריך לפחות סדרה אחת וקטגוריה אחת.",
+      "invalidText": "שם או תווית מכילים תווים שתרשים אינו יכול לשמור.",
+      "notNumber": "כל ערך חייב להיות מספר.",
+      "layout": "הפניות התאים של התרשים אינן יוצרות טבלה אחת, ולכן ניתן לשנות רק שמות וערכים.",
+      "workbook": "חוברת העבודה המוטמעת אינה יכולה לקבל שינוי זה. תן לכל סדרה שם שונה, והשאר ריקים את התאים שליד הנתונים.",
+      "noAxes": "לסוג תרשים זה אין צירים.",
+      "sameType": "התרשים כבר מסוג זה.",
+      "unsupported": "העורך אינו תומך בשינוי זה בתרשים.",
+      "invalidValue": "התרשים אינו יכול להשתמש בערך זה.",
+      "suggesting": "לא ניתן לשנות תרשימים בזמן הצעת עריכות. עבור לעריכה כדי לשנות תרשים זה."
+    }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "לסוג צורה ישן זה אין הגדרת שקיפות.",
+      "noShape": "בחר צורה אחת, תיבת טקסט אחת או קו אחד.",
+      "noSolidFill": "לצורה אין מילוי אחיד. בחר תחילה צבע מילוי.",
+      "outOfRange": "הערך מחוץ לטווח.",
+      "staleSelection": "הבחירה השתנתה. בחר את הצורה שוב.",
+      "mixedFill": "לצורות בקבוצה זו יש מילויים שונים. בחר צבע כדי להחיל אותו על כולן."
+    },
+    "formatShape": "עיצוב צורה…",
+    "pane": {
+      "close": "סגור את חלונית עיצוב הצורה",
+      "emptyBody": "בחר צורה, תיבת טקסט או קו במסמך כדי לעצב אותם.",
+      "emptyTitle": "לא נבחרה צורה",
+      "errors": {
+        "color": "הקלד צבע בתבנית ‎#RRGGBB או כשם של צבע.",
+        "noSolidFill": "בחר תחילה צבע מילוי.",
+        "transparency": "הקלד מספר בין 0 ל-100.",
+        "width": "הקלד עובי בין 0.25 ל-1584 נקודות.",
+        "dash": "בחר סוג מקף מהרשימה."
+      },
+      "fill": "מילוי",
+      "fillColor": "צבע מילוי",
+      "fillHex": "צבע מילוי הקסדצימלי",
+      "fillTypes": {
+        "gradient": "מעבר צבע",
+        "mixed": "מעורב",
+        "none": "ללא מילוי",
+        "pattern": "דוגמה",
+        "picture": "תמונה",
+        "solid": "אחיד"
+      },
+      "hexHelp": "הקלד ‎#RRGGBB או שם של צבע, ולאחר מכן הקש Enter.",
+      "mixedOutline": "לצורות בקבוצה זו יש קווי מתאר שונים.",
+      "noFill": "ללא מילוי",
+      "noOutline": "ללא קו",
+      "openFillColors": "בחר צבע מילוי",
+      "openOutlineColors": "בחר צבע קו מתאר",
+      "otherWidth": "עובי אחר",
+      "outline": "קו מתאר",
+      "outlineColor": "צבע קו מתאר",
+      "outlineHex": "צבע קו מתאר הקסדצימלי",
+      "readOnlyFill": "סוג מילוי: {fill}. בחר צבע או ״ללא מילוי״ כדי להחליף אותו.",
+      "title": "עיצוב צורה",
+      "transparency": "שקיפות (%)",
+      "width": "עובי (נק׳)",
+      "widthPoints": "{value} נק׳",
+      "widthPreset": "עובי מוגדר מראש",
+      "dash": "סוג מקף",
+      "dashes": {
+        "custom": "מותאם אישית",
+        "dash": "מקף",
+        "dashDot": "מקף ונקודה",
+        "dot": "נקודה",
+        "lgDash": "מקף ארוך",
+        "lgDashDot": "מקף ארוך ונקודה",
+        "lgDashDotDot": "מקף ארוך ושתי נקודות",
+        "solid": "רציף",
+        "sysDash": "נקודה מרובעת",
+        "sysDashDot": "מקף מרובע ונקודה",
+        "sysDashDotDot": "מקף מרובע ושתי נקודות",
+        "sysDot": "נקודה עגולה"
+      }
+    }
   }
 }

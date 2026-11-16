@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "At the trailing edge of an inline text control, the caret's owning control came from a hit test a quarter point left of the caret. An automatic inter-script gap put that point outside the control, so typing landed beside it. Plain-text paste and the forms-protection admission never named the owning control.",
+  "after": "The trailing edge of a non-empty inline control resolves from the control's model range. Plain-text paste and admission name the same owning control that typing names, through the existing insertText inside field.",
+  "reason": "Peers already apply insertText with inside, because typing emits it. The change only decides locally which control a caret insert names. Stored fields, operation encoding, identities, and repair rules do not change.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-control-trailing-edge.test.ts",
+    "packages/core/src/editor/__tests__/content-control-trailing-edge.test.ts"
+  ],
+  "changeset": "text-control-trailing-edge",
+  "migration": null
+}

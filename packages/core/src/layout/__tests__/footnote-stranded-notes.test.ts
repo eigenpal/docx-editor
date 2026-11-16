@@ -277,11 +277,11 @@ describe('footnote hold-out release', () => {
     expect(strandedNotes(probe, warm.layout)).toEqual([]);
   });
 
-  // Page 1's long note pushes filler lines forward in a later round. Page 3 then opens with
-  // an independent one-line paragraph (L24) and a widow-controlled paragraph whose second
-  // line (L26) cites a 20-line note. Releasing the hold ahead of L24 lets the opening pair
-  // follow it back to page 2, where the orphan-pair phase keeps the pair and moves the whole
-  // note to page 3 without a head. The hold stays, and the note starts beside L26.
+  // In the strict answer, the second page ends at L24 and the third page opens with a
+  // widow-controlled paragraph whose second line (L26) cites a 12-line note. The pair then
+  // returns to the second page with its eviction off. The note has no room below it there,
+  // so the whole note continues on the third page. No block ahead of the pair changes pages.
+  // The search decides each page from no reserve, so a cold and a warm pass agree.
   const orphanPair: Probe = {
     paragraphs: [
       ...Array.from({ length: 24 }, () => ({ lines: 1 })),
@@ -292,10 +292,11 @@ describe('footnote hold-out release', () => {
     notes: { 1: 32, 2: 12, 3: 4 },
   };
 
-  test('keeps the hold when the reference sits on an opening orphan pair', () => {
+  test('an opening orphan pair keeps its line and its whole note continues', () => {
     const session = createLayoutSession();
     const { layout } = layoutProbe(orphanPair, session);
-    expect(strandedNotes(orphanPair, layout)).toEqual([]);
+    expect(pages(layout)).toEqual(['L01..L07 | 1', 'L08..L26 | 3', 'L27..L42 | 2', 'L43..L55']);
+    expect(strandedNotes(orphanPair, layout)).toEqual(['note 2: reference on 1, head on 2']);
     expect(settles(orphanPair, session, layout)).toBe(true);
     expect(pages(layoutProbe(orphanPair).layout)).toEqual(pages(layout));
   });

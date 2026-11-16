@@ -7,6 +7,7 @@ import { useEditorValueCommand } from '../useEditorValueCommand';
 import { useToolbarLabel } from '../toolbar/toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { Slot } from '../toolbar/Slot';
+import { panelRowContent, triggerClassName, usePanelRow } from '../toolbar/panel-row';
 
 const WRAP_OPTIONS: readonly {
   readonly value: ImageWrapTarget;
@@ -42,6 +43,7 @@ export const ImageWrap = defineComponent({
   setup(props, { slots }) {
     const { t } = useTranslation();
     const label = useToolbarLabel();
+    const isPanelRow = usePanelRow();
     const command = useEditorValueCommand('image.wrap');
     const open = ref(false);
     const rootRef = ref<HTMLDivElement | null>(null);
@@ -84,13 +86,14 @@ export const ImageWrap = defineComponent({
 
     return () => {
       if (props.hidden) return null;
+      const panelRow = isPanelRow(props.asChild, !!slots.default);
       const triggerLabel = t('imageWrap.tooltipPrefix', {
         label: t(current.value.labelKey),
       });
       const shared = {
         type: 'button' as const,
         ref: triggerRef,
-        class: `docx-toolbar__button docx-toolbar__image-wrap-trigger${props.className ? ` ${props.className}` : ''}`,
+        class: `${triggerClassName(panelRow)} docx-toolbar__image-wrap-trigger${props.className ? ` ${props.className}` : ''}`,
         'data-slot': 'image.wrap',
         disabled: !command.isEnabled.value,
         ...(!command.isEnabled.value ? { 'data-disabled': '' } : {}),
@@ -110,7 +113,11 @@ export const ImageWrap = defineComponent({
           {props.asChild ? (
             <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>
           ) : (
-            <button {...shared}>{slots.default?.() ?? chromeIcon(control?.paths)}</button>
+            <button {...shared}>
+              {panelRow
+                ? panelRowContent(chromeIcon(control?.paths), tooltip)
+                : (slots.default?.() ?? chromeIcon(control?.paths))}
+            </button>
           )}
           {open.value ? (
             <div

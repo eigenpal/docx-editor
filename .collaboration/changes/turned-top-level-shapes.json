@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A turned top-level shape or line, and a shape with no width and no height, have no graphic projection and paint a placeholder.",
+  "after": "Turned shapes paint turned about their extent centre and select by their painted geometry; a shape with no extent paints nothing and stays selectable. Source XML, including rot and flips, is unchanged.",
+  "reason": "Only graphic projection, hit testing, and the selection frame change. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/drawing-turned-shape-projection.test.ts",
+    "packages/core/src/editor/__tests__/turned-shape-selection.test.ts",
+    "packages/pro/src/collaboration/__tests__/turned-shape-peers.test.ts"
+  ],
+  "changeset": "turned-top-level-shapes",
+  "migration": null
+}

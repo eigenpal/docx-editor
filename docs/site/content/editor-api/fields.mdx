@@ -1,126 +1,59 @@
 ---
 title: 'Fields and pagination'
-description: 'Insert inert reference, sequence, date, page, and TOC fields, propose them as tracked insertions, write their cached results, and update PAGE and NUMPAGES fields with measured pagination.'
+description: 'Insert inert fields, propose them as tracked insertions, write their cached results, and update PAGE and NUMPAGES fields with measured pagination.'
 category: 'Editing API'
 order: 59
 ---
 
-A field stores an instruction and cached result text. Reading or inserting a field does not execute its instruction. You can insert page, reference, sequence, style reference, date, and time fields, and an inert `TOC` field. You can evaluate plain `PAGE` and `NUMPAGES` fields without switches. The runtime does not calculate other results, but you can write the cached result of a field yourself through `Field.result`.
+A field stores an instruction and a cached result. Inserting or reading a field never evaluates its instruction. Only plain `PAGE` and `NUMPAGES` fields support evaluation.
 
-Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime).
 
 ## Insert a field
 
-`Range.insertField(location, fieldType?, text?, removeFormatting?)` returns `Field`. It accepts `Before`, `After`, `Start`, `End`, or `Replace`. The runtime rejects `removeFormatting: true`.
-
-The following table lists the field types that the runtime inserts. For a typed field, `text` holds the arguments after the field name. For `Empty`, or when you omit the type, `text` holds the whole instruction, and its first word must name one of these types.
-
-| Field type | Instruction | Required arguments |
-| --- | --- | --- |
-| `Page`, `NumPages` | `PAGE`, `NUMPAGES` | None. Switches refuse. |
-| `Ref`, `PageRef`, `NoteRef` | `REF`, `PAGEREF`, `NOTEREF` | A bookmark name, then optional switches |
-| `Seq` | `SEQ` | A sequence name, then optional switches |
-| `StyleRef` | `STYLEREF` | A style name, quoted when it contains a space |
-| `Date`, `Time` | `DATE`, `TIME` | None. Optional switches, such as `\@ "d MMMM yyyy"` |
-| `TOC` | `TOC` | Optional `\o "1-3"`, `\h`, `\z`, and `\u` |
-
-Arguments are switches such as `\h`, quoted strings, and bare words, separated by spaces. A quoted string cannot contain a quotation mark or a backslash. An instruction is 255 characters or fewer, with no tabs, line breaks, or other control characters.
-
-The runtime writes the instruction as text and never evaluates it. Field types that fetch, embed, link, run, or prompt always refuse. For example, `DDE`, `DDEAUTO`, `IncludeText`, `IncludePicture`, `Import`, `Link`, `MacroButton`, `AutoText`, `Hyperlink`, and `FillIn` refuse. Those names also refuse anywhere in the arguments. A refused type or instruction fails with `InvalidArgument`, and `debugInfo.innerError.code` is `edit.field-unsupported`. The document does not change.
-
-This example inserts a cross-reference to a bookmark after a search hit:
+Insert the field, sync, then write its result:
 
 ```ts
 await runtime.run(async (context) => {
   const hit = context.document.body.search('see section ').getFirst();
   const field = hit.insertField('After', 'Ref', '_Ref123456 \\h');
   await context.sync();
-  field.load('code');
-  await context.sync();
-  console.log(field.code.trim()); // REF _Ref123456 \h
-});
-```
 
-A complex field's `code` keeps the spaces around its instruction, so trim it before you compare.
-
-## Insert a page field
-
-Insert the field, then update its result in a second sync. A range read from the document, such as the end of the last paragraph, takes the insertion in the same sync that reads it:
-
-```ts
-await runtime.run(async (context) => {
-  const anchor = context.document.paragraphs.getLast().getRange('End');
-  const field = anchor.insertField('After', 'NumPages');
-  await context.sync();
-  field.updateResult(); // Requires configured pagination on a server.
+  field.result.insertText('Section 4', 'Replace');
   await context.sync();
 });
 ```
 
-New fields start with an empty cached result. Insertion does not calculate pagination. Untracked `PAGE`, `NUMPAGES`, and `TOC` fields are simple fields (`w:fldSimple`). Every other field, and every tracked field, is one complex field, placed where a typed character would land, inside a link or a content control. Its runs take the formatting of the text before the insertion point, as typed text does. New `REF`, `PAGEREF`, `NOTEREF`, `SEQ`, `STYLEREF`, `DATE`, and `TIME` fields carry `w:dirty="true"` on their begin marker. An application that evaluates fields then recomputes their results when it opens the file. Page fields and `TOC` fields carry no such marker. `Before` and `Start` use the start endpoint; `After` and `End` use the end endpoint. `Replace` requires an eligible span in one paragraph. Insertion inside locked or data-bound content refuses with `edit.protected-content`.
+`Range.insertField(location, fieldType?, text?, removeFormatting?)` returns a `Field`. It accepts `Before`, `After`, `Start`, `End`, and `Replace` within one paragraph. Sync before you use the returned field.
 
-`FieldType` exports the Office.js-compatible field vocabulary. `FieldTypeLiteral` provides corresponding string literals. The presence of an enum value does not mean that the runtime inserts it. Creation supports only the types in the table in [Insert a field](#insert-a-field).
+New fields start with an empty result and take the formatting of the text before them. Trim `code` before you compare it.
+
+## Choose a field instruction
+
+For a typed field, `text` holds the arguments. For `Empty` or no type, it holds the whole instruction:
+
+| Field type | Instruction | Arguments |
+| --- | --- | --- |
+| `Page`, `NumPages` | `PAGE`, `NUMPAGES` | None. Switches refuse. |
+| `Ref`, `PageRef`, `NoteRef` | `REF`, `PAGEREF`, `NOTEREF` | A bookmark name, then optional switches |
+| `Seq` | `SEQ` | A sequence name, then optional switches |
+| `StyleRef` | `STYLEREF` | A style name, quoted when it contains a space |
+| `Date`, `Time` | `DATE`, `TIME` | Optional switches |
+| `TOC` | `TOC` | Optional `\o` with ascending levels 1 through 9, `\h`, `\z`, and `\u` |
+
+| Rule | Detail |
+| --- | --- |
+| Length | 255 characters or fewer, with no tabs, line breaks, or control characters. |
+| Syntax | Switches, quoted strings, and bare words, separated by spaces. Quoted strings cannot contain `"` or `\`. |
+| Refused types | Types that fetch, embed, link, run, or prompt, such as `DDE`, `DDEAUTO`, `IncludeText`, `IncludePicture`, `Import`, `Link`, `MacroButton`, `AutoText`, `Hyperlink`, and `FillIn`, also inside arguments. |
+| `TOC` | Saves the instruction only. Duplicate or unknown switches, code writes, and `updateResult()` refuse. |
+| Enums | `FieldType` and `FieldTypeLiteral` list more types than creation supports. |
+
+New fields other than page and `TOC` fields are marked dirty, so a reader that evaluates fields recomputes them on open.
 
 ## Propose a field as a tracked change
 
-Set `document.changeTrackingMode` to `TrackMineOnly`, then call `insertField`. The runtime writes the field as one complex field. Its begin, instruction, separator, empty result, and end runs sit inside one `w:ins` element by the runtime author. A simple field is never written inside a revision. Accepting the change keeps the field, and rejecting it removes the whole field.
-
-This example proposes a figure number in place of the word "figure":
-
-```ts
-await runtime.run(async (context) => {
-  context.document.changeTrackingMode = 'TrackMineOnly';
-  const hit = context.document.body.search('figure').getFirst();
-  hit.insertField('Replace', 'Seq', 'Figure \\* ARABIC');
-  await context.sync();
-});
-```
-
-A tracked `Replace` strikes the range as a tracked deletion and proposes the field after it. A reviewer sees one replacement. The saved markup has this shape:
-
-```xml
-<w:del w:author="Agent" w:date="2026-10-20T09:00:00Z" w:id="0">
-  <w:r><w:delText>figure</w:delText></w:r>
-</w:del>
-<w:ins w:author="Agent" w:date="2026-10-20T09:00:00Z" w:id="1">
-  <w:r><w:fldChar w:dirty="true" w:fldCharType="begin"/></w:r>
-  <w:r>
-    <w:instrText xml:space="preserve"> SEQ Figure \* ARABIC </w:instrText>
-  </w:r>
-  <w:r><w:fldChar w:fldCharType="separate"/></w:r>
-  <w:r><w:t/></w:r>
-  <w:r><w:fldChar w:fldCharType="end"/></w:r>
-</w:ins>
-```
-
-Each field run takes the formatting of the text before the insertion point, so a field after bold text is bold. In this example, the struck word has no formatting, so the runs carry no `w:rPr`.
-
-A pending field appears in `fields`, and its `code` reads normally. Code writes and `updateResult()` refuse until a reviewer accepts the insertion. `delete()` takes your own pending field back outright.
-
-`insertField()` refuses in these cases, tracked or not, and the document does not change:
-
-| Error | `innerError.code` | Cause | What to do |
-| --- | --- | --- | --- |
-| `InvalidArgument` | `edit.field-unsupported` | The type or instruction is not one the runtime writes, such as `DDE`, `IncludeText`, or `Hyperlink`, or its arguments are malformed. | Use a type from the table in [Insert a field](#insert-a-field) with supported arguments. |
-| `InvalidArgument` | `edit.protected-content` | The insertion point is in content-locked or data-bound content. | Insert outside the protected content. |
-| `InvalidArgument` | `edit.invalid-argument` | `Replace` spans more than one paragraph, or `removeFormatting` is `true`. | Replace a range in one paragraph, and omit `removeFormatting`. |
-| `NotSupported` | `edit.tracked-operation-unsupported` | With `TrackMineOnly`, the type is `TOC`. | Insert the TOC field with tracking off. |
-| `NotImplemented` | `edit.tracked-foreign-revision-unsupported` | With `TrackMineOnly`, the field would land in another author's pending structural change, such as an inserted table row. | Ask the reviewer to decide that change first. |
-| `ConflictingChanges` | None | Another edit in the same sync changes the same paragraph. | Sync between the two edits. |
-| `StaleDocument` | None | The range's text moved after you read it. | Read the range again, and reconsider the edit. |
-
-## Read and write the cached result
-
-`Field.result` returns the field's cached result as a `Range`. A field is one character of its paragraph, so its result has no position of its own. The result range supports two members:
-
-| Member | Behavior |
-| --- | --- |
-| `text`, after `load('text')` or `field.load('result')` | Returns the cached result text, the same text that a range over the field reads |
-| `insertText(text, 'Replace')` | Replaces the cached result with plain text and returns the result range |
-
-The new text is plain text of 2,048 characters or fewer, and a tab becomes `w:tab`. The runtime writes the text into the result runs. It never evaluates the instruction and never changes it. The field's begin marker gets `w:dirty="true"`. An application that evaluates fields then recomputes the result when it opens the file. The editor paints the cached result that you write, and the result survives save and reopen.
-
-This example proposes a figure cross-reference with its displayed text in one tracked insertion:
+With `TrackMineOnly`, the field and its result form one tracked insertion. If the result write fails, take the field back:
 
 ```ts
 await runtime.run(async (context) => {
@@ -128,62 +61,59 @@ await runtime.run(async (context) => {
   const hit = context.document.body.search('as shown in ').getFirst();
   const field = hit.insertField('After', 'Ref', '_Ref123456 \\h');
   await context.sync();
-  field.result.insertText('Figure 3', 'Replace');
-  await context.sync();
+  try {
+    field.result.insertText('Figure 3', 'Replace');
+    await context.sync();
+  } catch (error) {
+    field.delete();
+    await context.sync();
+    throw error;
+  }
 });
 ```
 
-Sync after `insertField()` before you use `field.result`. The field has no address until the insertion commits. If the result write fails, take the field back with `field.delete()`. For the pattern, see [Propose several structural edits in one run](/docs/2.x/editor-api/revisions#propose-several-structural-edits-in-one-run).
+- Reject removes the field with its result. A tracked `Replace` strikes the range first.
+- `delete()` removes your own pending field outright. A tracked `delete()` of any other field refuses with `NotSupported` and `edit.tracked-operation-unsupported`.
+- Code writes and `updateResult()` refuse until a reviewer accepts the field. Tracked `TOC` creation refuses.
 
-The write follows the field's review state:
+## Read or replace cached results
 
-- If tracking is off, the field must sit outside every revision.
-- With `TrackMineOnly`, the field must be your own pending insertion. The new result runs join that insertion, so one **Reject** removes the field with its result. The runtime never writes the result untracked instead.
+`Field.result` returns a `Range` that supports two members:
 
-Several result writes can share one sync, including writes to fields in one paragraph. After a reviewer accepts a `PAGE` or `NUMPAGES` field, `updateResult()` computes its result from pagination.
+| Member | Behavior |
+| --- | --- |
+| `text`, after `load('text')` or `field.load('result')` | The cached result text |
+| `insertText(text, 'Replace')` | Replaces the result with one line of plain text, 2,048 characters or fewer. A tab becomes `w:tab` |
 
-A result write refuses in these cases, and the document does not change:
+The write never evaluates the instruction, and it marks the field dirty. Several result writes can share a sync.
 
-| Error | `innerError.code` | Cause | What to do |
-| --- | --- | --- | --- |
-| `NotImplemented` | `edit.field-result-unsupported` | You used a range member other than `text` and `insertText(text, 'Replace')`, or another insert location. | Use only those two members. To change the field itself, use `Field.code` or `Field.delete()`. |
-| `NotSupported` | `edit.unsupported-content` | The result holds content other than plain runs, such as a symbol, a picture, a line break, or a nested field. | Read the result instead, or replace the whole field. |
-| `NotSupported` | `edit.tracked-operation-unsupported` | With `TrackMineOnly`, the field is not your own pending insertion. | Write the result with tracking off, as an intentional permanent edit, or propose a new field. |
-| `NotImplemented` | `edit.revision-unsupported` | With tracking off, the field is inside a pending revision. | Write the result as that revision's author with `TrackMineOnly`, or decide the revision first. |
-| `InvalidArgument` | `edit.invalid-argument` | The text holds a line break, a paragraph break, or another control character, or it is longer than 2,048 characters. | Send one line of plain text. |
-| `InvalidArgument` | `edit.protected-content` | The field is locked, or it is in locked or data-bound content. | Leave the field as it is. |
-| `InvalidObjectPath` | None | The field came from an insertion that has not synced yet. | Sync after `insertField()`. |
+| Tracking state | Requirement |
+| --- | --- |
+| Off | The field must sit outside every revision. |
+| `TrackMineOnly` | The field must be your own pending insertion. The runtime never writes the result untracked instead. |
 
 ## Read and change instructions
 
-`Body.fields` and `Range.fields` return `FieldCollection`. A range includes fields fully contained within that span. Collections expose `items`, `getFirst()`, `getLast()`, `getFirstOrNullObject()`, and `getLastOrNullObject()`.
-
-Load each field's `code` before inspecting its raw instruction:
+Load `code` on each field in one sync:
 
 ```ts
-await runtime.run(async (context) => {
+const codes = await runtime.run(async (context) => {
   const fields = context.document.body.fields;
-  fields.load('items');
+  fields.load('items/code');
   await context.sync();
-  for (const field of fields.items) field.load('code');
-  await context.sync();
-  console.log(fields.items.map((field) => field.code));
+  return fields.items.map((field) => field.code);
 });
 ```
 
-`Field.code = 'PAGE'` or `'NUMPAGES'` changes a supported page-field instruction. It preserves the field identity and cached result until explicit evaluation. Supported simple fields and ordinary complex fields with sibling runs can accept code changes. The runtime rejects edits to protected fields, unsupported instructions, and edits made while tracking changes. `Field.delete()` removes the field and its cached result through the supported deletion path. Deleted field proxies become invalid.
+| Member | Behavior |
+| --- | --- |
+| `Body.fields`, `Range.fields` | A `FieldCollection` with `items`, `getFirst()`, `getLast()`, and their `OrNullObject` forms. A range lists fields it fully contains. |
+| `Field.code` | Writing `'PAGE'` or `'NUMPAGES'` keeps the cached result. Code writes refuse on protected fields, unsupported instructions, and while tracking. |
+| `Field.delete()` | Removes the field. Its proxy becomes invalid. |
 
 ## Configure measured server pagination
 
-Server result updates require `CreateServerOptions.pagination`. `ServerPaginationOptions` contains a required `measurer` and optional `producer`. Build the measurer from actual font resources using the core layout APIs.
-
-The runnable [report agent](https://github.com/eigenpal/docx-editor/blob/main/examples/editor-api-consumers/report-agent.ts) shows the complete font setup and cleanup:
-
-```bash
-bun examples/editor-api-consumers/report-agent.ts
-```
-
-Run it from the repository root after installing workspace dependencies. The example loads Carlito regular, bold, italic, and bold-italic files. It registers those files explicitly as Calibri resources with `sha256FontBytes` and `createLayoutShaping`. It builds `createLayoutShapedMeasurer` with a resolver that refuses unavailable requested faces. Pass the configured measurer when opening the document:
+Server result updates require `CreateServerOptions.pagination`, a `ServerPaginationOptions` with a required `measurer` and optional `producer`:
 
 ```ts
 const runtime = await DocxEditor.createServer(bytes, {
@@ -191,39 +121,56 @@ const runtime = await DocxEditor.createServer(bytes, {
 });
 ```
 
-Use the document's fonts or deliberately selected substitutes. Font substitution can change page breaks and page counts compared with Word. Bullets can request additional fonts, such as Symbol or Courier New. Provide those resources, or use an explicit registered font for custom Unicode bullets.
+Build the measurer from real font resources with `sha256FontBytes`, `createLayoutShaping`, and `createLayoutShapedMeasurer`. The runnable [report agent](https://github.com/eigenpal/docx-editor/blob/main/examples/editor-api-consumers/report-agent.ts) shows the setup.
 
-Dispose the runtime when the job finishes. Release its shaping resources with `disposeLayoutShaping(shaping)` as the example shows. A fixed-width test measurer does not establish production pagination fidelity. A browser runtime uses its attached editor's layout.
+- Font substitution can change page counts. Provide bullet fonts, such as Symbol, too.
+- Dispose the runtime, and release shaping with `disposeLayoutShaping(shaping)`.
+- A browser runtime uses its editor's layout instead.
 
-## Update results after document edits
+## Update page fields
 
-`Field.updateResult()` computes cached text from measured pagination, including supported section page-number formats. The computed result remains in the DOCX after saving and reopening. Read the visible result with `field.result.text` after `field.load('result')`.
-
-Multiple field result updates can share one sync, including fields in one paragraph. They can share queries, but cannot share other document writes. Finish text, table, picture, font, and page-layout edits first. Then evaluate fields in a separate transaction.
-
-Updates fail with `NotSupported` if pagination is missing, the instruction is unsupported, or the cached result cannot be rewritten. The server does not guess a page count or automatically resolve external field instructions. On refusal, preserve the document and provide valid measurement resources or select an eligible field.
-
-## Insert a table of contents field
-
-Use `TOC` to save a table of contents instruction for an application that calculates it. Creation does not populate entries. The runtime refuses TOC calculation through `updateResult()`.
-
-This example inserts a field for heading levels 1 through 3:
+Insert a page field, then update it in a separate sync:
 
 ```ts
 await runtime.run(async (context) => {
-  const anchor = context.document.body.getRange('Start');
+  const anchor = context.document.paragraphs.getLast().getRange('End');
+  const field = anchor.insertField('After', 'NumPages');
   await context.sync();
-  anchor.insertField('Before', 'TOC', '\\o "1-3" \\h \\z \\u');
+  field.updateResult(); // Requires pagination on a server.
   await context.sync();
 });
 ```
 
-The runtime accepts `\o` with ascending levels 1 through 9, plus `\h`, `\z`, and `\u`. It rejects duplicate switches, unknown switches, TOC code writes, and tracked TOC creation.
+`Field.updateResult()` computes the result from measured pagination, including section page-number formats. Several updates can share a sync, but no other document writes, so finish layout-changing edits first. Updates fail with `NotSupported` without pagination, for unsupported instructions, or when the result cannot be rewritten.
 
-## Fonts in mixed-script results
+## Limits
 
-Font substitution can change field widths and pagination. Mixed cached atomic results select fonts by display script. Splitting displayed font runs preserves the original atomic source range. Navigation spans and explicit measurement reservations do not change. Display font selection never changes stored field data.
+`insertField()` refuses in these cases, and nothing changes:
 
-## Next steps
+| Error | `innerError.code` | Cause |
+| --- | --- | --- |
+| `InvalidArgument` | `edit.field-unsupported` | Unsupported type or instruction, or malformed arguments. |
+| `InvalidArgument` | `edit.protected-content` | The point is in content-locked or data-bound content. |
+| `InvalidArgument` | `edit.invalid-argument` | `Replace` spans paragraphs, or `removeFormatting` is `true`. |
+| `NotSupported` | `edit.tracked-operation-unsupported` | With `TrackMineOnly`, the type is `TOC`. |
+| `NotImplemented` | `edit.tracked-foreign-revision-unsupported` | With `TrackMineOnly`, the point is in another author's structural change. |
+| `ConflictingChanges` | None | Another edit in the sync changes the same paragraph. |
+| `StaleDocument` | None | The range moved after you read it. |
 
-See [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) and [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
+A result write refuses in these cases:
+
+| Error | `innerError.code` | Cause |
+| --- | --- | --- |
+| `NotImplemented` | `edit.field-result-unsupported` | A member other than `text` and `insertText(text, 'Replace')`. |
+| `NotSupported` | `edit.unsupported-content` | The result holds a symbol, picture, line break, or nested field. |
+| `NotSupported` | `edit.tracked-operation-unsupported` | With `TrackMineOnly`, the field is not your own pending insertion. |
+| `NotImplemented` | `edit.revision-unsupported` | With tracking off, the field is inside a pending revision. |
+| `InvalidArgument` | `edit.invalid-argument` | A line break, a control character other than a tab, or over 2,048 characters. |
+| `InvalidArgument` | `edit.protected-content` | The field is locked, or in locked or data-bound content. |
+| `InvalidObjectPath` | None | The insertion has not synced yet. |
+
+## See also
+
+- [Tracked changes](/docs/2.x/editor-api/revisions)
+- [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories)
+- [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors)

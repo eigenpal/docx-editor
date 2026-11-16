@@ -2,6 +2,13 @@ import { describe, expect, test } from 'bun:test';
 import { createT, en, localizeDisabledReason } from './index';
 
 describe('localizeDisabledReason', () => {
+  test.each([
+    'the drop target is stale; drop the image again',
+    'the drop target story is no longer active',
+    'the drop target is no longer attached',
+  ])('localizes the drop refusal: %s', (reason) => {
+    expect(localizeDisabledReason(reason, createT(en))).toBe(en.imageInsert.errors.staleTarget);
+  });
   test('translates known chrome refusals', () => {
     const t = createT({
       ...en,
@@ -65,12 +72,15 @@ test('the empty reviewer roster refusal is translatable', () => {
 
 test.each([
   'this drawing is a chart; only delete applies, and it removes the whole chart',
-  'the selection contains a chart; a chart cannot be copied, cut or pasted',
+  'a chart can be copied, cut or pasted only on its own, not with other content',
+  'the copied chart is no longer available; copy the chart again',
 ])('the chart refusal %s is translatable', (reason) => {
   expect(localizeDisabledReason(reason, createT(en))).toBe(
-    reason.startsWith('the selection')
+    reason.startsWith('a chart can')
       ? en.disabledReason.chartClipboard
-      : en.disabledReason.chartDrawing
+      : reason.startsWith('the copied')
+        ? en.disabledReason.chartClipboardStale
+        : en.disabledReason.chartDrawing
   );
 });
 
@@ -116,4 +126,29 @@ test.each([
   ['no bookmark dialog is registered', 'noBookmarkDialog'],
 ] as const)('the chrome refusal "%s" is translatable', (reason, key) => {
   expect(localizeDisabledReason(reason, createT(en))).toBe(en.disabledReason[key]);
+});
+
+test('the compare documents collaboration refusal is translatable', () => {
+  const reason = 'documents cannot be compared while a collaboration session is attached';
+  expect(localizeDisabledReason(reason, createT(en))).toBe(
+    'Compare documents is not available in a shared editing session.'
+  );
+});
+
+describe('the Format shape refusals are translatable', () => {
+  const t = createT(en);
+  test.each([
+    ['this drawing has no fill or outline to set', en.shape.errors.noShape],
+    ['the shape has no solid fill to change; set a color', en.shape.errors.noSolidFill],
+    [
+      'the shapes in this group have different fills; pick a color to set them all',
+      en.shape.errors.mixedFill,
+    ],
+    ['a legacy shape has no transparency', en.shape.errors.legacyTransparency],
+    ['the fill or outline value is out of range', en.shape.errors.outOfRange],
+    ['stale drawing selection', en.shape.errors.staleSelection],
+    ['shape.pane.errors.width', en.shape.pane.errors.width],
+  ])('%s', (reason, expected) => {
+    expect(localizeDisabledReason(reason, t)).toBe(expected);
+  });
 });

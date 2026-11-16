@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -194,8 +194,14 @@ export interface ObserveReviewRailMetricsOptions {
 }
 
 /**
+ * The cleanup {@link observeReviewRailMetrics} returns. `measure` measures again now, for a
+ * change the observers cannot see (new review items, zoom), without rebuilding them.
+ */
+export type ReviewRailObservation = (() => void) & { readonly measure: () => void };
+
+/**
  * Measure `rail` now and again whenever its geometry can move, calling `onMeasure` with each
- * result. Returns the cleanup.
+ * result. Returns the cleanup, which also carries a `measure` handle.
  *
  * The observers come from the rail's own window, so a rail in a pop-out window or an iframe
  * observes there. Triggers:
@@ -215,7 +221,7 @@ export function observeReviewRailMetrics(
   source: RenderScaleSource,
   onMeasure: (metrics: ReviewRailGeometry) => void,
   options: ObserveReviewRailMetricsOptions = {}
-): () => void {
+): ReviewRailObservation {
   const parent = rail.offsetParent as HTMLElement | null;
   const view = hostWindowOf(rail);
   let surface: HTMLElement | null = null;
@@ -285,9 +291,16 @@ export function observeReviewRailMetrics(
       parent.removeEventListener('scroll', onScroll);
     });
   }
-  return () => {
+  let stopped = false;
+  const stop = (): void => {
+    stopped = true;
     for (const cleanup of cleanups) cleanup();
   };
+  return Object.assign(stop, {
+    measure: (): void => {
+      if (!stopped) sync();
+    },
+  });
 }
 
 /**

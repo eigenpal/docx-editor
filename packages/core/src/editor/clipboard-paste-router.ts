@@ -28,11 +28,7 @@ export interface PasteRouteInput {
 }
 
 export type PasteRouteLane =
-  | 'fragment'
-  | 'external-html'
-  | 'plain'
-  | 'none'
-  | 'unsupported-content';
+  'fragment' | 'external-html' | 'plain' | 'none' | 'unsupported-content';
 
 /** Route one paste payload; reports the lane that actually landed. */
 export function routePaste(target: PasteRouteTarget, input: PasteRouteInput): PasteRouteLane {

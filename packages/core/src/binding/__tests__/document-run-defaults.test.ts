@@ -115,7 +115,7 @@ describe('createRunDefaultsResolver', () => {
     expect(withoutEastAsia(null).fontFamily).toBeNull();
   });
 
-  test('invalid names and out-of-range sizes are dropped, never repaired', () => {
+  test('an invalid name paints in the unmatched face; an out-of-range size is dropped', () => {
     const resolve = createRunDefaultsResolver(
       stylesRoot(
         '<w:docDefaults><w:rPrDefault><w:rPr>' +
@@ -124,7 +124,20 @@ describe('createRunDefaultsResolver', () => {
       ),
       NO_THEME
     );
-    expect(resolve(null)).toEqual({ fontFamily: null, fontSizeHalfPoints: null });
+    // The answer is the engine's own constant, never the file's text.
+    expect(resolve(null)).toEqual({ fontFamily: 'Cambria', fontSizeHalfPoints: null });
+  });
+
+  test('a name written as a list resolves to its first item', () => {
+    const resolve = createRunDefaultsResolver(
+      stylesRoot(
+        '<w:docDefaults><w:rPrDefault><w:rPr>' +
+          '<w:rFonts w:ascii="Verdana, Geneva, sans-serif"/>' +
+          '</w:rPr></w:rPrDefault></w:docDefaults>'
+      ),
+      NO_THEME
+    );
+    expect(resolve(null).fontFamily).toBe('Verdana');
   });
 
   test('no styles part answers nulls', () => {

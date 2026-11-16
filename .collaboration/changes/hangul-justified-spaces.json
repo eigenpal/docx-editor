@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "In a document that balances single-byte and double-byte widths, every space keeps its face advance, and a justified line in a modern compatibility mode shrinks every inter-word space to keep the next word.",
+  "after": "With w:balanceSingleByteDoubleByteWidth, a space beside East Asian text and each space of a run of spaces take the balanced width in every mode, and justified and distributed lines keep that width while their other spaces shrink. Without the setting, layout is unchanged.",
+  "reason": "Only derived layout changes. Canonical OOXML, source offsets, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/balanced-space-shrink.test.ts",
+    "packages/core/src/layout/__tests__/balanced-space-widths.test.ts",
+    "packages/core/src/layout/__tests__/legacy-compressed-space-shrink.test.ts",
+    "packages/pro/src/collaboration/__tests__/korean-justified-spaces-editors.test.ts"
+  ],
+  "changeset": "hangul-justified-spaces",
+  "migration": null
+}

@@ -1,4 +1,5 @@
 import type { DocxEditorRevisionMarkupDialogProps } from './DocxEditorRevisionMarkupDialog';
+import type { DocxEditorCompareDocumentsDialogProps } from './DocxEditorCompareDocumentsDialog';
 import type { DocxEditorExportDialogProps } from './DocxEditorExportDialog';
 import type { DocxEditorPrintDialogProps } from './DocxEditorPrintDialog';
 import type { DocxEditorContentControlWidgetProps } from './DocxEditorContentControlWidget';
@@ -62,6 +63,8 @@ export interface DocxEditorPopups {
   /** The Split cells dialog the table context menu and toolbar open. */
   splitCell?: DocxEditorPopup<DocxEditorSplitCellDialogProps>;
   revisionMarkup?: DocxEditorPopup<DocxEditorRevisionMarkupDialogProps>;
+  /** The Compare documents dialog the Review menu opens. Requires the review module. */
+  compareDocuments?: DocxEditorPopup<DocxEditorCompareDocumentsDialogProps>;
   textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
   hyperlink?: DocxEditorPopup<HyperLinkProps>;
   contentControl?: DocxEditorPopup<ContentControlProps>;

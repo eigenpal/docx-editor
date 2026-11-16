@@ -203,6 +203,15 @@ function rowsOf(layout: SemanticLayout): string[] {
   return out;
 }
 
+/** Pages up to the table's last. The empty paragraph the body reads after it may take one more. */
+function pagesThroughTable(layout: SemanticLayout): number {
+  return (
+    layout.pages.findLastIndex((page) =>
+      page.fragments.some((fragment) => fragment.kind === 'table')
+    ) + 1
+  );
+}
+
 /** Where the first line of row `label` lands: page, column left, and top. */
 function start(layout: SemanticLayout, label: string): string | undefined {
   return rowsOf(layout).find((row) => row.split(' ').at(-1)!.startsWith(`${label}-1@`));
@@ -238,7 +247,7 @@ describe('a row minimum below a header picture that repeats on every page', () =
       { headers: { default: TOP_BAND } }
     );
     expect(start(layout, 'M')).toBe('p2 x0 M-1@98');
-    expect(layout.pages).toHaveLength(2);
+    expect(pagesThroughTable(layout)).toBe(2);
   });
 
   test('two tall rows leave no blank page before the table', () => {
@@ -252,7 +261,7 @@ describe('a row minimum below a header picture that repeats on every page', () =
     expect(start(layout, 'A')).toBe('p1 x0 A-1@98');
     // The second row still moves: the first row is content above it.
     expect(start(layout, 'B')).toBe('p2 x0 B-1@98');
-    expect(layout.pages).toHaveLength(2);
+    expect(pagesThroughTable(layout)).toBe(2);
   });
 });
 
@@ -271,7 +280,7 @@ describe('a row minimum below distinct first and even page headers', () => {
       { evenAndOddHeaders: true, headers: { default: TOP_BAND, even: TOP_BAND } }
     );
     expect(start(layout, 'M')).toBe('p2 x0 M-1@98');
-    expect(layout.pages).toHaveLength(2);
+    expect(pagesThroughTable(layout)).toBe(2);
   });
 });
 

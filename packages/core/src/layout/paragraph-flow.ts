@@ -6,7 +6,11 @@ import {
   rememberHangingPunctuation,
   spaceShrinkMarkAdvance,
 } from './paragraph-hanging-punctuation.ts';
-import { appendColumnBreak, appendUnsupportedContent } from './unsupported-content-flow.ts';
+import {
+  appendColumnBreak,
+  appendEquation,
+  appendUnsupportedContent,
+} from './unsupported-content-flow.ts';
 import { besideFloatWidth } from './legacy-inline-beside-float.ts';
 import { continuationPiecesWithRules } from './paragraph-continuation-pieces.ts';
 import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
@@ -29,7 +33,7 @@ import { spacedLine } from './positioned-run-spacing.ts';
 import { paragraphMarkStyles } from './paragraph-mark-styles.ts';
 import { splitAtSpacedSoundMarks } from './sound-mark-pieces.ts';
 import { returnUncoveredHintedText } from './east-asia-hint-coverage.ts';
-import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
+import { markSyntheticBoldSpans, paragraphSpanMetadata } from './paragraph-span-metadata.ts';
 import {
   endsAtHyphenBreak,
   spaceShrinkFit,
@@ -70,9 +74,10 @@ import {
 } from './cjk-spacing.ts';
 import { lineEndMarksMayHang, resolveCjkTypography } from './cjk-typography.ts';
 import {
-  automaticLineTextGap,
   automaticTextSpan,
+  candidateAutomaticGap,
   justifiedGroupGapSlack,
+  piecesMayTakeAutomaticSpacing,
   splitAtAutomaticSpacing,
 } from './cjk-automatic-spacing.ts';
 import {
@@ -182,8 +187,9 @@ export function breakParagraph(
   if (cached) return cached;
 
   const lineSpacing = flow?.lineSpacing ?? SINGLE_LINE_SPACING;
-  // A manual page break inside a table cell keeps its model offset but has no geometry.
-  const pageBreaksIgnored = flow?.cellAnchorScope?.inTableCell === true;
+  // A manual page break in a table cell or a text frame keeps its offset but has no geometry.
+  const pageBreaksIgnored =
+    flow?.cellAnchorScope?.inTableCell === true || flow?.pageBreaksIgnored === true;
 
   // Collect deleted ranges during projection: removed content has no visible span.
   const deletedRanges: { start: number; end: number }[] = [];
@@ -234,11 +240,13 @@ export function breakParagraph(
   const firstLineOffset = indentOpen ? (flow?.firstLineOffset ?? 0) : 0;
   const markerBaselineFloor = slotOpen ? (flow?.firstLineMinimumBaseline ?? 0) : 0;
   const markerAscent = slotOpen ? Math.max(0, flow?.firstLineMarkerAscent ?? 0) : 0;
-  const typography = flow?.typography ?? resolveCjkTypography(paragraphProperties());
+  const typography =
+    flow?.typography ??
+    resolveCjkTypography(paragraphProperties(), undefined, flow?.markRunProperties);
   const visiblePieces = splitAtSpacedSoundMarks(
     splitAtAutomaticSpacing(
       returnUncoveredHintedText(
-        continuationPiecesWithRules(allPieces, startOffset, flow?.showFieldCodes, available),
+        continuationPiecesWithRules(allPieces, startOffset, flow, available),
         measurer
       ),
       typography,
@@ -248,6 +256,7 @@ export function breakParagraph(
   );
   const { preserveColonAdvances } = advances;
   const pieces = compressCjkPieces(visiblePieces, typography, measurer, advances);
+  const automaticSpacing = piecesMayTakeAutomaticSpacing(pieces, typography);
   const seamNaturalWidths = cjkSeamNaturalWidths(pieces, visiblePieces, measurer);
   const placeableSuffixes = placeableContentSuffixes(pieces, pageBreaksIgnored);
   const replayScope = cellTabReplayScope(flow?.cellAnchorScope, rawPieces);
@@ -435,6 +444,7 @@ export function breakParagraph(
           })
         : Object.freeze([]);
     const synthesized = anchorsWrap ? ownTopAndBottomZones() : emptyExclusionZones;
+    if (!synthesizedWrap.length && !synthesized.length) return breakSpace.zones(pageZones);
     return breakSpace.zones(Object.freeze([...pageZones, ...synthesizedWrap, ...synthesized]));
   };
 
@@ -798,6 +808,7 @@ export function breakParagraph(
       glyphBaseline += raised;
     }
     growRunBorderLineMetrics(line, measurer);
+    markSyntheticBoldSpans(line, measurer);
     syncPendingDrawingBaselines(line, pageBreaksIgnored);
     growPendingLineDrawingExtent(line);
     // Apply paragraph line spacing once to the finished box.
@@ -986,30 +997,7 @@ export function breakParagraph(
       );
       applyInlineObjectSkipIfNeeded(atomWidth, equation.geometry.box.height);
       if (!ensurePlacementWidth(atomWidth)) continue;
-      const priorDescent = Math.max(0, line.height - line.baseline);
-      const equationDescent = Math.max(
-        0,
-        equation.geometry.box.height - equation.geometry.baseline
-      );
-      line.baseline = Math.max(line.baseline, equation.geometry.baseline);
-      line.height = line.baseline + Math.max(priorDescent, equationDescent);
-      line.spans.push({
-        range: { paragraphId, start: piece.start, end: piece.end },
-        text: '\uFFFC',
-        props: piece.props,
-        style: piece.style,
-        box: {
-          x: lineOrigin() + line.width,
-          y: 0,
-          width: atomWidth,
-          height: equation.geometry.box.height,
-        },
-        projected: true,
-        equation,
-        ...paragraphSpanMetadata(piece),
-      });
-      line.width += atomWidth;
-      line.end = piece.end;
+      appendEquation(line, piece, equation, paragraphId, lineOrigin() + line.width);
       wordStartSpan = -1;
       lastEmitted = '';
       continue;
@@ -1080,7 +1068,7 @@ export function breakParagraph(
           contentRight: contentOriginX + rightEdge,
           ...(flow?.deferInlineDrawingHorizontalClip ? { deferHorizontalClip: true } : {}),
           ...(piece.revisions ? { revisions: piece.revisions } : {}),
-          ...(piece.style.shaping ? { bidiLevel: piece.style.shaping.level } : {}),
+          ...(piece.style.shaping ? { bidiShaping: piece.style.shaping } : {}),
           layoutTextboxStory: flow?.layoutTextboxStory,
           measurer,
         })
@@ -1270,18 +1258,13 @@ export function breakParagraph(
       // Measured as DRAWN: `w:caps` changes the glyphs, so measuring the source text
       // would size the line for characters the reader never sees. Note marks may reserve
       // a wider measureText (eachPage) while painting the real digits.
-      const automaticGap = (text = candidate, start = spanRange.start): number =>
-        automaticLineTextGap(
-          line,
-          lineOrigin,
-          paragraphId,
-          start,
-          piece,
-          text,
-          faceStyle,
-          typography,
-          measurer
-        );
+      const automaticGap = candidateAutomaticGap(
+        automaticSpacing && { line: () => line, lineOrigin, paragraphId, typography, measurer },
+        piece,
+        faceStyle,
+        candidate,
+        spanRange.start
+      );
       const measureSource = piece.measureText ?? candidate;
       let width = piece.noteSeparator
         ? Math.min(piece.noteSeparator === 'separator' ? 144 : lineAvailable(), lineAvailable())

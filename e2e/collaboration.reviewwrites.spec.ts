@@ -33,7 +33,8 @@ const CLEAN = 'review-clean-demo.docx';
 const EDITABLE = 'editable-sample.docx';
 const HEADER = 'review-header-demo.docx';
 const TABLE = 'table-cell-selection-drag.docx';
-const TOC = 'paragraph-acceptance.docx';
+// A heading counts for the contents only when its style is defined in the file.
+const TOC = 'example-with-image.docx';
 
 for (const variant of ['ordinary', 'headers', 'numeric', 'notes']) {
   const repeatedHeaders = variant !== 'ordinary';
@@ -249,6 +250,7 @@ test('accepting an insertion keeps the typed text on the peer', async ({
   page: creator,
 }) => {
   const joiner = await connectedPeers(browser, creator, CLEAN);
+  await ensureReviewPaneOpen(creator);
   await ensureReviewPaneOpen(joiner);
   const source = await firstTextParagraph(creator);
   const marker = ' [ins-accept]';
@@ -276,6 +278,7 @@ test('accepting a deletion removes the deleted text on the peer', async ({
   page: creator,
 }) => {
   const joiner = await connectedPeers(browser, creator, CLEAN);
+  await ensureReviewPaneOpen(creator);
   await ensureReviewPaneOpen(joiner);
   const source = await firstTextParagraph(creator);
   expect(source.text).toContain('world');
@@ -301,6 +304,7 @@ test('rejecting an insertion removes the typed text on the peer', async ({
   page: creator,
 }) => {
   const joiner = await connectedPeers(browser, creator, CLEAN);
+  await ensureReviewPaneOpen(creator);
   await ensureReviewPaneOpen(joiner);
   const source = await firstTextParagraph(creator);
   const marker = ' [ins-reject]';
@@ -323,6 +327,7 @@ test('rejecting a deletion restores the text instead of leaving delText', async 
   page: creator,
 }) => {
   const joiner = await connectedPeers(browser, creator, CLEAN);
+  await ensureReviewPaneOpen(creator);
   await ensureReviewPaneOpen(joiner);
   const source = await firstTextParagraph(creator);
   expect(source.text).toContain('world');
@@ -351,7 +356,7 @@ test('inserting and refreshing a table of contents streams entries', async ({
   page: creator,
 }) => {
   const joiner = await connectedPeers(browser, creator, TOC);
-  const heading = 'paragraph property pStyle';
+  const heading = 'Example';
   await firstTextParagraph(creator);
   await creator.getByRole('menuitem', { name: 'Insert' }).click();
   const insertToc = creator.getByRole('menuitem', { name: 'Table of contents' });
@@ -377,9 +382,13 @@ test('inserting and refreshing a table of contents streams entries', async ({
     expect(entries.some((entry) => entry.text.includes(heading))).toBe(true);
     expect(entries.some((entry) => entry.page.length > 0)).toBe(true);
   }).toPass({ timeout: 20_000 });
+  // The contents row is the heading text followed by its page number.
   await expect(
-    joiner.locator('[data-paragraph-id]:visible').filter({ hasText: heading })
-  ).toContainText(/\d/, { timeout: 20_000 });
+    joiner
+      .locator('[data-paragraph-id]:visible')
+      .filter({ hasText: new RegExp(`^${heading}\\s*\\d+$`) })
+      .first()
+  ).toBeVisible({ timeout: 20_000 });
 });
 
 test('a comment in a header streams to the peer', async ({ browser, page: creator }) => {

@@ -13,10 +13,10 @@ import {
   watch,
 } from 'vue';
 import {
-  clipboardDropLandsText,
   clipboardPasteLandsContent,
-  isElementNode,
+  editorDropHandled,
   isHTMLElementNode,
+  openChartPaneAt,
 } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useDocxEditor, useEditorContentElement } from './context';
@@ -94,38 +94,27 @@ export const DocxEditorContent = defineComponent({
       void insert.insertFromDataTransfer(items);
     };
 
-    const onDragOver = (event: DragEvent) => {
-      if (!imageInsert?.isEnabled || !event.dataTransfer || !hasImageFile(event.dataTransfer)) {
-        return;
-      }
+    const onDrop = (event: DragEvent) => {
+      // Keep unsupported file drops on the mount from navigating away from the editor.
       event.preventDefault();
+      if (editorDropHandled(event) || !imageInsert) return;
+      const transfer = event.dataTransfer;
+      if (!transfer || !hasImageFile(transfer)) return;
+      const at = editorRef.value?.positionAtPoint(event.clientX, event.clientY);
+      if (!at) return;
+      const selected = editorRef.value!.exec({
+        type: 'setSelection',
+        range: { anchor: at, head: at },
+      });
+      if (!selected.ok) return;
+      editorRef.value!.focus();
+      void imageInsert.insertFromDataTransfer(transfer, at);
     };
 
-    const onDrop = (event: DragEvent) => {
-      const insert = imageInsert;
-      if (!insert?.isEnabled) return;
-      const transfer = event.dataTransfer;
-      if (!transfer) return;
-      if (!hasImageFile(transfer)) return;
-      // Same stand-down as paste, for the drop lane's plain-text-only reality: when the
-      // payload carries visible HTML text, NOT preventing the default lets the browser
-      // fire `insertFromDrop`, which is the engine's only drop path. Mirrors the React
-      // adapter.
-      if (clipboardDropLandsText(transfer)) {
-        // Only an EDITABLE target fires `insertFromDrop`. Anywhere else the browser's
-        // default action for a file-carrying transfer is to NAVIGATE to the file — which
-        // destroys the session — so the drop is swallowed instead of released. Resolved
-        // through the nearest annotated ancestor: `isContentEditable` does not exist on
-        // SVG elements (painted vector shapes). Mirrors the React adapter.
-        const target = isElementNode(event.target) ? event.target : null;
-        if (target?.closest('[contenteditable]')?.getAttribute('contenteditable') === 'true') {
-          return;
-        }
-        event.preventDefault();
-        return;
-      }
-      event.preventDefault();
-      void insert.insertFromDataTransfer(transfer);
+    // A double press on a chart opens the Chart pane, as Edit chart does.
+    const onDblclick = (event: MouseEvent) => {
+      const editor = editorRef.value;
+      if (editor && openChartPaneAt(editor, event)) event.preventDefault();
     };
 
     return () =>
@@ -146,8 +135,8 @@ export const DocxEditorContent = defineComponent({
             },
             class: mergeHostClass('docx-paginated-surface', props.class, props.className),
             onPaste,
-            onDragover: onDragOver,
             onDrop,
+            onDblclick,
           }),
           // Dialogs mount in their own element, as in the React adapter, so a right-to-left
           // provider can mirror them without touching the pages beside them.

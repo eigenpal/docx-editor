@@ -119,6 +119,7 @@ export interface SurfaceFormatDeps {
 type FormatMethods = Pick<
   PaginatedSurface,
   | 'setRunProperty'
+  | 'setRunProperties'
   | 'setParagraphProperty'
   | 'setParagraphProperties'
   | 'toggleRunProperty'
@@ -234,7 +235,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   const writeRunProperty = (
     from: SemanticPosition,
     to: SemanticPosition,
-    incoming: SurfaceProperty
+    incoming: SurfaceProperty | readonly SurfaceProperty[]
   ): string | null => {
     const part = storyPart();
     if (from.paragraphId === to.paragraphId) {
@@ -338,7 +339,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
    */
   const writeRunPropertyOverCells = (
     cells: readonly string[],
-    incoming: SurfaceProperty
+    incoming: SurfaceProperty | readonly SurfaceProperty[]
   ): string | null => {
     const part = storyPart();
     const ops: TreeDocOp[] = [];
@@ -413,7 +414,10 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       ? from.paragraphId
       : null;
 
-  const writeEmptyParagraphMark = (paragraphId: string, incoming: SurfaceProperty) => {
+  const writeEmptyParagraphMark = (
+    paragraphId: string,
+    incoming: SurfaceProperty | readonly SurfaceProperty[]
+  ) => {
     const part = storyPart();
     const properties = mergedParagraphMarkProperties(part, paragraphId, incoming);
     // A pick the mark already states changes nothing, so it is not an undo step either.
@@ -457,6 +461,42 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       from: { paragraphId: from.paragraphId, offset: word.start },
       to: { paragraphId: from.paragraphId, offset: word.end },
     };
+  };
+
+  /**
+   * Set run properties over the selection in ONE commit, so the store accepts or refuses
+   * them together and they undo as one step. `setRunProperty` is this with one entry.
+   */
+  const writeRunProperties = (entries: readonly SurfaceProperty[]): string | null => {
+    if (entries.length === 0) return null;
+    const refused = refuseRunFormat();
+    if (refused) return refused;
+    const incoming = entries.map((entry) => {
+      const widened =
+        entry.localName === 'rFonts' ? withEastAsianSlot(entry.attributes) : entry.attributes;
+      return { localName: entry.localName, ...(widened ? { attributes: widened } : {}) };
+    });
+    const cells = deps.selectedCells?.();
+    if (cells && cells.length > 0) return writeRunPropertyOverCells(cells, incoming);
+    const { from, to } = orderedRange();
+    const empty = emptyParagraphAtCaret(from, to);
+    if (empty) return writeEmptyParagraphMark(empty, incoming);
+    // A highlight is a pen, not a word format: with nothing selected it marks what is typed
+    // next and leaves the word under the caret alone.
+    const pens = incoming.filter((entry) => entry.localName === 'highlight');
+    const formats = incoming.filter((entry) => entry.localName !== 'highlight');
+    const word = formats.length > 0 ? caretWordAt(from, to) : null;
+    if (word) {
+      pens.forEach(armPending);
+      return writeRunProperty(word.from, word.to, formats);
+    }
+    if (from.paragraphId === to.paragraphId && from.offset === to.offset) {
+      // A collapsed caret arms the value for the NEXT characters typed — picking a font
+      // with nothing selected is how Word starts typing in that font.
+      incoming.forEach(armPending);
+      return null;
+    }
+    return writeRunProperty(from, to, incoming);
   };
 
   /**
@@ -542,27 +582,10 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
 
   return {
     setRunProperty(localName, attributes) {
-      const refused = refuseRunFormat();
-      if (refused) return refused;
-      const widened = localName === 'rFonts' ? withEastAsianSlot(attributes) : attributes;
-      const incoming = { localName, ...(widened ? { attributes: widened } : {}) };
-      const cells = deps.selectedCells?.();
-      if (cells && cells.length > 0) return writeRunPropertyOverCells(cells, incoming);
-      const { from, to } = orderedRange();
-      const empty = emptyParagraphAtCaret(from, to);
-      if (empty) return writeEmptyParagraphMark(empty, incoming);
-      // A highlight is a pen, not a word format: with nothing selected it marks what is typed
-      // next and leaves the word under the caret alone.
-      const word = localName === 'highlight' ? null : caretWordAt(from, to);
-      if (word) return writeRunProperty(word.from, word.to, incoming);
-      if (from.paragraphId === to.paragraphId && from.offset === to.offset) {
-        // A collapsed caret arms the value for the NEXT characters typed — picking a font
-        // with nothing selected is how Word starts typing in that font.
-        armPending(incoming);
-        return null;
-      }
-      return writeRunProperty(from, to, incoming);
+      return writeRunProperties([{ localName, ...(attributes ? { attributes } : {}) }]);
     },
+
+    setRunProperties: writeRunProperties,
 
     setParagraphProperty(localName, attributes, options) {
       writeParagraphProperties([

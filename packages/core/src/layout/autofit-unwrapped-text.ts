@@ -20,11 +20,17 @@ import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 /** CJK minimums use paragraph analysis; other scripts retain ordinary word cuts. */
 export function cjkAutofitBreaks(
   pieces: readonly FieldAwarePiece[],
-  { props }: { readonly props: readonly OoxmlProperty[] },
+  {
+    props,
+    markRunProperties,
+  }: {
+    readonly props: readonly OoxmlProperty[];
+    readonly markRunProperties?: readonly OoxmlProperty[];
+  },
   measurer: TextMeasurer,
   styleCascade?: { readonly typography?: CjkTypographySettings }
 ) {
-  const policy = resolveCjkTypography(props, styleCascade?.typography);
+  const policy = resolveCjkTypography(props, styleCascade?.typography, markRunProperties);
   const visible = pieces.filter((piece) => !piece.style.hidden);
   if (
     !policy.characterWrap &&

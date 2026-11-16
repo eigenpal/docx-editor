@@ -91,7 +91,7 @@ async function joinRoom(page: Page, invite: string, name: string): Promise<void>
   const dialog = page.getByRole('dialog', { name: /Collaborate on this document/i });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Display name').fill(name);
-  await expect(dialog.getByLabel('Room ID or link')).toHaveValue(
+  await expect(dialog.getByLabel(/^Full room link/)).toHaveValue(
     new URL(invite).searchParams.get('room')!
   );
   await dialog.getByRole('button', { name: 'Join room' }).click();

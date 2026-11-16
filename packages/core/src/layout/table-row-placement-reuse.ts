@@ -209,56 +209,78 @@ const offered = new WeakMap<OoxmlElement, WeakRef<ReadonlyMap<string, PreviousRo
  * finalized after a pass budget ran out.
  */
 export function offerPreviousRows(table: OoxmlElement, pages: readonly PageRecord[]): void {
-  const rows = previousRowsOf(table, pages);
+  const rows = previousRowsOf(table, tableFragmentsOf(pages));
   if (rows) offered.set(table, new WeakRef(rows));
+}
+
+/**
+ * The body-level table fragments of `pages`, in page order: all that the row offers read. Kept
+ * for as long as `pages` is.
+ */
+const tableFragmentsOfPages = new WeakMap<readonly PageRecord[], readonly TableFragmentRecord[]>();
+
+function tableFragmentsOf(pages: readonly PageRecord[]): readonly TableFragmentRecord[] {
+  let fragments = tableFragmentsOfPages.get(pages);
+  if (!fragments) {
+    const found: TableFragmentRecord[] = [];
+    for (const page of pages)
+      for (const fragment of page.fragments as readonly BlockFragmentRecord[])
+        if (fragment.kind === 'table') found.push(fragment as TableFragmentRecord);
+    fragments = found;
+    tableFragmentsOfPages.set(pages, fragments);
+  }
+  return fragments;
 }
 
 function previousRowsOf(
   table: OoxmlElement,
-  pages: readonly PageRecord[]
+  fragments: readonly TableFragmentRecord[]
 ): ReadonlyMap<string, PreviousRow> | undefined {
   const rows = new Map<string, PreviousRow>();
   const repeated = new Set<string>();
-  for (const page of pages)
-    for (const fragment of page.fragments as readonly BlockFragmentRecord[]) {
-      if (fragment.kind !== 'table' || fragment.tableId !== table.id) continue;
-      if (!finalizedWithHeadroom(fragment as TableFragmentRecord)) return;
-      const deferred = deferredWidthRecipe(fragment as TableFragmentRecord);
-      if (deferred && Object.getOwnPropertyDescriptor(fragment, 'rows')?.get) {
-        for (const source of deferred.sources.slice(0, deferred.headers.length))
-          repeated.add(source.id);
-        for (const compact of deferred.body.rows) {
-          const id = compact.source.id;
-          if (rows.has(id)) repeated.add(id);
-          else
-            rows.set(id, {
-              compact,
-              baseline: {
-                ...compact.baseline,
-                cells: compact.cells.map((cell) => cell.baseline),
-              },
-            });
-        }
+  for (const fragment of fragments) {
+    if (fragment.tableId !== table.id) continue;
+    if (!finalizedWithHeadroom(fragment)) return;
+    const deferred = deferredWidthRecipe(fragment);
+    if (deferred && Object.getOwnPropertyDescriptor(fragment, 'rows')?.get) {
+      for (const source of deferred.sources.slice(0, deferred.headers.length))
+        repeated.add(source.id);
+      for (const compact of deferred.body.rows) {
+        const id = compact.source.id;
+        if (rows.has(id)) repeated.add(id);
+        else
+          rows.set(id, {
+            compact,
+            baseline: {
+              ...compact.baseline,
+              cells: compact.cells.map((cell) => cell.baseline),
+            },
+          });
+      }
+      continue;
+    }
+    for (const record of fragment.rows) {
+      if (record.isHeaderRepeat || record.isContinuation || record.hasContinuation) {
+        repeated.add(record.id);
         continue;
       }
-      for (const record of fragment.rows) {
-        if (record.isHeaderRepeat || record.isContinuation || record.hasContinuation) {
-          repeated.add(record.id);
-          continue;
-        }
-        if (rows.has(record.id)) repeated.add(record.id);
-        else rows.set(record.id, record);
-      }
+      if (rows.has(record.id)) repeated.add(record.id);
+      else rows.set(record.id, record);
     }
+  }
   for (const id of repeated) rows.delete(id);
   return rows.size > 0 ? rows : undefined;
 }
 
 // Scoped to the current pass, never to a table node shared by separate editor sessions.
-// Keep only a weak reference to old pages: retained flow dependencies must not retain history.
+// Keep only a weak reference: retained flow dependencies must not retain history. The
+// reference is to the old pages' table fragments, never to the pages: making or reading a
+// weak reference keeps its target alive until the current task ends, and the pages of a pass
+// that is not final, such as a footnote search round, hold page furniture that can reach a
+// whole document's header and footer layouts.
 const unchangedTables = new WeakMap<
   TableFlowDeps,
-  { tables: ReadonlySet<OoxmlElement>; pages: WeakRef<readonly PageRecord[]> }
+  { tables: ReadonlySet<OoxmlElement>; fragments: WeakRef<readonly TableFragmentRecord[]> }
 >();
 
 /**
@@ -278,7 +300,9 @@ export function offerUnchangedTableRows(
   const tables = new Set<OoxmlElement>();
   for (const entry of next.prepared)
     if (entry.kind === 'table' && oldKeys.get(entry.table) === entry.key) tables.add(entry.table);
-  if (tables.size > 0) unchangedTables.set(deps, { tables, pages: new WeakRef(pages) });
+  if (tables.size > 0) {
+    unchangedTables.set(deps, { tables, fragments: new WeakRef(tableFragmentsOf(pages)) });
+  }
 }
 
 /** The rows offered for `table`, once. */
@@ -290,6 +314,6 @@ export function takePreviousRows(
   offered.delete(table);
   if (rows) return rows;
   const unchanged = deps ? unchangedTables.get(deps) : undefined;
-  const pages = unchanged?.tables.has(table) ? unchanged.pages.deref() : undefined;
-  return pages ? previousRowsOf(table, pages) : undefined;
+  const fragments = unchanged?.tables.has(table) ? unchanged.fragments.deref() : undefined;
+  return fragments ? previousRowsOf(table, fragments) : undefined;
 }

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -39,6 +39,15 @@ export {
   type ReviewPaneOverflow,
   type RevisionDisplay,
 } from './review/review-module.ts';
+export {
+  compareDocuments,
+  type CompareDocumentsErrorCode,
+  type CompareDocumentsRefusalReason,
+  type CompareDocumentsOptions,
+  type CompareDocumentsResult,
+} from './compare/index.ts';
+// The codes `compareDocuments` returns: a subset of `CompareDocumentsErrorCode`.
+export type { CompareDocumentsEngineErrorCode } from '@docx-editor.dev/core/editor';
 export {
   collaborationModule,
   type CollaborationModuleOptions,

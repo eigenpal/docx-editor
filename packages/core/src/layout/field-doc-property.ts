@@ -20,12 +20,7 @@ import { normalizeFieldInstruction } from './field-instruction.ts';
 
 /** The document-property keys a field may resolve to. A subset of {@link DocumentProperties}. */
 export type DocumentPropertyKey =
-  | 'title'
-  | 'creator'
-  | 'subject'
-  | 'keywords'
-  | 'lastModifiedBy'
-  | 'description';
+  'title' | 'creator' | 'subject' | 'keywords' | 'lastModifiedBy' | 'description';
 
 /** One recognized document-property field: which property it displays, nothing executable. */
 export interface DocPropertyField {

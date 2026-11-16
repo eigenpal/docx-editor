@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The editing API could set line spacing points but not the line rule, and a lineSpacing write on a paragraph that stated no rule wrote the auto rule even over a style's exact or at-least rule.",
+  "after": "Paragraph.lineSpacingRule reads and writes the rule, and lineSpacing keeps the rule in force, including one the style supplies. Both write the paragraph's own w:spacing through the existing setParagraphProperties operation.",
+  "reason": "The writes use the existing paragraph property operation and replicate as ordinary w:spacing attribute changes inside w:pPr, which released peers already read. No shared field, operation encoding, offset rule, or repair rule changes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-line-spacing-rule.test.ts",
+    "packages/core/src/automation/__tests__/automation-formatting.test.ts",
+    "packages/editor-api/src/model/__tests__/model-formatting.test.ts"
+  ],
+  "changeset": "paragraph-line-spacing-rule",
+  "migration": null
+}

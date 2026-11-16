@@ -52,10 +52,7 @@ export interface RevisionBatchEntry {
 
 /** Why a requested decision remains pending. @public */
 export type RevisionBatchSkipReason =
-  | 'unsupported-revision'
-  | 'incomplete-group'
-  | 'retained-structure'
-  | 'unknown-revision';
+  'unsupported-revision' | 'incomplete-group' | 'retained-structure' | 'unknown-revision';
 
 /**
  * The structure behind a skip.

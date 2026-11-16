@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -92,6 +92,7 @@ function reviewItemRange(context: RequestContext, key: string, nullable: boolean
  * });
  * ```
  *
+ * @docxEditorExtension
  * @public
  */
 export function getReviewItemRevisions(context: RequestContext, key: string): RevisionCollection {
@@ -140,6 +141,7 @@ export function getReviewItemRevisions(context: RequestContext, key: string): Re
  * });
  * ```
  *
+ * @docxEditorExtension
  * @public
  */
 export function getReviewItemRange(context: RequestContext, key: string): Range {
@@ -173,6 +175,7 @@ export function getReviewItemRange(context: RequestContext, key: string): Range 
  * });
  * ```
  *
+ * @docxEditorExtension
  * @public
  */
 export function getReviewItemRangeOrNullObject(context: RequestContext, key: string): Range {

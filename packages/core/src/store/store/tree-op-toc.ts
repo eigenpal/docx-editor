@@ -113,7 +113,7 @@ export function validateInsertToc(part: OoxmlPart, op: InsertTocOp): TreeOpRejec
   return validateEntriesAndBookmarks(part, op);
 }
 
-function tocRestriction(part: OoxmlPart, toc: DetectedToc): TreeOpRejection | null {
+export function tocRestriction(part: OoxmlPart, toc: DetectedToc): TreeOpRejection | null {
   for (const nodeId of [toc.beginParagraphId, ...toc.resultParagraphIds, toc.endParagraphId]) {
     if (isBoundAt(part, nodeId)) return 'bound';
     if (effectiveContentLockAt(part, nodeId).content) return 'locked';

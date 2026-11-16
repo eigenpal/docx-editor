@@ -49,6 +49,7 @@ function textbox(
     readonly positionH?: string;
     readonly fill?: string;
     readonly wrap?: string;
+    readonly rotDegrees?: number;
   } = {}
 ): string {
   const cx = (options.widthPt ?? 10) * EMU_PER_PT;
@@ -63,7 +64,8 @@ function textbox(
     `<wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>${options.wrap ?? '<wp:wrapNone/>'}` +
     '<wp:docPr id="1" name="TB"/>' +
     `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp>` +
-    `<wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>` +
+    `<wps:spPr><a:xfrm rot="${(options.rotDegrees ?? 0) * 60_000}">` +
+    `<a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>` +
     `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${fill}</wps:spPr>` +
     `<wps:txbx><w:txbxContent>${content}</w:txbxContent></wps:txbx>` +
     (options.bodyPr ?? NO_WRAP) +
@@ -308,7 +310,9 @@ describe('unwrapped text box text', () => {
     expect(content!.textContent).toBe('painted label');
   });
   test('a table cell wraps its text around the sized box', () => {
+    // No `a:spAutoFit`: the box keeps its authored 50pt height beside the first lines.
     const drawing = textbox(para('Hello world'), {
+      bodyPr: '<wps:bodyPr wrap="none"/>',
       wrap: '<wp:wrapSquare wrapText="bothSides"/>',
       positionH:
         '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>',
@@ -338,5 +342,74 @@ describe('unwrapped text box text', () => {
     for (const line of cellParagraph.lines.slice(0, 3)) {
       expect(line.contentX).toBeGreaterThanOrEqual(record.width - 0.01);
     }
+  });
+
+  test('a:spAutoFit fits the box height to its text, and the wrap follows the fitted box', () => {
+    const layoutWith = (bodyPr: string) => {
+      const drawing = textbox(para('Hello world'), {
+        bodyPr,
+        widthPt: 100,
+        wrap: '<wp:wrapSquare wrapText="bothSides"/>',
+        positionH:
+          '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>',
+      });
+      const doc = readOoxmlPart(
+        `<w:document ${NS}><w:body><w:p>${drawing}<w:r><w:t>${'word '.repeat(80)}</w:t></w:r></w:p>` +
+          `<w:sectPr><w:pgSz w:w="${PAGE_WIDTH * 20}" w:h="15840"/>` +
+          '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>' +
+          '</w:body></w:document>',
+        { name: '/word/document.xml', contentType: 'app/xml' }
+      );
+      if (!doc.ok) throw new Error(doc.reason);
+      const layout = layoutSemanticDocument(doc.part, 1, {
+        measurer,
+        producer: 'test',
+        inlineDrawingLayout: drawingLayoutFor(doc.part),
+      });
+      const record = layout.pages[0]!.anchoredDrawings!.find((entry) => entry.textboxStory)!;
+      const lines = paragraphFragmentsOfBlocks(layout.pages[0]!.fragments, true)[0]!.lines;
+      return { record, beside: lines.filter((line) => line.contentX > 1).length };
+    };
+    const fixed = layoutWith('<wps:bodyPr/>');
+    const fitted = layoutWith('<wps:bodyPr><a:spAutoFit/></wps:bodyPr>');
+    expect(fixed.record.height).toBe(50);
+    // One line (the 14pt fixed line scaled to the 10pt run) plus the 3.6pt top and bottom insets.
+    expect(fitted.record.height).toBeCloseTo((14 * 10) / 11 + 7.2, 3);
+    expect(fitted.beside).toBeLessThan(fixed.beside);
+  });
+
+  const FITTED_HEIGHT = (14 * 10) / 11 + 7.2;
+
+  test('a turned DrawingML box fits its text too', () => {
+    const record = boxRecord(
+      textbox(para('Hello'), {
+        bodyPr: '<wps:bodyPr><a:spAutoFit/></wps:bodyPr>',
+        widthPt: 100,
+        rotDegrees: 30,
+      })
+    );
+    expect(record.height).toBeCloseTo(FITTED_HEIGHT, 3);
+  });
+
+  test('an inline DrawingML box fits its text, and its line holds the fitted box', () => {
+    const lineHeight = (bodyPr: string) => {
+      const cx = 100 * EMU_PER_PT;
+      const cy = 50 * EMU_PER_PT;
+      const drawing =
+        '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+        `<wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>` +
+        '<wp:docPr id="1" name="TB"/>' +
+        `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp>` +
+        `<wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>` +
+        '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr>' +
+        `<wps:txbx><w:txbxContent>${para('Hello')}</w:txbxContent></wps:txbx>${bodyPr}` +
+        '</wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+      const layout = layoutBody(drawing);
+      return paragraphFragmentsOfBlocks(layout.pages[0]!.fragments, true)[0]!.lines[0]!.box.height;
+    };
+    expect(lineHeight('<wps:bodyPr/>')).toBeGreaterThan(50);
+    const fitted = lineHeight('<wps:bodyPr><a:spAutoFit/></wps:bodyPr>');
+    expect(fitted).toBeGreaterThanOrEqual(FITTED_HEIGHT);
+    expect(fitted).toBeLessThan(FITTED_HEIGHT + 5);
   });
 });

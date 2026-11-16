@@ -243,6 +243,30 @@ describe('canonical primitive journal (task 3.5)', () => {
     expect(journals[0]).not.toBe(journals[1]);
   });
 
+  test('typing beside an equal letter names the offset it typed at', () => {
+    const store = openStore();
+    const id = paragraphIdOf(store.bodyStore().part);
+    const journals: CanonicalPrimitiveJournal[] = [];
+    const stop = observeCanonicalPrimitiveJournal(store, (journal) => journals.push(journal));
+    for (const offset of [3, 2]) {
+      const result = store.transact({ kind: 'body' }, (context) => {
+        context.apply({ op: 'insertText', paragraphId: id, offset, text: 'l' });
+      });
+      if (!result.ok) throw new Error(result.detail ?? result.reason);
+    }
+    flushPendingCanonicalJournals(store);
+    stop();
+    // Read as text alone, each new letter goes after the equal letters beside it.
+    const starts = journals.map(
+      (journal) =>
+        journal.effects.find(
+          (effect): effect is Extract<CanonicalPrimitiveEffect, { kind: 'spliceText' }> =>
+            effect.kind === 'spliceText'
+        )?.utf16Start
+    );
+    expect(starts).toEqual([3, 2]);
+  });
+
   test('a committed journal is frozen and delivered before transact returns', () => {
     // Positions in a journal are absolute against the tree this transaction just committed,
     // so delivery cannot wait for a later task: anything that moves the tree first invalidates

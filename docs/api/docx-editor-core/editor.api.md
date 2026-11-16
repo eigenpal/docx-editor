@@ -5,6 +5,24 @@
 ```ts
 
 // @public
+export function acceptedOffsetFromText(paragraph: ParagraphText, offset: number): number;
+
+// @public
+export interface AcceptedTextRange {
+    readonly blockId: string;
+    readonly expectedText?: string;
+    readonly length: number;
+    readonly scope?: ViewScope;
+    readonly start: number;
+}
+
+// @public
+export function acceptedTextRanges(paragraph: ParagraphText, from: number, to: number): HighlightRange[];
+
+// @public
+export function alignColorPickerPopover(grid: HTMLElement | null): void;
+
+// @public
 export function alignmentAfterDirectionChange(alignment: ParagraphDialogFields['alignment']): ParagraphDialogFields['alignment'];
 
 // @public
@@ -56,6 +74,38 @@ export interface AttachOptions {
 // @public
 export const AUTO_ZOOM_MODE: ZoomMode;
 
+// @public
+export interface AutomationEndpoint {
+    // (undocumented)
+    readonly offset: number;
+    readonly paragraph: AutomationHandle;
+    readonly readAt?: number;
+}
+
+// @public
+export interface AutomationHandle<K extends AutomationObjectKind = AutomationObjectKind> {
+    // (undocumented)
+    readonly kind: K;
+    // (undocumented)
+    readonly ref: AutomationHandleRef;
+}
+
+// @public
+export type AutomationHandleRef = string & {
+    readonly [AUTOMATION_HANDLE_BRAND]: 'handle';
+};
+
+// @public
+export type AutomationObjectKind = 'document' | 'body' | 'paragraph' | 'section' | 'note' | 'comment' | 'revision' | 'bookmark' | 'list' | 'contentControl' | 'table' | 'tableRow' | 'tableCell' | 'field' | 'inlinePicture' | 'shape';
+
+// @public
+export interface AutomationSpan {
+    // (undocumented)
+    readonly end: AutomationEndpoint;
+    // (undocumented)
+    readonly start: AutomationEndpoint;
+}
+
 // @internal
 export interface BarRoomInput {
     readonly chrome: number;
@@ -77,6 +127,9 @@ export function beginEditorPreview(editor: DocxEditorInstance): {
     readonly ok: false;
     readonly reason: EditorPreviewRefusal;
 };
+
+// @public
+export function beginInlineImageDrag(editor: Editor, event: PointerEvent, drawingNodeId: string): boolean;
 
 // @public
 export function bindHistoryGroup(editor: Editor, element: HTMLElement, config: HistoryGroupBindingOptions): HistoryGroupBinding;
@@ -150,6 +203,8 @@ export const BROWSER_AUTOMATION_CAPABILITIES: AutomationCapabilities;
 export interface BrowserAutomationHost extends AutomationHost {
     // @internal
     beginHistoryGroupRun(group: HistoryGroup): HistoryGroupRun | null;
+    // @internal
+    highlightRangeOf(span: AutomationSpan): HighlightRange | null;
 }
 
 // @public
@@ -206,12 +261,312 @@ export function canExecuteImageCommand(command: Extract<EditorCommand, {
 }>, surface: PaginatedSurface | null): CanResult;
 
 // @public
+export function canMoveInlineImage(editor: Editor, drawingNodeId: string): boolean;
+
+// @public
 export function captureImageMutationPreconditions(editor: Pick<DocxEditorInstance, 'surface' | 'mountGeneration'>): ImageMutationPreconditions | null;
+
+// @public
+export interface CaretGeometry {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly lineId: string;
+    // (undocumented)
+    readonly pageIndex: number;
+    // (undocumented)
+    readonly position: SemanticPosition;
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
 
 // @public
 export function changedFields(seed: ParagraphDialogFields, current: ParagraphDialogFields,
 seedMixed?: ParagraphDialogMixed,
 currentMixed?: ParagraphDialogMixed): ParagraphFormatUpdate | null;
+
+// @public
+export const CHART_AXES_OFF_REASON = "chart.format.axesOff";
+
+// @public
+export const CHART_INSERT_CHOICES: readonly ChartType[];
+
+// @public
+export const CHART_LEGEND_CHOICES: readonly ChartLegendPosition[];
+
+// @public
+export const CHART_NO_AXES_REASON = "chart.errors.noAxes";
+
+// @public @deprecated (undocumented)
+export const CHART_STANDARD_COLORS: readonly {
+    readonly hex: string;
+    readonly nameKey: string;
+}[];
+
+// @public @deprecated (undocumented)
+export const CHART_THEME_SLOTS: readonly ChartThemeColor[];
+
+// @public
+export const CHART_TYPE_CHOICES: readonly ChartType[];
+
+// @public
+export function chartAxisTitleLabels(format: ChartFormat): {
+    readonly category: 'chart.format.categoryAxisTitle' | 'chart.format.xAxisTitle';
+    readonly value: 'chart.format.valueAxisTitle' | 'chart.format.yAxisTitle';
+};
+
+// @public
+export type ChartChromeSlotId = Extract<ChromeSlotId, `chart.${string}`>;
+
+// @public
+export type ChartColor = string | {
+    readonly shift?: number;
+    readonly theme: ChartThemeColor;
+};
+
+// @public
+export function chartColorCommand(drawingNodeId: string, index: number, pick: ChartColorPick): EditorCommand;
+
+// @public
+export interface ChartColorEntry {
+    readonly automatic: ChartColor;
+    readonly color: ChartColor | null;
+    readonly name: string;
+}
+
+// @public @deprecated (undocumented)
+export const chartColorGrid: (themeHexes: readonly string[]) => ColorPickerGrid;
+
+// @public @deprecated
+export function chartColorLabel(pick: ChartColorPick, t: ChartTranslate): string;
+
+// @public
+export function chartColorOfPick(pick: ChartColorPick): ChartColor | null;
+
+// @public
+export type ChartColorPick = ColorPick;
+
+// @public
+export const chartColorPick: (entry: ChartColorEntry) => ChartColorPick;
+
+// @public
+export function chartColorPickOf(color: ChartColor): ChartColorPick;
+
+// @public
+export function chartColorPicks(value: ChartColorPick): readonly ChartColorPick[];
+
+// @public
+export interface ChartCopySource {
+    readonly drawing: OoxmlElement;
+    readonly ownerPart: string;
+    // (undocumented)
+    readonly pkg: OoxmlPackage;
+}
+
+// @public
+export interface ChartData {
+    // (undocumented)
+    readonly categories: readonly ChartDataCategory[];
+    // (undocumented)
+    readonly kind: ChartDataKind;
+    // (undocumented)
+    readonly series: readonly ChartDataSeries[];
+    readonly workbook?: ChartWorkbookState;
+}
+
+// @public
+export interface ChartDataCategory {
+    readonly label: string;
+    readonly source?: number;
+}
+
+// @public
+export type ChartDataKind = 'category' | 'xy';
+
+// @public
+export type ChartDataRead = {
+    readonly data: ChartData;
+    readonly ok: true;
+} | {
+    readonly ok: false;
+    readonly reason: string;
+};
+
+// @public
+export interface ChartDataSeries {
+    readonly name: string;
+    readonly source?: number;
+    readonly values: readonly (number | null)[];
+}
+
+// @public
+export interface ChartFormat {
+    readonly axes: boolean | null;
+    readonly axisTitles: {
+        readonly category: string | null;
+        readonly value: string | null;
+    } | null;
+    // (undocumented)
+    readonly colors: readonly ChartColorEntry[];
+    readonly colorsBy: 'series' | 'point';
+    readonly dataLabels: boolean;
+    readonly gridlines: boolean | null;
+    // (undocumented)
+    readonly legend: ChartLegendPosition;
+    readonly title: string | null;
+    readonly type: ChartType | null;
+}
+
+// @public
+export interface ChartFormatChange {
+    // (undocumented)
+    readonly axes?: boolean;
+    // (undocumented)
+    readonly categoryAxisTitle?: string | null;
+    // (undocumented)
+    readonly dataLabels?: boolean;
+    // (undocumented)
+    readonly gridlines?: boolean;
+    // (undocumented)
+    readonly legend?: ChartLegendPosition;
+    // (undocumented)
+    readonly title?: string | null;
+    // (undocumented)
+    readonly valueAxisTitle?: string | null;
+}
+
+// @public
+export type ChartFormatRead = {
+    readonly format: ChartFormat;
+    readonly ok: true;
+} | {
+    readonly ok: false;
+    readonly reason: string;
+};
+
+// @public
+export type ChartIntentResult = ImageIntentResult | {
+    readonly detail: string;
+    readonly ok: false;
+    readonly reason: 'chart';
+};
+
+// @public
+export interface ChartLanes {
+    duplicate(scope: StoryScope, input: DuplicateChartInput): ChartIntentResult;
+    // (undocumented)
+    edit(scope: StoryScope, drawingNodeId: string, edit: (pkg: OoxmlPackage, target: ChartTarget) => ChartEdit, options?: {
+        readonly actorId?: string;
+    }): ChartIntentResult;
+    // (undocumented)
+    insert(scope: StoryScope, input: InsertChartInput): ChartIntentResult;
+}
+
+// @public
+export type ChartLegendPosition = 'none' | 'top' | 'bottom' | 'left' | 'right';
+
+// @public
+export const chartPaneAvailable: (editor: Editor | null) => boolean;
+
+// @public
+export type ChartPaneChange = {
+    readonly category: number;
+    readonly series: number;
+    readonly text: string;
+    readonly type: 'value';
+} | {
+    readonly series: number;
+    readonly text: string;
+    readonly type: 'seriesName';
+} | {
+    readonly category: number;
+    readonly text: string;
+    readonly type: 'label';
+} | {
+    readonly name: string;
+    readonly type: 'addSeries';
+} | {
+    readonly series: number;
+    readonly type: 'removeSeries';
+} | {
+    readonly label: string;
+    readonly type: 'addCategory';
+} | {
+    readonly category: number;
+    readonly type: 'removeCategory';
+};
+
+// @public
+export function chartPaneCommand(drawingNodeId: string, data: ChartData, change: ChartPaneChange): ChartPaneResult;
+
+// @public
+export function chartPaneDraftContinues(previous: string, next: string): boolean;
+
+// @public
+export function chartPaneDraftKey(drawingNodeId: string, data: ChartData): string;
+
+// @public
+export function chartPaneNumericX(data: Pick<ChartData, 'kind' | 'categories'>): boolean;
+
+// @public
+export type ChartPaneResult = {
+    readonly command: EditorCommand;
+    readonly ok: true;
+} | {
+    readonly error: 'chart.data.fieldErrors.number' | 'chart.data.fieldErrors.xNumber' | 'chart.data.fieldErrors.tooLong' | 'chart.data.fieldErrors.limit';
+    readonly ok: false;
+};
+
+// @public
+export function chartPickHex(pick: ChartColorPick, themeHexes: readonly string[], automatic?: ChartColor): string;
+
+// @public
+export const chartRowFocusAfterRemove: (removed: number, count: number) => number;
+
+// @public
+export function chartSeriesNote(format: ChartFormat, seriesCount: number): 'chart.format.pieFirstSeries' | null;
+
+// @public
+export const chartSlotIsToggle: (id: string) => boolean;
+
+// @public @deprecated (undocumented)
+export type ChartSwatch = ColorSwatch;
+
+// @public
+export type ChartThemeColor = 'bg1' | 'tx1' | 'bg2' | 'tx2' | 'accent1' | 'accent2' | 'accent3' | 'accent4' | 'accent5' | 'accent6';
+
+// @public @deprecated (undocumented)
+export const chartThemeHexes: (entries: readonly {
+    readonly hex: string;
+}[] | undefined) => readonly string[];
+
+// @public
+export function chartTitleCommand(drawingNodeId: string, format: ChartFormat, field: 'title' | 'categoryAxisTitle' | 'valueAxisTitle', text: string): EditorCommand | null;
+
+// @public @deprecated (undocumented)
+export type ChartTranslate = ColorPickerTranslate;
+
+// @public
+export type ChartType = 'columnClustered' | 'columnStacked' | 'columnPercentStacked' | 'barClustered' | 'barStacked' | 'barPercentStacked' | 'line' | 'lineMarkers' | 'area' | 'areaStacked' | 'areaPercentStacked' | 'pie' | 'doughnut' | 'radar' | 'scatter' | 'scatterLines';
+
+// @public
+export function chartTypeChangeNote(before: ChartFormat, after: ChartFormat): 'chart.format.typeChangeRemoved' | null;
+
+// @public
+export function chartTypeHint(format: ChartFormat): 'chart.format.typeChangeHint' | null;
+
+// @public
+export function chartTypeIconPaths(type: ChartType): readonly string[];
+
+// @public
+export const chartTypeLabelKey: (type: ChartType) => `chart.types.${ChartType}`;
+
+// @public
+export const chartValueText: (v: number | null | undefined) => string;
+
+// @public
+export type ChartWorkbookState = 'embedded' | 'kept' | 'external' | 'none';
 
 // @internal
 export function chordLetter(event: KeyboardEvent): string;
@@ -579,6 +934,15 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: 'command';
         };
     }, {
+        readonly defaultToolbar: false;
+        readonly id: 'compareDocuments';
+        readonly labelKey: 'review.compareDocuments';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
         readonly id: 'comments';
         readonly labelKey: 'formattingBar.commentsAndChanges';
         readonly paths: readonly string[];
@@ -666,6 +1030,20 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: 'command';
         };
     }, {
+        readonly id: 'editChart';
+        readonly labelKey: 'chart.edit';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'formatShape';
+        readonly labelKey: 'shape.formatShape';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
         readonly id: 'wrap';
         readonly labelKey: 'formattingBar.imageWrap';
         readonly paths: readonly string[];
@@ -686,6 +1064,143 @@ export const CHROME_GROUPS: readonly [{
     }];
     readonly id: 'image';
     readonly labelKey: 'formattingBar.groups.image';
+}, {
+    readonly contextual: true;
+    readonly controls: readonly [{
+        readonly id: 'fill';
+        readonly labelKey: 'shape.pane.fillColor';
+        readonly paths: readonly string[];
+        readonly shape: 'colorSplit';
+        readonly state: {
+            readonly kind: 'value';
+        };
+        readonly swatch: '#4472c4';
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'fillTransparency';
+        readonly labelKey: 'shape.pane.transparency';
+        readonly paths: readonly string[];
+        readonly shape: 'stepper';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }, {
+        readonly id: 'outlineColor';
+        readonly labelKey: 'shape.pane.outlineColor';
+        readonly paths: readonly string[];
+        readonly shape: 'colorSplit';
+        readonly state: {
+            readonly kind: 'value';
+        };
+        readonly swatch: '#000000';
+    }, {
+        readonly id: 'outlineWidth';
+        readonly labelKey: 'shape.pane.width';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }, {
+        readonly id: 'outlineDash';
+        readonly labelKey: 'shape.pane.dash';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }];
+    readonly id: 'shape';
+    readonly labelKey: 'formattingBar.groups.shape';
+}, {
+    readonly contextual: true;
+    readonly controls: readonly [{
+        readonly id: 'type';
+        readonly labelKey: 'chart.format.type';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }, {
+        readonly id: 'title';
+        readonly labelKey: 'chart.format.titleText';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }, {
+        readonly id: 'legend';
+        readonly labelKey: 'chart.format.legend';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }, {
+        readonly id: 'dataLabels';
+        readonly labelKey: 'chart.format.dataLabels';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'axes';
+        readonly labelKey: 'chart.format.axes';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'gridlines';
+        readonly labelKey: 'chart.format.gridlines';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'categoryAxisTitle';
+        readonly labelKey: 'chart.format.categoryAxisTitle';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'valueAxisTitle';
+        readonly labelKey: 'chart.format.valueAxisTitle';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'seriesColor';
+        readonly labelKey: 'chart.format.colors';
+        readonly paths: readonly string[];
+        readonly shape: 'colorSplit';
+        readonly state: {
+            readonly kind: 'value';
+        };
+        readonly swatch: '#4472c4';
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'data';
+        readonly labelKey: 'chart.data.series';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+    }];
+    readonly id: 'chart';
+    readonly labelKey: 'formattingBar.groups.chart';
 }, {
     readonly contextual: true;
     readonly controls: readonly [{
@@ -823,6 +1338,15 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: 'command';
         };
     }, {
+        readonly id: 'chart';
+        readonly labelKey: 'chart.insert';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+        readonly valueKey: 'chart.insert';
+    }, {
         readonly id: 'footnote';
         readonly labelKey: 'toolbar.insertFootnote';
         readonly paths: readonly string[];
@@ -920,6 +1444,12 @@ export const CHROME_GROUPS: readonly [{
 
 // @public
 export const CHROME_MENUS: readonly ChromeMenu[];
+
+// @public
+export const CHROME_PRINT_DISPLAY_MODES: readonly {
+    readonly labelKey: 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original';
+    readonly mode: ReviewDisplayMode;
+}[];
 
 // @public
 export const CHROME_UNAVAILABLE_KEY = "formattingBar.unavailableInPreview";
@@ -1025,6 +1555,7 @@ export interface ChromeExportResult {
 
 // @public
 export interface ChromeExportView {
+    readonly comments?: boolean;
     // (undocumented)
     readonly displayMode: ReviewDisplayMode;
     readonly revisionAuthorSlots?: Readonly<Record<string, number>>;
@@ -1043,7 +1574,7 @@ export interface ChromeGroup<Id extends string = string, ControlId extends strin
 }
 
 // @public
-export type ChromeGroupId = 'history' | 'zoom' | 'styles' | 'font' | 'text' | 'script' | 'alignment' | 'direction' | 'list' | 'format' | 'review' | 'contentControl' | 'image' | 'table' | 'paragraph' | 'file' | 'insert';
+export type ChromeGroupId = 'history' | 'zoom' | 'styles' | 'font' | 'text' | 'script' | 'alignment' | 'direction' | 'list' | 'format' | 'review' | 'contentControl' | 'image' | 'shape' | 'chart' | 'table' | 'paragraph' | 'file' | 'insert';
 
 // @public
 export interface ChromeMenu {
@@ -1066,7 +1597,7 @@ export interface ChromeMenuItemEntry {
     // (undocumented)
     readonly kind: 'item';
     readonly labelKey?: string;
-    readonly picker?: 'tableGrid';
+    readonly picker?: 'tableGrid' | 'chartType';
     readonly shortcutKey?: string;
     // (undocumented)
     readonly slot: ChromeSlotId;
@@ -1115,10 +1646,16 @@ export interface ChromePrintOptions {
 }
 
 // @public
+export interface ChromePrintSettings {
+    readonly comments?: boolean;
+    readonly displayMode?: ReviewDisplayMode;
+}
+
+// @public
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'table.mergeCells' | 'table.splitCell' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.compareDocuments' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.editChart' | 'image.formatShape' | 'image.wrap' | 'image.altText' | 'shape.fill' | 'shape.fillTransparency' | 'shape.outlineColor' | 'shape.outlineWidth' | 'shape.outlineDash' | 'chart.type' | 'chart.title' | 'chart.legend' | 'chart.dataLabels' | 'chart.axes' | 'chart.gridlines' | 'chart.categoryAxisTitle' | 'chart.valueAxisTitle' | 'chart.seriesColor' | 'chart.data' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'table.mergeCells' | 'table.splitCell' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.chart' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
 
 // @public
 export function chromeSlotId(group: {
@@ -1156,13 +1693,75 @@ export function collapseOrder(groups: readonly string[], order?: readonly string
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
 
 // @public
+export const COLOR_PICKER_STANDARD_COLORS: readonly {
+    readonly hex: string;
+    readonly nameKey: string;
+}[];
+
+// @public
+export const COLOR_PICKER_THEME_SLOTS: readonly ColorPickerThemeSlot[];
+
+// @public
 export type ColorLowerResult = {
     readonly color: TreeDocColorValue;
     readonly ok: true;
 } | ColorLowerRefusal;
 
 // @public
+export type ColorPick = 'auto' | ColorPickerThemeSlot | `${ColorPickerThemeSlot}:${number}` | `#${string}`;
+
+// @public
+export interface ColorPickerGrid {
+    // (undocumented)
+    readonly standard: readonly ColorSwatch[];
+    readonly theme: readonly (readonly ColorSwatch[])[];
+}
+
+// @public
+export function colorPickerGrid(themeHexes: readonly string[]): ColorPickerGrid;
+
+// @public
+export type ColorPickerThemeSlot = ShapeThemeColorName;
+
+// @public
+export type ColorPickerTranslate = (key: string, params?: Record<string, string | number>) => string;
+
+// @public
+export function colorPickFromHexText(text: string): ColorPick | null;
+
+// @public
+export function colorPickHex(pick: ColorPick, themeHexes: readonly string[], automaticHex?: string): string;
+
+// @public
+export const colorPickIsCurrent: (swatch: ColorPick, current: ColorPick | null) => boolean;
+
+// @public
+export function colorPickLabel(pick: ColorPick, t: ColorPickerTranslate): string;
+
+// @public
+export function colorPickOf(hex: string | null | undefined, theme?: {
+    readonly name: ColorPickerThemeSlot;
+    readonly shift?: number;
+} | null): ColorPick | null;
+
+// @public
+export function colorPickTheme(pick: string): {
+    readonly name: ColorPickerThemeSlot;
+    readonly shift: number;
+} | null;
+
+// @public
+export interface ColorSwatch {
+    readonly hex: string;
+    // (undocumented)
+    readonly pick: ColorPick;
+}
+
+// @public
 export function commandExecOptions(value: unknown): EditorExecOptions | undefined;
+
+// @public
+export function commandForObjectSlotValue(id: ChromeSlotId, value: unknown): EditorCommand | null;
 
 // @public
 export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null;
@@ -1180,6 +1779,197 @@ export interface CommentDraftChromeHandlers {
 
 // @public
 export type CommentMarkerStyle = 'initials' | 'icon';
+
+// @public
+export interface CommentTextOptions extends HistoryGroupOptions {
+    readonly expectedText?: string;
+}
+
+// @public
+export const COMPARE_DOCUMENTS_ACCEPT = ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+// @public
+export const COMPARE_DOCUMENTS_PHASE_ATTRIBUTE = "data-docx-compare-phase";
+
+// @public
+export type CompareDocumentsBackgroundEngine = (original: Uint8Array, revised: Uint8Array, options: CompareDocumentsEngineOptions, control: {
+    readonly onProgress: (progress: CompareDocumentsProgress) => void;
+    readonly signal: AbortSignal;
+}) => Promise<CompareDocumentsBackgroundResult>;
+
+// @public
+export type CompareDocumentsBackgroundResult = {
+    readonly bytes: Uint8Array | null;
+    readonly changed: boolean;
+    readonly ok: true;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsEngineErrorCode;
+    readonly message: string;
+    readonly ok: false;
+    readonly reason?: CompareDocumentsRefusalReason;
+};
+
+// @public
+export interface CompareDocumentsChromeHandlers {
+    // (undocumented)
+    readonly onRequest?: (session: CompareDocumentsDialogSession) => void;
+}
+
+// @public
+export interface CompareDocumentsDialog {
+    // (undocumented)
+    destroy(): void;
+    // (undocumented)
+    open(): void;
+}
+
+// @public
+export interface CompareDocumentsDialogHost extends CompareDocumentsDialogSession {
+    // (undocumented)
+    readonly container: HTMLElement;
+    // (undocumented)
+    readonly translate?: (key: string) => string | undefined;
+}
+
+// @public
+export interface CompareDocumentsDialogSession {
+    apply(request: CompareDocumentsRequest, options?: {
+        readonly onProgress?: (progress: CompareDocumentsProgress) => void;
+    }): Promise<CompareDocumentsOutcome>;
+    canApply(): boolean;
+    cancel(): void;
+    readonly cancelable: boolean;
+    readonly defaultAuthor: string;
+    readonly originalHasTrackedChanges: boolean;
+    readonly signal: AbortSignal;
+}
+
+// @public
+export type CompareDocumentsEngine = (original: OoxmlPackage, revised: Uint8Array, options: CompareDocumentsEngineOptions) => CompareDocumentsEngineResult;
+
+// @public
+export type CompareDocumentsEngineErrorCode =
+/**
+* An option has a value of the wrong type, such as a `detectFormatChanges` that is not a
+* boolean, or the revised document is not a `Uint8Array`.
+*/
+'invalidOptions'
+/** The original document is not a readable DOCX package. */
+| 'invalidOriginal'
+/** The revised document is not a readable DOCX package. */
+| 'invalidRevised'
+/** The documents exceed the compare's size limits. */
+| 'tooLarge'
+/**
+* The original document enforces protection that the compare would break: read-only,
+* comments, forms, or tracked-changes protection. A compare also writes differences that
+* have no tracked form, such as style definitions and content control properties, so
+* tracked-changes protection refuses too.
+*/
+| 'protected'
+/** The differences include content that no tracked change can record. */
+| 'unsupportedContent';
+
+// @public
+export interface CompareDocumentsEngineOptions {
+    readonly authorName?: string;
+    readonly detectFormatChanges?: boolean;
+    readonly removeDateAndTime?: boolean;
+}
+
+// @public
+export type CompareDocumentsEngineResult = {
+    readonly changed: boolean;
+    readonly ok: true;
+    readonly package: OoxmlPackage;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsEngineErrorCode;
+    readonly message: string;
+    readonly ok: false;
+    readonly reason?: CompareDocumentsRefusalReason;
+};
+
+// @public
+export type CompareDocumentsErrorCode = CompareDocumentsEngineErrorCode
+/** Editor only: no review module, no open document, or no mount. */
+| 'unavailable'
+/** Editor only: a collaboration session is attached. */
+| 'collaboration'
+/** Editor only: the document is open for viewing only. */
+| 'viewing'
+/** Editor only: the dialog closed, or the compare was canceled, before it finished. */
+| 'closed'
+/** Editor only: the revised file is a `Uint8Array` with no bytes. */
+| 'empty'
+/**
+* Editor only: another compare of the same dialog runs, or a preview or an external document
+* refresh blocks writes to the document. Try again when it ends.
+*/
+| 'busy'
+/**
+* Editor only: the open document changed while a background compare ran, so its result
+* no longer applies. The editor never retries by itself.
+*/
+| 'documentChanged'
+/** Editor only: any other failure. */
+| 'failed';
+
+// @public
+export function compareDocumentsErrorKey(refusal: {
+    readonly code: CompareDocumentsErrorCode;
+    readonly reason?: CompareDocumentsRefusalReason;
+}): `compareDocuments.errors.${CompareDocumentsErrorCode}` | `compareDocuments.reasons.${CompareDocumentsRefusalReason}`;
+
+// @public
+export type CompareDocumentsOutcome = {
+    readonly changed: boolean;
+    readonly ok: true;
+    readonly revisionCount: number;
+} | {
+    readonly code: CompareDocumentsErrorCode;
+    readonly message: string;
+    readonly ok: false;
+    readonly reason?: CompareDocumentsRefusalReason;
+};
+
+// @public
+export type CompareDocumentsPhase = 'reading' | 'comparing' | 'checking' | 'applying';
+
+// @public
+export interface CompareDocumentsProgress {
+    readonly fraction: number;
+    readonly phase: CompareDocumentsPhase;
+}
+
+// @public
+export type CompareDocumentsRefusalReason =
+/** The documents differ inside a content control that is locked or bound to data. */
+'lockedContent'
+/** A document holds tracked changes that cannot be accepted, so its final state is unknown. */
+| 'unresolvedRevisions'
+/** The documents differ in content with no tracked-change form, such as an embedded file. */
+| 'untrackedContent'
+/** The revised document adds section or table settings that a reject cannot restore. */
+| 'unrecordedSettings'
+/** A header or footer of an earlier section cannot be paired with one of the original. */
+| 'headerFooter'
+/** The result needs a part type that the original document does not declare. */
+| 'packageStructure'
+/**
+* The result fails the check: accepting all changes does not give the revised text, rejecting
+* them does not give the original text, or a tracked change cannot be accepted or rejected.
+*/
+| 'unverified';
+
+// @public
+export interface CompareDocumentsRequest {
+    readonly authorName?: string;
+    readonly detectFormatChanges?: boolean;
+    readonly removeDateAndTime?: boolean;
+    readonly revised: Uint8Array;
+}
 
 // @public
 export function composeFontConfiguration(base: FontConfigurationBase, ...fragments: readonly FontConfigurationFragment[]): FontConfiguration;
@@ -1379,6 +2169,12 @@ export function defineFontResolver<T extends FontResolver>(resolve: T): MarkedFo
 export function disposeLayoutShaping(shaping: LayoutShapingOptions): void;
 
 // @public
+export interface DocumentHandle {
+    readonly loadId: string;
+    readonly revision: number;
+}
+
+// @public
 export interface DocumentRefresh {
     applyUpdate(update: RefreshUpdate): Promise<RefreshResult>;
     cancel(): void;
@@ -1467,6 +2263,11 @@ export interface DocumentSearchState {
 }
 
 // @public
+export function documentThemeHexes(entries: readonly {
+    readonly hex: string;
+}[] | undefined): readonly string[];
+
+// @public
 export interface DocxEditorConfig {
     // (undocumented)
     author?: string;
@@ -1512,6 +2313,7 @@ export interface DocxEditorInstance extends Editor {
     setBookmarkChrome(handlers: BookmarkChromeHandlers): Unsubscribe;
     setBookmarkMarks(options: BookmarkMarkOptions): Unsubscribe;
     setCommentDraftChrome(handlers: CommentDraftChromeHandlers): Unsubscribe;
+    setCompareDocumentsChrome(handlers: CompareDocumentsChromeHandlers | null, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setFonts(fonts: DocxEditorConfig['fonts']): Promise<void>;
@@ -1543,6 +2345,14 @@ export const DRAWING_REL_FROM_H: readonly string[];
 
 // @public
 export const DRAWING_REL_FROM_V: readonly string[];
+
+// @public
+export type DrawingFramePress = 'frame' | 'text' | {
+    readonly drawingNodeId: string;
+};
+
+// @public
+export function drawingFramePressTarget(editor: Editor, event: PointerEvent): DrawingFramePress;
 
 // @public
 export type DrawingGraphicKind = 'picture' | 'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
@@ -1586,6 +2396,7 @@ export type DrawingSelectionIntent = {
 } | {
     readonly drawingNodeId: string;
     readonly kind: 'pointer';
+    readonly memberNodeId?: string;
 } | {
     readonly kind: 'programmatic';
 };
@@ -1603,6 +2414,22 @@ export interface DrawingSupportIssue {
 }
 
 // @public
+export interface DuplicateChartInput {
+    // (undocumented)
+    readonly actorId?: string;
+    readonly bias?: 'left' | 'right';
+    // (undocumented)
+    readonly expectedPackageRevision?: number;
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+    readonly priorOps?: readonly TreeDocOp[];
+    // (undocumented)
+    readonly source: ChartCopySource;
+}
+
+// @public
 export interface EditorCommandExecute {
     // (undocumented)
     (): boolean;
@@ -1614,7 +2441,25 @@ export interface EditorCommandExecute {
 export function editorCommandKey(command: EditorCommand): string;
 
 // @public
+export interface EditorDropEvent {
+    // (undocumented)
+    readonly event: EditorHostDragEvent;
+    // (undocumented)
+    readonly position: EditorPointPosition;
+}
+
+// @public
+export function editorDropHandled(event: Event): boolean;
+
+// @public
 export function editorHostDocument(editor: Editor): Document;
+
+// @public
+export type EditorHostDragEvent = typeof globalThis extends {
+    readonly DragEvent: {
+        readonly prototype: infer E;
+    };
+} ? E : object;
 
 // @public
 export function editorHostElement(editor: Editor): Element | null;
@@ -1651,6 +2496,19 @@ export interface EditorModuleRegistry {
     readonly wantsDiagnostic: (kind: EditorDiagnosticKind) => boolean;
 }
 
+// @public
+export type EditorPaneId = 'chart' | 'shape';
+
+// @public
+export interface EditorPointPosition {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+    // (undocumented)
+    readonly part: string;
+}
+
 // @internal
 export function editorPreviewActive(editor: object): boolean;
 
@@ -1676,6 +2534,12 @@ export interface EditorWindow {
     onClose(listener: () => void): () => void;
     readonly window: Window;
 }
+
+// @public
+export function editSelectedChartData(editor: Editor | null, chart: SelectedChartState | null, change: ChartPaneChange): ExecResult;
+
+// @public
+export function editSelectedShape(editor: Editor | null, image: SelectedImageState | null, change: ShapePaneChange, themeHexes?: readonly string[]): ExecResult;
 
 // @public
 export const EMU_PER_POINT = 12700;
@@ -1721,6 +2585,12 @@ export interface EquationOps {
 }
 
 // @public
+export function execSelectedChart(editor: Editor | null, chart: SelectedChartState | null, command: SelectedChartCommand): ExecResult;
+
+// @public
+export function execSelectedShape(editor: Editor | null, image: SelectedImageState | null, command: SelectedShapeCommand): ExecResult;
+
+// @public
 export function executeImageCommand(editor: DocxEditorInstance, command: Extract<EditorCommand, {
     type: 'insertImage' | 'replaceImage';
 }>): Promise<ExecResult>;
@@ -1754,6 +2624,18 @@ export function firstDayOfWeek(locale?: string): number;
 
 // @public
 export const FIT_WIDTH_ZOOM_MODE: ZoomMode;
+
+// @public
+export function focusChartPane(pane: HTMLElement | null): void;
+
+// @public @deprecated (undocumented)
+export const focusChartSwatch: (grid: HTMLElement | null) => void;
+
+// @public
+export function focusColorSwatch(grid: HTMLElement | null): void;
+
+// @public
+export function focusCompareDocumentsControl(dialog: HTMLElement | null | undefined, moment: 'busy' | 'refused' | 'unchanged'): void;
 
 // @public
 export const FONT_RESOLVER_BRAND: unique symbol;
@@ -1824,6 +2706,7 @@ export interface FontOriginFailure {
 // @public
 export interface FontResolutionRequest {
     readonly defaultFamily: string;
+    readonly faces?: readonly FontFaceRequest[];
     readonly families: readonly string[];
     readonly resolvedFaces?: readonly FontFaceRequest[];
     readonly signal?: AbortSignal;
@@ -1865,7 +2748,11 @@ export function formattingBarChromeGroups(image: ImageContext | null, options?: 
 
 // @public
 export interface FormattingBarOptions {
+    readonly chart?: boolean;
+    readonly chartControls?: boolean;
     readonly direction?: boolean;
+    readonly shape?: boolean;
+    readonly shapeControls?: boolean;
 }
 
 // @public
@@ -1926,17 +2813,22 @@ export interface HighlightHit<R extends HighlightRange = HighlightRange> {
 }
 
 // @public
+export type HighlightKind = 'spelling' | 'grammar';
+
+// @public
 export interface HighlightOptions {
     readonly activeColor?: string;
     readonly activeIndex?: number;
     readonly className?: string;
     readonly color?: string;
+    readonly kind?: HighlightKind;
     readonly priority?: number;
 }
 
 // @public
 export interface HighlightRange {
     readonly blockId: string;
+    readonly description?: string;
     readonly expectedText?: string;
     readonly length: number;
     readonly scope?: ViewScope;
@@ -2087,6 +2979,10 @@ export interface HyperlinkOps {
     linksInCaretParagraph(): SurfaceHyperlink[];
     removeHyperlink(linkId?: string): boolean;
     selectionIsPendingDeletion(): boolean;
+    wordAtCaret(): {
+        readonly from: SemanticPosition;
+        readonly to: SemanticPosition;
+    } | null;
 }
 
 // @public
@@ -2228,12 +3124,37 @@ export type ImageWrapTarget = 'inline' | 'square' | 'squareLeft' | 'squareRight'
 export const inchesToTwips: (inches: number) => number;
 
 // @public
+export function initialChromePrintSettings(snapshot: Pick<EditorSnapshot, 'reviewDisplayMode'> | null | undefined): ResolvedChromePrintSettings;
+
+// @public
 export function initialSplitCellCounts(limits: SplitCellLimits | null, can: (command: Extract<EditorCommand, {
     type: 'splitCell';
 }>) => CanResult): {
     readonly columns: string;
     readonly rows: string;
 };
+
+// @public
+export interface InsertChartInput {
+    // (undocumented)
+    readonly actorId?: string;
+    readonly bias?: 'left' | 'right';
+    // (undocumented)
+    readonly chartType: ChartType;
+    // (undocumented)
+    readonly data?: NewChartData;
+    // (undocumented)
+    readonly expectedPackageRevision?: number;
+    // (undocumented)
+    readonly heightPoints: number;
+    readonly name: string;
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+    // (undocumented)
+    readonly widthPoints: number;
+}
 
 // @public
 export interface InvalidTextFormFieldChromeHandlers {
@@ -2250,6 +3171,9 @@ export interface InvalidTextFormFieldSession {
     // (undocumented)
     readonly type: 'number' | 'date';
 }
+
+// @public
+export const isChartChromeSlot: (id: string) => id is ChartChromeSlotId;
 
 // @public
 export function isChromePrintShortcut(event: KeyboardEvent): boolean;
@@ -2279,10 +3203,16 @@ export function isKeyboardEvent(event: Event): event is KeyboardEvent;
 export function isMouseEvent(event: Event): event is MouseEvent;
 
 // @public
+export const isObjectChromeSlot: (id: string) => id is ShapeChromeSlotId | ChartChromeSlotId;
+
+// @public
 export function isoDateOf(date: Date): string;
 
 // @public
 export function isPointerEvent(event: Event): event is PointerEvent;
+
+// @public
+export const isShapeChromeSlot: (id: string) => id is ShapeChromeSlotId;
 
 // @public
 export function isStaleImageInteractionCommit(editor: Pick<DocxEditorInstance, 'surface' | 'mountGeneration'>, session: ImageInteractionSession): ExecResult | null;
@@ -2298,6 +3228,9 @@ export function keepScrollAtInlineEnd(scroller: HTMLElement): () => void;
 
 // @public
 export function layoutPointsToCssPixels(points: number, paintScale: number): number;
+
+// @public
+export function leaveGroupMember(editor: Editor): boolean;
 
 // @public
 export const LINE_SPACING_PRESETS: readonly number[];
@@ -2331,6 +3264,9 @@ export function listenForPopupEscape(options: PopupEscapeOptions): () => void;
 
 // @internal
 export function listenForPopupFocusLeave(options: PopupFocusLeaveOptions): () => void;
+
+// @public
+export function listenPaneRequests(editor: Editor, listener: (request: PaneRequest) => void, options?: PaneRequestListenerOptions): () => void;
 
 // @public
 export function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult>;
@@ -2369,6 +3305,12 @@ export function lowerColorValueForFill(color: ColorValue, themeColors: readonly 
 export type MarkedFontResolver<T extends FontResolver = FontResolver> = T & FontResolverMark;
 
 // @public
+export const MAX_CHART_POINTS = 4000;
+
+// @public (undocumented)
+export const MAX_CHART_SERIES = 255;
+
+// @public
 export const MAX_RESOLVER_FAMILIES = 64;
 
 // @public
@@ -2376,6 +3318,18 @@ export function mixedFieldsOf(format: ParagraphFormatRead): ParagraphDialogMixed
 
 // @public
 export function mountPaginatedSurface(container: HTMLElement, bytes: Uint8Array, options?: PaginatedSurfaceOptions): OpenPaginatedResult;
+
+// @public @deprecated (undocumented)
+export const moveChartSwatchFocus: (grid: HTMLElement | null, key: string) => boolean;
+
+// @public
+export function moveColorSwatchFocus(grid: HTMLElement | null, key: string): boolean;
+
+// @public
+export interface NavigateHighlightCommand {
+    readonly direction: 'next' | 'previous';
+    readonly name: string;
+}
 
 // @public
 export interface NavigateToChangeOptions extends ScrollToAnchorOptions {
@@ -2386,8 +3340,66 @@ export interface NavigateToChangeOptions extends ScrollToAnchorOptions {
 // @public
 export type NavigationCommand = 'left' | 'right' | 'up' | 'down' | 'wordLeft' | 'wordRight' | 'lineStart' | 'lineEnd' | 'documentStart' | 'documentEnd' | 'pageUp' | 'pageDown';
 
+// @public
+export interface NewChartData {
+    // (undocumented)
+    readonly categories: readonly string[];
+    // (undocumented)
+    readonly series: readonly {
+        readonly name: string;
+        readonly values: readonly (number | null)[];
+    }[];
+}
+
+// @public
+export function nextChartCategoryLabel(data: Pick<ChartData, 'kind' | 'categories'>, fallback: string): string;
+
 // @public (undocumented)
 export const NO_MIXED_FIELDS: ParagraphDialogMixed;
+
+// @public
+export function objectSlotOptions<K extends keyof ObjectSlotValueMap>(id: K): readonly ObjectSlotValueMap[K][];
+
+// @public
+export interface ObjectSlotReadValueMap extends Omit<ObjectSlotValueMap, 'shape.fill' | 'shape.outlineColor'> {
+    'shape.fill': ColorPick | 'none';
+    'shape.outlineColor': ColorPick | 'none';
+}
+
+// @public
+export function objectSlotValue<K extends keyof ObjectSlotValueMap>(id: K, text: string | undefined): ObjectSlotReadValueMap[K] | null;
+
+// @public
+export interface ObjectSlotValueMap {
+    // (undocumented)
+    'chart.axes': boolean;
+    'chart.categoryAxisTitle': string | null;
+    'chart.data': ChartPaneChange | Omit<ChartData, 'workbook'>;
+    // (undocumented)
+    'chart.dataLabels': boolean;
+    // (undocumented)
+    'chart.gridlines': boolean;
+    // (undocumented)
+    'chart.legend': ChartLegendPosition;
+    'chart.seriesColor': {
+        readonly color: ColorPick;
+        readonly index: number;
+    };
+    'chart.title': string | null;
+    // (undocumented)
+    'chart.type': ChartType;
+    // (undocumented)
+    'chart.valueAxisTitle': string | null;
+    'shape.fill': ColorPick | 'none' | (string & {});
+    'shape.fillTransparency': number;
+    'shape.outlineColor': ColorPick | 'none' | (string & {});
+    // (undocumented)
+    'shape.outlineDash': ShapeOutlineDash;
+    'shape.outlineWidth': number;
+}
+
+// @public
+export type ObjectToggleSlotId = 'chart.dataLabels' | 'chart.axes' | 'chart.gridlines';
 
 // @public
 export function observeContentControlPopup(panel: HTMLElement, anchor: HTMLElement): () => void;
@@ -2397,6 +3409,12 @@ export function observeHostDirection(node: Element, onChange: () => void): () =>
 
 // @public
 export function observeUnsupportedElements(container: HTMLElement, listener: (hosts: readonly UnsupportedElementHost[]) => void): () => void;
+
+// @public
+export function openChartPaneAt(editor: Editor, event: Pick<MouseEvent, 'target' | 'clientX' | 'clientY'>): boolean;
+
+// @public
+export function openChartPaneFor(editor: Editor, drawingNodeId: string): boolean;
 
 // @public
 export function openEditorWindow(options?: OpenEditorWindowOptions): Promise<EditorWindow | null>;
@@ -2426,12 +3444,34 @@ export type OpenPaginatedResult = {
     readonly reason: string;
 };
 
+// @public
+export function openShapePane(editor: Editor, drawingNodeId?: string): boolean;
+
+// @internal
+export function orderToolbarOverflowSections<T extends {
+    readonly id: string;
+}>(sections: readonly T[]): T[];
+
 // @internal
 export interface OutsidePressOptions {
     readonly close: (event: PointerEvent) => void;
     readonly contains?: (node: Node) => boolean;
     readonly popup: Node | null | undefined;
 }
+
+// @public
+export function overlayFrameCssBox(rect: {
+    readonly height: number;
+    readonly left: number;
+    readonly top: number;
+    readonly width: number;
+}, turn: OverlayFrameTurn | undefined, paintScale: number): {
+    readonly height: number;
+    readonly left: number;
+    readonly top: number;
+    readonly transform?: string;
+    readonly width: number;
+};
 
 // @public
 export interface OverlayFrameRect {
@@ -2456,13 +3496,20 @@ export function overlayFrameToSheetCssPixels(layout: SemanticLayout, frame: Over
 };
 
 // @public
+export interface OverlayFrameTurn {
+    readonly height: number;
+    readonly rotationDegrees: number;
+    readonly width: number;
+}
+
+// @public
 export function overlayHostOrigin(surfaceElement: HTMLElement | null): {
     readonly left: number;
     readonly top: number;
 };
 
 // @public
-export interface PaginatedSurface {
+export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartOps {
     activatedReviewKey(): string | null;
     activateReview(key: string, selection?: SemanticSelection, options?: {
         readonly allowExcluded?: boolean;
@@ -2470,8 +3517,8 @@ export interface PaginatedSurface {
     }): void;
     activeReviewKey(): string | null;
     activeScope(): ViewScope;
-    adjustIndent(direction: 'increase' | 'decrease'): boolean;
-    applyAutomationOps(staged: (relate: (url: string) => string | null) => readonly TreeDocOp[] | null, scope?: StoryScope, packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[], requiresReview?: boolean): TreeApplyResult;
+    applyAutomationOps(staged: (relate: (url: string) => string | null) => readonly TreeDocOp[] | null, scope?: StoryScope, packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[], requiresReview?: boolean,
+    carry?: (selection: SemanticSelection) => SemanticSelection): TreeApplyResult;
     // (undocumented)
     applyDrawingOps(ops: readonly DrawingTreeDocOp[]): TreeApplyResult;
     applyHeaderFooterLifecycle(op: {
@@ -2498,11 +3545,11 @@ export interface PaginatedSurface {
     author(): string | undefined;
     readonly bookmarkEditing: SurfaceBookmarks;
     bookmarks(): BookmarkIndex;
-    canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
     canEditTextFormField(): boolean;
     canInsertTable(rows: number, cols: number): boolean;
     canInsertToc(): boolean;
     canRefreshToc(tocId?: string): boolean;
+    caretClientRect(): HighlightRect | null;
     clearFormatting(): void;
     collaborationSession(): EditorCollaborationSession | null;
     commitReviewOps(run: (historyToken: symbol | undefined) => {
@@ -2515,6 +3562,7 @@ export interface PaginatedSurface {
     // (undocumented)
     convertNote(fromKind: 'footnote' | 'endnote', noteId: number): boolean;
     copyFlavours(): {
+        readonly chartDrawingNodeId?: string;
         readonly html: string | null;
         readonly reason?: 'unsupported-content' | 'chart-content';
         readonly text: string;
@@ -2554,7 +3602,6 @@ export interface PaginatedSurface {
     // (undocumented)
     readonly equations: EquationOps;
     exitHeaderFooter(): void;
-    exitListOnEmptyItem(): boolean;
     // (undocumented)
     exitNote(): void;
     flushPendingInput(): void;
@@ -2579,7 +3626,6 @@ export interface PaginatedSurface {
     readonly hyperlinks: HyperlinkOps;
     // (undocumented)
     imageDecodePort(): ImageDecodePort;
-    indentWithTab(direction: 'increase' | 'decrease'): boolean;
     // (undocumented)
     insertImage(input: SurfaceInsertImageInput): Promise<ImageIntentResult>;
     insertLineBreak(): void;
@@ -2592,8 +3638,6 @@ export interface PaginatedSurface {
     insertTable(rows: number, cols: number): boolean;
     insertToc(): boolean;
     isInsideToc(paragraphId: string): boolean;
-    isListActive(kind: 'bullet' | 'ordered'): boolean;
-    isListParagraph(): boolean;
     // (undocumented)
     layout(): SemanticLayout;
     layoutSession(): {
@@ -2615,6 +3659,8 @@ export interface PaginatedSurface {
     park(): void;
     parked(): boolean;
     pasteRich(text: string, html: string | null): boolean;
+    // (undocumented)
+    pointAt(clientX: number, clientY: number): SurfacePointHit | null;
     proposeTextChange(kind: 'insertion' | 'deletion' | 'replacement', text: string, author?: string): boolean;
     publishedLayout(): SemanticLayout;
     // (undocumented)
@@ -2625,7 +3671,9 @@ export interface PaginatedSurface {
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
     releaseSelection(pin: SelectionPin): void;
     remotePresenceColor(name: string): string | undefined;
-    removeListNumber(paragraphId: string): boolean;
+    remoteSelectionPending(): boolean;
+    removeToc(tocId?: string): boolean;
+    removeTocRefusal(tocId?: string): TocRemovalRefusal | null;
     repaintHighlights(): void;
     // (undocumented)
     replaceImage(drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, options: {
@@ -2654,6 +3702,7 @@ export interface PaginatedSurface {
     sectionPropertiesAt(paragraphId: string): SectionProperties;
     selectAll(): void;
     selectDrawing(drawingNodeId: string, hostParagraphId: string): boolean;
+    selectDrawingMember(memberNodeId: string | null): boolean;
     selectedText(): string;
     // (undocumented)
     readonly session: TreeDocxSessionView;
@@ -2666,11 +3715,6 @@ export interface PaginatedSurface {
     // (undocumented)
     setEditingMode(mode: SurfaceEditingMode): void;
     setHighlightPainter(painter: SurfaceOverlayPainter | null): void;
-    setIndent(update: {
-        readonly firstLine?: number | null;
-        readonly left?: number | null;
-        readonly right?: number | null;
-    }): boolean;
     setLocale(locale: string | undefined): void;
     // (undocumented)
     setNoteProperties(args: {
@@ -2701,6 +3745,10 @@ export interface PaginatedSurface {
     setRevisionMarkup(settings: ResolvedRevisionMarkup): void;
     // (undocumented)
     setRevisionStyles(colors: RevisionStyles | undefined): void;
+    setRunProperties(entries: readonly {
+        attributes?: Record<string, string>;
+        localName: string;
+    }[]): string | null;
     setRunProperty(localName: string, attributes?: Record<string, string>): string | null;
     setSectionProperties(update: {
         readonly anchorParagraphId?: string;
@@ -2728,7 +3776,6 @@ export interface PaginatedSurface {
     // (undocumented)
     storyScope(): StoryScope;
     textMeasurer?(): TextMeasurer;
-    toggleList(kind: 'bullet' | 'ordered'): boolean;
     toggleRunProperty(localName: string, attributes?: Record<string, string>): string | null;
     // (undocumented)
     type(text: string): void;
@@ -2755,6 +3802,8 @@ export interface PaginatedSurfaceOptions {
     readonly measurer?: TextMeasurer;
     // (undocumented)
     readonly onChange?: (state: PaginatedSurfaceState) => void;
+    // @internal
+    readonly onDragEvent?: (kind: 'dragOver' | 'drop', event: DragEvent, position: SemanticPosition) => void;
     readonly onEdit?: (typing: boolean) => void;
     // (undocumented)
     readonly onEquationPopover?: (activation: EquationActivation) => void;
@@ -2817,6 +3866,60 @@ export interface PaginatedSurfaceState {
     // (undocumented)
     readonly selection: SemanticSelection;
 }
+
+// @public
+export const PANE_SECTIONS: {
+    readonly [P in EditorPaneId]: readonly PaneSection<P>[];
+};
+
+// @public
+export function paneAvailable(editor: Editor | null, pane: EditorPaneId): boolean;
+
+// @public
+export interface PaneRequest {
+    // (undocumented)
+    readonly focus: boolean;
+    // (undocumented)
+    readonly pane: EditorPaneId;
+}
+
+// @public
+export interface PaneRequestListenerOptions {
+    readonly panes?: readonly EditorPaneId[];
+}
+
+// @public
+export interface PaneRequestOptions {
+    readonly focus?: boolean;
+}
+
+// @public
+export interface PaneSection<P extends EditorPaneId = EditorPaneId> {
+    readonly id: PaneSectionId<P>;
+    readonly labelKey: string | null;
+    // (undocumented)
+    readonly slots: readonly ChromeSlotId[];
+}
+
+// @public
+export type PaneSectionId<P extends EditorPaneId = EditorPaneId> = PaneSectionIds[P];
+
+// @public
+export interface PaneSectionIds {
+    // (undocumented)
+    readonly chart: 'type' | 'elements' | 'colors' | 'data';
+    // (undocumented)
+    readonly shape: 'fill' | 'outline';
+}
+
+// @public
+export function paneSections<P extends EditorPaneId>(pane: P): readonly PaneSection<P>[];
+
+// @public
+export function paneSlots(pane: EditorPaneId): readonly ChromeSlotId[];
+
+// @public
+export const paneTitleKey: (pane: EditorPaneId) => 'chart.pane.title' | 'shape.pane.title';
 
 // @public
 export interface ParagraphDialogFields {
@@ -2994,6 +4097,15 @@ export interface ParagraphPropertyEdit {
 }
 
 // @public
+export interface ParagraphsChangeEvent {
+    readonly added: readonly string[];
+    readonly changed: readonly string[];
+    readonly deleted: readonly string[];
+    readonly revision: number;
+    readonly source: 'local' | 'remote';
+}
+
+// @public
 export interface ParagraphTabStop {
     // (undocumented)
     readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
@@ -3004,10 +4116,62 @@ export interface ParagraphTabStop {
 }
 
 // @public
+export interface ParagraphText {
+    readonly acceptedSpans: readonly ParagraphTextSpan[];
+    readonly acceptedText: string;
+    readonly blockId: string;
+    readonly proofing: readonly ParagraphTextProofing[];
+    readonly text: string;
+}
+
+// @public
+export interface ParagraphTextProofing {
+    readonly acceptedStart: number;
+    readonly lang: string | null;
+    readonly length: number;
+    readonly noProof: boolean;
+}
+
+// @public
+export interface ParagraphTextReadOptions {
+    readonly fields?: 'object' | 'result';
+}
+
+// @public
+export interface ParagraphTextSpan {
+    readonly acceptedStart: number;
+    readonly length: number;
+    readonly start: number;
+}
+
+// @public
+export function parseChartValue(text: string): number | null | undefined;
+
+// @public
 export function parseIsoDate(value: string): Date | null;
 
 // @public
 export function partOfNodeId(session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'> & Partial<Pick<TreeDocxSessionView, 'storyParts'>>, nodeId: string | undefined): OoxmlPart | null;
+
+// @public
+export function passDrawingFramePress(editor: Editor, event: PointerEvent): DrawingFramePress;
+
+// @internal
+export function placeContextMenu(pointer: {
+    readonly x: number;
+    readonly y: number;
+}, panel: {
+    readonly height: number;
+    readonly width: number;
+}, view: {
+    readonly height: number;
+    readonly width: number;
+}, rtl: boolean): {
+    readonly left: number;
+    readonly maxHeight: number;
+    readonly maxWidth: number;
+    readonly top: number;
+};
 
 // @internal
 export function placeSubmenu(row: {
@@ -3093,6 +4257,12 @@ export function readInlineMargins(style: CSSStyleDeclaration): {
 };
 
 // @public
+export function readSelectedChart(editor: Editor | null, chart: SelectedChartState | null, snapshot: Pick<EditorSnapshot, 'editable' | 'editingMode'>): SelectedChartView;
+
+// @public
+export function readSelectedShape(editor: Editor | null, image: SelectedImageState | null): SelectedShapeView;
+
+// @public
 export function readSplitCellCounts(columns: string, rows: string, limits: SplitCellLimits | null): SplitCellCounts;
 
 // @internal
@@ -3126,7 +4296,7 @@ export interface RefreshChangeInput {
 }
 
 // @public
-export type RefreshFailureCode = 'unavailable' | 'collaboration' | 'busy' | 'cancelled' | 'superseded' | 'document-changed' | 'local-edits' | 'out-of-order' | 'invalid-result' | 'invalid-document' | 'input-failed' | 'load-failed' | 'recovery-failed';
+export type RefreshFailureCode = 'unavailable' | 'collaboration' | 'busy' | 'cancelled' | 'superseded' | 'document-changed' | 'local-edits' | 'out-of-order' | 'invalid-result' | 'invalid-document' | 'input-failed' | 'load-failed' | 'recovery-failed' | 'edit-not-permitted' | 'edit-unsupported';
 
 // @public
 export type RefreshHighlightAnimation = AnchorHighlightAnimation;
@@ -3148,18 +4318,42 @@ export interface RefreshLocation {
 }
 
 // @public
+export type RefreshRefusal = (RefreshRefusalFields & {
+    readonly code: 'edit-not-permitted';
+    readonly reason: 'viewing' | 'protected';
+}) | (RefreshRefusalFields & {
+    readonly code: 'edit-unsupported';
+    readonly reason: 'different-main-part' | 'unsupported-difference' | 'collaboration-refused';
+}) | (RefreshRefusalFields & {
+    readonly code: 'unavailable';
+    readonly reason?: 'collaboration-unavailable';
+}) | (RefreshRefusalFields & {
+    readonly code: Exclude<RefreshFailureCode, 'edit-not-permitted' | 'edit-unsupported' | 'unavailable'>;
+    readonly reason?: undefined;
+});
+
+// @public
+export interface RefreshRefusalFields {
+    readonly message: string;
+    // (undocumented)
+    readonly ok: false;
+    readonly recovered?: boolean;
+    // (undocumented)
+    readonly resultId: string;
+}
+
+// @public
+export type RefreshRefusalReason = 'viewing' | 'protected' | 'collaboration-unavailable' | 'different-main-part' | 'unsupported-difference' | 'collaboration-refused';
+
+// @public
 export type RefreshResult = {
     readonly changeInformation: 'available' | 'unavailable';
     readonly changes: readonly RefreshChange[];
     readonly failures: readonly string[];
+    readonly mode: RefreshUpdateMode;
     readonly ok: true;
     readonly resultId: string;
-} | {
-    readonly code: RefreshFailureCode;
-    readonly ok: false;
-    readonly recovered?: boolean;
-    readonly resultId: string;
-};
+} | RefreshRefusal;
 
 // @public
 export interface RefreshSubmission {
@@ -3175,11 +4369,15 @@ export interface RefreshUpdate {
     readonly bytes: ArrayBuffer | Uint8Array;
     readonly changes?: readonly RefreshChangeInput[];
     readonly failures?: readonly string[];
+    readonly mode?: RefreshUpdateMode;
     // (undocumented)
     readonly sequence: number;
     // (undocumented)
     readonly submission: RefreshSubmission;
 }
+
+// @public
+export type RefreshUpdateMode = 'reload' | 'edit';
 
 // @public
 export interface RemoteCaretLabelAnchor {
@@ -3198,6 +4396,60 @@ export interface RemoteCaretLabelHost {
 export type RenderableImageMime = SupportedImageMime | VectorImageMime;
 
 // @public
+export interface ReplaceAcceptedTextCommand {
+    readonly match: AcceptedTextRange;
+    readonly text: string;
+}
+
+// @public
+export interface ReplaceAllMatchesOutcome {
+    readonly replaced: number;
+    readonly skipped: number;
+}
+
+// @public
+export type ReplaceDocumentErrorCode = 'invalidRequest' | 'invalidDocument' | 'staleDocument' | 'unavailable' | 'busy' | 'editNotPermitted' | 'editUnsupported';
+
+// @public
+export type ReplaceDocumentOutcome = {
+    readonly changed: boolean;
+    readonly ok: true;
+} | ReplaceDocumentRefusal;
+
+// @public
+export type ReplaceDocumentRefusal = {
+    readonly message: string;
+    readonly ok: false;
+} & ({
+    readonly code: 'editNotPermitted';
+    readonly reason: 'viewing' | 'suggesting' | 'protected';
+} | {
+    readonly code: 'editUnsupported';
+    readonly reason: 'differentMainPart' | 'unsupportedDifference' | 'collaborationRefused';
+} | {
+    readonly code: 'unavailable';
+    readonly reason?: 'collaborationUnavailable';
+} | {
+    readonly code: 'staleDocument';
+    readonly reason: 'otherDocument' | 'edited';
+} | {
+    readonly code: 'invalidRequest';
+    readonly reason?: undefined;
+} | {
+    readonly code: 'invalidDocument' | 'busy';
+    readonly reason?: undefined;
+});
+
+// @public
+export type ReplaceDocumentRefusalReason = 'viewing' | 'suggesting' | 'protected' | 'collaborationUnavailable' | 'differentMainPart' | 'unsupportedDifference' | 'collaborationRefused' | 'otherDocument' | 'edited';
+
+// @public
+export interface ReplaceDocumentRequest {
+    readonly docx: Uint8Array | ArrayBuffer;
+    readonly expected?: DocumentHandle;
+}
+
+// @public
 export function reportAutomationException(editor: object, error: unknown, tracked: boolean): void;
 
 // @public
@@ -3207,10 +4459,16 @@ export function reportAutomationRefusal(editor: object, code: EditDiagnosticCode
 export function reportAutomationReviewSkip(editor: object, code: ReviewDiagnosticCode, operation?: ReviewOperation, cause?: string): void;
 
 // @public
+export function requestPane(editor: Editor, pane: EditorPaneId, options?: PaneRequestOptions): boolean;
+
+// @public
 export function resizePreservesAspect(handle: ImageResizeHandle, aspectLocked: boolean, shiftKey: boolean, textbox?: boolean): boolean;
 
 // @public
 export function resolveColorValueToCss(color: ColorValue | undefined | null, themeColors: readonly DocumentThemeColorEntry[], defaultHex?: string): string;
+
+// @public
+export type ResolvedChromePrintSettings = Required<ChromePrintSettings>;
 
 // @public
 export interface ResolvedReviewPane {
@@ -3277,6 +4535,9 @@ export function resolveThemeColorHex(color: Extract<ColorValue, {
 export function resolveZoomMode(mode: ZoomMode | 'auto'): ZoomMode | null;
 
 // @internal
+export function revealMenuItem(panel: HTMLElement, item: Element | null): void;
+
+// @internal
 export const REVIEW_MARKERS_GUTTER_PX = 44;
 
 // @public
@@ -3318,6 +4579,9 @@ export interface ReviewModelInput {
 // @public
 export interface ReviewModuleContribution {
     readonly collectReviewItems: CollectReviewItems;
+    readonly compareDocuments?: CompareDocumentsEngine;
+    readonly compareDocumentsInBackground?: CompareDocumentsBackgroundEngine;
+    readonly createCompareDocumentsDialog?: (host: CompareDocumentsDialogHost) => CompareDocumentsDialog;
     readonly createRevisionMarkupDialog?: (host: RevisionMarkupDialogHost) => RevisionMarkupDialog;
     readonly displayModes: readonly ReviewDisplayMode[];
     readonly pane?: ReviewPaneOptions;
@@ -3354,7 +4618,7 @@ export interface ReviewPaneOptions {
 export type ReviewPaneOverflow = 'float' | 'shrinkPage' | 'scroll';
 
 // @public
-export type ReviewWriteIntent = 'revision-resolve' | 'revision-attribution' | 'comment-add' | 'comment-reply' | 'comment-resolve' | 'comment-delete' | 'package-scoped';
+export type ReviewWriteIntent = 'revision-resolve' | 'revision-attribution' | 'comment-add' | 'comment-reply' | 'comment-resolve' | 'comment-edit' | 'comment-delete' | 'package-scoped';
 
 // @public
 export const REVISION_MARKUP_COLORS: readonly ['black', 'blue', 'turquoise', 'green', 'pink', 'red', 'yellow', 'white', 'darkBlue', 'teal', 'darkGreen', 'violet', 'darkRed', 'darkYellow', 'gray50', 'gray25', 'lightBlue', 'lightYellow', 'lightOrange', 'lightPurple', 'lightGreen', 'gray'];
@@ -3516,10 +4780,10 @@ export interface RulerTick {
 export type RulerUnit = 'inch' | 'cm';
 
 // @public
-export function runChromeExport(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>, format: ChromeExportFormat, handlers?: ChromeExportHandlers): Promise<ChromeExportResult>;
+export function runChromeExport(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>, format: ChromeExportFormat, handlers?: ChromeExportHandlers, settings?: ChromePrintSettings): Promise<ChromeExportResult>;
 
 // @public
-export function runChromePrint(editor: Pick<Editor, 'save'> & Partial<Pick<Editor, 'snapshot'>>, handlers?: ChromeExportHandlers, container?: Document | Element): Promise<ChromePrintJob>;
+export function runChromePrint(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>, handlers?: ChromeExportHandlers, container?: Document | Element, settings?: ChromePrintSettings): Promise<ChromePrintJob>;
 
 // @public
 export function runSave(editor: Editor | null): Promise<ArrayBuffer>;
@@ -3555,6 +4819,9 @@ export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId, value
 
 // @internal
 export function sameItemOverflow(a: ToolbarItemOverflow, b: ToolbarItemOverflow): boolean;
+
+// @public
+export function sameSelectedShape(a: SelectedShapeView, b: SelectedShapeView): boolean;
 
 // @public
 export function sameTabStops(a: readonly ParagraphTabStop[], b: readonly ParagraphTabStop[]): boolean;
@@ -3629,10 +4896,47 @@ export interface SectionProperties {
     };
     // (undocumented)
     readonly titlePage: boolean;
+    readonly verticalAlign?: SectionVerticalAlign;
 }
 
 // @public
+export type SectionVerticalAlign = 'center' | 'bottom' | 'both';
+
+// @public
 export function seedFields(format: ParagraphFormatRead): ParagraphDialogFields;
+
+// @public
+export type SelectedChartCommand = Omit<Extract<EditorCommand, {
+    type: 'setChartData';
+}>, 'drawingNodeId'> | Omit<Extract<EditorCommand, {
+    type: 'setChartType';
+}>, 'drawingNodeId'> | Omit<Extract<EditorCommand, {
+    type: 'setChartFormat';
+}>, 'drawingNodeId'> | Omit<Extract<EditorCommand, {
+    type: 'setChartColor';
+}>, 'drawingNodeId'>;
+
+// @public
+export interface SelectedChartState {
+    readonly drawingNodeId: string;
+    readonly editable: boolean;
+    readonly formatReason?: string;
+    readonly formattable: boolean;
+    readonly reason?: string;
+    readonly version: number;
+}
+
+// @public
+export interface SelectedChartView {
+    readonly canEditData: boolean;
+    readonly canEditFormat: boolean;
+    readonly chart: SelectedChartState | null;
+    readonly data: ChartData | null;
+    readonly dataDisabledReason: string | null;
+    readonly format: ChartFormat | null;
+    readonly formatDisabledReason: string | null;
+    readonly readReason: string | null;
+}
 
 // @public
 export interface SelectedDrawingOverlayTarget {
@@ -3658,10 +4962,12 @@ export interface SelectedDrawingOverlayTarget {
     readonly pageIndex: number;
     // (undocumented)
     readonly position: DrawingPositionInput | null;
+    readonly shape?: boolean;
     readonly textbox?: boolean;
     readonly textEditable?: boolean;
     // (undocumented)
     readonly transform: DrawingTransform;
+    readonly turn?: OverlayFrameTurn;
     // (undocumented)
     readonly width: number;
     // (undocumented)
@@ -3703,14 +5009,15 @@ export interface SelectedImageState {
     readonly kind: DrawingKind;
     // (undocumented)
     readonly locks: DrawingLocks;
+    readonly memberId?: string;
     // (undocumented)
     readonly name: string;
     // (undocumented)
     readonly position: DrawingPositionInput | null;
     // (undocumented)
     readonly resourceStatus: ImageResourceState['kind'];
-    // (undocumented)
     readonly rotationDegrees: number;
+    readonly shapeFormat: ShapeFormatState | null;
     // (undocumented)
     readonly title: string;
     // (undocumented)
@@ -3721,6 +5028,55 @@ export interface SelectedImageState {
 
 // @public
 export function selectedImageStateOf(surface: PaginatedSurface | null): SelectedImageState | null;
+
+// @public
+export type SelectedShapeCommand = Omit<Extract<EditorCommand, {
+    type: 'setShapeFill';
+}>, 'drawingNodeId'> | Omit<Extract<EditorCommand, {
+    type: 'setShapeOutline';
+}>, 'drawingNodeId'>;
+
+// @public
+export interface SelectedShapeView {
+    readonly canEditFill: boolean;
+    readonly canEditOutline: boolean;
+    readonly canEditTransparency: boolean;
+    readonly drawingNodeId: string | null;
+    readonly fillDisabledReason: string | null;
+    readonly format: ShapeFormatState | null;
+    readonly memberId: string | null;
+    readonly outlineDisabledReason: string | null;
+    readonly transparencyDisabledReason: string | null;
+}
+
+// @public
+export function selectionPane(snapshot: Pick<EditorSnapshot, 'chart' | 'image'>): EditorPaneId | null;
+
+// @public
+export interface SemanticHit {
+    // (undocumented)
+    readonly caret: CaretGeometry;
+    readonly cell: TableCellAddress | null;
+    readonly contentControlId: string | null;
+    readonly drawing: SemanticHitDrawing | null;
+    // (undocumented)
+    readonly lineId: string;
+    readonly onGlyphs: boolean;
+    // (undocumented)
+    readonly pageIndex: number;
+    // (undocumented)
+    readonly position: SemanticPosition;
+}
+
+// @public
+export interface SemanticHitDrawing {
+    // (undocumented)
+    readonly drawingNodeId: string;
+    // (undocumented)
+    readonly paragraphId: string;
+    // (undocumented)
+    readonly start: number;
+}
 
 // @public
 export interface SemanticPosition {
@@ -3742,10 +5098,153 @@ export interface SemanticSelection {
 export function separatorLeadingCost(separatorWidth: number, marginInlineStart: number, marginInlineEnd: number, gap: number): number;
 
 // @public
+export const SHAPE_OUTLINE_DASHES: readonly ShapeOutlineDash[];
+
+// @public
+export const SHAPE_OUTLINE_WIDTHS: readonly number[];
+
+// @public
+export type ShapeChromeSlotId = Extract<ChromeSlotId, `shape.${string}`>;
+
+// @public
+export function shapeColorPick(color: string | null, _themeHexes: readonly string[], theme?: ShapeThemeColor): ColorPick | null;
+
+// @public
+export type ShapeColorValue = string | {
+    readonly shift?: number;
+    readonly theme: ShapeThemeColorName;
+};
+
+// @public
+export const shapeDashLabelKey: (dash: ShapeOutlineDash | 'custom') => `shape.pane.dashes.${ShapeOutlineDash | 'custom'}`;
+
+// @public
+export const shapeDashValue: (outline: ShapeOutlineState) => ShapeOutlineDash | 'custom' | '';
+
+// @public
+export const shapeFillEditable: (fill: ShapeFillState) => boolean;
+
+// @public
+export function shapeFillLabelKey(fill: ShapeFillState): `shape.pane.fillTypes.${ShapeFillState['type']}`;
+
+// @public
+export const shapeFillPick: (fill: ShapeFillState, themeHexes: readonly string[]) => ColorPick | null;
+
+// @public
+export interface ShapeFillState {
+    readonly color: string | null;
+    readonly theme?: ShapeThemeColor;
+    readonly transparency: number;
+    readonly type: 'solid' | 'none' | 'gradient' | 'pattern' | 'picture' | 'mixed';
+}
+
+// @public
+export function shapeFillSummary(fill: ShapeFillState, themeHexes: readonly string[], t: ColorPickerTranslate): string;
+
+// @public
+export interface ShapeFormatState {
+    // (undocumented)
+    readonly fill: ShapeFillState;
+    // (undocumented)
+    readonly outline: ShapeOutlineState;
+}
+
+// @public
+export const shapeHexText: (color: string | null) => string;
+
+// @public
+export type ShapeOutlineDash = 'solid' | 'sysDot' | 'sysDash' | 'sysDashDot' | 'sysDashDotDot' | 'dot' | 'dash' | 'lgDash' | 'dashDot' | 'lgDashDot' | 'lgDashDotDot';
+
+// @public
+export const shapeOutlinePick: (outline: ShapeOutlineState, themeHexes: readonly string[]) => ColorPick | null;
+
+// @public
+export interface ShapeOutlineState {
+    readonly color: string | null;
+    readonly dash?: ShapeOutlineDash | 'custom' | null;
+    readonly theme?: ShapeThemeColor;
+    // (undocumented)
+    readonly visible: boolean | null;
+    // (undocumented)
+    readonly widthPt: number | null;
+}
+
+// @public
+export function shapeOutlineSummary(outline: ShapeOutlineState, themeHexes: readonly string[], t: ColorPickerTranslate): string;
+
+// @public
+export const shapePaneAvailable: (editor: Editor | null) => boolean;
+
+// @public
+export type ShapePaneChange = {
+    readonly color: string;
+    readonly type: 'fillColor';
+} | {
+    readonly type: 'noFill';
+} | {
+    readonly text: string;
+    readonly type: 'fillTransparency';
+} | {
+    readonly color: string;
+    readonly type: 'outlineColor';
+} | {
+    readonly type: 'noOutline';
+} | {
+    readonly text: string;
+    readonly type: 'outlineWidth';
+} | {
+    readonly dash: ShapeOutlineDash;
+    readonly type: 'outlineDash';
+};
+
+// @public
+export function shapePaneColorHex(color: string, themeHexes: readonly string[]): string | null;
+
+// @public
+export function shapePaneCommand(format: ShapeFormatState, change: ShapePaneChange, themeHexes: readonly string[]): ShapePaneResult;
+
+// @public
+export type ShapePaneError = 'shape.pane.errors.color' | 'shape.pane.errors.transparency' | 'shape.pane.errors.width' | 'shape.pane.errors.dash' | 'shape.pane.errors.noSolidFill';
+
+// @public
+export type ShapePaneResult = {
+    readonly command: SelectedShapeCommand | null;
+    readonly ok: true;
+} | {
+    readonly error: ShapePaneError;
+    readonly ok: false;
+};
+
+// @public
+export const shapeSwatchCurrent: (swatchPick: ColorPick, current: ColorPick | null) => boolean;
+
+// @public
+export interface ShapeThemeColor {
+    // (undocumented)
+    readonly name: 'bg1' | 'tx1' | 'bg2' | 'tx2' | 'accent1' | 'accent2' | 'accent3' | 'accent4' | 'accent5' | 'accent6';
+    readonly shift: number;
+}
+
+// @public
+export type ShapeThemeColorName = 'bg1' | 'tx1' | 'bg2' | 'tx2' | 'accent1' | 'accent2' | 'accent3' | 'accent4' | 'accent5' | 'accent6';
+
+// @public
+export const shapeTransparencyText: (fill: ShapeFillState) => string;
+
+// @public
+export const shapeWidthText: (widthPt: number | null) => string;
+
+// @public
 export function shiftMonth(year: number, month: number, delta: 1 | -1): {
     readonly month: number;
     readonly year: number;
 };
+
+// @internal
+export function showInTopLayer(panel: HTMLElement): boolean;
+
+// @public
+export function sidePanelPane(snapshot: Pick<EditorSnapshot, 'chart' | 'image'>, requested: EditorPaneId): EditorPaneId;
 
 // @public
 export const signedFirstLineOf: (kind: SpecialIndent, magnitudeTwips: number) => number;
@@ -3815,6 +5314,14 @@ export function submenuKeys(rtl: boolean): {
 
 // @public
 export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/bmp' | 'image/webp';
+
+// @public
+export interface SurfaceChartOps {
+    // (undocumented)
+    editChart(drawingNodeId: string, edit: (pkg: OoxmlPackage, target: ChartTarget) => ChartEdit): ChartIntentResult;
+    // (undocumented)
+    insertChart(input: SurfaceInsertChartInput): ChartIntentResult;
+}
 
 // @public
 export interface SurfaceEquation {
@@ -3906,6 +5413,24 @@ export interface SurfaceHyperlink {
 }
 
 // @public
+export interface SurfaceIndentAndListOps {
+    adjustIndent(direction: 'increase' | 'decrease'): boolean;
+    canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
+    exitListOnEmptyItem(): boolean;
+    indentWithTab(direction: 'increase' | 'decrease'): boolean;
+    isListActive(kind: 'bullet' | 'ordered'): boolean;
+    isListParagraph(): boolean;
+    removeListNumber(paragraphId: string): boolean;
+    removeParagraphIndent(paragraphId: string): boolean;
+    setIndent(update: {
+        readonly firstLine?: number | null;
+        readonly left?: number | null;
+        readonly right?: number | null;
+    }): boolean;
+    toggleList(kind: 'bullet' | 'ordered'): boolean;
+}
+
+// @public
 export type SurfaceInsertImageInput = Omit<InsertImageInput, 'decodePort' | 'actorId'>;
 
 // @public
@@ -3967,6 +5492,15 @@ export interface SurfaceParagraphFormat {
 }
 
 // @public
+export interface SurfacePointHit {
+    // (undocumented)
+    readonly hit: SemanticHit;
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @public
 export const TAB_ALIGNMENT_LABELS: {
     readonly bar: 'dialogs.paragraph.tabAlignBar';
     readonly center: 'dialogs.paragraph.tabAlignCenter';
@@ -3999,7 +5533,7 @@ export interface TableBorderStyleOption {
     readonly labelKey: string;
     readonly previewClass: string;
     // (undocumented)
-    readonly value: TableBorderStyle_2;
+    readonly value: TableBorderStyle;
 }
 
 // @public
@@ -4012,7 +5546,7 @@ export interface TableBorderTargetOption {
 }
 
 // @public
-export type TableBorderTargetValue = TableBorderEdgeTarget_2 | 'none';
+export type TableBorderTargetValue = TableBorderEdgeTarget$1 | 'none';
 
 // @public
 export interface TableBorderWidthOption {
@@ -4023,9 +5557,21 @@ export interface TableBorderWidthOption {
 }
 
 // @public
+export interface TableCellAddress {
+    readonly cellId: string;
+    // (undocumented)
+    readonly gridColumn: number;
+    // (undocumented)
+    readonly gridSpan: number;
+    readonly rowId: string;
+    readonly rowIndex: number;
+    readonly tableId: string;
+}
+
+// @public
 export interface TableChromeDraft {
     // (undocumented)
-    readonly activeTarget: TableBorderEdgeTarget_2;
+    readonly activeTarget: TableBorderEdgeTarget$1;
     // (undocumented)
     readonly spec: TableBorderSpec;
 }
@@ -4034,7 +5580,7 @@ export interface TableChromeDraft {
 export function tableChromeIconPaths(name: keyof typeof GENERATED_ICON_PATHS): readonly string[];
 
 // @public
-export function tableChromeLabelKeyForTarget(target: TableBorderEdgeTarget_2): string;
+export function tableChromeLabelKeyForTarget(target: TableBorderEdgeTarget$1): string;
 
 // @public
 export interface TableChromePick {
@@ -4064,6 +5610,12 @@ export function tableCommandToolbarState(surface: PaginatedSurface | null, comma
 
 // @public
 export type TableInteractionLabelKey = 'table.insertRowBelow' | 'table.insertColumnRight' | 'table.selectTable';
+
+// @public
+export function takePaneRequest(editor: Editor): PaneRequest | null;
+
+// @public
+export function takePaneRequestFor(editor: Editor, pane: EditorPaneId): PaneRequest | null;
 
 // @public
 export const TEXT_FORM_FORMATS: {
@@ -4131,7 +5683,20 @@ export interface TextMeasurer {
     };
     measure(text: string, style: ResolvedRunStyle): number;
     strikeoutMetrics?(style: ResolvedRunStyle): StrikeoutStrokePt | undefined;
+    // @internal
+    syntheticBold?(style: ResolvedRunStyle): boolean;
     textOutline?(text: string, style: ResolvedRunStyle): TextOutline | undefined;
+}
+
+// @public
+export function textOffsetFromAccepted(paragraph: ParagraphText, offset: number): number;
+
+// @public
+export interface TocRemovalRefusal {
+    // (undocumented)
+    readonly code: 'notFound' | 'unsupported';
+    // (undocumented)
+    readonly reason: string;
 }
 
 // @public (undocumented)
@@ -4148,6 +5713,9 @@ export const TOOLBAR_ITEM_ATTRIBUTE = "data-toolbar-item";
 
 // @internal
 export const TOOLBAR_OVERFLOW_HYSTERESIS = 24;
+
+// @internal
+export const TOOLBAR_OVERFLOW_LEADING_GROUPS: ReadonlySet<string>;
 
 // @internal
 export const TOOLBAR_PANEL_EDGE_MARGIN = 8;
@@ -4269,7 +5837,7 @@ export function toolbarShownCount(overflow: ToolbarItemOverflow, groupId: string
 export type ToolbarSlotValue<K extends ToolbarValueSlot> = K extends keyof ToolbarValueMap ? ToolbarValueMap[K] : unknown;
 
 // @public
-export interface ToolbarValueMap {
+export interface ToolbarValueMap extends ObjectSlotValueMap {
     // (undocumented)
     'font.family': string;
     // (undocumented)
@@ -4278,6 +5846,8 @@ export interface ToolbarValueMap {
     'image.altText': string;
     // (undocumented)
     'image.wrap': ImageWrapTarget;
+    // (undocumented)
+    'insert.chart': ChartType;
     // (undocumented)
     'list.lineSpacing': number;
     // (undocumented)
@@ -4318,8 +5888,10 @@ export interface TreeApplyResult {
 
 // @public
 export interface TreeDocxSessionView extends HeadlessDocumentView {
+    applyDrawingFrameOps(scope: StoryScope, ops: readonly DrawingTreeDocOp[]): ImageIntentResult;
     applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
+    applyPackageUpdate(pkg: OoxmlPackage): PackageUpdateResult;
     applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope, options?: TreeApplyOptions): TreeApplyResult;
     applyTreeOpsAtomic(groups: readonly {
         readonly ops: readonly TreeDocOp[];
@@ -4333,6 +5905,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     canRedo(): boolean;
     // (undocumented)
     canUndo(): boolean;
+    charts(): ChartLanes;
     collaborationPort(documentId: string): CollaborationDocumentPort;
     currentPackage(): OoxmlPackage;
     deleteComment(commentId: string, scope?: StoryScope, noteId?: number, options?: PackageWriteOptions): boolean;
@@ -4383,6 +5956,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     renderedFontFamilies(): readonly string[];
     rendersText(): boolean;
     replaceImage(scope: StoryScope, drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, decodePort: ImageDecodePort, options: ReplaceImageOptions): Promise<ImageIntentResult>;
+    replacePackage(pkg: OoxmlPackage): PackageReplacementResult;
     replyToComment(parentCommentId: string | null, anchor: {
         end: number;
         endParagraphId?: string;
@@ -4397,6 +5971,11 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     save(): Uint8Array;
     saveSteps(): Generator<void, Uint8Array>;
     setCommentResolved(commentId: string, resolved: boolean, options?: PackageWriteOptions): boolean;
+    setCommentText(commentId: string, text: string, options?: PackageWriteOptions): boolean;
+    setCommentTexts(edits: readonly {
+        readonly commentId: string;
+        readonly text: string;
+    }[], options?: PackageWriteOptions): boolean;
     settingsRoot(): OoxmlElement | null;
     storyParts(): readonly OoxmlPart[];
     storyText(scope: StoryScope): string | null;

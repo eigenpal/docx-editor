@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -19,6 +19,7 @@ import {
   type CSSProperties,
   type InjectionKey,
   type PropType,
+  type ShallowRef,
   type VNode,
   type MaybeRefOrGetter,
 } from 'vue';
@@ -76,6 +77,7 @@ const INERT_REVIEW: ReviewActions = {
   commentResolutionDisabledReason: null,
   remove: () => false,
   reply: () => false,
+  edit: () => false,
   selectionAnchorY: null,
   comment: () => false,
   lastRefusal: null,
@@ -178,6 +180,26 @@ function reviewItemRenderKey(item: ReviewItemView): string {
   ].join('\u0000');
 }
 
+/**
+ * The rail's current view of an item. A copy is made only when the view object changes, so a
+ * rail input that leaves the item as it was (a draft anchor, an expanded resolved card)
+ * re-renders no card.
+ */
+function liveReviewItem(
+  rail: ComputedRef<ReviewRailValue>,
+  entry: () => ReviewItemView
+): ShallowRef<ReviewItemView> {
+  const item = shallowRef<ReviewItemView>(entry());
+  let source: ReviewItemView | null = null;
+  watchEffect(() => {
+    const live = rail.value.byId.get(entry().id) ?? entry();
+    if (live === source) return;
+    source = live;
+    item.value = { ...live, replyIds: [...live.replyIds] };
+  });
+  return item;
+}
+
 /** Provides review-item context and owns the slot wrapper ref in the same render owner. @internal */
 export const ReviewItemScope = defineComponent({
   name: 'ReviewItemScope',
@@ -191,14 +213,7 @@ export const ReviewItemScope = defineComponent({
   },
   setup(props, { slots }) {
     const rail = useRail();
-    const item = shallowRef<ReviewItemView>(props.entry);
-    watchEffect(() => {
-      const live = rail.value.byId.get(props.entry.id) ?? props.entry;
-      item.value = {
-        ...live,
-        replyIds: [...live.replyIds],
-      };
-    });
+    const item = liveReviewItem(rail, () => props.entry);
     provide(ReviewItemContextKey, item as unknown as ComputedRef<ReviewItemView | null>);
     let measuredNode: HTMLElement | null = null;
     let measuredKey: string | null = null;
@@ -245,14 +260,7 @@ export const ReviewReplyScope = defineComponent({
   },
   setup(props, { slots }) {
     const rail = useRail();
-    const item = shallowRef<ReviewItemView>(props.entry);
-    watchEffect(() => {
-      const live = rail.value.byId.get(props.entry.id) ?? props.entry;
-      item.value = {
-        ...live,
-        replyIds: [...live.replyIds],
-      };
-    });
+    const item = liveReviewItem(rail, () => props.entry);
     provide(ReviewItemContextKey, item as unknown as ComputedRef<ReviewItemView | null>);
     return () => slots.default?.() as VNode | VNode[] | null;
   },

@@ -52,7 +52,10 @@ import {
   groupPictureLayerFields,
   groupPictureLayerResources,
 } from './drawing-group-picture-layers.ts';
-import { wrappedParagraphAnchorTop } from './anchor-content-top.ts';
+import {
+  wrappedParagraphAnchorBottomTop,
+  wrappedParagraphAnchorTop,
+} from './anchor-content-top.ts';
 import {
   anchoredDrawingAtomsInParagraph,
   drawingModelOffsetsInParagraph,
@@ -312,6 +315,8 @@ export interface InlineDrawingRecord {
    * paragraph needed no bidi resolution.
    */
   readonly bidiLevel?: number;
+  /** The run-direction group of a picture in a `w:bdo` override or a wrapper's group; else its level's. */
+  readonly bidiRunDirection?: 'ltr' | 'rtl';
   /**
    * Laid-out textbox story for a `wps:txbx` drawing; paint renders it clipped inside the
    * extent instead of a placeholder. Absent when the drawing carries no story or the host
@@ -535,6 +540,13 @@ export interface DrawingAnchorFrameContext {
    * top (`wrappedAnchorsStayBelowTopMargin`). Set by the body frame base in modern modes.
    */
   readonly wrappedParagraphAnchorsBelowContentTop?: boolean;
+  /**
+   * Where a wrapping body object positioned from its paragraph or line must end: the content
+   * box bottom in modern modes (`wrappedAnchorsEndAtBottomMargin`), the sheet bottom in legacy
+   * modes (`wrappedAnchorsEndOnSheet`). Set only by the body frame base, so a story without a
+   * real sheet never lifts an object.
+   */
+  readonly wrappedParagraphAnchorBottom?: 'margin' | 'sheet';
   /**
    * Called whenever a frame or alignment resolution reads the parity of
    * {@link pageNumber}. Incremental layout listens so it knows a section's
@@ -957,7 +969,13 @@ export function resolveAnchoredDrawingPosition(
 
   return Object.freeze({
     x,
-    y: wrappedParagraphAnchorTop(y, verticalFrame, projection.wrap, ctx),
+    y: wrappedParagraphAnchorBottomTop(
+      wrappedParagraphAnchorTop(y, verticalFrame, projection.wrap, ctx),
+      measure.height,
+      verticalFrame,
+      projection.wrap,
+      ctx
+    ),
     horizontalFrame,
     verticalFrame,
     horizontalFrameOrigin,
@@ -1013,7 +1031,7 @@ export function buildAnchoredDrawingRecord(options: {
   // Turned text or a turned text box reaches past its box; the painted area holds the turn.
   const turned = textArt
     ? textArtPaintBounds(geometry.paintBounds, textArt)
-    : turnedTextboxBounds(geometry.paintBounds, options.textboxStory);
+    : turnedTextboxBounds(geometry.paintBounds, options.textboxStory, geometry.contentBounds);
   const paintBounds = options.clipRegion ? clipBoxToRegion(turned, options.clipRegion) : turned;
   const hitBounds = hitBoundsOf(paintBounds);
   return Object.freeze({
@@ -1258,7 +1276,13 @@ export function buildInlineDrawingRecord(options: {
   /** @internal Line placement applies the horizontal clip later. */
   readonly deferHorizontalClip?: boolean;
   readonly revisions?: readonly RevisionAttribution[];
-  readonly bidiLevel?: number;
+  /** The resolved bidi shaping of the drawing's piece; absent without bidi resolution. */
+  readonly bidiShaping?: {
+    readonly level: number;
+    readonly runDirection?: 'ltr' | 'rtl';
+    readonly override?: 'ltr' | 'rtl';
+    readonly wrapperGroup?: true;
+  };
   /** Lays out a text-box story; called only for a drawing that carries one. */
   readonly layoutTextboxStory?: import('./inline-textbox-flow.ts').TextboxStoryLayouter;
   /** Fits legacy text art; without it, text art on the line paints nothing. */
@@ -1287,7 +1311,7 @@ export function buildInlineDrawingRecord(options: {
   // clip keeps that reach.
   const reach = textArt
     ? textArtPaintBounds(geometry.paintBounds, textArt)
-    : turnedTextboxBounds(geometry.paintBounds, textboxStory);
+    : turnedTextboxBounds(geometry.paintBounds, textboxStory, geometry.contentBounds);
   const horizontalClip = options.deferHorizontalClip
     ? { x: reach.x, width: reach.width }
     : { x: options.contentLeft, width: Math.max(0, options.contentRight - options.contentLeft) };
@@ -1326,14 +1350,20 @@ export function buildInlineDrawingRecord(options: {
     baselineOffset: options.baseline,
     paintBounds,
     hitBounds,
-    geometry: clipGeometryToRegion(geometry, clipRegion),
+    // The line and column clip is no region a shape stays cut at: a shape that paints past its
+    // extent paints over the margins, and a cell clips it again (semantic-table-layout.ts).
+    geometry: clipGeometryToRegion(geometry, clipRegion, false),
     resource: options.input.resource,
     accessibility: drawingAccessibility(options.input.projection),
     ...drawingPaintFields(options.input.projection),
     ...groupPictureLayerFields(options.input.projection, options.input.groupPictureLayerResources),
     ...chartFallbackFields(options.input.chartFallbackResource),
     ...(options.revisions && options.revisions.length > 0 ? { revisions: options.revisions } : {}),
-    ...(options.bidiLevel !== undefined ? { bidiLevel: options.bidiLevel } : {}),
+    ...(options.bidiShaping ? { bidiLevel: options.bidiShaping.level } : {}),
+    ...((options.bidiShaping?.override || options.bidiShaping?.wrapperGroup) &&
+    options.bidiShaping.runDirection
+      ? { bidiRunDirection: options.bidiShaping.runDirection }
+      : {}),
     ...(textboxStory ? { textboxStory } : {}),
     ...(textArt ? { textArt } : {}),
   });

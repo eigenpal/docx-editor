@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { catalogMergeState } from './catalog-merge.mjs';
+import { catalogMergeState, COLLABORATION_SHARDS, REQUIRED } from './catalog-merge.mjs';
 
 const repository = 'eigenpal/docx-editor';
 const version = '2.19.0';
@@ -28,9 +28,7 @@ function pullRequest() {
         (file) => `.collaboration/releases/${version}/${file}`
       ),
     ].map((path) => ({ path })),
-    statusCheckRollup: ['build', ...[1, 2, 3, 4].map((shard) => `collaboration (${shard}/4)`)].map(
-      check
-    ),
+    statusCheckRollup: REQUIRED.map(check),
   };
 }
 const run = {
@@ -57,10 +55,29 @@ test('green registered checks cannot bypass CI jobs that have not been created y
 
 test('missing or skipped collaboration shards cannot count as success', () => {
   const pr = pullRequest();
-  pr.statusCheckRollup.pop();
+  const last = pr.statusCheckRollup.pop()!;
+  const inProgress = [{ ...run, status: 'in_progress', conclusion: '' }];
+  expect(state(pr, inProgress)).toBe('pending');
+  pr.statusCheckRollup.push({ ...last, conclusion: 'SKIPPED' });
+  expect(state(pr, inProgress)).toBe('pending');
+});
+
+test('a finished CI run without a required check fails at once instead of waiting', () => {
+  const pr = pullRequest();
+  const last = pr.statusCheckRollup.pop()!;
+  expect(() => state(pr)).toThrow(`CI finished without required checks: ${last.name}`);
+  pr.statusCheckRollup.push({ ...last, conclusion: 'SKIPPED' });
+  expect(() => state(pr)).toThrow('CI finished without required checks');
+  pr.statusCheckRollup.push({ ...check('late check'), status: 'IN_PROGRESS', conclusion: '' });
   expect(state(pr)).toBe('pending');
-  pr.statusCheckRollup.push({ ...check('collaboration (4/4)'), conclusion: 'SKIPPED' });
-  expect(state(pr)).toBe('pending');
+});
+
+test('required collaboration checks match the CI collaboration matrix', () => {
+  const ci: any = Bun.YAML.parse(
+    readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')
+  );
+  expect(COLLABORATION_SHARDS).toEqual(ci.jobs.collaboration.strategy.matrix.shard);
+  expect(Object.keys(ci.jobs)).toContain('build');
 });
 
 test('pending checks wait and any failed check or CI run blocks merging', () => {

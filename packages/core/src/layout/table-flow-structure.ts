@@ -52,6 +52,38 @@ export function readFlowTable(table: OoxmlElement, flow: TableFlowCursor): FlowT
   // Both kinds of breaking positioned table may split any row (`table-text-float-break.ts`).
   const textFlow = isInFlowTextTable(authored, outOfFlow);
   const structure = pinnedBreak || textFlow ? withSplittableRows(authored) : authored;
-  const cellDeps = outOfFlow || textFlow ? withoutFloatingTableZones(flow.deps) : flow.deps;
+  const flowDeps = outOfFlow || textFlow ? withoutFloatingTableZones(flow.deps) : flow.deps;
+  const cellDeps = withParentTableLayout(authored, flowDeps);
   return { structure, pinnedBreak, outOfFlow, textFlow, cellDeps };
+}
+
+/**
+ * The deps the cells of `structure` lay out with: a fixed table that holds a nested table
+ * marks them (`nestedAutofitStructure`); every other table keeps `deps` itself, so the caches
+ * keyed by deps identity keep their entries. One stable copy per deps.
+ */
+export function withParentTableLayout(
+  structure: SemanticTableStructure,
+  deps: TableFlowDeps
+): TableFlowDeps {
+  if (deps.parentTableFixed || !structure.layoutFixed || !holdsNestedTable(structure)) {
+    return deps.parentTableFixed && !structure.layoutFixed
+      ? { ...deps, parentTableFixed: undefined }
+      : deps;
+  }
+  let known = fixedParentDeps.get(deps);
+  if (!known) fixedParentDeps.set(deps, (known = { ...deps, parentTableFixed: true }));
+  return known;
+}
+const fixedParentDeps = new WeakMap<TableFlowDeps, TableFlowDeps>();
+const nestingStructures = new WeakMap<SemanticTableStructure, boolean>();
+function holdsNestedTable(structure: SemanticTableStructure): boolean {
+  let known = nestingStructures.get(structure);
+  if (known === undefined) {
+    known = structure.rows.some((row) =>
+      row.cells.some((cell) => cell.blocks.some((block) => block.kind === 'table'))
+    );
+    nestingStructures.set(structure, known);
+  }
+  return known;
 }

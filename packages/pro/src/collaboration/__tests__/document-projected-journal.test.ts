@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -62,6 +62,8 @@ function fixture(limits: Partial<DocumentLimits> = {}) {
     showsAsChild: (id: string) => nodes.has(id),
     // No paragraph here holds shared inline text, so the projection sees every effect.
     inline: { textOf: () => null, owner: () => null },
+    // No concurrent split siblings: every child shows where it is listed.
+    splitSiblings: { ranksOf: () => null },
   } as unknown as DocumentRegistry;
   return { registry, nodes };
 }

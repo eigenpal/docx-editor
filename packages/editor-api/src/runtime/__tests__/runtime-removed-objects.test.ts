@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -185,18 +185,17 @@ describe('every other InvalidObjectPath keeps the neutral message', () => {
       const { host } = stubHost({
         execute: (request: AutomationBatchRequest): AutomationBatchResponse => ({
           ok: false,
-          results: request.operations.map(
-            (_, index): AutomationOperationResult =>
-              index === 0
-                ? {
-                    status: 'error',
-                    error: {
-                      code: 'invalid-handle',
-                      message: 'refused',
-                      ...(detail === undefined ? {} : { detail }),
-                    },
-                  }
-                : { status: 'skipped' }
+          results: request.operations.map((_, index): AutomationOperationResult =>
+            index === 0
+              ? {
+                  status: 'error',
+                  error: {
+                    code: 'invalid-handle',
+                    message: 'refused',
+                    ...(detail === undefined ? {} : { detail }),
+                  },
+                }
+              : { status: 'skipped' }
           ),
           revision: 3,
           changed: false,

@@ -45,6 +45,19 @@ export function definePopup<C extends Component | FunctionalComponent<never>>(
 const sessionKeys = new WeakMap<object, number>();
 let nextSessionKey = 0;
 
+/**
+ * @internal A stable key per form session. A dialog keyed by it mounts a new form for a new
+ * session, so no draft, focus return, or late progress of the previous session carries over.
+ */
+export function sessionKey(session: object): number {
+  let key = sessionKeys.get(session);
+  if (key === undefined) {
+    key = ++nextSessionKey;
+    sessionKeys.set(session, key);
+  }
+  return key;
+}
+
 /** @internal Render popup callbacks with a separate component lifetime for each form session. */
 export function renderPopup<P extends object>(
   popup: DocxEditorPopup<P>,
@@ -52,14 +65,6 @@ export function renderPopup<P extends object>(
   session?: object
 ): DocxEditorChildren | null {
   if (popup === false) return null;
-  let key: number | undefined;
-  if (session) {
-    key = sessionKeys.get(session);
-    if (key === undefined) {
-      key = ++nextSessionKey;
-      sessionKeys.set(session, key);
-    }
-  }
   const children = popup(props);
-  return session ? h(Fragment, { key }, [children]) : children;
+  return session ? h(Fragment, { key: sessionKey(session) }, [children]) : children;
 }

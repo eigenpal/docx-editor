@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -198,7 +198,7 @@ const MAX_SUPERSEDED_ID = 4096;
  * keeps its first entries, so one entry too many never makes every superseded revision count.
  * It reads alike under every session's limits, as `revisionTrail` must read it too.
  */
-function supersededKeys(value: unknown): Set<string> {
+export function supersededKeys(value: unknown): Set<string> {
   const keys = new Set<string>();
   // No list the bounds admit is longer, so a longer value is never parsed.
   if (typeof value !== 'string' || value.length > MAX_SUPERSEDED * (MAX_SUPERSEDED_ID + 3)) {

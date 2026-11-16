@@ -60,7 +60,10 @@
     "bookmarkShortcut": "Ctrl+Shift+F5",
     "goToBookmark": "Buka penanda…",
     "goToBookmarkShortcut": "Ctrl+G",
-    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G",
+    "printComments": "Cetak komentar",
+    "printCommentsNote": "Di luar {mode}, komentar dicetak sebagai catatan pada teks yang dikomentari.",
+    "printMarkup": "Markup"
   },
   "formattingBar": {
     "groups": {
@@ -75,7 +78,9 @@
       "image": "Gambar",
       "table": "Tabel",
       "format": "Format",
-      "direction": "Arah teks"
+      "direction": "Arah teks",
+      "chart": "Bagan",
+      "shape": "Bentuk"
     },
     "undo": "Urungkan",
     "undoShortcut": "Urungkan (Ctrl+Z)",
@@ -223,7 +228,11 @@
       "background2": "Latar Belakang 2",
       "text1": "Teks 1",
       "text2": "Teks 2"
-    }
+    },
+    "lighterPercent": "{color}, lebih terang {percent}%",
+    "darkerPercent": "{color}, lebih gelap {percent}%",
+    "hexColor": "Warna heksadesimal",
+    "invalidHex": "Ketik warna sebagai #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {
@@ -420,7 +429,20 @@
     "addComment": "Tambahkan komentar...",
     "replyPlaceholder": "Balas atau tambahkan orang lain dengan @",
     "reopen": "Buka kembali",
-    "resolve": "Selesaikan"
+    "resolve": "Selesaikan",
+    "edit": "Edit",
+    "editConflict": "Komentar ini telah berubah. Draf Anda tetap disimpan. Batalkan untuk melihat teks terbaru.",
+    "editEmpty": "Masukkan teks komentar sebelum menyimpan.",
+    "editPermission": "Anda hanya dapat mengedit komentar Anda sendiri.",
+    "editRefused": "Komentar ini tidak dapat disimpan. Draf Anda tetap disimpan.",
+    "editText": "Teks komentar",
+    "saveEdit": "Simpan perubahan",
+    "deletedDraft": "Komentar ini tidak lagi tersedia di sini. Draf Anda yang belum disimpan tetap tersedia untuk disalin.",
+    "discardDraft": "Buang draf",
+    "recoveredDraft": "Draf komentar yang belum disimpan",
+    "actions": "Tindakan komentar",
+    "replyActions": "Tindakan balasan",
+    "delete": "Hapus"
   },
   "revisions": {
     "paragraphMarkInserted": "Menyisipkan tanda paragraf",
@@ -447,6 +469,7 @@
       "fontFamily": "Font",
       "fontSize": "Ukuran font",
       "hangingIndent": "Indentasi gantung",
+      "highlight": "Sorotan",
       "italic": "Miring",
       "left": "Kiri",
       "leftIndent": "Inden Kiri",
@@ -625,7 +648,9 @@
     "fontSubstitutionNotice": "Beberapa font dalam dokumen ini tidak tersedia, jadi font pengganti ditampilkan: {fonts}",
     "documentContent": "Konten dokumen",
     "previewContent": "Pratinjau perubahan yang diusulkan",
-    "documentViewport": "Halaman dokumen"
+    "documentViewport": "Halaman dokumen",
+    "grammarIssueCount": "{count, plural, =0 {Tidak ada kesalahan tata bahasa.} other {# kesalahan tata bahasa.}}",
+    "spellingIssueCount": "{count, plural, =0 {Tidak ada kesalahan ejaan.} other {# kesalahan ejaan.}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Teks yang ditampilkan",
@@ -704,7 +729,8 @@
     },
     "selection": "Gambar yang dipilih",
     "locked": "Kotak ini tidak dapat dipindahkan atau diubah ukurannya",
-    "textLocked": "Teks dalam kotak ini tidak dapat diedit"
+    "textLocked": "Teks dalam kotak ini tidak dapat diedit",
+    "selectionShape": "Bentuk yang dipilih"
   },
   "ruler": {
     "horizontal": "Penggaris Horizontal",
@@ -732,7 +758,8 @@
   },
   "toc": {
     "refresh": "Perbarui seluruh tabel",
-    "refreshPageNumbers": "Perbarui nomor halaman saja"
+    "refreshPageNumbers": "Perbarui nomor halaman saja",
+    "remove": "Hapus daftar isi"
   },
   "reviewers": {
     "label": "Peninjau",
@@ -920,12 +947,20 @@
     "replyCount": "Balasan: {count}",
     "trackedChange": "Perubahan terlacak",
     "changeAnnouncement": "{change} oleh {author}: {text}",
-    "replyTargetResolved": "Perubahan sudah diselesaikan, jadi balasan tidak dikirim."
+    "replyTargetResolved": "Perubahan sudah diselesaikan, jadi balasan tidak dikirim.",
+    "compareDocuments": "Bandingkan dokumen"
   },
   "imageAltText": {
     "description": "Deskripsi",
     "panelTitle": "Teks alternatif",
     "title": "Judul"
+  },
+  "drop": {
+    "errors": {
+      "readOnly": "Dokumen ini hanya bisa dibaca.",
+      "noTarget": "Lepaskan pada teks yang dapat diedit.",
+      "unsupported": "Lepaskan gambar PNG, JPEG, GIF, atau teks."
+    }
   },
   "imageInsert": {
     "errors": {
@@ -934,7 +969,8 @@
       "invalidSignature": "File tersebut bukan gambar PNG, JPEG, atau GIF yang didukung.",
       "oversize": "Gambar melebihi ukuran maksimum yang diizinkan.",
       "refused": "Gambar tidak dapat disisipkan.",
-      "unsupportedFormat": "Format gambar ini tidak didukung untuk penyisipan."
+      "unsupportedFormat": "Format gambar ini tidak didukung untuk penyisipan.",
+      "staleTarget": "Dokumen atau posisi pelepasan berubah. Lepaskan gambar lagi."
     }
   },
   "imageProperties": {
@@ -1008,6 +1044,7 @@
     "trackedOnly": "Dokumen ini hanya mengizinkan pengeditan sebagai perubahan terlacak",
     "unavailable": "Perintah ini tidak tersedia",
     "viewing": "Dokumen ini terbuka untuk dilihat",
+    "compareCollaboration": "Bandingkan dokumen tidak tersedia dalam sesi pengeditan bersama.",
     "bodyOnlyNote": "Catatan kaki dan catatan akhir ditambahkan dari isi dokumen.",
     "bodyOnlySectionBreak": "Pemisah bagian ditempatkan di isi dokumen.",
     "bodyOnlyToc": "Daftar isi ditempatkan di isi dokumen.",
@@ -1023,13 +1060,19 @@
     "suggestingNeedsAuthor": "Mode saran memerlukan penulis. Tetapkan penulis dalam konfigurasi editor.",
     "pictureSelected": "Sebuah gambar dipilih. Letakkan kursor di teks untuk menyisipkan gambar.",
     "chartDrawing": "Ini adalah bagan. Anda dapat menghapusnya, tetapi tidak dapat mengeditnya sebagai gambar.",
-    "chartClipboard": "Pilihan berisi bagan. Bagan tidak dapat disalin, dipotong, atau ditempel.",
+    "chartFrame": "Ini adalah bagan. Anda dapat mengubah ukuran, posisi, pembungkusan teks, dan teks alternatifnya.",
+    "diagramFrame": "Ini adalah diagram. Anda dapat mengubah ukuran, posisi, pembungkusan teks, dan teks alternatifnya.",
+    "diagramRescale": "Ukuran diagram ini tidak dapat diubah. Gambar tersimpannya digunakan bersama diagram lain atau tidak dapat diskalakan ke ukuran tersebut.",
+    "chartClipboard": "Bagan hanya dapat disalin, dipotong, atau ditempel sendiri, tidak bersama konten lain.",
+    "chartClipboardStale": "Bagan yang disalin tidak lagi tersedia. Salin bagan lagi.",
     "nothingToUndo": "Tidak ada yang dapat dibatalkan",
     "nothingToRedo": "Tidak ada yang dapat diulang",
     "outermostLevel": "Pilihan sudah berada di tingkat terluar",
     "cannotIndentFurther": "Indentasi pilihan tidak dapat ditambah lagi",
     "noGoToView": "Buka tidak tersedia di sini",
-    "noBookmarkDialog": "Penanda tidak dapat ditambahkan di sini"
+    "noBookmarkDialog": "Penanda tidak dapat ditambahkan di sini",
+    "groupMemberMove": "Bentuk di dalam grup tidak dapat dipindahkan, diubah ukurannya, atau dihapus sendiri. Tekan Escape untuk memilih grup.",
+    "groupMemberProperties": "Bentuk di dalam grup mengambil pembungkusan, teks alternatif, dan propertinya dari grup. Tekan Escape untuk memilih grup."
   },
   "equationPopup": {
     "apply": "Terapkan",
@@ -1168,5 +1211,230 @@
     "sectionBreakNextColumn": "Pemisah Bagian (Kolom Baru)",
     "sectionBreakNextPage": "Pemisah Bagian (Halaman Berikutnya)",
     "sectionBreakOddPage": "Pemisah Bagian (Halaman Ganjil)"
+  },
+  "compareDocuments": {
+    "author": "Penulis perubahan",
+    "cancel": "Batal",
+    "compare": "Bandingkan",
+    "comparing": "Membandingkan…",
+    "description": "Pilih versi lain dari dokumen ini. Perbedaannya muncul di sini sebagai perubahan terlacak.",
+    "trackedChangesAccepted": "Dokumen yang terbuka memiliki perubahan terlacak. Perbandingan menganggapnya sudah diterima.",
+    "detectFormatting": "Sertakan perubahan format",
+    "fileRequired": "Pilih dokumen untuk dibandingkan terlebih dahulu.",
+    "readFailed": "Tidak dapat membaca file yang dipilih.",
+    "revisedFile": "Bandingkan dengan",
+    "title": "Bandingkan dokumen",
+    "noDifferences": "Dokumen tidak memiliki perbedaan.",
+    "recorded": "{count, plural, other {Perbandingan mencatat # perubahan.}}",
+    "recordedNoRevisions": "Perbandingan memperbarui dokumen tanpa perubahan terlacak.",
+    "phases": {
+      "reading": "Membaca dokumen…",
+      "comparing": "Membandingkan…",
+      "checking": "Memeriksa hasil…",
+      "applying": "Menerapkan perubahan…"
+    },
+    "errors": {
+      "invalidOptions": "Opsi perbandingan tidak valid.",
+      "invalidOriginal": "Dokumen yang terbuka tidak dapat dibaca untuk dibandingkan.",
+      "invalidRevised": "File yang dipilih bukan dokumen yang dapat dibandingkan.",
+      "tooLarge": "Dokumen terlalu besar untuk dibandingkan.",
+      "unsupportedContent": "Dokumen berbeda dalam konten yang tidak dapat ditampilkan sebagai perubahan terlacak.",
+      "unavailable": "Bandingkan dokumen tidak tersedia untuk dokumen ini.",
+      "protected": "Dokumen ini dilindungi dari pengeditan.",
+      "collaboration": "Bandingkan dokumen tidak tersedia dalam sesi pengeditan bersama.",
+      "viewing": "Dokumen dibuka hanya untuk dilihat.",
+      "closed": "Perbandingan dibatalkan.",
+      "empty": "File yang dipilih kosong.",
+      "busy": "Perbandingan lain, pratinjau, atau penyegaran dokumen sedang berjalan. Coba lagi setelah selesai.",
+      "documentChanged": "Dokumen berubah saat dibandingkan. Bandingkan lagi.",
+      "failed": "Dokumen tidak dapat dibandingkan."
+    },
+    "reasons": {
+      "headerFooter": "Dokumen berbeda pada header atau footer dari bagian sebelumnya, dan bagian itu tidak memiliki bagian yang cocok di dokumen lain.",
+      "lockedContent": "Dokumen berbeda di dalam kontrol konten yang terkunci atau tertaut ke data, sehingga perubahan di sana tidak dapat ditinjau. Hapus kunci atau tautannya, lalu bandingkan lagi.",
+      "packageStructure": "Dokumen yang terbuka tidak dapat menampung hasil perbandingan ini.",
+      "unrecordedSettings": "Versi lain menambahkan pengaturan bagian atau tabel yang tidak dapat dibatalkan dengan menolak perubahan.",
+      "unresolvedRevisions": "Sebuah dokumen berisi perubahan terlacak yang tidak dapat diterima. Terima atau tolak perubahan itu di dokumen tersebut, lalu bandingkan lagi.",
+      "untrackedContent": "Dokumen berbeda dalam konten yang tidak dapat ditampilkan sebagai perubahan terlacak, seperti file tersemat.",
+      "unverified": "Hasil perbandingan tidak akan mereproduksi kedua dokumen, sehingga tidak diterapkan."
+    }
+  },
+  "chart": {
+    "insert": "Bagan",
+    "insertType": "Sisipkan bagan {type}",
+    "edit": "Edit bagan…",
+    "sample": {
+      "category": "Kategori {number}",
+      "series": "Seri {number}",
+      "name": "Bagan {number}"
+    },
+    "pane": {
+      "title": "Bagan",
+      "close": "Tutup panel bagan",
+      "emptyTitle": "Tidak ada bagan yang dipilih",
+      "emptyBody": "Pilih bagan di dokumen untuk mengeditnya.",
+      "notEditableTitle": "Bagan ini tidak dapat diedit"
+    },
+    "types": {
+      "columnClustered": "Kolom",
+      "columnStacked": "Kolom bertumpuk",
+      "columnPercentStacked": "Kolom bertumpuk 100%",
+      "barClustered": "Batang",
+      "barStacked": "Batang bertumpuk",
+      "barPercentStacked": "Batang bertumpuk 100%",
+      "line": "Garis",
+      "lineMarkers": "Garis dengan penanda",
+      "area": "Area",
+      "areaStacked": "Area bertumpuk",
+      "areaPercentStacked": "Area bertumpuk 100%",
+      "pie": "Pai",
+      "doughnut": "Donat",
+      "radar": "Radar",
+      "scatter": "Sebar",
+      "scatterLines": "Sebar dengan garis",
+      "other": "Jenis lain"
+    },
+    "format": {
+      "type": "Jenis bagan",
+      "elements": "Elemen bagan",
+      "showTitle": "Judul",
+      "titleText": "Teks judul",
+      "defaultTitle": "Judul Bagan",
+      "legend": "Legenda",
+      "legendPositions": {
+        "none": "Tidak ada",
+        "top": "Atas",
+        "bottom": "Bawah",
+        "left": "Kiri",
+        "right": "Kanan"
+      },
+      "dataLabels": "Label data",
+      "gridlines": "Garis kisi",
+      "axes": "Sumbu",
+      "categoryAxisTitle": "Judul sumbu kategori",
+      "valueAxisTitle": "Judul sumbu nilai",
+      "xAxisTitle": "Judul sumbu X",
+      "yAxisTitle": "Judul sumbu Y",
+      "axisTitleHelp": "Biarkan judul sumbu kosong agar tidak ada judul.",
+      "axesOff": "Aktifkan Sumbu untuk menggunakan ini.",
+      "typeChangeRemoved": "Jenis bagan ini tidak menyimpan warna atau judul sumbu yang Anda atur. Urungkan akan mengembalikannya.",
+      "typeChangeHint": "Beberapa jenis bagan tidak menyimpan warna atau judul sumbu yang Anda atur.",
+      "pieFirstSeries": "Bagan pai hanya menampilkan seri pertama.",
+      "colors": "Warna",
+      "seriesColor": "Warna {name}",
+      "openColors": "Pilih warna untuk {name}",
+      "colorLighter": "{color}, lebih terang {percent}%",
+      "colorDarker": "{color}, lebih gelap {percent}%"
+    },
+    "data": {
+      "categories": "Kategori",
+      "xValues": "Nilai X",
+      "seriesName": "Nama seri {number}",
+      "categoryLabel": "Kategori {number}",
+      "xValueLabel": "Nilai X {number}",
+      "cellLabel": "{series}, {category}",
+      "addCategory": "Tambahkan kategori",
+      "addSeries": "Tambahkan seri",
+      "help": "Tekan Enter atau tinggalkan bidang untuk menerapkannya. Biarkan nilai kosong agar tidak ada nilai.",
+      "workbookKept": "Buku kerja tersemat menyimpan nilai lamanya. Bagan menampilkan nilai yang Anda masukkan.",
+      "workbookExternal": "Bagan mengambil datanya dari buku kerja tertaut. Bagan menampilkan nilai yang Anda masukkan dan berhenti diperbarui dari tautan.",
+      "name": "Nama",
+      "series": "Seri",
+      "unnamed": "Seri tanpa nama",
+      "removeCategoryNamed": "Hapus kategori {name}",
+      "removeSeriesNamed": "Hapus seri {name}",
+      "fieldErrors": {
+        "number": "Masukkan angka, atau biarkan sel kosong.",
+        "xNumber": "Masukkan angka untuk setiap nilai X.",
+        "tooLong": "Gunakan 255 karakter atau kurang.",
+        "limit": "Bagan memiliki minimal satu seri dan satu kategori, dan maksimal 255 seri dan 4.000 kategori."
+      },
+      "removeSeries": "Hapus seri"
+    },
+    "errors": {
+      "noChart": "Pilih satu bagan.",
+      "noData": "Bagan tidak memiliki seri data.",
+      "combination": "Bagan menggabungkan lebih dari satu jenis bagan.",
+      "unsupportedType": "Editor tidak mengedit data jenis bagan ini.",
+      "filtered": "Bagan menyembunyikan beberapa serinya.",
+      "multiLevel": "Bagan memiliki kategori di lebih dari satu tingkat.",
+      "mixedCategories": "Seri dalam bagan menggunakan kategori yang berbeda.",
+      "tooLarge": "Bagan memiliki lebih banyak data daripada yang diedit editor.",
+      "empty": "Bagan memerlukan minimal satu seri dan satu kategori.",
+      "invalidText": "Nama atau label memiliki karakter yang tidak dapat disimpan oleh bagan.",
+      "notNumber": "Setiap nilai harus berupa angka.",
+      "layout": "Referensi sel bagan tidak membentuk satu tabel, jadi Anda hanya dapat mengubah nama dan nilai.",
+      "workbook": "Buku kerja tersemat tidak dapat menerima perubahan ini. Beri setiap seri nama yang berbeda, dan biarkan sel di samping data kosong.",
+      "noAxes": "Jenis bagan ini tidak memiliki sumbu.",
+      "sameType": "Bagan sudah memiliki jenis ini.",
+      "unsupported": "Editor tidak mendukung perubahan bagan ini.",
+      "invalidValue": "Bagan tidak dapat menggunakan nilai ini.",
+      "suggesting": "Bagan tidak dapat diubah saat Anda menyarankan pengeditan. Beralihlah ke Pengeditan untuk mengubah bagan ini."
+    }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "Jenis bentuk lama ini tidak memiliki pengaturan transparansi.",
+      "noShape": "Pilih satu bentuk, kotak teks, atau garis.",
+      "noSolidFill": "Bentuk tidak memiliki isian solid. Pilih warna isian terlebih dahulu.",
+      "outOfRange": "Nilai di luar rentang.",
+      "staleSelection": "Pilihan berubah. Pilih bentuk lagi.",
+      "mixedFill": "Bentuk dalam grup ini memiliki isian berbeda. Pilih warna untuk menerapkannya ke semua."
+    },
+    "formatShape": "Format bentuk…",
+    "pane": {
+      "close": "Tutup panel Format bentuk",
+      "emptyBody": "Pilih bentuk, kotak teks, atau garis di dokumen untuk memformatnya.",
+      "emptyTitle": "Tidak ada bentuk yang dipilih",
+      "errors": {
+        "color": "Ketik warna sebagai #RRGGBB atau sebagai nama warna.",
+        "noSolidFill": "Pilih warna isian terlebih dahulu.",
+        "transparency": "Ketik angka dari 0 sampai 100.",
+        "width": "Ketik ketebalan dari 0,25 sampai 1584 poin.",
+        "dash": "Pilih jenis garis putus dari daftar."
+      },
+      "fill": "Isian",
+      "fillColor": "Warna isian",
+      "fillHex": "Warna heksa isian",
+      "fillTypes": {
+        "gradient": "Gradien",
+        "mixed": "Campuran",
+        "none": "Tanpa isian",
+        "pattern": "Pola",
+        "picture": "Gambar",
+        "solid": "Solid"
+      },
+      "hexHelp": "Ketik #RRGGBB atau nama warna, lalu tekan Enter.",
+      "mixedOutline": "Bentuk dalam grup ini memiliki kerangka yang berbeda.",
+      "noFill": "Tanpa isian",
+      "noOutline": "Tanpa garis",
+      "openFillColors": "Pilih warna isian",
+      "openOutlineColors": "Pilih warna kerangka",
+      "otherWidth": "Ketebalan lain",
+      "outline": "Kerangka",
+      "outlineColor": "Warna kerangka",
+      "outlineHex": "Warna heksa kerangka",
+      "readOnlyFill": "Jenis isian: {fill}. Pilih warna atau Tanpa isian untuk menggantinya.",
+      "title": "Format bentuk",
+      "transparency": "Transparansi (%)",
+      "width": "Ketebalan (pt)",
+      "widthPoints": "{value} pt",
+      "widthPreset": "Ketebalan prasetel",
+      "dash": "Jenis garis putus",
+      "dashes": {
+        "custom": "Kustom",
+        "dash": "Putus-putus",
+        "dashDot": "Garis titik",
+        "dot": "Titik",
+        "lgDash": "Garis panjang",
+        "lgDashDot": "Garis panjang titik",
+        "lgDashDotDot": "Garis panjang titik titik",
+        "solid": "Padat",
+        "sysDash": "Titik persegi",
+        "sysDashDot": "Garis persegi titik",
+        "sysDashDotDot": "Garis persegi titik titik",
+        "sysDot": "Titik bulat"
+      }
+    }
   }
 }

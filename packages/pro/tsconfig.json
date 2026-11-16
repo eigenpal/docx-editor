@@ -56,29 +56,10 @@
     "node_modules",
     "dist",
     "src/vue",
-    // Every Vue-side test, for the same reason `src/vue` is excluded: this config compiles
-    // JSX as React, so a test that reaches `@docx-editor.dev/vue` drags the Vue package's
+    // Every Vue-side file, for the same reason `src/vue` is excluded: this config compiles
+    // JSX as React, so a file that reaches `@docx-editor.dev/vue` drags the Vue package's
     // `.tsx` into a React-JSX program and produces thousands of VNode-vs-ReactNode errors.
-    // `exclude` only filters the `include` glob, so each one has to be named here.
-    "src/__tests__/collaboration-presence-ui-vue.test.ts",
-    "src/__tests__/custom-node-vue-chrome.test.ts",
-    "src/__tests__/review-sidebar-vue.test.ts",
-    "src/__tests__/review-refusal-ui-vue.test.ts",
-    "src/__tests__/review-compact-card-vue.test.ts",
-    "src/__tests__/review-rail-metrics-vue.test.ts",
-    "src/__tests__/review-rail-window-vue.test.ts",
-    "src/__tests__/review-reply-author-vue.test.ts",
-    "src/__tests__/review-adopt-vue.test.ts",
-    "src/__tests__/review-region-vue.test.ts",
-    "src/__tests__/formatting-page-balloon-vue.test.ts",
-    "src/__tests__/review-balloons-vue.test.ts",
-    "src/__tests__/review-draft-position-vue.test.ts",
-    "src/__tests__/review-vue-harness.ts",
-    "src/__tests__/use-collaboration-participants-vue.test.ts",
-    "src/__tests__/use-document-collaboration-vue.test.ts",
-    "src/__tests__/use-hocuspocus-collaboration-vue.test.ts",
-    "src/__tests__/use-webrtc-collaboration-vue.test.ts",
-    "src/collaboration/__tests__/use-collaboration-status-vue.test.ts",
-    "src/collaboration/__tests__/link-popover-remote-target-vue.test.ts"
+    // `tsconfig.vue.json` includes the same pattern, so each such file is checked once.
+    "src/**/*vue*"
   ]
 }

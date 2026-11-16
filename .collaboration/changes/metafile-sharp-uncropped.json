@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Metafile pictures rasterize at their recording device size.",
+  "after": "Small metafile pictures rasterize at up to four times that size; the converter places EMF+ drawing at its recorded resolution.",
+  "reason": "Only the local raster and vector replay of picture bytes change. Shared nodes, media parts, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/browser-metafile-convert.test.ts",
+    "packages/pro/src/drawing/__tests__/metafile-raster.test.ts"
+  ],
+  "changeset": "metafile-sharp-uncropped",
+  "migration": null
+}

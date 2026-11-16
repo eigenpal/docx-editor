@@ -1,4 +1,4 @@
-// Which right-clicks the document context menu answers.
+// Which right-clicks the document context menu answers, and where its panel opens.
 //
 // The menu acts on the document selection, so it answers only presses on the document: the
 // painted pages, the handles of a selected picture, and the empty canvas around them.
@@ -39,4 +39,38 @@ export function isDocumentContextMenuTarget(
   const surface = scroller.querySelector(SURFACE);
   if (!surface) return true;
   return surface.contains(target) || target.contains(surface) || !!target.closest(SURFACE_OVERLAY);
+}
+
+/** What a keyboard-opened menu reads from the editor: where the caret is. */
+interface CaretSource {
+  getCaretRect(): { readonly left: number; readonly bottom: number } | null;
+}
+
+/**
+ * Whether the menu was opened from the keyboard (Shift+F10 or the Menu key), which reports
+ * no pointer position.
+ */
+export function isKeyboardContextMenu(event: MouseEvent): boolean {
+  return event.button === -1 || (event.clientX === 0 && event.clientY === 0);
+}
+
+/**
+ * Where the panel opens, in client coordinates.
+ *
+ * A pointer open uses the pointer. A keyboard open uses the bottom-left corner of the caret,
+ * so the panel opens below the line being edited. When the caret has no painted position,
+ * such as on a page outside the viewport, the panel opens at the scroller's top-left
+ * instead. Either anchor is clamped to the window like any other.
+ */
+export function contextMenuAnchorOf(
+  event: MouseEvent,
+  keyboard: boolean,
+  editor: CaretSource | null,
+  scroller: HTMLElement
+): { readonly x: number; readonly y: number; readonly trigger: 'pointer' | 'keyboard' } {
+  if (!keyboard) return { x: event.clientX, y: event.clientY, trigger: 'pointer' };
+  const caret = editor?.getCaretRect() ?? null;
+  if (caret) return { x: caret.left, y: caret.bottom, trigger: 'keyboard' };
+  const box = scroller.getBoundingClientRect();
+  return { x: box.left + 16, y: box.top + 16, trigger: 'keyboard' };
 }

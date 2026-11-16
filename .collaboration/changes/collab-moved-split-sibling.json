@@ -1,0 +1,14 @@
+{
+  "impact": "migration-required",
+  "fields": ["repairVersion"],
+  "before": "Two participants who split one paragraph at different points at the same time each hold a moved copy of the text after both split points, and the copy showed in the last paragraph in document order that held it. When a participant then moved the paragraph with the earlier split below the other one, or moved the other one above it, the moved paragraph showed both tails and the other paragraph showed nothing. A later split of the moved paragraph joined the text of both, so every replica showed text such as twthree beside an empty paragraph.",
+  "after": "Of the paragraphs that hold a moved copy of one character of a live paragraph text, the source, the copy whose start stands latest in the source shows. Each holder's key is the place in the source of the first character the holder holds a moved copy of, deleted copies included, that the source holds as its own character or as a copy, so a join that copies a paragraph from its start keys at that start. A block move changes no text, so the keys stay wherever the paragraphs stand. Holders with the same key, holders of a character whose source is deleted, and copies an undo or redo put back still show in the last holder in document order. A holder that has no key gives way to one that has. The comparison is one key per holder, so exactly one holder shows each character. The rule reads shared state and writes nothing.",
+  "reason": "The rule changes which paragraph shows a moved copy for the same shared state after a block move, so it is repair semantics. A replica with the earlier rule shows other text in other paragraphs for the same state, and local edits on the two would address different paragraphs. The change rides the repairVersion 3 increment that collab-concurrent-split-order introduces while that format is unpublished; if format 1.5.3.1 is published first, this change needs its own repairVersion increment. No stored field, identity, or update changes. The keys read text items, marks, and item order, which every replica holds alike once it holds the same updates; only a live text gives keys, because garbage collection keeps a deleted text's items on some replicas and not on others, and a key that names a character not received yet is read again when it arrives.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-concurrent-split-order.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-split-sibling-move.test.ts",
+    "packages/pro/src/collaboration/__tests__/paragraph-text-follow-cost.test.ts"
+  ],
+  "changeset": "collab-moved-split-sibling",
+  "migration": "upgrade-rooms-to-format-1531"
+}

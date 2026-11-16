@@ -1,0 +1,1172 @@
+/* The studio look of the React and Vue demos: warm neutral chrome around a faithful page.
+
+   A top bar on the canvas, the formatting toolbar as a floating dock over the page column, zoom
+   in the corner of the canvas, and a side panel card with tabs. Both demos import this file, so
+   they look the same.
+
+   The demo palette lives in `--demo-*` tokens on `.demo-app`; `.demo-app.dark` swaps them. The
+   `--doc-*` overrides give the packaged chrome (toolbar parts, menus, dialogs, the review rail,
+   the Chart pane) the same palette. The page itself is never themed. */
+
+.demo-app {
+  --demo-bg: #f4f3f0;
+  --demo-surface: #ffffff;
+  --demo-surface-2: #faf9f7;
+  --demo-raised: #ffffff;
+  --demo-ink: #1b1a19;
+  --demo-ink-2: #44413d;
+  --demo-ink-3: #75716b;
+  --demo-ink-4: #a29e97;
+  --demo-line: #e7e4df;
+  --demo-line-2: #d9d5ce;
+  --demo-hover: rgba(27, 26, 25, 0.05);
+  --demo-press: rgba(27, 26, 25, 0.09);
+  --demo-primary: #1b1a19;
+  --demo-primary-ink: #ffffff;
+  --demo-accent: #2f5d8a;
+  --demo-error: #a8432a;
+  --demo-focus: rgba(47, 93, 138, 0.45);
+  --demo-shadow-1: 0 1px 2px rgba(27, 26, 25, 0.05), 0 0 0 1px var(--demo-line);
+  --demo-shadow-2:
+    0 0 0 1px rgba(27, 26, 25, 0.06), 0 2px 4px rgba(27, 26, 25, 0.04),
+    0 16px 36px -12px rgba(27, 26, 25, 0.22);
+  --demo-dock-shadow:
+    0 0 0 1px var(--demo-line), 0 1px 2px rgba(27, 26, 25, 0.04),
+    0 8px 20px -14px rgba(27, 26, 25, 0.28);
+  --demo-panel-shadow:
+    0 0 0 1px var(--demo-line), 0 1px 2px rgba(27, 26, 25, 0.04),
+    0 12px 32px -20px rgba(27, 26, 25, 0.3);
+  --demo-page-shadow:
+    0 0 0 1px rgba(27, 26, 25, 0.04), 0 1px 2px rgba(27, 26, 25, 0.05),
+    0 10px 28px -6px rgba(27, 26, 25, 0.1);
+  --demo-scrim: rgba(20, 20, 19, 0.16);
+  --demo-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --demo-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --demo-r-sm: 6px;
+  --demo-r: 8px;
+  --demo-r-lg: 12px;
+  --demo-panel-width: 384px;
+
+  /* The packaged chrome in this palette. */
+  --doc-surface: var(--demo-surface);
+  --doc-bg: var(--demo-bg);
+  --doc-bg-subtle: var(--demo-surface-2);
+  --doc-bg-hover: var(--demo-hover);
+  --doc-bg-input: var(--demo-surface);
+  --doc-primary: var(--demo-ink);
+  --doc-primary-hover: #000000;
+  --doc-primary-light: var(--demo-hover);
+  --doc-accent: var(--demo-ink);
+  --doc-accent-bg: var(--demo-press);
+  --doc-toggle-active-bg: var(--demo-press);
+  --doc-toggle-active-fg: var(--demo-ink);
+  --doc-text: var(--demo-ink);
+  --doc-text-muted: var(--demo-ink-3);
+  --doc-text-subtle: var(--demo-ink-4);
+  --doc-border: var(--demo-line);
+  --doc-border-light: var(--demo-line);
+  --doc-border-dark: var(--demo-line-2);
+  --doc-border-input: var(--demo-line-2);
+  --doc-focus-ring: var(--demo-focus);
+  --doc-card-shadow: var(--demo-shadow-1);
+  --doc-card-shadow-strong: var(--demo-shadow-2);
+  --doc-shadow-lg: var(--demo-shadow-2);
+  --doc-page-gap: 24px;
+
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--demo-ink);
+  background: var(--demo-bg);
+  font: 13.5px/1.5 var(--demo-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.demo-app.dark {
+  --demo-bg: #141413;
+  --demo-surface: #1c1c1b;
+  --demo-surface-2: #222220;
+  --demo-raised: #262624;
+  --demo-ink: #f1efec;
+  --demo-ink-2: #d2cfca;
+  --demo-ink-3: #9c9891;
+  --demo-ink-4: #6d6a64;
+  --demo-line: #2d2c2a;
+  --demo-line-2: #3b3a37;
+  --demo-hover: rgba(255, 255, 255, 0.06);
+  --demo-press: rgba(255, 255, 255, 0.11);
+  --demo-primary: #f1efec;
+  --demo-primary-ink: #141413;
+  --demo-accent: #7fa7cf;
+  --demo-error: #e08a72;
+  --demo-focus: rgba(127, 167, 207, 0.5);
+  --demo-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--demo-line);
+  --demo-shadow-2:
+    0 0 0 1px rgba(255, 255, 255, 0.06), 0 2px 4px rgba(0, 0, 0, 0.3),
+    0 18px 40px -12px rgba(0, 0, 0, 0.6);
+  --demo-dock-shadow: 0 0 0 1px var(--demo-line), 0 10px 24px -14px rgba(0, 0, 0, 0.7);
+  --demo-panel-shadow: 0 0 0 1px var(--demo-line), 0 14px 36px -18px rgba(0, 0, 0, 0.7);
+  --demo-page-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 12px 32px -6px rgba(0, 0, 0, 0.55);
+  --demo-scrim: rgba(0, 0, 0, 0.4);
+  --doc-primary-hover: #ffffff;
+}
+
+.demo-app *,
+.demo-app *::before,
+.demo-app *::after {
+  box-sizing: border-box;
+}
+
+/* The demo's own controls take the ring. The editor's parts draw their own focus. */
+:is(.demo-topbar, .demo-panel, .demo-dock, .demo-zoombar) :focus-visible {
+  outline: 2px solid var(--demo-focus);
+  outline-offset: 1px;
+}
+
+/* ───────────── Buttons ───────────── */
+
+.demo-header-action {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  color: var(--demo-ink-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: normal;
+  white-space: nowrap;
+  text-decoration: none;
+  background: transparent;
+  border: 0;
+  border-radius: var(--demo-r);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    opacity 150ms ease,
+    transform 160ms var(--demo-ease-out);
+}
+
+.demo-header-action svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+}
+
+.demo-header-action:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.demo-header-action:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.demo-header-action--primary {
+  margin-inline-start: 4px;
+  padding: 0 12px;
+  color: var(--demo-primary-ink);
+  background: var(--demo-primary);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.demo-header-action--outline {
+  box-shadow: inset 0 0 0 1px var(--demo-line);
+}
+
+.demo-header-action--icon {
+  width: 30px;
+  padding: 0;
+  color: var(--demo-ink-3);
+  border-radius: var(--demo-r-sm);
+}
+
+.demo-header-action--icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.demo-header-action__chev {
+  display: inline-flex;
+  margin-inline-start: -2px;
+  opacity: 0.6;
+}
+
+.demo-header-action .demo-header-action__chev svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* The status of an export or an open, beside the file name. */
+.demo-file__status {
+  margin-inline-start: 10px;
+  color: var(--demo-ink-3);
+  font-size: 12px;
+  white-space: nowrap;
+  animation: demo-fade-in 200ms ease-out both;
+}
+
+.demo-file__status:empty {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .demo-header-action:not(.demo-header-action--primary):hover:not(:disabled) {
+    color: var(--demo-ink);
+    background: var(--demo-hover);
+  }
+
+  .demo-header-action--primary:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+}
+
+/* ───────────── Top bar ───────────── */
+
+/* The top bar sits on the canvas, with no rule under it: the floating dock and the page carry
+   the structure. It stacks over the workspace, so its menus open over the dock and the panel. */
+.demo-chrome {
+  position: relative;
+  z-index: 40;
+  flex: none;
+  background: var(--demo-bg);
+}
+
+.demo-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 54px;
+  padding: 0 12px 0 16px;
+}
+
+.demo-topbar__brand {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  color: var(--demo-ink);
+}
+
+/* The product mark: the document icon and the name on one line. */
+.demo-brand {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 9px;
+  color: var(--demo-ink);
+  text-decoration: none;
+}
+
+.demo-brand__name {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+}
+
+/* The framework switch, beside the product mark. */
+.demo-topbar__adapter {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+.demo-topbar__divider {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  background: var(--demo-line-2);
+}
+
+.demo-file {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: baseline;
+  min-width: 0;
+  /* A file name reads left to right in every interface language. */
+  direction: ltr;
+}
+
+.demo-title {
+  min-width: 60px;
+  max-width: 280px;
+  field-sizing: content;
+  padding: 4px 7px;
+  color: var(--demo-ink);
+  font: 550 14px/1.3 var(--demo-sans);
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--demo-r-sm);
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .demo-title:hover {
+    background: var(--demo-hover);
+  }
+}
+
+.demo-title:focus {
+  outline: none;
+  border-color: var(--demo-line-2);
+  background: var(--demo-surface);
+}
+
+.demo-file__ext {
+  margin-inline-start: -3px;
+  color: var(--demo-ink-4);
+  font-size: 13px;
+}
+
+/* The packaged menu bar (File, Format, Insert, Review, Help), flattened into the top bar. */
+.demo-app .docx-menubar.demo-menubar {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  height: auto;
+  margin: 0 0 0 2px;
+  padding: 0;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.demo-app .demo-menubar .docx-menubar__trigger {
+  height: 28px;
+  padding: 0 9px;
+  color: var(--demo-ink-3);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--demo-r-sm);
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.demo-app .demo-menubar .docx-menubar__trigger:hover,
+.demo-app .demo-menubar .docx-menubar__trigger[aria-expanded='true'] {
+  color: var(--demo-ink);
+  background: var(--demo-hover);
+}
+
+.demo-topbar__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin-inline-start: auto;
+}
+
+.demo-topbar__actions > .demo-topbar__divider {
+  margin: 0 4px;
+}
+
+/* Editing mode: a quiet pill in the top bar. */
+.demo-app .docx-toolbar.demo-modebar {
+  display: flex;
+  align-items: center;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.demo-app .demo-modebar button[aria-haspopup] {
+  width: auto;
+  height: 30px;
+  gap: 6px;
+  padding: 0 11px;
+  color: var(--demo-ink-2);
+  font-size: 12.5px;
+  font-weight: 500;
+  background: var(--demo-surface);
+  border: 1px solid var(--demo-line);
+  border-radius: 999px;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease,
+    transform 160ms var(--demo-ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .demo-app .demo-modebar button[aria-haspopup]:hover {
+    color: var(--demo-ink);
+    border-color: var(--demo-line-2);
+  }
+}
+
+.demo-app .demo-modebar button[aria-haspopup]:active {
+  transform: scale(0.97);
+}
+
+/* ───────────── Export menu ───────────── */
+
+.demo-menu {
+  position: relative;
+  flex: none;
+}
+
+.demo-menu__pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 80;
+  min-width: 280px;
+  padding: 4px;
+  background: var(--demo-raised);
+  border-radius: var(--demo-r-lg);
+  box-shadow: var(--demo-shadow-2);
+  transform-origin: top right;
+  animation: demo-pop 150ms var(--demo-ease-out) both;
+}
+
+/* The menu takes the focus only to hand it to its rows; the rows show the ring. */
+.demo-menu__pop:focus {
+  outline: none;
+}
+
+.demo-app[dir='rtl'] .demo-menu__pop {
+  transform-origin: top left;
+}
+
+@keyframes demo-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.demo-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 10px;
+  color: var(--demo-ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  background: transparent;
+  border: 0;
+  border-radius: var(--demo-r-sm);
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.demo-menu__item:hover:not(:disabled),
+.demo-menu__item:focus-visible {
+  background: var(--demo-hover);
+  outline: none;
+}
+
+.demo-menu__item:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.demo-menu__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.demo-menu__text > span:first-child {
+  font-weight: 500;
+}
+
+.demo-menu__hint {
+  color: var(--demo-ink-3);
+  font-size: 11.5px;
+}
+
+/* A file type badge: the page color of each format. */
+.demo-filetype {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 32px;
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-radius: 5px;
+}
+
+.demo-filetype--docx {
+  background: #2f5d8a;
+}
+
+.demo-filetype--pdf {
+  background: #a8432a;
+}
+
+.demo-filetype--md {
+  background: #44413d;
+}
+
+/* ───────────── Workspace ───────────── */
+
+.demo-workspace {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.demo-docpane {
+  position: relative;
+  /* The review rail stacks inside the document pane, so toolbar menus and the panel sheet
+     stay on top of it. */
+  isolation: isolate;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Beside the panel, the page column stacks above it, so the dock's popups (font list, table
+   grid) can spill over the panel. Below 1280px the panel is a sheet over the page. */
+@media (min-width: 1280px) {
+  .demo-docpane {
+    z-index: 21;
+  }
+}
+
+/* The formatting toolbar: a floating card over the page column, as wide as its content. */
+.demo-dock {
+  position: relative;
+  /* Above the navigation pane and its disc, so the toolbar's "More" panel opens over them. */
+  z-index: 60;
+  display: flex;
+  flex: none;
+  justify-content: center;
+  /* 32px from the canvas edges with the toolbar's 2px ring, as on the site. */
+  padding: 2px 30px 10px;
+}
+
+/* A group whose controls are all hidden in place renders empty: drop it and the separator
+   before it. */
+.demo-app .demo-docbar .docx-toolbar__group:empty,
+.demo-app .demo-docbar .docx-toolbar__separator:has(+ .docx-toolbar__group:empty),
+.demo-app .demo-docbar .docx-toolbar__group:empty:first-child + .docx-toolbar__separator {
+  display: none;
+}
+
+.demo-app .docx-toolbar.demo-docbar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 2px;
+  width: max-content;
+  max-width: 100%;
+  height: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 6px;
+  overflow: visible;
+  background: var(--demo-surface);
+  border: 0;
+  border-radius: 12px;
+  box-shadow: var(--demo-dock-shadow);
+}
+
+.demo-app .demo-docbar .docx-toolbar__button {
+  width: 30px;
+  height: 30px;
+  color: var(--demo-ink-3);
+  border-radius: 7px;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    transform 160ms var(--demo-ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .demo-app .demo-docbar .docx-toolbar__button:hover:not(:disabled) {
+    color: var(--demo-ink);
+    background: var(--demo-hover);
+  }
+}
+
+.demo-app .demo-docbar .docx-toolbar__button:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.demo-app .demo-docbar .docx-toolbar__button[data-active],
+.demo-app .demo-docbar .docx-toolbar__button[aria-pressed='true'] {
+  color: var(--demo-ink);
+  background: var(--demo-press);
+}
+
+.demo-app .demo-docbar .docx-toolbar__style-trigger,
+.demo-app .demo-docbar .docx-toolbar__font-family-trigger,
+.demo-app .demo-docbar .docx-toolbar__font-size-input {
+  height: 30px;
+  color: var(--demo-ink);
+  font-size: 13px;
+  background: var(--demo-hover);
+  border-color: transparent;
+  border-radius: 7px;
+  transition: background-color 150ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .demo-app .demo-docbar .docx-toolbar__style-trigger:hover,
+  .demo-app .demo-docbar .docx-toolbar__font-family-trigger:hover {
+    background: var(--demo-press);
+  }
+}
+
+/* Phones: the "More" panel spans the screen under the dock instead of opening past its edge. */
+@media (max-width: 699px) {
+  .demo-app .demo-docbar .docx-toolbar__more-panel {
+    position: fixed;
+    top: 104px;
+    inset-inline: 8px;
+    inline-size: auto;
+    min-inline-size: 0;
+    max-block-size: calc(100dvh - 120px);
+  }
+}
+
+/* The rulers, when Settings shows them: a row under the dock, centered over the page column. */
+.demo-ruler-row {
+  display: flex;
+  flex: none;
+  justify-content: safe center;
+  min-height: 30px;
+  padding: 0 0 4px;
+  overflow: hidden;
+}
+
+.demo-main {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.demo-app .demo-viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--demo-bg);
+}
+
+/* Loading is a separate editor root with its own default tokens. Keep its canvas
+   aligned with the demo viewport while the document opens. */
+.demo-app .docx-editor__loading--overlay {
+  --doc-bg: var(--demo-bg);
+}
+
+/* The vertical ruler scrolls with the document: an absolute child of the scroll container,
+   with tick zero on the first page's top edge. */
+.demo-vruler {
+  position: absolute;
+  top: 24px;
+  left: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.demo-app[dir='rtl'] .demo-vruler {
+  right: 0;
+  left: auto;
+}
+
+/* Per page, on the engine's own page box: a filter on the whole stack would rasterize every
+   page as one layer. */
+.demo-app .demo-viewport .docx-page {
+  box-shadow: var(--demo-page-shadow);
+}
+
+/* The page readout, as the dock's floating controls. */
+.demo-app .docx-page-number {
+  color: var(--demo-ink-2);
+  background: var(--demo-raised);
+  border-radius: 999px;
+  box-shadow: var(--demo-shadow-1);
+}
+
+/* Zoom: a small pill in the corner of the canvas. Its menu opens upward. */
+.demo-app .docx-toolbar.demo-zoombar {
+  position: absolute;
+  bottom: 16px;
+  inset-inline-end: 18px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  height: 34px;
+  min-height: 0;
+  margin: 0;
+  padding: 0 3px;
+  background: var(--demo-surface);
+  border: 0;
+  border-radius: 999px;
+  box-shadow: var(--demo-shadow-2);
+}
+
+.demo-app .demo-zoombar .docx-toolbar__button {
+  height: 28px;
+  color: var(--demo-ink-2);
+  border-radius: 999px;
+}
+
+.demo-app .demo-zoombar .docx-toolbar__zoom-menu {
+  top: auto;
+  bottom: calc(100% + 8px);
+  inset-inline: auto 0;
+}
+
+/* ───────────── Side panel ───────────── */
+
+/* An inset card on the canvas, level with the dock. */
+.demo-panel {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: var(--demo-panel-width);
+  min-height: 0;
+  margin: 2px 12px 12px 0;
+  overflow: hidden;
+  color: var(--demo-ink);
+  background: var(--demo-surface);
+  border-radius: 14px;
+  box-shadow: var(--demo-panel-shadow);
+  animation: demo-panel-in 240ms var(--demo-ease-out) both;
+}
+
+.demo-app[dir='rtl'] .demo-panel {
+  margin: 2px 0 12px 12px;
+}
+
+/* The panel comes in from its own edge: the end edge, which is the left in right-to-left. */
+@keyframes demo-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--demo-panel-from, 10px)) scale(0.99);
+  }
+}
+
+.demo-app[dir='rtl'] {
+  --demo-panel-from: -10px;
+}
+
+@keyframes demo-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.demo-panel__head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px 8px 12px;
+}
+
+.demo-panel__body {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 16px 24px;
+  overflow-y: auto;
+}
+
+.demo-panel__body[hidden] {
+  display: none;
+}
+
+/* Tabs as a segmented control. */
+.demo-tabs {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 3px;
+  background: var(--demo-hover);
+  border-radius: 10px;
+}
+
+.demo-tabs__tab {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  /* Sized by their labels, which run longer in some languages. A label that still does not
+     fit ends in an ellipsis rather than pushing the row wider than the panel. */
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  color: var(--demo-ink-3);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.demo-tabs__tab svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.demo-tabs__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .demo-tabs__tab:hover {
+    color: var(--demo-ink);
+  }
+}
+
+.demo-tabs__tab[aria-selected='true'] {
+  color: var(--demo-ink);
+  background: var(--demo-raised);
+  box-shadow:
+    0 0 0 1px rgba(27, 26, 25, 0.06),
+    0 1px 2px rgba(27, 26, 25, 0.08);
+}
+
+.demo-app.dark .demo-tabs__tab[aria-selected='true'] {
+  background: var(--demo-press);
+  box-shadow: none;
+}
+
+.demo-scrim {
+  display: none;
+}
+
+/* The Chart pane in the panel: the panel gives the side padding. */
+.demo-panel .docx-chart-pane {
+  padding-top: 4px;
+}
+
+/* ───────────── Navigation pane ───────────── */
+
+/* The library pane, as the side panel's twin: an inset floating sheet. */
+.demo-app .docx-nav__panel-shell {
+  inset-block: 12px;
+  padding: 2px 10px 10px 12px;
+  background: var(--demo-surface);
+  border-radius: var(--demo-r-lg);
+  box-shadow: var(--demo-shadow-2);
+}
+
+.demo-app .docx-nav__title {
+  color: var(--demo-ink);
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.demo-app .docx-nav__tabs {
+  gap: 2px;
+  margin-block-end: 10px;
+  padding: 3px;
+  background: var(--demo-surface-2);
+  border: 0;
+  border-radius: var(--demo-r);
+  box-shadow: inset 0 0 0 1px var(--demo-line);
+}
+
+.demo-app .docx-nav__tab {
+  flex: 1;
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--demo-ink-3);
+  font-weight: 500;
+  border: 0;
+  border-radius: var(--demo-r-sm);
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.demo-app .docx-nav__tab--selected {
+  color: var(--demo-ink);
+  font-weight: 600;
+  background: var(--demo-surface);
+  box-shadow: var(--demo-shadow-1);
+}
+
+.demo-app .docx-nav__searchbox {
+  padding: 7px 10px;
+  background: var(--demo-surface);
+  border: 1px solid var(--demo-line-2);
+  border-radius: var(--demo-r);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.demo-app .docx-nav__searchbox:focus-within {
+  border-color: var(--demo-accent);
+  box-shadow: 0 0 0 3px var(--demo-focus);
+}
+
+.demo-app .docx-nav__result,
+.demo-app .docx-nav__heading {
+  color: var(--demo-ink-2);
+  border: 0;
+  border-radius: var(--demo-r-sm);
+  transition: background-color 150ms ease;
+}
+
+.demo-app .docx-nav__result--active,
+.demo-app .docx-nav__heading--current {
+  color: var(--demo-ink);
+  background: var(--demo-hover);
+  box-shadow: inset 2px 0 0 var(--demo-accent);
+}
+
+/* The closed pane's disc, as the dock's floating controls. */
+.demo-app .docx-nav__toggle,
+.demo-app .docx-outline-toggle {
+  color: var(--demo-ink-3);
+  background: var(--demo-surface);
+  border: 0;
+  box-shadow: var(--demo-shadow-1);
+  transition:
+    color 150ms ease,
+    box-shadow 150ms ease,
+    transform 160ms var(--demo-ease-out);
+}
+
+.demo-app .docx-nav__toggle:active,
+.demo-app .docx-outline-toggle:active {
+  transform: scale(0.94);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .demo-app .docx-nav__result:hover,
+  .demo-app .docx-nav__heading:hover {
+    color: var(--demo-ink);
+    background: var(--demo-hover);
+  }
+
+  .demo-app .docx-nav__tab:hover:not(.docx-nav__tab--selected) {
+    color: var(--demo-ink);
+  }
+
+  .demo-app .docx-nav__toggle:hover,
+  .demo-app .docx-outline-toggle:hover {
+    color: var(--demo-ink);
+    background: var(--demo-surface);
+    box-shadow: var(--demo-shadow-2);
+  }
+}
+
+/* ───────────── Review rail ───────────── */
+
+/* A card is a quiet sheet with its author's edge; the open thread lifts. */
+.demo-app .docx-review__card {
+  background: var(--demo-surface);
+  border: 0;
+  border-inline-start: 3px solid var(--doc-review-author-current, var(--demo-accent));
+  border-radius: var(--demo-r-lg);
+  box-shadow: var(--demo-shadow-1);
+  transition:
+    box-shadow 200ms ease,
+    transform 200ms var(--demo-ease-out);
+}
+
+.demo-app .docx-review__card[data-active] {
+  box-shadow: var(--demo-shadow-2);
+}
+
+/* The add-comment button beside a selection: a raised chip, with the bubble corner pointing at
+   the selection. */
+.demo-app .docx-review .docx-review__add {
+  width: 34px;
+  height: 34px;
+  color: var(--demo-ink-2);
+  background: var(--demo-raised);
+  border: 0;
+  border-radius: 10px 10px 10px 3px;
+  box-shadow:
+    0 0 0 1px var(--demo-line),
+    0 4px 12px -4px rgba(27, 26, 25, 0.18);
+  transition:
+    transform 160ms var(--demo-ease-out),
+    box-shadow 160ms ease,
+    color 160ms ease;
+}
+
+.demo-app .docx-review .docx-review__add:active {
+  transform: scale(0.94);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .demo-app .docx-review .docx-review__add:hover {
+    color: var(--demo-ink);
+    background: var(--demo-raised);
+    box-shadow:
+      0 0 0 1px var(--demo-line-2),
+      0 8px 18px -6px rgba(27, 26, 25, 0.26);
+    transform: translateY(-1px);
+  }
+}
+
+/* ───────────── Narrow windows ───────────── */
+
+/* Below 1280px the page keeps the width, and the panel opens as a sheet over it. */
+@media (max-width: 1279px) {
+  .demo-panel {
+    position: absolute;
+    top: 2px;
+    bottom: 0;
+    inset-inline-end: 0;
+    width: min(var(--demo-panel-width), calc(100% - 24px));
+    box-shadow:
+      0 0 0 1px var(--demo-line),
+      var(--demo-shadow-2);
+  }
+
+  .demo-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 15;
+    display: block;
+    padding: 0;
+    background: var(--demo-scrim);
+    border: 0;
+    cursor: default;
+    animation: demo-fade-in 200ms ease-out both;
+  }
+}
+
+/* Below a wide window: the top bar buttons show their icons only; their names stay as
+   accessible names. The framework switch beside the brand takes the room their labels had. */
+@media (max-width: 1280px) {
+  .demo-topbar__actions
+    .demo-header-action:not(.demo-header-action--primary, .demo-collaboration-trigger) {
+    width: 30px;
+    padding: 0;
+  }
+
+  .demo-topbar__actions
+    .demo-header-action:not(.demo-header-action--primary)
+    .demo-header-action__label {
+    display: none;
+  }
+}
+
+/* Medium widths: the product name and the divider after the brand step out. The icon, the
+   framework switch, and the source link (as an icon) stay. */
+@media (max-width: 1100px) {
+  .demo-brand__name,
+  .demo-topbar__brand + .demo-topbar__divider {
+    display: none;
+  }
+}
+
+/* Narrower still: the menu bar and the framework switch step out. The top bar and the toolbar's
+   More panel still reach their actions. */
+@media (max-width: 760px) {
+  .demo-app .docx-menubar.demo-menubar,
+  .demo-topbar__adapter {
+    display: none;
+  }
+
+  .demo-vruler {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .demo-app .docx-toolbar.demo-modebar,
+  .demo-topbar__divider {
+    display: none;
+  }
+
+  .demo-topbar {
+    padding: 0 8px 0 12px;
+  }
+
+  .demo-file {
+    flex: 1 1 0;
+  }
+
+  .demo-title {
+    width: 100%;
+    min-width: 0;
+    max-width: 140px;
+  }
+
+  .demo-file__ext {
+    display: none;
+  }
+
+  .demo-dock {
+    padding: 0 8px 8px;
+  }
+
+  .demo-panel {
+    width: calc(100% - 16px);
+    margin: 0 8px 8px 0;
+  }
+
+  .demo-app .docx-toolbar.demo-zoombar {
+    bottom: 12px;
+    inset-inline-end: 12px;
+  }
+}
+
+/* Reduced motion keeps the fades and drops the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .demo-panel {
+    animation-name: demo-fade-in;
+  }
+
+  .demo-menu__pop {
+    animation-name: demo-fade-in;
+  }
+
+  .demo-header-action:active:not(:disabled),
+  .demo-app .demo-docbar .docx-toolbar__button:active:not(:disabled),
+  .demo-app .demo-modebar button[aria-haspopup]:active {
+    transform: none;
+  }
+}

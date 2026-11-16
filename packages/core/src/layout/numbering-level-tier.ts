@@ -3,7 +3,7 @@
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { propertiesOf } from './paragraph-flow.ts';
-import { styleChain } from './style-chain.ts';
+import { paragraphStyleChain } from './style-chain.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { isElement, type StyleDefinition } from './style-definition-reader.ts';
 
@@ -50,7 +50,7 @@ export function numberingLevelTiers(
   styleId: string | null,
   directPPr: OoxmlNode | undefined
 ): { readonly below: readonly OoxmlProperty[]; readonly above: readonly OoxmlProperty[] } {
-  const chain = styleId ? styleChain(table, styleId, 'paragraph') : [];
+  const chain = paragraphStyleChain(table, styleId);
   const rank = numberingLevelRank(chain, directPPr);
   return {
     below: [

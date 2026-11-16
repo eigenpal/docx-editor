@@ -110,6 +110,8 @@ function expressionNeedsSourcePreservation(expression: EquationExpression): bool
   if (hasControlProperties(expression)) return true;
   switch (expression.kind) {
     case 'bar':
+    case 'borderBox':
+    case 'delimiter':
       return true;
     case 'text':
       return expression.format !== undefined;
@@ -152,6 +154,8 @@ function expressionIsSupported(expression: EquationExpression): boolean {
   switch (expression.kind) {
     case 'fallback':
     case 'bar':
+    case 'borderBox':
+    case 'delimiter':
       return false;
     case 'text':
       return expression.format === undefined;

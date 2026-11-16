@@ -24,6 +24,8 @@ const paragraph = (text: string, mark = 20, run = '') =>
 const superscript = (text: string) => paragraph(text, 20, '<w:vertAlign w:val="superscript"/>');
 const table = (content: string, cellProperties = '', rowProperties = '') =>
   `<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblCellMar>${['top', 'bottom', 'left', 'right'].map((side) => `<w:${side} w:w="0" w:type="dxa"/>`).join('')}</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:trPr>${rowProperties}</w:trPr><w:tc><w:tcPr>${cellProperties}</w:tcPr>${content}</w:tc></w:tr></w:tbl>`;
+/** The table's lines: the empty paragraph the body reads after its final table comes last. */
+const cellLinesOf = (result: Parameters<typeof linesOf>[0]) => linesOf(result).slice(0, -1);
 function load(body: string) {
   const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
     name: '/word/document.xml',
@@ -86,7 +88,7 @@ test('an end paragraph of hidden or deleted runs takes the mark line', () => {
 
 test('wrapped small text grows beyond the cell marker without enlarging its last line', () => {
   const result = run(table(paragraph('Small text '.repeat(30))));
-  const lines = linesOf(result);
+  const lines = cellLinesOf(result);
   expect(lines.length).toBeGreaterThan(4);
   expect(lines.every((line) => line.box.height === 5)).toBe(true);
   expect(rows(result)[0]!.box.height).toBe(lines.length * 5);
@@ -94,7 +96,7 @@ test('wrapped small text grows beyond the cell marker without enlarging its last
 
 test('no text line grows from its mark, and the row holds its text lines', () => {
   const result = run(table(paragraph('First') + paragraph('Last'), '<w:vAlign w:val="bottom"/>'));
-  const lines = linesOf(result);
+  const lines = cellLinesOf(result);
   expect(lines.map((line) => line.box.height)).toEqual([5, 5]);
   expect(rows(result)[0]!.box.height).toBe(10);
   expect(lines[1]!.box.y + lines[1]!.box.height).toBe(rows(result)[0]!.box.height);
@@ -142,7 +144,7 @@ test('a collapsed nested-table terminator cannot restore its oversized marker fl
   const terminator = '<w:p><w:pPr><w:rPr><w:sz w:val="72"/></w:rPr></w:pPr></w:p>';
   const result = run(table(nested + terminator));
   expect(rows(result)[0]!.box.height).toBe(5);
-  expect(linesOf(result).at(-1)!.box.height).toBe(0);
+  expect(cellLinesOf(result).at(-1)!.box.height).toBe(0);
   expect(rows(run(table('<w:tbl/>' + terminator)))[0]!.box.height).toBe(36);
 });
 

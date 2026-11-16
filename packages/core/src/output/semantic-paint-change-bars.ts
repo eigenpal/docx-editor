@@ -298,6 +298,9 @@ function mergeRuns(runs: BarRun[]): BarRun[] {
   return merged;
 }
 
+/** How far outside the text a changed-line bar stands, in points. */
+const CHANGE_BAR_GAP_PT = 36;
+
 /**
  * The rules one page needs, in sheet coordinates: every root story the page paints, the
  * blocks of each (tracked rows and rotated cells included), and the text-box stories its
@@ -349,17 +352,18 @@ export function collectPageChangeBars(
       rootDrawingOrigin
     );
   });
-  // Word's column: half the left margin in from the sheet edge, whatever the paragraph's
-  // indent. A sheet with no left margin keeps the rule on the paper. Snapped to a whole
-  // pixel: a one-pixel rule at a fractional x is two faint ones.
+  // The column sits half an inch outside the text, whatever the paragraph's indent, but never
+  // past the middle of a narrower margin. A sheet with no margin keeps the rule on the paper.
+  // Snapped to a whole pixel: a one-pixel rule at a fractional x is two faint ones.
   const right =
     markup?.changedLines.mark === 'rightBorder' ||
     (markup?.changedLines.mark === 'outsideBorder' && facingPages && page.index % 2 === 0);
+  const fromEdge = (margin: number) => Math.max(0, margin / 2, margin - CHANGE_BAR_GAP_PT);
   const left = Math.round(
     (right
       ? page.box.width -
-        Math.max(0, (page.box.width - page.contentBox.width - (page.contentBox.x - page.box.x)) / 2)
-      : Math.max(0, (page.contentBox.x - page.box.x) / 2)) * scale
+        fromEdge(page.box.width - page.contentBox.width - (page.contentBox.x - page.box.x))
+      : fromEdge(page.contentBox.x - page.box.x)) * scale
   );
   const color = markup
     ? revisionMarkupColor(

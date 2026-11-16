@@ -268,20 +268,30 @@ describe('A2 — new abstractNum/num land at their CT_Numbering (17.9.16) positi
     expect(names).toEqual(['numPicBullet', 'abstractNum', 'num', 'numIdMacAtCleanup']);
   });
 
-  test('the existing template is reused with a fresh counter instance', () => {
+  test('a template the document authored is not borrowed', () => {
     const first = ensured(load({ numbering: BUSY_NUMBERING }), 'bullet');
     expect(first.numId).toBe('8');
     expect(childNames(numberingRoot(first.pkg))).toEqual([
       'numPicBullet',
       'abstractNum',
+      'abstractNum',
       'num',
       'num',
       'numIdMacAtCleanup',
     ]);
-    const nums = named(numberingRoot(first.pkg), 'num');
+  });
+
+  test('its own template is reused with a fresh counter instance', () => {
+    const first = ensured(load({ numbering: BUSY_NUMBERING }), 'bullet');
+    const second = ensured(first.pkg, 'bullet');
+    expect(second.numId).toBe('9');
+    const root = numberingRoot(second.pkg);
+    expect(named(root, 'abstractNum')).toHaveLength(2);
+    const nums = named(root, 'num');
     expect(nums.map((num) => attribute(named(num, 'abstractNumId')[0]!, 'val'))).toEqual([
       '4',
-      '4',
+      '5',
+      '5',
     ]);
   });
 });

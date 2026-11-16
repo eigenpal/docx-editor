@@ -250,11 +250,12 @@ describe('projectDrawing', () => {
       relativeHeight: 952500,
     });
     expect(projection!.hidden).toBe(true);
+    // `locked="1"` fixes only the anchor paragraph; the frame locks say the rest.
     expect(projection!.locks).toEqual({
-      select: true,
+      select: false,
       move: true,
       resize: true,
-      changeAspect: true,
+      changeAspect: false,
     });
     expect(projection!.picture!.fillMode).toBe('tile');
   });

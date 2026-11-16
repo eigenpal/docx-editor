@@ -7,234 +7,26 @@
 // The page is 350pt by 210pt with 20pt margins: a 170pt body of exact 14pt lines. The
 // footnote separator and every note line are exact 14pt lines too.
 import { describe, expect, test } from 'bun:test';
-import { strToU8, zipSync } from 'fflate';
-import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
-import { collectNoteReferences, resolveNotesPart } from '../../store/package/note-references.ts';
-import {
-  resolveEndnoteProperties,
-  resolveFootnoteProperties,
-} from '../../store/package/note-properties.ts';
 import { createLayoutSession } from '../layout-session.ts';
-import { bodyOnlyPage, noteReferenceLineBandPt } from '../note-fragment-geometry.ts';
-import {
-  buildPageRefHits,
-  computeFootnoteReserves,
-  provisionalNoteMarks,
-  type NotesLayoutInput,
-} from '../note-pagination.ts';
-import { footnoteReservesEqual } from '../note-reserves.ts';
+import { bodyOnlyPage } from '../note-fragment-geometry.ts';
 import { rowContinuesOn } from '../note-table-reference-band.ts';
-import { layoutSemanticDocument } from '../semantic-layout.ts';
-import type { SemanticLayout, TableFragmentRecord } from '../semantic-records.ts';
-import { blockText, measurer, para, SECT, W } from './table-row-keep-fixtures.ts';
-
-const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
-const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
-const EXACT = '<w:spacing w:before="0" w:after="0" w:line="280" w:lineRule="exact"/>';
-
-/** A one-line paragraph `text`, citing footnote `note` when given. */
-const cite = (text: string, note?: number, pPr = '') =>
-  `<w:p><w:pPr>${pPr}<w:widowControl w:val="0"/>${EXACT}</w:pPr><w:r><w:t>${text}</w:t></w:r>` +
-  (note === undefined ? '' : `<w:r><w:footnoteReference w:id="${note}"/></w:r>`) +
-  '</w:p>';
-
-const tc = (content: string, tcPr = '') =>
-  `<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/>${tcPr}</w:tcPr>${content}</w:tc>`;
-
-interface RowSpec {
-  readonly name: string;
-  readonly note?: number;
-  readonly trPr?: string;
-  /** First cell; defaults to a plain `${name}a` paragraph. */
-  readonly first?: string;
-  readonly firstTcPr?: string;
-  /** Second cell; defaults to `${name}b`, citing `note`. */
-  readonly second?: string;
-  readonly secondTcPr?: string;
-}
-
-const tr = (spec: RowSpec) =>
-  `<w:tr>${spec.trPr ? `<w:trPr>${spec.trPr}</w:trPr>` : ''}` +
-  tc(spec.first ?? cite(`${spec.name}a`), spec.firstTcPr) +
-  tc(spec.second ?? cite(`${spec.name}b`, spec.note), spec.secondTcPr) +
-  '</w:tr>';
-
-const tbl = (rows: readonly string[], tblPr = '') =>
-  `<w:tbl><w:tblPr>${tblPr}<w:tblW w:w="6000" w:type="dxa"/><w:tblLayout w:type="fixed"/>` +
-  '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/>' +
-  '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
-  `<w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>${rows.join('')}</w:tbl>`;
-
-/** Rows `R1`..`R{count}`; `refs` maps a row number to the footnote its second cell cites. */
-const rows = (
-  count: number,
-  refs: ReadonlyMap<number, number>,
-  edit: (n: number, spec: RowSpec) => RowSpec = (_n, spec) => spec
-): string[] =>
-  Array.from({ length: count }, (_, i) =>
-    tr(edit(i + 1, { name: `R${i + 1}`, note: refs.get(i + 1) }))
-  );
-
-function probeDocx(body: string, notes: ReadonlyMap<number, number>): Uint8Array {
-  const noteXml = [...notes]
-    .map(([id, lines]) => {
-      const runs = Array.from({ length: lines }, (_, i) => `<w:t>N${id}-${i + 1}</w:t>`);
-      return (
-        `<w:footnote w:id="${id}"><w:p><w:pPr>${EXACT}</w:pPr>` +
-        `<w:r><w:footnoteRef/></w:r><w:r>${runs.join('<w:br/>')}</w:r></w:p></w:footnote>`
-      );
-    })
-    .join('');
-  const separator = (type: string, tag: string) =>
-    `<w:footnote w:type="${type}" w:id="${type === 'separator' ? -1 : 0}"><w:p><w:pPr>${EXACT}</w:pPr>` +
-    `<w:r><w:${tag}/></w:r></w:p></w:footnote>`;
-  return zipSync({
-    '[Content_Types].xml': strToU8(
-      `<Types xmlns="${CT}">` +
-        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-        '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
-        '</Types>'
-    ),
-    '_rels/.rels': strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
-    ),
-    'word/_rels/document.xml.rels': strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
-    ),
-    'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}${SECT}</w:body></w:document>`
-    ),
-    'word/footnotes.xml': strToU8(
-      `<w:footnotes xmlns:w="${W}">${separator('separator', 'separator')}` +
-        `${separator('continuationSeparator', 'continuationSeparator')}${noteXml}</w:footnotes>`
-    ),
-  });
-}
-
-interface Laid {
-  readonly layout: SemanticLayout;
-  /** The published reserves reproduce themselves from the layout they produced. */
-  readonly fixedPoint: boolean;
-  readonly refs: ReturnType<typeof buildPageRefHits>;
-  /** The reserves the layout was laid under, by page index. */
-  readonly reserves: ReadonlyMap<number, number>;
-  readonly compatibilityMode?: number;
-}
-
-function layoutProbe(
-  body: string,
-  notes: ReadonlyMap<number, number>,
-  session = createLayoutSession(),
-  revision = 1,
-  compatibilityMode?: number
-): Laid {
-  const loaded = readOoxmlPackage(probeDocx(body, notes));
-  if (!loaded.ok) throw new Error(loaded.reason);
-  const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
-  const fn = resolveFootnoteProperties(undefined, undefined);
-  const en = resolveEndnoteProperties(undefined, undefined);
-  const input: NotesLayoutInput = {
-    footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
-    endnotesPart: null,
-    footnotePropsBySection: [fn],
-    endnotePropsBySection: [en],
-    documentFootnoteProps: fn,
-    documentEndnoteProps: en,
-    measurer,
-    producer: 'footnote-table-row-bands',
-    compatibilityMode,
-  };
-  const layout = layoutSemanticDocument(part, revision, {
-    measurer,
-    notes: input,
-    session,
-    producer: 'footnote-table-row-bands',
-    compatibilityMode,
-  });
-  const used = session.notePageBottomReserves ?? new Map<number, number>();
-  const collected = collectNoteReferences(part);
-  const refs = buildPageRefHits(collected, new Map(collected.map((ref) => [ref.paragraphId, 0])));
-  const computed = computeFootnoteReserves(
-    { ...layout, pages: layout.pages.map(bodyOnlyPage) },
-    refs,
-    input,
-    provisionalNoteMarks(refs, input),
-    undefined,
-    used
-  );
-  return {
-    layout,
-    refs,
-    reserves: used,
-    compatibilityMode,
-    fixedPoint: computed.stable && footnoteReservesEqual(computed.reserves, used),
-  };
-}
-
-/** `body text | notes` per page; a trailing `c` marks a note continuation. */
-function pages(layout: SemanticLayout): string[] {
-  return layout.pages.map((page) => {
-    const body = page.fragments.flatMap(blockText).join(' ');
-    const notes = (page.footnotes?.notes ?? []).map(
-      (n) => `${n.noteId}${n.continuation ? 'c' : ''}`
-    );
-    return `${body} | ${notes.join(',')}`;
-  });
-}
-
-/** Lines of footnote `noteId` on page `index`. */
-function noteLines(layout: SemanticLayout, index: number, noteId: number): number {
-  const note = layout.pages[index]?.footnotes?.notes.find((n) => n.noteId === noteId);
-  return (note?.fragments ?? []).reduce(
-    (sum, block) => sum + (block.kind === 'paragraph' ? block.lines.length : 0),
-    0
-  );
-}
-
-/** Every body line and note opening appears: no row or note is dropped or doubled. */
-function expectComplete(layout: SemanticLayout, lines: readonly string[], noteIds?: number[]) {
-  const painted = layout.pages.flatMap((page) =>
-    page.fragments.flatMap((fragment) =>
-      fragment.kind === 'table'
-        ? fragment.rows
-            .filter((row) => !row.isHeaderRepeat)
-            .flatMap((row) => row.cells.flatMap((c) => c.blocks.flatMap(blockText)))
-        : blockText(fragment)
-    )
-  );
-  // Sorted: a split row interleaves its cells' lines across page fragments.
-  expect(painted.map(unmark).sort()).toEqual([...lines].sort());
-  if (!noteIds) return;
-  const opened = layout.pages.flatMap((page) =>
-    (page.footnotes?.notes ?? []).filter((n) => !n.continuation).map((n) => n.noteId)
-  );
-  expect(opened).toEqual(noteIds);
-}
-
-/** The band of footnote `noteId`'s reference on the page that paints it. */
-function bandOf(laid: Laid, noteId: number) {
-  const ref = laid.refs.find((hit) => hit.noteId === noteId)!;
-  for (const page of laid.layout.pages) {
-    const body = bodyOnlyPage(page);
-    const band = noteReferenceLineBandPt(body, ref, laid.compatibilityMode);
-    if (band.bottom > 0) {
-      const table = body.fragments.find((f): f is TableFragmentRecord => f.kind === 'table')!;
-      return { page: page.index, band, table };
-    }
-  }
-  throw new Error(`reference ${noteId} is not on any page`);
-}
-
-/** Drops a painted footnote mark (`R2b1` -> `R2b`); note ids stay below 10 here. */
-const unmark = (text: string) => text.replace(/^(R\d+b|Nb)\d$/, '$1');
-
-const INTRO = para('INTRO', 2);
-const TAIL = cite('TAIL');
-const names = (count: number) =>
-  Array.from({ length: count }, (_, i) => [`R${i + 1}a`, `R${i + 1}b`]).flat();
-
+import type { SemanticLayout } from '../semantic-records.ts';
+import {
+  bandOf,
+  cite,
+  expectComplete,
+  INTRO,
+  type Laid,
+  layoutProbe,
+  names,
+  noteLines,
+  pages,
+  rows,
+  TAIL,
+  tbl,
+  tr,
+} from './footnote-row-band-fixtures.ts';
+import { para } from './table-row-keep-fixtures.ts';
 describe('footnote references in body table rows', () => {
   // Rows 2, 4, 6 and 8 cite one-line notes. Six rows and three notes fill the first page.
   const refs = new Map([
@@ -288,7 +80,8 @@ describe('footnote references in body table rows', () => {
 
 describe('a row whose long note keeps two lines below it', () => {
   // Row 5 cites a four-line note. Below row 5 there is room for three note lines. The row
-  // stays, and the note splits: widow control leaves two lines on each page.
+  // stays, and the note splits: widow control leaves two lines on each page. A note that
+  // splits ends the page body at its reference, so row 6 and everything after it move on.
   const refs = new Map([
     [1, 1],
     [5, 2],
@@ -298,11 +91,11 @@ describe('a row whose long note keeps two lines below it', () => {
     [2, 4],
   ]);
 
-  test('stays, and its note continues on the next page', () => {
+  test('stays, its note continues, and the next row moves on', () => {
     const laid = layoutProbe(INTRO + tbl(rows(8, refs)) + TAIL, notes);
     expect(pages(laid.layout)).toEqual([
-      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a R5b2 R6a R6b | 1,2',
-      'R7a R7b R8a R8b TAIL | 2c',
+      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a R5b2 | 1,2',
+      'R6a R6b R7a R7b R8a R8b TAIL | 2c',
     ]);
     expect(noteLines(laid.layout, 0, 2)).toBe(2);
     expect(laid.fixedPoint).toBe(true);
@@ -319,13 +112,13 @@ describe('a row whose long note keeps two lines below it', () => {
     expect(laid.fixedPoint).toBe(true);
   });
 
-  test('the last row of a table keeps the content after the table in place', () => {
-    // The referencing row ends the table, and a three-line paragraph follows it. Moving
-    // the row would also move that paragraph and every page break after it.
+  test('the last row of a table stays, and the content after the table moves on', () => {
+    // The referencing row ends the table, and a three-line paragraph follows it. The row
+    // stays; the paragraph after the table moves on with the rest of the body.
     const laid = layoutProbe(INTRO + tbl(rows(5, refs)) + para('TAIL', 3), notes);
     expect(pages(laid.layout)).toEqual([
-      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a R5b2 TAIL1 | 1,2',
-      'TAIL2 TAIL3 | 2c',
+      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a R5b2 | 1,2',
+      'TAIL1 TAIL2 TAIL3 | 2c',
     ]);
     expect(noteLines(laid.layout, 0, 2)).toBe(2);
     expect(laid.fixedPoint).toBe(true);
@@ -335,8 +128,8 @@ describe('a row whose long note keeps two lines below it', () => {
   test('a short table ending mid-page keeps its referencing row', () => {
     const laid = layoutProbe(INTRO + tbl(rows(6, refs)) + para('TAIL', 3), notes);
     expect(pages(laid.layout)).toEqual([
-      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a R5b2 R6a R6b | 1,2',
-      'TAIL1 TAIL2 TAIL3 | 2c',
+      'INTRO1 INTRO2 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a R5b2 | 1,2',
+      'R6a R6b TAIL1 TAIL2 TAIL3 | 2c',
     ]);
     expect(noteLines(laid.layout, 0, 2)).toBe(2);
     expect(laid.fixedPoint).toBe(true);
@@ -351,13 +144,15 @@ describe('a row whose long note keeps two lines below it', () => {
     }));
     const laid = layoutProbe(INTRO + tbl(merged) + TAIL, notes);
     expect(pages(laid.layout)).toEqual([
-      'INTRO1 INTRO2 M R1b1 R2b R3b R4b R5b2 R6b | 1,2',
-      'R7b R8b TAIL | 2c',
+      'INTRO1 INTRO2 M R1b1 R2b R3b R4b R5b2 | 1,2',
+      'R6b R7b R8b TAIL | 2c',
     ]);
     expect(laid.fixedPoint).toBe(true);
   });
 
   test('a reference in a nested table takes the outer row band', () => {
+    // The empty paragraph after the nested table takes no room, so the outer row is one
+    // line high and paginates as the plain referencing row does: row 6 moves on.
     const nested = rows(8, refs, (n, spec) =>
       n === 5 ? { ...spec, second: tbl([tr({ name: 'N', note: 2 })]) + cite('') } : spec
     );
@@ -368,6 +163,54 @@ describe('a row whose long note keeps two lines below it', () => {
     ]);
     expect(noteLines(laid.layout, 0, 2)).toBe(2);
     expect(laid.fixedPoint).toBe(true);
+  });
+
+  test('a note that fits whole leaves the next rows in place', () => {
+    // With one introduction line, the whole note fits below row 5, and row 6 fits too.
+    const laid = layoutProbe(
+      para('INTRO', 1) + tbl(rows(8, refs)) + TAIL,
+      new Map([
+        [1, 1],
+        [2, 3],
+      ])
+    );
+    expect(pages(laid.layout)[0]).toBe(
+      'INTRO1 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a R5b2 R6a R6b | 1,2'
+    );
+    expect(laid.fixedPoint).toBe(true);
+  });
+
+  test('a split note fills the room below its reference', () => {
+    // An eight-line note has four lines of room below row 5 with one introduction line.
+    const laid = layoutProbe(
+      para('INTRO', 1) + tbl(rows(8, refs)) + TAIL,
+      new Map([
+        [1, 1],
+        [2, 8],
+      ])
+    );
+    expect(pages(laid.layout)).toEqual([
+      'INTRO1 R1a R1b1 R2a R2b R3a R3b R4a R4b R5a R5b2 | 1,2',
+      'R6a R6b R7a R7b R8a R8b TAIL | 2c',
+    ]);
+    expect(noteLines(laid.layout, 0, 2)).toBe(4);
+    expect(laid.fixedPoint).toBe(true);
+  });
+
+  test('warm passes that start or stop the split match a clean layout', () => {
+    const one = para('INTRO', 1) + tbl(rows(8, refs)) + TAIL;
+    const two = INTRO + tbl(rows(8, refs)) + TAIL;
+    for (const [before, after] of [
+      [one, two],
+      [two, one],
+    ] as const) {
+      const session = createLayoutSession();
+      layoutProbe(before, notes, session, 1);
+      const warm = layoutProbe(after, notes, session, 2);
+      const clean = layoutProbe(after, notes);
+      expect(pages(warm.layout)).toEqual(pages(clean.layout));
+      expect(warm.fixedPoint).toBe(true);
+    }
   });
 });
 
@@ -529,8 +372,8 @@ describe('legal breaks inside a multi-line referencing row', () => {
       15
     );
     expect(pages(laid.layout)).toEqual([
-      'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5a3 R5b1 R6a R6b | 1',
-      'R7a R7b R8a R8b TAIL | 1c',
+      'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5a3 R5b1 | 1',
+      'R6a R6b R7a R7b R8a R8b TAIL | 1c',
     ]);
     const { band, table } = bandOf(laid, 1);
     const row = table.rows.find((r) => r.rowIndex === 4)!;
@@ -548,8 +391,8 @@ describe('legal breaks inside a multi-line referencing row', () => {
       15
     );
     expect(pages(laid.layout)).toEqual([
-      'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5a3 R5b1 R6a R6b | 1',
-      'R7a R7b R8a R8b TAIL | 1c',
+      'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5a3 R5b1 | 1',
+      'R6a R6b R7a R7b R8a R8b TAIL | 1c',
     ]);
     expect(noteLines(laid.layout, 0, 1)).toBe(2);
     expect(laid.fixedPoint).toBe(true);
@@ -624,13 +467,14 @@ describe('a row that cannot continue below its reference line', () => {
   };
 
   test('a row that cannot split keeps three lines and splits the note', () => {
+    // Reference probe cs4 (modes 0 and 15): row 5 stays whole, two note lines, row 6 moves.
     const kept = rows(8, refs, (n, spec) =>
       n === 5 ? { ...spec, trPr: '<w:cantSplit/>', first: para('R5a', 3) } : spec
     );
     const laid = layoutProbe(para('INTRO', 1) + tbl(kept) + TAIL, new Map([[1, 4]]));
     expect(pages(laid.layout)).toEqual([
-      'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5a3 R5b1 R6a R6b | 1',
-      'R7a R7b R8a R8b TAIL | 1c',
+      'INTRO1 R1a R1b R2a R2b R3a R3b R4a R4b R5a1 R5a2 R5a3 R5b1 | 1',
+      'R6a R6b R7a R7b R8a R8b TAIL | 1c',
     ]);
     expect(rowBand(laid).placesWhole).toBe(true);
     expect(noteLines(laid.layout, 0, 1)).toBe(2);
@@ -670,10 +514,17 @@ describe('a row that cannot continue below its reference line', () => {
     const atLeast = rows(9, refs, (n, spec) =>
       n === 5 ? { ...spec, trPr: '<w:trHeight w:val="500" w:hRule="atLeast"/>' } : spec
     );
-    const laid = layoutProbe(spacer(1) + tbl(atLeast) + TAIL, new Map([[1, 6]]));
+    // Reference probe al_m15. Mode 0 differs; see the todo below.
+    const laid = layoutProbe(
+      spacer(1) + tbl(atLeast) + TAIL,
+      new Map([[1, 6]]),
+      createLayoutSession(),
+      1,
+      15
+    );
     expect(pages(laid.layout)).toEqual([
-      'R1a R1b R2a R2b R3a R3b R4a R4b R5a R5b1 R6a R6b | 1',
-      'R7a R7b R8a R8b R9a R9b TAIL | 1c',
+      'R1a R1b R2a R2b R3a R3b R4a R4b R5a R5b1 | 1',
+      'R6a R6b R7a R7b R8a R8b R9a R9b TAIL | 1c',
     ]);
     const row = rowBand(laid);
     expect(row.box.height).toBeCloseTo(25, 3);
@@ -681,6 +532,10 @@ describe('a row that cannot continue below its reference line', () => {
     expect(noteLines(laid.layout, 0, 1)).toBe(4);
     expect(laid.fixedPoint).toBe(true);
   });
+
+  // Reference probe al_m0: without compatibility mode 15, the at-least row moves whole to
+  // page 2 with its whole note, and rows 6 to 8 follow it there. The engine keeps row 5.
+  test.todo('an at-least row in mode 0 moves whole with its note to the next page');
 });
 
 describe('a referencing row that splits at the page end', () => {

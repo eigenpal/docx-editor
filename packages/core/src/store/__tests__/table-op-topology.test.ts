@@ -13,6 +13,7 @@ import { readOoxmlPackage } from '../package/ooxml-package.ts';
 import { readEditableTableTopology } from '../store/tree-op-table-topology.ts';
 import { cachedUniqueNode, findNode, insertChildren } from '../package/ooxml-edit.ts';
 import { applyTreeOp } from '../store/tree-ops.ts';
+import { withRepeated } from './repeated-node-support.ts';
 import {
   CT_TBLPR_SEQUENCE,
   CT_TRPR_SEQUENCE,
@@ -234,7 +235,7 @@ describe('readEditableTableTopology', () => {
     expect(result.topology.rows[1]!.cells).toHaveLength(3);
   });
 
-  test('rejects duplicate trPr containers but not foreign x:trPr', () => {
+  test('reads a repeated trPr as merged, and refuses one only for repeated revision markup', () => {
     const part = load(
       `<w:tbl xmlns:x="${FOREIGN}"><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>` +
         `<w:tr><w:trPr/><x:trPr/>${CELL}</w:tr></w:tbl>`
@@ -243,18 +244,30 @@ describe('readEditableTableTopology', () => {
     const result = readEditableTableTopology(part.root, table.id, limits);
     expect(result.ok).toBe(true);
 
-    const dup = load(
+    const read = load(
       `<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>` +
         `<w:tr><w:trPr/><w:trPr/>${CELL}</w:tr></w:tbl>`
     );
-    const dupTable = firstTable(dup);
-    const dupResult = readEditableTableTopology(dup.root, dupTable.id, limits);
-    expect(dupResult.ok).toBe(false);
-    if (dupResult.ok) return;
-    expect(dupResult.reason).toBe('duplicate-property-container');
+    // A file with two opens with one; a tree a merge left with two reads as the heal leaves it.
+    expect(readEditableTableTopology(read.root, firstTable(read).id, limits).ok).toBe(true);
+    const dup = withRepeated(read, 'trPr');
+    expect(readEditableTableTopology(dup.root, firstTable(dup).id, limits).ok).toBe(true);
+
+    // Two copies that each carry a row change cannot merge: which history survives is open.
+    const tracked = withRepeated(
+      load(
+        `<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid><w:tr><w:trPr>` +
+          `<w:trPrChange w:id="1" w:author="A"><w:trPr/></w:trPrChange></w:trPr>${CELL}</w:tr></w:tbl>`
+      ),
+      'trPr'
+    );
+    const refused = readEditableTableTopology(tracked.root, firstTable(tracked).id, limits);
+    expect(refused.ok).toBe(false);
+    if (refused.ok) return;
+    expect(refused.reason).toBe('duplicate-property-container');
   });
 
-  test('rejects duplicate tcPr in one cell but not foreign x:tcPr', () => {
+  test('reads a repeated tcPr as merged, and refuses one only for repeated revision markup', () => {
     const foreignOk = load(
       `<w:tbl xmlns:x="${FOREIGN}"><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>` +
         `<w:tr><w:tc><w:tcPr/><x:tcPr/><w:p/></w:tc></w:tr></w:tbl>`
@@ -263,11 +276,22 @@ describe('readEditableTableTopology', () => {
       true
     );
 
-    const part = load(
+    const read = load(
       `<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>` +
         `<w:tr><w:tc><w:tcPr/><w:tcPr/><w:p/></w:tc></w:tr></w:tbl>`
     );
-    const result = readEditableTableTopology(part.root, firstTable(part).id, limits);
+    expect(readEditableTableTopology(read.root, firstTable(read).id, limits).ok).toBe(true);
+    const part = withRepeated(read, 'tcPr');
+    expect(readEditableTableTopology(part.root, firstTable(part).id, limits).ok).toBe(true);
+
+    const tracked = withRepeated(
+      load(
+        `<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid><w:tr><w:tc><w:tcPr>` +
+          `<w:cellIns w:id="1" w:author="A"/></w:tcPr><w:p/></w:tc></w:tr></w:tbl>`
+      ),
+      'tcPr'
+    );
+    const result = readEditableTableTopology(tracked.root, firstTable(tracked).id, limits);
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toBe('duplicate-property-container');

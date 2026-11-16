@@ -2,6 +2,27 @@ import { readTextOf, searchableLineBreaks } from './line-break-text.ts';
 import type { AutomationStoryReads } from './reads.ts';
 import type { AutomationSectionRead } from './sections.ts';
 import type { ResolvedRange } from './spans.ts';
+import type { PlannedOperation } from './plan.ts';
+import { refused as refuse } from './plan-results.ts';
+
+/** Most delimiters one split accepts, and the longest each may be. Both are host input. */
+const MAX_DELIMITERS = 16;
+const MAX_DELIMITER_LENGTH = 64;
+
+/** Why a split's delimiters are refused, or null when they are usable. */
+export function delimiterRefusal(delimiters: readonly string[]): PlannedOperation | null {
+  if (!Array.isArray(delimiters) || delimiters.length === 0)
+    return refuse('unsupported-content', 'split needs at least one delimiter', 'delimiters');
+  if (delimiters.length > MAX_DELIMITERS)
+    return refuse('unsupported-content', 'too many delimiters', String(delimiters.length));
+  for (const delimiter of delimiters) {
+    if (typeof delimiter !== 'string' || delimiter.length === 0)
+      return refuse('unsupported-content', 'a delimiter must be a non-empty string', 'delimiters');
+    if (delimiter.length > MAX_DELIMITER_LENGTH)
+      return refuse('unsupported-content', 'that delimiter is too long', 'delimiters');
+  }
+  return null;
+}
 
 /** A paragraph's text as a read reports it, and where any delimiter occurs in it. */
 export function delimitedText(

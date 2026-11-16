@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A list button over list items and plain paragraphs reused the list above or a list an item was on, and kept each item at its level.",
+  "after": "Such a selection starts a new list with each item at its level and each plain paragraph at level 0, unless it starts with a plain paragraph below a list item, which joins that list with the selected items at the level of that paragraph.",
+  "reason": "The toggle still writes the same paragraph property and list numbering operations, only with another numId or level. Shared nodes, text offsets, the operation format, and package serialization stay the same.",
+  "tests": [
+    "packages/core/src/editor/__tests__/list-toggle-mixed-selection.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-list-mixed-selection.test.ts"
+  ],
+  "changeset": "list-toggle-mixed-selection",
+  "migration": null
+}

@@ -143,6 +143,34 @@ function mathml(expression: EquationExpression, depth: number): string {
       return expression.position === 'top'
         ? `<mover accent="true">${row(expression.body)}<mo>¯</mo></mover>`
         : `<munder accentunder="true">${row(expression.body)}<mo>¯</mo></munder>`;
+    case 'borderBox': {
+      const notation = [
+        expression.hidden.top ? '' : 'top',
+        expression.hidden.bottom ? '' : 'bottom',
+        expression.hidden.left ? '' : 'left',
+        expression.hidden.right ? '' : 'right',
+        expression.strikes.horizontal ? 'horizontalstrike' : '',
+        expression.strikes.vertical ? 'verticalstrike' : '',
+        expression.strikes.bottomLeftToTopRight ? 'updiagonalstrike' : '',
+        expression.strikes.topLeftToBottomRight ? 'downdiagonalstrike' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      return `<menclose notation="${notation}">${row(expression.body)}</menclose>`;
+    }
+    case 'delimiter': {
+      const stretchy = expression.grow ? '' : ' stretchy="false"';
+      const fence = (character: string) =>
+        character ? `<mo fence="true"${stretchy}>${escapeXml(character)}</mo>` : '';
+      const separator = expression.separator
+        ? `<mo separator="true"${stretchy}>${escapeXml(expression.separator)}</mo>`
+        : '';
+      return (
+        `<mrow>${fence(expression.opening)}` +
+        expression.items.map(row).join(separator) +
+        `${fence(expression.closing)}</mrow>`
+      );
+    }
     case 'fraction':
       return `<mfrac>${row(expression.numerator)}${row(expression.denominator)}</mfrac>`;
     case 'radical':

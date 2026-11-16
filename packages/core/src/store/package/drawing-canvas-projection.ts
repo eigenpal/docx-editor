@@ -6,6 +6,7 @@
 // A canvas renders whole or not at all: a member outside the supported subset (a picture,
 // ink, a nested canvas, an unsupported shape) leaves the canvas to its placeholder.
 
+import { groupFillOf } from './drawing-group-fill.ts';
 import {
   findGraphicData,
   isGroupPropertyChild,
@@ -142,7 +143,8 @@ function projectMember(
   placement: Placement,
   out: CanvasOutput,
   pointBudget: { remaining: number },
-  context: CanvasContext
+  context: CanvasContext,
+  groupFill: OoxmlElement | null
 ): boolean {
   const shape = childTransform(member);
   if (!shape) return false;
@@ -152,7 +154,8 @@ function projectMember(
     pointBudget,
     context.resolveSchemeColor,
     context.resolveStyleMatrixReference,
-    true
+    true,
+    groupFill
   );
   if (components === null) return false;
   const origin = {
@@ -196,7 +199,8 @@ function projectMembers(
   depth: number,
   out: CanvasOutput,
   pointBudget: { remaining: number },
-  context: CanvasContext
+  context: CanvasContext,
+  groupFill: OoxmlElement | null = null
 ): boolean {
   for (const node of parent.children) {
     if (!isElement(node)) continue;
@@ -209,12 +213,23 @@ function projectMembers(
       const nonVisual = child(node, WPS_NAMESPACE_URI, 'cNvPr');
       if (nonVisual && !schemaFlagIsUnset(schemaAttributeValue(nonVisual.attributes, 'hidden')))
         continue;
-      if (!projectMember(node, placement, out, pointBudget, context)) return false;
+      if (!projectMember(node, placement, out, pointBudget, context, groupFill)) return false;
       continue;
     }
     if (node.namespaceUri === WPG_NAMESPACE_URI && node.localName === 'wgp' && depth < 4) {
       const nested = groupPlacement(node, placement);
-      if (!nested || !projectMembers(node, nested, depth + 1, out, pointBudget, context))
+      if (
+        !nested ||
+        !projectMembers(
+          node,
+          nested,
+          depth + 1,
+          out,
+          pointBudget,
+          context,
+          groupFillOf(node, groupFill)
+        )
+      )
         return false;
       continue;
     }

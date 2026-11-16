@@ -10,6 +10,7 @@ import { resolveSectionColumns, type ResolvedSectionColumns } from './section-co
 import { DEFAULT_SECTION_PROPERTIES, type SectionColumns } from './section-properties.ts';
 import type { LayoutBox, PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
+import { resultUnsettled } from './unsettled-exclusion-layout.ts';
 
 /** Result shared by ordinary and column-balanced block-flow passes. @internal */
 export interface BlockLayoutResult {
@@ -23,7 +24,11 @@ export interface BlockLayoutResult {
   /** Whether the last page is the one the flow was still filling. */
   readonly endsOpenPage: boolean;
   /** Resolve the content box and furniture for a note-overflow sheet at this document index. */
-  readonly overflowShellAt: (documentPageIndex: number, box: LayoutBox) => OverflowPageShell;
+  readonly overflowShellAt: (
+    documentPageIndex: number,
+    box: LayoutBox,
+    pageNumberShift?: number
+  ) => OverflowPageShell;
 }
 
 /** Session state the balance search reads and publishes. */
@@ -58,6 +63,11 @@ export type BlockLayoutOptions<HostOptions extends object = object> = HostOption
   readonly columnRegionBottom?: number;
   /** Section-local page selected for column balancing; defaults to the first page. */
   readonly columnRegionPage?: number;
+  /**
+   * Set on a balance search trial, which reads any layout refusal as a band that does not fit,
+   * so a wrap reflow that does not settle refuses there instead of publishing.
+   */
+  readonly columnBalanceTrial?: boolean;
   /** Section page-number format used to measure body page-field placeholders. */
   readonly bodyPageNumberFormat?: string;
   /** Story REF inputs built by the document composition root. */
@@ -196,9 +206,12 @@ export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
   }
 
   const natural = yield* layoutPass(bodies, revision, trialOptions);
-  if (!natural.pages.length || !natural.endsOpenPage) {
+  // A natural layout whose wrap never settled makes every trial run to the pass ceiling too,
+  // only to refuse: skip the search. Each reflow pass still balances its own candidate.
+  if (!natural.pages.length || !natural.endsOpenPage || resultUnsettled(natural)) {
     if (session) session.balanceLimit = null;
-    return yield* layoutPass(bodies, revision, options);
+    // Without a session to fill, the natural layout is that pass already.
+    return session ? yield* layoutPass(bodies, revision, options) : natural;
   }
   balancePage = natural.pages.length - 1;
   regionTop = balancePage === 0 ? (options.flowStartY ?? 0) : 0;
@@ -226,6 +239,7 @@ export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
     try {
       const trial = yield* layoutPass(bodies, revision, {
         ...trialOptions,
+        columnBalanceTrial: true,
         columnRegionBottom: limit,
         columnRegionPage: balancePage,
       });

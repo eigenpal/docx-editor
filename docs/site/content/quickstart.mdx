@@ -1,18 +1,14 @@
 ---
 title: 'Quickstart'
-description: 'Load, edit, and save a .docx in the browser with React or Vue. Minimal setup: a file input, the editor component, and a download button, in one file.'
+description: 'Load, edit, and save a .docx in the browser with React or Vue in one file.'
 category: 'Getting started'
 ---
 
-This page builds a browser editor that opens a local `.docx` and downloads the edited document.
+Build a browser editor that opens a local `.docx` and downloads the edited file.
 
-<Steps>
+## Install the editor
 
-<Step>
-
-### Install
-
-The adapter includes the string catalog and declares the engine as a peer dependency, so install both.
+Install an adapter and its engine peer:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -31,17 +27,11 @@ npm install @docx-editor.dev/vue @docx-editor.dev/core
 </Framework>
 </FrameworkTabs>
 
-For server-side rendering (SSR) frameworks such as Next.js, Nuxt, and Remix, render the editor only on the client. Use the client-only setup in [Installation](/docs/2.x/installation). This example works in client-rendered apps such as Vite.
+This example runs in client-rendered apps such as Vite. In Next.js, Nuxt, Remix, or Astro, render the editor on the client only. See [Installation](/docs/2.x/installation#choose-a-framework-setup).
 
-</Step>
+## Load and save a document
 
-<Step>
-
-### Load, edit, and save
-
-This example puts load, edit, and save in one file. A file input supplies bytes to the editor, the editor supports editing (typing, formatting, undo, tables), and a button serializes the current state back to a `.docx` download.
-
-The packaged `<DocxEditor>` shows a document page with loading status while a document opens.
+This component reads a file input, edits the document, and downloads the result:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -127,134 +117,42 @@ async function download() {
 </script>
 
 <template>
-  <div class="app">
-    <div class="bar">
+  <div style="height: 100vh; display: flex; flex-direction: column">
+    <div style="padding: 8px; display: flex; gap: 8px">
       <input type="file" accept=".docx" @change="pick" />
       <button type="button" @click="download">Download .docx</button>
     </div>
-    <div class="surface">
+    <div style="flex: 1; min-height: 0">
       <DocxEditor v-if="bytes" ref="editorRef" :document="bytes" mode="edit" />
     </div>
   </div>
 </template>
-
-<style>
-.app {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-.bar {
-  padding: 8px;
-  display: flex;
-  gap: 8px;
-}
-.surface {
-  flex: 1;
-  min-height: 0;
-}
-</style>
 ```
 
 </Framework>
 </FrameworkTabs>
 
-Notes for this example:
+Parsing, editing, and serialization run in the browser. The editor does not upload the document anywhere.
 
-- `document` takes a `Uint8Array`, an `ArrayBuffer`, a `DocumentHandle`, or `'blank'` for an empty document. Omitting it means no document at all. The editor shows its loading screen, and every control stays disabled until you supply bytes.
-- `mode` is `'edit'` (default), `'view'`, or `'suggesting'`. Changes apply without a remount. Suggesting mode requires a review module and a non-empty `author`.
-- `save()` on the ref returns `Promise<ArrayBuffer | null>`: a complete `.docx`, or `null` when there is no document. Parsing and serialization both happen in the browser; the document stays in the browser; no server upload occurs.
-- The editor fills its parent, so give the parent a non-zero CSS height. The stylesheet import is required once per app.
+## Check the required options
 
-</Step>
+| Option | Values | Notes |
+| --- | --- | --- |
+| `document` | `Uint8Array`, `ArrayBuffer`, `DocumentHandle`, or `'blank'` | `'blank'` opens an empty document. An omitted `document` means no document: the editor shows its loading screen, and editing controls stay unavailable until a document loads. **File > Open** works once the editor instance exists. |
+| `mode` | `'edit'` (default), `'view'`, or `'suggesting'` | Changes apply without a remount. `'suggesting'` requires a review module and a nonempty `author`. |
+| `save()` on the ref | `Promise<ArrayBuffer \| null>` | Returns a complete `.docx`, or `null` when no document is loaded. |
+| Stylesheet | `@docx-editor.dev/core/styles/editor.css` (React) or `@docx-editor.dev/vue/styles.css` (Vue) | Import it once per app. |
+| Container height | Any nonzero CSS height | The editor fills its parent. A parent without a height collapses. |
 
-<Step>
+## Limits
 
-### Fetch instead of a file input (optional)
-
-Load a template from your own server instead:
-
-<FrameworkTabs>
-<Framework value="react">
-
-```ts
-const response = await fetch('/template.docx');
-if (!response.ok) throw new Error(`Load failed: ${response.status}`);
-const bytes = new Uint8Array(await response.arrayBuffer());
-// <DocxEditor document={bytes} />
-```
-
-</Framework>
-<Framework value="vue">
-
-```ts
-import { useDocxSource } from '@docx-editor.dev/vue';
-
-const { document: bytes, isLoading } = useDocxSource('/template.docx');
-// <DocxEditor :document="bytes" />
-```
-
-`useDocxSource()` fetches the resource and exposes loading state.
-
-</Framework>
-</FrameworkTabs>
-
-To react to the built-in Save action (Command+S or **File > Save**) instead of adding your own button, handle the save event. It replaces the packaged behavior, so read the bytes from the ref:
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-<DocxEditor
-  ref={editorRef}
-  document={bytes}
-  onSave={async () => {
-    const buffer = await editorRef.current?.save();
-    if (buffer) await upload(buffer);
-  }}
-/>
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<script setup lang="ts">
-async function onSave() {
-  const buffer = await editorRef.value?.save();
-  if (buffer) await upload(buffer);
-}
-</script>
-
-<template>
-  <DocxEditor ref="editorRef" :document="bytes" @save="onSave" />
-</template>
-```
-
-</Framework>
-</FrameworkTabs>
-
-</Step>
-
-<Step>
-
-### Open a local .docx file
-
-Run your dev server, click the file input, and pick a `.docx`, for example a document that includes tables and headers. The editor parses it client-side and the download button writes the current state back. Check the result in Microsoft Word. If something renders or saves incorrectly, [file an issue](https://github.com/eigenpal/docx-editor/issues) with the document.
-
-If you do not have a local file, try the [live demo](https://docx-editor.dev/editor) first.
-
-</Step>
-
-</Steps>
+- The packaged `<DocxEditor>` shows a document page with loading status while a document opens.
+- To handle the built-in **File > Save** action, use `onSave` (React) or `@save` (Vue). The handler replaces the packaged action, so read the bytes through the ref.
+- Tracked changes and comments require [`@docx-editor.dev/pro`](/docs/2.x/pro).
+- To load from a URL or autosave, see [Loading and saving](/docs/2.x/guides/loading-and-saving).
 
 ## Next steps
 
-- [Installation](/docs/2.x/installation) for Next.js, Nuxt, Remix, and Astro specifics
-- [React composition](/docs/2.x/react/composition) or [Vue composition](/docs/2.x/vue/composition) to replace the packaged chrome with your own
-- [Word fidelity](/docs/2.x/word-fidelity) if you evaluate feature support and round-trip behavior
-- [React props](/docs/2.x/react/props) and [Vue props](/docs/2.x/vue/props) for the full packaged-editor prop surface
-
-## Customize your editor
-
-Start with [Overview](/docs/2.x/customization). Choose a focused guide with a live contract preview and React and Vue examples.
+- [Loading and saving](/docs/2.x/guides/loading-and-saving): Fetch, save handlers, and autosave.
+- [React props](/docs/2.x/react/props) or [Vue props](/docs/2.x/vue/props): Configure the packaged editor.
+- [Live demo](https://docx-editor.dev/editor): Try a document before you install.

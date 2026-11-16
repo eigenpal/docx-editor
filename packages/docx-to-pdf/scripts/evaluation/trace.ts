@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -15,23 +15,12 @@ import type {
 } from '../../../core/src/layout/semantic-records.ts';
 import { forEachPageStory } from '../../../core/src/layout/semantic-record-queries.ts';
 import { openExportSession } from '../../src/open-session.ts';
+import { EVALUATION_FONT_PROFILE } from './font-profile.ts';
 
 const LIMIT = 8000;
 const MAX_RECORDS = 100_000;
-/** Exported only for eval tests. The fallback list must stay identical to export.ts. */
-export const SETTINGS = {
-  displayMode: 'proposed' as const,
-  useSystemFonts: false,
-  glyphFallbacks: [
-    'Noto Sans Symbols 2',
-    'Noto Sans Math',
-    'Noto Sans Arabic',
-    'Times New Roman',
-    'Noto Sans CJK JP',
-    'Twemoji Mozilla',
-    'Noto Emoji',
-  ].map((family) => ({ family, weight: 400, style: 'normal' as const })),
-};
+/** Exported only for eval tests: the font profile that export.ts also uses. */
+export const SETTINGS = EVALUATION_FONT_PROFILE;
 
 type Origin = { x: number; y: number };
 type TraceKind = 'all' | 'drawing' | 'table' | 'paragraph';

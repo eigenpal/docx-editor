@@ -330,6 +330,8 @@ describe('pending caret formatting', () => {
       const span = pagesLayer.querySelector('[data-paragraph-id][data-start]') as HTMLElement;
       span.textContent = 'hello漢';
       pagesLayer.dispatchEvent(new Event('compositionend', { bubbles: true }));
+      // Queued like typed text, it lands at the next flush with the format still armed.
+      surface.flushPendingInput();
 
       expect(runsOf(surface)).toEqual([['hello'], ['漢', 'b']]);
     });

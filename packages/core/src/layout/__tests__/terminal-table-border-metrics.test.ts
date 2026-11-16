@@ -73,7 +73,10 @@ for (const rule of [undefined, 'atLeast', 'exact']) {
 }
 test('terminal-edge admission retains a row after preceding body content', () => {
   const result = run(fixture({ prefix: true }), 25);
-  expect(result.pages).toHaveLength(2);
+  // Pages through the table; the empty paragraph the body reads after it may take one more.
+  expect(
+    result.pages.findLastIndex((page) => page.fragments.some((f) => f.kind === 'table')) + 1
+  ).toBe(2);
   expect(tables(result, 0)[0]!.rows[0]!.box.y).toBe(12);
   const texts = result.pages.map((page) =>
     page.fragments
@@ -84,11 +87,14 @@ test('terminal-edge admission retains a row after preceding body content', () =>
         b.kind === 'paragraph' ? b.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
       )
   );
-  expect(texts).toEqual([['Prefix', 'Before'], ['After']]);
+  // The last page holds only the empty paragraph the body reads after the table.
+  expect(texts).toEqual([['Prefix', 'Before'], ['After'], []]);
 });
 test('terminal clearance preserves the incoming repeated-header boundary', () => {
   const result = run(fixture({ header: true }), 39);
-  expect(result.pages).toHaveLength(2);
+  expect(
+    result.pages.findLastIndex((page) => page.fragments.some((f) => f.kind === 'table')) + 1
+  ).toBe(2);
   const cell = tables(result, 0)[0]!.rows[1]!.cells[0]!;
   // The row under the header authors no top rule of its own, so it inherits the rule the
   // grid resolves for it — the header's 2pt bottom — and carries the whole band.

@@ -1,13 +1,13 @@
 ---
 title: 'Astro'
-description: 'Run an Astro DOCX editor as a React island with client:only. Why client:load crashes, how styles load, and the path from file upload to .docx download.'
+description: 'Run an Astro DOCX editor as a React island with client:only.'
 category: 'Frameworks'
 seoTitle: 'Astro DOCX editor setup'
 ---
 
-This guide shows an Astro page that mounts the editor as a React island, opens a `.docx` from disk, and downloads the edited result.
-
 ## Install
+
+Install the editor and add the Astro React integration:
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core
@@ -16,9 +16,9 @@ npx astro add react
 
 `astro add react` adds `@astrojs/react` to `astro.config.mjs`.
 
-## Mount the editor
+## Mount a client-only island
 
-The page stays static HTML; the editor is a single island with `client:only="react"`. This is the structure of [`examples/astro`](https://github.com/eigenpal/docx-editor/tree/main/examples/astro):
+Render the editor as an island with `client:only="react"`:
 
 ```astro
 ---
@@ -26,82 +26,47 @@ The page stays static HTML; the editor is a single island with `client:only="rea
 import { Editor } from '../components/Editor';
 ---
 
-<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>DOCX editor</title>
-  </head>
   <body>
     <Editor client:only="react" />
   </body>
 </html>
 ```
 
+The island component imports the stylesheet and fills a container with a height:
+
 ```tsx
 // src/components/Editor.tsx
-import { useRef, useState } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
+import { DocxEditor } from '@docx-editor.dev/react';
 import '@docx-editor.dev/core/styles/editor.css';
 
 export function Editor() {
-  const editorRef = useRef<DocxEditorRef>(null);
-  const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
-
-  async function onFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) setBuffer(await file.arrayBuffer());
-  }
-
-  async function onSave() {
-    const out = await editorRef.current?.save();
-    if (!out) return;
-    const blob = new Blob([out], {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'document.docx';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: 8, display: 'flex', gap: 8 }}>
-        <input type="file" accept=".docx" onChange={onFileSelect} />
-        <button onClick={onSave}>Save .docx</button>
-      </div>
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <DocxEditor ref={editorRef} document={buffer ?? 'blank'} />
-      </div>
+    <div style={{ height: '100vh' }}>
+      <DocxEditor document="blank" />
     </div>
   );
 }
 ```
 
-## Why this pattern
+To open and download files, use the component from the [quickstart](/docs/2.x/quickstart).
 
-`client:only="react"` is required. `client:load` would still server-render the component once to produce static HTML, and SSR throws when `window` is undefined during that pass. `client:only` skips SSR for the island entirely and renders it in the browser only. The rest of the page stays zero-JS static HTML.
+## Limits
 
-Styles need no extra setup: the stylesheet import sits inside the island component, and Astro's Vite pipeline bundles CSS imported from `client:only` components like any other module.
+- Use `client:only="react"` to skip the server render. Live editing starts after the island mounts in the browser.
+- Import the stylesheet inside the island. Astro bundles CSS from `client:only` components.
+- The island's container needs a measured height.
 
 ## Run the example
 
-The example resolves `@docx-editor.dev/*` from built output, so build the workspace packages once first:
+The [`examples/astro`](https://github.com/eigenpal/docx-editor/tree/main/examples/astro) starter needs built packages. After the [shared setup](/docs/2.x/examples#run-a-repository-starter), run:
 
 ```bash
-git clone https://github.com/eigenpal/docx-editor.git
-cd docx-editor
-bun install
-bun run build:packages
 bun run dev:astro   # http://localhost:4321
 ```
 
 ## Next steps
 
-- [Quickstart](/docs/2.x/quickstart): the load, edit, save flow in detail
-- [Loading and saving](/docs/2.x/guides/loading-and-saving): URLs, autosave, upload to your API
-- [Astro DOCX editor guide](/blog/astro-docx-editor): the detailed walkthrough
-- [Astro example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/astro)
+- [Quickstart](/docs/2.x/quickstart): Load, edit, and save a document.
+- [Loading and saving](/docs/2.x/guides/loading-and-saving): URLs, autosave, and uploads.
+- [Astro DOCX editor guide](/blog/astro-docx-editor): Detailed walkthrough.

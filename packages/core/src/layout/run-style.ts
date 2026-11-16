@@ -15,6 +15,7 @@ import { layoutDerivedSpacingSourcesEqual } from './layout-derived-spacing.ts';
 import { readTwipsMeasure } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
+import { paintedFontFamilyName } from '../store/package/font-family-name.ts';
 import { RUN_FONT_DEFAULTS } from './application-run-defaults.ts';
 import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
 import { resolveTextOutline } from './run-text-outline.ts';
@@ -90,7 +91,11 @@ export interface ResolvedRunStyle {
     readonly baseLevel: number;
     /** Resolved w:rtl context; absent when authored Unicode controls govern the paragraph. */
     readonly runDirection?: 'ltr' | 'rtl';
+    /** A `w:bdo` override: every character reads in this direction, whatever its class. */
+    readonly override?: 'ltr' | 'rtl';
     readonly wordSpacingPt?: number;
+    /** The run-direction group comes from a `w:dir` or `w:bdo` wrapper, not the run. */
+    readonly wrapperGroup?: true;
     /** Neighbouring text a joining script reads across a formatting-run boundary. */
     readonly context?: import('./shaped-run.ts').ShapingContext;
   };
@@ -284,10 +289,10 @@ export function resolveRunStyle(
         const attributes = property.attributes;
         const family =
           (themeFonts ? themeFontFamilyOf(attributes?.eastAsiaTheme, themeFonts) : null) ??
-          attributes?.eastAsia;
-        if (family && family.length <= 128) style.fontFamilyEastAsia = family;
-        if (attributes?.ascii && attributes.ascii.length <= 128)
-          style.fontFamily = attributes.ascii;
+          paintedFontFamilyName(attributes?.eastAsia);
+        if (family) style.fontFamilyEastAsia = family;
+        const ascii = paintedFontFamilyName(attributes?.ascii);
+        if (ascii) style.fontFamily = ascii;
         break;
       }
       case 'rFonts': {
@@ -307,10 +312,10 @@ export function resolveRunStyle(
           themeFonts ? themeFontFamilyOf(token, themeFonts) : null;
         const family =
           theme(attributes?.asciiTheme) ??
-          attributes?.ascii ??
+          paintedFontFamilyName(attributes?.ascii) ??
           theme(attributes?.hAnsiTheme) ??
-          attributes?.hAnsi;
-        if (family && family.length <= 128) style.fontFamily = family;
+          paintedFontFamilyName(attributes?.hAnsi);
+        if (family) style.fontFamily = family;
         // A theme reference with no theme face to resolve to still replaces the format
         // default beneath it, so the run takes the surface default face. (The reference
         // application uses its built-in theme here, Aptos; probe n01.)
@@ -323,8 +328,8 @@ export function resolveRunStyle(
         const themedEastAsia = themeFonts
           ? themeFontFamilyOf(attributes?.eastAsiaTheme, themeFonts)
           : null;
-        const familyEastAsia = themedEastAsia ?? attributes?.eastAsia;
-        if (familyEastAsia && familyEastAsia.length <= 128) {
+        const familyEastAsia = themedEastAsia ?? paintedFontFamilyName(attributes?.eastAsia);
+        if (familyEastAsia) {
           style.fontFamilyEastAsia = familyEastAsia;
           style.eastAsianFontAuthored = true;
         }
@@ -332,8 +337,8 @@ export function resolveRunStyle(
           ? themeFontFamilyOf(attributes?.cstheme, themeFonts)
           : null;
         // `||`: an Office theme's `a:cs` is usually empty, which names no face.
-        const familyComplex = themedComplex || attributes?.cs;
-        if (familyComplex && familyComplex.length <= 128) {
+        const familyComplex = themedComplex || paintedFontFamilyName(attributes?.cs);
+        if (familyComplex) {
           complex.fontFamily = familyComplex;
           complex.fontFamilyAuthored = true;
         }
@@ -398,7 +403,7 @@ export function resolveRunStyle(
         break;
       }
       case 'shd': {
-        // Strict hex fill only; theme/pattern rendering is deferred. Paint lets highlight
+        // Strict hex fill, with a pattern mixed into one colour. Paint lets highlight
         // override this colour when both are present.
         style.shading = resolveOoxmlShadingFill(property.attributes) ?? null;
         break;
@@ -553,6 +558,7 @@ export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolea
     a.shaping?.level === b.shaping?.level &&
     a.shaping?.baseLevel === b.shaping?.baseLevel &&
     a.shaping?.runDirection === b.shaping?.runDirection &&
+    a.shaping?.override === b.shaping?.override &&
     a.shaping?.wordSpacingPt === b.shaping?.wordSpacingPt &&
     a.shaping?.context?.before === b.shaping?.context?.before &&
     a.shaping?.context?.after === b.shaping?.context?.after &&

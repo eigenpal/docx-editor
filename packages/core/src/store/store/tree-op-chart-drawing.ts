@@ -6,6 +6,8 @@
 // chart, not a picture. Picture edits refuse on it in every state, because an edit of one
 // branch alone would leave the other as it was, and a chart's own geometry lives in its chart
 // part. A delete removes the whole chart: the wrapper with both branches, or the bare drawing.
+// A bare chart drawing also takes the frame edits (`chartFrameEdit`): its size, position, wrap
+// and alt text live in its own anchor, as a picture's do.
 
 import {
   isMcAlternateContent,
@@ -68,4 +70,21 @@ export function chartDrawingOf(part: OoxmlPart, nodeId: string): ChartDrawingTar
     return { removeNodeId: node.id, chartDrawing: node };
   }
   return null;
+}
+
+/** The edits that change only a chart's frame in the page, never its graphic. */
+const CHART_FRAME_EDITS: ReadonlySet<string> = new Set([
+  'resizeDrawing',
+  'positionDrawing',
+  'setDrawingWrap',
+  'setDrawingMetadata',
+]);
+
+/**
+ * Whether `operation` may change the frame of this chart: its size, position, wrap or alt text.
+ * Only a bare chart drawing takes them. In an `mc:AlternateContent` wrapper the fallback
+ * branch keeps its own frame, and an edit of one branch alone leaves the two out of step.
+ */
+export function chartFrameEdit(target: ChartDrawingTarget, operation: string): boolean {
+  return target.removeNodeId === target.chartDrawing.id && CHART_FRAME_EDITS.has(operation);
 }

@@ -9,6 +9,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
+import { findNode } from '../package/ooxml-edit.ts';
 import { applyTreeOp } from '../store/tree-ops.ts';
 import { wmlAttributeValue, wmlChildNamed } from '../store/tree-op-table-shared.ts';
 import { TreeDocumentStore } from '../store/tree-store.ts';
@@ -144,6 +145,23 @@ describe('mergeTableCells', () => {
     expect(shape(merged)).toEqual(['a b+h^ c', 'd _| f', 'g _| i']);
     // The blank middle cell keeps its own paragraph; the emptied bottom cell gets a fresh one.
     expect(cellIds(merged)[1]![1]).toBe(ids[1]![1]!);
+  });
+
+  test('a paragraph a vertical merge moves up stays addressable', () => {
+    const part = load(THREE_BY_THREE);
+    const ids = cellIds(part);
+    const moved = all(part.root, 'paragraph')[7]!.id;
+    // Look up first, so the merge patches an index instead of building a fresh one.
+    expect(findNode(part, moved)).not.toBeNull();
+    const merged = apply(part, {
+      op: 'mergeTableCells',
+      tableId: tableId(part),
+      cellIds: [ids[0]![1]!, ids[1]![1]!, ids[2]![1]!],
+    });
+    expect(findNode(merged, moved)?.kind).toBe('paragraph');
+    const head = all(merged.root, 'paragraph')[1]!.id;
+    const joined = apply(merged, { op: 'joinParagraphs', firstId: head, secondId: moved });
+    expect(shape(joined)).toEqual(['a bh^ c', 'd _| f', 'g _| i']);
   });
 
   test('merges a rectangle and names a merged cell by any part', () => {

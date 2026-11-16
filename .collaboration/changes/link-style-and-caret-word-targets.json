@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A new link in a document without a hyperlink character style named no style, so it looked like the text around it. Insert link and Add comment needed a selected range. Undo after a table of contents command from its menu put the caret back where it was before the menu opened.",
+  "after": "Outside a collaboration session, the first new link adds the built-in Hyperlink character style to the styles part in the same transaction as the link, and the run names it. In a session, a new link names the document's own hyperlink style when one exists and adds none. A caret inside a word makes that word the link or comment range. A table of contents command from its menu moves the caret to the table of contents first, so undo returns there.",
+  "reason": "In a session the editor writes no styles-part edit for a link, so links replicate as before: one participant's undo cannot remove a style other links use, and participants apart cannot add duplicate copies. No shared field, mark, identity, or format version changes. sharedSchemaVersion and repairVersion do not change.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-hyperlink-style.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-toc-remove.test.ts"
+  ],
+  "changeset": "link-style-and-caret-word-targets",
+  "migration": null
+}

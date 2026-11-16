@@ -137,15 +137,13 @@ test('frame and empty anchor keep separate caret positions and pointer targets',
   expect(stops.some((stop) => stop.position.paragraphId === empty!.paragraphId)).toBe(true);
 });
 
-test('unknown frames, visible anchors, extra paragraphs, and unsupported fields keep ordinary flow', () => {
+test('unknown frames, two fields, and unsupported fields keep ordinary flow', () => {
   for (const xml of [
     body().replace('w:vAnchor="text"', 'w:vAnchor="page"'),
     body().replace('w:y="1"', 'w:y="400"'),
     body().replace('w:y="1"', 'w:y="1" w:w="200"'),
     body().replace(' PAGE ', ' NUMPAGES '),
     body().replace(' PAGE ', ' INCLUDETEXT file '),
-    body().replace(anchor, anchor.replace('</w:p>', '<w:r><w:t>Visible</w:t></w:r></w:p>')),
-    body() + anchor,
     body(complex + complex),
     body(simple.replace('PAGE', 'NUMPAGES')),
     body().replace(frame, frame + frame),
@@ -154,6 +152,15 @@ test('unknown frames, visible anchors, extra paragraphs, and unsupported fields 
     const result = lay(xml);
     expect(result.fragments[1]!.box.y).toBeGreaterThan(0);
     expect(result.flowHeight).toBe(ordinary.flowHeight);
+  }
+  // A visible anchor or a later paragraph clear of the number takes the general frame lane.
+  for (const xml of [
+    body().replace(anchor, anchor.replace('</w:p>', '<w:r><w:t>Visible</w:t></w:r></w:p>')),
+    body() + anchor,
+  ]) {
+    const [framed, next] = paragraphs(lay(xml));
+    expect(framed!.outOfFlow).toBe(true);
+    expect(next!.box.y).toBe(0);
   }
 });
 

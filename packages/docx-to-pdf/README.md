@@ -54,7 +54,7 @@ Use `openDocumentForExport` and `exportPdfFrom` to reuse font resolution and lay
 | Option | Default | Behavior |
 | --- | --- | --- |
 | `fidelityPolicy` | `'strict'` | Rejects unsupported or approximate output. Use `'best-effort'` to return available output with diagnostics. |
-| `displayMode` | `'proposed'` | Includes proposed revisions. Use `'original'` for the original content or `'all-markup'` to show revisions. |
+| `displayMode` | `'all-markup'` | Shows tracked insertions and deletions. Use `'proposed'` for the text with all changes accepted or `'original'` for the original content. |
 | `comments` | `true` | Includes native PDF annotations. Set to `false` to omit them. |
 | `useSystemFonts` | `true` | Searches standard operating system directories for supported font files. Set to `false` to disable this search. |
 | `timeoutMs` | `60000` | Sets the conversion deadline in milliseconds. |
@@ -100,7 +100,7 @@ The converter reads PNG and JPEG images even when DOCX metadata declares another
 
 ## Limitations
 
-The converter includes the drawing module from `@docx-editor.dev/pro/drawing`, so charts, SmartArt diagrams, shape effects, WordArt, and EMF and WMF pictures render. Treemap, sunburst, and map charts, and charts that combine a pie or radar plot with other plot types, do not render. Such a chart exports its saved fallback picture when it has one. Otherwise, it is left out with a `drawing` diagnostic, so the default strict export refuses the document. Drawings that the module cannot render, rotated table-cell text, unsupported equation fallbacks, some revision presentation, and other unsupported media produce diagnostics. Brightness and grayscale adjustments are not supported.
+The converter includes the drawing module from `@docx-editor.dev/pro/drawing`, so charts, DrawingML diagrams, shape effects, VML text paths, and EMF and WMF pictures render. Treemap, sunburst, and map charts, and charts that combine a pie or radar plot with other plot types, do not render. Such a chart exports its saved fallback picture when it has one. Otherwise, it is left out with a `drawing` diagnostic, so the default strict export refuses the document. Drawings that the module cannot render, rotated table-cell text, unsupported equation fallbacks, some revision presentation, and other unsupported media produce diagnostics. Brightness and grayscale adjustments are not supported.
 
 The writer rejects variable fonts, missing glyphs, prohibited embedding, fonts that prohibit subsetting, and font containers that cannot be encoded. Tagged PDF, PDF/A, encryption, and forms are not supported.
 

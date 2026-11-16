@@ -1,14 +1,15 @@
 // Shared OOXML shading fill resolution (paragraph, run, table cell).
 //
-// `w:shd/@w:fill` is attacker-controlled. Only a strict 6-hex RRGGBB leaves this boundary;
-// `auto`/`nil`, theme fills, CSS/URL payloads, and pattern rendering are rejected or deferred.
-// Measurement never reads shading — resolve and paint only.
+// `w:shd/@w:fill` and `@w:color` are attacker-controlled. Only a strict 6-hex RRGGBB leaves this
+// boundary; theme fills, CSS/URL payloads, and other values are rejected. A pattern mixes its
+// colour into its fill and paints as one solid colour. Measurement never reads shading —
+// resolve and paint only.
 //
 // Paragraph shading geometry is the line/content band only: Word does not extend `w:pPr/w:shd`
 // into before/after spacing or bottom-border extent. Layout publishes that box; paint must not
 // invent it from the fragment outer box.
 
-import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import type { LayoutBox } from './semantic-records.ts';
 
@@ -24,6 +25,57 @@ export function resolveStrictHexFill(raw: string | undefined): string | undefine
   return raw.toUpperCase();
 }
 
+/** How much of a hatch pattern its colour covers, in ten-thousandths, from reference renderings. */
+// A Map, so a file-supplied `val` such as `constructor` never reads an Object prototype key.
+const HATCH_COVERAGE: ReadonlyMap<string, number> = new Map([
+  ['horzStripe', 5000],
+  ['vertStripe', 5000],
+  ['diagStripe', 5000],
+  ['reverseDiagStripe', 5000],
+  ['horzCross', 5000],
+  ['diagCross', 7500],
+  ['thinHorzStripe', 2500],
+  ['thinVertStripe', 2500],
+  ['thinDiagStripe', 2500],
+  ['thinReverseDiagStripe', 2500],
+  ['thinHorzCross', 4375],
+  ['thinDiagCross', 4375],
+]);
+
+/** `pct12`, `pct37`, `pct62` and `pct87` are the eighths: 12.5, 37.5, 62.5 and 87.5 percent. */
+const PERCENT_PATTERN =
+  /^pct(5|10|12|15|20|25|30|35|37|40|45|50|55|60|62|65|70|75|80|85|87|90|95)$/;
+
+/** The share of a `w:shd` pattern its colour covers, in ten-thousandths, or null for `clear`. */
+function patternCoverage(val: string | undefined): number | null {
+  if (val === 'solid') return 10000;
+  const percent = val === undefined ? null : PERCENT_PATTERN.exec(val);
+  if (percent) {
+    const value = Number(percent[1]);
+    return value % 25 === 12 ? value * 100 + 50 : value * 100;
+  }
+  return (val !== undefined && HATCH_COVERAGE.get(val)) || null;
+}
+
+/** One channel of `color` over `fill` at `coverage`, half a step rounding away from the fill. */
+function mixChannel(fill: number, color: number, coverage: number): number {
+  const scaled = (color - fill) * coverage;
+  return fill + Math.sign(scaled) * Math.floor((Math.abs(scaled) + 5000) / 10000);
+}
+
+function mixHex(fill: string, color: string, coverage: number): string {
+  let out = '';
+  for (let at = 0; at < 6; at += 2) {
+    const mixed = mixChannel(
+      Number.parseInt(fill.slice(at, at + 2), 16),
+      Number.parseInt(color.slice(at, at + 2), 16),
+      coverage
+    );
+    out += mixed.toString(16).padStart(2, '0');
+  }
+  return out.toUpperCase();
+}
+
 /**
  * Resolve a `w:shd` attribute bag to a validated RRGGBB fill, or undefined.
  *
@@ -33,26 +85,60 @@ export function resolveStrictHexFill(raw: string | undefined): string | undefine
  * the colour the producer computed. Dropping the fill because a theme reference sat next
  * to it left every accent-shaded cell and paragraph unpainted.
  *
- * `val="nil"` clears shading. Pattern vals are not rendered; a valid solid `fill` still
- * paints as a clear fill until pattern support lands. A theme reference with no usable
- * `w:fill` still resolves to nothing rather than a guess.
+ * `val="nil"` clears shading, and `clear` paints the fill alone. Any other pattern mixes
+ * `w:color` into `w:fill` by the share it covers: `pct50` is half of each, `solid` is the colour
+ * alone. Each channel rounds half a step away from the fill, as reference renderings do. Under
+ * a pattern an `auto` colour is black and an `auto` or absent fill is white. A hatch (stripes
+ * and crosses) paints as one colour of the same average, where the reference draws its lines.
  */
 export function resolveOoxmlShadingFill(
   attributes: Readonly<Record<string, string>> | undefined
 ): string | undefined {
   if (!attributes) return undefined;
   if (attributes.val === 'nil') return undefined;
-  return resolveStrictHexFill(attributes.fill);
+  const coverage = patternCoverage(attributes.val);
+  const fill = resolveStrictHexFill(attributes.fill);
+  if (coverage === null) return fill;
+  // A theme colour with no resolved hex `w:color` beside it is not guessed: the fill stands alone.
+  if (
+    attributes.themeColor !== undefined &&
+    (attributes.color === undefined || attributes.color === 'auto')
+  )
+    return fill;
+  const color =
+    attributes.color === undefined || attributes.color === 'auto'
+      ? '000000'
+      : resolveStrictHexFill(attributes.color);
+  // A colour that is neither `auto` nor hex cannot be mixed: the fill stands alone.
+  if (color === undefined) return fill;
+  return mixHex(fill ?? 'FFFFFF', color, coverage);
+}
+
+function shadingAttributes(shd: OoxmlElement): Record<string, string> {
+  const attributes: Record<string, string> = {};
+  for (const attribute of shd.attributes) {
+    if (attribute.namespaceUri === WML_NAMESPACE_URI)
+      attributes[attribute.localName] = attribute.value;
+  }
+  return attributes;
 }
 
 /** Read `w:shd` from a typed/generic element (table `tcPr`, nested `pPr`, …). */
-export function shadingFillFromElement(shd: OoxmlElement | undefined): string | undefined {
+export function shadingFillFromElement(shd: OoxmlElement | null | undefined): string | undefined {
   if (!shd || shd.localName !== 'shd') return undefined;
-  const attributes: Record<string, string> = {};
-  for (const attribute of shd.attributes) {
-    attributes[attribute.localName] = attribute.value;
-  }
-  return resolveOoxmlShadingFill(attributes);
+  return resolveOoxmlShadingFill(shadingAttributes(shd));
+}
+
+/**
+ * What one layer's `w:shd` states: its fill, `null` when it states shading that paints no
+ * colour (an `auto` fill under `clear`), or undefined when it states none (absent or `nil`).
+ * A stated `null` hides the layers below it; undefined leaves them showing.
+ */
+export function statedShadingFill(shd: OoxmlElement | null | undefined): string | null | undefined {
+  if (!shd || shd.localName !== 'shd') return undefined;
+  const attributes = shadingAttributes(shd);
+  if (attributes.val === 'nil') return undefined;
+  return resolveOoxmlShadingFill(attributes) ?? null;
 }
 
 /**

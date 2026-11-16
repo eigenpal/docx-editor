@@ -14,7 +14,7 @@
 import { carryPageOrder } from './document-order.ts';
 import { framedTokenJoin } from './framed-token.ts';
 import { rtlListMarkerPieces } from './list-marker-bidi.ts';
-import { listMarkerWidth } from './list-marker-geometry.ts';
+import { listMarkerAscent, listMarkerWidth } from './list-marker-geometry.ts';
 import { carryPageLines } from './paragraph-lines.ts';
 import { carryPagePlacedIds } from './paragraph-range-rects.ts';
 import { carryPageTableContributions } from './table-caret-context.ts';
@@ -57,10 +57,7 @@ export function registerListGeometry(
     if (item.picBullet || geometryTokens.get(item)?.measurer === measurer) continue;
     const shape = shapeTokens.get(item);
     if (shape === undefined) continue;
-    const ascent =
-      item.markerText.length > 0 && !item.markerStyle.hidden
-        ? measurer.lineMetrics(item.markerStyle, item.markerText).baseline
-        : 0;
+    const ascent = listMarkerAscent(item, measurer);
     const width = listMarkerWidth(item, measurer);
     geometryTokens.set(item, {
       measurer,

@@ -15,7 +15,7 @@ import type {
 } from '../store/store/formattable-runs.ts';
 import { paragraphLinesFor } from './paragraph-lines.ts';
 import { lineSegmentFor } from './line-segments.ts';
-import { paragraphTextFromLayout } from './semantic-interaction.ts';
+import { paragraphTextFromLayout, type SemanticPosition } from './semantic-interaction.ts';
 import type { SemanticLayout } from './semantic-records.ts';
 import { inlineControlEdges } from './word-navigation-boundaries.ts';
 import { segmentWords } from './word-segment.ts';
@@ -141,6 +141,26 @@ export function caretWordAt(
     offset,
     inlineControlEdges(layout, paragraphId)
   );
+}
+
+/**
+ * The word a collapsed selection sits inside, as a range to select, or null.
+ *
+ * Commands that act on a word when nothing is selected (a new link, a new comment) select
+ * this range first. Inside means the same as for formatting at the caret.
+ */
+export function caretWordSelection(
+  layout: SemanticLayout,
+  selection: { readonly anchor: SemanticPosition; readonly head: SemanticPosition }
+): { readonly from: SemanticPosition; readonly to: SemanticPosition } | null {
+  const { anchor, head } = selection;
+  if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return null;
+  const word = caretWordAt(layout, head.paragraphId, head.offset, []);
+  if (!word) return null;
+  return {
+    from: { paragraphId: head.paragraphId, offset: word.start },
+    to: { paragraphId: head.paragraphId, offset: word.end },
+  };
 }
 
 function insideDeletion(layout: SemanticLayout, paragraphId: string, offset: number): boolean {

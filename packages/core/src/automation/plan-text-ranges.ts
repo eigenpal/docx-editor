@@ -36,10 +36,18 @@ import {
 } from './spans.ts';
 import { storyKey } from './stories.ts';
 import { projectReviewedParagraphText } from './text-projection.ts';
+import { planParagraphText } from './plan-paragraph-text.ts';
 
 type TextRangeOperation = Extract<
   AutomationOperation,
-  { op: 'getTextRanges' | 'expandSpan' | 'getReviewedText' }
+  {
+    op:
+      | 'getTextRanges'
+      | 'getParagraphTextIfPresent'
+      | 'getParagraphTextSpan'
+      | 'expandSpan'
+      | 'getReviewedText';
+  }
 >;
 
 /** Most ending marks one `getTextRanges` call may name. */
@@ -64,6 +72,8 @@ export function planTextRanges(
   reads: AutomationPackageReads
 ): PlannedOperation {
   if (operation.op === 'expandSpan') return planExpand(operation, handles, reads);
+  if (operation.op === 'getParagraphTextIfPresent' || operation.op === 'getParagraphTextSpan')
+    return planParagraphText(operation, handles, reads);
   const ref = operation.op === 'getTextRanges' ? operation.scope : operation.span;
   const resolved = resolveSpanRef(ref, handles, reads);
   if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);

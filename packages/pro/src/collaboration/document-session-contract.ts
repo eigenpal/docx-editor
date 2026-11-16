@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -9,6 +9,10 @@ import type {
 } from '@docx-editor.dev/core/collaboration';
 import type { CollaborationIdentityUpdate } from './types.ts';
 import type { CollaborationResourceUsage } from './resource-usage.ts';
+import type {
+  CollaborationResourcePressure,
+  CollaborationResourcePressureOptions,
+} from './resource-pressure.ts';
 import type { CollaborationUndoGroup } from './document-undo-group.ts';
 
 /**
@@ -46,10 +50,44 @@ export interface DocumentCollaborationSession extends EditorCollaborationSession
    *
    * A room only grows — deletion is a tombstone — and the limits that bound hostile
    * amplification turn terminal when crossed. Watch this to archive and re-room before that
-   * happens. The tombstone count walks the node map once per call, so read it on your own
-   * schedule rather than per keystroke.
+   * happens. The tombstone and formatting marker counts walk the node map once per call, so
+   * read it on your own schedule rather than per keystroke. To be told when growth matters, use
+   * {@link DocumentCollaborationSession.subscribeResourcePressure}.
    */
   resourceUsage(): CollaborationResourceUsage;
+
+  /**
+   * Call `listener` when the room crosses a fraction of any cap that would end it.
+   *
+   * The session checks the caps after every local or remote transaction. The node count is
+   * maintained, and the part, relationship and media totals are measured again only after
+   * they change, so typing costs no walk of the document. `listener` runs when the highest
+   * threshold the room reaches changes, in either direction: a lower `threshold` (0 below
+   * every threshold) tells the host to clear its warning. It also runs once, synchronously, at subscription when the room
+   * already reaches a threshold, so a participant joining a large room learns of it at once.
+   *
+   * The reading names the cap closest to its limit. Call
+   * {@link DocumentCollaborationSession.resourceUsage} for every count. Destroying the session
+   * ends every subscription. A listener that throws is reported with `console.error` and does
+   * not stop the edit or other listeners.
+   *
+   * @param options - `thresholds` sets the fractions that notify. Default: `[0.75, 0.9]`.
+   * @returns A function that ends the subscription.
+   * @throws RangeError when `thresholds` is empty, holds more than 16 values, or holds a value
+   * that is not greater than 0 and at most 1.
+   *
+   * @example
+   * ```ts
+   * const stop = session.subscribeResourcePressure(({ limit, fraction, threshold }) => {
+   *   if (threshold === 0) hideRoomSizeWarning();
+   *   else showRoomSizeWarning(limit, fraction); // Export the room and create a new one.
+   * });
+   * ```
+   */
+  subscribeResourcePressure(
+    listener: (pressure: CollaborationResourcePressure) => void,
+    options?: CollaborationResourcePressureOptions
+  ): () => void;
 
   /**
    * Open an explicit undo group: every local write this session publishes until `end()` is
@@ -70,9 +108,10 @@ export interface DocumentCollaborationSession extends EditorCollaborationSession
    * - A refused write does not end the group. Later writes join the same step as the
    *   earlier ones. To revert the whole operation, end the group and call `undo()` once.
    * - Only local writes join the group. Other participants' edits stay out of it, and an
-   *   undo of the group keeps them. It can also remove text that others typed in a
-   *   paragraph the group inserted (#1398). When they removed everything the group wrote,
-   *   its undo changes nothing and never reverts an older step.
+   *   undo of the group keeps them. Text that others typed in a paragraph the group
+   *   inserted joins the paragraph before it, or the paragraph after it when none comes
+   *   before. When they removed everything the group wrote, its undo changes nothing and
+   *   never reverts an older step.
    * - An undo of an ungrouped step never reverts a group's step below it. Ungrouped history
    *   otherwise undoes as it does without groups. If a peer removed everything that the top
    *   ungrouped step wrote, that `undo()` changes nothing and returns true. Call `undo()`

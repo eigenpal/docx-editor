@@ -1,0 +1,2267 @@
+{
+  "config": "undoGroups",
+  "seed": 75,
+  "replicas": 3,
+  "delivery": "peer",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertTab",
+          "offset": 15
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 0,
+          "text": "lo"
+        },
+        "paragraphs": [9]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertTab",
+          "offset": 13
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 7,
+          "text": "p"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 0,
+          "text": "lo"
+        },
+        "paragraphs": [11]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "group",
+      "replica": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "resizeDrawing",
+          "drawingNodeId": "",
+          "extentEmu": {
+            "cx": 860411,
+            "cy": 491531
+          }
+        },
+        "targets": [
+          {
+            "field": "drawingNodeId",
+            "localName": "drawing",
+            "index": 11
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "wait",
+      "ms": 300
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteBlock",
+          "blockId": ""
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "undo",
+      "replica": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [7, 8]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "wait",
+      "ms": 1500
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 0,
+          "text": "lor"
+        },
+        "paragraphs": [2]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "redo",
+      "replica": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 10,
+          "text": "m"
+        },
+        "paragraphs": [3]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "group",
+      "replica": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 19,
+          "text": " sit"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 8,
+          "text": "su"
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 15,
+          "text": "olo"
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 0,
+          "end": 3
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 9,
+          "text": "um "
+        },
+        "paragraphs": [10]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 5
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [2, 3]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 3,
+          "end": 4
+        },
+        "paragraphs": [2]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 19,
+          "text": " s"
+        },
+        "paragraphs": [4]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "addComment",
+          "start": 8,
+          "end": 10
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 1,
+          "text": "orem"
+        },
+        "paragraphs": [3]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 5
+        },
+        "paragraphs": [10]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "redo",
+      "replica": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 44
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "insertTableColumn",
+          "tableId": "",
+          "gridColumnId": "",
+          "where": "right"
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 9
+          },
+          {
+            "field": "gridColumnId",
+            "localName": "gridCol",
+            "index": 1,
+            "within": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "wait",
+      "ms": 300
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 13,
+          "text": " d"
+        },
+        "paragraphs": [6]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "wait",
+      "ms": 1500
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 16,
+          "end": 17
+        },
+        "paragraphs": [9]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setRunProperties",
+          "start": 0,
+          "end": 8,
+          "properties": [
+            {
+              "localName": "b"
+            }
+          ]
+        },
+        "paragraphs": [3]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 6
+        },
+        "paragraphs": [11]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 23
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertTab",
+          "offset": 13
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "addComment",
+          "start": 2,
+          "end": 5
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "row",
+        "table": 1,
+        "row": 0,
+        "op": {
+          "op": "insertTableRow",
+          "tableId": "",
+          "rowId": "",
+          "where": "below"
+        }
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 20,
+          "text": "si"
+        },
+        "paragraphs": [3]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 1,
+          "text": "or"
+        },
+        "paragraphs": [3]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "redo",
+      "replica": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "redo",
+      "replica": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 20,
+          "text": "sit"
+        },
+        "paragraphs": [6]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "undo",
+      "replica": 2
+    },
+    {
+      "kind": "group",
+      "replica": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 3
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "deleteDrawing",
+          "drawingNodeId": ""
+        },
+        "targets": [
+          {
+            "field": "drawingNodeId",
+            "localName": "drawing",
+            "index": 12
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "undo",
+      "replica": 0
+    },
+    {
+      "kind": "wait",
+      "ms": 1500
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [3, 4]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setListNumbering",
+          "numId": "2",
+          "level": 2
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 1
+        },
+        "paragraphs": [4]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "undo",
+      "replica": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 5,
+          "text": " "
+        },
+        "paragraphs": [10]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 2,
+          "end": 3
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertHyperlink",
+          "start": 2,
+          "end": 6,
+          "anchor": "_fuzz"
+        },
+        "paragraphs": [2]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setRunProperties",
+          "start": 5,
+          "end": 7,
+          "properties": []
+        },
+        "paragraphs": [5]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setRunProperties",
+          "start": 0,
+          "end": 2,
+          "properties": [
+            {
+              "localName": "b"
+            }
+          ]
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 7,
+          "text": "psum"
+        },
+        "paragraphs": [7]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 38,
+          "text": "i"
+        },
+        "paragraphs": [3]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "group",
+      "replica": 2
+    },
+    {
+      "kind": "redo",
+      "replica": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "wait",
+      "ms": 300
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteBlock",
+          "blockId": ""
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [1, 2]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setRunProperties",
+          "start": 0,
+          "end": 1,
+          "properties": [
+            {
+              "localName": "u"
+            }
+          ]
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "insertTableColumn",
+          "tableId": "",
+          "gridColumnId": "",
+          "where": "right"
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 9
+          },
+          {
+            "field": "gridColumnId",
+            "localName": "gridCol",
+            "index": 2,
+            "within": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertHyperlink",
+          "start": 28,
+          "end": 29,
+          "anchor": "_fuzz"
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setParagraphProperties",
+          "properties": [
+            {
+              "localName": "jc",
+              "attributes": {
+                "val": "left"
+              }
+            }
+          ]
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 0,
+          "text": "lo"
+        },
+        "paragraphs": [10]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "wait",
+      "ms": 1500
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 9,
+          "text": "um "
+        },
+        "paragraphs": [4]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "group",
+      "replica": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setRunProperties",
+          "start": 0,
+          "end": 1,
+          "properties": [
+            {
+              "localName": "i"
+            }
+          ]
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "redo",
+      "replica": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "row",
+        "table": 10,
+        "row": 0,
+        "op": {
+          "op": "insertTableRow",
+          "tableId": "",
+          "rowId": "",
+          "where": "below"
+        }
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 16,
+          "text": "l"
+        },
+        "paragraphs": [7]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 4,
+          "text": "m i"
+        },
+        "paragraphs": [11]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteBlock",
+          "blockId": ""
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 3,
+          "text": "em"
+        },
+        "paragraphs": [7]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setRunProperties",
+          "start": 5,
+          "end": 11,
+          "properties": [
+            {
+              "localName": "u"
+            }
+          ]
+        },
+        "paragraphs": [8]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 14,
+          "text": "d"
+        },
+        "paragraphs": [3]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "removeHyperlink",
+          "linkId": ""
+        },
+        "targets": [
+          {
+            "field": "linkId",
+            "localName": "hyperlink",
+            "index": 22
+          }
+        ]
+      }
+    },
+    {
+      "kind": "wait",
+      "ms": 1500
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 1,
+          "end": 3
+        },
+        "paragraphs": [7]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "group",
+      "replica": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setRunProperties",
+          "start": 0,
+          "end": 1,
+          "properties": [
+            {
+              "localName": "strike"
+            }
+          ]
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "wait",
+      "ms": 300
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 2,
+          "end": 4
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [1, 2]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 0,
+          "text": "lor"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setRunProperties",
+          "start": 3,
+          "end": 5,
+          "properties": [
+            {
+              "localName": "strike"
+            }
+          ]
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [2, 3]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setRunProperties",
+          "start": 0,
+          "end": 5,
+          "properties": []
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertHyperlink",
+          "start": 10,
+          "end": 13,
+          "anchor": "_fuzz"
+        },
+        "paragraphs": [2]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setRunProperties",
+          "start": 4,
+          "end": 5,
+          "properties": [
+            {
+              "localName": "strike"
+            }
+          ]
+        },
+        "paragraphs": [10]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertHyperlink",
+          "start": 22,
+          "end": 23,
+          "anchor": "_fuzz"
+        },
+        "paragraphs": [8]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 2,
+          "text": "rem "
+        },
+        "paragraphs": [10]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 8,
+          "text": "sum"
+        },
+        "paragraphs": [3]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 6,
+          "text": "ip"
+        },
+        "paragraphs": [7]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [0, 1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setParagraphProperties",
+          "properties": [
+            {
+              "localName": "jc",
+              "attributes": {
+                "val": "right"
+              }
+            }
+          ]
+        },
+        "paragraphs": [4]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "group",
+      "replica": 2
+    },
+    {
+      "kind": "undo",
+      "replica": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "wait",
+      "ms": 300
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 61
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "wait",
+      "ms": 1500
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [8, 9]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 4,
+          "text": "m"
+        },
+        "paragraphs": [4]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "redo",
+      "replica": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 4,
+          "end": 5
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 13
+        },
+        "paragraphs": [8]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 2,
+          "text": "r"
+        },
+        "paragraphs": [6]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 0
+    },
+    {
+      "kind": "wait",
+      "ms": 1500
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteBlock",
+          "blockId": ""
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 1,
+          "text": "orem"
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteBlock",
+          "blockId": ""
+        },
+        "paragraphs": [3]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "group",
+      "replica": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setParagraphProperties",
+          "properties": [
+            {
+              "localName": "jc",
+              "attributes": {
+                "val": "center"
+              }
+            }
+          ]
+        },
+        "paragraphs": [2]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 0
+    },
+    {
+      "kind": "wait",
+      "ms": 300
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setRunProperties",
+          "start": 25,
+          "end": 27,
+          "properties": [
+            {
+              "localName": "b"
+            }
+          ]
+        },
+        "paragraphs": [4]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setListNumbering",
+          "numId": "6",
+          "level": 0
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [0, 1]
+      }
+    }
+  ]
+}

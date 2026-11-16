@@ -155,10 +155,7 @@ export function proposalRevisionError(
 
 /** Why a tracked edit cannot touch a pending revision. */
 type ProposalRevisionRule =
-  | 'deleted-text-only'
-  | 'foreign-revision'
-  | 'foreign-formatting'
-  | 'own-pending';
+  'deleted-text-only' | 'foreign-revision' | 'foreign-formatting' | 'own-pending';
 
 const RULE_MESSAGES: Readonly<Record<ProposalRevisionRule, string>> = {
   'deleted-text-only': 'a tracked deletion or replacement needs live text, not only deleted text',

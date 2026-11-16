@@ -13,9 +13,9 @@ import { DialogMount } from './dialog-host';
 
 import { useCallback, useContext, useLayoutEffect, useRef } from 'react';
 import {
-  clipboardDropLandsText,
   clipboardPasteLandsContent,
-  isElementNode,
+  editorDropHandled,
+  openChartPaneAt,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
@@ -98,41 +98,20 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
     [imageInsert]
   );
 
-  const onDragOver = useCallback(
-    (event: React.DragEvent) => {
-      if (!imageInsert?.isEnabled || !hasImageFile(event.dataTransfer)) return;
-      event.preventDefault();
-    },
-    [imageInsert]
-  );
-
   const onDrop = useCallback(
     (event: React.DragEvent) => {
-      if (!imageInsert?.isEnabled) return;
-      if (!hasImageFile(event.dataTransfer)) return;
-      // Same stand-down as paste, for the drop lane's plain-text-only reality: when the
-      // payload carries visible HTML text, NOT preventing the default lets the browser
-      // fire `insertFromDrop`, which is the engine's only drop path. Word on macOS drags
-      // carry a rendered PNG beside the text; taking the file lane swallowed that event
-      // and turned dropped text into a picture of it.
-      if (clipboardDropLandsText(event.dataTransfer)) {
-        // Only an EDITABLE target fires `insertFromDrop`. Anywhere else (page furniture,
-        // an inactive header band), the browser's default action for a file-carrying
-        // transfer is to NAVIGATE to the file — which destroys the session — so the drop
-        // is swallowed instead of released. Resolved through the nearest annotated
-        // ancestor: `isContentEditable` does not exist on SVG elements (painted vector
-        // shapes), where a direct read answered undefined for an editable position.
-        const target = isElementNode(event.target) ? event.target : null;
-        if (target?.closest('[contenteditable]')?.getAttribute('contenteditable') === 'true') {
-          return;
-        }
-        event.preventDefault();
-        return;
-      }
+      // Keep unsupported file drops on the mount from navigating away from the editor.
       event.preventDefault();
-      void imageInsert.insertFromDataTransfer(event.dataTransfer);
+      if (editorDropHandled(event.nativeEvent) || !imageInsert) return;
+      if (!hasImageFile(event.dataTransfer)) return;
+      const at = editor?.positionAtPoint(event.clientX, event.clientY);
+      if (!at) return;
+      const selected = editor!.exec({ type: 'setSelection', range: { anchor: at, head: at } });
+      if (!selected.ok) return;
+      editor!.focus();
+      void imageInsert.insertFromDataTransfer(event.dataTransfer, at);
     },
-    [imageInsert]
+    [editor, imageInsert]
   );
 
   return (
@@ -141,8 +120,11 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
         ref={contentRef}
         className={`docx-paginated-surface${className ? ` ${className}` : ''}`}
         onPaste={onPaste}
-        onDragOver={onDragOver}
         onDrop={onDrop}
+        // A double press on a chart opens the Chart pane, as Edit chart does.
+        onDoubleClick={(event) => {
+          if (editor && openChartPaneAt(editor, event)) event.preventDefault();
+        }}
       />
       <DialogMount />
       <ConfiguredPopups />

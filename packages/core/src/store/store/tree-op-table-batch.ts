@@ -64,7 +64,11 @@ export function applyTableAuthoring(part: OoxmlPart, op: Op): TreeOpResult {
     return {
       ok: false,
       reason:
-        result.reason === 'locked' ? 'locked' : result.reason === 'bound' ? 'bound' : 'invalidArgs',
+        result.reason === 'locked' ||
+        result.reason === 'bound' ||
+        result.reason === 'unsupported-cell-content'
+          ? result.reason
+          : 'invalidArgs',
     };
   const splits = result.effects.flatMap((effect) => [
     ...(effect.split ? [effect.split] : []),

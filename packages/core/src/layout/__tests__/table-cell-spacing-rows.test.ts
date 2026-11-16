@@ -1,6 +1,6 @@
 // `w:tblCellSpacing` (17.4.45) separates rows as it separates columns: twice the spacing lies
 // above each row's cells and below the last row. An `atLeast` minimum sizes the cell, below
-// the gap; an exact row keeps its authored height.
+// the gap; an exact row below the first counts its height from the middle of the gap.
 
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
@@ -73,11 +73,14 @@ test('the same spacing on every row acts as the table spacing', () => {
   expect(pitches(layout({ rowSpacing: 60 }))).toEqual(pitches(layout({ tableSpacing: 60 })));
 });
 
-test('an atLeast minimum sizes the cell below the gap; an exact row keeps its height', () => {
+test('an atLeast minimum sizes the cell below the gap; an exact row counts from mid-gap', () => {
   const atLeast = '<w:trHeight w:val="400" w:hRule="atLeast"/>';
   for (const pitch of pitches(layout({ tableSpacing: 60, height: atLeast })).slice(1, 3))
     expect(pitch).toBeCloseTo(26, 6);
+  // The first exact row keeps its height. Below it an exact height starts in the middle of the
+  // gap above the cells, so the row takes its height plus the 3pt spacing.
   const exact = '<w:trHeight w:val="400" w:hRule="exact"/>';
-  for (const pitch of pitches(layout({ tableSpacing: 60, height: exact })).slice(1, 3))
-    expect(pitch).toBeCloseTo(20, 6);
+  const [first, second] = pitches(layout({ tableSpacing: 60, height: exact })).slice(1, 3);
+  expect(first).toBeCloseTo(20, 6);
+  expect(second).toBeCloseTo(23, 6);
 });

@@ -839,11 +839,12 @@ describe('Enter at the end of a list', () => {
     });
 
     handler(key({ key: 'Enter' }));
-    expect(surface.session.paragraphIds()).toHaveLength(2);
+    // Two in the cell, and the empty paragraph the body reads after its final table.
+    expect(surface.session.paragraphIds()).toHaveLength(3);
     expect(surface.isListParagraph()).toBe(true);
 
     handler(key({ key: 'Enter' }));
-    expect(surface.session.paragraphIds()).toHaveLength(2);
+    expect(surface.session.paragraphIds()).toHaveLength(3);
     expect(surface.isListParagraph()).toBe(false);
   });
 

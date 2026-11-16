@@ -10,11 +10,6 @@ import {
 } from '@docx-editor.dev/pro/react';
 import type { CollaborationSession } from '@docx-editor.dev/pro/react';
 import { exampleText as t } from '../../shared/example-text';
-import {
-  createCollaborationRoomId,
-  DEMO_SIGNALING_ENDPOINTS,
-  validateRoomId,
-} from '@docx-editor.dev/pro/collaboration/webrtc';
 import type { UseWebrtcCollaborationReturn } from '@docx-editor.dev/pro/react/webrtc';
 import { DemoHeaderButton } from './DemoHeaderButton';
 
@@ -94,7 +89,7 @@ function identityColor(name: string): string {
   return `var(--doc-review-author-${Math.abs(hash) % 8})`;
 }
 
-function roomIdFrom(value: string): string {
+function roomIdFrom(value: string, validateRoomId: (value: string) => string): string {
   const trimmed = value.trim();
   if (!trimmed) throw new Error(strings.enterRoom);
   try {
@@ -244,7 +239,11 @@ export function CollaborationControl({
     setError(null);
     try {
       const displayName = rememberName();
-      const roomId = kind === 'create' ? createCollaborationRoomId() : roomIdFrom(roomInput);
+      // Load the transport only when the user starts or joins a room.
+      const { createCollaborationRoomId, DEMO_SIGNALING_ENDPOINTS, validateRoomId } =
+        await import('@docx-editor.dev/pro/collaboration/webrtc');
+      const roomId =
+        kind === 'create' ? createCollaborationRoomId() : roomIdFrom(roomInput, validateRoomId);
       // Passed explicitly rather than left for the engine to read off the address bar, so the
       // URL only changes once a room actually exists.
       const secret = kind === 'create' ? createRoomSecret() : roomSecretFrom(roomInput);
@@ -304,6 +303,12 @@ export function CollaborationControl({
     }
   };
 
+  const triggerLabel = !session
+    ? strings.connect
+    : diverged
+      ? strings.outOfSyncShort
+      : `${participants.length} ${strings.online}`;
+
   return (
     <>
       <DemoHeaderButton
@@ -316,6 +321,7 @@ export function CollaborationControl({
           setOpen(true);
         }}
         disabled={!editor || busy || pending}
+        aria-label={triggerLabel}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-busy={busy || pending}
@@ -330,13 +336,10 @@ export function CollaborationControl({
         {/* A diverged replica still has peers in its participant list, so a headcount here
             reads as healthy while this copy's edits reach nobody. The trigger is the only
             collaboration state on screen once the dialog closes, so it has to carry the
-            warning in WORDS: the class alone would leave the meaning in the colour. */}
-        <span>
-          {!session
-            ? strings.connect
-            : diverged
-              ? strings.outOfSyncShort
-              : `${participants.length} ${strings.online}`}
+            warning in WORDS: the class alone would leave the meaning in the colour. So on a
+            narrow top bar the other labels step out, and this one stays. */}
+        <span className={session && diverged ? undefined : 'demo-header-action__label'}>
+          {triggerLabel}
         </span>
       </DemoHeaderButton>
 

@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Delete or Backspace inside a control that showed its prompt removed or struck prompt characters one at a time and kept w:showingPlcHdr, so part of the prompt stayed on the page as the placeholder. A range that ended inside the prompt removed part of it too. A tracked deletion over a whole unlocked prompt control struck the prompt text inside the control.",
+  "after": "A press that reaches only a prompt selects the whole prompt and writes no operation. A press with the prompt selected writes removeContentControl, or in suggesting mode one deleteText over the control. A press over a range writes deleteText operations for the text around a prompt it takes part of, and removeContentControl for an inline control it covers. A tracked deletion over a whole prompt control now writes the control inside one w:del, the shape it already wrote for a contentLocked control.",
+  "reason": "The key rules are in the editor surface and only choose which ordinary operations a press writes. The store change reuses the existing whole-control w:del shape, which released readers already read, accept, and reject. Operation encoding, stored fields, identities, and repair rules do not change, and peers share the resulting tree state, not a replay of the operation.",
+  "tests": [
+    "packages/core/src/editor/__tests__/content-control-prompt-delete.test.ts",
+    "packages/pro/src/collaboration/__tests__/content-control-prompt-delete-editors.test.ts"
+  ],
+  "changeset": "prompt-delete-whole",
+  "migration": null
+}

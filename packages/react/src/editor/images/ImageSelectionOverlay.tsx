@@ -11,6 +11,12 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  beginInlineImageDrag,
+  leaveGroupMember,
+  drawingFramePressTarget,
+  type DrawingFramePress,
+  passDrawingFramePress,
+  canMoveInlineImage,
   captureImageMutationPreconditions,
   computeMovedImagePosition,
   hostWindowOf,
@@ -19,6 +25,7 @@ import {
   IMAGE_OVERLAY_NUDGE_SHIFT_PT,
   isElementNode,
   isStaleImageInteractionCommit,
+  openChartPaneFor,
   selectedDrawingOverlayTargetOf,
   textboxFrameReason,
   type ImageInteractionSession,
@@ -31,6 +38,7 @@ import {
   createImageOverlayScrollPort,
   cssPixelsToLayoutPoints,
   finalizeImageOverlayInteraction,
+  overlayFrameCssBox,
   overlayFrameToSheetCssPixels,
   overlayHostOrigin,
   resizePreservesAspect,
@@ -136,17 +144,32 @@ export function ImageSelectionOverlay({
         focusRequestedForDrawingRef.current = null;
         return;
       }
-      const drawingId = element
-        ?.closest<HTMLElement>('[data-drawing-node-id]')
-        ?.getAttribute('data-drawing-node-id');
-      focusRequestedForDrawingRef.current = drawingId ?? null;
-      if (drawingId && drawingId === target?.id) {
+      // A drawing behind the text paints under it, so the hit names what the press reaches.
+      const drawingId =
+        element
+          ?.closest<HTMLElement>('[data-drawing-node-id]')
+          ?.getAttribute('data-drawing-node-id') ??
+        editor?.surface?.pointAt(event.clientX, event.clientY)?.hit.drawing?.drawingNodeId;
+      // A press on the frame goes where the frame hands it: text keeps the keyboard with the
+      // editor, another drawing takes it once selected.
+      const onFrame = !!editor && !!drawingId && drawingId === target?.id;
+      const press: DrawingFramePress = onFrame ? drawingFramePressTarget(editor, event) : 'frame';
+      focusRequestedForDrawingRef.current =
+        press === 'text' ? null : press === 'frame' ? (drawingId ?? null) : press.drawingNodeId;
+      if (onFrame && press === 'frame') {
         queueMicrotask(() => overlayRef.current?.focus({ preventScroll: true }));
       }
     };
     container.addEventListener('pointerdown', onPointerDown, { capture: true });
     return () => container.removeEventListener('pointerdown', onPointerDown, { capture: true });
-  }, [containerRef, target?.id]);
+  }, [containerRef, editor, target?.id]);
+
+  const refreshOrigin = useCallback(() => {
+    setOrigin((previous) => {
+      const next = overlayHostOrigin(containerRef.current);
+      return next.left === previous.left && next.top === previous.top ? previous : next;
+    });
+  }, [containerRef]);
 
   useEffect(() => {
     if (!editor) {
@@ -155,6 +178,14 @@ export function ImageSelectionOverlay({
     }
     const sync = (): void => {
       setTarget(selectedDrawingOverlayTargetOf(editor.surface));
+    };
+    // A selection of a drawing measures the origin again, as a new target used to: the
+    // target keeps its object while its values hold, and content above the pages can move
+    // the origin without resizing what the observer watches.
+    const onSelectionChange = (): void => {
+      const next = selectedDrawingOverlayTargetOf(editor.surface);
+      setTarget(next);
+      if (next) refreshOrigin();
     };
     // Document `change` can fire synchronously from inside a surface commit (the facade
     // listens on the session and emits before `selectionAfter` runs). Running overlay
@@ -165,22 +196,19 @@ export function ImageSelectionOverlay({
       queueMicrotask(sync);
     };
     sync();
-    const off = [editor.on('change', syncAfterCommit), editor.on('selectionChange', sync)];
+    const off = [
+      editor.on('change', syncAfterCommit),
+      editor.on('selectionChange', onSelectionChange),
+    ];
     return () => {
       for (const unsubscribe of off) unsubscribe();
     };
-  }, [editor]);
-
-  const refreshOrigin = useCallback(() => {
-    setOrigin((previous) => {
-      const next = overlayHostOrigin(containerRef.current);
-      return next.left === previous.left && next.top === previous.top ? previous : next;
-    });
-  }, [containerRef]);
+  }, [editor, refreshOrigin]);
 
   useEffect(() => {
-    // Once per selection too: keyed on `target`, so a portal that mounted after the first
-    // pass still gets its observer, and a fresh selection re-measures a moved origin.
+    // Once per target too: keyed on `target`, so a portal that mounted after the first pass
+    // still gets its observer. A repeated selection of the same drawing re-measures in the
+    // `selectionChange` handler, since its target keeps the same object.
     refreshOrigin();
     const portal = portalRef.current;
     const Observer = hostWindowOf(portal).ResizeObserver;
@@ -346,6 +374,12 @@ export function ImageSelectionOverlay({
         return;
       }
       if (previewRef.current) return;
+      // Escape on a shape inside a group selects the group again.
+      if (event.key === 'Escape' && leaveGroupMember(editor)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       // Focus sits on the overlay, not the text surface, so history keys stop here unless
       // the overlay forwards them. Undo usually reverts the resize or move just made.
       const history = historyShortcutOf(event);
@@ -359,7 +393,8 @@ export function ImageSelectionOverlay({
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
         event.stopPropagation();
-        editor.exec({ type: 'deleteImage' });
+        // The frame goes with the drawing: the caret it leaves keeps the keyboard, for undo.
+        if (editor.exec({ type: 'deleteImage' }).ok) editor.focus();
         return;
       }
       if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
@@ -418,8 +453,11 @@ export function ImageSelectionOverlay({
     [clearPreview, editor]
   );
 
+  // Keyed on the drag being active, not on each preview: every pointer move sets a new
+  // preview, and the handlers read the current one through `previewRef`.
+  const dragging = preview !== null;
   useEffect(() => {
-    if (!preview || !editor?.surface) return undefined;
+    if (!dragging || !editor?.surface) return undefined;
     const coordinates = editor.surface.overlayCoordinates();
     const onPointerMove = (event: PointerEvent) => {
       const current = previewRef.current;
@@ -532,7 +570,7 @@ export function ImageSelectionOverlay({
       win.removeEventListener('pointerup', finish);
       win.removeEventListener('pointercancel', finish);
     };
-  }, [clearPreview, commitSession, containerRef, editor, preview]);
+  }, [clearPreview, commitSession, containerRef, dragging, editor]);
 
   useEffect(() => {
     if (!target || focusRequestedForDrawingRef.current !== target.id) return;
@@ -563,8 +601,11 @@ export function ImageSelectionOverlay({
       width: sheetRect.width,
       height: sheetRect.height,
     };
+    // A turned shape's frame rings its unturned extent, turned; a drag preview keeps the turn.
+    const frame = overlayFrameCssBox(rect, target?.turn, coordinates.paintScale);
     const showHandles = active.canResize;
     const showMove = active.kind === 'anchored' && active.canMove;
+    const showInlineMove = active.kind === 'inline' && canMoveInlineImage(editor, active.id);
     // A text box frame says why it takes no caret or offers no handles.
     const frameReason = textboxFrameReason(active, editor.surface.editingMode());
     const frameLabel = frameReason ? t(frameReason) : undefined;
@@ -578,22 +619,37 @@ export function ImageSelectionOverlay({
       >
         <div
           className={`docx-image-selection-overlay__frame${
-            showMove ? ' docx-editor-one-surface__overlay-control' : ''
+            showMove || showInlineMove ? ' docx-editor-one-surface__overlay-control' : ''
           }`}
           data-textbox={active.textbox ? 'true' : undefined}
+          data-turned={frame.transform ? 'true' : undefined}
           // To pointer and screen reader users alike.
           title={frameLabel}
           aria-description={frameLabel}
           role="group"
-          aria-label={t('imageOverlay.selection')}
+          aria-label={t(active.shape ? 'imageOverlay.selectionShape' : 'imageOverlay.selection')}
           style={{
-            left: `${rect.left}px`,
-            top: `${rect.top}px`,
-            width: `${rect.width}px`,
-            height: `${rect.height}px`,
-            cursor: showMove ? 'move' : 'default',
+            left: `${frame.left}px`,
+            top: `${frame.top}px`,
+            width: `${frame.width}px`,
+            height: `${frame.height}px`,
+            transform: frame.transform,
+            cursor: showMove || showInlineMove ? 'move' : 'default',
+          }}
+          // A double press on a chart opens the Chart pane, as Edit chart does.
+          onDoubleClick={(event) => {
+            if (editor && openChartPaneFor(editor, active.id)) event.preventDefault();
           }}
           onPointerDown={(event) => {
+            // Over text in front of a drawing behind it, the text takes the press.
+            const passed = passDrawingFramePress(editor, event.nativeEvent);
+            if (passed !== 'frame') {
+              // The forwarded press ran the capture listener again; the frame's answer wins.
+              focusRequestedForDrawingRef.current = passed === 'text' ? null : passed.drawingNodeId;
+              return;
+            }
+            if (showInlineMove && beginInlineImageDrag(editor, event.nativeEvent, active.id))
+              return;
             guardToolbarMousedown(event);
             if (!showMove || !active.position) return;
             if (event.button !== 0) return;
@@ -646,7 +702,7 @@ export function ImageSelectionOverlay({
           : null}
       </div>
     );
-  }, [active, beginSession, editor, onOverlayKeyDown, origin.left, origin.top, t]);
+  }, [active, beginSession, editor, onOverlayKeyDown, origin.left, origin.top, t, target]);
 
   if (!rendered || !portalRef.current) return null;
   return createPortal(rendered, portalRef.current);

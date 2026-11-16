@@ -95,7 +95,7 @@ interface MarkdownReviewBinding {
 
 `fontResolution` lists requested families, resolved and substituted faces, coverage (`complete`, `partial`, or `none`), and nonfatal `originFailures`. Document-aware byte sessions return this report. Reusable sessions also expose it as `session.fontResolution`. It is `null` for detached layouts, custom measurers, ordinary Core sessions, and live views using shared shaping. Fatal failures throw `DocumentOpenError` or `ExportResourceError`.
 
-`pages` contains the page output from the editor's layout engine. Page numbers and IDs apply only to this export. Different fonts or Microsoft Word versions can produce different page breaks.
+`pages` contains the page output from the editor's layout engine. Page numbers and IDs apply only to this export. Different fonts or authoring applications can produce different page breaks.
 
 `pagination` records the layout source, export scope, Core revision, and tracked-change display mode.
 
@@ -315,7 +315,7 @@ Drawing warnings are grouped by category and page, including headers, footers, a
 - Nested tables use inline HTML (`<table>`, `<tr>`, `<td>`, and `<th>`). Cells retain inline Markdown.
 - Images affect layout. They are omitted by default; `images: true` includes supported images and returns their bytes.
 - Anchored text-box text is omitted because it has no unambiguous linear position; comments and tracked changes inside it remain available as page artifacts with exact text-box provenance.
-- Office Math uses the core semantic equation fallback.
+- OMML equations use the core semantic equation fallback.
 - A note continued without its reference is emitted as a labeled continuation block in page Markdown.
 
 ## See also

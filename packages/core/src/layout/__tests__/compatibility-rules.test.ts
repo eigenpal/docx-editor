@@ -34,6 +34,7 @@ const MODE_MATRIX = {
   keepNextGivesTailLines: 'modern',
   legacyPercentTableContentWidth: 'legacy',
   legacySharedGridLineSideRules: 'legacy',
+  legacySpacedFrameRuleCenters: 'legacy',
   modernBidiTableRuleShift: 'modern',
   modernGridLineSideRules: 'modern',
   noteTableCellKeeps: 'modern',
@@ -49,7 +50,10 @@ const MODE_MATRIX = {
   tallRowStaysWhole: 'legacy',
   tableParagraphWidowControl: 'modern',
   vMergeTextMovesPastHeadRow: 'modern',
+  wrappedAnchorsEndAtBottomMargin: 'modern',
+  wrappedAnchorsEndOnSheet: 'legacy',
   wrappedAnchorsStayBelowTopMargin: 'modern',
+  lineAnchorsBeforeBandPush: 'legacy',
 } as const satisfies Record<ModeRuleName, 'legacy' | 'modern'>;
 
 test('each mode rule applies in exactly its class', () => {

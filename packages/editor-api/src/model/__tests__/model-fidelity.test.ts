@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -106,11 +106,11 @@ describe('an edit made by script survives the serializer', () => {
       const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
-      paragraphs.items[1]!.insertText(' \u2014 revised', 'End');
+      paragraphs.items[paragraphs.items.length - 1]!.insertText(' \u2014 revised', 'End');
       paragraphs.items[0]!.split([' '], true);
-      // The last paragraph, which is the one after the table — not a cell's only paragraph, which
-      // the store refuses to remove (see `model-writes.test.ts`).
-      paragraphs.items[paragraphs.items.length - 1]!.delete();
+      // A body paragraph before the table. A cell's only paragraph and the paragraph that
+      // follows a table at the end of the body are refused (see `model-writes.test.ts`).
+      paragraphs.items[1]!.delete();
       await context.sync();
     });
 

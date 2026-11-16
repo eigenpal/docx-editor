@@ -26,7 +26,9 @@ import { METRIC_COMPATIBLE_FALLBACK_FAMILIES } from '../layout/canvas-measurer.t
 /** Measures a fixed sample under one CSS font shorthand; width in px. */
 export type FontProbeMeasure = (font: string) => number;
 
-const SAMPLE = 'The quick brown fox 0123 — {}#@';
+// The private-use tail is for symbol and icon faces with no Latin glyphs: a face that
+// draws only `U+F0xx` or `U+E7xx` glyphs changes the advance of those code points alone.
+const SAMPLE = 'The quick brown fox 0123 — {}#@\uF021\uF041\uF061\uF0A1\uF0E1\uE700\uE710';
 const GENERIC_BASELINES = ['monospace', 'serif'] as const;
 
 /**

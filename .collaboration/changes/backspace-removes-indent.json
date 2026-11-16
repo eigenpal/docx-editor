@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Backspace at the start of an indented paragraph joined it to the previous paragraph.",
+  "after": "The first Backspace writes the paragraph's own properties without the indent, as an ordinary paragraph property change; a later Backspace joins.",
+  "reason": "Indent removal is an existing setParagraphProperties write that replicas already apply and converge on; no new op or shared field.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-list-backspace.test.ts",
+    "packages/core/src/editor/__tests__/backspace-indent.test.ts"
+  ],
+  "changeset": "backspace-removes-indent",
+  "migration": null
+}

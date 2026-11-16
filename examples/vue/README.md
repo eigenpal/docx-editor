@@ -40,6 +40,6 @@ import '@docx-editor.dev/vue/styles.css';
 
 To open a real file, read it as an `ArrayBuffer` or `Uint8Array` and pass it as `:document`.
 
-Pass usable font bytes for Word-accurate measurement. Without them, fallback measurement does not guarantee Word-compatible layout. Use `packagedFonts()` for local substitutes. `googleFonts()` opts your application into CDN requests.
+Pass usable font bytes for accurate measurement. Without them, fallback measurement does not guarantee faithful DOCX layout. Use `packagedFonts()` for local substitutes. `googleFonts()` opts your application into CDN requests.
 
 For more information, see the [Vue adapter guide](https://www.docx-editor.dev/docs/2.x/vue).

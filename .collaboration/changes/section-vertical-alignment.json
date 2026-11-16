@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Section vertical alignment is read but page content stays top-aligned.",
+  "after": "Layout moves the body of a centered, bottom-aligned, or justified section on each page, and the editor entry exports the alignment type.",
+  "reason": "The change is layout geometry computed from the saved section properties and a type-only export. It writes nothing, so no shared field, operation, snapshot, or protocol message changes.",
+  "tests": [
+    "packages/core/src/layout/__tests__/section-vertical-align.test.ts",
+    "packages/pro/src/collaboration/__tests__/section-vertical-align-editors.test.ts"
+  ],
+  "changeset": "section-vertical-alignment",
+  "migration": null
+}

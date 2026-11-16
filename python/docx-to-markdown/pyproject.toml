@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "docx-to-markdown"
 dynamic = ["version"]
-description = "Convert DOCX to Markdown with Word-faithful pages, headers, footers, comments, and tracked changes."
+description = "Convert DOCX to Markdown with faithful pages, headers, footers, comments, and tracked changes."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]

@@ -10,8 +10,9 @@
 // ONE Latin family (`run-style.ts`: theme slot ?? `w:ascii` ?? `w:hAnsi`), resolved through
 // the cascade layout applies: direct run `w:rFonts`, the `w:rStyle` chain, the `w:pStyle`
 // chain, the enclosing table's `w:tblStyle` chain, then `w:docDefaults` — with the
-// `w:default="1"` style of each type standing in where the reference is absent
-// (`style-cascade.ts` resolves absent `pStyle`/`rStyle`/`tblStyle` the same way).
+// `w:default="1"` paragraph and table styles standing in where the reference is absent.
+// The default character style contributes nothing, named or reached through `basedOn`
+// (`style-cascade.ts` resolves the same way).
 //
 // Each glyph-bearing run resolves on its own, in the order layout applies: the run's own
 // `w:rFonts`, its `w:rStyle` chain, its paragraph's `w:pStyle` chain, its table's
@@ -35,6 +36,7 @@
 import { isEastAsianCodePoint } from './east-asian-code-points.ts';
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import { runIsDirectlyHidden } from './run-hidden.ts';
 import type { DocumentThemeFonts } from './theme-font-scheme.ts';
 import {
   eastAsiaFamilyFromRFonts,
@@ -241,9 +243,12 @@ function symbolOverridesRunFace(sym: OoxmlElement): boolean {
 /**
  * Whether a `w:r` puts a glyph on the page IN ITS OWN FACE: a non-empty `w:t`, a
  * `w:delText` (tracked deletions render in markup view — over-reporting in final view,
- * never hiding), a glyph mark element, or a `w:sym` that names no face of its own.
+ * never hiding), a glyph mark element, or a `w:sym` that names no face of its own. A run
+ * with direct `w:vanish` puts nothing on the page; one hidden through a style still counts,
+ * and so does a run nested in a hidden run's text box (over-reported, never hidden).
  */
 function runRendersGlyphs(run: OoxmlElement, projectedGlyphIds?: ReadonlySet<string>): boolean {
+  if (runIsDirectlyHidden(run)) return false;
   if (projectedGlyphIds?.has(run.id)) return true;
   for (const child of run.children as readonly OoxmlNode[]) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
@@ -561,6 +566,8 @@ interface StyleIndex {
   readonly defaultTable: string | null;
   /** The chain a style reference resolves through. Cycle-safe, capped at {@link CHAIN_CAP}. */
   chain(styleId: string | null): StyleChain;
+  /** A `w:rStyle` chain: {@link chain} without the default character style's own entry. */
+  characterChain(styleId: string | null): StyleChain;
 }
 
 const EMPTY_STYLE_INDEX: StyleIndex = {
@@ -575,6 +582,7 @@ const EMPTY_STYLE_INDEX: StyleIndex = {
   defaultCharacter: null,
   defaultTable: null,
   chain: () => EMPTY_CHAIN,
+  characterChain: () => EMPTY_CHAIN,
 };
 
 interface StyleIndexMemo {
@@ -688,9 +696,14 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
   }
 
   const chainMemo = new Map<string, StyleChain>();
-  const chain = (styleId: string | null): StyleChain => {
+  const characterChainMemo = new Map<string, StyleChain>();
+  const walk = (
+    styleId: string | null,
+    memo: Map<string, StyleChain>,
+    skip: string | null
+  ): StyleChain => {
     if (styleId === null) return EMPTY_CHAIN;
-    const cached = chainMemo.get(styleId);
+    const cached = memo.get(styleId);
     if (cached) return cached;
     let latin: string | null = null;
     let eastAsia: string | null = null;
@@ -704,6 +717,10 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
       seen.add(at);
       const entry = entries.get(at);
       if (!entry) break;
+      if (at === skip) {
+        at = entry.basedOn;
+        continue;
+      }
       latin ??= entry.family;
       eastAsia ??= entry.eastAsiaFamily;
       hAnsi ??= entry.hAnsiFamily;
@@ -713,9 +730,12 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
       at = entry.basedOn;
     }
     const resolved = { latin, eastAsia, hAnsi, hint, conditional, conditionalEastAsia };
-    chainMemo.set(styleId, resolved);
+    memo.set(styleId, resolved);
     return resolved;
   };
+  const chain = (styleId: string | null): StyleChain => walk(styleId, chainMemo, null);
+  const characterChain = (styleId: string | null): StyleChain =>
+    walk(styleId, characterChainMemo, defaultCharacter);
 
   return {
     docDefaultLatin: docDefaultFamily,
@@ -729,6 +749,7 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
     defaultCharacter,
     defaultTable,
     chain,
+    characterChain,
   };
 }
 
@@ -793,7 +814,7 @@ function addBroadFamilies(
   inherited: Map<string, string>
 ): void {
   const chains = [
-    index.chain(profile.runStyle ?? index.defaultCharacter),
+    index.characterChain(profile.runStyle ?? null),
     index.chain(profile.paragraphStyle ?? index.defaultParagraph),
     profile.tableStyle === false || profile.tableStyle === undefined
       ? EMPTY_CHAIN
@@ -831,7 +852,7 @@ function resolveProfile(
   direct: Map<string, string>,
   inherited: Map<string, string>
 ): void {
-  const runChain = index.chain(profile.runStyle ?? index.defaultCharacter);
+  const runChain = index.characterChain(profile.runStyle ?? null);
   const paragraphChain = index.chain(profile.paragraphStyle ?? index.defaultParagraph);
   const tableChain =
     profile.tableStyle === false || profile.tableStyle === undefined

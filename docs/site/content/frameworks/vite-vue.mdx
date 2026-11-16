@@ -1,11 +1,9 @@
 ---
 title: 'Vite with Vue'
-description: 'Set up a Vue 3 DOCX editor with Vite. Add the stylesheet, open a file, and save the edited document.'
+description: 'Set up a client-rendered Vue 3 DOCX editor with Vite.'
 category: 'Frameworks'
 seoTitle: 'Vite Vue DOCX editor setup'
 ---
-
-Vite runs this Vue app in the browser. You do not need a server-side rendering (SSR) boundary.
 
 ## Install
 
@@ -13,9 +11,9 @@ Vite runs this Vue app in the browser. You do not need a server-side rendering (
 npm install @docx-editor.dev/vue @docx-editor.dev/core
 ```
 
-## Add the editor
+## Mount the editor
 
-Import the editor stylesheet in `src/main.ts`.
+Vite renders on the client, so you do not need a server-rendering boundary. Import the stylesheet in the entry and mount the app:
 
 ```ts
 // src/main.ts
@@ -26,94 +24,39 @@ import App from './App.vue';
 createApp(App).mount('#app');
 ```
 
-Add the open, edit, and save flow to `src/App.vue`.
+Render the editor in a container with a height:
 
 ```vue
+<!-- src/App.vue -->
 <script setup lang="ts">
-import { ref } from 'vue';
-import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
-
-const editorRef = ref<DocxEditorRef | null>(null);
-const documentBytes = ref<ArrayBuffer>();
-const fileName = ref('document.docx');
-
-async function openDocument(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  if (!file) return;
-
-  documentBytes.value = await file.arrayBuffer();
-  fileName.value = file.name;
-}
-
-async function saveDocument() {
-  const bytes = await editorRef.value?.save();
-  if (!bytes) return;
-
-  const type = ['application/vnd.openxmlformats-officedocument', 'wordprocessingml.document'].join(
-    '.'
-  );
-  const url = URL.createObjectURL(new Blob([bytes], { type }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName.value;
-  link.click();
-  URL.revokeObjectURL(url);
-}
+import { DocxEditor } from '@docx-editor.dev/vue';
 </script>
 
 <template>
-  <div class="app">
-    <div class="actions">
-      <label>
-        Open DOCX
-        <input type="file" accept=".docx" @change="openDocument" />
-      </label>
-      <button type="button" @click="saveDocument">Save DOCX</button>
-    </div>
-    <div class="editor-host">
-      <DocxEditor ref="editorRef" :document="documentBytes ?? 'blank'" />
-    </div>
+  <div style="height: 100vh">
+    <DocxEditor document="blank" />
   </div>
 </template>
-
-<style>
-.app {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
-
-.actions {
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.5rem;
-}
-
-.editor-host {
-  flex: 1;
-  min-height: 0;
-}
-</style>
 ```
 
-The stylesheet includes the editor chrome and document surface. The editor fills its parent, so `.editor-host` needs a measured height.
+To open and download files, use the Vue component from the [quickstart](/docs/2.x/quickstart).
 
-## Run the repository example
+## Limits
 
-The repository example aliases workspace package source. You do not need to build the packages first.
+- Mount the app on the element from your `index.html`. The standard Vite Vue template uses `#app`.
+- This setup assumes a client-rendered Vite app. For Nuxt, see [Nuxt](/docs/2.x/frameworks/nuxt).
+- The editor fills its parent, so the parent needs a measured height.
+
+## Run the example
+
+The [`examples/vue`](https://github.com/eigenpal/docx-editor/tree/main/examples/vue) starter aliases package source, so it needs no package build. After you clone the repository and run `bun install`, run:
 
 ```bash
-git clone https://github.com/eigenpal/docx-editor.git
-cd docx-editor
-bun install
-bun run dev:vue
+bun run dev:vue   # http://localhost:5174
 ```
-
-Open `http://localhost:5174`.
 
 ## Next steps
 
-- [Loading and saving](/docs/2.x/guides/loading-and-saving)
-- [Vue composition](/docs/2.x/vue/composition)
-- [Vue example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/vue)
+- [Quickstart](/docs/2.x/quickstart): Load, edit, and save a document.
+- [Vue composition](/docs/2.x/vue/composition): Arrange editor parts.
+- [Loading and saving](/docs/2.x/guides/loading-and-saving): URLs, autosave, and uploads.

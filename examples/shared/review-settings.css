@@ -1,106 +1,19 @@
-/* The review settings panel (ReviewSettings.tsx): a gear in the header and the panel it
-   opens. Tokens only, so the panel follows the light and dark editor themes. */
-
-.demo-settings {
-  position: relative;
-  display: inline-flex;
-}
-
-.demo-settings__trigger[aria-expanded='true'] {
-  background: var(--doc-surface) !important;
-  box-shadow: 0 0 0 2px var(--doc-focus-ring);
-}
-
-.demo-settings__panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  /* Under the gear, opening toward the page: leftward, or rightward in a right-to-left
-     interface, where the gear sits at the left. */
-  inset-inline-end: 0;
-  z-index: var(--doc-z-overlay, 50);
-  width: 360px;
-  max-height: calc(100vh - 96px);
-  overflow: auto;
-  border: 1px solid var(--doc-border);
-  border-radius: 14px;
-  background: var(--doc-surface);
-  box-shadow:
-    0 1px 2px var(--doc-shadow-subtle),
-    0 18px 48px -12px var(--doc-shadow);
-  color: var(--doc-text);
-  font-size: 13px;
-  text-align: left;
-  animation: demo-settings-in 140ms ease-out;
-}
-
-@keyframes demo-settings-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .demo-settings__panel {
-    animation: none;
-  }
-}
-
-.demo-settings__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 16px 12px;
-  border-bottom: 1px solid var(--doc-border-light);
-}
-
-.demo-settings__header h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-.demo-settings__header p {
-  margin: 3px 0 0;
-  color: var(--doc-text-muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.demo-settings__close {
-  display: grid;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--doc-text-muted);
-  cursor: pointer;
-}
-
-.demo-settings__close:hover {
-  background: var(--doc-bg-hover);
-  color: var(--doc-text);
-}
-
-.demo-settings__close:focus-visible,
-.demo-settings__reset:focus-visible {
-  outline: 2px solid var(--doc-primary);
-  outline-offset: 2px;
-}
+/* The Settings tab of the demo side panel (ReviewSettings.tsx and ReviewSettings.vue): sections
+   with small uppercase titles, segmented choices, and a plain select. The colors come from the
+   demo tokens in demo-shell.css, so the tab follows the light and dark themes. */
 
 .demo-settings__body {
-  display: grid;
-  gap: 16px;
-  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin: 0;
+  padding: 0;
 }
 
 .demo-settings__group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -109,48 +22,44 @@
 
 .demo-settings__group legend,
 .demo-settings__label {
-  display: block;
-}
-
-.demo-settings__group legend,
-.demo-settings__label {
-  margin: 0 0 7px;
+  /* A legend takes no flex gap, so it keeps its own space under it. */
+  margin: 0 0 8px;
   padding: 0;
-  color: var(--doc-text-muted);
-  font-size: 11px;
-  font-weight: 600;
+  color: var(--demo-ink-3);
+  font: 600 11px/1.2 var(--demo-sans);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-/* The interface language: a native select, as wide as the segmented controls below it. */
+.demo-settings__label {
+  margin: 0;
+}
+
 .demo-settings__select {
   width: 100%;
-  min-height: 36px;
-  padding: 6px 10px;
-  border: 1px solid var(--doc-border);
-  border-radius: 10px;
-  background: var(--doc-bg-subtle);
-  color: var(--doc-text);
-  font: inherit;
-  font-size: 14px;
+  height: 34px;
+  padding: 0 10px;
+  color: var(--demo-ink);
+  font: 13px var(--demo-sans);
+  background: var(--demo-surface);
+  border: 1px solid var(--demo-line);
+  border-radius: var(--demo-r);
 }
 
 .demo-settings__select:focus-visible {
-  outline: 2px solid var(--doc-focus-ring);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--demo-line-2);
+  box-shadow: 0 0 0 3px var(--demo-focus);
 }
 
-/* A segmented control over native radios: arrow keys move between options, and the
-   checked option shows as a raised segment. */
+/* A segmented control: the radios stay native, so they keep their names and keys. */
 .demo-settings__segments {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 2px;
   padding: 3px;
-  border: 1px solid var(--doc-border);
-  border-radius: 10px;
-  background: var(--doc-bg-subtle);
+  background: var(--demo-hover);
+  border-radius: var(--demo-r);
 }
 
 .demo-settings__segments[data-count='3'] {
@@ -166,112 +75,206 @@
 .demo-settings__segment input {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   margin: 0;
   opacity: 0;
   cursor: pointer;
 }
 
+.demo-settings__segment input:disabled {
+  cursor: default;
+}
+
 .demo-settings__segment > span {
-  display: flex;
+  display: inline-flex;
   flex: 1;
-  min-width: 0;
-  min-height: 30px;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-height: 30px;
   padding: 4px 8px;
-  border-radius: 7px;
-  color: var(--doc-text-muted);
+  color: var(--demo-ink-3);
+  font-size: 13px;
   font-weight: 500;
-  line-height: 1.2;
+  line-height: 1.25;
   text-align: center;
-  pointer-events: none;
+  border-radius: var(--demo-r-sm);
   transition:
-    background 0.15s,
-    color 0.15s,
-    box-shadow 0.15s;
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
 }
 
-.demo-settings__segment input:hover + span {
-  color: var(--doc-text);
+@media (hover: hover) and (pointer: fine) {
+  .demo-settings__segment input:hover:not(:checked):not(:disabled) + span {
+    color: var(--demo-ink);
+  }
 }
 
 .demo-settings__segment input:checked + span {
-  background: var(--doc-surface);
-  box-shadow:
-    0 0 0 1px var(--doc-border),
-    0 1px 2px var(--doc-shadow-subtle);
-  color: var(--doc-text);
+  color: var(--demo-ink);
+  background: var(--demo-raised);
+  box-shadow: var(--demo-shadow-1);
+}
+
+.demo-app.dark .demo-settings__segment input:checked + span {
+  background: var(--demo-press);
+  box-shadow: none;
 }
 
 .demo-settings__segment input:focus-visible + span {
-  outline: 2px solid var(--doc-primary);
+  outline: 2px solid var(--demo-focus);
   outline-offset: 1px;
 }
 
-/* A miniature of the initials marker, beside its option. */
+.demo-settings__segment input:disabled + span {
+  opacity: 0.5;
+}
+
+.demo-settings__segment svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+/* The comment marker previews, in the colors the page uses. */
 .demo-settings__badge {
   display: inline-grid;
   flex: none;
-  width: 18px;
-  height: 18px;
   place-items: center;
-  border-radius: 9px 9px 9px 2px;
-  background: var(--doc-review-author-0);
-  color: var(--doc-review-avatar-ink);
-  font-size: 7.5px;
-  font-weight: 700;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 4px;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 650;
   letter-spacing: 0.02em;
+  background: var(--demo-accent);
+  border-radius: 9px 9px 9px 3px;
 }
 
 .demo-settings__help {
-  margin: 6px 2px 0;
-  color: var(--doc-text-muted);
+  margin: 0;
+  color: var(--demo-ink-3);
   font-size: 12px;
   line-height: 1.45;
 }
 
-.demo-settings__footer {
+/* A switch row: the label and its help on the left, the native check box on the right. */
+.demo-settings__switch {
   display: flex;
-  justify-content: flex-end;
-  padding: 10px 16px 14px;
-  border-top: 1px solid var(--doc-border-light);
-}
-
-.demo-settings__reset {
-  padding: 5px 10px;
-  border: 1px solid var(--doc-border);
-  border-radius: 6px;
-  background: var(--doc-bg-subtle);
-  color: var(--doc-text);
-  font: inherit;
-  font-size: 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  padding: 8px 12px;
+  color: var(--demo-ink);
+  font-size: 13px;
   font-weight: 500;
+  background: var(--demo-surface-2);
+  border-radius: var(--demo-r-lg);
+  box-shadow: inset 0 0 0 1px var(--demo-line);
   cursor: pointer;
 }
 
-.demo-settings__reset:hover {
-  background: var(--doc-bg-hover);
+/* The check box draws as a toggle: a track with a knob that slides to the end when on. */
+.demo-settings__switch input {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 18px;
+  margin: 0;
+  appearance: none;
+  background: var(--demo-ink-4);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 160ms ease;
 }
 
-/* A phone: the panel spans the window under the header, with a 16px gutter. */
-@media (max-width: 560px) {
-  .demo-settings {
-    position: static;
-  }
+.demo-settings__switch input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: var(--demo-raised);
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+  transition: transform 200ms var(--demo-ease-out);
+}
 
-  .demo-settings__panel {
-    position: fixed;
-    top: 56px;
-    right: 16px;
-    left: 16px;
-    width: auto;
-    max-height: calc(100vh - 72px);
+.demo-settings__switch input:checked {
+  background: var(--demo-primary);
+}
+
+.demo-settings__switch input:checked::after {
+  background: var(--demo-primary-ink);
+  transform: translateX(12px);
+}
+
+.demo-settings__switch input:focus-visible {
+  outline: 2px solid var(--demo-focus);
+  outline-offset: 2px;
+}
+
+[dir='rtl'] .demo-settings__switch input:checked::after {
+  transform: translateX(-12px);
+}
+
+[dir='rtl'] .demo-settings__switch input::after {
+  left: auto;
+  right: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-settings__switch input,
+  .demo-settings__switch input::after {
+    transition: none;
   }
 }
 
-/* The demo's own text is English. In a right-to-left interface each line keeps its own
-   direction, so its punctuation stays at its end. */
-.demo-settings__panel :is(h2, p, legend, .demo-settings__label) {
-  unicode-bidi: plaintext;
+.demo-settings__reset {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  color: var(--demo-ink-2);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  background: var(--demo-surface);
+  border: 1px solid var(--demo-line);
+  border-radius: var(--demo-r);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease,
+    transform 160ms var(--demo-ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .demo-settings__reset:hover:not(:disabled) {
+    color: var(--demo-ink);
+    background: var(--demo-surface-2);
+    border-color: var(--demo-line-2);
+  }
+}
+
+.demo-settings__reset:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.demo-settings__reset:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-settings__reset:active:not(:disabled) {
+    transform: none;
+  }
 }

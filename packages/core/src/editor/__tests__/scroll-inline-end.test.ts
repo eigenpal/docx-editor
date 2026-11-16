@@ -2,10 +2,11 @@ import { expect, test } from 'bun:test';
 import { keepScrollAtInlineEnd } from '../scroll-inline-end.ts';
 
 /** A scroller with a settable content width and its own window, without a DOM. */
-function fakeScroller() {
+function fakeScroller(direction: 'ltr' | 'rtl' = 'ltr') {
   const listeners = new Map<string, () => void>();
   const resizeCallbacks: Array<() => void> = [];
   const view = {
+    getComputedStyle: () => ({ direction }),
     ResizeObserver: class {
       constructor(callback: () => void) {
         resizeCallbacks.push(callback);
@@ -67,5 +68,16 @@ test('its own scroll, reported after the content grew again, does not unpin it',
   listeners.get('scroll')?.();
   grow(1700);
   expect(scroller.scrollLeft).toBe(700);
+  stop();
+});
+
+test('a right-to-left scroller keeps its right end by itself, so nothing is pinned', () => {
+  const { scroller, grow, listeners } = fakeScroller('rtl');
+  const stop = keepScrollAtInlineEnd(scroller as unknown as HTMLElement);
+  // Its `scrollLeft` is 0 at the right end; a left-to-right write would move it away.
+  expect(scroller.scrollLeft).toBe(0);
+  grow(1620);
+  expect(scroller.scrollLeft).toBe(0);
+  expect(listeners.size).toBe(0);
   stop();
 });

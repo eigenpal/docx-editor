@@ -1,5 +1,9 @@
 import { DocxEditorRevisionMarkupDialog } from './DocxEditorRevisionMarkupDialog';
-import type { RevisionMarkupDialogSession } from '@docx-editor.dev/core/editor';
+import { DocxEditorCompareDocumentsDialog } from './DocxEditorCompareDocumentsDialog';
+import type {
+  CompareDocumentsDialogSession,
+  RevisionMarkupDialogSession,
+} from '@docx-editor.dev/core/editor';
 import { renderPopup } from './popup-renderer';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -40,6 +44,9 @@ export function DialogProvider({
   const [markupSession, setMarkupSession] = useState<RevisionMarkupDialogSession | null>(null);
   const markupSessionRef = useRef(markupSession);
   markupSessionRef.current = markupSession;
+  const [compareSession, setCompareSession] = useState<CompareDocumentsDialogSession | null>(null);
+  const compareSessionRef = useRef(compareSession);
+  compareSessionRef.current = compareSession;
   const popupsRef = useRef(popups);
   popupsRef.current = popups;
   const opener = useRef<HTMLElement | null>(null);
@@ -62,6 +69,7 @@ export function DialogProvider({
             return;
           }
           markupSessionRef.current?.cancel();
+          compareSessionRef.current?.cancel();
           setActive(null);
           setSession(request);
           request.signal.addEventListener(
@@ -84,6 +92,7 @@ export function DialogProvider({
             return;
           }
           sessionRef.current?.cancel();
+          compareSessionRef.current?.cancel();
           setActive(null);
           setMarkupSession(request);
           request.signal.addEventListener(
@@ -101,9 +110,37 @@ export function DialogProvider({
     };
   }, [editor, container, popups?.revisionMarkup === false]);
   useEffect(() => {
+    if (!editor || (!container && popups?.compareDocuments !== false)) return;
+    const unregister = editor.setCompareDocumentsChrome(
+      {
+        onRequest(request) {
+          if (popupsRef.current?.compareDocuments === false) {
+            request.cancel();
+            return;
+          }
+          sessionRef.current?.cancel();
+          markupSessionRef.current?.cancel();
+          setActive(null);
+          setCompareSession(request);
+          request.signal.addEventListener(
+            'abort',
+            () => setCompareSession((previous) => (previous === request ? null : previous)),
+            { once: true }
+          );
+        },
+      },
+      { fallback: true }
+    );
+    return () => {
+      compareSessionRef.current?.cancel();
+      unregister();
+    };
+  }, [editor, container, popups?.compareDocuments === false]);
+  useEffect(() => {
     setActive(null);
     setSession(null);
     setMarkupSession(null);
+    setCompareSession(null);
   }, [editor, generation]);
   // The `bookmark` popup answers the editor's `openBookmarkDialog` request, which the Insert
   // menu row, Ctrl/Cmd+Shift+F5 and host code all send. A `false` popup registers nothing, so
@@ -115,6 +152,7 @@ export function DialogProvider({
       onRequest() {
         sessionRef.current?.cancel();
         markupSessionRef.current?.cancel();
+        compareSessionRef.current?.cancel();
         opener.current = returnFocusTarget(container.ownerDocument.activeElement);
         setActive('bookmark');
       },
@@ -122,6 +160,7 @@ export function DialogProvider({
   }, [editor, container, bookmarkDisabled]);
   useEffect(() => {
     if (popups?.revisionMarkup === false) markupSessionRef.current?.cancel();
+    if (popups?.compareDocuments === false) compareSessionRef.current?.cancel();
     if (popups?.textFormField === false) sessionRef.current?.cancel();
     if (active && popups?.[active] === false) setActive(null);
   }, [popups, active]);
@@ -133,6 +172,7 @@ export function DialogProvider({
       open(kind, returnFocusTo) {
         sessionRef.current?.cancel();
         markupSessionRef.current?.cancel();
+        compareSessionRef.current?.cancel();
         if (popupsRef.current?.[kind] === false) return;
         opener.current =
           returnFocusTo ?? (container?.ownerDocument.activeElement as HTMLElement | null);
@@ -178,6 +218,12 @@ export function DialogProvider({
         renderPopup(popups.revisionMarkup, { session: markupSession }, markupSession)
       ) : (
         <DocxEditorRevisionMarkupDialog session={markupSession} />
+      )
+    ) : compareSession && popups?.compareDocuments !== false ? (
+      popups?.compareDocuments ? (
+        renderPopup(popups.compareDocuments, { session: compareSession }, compareSession)
+      ) : (
+        <DocxEditorCompareDocumentsDialog session={compareSession} />
       )
     ) : session && popups?.textFormField !== false ? (
       popups?.textFormField ? (

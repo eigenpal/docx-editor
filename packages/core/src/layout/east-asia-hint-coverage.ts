@@ -65,7 +65,7 @@ function uncoveredRanges(
 ): { from: number; to: number }[] {
   const style = styleForFontSlot(piece.style, 'eastAsia');
   const ranges: { from: number; to: number }[] = [];
-  for (let from = 0; from < piece.text.length; ) {
+  for (let from = 0; from < piece.text.length;) {
     const codePoint = piece.text.codePointAt(from)!;
     const to = from + (codePoint > 0xffff ? 2 : 1);
     const character = piece.text.slice(from, to);

@@ -1,6 +1,6 @@
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { isHTMLElementNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
-import { renderPopup } from './popup-renderer';
+import { renderPopup, sessionKey } from './popup-renderer';
 import { useEditorState } from './useEditorState';
 import {
   defineComponent,
@@ -16,6 +16,7 @@ import {
 } from 'vue';
 import type { DocxEditorPopups } from './popup-config';
 import type {
+  CompareDocumentsDialogSession,
   TextFormFieldDialogSession,
   RevisionMarkupDialogSession,
 } from '@docx-editor.dev/core/editor';
@@ -27,6 +28,7 @@ import { DocxEditorBookmarkDialog } from './DocxEditorBookmark';
 import { DocxEditorSplitCellDialog } from './DocxEditorSplitCell';
 import { DocxEditorTextFormFieldDialog } from './DocxEditorTextFormFieldDialog';
 import { DocxEditorRevisionMarkupDialog } from './DocxEditorRevisionMarkupDialog';
+import { DocxEditorCompareDocumentsDialog } from './DocxEditorCompareDocumentsDialog';
 type DialogKind = 'pageSetup' | 'paragraph' | 'watermark' | 'bookmark' | 'splitCell';
 const key: InjectionKey<ReturnType<typeof createHost>> = Symbol('docx.dialogs');
 function createHost(config: () => DocxEditorPopups | undefined) {
@@ -34,6 +36,7 @@ function createHost(config: () => DocxEditorPopups | undefined) {
   const active = shallowRef<DialogKind | null>(null);
   const session = shallowRef<TextFormFieldDialogSession | null>(null);
   const revisionSession = shallowRef<RevisionMarkupDialogSession | null>(null);
+  const compareSession = shallowRef<CompareDocumentsDialogSession | null>(null);
   let opener: HTMLElement | null = null;
   const close = () => {
     active.value = null;
@@ -41,11 +44,13 @@ function createHost(config: () => DocxEditorPopups | undefined) {
     session.value = null;
     revisionSession.value?.cancel();
     revisionSession.value = null;
+    compareSession.value?.cancel();
+    compareSession.value = null;
     const returnFocusTo = opener;
     opener = null;
     void nextTick(() => {
-      if (!active.value && !session.value && !revisionSession.value && returnFocusTo?.isConnected)
-        returnFocusTo.focus({ preventScroll: true });
+      const open = active.value || session.value || revisionSession.value || compareSession.value;
+      if (!open && returnFocusTo?.isConnected) returnFocusTo.focus({ preventScroll: true });
     });
   };
   const open = (kind: DialogKind, focus?: HTMLElement | null) => {
@@ -62,6 +67,7 @@ function createHost(config: () => DocxEditorPopups | undefined) {
     active,
     session,
     revisionSession,
+    compareSession,
     open,
     close,
     get ownsPageSetup() {
@@ -82,7 +88,8 @@ export const DialogHost = defineComponent({
         if (
           (host.active.value && config?.[host.active.value] === false) ||
           (host.session.value && config?.textFormField === false) ||
-          (host.revisionSession.value && config?.revisionMarkup === false)
+          (host.revisionSession.value && config?.revisionMarkup === false) ||
+          (host.compareSession.value && config?.compareDocuments === false)
         )
           host.close();
       },
@@ -182,6 +189,38 @@ export const DialogHost = defineComponent({
       },
       { immediate: true }
     );
+    watch(
+      [editor, host.target, () => p.popups?.compareDocuments === false],
+      ([value, target, disabled], _old, onCleanup) => {
+        if (!value || (!target && !disabled)) return;
+        const disposeCompare = value.setCompareDocumentsChrome(
+          {
+            onRequest: (session) => {
+              host.close();
+              if (p.popups?.compareDocuments === false) {
+                session.cancel();
+                return;
+              }
+              host.compareSession.value = session;
+              session.signal.addEventListener(
+                'abort',
+                () => {
+                  if (host.compareSession.value === session) host.compareSession.value = null;
+                },
+                { once: true }
+              );
+            },
+          },
+          { fallback: true }
+        );
+        onCleanup(() => {
+          disposeCompare();
+          host.compareSession.value?.cancel();
+          host.compareSession.value = null;
+        });
+      },
+      { immediate: true }
+    );
     return () => [
       slots.default?.(),
       host.target.value
@@ -218,7 +257,22 @@ export const DialogHost = defineComponent({
                     { session: host.revisionSession.value },
                     host.revisionSession.value
                   )
-                : h(DocxEditorRevisionMarkupDialog, { session: host.revisionSession.value })
+                : h(DocxEditorRevisionMarkupDialog, {
+                    session: host.revisionSession.value,
+                    key: sessionKey(host.revisionSession.value),
+                  })
+              : null,
+            host.compareSession.value && p.popups?.compareDocuments !== false
+              ? p.popups?.compareDocuments
+                ? renderPopup(
+                    p.popups.compareDocuments,
+                    { session: host.compareSession.value },
+                    host.compareSession.value
+                  )
+                : h(DocxEditorCompareDocumentsDialog, {
+                    session: host.compareSession.value,
+                    key: sessionKey(host.compareSession.value),
+                  })
               : null,
             host.session.value && p.popups?.textFormField !== false
               ? p.popups?.textFormField
@@ -227,7 +281,10 @@ export const DialogHost = defineComponent({
                     { session: host.session.value },
                     host.session.value
                   )
-                : h(DocxEditorTextFormFieldDialog, { session: host.session.value })
+                : h(DocxEditorTextFormFieldDialog, {
+                    session: host.session.value,
+                    key: sessionKey(host.session.value),
+                  })
               : null,
           ])
         : null,

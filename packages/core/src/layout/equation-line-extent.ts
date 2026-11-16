@@ -63,6 +63,17 @@ function collectClaimants(
       open(node.subscript, depth + scriptLevels(node.subscript));
       open(node.superscript, depth + scriptLevels(node.superscript));
       return;
+    case 'delimiter':
+      // The arguments claim like any other part, and each character claims as text.
+      for (const item of node.items) open(item, depth);
+      for (const fence of node.fences) open(fence, depth);
+      return;
+    case 'borderBox':
+      // The body claims like any other part; the box adds a claim for its own rules.
+      open(node.body, depth);
+      if (node.rules.length > 0)
+        claimants.push({ node, offset: top + node.baseline - baseline, depth });
+      return;
     case 'fraction':
       if (display) break;
       open(node.numerator, depth);
@@ -123,6 +134,25 @@ function withExtent(node: EquationGeometry, baseline: number, height: number): E
       });
     case 'bar':
       return Object.freeze({ ...node, ...extent, body: move(node.body), bar: rule(node.bar) });
+    case 'delimiter':
+      return Object.freeze({
+        ...node,
+        ...extent,
+        fences: Object.freeze(node.fences.map(move)),
+        items: Object.freeze(node.items.map(move)),
+      });
+    case 'borderBox':
+      return Object.freeze({
+        ...node,
+        ...extent,
+        body: move(node.body),
+        rules: Object.freeze(node.rules.map(rule)),
+        diagonals: Object.freeze(
+          node.diagonals.map((line) =>
+            Object.freeze({ ...line, y1: line.y1 + dy, y2: line.y2 + dy })
+          )
+        ),
+      });
     case 'radical':
       return Object.freeze({
         ...node,
@@ -178,7 +208,7 @@ export function fitEquationLineExtent(
   const first = claimants[0];
   if (!first) return root;
   // A first text atom is the band itself, on the baseline.
-  const opensWithText = first.node.kind === 'text' && first.offset === 0;
+  const opensWithText = first.node.kind === 'text' && first.offset === 0 && !first.node.stretch;
   let ascent = band.baseline;
   let descent = band.height - band.baseline;
   for (const [index, { node, offset, depth, boxOnly }] of claimants.entries()) {
@@ -206,6 +236,23 @@ export function fitEquationLineExtent(
         nodeAscent = Math.min(nodeAscent, ink.ascent + leading);
         nodeDescent = Math.min(nodeDescent, ink.descent);
       }
+    }
+    // A grown delimiter character claims its scaled ink, with the math leading above it.
+    if (node.kind === 'text' && node.stretch) {
+      const ink = equationInk(node, measurer);
+      nodeAscent = ink.ascent + MATH_LEADING * Math.min(leadingSizePt, node.fontSizePt);
+      nodeDescent = ink.descent;
+    }
+    // A border box claims the extent of its rules, with the math leading above them.
+    if (node.kind === 'borderBox') {
+      let ruleTop = Number.POSITIVE_INFINITY;
+      let ruleBottom = Number.NEGATIVE_INFINITY;
+      for (const rule of node.rules) {
+        ruleTop = Math.min(ruleTop, rule.y);
+        ruleBottom = Math.max(ruleBottom, rule.y + rule.height);
+      }
+      nodeAscent = node.baseline - ruleTop + MATH_LEADING * leadingSizePt;
+      nodeDescent = ruleBottom - node.baseline;
     }
     ascent = Math.max(ascent, nodeAscent - offset);
     descent = Math.max(descent, nodeDescent + offset);

@@ -522,9 +522,10 @@ function randomAtomParagraph(rand: Rand): AtomParagraph {
       fieldRanges.push([text.length, text.length + result.length]);
       text += result;
     } else if (kind === 'page') {
+      // The saved `7` never paints: a body PAGE shows the page it lands on, here the first.
       xml += `<w:fldSimple w:instr="PAGE">${runXml('7')}</w:fldSimple>`;
       fieldRanges.push([text.length, text.length + 1]);
-      text += '7';
+      text += '1';
     } else if (kind === 'picture') {
       xml += PICTURE;
       atomEdges.add(text.length);

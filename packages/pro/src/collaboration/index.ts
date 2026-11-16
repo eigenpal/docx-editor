@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -55,6 +55,11 @@ export {
   readCollaborationResourceUsage,
   type CollaborationResourceUsage,
 } from './resource-usage.ts';
+export type {
+  CollaborationResourceLimit,
+  CollaborationResourcePressure,
+  CollaborationResourcePressureOptions,
+} from './resource-pressure.ts';
 export { CollaborationSchemaError } from './errors.ts';
 export {
   CollaborationUndoGroupError,

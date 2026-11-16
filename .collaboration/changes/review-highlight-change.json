@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A tracked w:highlight change had no entry in ReviewRevisionItem.formattingChanges, so its review card described it only as a formatting change.",
+  "after": "The review read reports a tracked w:highlight change as the highlight property with the w:highlight color name, and the card label describes it.",
+  "reason": "The change extends a derived review read over OOXML that the document already holds. It adds no stored field, operation, or journal primitive, and it does not change how any shared node, identity, or update is represented or interpreted. Released participants read the same collaborative state; only the description of an existing tracked change gains one property.",
+  "tests": ["packages/pro/src/__tests__/paragraph-break-word-parity.test.ts"],
+  "changeset": "review-highlight-change",
+  "migration": null
+}

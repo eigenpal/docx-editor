@@ -17,7 +17,7 @@ import {
 import { validateRasterHeader, type ImageDecodePort } from '../../store/package/image-resources.ts';
 import { chartexDocx, waterfallChartSpace } from '../../store/__tests__/chartex-fixture.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
-import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
+import { selectedDrawingOverlayTargetOf } from '../drawing-overlay-target.ts';
 import { CHART_DRAWING_REASON } from '../image-state-rules.ts';
 import { toolbarCommandState } from '../toolbar-commands.ts';
 

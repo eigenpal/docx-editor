@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The editor viewport kept a left-to-right scroll base in a right-to-left interface, so its vertical scroll bar stayed on the right.",
+  "after": "In a right-to-left interface the viewport scrolls right to left, with its scroll bar on the left. Zoom, reading position, and refresh restore read the scroll offset through one direction-neutral helper.",
+  "reason": "The change affects only each participant's own viewport scrolling. Remote cursors and selections paint in the surface's coordinates, which the scroller's direction does not change. The change writes nothing to the shared document and adds no field or message.",
+  "tests": [
+    "packages/core/src/editor/__tests__/surface-inline-scroll.test.ts",
+    "packages/core/src/editor/__tests__/scroll-inline-end.test.ts"
+  ],
+  "changeset": "rtl-scrollbar-left",
+  "migration": null
+}

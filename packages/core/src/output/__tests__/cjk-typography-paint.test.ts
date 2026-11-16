@@ -9,6 +9,7 @@ import {
 import { caretAt } from '../../layout/semantic-interaction.ts';
 import { layoutHeaderFooterStory } from '../../layout/hf-layout.ts';
 import { paintSemanticLayout } from '../semantic-paint.ts';
+import { recordWebkitStyleWrites } from './style-writes.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const measurer = createFixedMeasurer(6, 14);
@@ -139,16 +140,25 @@ test('compressed opening punctuation translates only ink and retains layout care
   });
   const line = layout.pages[0]!.fragments[0]!.lines[0]!;
   const container = document.createElement('div');
-  paintSemanticLayout(container, layout, { scale: 2 });
+  const styles = recordWebkitStyleWrites();
+  try {
+    paintSemanticLayout(container, layout, { scale: 2 });
+  } finally {
+    styles.stop();
+  }
+  // Only the shifted glyph hides its own ink; its shadow paints the glyph at the offset.
+  expect(styles.writes).toEqual([['-webkit-text-fill-color', 'transparent']]);
   const openings = [...container.querySelectorAll<HTMLElement>('[data-start]')].filter(
     (element) => element.textContent === '（'
   );
   expect(openings).toHaveLength(2);
   expect(container.querySelectorAll('[data-docx-shifted-ink]')).toHaveLength(1);
   expect(openings.map((element) => element.style.width)).toEqual(['', '6px']);
+  // happy-dom drops `-webkit-text-fill-color` from the attribute (capricorn86/happy-dom#2401);
+  // the recorded write covers it. When that is fixed, put it back into this string.
   expect(openings.map((element) => element.firstElementChild?.getAttribute('style'))).toEqual([
     undefined,
-    'forced-color-adjust: preserve-parent-color; -webkit-text-fill-color: transparent; --docx-glyph-ink-offset: -6px; text-shadow: -6px 0 currentColor;',
+    'forced-color-adjust: preserve-parent-color; --docx-glyph-ink-offset: -6px; text-shadow: -6px 0 currentColor;',
   ]);
   for (const span of line.spans) {
     expect(

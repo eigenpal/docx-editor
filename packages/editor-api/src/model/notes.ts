@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -93,6 +93,8 @@ export class NoteItem extends ModelObject implements PromisedItem {
    * This is the same value as loading `text` from {@link NoteItem.body}: every paragraph in the
    * note story, in reading order, joined by one carriage return per paragraph mark. Load it
    * directly when structured traversal or editing through {@link NoteItem.body} is not needed.
+   *
+   * @docxEditorExtension
    */
   get text(): string {
     return this.loadedProperty<string>('text');

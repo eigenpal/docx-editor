@@ -1,7 +1,7 @@
 // The implementation lives in the store lane (`store/package/sha256.ts`), where both
 // byte-fingerprinting trust boundaries sit; this import + re-export keeps the layout entry
 // point and every shaping consumer unchanged. layout → store is a lane-legal edge.
-import { sha256FontBytes } from '../store/package/sha256.ts';
+import { sha256FontBytes, sha256OwnedFontBytesAsync } from '../store/package/sha256.ts';
 export { sha256FontBytes };
 
 /**
@@ -79,11 +79,7 @@ export const HARD_MAX_AGGREGATE_FONT_BYTES = 128 * 1024 * 1024;
  * claimed.
  */
 export type FontResolutionErrorCode =
-  | 'missing'
-  | 'forbidden'
-  | 'overLimit'
-  | 'malformed'
-  | 'hashMismatch';
+  'missing' | 'forbidden' | 'overLimit' | 'malformed' | 'hashMismatch';
 
 /**
  * A face that could not be admitted, carrying whatever evidence the refusal produced.
@@ -163,8 +159,7 @@ export interface DeclaredFontSubstitution {
 
 /** Whether bytes parse as a usable font, with a diagnostic when they do not. */
 export type FontValidationResult =
-  | { readonly valid: true }
-  | { readonly valid: false; readonly diagnostic: string };
+  { readonly valid: true } | { readonly valid: false; readonly diagnostic: string };
 
 /**
  * The injected check that bytes really are a font.
@@ -317,6 +312,29 @@ export function preparedFontResourceActualHash(
   definition: FontResourceDefinition
 ): string | null | undefined {
   return preparedFontResourceHashes.get(definition);
+}
+
+/** Copy before yielding, then verify the owned bytes with the browser's crypto provider. @internal */
+export async function prepareFontResourceDefinitionAsync(
+  definition: FontResourceDefinition,
+  instrumentation?: Pick<FontResourceInstrumentation, 'onOwnedByteCopy' | 'onHash'>
+): Promise<PreparedFontResourceDefinition> {
+  if (definition.availability === 'forbidden') {
+    return prepareFontResourceDefinition(definition, instrumentation);
+  }
+  const request = freezeRequest(definition.request);
+  const bytes = copyFontBytes(definition.bytes);
+  const sampled = { ...definition, request, bytes };
+  instrumentation?.onOwnedByteCopy?.();
+  instrumentation?.onHash?.();
+  const actualHash = await sha256OwnedFontBytesAsync(bytes);
+  const prepared = Object.freeze({
+    ...sampled,
+    actualHash,
+    [PREPARED_FONT_RESOURCE_BRAND]: true as const,
+  });
+  preparedFontResourceHashes.set(prepared, actualHash);
+  return prepared;
 }
 
 const freezeLineMetrics = (

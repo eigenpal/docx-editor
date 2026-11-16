@@ -78,6 +78,109 @@ describe('resolveOoxmlShadingFill', () => {
   });
 });
 
+describe('pattern shading mixes its colour into its fill', () => {
+  const red = (val: string) => resolveOoxmlShadingFill({ val, color: 'FF0000', fill: 'FFFFFF' });
+
+  test('percent patterns match reference renderings, eighths included', () => {
+    // Each pair is a pattern and the solid colour reference renderings paint for it.
+    const measured: [string, string][] = [
+      ['pct5', 'FFF2F2'],
+      ['pct10', 'FFE5E5'],
+      ['pct12', 'FFDFDF'],
+      ['pct15', 'FFD9D9'],
+      ['pct25', 'FFBFBF'],
+      ['pct35', 'FFA6A6'],
+      ['pct37', 'FF9F9F'],
+      ['pct40', 'FF9999'],
+      ['pct45', 'FF8C8C'],
+      ['pct50', 'FF7F7F'],
+      ['pct55', 'FF7373'],
+      ['pct60', 'FF6666'],
+      ['pct62', 'FF6060'],
+      ['pct65', 'FF5959'],
+      ['pct70', 'FF4C4C'],
+      ['pct75', 'FF4040'],
+      ['pct80', 'FF3333'],
+      ['pct85', 'FF2626'],
+      ['pct87', 'FF2020'],
+      ['pct90', 'FF1919'],
+      ['pct95', 'FF0D0D'],
+      ['solid', 'FF0000'],
+    ];
+    for (const [val, expected] of measured) expect([val, red(val)]).toEqual([val, expected]);
+    expect(resolveOoxmlShadingFill({ val: 'pct20', color: '0000FF', fill: 'FFFF00' })).toBe(
+      'CCCC33'
+    );
+    expect(resolveOoxmlShadingFill({ val: 'pct30', color: '00FF00', fill: '000000' })).toBe(
+      '004D00'
+    );
+    expect(resolveOoxmlShadingFill({ val: 'pct50', color: '00B050', fill: 'FFFFFF' })).toBe(
+      '7FD7A7'
+    );
+  });
+
+  test('an auto colour is black and an auto or nil fill is white under a pattern', () => {
+    expect(resolveOoxmlShadingFill({ val: 'pct50', color: 'auto', fill: 'auto' })).toBe('7F7F7F');
+    expect(resolveOoxmlShadingFill({ val: 'pct50', color: 'auto', fill: 'FFFF00' })).toBe('7F7F00');
+    expect(resolveOoxmlShadingFill({ val: 'pct50', color: '0000FF', fill: 'auto' })).toBe('7F7FFF');
+    expect(resolveOoxmlShadingFill({ val: 'pct50', color: 'FF0000', fill: 'nil' })).toBe('FF7F7F');
+    expect(resolveOoxmlShadingFill({ val: 'solid', color: 'auto', fill: 'FFFF00' })).toBe('000000');
+    expect(resolveOoxmlShadingFill({ val: 'solid', color: 'FF0000', fill: 'auto' })).toBe('FF0000');
+  });
+
+  test('clear paints the fill alone, and nil paints nothing', () => {
+    expect(resolveOoxmlShadingFill({ val: 'clear', color: 'FF0000', fill: 'FFFF00' })).toBe(
+      'FFFF00'
+    );
+    expect(
+      resolveOoxmlShadingFill({ val: 'nil', color: 'FF0000', fill: 'FFFF00' })
+    ).toBeUndefined();
+  });
+
+  test('a hatch paints the average colour of its lines', () => {
+    expect(red('horzStripe')).toBe('FF7F7F');
+    expect(red('reverseDiagStripe')).toBe('FF7F7F');
+    expect(red('diagCross')).toBe('FF4040');
+    expect(red('thinHorzStripe')).toBe('FFBFBF');
+    expect(red('thinDiagCross')).toBe('FF8F8F');
+  });
+
+  test('an unknown pattern or a hostile colour leaves the fill alone', () => {
+    expect(resolveOoxmlShadingFill({ val: 'pct33', color: 'FF0000', fill: 'FFFF00' })).toBe(
+      'FFFF00'
+    );
+    expect(resolveOoxmlShadingFill({ val: 'pct50', color: 'url(x)', fill: 'FFFF00' })).toBe(
+      'FFFF00'
+    );
+    expect(resolveOoxmlShadingFill({ val: 'constructor', color: 'FF0000' })).toBeUndefined();
+    expect(resolveOoxmlShadingFill({ val: '__proto__', color: 'FF0000' })).toBeUndefined();
+    // A theme colour with no resolved value beside it is not guessed.
+    expect(resolveOoxmlShadingFill({ val: 'pct50', themeColor: 'accent1', fill: 'FFFF00' })).toBe(
+      'FFFF00'
+    );
+    expect(
+      resolveOoxmlShadingFill({
+        val: 'pct50',
+        color: 'auto',
+        themeColor: 'accent1',
+        fill: 'FFFF00',
+      })
+    ).toBe('FFFF00');
+  });
+
+  test('paragraph and run shading mix the same way', () => {
+    const layout = lay(
+      `<w:p><w:pPr><w:shd w:val="pct50" w:color="FF0000" w:fill="FFFFFF"/></w:pPr>` +
+        `<w:r><w:rPr><w:shd w:val="pct25" w:color="0000FF" w:fill="FFFFFF"/></w:rPr>` +
+        `<w:t>x</w:t></w:r></w:p>`
+    );
+    const fragment = layout.pages[0]!.fragments[0]!;
+    if (fragment.kind !== 'paragraph') throw new Error('expected a paragraph');
+    expect(fragment.shading).toBe('FF7F7F');
+    expect(fragment.lines[0]!.spans[0]!.style.shading).toBe('BFBFFF');
+  });
+});
+
 describe('paragraphShading from cascaded flat props', () => {
   test('later shd wins', () => {
     expect(

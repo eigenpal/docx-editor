@@ -319,7 +319,10 @@ describe('insertTableRow', () => {
     const newRow = collectByKind(result.part.root, 'tableRow').find((r) =>
       result.effect.created.includes(r.id)
     )!;
-    const tcPr = wmlChildNamed(newRow.children.find((c) => c.kind === 'tableCell')!, 'tcPr');
+    const tcPr = wmlChildNamed(
+      newRow.children.find((c) => c.kind === 'tableCell')!,
+      'tcPr'
+    );
     expect(tcPr?.children.some((c) => c.namespaceUri === FOREIGN)).toBe(false);
     expect(tcPr?.children.some((c) => c.localName === 'tcW')).toBe(true);
   });
@@ -429,7 +432,10 @@ describe('insertTableRow', () => {
       result.effect.created.includes(r.id)
     )!;
     const tcW = wmlChildNamed(
-      wmlChildNamed(newRow.children.find((c) => c.kind === 'tableCell')!, 'tcPr')!,
+      wmlChildNamed(
+        newRow.children.find((c) => c.kind === 'tableCell')!,
+        'tcPr'
+      )!,
       'tcW'
     )!;
     expect(tcW.namespaceBindings).toEqual([]);
@@ -464,7 +470,10 @@ describe('insertTableRow', () => {
     const newRow = collectByKind(result.part.root, 'tableRow').find((r) =>
       result.effect.created.includes(r.id)
     )!;
-    const tcPr = wmlChildNamed(newRow.children.find((c) => c.kind === 'tableCell')!, 'tcPr')!;
+    const tcPr = wmlChildNamed(
+      newRow.children.find((c) => c.kind === 'tableCell')!,
+      'tcPr'
+    )!;
     expect(tcPr.children.some((c) => c.localName === 'tcW')).toBe(false);
     const shd = wmlChildNamed(tcPr, 'shd');
     expect(shd).toBeDefined();
@@ -807,7 +816,10 @@ describe('insertTableRow', () => {
       expect(newRow.prefix).toBe('wx');
       expect(newRow.namespaceBindings).toEqual([]);
       const tcW = wmlChildNamed(
-        wmlChildNamed(newRow.children.find((c) => c.kind === 'tableCell')!, 'tcPr')!,
+        wmlChildNamed(
+          newRow.children.find((c) => c.kind === 'tableCell')!,
+          'tcPr'
+        )!,
         'tcW'
       )!;
       expect(tcW.prefix).toBe('wx');
@@ -849,7 +861,10 @@ describe('insertTableRow', () => {
       expect(newRow.prefix).toBeUndefined();
       expect(newRow.namespaceBindings).toEqual([]);
       const tcW = wmlChildNamed(
-        wmlChildNamed(newRow.children.find((c) => c.kind === 'tableCell')!, 'tcPr')!,
+        wmlChildNamed(
+          newRow.children.find((c) => c.kind === 'tableCell')!,
+          'tcPr'
+        )!,
         'tcW'
       )!;
       expect(tcW.prefix).toBeUndefined();
@@ -891,7 +906,10 @@ describe('insertTableRow', () => {
       expect(newRow.prefix).toBe('wx');
       expect(newRow.namespaceBindings).toEqual([]);
       const tcW = wmlChildNamed(
-        wmlChildNamed(newRow.children.find((c) => c.kind === 'tableCell')!, 'tcPr')!,
+        wmlChildNamed(
+          newRow.children.find((c) => c.kind === 'tableCell')!,
+          'tcPr'
+        )!,
         'tcW'
       )!;
       expect(tcW.attributes.every((a) => a.prefix === 'wx' && a.namespaceUri === W)).toBe(true);
@@ -965,7 +983,10 @@ describe('insertTableRow', () => {
       const newRow = collectByKind(result.part.root, 'tableRow').find((r) =>
         result.effect.created.includes(r.id)
       )!;
-      const tcPr = wmlChildNamed(newRow.children.find((c) => c.kind === 'tableCell')!, 'tcPr')!;
+      const tcPr = wmlChildNamed(
+        newRow.children.find((c) => c.kind === 'tableCell')!,
+        'tcPr'
+      )!;
       const tcW = wmlChildNamed(tcPr, 'tcW')!;
       const shd = wmlChildNamed(tcPr, 'shd')!;
       expect(tcW.attributes.find((a) => a.localName === 'w')?.value).toBe('1800');

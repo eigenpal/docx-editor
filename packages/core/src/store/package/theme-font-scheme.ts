@@ -150,7 +150,7 @@ const fontTableFacesMemo = new WeakMap<
  * the theme leaves empty takes the script's default face (`default-font-faces.ts`), or the
  * built-in theme's face when the package has no theme part. The font table's Chinese faces
  * ride along for the East Asian hint (`isChineseFace`), and its East Asian faces for the
- * default-face check of punctuation compression (`isEastAsianFace`).
+ * default-face check of punctuation compression (`isDefaultEastAsianFace`).
  */
 export function collectThemeSchemeFaces(
   themeRoot: OoxmlElement | null,

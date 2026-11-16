@@ -1,0 +1,20 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Posted comment bodies could not change. Correcting text required a reply or thread deletion.",
+  "after": "Comment and reply bodies support atomic plain-text replacement. The write preserves comment attributes, terminal paragraph identifiers, thread state, and document anchors. Concurrent replacements retain one complete draft. Multi-comment batches share one journal and one undo step.",
+  "reason": "The writer reuses existing paragraph replacement and split-lineage fields. Released materializers already select one surviving lineage. No field, encoding, reader, or repair rule changes. Real editor sessions cover concurrency, history, reconnect, deletion, thread metadata, and save/reopen. The mixed-version scenario verifies released readers and released reply and resolution writes against candidate replacements.",
+  "tests": [
+    "packages/core/src/store/__tests__/comment-text-writes.test.ts",
+    "packages/core/src/store/__tests__/comment-package-write.test.ts",
+    "packages/core/src/editor/__tests__/comment-text-edit.test.ts",
+    "packages/core/src/editor/__tests__/collaboration-review-writes.test.ts",
+    "packages/core/src/store/__tests__/document-protection.test.ts",
+    "packages/core/src/editor/__tests__/protected-document-commands.test.ts",
+    "packages/core/src/editor/__tests__/history-group-review.test.ts",
+    "packages/pro/src/collaboration/__tests__/comment-text-edit-editors.test.ts",
+    "scripts/collaboration/comment-edit-scenario.mjs"
+  ],
+  "changeset": "comment-text-edit",
+  "migration": null
+}

@@ -62,8 +62,8 @@ export function textboxTextEditable(
 
 /**
  * The message key saying why a selected text box frame takes no caret or offers no handles, or
- * null when it does both. Only in editing mode: viewing and suggesting refuse the edit
- * themselves, so the box is not what stops it.
+ * null when it does both. Not in viewing mode: viewing refuses the edit itself, so the box
+ * is not what stops it.
  *
  * @param target - The overlay target of the selected drawing.
  * @param editingMode - The surface's editing mode.
@@ -86,7 +86,7 @@ export function textboxFrameReason(
   },
   editingMode: string
 ): 'imageOverlay.textLocked' | 'imageOverlay.locked' | null {
-  if (!target.textbox || editingMode !== 'edit') return null;
+  if (!target.textbox || editingMode === 'view') return null;
   if (target.textEditable === false) return 'imageOverlay.textLocked';
   return !target.canMove && !target.canResize ? 'imageOverlay.locked' : null;
 }

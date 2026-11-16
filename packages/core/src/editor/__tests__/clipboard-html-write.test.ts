@@ -137,6 +137,26 @@ describe('interopHtmlFromFragment', () => {
     expect(bare).not.toContain('margin-bottom');
   });
 
+  test('the default character style adds nothing to a copied run', () => {
+    const styles =
+      FORMAT_DOC_DEFAULTS +
+      '<w:style w:type="character" w:default="1" w:styleId="DefaultParagraphFont">' +
+      '<w:rPr><w:color w:val="FF0000"/></w:rPr></w:style>' +
+      '<w:style w:type="character" w:styleId="Strong"><w:basedOn w:val="DefaultParagraphFont"/>' +
+      '<w:rPr><w:b/></w:rPr></w:style>';
+    const run = (rPr: string) => `<w:r><w:rPr>${rPr}</w:rPr><w:t>x</w:t></w:r>`;
+    const html = interopHtmlFromFragment(
+      fragment({
+        styles,
+        body:
+          `<w:p>${run('')}${run('<w:rStyle w:val="DefaultParagraphFont"/>')}` +
+          `${run('<w:rStyle w:val="Strong"/>')}</w:p>`,
+      })
+    );
+    expect(html).not.toContain('#ff0000');
+    expect(html).toContain('font-weight:bold');
+  });
+
   test('a formatted run carries its resolved inline CSS', () => {
     const html = interopHtmlFromFragment(
       fragment({
@@ -753,6 +773,69 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('Primary body.');
     expect(html).not.toContain('Hidden target body.');
     expect(html).not.toContain('mso-footnote-id:ftn2');
+  });
+
+  test('a table style fills its cells from its own tcPr, under the first row and the cell', () => {
+    const cell = (text: string, shd = '') =>
+      `<w:tc><w:tcPr>${shd}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const html = interopHtmlFromFragment(
+      fragment({
+        styles:
+          '<w:style w:type="table" w:styleId="Shaded"><w:tcPr>' +
+          '<w:shd w:val="clear" w:color="auto" w:fill="FFFF00"/></w:tcPr>' +
+          '<w:tblStylePr w:type="firstRow"><w:tcPr>' +
+          '<w:shd w:val="clear" w:color="auto" w:fill="0000FF"/></w:tcPr></w:tblStylePr>' +
+          '</w:style>',
+        body:
+          '<w:tbl><w:tblPr><w:tblStyle w:val="Shaded"/><w:tblLook w:firstRow="1"/></w:tblPr>' +
+          `<w:tr>${cell('head')}</w:tr><w:tr>${cell('body')}</w:tr>` +
+          `<w:tr>${cell('cleared', '<w:shd w:val="clear" w:color="auto" w:fill="auto"/>')}</w:tr>` +
+          '</w:tbl>',
+      })
+    );
+    const cells = html.match(/<td[^>]*>/g) ?? [];
+    expect(cells[0]).toContain('background-color:#0000ff');
+    expect(cells[1]).toContain('background-color:#ffff00');
+    // The cell's own auto fill paints no colour over the style's.
+    expect(cells[2]).not.toContain('background-color');
+  });
+
+  test('a condition with an auto fill clears the style fill, and wholeTable paints none', () => {
+    const cell = (text: string) => `<w:tc><w:tcPr/><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const html = interopHtmlFromFragment(
+      fragment({
+        styles:
+          '<w:style w:type="table" w:styleId="Shaded"><w:tcPr>' +
+          '<w:shd w:val="clear" w:color="auto" w:fill="FF0000"/></w:tcPr>' +
+          '<w:tblStylePr w:type="wholeTable"><w:tcPr>' +
+          '<w:shd w:val="clear" w:color="auto" w:fill="FFFF00"/></w:tcPr></w:tblStylePr>' +
+          '<w:tblStylePr w:type="firstRow"><w:tcPr>' +
+          '<w:shd w:val="clear" w:color="auto" w:fill="auto"/></w:tcPr></w:tblStylePr>' +
+          '</w:style>',
+        body:
+          '<w:tbl><w:tblPr><w:tblStyle w:val="Shaded"/><w:tblLook w:firstRow="1"/></w:tblPr>' +
+          `<w:tr>${cell('head')}</w:tr><w:tr>${cell('body')}</w:tr></w:tbl>`,
+      })
+    );
+    const cells = html.match(/<td[^>]*>/g) ?? [];
+    expect(cells[0]).not.toContain('background-color');
+    expect(cells[1]).toContain('background-color:#ff0000');
+  });
+
+  test('pattern shading copies as the colour layout paints', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:p><w:pPr><w:shd w:val="pct50" w:color="FF0000" w:fill="FFFFFF"/></w:pPr>' +
+          '<w:r><w:rPr><w:shd w:val="pct25" w:color="0000FF" w:fill="FFFFFF"/></w:rPr>' +
+          '<w:t>x</w:t></w:r></w:p>' +
+          '<w:tbl><w:tr><w:tc><w:tcPr><w:shd w:val="solid" w:color="auto" w:fill="FFFF00"/>' +
+          '</w:tcPr><w:p><w:r><w:t>c</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
+      })
+    );
+    expect(html).toMatch(/<p[^>]*background-color:#ff7f7f/);
+    expect(html).toMatch(/<span[^>]*background-color:#bfbfff/);
+    expect(html).toMatch(/<td[^>]*background-color:#000000/);
   });
 
   test('every text value is escaped, never markup', () => {

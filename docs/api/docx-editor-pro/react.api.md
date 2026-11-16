@@ -400,6 +400,7 @@ export function reviewModule(options?: ReviewModuleOptions): EditorModule;
 
 // @public
 export interface ReviewModuleOptions extends ProLicenseOptions {
+    readonly compareWorker?: (() => Worker) | false;
     readonly pane?: ReviewPaneOptions;
 }
 
@@ -454,7 +455,7 @@ export interface ReviewRailMetrics {
 }
 
 // @public
-export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment';
+export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment' | 'edit';
 
 // @public
 export interface ReviewWriteRefusal {
@@ -526,6 +527,17 @@ export function useReview(query?: ReviewItemQuery): UseReviewReturn;
 export function useReviewAuthor(author: string | undefined): ReviewAuthorInfo | undefined;
 
 // @public
+export function useReviewCardHeights(items?: readonly {
+    readonly key: string;
+}[]): UseReviewCardHeightsReturn;
+
+// @public
+export interface UseReviewCardHeightsReturn {
+    readonly cardRef: (key: string) => (node: HTMLElement | null) => void;
+    readonly heights: ReadonlyMap<string, number>;
+}
+
+// @public
 export function useReviewItem(): ReviewItemView | null;
 
 // @public
@@ -551,6 +563,7 @@ export interface UseReviewReturn {
     readonly adopt: (items: ReviewItemView | readonly ReviewItemView[], options?: ReviewAdoptOptions) => boolean;
     readonly comment: (text: string, author?: string) => boolean;
     readonly commentResolutionDisabledReason: string | null;
+    readonly edit: (item: ReviewItemView, text: string, expectedText?: string) => boolean;
     readonly items: readonly ReviewItemView[];
     readonly lastRefusal: ReviewWriteRefusal | null;
     readonly paneOpen: boolean;

@@ -60,6 +60,78 @@ export {
   type DocxEditorDocumentOutlineProps,
 } from './editor/DocxEditorOutline';
 export {
+  ChartInsert,
+  DocxEditorChartPane,
+  DocxEditorSidePanel,
+  ToolbarChartInsert,
+  usePaneRequest,
+  useSelectedChart,
+  type ChartInsertPartComponent,
+  type ChartInsertProps,
+  type DocxEditorChartPaneProps,
+  type DocxEditorSidePanelProps,
+  type UseSelectedChartReturn,
+} from './editor/charts';
+export {
+  DocxEditorShapePane,
+  useSelectedShape,
+  type DocxEditorShapePaneProps,
+  type UseSelectedShapeReturn,
+} from './editor/shapes';
+export * from './editor/objects';
+export {
+  ColorPicker,
+  type ColorPickerCompound,
+  type ColorPickerContentProps,
+  type ColorPickerHexInputProps,
+  type ColorPickerNoColorProps,
+  type ColorPickerRootProps,
+  type ColorPickerSwatchProps,
+  type ColorPickerTriggerProps,
+  type ColorPickerValue,
+} from './editor/color/ColorPicker';
+// The names a host needs to place shape and chart controls of its own.
+export {
+  PANE_SECTIONS,
+  SHAPE_OUTLINE_DASHES,
+  SHAPE_OUTLINE_WIDTHS,
+  paneSections,
+} from '@docx-editor.dev/core/editor';
+export type {
+  ColorPick,
+  ObjectSlotReadValueMap,
+  ObjectSlotValueMap,
+  ObjectToggleSlotId,
+  PaneSection,
+  PaneSectionId,
+  PaneSectionIds,
+  ShapeOutlineDash,
+} from '@docx-editor.dev/core/editor';
+export type {
+  SelectedShapeCommand,
+  ShapeFillState,
+  ShapeFormatState,
+  ShapeOutlineState,
+  ShapePaneChange,
+} from '@docx-editor.dev/core/editor';
+// The chart names a custom chart pane needs (`useSelectedChart`), so it imports from one package.
+export { CHART_TYPE_CHOICES, chartTypeLabelKey } from '@docx-editor.dev/core/editor';
+export {
+  acceptedOffsetFromText,
+  acceptedTextRanges,
+  textOffsetFromAccepted,
+} from '@docx-editor.dev/core/editor';
+export type {
+  ChartColor,
+  ChartData,
+  ChartFormat,
+  ChartFormatChange,
+  ChartPaneChange,
+  ChartType,
+  SelectedChartCommand,
+  SelectedChartState,
+} from '@docx-editor.dev/core/editor';
+export {
   DocxEditorPageSetupDialog,
   type DocxEditorPageSetupDialogProps,
 } from './editor/DocxEditorPageSetup';
@@ -218,6 +290,7 @@ export {
   ContextMenuCellVerticalAlignment,
   ContextMenuDelete,
   ContextMenuItem,
+  ContextMenuStart,
   ContextMenuPaste,
   ContextMenuPasteFormatting,
   ContextMenuPasteWithoutFormatting,
@@ -234,11 +307,15 @@ export {
   ContextMenuInsertRowBelow,
   ContextMenuRefreshToc,
   ContextMenuRefreshTocPageNumbers,
+  ContextMenuRemoveToc,
+  useContextMenuAnchor,
+  useContextMenuHighlights,
   useContextMenuTarget,
   type ContextMenuAnchor,
   type ContextMenuCommandProps,
   type ContextMenuContextValue,
   type ContextMenuItemProps,
+  type ContextMenuStartProps,
   type ContextMenuTableRowProps,
   type DocxEditorContextMenuNamespace,
   type DocxEditorContextMenuProps,
@@ -331,7 +408,12 @@ export {
   useEditorHostDocument,
   type UseEditorHostDocumentReturn,
 } from './editor/useEditorHostDocument';
-export { HIGHLIGHT_REFRESH_MS, useHighlights, type HighlightSource } from './editor/useHighlights';
+export {
+  HIGHLIGHT_REFRESH_MS,
+  useHighlights,
+  type HighlightSource,
+  type UseHighlightsReturn,
+} from './editor/useHighlights';
 export { useHighlightAt } from './editor/useHighlightAt';
 export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';
 export {
@@ -493,6 +575,8 @@ export type {
   DocumentOpenFailure,
   DocumentOpenFailureReason,
   HighlightHit,
+  HighlightKind,
+  NavigateHighlightCommand,
   HighlightOptions,
   HighlightRange,
   HighlightRect,
@@ -504,6 +588,13 @@ export type {
   EditorSnapshot,
   EditorScope,
   PageSetup,
+  AcceptedTextRange,
+  ParagraphText,
+  ParagraphsChangeEvent,
+  ParagraphTextProofing,
+  ParagraphTextReadOptions,
+  ParagraphTextSpan,
+  ReplaceAcceptedTextCommand,
   ScrollToAnchorOptions,
   Watermark,
   WatermarkState,
@@ -618,6 +709,10 @@ export type {
   DocumentRefreshState,
   RefreshSubmission,
   RefreshUpdate,
+  RefreshRefusal,
+  RefreshRefusalFields,
+  RefreshRefusalReason,
+  RefreshUpdateMode,
   RefreshResult,
   RefreshFailureCode,
   RefreshChange,
@@ -665,6 +760,29 @@ export {
   type DocxEditorRevisionMarkupDialogProps,
   type UseRevisionMarkupDialogReturn,
 } from './editor/DocxEditorRevisionMarkupDialog';
+
+export type {
+  CompareDocumentsChromeHandlers,
+  CompareDocumentsDialogSession,
+  CompareDocumentsEngineErrorCode,
+  CompareDocumentsErrorCode,
+  CompareDocumentsRefusalReason,
+  CompareDocumentsOutcome,
+  CompareDocumentsRequest,
+  ReplaceDocumentErrorCode,
+  ReplaceDocumentOutcome,
+  ReplaceDocumentRefusal,
+  ReplaceDocumentRefusalReason,
+  ReplaceDocumentRequest,
+} from '@docx-editor.dev/core/editor';
+
+export {
+  DocxEditorCompareDocumentsDialog,
+  useCompareDocumentsDialog,
+  type CompareDocumentsDialogValues,
+  type DocxEditorCompareDocumentsDialogProps,
+  type UseCompareDocumentsDialogReturn,
+} from './editor/DocxEditorCompareDocumentsDialog';
 
 export type {
   DrawingGraphicKind,

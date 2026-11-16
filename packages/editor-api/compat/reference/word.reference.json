@@ -5,6 +5,119 @@
     "version": "1.0.605"
   },
   "symbols": {
+    "Annotation": {
+      "uid": "Word.Annotation",
+      "kind": "class",
+      "requirementSet": "WordApi 1.7",
+      "members": {
+        "critiqueAnnotation": {
+          "uid": "Word.Annotation#critiqueAnnotation",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CritiqueAnnotation"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "Word.Annotation#delete",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "id": {
+          "uid": "Word.Annotation#id",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "state": {
+          "uid": "Word.Annotation#state",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Created\" | \"Accepted\" | \"Rejected\""
+            }
+          ]
+        }
+      }
+    },
+    "AnnotationCollection": {
+      "uid": "Word.AnnotationCollection",
+      "kind": "class",
+      "requirementSet": "WordApi 1.7",
+      "members": {
+        "getFirst": {
+          "uid": "Word.AnnotationCollection#getFirst",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Annotation"
+            }
+          ]
+        },
+        "getFirstOrNullObject": {
+          "uid": "Word.AnnotationCollection#getFirstOrNullObject",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Annotation"
+            }
+          ]
+        },
+        "items": {
+          "uid": "Word.AnnotationCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Annotation[]"
+            }
+          ]
+        }
+      }
+    },
+    "AnnotationSet": {
+      "uid": "Word.AnnotationSet",
+      "kind": "interface",
+      "requirementSet": "WordApi 1.7",
+      "members": {
+        "critiques": {
+          "uid": "Word.AnnotationSet#critiques",
+          "kind": "property",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Critique[]"
+            }
+          ]
+        }
+      }
+    },
     "Body": {
       "uid": "Word.Body",
       "kind": "class",
@@ -77,6 +190,26 @@
             {
               "params": [],
               "returns": "CommentCollection"
+            }
+          ]
+        },
+        "insertFileFromBase64": {
+          "uid": "Word.Body#insertFileFromBase64",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "base64File",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Replace\" | \"Start\" | \"End\""
+                }
+              ],
+              "returns": "Range"
             }
           ]
         },
@@ -262,6 +395,99 @@
         }
       }
     },
+    "BorderUniversal": {
+      "uid": "Word.BorderUniversal",
+      "kind": "class",
+      "requirementSet": "WordApiDesktop 1.3",
+      "members": {
+        "color": {
+          "uid": "Word.BorderUniversal#color",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "colorIndex": {
+          "uid": "Word.BorderUniversal#colorIndex",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Auto\" | \"Black\" | \"Blue\" | \"Turquoise\" | \"BrightGreen\" | \"Pink\" | \"Red\" | \"Yellow\" | \"White\" | \"DarkBlue\" | \"Teal\" | \"Green\" | \"Violet\" | \"DarkRed\" | \"DarkYellow\" | \"Gray50\" | \"Gray25\" | \"ClassicRed\" | \"ClassicBlue\" | \"ByAuthor\""
+            }
+          ]
+        },
+        "inside": {
+          "uid": "Word.BorderUniversal#inside",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "isVisible": {
+          "uid": "Word.BorderUniversal#isVisible",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "lineStyle": {
+          "uid": "Word.BorderUniversal#lineStyle",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"None\" | \"Single\" | \"Dot\" | \"DashSmallGap\" | \"DashLargeGap\" | \"DashDot\" | \"DashDotDot\" | \"Double\" | \"Triple\" | \"ThinThickSmallGap\" | \"ThickThinSmallGap\" | \"ThinThickThinSmallGap\" | \"ThinThickMedGap\" | \"ThickThinMedGap\" | \"ThinThickThinMedGap\" | \"ThinThickLargeGap\" | \"ThickThinLargeGap\" | \"ThinThickThinLargeGap\" | \"SingleWavy\" | \"DoubleWavy\" | \"DashDotStroked\" | \"Emboss3D\" | \"Engrave3D\" | \"Outset\" | \"Inset\""
+            }
+          ]
+        },
+        "lineWidth": {
+          "uid": "Word.BorderUniversal#lineWidth",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Pt025\" | \"Pt050\" | \"Pt075\" | \"Pt100\" | \"Pt150\" | \"Pt225\" | \"Pt300\" | \"Pt450\" | \"Pt600\""
+            }
+          ]
+        }
+      }
+    },
+    "BorderUniversalCollection": {
+      "uid": "Word.BorderUniversalCollection",
+      "kind": "class",
+      "requirementSet": "WordApiDesktop 1.3",
+      "members": {
+        "items": {
+          "uid": "Word.BorderUniversalCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "BorderUniversal[]"
+            }
+          ]
+        }
+      }
+    },
     "ClientObject": {
       "uid": "OfficeExtension.ClientObject",
       "kind": "class",
@@ -300,6 +526,17 @@
           "uid": "Word.Comment#authorName",
           "kind": "property",
           "readonly": true,
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "content": {
+          "uid": "Word.Comment#content",
+          "kind": "property",
           "requirementSet": "WordApi 1.4",
           "overloads": [
             {
@@ -434,6 +671,17 @@
           "uid": "Word.CommentReply#authorName",
           "kind": "property",
           "readonly": true,
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "content": {
+          "uid": "Word.CommentReply#content",
+          "kind": "property",
           "requirementSet": "WordApi 1.4",
           "overloads": [
             {
@@ -684,6 +932,161 @@
         }
       }
     },
+    "Critique": {
+      "uid": "Word.Critique",
+      "kind": "interface",
+      "requirementSet": "WordApi 1.7",
+      "members": {
+        "colorScheme": {
+          "uid": "Word.Critique#colorScheme",
+          "kind": "property",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Red\" | \"Green\" | \"Blue\" | \"Lavender\" | \"Berry\""
+            }
+          ]
+        },
+        "length": {
+          "uid": "Word.Critique#length",
+          "kind": "property",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "popupOptions": {
+          "uid": "Word.Critique#popupOptions",
+          "kind": "property",
+          "requirementSet": "WordApi 1.8",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CritiquePopupOptions"
+            }
+          ]
+        },
+        "start": {
+          "uid": "Word.Critique#start",
+          "kind": "property",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        }
+      }
+    },
+    "CritiqueAnnotation": {
+      "uid": "Word.CritiqueAnnotation",
+      "kind": "class",
+      "requirementSet": "WordApi 1.7",
+      "members": {
+        "accept": {
+          "uid": "Word.CritiqueAnnotation#accept",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "critique": {
+          "uid": "Word.CritiqueAnnotation#critique",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Critique"
+            }
+          ]
+        },
+        "range": {
+          "uid": "Word.CritiqueAnnotation#range",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Range"
+            }
+          ]
+        },
+        "reject": {
+          "uid": "Word.CritiqueAnnotation#reject",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        }
+      }
+    },
+    "CritiquePopupOptions": {
+      "uid": "Word.CritiquePopupOptions",
+      "kind": "interface",
+      "requirementSet": "WordApi 1.8",
+      "members": {
+        "brandingTextResourceId": {
+          "uid": "Word.CritiquePopupOptions#brandingTextResourceId",
+          "kind": "property",
+          "requirementSet": "WordApi 1.8",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "subtitleResourceId": {
+          "uid": "Word.CritiquePopupOptions#subtitleResourceId",
+          "kind": "property",
+          "requirementSet": "WordApi 1.8",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "suggestions": {
+          "uid": "Word.CritiquePopupOptions#suggestions",
+          "kind": "property",
+          "requirementSet": "WordApi 1.8",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string[]"
+            }
+          ]
+        },
+        "titleResourceId": {
+          "uid": "Word.CritiquePopupOptions#titleResourceId",
+          "kind": "property",
+          "requirementSet": "WordApi 1.8",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        }
+      }
+    },
     "Document": {
       "uid": "Word.Document",
       "kind": "class",
@@ -724,6 +1127,48 @@
             }
           ]
         },
+        "compare": {
+          "uid": "Word.Document#compare",
+          "kind": "method",
+          "requirementSet": "WordApiDesktop 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "filePath",
+                  "type": "string"
+                },
+                {
+                  "name": "documentCompareOptions",
+                  "type": "DocumentCompareOptions",
+                  "optional": true
+                }
+              ],
+              "returns": "void"
+            }
+          ]
+        },
+        "compareFromBase64": {
+          "uid": "Word.Document#compareFromBase64",
+          "kind": "method",
+          "requirementSet": "WordApiDesktop 1.2",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "base64File",
+                  "type": "string"
+                },
+                {
+                  "name": "documentCompareOptions",
+                  "type": "DocumentCompareOptions",
+                  "optional": true
+                }
+              ],
+              "returns": "void"
+            }
+          ]
+        },
         "contentControls": {
           "uid": "Word.Document#contentControls",
           "kind": "property",
@@ -749,6 +1194,22 @@
                 }
               ],
               "returns": "void"
+            }
+          ]
+        },
+        "getAnnotationById": {
+          "uid": "Word.Document#getAnnotationById",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "id",
+                  "type": "string"
+                }
+              ],
+              "returns": "Annotation"
             }
           ]
         },
@@ -1331,6 +1792,18 @@
             }
           ]
         },
+        "borders": {
+          "uid": "Word.Paragraph#borders",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "BorderUniversalCollection"
+            }
+          ]
+        },
         "clear": {
           "uid": "Word.Paragraph#clear",
           "kind": "method",
@@ -1388,6 +1861,17 @@
             }
           ]
         },
+        "getAnnotations": {
+          "uid": "Word.Paragraph#getAnnotations",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "AnnotationCollection"
+            }
+          ]
+        },
         "getReviewedText": {
           "uid": "Word.Paragraph#getReviewedText",
           "kind": "method",
@@ -1433,6 +1917,22 @@
                 }
               ],
               "returns": "RangeCollection"
+            }
+          ]
+        },
+        "insertAnnotations": {
+          "uid": "Word.Paragraph#insertAnnotations",
+          "kind": "method",
+          "requirementSet": "WordApi 1.7",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "annotations",
+                  "type": "AnnotationSet"
+                }
+              ],
+              "returns": "ClientResult<string[]>"
             }
           ]
         },

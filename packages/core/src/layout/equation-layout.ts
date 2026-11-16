@@ -7,6 +7,12 @@ import { equationDisplayText } from './equation-display-text.ts';
 import { equationInk } from './equation-ink.ts';
 import { fitEquationLineExtent, type EquationTextBand } from './equation-line-extent.ts';
 import { attachScripts, box, naryLimitsBeside, shifted } from './equation-scripts.ts';
+import { layoutBorderBox } from './equation-border-box.ts';
+import {
+  layoutDelimiter,
+  type EquationDelimiterGeometry,
+  type EquationStretch,
+} from './equation-delimiter.ts';
 import {
   equationAtomSpaces,
   equationTextAtoms,
@@ -76,6 +82,8 @@ export interface EquationTextGeometry extends EquationGeometryBase {
   readonly fontSizePt: number;
   /** The same resolved face used by measurement and the trusted paint sink. */
   readonly runStyle?: ResolvedRunStyle;
+  /** A delimiter character grown to the height of its arguments. */
+  readonly stretch?: EquationStretch;
 }
 
 export interface EquationRowGeometry extends EquationGeometryBase {
@@ -104,6 +112,24 @@ export interface EquationBarGeometry extends EquationGeometryBase {
   readonly bar: LayoutBox;
 }
 
+/** A straight stroke between two points, relative to its node's box. */
+export interface EquationDiagonal {
+  readonly x1: number;
+  readonly y1: number;
+  readonly x2: number;
+  readonly y2: number;
+}
+
+export interface EquationBorderBoxGeometry extends EquationGeometryBase {
+  readonly kind: 'borderBox';
+  readonly body: EquationGeometry;
+  /** Edges and horizontal or vertical strikes, as filled rectangles. */
+  readonly rules: readonly LayoutBox[];
+  /** Diagonal strikes, stroked at {@link thickness}. */
+  readonly diagonals: readonly EquationDiagonal[];
+  readonly thickness: number;
+}
+
 export interface EquationScriptGeometry extends EquationGeometryBase {
   readonly kind: 'script';
   readonly base: EquationGeometry;
@@ -125,6 +151,8 @@ export type EquationGeometry =
   | EquationFractionGeometry
   | EquationRadicalGeometry
   | EquationBarGeometry
+  | EquationBorderBoxGeometry
+  | EquationDelimiterGeometry
   | EquationScriptGeometry
   | EquationNaryGeometry;
 
@@ -477,7 +505,10 @@ function layoutArgument(
       continue;
     }
     parts.push(null);
-    atoms.push({ atomClass: structureClass(leaf), sizePt: style.fontSizePt });
+    // A delimiter opens and closes like its characters do in text.
+    if (leaf.kind === 'delimiter')
+      atoms.push({ atomClass: 'open', endClass: 'close', sizePt: style.fontSizePt });
+    else atoms.push({ atomClass: structureClass(leaf), sizePt: style.fontSizePt });
   }
   const spaces = equationAtomSpaces(atoms);
   if (spaces.every((space) => space === 0)) {
@@ -712,6 +743,21 @@ function layoutExpression(
         baseline: -top,
       });
     }
+    case 'delimiter':
+      return layoutDelimiter(
+        expression,
+        expression.items.map((item) => layoutExpression(item, measurer, style, scale, cache)),
+        (character) => textGeometry('text', character, measurer, style, scale, cache),
+        MATH_AXIS_HEIGHT * structureSizePt(expression, scale, cache),
+        measurer
+      );
+    case 'borderBox':
+      return layoutBorderBox(
+        expression,
+        layoutExpression(expression.body, measurer, style, scale, cache),
+        structureSizePt(expression, scale, cache),
+        measurer
+      );
     case 'script': {
       const base = layoutExpression(expression.base, measurer, style, scale, cache);
       const subscript = expression.subscript

@@ -10,6 +10,7 @@ import {
   bodyParagraphOptionFlow,
   bodyParagraphPlacementFlow,
   bodyContentBounds,
+  framedParagraphFlow,
 } from './body-paragraph-flow.ts';
 import { layoutWithCharacterHeadersSteps } from './character-header-layout.ts';
 import { contextualParagraphSpacing, flowNeighbourStyle } from './contextual-paragraph-spacing.ts';
@@ -17,7 +18,7 @@ import { resolveParagraphFrame } from './paragraph-drop-cap.ts';
 import {
   anchorLineSkipsExclusion,
   anchorsSpacingDependentBand,
-  drawingZonesAtLinePlacement,
+  createLinePlacementZones,
 } from './drawing-placement-exclusion.ts';
 import { createParagraphDrawingWrap } from './paragraph-drawing-wrap.ts';
 import { continuedPageZones, continuedWrapFlags } from './continued-page-zones.ts';
@@ -25,6 +26,7 @@ import { retainedFurnitureWrap } from './furniture-drawing-exclusion.ts';
 import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
 import { tocIdsToken, type TocIdSets } from './toc-id-sets.ts';
+import { createLiveExclusionZones } from './live-exclusion-zones.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import * as sectionPrep from './section-preparation.ts';
 import { resolveListAutoSpacing } from './list-auto-spacing.ts';
@@ -94,7 +96,7 @@ import { paragraphBoxOutdent } from './paragraph-indent.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { paragraphFragmentBorders } from './paragraph-fragment-borders.ts';
 import { holdsOnlyPageBreak, lineBreakAfterFields, lineContentX } from './pending-line.ts';
-import { withSectionBreakMarks } from './section-break-marks.ts';
+import { interimSectionAligner, publishLayoutPass } from './layout-pass-publish.ts';
 import { alignLineWithPictures } from './line-picture-alignment.ts';
 import { createLeadingBreakGroups } from './leading-break-border-group.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
@@ -102,7 +104,8 @@ import * as tableFloat from './table-float-position.ts';
 import * as tableWrap from './table-float-exclusion.ts';
 import {
   bodyAnchorFrameBase,
-  publishableAnchors,
+  openingAbove,
+  holdsDrawingIn,
   atKeptBreakY,
   holdsOnlyColumnBreak,
   opensWithPageBreak,
@@ -110,6 +113,7 @@ import {
   paragraphPaintsNothing,
 } from './body-flow-helpers.ts';
 import { shiftAnchoredDrawingY } from './drawing-overlap.ts';
+import { createOwnAnchorPageFit, linesWithOwnAnchorNeeds } from './paragraph-own-anchors.ts';
 import { collectAnchoredDrawings as collectAnchoredDrawingRecords } from './anchored-drawing-collect.ts';
 import { createEarlierLinePush, ownTableStaysForAnchor } from './earlier-line-push.ts';
 import { createStackPlacement } from './table-float-stack.ts';
@@ -143,18 +147,14 @@ import {
   sortDrawingsForPaint,
   topAndBottomSkipBeforeLine,
   travellingTopAndBottomSkip,
-  ownTopAndBottomSkip,
   withAnchoredDrawingLayoutFallback,
   type ExclusionZone,
   MAX_DRAWING_EXCLUSION_REFLOW_PASSES,
 } from './drawing-exclusion.ts';
-import { drawingModelOffsetsInParagraph } from './drawing-layout.ts';
 import { bodyLineId } from './body-line-id.ts';
-import { syntheticAnchorLines } from './anchor-frame-lines.ts';
-import {
-  drawingSourceOrderInPart,
-  drawingTokenForTableBlockMemo,
-} from './inline-drawing-source.ts';
+import { fragmentAnchorFrame } from './anchor-frame-lines.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
+import { drawingTokenForTableBlockMemo, withDrawingSourceOrder } from './inline-drawing-source.ts';
 import {
   emptyTocPlaceholderParagraphIds,
   emptyTocSuppressedResultParagraphIds,
@@ -167,7 +167,6 @@ import { createPageContentInsets, registerOverflowPageShell } from './page-furni
 import { convergenceTailShiftAllowed } from './page-reuse-guards.ts';
 import { layoutPassContextKey } from './layout-pass-context-key.ts';
 import {
-  attachContentControlBoundaries,
   contentControlContextToken,
   withContentControlMetadata,
 } from './content-control-boundary-layout.ts';
@@ -179,12 +178,14 @@ import {
   sectionLineGridPt,
 } from './section-properties.ts';
 import { pageBreakBeforeRules } from './page-break-before.ts';
+import { previousBodyLayout } from './previous-body-pages.ts';
 import { columnSeparatorBoxes, resolveSectionColumns } from './section-columns.ts';
 import {
   inheritNotesLayoutInput,
   layoutSemanticDocumentWithNotesSteps,
+  noteRoundBlocks,
 } from './note-pagination.ts';
-import { closingSpaceAfterPt } from './note-area-fit.ts';
+import { closingSpaceAfterPt, droppableSpacingPt, keepNoteClosing } from './note-area-fit.ts';
 import { passProducerOf } from './pass-producer.ts';
 import { documentProjectionProducer } from './document-property-context.ts';
 
@@ -204,12 +205,17 @@ import { refTokenForTableBlock } from './field-ref.ts';
 import { createListFirstLineMetrics, markerLineStart, publishListMarker } from './list-marker.ts';
 import { FlowCheckpointOwner, flowCheckpointsMatch } from './flow-checkpoint.ts';
 import { sectionReserveResume } from './note-reserve-resume.ts';
-import type { FlowCheckpoint } from './layout-session.ts';
+import {
+  convergedCheckpoints,
+  createLayoutSession,
+  nextParityDependent,
+  type FlowCheckpoint,
+} from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocumentSteps } from './multi-section-layout.ts';
 import { hostedStoryFlowDeps, layoutTextboxStory } from './textbox-story-layout.ts';
 import { inlineDrawingFlow } from './inline-textbox-flow.ts';
 import { convergeExclusionLayout } from './exclusion-layout-steps.ts';
-import { withInterimLayout, withRelabeledProgress } from './interim-layout.ts';
+import { withAlignedProgress, withInterimLayout, withRelabeledProgress } from './interim-layout.ts';
 import { layoutWithFurnitureRetry } from './furniture-retry-layout.ts';
 import { drainLayoutSteps, stepsInFieldResultsMode, type LayoutSteps } from './layout-steps.ts';
 import { preparedBlocks } from './prepared-block-memo.ts';
@@ -260,7 +266,11 @@ export function layoutSemanticDocumentSteps(
   revision: number,
   options: SemanticLayoutOptions
 ): LayoutSteps<SemanticLayout> {
-  return stepsInFieldResultsMode(options.fieldResults, layoutInModeSteps(part, revision, options));
+  // The footnote search lays the body out several times; a private session lets each round
+  // reuse the last one's work, as a cold open with a session does.
+  const opts =
+    options.notes && !options.session ? { ...options, session: createLayoutSession() } : options;
+  return stepsInFieldResultsMode(options.fieldResults, layoutInModeSteps(part, revision, opts));
 }
 
 function* layoutInModeSteps(
@@ -298,13 +308,7 @@ function* layoutInModeSteps(
       options.emptyTocSuppressedResultParagraphIds ?? emptyTocSuppressedResultParagraphIds(part),
   };
   // Full-body list resolve so counters continue across sections and table cells.
-  let drawingSourceOrder = options.drawingSourceOrder;
-  if (!drawingSourceOrder && options.inlineDrawingLayout) {
-    drawingSourceOrder = drawingSourceOrderInPart(part, options.inlineDrawingLayout);
-  }
-  const drawingOptions = drawingSourceOrder
-    ? { ...optionsWithControlContext, drawingSourceOrder }
-    : optionsWithControlContext;
+  const drawingOptions = withDrawingSourceOrder(optionsWithControlContext, part);
   const optionsWithLists = options.session
     ? withResolvedListItemsForSession(drawingOptions, allBlocks, options.session)
     : withResolvedListItems(drawingOptions, allBlocks);
@@ -326,12 +330,13 @@ function* layoutInModeSteps(
   const optionsForBody = refFields === null ? optionsWithLists : { ...optionsWithLists, refFields };
 
   function* runBodySteps(opts: SemanticLayoutOptions): LayoutSteps<SemanticLayout> {
+    const [roundBlocks, roundSections] = noteRoundBlocks(part, blocks, sections, opts);
     if (sections.length > 1) {
       // Reports document pages as each section completes them, labelled as a single section's.
       return yield* withRelabeledProgress(
         layoutMultiSectionDocumentSteps(
-          blocks,
-          sections,
+          roundBlocks,
+          roundSections,
           revision,
           opts,
           layoutBlocksWithGeometrySteps
@@ -341,10 +346,10 @@ function* layoutInModeSteps(
       );
     }
 
-    const section = sections[0];
+    const section = roundSections[0];
     const geometry =
       opts.geometry ?? (section ? geometryOfSection(section.properties) : DEFAULT_PAGE_GEOMETRY);
-    const furniture = furnitureForSection(opts, 0, sections.length) ?? opts.furniture;
+    const furniture = furnitureForSection(opts, 0, roundSections.length) ?? opts.furniture;
     const sectionNumbering = section?.properties.pageNumbering;
     const interim = {
       revision,
@@ -352,7 +357,7 @@ function* layoutInModeSteps(
       listItems: optionsWithLists.listItems,
     };
     const laid = yield* withInterimLayout(
-      layoutBlocksWithGeometrySteps(blocks, revision, {
+      layoutBlocksWithGeometrySteps(roundBlocks, revision, {
         ...opts,
         geometry,
         furniture,
@@ -382,12 +387,12 @@ function* layoutInModeSteps(
       laid.layout
     );
     const finalized = finalizePageFieldProjection(annotated, {
-      provisional: opts.bodyBlockLimit !== undefined,
+      provisional: opts.bodyBlockLimit !== undefined || opts.noteRoundBlockLimit !== undefined,
     });
     carryLayoutReadCaches(laid.layout, finalized);
     // The notes pass mints overflow sheets from this layout; publish what index they land at.
-    registerOverflowPageShell(finalized, (_sectionAnchorIndex, documentPageIndex, box) =>
-      laid.overflowShellAt(documentPageIndex, box)
+    registerOverflowPageShell(finalized, (_sectionAnchorIndex, documentPageIndex, box, shift) =>
+      laid.overflowShellAt(documentPageIndex, box, shift)
     );
     if (opts.session) {
       opts.session.multi = null;
@@ -411,37 +416,31 @@ function* layoutInModeSteps(
     if (options.session && options.bodyBlockLimit === undefined) {
       projected = relabelListMarkers(projected, optionsWithLists.listItems, options.measurer);
     }
-    const bounded = attachContentControlBoundaries(projected, part, controlToken);
-    const withBoundaries = withSectionBreakMarks(bounded, part, allBlocks);
-    carryLayoutReadCaches(layout, withBoundaries);
-    if (options.session) {
-      options.session.previous = withBoundaries;
-    }
-    return withBoundaries;
+    const pass = publishLayoutPass(projected, part, controlToken, allBlocks, sections, blocks);
+    carryLayoutReadCaches(layout, pass.published);
+    if (options.session) options.session.previous = pass.retained;
+    return pass.published;
   };
 
-  if (!options.notes) {
-    if (options.session) {
-      options.session.notes = null;
-      options.session.notePageBottomReserves = null;
-    }
-    return finish(yield* layoutWithCharacterHeadersSteps(part, optionsForBody, runBodySteps));
+  if (!options.notes && options.session) {
+    options.session.notes = null;
+    options.session.notePageBottomReserves = null;
   }
-
   // Notes inherit the body's projector seams and document properties (link, field link, doc
   // props) unless the notes input pinned its own — see `inheritNotesLayoutInput`. The REF
   // context rides along the same way: the note flow folds each paragraph's resolved values
   // into its break key and the notes-pass fingerprint folds the values token, so a
   // renumbering edit repaints the notes that cite the renumbered target.
-  const notesInput = inheritNotesLayoutInput(
-    options.notes,
-    refFields ? { ...options, refFields } : options
+  const notesInput =
+    options.notes &&
+    inheritNotesLayoutInput(options.notes, refFields ? { ...options, refFields } : options);
+  const steps = layoutWithCharacterHeadersSteps(part, optionsForBody, (opts) =>
+    notesInput
+      ? layoutSemanticDocumentWithNotesSteps(part, sections, opts, notesInput, runBodySteps, blocks)
+      : runBodySteps(opts)
   );
-  return finish(
-    yield* layoutWithCharacterHeadersSteps(part, optionsForBody, (opts) =>
-      layoutSemanticDocumentWithNotesSteps(part, sections, opts, notesInput, runBodySteps)
-    )
-  );
+  const aligner = interimSectionAligner(part, controlToken, sections, blocks);
+  return finish(yield* withAlignedProgress(steps, aligner));
 }
 
 function* layoutBlocksPass(
@@ -637,7 +636,10 @@ function* layoutBlocksPass(
   );
   let exclusionPageIndex = -1;
   let currentPageZones: readonly ExclusionZone[] = Object.freeze([]);
-  const pageExclusionZones = (): readonly ExclusionZone[] => {
+  const liveZones = createLiveExclusionZones(options, columns, contentWidthForReflow, bodies);
+  const pageExclusionZones = (): readonly ExclusionZone[] =>
+    liveZones.zones(pages, pendingAnchoredDrawings, previousPassZones());
+  const previousPassZones = (): readonly ExclusionZone[] => {
     const index = pages.length;
     if (exclusionPageIndex === index) return currentPageZones;
     const bodyZones = options.drawingExclusionZonesByPage?.get(index) ?? Object.freeze([]);
@@ -1087,7 +1089,7 @@ function* layoutBlocksPass(
       prepared.flatMap((entry) => (entry.kind === 'table' ? [entry.table] : []))
     );
   };
-  const previous = session?.previous ?? null;
+  const previous = previousBodyLayout(session?.previous ?? null);
   // A geometry or producer change invalidates every checkpoint, because it moves every
   // break; resuming from one would place new content against a stale flow. A parity flip
   // only matters when the previous pass actually read parity (even/odd headers or an
@@ -1280,6 +1282,16 @@ function* layoutBlocksPass(
     });
 
   const pageContentClip = (): LayoutBox => pageClipRegion(anchorFrameBase());
+  const lineAnchorsBeforeBandPush = hasCompatibilityRule(
+    options.compatibilityMode,
+    'lineAnchorsBeforeBandPush'
+  );
+  const anchorScope = {
+    drawingLayout: options.inlineDrawingLayout,
+    displayMode,
+    revisionAuthorFilter: authorFilter,
+    layoutTextboxStory: hostedStory?.layoutTextboxStoryFor,
+  };
 
   const sourceOrderOf = (drawingNodeId: string): number | undefined => {
     const projectedId =
@@ -1433,6 +1445,7 @@ function* layoutBlocksPass(
       resumable &&
       reserveResume.moved === undefined &&
       !furnitureHasWrap &&
+      // Live zones too: a pass that finds any collects them, and the next pass is not eligible.
       !options.drawingExclusionZonesByPage?.size,
     firstChanged,
     commonSuffix,
@@ -1473,7 +1486,7 @@ function* layoutBlocksPass(
     prepared.length,
     options.compatibilityMode,
     () => firstParagraphOfSection,
-    // The HTML automatic gap only: the fixed 5pt setting keeps its value.
+    // The HTML automatic gap only: under fixed spacing the authored measurement stays.
     styleCascade?.fixedParagraphSpacing !== true && pageIndexStart === 0 && flowStartY === 0
   );
 
@@ -1573,8 +1586,7 @@ function* layoutBlocksPass(
         displayMode,
         ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
         ...inlineDrawingFlow(options.inlineDrawingLayout, hostedStory),
-        // Line placement below clips these pictures to the sheet; frames keep the flow clip.
-        ...(!entry.frame ? { deferInlineDrawingHorizontalClip: true } : {}),
+        ...framedParagraphFlow(entry.frame !== undefined),
         ...bodyContentBounds(entry.indent, available, columnCount > 1 ? columnWidth() : undefined),
         ...bodyParagraphPlacementFlow({
           paragraphStartY,
@@ -1594,41 +1606,19 @@ function* layoutBlocksPass(
       placement: true,
     });
 
-  const placementZonesForLine = (
-    entry: PreparedParagraph,
-    entryIndex: number,
-    brokenLines: readonly PendingLine[],
-    lineIndex: number,
-    fragmentFirstLine: number,
-    fragmentParagraphStartY: number,
-    appliedSkipByLineIndex: ReadonlyMap<number, number>
-  ): readonly ExclusionZone[] => {
-    const pageZones = pageExclusionZonesForEntry(entry, entryIndex);
-    if (!options.inlineDrawingLayout || lineIndex <= fragmentFirstLine) return pageZones;
-    if (drawingModelOffsetsInParagraph(entry.paragraph).size === 0) return pageZones;
-    return drawingZonesAtLinePlacement({
-      paragraph: entry.paragraph,
-      paragraphId: entry.paragraph.id,
-      drawingLayout: options.inlineDrawingLayout,
-      contentLeft: columnCount > 1 ? columnOffsetX() : 0,
-      contentRight:
-        columnCount > 1
-          ? columnOffsetX() + columnWidth()
-          : entry.indent.left + entry.available + entry.indent.right,
-      paragraphStartY:
-        fragmentParagraphStartY -
-        paragraphDrawingWrap.displacement(pages.length, entry.paragraph.id),
-      columnIndex: flowColumnIndex,
-      displayMode,
-      ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
-      frameBase: anchorFrameBase(),
-      pageZones,
-      brokenLines,
-      lineIndex,
-      fragmentFirstLine,
-      appliedSkipByLineIndex,
-    });
-  };
+  const placementZonesForLine = createLinePlacementZones({
+    drawingLayout: options.inlineDrawingLayout,
+    displayMode,
+    ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
+    pageZones: pageExclusionZonesForEntry,
+    band: (entry) =>
+      columnCount > 1
+        ? { left: columnOffsetX(), right: columnOffsetX() + columnWidth() }
+        : { left: 0, right: entry.indent.left + entry.available + entry.indent.right },
+    paragraphTop: (id, y) => y - paragraphDrawingWrap.displacement(pages.length, id),
+    columnIndex: () => flowColumnIndex,
+    frameBase: anchorFrameBase,
+  });
 
   const placementSkipBefore = (
     entry: PreparedParagraph,
@@ -1688,6 +1678,17 @@ function* layoutBlocksPass(
 
   const tableVerticalFrames = (anchorY: number) =>
     tableFloat.bodyTableVerticalAnchorFrames(anchorFrameBase(), anchorY, geometry.margin.top);
+  const anchorTableBand = tableWrap.anchorTableBandOf({
+    anchors: positionedTables,
+    pending: pendingFloatIds,
+    width: columnWidth,
+    deps: tableDeps,
+    frames: anchorFrames,
+    verticalFrames: tableVerticalFrames,
+    earlier: () => pageFragments,
+    signals: floatSignals,
+    pushOf: stacks.push,
+  });
 
   const layoutTableInFlow = (
     table: OoxmlElement,
@@ -1839,12 +1840,19 @@ function* layoutBlocksPass(
       },
       linesFor: (at) => {
         const member = prepareBlock(bodies[at]!, columnWidth());
-        return member.kind === 'paragraph' ? breakBlock(member, at) : [];
+        if (member.kind !== 'paragraph') return [];
+        return linesWithOwnAnchorNeeds(bodies[at]!, breakBlock(member, at), {
+          ...anchorScope,
+          modern: () => anchorFrameBase().wrappedParagraphAnchorBottom === 'margin',
+          opening: () =>
+            openingAbove(member, prepared[at - 1], styleCascade?.fixedParagraphSpacing),
+        });
       },
       skipBlock: (at) =>
         prepared[at]?.kind === 'paragraph' && (!!prepared[at].frame || !!emptySectionMarkAt(at)),
       breaksBefore: (at) => prepared[at]?.kind === 'paragraph' && breaksBeforeAt(at, prepared[at]),
       sumAdjacentSpacing: styleCascade?.fixedParagraphSpacing,
+      noteClosing: () => keepNoteClosing(noteReserveHere(), pageFragments, options),
       tableOpening: (at) =>
         keptTables.opening(prepared[at], columnWidth(), contentHeight(), tableDeps),
     },
@@ -1895,7 +1903,8 @@ function* layoutBlocksPass(
             options.sectionPageBorders !== undefined &&
             options.sectionPageBorders.display !== 'allPages',
           hasNoteReserves: pageBottomReserves !== undefined && !shiftedTail,
-          hasExclusionZones: (options.drawingExclusionZonesByPage?.size ?? 0) > 0,
+          hasExclusionZones:
+            (options.drawingExclusionZonesByPage?.size ?? 0) > 0 || liveZones.sawLiveZones,
         });
         if (shiftable && flowCheckpointsMatch(mark, checkpoints[index]!)) {
           if (shiftedTail) reserveResume.adoptShiftedTail(shiftedTail);
@@ -1971,7 +1980,9 @@ function* layoutBlocksPass(
         !furnitureHoldsTables &&
         tableWrap.admitsAtAnchor(entry.table, tableDeps, {
           allowBreak: columns.count === 1,
-          zones: admission(options.drawingExclusionZonesByPage),
+          zones: admission(
+            liveZones.byPage(pages, pendingAnchoredDrawings, options.drawingExclusionZonesByPage)
+          ),
           page: pages.length,
           width: Math.min(...columns.widths),
           frames: anchorFrames(),
@@ -2062,6 +2073,9 @@ function* layoutBlocksPass(
       (pageFragments.length > 0 || cursorY > 0) &&
       index !== markOnBreakSheet
     ) {
+      const fits = () => cursorY + anchorTableBand(paragraphId, cursorY, 0) <= contentHeight();
+      if (tableWrap.staysBeforeAnchorBreak(positionedTables, pendingFloatIds, paragraphId, fits))
+        noteAnchor(paragraphId, cursorY);
       flushPage();
       previousSpaceAfter = 0;
     }
@@ -2106,6 +2120,12 @@ function* layoutBlocksPass(
       flowNeighbourStyle(paragraph, -1, previousEntry, styleCascade),
       flowNeighbourStyle(paragraph, 1, nextEntry, styleCascade)
     );
+    // Whether a line's own wrapping objects still cross the margin (`wrappedAnchorsEndAtBottomMargin`).
+    const pageFit = createOwnAnchorPageFit(paragraph, {
+      ...anchorScope,
+      frameBase: anchorFrameBase,
+      column: () => ({ x: columnOffsetX(), width: columnWidth() }),
+    });
     let keepTailAt = -1; // Where a kept paragraph that splits early breaks; a rebreak clears it.
     const rebreakInCurrentColumn = (startOffset: number, placedParagraphStartY?: number): void => {
       const next = prepareBlock(paragraph, columnWidth());
@@ -2166,23 +2186,11 @@ function* layoutBlocksPass(
         Math.max(
           firstExtent,
           paragraphFrames.requiredAnchorBand(lines),
-          tableWrap.requiredAnchorBand(
-            positionedTables,
-            pendingFloatIds,
-            paragraphId,
-            columnWidth(),
-            tableDeps,
-            {
-              anchorY: prospectiveFirstTop,
-              anchorExtent: firstExtent,
-              frames: anchorFrames(),
-              verticalFrames: tableVerticalFrames(prospectiveFirstTop),
-              earlier: pageFragments,
-              signals: floatSignals,
-              pushOf: stacks.push,
-            }
-          )
+          anchorTableBand(paragraphId, prospectiveFirstTop, firstExtent)
         );
+      // An own object that cannot end at the bottom margin takes the paragraph along.
+      const ownY = () => cursorY - paragraphDrawingWrap.displacement(pages.length, paragraphId);
+      const anchorMoves = !!lines[0] && pageFit.crosses(lines[0], lines.length <= 1, ownY, cursorY);
       // `w:keepNext` (§17.3.1.15): priced ONCE per chain, at its head (`keepNextGroupNeed`).
       if (keeps.keepNext && !keepsNext[index - 1]) {
         const need = keepChains.need(index, previousSpaceAfter, {
@@ -2198,7 +2206,8 @@ function* layoutBlocksPass(
         if (need !== null) needed = Math.max(needed, need);
       }
       markPastBottom = !collapsedMark && cursorY + needed > contentHeight() && holdsSheet();
-      if (cursorY + needed > contentHeight() && cursorY > 0 && !holdsSheet() && !leadingBreak()) {
+      const overflows = cursorY + needed > contentHeight() || anchorMoves;
+      if (overflows && cursorY > 0 && !holdsSheet() && !leadingBreak()) {
         const plainExtent = lead + topExtent + (lines[0]?.height ?? 0) + firstTail;
         if (!frame && ownTableStays(paragraphId, plainExtent)) noteAnchor(paragraphId, cursorY);
         advanceColumn();
@@ -2235,7 +2244,9 @@ function* layoutBlocksPass(
     let fragmentIndex = 0;
     let pending: LineRecord[] = [];
     const closingAfter = (line: PendingLine): number =>
-      closingSpaceAfterPt(noteReserveHere(), pageFragments, pending, line, spacing.after);
+      closingSpaceAfterPt(noteReserveHere(), pageFragments, pending, line, spacing.after, options);
+    const droppedBelow = (line: PendingLine): number =>
+      droppableSpacingPt(noteReserveHere(), pageFragments, pending, line, options);
     let fragmentStart = lines[0]?.start ?? 0;
     let fragmentBefore = appliedBefore;
     // Reserved above the FIRST fragment only: a paragraph continued onto the next page opens
@@ -2265,12 +2276,6 @@ function* layoutBlocksPass(
     const paragraphHasAnchors =
       options.inlineDrawingLayout !== undefined &&
       anchoredDrawingAtomsInParagraph(entry.paragraph, options.inlineDrawingLayout).length > 0;
-    let paragraphAnchorsPublished = false;
-    let paragraphAnchorOrigin: Readonly<{
-      columnX: number;
-      columnWidth: number;
-      startY: number;
-    }> | null = null;
 
     const { revisions: markRevisions, formatRevision: markFormatRevision } =
       visibleParagraphMarkRevisionsOf(entry.paragraph, displayMode, authorFilter);
@@ -2284,6 +2289,17 @@ function* layoutBlocksPass(
       ? mergeBoundariesOf(mergeGroup, displayMode, authorFilter)
       : null;
 
+    // The fragment's first line skip that wrapping bands caused (see `fragmentAnchorFrame`).
+    const bandSkip = (applied = fragmentFirstLineSkip) =>
+      Math.max(0, applied - (lines[fragmentFirstLine]?.anchorClearanceBefore ?? 0));
+    /** The paragraph top this fragment's anchors publish against (`applied`: first line skip). */
+    const anchorParagraphY = (applied = fragmentFirstLineSkip): number =>
+      fragmentParagraphStartY -
+      fragmentBefore -
+      fragmentTopExtent +
+      applied -
+      bandSkip(applied) -
+      paragraphDrawingWrap.displacement(pages.length, paragraphId);
     const flushFragment = (isLast: boolean): void => {
       if (pending.length === 0) return;
       const regionX = columnLeft();
@@ -2412,74 +2428,37 @@ function* layoutBlocksPass(
       };
       if (frame) paragraphFrames.add(frame, publishedFragment, frameStart?.groupId, index);
       else pageFragments.push(publishedFragment);
-      const publish =
-        options.inlineDrawingLayout && paragraphHasAnchors && !paragraphAnchorsPublished;
-      const anchorOffsets = publish ? publishableAnchors(entry.paragraph, lines, pending) : null;
-      if (publish && anchorOffsets) {
-        paragraphAnchorsPublished = true;
-        const pendingCoversAnchors =
-          anchorOffsets.length > 0 &&
-          anchorOffsets.every((offset) =>
-            pending.some((line) => offset >= line.range.start && offset < line.range.end)
-          );
-        let publishLines: typeof pending;
-        let publishParagraphBox: LayoutBox;
-        let publishColumnBox: LayoutBox;
-        if (pendingCoversAnchors) {
-          // A `wrapTopAndBottom` anchor pushed its OWN paragraph's lines down to clear the
-          // band. Framing the anchor against those lines chases the displacement it caused —
-          // the picture lands on the text it just moved. `positionV relativeFrom="paragraph"`
-          // means where the paragraph would begin without its own band, so that skip comes
-          // back off here. A band inherited from an earlier paragraph is NOT removed: it
-          // moved this paragraph for real, and the anchor travels with it.
-          const anchorTop =
-            top -
-            ownTopAndBottomSkip(fragmentFirstLineSkip, fragmentParagraphStartY, pending[0], {
-              inheritedZones: pageExclusionZonesForEntry(entry, index),
-              spaceAbove: fragmentBefore,
-              anchorClearanceBefore: lines[fragmentFirstLine]?.anchorClearanceBefore,
-            }) -
-            paragraphDrawingWrap.displacement(pages.length, paragraphId);
-          publishLines = pending;
-          publishParagraphBox = {
-            x: columnX + indent.left,
-            y: anchorTop,
-            width: available,
-            height,
-          };
-          publishColumnBox = anchorColumnBox(publishParagraphBox);
-        } else {
-          const origin = paragraphAnchorOrigin ?? {
-            columnX,
-            columnWidth: columnWidth(),
-            startY: top,
-          };
-          const synthetic = syntheticAnchorLines(
-            lines,
-            origin,
-            { left: origin.columnX + indent.left, width: available },
-            paragraphId
-          );
-          publishLines = synthetic.lines;
-          const paragraphTop =
-            origin.startY - paragraphDrawingWrap.displacement(pages.length, paragraphId);
-          publishParagraphBox = {
-            x: origin.columnX + indent.left,
-            y: paragraphTop,
-            width: available,
-            height: Math.max(synthetic.bottom - paragraphTop, pending[0]?.box.height ?? 0),
-          };
-          publishColumnBox = anchorColumnBox(publishParagraphBox);
-        }
+      // Each fragment publishes the anchors its lines hold, framed by its own lines.
+      const anchorRange = {
+        start: fragmentIndex === 0 ? 0 : fragmentStart,
+        end: isLast ? Infinity : pending[pending.length - 1]!.range.end,
+      };
+      if (
+        options.inlineDrawingLayout &&
+        paragraphHasAnchors &&
+        holdsDrawingIn(entry.paragraph, anchorRange)
+      ) {
+        const anchorFrame = fragmentAnchorFrame({
+          pending,
+          top,
+          height,
+          column: { x: columnX, width: columnWidth() },
+          indentLeft: indent.left,
+          available,
+          displacement: paragraphDrawingWrap.displacement(pages.length, paragraphId),
+          bandSkip: bandSkip(),
+          lineBeforeBandPush: lineAnchorsBeforeBandPush,
+        });
         collectAnchoredDrawings(
           publishAnchoredDrawingsForParagraph({
             paragraph: entry.paragraph,
             paragraphId,
-            paragraphBox: publishParagraphBox,
-            lines: publishLines,
+            paragraphBox: anchorFrame.paragraphBox,
+            lines: anchorFrame.lines,
+            fragmentRange: anchorRange,
             drawingLayout: options.inlineDrawingLayout,
             frameBase: anchorFrameBase(),
-            columnBox: publishColumnBox,
+            columnBox: anchorColumnBox(anchorFrame.paragraphBox),
             cellBox: null,
             pageClip: pageContentClip(),
             cellAnchorScope: null,
@@ -2517,13 +2496,6 @@ function* layoutBlocksPass(
       const tail = isLastLine ? borderExtent + closingAfter(pendingLine) : 0;
       if (lineIndex === fragmentFirstLine) {
         fragmentParagraphStartY = cursorY;
-        if (paragraphHasAnchors && paragraphAnchorOrigin === null && fragmentIndex === 0) {
-          paragraphAnchorOrigin = Object.freeze({
-            columnX: columnOffsetX(),
-            columnWidth: columnWidth(),
-            startY: fragmentParagraphStartY,
-          });
-        }
       }
       const skipBefore = frame
         ? 0
@@ -2538,21 +2510,30 @@ function* layoutBlocksPass(
             appliedSkipByLineIndex,
             fragmentBefore
           );
-      // Auto spacing below the glyph band may cross the bottom text margin. The painted line
-      // keeps its full box; only the pagination budget drops that trailing external depth.
+      // Auto spacing below the glyph band may cross the bottom text margin, not a footnote
+      // area. The painted line keeps its full box; only the pagination budget drops it.
       // An empty anchor's own clearance moves its mark, not the anchor onto another sheet.
       const lineExtent =
         (pendingLine.anchorClearanceBefore ?? skipBefore) +
-        Math.max(0, pendingLine.height - pendingLine.trailingSpacing) +
+        Math.max(0, pendingLine.height - droppedBelow(pendingLine)) +
         tail;
       // A leading page break's empty line stays: the break itself opens the next sheet.
       keptBreakLine =
         !frame && lineIndex === 0 && cursorY + lineExtent > contentHeight() && leadingBreak();
+      // An own object that cannot end at the bottom margin takes its line to the next column.
+      const anchorMoves =
+        (pending.length > 0 || regionHasFragments() || columnRegionTop > 0) &&
+        pageFit.crosses(
+          pendingLine,
+          isLastLine,
+          () => anchorParagraphY(pending.length > 0 ? undefined : skipBefore),
+          cursorY + skipBefore - (pending.length > 0 ? 0 : fragmentBefore + fragmentTopExtent)
+        );
       // An intrinsically oversized line cannot fit another empty sheet; publish it once.
       const overflowsPage =
         lineIndex === keepTailAt ||
         (!frame &&
-          cursorY + lineExtent > contentHeight() &&
+          (cursorY + lineExtent > contentHeight() || anchorMoves) &&
           !holdsSheet() &&
           !keptBreakLine &&
           (pending.length > 0 ||
@@ -2600,12 +2581,14 @@ function* layoutBlocksPass(
           lineCounter -= 1;
         }
         // Moving WHOLE preserves the next column's origin; space-before drops, the top rule travels.
-        const movesWhole = retreated && pending.length === 0 && fragmentIndex === 0;
+        // So does an own object that takes the paragraph's first line along.
+        const movesWhole =
+          (retreated || anchorMoves) && pending.length === 0 && fragmentIndex === 0;
         const nextOffset = lines[breakAt]!.start;
         const priorColumnWidth = columnWidth();
         const priorPageHadExclusions = pageExclusionZones().length > 0;
         // An anchor that keeps or widow rules move whole leaves its own table here as well.
-        if (movesWhole && !frame && ownTableStays(paragraphId, lines[0]!.height))
+        if (movesWhole && retreated && !frame && ownTableStays(paragraphId, lines[0]!.height))
           noteAnchor(paragraphId, cursorY);
         flushFragment(false);
         advanceColumn();
@@ -2723,6 +2706,10 @@ function* layoutBlocksPass(
       if (pending.length === 0) fragmentFirstLineSkip = skipBefore;
       pending.push(record);
       cursorY += pendingLine.height;
+      // An own object that still crosses the bottom margin here ends the page after its line.
+      const lineY = record.box.y - (pending.length > 1 ? 0 : fragmentBefore + fragmentTopExtent);
+      if (!frame && pageFit.crosses(pendingLine, isLastLine, () => anchorParagraphY(), lineY))
+        cursorY = Math.max(cursorY, contentHeight());
       if (pendingLine.columnBreakAfter) {
         const priorColumnWidth = columnWidth();
         const priorPageHadExclusions = pageExclusionZones().length > 0;
@@ -2835,33 +2822,21 @@ function* layoutBlocksPass(
   };
   if (session) {
     session.previous = layout;
-    // A converged pass stops early, so the tail's checkpoints were never recomputed. The
-    // previous pass's remain valid precisely because the flow matched at the join — with
-    // their completed-page counts moved by however many sheets the reused tail moved.
     session.checkpoints = converged
-      ? [
-          ...checkpoints.slice(0, convergedAt),
-          ...session.checkpoints
-            .slice(convergedAt + (session.keys.length - prepared.length))
-            .map((checkpoint) =>
-              convergedPageDelta === 0
-                ? checkpoint
-                : { ...checkpoint, pageCount: checkpoint.pageCount + convergedPageDelta }
-            ),
-        ]
+      ? convergedCheckpoints(checkpoints, session.checkpoints, {
+          at: convergedAt,
+          removedBlocks: session.keys.length - prepared.length,
+          pageDelta: convergedPageDelta,
+        })
       : checkpoints;
     session.keys = flowKeys;
     reserveResume.publish(session, pages.length);
     session.producer = producer;
-    // Sticky whenever any part of the previous layout was reused: a resumed pass never
-    // re-places the prefix and a converged pass never re-places the tail, so their
-    // parity-reading anchors could not fire `onPageParityRead` this pass. Only a pass that
-    // placed EVERYTHING (full start, no convergence) may clear the flag.
-    const passParityDependent = usedPageParity || furniture?.evenAndOddHeaders === true;
-    session.parityDependent =
+    session.parityDependent = nextParityDependent(
+      session.parityDependent,
+      usedPageParity || furniture?.evenAndOddHeaders === true,
       startIndex === 0 && !converged
-        ? passParityDependent
-        : session.parityDependent || passParityDependent;
+    );
     session.startPageParity = startPageParity;
     session.startLineCounter = lineCounterStart;
     session.endLineCounter = lineCounter;

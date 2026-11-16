@@ -1,0 +1,16 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Charts are read-only. No command writes a chart part or an embedded workbook, and a chart frame refuses resize, move, and wrap.",
+  "after": "insertChart writes a new chart part, an embedded workbook, and their relationships. setChartData, setChartType, setChartFormat, and setChartColor replace the chart part and the workbook. A chart that is not in mc:AlternateContent takes resizeDrawing, positionDrawing, setDrawingWrap, and setDrawingMetadata, as a picture does. A chart paste copies the chart part and the parts it reaches as new parts, adds a chart relationship, and inserts the drawing, in one package unit. A drag of a floating drawing to another body paragraph sends deleteDrawing and insertDrawing in one transaction, with the new position on the inserted drawing.",
+  "reason": "The commands use the existing package operations: new XML and binary parts, relationships, and same-identity node replacement. A chart frame edit writes the same drawing extent, position, and wrap nodes as a picture frame edit. Peers on older versions receive ordinary part and node changes. No shared field or operation changes. A chart paste uses the same part, relationship, and insertDrawing operations as insertChart. The move of an anchor uses only the existing deleteDrawing and insertDrawing operations.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/chart-editing.test.ts",
+    "packages/core/src/editor/__tests__/chart-commands.test.ts",
+    "packages/core/src/editor/__tests__/chart-clipboard.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-drawing-reanchor.test.ts",
+    "packages/core/src/editor/__tests__/drawing-reanchor.test.ts"
+  ],
+  "changeset": "chart-insert-and-edit",
+  "migration": null
+}

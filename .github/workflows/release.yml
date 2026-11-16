@@ -33,14 +33,35 @@ name: Release
 # runs queue and get cancelled, leaving the release PR stale.
 #
 # Manual workflow_dispatch is kept for the rare case of triggering a publish
-# without a fresh push (e.g. recovering from a failed publish step).
+# without a fresh push (e.g. recovering from a failed publish step). Every stable
+# job requires main, so a manual run on any other branch never updates the
+# release PR or publishes; versions reach npm only from main.
+#
+# Canary channel. The nightly schedule, or a manual run with channel=canary,
+# publishes the newest main commit that passed CI as a prerelease on the
+# `canary` dist-tag, e.g. 2.35.0-canary.20261103032300.sha-b20ba9f. The base
+# version is the one the pending changesets will release. `changeset version
+# --snapshot` changes versions on the runner only: no commit, no git tag, no
+# changelog, no GitHub Release, and `latest` never moves. The canary lives in
+# this file because npm allows one Trusted Publisher per package, bound to the
+# workflow filename. It runs in its own concurrency group, so a nightly run
+# never cancels a queued release-PR update.
 on:
   push:
     branches: [main]
+  schedule:
+    # Off the hour: GitHub delays or drops scheduled runs at :00 under load.
+    - cron: '23 3 * * *'
   workflow_dispatch:
+    inputs:
+      channel:
+        description: 'release: update the release PR or publish to latest. canary: publish the newest green main commit to the canary tag.'
+        type: choice
+        options: [release, canary]
+        default: release
 
 concurrency:
-  group: release
+  group: ${{ (github.event_name == 'schedule' || inputs.channel == 'canary') && 'release-canary' || 'release' }}
   cancel-in-progress: false
 
 jobs:
@@ -55,11 +76,42 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      actions: read # canary: find the newest main commit that passed CI
+    env:
+      RELEASE_CHANNEL: ${{ (github.event_name == 'schedule' || inputs.channel == 'canary') && 'canary' || 'release' }}
     outputs:
-      mode: ${{ steps.mode.outputs.mode }}
+      # A canary run can only answer canary or idle. The script comes from the green
+      # commit, so this also holds when that commit predates the canary channel.
+      mode: ${{ ((github.event_name == 'schedule' || inputs.channel == 'canary') && steps.mode.outputs.mode != 'canary') && 'idle' || steps.mode.outputs.mode }}
+      commit: ${{ steps.commit.outputs.sha }}
     steps:
+      # A canary ships only a commit that main's own CI run passed, and only from the
+      # canonical repository's main branch: never from a fork or a dispatch on a branch.
+      - name: Find the newest main commit that passed CI
+        id: commit
+        if: ${{ env.RELEASE_CHANNEL == 'canary' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$REPOSITORY" != "eigenpal/docx-editor" ] || [ "$REF" != "refs/heads/main" ]; then
+            echo "Canaries publish only from eigenpal/docx-editor main, not $REPOSITORY $REF" >&2
+            exit 1
+          fi
+          sha=$(gh run list --repo "$REPOSITORY" --workflow ci.yml --branch main --event push \
+            --status success --limit 1 --json headSha --jq '.[0].headSha // empty')
+          if [ -z "$sha" ]; then
+            echo "No main commit has a successful CI run" >&2
+            exit 1
+          fi
+          echo "Newest main commit that passed CI: $sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.commit.outputs.sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -68,20 +120,34 @@ jobs:
 
       - name: Detect pending changesets and unpublished versions
         id: mode
+        env:
+          CANARY_COMMIT: ${{ steps.commit.outputs.sha }}
+          # Canary only: reads main's changesets and the active Release runs.
+          GH_TOKEN: ${{ env.RELEASE_CHANNEL == 'canary' && github.token || '' }}
         run: node scripts/release-mode.mjs
+
+      # Every stable job requires main. A manual run on another branch, such as the
+      # unmerged release PR branch, stops here: no release PR update, no publish.
+      - name: Refuse stable releases outside main
+        if: ${{ env.RELEASE_CHANNEL == 'release' && github.ref != 'refs/heads/main' }}
+        env:
+          REF: ${{ github.ref }}
+        run: echo "::warning::Stable releases run only from main. This run on $REF stops after mode detection."
 
   # Independent checks run concurrently. Publish path only — contributor PRs
   # already run the same checks, and the PR-update path only rewrites versions.
   checks:
     name: Prepublish ${{ matrix.label }}
     needs: mode
-    if: ${{ needs.mode.outputs.mode == 'publish' }}
+    if: ${{ github.ref == 'refs/heads/main' && needs.mode.outputs.mode == 'publish' }}
     strategy:
       fail-fast: true
       matrix:
         include:
           - label: lint
             command: bun run lint
+          - label: shipped dependency advisories
+            command: bun run check:shipped-advisories
           - label: format
             command: bun run format:check
           - label: typecheck
@@ -137,7 +203,7 @@ jobs:
   build:
     name: Prepublish build
     needs: mode
-    if: ${{ needs.mode.outputs.mode == 'publish' }}
+    if: ${{ github.ref == 'refs/heads/main' && needs.mode.outputs.mode == 'publish' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -165,6 +231,9 @@ jobs:
 
       - name: Build packages (publish reuses the dist/)
         run: bun run build:packages
+
+      - name: Check public API snapshots
+        run: bun run api:check
 
       - name: Root and example type check
         run: bun run typecheck:root
@@ -221,7 +290,7 @@ jobs:
   collaboration:
     name: Prepublish collaboration (${{ matrix.shard }})
     needs: [mode, build]
-    if: ${{ needs.mode.outputs.mode == 'publish' }}
+    if: ${{ github.ref == 'refs/heads/main' && needs.mode.outputs.mode == 'publish' }}
     strategy:
       fail-fast: false
       matrix:
@@ -264,9 +333,9 @@ jobs:
   release:
     name: Release
     needs: [mode, checks, build, collaboration]
-    # Run on both paths: checks/build are skipped on the PR-update path by
-    # design, so accept skipped as well as success. The idle path has no work.
-    if: ${{ !cancelled() && needs.mode.result == 'success' && (needs.mode.outputs.mode == 'pending' || needs.mode.outputs.mode == 'publish') && (needs.checks.result == 'success' || needs.checks.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped') && (needs.mode.outputs.mode != 'publish' || needs.collaboration.result == 'success') }}
+    # PR updates accept skipped checks/build. Publication requires every gate
+    # to succeed. The idle path has no work.
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.mode.result == 'success' && ((needs.mode.outputs.mode == 'pending' && (needs.checks.result == 'success' || needs.checks.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped')) || (needs.mode.outputs.mode == 'publish' && needs.checks.result == 'success' && needs.build.result == 'success' && needs.collaboration.result == 'success')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -430,6 +499,96 @@ jobs:
           version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
           gh workflow run python-wheels.yml --ref "v$version" -f publish=true
 
+  # Nightly prerelease on the `canary` dist-tag; see the header comment. Main's CI
+  # already passed this commit, so the job repeats only the gates that depend on the
+  # canary version itself: the build (telemetry embeds its version), the package
+  # artifacts, and a consumer install of the exact tarballs with their pinned
+  # internal ranges. Publishing needs a GitHub-hosted runner for provenance.
+  canary:
+    name: Canary
+    needs: mode
+    if: ${{ (github.event_name == 'schedule' || inputs.channel == 'canary') && needs.mode.result == 'success' && needs.mode.outputs.mode == 'canary' && needs.mode.outputs.commit != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: read # the stable-release gate lists active Release runs
+      id-token: write # OIDC for npm Trusted Publishing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.mode.outputs.commit }}
+          # `changeset version` reads the commit that added each changeset, as the
+          # stable release job does.
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+          # Downloading the binary takes seconds; caching it only fills the cache.
+          no-cache: true
+
+      # Node 24 ships with npm 11.x; Trusted Publishing requires >=11.5.1.
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: bash scripts/ci/install-dependencies.sh
+
+      # Versions every public package <pending version>-canary.<UTC time>.sha-<commit>
+      # and pins the internal peer and runtime ranges to that exact version.
+      - name: Version the canary
+        run: bun run changeset version --snapshot canary
+
+      - name: Check the canary version
+        run: |
+          version=$(node -p "require('./packages/core/package.json').version")
+          echo "Canary version: $version"
+          case "$version" in
+            *-canary.*.sha-*) ;;
+            *) echo "Unexpected canary version: $version" >&2; exit 1 ;;
+          esac
+
+      - name: Build packages
+        run: bun run build:packages
+
+      - name: Generate third-party notices
+        run: bun run notices:generate
+
+      - name: Check published package artifacts
+        run: bun run check:package-artifacts
+
+      - name: Consumer install check
+        run: bun run check:consumer-install
+        env:
+          SKIP_CONSUMER_INSTALL_BUILD: '1'
+
+      # Installs docx-to-pdf with fonts-cjk, which the consumer install check does not cover.
+      - name: PDF packed consumer check
+        run: "bun run --filter '@docx-editor.dev/docx-to-pdf' check:consumer"
+
+      # Checked again right before publishing: a release PR merged or a stable publish
+      # started during this job skips the publish. See stableReleaseClear.
+      - name: Confirm no stable release is active
+        id: gate
+        env:
+          RELEASE_CHANNEL: canary-gate
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-mode.mjs
+
+      # --tag canary keeps `latest` where it is. Canaries create no git tags. Canaries
+      # post nothing to Slack; a failed canary shows only as a failed run in Actions.
+      - name: Publish canary
+        if: ${{ steps.gate.outputs.clear == 'true' }}
+        run: bun run changeset publish --tag canary --no-git-tag
+        env:
+          NPM_CONFIG_PROVENANCE: 'true'
+
   # Distinguish three failure modes when notifying Slack:
   #   - MODE=pre-release → a prepublish job failed, or a release-job step failed
   #     before the changesets step ever ran (install, checkout, artifact
@@ -440,11 +599,11 @@ jobs:
   #   - MODE=publish     → changesets step failed AND no pending changesets,
   #     so the run was trying to publish to npm and failed mid-publish.
   # Lives in its own job so a prepublish failure still alerts — the
-  # release job never starts in that case.
+  # release job never starts in that case. Canary runs never post to Slack.
   notify-failure:
     name: Notify Slack — workflow failed
     needs: [mode, checks, build, release]
-    if: ${{ failure() }}
+    if: ${{ failure() && github.event_name != 'schedule' && inputs.channel != 'canary' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     # Only curls the Slack webhook; needs no GITHUB_TOKEN access at all.

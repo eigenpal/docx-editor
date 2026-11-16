@@ -94,7 +94,7 @@ test('with East Asian spacing off, a justified East Asian line stretches its spa
 });
 
 test('with East Asian spacing off, a justified table cell stays at natural spacing', () => {
-  const cell = `<w:tbl><w:tblPr><w:tblW w:w="2000" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="1900"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="1900" w:type="dxa"/></w:tcPr>${paragraph(TEXT, '<w:jc w:val="both"/>')}</w:tc></w:tr></w:tbl><w:p/>`;
+  const cell = `<w:tbl><w:tblPr><w:tblW w:w="1900" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="1900"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="1900" w:type="dxa"/></w:tcPr>${paragraph(TEXT, '<w:jc w:val="both"/>')}</w:tc></w:tr></w:tbl><w:p/>`;
   const [off] = lines(cell, OFF['an empty rPrDefault']);
   const [on] = lines(cell, ON['no rPrDefault']);
   // 95pt cell: nine characters and 5pt of slack.

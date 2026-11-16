@@ -195,6 +195,7 @@ describe('commit-tail layout deferral under input pressure', () => {
       // The IME writes at the caret (after 'X') and only then says it is finished.
       repaintParagraphAs(container, id, 'X中tail');
       pages.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+      surface.flushPendingInput();
 
       // The diff is exactly the composed character — not the deferred 'X' read back twice.
       expect(surface.session.bodyText()).toBe('X中tail');

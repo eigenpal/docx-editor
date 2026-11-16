@@ -75,9 +75,7 @@ export type MarkdownReviewProjection =
 
 /** Why a source occurrence has no range in a particular Markdown projection. @public */
 export type MarkdownReviewUnmappedReason =
-  | 'not-represented-in-markdown'
-  | 'non-linear-structural-change'
-  | 'omitted-story-content';
+  'not-represented-in-markdown' | 'non-linear-structural-change' | 'omitted-story-content';
 
 /** Honest snapshot-local mapping from a Core review occurrence to generated Markdown. @public */
 export interface MarkdownReviewBinding {

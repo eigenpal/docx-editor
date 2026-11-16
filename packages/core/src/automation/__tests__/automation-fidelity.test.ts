@@ -294,12 +294,12 @@ describe('a structural edit survives the serializer', () => {
     );
     const host = open(source);
     const list = paragraphsOf(host, bodyOf(host));
-    expect(list).toHaveLength(3);
+    expect(list).toHaveLength(4); // The last is the body's paragraph after the table.
     host.execute({ operations: [{ op: 'deleteParagraph', paragraph: list[1]! }] });
 
     const reopened = open(savedBytes(host));
     const paragraphs = paragraphsOf(reopened, bodyOf(reopened));
-    expect(paragraphs).toHaveLength(2);
+    expect(paragraphs).toHaveLength(3);
     const after = semanticDigest([savedMainPart(reopened)]);
     const differences = diffSemanticDigests(semanticDigest([savedMainPart(open(source))]), after);
     const changed = differences.map((difference) => difference.path).join(' ');

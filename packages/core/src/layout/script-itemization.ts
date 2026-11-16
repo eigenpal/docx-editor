@@ -83,7 +83,7 @@ function classifiedCodePoints(
   text: string
 ): { from: number; to: number; classified: Classified }[] {
   const codePoints: { from: number; to: number; classified: Classified }[] = [];
-  for (let from = 0; from < text.length; ) {
+  for (let from = 0; from < text.length;) {
     const codePoint = text.codePointAt(from)!;
     const to = from + (codePoint > 0xffff ? 2 : 1);
     codePoints.push({ from, to, classified: classify(codePoint) });
@@ -279,7 +279,7 @@ export function eastAsiaRunsOfSegments(
       }
       continue;
     }
-    for (let from = 0; from < text.length; ) {
+    for (let from = 0; from < text.length;) {
       let codePoint = text.codePointAt(from)!;
       let to = from + (codePoint > 0xffff ? 2 : 1);
       let hinted = false;

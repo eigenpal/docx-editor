@@ -124,6 +124,20 @@ export async function waitForSiteRun({
   }
 }
 
+/** Conclusions that end a site run without success. */
+const UNFINISHED = ['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required'];
+
+/** `job / step` for each failed step of a finished run, so the log names the cause. */
+export function failedSteps(jobs) {
+  return (jobs ?? []).flatMap((job) => {
+    if (!UNFINISHED.includes(job.conclusion)) return [];
+    const steps = (job.steps ?? []).filter((step) => UNFINISHED.includes(step.conclusion));
+    return steps.length
+      ? steps.map((step) => `${job.name} / ${step.name} (${step.conclusion})`)
+      : [`${job.name} (${job.conclusion})`];
+  });
+}
+
 /**
  * Request one site update and wait for it. A version that is no longer npm `latest` is not
  * sent: a rerun after a newer release must not move the site back. The same check turns a
@@ -217,6 +231,17 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
       console.error(
         `::error::The ${repository} update finished with ${outcome.result}: ${outcome.url}`
       );
+      // Best effort: the cause is in the site repository, so name the failed step here.
+      const id = /\/runs\/(\d+)/.exec(outcome.url ?? '')?.[1];
+      if (id) {
+        try {
+          const steps = failedSteps(api(`repos/${repository}/actions/runs/${id}/jobs`).jobs);
+          for (const step of steps) console.error(`::error::${repository} failed at: ${step}`);
+          if (summary && steps.length) appendFileSync(summary, `Failed at: ${steps.join('; ')}\n`);
+        } catch {
+          console.error('Could not read the failed steps of the site run.');
+        }
+      }
       process.exitCode = 1;
     }
   } catch (error) {

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -26,6 +26,7 @@ import { spanRefOf, type SpanOwner } from './addressing.ts';
 import { Body } from './body.ts';
 import { ItemCollection, type PromisedItem } from './item-collection.ts';
 import { ModelObject } from './model-object.ts';
+import { ShapeFill } from './shape-fill.ts';
 
 /** Word's shape types. Supported text-bearing shapes expose their own body. @public */
 export enum ShapeType {
@@ -50,6 +51,7 @@ const SHAPE_TYPES: ReadonlySet<string> = new Set(Object.values(ShapeType));
  */
 export class Shape extends ModelObject implements PromisedItem {
   #body: Body | undefined;
+  #fill: ShapeFill | undefined;
 
   /** @internal */
   static at(context: RequestContext, label: string, address: ObjectAddress): Shape {
@@ -110,6 +112,18 @@ export class Shape extends ModelObject implements PromisedItem {
     );
     this.#body = story;
     return story;
+  }
+
+  /**
+   * The shape's fill. A group's fill is every shape it holds. Pictures, charts and diagrams
+   * refuse at the sync. The outline has no Office.js member; the editor's `setShapeOutline`
+   * command sets it.
+   */
+  get fill(): ShapeFill {
+    this.#fill ??= ShapeFill.of(this.context, `${this.path.label}.fill`, this.path, () =>
+      this.#handle()
+    );
+    return this.#fill;
   }
 
   /** @internal Plan the read this object's `load(...)` asked for. */

@@ -10,7 +10,6 @@ export {
   inlineControlStartingAt,
   paragraphOffsetIndex,
   paragraphTextOf,
-  segmentsOf,
   validateTreeOp,
   TREE_DOC_OP_KINDS,
   type ImpactClass,
@@ -23,10 +22,16 @@ export {
   type TreeDocOp,
   type TreeDocOpKind,
   type DrawingTreeDocOp,
+  type ShapeFillInput,
+  type ShapeOutlineDash,
+  type ShapeOutlineInput,
+  type ShapeThemeColorInput,
+  type ShapeThemeColorName,
   type TreeOpEffect,
   type TreeOpRejection,
   type TreeOpResult,
 } from './tree-ops.ts';
+export { segmentsOfCopy as segmentsOf } from './tree-op-segments.ts';
 export {
   extractFragmentPackage,
   type FragmentCoverage,
@@ -68,13 +73,17 @@ export {
   addPackageComment,
   deletePackageComments,
   setPackageCommentResolved,
+  setPackageCommentText,
+  setPackageCommentTexts,
   type PackageCommentDelete,
 } from './comment-package-write.ts';
 export { insertPackageCustomNode, removePackageCustomNode } from './custom-node-package-write.ts';
+export { refreshBoundContent } from './bound-content-refresh.ts';
 export { nextCommentId } from './comment-id-mint.ts';
 export {
   addComment,
   setCommentResolved,
+  setCommentText,
   commentPartNameOf,
   commentsExtendedPartNameOf,
   hasCommentPart,
@@ -82,6 +91,7 @@ export {
   type AddCommentResult,
   type CommentAnchorRequest,
   type SetCommentResolvedResult,
+  type SetCommentTextResult,
 } from './comment-writes.ts';
 export {
   MAX_CUSTOM_NODE_LABEL_LENGTH,
@@ -124,6 +134,8 @@ export {
   type FormattingRevisionAuthorFilter,
 } from './formattable-runs.ts';
 export { collectRevisionSites, type RevisionAddress } from './tree-op-revisions.ts';
+export { LEVEL_INDENT_ATTRIBUTES } from './tree-op-list-level-indent.ts';
+export { healedTableView } from './tree-op-table-heal.ts';
 export type { RevisionSiteRefusal } from './revision-site-refusal.ts';
 export {
   commentAnchorsOfStory,
@@ -205,7 +217,11 @@ export {
   type SetLegacyCheckboxOp,
 } from './legacy-checkbox-fields.ts';
 export { type InsertBuildingBlockOp } from './building-block-insert.ts';
-export { type InsertTableOp, type MoveTableOp } from './table-placement-op-types.ts';
+export {
+  type InsertParagraphBesideTableOp,
+  type InsertTableOp,
+  type MoveTableOp,
+} from './table-placement-op-types.ts';
 export {
   enclosedBookmarkDeletions,
   withoutBookmarkInPart,
@@ -221,6 +237,11 @@ export type { InsertTextOp, DeleteTextOp } from './text-edit-op-types.ts';
 export type { InsertComplexFieldOp, InsertPageFieldOp } from './tree-op-field-insert.ts';
 export type { SetFieldResultOp } from './tree-op-field-result-write.ts';
 export type { InsertEquationOp } from './tree-op-equation-insert.ts';
+export type {
+  ParagraphBorderEdgeName,
+  ParagraphBorderEdgeWrite,
+  SetParagraphBordersOp,
+} from './tree-op-paragraph-borders.ts';
 export type { SetTextFormFieldDefaultOp } from './text-form-fields.ts';
 
 export { type TextFormFieldOptions, type TextFormFieldType } from './text-form-field-options.ts';
@@ -248,3 +269,5 @@ export {
 } from './history-group.ts';
 
 export type { SetLegacyDropdownOp } from './legacy-dropdown-fields.ts';
+
+export { normalizeCommentBodyText } from './comment-body.ts';

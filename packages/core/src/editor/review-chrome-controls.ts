@@ -108,6 +108,16 @@ export const REVIEW_CHROME_GROUP = {
       state: { kind: 'command' },
     },
     {
+      // Packaged in the Review menu: records a revised document's differences in the open one
+      // as tracked changes. Requires the review module.
+      id: 'compareDocuments',
+      shape: 'icon',
+      labelKey: 'review.compareDocuments',
+      defaultToolbar: false,
+      paths: GENERATED_ICON_PATHS['difference'],
+      state: { kind: 'command' },
+    },
+    {
       id: 'comments',
       shape: 'icon',
       labelKey: 'formattingBar.commentsAndChanges',

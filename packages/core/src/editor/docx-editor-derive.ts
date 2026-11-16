@@ -32,6 +32,9 @@ import type { ParagraphSummary } from '../contracts/document.ts';
 import { classifyCommand } from './docx-editor-support.ts';
 import { NO_COPIED_FORMATTING } from './surface-format-painter-contract.ts';
 import { gateImageCommand, resolveSelectedDrawingRecord } from './docx-editor-images.ts';
+import { gateShapeFormatCommand } from './shape-format-commands.ts';
+import { chartTargetIn } from '../store/store/tree-package-charts.ts';
+import { chartCommandContentRefusal } from './chart-commands.ts';
 
 /** Whether a command may run, and the engine's own refusal when it may not. */
 export type CommandGate =
@@ -40,13 +43,14 @@ export type CommandGate =
 import { tableContextAt } from '@docx-editor.dev/core/layout';
 import { tableAnchorAt } from '../layout/semantic-cell-selection.ts';
 import { splitCellLimits } from '../store/store/tree-op-table-split.ts';
-import { suggestingStructureRefusal } from './surface-suggesting-structure.ts';
+import { ownProposedTableIn, suggestingStructureRefusal } from './surface-suggesting-structure.ts';
 import {
   isTableEditorCommand,
   planTableCommand,
   type TableCommandPlan,
   type TableCommandPlannerInput,
 } from './table-command-plan.ts';
+import { suggestingAuthorOf } from './table-cell-structure-plan.ts';
 import { findNode, paragraphTextOf, parentNodeOf } from '@docx-editor.dev/core/store';
 import { allParagraphs } from '../binding/tree-binding.ts';
 import { paragraphStyleId } from '../binding/document-outline.ts';
@@ -263,6 +267,7 @@ export function buildTableCommandPlannerInput(
     themeColors: surface.session.documentThemeColors(),
     editable: surface.session.editable,
     viewing: surface.editingMode() === 'view',
+    ...suggestingAuthorOf(surface),
   };
 }
 
@@ -281,7 +286,8 @@ export function tableCommandState(
   if (plan.ok && surface.editingMode() === 'suggest') {
     const reason = suggestingStructureRefusal(
       plan.ops,
-      (id) => findNode(input.part, id)?.kind === 'table'
+      (id) => findNode(input.part, id)?.kind === 'table',
+      ownProposedTableIn(surface.session, surface.author())
     );
     if (reason) plan = { ok: false, code: 'unsupported', reason };
   }
@@ -351,6 +357,8 @@ export function gateCommand(
   }
   const protection = support.mutating ? commandProtectionRefusal(command, surface) : null;
   if (protection) return { ok: false, refusal: protection };
+  const chartProtection = chartCommandContentRefusal(surface, command);
+  if (chartProtection) return { ok: false, refusal: chartProtection };
   const locked = contentLockFormatRefusal(command, surface, contentLockPolicyFor(surface));
   if (locked) return { ok: false, refusal: locked };
   const paragraphLocked = paragraphFormatLockRefusal(
@@ -393,6 +401,12 @@ export function gateCommand(
   // selectors that re-run on every tick — the exact cost `EditorSnapshot.selectionCollapsed`
   // exists to avoid, which it would be absurd to reintroduce here.
   if (command.type === 'deleteText' && resolveSelectedDrawingRecord(surface)) {
+    const refusal = gateImageCommand({ type: 'deleteImage' }, surface);
+    return refusal && !refusal.ok ? { ok: false, refusal } : { ok: true };
+  }
+  // One selected chart copies whole; a cut also deletes it, so it asks the delete's gate.
+  if ((command.type === 'copy' || command.type === 'cut') && selectedChartOf(surface)) {
+    if (command.type === 'copy') return { ok: true };
     const refusal = gateImageCommand({ type: 'deleteImage' }, surface);
     return refusal && !refusal.ok ? { ok: false, refusal } : { ok: true };
   }
@@ -478,6 +492,10 @@ export function gateCommand(
         reason: 'there is no refreshable table of contents at the selection',
       },
     };
+  }
+  if (command.type === 'removeToc') {
+    const refusal = surface.removeTocRefusal(command.tocId);
+    if (refusal) return { ok: false, refusal: { ok: false, ...refusal } };
   }
   if (command.type === 'insertPageField') {
     const active = surface.activeScope?.() ?? { kind: 'body' as const };
@@ -583,6 +601,8 @@ export function gateCommand(
   if (imageGate && !imageGate.ok) {
     return { ok: false, refusal: imageGate };
   }
+  const shapeGate = gateShapeFormatCommand(command, surface);
+  if (shapeGate) return { ok: false, refusal: shapeGate };
   return { ok: true };
 }
 
@@ -700,4 +720,12 @@ export function isInsideTocOf(surface: PaginatedSurface | null): boolean {
   return (
     !!surface && tocAtPosition(surface.session.part(), surface.state().selection.head) !== undefined
   );
+}
+
+/** Whether the selection is one chart drawing. */
+function selectedChartOf(surface: PaginatedSurface): boolean {
+  const record = resolveSelectedDrawingRecord(surface);
+  if (!record) return false;
+  const pkg = surface.session.currentPackage();
+  return chartTargetIn(pkg, record.ownerPartName, record.drawingNodeId) !== null;
 }

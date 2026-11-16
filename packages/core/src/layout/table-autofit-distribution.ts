@@ -4,11 +4,64 @@
  * measuring lives in `table-autofit-widths.ts`.
  */
 
-import type { PreferredWidth } from './table-widths.ts';
+import { MAX_COLUMN_WIDTH_PT, type PreferredWidth } from './table-widths.ts';
 
 const EPSILON_PT = 0.01;
 /** No column collapses below a hairline, whatever its content. */
 export const MIN_COLUMN_PT = 1;
+/** The most content a column counts once minimums overflow: the widest a page can be. */
+const MAX_CONTENT_PT = MAX_COLUMN_WIDTH_PT;
+/**
+ * Column minimums, each at least a hairline, settled into `room`.
+ *
+ * Minimums that fit come back as they are. Otherwise each column keeps its content insets
+ * whole, and at least a hairline. What its content needs beyond them, counted as no more than
+ * the widest a page can be, narrows by one factor shared by every column, and no column grows
+ * past its minimum. One unbreakable word therefore takes the same share from every column
+ * instead of collapsing the others. Insets that alone do not fit scale above the hairlines. A
+ * room that is not finite keeps the minimums.
+ */
+export function fitMinimumsToRoom(
+  minimums: readonly number[],
+  room: number,
+  /** Each column's horizontal content insets; pass `[]` to keep only hairlines. */
+  insets: readonly number[]
+): readonly number[] {
+  const floor = minimums.map((minimum) => Math.max(minimum, MIN_COLUMN_PT));
+  const needed = floor.reduce((sum, value) => sum + value, 0);
+  if (!Number.isFinite(room) || needed <= room) return floor;
+  const kept = floor.map((minimum, column) =>
+    Math.min(minimum, Math.max(MIN_COLUMN_PT, insets[column] ?? 0))
+  );
+  const content = floor.map((minimum, column) => Math.min(minimum - kept[column]!, MAX_CONTENT_PT));
+  let keptPt = 0;
+  let contentPt = 0;
+  for (let column = 0; column < floor.length; column++) {
+    keptPt += kept[column]!;
+    contentPt += content[column]!;
+  }
+  if (keptPt < room && contentPt > EPSILON_PT) {
+    let scale = (room - keptPt) / contentPt;
+    if (scale > 1) {
+      // Content counted whole reaches its minimum; the content past the widest page shares
+      // the room that leaves.
+      let rest = room;
+      let cappedPt = 0;
+      for (let column = 0; column < floor.length; column++) {
+        if (kept[column]! + content[column]! < floor[column]!) {
+          rest -= kept[column]!;
+          cappedPt += content[column]!;
+        } else rest -= floor[column]!;
+      }
+      scale = cappedPt > EPSILON_PT ? rest / cappedPt : 1;
+    }
+    return kept.map((width, column) => Math.min(floor[column]!, width + content[column]! * scale));
+  }
+  // Scale only what each column holds above its hairline, so every hairline survives whole.
+  const hairlines = floor.length * MIN_COLUMN_PT;
+  const scale = Math.max(0, room - hairlines) / Math.max(keptPt - hairlines, EPSILON_PT);
+  return kept.map((width) => MIN_COLUMN_PT + (width - MIN_COLUMN_PT) * scale);
+}
 
 /** What a cell spanning `count` columns from `from` needs across them, in points. */
 export interface SpanRequirement {
@@ -47,7 +100,8 @@ export function spanAdjustedMinimums(
     if (columns.length < 2) continue;
     let held = 0;
     for (const column of columns) held += Math.max(widths[column]!, raised[column]!);
-    if (span.minimum <= held + EPSILON_PT) continue;
+    // Exact: a span short by a rounding hair still breaks its text inside the cell.
+    if (span.minimum <= held) continue;
     const weightOf = (column: number): number =>
       Math.max(widths[column]!, raised[column]!) + Math.max(maximums[column]!, raised[column]!);
     const pinned = new Set<number>();
@@ -85,7 +139,7 @@ export function spanAdjustedMinimums(
  * preferred width keep it while the content-sized ones get their widest lines; past that they
  * give way down to their minimums, and then the content-sized columns wrap, each moving from
  * its minimum toward its widest line by the same fraction. A table whose minimums do not fit
- * its room scales every column above a hairline by the same factor.
+ * its room narrows their content alike (see {@link fitMinimumsToRoom}).
  *
  * `targetPt` is the table's settled width; for a table with no width of its own, pass
  * `undefined` and it takes what its content asks for, up to `availablePt`.
@@ -97,8 +151,15 @@ export function contentSizedWidths(
   maximums: readonly number[],
   targetPt: number | undefined,
   availablePt: number,
-  /** What the table measured before; overflowing minimums never fit into less than this. */
-  currentPt = 0
+  {
+    currentPt = 0,
+    insets,
+  }: {
+    /** What the table measured before; overflowing minimums never fit into less than this. */
+    readonly currentPt?: number;
+    /** Each column's content insets, which overflowing minimums keep whole. */
+    readonly insets: readonly number[];
+  }
 ): readonly number[] {
   const count = widths.length;
   const result = new Array<number>(count);
@@ -163,15 +224,9 @@ export function contentSizedWidths(
     }
     return result;
   }
-  // The minimums alone overflow: scale what each column holds above its hairline.
-  const floor = minimums.map((minimum) => Math.max(minimum, MIN_COLUMN_PT));
-  const needed = floor.reduce((sum, value) => sum + value, 0);
-  // Never narrower than the table already was: an indent can leave the text column no room.
-  const fitTo = Math.max(target, availablePt, currentPt);
-  if (!Number.isFinite(fitTo) || needed <= fitTo) return floor;
-  const hairlines = count * MIN_COLUMN_PT;
-  const scale = Math.max(0, fitTo - hairlines) / Math.max(needed - hairlines, EPSILON_PT);
-  return floor.map((width) => MIN_COLUMN_PT + (width - MIN_COLUMN_PT) * scale);
+  // The minimums alone overflow. Never narrower than the table already was: an indent can
+  // leave the text column no room.
+  return fitMinimumsToRoom(minimums, Math.max(target, availablePt, currentPt), insets);
 }
 
 /**
@@ -182,14 +237,22 @@ export function contentSizedWidths(
  * above its minimum, so a column whose content needs little keeps less of its preference than
  * a column whose content needs much. A `stretch` table narrower than its target grows every
  * column in proportion to its width. When the minimums alone are wider than the target, the
- * table keeps them up to `roomPt`, and scales them into the room past it.
+ * table keeps them up to `roomPt`, and narrows them into the room past it (see
+ * {@link fitMinimumsToRoom}).
  */
 export function spreadPreferredColumns(
   preferred: readonly number[],
   minimums: readonly number[],
   targetPt: number,
   roomPt: number,
-  stretch: boolean
+  {
+    stretch,
+    insets,
+  }: {
+    readonly stretch: boolean;
+    /** Each column's content insets, which overflowing minimums keep whole. */
+    readonly insets: readonly number[];
+  }
 ): readonly number[] {
   const floor = minimums.map((minimum) => Math.max(minimum, MIN_COLUMN_PT));
   const grown = preferred.map((width, index) => Math.max(width, floor[index]!));
@@ -203,12 +266,41 @@ export function spreadPreferredColumns(
   const totalSlack = slack.reduce((sum, value) => sum + value, 0);
   if (need <= totalSlack)
     return grown.map((width, index) => width - (need * slack[index]!) / totalSlack);
-  const needed = floor.reduce((sum, value) => sum + value, 0);
-  const fitTo = Math.max(targetPt, roomPt);
-  if (!Number.isFinite(fitTo) || needed <= fitTo) return floor;
-  const hairlines = floor.length * MIN_COLUMN_PT;
-  const scale = Math.max(0, fitTo - hairlines) / Math.max(needed - hairlines, EPSILON_PT);
-  return floor.map((width) => MIN_COLUMN_PT + (width - MIN_COLUMN_PT) * scale);
+  return fitMinimumsToRoom(minimums, Math.max(targetPt, roomPt), insets);
+}
+
+/**
+ * Widen the columns of a table whose every column has a percentage preferred width.
+ *
+ * A column narrower than its minimum grows to it, and every other column gives up an equal
+ * part of what they grew by, whatever its width or content. Then, from the first column to
+ * the last, a column that the equal part takes below its minimum keeps the minimum, and the
+ * next column that gives way gives up the difference as well. Returns `undefined` when no
+ * column widens, or when the last columns cannot give up what the earlier ones need.
+ */
+export function equalShareWidenedWidths(
+  widths: readonly number[],
+  minimums: readonly number[]
+): readonly number[] | undefined {
+  const floor = minimums.map((minimum) => Math.max(minimum, MIN_COLUMN_PT));
+  let gain = 0;
+  let givers = 0;
+  const widens = widths.map((width, index) => {
+    const grows = width < floor[index]! - EPSILON_PT;
+    if (grows) gain += floor[index]! - width;
+    else givers++;
+    return grows;
+  });
+  if (gain <= EPSILON_PT || givers === 0) return undefined;
+  const share = gain / givers;
+  let carry = 0;
+  const result = widths.map((width, index) => {
+    if (widens[index]) return floor[index]!;
+    const settled = width - share - carry;
+    carry = Math.max(0, floor[index]! - settled);
+    return Math.max(settled, floor[index]!);
+  });
+  return carry > EPSILON_PT ? undefined : result;
 }
 
 /** Widths that match the resolved ones come back by identity, so the shared base stays. */
@@ -232,16 +324,23 @@ export function sameOrComputed(
  * grows only as far as its content needs. The other columns give the difference in
  * proportion to how far each one sits above its own minimum. When they reach their minimums,
  * the table grows past its target; when the minimums together are wider than `availablePt`,
- * every column is its minimum scaled down by the same factor. Widths that already hold their
- * content come back unchanged, by identity.
+ * their content narrows alike (see {@link fitMinimumsToRoom}). Widths that already
+ * hold their content come back unchanged, by identity.
  */
 export function widenAutofitColumns(
   widths: readonly number[],
   minimums: readonly number[],
   targetPt: number,
   availablePt: number,
-  /** Also bring a table wider than `targetPt` down to it when no column widens. */
-  shrinkToTarget = false
+  {
+    shrinkToTarget = false,
+    insets,
+  }: {
+    /** Also bring a table wider than `targetPt` down to it when no column widens. */
+    readonly shrinkToTarget?: boolean;
+    /** Each column's content insets, which overflowing minimums keep whole. */
+    readonly insets: readonly number[];
+  }
 ): readonly number[] {
   let deficit = 0;
   let total = 0;
@@ -264,18 +363,8 @@ export function widenAutofitColumns(
     return grown.map((width, index) => width - (need * slack[index]!) / totalSlack);
   }
   // Every column keeps a hairline: a zero-width column would give its cell no box at all.
-  const floor = minimums.map((minimum) => Math.max(minimum, MIN_COLUMN_PT));
-  const needed = floor.reduce((sum, value) => sum + value, 0);
   // Never narrower than the table already was: an indent can leave the text column no room.
-  const room = Math.max(
-    availablePt,
-    widths.reduce((sum, width) => sum + width, 0)
-  );
-  if (!Number.isFinite(room) || needed <= room) return floor;
-  // Scale only what each column holds above its hairline, so every hairline survives whole.
-  const hairlines = floor.length * MIN_COLUMN_PT;
-  const scale = Math.max(0, room - hairlines) / Math.max(needed - hairlines, EPSILON_PT);
-  return floor.map((width) => MIN_COLUMN_PT + (width - MIN_COLUMN_PT) * scale);
+  return fitMinimumsToRoom(minimums, Math.max(availablePt, total), insets);
 }
 
 /** The total an autofit table settles at once a column has to widen, in points. */

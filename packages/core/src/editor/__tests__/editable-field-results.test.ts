@@ -472,6 +472,7 @@ describe('composition inside a saved result', () => {
     const at = 5 - Number(span.dataset.start);
     span.textContent = `${span.textContent!.slice(0, at)}\u4e2d${span.textContent!.slice(at)}`;
     host.pages.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+    host.surface.flushPendingInput();
     expect(host.surface.state().lastRejection).toBeNull();
     expect(host.text()).toBe('ab Na\u4e2dme cd');
     expect(resultTextOf(host.xml())).toBe('Na\u4e2dme');

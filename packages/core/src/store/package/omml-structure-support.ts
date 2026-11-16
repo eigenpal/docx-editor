@@ -90,6 +90,57 @@ const BAR_POSITIONS: ReadonlySet<string> = new Set(['top', 'bot']);
 const FRACTION_TYPES: ReadonlySet<string> = new Set(['bar']);
 const TRUE_VALUES: ReadonlySet<string> = new Set(['1', 'true', 'on']);
 const NARY_LIMIT_LOCATIONS: ReadonlySet<string> = new Set(['undOvr', 'subSup']);
+const ON_OFF_VALUES: ReadonlySet<string> = new Set(['0', '1', 'true', 'false', 'on', 'off']);
+
+/** `m:borderBoxPr` flags; each is an on/off property. */
+export const BORDER_BOX_FLAGS = Object.freeze([
+  'hideTop',
+  'hideBot',
+  'hideLeft',
+  'hideRight',
+  'strikeH',
+  'strikeV',
+  'strikeBLTR',
+  'strikeTLBR',
+] as const);
+
+/** The `m:dPr` properties that name one character. */
+export const DELIMITER_CHARACTERS = Object.freeze(['begChr', 'sepChr', 'endChr'] as const);
+/** The characters of an `m:d` whose `m:dPr` names none. */
+export const DEFAULT_DELIMITER_CHARACTERS = Object.freeze({
+  begChr: '(',
+  sepChr: '|',
+  endChr: ')',
+});
+const DELIMITER_SHAPES: ReadonlySet<string> = new Set(['centered', 'match']);
+
+/** One character of an `m:d`: the `m:val` of its `m:dPr` property, or the default. */
+export function delimiterCharacter(
+  node: OoxmlGenericElementNode,
+  name: (typeof DELIMITER_CHARACTERS)[number]
+): string {
+  const property = namedChild(node, 'dPr');
+  const character = property ? namedChild(property, name) : null;
+  return (character && mathVal(character)) ?? DEFAULT_DELIMITER_CHARACTERS[name];
+}
+
+/** A character property (`ST_Char`): one `m:val` of at most one character. */
+function isCharacterProperty(node: OoxmlGenericElementNode): boolean {
+  return hasOnlyMathVal(node) && [...mathVal(node)!].length <= 1;
+}
+
+/** An on/off property: a bare element, or one `m:val` from `ST_OnOff`. */
+function isOnOffProperty(node: OoxmlGenericElementNode): boolean {
+  if (node.children.length > 0) return false;
+  return node.attributes.length === 0 || hasOnlyMathVal(node, ON_OFF_VALUES);
+}
+
+/** Whether an on/off property is on. A bare element is on. */
+export function mathOnOff(node: OoxmlGenericElementNode | null): boolean {
+  if (!node) return false;
+  const value = mathVal(node);
+  return value === undefined || TRUE_VALUES.has(value);
+}
 
 /** True when every node belongs to the projected Office Math subset. */
 export function isSupportedExpressionNode(node: OoxmlNode): boolean {
@@ -104,6 +155,47 @@ export function isSupportedExpressionNode(node: OoxmlNode): boolean {
         const position = namedChild(property, 'pos');
         return !position || hasOnlyMathVal(position, BAR_POSITIONS);
       }) &&
+      containersSupported(node, ['e'])
+    );
+  }
+  if (node.localName === 'borderBox') {
+    const counts = Object.fromEntries(BORDER_BOX_FLAGS.map((flag) => [flag, OPTIONAL]));
+    return (
+      hasOnlyMathChildren(node, { borderBoxPr: OPTIONAL, e: REQUIRED }) &&
+      propertyIsSupported(namedChild(node, 'borderBoxPr'), counts, (property) =>
+        BORDER_BOX_FLAGS.every((flag) => {
+          const value = namedChild(property, flag);
+          return !value || isOnOffProperty(value);
+        })
+      ) &&
+      containersSupported(node, ['e'])
+    );
+  }
+  if (node.localName === 'd') {
+    return (
+      hasOnlyMathChildren(node, { dPr: OPTIONAL, e: { min: 1, max: Number.MAX_SAFE_INTEGER } }) &&
+      propertyIsSupported(
+        namedChild(node, 'dPr'),
+        {
+          begChr: OPTIONAL,
+          sepChr: OPTIONAL,
+          endChr: OPTIONAL,
+          grow: OPTIONAL,
+          shp: OPTIONAL,
+        },
+        (property) => {
+          const grow = namedChild(property, 'grow');
+          const shape = namedChild(property, 'shp');
+          return (
+            DELIMITER_CHARACTERS.every((name) => {
+              const character = namedChild(property, name);
+              return !character || isCharacterProperty(character);
+            }) &&
+            (!grow || isOnOffProperty(grow)) &&
+            (!shape || hasOnlyMathVal(shape, DELIMITER_SHAPES))
+          );
+        }
+      ) &&
       containersSupported(node, ['e'])
     );
   }

@@ -429,15 +429,6 @@ function restartOverridesXml(abstract: OoxmlElement): string {
     .join('');
 }
 
-/** The `w:numFmt` of an abstract definition's first level, if it states one. */
-function firstLevelFormat(abstract: OoxmlElement): string | undefined {
-  const firstLevel = childrenNamed(abstract, 'lvl').find(
-    (level) => attribute(level, 'ilvl') === '0' || attribute(level, 'ilvl') === undefined
-  );
-  const format = firstLevel ? childrenNamed(firstLevel, 'numFmt')[0] : undefined;
-  return format ? attribute(format, 'val') : undefined;
-}
-
 /** Element equality without node ids: names, attributes, then element children in order. */
 function sameElement(left: OoxmlElement, right: OoxmlElement): boolean {
   if (left.namespaceUri !== right.namespaceUri || left.localName !== right.localName) return false;
@@ -459,15 +450,20 @@ function sameElement(left: OoxmlElement, right: OoxmlElement): boolean {
 }
 
 /**
- * An existing definition whose levels are exactly the ones `geometry` would author.
+ * An existing definition whose levels are exactly the ones this module would author for
+ * `kind` and `geometry`.
  *
- * Switching an item back and forth then reuses one definition per kind and geometry instead
- * of adding two definitions to `numbering.xml` on every press.
+ * Pressing a list button again, or switching an item back and forth, then reuses one
+ * definition per kind and geometry instead of adding definitions on every press. Any other
+ * definition the document holds is never borrowed: a heading numbering such as "01" with its
+ * own marker formatting is decimal too, and a new list must not take its look. A document
+ * whose lists another program authored gains one definition of this module's own on the first
+ * press; later presses reuse it.
  */
 function sameLevelsAbstract(
   abstractNums: readonly OoxmlElement[],
   kind: ListKind,
-  geometry: ListDefinitionGeometry
+  geometry: ListDefinitionGeometry | undefined
 ): OoxmlElement | undefined {
   const authored = authoredElements(abstractNumXml(kind, 0, geometry), [
     { localName: 'abstractNum' },
@@ -494,8 +490,10 @@ export interface EnsuredListDefinition {
 /**
  * Find or create a list definition of `kind`, returning the package that holds it.
  *
- * An existing abstract definition of the same kind is reused, but every disconnected list
- * gets a fresh `w:num` instance. Counters belong to the abstract definition, shared by every
+ * Only a definition with exactly the levels this module authors for `kind` is reused, so a
+ * new list looks the same in every document; a definition the document authored itself, such
+ * as a heading numbering, is left to the paragraphs that use it. Every disconnected list gets
+ * a fresh `w:num` instance. Counters belong to the abstract definition, shared by every
  * `w:num` over it, so the fresh instance restarts each level with a
  * `w:startOverride` (see {@link restartOverridesXml}). Returns null only when the part cannot
  * be built at all.
@@ -522,11 +520,7 @@ export function ensureListDefinition(
   // Reuse the first matching TEMPLATE, not its counter instance. Two disconnected lists
   // can share one `w:abstractNum`, but each needs its own `w:num` with restart overrides to
   // start at the authored level baseline. Without them a new list after 39 items began at 40.
-  const matchingAbstract = geometry
-    ? sameLevelsAbstract(abstractNums, kind, geometry)
-    : abstractNums.find(
-        (abstract) => firstLevelFormat(abstract) === (kind === 'bullet' ? 'bullet' : 'decimal')
-      );
+  const matchingAbstract = sameLevelsAbstract(abstractNums, kind, geometry);
 
   const matchingAbstractId = matchingAbstract
     ? Number(attribute(matchingAbstract, 'abstractNumId'))

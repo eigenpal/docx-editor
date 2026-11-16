@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/i18n",
-  "version": "2.33.0",
+  "version": "2.37.0",
   "description": "Shared UI locale strings and types for the @docx-editor.dev editor adapters (React and Vue).",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -52,6 +52,11 @@
       "import": "./dist/id.mjs",
       "require": "./dist/id.js"
     },
+    "./it": {
+      "types": "./dist/it.d.ts",
+      "import": "./dist/it.mjs",
+      "require": "./dist/it.js"
+    },
     "./ja": {
       "types": "./dist/ja.d.ts",
       "import": "./dist/ja.mjs",
@@ -97,7 +102,7 @@
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/i18n"
   },
   "devDependencies": {
-    "tsup": "^8.0.1",
+    "tsup": "^9.0.0",
     "typescript7": "npm:typescript@^7.0.2"
   },
   "keywords": [

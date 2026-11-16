@@ -51,12 +51,7 @@ const marks = [
 ];
 const deletionMarks = [...marks, 'hidden', 'caret', 'pound'];
 type StyleKey =
-  | 'insertions'
-  | 'deletions'
-  | 'changedLines'
-  | 'movedFrom'
-  | 'movedTo'
-  | 'formatting';
+  'insertions' | 'deletions' | 'changedLines' | 'movedFrom' | 'movedTo' | 'formatting';
 
 const Impl = defineComponent({
   name: 'DocxEditorRevisionMarkupDialog',

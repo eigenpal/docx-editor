@@ -237,6 +237,9 @@ function hyperlinkPopupInstance(active: () => boolean): UseHyperlinkPopupResult 
       };
       return;
     }
+    // A caret inside a word links that word: it becomes the selection and the display text.
+    const word = editor?.surface?.hyperlinks.wordAtCaret() ?? null;
+    if (word) editor?.surface?.setSelection({ anchor: word.from, head: word.to });
     const selected = editor?.query({ type: 'selectedText' }) ?? '';
     const pin = editor?.retainSelection() ?? null;
     if (editor && pin) selectionRetainer.value = { editor, pin };

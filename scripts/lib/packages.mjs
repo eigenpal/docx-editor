@@ -75,6 +75,9 @@ export const PACKAGES = [
       crossEntry: { agent: ['Paragraph', 'RequestContext'] },
       allowlist: {
         index: [
+          'BorderAuthor',
+          'BorderEdge',
+          'BorderField',
           'CommentBase',
           'ContentControlScope',
           'ContextInternals',
@@ -91,6 +94,9 @@ export const PACKAGES = [
           'SpanOwner',
         ],
         browser: [
+          'BorderAuthor',
+          'BorderEdge',
+          'BorderField',
           'CommentBase',
           'ContentControlScope',
           'ContextInternals',

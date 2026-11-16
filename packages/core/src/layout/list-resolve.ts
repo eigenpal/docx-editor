@@ -330,7 +330,11 @@ function resolveListSequence(
         advanced.level.runProperties,
         styleCascade
       );
-      const resolved = resolveRunStyle(markerProps, styleCascade?.themeFonts);
+      // A marker never draws in small capitals; `w:caps` still applies.
+      const resolved = {
+        ...resolveRunStyle(markerProps, styleCascade?.themeFonts),
+        smallCaps: false,
+      };
       levelDerived = {
         indent,
         markerStyle:

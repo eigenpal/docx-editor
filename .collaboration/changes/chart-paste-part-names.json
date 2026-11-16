@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A chart paste checks each candidate part name against every part in the package.",
+  "after": "A chart paste reads the part names once and checks each candidate name against that set.",
+  "reason": "The search returns the same part name, including the actor stripe under collaboration. Shared parts, relationships, operations, and transport messages remain unchanged.",
+  "tests": [
+    "packages/core/src/store/package/chart-edit/__tests__/free-part-name.test.ts",
+    "packages/core/src/store/package/chart-edit/__tests__/duplicate.test.ts",
+    "packages/pro/src/collaboration/__tests__/chart-editing.test.ts"
+  ],
+  "changeset": "chart-paste-part-names",
+  "migration": null
+}

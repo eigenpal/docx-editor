@@ -18,6 +18,7 @@ import {
   type SemanticLayout,
 } from '@docx-editor.dev/core/layout';
 import { bodyReviewAnchors } from '../layout/body-review-anchors.ts';
+import { textboxOnlyLayout } from './textbox-presence-layout.ts';
 import { fragmentParagraphs } from '../layout/line-segments.ts';
 import { weakRefOf, type WeakRefOf } from '../store/package/weak-ref.ts';
 
@@ -28,7 +29,101 @@ import { weakRefOf, type WeakRefOf } from '../store/package/weak-ref.ts';
  * is the current one, and a new revision brings a new one.
  */
 
-export function createAnchorIndex(): (
+export function createAnchorIndex(
+  hostOf?: (paragraphId: string) => string | null
+): (layout: SemanticLayout) => ReadonlyMap<string, ReviewParagraphAnchor> {
+  const index = createStoryAnchorIndex();
+  if (!hostOf) return index;
+  const boxIndex = createStoryAnchorIndex();
+  const views = new WeakMap<ReadonlyMap<string, ReviewParagraphAnchor>, TextboxHostAnchors>();
+  return (layout) => {
+    const stories = index(layout);
+    let view = views.get(stories);
+    if (!view) {
+      const boxes = () => boxIndex(textboxOnlyLayout(layout));
+      views.set(stories, (view = new TextboxHostAnchors(stories, boxes, hostOf)));
+    }
+    return view;
+  };
+}
+
+/**
+ * The story anchors, answering for a text box paragraph too. Box text is laid out inside its
+ * drawing, never in a story's fragments, so a card on it and the comment affordance over it
+ * had no geometry and the rail could not place them. A box paragraph answers with its own
+ * lines, from the box paragraphs laid out on each page, so its card sits level with its text; a
+ * box with no such lines answers with the top of the paragraph it rides in. Only a miss
+ * builds either, so ordinary paragraphs cost what they always did.
+ */
+class TextboxHostAnchors implements ReadonlyMap<string, ReviewParagraphAnchor> {
+  readonly [Symbol.toStringTag] = 'Map';
+  private readonly hosted = new Map<string, ReviewParagraphAnchor | null>();
+
+  constructor(
+    private readonly stories: ReadonlyMap<string, ReviewParagraphAnchor>,
+    private readonly boxes: () => ReadonlyMap<string, ReviewParagraphAnchor>,
+    private readonly hostOf: (paragraphId: string) => string | null
+  ) {}
+
+  get(paragraphId: string): ReviewParagraphAnchor | undefined {
+    const own = this.stories.get(paragraphId);
+    if (own) return own;
+    let hosted = this.hosted.get(paragraphId);
+    if (hosted === undefined) {
+      // The box's own lines first: a box paragraph laid out on a page needs no tree walk.
+      const boxed = this.boxes().get(paragraphId);
+      if (boxed) {
+        this.hosted.set(paragraphId, boxed);
+        return boxed;
+      }
+      const hostId = this.hostOf(paragraphId);
+      const host = hostId === null ? undefined : this.stories.get(hostId);
+      // Without lines: the host's lines count offsets in the host, not in the box.
+      hosted = host
+        ? { pageIndex: host.pageIndex, contentY: host.contentY, fragmentY: host.fragmentY }
+        : null;
+      this.hosted.set(paragraphId, hosted);
+    }
+    return hosted ?? undefined;
+  }
+
+  has(paragraphId: string): boolean {
+    return this.get(paragraphId) !== undefined;
+  }
+
+  get size(): number {
+    return this.stories.size;
+  }
+
+  forEach(
+    callback: (
+      value: ReviewParagraphAnchor,
+      key: string,
+      map: ReadonlyMap<string, ReviewParagraphAnchor>
+    ) => void,
+    thisArg?: unknown
+  ): void {
+    this.stories.forEach((value, key) => callback.call(thisArg, value, key, this));
+  }
+
+  entries() {
+    return this.stories.entries();
+  }
+
+  keys() {
+    return this.stories.keys();
+  }
+
+  values() {
+    return this.stories.values();
+  }
+
+  [Symbol.iterator]() {
+    return this.stories[Symbol.iterator]();
+  }
+}
+
+function createStoryAnchorIndex(): (
   layout: SemanticLayout
 ) => ReadonlyMap<string, ReviewParagraphAnchor> {
   const cache = new WeakMap<SemanticLayout, ReviewAnchorIndex>();

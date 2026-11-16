@@ -31,7 +31,7 @@ import { lay, load, measurer, styleCascade } from './table-row-keep-fixtures.ts'
 
 // Page body: 310pt wide, 170pt tall, twelve 14pt lines.
 const p = (text: string, pPr = '') =>
-  `<w:p><w:pPr>${pPr}<w:widowControl w:val="0"/>` +
+  `<w:p><w:pPr><w:widowControl w:val="0"/>${pPr}` +
   '<w:spacing w:before="0" w:after="0" w:line="280" w:lineRule="exact"/></w:pPr>' +
   `<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 const tc = (content: string, tcPr = '') => `<w:tc><w:tcPr>${tcPr}</w:tcPr>${content}</w:tc>`;

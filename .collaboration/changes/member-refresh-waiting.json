@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A local list, comment, or note edit refused while a peer update was held back counted toward the refusal limit that ends recovery.",
+  "after": "That refusal counts as waiting on the room, as other refusals that wait on a peer update do.",
+  "reason": "Only the local refusal classification changes. Shared operations, stored fields, and materialization rules stay unchanged, so released participants are unaffected.",
+  "tests": ["packages/pro/src/collaboration/__tests__/prepare-member-root-journal.test.ts"],
+  "changeset": "member-refresh-waiting",
+  "migration": null
+}

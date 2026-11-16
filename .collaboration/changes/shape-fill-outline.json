@@ -1,0 +1,15 @@
+{
+  "impact": "migration-required",
+  "fields": ["repairVersion"],
+  "before": "A shape's fill and outline are not editable. Concurrent writes to a shape's a:spPr or a:ln have no singleton rule, so two copies of a fill choice or an a:ln both show and save.",
+  "after": "setShapeFormat writes a shape's fill and outline as ordinary node edits. When two peers write a fill choice, an a:ln, or another once-only a:spPr or a:ln child at once, each replica shows the first live copy, as for other singletons. repairVersion increases to 4, so the format becomes docx-collaboration:1.5.4.1.",
+  "reason": "The singleton rule decides which conflicting node survives for the same shared state, so it is repair semantics. Every fill write inserts a new fill-choice child: a recolour of an existing fill replaces the old a:solidFill with a new one, and a first fill or a:ln adds one. Two current participants who write a fill or an outline of one shape at once therefore each insert a child, and no write can remove a child the other has not received. A replica with repairVersion 3 lacks the rule, shows both copies, and saves a schema-invalid a:spPr. repairVersion increases to 4, so replicas with repairVersion 3 refuse these rooms before any update applies, and rooms created with repairVersion 3 keep the earlier rules. No stored field or identity changes; the op writes ordinary element and attribute records. The rule is derived on each replica from shared child order, and hidden copies stay in Yjs for undo.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/shape-format-peers.test.ts",
+    "packages/pro/src/collaboration/__tests__/singleton-children.test.ts",
+    "packages/pro/src/collaboration/__tests__/read-collaboration-document.test.ts",
+    "packages/core/src/store/__tests__/shape-format-op.test.ts"
+  ],
+  "changeset": "shape-fill-outline",
+  "migration": "upgrade-rooms-to-format-1541"
+}

@@ -170,9 +170,15 @@ describe('Backspace at the start of a list item', () => {
     expect(own(editor, 2)).toContain('numPr');
   });
 
-  test('a second Backspace joins the paragraph to the previous one', () => {
+  test('later presses step the indent back, and only then join the previous paragraph', () => {
     const editor = mount(docx(list('Two')));
     backspaceAt(editor, 2);
+    // Lined up with the item before it: back to that item's marker, then no indent.
+    backspaceAt(editor, 2);
+    expect(own(editor, 2)).toEqual(['ind(left=360)']);
+    backspaceAt(editor, 2);
+    expect(own(editor, 2)).toEqual([]);
+    expect(texts(editor)).toEqual(['Intro', 'One', 'Two', 'Three', 'After']);
     backspaceAt(editor, 2);
     expect(texts(editor)).toEqual(['Intro', 'OneTwo', 'Three', 'After']);
   });

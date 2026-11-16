@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Suggesting mode refused text box entry, wrote content control values directly, and gave text box changes no review range.",
+  "after": "Text box typing and content control values become tracked insertions and deletions inside the box or control, a decision re-derives the control's recorded state, and text box changes get review ranges.",
+  "reason": "Every write is an ordinary tree edit already in the shared vocabulary: tracked runs, sdtPr properties, and revision decisions. Property node identities are kept so shared state addresses them. Review ranges are local reads. No shared field, record shape, or operation changes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-tracked-control-values.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-textboxes.test.ts"
+  ],
+  "changeset": "suggesting-text-box-entry",
+  "migration": null
+}

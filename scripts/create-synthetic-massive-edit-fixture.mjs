@@ -17,7 +17,7 @@
  * Usage:
  *   bun scripts/create-synthetic-massive-edit-fixture.mjs [outDir]
  */
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import JSZip from 'jszip';
@@ -118,19 +118,16 @@ function table(unit) {
     }).join('');
     return `<w:tr>${header}${cells}</w:tr>`;
   }).join('');
-  const grid = Array.from(
-    { length: TABLE_COLUMNS },
-    () => `<w:gridCol w:w="${cellWidth}"/>`
-  ).join('');
+  const grid = Array.from({ length: TABLE_COLUMNS }, () => `<w:gridCol w:w="${cellWidth}"/>`).join(
+    ''
+  );
   return `<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/><w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/><w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/></w:tblBorders></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${rows}</w:tbl>`;
 }
 
 function unitBlocks(unit, { sectionBreak, chapterBreak }) {
   // Chapter-style page break on each unit heading (single-section variant): the authored
   // sync point a real long document has, where an incremental pass can reconverge.
-  const blocks = [
-    paragraph(unit, 0, 'Heading1', { pageBreakBefore: chapterBreak && unit > 0 }),
-  ];
+  const blocks = [paragraph(unit, 0, 'Heading1', { pageBreakBefore: chapterBreak && unit > 0 })];
   for (let index = 1; index < PARAGRAPHS_PER_UNIT; index += 1) {
     if (index === Math.floor(PARAGRAPHS_PER_UNIT / 2)) blocks.push(table(unit));
     blocks.push(paragraph(unit, index, null));
@@ -180,6 +177,11 @@ for (const [name, multiSection] of [
     console.log(`kept ${target}`);
     continue;
   }
-  writeFileSync(target, bytes);
+  // Write, then rename: the edit-bench gate files can run this at the same time, and a reader
+  // must never see a half-written file. The output is byte-deterministic, so the last rename wins
+  // with the same bytes.
+  const partial = `${target}.${process.pid}.partial`;
+  writeFileSync(partial, bytes);
+  renameSync(partial, target);
   console.log(`wrote ${target} (${bytes.length} bytes)`);
 }

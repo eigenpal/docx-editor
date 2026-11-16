@@ -1,11 +1,12 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // The package builds its React and Vue entries together; this file uses Vue's JSX runtime.
 /** @jsxImportSource vue */
 
+import { ReviewCommentRecovery } from './review-comment-recovery.tsx';
 import {
   cloneVNode,
   computed,
@@ -86,7 +87,7 @@ import {
 } from './review-context.ts';
 import type { ReviewActions } from './review-types.ts';
 import { stackRailCards } from '../review/rail-stack.ts';
-import { useReviewSlotSizing } from './use-review-slot-sizing.ts';
+import { useCardSizer } from './use-review-card-heights.ts';
 import { resolveReviewAuthorInfo } from './review-author-styles.ts';
 import {
   ReviewAccept,
@@ -148,6 +149,7 @@ function buildReviewActions(hook: UseReviewReturn, list: readonly ReviewItemView
     commentResolutionDisabledReason: hook.commentResolutionDisabledReason.value,
     remove: hook.remove,
     reply: hook.reply,
+    edit: hook.edit,
     selectionAnchorY: hook.selectionAnchorY.value,
     comment: hook.comment,
     lastRefusal: hook.lastRefusal.value,
@@ -335,15 +337,12 @@ const ReviewRoot = defineComponent({
       return map;
     });
 
-    const heights = ref<ReadonlyMap<string, number>>(new Map());
-    const measureHeight = (key: string, height: number) => {
-      if (height <= 0) return;
-      if (heights.value.get(key) === height) return;
-      const next = new Map(heights.value);
-      next.set(key, height);
-      heights.value = next;
-    };
-    const observeSlot = useReviewSlotSizing(measureHeight);
+    // Against every item the rail can show: a host filter, `structural` or `formatting` hides
+    // a card without forgetting its height; a deleted item leaves both lists.
+    const { heights, observe: observeSlot } = useCardSizer(() => [
+      ...reviewHook.items.value,
+      ...allReview.items.value,
+    ]);
 
     // Where the rail sits, from the shared `../review/rail-metrics.ts`. The viewport's
     // reserved gutter is read on the same pass, so `compact` follows a style change at once.
@@ -766,6 +765,7 @@ const ReviewRoot = defineComponent({
           ? [takeRoot('Balloon', h(ReviewBalloon), rootParts)]
           : []),
         h(ReviewRefusalAnnouncer),
+        h(ReviewCommentRecovery),
       ] as VNodeArrayChildren;
       const child = asChildHost;
       if (!child) return h('aside', shared, content);

@@ -26,6 +26,7 @@ interface PendingJournal {
   readonly store: object;
   readonly effects: CanonicalPrimitiveEffect[];
   readonly historyGroup: HistoryGroup | undefined;
+  readonly outsideUndo: boolean;
 }
 
 type JournalListener = (journal: CanonicalPrimitiveJournal) => void;
@@ -121,7 +122,10 @@ function publishStore(store: object): void {
       const taken = takePending(store);
       if (taken.length === 0) return;
       for (const item of taken) {
-        notifyStore(store, freezeCanonicalPrimitiveJournal(item.effects, item.historyGroup));
+        notifyStore(
+          store,
+          freezeCanonicalPrimitiveJournal(item.effects, item.historyGroup, item.outsideUndo)
+        );
       }
     }
   } finally {
@@ -139,8 +143,9 @@ function publishStore(store: object): void {
 export function publishCanonicalPrimitiveJournal(
   store: object,
   effects: CanonicalPrimitiveEffect[],
-  historyGroup?: HistoryGroup
+  historyGroup?: HistoryGroup,
+  outsideUndo = false
 ): void {
-  pending.push({ store, effects, historyGroup });
+  pending.push({ store, effects, historyGroup, outsideUndo });
   publishStore(store);
 }

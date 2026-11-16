@@ -31,7 +31,7 @@ Everything on the screen composes under `<DocxEditor.Root>`. The demo owns the a
 | `src/SpecimenPopover.tsx`       | Opens custom-node details at the activation rectangle.                                        |
 | `src/useFrost.ts`               | Shares one host action and checks it with `Editor.can`.                                       |
 | `src/IglooForms.tsx`            | Renders every content-control pop-up (lists, calendar, gallery, picture, checkbox) as ice.    |
-| `public/expedition-permit.docx` | A form of Word content controls, opened from **Custom Actions** > **Paperwork**.              |
+| `public/expedition-permit.docx` | A form of DOCX content controls, opened from **Custom Actions** > **Paperwork**.              |
 | `src/labels.ts`                 | Defines label overrides through the same path as a locale.                                    |
 | `src/igloo.css`                 | Changes the theme through `--doc-*` token overrides.                                          |
 | `src/icons/`                    | Contains the demo SVG components.                                                             |
@@ -53,7 +53,7 @@ The demo changes the rail through these extension points:
 
 `Toolbar.Comments` controls the `review.comments` slot. Its pressed state stays synchronized when another action opens the rail.
 
-The page wrapper changes `--doc-revision-*` tokens for tracked changes. These marks belong to review chrome. The document canvas remains Word-faithful.
+The page wrapper changes `--doc-revision-*` tokens for tracked changes. These marks belong to review chrome. The document canvas remains faithful to the DOCX.
 
 ## Organize host actions
 
@@ -71,15 +71,15 @@ Ask the engine before you run a host action. `useFrost.ts` calls `Editor.can` wi
 
 `defineCustomNode` registers an iceberg and an igloo. Each node uses a run-level `w:sdt`. Its `w:tag` stores the identity and attributes.
 
-Word and readers without the definition show each node as plain text. They preserve the content during a save and reopen cycle.
+Other DOCX applications and readers without the definition show each node as plain text. They preserve the content during a save and reopen cycle.
 
 Use **Custom Actions** or the **Custom elements** context menu to insert a node. The dialog collects attributes and calls `insertCustomNode`. The popover calls `updateCustomNode` for later changes.
 
-Word limits `w:tag` to 64 characters. The engine refuses an oversized tag, and the demo shows the refusal in the notice strip.
+Desktop word processors limit `w:tag` to 64 characters. The engine refuses an oversized tag, and the demo shows the refusal in the notice strip.
 
 ## Compose the content-control pop-ups
 
-`public/expedition-permit.docx` holds one of every Word content control: plain and rich text, a date, a dropdown, a combo box, a building block gallery with its own glossary blocks, two checkboxes, and a picture. `IglooForms.tsx` gives the editor root a `popups` map for them:
+`public/expedition-permit.docx` holds one of every DOCX content control type: plain and rich text, a date, a dropdown, a combo box, a building block gallery with its own glossary blocks, two checkboxes, and a picture. `IglooForms.tsx` gives the editor root a `popups` map for them:
 
 - `contentControlWidget` renders lists, the combo box, the gallery, and the date picker from `DocxEditorContentControlWidget` parts with the demo's classes and headings. The date opens the operating system's own picker through a native `<input type="date">` whose ISO value goes to `apply`; a switch in the heading brings back the packaged grid, which is the override a host uses for one look on every platform. Both keep the **Freeze today** button. The pop-ups restate the `--doc-*` tokens as deep water, so the packaged parts inside take the palette without any per-class styling.
 - `contentControlPicture` carves three sled photos on a canvas and hands the PNG bytes to `replaceImage`; the packaged `Picture` part stays for a file of your own.
@@ -93,7 +93,7 @@ Set `--doc-*` tokens under one host scope to theme the editor chrome. `igloo.css
 
 Use props and public tokens instead of `docx-*` implementation classes. The demo does not use `!important`.
 
-Keep the document canvas Word-faithful. Put host art behind the pages and keep document formatting separate from chrome formatting.
+Keep the document canvas faithful to the DOCX. Put host art behind the pages and keep document formatting separate from chrome formatting.
 
 For more information, see the [editor customization guide](../../docs/CUSTOMIZING.md).
 

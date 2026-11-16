@@ -1,0 +1,128 @@
+{
+  "config": "tableCells",
+  "seed": 53,
+  "replicas": 3,
+  "delivery": "peer",
+  "actions": [
+    {
+      "kind": "join",
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 10
+        },
+        "paragraphs": [5]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 3,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "mergeTableCells",
+          "tableId": "",
+          "cellIds": []
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 0
+          },
+          {
+            "field": "cellIds",
+            "localName": "tc",
+            "index": 1,
+            "within": 0,
+            "array": true
+          },
+          {
+            "field": "cellIds",
+            "localName": "tc",
+            "index": 3,
+            "within": 0,
+            "array": true
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 2,
+          "text": "r"
+        },
+        "paragraphs": [6]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "splitTableCell",
+          "tableId": "",
+          "cellId": "",
+          "rows": 2,
+          "columns": 1
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 0
+          },
+          {
+            "field": "cellId",
+            "localName": "tc",
+            "index": 1,
+            "within": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "row",
+        "table": 0,
+        "row": 2,
+        "op": {
+          "op": "deleteTableRow",
+          "tableId": "",
+          "rowId": ""
+        }
+      }
+    }
+  ]
+}

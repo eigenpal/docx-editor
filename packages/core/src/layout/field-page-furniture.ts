@@ -99,6 +99,29 @@ export function pageFieldPlaceholder(switches: PageFieldSwitches = {}): string {
 
 const NO_BREAK_SPACE = '\u00a0';
 
+/** Longest saved result a body page field is measured at; a longer one uses the placeholder. */
+const MAX_MEASURED_CACHED_RESULT = 32;
+
+/**
+ * The text a body page field is MEASURED at, given the result the file saved for it.
+ *
+ * The saved result never paints, because finalize substitutes the page's value. It is still
+ * the best width guess: the file was saved from a layout where the field had that value, so
+ * a page number keeps its digit count unless pagination moved it past a power of ten. A saved
+ * result that is empty, holds whitespace (it would split into several spans, and finalize
+ * paints the value into each one), or is too long falls back to {@link pageFieldPlaceholder}.
+ */
+export function pageFieldMeasuredText(switches: PageFieldSwitches = {}, cachedText = ''): string {
+  if (
+    cachedText.length > 0 &&
+    cachedText.length <= MAX_MEASURED_CACHED_RESULT &&
+    !/\s/.test(cachedText)
+  ) {
+    return cachedText;
+  }
+  return pageFieldPlaceholder(switches);
+}
+
 /**
  * The finalize marker for a body page field: its kind and only the switches it states.
  */

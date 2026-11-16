@@ -8,11 +8,16 @@ import type { SetTextFormFieldDefaultOp, CommitTextFormFieldOp } from './text-fo
 import type { SetLegacyCheckboxOp } from './legacy-checkbox-fields.ts';
 import type { InsertBuildingBlockOp } from './building-block-insert.ts';
 import type { InsertBookmarkOp, DeleteBookmarkOp } from './tree-op-bookmarks.ts';
-import type { InsertTableOp, MoveTableOp } from './table-placement-op-types.ts';
+import type {
+  InsertParagraphBesideTableOp,
+  InsertTableOp,
+  MoveTableOp,
+} from './table-placement-op-types.ts';
 // The op vocabulary and effect/rejection contracts (tree-ops seam).
 //
 // This module owns what an op IS — the declarative, JSON-safe `TreeDocOp` shapes, the
-// accepted property boundaries, and the effect/rejection contracts. Validation lives in
+// accepted property boundaries, and the effect contract. Rejection codes live in
+// tree-op-rejection.ts. Validation lives in
 // tree-op-validate.ts; application lives in tree-op-apply.ts; both re-export via tree-ops.ts.
 
 import type { ParagraphTabStop } from '../../contracts/types.ts';
@@ -29,6 +34,13 @@ import type {
   InsertableContentControlKind,
 } from './tree-op-content-controls.ts';
 import type { TableBorderStyle } from '../table-border-style.ts';
+import type { TreeOpRejection } from './tree-op-rejection.ts';
+import type { SetParagraphBordersOp } from './tree-op-paragraph-borders.ts';
+export type {
+  ParagraphBorderEdgeName,
+  ParagraphBorderEdgeWrite,
+  SetParagraphBordersOp,
+} from './tree-op-paragraph-borders.ts';
 
 /**
  * A colour as an op carries it: a literal, a theme reference, or automatic.
@@ -49,14 +61,7 @@ export type TreeDocColorValue =
 
 /** Which edges a border op addresses — the four sides, the interiors, all, or clear. */
 export type TableBorderTarget =
-  | 'all'
-  | 'outside'
-  | 'inside'
-  | 'none'
-  | 'top'
-  | 'bottom'
-  | 'left'
-  | 'right';
+  'all' | 'outside' | 'inside' | 'none' | 'top' | 'bottom' | 'left' | 'right';
 
 /** A {@link TableBorderTarget} that draws something — everything except clear. */
 export type TableBorderEdgeTarget = Exclude<TableBorderTarget, 'none'>;
@@ -177,6 +182,7 @@ export {
  */
 export type TreeDocOp =
   | SetFieldCodeOp
+  | SetParagraphBordersOp
   | {
       /**
        * Replace one story's complete block structure with fresh plain paragraphs.
@@ -297,6 +303,8 @@ export type TreeDocOp =
       readonly op: 'insertTab';
       readonly paragraphId: string;
       readonly offset: number;
+      /** Explicit left bias keeps a leading prompt outside the insertion. */
+      readonly bias?: 'left' | 'right';
       /** Write this as a TRACKED insertion, on the same terms as `insertText`. */
       readonly revision?: RevisionAttributionInput;
     }
@@ -304,6 +312,8 @@ export type TreeDocOp =
       readonly op: 'insertHardBreak';
       readonly paragraphId: string;
       readonly offset: number;
+      /** Explicit left bias keeps a leading prompt outside the insertion. */
+      readonly bias?: 'left' | 'right';
       /** Write this as a TRACKED insertion, on the same terms as `insertText`. */
       readonly revision?: RevisionAttributionInput;
     }
@@ -311,6 +321,8 @@ export type TreeDocOp =
       readonly op: 'insertPageBreak';
       readonly paragraphId: string;
       readonly offset: number;
+      /** Explicit left bias keeps a leading prompt outside the insertion. */
+      readonly bias?: 'left' | 'right';
       /** Write this as a TRACKED insertion, on the same terms as `insertText`. */
       readonly revision?: RevisionAttributionInput;
     }
@@ -640,6 +652,7 @@ export type TreeDocOp =
     }
   | InsertTableOp
   | MoveTableOp
+  | InsertParagraphBesideTableOp
   | {
       /** Insert a fresh row above or below a canonical table row. */
       readonly op: 'insertTableRow';
@@ -687,6 +700,8 @@ export type TreeDocOp =
       readonly op: 'mergeTableCells';
       readonly tableId: string;
       readonly cellIds: readonly string[];
+      /** Merge inside this author's own pending table insertion; new structure joins it. */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /** Split one cell into `rows` by `columns` equal cells; a one-row cell adds rows. */
@@ -695,6 +710,8 @@ export type TreeDocOp =
       readonly cellId: string;
       readonly rows: number;
       readonly columns: number;
+      /** Split inside this author's own pending table insertion; new structure joins it. */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /**
@@ -895,6 +912,12 @@ export type TreeDocOp =
       readonly controlId: string;
       /** String is the editor-facing v2 form; structured input is the automation form. */
       readonly value: string | ContentControlValueInput;
+      /**
+       * Propose the value instead of writing it: the shown value is struck (`w:del`) and the
+       * new one inserted (`w:ins`) inside the control. The control's recorded state moves to
+       * the new value, and accepting or rejecting brings it back in line with what is shown.
+       */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /**
@@ -977,7 +1000,15 @@ export type TreeDocOp =
       readonly lastMarkCovered?: boolean;
     }
   | {
+      readonly op: 'moveInlineDrawing';
+      readonly drawingNodeId: string;
+      readonly paragraphId: string;
+      readonly offset: number;
+    }
+  | {
       readonly op: 'insertDrawing';
+      /** Explicit left bias inserts before a leading prompt. */
+      readonly bias?: 'left' | 'right';
       readonly paragraphId: string;
       readonly offset: number;
       readonly drawing: OoxmlDrawingNode;
@@ -1031,6 +1062,19 @@ export type TreeDocOp =
     }
   | {
       /**
+       * Set the fill or outline of a shape, a text box, a line, or every shape of a group.
+       * One undo unit; a VML fallback that draws the same shapes follows.
+       */
+      readonly op: 'setShapeFormat';
+      /** The `w:drawing`, the `mc:AlternateContent` that holds it, or a legacy `w:pict`. */
+      readonly drawingNodeId: string;
+      /** One `wps:wsp` or VML shape of the drawing. Omitted formats every shape it holds. */
+      readonly shapeNodeId?: string;
+      readonly fill?: ShapeFillInput;
+      readonly outline?: ShapeOutlineInput;
+    }
+  | {
+      /**
        * Replace a detected TOC field's cached result paragraphs and ensure heading bookmarks.
        * Preserves field chrome / instruction. One undo unit (phase A of TOC refresh).
        */
@@ -1047,6 +1091,14 @@ export type TreeDocOp =
         readonly paragraphId: string;
         readonly name: string;
       }[];
+    }
+  | {
+      /**
+       * Remove a detected table of contents: its field, or the whole control the field fills.
+       * Text before and after the field stays, in one paragraph. One undo unit.
+       */
+      readonly op: 'removeToc';
+      readonly tocId: string;
     }
   | {
       /**
@@ -1087,6 +1139,7 @@ export type DrawingTreeDocOp = Extract<
   TreeDocOp,
   {
     readonly op:
+      | 'moveInlineDrawing'
       | 'insertDrawing'
       | 'replaceDrawingResource'
       | 'deleteDrawing'
@@ -1096,14 +1149,90 @@ export type DrawingTreeDocOp = Extract<
       | 'setDrawingWrap'
       | 'setDrawingMetadata'
       | 'setDrawingLocks'
-      | 'transformDrawing';
+      | 'transformDrawing'
+      | 'setShapeFormat';
   }
 >;
+
+/**
+ * A theme colour of a shape fill or outline: a slot of the document theme, lighter or darker by
+ * `shift` percent (`40` is Lighter 40%, `-25` is Darker 25%). It writes `a:schemeClr` with the
+ * `a:lumMod` and `a:lumOff` that the theme colour grid writes. @public
+ */
+export interface ShapeThemeColorInput {
+  readonly name: ShapeThemeColorName;
+  /** From -100 to 100; 0 or omitted is the theme colour itself. */
+  readonly shift?: number;
+}
+
+/** The theme colour slots a shape colour can name. @public */
+export type ShapeThemeColorName =
+  | 'bg1'
+  | 'tx1'
+  | 'bg2'
+  | 'tx2'
+  | 'accent1'
+  | 'accent2'
+  | 'accent3'
+  | 'accent4'
+  | 'accent5'
+  | 'accent6';
+
+/**
+ * A shape fill to write: none, or solid. A solid fill without `color` keeps the shape's colour,
+ * or brings back the one a hidden fill kept. `transparency` runs from 0 (opaque) to 1 (clear).
+ * With `theme`, the DrawingML shape takes the theme reference and `color` is the `RRGGBB` it
+ * resolves to, which a VML copy writes.
+ *
+ * @public
+ */
+export type ShapeFillInput =
+  | { readonly type: 'none' }
+  | {
+      readonly type: 'solid';
+      readonly color?: string;
+      readonly theme?: ShapeThemeColorInput;
+      readonly transparency?: number;
+    };
+
+/**
+ * A preset outline dash (ECMA-376 Part 1, 20.1.10.48 `ST_PresetLineDashVal`). `solid` is a
+ * plain line; the `sys` presets scale with the line width in short steps. @public
+ */
+export type ShapeOutlineDash =
+  | 'solid'
+  | 'sysDot'
+  | 'sysDash'
+  | 'sysDashDot'
+  | 'sysDashDotDot'
+  | 'dot'
+  | 'dash'
+  | 'lgDash'
+  | 'dashDot'
+  | 'lgDashDot'
+  | 'lgDashDotDot';
+
+/**
+ * A shape outline to write. Omitted fields keep their value. `color` is `RRGGBB`; `widthPt`
+ * runs from 0.25 to 1584 points; `dash` writes `a:prstDash` (and `v:stroke/@dashstyle` on a
+ * VML shape).
+ *
+ * @public
+ */
+export interface ShapeOutlineInput {
+  readonly visible?: boolean;
+  readonly color?: string;
+  /** A theme reference for the DrawingML outline; `color` is then its `RRGGBB`. */
+  readonly theme?: ShapeThemeColorInput;
+  readonly widthPt?: number;
+  readonly dash?: ShapeOutlineDash;
+}
 
 /** Just the `op` discriminants, for dispatch tables and validation. */
 export type TreeDocOpKind = TreeDocOp['op'];
 
 export { TREE_DOC_OP_KINDS } from './tree-op-kinds.ts';
+export type { TreeOpRejection } from './tree-op-rejection.ts';
 
 /**
  * How far a committed op can reach, so layout can scope its work (task 5.2).
@@ -1136,7 +1265,7 @@ export interface TreeOpEffect {
   readonly join?: { readonly kept: string; readonly removed: string };
   readonly dependencyKeys: readonly string[];
   readonly impact: ImpactClass;
-  /** Post-edit caret: the first cell paragraph of a table op, or the end of a fragment. */
+  /** Post-edit caret paragraph for structural ops, at `offset` (default 0). */
   readonly caret?: { readonly paragraphId: string; readonly offset?: number };
 }
 
@@ -1144,148 +1273,6 @@ export interface TreeOpEffect {
 export interface TreeOpCaret {
   readonly paragraphId: string;
 }
-
-/**
- * Why an op was refused.
- *
- * `not-adjacent-siblings` is the notable one: a join across table cells is refused rather than
- * silently merging content out of the cell that owned it.
- */
-export type TreeOpRejection =
-  | 'unknown-op'
-  | 'unknown-paragraph'
-  | 'not-a-paragraph'
-  | 'offset-out-of-range'
-  | 'invalid-range'
-  | 'not-a-list-paragraph'
-  | 'splits-surrogate-pair'
-  | 'invalid-text'
-  | 'unsupported-property'
-  | 'invalid-property-value'
-  | 'not-adjacent-siblings'
-  /**
-   * The addressed position is strictly inside content nothing can divide: a hyperlink, an
-   * inline content control, a revision wrapper, or an atomic field.
-   *
-   * Distinct from `invalid-range`, which is an offset the paragraph does not have. This one is
-   * a real offset that is not a PLACE — refused rather than resolved to the nearest one, so a
-   * caller learns the node would not have landed where they asked.
-   */
-  | 'indivisible-content'
-  /**
-   * The range has one end inside a field's editable saved result and the other outside it.
-   * Deleting it would leave the field's begin, separate, and end markers unbalanced, so it is
-   * refused. A range that covers the whole field removes the field.
-   */
-  | 'field-structure'
-  /**
-   * In the editable field-result mode, an op other than typing, deletion, or run formatting
-   * addresses a position inside a field's saved result. Splits, tabs, links, notes, and
-   * fragments there are not supported yet.
-   */
-  | 'field-result-unsupported'
-  | 'unknown-block'
-  | 'not-a-block'
-  | 'block-required'
-  | 'carries-section-mark'
-  /** The transaction named a part the package does not hold. */
-  | 'unknown-part'
-  /**
-   * The transaction would have published a package that does not open: a relationship
-   * pointing at a part nobody created, or a part with no declared content type.
-   */
-  | 'package-invariant'
-  /**
-   * A package edit refused the package it was given, for example because an id or part name it
-   * expected to allocate is taken or a definition it addresses changed. Nothing was applied.
-   */
-  | 'package-changed'
-  /** No revision in this part carries the addressed `(id, author, date)` triple. */
-  | 'unknown-revision'
-  /**
-   * A matched revision is a kind whose accept/reject semantics are structural and not
-   * implemented. Refusing is deliberate: removing the markup alone would report the decision
-   * applied while leaving the row, cell, or section it describes untouched.
-   */
-  | 'unsupported-revision'
-  /**
-   * A tracked insertion would land inside a link, content control, or other container within
-   * another author's pending insertion. The container cannot split, and nested words would
-   * become part of that author's proposal.
-   */
-  | 'unsupported-revision:foreign-insertion'
-  | 'tree-invariant'
-  /** No content control in this part carries the addressed node id. */
-  | 'unknown-content-control'
-  /** The addressed node exists and is not a `w:sdt`. */
-  | 'not-a-content-control'
-  /**
-   * A content control's `w:lock` — or one an enclosing control imposes — forbids this.
-   *
-   * The same code for an edit inside `contentLocked` content and for the removal of an
-   * `sdtLocked` control: both are "the document says no", and the two halves are already
-   * distinguished by which operation was refused.
-   */
-  | 'locked'
-  /** The control declares `w:dataBinding`; its value belongs to a custom XML part. */
-  | 'bound'
-  /** The value offered is not one this control's type accepts. */
-  | 'typeMismatch'
-  | 'unknown-control'
-  | 'unsupported'
-  /** Malformed lifecycle args / first-section link — mirrors Editor `invalidArgs`. */
-  | 'invalidArgs'
-  /** The addressed table id is missing, duplicated, or not a typed table. */
-  | 'unknown-table'
-  /** The addressed row id is missing or not a direct child of the table. */
-  | 'unknown-row'
-  /** A table property container appears more than once on a typed node. */
-  | 'duplicate-property-container'
-  /**
-   * A row holds a `w:tc` inside a cell-level wrapper such as `w:sdt`, so the row's grid
-   * mapping cannot be trusted and the inserted row would not match it.
-   */
-  | 'row-hides-cell'
-  /** The table carries a legacy `w:hMerge`, which grid edits cannot place. */
-  | 'table-has-merge'
-  /** The cells to merge do not cover one rectangle, or cover only one cell. */
-  | 'cells-not-rectangle'
-  /** A cell merged over several rows splits only into a divisor of them. */
-  | 'split-rows-not-divisor'
-  /** The cells hold a tracked cell insertion, deletion, or merge. */
-  | 'cell-has-revision'
-  /** The split cells would be narrower than the minimum column width. */
-  | 'cell-too-narrow'
-  /** Without `w:tblGrid`, a cell splits only into a divisor of the columns it spans. */
-  | 'split-needs-grid'
-  /** The addressed grid column id is missing or ambiguous without `w:tblGrid`. */
-  | 'unknown-grid-column'
-  /** The operation would exceed bounded table topology limits. */
-  | 'resource-limit'
-  /** The addressed node is not a top-level `w:drawing`. */
-  | 'not-a-drawing'
-  /** No `w:drawing` with this id exists in the part. */
-  | 'unknown-drawing'
-  /** The drawing's graphic payload is not a supported picture. */
-  | 'not-a-picture-drawing'
-  /** A chart in any state: only a delete applies, and it removes the whole chart. */
-  | 'chart-drawing'
-  /** A lock flag or `@locked` forbids this mutation. */
-  | 'drawing-locked'
-  /** Finite EMU extent, crop, or position value is out of range. */
-  | 'invalid-drawing-value'
-  /** Insertion would cross a table-cell boundary or wrong story container. */
-  | 'cross-cell-drawing'
-  /** Suggesting-mode drawing deletion is not implemented in this change. */
-  | 'trackedDrawingDeletionUnsupported'
-  /** Hyperlink target creation or change needs an OPC relationship in a package transaction. */
-  | 'packageTransactionRequired'
-  /** A clipboard fragment block nests deeper than the recursion cap. */
-  | 'fragment-too-deep'
-  /** A clipboard fragment block is not a paragraph, table, or content control subtree. */
-  | 'fragment-invalid-block'
-  /** A clipboard fragment exceeds its block or node budget. */
-  | 'fragment-resource-budget';
 
 /** Whether an op applied, with the effect it produced or the reason it was refused. */
 export type TreeOpResult =

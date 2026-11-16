@@ -198,3 +198,51 @@ for (const depth of [31, 32])
       depth < 32 ? 1 : 0
     );
   });
+
+describe('textboxStoriesInPart after an edit', () => {
+  const bodyOf = (part: OoxmlPart): OoxmlElement => {
+    const body = part.root.children.find((child) => child.kind === 'body');
+    if (!body || body.kind === 'textValue') throw new Error('no body');
+    return body;
+  };
+  const withBody = (part: OoxmlPart, children: readonly OoxmlNode[]): OoxmlPart =>
+    ({
+      ...part,
+      root: { ...part.root, children: [{ ...bodyOf(part), children: [...children] }] },
+    }) as OoxmlPart;
+
+  test('reuses the stories of unchanged blocks and walks the new ones', () => {
+    const part = documentPart(
+      `<w:p>${textbox(paragraph('first'), 1)}</w:p>` +
+        `<w:tbl><w:tr><w:tc><w:p>${textbox(paragraph('cell'), 2)}</w:p></w:tc></w:tr></w:tbl>` +
+        paragraph('plain')
+    );
+    const stories = textboxStoriesInPart(part);
+    const added = bodyOf(documentPart(`<w:p>${textbox(paragraph('added'), 3)}</w:p>`)).children;
+    const edited = withBody(part, [...added, ...bodyOf(part).children]);
+    const again = textboxStoriesInPart(edited);
+
+    expect(stories).toHaveLength(2);
+    expect(again).toHaveLength(3);
+    expect(again[1]).toBe(stories[0]);
+    expect(again[2]).toBe(stories[1]);
+    expect(storyParagraphs(again[0]!.root).map((node) => paragraphTextOf(edited, node.id))).toEqual(
+      ['added']
+    );
+  });
+
+  test('walks a reused block again when the namespaces in scope change', () => {
+    const part = documentPart(`<w:p>${wrappedTextbox(paragraph('wrapped'), 5)}</w:p>`);
+    const root = part.root as OoxmlElement;
+    const withoutWps = {
+      ...part,
+      root: {
+        ...root,
+        namespaceBindings: root.namespaceBindings.filter((binding) => binding.prefix !== 'wps'),
+      },
+    } as OoxmlPart;
+
+    expect(textboxStoriesInPart(part)).toHaveLength(1);
+    expect(textboxStoriesInPart(withoutWps)).toEqual([]);
+  });
+});

@@ -4,7 +4,8 @@
 // the shipped stylesheet), then by child order; `paintRank` models that. A header or footer drawing set in front of
 // text covers the header or footer text only: the whole layer paints before the body's
 // behind-text drawings, the body and the body's in-front drawings. `behindDoc` still orders
-// a drawing within that layer. A `back` page border is under the layer, a `front` one over
+// a drawing within that layer, and `relativeHeight` orders the drawings on one side of the
+// text, as in the body. A `back` page border is under the layer, a `front` one over
 // everything, and the edit pill stays over the body it sits beside.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
@@ -23,11 +24,13 @@ import {
   OD_REL,
   PNG_1X1,
   REL_NS,
+  mountWithImages,
   picture,
 } from './image-decode-harness.ts';
 
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const VML_NS = 'xmlns:v="urn:schemas-microsoft-com:vml"';
+const LEGACY_NS = `${VML_NS} xmlns:o="urn:schemas-microsoft-com:office:office"`;
 const EMU = 12700;
 
 /** Screen `z-index` rules of the shipped stylesheet, in source order. */
@@ -248,6 +251,82 @@ describe('header and footer content paints under the body', () => {
     const { surface, index } = paintedSheet('front');
     expect(index('[data-docx-hf-hint="header"]')).toBeGreaterThan(index('.docx-page-content'));
     expect(index('[data-docx-hf-hint="footer"]')).toBeGreaterThan(index('.docx-page-content'));
+    surface.destroy();
+  });
+});
+
+/** A picture watermark in a header: VML, behind text, centered on the margins. */
+function vmlPictureWatermark(widthPt: number, zIndex: number): string {
+  return (
+    '<w:r><w:pict><v:shape id="WordPictureWatermark1" o:spid="_x0000_s2049" ' +
+    `style="position:absolute;margin-left:0;margin-top:0;width:${widthPt}pt;height:120pt;` +
+    `z-index:${zIndex};mso-position-horizontal:center;mso-position-horizontal-relative:margin;` +
+    'mso-position-vertical:center;mso-position-vertical-relative:margin" o:allowincell="f">' +
+    '<v:imagedata r:id="rIdImg" o:title="mark"/></v:shape></w:pict></w:r>'
+  );
+}
+
+/** A behind-text DrawingML picture, centered on the margins. */
+function marginCenteredPicture(widthPt: number, relativeHeight: number): string {
+  return (
+    '<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" ' +
+    `relativeHeight="${relativeHeight}" behindDoc="1" locked="0" layoutInCell="0" allowOverlap="1">` +
+    '<wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="margin"><wp:align>center</wp:align></wp:positionH>' +
+    '<wp:positionV relativeFrom="margin"><wp:align>center</wp:align></wp:positionV>' +
+    `<wp:extent cx="${widthPt * EMU}" cy="${90 * EMU}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>` +
+    `<wp:wrapNone/><wp:docPr id="7" name="Picture 7"/>${picture(7)}</wp:anchor></w:drawing></w:r>`
+  );
+}
+
+function watermarkDocx(): Uint8Array {
+  const rels = (inner: string) =>
+    strToU8(`<Relationships xmlns="${REL_NS}">${inner}</Relationships>`);
+  const image = `<Relationship Id="rIdImg" Type="${IMG_REL}" Target="media/image1.png"/>`;
+  // Document order puts the watermark first. Its rank is the higher one.
+  const header =
+    '<w:p>' +
+    vmlPictureWatermark(360, -251610112) +
+    marginCenteredPicture(280, 251703296) +
+    text('Header line') +
+    '</w:p>';
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT_NS}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="png" ContentType="image/png"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': rels(`<Relationship Id="rId1" Type="${OD_REL}" Target="word/document.xml"/>`),
+    'word/document.xml': strToU8(
+      `<w:document ${DRAWING_NS}><w:body><w:p>${text('Body text')}</w:p><w:sectPr>` +
+        '<w:headerReference r:id="rIdHdr" w:type="default"/>' +
+        '<w:pgSz w:w="11906" w:h="16838"/>' +
+        '<w:pgMar w:top="1701" w:right="1440" w:bottom="1440" w:left="1440" w:header="851" w:footer="737" w:gutter="0"/>' +
+        '</w:sectPr></w:body></w:document>'
+    ),
+    'word/_rels/document.xml.rels': rels(
+      `<Relationship Id="rIdHdr" Type="${R}/header" Target="header1.xml"/>`
+    ),
+    'word/header1.xml': strToU8(`<w:hdr ${DRAWING_NS} ${LEGACY_NS}>${header}</w:hdr>`),
+    'word/_rels/header1.xml.rels': rels(image),
+    'word/media/image1.png': PNG_1X1,
+  });
+}
+
+describe('drawings inside the header layer', () => {
+  test('a picture watermark paints over a behind-text picture of a lower rank', async () => {
+    // The watermark ranks above the picture, so it paints last, whatever the document order.
+    const { surface, container } = await mountWithImages(watermarkDocx());
+    const layer = container.querySelector('[data-docx-hf-behind="header"]');
+    expect(layer === null).toBe(false);
+    // At scale 1 the painter writes one pixel for each point.
+    const widthsInPaintOrder = [
+      ...layer!.querySelectorAll<HTMLElement>('.docx-drawing-layer > .docx-drawing'),
+    ].map((drawing) => Math.round(parseFloat(drawing.style.width)));
+    expect(widthsInPaintOrder).toEqual([280, 360]);
     surface.destroy();
   });
 });

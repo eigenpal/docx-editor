@@ -1,8 +1,9 @@
 import type { ViewScope } from './editor-scope.ts';
 
 /**
- * One text range to mark. A `TextMatch` from `findMatches()` is a valid range, so search
- * results pass straight through. @public
+ * One text range to mark, select, or replace. A `TextMatch` from `findMatches()` is a valid
+ * range, so search results pass straight through. `selectMatch()` and the `replaceMatch`
+ * command also take a range you computed, such as a proofing result. @public
  */
 export interface HighlightRange {
   /** Paragraph that holds the range: `TextMatch.blockId`. IDs belong to the open document. */
@@ -11,14 +12,24 @@ export interface HighlightRange {
   readonly start: number;
   /** Range length in the same units. A zero length marks nothing. */
   readonly length: number;
-  /** Story that holds the paragraph. Informational; `blockId` already names the paragraph. */
+  /**
+   * Story that holds the paragraph. Optional, because `blockId` already names the paragraph.
+   * `selectMatch()` and `replaceMatch` refuse a scope that names another story.
+   */
   readonly scope?: ViewScope;
   /**
    * Model text the range must cover to paint. Set it for ranges computed outside the editor,
    * such as on a server, so a range that no longer matches the document never paints. When it
    * is omitted, a range must keep covering the text it covered when it was first set.
+   * `selectMatch()` and `replaceMatch` refuse a range whose text differs, with `notFound`.
    */
   readonly expectedText?: string;
+  /**
+   * What the mark says, for assistive technology, such as `Possible spelling mistake`. In a
+   * set with a `kind`, the covered text references this text with `aria-describedby`.
+   * Other sets ignore it.
+   */
+  readonly description?: string;
 }
 
 /** Presentation for one named highlight set. Every field is optional. @public */
@@ -44,6 +55,28 @@ export interface HighlightOptions {
    * The built-in Find pane uses the set name `search` with priority `10`.
    */
   readonly priority?: number;
+  /**
+   * What the marks mean, for assistive technology. `'spelling'` and `'grammar'` mark proofing
+   * issues: the covered text reports `aria-invalid` with that value, browsers with the CSS
+   * Custom Highlight API also paint the set as a `spelling-error` or `grammar-error`
+   * highlight, and the editor announces a change of the issue count in a polite live region.
+   * Omit it for marks without a proofing meaning, such as search results. Default: none.
+   */
+  readonly kind?: HighlightKind;
+}
+
+/** The proofing meaning of a highlight set. See {@link HighlightOptions.kind}. @public */
+export type HighlightKind = 'spelling' | 'grammar';
+
+/**
+ * Move the selection to the next or previous mark of one highlight set. See the
+ * `navigateHighlight` command. @public
+ */
+export interface NavigateHighlightCommand {
+  /** The highlight set name passed to `setHighlights()`. */
+  readonly name: string;
+  /** `'next'` selects the first mark after the selection, `'previous'` the last one before it. */
+  readonly direction: 'next' | 'previous';
 }
 
 /** What `setHighlights()` resolved against the open document. @public */

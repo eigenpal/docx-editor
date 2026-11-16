@@ -1,4 +1,5 @@
 // Copied into each isolated installation. Never import workspace source here.
+import * as coreStore from '@docx-editor.dev/core/store';
 import { createInterface } from 'node:readline';
 import { createHash } from 'node:crypto';
 import * as Y from 'yjs';
@@ -153,6 +154,38 @@ async function command(input) {
       port.flushPendingJournals();
       return true;
     }
+    case 'comment': {
+      let result;
+      if (input.action === 'edit') {
+        if (!coreStore.setPackageCommentText) throw new Error('Comment editing is unavailable');
+        result = coreStore.setPackageCommentText(store, input.commentId, input.text);
+      } else if (input.action === 'resolve') {
+        result = coreStore.setPackageCommentResolved(store, input.commentId, input.resolved);
+      } else {
+        const paragraph = nodes(store.bodyStore().part.root).find(
+          (node) => node.kind === 'paragraph'
+        );
+        result = coreStore.addPackageComment(store, {
+          anchor: { paragraphId: paragraph.id, start: 0, end: 3 },
+          author: 'Reviewer',
+          text: input.text,
+          ...(input.commentId ? { replyToCommentId: input.commentId } : {}),
+          date: '2026-11-10T00:00:00Z',
+        });
+      }
+      if (!result.ok) throw new Error(result.reason);
+      port.flushPendingJournals();
+      return result.commentId ?? true;
+    }
+    case 'comments':
+      return [...packageOf().parts.values()].flatMap((part) =>
+        nodes(part.root)
+          .filter((node) => node.kind === 'comment')
+          .map((node) => ({
+            id: node.attributes.find((attr) => attr.localName === 'id')?.value,
+            text: textOf(node),
+          }))
+      );
     case 'blocks':
       return bodyNode().children.filter(isBlock).map(textOf);
     case 'reorder': {

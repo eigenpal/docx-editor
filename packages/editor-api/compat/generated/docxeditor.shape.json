@@ -2,9 +2,122 @@
   "schemaVersion": 1,
   "generatedFrom": {
     "package": "docxeditor-declarations (compat/docxeditor/declarations.ts)",
-    "version": "2.33.0"
+    "version": "2.37.0"
   },
   "symbols": {
+    "Annotation": {
+      "uid": "DocxEditor.Annotation",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "critiqueAnnotation": {
+          "uid": "DocxEditor.Annotation#critiqueAnnotation",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CritiqueAnnotation"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "DocxEditor.Annotation#delete",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "id": {
+          "uid": "DocxEditor.Annotation#id",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "state": {
+          "uid": "DocxEditor.Annotation#state",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Created\" | \"Accepted\" | \"Rejected\""
+            }
+          ]
+        }
+      }
+    },
+    "AnnotationCollection": {
+      "uid": "DocxEditor.AnnotationCollection",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "getFirst": {
+          "uid": "DocxEditor.AnnotationCollection#getFirst",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Annotation"
+            }
+          ]
+        },
+        "getFirstOrNullObject": {
+          "uid": "DocxEditor.AnnotationCollection#getFirstOrNullObject",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Annotation"
+            }
+          ]
+        },
+        "items": {
+          "uid": "DocxEditor.AnnotationCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Annotation[]"
+            }
+          ]
+        }
+      }
+    },
+    "AnnotationSet": {
+      "uid": "DocxEditor.AnnotationSet",
+      "kind": "interface",
+      "requirementSet": null,
+      "members": {
+        "critiques": {
+          "uid": "DocxEditor.AnnotationSet#critiques",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Critique[]"
+            }
+          ]
+        }
+      }
+    },
     "Body": {
       "uid": "DocxEditor.Body",
       "kind": "class",
@@ -77,6 +190,26 @@
             {
               "params": [],
               "returns": "CommentCollection"
+            }
+          ]
+        },
+        "insertFileFromBase64": {
+          "uid": "DocxEditor.Body#insertFileFromBase64",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "base64File",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Replace\" | \"Start\" | \"End\""
+                }
+              ],
+              "returns": "Range"
             }
           ]
         },
@@ -262,6 +395,99 @@
         }
       }
     },
+    "BorderUniversal": {
+      "uid": "DocxEditor.BorderUniversal",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "color": {
+          "uid": "DocxEditor.BorderUniversal#color",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "colorIndex": {
+          "uid": "DocxEditor.BorderUniversal#colorIndex",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Auto\" | \"Black\" | \"Blue\" | \"Turquoise\" | \"BrightGreen\" | \"Pink\" | \"Red\" | \"Yellow\" | \"White\" | \"DarkBlue\" | \"Teal\" | \"Green\" | \"Violet\" | \"DarkRed\" | \"DarkYellow\" | \"Gray50\" | \"Gray25\" | \"ClassicRed\" | \"ClassicBlue\" | \"ByAuthor\""
+            }
+          ]
+        },
+        "inside": {
+          "uid": "DocxEditor.BorderUniversal#inside",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "isVisible": {
+          "uid": "DocxEditor.BorderUniversal#isVisible",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "lineStyle": {
+          "uid": "DocxEditor.BorderUniversal#lineStyle",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"None\" | \"Single\" | \"Dot\" | \"DashSmallGap\" | \"DashLargeGap\" | \"DashDot\" | \"DashDotDot\" | \"Double\" | \"Triple\" | \"ThinThickSmallGap\" | \"ThickThinSmallGap\" | \"ThinThickThinSmallGap\" | \"ThinThickMedGap\" | \"ThickThinMedGap\" | \"ThinThickThinMedGap\" | \"ThinThickLargeGap\" | \"ThickThinLargeGap\" | \"ThinThickThinLargeGap\" | \"SingleWavy\" | \"DoubleWavy\" | \"DashDotStroked\" | \"Emboss3D\" | \"Engrave3D\" | \"Outset\" | \"Inset\""
+            }
+          ]
+        },
+        "lineWidth": {
+          "uid": "DocxEditor.BorderUniversal#lineWidth",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Pt025\" | \"Pt050\" | \"Pt075\" | \"Pt100\" | \"Pt150\" | \"Pt225\" | \"Pt300\" | \"Pt450\" | \"Pt600\""
+            }
+          ]
+        }
+      }
+    },
+    "BorderUniversalCollection": {
+      "uid": "DocxEditor.BorderUniversalCollection",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "items": {
+          "uid": "DocxEditor.BorderUniversalCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "BorderUniversal[]"
+            }
+          ]
+        }
+      }
+    },
     "ClientObject": {
       "uid": "DocxEditor.ClientObject",
       "kind": "class",
@@ -300,6 +526,17 @@
           "uid": "DocxEditor.Comment#authorName",
           "kind": "property",
           "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "content": {
+          "uid": "DocxEditor.Comment#content",
+          "kind": "property",
           "requirementSet": null,
           "overloads": [
             {
@@ -434,6 +671,17 @@
           "uid": "DocxEditor.CommentReply#authorName",
           "kind": "property",
           "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "content": {
+          "uid": "DocxEditor.CommentReply#content",
+          "kind": "property",
           "requirementSet": null,
           "overloads": [
             {
@@ -684,6 +932,161 @@
         }
       }
     },
+    "Critique": {
+      "uid": "DocxEditor.Critique",
+      "kind": "interface",
+      "requirementSet": null,
+      "members": {
+        "colorScheme": {
+          "uid": "DocxEditor.Critique#colorScheme",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Red\" | \"Green\" | \"Blue\" | \"Lavender\" | \"Berry\""
+            }
+          ]
+        },
+        "length": {
+          "uid": "DocxEditor.Critique#length",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "popupOptions": {
+          "uid": "DocxEditor.Critique#popupOptions",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CritiquePopupOptions"
+            }
+          ]
+        },
+        "start": {
+          "uid": "DocxEditor.Critique#start",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        }
+      }
+    },
+    "CritiqueAnnotation": {
+      "uid": "DocxEditor.CritiqueAnnotation",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "accept": {
+          "uid": "DocxEditor.CritiqueAnnotation#accept",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "critique": {
+          "uid": "DocxEditor.CritiqueAnnotation#critique",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Critique"
+            }
+          ]
+        },
+        "range": {
+          "uid": "DocxEditor.CritiqueAnnotation#range",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Range"
+            }
+          ]
+        },
+        "reject": {
+          "uid": "DocxEditor.CritiqueAnnotation#reject",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        }
+      }
+    },
+    "CritiquePopupOptions": {
+      "uid": "DocxEditor.CritiquePopupOptions",
+      "kind": "interface",
+      "requirementSet": null,
+      "members": {
+        "brandingTextResourceId": {
+          "uid": "DocxEditor.CritiquePopupOptions#brandingTextResourceId",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "subtitleResourceId": {
+          "uid": "DocxEditor.CritiquePopupOptions#subtitleResourceId",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "suggestions": {
+          "uid": "DocxEditor.CritiquePopupOptions#suggestions",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string[]"
+            }
+          ]
+        },
+        "titleResourceId": {
+          "uid": "DocxEditor.CritiquePopupOptions#titleResourceId",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        }
+      }
+    },
     "Document": {
       "uid": "DocxEditor.Document",
       "kind": "class",
@@ -724,6 +1127,48 @@
             }
           ]
         },
+        "compare": {
+          "uid": "DocxEditor.Document#compare",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "filePath",
+                  "type": "string"
+                },
+                {
+                  "name": "documentCompareOptions",
+                  "type": "DocumentCompareOptions",
+                  "optional": true
+                }
+              ],
+              "returns": "void"
+            }
+          ]
+        },
+        "compareFromBase64": {
+          "uid": "DocxEditor.Document#compareFromBase64",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "base64File",
+                  "type": "string"
+                },
+                {
+                  "name": "documentCompareOptions",
+                  "type": "DocumentCompareOptions",
+                  "optional": true
+                }
+              ],
+              "returns": "void"
+            }
+          ]
+        },
         "contentControls": {
           "uid": "DocxEditor.Document#contentControls",
           "kind": "property",
@@ -749,6 +1194,22 @@
                 }
               ],
               "returns": "void"
+            }
+          ]
+        },
+        "getAnnotationById": {
+          "uid": "DocxEditor.Document#getAnnotationById",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "id",
+                  "type": "string"
+                }
+              ],
+              "returns": "Annotation"
             }
           ]
         },
@@ -1331,6 +1792,18 @@
             }
           ]
         },
+        "borders": {
+          "uid": "DocxEditor.Paragraph#borders",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "BorderUniversalCollection"
+            }
+          ]
+        },
         "clear": {
           "uid": "DocxEditor.Paragraph#clear",
           "kind": "method",
@@ -1388,6 +1861,17 @@
             }
           ]
         },
+        "getAnnotations": {
+          "uid": "DocxEditor.Paragraph#getAnnotations",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "AnnotationCollection"
+            }
+          ]
+        },
         "getReviewedText": {
           "uid": "DocxEditor.Paragraph#getReviewedText",
           "kind": "method",
@@ -1433,6 +1917,22 @@
                 }
               ],
               "returns": "RangeCollection"
+            }
+          ]
+        },
+        "insertAnnotations": {
+          "uid": "DocxEditor.Paragraph#insertAnnotations",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "annotations",
+                  "type": "AnnotationSet"
+                }
+              ],
+              "returns": "ClientResult<string[]>"
             }
           ]
         },

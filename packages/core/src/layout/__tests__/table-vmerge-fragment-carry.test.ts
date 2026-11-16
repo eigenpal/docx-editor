@@ -97,7 +97,7 @@ function fixture({
       p(text(`ROW-${String(index + 1).padStart(2, '0')}`)) +
       '</w:tc></w:tr>'
   ).join('');
-  const xml = `<w:document xmlns:w="${W}"><w:body>${prefix}<w:tbl>${tableProperties}<w:tblGrid><w:gridCol w:w="5000"/><w:gridCol w:w="5000"/></w:tblGrid>${header}${body}</w:tbl></w:body></w:document>`;
+  const xml = `<w:document xmlns:w="${W}"><w:body>${prefix}<w:tbl>${tableProperties}<w:tblGrid><w:gridCol w:w="5000"/><w:gridCol w:w="5000"/></w:tblGrid>${header}${body}</w:tbl><w:p/></w:body></w:document>`;
   const loaded = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'application/xml' });
   if (!loaded.ok) throw new Error(loaded.reason);
   return loaded.part;

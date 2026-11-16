@@ -49,7 +49,7 @@ type HarfBuzzFont = InstanceType<HarfBuzzModule['Font']>;
  */
 export const HARFBUZZ_SHAPING_LIBRARY: VersionedShapingLibrary = Object.freeze({
   name: 'HarfBuzz',
-  version: '14.4.0',
+  version: '15.0.0',
 });
 
 let harfBuzzModule: HarfBuzzModule | null = null;
@@ -683,7 +683,7 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       });
     }
     let codePoints = 0;
-    for (let offset = 0; offset < text.length; ) {
+    for (let offset = 0; offset < text.length;) {
       const codePoint = text.codePointAt(offset)!;
       offset += codePoint > 0xffff ? 2 : 1;
       codePoints += 1;

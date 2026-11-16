@@ -94,6 +94,39 @@ describe('DocxEditorContextMenu', () => {
     }
   });
 
+  test('editor state changes keep the one contextmenu listener', async () => {
+    const mounted = mountMenu();
+    try {
+      await flush();
+      const scroller = mounted.container.querySelector<HTMLElement>(
+        '.docx-editor__scroll-container'
+      )!;
+      const added: string[] = [];
+      const removed: string[] = [];
+      const add = scroller.addEventListener.bind(scroller);
+      const remove = scroller.removeEventListener.bind(scroller);
+      scroller.addEventListener = ((type: string, ...rest: [never, never?]) => {
+        added.push(type);
+        return add(type, ...rest);
+      }) as typeof scroller.addEventListener;
+      scroller.removeEventListener = ((type: string, ...rest: [never, never?]) => {
+        removed.push(type);
+        return remove(type, ...rest);
+      }) as typeof scroller.removeEventListener;
+      const editor = mounted.editor();
+      editor.setZoom(1.25);
+      await flush();
+      editor.setZoom(1.5);
+      await flush();
+      expect(added.filter((type) => type === 'contextmenu')).toEqual([]);
+      expect(removed.filter((type) => type === 'contextmenu')).toEqual([]);
+      await openMenu(mounted.container);
+      expect(panel(mounted.container)).not.toBeNull();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   test('the default set is the packaged rows; Add comment needs a review rail', async () => {
     const mounted = mountMenu();
     try {
@@ -219,6 +252,43 @@ test('Vue field context action opens and saves the shared options dialog', async
     await flush();
     expect(host.container.querySelector('dialog')).toBeNull();
     expect(host.container.querySelector('[data-field-atom="form"]')?.textContent).toBe('HELLO');
+  } finally {
+    host.unmount();
+  }
+});
+
+test('Vue TOC context rows include Remove, and selecting it removes the TOC', async () => {
+  const host = mountMenu(
+    docx(
+      '<w:p><w:r><w:t>Before</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> TOC \\o "1-1" \\h </w:instrText><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Old entry</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
+        '<w:p><w:r><w:t>After</w:t></w:r></w:p>'
+    )
+  );
+  try {
+    await flush();
+    const row = host.container.querySelector<HTMLElement>('[data-docx-read-only]')!;
+    row.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        clientX: 30,
+        clientY: 30,
+      })
+    );
+    await flush();
+    const slots = rows(host.container).map((item) => item.dataset.slot);
+    expect(slots.slice(-3)).toEqual(['toc.refresh', 'toc.refreshPageNumbers', 'toc.remove']);
+    const remove = host.container.querySelector<HTMLElement>('[data-slot="toc.remove"]')!;
+    expect(remove.textContent).toContain('toc.remove');
+    expect(remove.querySelector('svg')).not.toBeNull();
+    remove.click();
+    await flush();
+    expect(panel(host.container)).toBeNull();
+    expect(host.container.querySelector('[data-docx-read-only]')).toBeNull();
+    expect(host.editor().surface!.session.bodyText()).toBe('Before\nAfter');
   } finally {
     host.unmount();
   }

@@ -44,35 +44,57 @@ export function pushDecidedContent(
     before.wrapper.kind === wrapper.kind &&
     sameRevision(before.wrapper, wrapper);
   const from = continues ? before.from : out.length;
-  for (const node of kept) {
-    const previous = out.length > from ? out.pop() : undefined;
-    const joined = previous === undefined ? [node] : joinedRuns(mint, previous, node);
-    for (const entry of joined) out.push(entry);
-  }
+  // Same-format runs join in one pass: each is collected once, and the joined run is built once
+  // per group, so a change of many tab or break runs stays linear.
+  let group: JoinGroup | null = null;
+  const flush = () => {
+    if (group) out.push(joinedGroup(mint, group));
+    group = null;
+  };
+  const add = (node: OoxmlNode) => {
+    const parts = joinableParts(node);
+    if (group && parts && equivalentNodes(group.properties, parts.properties)) {
+      for (const child of parts.content) group.content.push(child);
+      group.count++;
+      return;
+    }
+    flush();
+    if (parts)
+      group = { first: node, properties: parts.properties, content: [...parts.content], count: 1 };
+    else out.push(node);
+  };
+  const previous = out.length > from ? out.pop() : undefined;
+  if (previous !== undefined) add(previous);
+  for (const node of kept) add(node);
+  flush();
   return { wrapper, from, to: out.length };
 }
 
 /** Run content a join may concatenate: characters, tabs and breaks, never atoms or fields. */
 const JOINABLE_CONTENT = new Set(['text', 'deletedText', 'tab', 'hardBreak']);
 
-/** One run for two adjacent runs of the same format that hold only joinable content. */
-function joinedRuns(mint: () => string, left: OoxmlNode, right: OoxmlNode): OoxmlNode[] {
-  if (left.kind !== 'run' || right.kind !== 'run') return [left, right];
-  const leftContent = left.children.filter((child) => !isRunProperties(child));
-  const rightContent = right.children.filter((child) => !isRunProperties(child));
-  const joinable =
-    leftContent.length > 0 &&
-    rightContent.length > 0 &&
-    [...leftContent, ...rightContent].every((child) => JOINABLE_CONTENT.has(child.kind)) &&
-    equivalentNodes(left.children.filter(isRunProperties), right.children.filter(isRunProperties));
-  if (!joinable) return [left, right];
-  const properties = left.children.filter(isRunProperties);
-  return [
-    {
-      ...left,
-      children: [...properties, ...coalesced(mint, [...leftContent, ...rightContent])],
-    } as OoxmlNode,
-  ];
+interface JoinGroup {
+  readonly first: OoxmlNode;
+  readonly properties: readonly OoxmlNode[];
+  readonly content: OoxmlNode[];
+  count: number;
+}
+
+/** A run's properties and content when it may join a neighbour: it holds only joinable content. */
+function joinableParts(node: OoxmlNode): { properties: OoxmlNode[]; content: OoxmlNode[] } | null {
+  if (node.kind !== 'run') return null;
+  const content = node.children.filter((child) => !isRunProperties(child));
+  if (content.length === 0 || !content.every((child) => JOINABLE_CONTENT.has(child.kind)))
+    return null;
+  return { properties: node.children.filter(isRunProperties), content };
+}
+
+/** One run for a group of adjacent runs of the same format; a lone run stays as it is. */
+function joinedGroup(mint: () => string, group: JoinGroup): OoxmlNode {
+  if (group.count === 1) return group.first;
+  const children: OoxmlNode[] = [...group.properties];
+  for (const child of coalesced(mint, group.content)) children.push(child);
+  return { ...group.first, children } as OoxmlNode;
 }
 
 /**

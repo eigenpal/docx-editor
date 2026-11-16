@@ -185,6 +185,25 @@ export function renderNotices({
     bunLicense.trim(),
     '```',
     '',
+    '### LGPL libraries in the Bun runtime',
+    '',
+    'Two libraries that Bun links into the executable are under the LGPL:',
+    '',
+    '- JavaScriptCore and WebKit: GNU Library General Public License, version 2 or later.',
+    '  The full text is installed as `LGPL-2.0.txt` beside this file.',
+    '- TinyCC: GNU Lesser General Public License, version 2.1 or later. The full text',
+    '  is installed as `LGPL-2.1.txt` beside this file.',
+    '',
+    `The exact source of each library for Bun ${bunVersion} is pinned in Bun's repository:`,
+    '',
+    `- WebKit: \`WEBKIT_VERSION\` in https://github.com/oven-sh/bun/blob/bun-v${bunVersion}/scripts/build/deps/webkit.ts,`,
+    '  a commit of https://github.com/oven-sh/WebKit.',
+    `- TinyCC: \`TINYCC_COMMIT\` in https://github.com/oven-sh/bun/blob/bun-v${bunVersion}/scripts/build/deps/tinycc.ts,`,
+    '  a commit of https://github.com/oven-sh/tinycc.',
+    '',
+    'You may change these libraries and relink Bun with your changes. Bun\'s license',
+    'file above explains how.',
+    '',
     '## HarfBuzz',
     '',
     'The `harfbuzzjs` package below wraps the HarfBuzz text shaping library compiled to',
@@ -198,7 +217,7 @@ export function renderNotices({
     '## Fonts',
     '',
     'The `fonts/` directory beside this file holds metric-compatible substitutes for',
-    "Word's default fonts. Their licenses are installed alongside:",
+    'common document fonts. Their licenses are installed alongside:',
     '',
     ...fontLicenses.map((file) => `- \`${file}\``),
     '',
@@ -267,5 +286,11 @@ export function writeNotices({ metafilePath, cwd, vendorLicensesDir, bunVersion 
   writeFileSync(path.join(vendorLicensesDir, 'THIRD_PARTY_NOTICES.md'), text);
   writeFileSync(path.join(vendorLicensesDir, 'bun-LICENSE.md'), bunLicense);
   writeFileSync(path.join(vendorLicensesDir, 'harfbuzz-COPYING.txt'), harfbuzzLicense);
+  for (const name of ['LGPL-2.0.txt', 'LGPL-2.1.txt']) {
+    writeFileSync(
+      path.join(vendorLicensesDir, name),
+      readFileSync(new URL(`./licenses/${name}`, import.meta.url), 'utf8')
+    );
+  }
   return packages.map(({ manifest }) => `${manifest.name}@${manifest.version}`);
 }

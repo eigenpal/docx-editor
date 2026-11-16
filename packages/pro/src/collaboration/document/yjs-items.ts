@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -63,6 +63,72 @@ export function deleteContent(text: Y.Text, index: number, length: number): void
     }
   });
   // Yjs caches index positions while it edits a text; this deletion bypassed that bookkeeping.
+  if (text._searchMarker) text._searchMarker.length = 0;
+}
+
+/**
+ * Format `length` positions of `text` from `index` with `attributes`, and keep the markers
+ * right after them that end an attribute of `kept` that the format removes.
+ *
+ * Yjs deletes such a marker as redundant: once the format removes the attribute, the marker
+ * sets what the text already holds there. A peer that kept the attribute on some of those
+ * positions at the same time writes its own marker that restores it after them, and that
+ * marker then runs on past where the attribute ended, over text that never held it. So each
+ * end marker the format deletes is written again in the same place.
+ */
+export function formatKeepingEnds(
+  text: Y.Text,
+  index: number,
+  length: number,
+  attributes: Readonly<Record<string, string | null>>,
+  kept: ReadonlySet<string>
+): void {
+  const doc = text.doc;
+  const removed = new Set([...kept].filter((key) => attributes[key] === null));
+  if (!doc || removed.size === 0 || length <= 0) {
+    text.format(index, length, { ...attributes });
+    return;
+  }
+  Y.transact(doc, (transaction) => {
+    // The live markers of a removed attribute between the last position and the next one.
+    const ends: Y.Item[] = [];
+    let count = 0;
+    let reached = false;
+    for (let item = text._start; item; item = item.right) {
+      if (item.deleted) continue;
+      if (item.countable) {
+        if (reached) break;
+        count += item.length;
+        if (count > index + length) break;
+        reached = count === index + length;
+        continue;
+      }
+      const content = item.content;
+      if (reached && content instanceof Y.ContentFormat && content.value === null) {
+        if (removed.has(content.key)) ends.push(item);
+      }
+    }
+    text.format(index, length, { ...attributes });
+    for (const end of ends) {
+      if (!end.deleted) continue;
+      const key = (end.content as Y.ContentFormat).key;
+      const right = end.right;
+      const client = doc.clientID;
+      const marker = new Y.Item(
+        Y.createID(client, Y.getState(doc.store, client)),
+        end,
+        end.lastId,
+        right,
+        right && right.id,
+        text,
+        null,
+        // Yjs types a format value as an object, but a null value is how it ends one.
+        new Y.ContentFormat(key, null as unknown as object)
+      );
+      marker.integrate(transaction, 0);
+    }
+  });
+  // Yjs caches index positions while it edits a text; the markers bypassed that bookkeeping.
   if (text._searchMarker) text._searchMarker.length = 0;
 }
 
@@ -223,7 +289,7 @@ export function structAt(doc: Y.Doc, id: ItemId): Y.Item | null {
 export function* itemsWrittenSince(doc: Y.Doc, from: number): Generator<Y.Item> {
   const client = doc.clientID;
   const to = Y.getState(doc.store, client);
-  for (let clock = from; clock < to; ) {
+  for (let clock = from; clock < to;) {
     const struct: Y.AbstractStruct = Y.getItem(doc.store, Y.createID(client, clock));
     clock = struct.id.clock + struct.length;
     if (struct instanceof Y.Item) yield struct;

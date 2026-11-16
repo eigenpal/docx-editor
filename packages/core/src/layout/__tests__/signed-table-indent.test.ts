@@ -333,8 +333,8 @@ describe('an over-wide left table', () => {
   test('keeps a negative indent when autofit', () => {
     const part = documentPart(tableXml({ ...wide, fixed: false, indent: indent('-900') }));
     const fragment = firstTable(layout(part, 15, createLayoutSession(), 0, geometry));
-    // -45pt: the table's right edge (455pt) still overflows the column, so no rule offset.
-    expect(fragment.box.x).toBe(-45);
+    // A stated absolute width keeps the edge-aligned rule offset when the table overflows.
+    expect(fragment.box.x).toBe(-45 + 0.25);
   });
 
   test('keeps a negative indent and its rule offset when fixed', () => {
@@ -345,10 +345,11 @@ describe('an over-wide left table', () => {
 
   test('applies a positive indent too', () => {
     const part = documentPart(tableXml({ ...wide, fixed: false, indent: indent('900') }));
-    expect(firstTable(layout(part, 15, createLayoutSession(), 0, geometry)).box.x).toBe(45);
+    expect(firstTable(layout(part, 15, createLayoutSession(), 0, geometry)).box.x).toBe(45 + 0.25);
     const s = structure(tableXml({ ...wide, fixed: false, indent: indent('900') }), { width: 430 });
     expect(s.indentPt).toBe(45);
-    expect(tableOriginX(s, 430)).toBe(45);
+    // Legacy AutoFit with a stated indent puts the first content edge on the indent.
+    expect(tableOriginX(s, 430)).toBe(45 - 5.4);
   });
 
   test('a positive indent past the slack of a narrower table applies in full', () => {
@@ -416,7 +417,7 @@ describe('placements the indent does not reach', () => {
   test('a bidiVisual table mirrors a negative indent, or ignores it when trailing-aligned', () => {
     for (const jc of [undefined, 'right']) {
       const pulled = structure(tableXml({ jc, indent: indent('-400'), extra: '<w:bidiVisual/>' }));
-      const flush = structure(tableXml({ jc, extra: '<w:bidiVisual/>' }));
+      const flush = structure(tableXml({ jc, indent: indent('0'), extra: '<w:bidiVisual/>' }));
       expect(pulled.indentPt).toBe(-20);
       expect(tableOriginX(pulled, 330) - tableOriginX(flush, 330)).toBe(jc ? 0 : 20);
     }

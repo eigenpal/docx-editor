@@ -206,3 +206,19 @@ test('a click beside a picture draws its caret where the caret for that offset i
     expect(hit.caret.x).toBeCloseTo(caretBoxOnLine(line, hit.position.offset, measurer).x, 5);
   }
 });
+
+describe('a right-to-left override in a left-to-right paragraph', () => {
+  test('reverses its text and picture as one sequence', () => {
+    // `A[picture]B` inside `w:bdo w:val="rtl"` paints B, the picture, then A.
+    const { line, drawing } = lay(
+      `${latin('x ')}<w:bdo w:val="rtl">${latin('A')}${picture}${latin('B')}</w:bdo>`,
+      ''
+    );
+    expect(drawing.bidiLevel).toBe(1);
+    const a = spanAt(line, 2);
+    const b = spanAt(line, 4);
+    expect(b.box.x + b.box.width).toBeCloseTo(drawing.advanceStart, 5);
+    expect(a.box.x).toBeCloseTo(drawing.advanceEnd, 5);
+    expect(spanAt(line, 0).box.x).toBeLessThan(b.box.x);
+  });
+});

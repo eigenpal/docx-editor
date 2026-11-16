@@ -11,7 +11,7 @@ import { DocxEditorNavigation } from '../src/editor/navigation';
 import { DocxEditorLoading } from '../src/editor/DocxEditorLoading';
 import { LocaleProvider } from '../src/i18n';
 import { flush, mountComponent, mountEditorTree, mountSugarAsync, SOURCE } from './helpers/mount';
-import { docx, LARGE_SOURCE } from './helpers/fixtures';
+import { docx, flushUntil, LARGE_SOURCE } from './helpers/fixtures';
 
 const label = createT(en);
 
@@ -41,8 +41,7 @@ describe('DocxEditor sugar host', () => {
     await nextTick();
     expect(view.container.querySelector('.docx-editor__loading-page')).not.toBeNull();
 
-    await view.flush();
-    expect(view.container.querySelector('.docx-editor__loading')).toBeNull();
+    await flushUntil(() => view.container.querySelector('.docx-editor__loading') === null);
     expect(view.container.textContent).toContain('large body');
     expect(
       (view.container.querySelector('[data-testid="docx-toolbar"]') as HTMLFieldSetElement).disabled

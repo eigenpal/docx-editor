@@ -13,6 +13,8 @@
 //     the shipped `FAMILY_PLANS` and compares against those Word numbers. Restating the
 //     plan's literal on both sides made the assertion a tautology: a wrong `lineMetrics`
 //     still passed.
+//   - Segoe UI's line box comes from its subsets' `hhea`, 2210/-514/0 over 2048 upem. Its
+//     widths come from the same subsets; Selawik carries them unchanged.
 //   - Montserrat's line box comes from its subsets' `hhea`, 968/-251/0 over 1000 upem.
 //     The catalogued face carries the same values, so the engine's own fallback and Word
 //     agree here; the case pins that they keep agreeing.
@@ -42,7 +44,7 @@ import { GOOGLE_METRIC_SUBSTITUTES } from '../src/google-fonts.ts';
 import { FAMILY_PLANS, planFaceFile, planLineBox } from '../src/family-plans.ts';
 
 /** The Word families this gate covers that resolve through a PACKAGED plan. */
-type PackagedFamily = 'Century Gothic';
+type PackagedFamily = 'Century Gothic' | 'Segoe UI';
 
 interface WidthCase {
   readonly family: PackagedFamily | 'Montserrat' | 'Montserrat Light';
@@ -106,6 +108,26 @@ const WIDTH_CASES: readonly WidthCase[] = [
     wordLineHeightPt: 48.49609375,
     wordBaselinePt: 39.6875,
   },
+  // Segoe UI Regular, from the subsets Word embeds: widths from `/Widths`, the line box from
+  // `hhea` 2210/-514/0 over 2048 upem. Word's references carry no bold or italic Segoe UI.
+  {
+    family: 'Segoe UI',
+    weight: 400,
+    style: 'normal',
+    text: 'Shape of the layout',
+    wordWidthPt: 85.92,
+    wordLineHeightPt: 13.30078125,
+    wordBaselinePt: 10.791015625,
+  },
+  {
+    family: 'Segoe UI',
+    weight: 400,
+    style: 'normal',
+    text: 'Wide margins, clean text.',
+    wordWidthPt: 110.45,
+    wordLineHeightPt: 13.30078125,
+    wordBaselinePt: 10.791015625,
+  },
   // Montserrat Regular's subset carries no lowercase, so this case is upper-case only.
   //
   // The next two share `wordWidthPt` and it is not a copy-paste: two different strings on
@@ -154,7 +176,7 @@ const WIDTH_CASES: readonly WidthCase[] = [
 const KNOWN_GAPS: readonly { readonly family: string; readonly gap: string }[] = [
   {
     family: 'Garamond',
-    gap: 'no packaged or catalogued face is metric-compatible; Word line pitch at 8pt is 1.125em against the engine fallback 1.2727em (issue #563)',
+    gap: 'widths only: no packaged or catalogued face is metric-compatible; the line box is recorded in core and checked below (issue #563)',
   },
   {
     family: 'Rockwell',
@@ -188,7 +210,7 @@ function planFor(family: PackagedFamily): NonNullable<ReturnType<typeof FAMILY_P
 }
 
 const isPackaged = (testCase: WidthCase): testCase is WidthCase & { family: PackagedFamily } =>
-  testCase.family === 'Century Gothic';
+  testCase.family === 'Century Gothic' || testCase.family === 'Segoe UI';
 
 async function bytesFor(testCase: WidthCase): Promise<Uint8Array> {
   if (isPackaged(testCase)) {
@@ -301,6 +323,41 @@ try {
           `${line.height.toFixed(2)}pt/${line.baseline.toFixed(2)}pt differ from Word ` +
           `${testCase.wordLineHeightPt.toFixed(2)}pt/${testCase.wordBaselinePt.toFixed(2)}pt; ` +
           `limit ${VERTICAL_TOLERANCE_PT.toFixed(2)}pt`
+      );
+    }
+  }
+  // A family the package cannot serve still keeps its own line box: core records it and
+  // applies it on whatever face the fallback picks. Garamond's own `hhea` is 1765/-539/0
+  // over 2048 units per em, so 1.125 em at every style.
+  const unresolved = createShapedMeasurer({
+    shaper,
+    resolveFont: () => null,
+    fallback: createFixedMeasurer(),
+    shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+    unicodeDataVersion: '16.0.0',
+    fixedPointScale: 20,
+  });
+  for (const [sizePt, bold, italic] of [
+    [8, false, false],
+    [11, true, false],
+    [12, false, true],
+  ] as const) {
+    const line = unresolved.lineMetrics({
+      ...DEFAULT_RUN_STYLE,
+      fontFamily: 'Garamond',
+      fontSizePt: sizePt,
+      bold,
+      italic,
+    });
+    const expectedHeight = sizePt * (2304 / 2048);
+    const expectedBaseline = sizePt * (1765 / 2048);
+    if (
+      Math.abs(line.height - expectedHeight) > VERTICAL_TOLERANCE_PT ||
+      Math.abs(line.baseline - expectedBaseline) > VERTICAL_TOLERANCE_PT
+    ) {
+      throw new Error(
+        `Garamond @${sizePt}pt line metrics ${line.height.toFixed(2)}pt/${line.baseline.toFixed(2)}pt ` +
+          `differ from ${expectedHeight.toFixed(2)}pt/${expectedBaseline.toFixed(2)}pt`
       );
     }
   }

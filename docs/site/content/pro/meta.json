@@ -4,6 +4,7 @@
     "index",
     "tracked-changes",
     "revision-markup",
+    "compare-documents",
     "review-styling",
     "comments",
     "custom-nodes",

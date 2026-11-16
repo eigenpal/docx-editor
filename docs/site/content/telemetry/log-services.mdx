@@ -6,54 +6,27 @@ category: 'Telemetry'
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-Use this setup to send telemetry over HTTP to Better Stack, Axiom, or Datadog Logs. It has two parts:
+The browser posts events to a same-origin route. The route validates them and forwards them with a token that stays on the server.
 
-1. In the browser, `httpExporter` batches events and posts them to a route on your own origin.
-2. On your server, `telemetryRoute` validates each event and forwards it with a token that stays on the server.
+## Send browser events
 
-```mermaid
-flowchart LR
-  E[Editor] --> H[httpExporter] -- JSON batches --> R[Your route: telemetryRoute]
-  R -- checked events --> L[Log service]
-```
-
-Anyone can read a token in the browser and use it to send data to your log service account. The route keeps the token on the server. Requests use the same origin. Your Content Security Policy does not need to allow the external log service.
-
-## Send events from the browser
-
-`httpExporter` posts event batches to a route on your own origin. This example records failures and performance, and excludes successful opens. It stops collection when the browser sends Global Privacy Control or Do Not Track:
+This client skips successful opens and honors browser privacy signals:
 
 ```ts
 import { browserPrivacySignals, createTelemetry, httpExporter } from '@docx-editor.dev/telemetry';
 
 export const telemetry = createTelemetry({
   exporters: [httpExporter({ url: '/api/telemetry' })],
-  include: {
-    documentOpen: true,
-    editing: true,
-    trackedChanges: true,
-    fonts: true,
-    performance: true,
-  },
-  // Everything the areas record, except opens that succeeded.
   filter: (event) => !(event.kind === 'document.open' && event.outcome === 'opened'),
   consent: browserPrivacySignals({ optOutKey: 'my-app:telemetry' }),
 });
 ```
 
-Register `telemetry.module` in the editor's `modules`, as in [Set up an editor](/docs/2.x/telemetry/editors).
+Register `telemetry.module` as shown in [Set up an editor](/docs/2.x/telemetry/editors).
 
-For options, filters, and delivery when a page closes, see [HTTP exporter and route reference](/docs/2.x/telemetry/http-reference).
+## Forward events from your server
 
-## Receive events on your server
-
-`telemetryRoute` returns a Fetch-style `POST` handler for Next.js route handlers, Hono, Bun, Deno, and Cloudflare Workers. It validates each event against the same predefined values as the browser and drops browser-defined fields. It calls `forward` with valid events and returns `204` for every request.
-
-`toLogRecord(event)` adds the `dt` and `message` fields that log services read. It also adds the `occurrences` and `failures` count fields. For validation details, see [HTTP exporter and route reference](/docs/2.x/telemetry/http-reference).
-
-### Better Stack
-
-In Better Stack Telemetry, create an HTTP source. Copy its source token and its ingesting host, such as `s1234567.eu-nbg-2.betterstackdata.com`, into `BETTERSTACK_SOURCE_TOKEN` and `BETTERSTACK_INGESTING_HOST`.
+This Next.js route forwards to a Better Stack HTTP source:
 
 ```ts
 // app/api/telemetry/route.ts
@@ -68,40 +41,58 @@ export const POST = telemetryRoute({
         'Content-Type': 'application/json',
         Authorization: `Bearer ${process.env.BETTERSTACK_SOURCE_TOKEN}`,
       },
-      // Your fixed fields go here, on the server, where the browser cannot change them.
+      // Add fixed fields on the server, where the browser cannot change them.
       body: JSON.stringify(events.map((event) => ({ ...toLogRecord(event), service: 'my-app' }))),
     }),
   onError: (error) => console.error('[telemetry]', error),
 });
 ```
 
-## Count events
+`toLogRecord` adds `dt` (timestamp), `message`, `occurrences`, and `failures`. The route returns `204` for every request, so use `onError` to see failed forwarding.
 
-The browser sends the first event of a repeated refusal at once. If the same event repeats within 10 seconds, it sends one summary at the end of that period. The summary copies the first event and adds `repeated`, which holds only the extra copies. Counting records therefore gives the wrong number.
+## Count deduplicated events
 
-Sum the fields that `toLogRecord` adds instead:
+A refusal repeated within 10 seconds arrives as one event plus one summary. The summary's `repeated` counts only the extra copies, so sum fields instead of counting records.
 
-- `occurrences` is `1` for an event and `repeated` for a summary. Sum it to count events of any kind.
-- `failures` is the number of failures that the record adds. It is `0` for expected refusals and other events that are not failures. Sum it to count faults.
-
-For example, in a SQL-based log service:
+| Field         | Value                            | Sum to count |
+| ------------- | -------------------------------- | ------------ |
+| `occurrences` | `1`, or `repeated` for a summary | Events       |
+| `failures`    | `0` for expected refusals        | Faults       |
 
 ```sql
 SELECT code, sum(occurrences) AS events, sum(failures) AS faults
-FROM logs
-WHERE kind = 'edit.rejected'
-GROUP BY code
+FROM logs WHERE kind = 'edit.rejected' GROUP BY code
 ```
 
-Sampled areas send only a share of their events, so sums count the sampled events. Metrics count every event before sampling. For exact rates, use [metrics](/docs/2.x/telemetry/metrics).
+Sampled areas send a share of events, so sums are not exact rates. Use [metrics](/docs/2.x/telemetry/metrics) for rates.
 
-## Privacy
+## Count sessions
 
-The route forwards predefined values, numbers, and attributes that you allow through `attributeKeys`. Allowed attribute values must be identifier strings. Session identifiers and engine versions must match the formats that the engine creates. The route never forwards text with spaces.
+The following query gives sessions per day, median length, and edits per session from `end` records:
 
-Validation checks event syntax. It cannot prove that an event is anonymous or that it happened. Identifier strings can still contain names, and anyone can submit a valid event. Treat event counts as browser reports. For the fields that events can contain, see [Privacy](/docs/2.x/telemetry/privacy).
+```sql
+SELECT
+  date_trunc('day', dt) AS day,
+  count(*) AS sessions,
+  median(durationMs) / 1000 AS median_seconds,
+  avg(inputEdits + commandEdits + automationEdits) AS edits_per_session
+FROM logs
+WHERE kind = 'session' AND phase = 'end'
+GROUP BY day
+ORDER BY day
+```
 
-## Next steps
+To count open sessions, count `start` records whose `editorSessionId` has no `end` record but a recent `active` record. For counting rules, see [Sessions](/docs/2.x/telemetry/sessions).
 
-- To send to Axiom, Datadog Logs, or from a framework without Fetch requests, see [Other log services](/docs/2.x/telemetry/log-recipes).
-- For custom functions, Datadog RUM, or PostHog, see [Send to your own code](/docs/2.x/telemetry/callbacks).
+## Limits
+
+- Keep provider tokens on the server.
+- Validation checks syntax, not that an event happened. Treat counts as browser reports.
+- Allowed identifier strings can still contain personal information.
+- The route drops events whose `editorSessionId` or `engineVersion` does not match the formats that the engine creates.
+- For batching and validation, see [HTTP exporter and route reference](/docs/2.x/telemetry/http-reference).
+
+## See also
+
+- [Other log services](/docs/2.x/telemetry/log-recipes)
+- [Send to your own code](/docs/2.x/telemetry/callbacks)

@@ -121,6 +121,28 @@ describe('a link is authored, and only a target this engine will open', () => {
     );
   });
 
+  test('a document with no hyperlink style gets the built-in one with its first link', () => {
+    const host = withLinks();
+    const { body } = roots(host);
+    const linkWords = (words: string) =>
+      host.execute({
+        operations: [
+          {
+            op: 'setHyperlink',
+            span: spanOfWords(host, body, words),
+            target: 'https://example.com/b',
+          },
+        ],
+      });
+    expect(linkWords('see').ok).toBe(true);
+    expect(linkWords('the place').ok).toBe(true);
+
+    const styles = savedPartBytes(host, 'word/styles.xml');
+    expect(styles.match(/w:styleId="Hyperlink"/g)).toHaveLength(1);
+    expect(styles).toMatch(/<w:style\b[^>]*w:type="character"[^>]*>.*<w:u w:val="single"\/>/s);
+    expect(savedMainXml(host).match(/<w:rStyle w:val="Hyperlink"\/>/g)).toHaveLength(2);
+  });
+
   test('a refused scheme is refused before anything is written', () => {
     const host = withLinks();
     const { body } = roots(host);

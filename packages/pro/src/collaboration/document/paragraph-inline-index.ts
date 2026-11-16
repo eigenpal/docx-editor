@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -22,6 +22,7 @@ import { asLogicalId, parseClientClock, type LogicalId } from './identity.ts';
 import { keyId } from './registry-node-reads.ts';
 import { isNodeMap } from './schema.ts';
 import { relocatedMarkerLineage } from './relocated-markers.ts';
+import { undoneIntoOf } from './undo-unlisted-text.ts';
 import type { DocumentLimits } from './limits.ts';
 import { decodeAttributes, INLINE_FIELD } from './paragraph-text.ts';
 import { TextFollow, type DocumentOrder, type ShownText } from './paragraph-text-follow.ts';
@@ -84,7 +85,7 @@ class Holders extends Set<LogicalId> {
   private push(id: LogicalId): void {
     const heap = this.heap;
     heap.push(id);
-    for (let at = heap.length - 1; at > 0; ) {
+    for (let at = heap.length - 1; at > 0;) {
       const parent = (at - 1) >> 1;
       if (heap[parent]! <= heap[at]!) break;
       [heap[parent], heap[at]] = [heap[at]!, heap[parent]!];
@@ -97,7 +98,7 @@ class Holders extends Set<LogicalId> {
     const last = heap.pop()!;
     if (heap.length === 0) return;
     heap[0] = last;
-    for (let at = 0; ; ) {
+    for (let at = 0; ;) {
       const left = 2 * at + 1;
       const right = left + 1;
       let least = at;
@@ -146,14 +147,17 @@ export class InlineIndex {
     private readonly nodes: Y.Map<Y.Map<unknown>>,
     private readonly limits: DocumentLimits,
     private readonly isDeleted: (paragraphId: LogicalId) => boolean,
-    order: DocumentOrder
+    order: DocumentOrder,
+    /** Hears each paragraph whose text or marks changed, before the index is first built too. */
+    private readonly textChanged: (paragraphId: LogicalId) => void = () => {}
   ) {
     this.follow = new TextFollow(
       (id) => this.textOf(id),
       isDeleted,
       order,
       (paragraphs) => this.noteOthers(paragraphs),
-      (identity) => this.paragraphHolding(identity)
+      (identity) => this.paragraphHolding(identity),
+      (paragraphId) => undoneIntoOf(this.nodes.get(paragraphId))
     );
   }
 
@@ -350,6 +354,7 @@ export class InlineIndex {
 
   /** Read one paragraph's text again after it changed. */
   paragraphChanged(paragraphId: LogicalId): void {
+    this.textChanged(paragraphId);
     // Before the first read, the first read builds from the whole document instead.
     if (!this.built) return;
     const before = this.idsOf.get(paragraphId) ?? new Set<string>();

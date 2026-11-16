@@ -1,6 +1,6 @@
 // Bounded styles.xml definition parsing, kept separate from cascade resolution.
 
-import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
+import { readOoxmlPart, type OoxmlElement, type OoxmlNode } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { isDangerousKey } from '../store/package/safe-record.ts';
 import { styleOutlineLevel } from '../store/package/style-outline.ts';
@@ -147,12 +147,66 @@ export function readStyleIdentity(node: OoxmlElement, nameCap: number): StyleIde
 /** Longest style name layout keeps. */
 const LAYOUT_NAME_CAP = 128;
 
+/**
+ * The built-in table properties of the table style named "Normal Table": no indent, and 108
+ * twips of cell margin on the left and right.
+ */
+const BUILT_IN_NORMAL_TABLE_XML =
+  '<w:tblPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+  '<w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/>' +
+  '<w:left w:w="108" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/>' +
+  '<w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr>';
+
+let builtInNormalTable: OoxmlElement | undefined;
+
+/**
+ * The built-in properties, parsed once under a part name of their own, so their node ids
+ * never collide with the nodes of a document's `styles.xml`.
+ */
+function builtInNormalTableProperties(): OoxmlElement | undefined {
+  if (!builtInNormalTable) {
+    const read = readOoxmlPart(BUILT_IN_NORMAL_TABLE_XML, {
+      name: '/built-in/normal-table.xml',
+      contentType: 'application/xml',
+    });
+    builtInNormalTable = read.ok ? read.part.root : undefined;
+  }
+  return builtInNormalTable;
+}
+
+/**
+ * Whether a style is the built-in "Normal Table", matched by name and not id. Its authored
+ * definition never applies in any compatibility mode: reference renderings drop its indent,
+ * alignment, cell margins, borders, shading, and paragraph and run properties, and keep only
+ * the built-in properties.
+ */
+function isBuiltInNormalTable(type: string, name: string | undefined): boolean {
+  return type === 'table' && name?.toLowerCase() === 'normal table';
+}
+
 export function readStyleDefinition(
   node: OoxmlElement
 ): (StyleDefinition & { isDefault: boolean }) | null {
   const identity = readStyleIdentity(node, LAYOUT_NAME_CAP);
   if (!identity) return null;
   const { styleId, type, name, basedOn, next, isDefault } = identity;
+  if (isBuiltInNormalTable(type, name)) {
+    return {
+      styleId,
+      name,
+      type,
+      basedOn: null,
+      next,
+      outlineLevel: null,
+      isDefault,
+      paragraphProperties: [],
+      runProperties: [],
+      paragraphPropertiesNode: undefined,
+      tablePropertiesNode: builtInNormalTableProperties(),
+      tableRowPropertiesNode: undefined,
+      conditionalTableFormats: new Map(),
+    };
+  }
   const paragraphPropertiesNode = findParagraphProperties(node);
   const runPropertiesNode = findRunProperties(node);
   const conditionalTableFormats = new Map<string, OoxmlElement>();

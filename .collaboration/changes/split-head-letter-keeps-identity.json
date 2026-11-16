@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "When a paragraph split left one letter between a dropped extra copy of an inline marker and the tail that moved away, the text diff treated the letter as part of a replacement and wrote it again as a new character. The new character had its own identity, so a peer's concurrent deletion of the letter did not hide it, and deleted text showed again.",
+  "after": "The diff still writes kept letters again inside a replacement that types new text, so the new text survives a peer's deletion of the old one. In a change whose only inserts are such letters, it keeps them in place, so each keeps its identity and a peer's deletion of it still applies.",
+  "reason": "Only how a replica writes its own edit to existing shared text changes; it writes fewer new characters. Older clients read the result as before. Shared fields, operations, and synchronization keep their meaning.",
+  "tests": ["packages/pro/src/collaboration/__tests__/paragraph-text-diff-kept-letters.test.ts"],
+  "changeset": "split-head-letter-keeps-identity",
+  "migration": null
+}

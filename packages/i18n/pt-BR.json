@@ -60,7 +60,10 @@
     "bookmarkShortcut": "Ctrl+Shift+F5",
     "goToBookmark": "Ir para indicador…",
     "goToBookmarkShortcut": "Ctrl+G",
-    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G",
+    "printComments": "Imprimir comentários",
+    "printCommentsNote": "Fora de {mode}, os comentários são impressos como notas no texto comentado.",
+    "printMarkup": "Marcação"
   },
   "formattingBar": {
     "groups": {
@@ -75,7 +78,9 @@
       "image": "Imagem",
       "table": "Tabela",
       "format": "Formatar",
-      "direction": "Direção do texto"
+      "direction": "Direção do texto",
+      "chart": "Gráfico",
+      "shape": "Forma"
     },
     "undo": "Desfazer",
     "undoShortcut": "Desfazer (Ctrl+Z)",
@@ -223,7 +228,11 @@
       "background2": "Plano de Fundo 2",
       "text1": "Texto 1",
       "text2": "Texto 2"
-    }
+    },
+    "lighterPercent": "{color}, {percent}% mais clara",
+    "darkerPercent": "{color}, {percent}% mais escura",
+    "hexColor": "Cor hexadecimal",
+    "invalidHex": "Digite uma cor como #RRGGBB."
   },
   "dialogs": {
     "imageProperties": {
@@ -420,7 +429,20 @@
     "addComment": "Adicionar um comentário...",
     "replyPlaceholder": "Responda ou adicione outros com @",
     "reopen": "Reabrir",
-    "resolve": "Resolver"
+    "resolve": "Resolver",
+    "edit": "Editar",
+    "editConflict": "Este comentário foi alterado. Seu rascunho foi mantido. Cancele para ver o texto mais recente.",
+    "editEmpty": "Digite o texto do comentário antes de salvar.",
+    "editPermission": "Você só pode editar seus próprios comentários.",
+    "editRefused": "Não foi possível salvar este comentário. Seu rascunho foi mantido.",
+    "editText": "Texto do comentário",
+    "saveEdit": "Salvar alterações",
+    "deletedDraft": "Este comentário não está mais disponível aqui. Seu rascunho não salvo foi mantido para que você possa copiá-lo.",
+    "discardDraft": "Descartar rascunho",
+    "recoveredDraft": "Rascunho de comentário não salvo",
+    "actions": "Ações do comentário",
+    "replyActions": "Ações da resposta",
+    "delete": "Excluir"
   },
   "contextMenu": {
     "ariaLabel": "Menu de ações de IA",
@@ -569,7 +591,9 @@
     "fontSubstitutionNotice": "Algumas fontes deste documento não estão disponíveis, então substitutas estão sendo exibidas: {fonts}",
     "documentContent": "Conteúdo do documento",
     "previewContent": "Pré-visualização das alterações propostas",
-    "documentViewport": "Páginas do documento"
+    "documentViewport": "Páginas do documento",
+    "grammarIssueCount": "{count, plural, =0 {Nenhum erro gramatical.} one {# erro gramatical.} other {# erros gramaticais.}}",
+    "spellingIssueCount": "{count, plural, =0 {Nenhum erro de ortografia.} one {# erro de ortografia.} other {# erros de ortografia.}}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Texto de exibição",
@@ -675,7 +699,8 @@
     },
     "selection": "Imagem selecionada",
     "locked": "Esta caixa não pode ser movida nem redimensionada",
-    "textLocked": "O texto desta caixa não pode ser editado"
+    "textLocked": "O texto desta caixa não pode ser editado",
+    "selectionShape": "Forma selecionada"
   },
   "revisions": {
     "paragraphMarkInserted": "Marca de parágrafo inserida",
@@ -702,6 +727,7 @@
       "fontFamily": "Fonte",
       "fontSize": "Tamanho da fonte",
       "hangingIndent": "Recuo deslocado",
+      "highlight": "Realce",
       "italic": "Itálico",
       "left": "Esquerda",
       "leftIndent": "Recuo esquerdo",
@@ -732,7 +758,8 @@
   },
   "toc": {
     "refresh": "Atualizar tabela inteira",
-    "refreshPageNumbers": "Atualizar apenas números de página"
+    "refreshPageNumbers": "Atualizar apenas números de página",
+    "remove": "Remover sumário"
   },
   "reviewers": {
     "label": "Revisores",
@@ -920,12 +947,20 @@
     "replyCount": "Respostas: {count}",
     "trackedChange": "Alteração controlada",
     "changeAnnouncement": "{change} por {author}: {text}",
-    "replyTargetResolved": "A alteração foi resolvida, então a resposta não foi publicada."
+    "replyTargetResolved": "A alteração foi resolvida, então a resposta não foi publicada.",
+    "compareDocuments": "Comparar documentos"
   },
   "imageAltText": {
     "description": "Descrição",
     "panelTitle": "Texto alternativo",
     "title": "Título"
+  },
+  "drop": {
+    "errors": {
+      "readOnly": "Este documento é somente leitura.",
+      "noTarget": "Solte sobre um texto editável.",
+      "unsupported": "Solte uma imagem PNG, JPEG, GIF ou um texto."
+    }
   },
   "imageInsert": {
     "errors": {
@@ -934,7 +969,8 @@
       "invalidSignature": "O arquivo não é uma imagem PNG, JPEG ou GIF compatível.",
       "oversize": "A imagem excede o tamanho máximo permitido.",
       "refused": "Não foi possível inserir a imagem.",
-      "unsupportedFormat": "Este formato de imagem não é compatível para inserção."
+      "unsupportedFormat": "Este formato de imagem não é compatível para inserção.",
+      "staleTarget": "O documento ou a posição de soltura mudou. Solte a imagem novamente."
     }
   },
   "imageProperties": {
@@ -1008,6 +1044,7 @@
     "trackedOnly": "Este documento permite apenas edições com controle de alterações",
     "unavailable": "Este comando não está disponível",
     "viewing": "Este documento está aberto para exibição",
+    "compareCollaboration": "Comparar documentos não está disponível em uma sessão de edição compartilhada.",
     "bodyOnlyNote": "As notas de rodapé e de fim são adicionadas a partir do corpo do documento.",
     "bodyOnlySectionBreak": "As quebras de seção devem ficar no corpo do documento.",
     "bodyOnlyToc": "O sumário deve ficar no corpo do documento.",
@@ -1023,13 +1060,19 @@
     "suggestingNeedsAuthor": "O modo de sugestão precisa de um autor. Defina o autor na configuração do editor.",
     "pictureSelected": "Uma imagem está selecionada. Coloque o cursor no texto para inserir uma imagem.",
     "chartDrawing": "Isto é um gráfico. Você pode excluí-lo, mas não pode editá-lo como uma imagem.",
-    "chartClipboard": "A seleção contém um gráfico. Gráficos não podem ser copiados, recortados nem colados.",
+    "chartFrame": "Isto é um gráfico. Você pode alterar o tamanho, a posição, a quebra de texto e o texto alternativo.",
+    "diagramFrame": "Isto é um diagrama. Você pode alterar o tamanho, a posição, a quebra de texto e o texto alternativo.",
+    "diagramRescale": "Não é possível redimensionar este diagrama. O desenho salvo é compartilhado com outro diagrama ou não pode ser dimensionado para esse tamanho.",
+    "chartClipboard": "Um gráfico só pode ser copiado, recortado ou colado sozinho, não com outro conteúdo.",
+    "chartClipboardStale": "O gráfico copiado não está mais disponível. Copie o gráfico novamente.",
     "nothingToUndo": "Não há nada para desfazer",
     "nothingToRedo": "Não há nada para refazer",
     "outermostLevel": "A seleção já está no nível mais externo",
     "cannotIndentFurther": "Não é possível aumentar mais o recuo da seleção",
     "noGoToView": "Ir para não está disponível aqui",
-    "noBookmarkDialog": "Não é possível adicionar indicadores aqui"
+    "noBookmarkDialog": "Não é possível adicionar indicadores aqui",
+    "groupMemberMove": "Uma forma dentro de um grupo não se move, não muda de tamanho nem é excluída sozinha. Pressione Esc para selecionar o grupo.",
+    "groupMemberProperties": "Uma forma dentro de um grupo usa a quebra, o texto alternativo e as propriedades do grupo. Pressione Esc para selecionar o grupo."
   },
   "equationPopup": {
     "apply": "Aplicar",
@@ -1168,5 +1211,230 @@
     "sectionBreakNextColumn": "Quebra de seção (nova coluna)",
     "sectionBreakNextPage": "Quebra de seção (próxima página)",
     "sectionBreakOddPage": "Quebra de seção (página ímpar)"
+  },
+  "compareDocuments": {
+    "author": "Autor das alterações",
+    "cancel": "Cancelar",
+    "compare": "Comparar",
+    "comparing": "Comparando…",
+    "description": "Escolha outra versão deste documento. As diferenças aparecem aqui como alterações controladas.",
+    "trackedChangesAccepted": "O documento aberto tem alterações controladas. A comparação as trata como aceitas.",
+    "detectFormatting": "Incluir alterações de formatação",
+    "fileRequired": "Primeiro escolha um documento para comparar.",
+    "readFailed": "Não foi possível ler o arquivo escolhido.",
+    "revisedFile": "Comparar com",
+    "title": "Comparar documentos",
+    "noDifferences": "Os documentos não têm diferenças.",
+    "recorded": "{count, plural, one {A comparação registrou # alteração.} other {A comparação registrou # alterações.}}",
+    "recordedNoRevisions": "A comparação atualizou o documento sem alterações controladas.",
+    "phases": {
+      "reading": "Lendo os documentos…",
+      "comparing": "Comparando…",
+      "checking": "Verificando o resultado…",
+      "applying": "Aplicando as alterações…"
+    },
+    "errors": {
+      "invalidOptions": "As opções de comparação não são válidas.",
+      "invalidOriginal": "Não é possível ler o documento aberto para comparação.",
+      "invalidRevised": "O arquivo escolhido não é um documento que possa ser comparado.",
+      "tooLarge": "Os documentos são grandes demais para comparar.",
+      "unsupportedContent": "Os documentos diferem em conteúdo que não pode ser mostrado como alterações controladas.",
+      "unavailable": "Comparar documentos não está disponível para este documento.",
+      "protected": "Este documento está protegido contra edição.",
+      "collaboration": "Comparar documentos não está disponível em uma sessão de edição compartilhada.",
+      "viewing": "O documento está aberto somente para leitura.",
+      "closed": "A comparação foi cancelada.",
+      "empty": "O arquivo escolhido está vazio.",
+      "busy": "Outra comparação, uma visualização ou uma atualização do documento está em andamento. Tente novamente quando terminar.",
+      "documentChanged": "O documento mudou durante a comparação. Compare novamente.",
+      "failed": "Não foi possível comparar os documentos."
+    },
+    "reasons": {
+      "headerFooter": "Os documentos diferem em um cabeçalho ou rodapé de uma seção anterior, e essa seção não tem uma seção correspondente no outro documento.",
+      "lockedContent": "Os documentos diferem dentro de um controle de conteúdo bloqueado ou vinculado a dados, então essas alterações não podem ser revisadas. Remova o bloqueio ou o vínculo e compare novamente.",
+      "packageStructure": "O documento aberto não pode conter o resultado desta comparação.",
+      "unrecordedSettings": "A outra versão adiciona configurações de seção ou de tabela que não podem ser desfeitas ao rejeitar as alterações.",
+      "unresolvedRevisions": "Um documento contém alterações controladas que não podem ser aceitas. Aceite-as ou rejeite-as nesse documento e compare novamente.",
+      "untrackedContent": "Os documentos diferem em conteúdo que não pode ser mostrado como alterações controladas, como um arquivo incorporado.",
+      "unverified": "O resultado da comparação não reproduziria os dois documentos, por isso não foi aplicado."
+    }
+  },
+  "chart": {
+    "insert": "Gráfico",
+    "insertType": "Inserir um gráfico do tipo {type}",
+    "edit": "Editar gráfico…",
+    "sample": {
+      "category": "Categoria {number}",
+      "series": "Série {number}",
+      "name": "Gráfico {number}"
+    },
+    "pane": {
+      "title": "Gráfico",
+      "close": "Fechar o painel do gráfico",
+      "emptyTitle": "Nenhum gráfico selecionado",
+      "emptyBody": "Selecione um gráfico no documento para editá-lo.",
+      "notEditableTitle": "Este gráfico não pode ser editado"
+    },
+    "types": {
+      "columnClustered": "Coluna",
+      "columnStacked": "Coluna empilhada",
+      "columnPercentStacked": "Coluna 100% empilhada",
+      "barClustered": "Barra",
+      "barStacked": "Barra empilhada",
+      "barPercentStacked": "Barra 100% empilhada",
+      "line": "Linha",
+      "lineMarkers": "Linha com marcadores",
+      "area": "Área",
+      "areaStacked": "Área empilhada",
+      "areaPercentStacked": "Área 100% empilhada",
+      "pie": "Pizza",
+      "doughnut": "Rosca",
+      "radar": "Radar",
+      "scatter": "Dispersão",
+      "scatterLines": "Dispersão com linhas",
+      "other": "Outro tipo"
+    },
+    "format": {
+      "type": "Tipo de gráfico",
+      "elements": "Elementos do gráfico",
+      "showTitle": "Título",
+      "titleText": "Texto do título",
+      "defaultTitle": "Título do gráfico",
+      "legend": "Legenda",
+      "legendPositions": {
+        "none": "Nenhuma",
+        "top": "Superior",
+        "bottom": "Inferior",
+        "left": "Esquerda",
+        "right": "Direita"
+      },
+      "dataLabels": "Rótulos de dados",
+      "gridlines": "Linhas de grade",
+      "axes": "Eixos",
+      "categoryAxisTitle": "Título do eixo de categorias",
+      "valueAxisTitle": "Título do eixo de valores",
+      "xAxisTitle": "Título do eixo X",
+      "yAxisTitle": "Título do eixo Y",
+      "axisTitleHelp": "Deixe o título de um eixo vazio para não exibir título.",
+      "axesOff": "Ative Eixos para usar esta opção.",
+      "typeChangeRemoved": "Este tipo de gráfico não mantém as cores nem os títulos de eixo que você definiu. Desfazer os restaura.",
+      "typeChangeHint": "Alguns tipos de gráfico não mantêm as cores nem os títulos de eixo que você definiu.",
+      "pieFirstSeries": "Um gráfico de pizza mostra apenas a primeira série.",
+      "colors": "Cores",
+      "seriesColor": "Cor de {name}",
+      "openColors": "Escolher uma cor para {name}",
+      "colorLighter": "{color}, {percent}% mais clara",
+      "colorDarker": "{color}, {percent}% mais escura"
+    },
+    "data": {
+      "categories": "Categorias",
+      "xValues": "Valores X",
+      "seriesName": "Nome da série {number}",
+      "categoryLabel": "Categoria {number}",
+      "xValueLabel": "Valor X {number}",
+      "cellLabel": "{series}, {category}",
+      "addCategory": "Adicionar categoria",
+      "addSeries": "Adicionar série",
+      "help": "Pressione Enter ou saia de um campo para aplicá-lo. Deixe um valor vazio para não definir valor.",
+      "workbookKept": "A pasta de trabalho incorporada mantém os valores antigos. O gráfico mostra os valores que você inserir.",
+      "workbookExternal": "O gráfico obtém os dados de uma pasta de trabalho vinculada. O gráfico mostra os valores que você inserir e deixa de ser atualizado pelo vínculo.",
+      "name": "Nome",
+      "series": "Série",
+      "unnamed": "Série sem nome",
+      "removeCategoryNamed": "Remover a categoria {name}",
+      "removeSeriesNamed": "Remover a série {name}",
+      "fieldErrors": {
+        "number": "Insira um número ou deixe a célula vazia.",
+        "xNumber": "Insira um número para cada valor X.",
+        "tooLong": "Use no máximo 255 caracteres.",
+        "limit": "Um gráfico mantém pelo menos uma série e uma categoria, e até 255 séries e 4.000 categorias."
+      },
+      "removeSeries": "Remover série"
+    },
+    "errors": {
+      "noChart": "Selecione um gráfico.",
+      "noData": "O gráfico não tem séries de dados.",
+      "combination": "O gráfico combina mais de um tipo de gráfico.",
+      "unsupportedType": "O editor não edita os dados deste tipo de gráfico.",
+      "filtered": "O gráfico oculta algumas de suas séries.",
+      "multiLevel": "O gráfico tem categorias em mais de um nível.",
+      "mixedCategories": "As séries do gráfico usam categorias diferentes.",
+      "tooLarge": "O gráfico tem mais dados do que o editor edita.",
+      "empty": "Um gráfico precisa de pelo menos uma série e uma categoria.",
+      "invalidText": "Um nome ou rótulo tem caracteres que um gráfico não pode manter.",
+      "notNumber": "Cada valor deve ser um número.",
+      "layout": "As referências de célula do gráfico não formam uma única tabela, então você pode alterar apenas nomes e valores.",
+      "workbook": "A pasta de trabalho incorporada não aceita esta alteração. Dê um nome diferente a cada série e mantenha vazias as células ao lado dos dados.",
+      "noAxes": "Este tipo de gráfico não tem eixos.",
+      "sameType": "O gráfico já tem este tipo.",
+      "unsupported": "O editor não oferece suporte a esta alteração no gráfico.",
+      "invalidValue": "O gráfico não pode usar este valor.",
+      "suggesting": "Não é possível alterar gráficos enquanto você sugere edições. Mude para Edição para alterar este gráfico."
+    }
+  },
+  "shape": {
+    "errors": {
+      "legacyTransparency": "Este tipo de forma antigo não tem configuração de transparência.",
+      "noShape": "Selecione uma forma, uma caixa de texto ou uma linha.",
+      "noSolidFill": "A forma não tem preenchimento sólido. Escolha primeiro uma cor de preenchimento.",
+      "outOfRange": "O valor está fora do intervalo.",
+      "staleSelection": "A seleção mudou. Selecione a forma novamente.",
+      "mixedFill": "As formas deste grupo têm preenchimentos diferentes. Escolha uma cor para aplicar a todas."
+    },
+    "formatShape": "Formatar forma…",
+    "pane": {
+      "close": "Fechar o painel Formatar forma",
+      "emptyBody": "Selecione uma forma, uma caixa de texto ou uma linha no documento para formatá-la.",
+      "emptyTitle": "Nenhuma forma selecionada",
+      "errors": {
+        "color": "Digite uma cor como #RRGGBB ou como nome de cor.",
+        "noSolidFill": "Escolha primeiro uma cor de preenchimento.",
+        "transparency": "Digite um número de 0 a 100.",
+        "width": "Digite uma espessura de 0,25 a 1584 pontos.",
+        "dash": "Escolha um tipo de traço na lista."
+      },
+      "fill": "Preenchimento",
+      "fillColor": "Cor de preenchimento",
+      "fillHex": "Cor hexadecimal do preenchimento",
+      "fillTypes": {
+        "gradient": "Gradiente",
+        "mixed": "Misto",
+        "none": "Sem preenchimento",
+        "pattern": "Padrão",
+        "picture": "Imagem",
+        "solid": "Sólido"
+      },
+      "hexHelp": "Digite #RRGGBB ou o nome de uma cor e pressione Enter.",
+      "mixedOutline": "As formas deste grupo têm contornos diferentes.",
+      "noFill": "Sem preenchimento",
+      "noOutline": "Sem linha",
+      "openFillColors": "Escolher uma cor de preenchimento",
+      "openOutlineColors": "Escolher uma cor de contorno",
+      "otherWidth": "Outra espessura",
+      "outline": "Contorno",
+      "outlineColor": "Cor do contorno",
+      "outlineHex": "Cor hexadecimal do contorno",
+      "readOnlyFill": "Tipo de preenchimento: {fill}. Escolha uma cor ou Sem preenchimento para substituí-lo.",
+      "title": "Formatar forma",
+      "transparency": "Transparência (%)",
+      "width": "Espessura (pt)",
+      "widthPoints": "{value} pt",
+      "widthPreset": "Espessura predefinida",
+      "dash": "Tipo de traço",
+      "dashes": {
+        "custom": "Personalizado",
+        "dash": "Traço",
+        "dashDot": "Traço e ponto",
+        "dot": "Ponto",
+        "lgDash": "Traço longo",
+        "lgDashDot": "Traço longo e ponto",
+        "lgDashDotDot": "Traço longo, ponto e ponto",
+        "solid": "Sólido",
+        "sysDash": "Ponto quadrado",
+        "sysDashDot": "Traço quadrado e ponto",
+        "sysDashDotDot": "Traço quadrado, ponto e ponto",
+        "sysDot": "Ponto redondo"
+      }
+    }
   }
 }

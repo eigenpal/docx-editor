@@ -208,6 +208,8 @@ export interface CanvasMeasurerOptions {
     readonly maxMetricsEntries?: number;
     readonly maxWidthEntries?: number;
     readonly scale?: number;
+    // @internal
+    readonly serifHangulFace?: (family: string) => boolean;
 }
 
 // @public
@@ -223,6 +225,7 @@ export interface CanvasTextContext {
     textAlign?: 'left' | 'right' | 'center' | 'start' | 'end';
     // (undocumented)
     textBaseline?: 'top' | 'hanging' | 'middle' | 'alphabetic' | 'ideographic' | 'bottom';
+    textRendering?: 'auto' | 'optimizeSpeed' | 'optimizeLegibility' | 'geometricPrecision';
 }
 
 // @public
@@ -382,6 +385,8 @@ export type CellVerticalAlign = 'top' | 'center' | 'bottom';
 // @public
 export interface CjkTypographySettings {
     readonly after: Readonly<Record<string, string>>;
+    // @internal
+    readonly balancedSpaceShrink?: true;
     // @internal
     readonly balancedWidths?: true;
     readonly before: Readonly<Record<string, string>>;
@@ -698,6 +703,9 @@ export function createListCounterState(index: NumberingIndex): ListCounterState;
 // @public
 export function createParagraphLayoutCache<T>(options?: ParagraphLayoutCacheOptions): ParagraphLayoutCache<T>;
 
+// @internal
+export function createRunProofingReader(styles: StyleCascadeTable | undefined): (paragraph: OoxmlNode, run: OoxmlNode, cellStyle?: TableCellStyleFormatting) => RunProofing;
+
 // @public
 export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasurer;
 
@@ -757,7 +765,7 @@ export const DEFAULT_TAB_INTERVAL_TWIPS = 720;
 export const DEFAULT_VERTICAL_WEIGHT = 8;
 
 // @public
-export function defaultNoteSeparatorRuleStyle(_noteKind: NoteKind, _kind: 'separator' | 'continuationSeparator'): NoteSeparatorRuleStyle;
+export function defaultNoteSeparatorRuleStyle(_noteKind: NoteKind$1, _kind: 'separator' | 'continuationSeparator'): NoteSeparatorRuleStyle;
 
 // @public
 export function defaultTabIntervalFromSettings(settings: OoxmlNode | null | undefined): number;
@@ -766,10 +774,10 @@ export function defaultTabIntervalFromSettings(settings: OoxmlNode | null | unde
 export function deletedTextBoundaries(layout: SemanticLayout, paragraphId: string): ReadonlySet<number>;
 
 // @public
-export function deriveNoteDisplayMarks(noteKind: NoteKind, references: readonly NoteReferenceSite[], properties: ResolvedNoteProperties): readonly NoteDisplayMark[];
+export function deriveNoteDisplayMarks(noteKind: NoteKind$1, references: readonly NoteReferenceSite[], properties: ResolvedNoteProperties): readonly NoteDisplayMark[];
 
 // @public
-export function deriveNoteDisplayMarksResolved(_noteKind: NoteKind, references: readonly NoteReferenceSite[], resolveProps: (sectionIndex: number) => ResolvedNoteProperties): readonly NoteDisplayMark[];
+export function deriveNoteDisplayMarksResolved(_noteKind: NoteKind$1, references: readonly NoteReferenceSite[], resolveProps: (sectionIndex: number) => ResolvedNoteProperties): readonly NoteDisplayMark[];
 
 // @public
 export function displayText(text: string, style: ResolvedRunStyle): string;
@@ -870,6 +878,7 @@ export interface DrawingGeometry {
     readonly imageTransformCorners?: readonly DrawingPoint[];
     // (undocumented)
     readonly paintBounds: LayoutBox;
+    readonly regionCuts?: DrawingRegionCuts;
     // (undocumented)
     readonly transformedCorners: readonly DrawingPoint[];
 }
@@ -949,6 +958,14 @@ export interface DrawingPoint {
 }
 
 // @public
+export interface DrawingRegionCuts {
+    readonly bottom: number;
+    readonly left: number;
+    readonly right: number;
+    readonly top: number;
+}
+
+// @public
 export type DrawingSupport = 'native' | 'partial' | 'unrendered';
 
 // @public
@@ -1012,6 +1029,12 @@ export interface DrawingTransform {
 // @public (undocumented)
 export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
 
+// @internal
+export function eastAsianTextRanges(text: string): readonly {
+    readonly from: number;
+    readonly to: number;
+}[];
+
 // @public
 export function effectiveBorderSide(authored: TableBorderSide, tableSide: TableBorderSide, _options?: {
     readonly interior?: boolean;
@@ -1049,6 +1072,41 @@ export interface EquationBarGeometry extends EquationGeometryBase {
 }
 
 // @public (undocumented)
+export interface EquationBorderBoxGeometry extends EquationGeometryBase {
+    // (undocumented)
+    readonly body: EquationGeometry;
+    readonly diagonals: readonly EquationDiagonal[];
+    // (undocumented)
+    readonly kind: 'borderBox';
+    readonly rules: readonly LayoutBox[];
+    // (undocumented)
+    readonly thickness: number;
+}
+
+// @public (undocumented)
+export interface EquationDelimiterGeometry {
+    readonly baseline: number;
+    // (undocumented)
+    readonly box: LayoutBox;
+    readonly fences: readonly EquationTextGeometry[];
+    readonly items: readonly EquationGeometry[];
+    // (undocumented)
+    readonly kind: 'delimiter';
+}
+
+// @public
+export interface EquationDiagonal {
+    // (undocumented)
+    readonly x1: number;
+    // (undocumented)
+    readonly x2: number;
+    // (undocumented)
+    readonly y1: number;
+    // (undocumented)
+    readonly y2: number;
+}
+
+// @public (undocumented)
 export interface EquationFractionGeometry extends EquationGeometryBase {
     // (undocumented)
     readonly bar: LayoutBox;
@@ -1061,7 +1119,7 @@ export interface EquationFractionGeometry extends EquationGeometryBase {
 }
 
 // @public (undocumented)
-export type EquationGeometry = EquationTextGeometry | EquationRowGeometry | EquationFractionGeometry | EquationRadicalGeometry | EquationBarGeometry | EquationScriptGeometry | EquationNaryGeometry;
+export type EquationGeometry = EquationTextGeometry | EquationRowGeometry | EquationFractionGeometry | EquationRadicalGeometry | EquationBarGeometry | EquationBorderBoxGeometry | EquationDelimiterGeometry | EquationScriptGeometry | EquationNaryGeometry;
 
 // @public (undocumented)
 export interface EquationNaryGeometry extends EquationGeometryBase {
@@ -1123,6 +1181,12 @@ export interface EquationSpanRecord {
     readonly truncated: boolean;
 }
 
+// @public
+export interface EquationStretch {
+    readonly originY: number;
+    readonly scale: number;
+}
+
 // @public (undocumented)
 export interface EquationTextGeometry extends EquationGeometryBase {
     // (undocumented)
@@ -1130,6 +1194,7 @@ export interface EquationTextGeometry extends EquationGeometryBase {
     // (undocumented)
     readonly kind: 'text' | 'fallback';
     readonly runStyle?: ResolvedRunStyle;
+    readonly stretch?: EquationStretch;
     // (undocumented)
     readonly text: string;
 }
@@ -1184,7 +1249,7 @@ export interface FieldLinkRegistry {
 export function filterRefsOnPage(page: PageRecord, allRefs: readonly PageRefHit[], refIndex?: PageRefIndex): readonly PageRefHit[];
 
 // @public
-export function findDrawingOverlayFrameInLayout(layout: SemanticLayout, drawingNodeId: string): DrawingOverlayFrame | null;
+export function findDrawingOverlayFrameInLayout(layout: SemanticLayout, drawingNodeId: string, preferPage?: number): DrawingOverlayFrame | null;
 
 // @public
 export function findSeparatorNote(part: OoxmlPart | null | undefined, kind: 'separator' | 'continuationSeparator'): OoxmlElement | undefined;
@@ -1667,6 +1732,7 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly baselineOffset: number;
     readonly bidiLevel?: number;
+    readonly bidiRunDirection?: 'ltr' | 'rtl';
     readonly chart?: DrawingChartSummary;
     // @internal
     readonly chartFallbackResource?: ImageResourceState;
@@ -1871,7 +1937,7 @@ export function layoutHeaderFooterStory(part: OoxmlPart, contentWidth: number, m
 export function layoutNoteById(part: OoxmlPart | null | undefined, noteId: number, contentWidth: number, options: LayoutNoteStoryOptions): NoteStoryLayout | null;
 
 // @public
-export function layoutNoteSeparator(part: OoxmlPart | null | undefined, kind: 'separator' | 'continuationSeparator', contentWidth: number, options: LayoutNoteStoryOptions, noteKind: NoteKind, maxFlowHeightPt?: number): NoteSeparatorLayout;
+export function layoutNoteSeparator(part: OoxmlPart | null | undefined, kind: 'separator' | 'continuationSeparator', contentWidth: number, options: LayoutNoteStoryOptions, noteKind: NoteKind$1, maxFlowHeightPt?: number): NoteSeparatorLayout;
 
 // @public
 export function layoutNoteStory(note: OoxmlNode, contentWidth: number, options: LayoutNoteStoryOptions): NoteStoryLayout | null;
@@ -2145,7 +2211,7 @@ export const MAX_NOTE_FRAGMENTS = 512;
 // @public
 export const MAX_NOTE_OVERFLOW_PAGES = 256;
 
-// @public
+// @public @deprecated
 export const MAX_NOTE_REFLOW_ATTEMPTS = 64;
 
 // @public
@@ -2263,7 +2329,7 @@ export type NoteLayoutFallbackReason = 'note-count-limit' | 'note-fragment-limit
 | 'note-separator-height-cap' | 'note-continuation-notice-height-cap' | 'missing-note-body' | 'dangling-note-reference';
 
 // @public
-export function noteLineIdPrefix(noteKind: NoteKind, noteId: number): string;
+export function noteLineIdPrefix(noteKind: NoteKind$1, noteId: number): string;
 
 // @public
 export interface NoteMarkContext {
@@ -2274,7 +2340,7 @@ export interface NoteMarkContext {
 }
 
 // @public
-export function noteMarkKey(noteKind: NoteKind, noteId: number): string;
+export function noteMarkKey(noteKind: NoteKind$1, noteId: number): string;
 
 // @public
 export type NotePaginationFallbackReason = NoteLayoutFallbackReason | 'note-reflow-exhausted' | 'note-area-fragment-limit' | 'note-overflow-page-limit'
@@ -2390,7 +2456,7 @@ export interface NoteStoryLayout {
     // (undocumented)
     readonly noteId: number;
     // (undocumented)
-    readonly noteKind: NoteKind;
+    readonly noteKind: NoteKind$1;
     // (undocumented)
     readonly noteType: ReturnType<typeof noteTypeOf>;
     readonly scopeId: string;
@@ -2435,6 +2501,7 @@ export interface NumberingLevel {
     // (undocumented)
     readonly numFmt: string;
     readonly picBulletId?: string;
+    readonly pStyle?: string;
     readonly runProperties: readonly OoxmlProperty[];
     // (undocumented)
     readonly start: number;
@@ -3209,9 +3276,11 @@ export interface ResolvedRunStyle {
         readonly context?: ShapingContext;
         readonly direction: 'ltr' | 'rtl';
         readonly level: number;
+        readonly override?: 'ltr' | 'rtl';
         readonly runDirection?: 'ltr' | 'rtl';
         readonly script: string;
         readonly wordSpacingPt?: number;
+        readonly wrapperGroup?: true;
     };
     // (undocumented)
     readonly smallCaps: boolean;
@@ -3461,7 +3530,7 @@ export interface ReviewRevisionItem {
     // (undocumented)
     readonly date?: string;
     readonly formattingChanges?: readonly {
-        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
+        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'highlight' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
         readonly value: string | null;
     }[];
     readonly formattingKind?: string;
@@ -3562,6 +3631,14 @@ export const roundFontUnitToFixedPoint: (fontUnits: number, denominator: number,
 
 // @public
 export function runBorderStrokesForLine(line: LineRecord): readonly ParagraphBorderStrokeRecord[];
+
+// @internal
+export interface RunProofing {
+    readonly eastAsiaLang: string | null;
+    readonly hidden: boolean;
+    readonly lang: string | null;
+    readonly noProof: boolean;
+}
 
 // @public
 export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolean;
@@ -3672,7 +3749,11 @@ export interface SectionProperties {
     };
     // (undocumented)
     readonly titlePage: boolean;
+    readonly verticalAlign?: SectionVerticalAlign;
 }
+
+// @public
+export type SectionVerticalAlign = 'center' | 'bottom' | 'both';
 
 // @public
 export function segmentGraphemes(text: string): readonly GraphemeSegment[];
@@ -3711,9 +3792,9 @@ export interface SemanticCommentArtifactRecord {
     readonly author: string;
     // (undocumented)
     readonly date?: string;
+    readonly declaredInitials?: string;
     // (undocumented)
     readonly id: string;
-    // (undocumented)
     readonly initials: string;
     // (undocumented)
     readonly kind: 'comment';
@@ -3725,6 +3806,7 @@ export interface SemanticCommentArtifactRecord {
     readonly parentId?: string;
     // (undocumented)
     readonly parentRevisionId?: string;
+    readonly referenceOrder?: number;
     // (undocumented)
     readonly replyIds: readonly string[];
     // (undocumented)
@@ -3826,6 +3908,10 @@ export interface SemanticLayoutOptions {
     // (undocumented)
     readonly measurer: TextMeasurer;
     readonly noteMarks?: NoteMarkContext;
+    // @internal
+    readonly noteRoundBlockLimit?: number;
+    // @internal
+    readonly noteRoundContext?: object;
     readonly notes?: NotesLayoutInput;
     readonly numberingIndex?: NumberingIndex;
     readonly pageBottomReserves?: ReadonlyMap<number, number>;
@@ -4054,6 +4140,8 @@ export interface SemanticTableRow {
     readonly revisionDate?: string;
     readonly revisionId?: string;
     readonly revisionKind?: 'insert' | 'delete';
+    readonly spacingFrame?: TableSpacingFrame;
+    readonly spacingShading?: TableSpacingShading;
 }
 
 // @public
@@ -4069,13 +4157,18 @@ export interface SemanticTableStructure {
     readonly indentPt: number;
     readonly layoutFixed: boolean;
     readonly legacyContentAlignment?: true;
+    readonly legacyContentOffsetPt?: number;
     readonly legacyTrailingOuterEdge?: true;
     readonly outerRuleOffsetPt?: number;
     readonly pastTextColumn?: true;
     // (undocumented)
     readonly rows: readonly SemanticTableRow[];
+    readonly sharedGridLinesHold?: true;
+    readonly statedColumnWidthsPt?: readonly number[];
     readonly tableBorders: TableBorderBox;
     readonly tableWidth: PreferredWidth;
+    readonly textBox?: true;
+    readonly textBoxBidiShiftPt?: number;
 }
 
 // @public
@@ -4119,7 +4212,7 @@ export function setHarfBuzzWasmUrl(url: string | URL): void;
 export const sha256FontBytes: (bytes: Uint8Array) => string;
 
 // @public
-export function shadingFillFromElement(shd: OoxmlElement | undefined): string | undefined;
+export function shadingFillFromElement(shd: OoxmlElement | null | undefined): string | undefined;
 
 // @public
 export interface ShapeColor {
@@ -4390,6 +4483,9 @@ export interface SourceRange {
     readonly start: number;
 }
 
+// @internal
+export function spacedTableFrameBorders(fragment: Pick<TableFragmentRecord, 'rows' | 'box'>): ResolvedCellBorders | undefined;
+
 // @public
 export interface SpanLinkRecord {
     readonly anchor?: string;
@@ -4455,6 +4551,8 @@ export interface StrikeoutStrokePt {
 // @public
 export interface StyleCascadeTable {
     readonly adjustLineHeightInTable?: true;
+    // @internal
+    readonly autoHyphenation?: true;
     readonly cacheToken: string;
     readonly defaultCharacterStyleId: string | null;
     readonly defaultParagraphStyleId: string | null;
@@ -4469,6 +4567,8 @@ export interface StyleCascadeTable {
     // (undocumented)
     readonly docDefaultsRun: readonly OoxmlProperty[];
     readonly doNotBreakWrappedTables?: true;
+    // @internal
+    readonly doNotHyphenateCaps?: true;
     readonly fixedParagraphSpacing?: true;
     readonly ignoreIndentAsNumberingTabStop?: true;
     readonly noColumnBalance?: true;
@@ -4543,6 +4643,8 @@ export interface StyleSpanRecord {
     readonly revisions?: readonly RevisionAttribution[];
     readonly style: ResolvedRunStyle;
     // @internal
+    readonly syntheticBold?: true;
+    // @internal
     readonly tabAlignment?: Exclude<TabAlignment, 'left'>;
     readonly tabLeader?: TabLeader;
     readonly tabLeaderAdvancePt?: number;
@@ -4597,6 +4699,7 @@ export interface TableAutofitContext {
     readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
     readonly measurer: TextMeasurer;
     readonly paragraphToken?: (paragraph: OoxmlElement) => string;
+    readonly parentTableFixed?: true;
     readonly passToken?: string;
 }
 
@@ -4790,6 +4893,8 @@ export interface TableRowFragmentRecord {
     readonly revisionId?: string;
     readonly revisionKind?: 'insert' | 'delete';
     readonly rowIndex: number;
+    readonly spacingFrame?: TableSpacingFrame;
+    readonly spacingShading?: TableSpacingShading;
 }
 
 // @public
@@ -4802,6 +4907,39 @@ export type TableRowHeight = {
 
 // @public
 export type TableRowHeightRule = 'auto' | 'atLeast' | 'exact';
+
+// @public
+export interface TableSpacingFrame {
+    readonly borders: Pick<TableBorderBox, 'top' | 'left' | 'bottom' | 'right'>;
+    readonly bottomPt: number;
+    readonly breakBottomPt: number;
+    readonly breakTopPt: number;
+    readonly first?: true;
+    readonly last?: true;
+    readonly leftPt: number;
+    readonly rightPt: number;
+    readonly rowBorders?: Pick<TableBorderBox, 'left' | 'right'>;
+    readonly spacingPt: number;
+    readonly topPt: number;
+}
+
+// @public
+export interface TableSpacingShading {
+    readonly fill: string;
+    readonly gapPt: number;
+}
+
+// @internal
+export interface TableSpacingShadingRegion {
+    readonly box: LayoutBox;
+    readonly fill: string;
+    readonly holes: readonly LayoutBox[];
+}
+
+// @internal
+export function tableSpacingShadingRegions(fragment: Pick<TableFragmentRecord, 'rows' | 'box'> & {
+    readonly columnEdges?: TableFragmentRecord['columnEdges'];
+}): readonly TableSpacingShadingRegion[];
 
 // @public
 export interface TabStop {
@@ -4911,6 +5049,8 @@ export interface TextMeasurer {
     };
     measure(text: string, style: ResolvedRunStyle): number;
     strikeoutMetrics?(style: ResolvedRunStyle): StrikeoutStrokePt | undefined;
+    // @internal
+    syntheticBold?(style: ResolvedRunStyle): boolean;
     textOutline?(text: string, style: ResolvedRunStyle): TextOutline | undefined;
 }
 
@@ -4993,6 +5133,7 @@ export interface VectorGradient {
     readonly kind: 'linear' | 'radial';
     readonly matrix: AffineMatrix;
     readonly stops: readonly GradientStop[];
+    readonly turnsWithShape?: false;
 }
 
 // @public
@@ -5059,6 +5200,7 @@ export interface VectorShapeProjection {
     readonly fillAlpha?: number;
     readonly fillHex: string | null;
     readonly overflowVisible?: true;
+    readonly rotationDegrees?: number;
     // (undocumented)
     readonly strokeAlpha?: number;
     readonly strokeHex: string | null;

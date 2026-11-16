@@ -221,8 +221,9 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    *
    * Separate from both other answers on purpose. It is not a DECLARATION, so it does not
    * join `documentFonts`, and it is not a face TEXT renders in, so the substitution notice
-   * must not report it — but a font resolver has to hear about it, or an app cannot supply
-   * the face a private-use glyph needs.
+   * reports it only for a private-use glyph with no Unicode equivalent
+   * (`editor/unmapped-symbol-faces.ts`) — but a font resolver has to hear about it, or an
+   * app cannot supply the face such a glyph needs.
    */
   symbolFontFamilies(): readonly string[];
   /**
@@ -342,6 +343,19 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    * part that records it commit together.
    */
   setCommentResolved(commentId: string, resolved: boolean, options?: PackageWriteOptions): boolean;
+  /**
+   * Replace the text of one comment or reply. False when the document holds no such comment, or
+   * when the write was refused.
+   *
+   * Only the body changes: the id, author, date, thread state, replies and range markers stay, so
+   * the comment keeps its place in its thread in Word.
+   */
+  setCommentText(commentId: string, text: string, options?: PackageWriteOptions): boolean;
+  /** Replace several validated comment bodies in one package transaction. */
+  setCommentTexts(
+    edits: readonly { readonly commentId: string; readonly text: string }[],
+    options?: PackageWriteOptions
+  ): boolean;
   /**
    * Delete a comment thread outright — body, thread state and story markers.
    *
@@ -531,9 +545,38 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     input: import('../store/store/tree-package-images.ts').ApplyImagePropertiesInput
   ): import('../store/store/tree-package-images.ts').ImageIntentResult;
 
+  /**
+   * Apply drawing ops as one package undo unit. A resize of a DrawingML diagram also rescales
+   * the diagram's saved drawing part, so the saved layout matches the new frame.
+   */
+  applyDrawingFrameOps(
+    scope: StoryScope,
+    ops: readonly import('../store/store/tree-op-types.ts').DrawingTreeDocOp[]
+  ): import('../store/store/tree-package-images.ts').ImageIntentResult;
+
+  /** Insert a chart, or edit the chart part behind a chart drawing, as one package undo unit. */
+  charts(): import('../store/store/tree-package-charts.ts').ChartLanes;
+
   /** Land a clipboard fragment (resource merge + blocks) as one package undo unit. */
   applyFragmentPaste(
     scope: StoryScope,
     input: import('../store/store/tree-package-fragment.ts').FragmentPasteInput
   ): import('../store/store/tree-package-fragment.ts').FragmentPasteResult;
+
+  /**
+   * Replace the whole package with one derived from {@link currentPackage}, as one package undo
+   * unit that publishes a `global` change. For writes that rebuild many parts, such as a compare.
+   */
+  replacePackage(
+    pkg: OoxmlPackage
+  ): import('../store/store/tree-package-replace.ts').PackageReplacementResult;
+
+  /**
+   * Apply a complete updated package, opened as a load would open it, as ONE undoable edit
+   * that replicates: unchanged nodes keep their ids, and a collaboration session receives the
+   * difference as an ordinary journal. Refuses with nothing changed when it cannot apply.
+   */
+  applyPackageUpdate(
+    pkg: OoxmlPackage
+  ): import('../store/store/tree-package-update.ts').PackageUpdateResult;
 }

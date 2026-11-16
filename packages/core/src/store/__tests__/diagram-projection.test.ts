@@ -227,14 +227,11 @@ describe('SmartArt diagram projection', () => {
   });
 
   test('more shapes than the diagram bound refuse the diagram', () => {
-    const shapes = Array.from(
-      { length: 513 },
-      (_, index): SmartArtShapeSpec => ({
-        preset: 'rect',
-        off: [index, 0],
-        ext: [10, 10],
-      })
-    );
+    const shapes = Array.from({ length: 513 }, (_, index): SmartArtShapeSpec => ({
+      preset: 'rect',
+      off: [index, 0],
+      ext: [10, 10],
+    }));
     expect(project({ shapes }).vectorShape).toBeNull();
     expect(project({ shapes: shapes.slice(0, 512) }).vectorShape!.components).toHaveLength(512);
   });

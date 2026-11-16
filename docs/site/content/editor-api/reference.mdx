@@ -2,14 +2,14 @@
 title: 'API member directory'
 description: 'Find every public editing API class, member group, enum, support type, and host extension.'
 category: 'Editing API'
-order: 64
+order: 65
 ---
 
-Use this directory to find task examples and runtime limits for the public API. The [generated API reference](/docs/2.x/api/editor-api) provides exact declarations, overloads, and enum values. The repository also publishes generated declarations for the [root entry](https://github.com/eigenpal/docx-editor/blob/main/docs/api/docx-editor-editor-api/index.api.md), the [browser entry](https://github.com/eigenpal/docx-editor/blob/main/docs/api/docx-editor-editor-api/browser.api.md), and the [agent entry](https://github.com/eigenpal/docx-editor/blob/main/docs/api/docx-editor-editor-api/agent.api.md).
+This directory maps every public symbol to the guide that documents it. For exact signatures and enum values, see the [generated API reference](/docs/2.x/api/editor-api) or the declarations for the [root](https://github.com/eigenpal/docx-editor/blob/main/docs/api/docx-editor-editor-api/index.api.md), [browser](https://github.com/eigenpal/docx-editor/blob/main/docs/api/docx-editor-editor-api/browser.api.md), and [agent](https://github.com/eigenpal/docx-editor/blob/main/docs/api/docx-editor-editor-api/agent.api.md) entries.
 
-A declaration or enum value does not guarantee runtime support for every document or argument. Read the linked guide before choosing an operation. Members marked `@internal`, including factories and hydration helpers, are not supported application APIs. Obtain model objects from `context.document`; do not construct them.
+Get model objects from `context.document`; do not construct them. Members marked `@internal`, including factories and hydration helpers, are unsupported.
 
-## Runtime and common members
+## Find runtime and batching APIs
 
 | Public symbol | Members or values | Guide |
 | --- | --- | --- |
@@ -28,9 +28,9 @@ A declaration or enum value does not guarantee runtime support for every documen
 | `LoadOption`, `LoadQueryOptions` | Explicit property names and `items/<property>` paths on collections; `select`, `top`, `skip`; reserved `expand` | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
 | `DocxEditorError`, `DocxEditorErrorInit`, `DocxEditorErrorCode`, `DocxEditorDebugInfo`, `DocxEditorInnerError`, `isDocxEditorError` | Stable error codes, `target`, resource limit, revision metadata, and `debugInfo` with the engine reason as `innerError` | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
 
-## Agent helpers
+## Find agent helpers
 
-The `@docx-editor.dev/editor-api/agent` entry holds helpers next to the object model. They are not Office.js members. They use only the Office.js-shaped calls of the object model on the `context` and `paragraph` that you pass in.
+The `@docx-editor.dev/editor-api/agent` entry holds helpers that are not Office.js members. They call only Office.js-shaped members on the `context` and `paragraph` you pass in.
 
 | Public symbol | Members or values | Guide |
 | --- | --- | --- |
@@ -38,17 +38,19 @@ The `@docx-editor.dev/editor-api/agent` entry holds helpers next to the object m
 | `RewriteDraft`, `RewriteResult`, `RewritePlaceholder`, `RewritePlaceholderKind` | Plain data: `paragraphId`, `original`, `text`, `placeholders`, and `legend` on a draft, with `check()` and `apply()` for the model text; `original`, `proposed`, `changes`, and `paragraphId` on a result | [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite) |
 | `RewriteError`, `RewriteErrorCode` | `code`, `isModelError`, `cause`, `suppressed` | [Handle errors](/docs/2.x/recipes/propose-rewrite#handle-errors) |
 
-## Document and text objects
+## Find document and text APIs
 
-Every model object inherits the common `ClientObject` members. Each collection also exposes loaded, read-only `items`.
+Every model object inherits `ClientObject` members, and every collection exposes read-only `items`.
 
 | Object | Public members beyond inherited members | Guide |
 | --- | --- | --- |
-| `Document` | `removeDocumentInformation`, `properties`, `body`, `paragraphs`, `sections`, `contentControls`, `comments`, `revisions`, `footnotes`, `endnotes`, `changeTrackingMode`, `deleteBookmark`, `getBookmarkRange`, `getBookmarkRangeOrNullObject`, `getStyles` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories), [Tracked changes](/docs/2.x/editor-api/revisions), [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
+| `Document` | `compareFromBase64`, `compare` (always refuses with `NotSupported`), `removeDocumentInformation`, `properties`, `body`, `paragraphs`, `sections`, `contentControls`, `comments`, `revisions`, `footnotes`, `endnotes`, `changeTrackingMode`, `deleteBookmark`, `getBookmarkRange`, `getBookmarkRangeOrNullObject`, `getStyles`, `getAnnotationById` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories), [Tracked changes](/docs/2.x/editor-api/revisions), [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
+| `CompareTarget` | `compareTargetCurrent`, `compareTargetNew`, `compareTargetSelected`; only `compareTargetCurrent` is supported | [Compare two documents](/docs/2.x/editor-api/revisions#compare-two-documents) |
+| `DocumentCompareOptions` | `authorName`, `compareTarget`, `detectFormatChanges`, `removeDateAndTime`, `removePersonalInformation`, `addToRecentFiles`, `ignoreAllComparisonWarnings` | [Compare two documents](/docs/2.x/editor-api/revisions#compare-two-documents) |
 | `RemoveDocInfoType` | All standard enum values; only `documentProperties` removal is supported | [Remove document properties](#remove-document-properties) |
 | `DocumentProperties` | `author`, `title`, `subject`, `keywords`, `comments`, `category`, read-only `lastAuthor` | [Document properties](#document-properties) |
-| `Body` | `text`, `footnotes`, `endnotes`, `paragraphs`, `getRange`, `search`, `clear`, `insertText`, `insertParagraph`; `font`, `style`, `lists`, `bookmarks`, `contentControls`, `getComments`, `revisions`, `tables`, `inlinePictures`, `shapes`, `fields` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
-| `Paragraph` | `text`, `uniqueLocalId`, `getRange`, `getTextRanges`, `getReviewedText`, `contentControls`, `search`, `insertText`, `insertParagraph`, `split`, `clear`, `delete`; `font`, `style`, paragraph formatting; `list`, `listItem`, `startNewList`, `attachToList`, `detachFromList`; `shapes` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Formatting and styles](/docs/2.x/editor-api/formatting), [Lists and numbering](/docs/2.x/editor-api/lists) |
+| `Body` | `text`, `footnotes`, `endnotes`, `paragraphs`, `getRange`, `search`, `clear`, `insertText`, `insertParagraph`, `insertTable`, `insertFileFromBase64` (`Replace` on the main body only); `font`, `style`, `lists`, `bookmarks`, `contentControls`, `getComments`, `revisions`, `tables`, `inlinePictures`, `shapes`, `fields` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
+| `Paragraph` | `text`, `uniqueLocalId`, `getRange`, `getTextRanges`, `getReviewedText`, `insertAnnotations`, `getAnnotations`, `contentControls`, `search`, `insertText`, `insertParagraph`, `insertTable`, `split`, `clear`, `delete`; `font`, `style`, paragraph formatting; `list`, `listItem`, `startNewList`, `attachToList`, `detachFromList`; `shapes` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Formatting and styles](/docs/2.x/editor-api/formatting), [Lists and numbering](/docs/2.x/editor-api/lists) |
 | `Range` | `text`, `paragraphs`, `getRange`, `getTextRanges`, `expandTo`, `getReviewedText`, `contentControls`, `search`, `insertText`, `insertParagraph`, `clear`, `delete`, `select`; `font`, `style`, `hyperlink`, `bookmarks`, `getBookmarks`, `revisions`, `tables`, `inlinePictures`, `fields`; `insertTable`, `insertInlinePictureFromBase64`, `insertField`, `insertOoxml` (one equation), `insertBreak`, `insertContentControl`, `insertComment`, `insertBookmark` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges) and the dedicated insertion guides |
 | `ParagraphCollection` | `getFirst`, `getLast`, `getFirstOrNullObject`, `getLastOrNullObject` | [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
 | `RangeCollection` | `getFirst`, `getLast`, `getFirstOrNullObject` | [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
@@ -57,14 +59,15 @@ Every model object inherits the common `ClientObject` members. Each collection a
 | `InsertLocation`, `BesideLocation`, `BodyInsertParagraphLocation`, `BodyInsertTextLocation`, `ParagraphInsertTextLocation`, `RangeInsertTextLocation` | Insertion location enums and aliases | [Text and ranges](/docs/2.x/editor-api/text-and-ranges) |
 | `RangeLocation` | `getRange` location values | [Text and ranges](/docs/2.x/editor-api/text-and-ranges#address-existing-content) |
 
-## Formatting, lists, tables, and pictures
+## Find formatting, list, table, and picture APIs
 
-Font writes honor inherited complex-script properties. Font reads return authored values or `null`; they do not resolve inherited formatting.
+Font reads return authored values or `null`, not inherited formatting.
 
 | Object or type | Public members beyond inherited members | Guide |
 | --- | --- | --- |
 | `Font` | `bold`, `italic`, `color`, `name`, `size`, `underline`, `strikeThrough`, `highlightColor`, `subscript`, `superscript` | [Formatting and styles](/docs/2.x/editor-api/formatting) |
-| `Paragraph` formatting | `alignment`, `firstLineIndent`, `leftIndent`, `rightIndent`, `lineSpacing`, `spaceBefore`, `spaceAfter`, `readingOrder` (DocxEditor addition) | [Formatting and styles](/docs/2.x/editor-api/formatting), including [right-to-left paragraphs](/docs/2.x/editor-api/formatting#right-to-left-paragraphs) |
+| `Paragraph` formatting | `alignment`, `firstLineIndent`, `leftIndent`, `rightIndent`, `lineSpacing`, `lineSpacingRule` (DocxEditor addition), `spaceBefore`, `spaceAfter`, `readingOrder` (DocxEditor addition) | [Formatting and styles](/docs/2.x/editor-api/formatting), including [line spacing and its rule](/docs/2.x/editor-api/formatting#line-spacing-and-its-rule) and [right-to-left paragraphs](/docs/2.x/editor-api/formatting#right-to-left-paragraphs) |
+| `BorderUniversalCollection`, `BorderUniversal`, `BorderLineStyle`, `LineWidth`, `ColorIndex` | `Paragraph.borders`; collection `items`; border `isVisible`, `lineStyle`, `lineWidth`, `color`, `colorIndex`, `inside` (read-only), `set` | [Paragraph borders](/docs/2.x/editor-api/formatting#paragraph-borders) |
 | `Style`, `StyleCollection`, `StyleType` | Read-only style `nameLocal`, `type`, `builtIn`, `baseStyle`, `nextParagraphStyle`, `linked`, `visibility`, `priority`, `quickStyle`, `unhideWhenUsed`; collection `getByNameOrNullObject`, `getCount`; style type values | [List the defined styles](/docs/2.x/editor-api/formatting#list-the-defined-styles) |
 | `UnderlineType`, `Alignment`, `ParagraphAlignment`, `ParagraphReadingOrder` | Font underline, paragraph alignment, and paragraph direction values | [Formatting and styles](/docs/2.x/editor-api/formatting) |
 | `List` | `id`, `paragraphs`, `getLevelParagraphs`, `insertParagraph`, `setLevelBullet`, `setLevelNumbering`, `setLevelStartingNumber`, `setLevelIndents` | [Lists and numbering](/docs/2.x/editor-api/lists) |
@@ -76,18 +79,17 @@ Font writes honor inherited complex-script properties. Font reads return authore
 | `VerticalAlignment` | Cell alignment values | [Tables and cells](/docs/2.x/editor-api/tables) |
 | `InlinePicture` | `width`, `height`, `lockAspectRatio`, `altTextDescription`, `delete` | [Inline pictures](/docs/2.x/editor-api/pictures) |
 | `InlinePictureCollection` | `getFirst`, `getLast`, `getFirstOrNullObject`, `getLastOrNullObject` | [Inline pictures](/docs/2.x/editor-api/pictures) |
-| `Shape`, `ShapeCollection`, `ShapeType` | Shape `id`, `name`, `type`, `body`; collection `getFirst`, `getFirstOrNullObject`, `getByTypes`; shape type values | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories#read-and-edit-text-boxes) |
+| `Shape`, `ShapeCollection`, `ShapeType` | Shape `id`, `name`, `type`, `body`, `fill`; collection `getFirst`, `getFirstOrNullObject`, `getByTypes`; shape type values | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories#read-and-edit-text-boxes) |
+| `ShapeFill`, `ShapeFillType` | Fill `type`, `foregroundColor`, `transparency`, `setSolidColor`, `clear`; fill type values | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories#set-a-shape-fill) |
 
-## Fields, stories, and controls
+## Find field, story, and control APIs
 
-`Range.insertContentControl()` creates `RichText`, `PlainText`, and `DatePicker` controls.
-
-`Range.insertBreak()` supports `Line`, `Page`, and `SectionNext`, also with `TrackMineOnly`. Only `Line` supports text edits in the same sync. Text reads use `\v` for manual line breaks and U+000E for column breaks. For migration instructions, see [Upgrade text processing](/docs/2.x/editor-api/text-and-ranges#upgrade-text-processing).
+Text reads use `\v` for manual line breaks and U+000E for column breaks. See [Upgrade text processing](/docs/2.x/editor-api/text-and-ranges#upgrade-text-processing).
 
 | Object or type | Public members beyond inherited members | Guide |
 | --- | --- | --- |
 | `Field`, `FieldCollection` | Field `code`, `result` (a `Range` that reads `text` and takes `insertText(text, 'Replace')`), `updateResult`, `delete`; collection `getFirst`, `getLast`, `getFirstOrNullObject`, `getLastOrNullObject` | [Fields and pagination](/docs/2.x/editor-api/fields) |
-| `FieldType`, `FieldTypeLiteral` | Office.js-compatible field vocabulary; authoring supports `Page`, `NumPages`, `Ref`, `PageRef`, `NoteRef`, `Seq`, `StyleRef`, `Date`, `Time`, and the documented inert `TOC` subset, untracked or as tracked insertions | [Fields and pagination](/docs/2.x/editor-api/fields) |
+| `FieldType`, `FieldTypeLiteral` | Office.js-compatible field vocabulary; authoring supports `Page`, `NumPages`, `Ref`, `PageRef`, `NoteRef`, `Seq`, `StyleRef`, `Date`, `Time`, and the documented inert `TOC` subset; all but `TOC` also as tracked insertions | [Fields and pagination](/docs/2.x/editor-api/fields) |
 | `Section`, `SectionCollection` | Section `body`, `pageSetup`, `getHeader`, `getFooter`, `getNext`; collection `getFirst` | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
 | `PageSetup` | `pageWidth`, `pageHeight`, `orientation`, `topMargin`, `bottomMargin`, `leftMargin`, `rightMargin` | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
 | `HeaderFooterType`, `PageOrientation`, `BreakType` | Story variants, orientation, and break vocabulary | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
@@ -96,57 +98,61 @@ Font writes honor inherited complex-script properties. Font reads return authore
 | `ContentControlCollection` | `getFirst`, `getFirstOrNullObject`, `getById`, `getByTag`, `getByTitle` | [Content controls](/docs/2.x/editor-api/content-controls) |
 | `ContentControlType`, `ContentControlSubtype`, `ContentControlValue`, `ContentControlLockState` | Creation vocabulary, DOCX subtype terms, typed values, and lock vocabulary | [Content controls](/docs/2.x/editor-api/content-controls) |
 
-## Comments and revisions
+## Find review APIs
 
-`Comment.delete()` and `CommentReply.delete()` use scan budgets that scale with the loaded document. Deletions in one batch share marker scans and rebuild each affected part once. See [Delete threads or replies](/docs/2.x/editor-api/comments#delete-threads-or-replies) for deletion guarantees and limits.
-
-`Document.changeTrackingMode = 'TrackMineOnly'` tracks supported text, font, paragraph, list, table, and content control edits. Column changes require an eligible complete proposed table. Page setup refuses while tracking. For supported operations and collaboration limits, see [Tracked changes](/docs/2.x/editor-api/revisions#supported-tracked-edits).
+For tracked operations and collaboration limits, see [Supported tracked edits](/docs/2.x/editor-api/revisions#supported-tracked-edits).
 
 | Object or type | Public members beyond inherited members | Guide |
 | --- | --- | --- |
-| `Comment` | `authorName`, `creationDate`, `id`, `text`, `delete`, `resolved`, `replies`, `getRange`, `reply` | [Comments](/docs/2.x/editor-api/comments) |
-| `CommentReply` | `authorName`, `creationDate`, `id`, `text`, `delete` | [Comments](/docs/2.x/editor-api/comments) |
+| `Comment` | `authorName`, `creationDate`, `id`, `content`, `text`, `delete`, `resolved`, `replies`, `getRange`, `reply` | [Comments](/docs/2.x/editor-api/comments) |
+| `CommentReply` | `authorName`, `creationDate`, `id`, `content`, `text`, `delete` | [Comments](/docs/2.x/editor-api/comments) |
 | `CommentCollection`, `CommentReplyCollection` | `getFirst` | [Comments](/docs/2.x/editor-api/comments) |
 | `Revision` | `author`, `date`, `type`, `range`, `accept`, `reject` | [Tracked changes](/docs/2.x/editor-api/revisions) |
 | `RevisionCollection` | `resolve`, `setAuthor`, `acceptAll`, `rejectAll` | [Tracked changes](/docs/2.x/editor-api/revisions) |
 | `getReviewItemRevisions`, `getReviewItemRange`, `getReviewItemRangeOrNullObject` | DocxEditor functions that return the changes a review item `key` names, or the range it covers | [Work with review items](/docs/2.x/editor-api/revisions#work-with-review-items) |
 | `ChangeTrackingMode`, `ChangeTrackingVersion`, `RevisionTextView`, `RevisionType` | Runtime tracking modes, `getReviewedText` versions, read views, and published revision types | [Tracked changes](/docs/2.x/editor-api/revisions) |
+| `Annotation`, `AnnotationCollection` | `Paragraph.insertAnnotations`, `Paragraph.getAnnotations`, `Document.getAnnotationById`; annotation `id`, `state`, `critiqueAnnotation`, `delete`; collection `getFirst`, `getFirstOrNullObject` | [Proofing annotations](/docs/2.x/editor-api/proofing-annotations) |
+| `CritiqueAnnotation` | `critique`, `range`, `accept`, `reject` | [Proofing annotations](/docs/2.x/editor-api/proofing-annotations) |
+| `AnnotationSet`, `Critique`, `CritiquePopupOptions`, `CritiqueColorScheme`, `AnnotationState` | Critique data, suggestions, color schemes, and annotation states | [Proofing annotations](/docs/2.x/editor-api/proofing-annotations) |
 
-## Distinguish host extensions from Office.js compatibility
+## Find host extensions
 
-Host factories, runtime capabilities, previews, input budgets, and collaboration setup are DocxEditor infrastructure. They do not represent Microsoft Office add-in APIs. Review item ranges, body-scoped bookmarks and revisions, document notes, typed control values, and nullable review dates include documented differences.
+Host factories, capabilities, previews, input budgets, and collaboration setup are DocxEditor infrastructure, not Office.js add-in APIs. Review item ranges, body-scoped bookmarks and revisions, document notes, typed control values, and nullable review dates differ from Office.js; see [Office.js compatibility](/docs/2.x/editor-api/office-js-api).
 
-## External document refresh
+| Public symbol | Members or values | Guide |
+| --- | --- | --- |
+| `RefreshHighlightOptions`, `NavigateToChangeOptions` | Change selection and decoration; scroll alignment, motion, padding, and focus | [Document refresh API](/docs/2.x/guides/document-refresh) |
+| `RefreshChangeInput`, `RefreshChange` | `description` for a processor review summary; `diagnostic` with stable codes and the requested anchor | [Document refresh API](/docs/2.x/guides/document-refresh) |
+| `RefreshUpdateMode` | `'reload'` replaces the document; `'edit'` applies the result as one undoable edit | [Apply an update as one undoable edit](/docs/2.x/guides/document-refresh#undoable-update) |
+| `ReplaceDocumentRequest`, `ReplaceDocumentOutcome`, `ReplaceDocumentRefusal`, `ReplaceDocumentErrorCode`, `ReplaceDocumentRefusalReason` | The `replaceDocument` editor command: a DOCX file, an optional `expected` document handle, and the typed outcome on `ExecResult.replaceDocument` | [Replace the document as one undoable edit](/docs/2.x/guides/loading-and-saving#replace-the-document-as-one-undoable-edit) |
+| `RefreshRefusal`, `RefreshRefusalFields`, `RefreshRefusalReason` | A refused update: stable `code`, English `message`, and for `mode: 'edit'` a `reason` that narrows `code` | [Refusal causes](/docs/2.x/guides/document-refresh#refusal-causes) |
 
-The refresh controller belongs to the browser host, outside the Office.js document model. `RefreshHighlightOptions` controls change selection and decoration. `NavigateToChangeOptions` controls scroll alignment, motion, padding, and focus. For more information, see [Document refresh API](/docs/2.x/guides/document-refresh).
-
-`RefreshChangeInput.description` supplies a processor review summary. `RefreshChange.diagnostic` reports unavailable locations with stable codes and the requested anchor. Refresh resets selection and undo history. It refuses collaborative sessions.
+The refresh controller belongs to the browser host. A reload resets selection and undo history, and refuses collaborative sessions. An update with `mode: 'edit'` keeps both and works in collaborative sessions.
 
 ## Document properties
 
-`Document.properties` returns a `DocumentProperties` proxy. It exposes the string properties `author`, `title`, `subject`, `keywords`, `comments`, and `category`. Load each property before reading it. Assignments commit at `context.sync()`. Missing properties read as empty strings. An empty assignment clears that value.
-
-Writes preserve unrelated document properties. Values must contain XML-safe text with at most 4096 UTF-16 code units. `TrackMineOnly` refuses these writes with `NotSupported`. Individual dates and custom properties are unsupported. `lastAuthor` reads `cp:lastModifiedBy` and has no setter.
+The following example sets core document properties:
 
 ```ts
 await runtime.run(async (context) => {
   const properties = context.document.properties;
   properties.author = 'Public Records Office';
   properties.title = 'Release packet';
-  properties.subject = 'Public information';
   properties.keywords = '';
-  properties.comments = '';
   await context.sync();
 });
 ```
 
-Collaborative writes require an existing core-properties part. If the input omits this part, set properties before joining collaboration. Concurrent creation of this package part cannot merge safely.
+- `DocumentProperties` exposes string `author`, `title`, `subject`, `keywords`, `comments`, and `category`. Load each before reading.
+- Missing properties read as empty strings. An empty assignment clears the value. Unrelated properties stay.
+- Values must be XML-safe text of at most 4,096 UTF-16 code units.
+- `TrackMineOnly` refuses these writes with `NotSupported`. Dates and custom properties are unsupported.
+- `lastAuthor` reads `cp:lastModifiedBy` and has no setter.
+- Collaborative writes need an existing core-properties part, because concurrent creation of that part cannot merge. If the input lacks it, set properties before joining collaboration.
 
 ### Remove document properties
 
-Call `document.removeDocumentInformation('DocumentProperties')` to remove standard core, extended, and custom property parts. Keep this command as the only write in its sync. This also removes last-author information and property relationships. It preserves document content, comments, revisions, and media.
-
-Ambiguous parts, incorrect roots or types, and unknown dependencies refuse with `NotSupported`. The method refuses all other `RemoveDocInfoType` modes, tracked writes, and collaboration. This subset does not anonymize text, cached field results, images, or review authors.
+The following example removes the property parts:
 
 ```ts
 await runtime.run(async (context) => {
@@ -155,8 +161,18 @@ await runtime.run(async (context) => {
 });
 ```
 
-## Next steps
+- This removes the standard core, extended, and custom property parts, last-author data, and their relationships. Content, comments, revisions, and media stay.
+- Keep it as the only write in its sync.
+- Only the `DocumentProperties` mode is supported. Other `RemoveDocInfoType` modes, tracked writes, and collaboration refuse.
+- Ambiguous parts, incorrect roots or types, and unknown dependencies refuse with `NotSupported`.
+- It does not anonymize text, cached field results, images, or review authors.
 
-See [Office.js compatibility](/docs/2.x/editor-api/office-js-api) before migrating Office.js code. The generated reference remains the declaration authority; runtime notes and tests establish supported behavior.
+## Limits
 
-For integration patterns, see [Connect an agent to a document](/docs/2.x/build-a-docx-agent).
+A declaration or enum value does not prove runtime support for every document or argument. The generated reference owns signatures; runtime notes and tests establish behavior. Read the linked guide before you choose an operation.
+
+## See also
+
+- [Office.js compatibility](/docs/2.x/editor-api/office-js-api)
+- [Connect an agent to a document](/docs/2.x/build-a-docx-agent)
+- [Editing API reference](/docs/2.x/api/editor-api)

@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Consecutive local numbering journals could project later insertions against a stale directory-member order, leaving another participant with numbering definitions after counter instances.",
+  "after": "A journal that edits a directory-member root refreshes its shared view before projecting insertion indexes and refuses an unavailable or incomplete view.",
+  "reason": "The writer uses the existing journal operations and shared format with corrected insertion positions. Released participants read those operations unchanged; no materialization rule or stored schema changes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-list-kind-switch.test.ts",
+    "packages/pro/src/collaboration/__tests__/prepare-member-root-journal.test.ts"
+  ],
+  "changeset": "collaboration-numbering-root-order",
+  "migration": null
+}

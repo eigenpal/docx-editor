@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -94,5 +94,5 @@ export async function createCollaborationState(
     // A configuration mistake, not shared state: thrown as other invalid options are.
     throw new TypeError(`maxBytes must be a whole number of bytes from 1 to ${MAX_BASELINE_BYTES}`);
   }
-  return seedGeneration(document, documentId, maxBytes);
+  return seedGeneration(document, documentId, { maxBytes });
 }

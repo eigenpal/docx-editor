@@ -111,6 +111,23 @@ export interface CollaborationModuleOptions extends ProLicenseOptions {
 }
 
 // @public
+export type CollaborationResourceLimit = 'nodes' | 'parts' | 'relationships' | 'blobBytes';
+
+// @public
+export interface CollaborationResourcePressure {
+    readonly fraction: number;
+    readonly limit: CollaborationResourceLimit;
+    readonly max: number;
+    readonly threshold: number;
+    readonly used: number;
+}
+
+// @public
+export interface CollaborationResourcePressureOptions {
+    readonly thresholds?: readonly number[];
+}
+
+// @public
 export interface CollaborationResourceUsage {
     readonly blobBytes: number;
     readonly formattingMarkers: number;
@@ -219,6 +236,7 @@ export interface DocumentCollaborationSession extends EditorCollaborationSession
     resourceUsage(): CollaborationResourceUsage;
     setIdentity(update: CollaborationIdentityUpdate): void;
     setTransportStatus(status: 'ready' | 'disconnected' | 'error', reason?: CollaborationFailureCode, detail?: string): void;
+    subscribeResourcePressure(listener: (pressure: CollaborationResourcePressure) => void, options?: CollaborationResourcePressureOptions): () => void;
     readonly undoGroupOpen: boolean;
 }
 

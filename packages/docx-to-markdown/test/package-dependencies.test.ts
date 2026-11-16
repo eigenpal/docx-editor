@@ -93,12 +93,20 @@ describe('engine dependency integrity', () => {
       (page: string, index: number) => index > exportSectionIndex && page.startsWith('---')
     );
     expect(nextSectionIndex).toBeGreaterThan(exportSectionIndex);
-    // Keep format guides nested below the shared export and print guides.
+    // Keep each format's child guides after its overview in the root sidebar.
     expect(navigation.pages.slice(exportSectionIndex + 1, nextSectionIndex)).toEqual([
       'guides/export',
       'guides/print',
       'export/markdown',
+      'export/markdown/fonts',
+      'export/markdown/images',
+      'export/markdown/api',
+      'export/markdown/integrations',
       'export/pdf',
+      'export/pdf/fonts',
+      'export/pdf/api',
+      'export/pdf/integrations',
+      'export/pdf/markdown-contract',
     ]);
     expect(navigation.pages).not.toContain('export');
     expect(exportNavigation.title).toBe('Export formats');
@@ -109,6 +117,11 @@ describe('engine dependency integrity', () => {
       const group = JSON.parse(readFileSync(join(directory, 'meta.json'), 'utf8'));
       expect(group.pagesIndex).toBe('index');
       expect(group.pages).not.toContain(group.pagesIndex);
+      const overviewIndex = navigation.pages.indexOf(`export/${format}`);
+      expect(overviewIndex).toBeGreaterThan(exportSectionIndex);
+      expect(
+        navigation.pages.slice(overviewIndex + 1, overviewIndex + 1 + group.pages.length)
+      ).toEqual(group.pages.map((page: string) => `export/${format}/${page}`));
       for (const page of [group.pagesIndex, ...group.pages]) {
         expect(existsSync(join(directory, `${page}.mdx`))).toBe(true);
       }

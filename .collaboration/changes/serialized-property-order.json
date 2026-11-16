@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A w:pPr or w:rPr kept its children in the order the file or a concurrent merge gave them, and a save wrote that order even when it broke the schema sequence.",
+  "after": "A file opens with the modelled children of those containers in schema order, and a save writes them in schema order. A tree that a concurrent merge left out of order keeps the merged order in the tree and the shared state; only the saved bytes are reordered. The canonical fingerprint still reads the tree order.",
+  "reason": "No shared field or operation changes. Replicas exchange shared state, not saved bytes, and a room seeds its shared state from one tree, so every participant sees the order that tree holds. Released and new participants keep the same meaning for shared data.",
+  "tests": [
+    "packages/core/src/store/__tests__/serialized-property-order.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-list-heading-numbering.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-block-reorder.test.ts"
+  ],
+  "changeset": "serialized-property-order",
+  "migration": null
+}

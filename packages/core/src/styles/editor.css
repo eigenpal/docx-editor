@@ -164,9 +164,7 @@
      does not select the text, so this band is the only thing on the page saying which
      change the card is about. */
   --doc-revision-insertion-active-bg: rgba(46, 125, 50, 0.24);
-  --doc-revision-insertion-active-border: var(--doc-revision-insertion);
   --doc-revision-deletion-active-bg: rgba(198, 40, 40, 0.24);
-  --doc-revision-deletion-active-border: var(--doc-revision-deletion);
   /* A format or structural change decorates no characters, so it takes a neutral fill
      rather than one claiming text was added or removed. */
   --doc-revision-other-active-bg: color-mix(
@@ -266,6 +264,15 @@
   /* Text highlights (Find results, host marks). Opaque, because the layer multiplies. */
   --doc-text-highlight-color: #fff176;
   --doc-text-highlight-active-color: #ff9632;
+  /* Proofing marks the browser paints through the CSS Custom Highlight API. */
+  --doc-proofing-spelling-color: #e53935;
+  --doc-proofing-grammar-color: #1e88e5;
+  /* Proofing annotation marks, one per critique color scheme. Opaque, as above. */
+  --doc-critique-red-color: #ffcdd2;
+  --doc-critique-green-color: #c8e6c9;
+  --doc-critique-blue-color: #bbdefb;
+  --doc-critique-lavender-color: #e1d5f5;
+  --doc-critique-berry-color: #f8bbd9;
   --doc-motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
   /* ----------------------------------------------------------------------
@@ -403,6 +410,11 @@
   /* The text highlight layer screens in dark mode, so these lift the dark sheet. */
   --doc-text-highlight-color: rgba(255, 214, 0, 0.32);
   --doc-text-highlight-active-color: rgba(255, 150, 50, 0.62);
+  --doc-critique-red-color: rgba(244, 67, 54, 0.34);
+  --doc-critique-green-color: rgba(76, 175, 80, 0.34);
+  --doc-critique-blue-color: rgba(33, 150, 243, 0.34);
+  --doc-critique-lavender-color: rgba(149, 117, 205, 0.34);
+  --doc-critique-berry-color: rgba(216, 27, 96, 0.34);
   /* NOT the author ramp. It used to be lifted here, back when only the review cards read
      it — but the ramp now colours the painted DOCUMENT too, and the dark page is rendered
      through `invert(1) hue-rotate(180deg)` (see `.docx-page-content` below). A colour
@@ -477,7 +489,15 @@
    where it clamps to zero, landing on a dark olive that reads as a redaction bar. Word keeps
    a highlight its authored colour, so the run is inverted back — the same treatment media
    already gets, for the same reason. */
-.docx-editor.dark .docx-page-content [data-highlight] {
+.docx-editor.dark
+  :is(
+    .docx-page-content,
+    .docx-page > .docx-hf > :not([data-no-color-invert]),
+    .docx-page > .docx-hf-behind-layer,
+    .docx-page > .docx-notes,
+    .docx-page > .docx-drawing-layer
+  )
+  [data-highlight] {
   filter: invert(1) hue-rotate(180deg);
 }
 
@@ -485,21 +505,45 @@
    the filter receives, not what the user sees. A normal blue came out orange; this is the
    pre-image that inverts back to the accent blue. The comment further up claiming the
    selection overlay sits outside the inverted page is true of the legacy lane only. */
-.docx-editor.dark .docx-page-content ::selection {
+.docx-editor.dark
+  :is(
+    .docx-page-content,
+    .docx-page > .docx-hf > :not([data-no-color-invert]),
+    .docx-page > .docx-hf-behind-layer,
+    .docx-page > .docx-notes,
+    .docx-page > .docx-drawing-layer
+  )
+  ::selection {
   background-color: rgba(177, 98, 0, 0.32);
 }
-.docx-editor.dark .docx-page-content {
+/* Every layer of document ink is inverted, not only the body. The header and footer
+   bands, the notes area, and the floating drawing layers are siblings of
+   `.docx-page-content` on the sheet, so a rule naming the body alone painted header text
+   black on the dark page. A band's CHILDREN are inverted rather than the band, so its hover
+   tint and edit border stay chrome colours, and the engine caret is left out. */
+.docx-editor.dark
+  :is(
+    .docx-page-content,
+    .docx-page > .docx-hf > :not([data-no-color-invert]),
+    .docx-page > .docx-hf-behind-layer,
+    .docx-page > .docx-notes,
+    .docx-page > .docx-drawing-layer
+  ) {
   /* contrast(0.92) softens the pure black/white extremes a plain invert
     * produces, landing on Word's gentler off-white text / dark-grey fills
     * rather than #fff on #000. The page FRAME sits outside this filter, so
     * its own shadow needs no counter-treatment. */
   filter: invert(1) hue-rotate(180deg) contrast(0.92);
 }
-.docx-editor.dark .docx-page-content img,
-.docx-editor.dark .docx-page-content svg,
-.docx-editor.dark .docx-page-content canvas,
-.docx-editor.dark .docx-page-content video,
-.docx-editor.dark .docx-page-content [data-no-color-invert] {
+.docx-editor.dark
+  :is(
+    .docx-page-content,
+    .docx-page > .docx-hf > :not([data-no-color-invert]),
+    .docx-page > .docx-hf-behind-layer,
+    .docx-page > .docx-notes,
+    .docx-page > .docx-drawing-layer
+  )
+  :is(img, svg, canvas, video, [data-no-color-invert]) {
   filter: invert(1) hue-rotate(180deg);
 }
 
@@ -2330,6 +2374,25 @@ a.docx-hyperlink:focus-visible {
   animation: none;
 }
 
+.docx-drop-rejection {
+  position: absolute;
+  z-index: var(--doc-z-overlay);
+  max-width: min(260px, calc(100vw - 24px));
+  padding: 6px 10px;
+  border: 1px solid var(--doc-danger);
+  border-radius: 6px;
+  background: var(--doc-popover-bg);
+  color: var(--doc-popover-fg);
+  box-shadow: var(--doc-card-shadow);
+  font-family: var(--doc-font-ui, system-ui, sans-serif);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* Right-to-left runs paint their caret on the trailing edge; the engine
  * supplies the rect, this only marks direction for the host. */
 .docx-editor-one-surface__caret--rtl {
@@ -2360,6 +2423,13 @@ a.docx-hyperlink:focus-visible {
   outline: none;
 }
 
+/* The layer takes the keyboard for the selected drawing, and the frame shows the selection. A
+   host focus ring on the layer would draw around the whole scroll area, so it never shows. */
+.docx-editor .docx-image-selection-overlay:is(:focus, :focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
 .docx-image-selection-overlay__frame {
   position: absolute;
   box-sizing: border-box;
@@ -2369,6 +2439,13 @@ a.docx-hyperlink:focus-visible {
 
 .docx-image-selection-overlay__frame.docx-editor-one-surface__overlay-control {
   pointer-events: auto;
+}
+
+/* An unseen band around a turned frame takes the drag: a turned line's frame is one border thick. */
+.docx-image-selection-overlay__frame[data-turned='true']::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
 }
 
 .docx-image-selection-overlay__handle {
@@ -2577,15 +2654,32 @@ a.docx-hyperlink:focus-visible {
   padding-inline-start: 18px;
 }
 
-/* The scroller keeps a left-to-right base whatever the host page declares. Under an
- * inherited `rtl`, `scrollLeft` runs from 0 to negative values and overflow grows
- * leftward, which breaks every horizontal offset the editor derives from it: zoom
- * anchoring, rulers, the review rail and popups. Document text direction comes only
- * from the document; the pages pin their own base as well. */
+/* The scroller keeps a left-to-right base whatever the host page declares: an inherited
+ * `rtl` must not move the scroll bar of a left-to-right interface. Document text direction
+ * comes only from the document; the pages pin their own base as well. */
 .docx-editor__scroll-container {
   display: flex;
   flex-direction: column;
   direction: ltr;
+}
+
+/* A right-to-left interface puts the vertical scroll bar on the left, which only the
+ * scroller's own `direction` does. Its content keeps a left-to-right base. `scrollLeft` then
+ * runs from 0 at the right end to negative values. Absolute positions inside the scroller use
+ * that same origin; `inlineScrollOffset` converts it for offsets taken inside the mount. */
+.docx-editor__scroll-container[data-chrome-dir='rtl'] {
+  direction: rtl;
+}
+
+/* A child with its own `dir` keeps it, as it did under the left-to-right scroller. */
+.docx-editor__scroll-container[data-chrome-dir='rtl'] > :not([dir]) {
+  direction: ltr;
+}
+
+/* A right-to-left scroller reaches overflow on its left only. The mount grows to the pages'
+ * width, so a page wider than the viewport overflows leftward instead of out of reach. */
+.docx-editor__scroll-container[data-chrome-dir='rtl'] > .docx-content-mount {
+  min-width: max-content;
 }
 
 /* Controls that mount inside the scroller are chrome, not pages: they take back the
@@ -3214,12 +3308,23 @@ a.docx-hyperlink:focus-visible {
    inversion here, printing in dark mode left near-white text on paper the printer drops to
    white — blank pages. `print-color-adjust` stops the sheet colour being dropped too. */
 @media print {
-  .docx-editor.dark .docx-page-content,
-  .docx-editor.dark .docx-page-content img,
-  .docx-editor.dark .docx-page-content svg,
-  .docx-editor.dark .docx-page-content canvas,
-  .docx-editor.dark .docx-page-content video,
-  .docx-editor.dark .docx-page-content [data-no-color-invert] {
+  .docx-editor.dark
+    :is(
+      .docx-page-content,
+      .docx-page > .docx-hf > :not([data-no-color-invert]),
+      .docx-page > .docx-hf-behind-layer,
+      .docx-page > .docx-notes,
+      .docx-page > .docx-drawing-layer
+    ),
+  .docx-editor.dark
+    :is(
+      .docx-page-content,
+      .docx-page > .docx-hf > :not([data-no-color-invert]),
+      .docx-page > .docx-hf-behind-layer,
+      .docx-page > .docx-notes,
+      .docx-page > .docx-drawing-layer
+    )
+    :is(img, svg, canvas, video, [data-no-color-invert]) {
     filter: none !important;
   }
   :is(.docx-paginated-surface, .docx-preview-surface) .docx-page {
@@ -3905,6 +4010,12 @@ a.docx-hyperlink:focus-visible {
  * and the panel's scrollport would clip them when the group collapses into More. */
 .docx-toolbar__more-panel:has(.docx-toolbar__font-family-content),
 .docx-toolbar__more-panel:has(.docx-toolbar__style-content) {
+  overflow-y: visible;
+}
+
+/* And for Wrap text: a picture or chart row sits low in the panel, and the scrollport cut its
+ * menu to the first choice, so only "In Line with Text" could be reached. */
+.docx-toolbar__more-panel:has(.docx-toolbar__image-wrap-menu) {
   overflow-y: visible;
 }
 
@@ -5984,7 +6095,8 @@ a.docx-hyperlink:focus-visible {
  * at the right, so its shift and the review gutter's start value pad the right edge, and the
  * review column pads the left. The custom properties keep their logical meaning (start, end),
  * so every reader of them stays direction-free; only these rules know the physical edges.
- * The scroller keeps a left-to-right base, so `padding-inline-start` is still the left. */
+ * These rules set both physical edges, so the scroller's own `rtl` direction, which maps
+ * `padding-inline-start` to the right, changes nothing here. */
 .docx-editor .docx-editor__scroll-container[data-chrome-dir='rtl'],
 .docx-editor.docx-editor__scroll-container[data-chrome-dir='rtl'] {
   padding-left: 0;
@@ -6834,38 +6946,49 @@ a.docx-hyperlink:focus-visible {
   flex: 1 0 100%;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
+  gap: 8px;
 }
 
-.docx-review__text-button {
-  padding: 6px 10px;
-  border: 0;
-  border-radius: 999px;
+.docx-review__text-button,
+.docx-review__submit {
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   background: transparent;
-  color: var(--doc-primary, #1a73e8);
+  color: var(--doc-text);
   font: inherit;
   font-weight: 500;
   cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
-.docx-review__text-button:hover {
-  background: var(--doc-surface-hover, rgb(0 0 0 / 6%));
+@media (hover: hover) {
+  .docx-review__text-button:hover:not(:disabled) {
+    background: var(--doc-bg-hover);
+  }
 }
 
 .docx-review__submit {
-  padding: 6px 14px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--doc-primary, #1a73e8);
-  color: #fff;
-  font: inherit;
-  font-weight: 500;
-  cursor: pointer;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+}
+
+@media (hover: hover) {
+  .docx-review__submit:hover:not(:disabled) {
+    background: var(--doc-primary-hover);
+  }
+}
+
+.docx-review__submit:active:not(:disabled) {
+  background: var(--doc-primary-hover);
 }
 
 .docx-review__submit:disabled {
-  background: var(--doc-surface-hover, rgb(0 0 0 / 8%));
-  color: var(--doc-text-muted, #8a8f98);
+  background: var(--doc-bg-subtle);
+  color: var(--doc-text-muted);
   cursor: default;
 }
 
@@ -6953,14 +7076,17 @@ p.docx-review__refused {
   background: transparent;
 }
 
+/* The open change deepens its fill and draws NO line of its own. The run already carries one:
+   an underline under inserted text, a strike through deleted text, in the ink the painter
+   chose, which is the author's under the author scheme. A 1px rule at the band's foot sat
+   just under that underline, in the kind colour, so an open insertion read as a double
+   underline in two colours, and the reader could not tell which line meant what. */
 .docx-revision-band--insert.docx-revision-band--active {
   background: var(--doc-revision-insertion-active-bg);
-  box-shadow: inset 0 -1px 0 var(--doc-revision-insertion-active-border);
 }
 
 .docx-revision-band--delete.docx-revision-band--active {
   background: var(--doc-revision-deletion-active-bg);
-  box-shadow: inset 0 -1px 0 var(--doc-revision-deletion-active-border);
 }
 
 /* A formatting or structural change decorates no characters of its own, so it gets the
@@ -7011,6 +7137,20 @@ p.docx-review__refused {
     --doc-text-highlight-set-active-color,
     var(--doc-text-highlight-active-color)
   );
+}
+
+/* Highlight sets with a `kind`: the covered text joins a shared `spelling-error` or
+ * `grammar-error` highlight where the browser has the CSS Custom Highlight API. The browser
+ * exposes that type to assistive technology; this rule draws the usual wavy underline. The
+ * overlay marks above still paint the set's own color and classes in every browser. */
+.docx-editor ::highlight(docx-spelling-error) {
+  text-decoration: underline wavy var(--doc-proofing-spelling-color);
+  text-decoration-skip-ink: none;
+}
+
+.docx-editor ::highlight(docx-grammar-error) {
+  text-decoration: underline wavy var(--doc-proofing-grammar-color);
+  text-decoration-skip-ink: none;
 }
 
 /* The editing-mode control: a pill that shows the current mode and a menu that changes it.
@@ -7673,7 +7813,8 @@ p.docx-review__refused {
    * wrapper's mouseleave, and close the submenu the user was moving toward. Visual
    * separation comes from the card's own border and shadow. */
   margin-inline-start: 0;
-  min-width: 240px;
+  min-width: min(240px, calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
 }
 
 /* The third-level reviewer list can be long. Keep the hierarchy anchored to its source,
@@ -7789,17 +7930,27 @@ p.docx-review__refused {
  * card holding `.docx-menubar__item` rows — the same object the menu bar drops under a
  * trigger — so a row means the same thing in both places and the disabled treatment has
  * one definition. What this block adds is only what differs: the panel is placed in client
- * space by the component rather than relative to a trigger, and it sits above the dialogs
- * and dropdowns (z-index 40) because it is opened ON them as often as on the page. */
+ * space by the component rather than relative to a trigger, and it opens in the top layer
+ * (`popover="manual"`), so a host header or a docked pane with its own stacking context
+ * cannot paint over it. The `z-index` is the fallback where the popover API is missing. */
 .docx-editor .docx-contextmenu,
 .docx-contextmenu {
   z-index: var(--doc-z-context);
-  min-width: 240px;
-  /* A menu longer than the window scrolls rather than overflowing it. The flip in
-   * `DocxEditorContextMenu` clamps the panel to the top inset when it cannot fit; without
-   * a max height and a scroller, the rows below the fold would be unreachable. */
+  /* Never wider than the window less both insets: a narrow window keeps the right edge in
+   * view. The component sets the exact cap from the window it measured. */
+  min-width: min(240px, calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
+  /* A menu longer than the window scrolls rather than overflowing it. The component sets
+   * the exact cap from the window it measured; this is the value before it does. */
   max-height: calc(100vh - 16px);
   overflow-y: auto;
+}
+
+/* The popover defaults center the panel in the viewport (`inset: 0; margin: auto`). The
+ * component places it at the pointer through `left` and `top` instead. */
+.docx-contextmenu[popover] {
+  inset: auto;
+  margin: 0;
 }
 
 /* The panel is `position: fixed`, so it renders OUTSIDE the `.docx-editor` cascade's usual
@@ -7817,6 +7968,15 @@ p.docx-review__refused {
 .docx-contextmenu .docx-menubar__item {
   gap: 12px;
   width: 100%;
+}
+
+/* `ContextMenu.Start` ends with a separator, and host rows can bring their own, so a
+ * separator with nothing above it, nothing below it, or another separator before it is
+ * hidden rather than drawn as a stray or doubled rule. */
+.docx-contextmenu > .docx-toolbar__menu-separator:first-child,
+.docx-contextmenu > .docx-toolbar__menu-separator:last-child,
+.docx-contextmenu > .docx-toolbar__menu-separator + .docx-toolbar__menu-separator {
+  display: none;
 }
 
 .docx-contextmenu__table-align {
@@ -7948,6 +8108,13 @@ p.docx-review__refused {
 .docx-toolbar__alt-text {
   position: relative;
   display: inline-flex;
+}
+
+/* In the "⋯" panel these parts draw a full-width row, so their wrapper spans the row too. */
+.docx-toolbar__more-section > .docx-toolbar__image-wrap,
+.docx-toolbar__more-section > .docx-toolbar__alt-text {
+  display: flex;
+  width: 100%;
 }
 
 .docx-editor .docx-toolbar__alt-text-panel,
@@ -8772,6 +8939,12 @@ p.docx-review__refused {
 .docx-editor.docx-print-dialog .docx-dialog__footer {
   flex-wrap: wrap;
 }
+.docx-editor .docx-print-dialog .docx-dialog__fieldset,
+.docx-editor.docx-print-dialog .docx-dialog__fieldset {
+  /* The settings body is one column: the column basis would become a fixed height. */
+  flex: none;
+  gap: 8px;
+}
 .docx-editor .docx-print-dialog__open {
   margin-inline-end: auto;
   text-decoration: none;
@@ -8845,6 +9018,228 @@ p.docx-review__refused {
   --doc-revision-color-lightPurple: #eadcf4;
   --doc-revision-color-lightGreen: #e2efd9;
   --doc-revision-color-gray: #d9d9d9;
+}
+
+/* Compare documents dialog. */
+.docx-editor .docx-compare-documents-dialog,
+.docx-editor.docx-compare-documents-dialog,
+.docx-compare-documents-dialog {
+  box-sizing: border-box;
+  width: min(28rem, calc(100vw - 2rem));
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+  max-height: calc(100dvh - 3rem);
+  overflow-y: auto;
+  padding: var(--doc-dialog-padding, 1.25rem);
+  border: 1px solid var(--doc-border);
+  border-radius: var(--doc-dialog-radius, 0.75rem);
+  color: var(--doc-text);
+  background: var(--doc-bg);
+  font: var(--doc-dialog-font-size, 13px) / 1.5
+    var(--doc-dialog-font-family, var(--doc-font-ui, system-ui, sans-serif));
+}
+.docx-compare-documents-dialog h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.docx-compare-documents-dialog p {
+  margin: 0 0 0.75rem;
+  color: var(--doc-text-muted);
+}
+.docx-compare-documents-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.docx-compare-documents-body label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.docx-compare-documents-body label.docx-compare-documents-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+.docx-compare-documents-body input[type='text'] {
+  padding: 0.3rem 0.375rem;
+  border: 1px solid var(--doc-border);
+  border-radius: 0.25rem;
+  color: var(--doc-text);
+  background: var(--doc-bg);
+}
+.docx-compare-documents-dialog .docx-compare-documents-error,
+.docx-compare-documents-dialog .docx-compare-documents-notice {
+  min-height: 1.25rem;
+  margin: 0.5rem 0 0;
+}
+.docx-compare-documents-dialog .docx-compare-documents-error {
+  color: var(--doc-error);
+}
+/* Said before a compare: the open document's tracked changes count as accepted. */
+.docx-compare-documents-dialog .docx-compare-documents-tracked {
+  margin: 0 0 0.75rem;
+  padding: 0.375rem 0.5rem;
+  border-left: 3px solid var(--doc-warning);
+  border-radius: 0.25rem;
+  color: var(--doc-warning-text);
+  background: var(--doc-warning-bg);
+}
+/* While a compare runs: a thin bar that fills with each reported step, a band that sweeps
+ * across it until the first step, and a spinner in the Compare button. */
+.docx-compare-documents-dialog .docx-compare-documents-progress {
+  appearance: none;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 0.375rem;
+  margin: 0.75rem 0 0;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  color: var(--doc-primary);
+  background-color: var(--doc-border);
+  animation: docx-compare-documents-appear 0.2s ease-out;
+}
+.docx-compare-documents-dialog .docx-compare-documents-progress::-webkit-progress-bar {
+  background: transparent;
+}
+.docx-compare-documents-dialog .docx-compare-documents-progress::-webkit-progress-value {
+  border-radius: inherit;
+  background: var(--doc-primary);
+  transition: inline-size 0.3s ease-out;
+}
+.docx-compare-documents-dialog .docx-compare-documents-progress::-moz-progress-bar {
+  border-radius: inherit;
+  background: var(--doc-primary);
+}
+.docx-compare-documents-dialog .docx-compare-documents-progress:indeterminate {
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    var(--doc-primary) 30%,
+    var(--doc-primary) 70%,
+    transparent
+  );
+  background-repeat: no-repeat;
+  background-size: 40% 100%;
+  animation:
+    docx-compare-documents-appear 0.2s ease-out,
+    docx-compare-documents-sweep 1.4s ease-in-out infinite;
+}
+.docx-compare-documents-dialog .docx-compare-documents-progress:indeterminate::-moz-progress-bar {
+  background: transparent;
+}
+.docx-compare-documents-dialog .docx-compare-documents-phase {
+  display: block;
+  margin: 0.25rem 0 0;
+  color: var(--doc-text-muted);
+  font-variant-numeric: tabular-nums;
+  animation: docx-compare-documents-appear 0.2s ease-out;
+}
+/* The Compare button stays legible while it works, with a spinner before its label. */
+.docx-compare-documents-dialog[data-docx-busy] .docx-compare-documents-actions button:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  opacity: 0.85;
+}
+.docx-compare-documents-dialog[data-docx-busy]
+  .docx-compare-documents-actions
+  button:last-child::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 0.875em;
+  height: 0.875em;
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: docx-compare-documents-spin 0.7s linear infinite;
+}
+@keyframes docx-compare-documents-sweep {
+  /* With a band of 40% width, -67% and 167% start and end it fully outside the bar. */
+  from {
+    background-position: -67% 0;
+  }
+  to {
+    background-position: 167% 0;
+  }
+}
+@keyframes docx-compare-documents-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes docx-compare-documents-appear {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docx-compare-documents-dialog .docx-compare-documents-progress,
+  .docx-compare-documents-dialog .docx-compare-documents-progress:indeterminate,
+  .docx-compare-documents-dialog .docx-compare-documents-phase,
+  .docx-compare-documents-dialog[data-docx-busy]
+    .docx-compare-documents-actions
+    button:last-child::before {
+    animation: none;
+  }
+  /* A still band in the middle still says that work is under way. */
+  .docx-compare-documents-dialog .docx-compare-documents-progress:indeterminate {
+    background-position: 50% 0;
+  }
+  .docx-compare-documents-dialog .docx-compare-documents-progress::-webkit-progress-value {
+    transition: none;
+  }
+}
+/* One message line: the notice takes the error's place, never a second line. An empty
+ * message region stays in the accessibility tree, so a later message is announced; it is
+ * only hidden from view (the `.docx-editor-sr-only` pattern). */
+.docx-compare-documents-dialog
+  .docx-compare-documents-error:empty:has(+ .docx-compare-documents-notice:not(:empty)),
+.docx-compare-documents-dialog .docx-compare-documents-notice:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.docx-compare-documents-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+}
+.docx-compare-documents-actions button {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--doc-border);
+  border-radius: 0.375rem;
+  background: var(--doc-bg);
+  color: var(--doc-text);
+  cursor: pointer;
+}
+.docx-compare-documents-actions button:last-child {
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  border-color: var(--doc-primary);
+}
+.docx-compare-documents-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.docx-compare-documents-dialog button:focus-visible,
+.docx-compare-documents-dialog input:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
 }
 
 /* Track changes options dialog. */
@@ -9092,4 +9487,689 @@ p.docx-review__refused {
   > .docx-unsupported-slot
   :is(a[href], button, input, select, textarea, [tabindex], [role='button']) {
   pointer-events: auto;
+}
+
+/* The Insert chart dropdown of the toolbar. Its menu takes the wrap menu's look. */
+.docx-toolbar__chart-insert {
+  position: relative;
+  display: inline-flex;
+}
+.docx-editor .docx-toolbar__chart-insert-menu,
+.docx-toolbar__chart-insert-menu {
+  min-width: 180px;
+}
+/* Each chart type with its icon, as in the Insert > Chart submenu. */
+.docx-editor .docx-toolbar__chart-insert-menu .docx-toolbar__image-wrap-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.docx-editor .docx-toolbar__chart-insert-menu .docx-toolbar__image-wrap-item svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--doc-text-muted);
+}
+
+/* The side panel beside the pages, and the Chart pane in it. A host can also show the pane in
+   its own panel: the pane sets its own fields, sections and spacing. */
+.docx-editor .docx-side-panel {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 340px;
+  min-width: 0;
+  max-height: 100%;
+  overflow: hidden;
+  font-family: var(--doc-font-ui, system-ui, sans-serif);
+  font-size: 14px;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border-inline-start: 1px solid var(--doc-border);
+}
+.docx-editor .docx-side-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 12px 8px 20px;
+}
+.docx-editor .docx-side-panel__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.docx-editor .docx-side-panel__close,
+.docx-editor .docx-chart-pane__icon-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--doc-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .docx-editor .docx-side-panel__close:where(:hover),
+  .docx-editor .docx-chart-pane__icon-button:where(:hover:not(:disabled)) {
+    color: var(--doc-text);
+    background: var(--doc-bg-hover);
+  }
+}
+.docx-editor .docx-chart-pane__icon-button:where(:disabled) {
+  color: var(--doc-text-subtle);
+  cursor: default;
+}
+.docx-editor .docx-side-panel__close:where(:focus-visible),
+.docx-editor .docx-chart-pane__icon-button:where(:focus-visible),
+.docx-editor .docx-chart-pane__swatch:where(:focus-visible),
+.docx-editor .docx-chart-pane__color-button:where(:focus-visible),
+.docx-editor .docx-chart-pane__summary:where(:focus-visible),
+.docx-editor .docx-chart-pane__grid-auto:where(:focus-visible) {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+.docx-editor .docx-side-panel__close svg,
+.docx-editor .docx-chart-pane__icon-button svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+.docx-editor .docx-side-panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 20px 20px;
+}
+
+/* The pane: sections with small capital titles, labels over full-width fields. */
+:is(.docx-editor .docx-chart-pane, .docx-editor.docx-chart-pane) {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  font-family: var(--doc-font-ui, system-ui, sans-serif);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--doc-text);
+}
+.docx-editor .docx-chart-pane__alert {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--doc-danger);
+  background: var(--doc-error-bg, transparent);
+  border-radius: 8px;
+}
+.docx-editor .docx-chart-pane__alert:where(:empty) {
+  display: none;
+}
+.docx-editor .docx-chart-pane__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.docx-editor .docx-chart-pane__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--doc-text-muted);
+}
+.docx-editor .docx-chart-pane__field {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.docx-editor .docx-chart-pane__label {
+  font-size: 13px;
+  color: var(--doc-text-muted);
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__input, .docx-dialog__select) {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  min-width: 0;
+  padding: 0 10px;
+  font: inherit;
+  color: var(--doc-text);
+  background-color: var(--doc-bg-input, var(--doc-surface));
+  border: 1px solid var(--doc-border-input);
+  border-radius: 8px;
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__input, .docx-dialog__select):focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__input, .docx-dialog__select):disabled {
+  color: var(--doc-text-subtle);
+  background-color: var(--doc-bg-subtle);
+  cursor: not-allowed;
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__input)[aria-invalid='true'] {
+  border-color: var(--doc-danger);
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__checkbox-row) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__checkbox-row) input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--doc-primary);
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__checkbox-row):has(input:disabled) {
+  color: var(--doc-text-subtle);
+  cursor: not-allowed;
+}
+.docx-editor .docx-chart-pane__sub {
+  padding-inline-start: 26px;
+}
+.docx-editor .docx-chart-pane__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.docx-editor .docx-chart-pane__note,
+.docx-editor .docx-chart-pane__empty-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--doc-text-muted);
+}
+.docx-editor .docx-chart-pane__status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.docx-editor .docx-chart-pane__status:where(:empty) {
+  display: none;
+}
+.docx-editor .docx-chart-pane__error {
+  font-size: 12px;
+  color: var(--doc-danger);
+}
+.docx-editor .docx-chart-pane__empty {
+  padding: 32px 4px;
+  text-align: center;
+}
+.docx-editor .docx-chart-pane__empty-title {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+.docx-editor .docx-chart-pane__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.docx-editor .docx-chart-pane__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.docx-editor .docx-chart-pane__row > .docx-chart-pane__icon-button {
+  height: 36px;
+}
+.docx-editor .docx-chart-pane__card {
+  border: 1px solid var(--doc-border);
+  border-radius: 10px;
+}
+.docx-editor .docx-chart-pane__summary {
+  padding: 10px 12px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.docx-editor .docx-chart-pane__card[open] > .docx-chart-pane__summary {
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+.docx-editor .docx-chart-pane__card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__button) {
+  align-self: flex-start;
+  height: 32px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .docx-editor .docx-chart-pane :where(.docx-dialog__button):hover:not(:disabled) {
+    background: var(--doc-bg-hover);
+  }
+}
+.docx-editor .docx-chart-pane :where(.docx-dialog__button):disabled {
+  color: var(--doc-text-subtle);
+  cursor: not-allowed;
+}
+
+/* A color: the list of choices, then a swatch that opens the color grid. */
+:is(.docx-editor .docx-chart-pane__color, .docx-editor.docx-chart-pane__color) {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.docx-editor .docx-chart-pane__color-button {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--doc-border-input);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.docx-editor .docx-chart-pane__color-button:where(:disabled) {
+  opacity: 0.5;
+  cursor: default;
+}
+.docx-editor .docx-chart-pane__grid {
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: var(--doc-z-overlay);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--doc-popover-bg, var(--doc-surface));
+  border: 1px solid var(--doc-border);
+  border-radius: 10px;
+  box-shadow: var(--doc-card-shadow-strong, 0 8px 24px var(--doc-shadow));
+  /* It grows from the swatch that opens it. */
+  transform-origin: top right;
+  transition:
+    opacity 150ms ease-out,
+    transform 150ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.docx-editor[dir='rtl'] .docx-chart-pane__grid,
+[dir='rtl'] .docx-editor .docx-chart-pane__grid {
+  transform-origin: top left;
+}
+.docx-editor .docx-chart-pane__grid[data-align='start'] {
+  inset-inline-start: 0;
+  inset-inline-end: auto;
+  transform-origin: top left;
+}
+[dir='rtl'] .docx-editor .docx-chart-pane__grid[data-align='start'] {
+  transform-origin: top right;
+}
+@starting-style {
+  .docx-editor .docx-chart-pane__grid {
+    opacity: 0;
+    transform: scale(0.97) translateY(-4px);
+  }
+}
+.docx-editor .docx-chart-pane__grid-title {
+  font-size: 12px;
+  color: var(--doc-text-muted);
+}
+.docx-editor .docx-chart-pane__grid-auto {
+  height: 30px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--doc-text);
+  text-align: start;
+  background: transparent;
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.docx-editor .docx-chart-pane__swatches {
+  display: grid;
+  grid-template-columns: repeat(10, 20px);
+  gap: 3px;
+}
+.docx-editor .docx-chart-pane__swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .docx-editor .docx-chart-pane__grid-auto:where(:hover) {
+    background: var(--doc-bg-hover);
+  }
+  .docx-editor .docx-chart-pane__swatch:where(:hover) {
+    transform: scale(1.12);
+  }
+}
+/* Press feedback: the control answers the press at once. */
+.docx-editor .docx-side-panel__close:where(:active),
+.docx-editor .docx-chart-pane__icon-button:where(:active:not(:disabled)),
+.docx-editor .docx-chart-pane__color-button:where(:active:not(:disabled)),
+.docx-editor .docx-chart-pane :where(.docx-dialog__button):active:not(:disabled) {
+  transform: scale(0.97);
+}
+.docx-editor .docx-chart-pane__swatch:where(:active) {
+  transform: scale(0.94);
+}
+.docx-editor .docx-chart-pane__swatch:where([aria-pressed='true']),
+.docx-editor .docx-chart-pane__grid-auto:where([aria-pressed='true']) {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
+}
+/* Reduced motion keeps the fades and drops the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .docx-editor .docx-chart-pane__swatch,
+  .docx-editor .docx-chart-pane__grid,
+  .docx-editor .docx-side-panel__close,
+  .docx-editor .docx-chart-pane__icon-button,
+  .docx-editor .docx-chart-pane__color-button,
+  .docx-editor .docx-chart-pane :where(.docx-dialog__button) {
+    transform: none !important;
+  }
+}
+
+/* The Format shape pane: it reuses the Chart pane's sections, fields, and color grid. A color
+   field is a label over one button that shows the current color and its name. */
+:is(.docx-editor .docx-shape-pane__color, .docx-editor.docx-shape-pane__color) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.docx-editor .docx-shape-pane__color-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--doc-text);
+  text-align: start;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.docx-editor .docx-shape-pane__color-button:where(:disabled) {
+  color: var(--doc-text-subtle);
+  cursor: default;
+}
+@media (hover: hover) and (pointer: fine) {
+  .docx-editor .docx-shape-pane__color-button:where(:hover:not(:disabled)) {
+    background: var(--doc-bg-hover);
+  }
+}
+.docx-editor .docx-shape-pane__color-button:where(:active:not(:disabled)) {
+  transform: scale(0.98);
+}
+.docx-editor .docx-shape-pane__color-button:where(:focus-visible) {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+.docx-editor .docx-shape-pane__chip {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+}
+/* No color: an empty chip crossed by one line. */
+.docx-editor .docx-shape-pane__chip:where([data-none='true']) {
+  background: linear-gradient(
+    to top right,
+    transparent calc(50% - 1px),
+    var(--doc-text-muted) calc(50% - 1px),
+    var(--doc-text-muted) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
+}
+.docx-editor .docx-shape-pane__summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .docx-editor .docx-shape-pane__color-button {
+    transform: none !important;
+  }
+}
+
+/* Comment edits stay in the card and preserve multiline text. */
+.docx-review__edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+.docx-review__edit-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72px;
+  max-height: 260px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  background: var(--doc-surface);
+  color: inherit;
+  font: inherit;
+  line-height: 1.5;
+  unicode-bidi: plaintext;
+}
+.docx-review__edit-input:focus-visible {
+  border-color: var(--doc-primary);
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+.docx-review__text-button:disabled {
+  cursor: default;
+  color: var(--doc-text-muted);
+}
+.docx-review__text-button:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
+}
+
+.docx-review__card[data-kind='comment'] .docx-review__text,
+.docx-review__reply .docx-review__text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.docx-review__draft-recovery {
+  position: fixed;
+  inset-inline-end: 16px;
+  bottom: 16px;
+  z-index: var(--doc-z-overlay);
+  width: min(340px, calc(100vw - 32px));
+  max-height: min(400px, 70vh);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  background: var(--doc-surface);
+  color: var(--doc-text);
+  box-shadow: 0 4px 16px var(--doc-shadow);
+  pointer-events: auto;
+}
+
+.docx-review__comment-menu {
+  position: relative;
+}
+.docx-review__comment-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--doc-text-muted);
+  cursor: pointer;
+}
+.docx-review__comment-menu-trigger:hover {
+  background: var(--doc-bg-hover);
+  color: var(--doc-text);
+}
+.docx-review__comment-menu-trigger:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
+}
+.docx-review__comment-menu-panel {
+  position: absolute;
+  inset-inline-end: 0;
+  top: calc(100% + 4px);
+  z-index: var(--doc-z-overlay);
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  background: var(--doc-surface);
+  box-shadow: 0 4px 16px var(--doc-shadow);
+}
+.docx-review__comment-menu-item {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 4px;
+  padding: 8px 10px;
+  text-align: start;
+  font: inherit;
+  font-size: 13px;
+  background: transparent;
+  color: var(--doc-text);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.docx-review__comment-menu-item:hover,
+.docx-review__comment-menu-item:focus-visible {
+  background: var(--doc-bg-hover);
+  outline: 2px solid var(--doc-primary);
+  outline-offset: -2px;
+}
+.docx-review__comment-menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.docx-review__comment-menu-item[data-destructive] {
+  color: var(--doc-danger);
+}
+
+/* Edit controls must remain visible when the surrounding card limits summary text. */
+.docx-review__card .docx-review__summary:has(.docx-review__edit),
+.docx-review__card[data-active][data-kind='comment'] .docx-review__summary {
+  display: block;
+  max-height: none;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+
+/* The shared colour picker and the shape and chart parts. A part is placement-free: a field
+   (label over control) in a pane, popover, or drawer, or a compact control in a toolbar. */
+:is(.docx-editor .docx-color-picker, .docx-editor.docx-color-picker) {
+  position: relative;
+  font-family: var(--doc-font-ui, system-ui, sans-serif);
+  color: var(--doc-text);
+}
+/* A grid in a host container carries the scope class itself. */
+.docx-editor.docx-color-picker__content {
+  font-family: var(--doc-font-ui, system-ui, sans-serif);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--doc-text);
+}
+/* It stacks No color, the titles, and the swatch rows, as the popover grid does. */
+.docx-editor.docx-color-picker__content--inline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.docx-editor .docx-color-picker__hex {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.docx-editor .docx-color-picker__hex .docx-dialog__input {
+  width: 100%;
+}
+/* A part placed outside the editor carries the scope class itself, so each rule on the part's own
+   element also matches that element. */
+:is(.docx-editor .docx-object-control, .docx-editor.docx-object-control) {
+  font-family: var(--doc-font-ui, system-ui, sans-serif);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--doc-text);
+}
+:is(.docx-editor .docx-object-control--field, .docx-editor.docx-object-control--field) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+:is(.docx-editor .docx-object-control--compact, .docx-editor.docx-object-control--compact) {
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.docx-editor .docx-object-control--compact .docx-chart-pane__field {
+  gap: 0;
+}
+.docx-editor .docx-object-control--compact .docx-dialog__select,
+.docx-editor .docx-object-control--compact .docx-dialog__input {
+  height: 28px;
+  min-width: 0;
+  max-width: 160px;
+  font-size: 13px;
+}
+.docx-editor .docx-object-control--compact .docx-color-picker__trigger {
+  width: auto;
+  min-height: 28px;
+  padding: 0 6px;
+  gap: 4px;
+}
+.docx-editor .docx-object-control--compact .docx-color-picker__summary {
+  display: none;
+}
+.docx-editor .docx-object-control__icon svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
 }

@@ -185,9 +185,7 @@ export function DocxEditorOpenFailureAction({
  * @public
  */
 export type DocxEditorOpenFailureMessage =
-  | string
-  | DocxEditorChildren
-  | ((failure: DocumentOpenFailure) => string | DocxEditorChildren);
+  string | DocxEditorChildren | ((failure: DocumentOpenFailure) => string | DocxEditorChildren);
 
 /** Props for `DocxEditor.OpenFailure`. @public */
 export interface DocxEditorOpenFailureProps {

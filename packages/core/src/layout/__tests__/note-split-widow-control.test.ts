@@ -2,7 +2,7 @@
 //
 // `note-splitting.ts` used to cut at any line boundary, so a three-line endnote with room
 // for two kept two lines and stranded the third on the next page. The reference moves the
-// whole note instead: `demo.docx` page 8 scored 1.268 % against it, and page 9 compounded
+// whole note instead: a corpus document scored 1.268 % against it, and its next page compounded
 // the error by drawing a continuation separator where the reference opens a fresh area.
 import { describe, expect, test } from 'bun:test';
 import { splitNoteFragments } from '../note-splitting.ts';

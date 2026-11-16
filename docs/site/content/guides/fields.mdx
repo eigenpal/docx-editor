@@ -1,60 +1,37 @@
 ---
 title: 'Fields and cross-references'
-description: 'Understand which Word fields update in the editor, which results refresh during save, and which field codes stay inert.'
+description: 'Configure field results, legacy form fields, and table of contents removal in the DOCX editor.'
 category: 'Guides'
 seoTitle: 'DOCX fields and cross-references'
 ---
 
-Word fields contain an instruction and an optional saved result. The editor preserves both forms when it opens and saves a DOCX file.
+A DOCX field stores an instruction and an optional saved result. The editor preserves both through open and save. It evaluates a defined set of display-only fields.
 
-The editor evaluates a defined set of display-only fields. It never runs macros, DDE instructions, or external include instructions.
-
-## Show field codes
-
-Press **Option+F9** on macOS or **Alt+F9** on Windows to show field instructions. Some Mac keyboards require **Fn+Option+F9**. Press the shortcut again to return to field results.
-
-The shortcut changes the display without changing document content or adding an undo step. It covers cross-references, form fields, and generated tables of contents, including fields in tables, notes, headers, and footers. Field instructions remain inert. Toggle back to field results before editing a form value.
+<Callout type="warn">
+  Field instructions stay inert. The editor never runs macros, DDE instructions, OLE content, or
+  external include instructions such as `INCLUDETEXT` and `INCLUDEPICTURE`. External image links
+  never fetch content.
+</Callout>
 
 ## Supported fields
 
 | Field | Behavior |
 | --- | --- |
-| `PAGE`, `NUMPAGES`, and `SECTIONPAGES` | Update in headers and footers. Empty-cache body fields also update. |
-| `STYLEREF` | Updates supported character-style references in headers. |
-| `REF` | Resolves bookmark text or numbering in the document body and notes. |
+| `PAGE`, `NUMPAGES`, `SECTIONPAGES` | Update in headers and footers. Body fields with an empty saved result also update. |
+| `STYLEREF` | Updates supported character-style and paragraph-style references in headers. A paragraph without a paragraph style matches the default paragraph style. A paragraph style outranks a character style with the same name. Supports `\l` and `\* MERGEFORMAT`. |
+| `REF` | Resolves bookmark text or numbering in the body and notes. |
 | `NOTEREF` | Resolves a bookmarked footnote or endnote reference number. |
-| `AUTONUM`, `AUTONUMLGL`, and `AUTONUMOUT` | Generate separate document-order number sequences. |
-| `LISTNUM` | Numbers from the document's list definitions in the document body. |
+| `AUTONUM`, `AUTONUMLGL`, `AUTONUMOUT` | Generate separate number sequences in document order. |
+| `LISTNUM` | Numbers from the document's list definitions in the body. Without a name, uses the list of its paragraph or of the last numbered paragraph before it, else the built-in list. Without `\l`, a field in a numbered paragraph uses the next level down. In the built-in list, the level is the paragraph's outline level, else the level below the last heading. |
 | `SYMBOL` | Renders the requested character, font, and size. |
 | Selected metadata fields | Render sanitized values from document properties. |
+| `DATE`, `TIME`, `FILENAME`, `SEQ`, `EQ`, `CITATION`, `BIBLIOGRAPHY` | Show the saved result. No new value is calculated. |
 
-The editor also renders saved results for other complex and simple fields. Unsupported instructions keep their saved result.
-
-Leading direction marks remain in saved results. Their formatting does not replace the first visible result run’s formatting. A result containing only direction marks keeps its first run’s formatting.
-
-### Wrapped field results
-
-Saved field results can wrap across lines. Long unbroken results, including hyperlink URLs, can break at the line edge. Authored line breaks inside supported results start another line. Page breaks follow the surrounding story rules. Page breaks inside table cells do not add pages.
-
-Wrapping does not split an atomic field into separately editable characters, unless you [edit saved field results](#edit-saved-field-results). The caret before the field stays on its first line. The caret after it goes to its last line. Deleting the field removes the complete field.
-
-Breaking long unbroken results excludes page-number placeholders, `PAGEREF` results, form controls, note marks, and positional tabs. These items retain their existing layout limits. Text form fields have separate editing rules described later in this guide.
-
-### Cached pictures
-
-Complex fields display embedded pictures from their saved results, including nested complex results. Text and pictures keep their saved order. The field retains its existing model range. Hidden pictures stay hidden, and pictures inside field instructions do not display. External image links and include instructions never fetch new content.
-
-### Nested fields
-
-Saved results inside another field's instruction do not add text, line breaks, or links. Find and text reads skip them too. This applies to complex fields and simple fields (`w:fldSimple`). The outer field keeps its normal display behavior. Fields inside a saved result still display.
+Other fields show their saved result. `REF`, `PAGEREF`, and `NOTEREF` with `\h` link to their bookmark. For switch support, wrapping, and header pagination, see [DOCX fidelity](/docs/2.x/docx-fidelity#fields-links-and-table-of-contents).
 
 ## Edit saved field results
 
-By default, these saved field results behave as one unit. Typing beside a field places text before or after it. Legacy text form fields have [separate editing rules](#legacy-text-form-fields).
-
-Caret positions and selections retain both field boundaries, including paragraphs that contain only fields. Computed field caches remain read-only.
-
-To let readers edit the saved result of a field, set `fieldResults` to `'editable'` when you create the editor:
+Set `fieldResults` to `'editable'` when you create the editor to let users edit saved results:
 
 ```ts
 import { createDocxEditor } from '@docx-editor.dev/core';
@@ -66,7 +43,7 @@ const editor = createDocxEditor({
 });
 ```
 
-The same setting works on the packaged editor and `DocxEditor.Root` in React and Vue. Set it when the editor starts. Later prop changes have no effect and produce a development warning.
+The packaged editor and `DocxEditor.Root` accept the same prop:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -97,171 +74,116 @@ defineProps<{ bytes: Uint8Array }>();
 </Framework>
 </FrameworkTabs>
 
-This mode applies to fields that show their saved result: `DATE`, `TIME`, `CREATEDATE`, `SAVEDATE`, `PRINTDATE`, `MERGEFIELD`, `HYPERLINK`, `QUOTE`, `FILENAME`, `FILLIN`, and `SEQ`. Fields that the editor computes, such as `PAGE`, `NUMPAGES`, `REF`, `PAGEREF`, and `DOCPROPERTY`, stay one unit. Editable mode supports saved results without nested fields. A simple field (`w:fldSimple`) inside a complex field result is not supported. Do not enable editable mode for documents with this structure. Other nested results keep their existing addressing behavior.
+The option applies only at creation. Later prop changes have no effect and log a development warning. By default, each field behaves as one unit.
 
-In this mode:
+| Field kind | In editable mode |
+| --- | --- |
+| `DATE`, `TIME`, `CREATEDATE`, `SAVEDATE`, `PRINTDATE`, `MERGEFIELD`, `HYPERLINK`, `QUOTE`, `FILENAME`, `FILLIN`, `SEQ` | The saved result is editable text. |
+| Computed fields, such as `PAGE`, `NUMPAGES`, `REF`, `PAGEREF`, `DOCPROPERTY` | Stay one atomic unit. |
+| A simple field (`w:fldSimple`) inside a complex field result | Not supported. Do not enable editable mode for these documents. |
 
-- Typing, deletion, formatting, and composed input inside a result change the result text. Undo and redo treat a typing burst as one step.
-- Text typed at the start or end of a result goes before or after the field.
-- Backspace after a field, or Delete before it, selects the whole field. Press the key again to remove the field.
-- A selection with one end inside a result and the other end outside grows to cover the whole field.
-- Deleting only the result text keeps the field with an empty result. The empty field is one unit: text typed beside it goes before or after it, and Backspace or Delete next to it removes it.
-- In suggesting mode, edits inside a result are tracked inside the result.
-- A `w:fldSimple` field becomes the equivalent complex field when you edit its result.
+- Manual edits save as result text. The editor does not calculate the field or set `w:dirty`.
+- An application that updates fields later can replace manual edits, except `HYPERLINK` display text and locked fields.
+- Suggesting mode tracks edits inside the result.
+- Text typed at either edge of a result stays outside the field.
+- Deleting only the result text leaves an empty field that acts as one unit. Typing goes beside it, and an adjacent Backspace or Delete removes it.
+- Editing the result of a `w:fldSimple` field converts it to an equivalent complex field.
+- If you set `fieldResults: 'editable'` and register a collaboration module, `createDocxEditor` throws a `TypeError`.
+- For a custom core integration, pass the same `FieldResultsMode` to layout, `paragraphTextOf()`, and each edit. The modes produce different text offsets.
 
-The editor saves manual changes as field result text. It does not calculate these fields or mark them for update (`w:dirty`).
+## Insert and update fields from code
 
-An application that updates fields later can replace manual changes. `HYPERLINK` display text and locked fields are exceptions.
+The automation API inserts fields with the Office.js-shaped `Range.insertField()`:
 
-Collaboration sessions keep every field one unit. If you set `fieldResults: 'editable'` and register a collaboration module, `createDocxEditor` throws a `TypeError`.
+```ts
+await runtime.run(async (context) => {
+  const hit = context.document.body.search('see section ').getFirst();
+  hit.insertField('After', 'Ref', '_Ref123456 \\h');
+  await context.sync();
+});
+```
 
-### Keep low-level offsets consistent
+Insertion writes the instruction as text and never evaluates it. For field types, tracked insertion, and `updateResult()`, see [Fields and pagination](/docs/2.x/editor-api/fields).
 
-For a custom core integration, use the same `FieldResultsMode` for layout, `paragraphTextOf()`, and edits. Pass `fieldResults` to layout options and each transaction or edit option. The modes produce different text offsets. Recompute ranges and selection offsets if you change modes.
+## Refresh results on save
 
-## Table of contents boundaries
+`save()` updates calibrated, writable `REF` and `NOTEREF` results in the body, footnotes, and endnotes. The refresh can add one undo step for all updated parts.
 
-Generated TOC rows are read-only. Ordinary text before or after the field remains editable, even when it shares a paragraph with a field marker. Formatting a selection that includes a TOC, such as Select All followed by a highlight, formats the ordinary text and leaves the generated rows unchanged. The TOC highlight follows the generated content. TOC links use the TOC paragraph formatting and explicit run formatting, as in Word. The Hyperlink character style does not add blue underlines inside generated TOC results.
-
-## Character-style header fields
-
-Header `STYLEREF` fields use text with the named character style applied directly. A derived style does not match its base style. Use the style's display name, not its internal identifier.
-
-The default result uses the first occurrence on the page. The `\l` switch uses the last occurrence. A page without a match uses the last preceding occurrence. If none precedes it, the result uses the first following occurrence.
-
-Visible body text supplies these results. Hidden text and field instructions do not supply results. Revision display settings control which inserted and deleted text supplies results.
-
-Header height adjusts for each page's result. Body text and footnotes use the space left by that header. During pagination, each page retains the largest space that its live header needs. The displayed header keeps its current result and height. Saved results do not establish this reserved space.
-
-A continuous section keeps the preceding section's header on their shared page. Its own header does not enlarge that page's body inset. Exact negative top margins do not reserve header height.
-
-The `\* MERGEFORMAT` switch is supported. Other switches, missing matches, nested result fields, and results longer than 4,096 characters keep their saved results. Body and footer `STYLEREF` fields keep their saved results. Paragraph styles and style aliases are not supported.
-
-The layout checks bounded document scans and pagination passes. Exceeded scan or pagination bounds stop layout with an error. Save preserves instructions and saved results.
-
-## `REF` fields
-
-`REF` resolves bookmark text and numbered paragraph references. The editor supports the `\r`, `\w`, `\n`, `\t`, `\h`, and `\* MERGEFORMAT` switches.
-
-The `\t` switch removes text that is not a number delimiter from a referenced number. It needs `\r`, `\w`, or `\n`. With `\h`, clicking the result follows its bookmark within the document.
-
-The editor checks a non-empty saved result once. A matching result enables live updates after later edits. A mismatch keeps Word's saved result for that field.
-
-An empty saved result remains eligible for live updates.
-
-The editor also keeps the saved result for missing bookmarks, bullet targets, and unsupported switches. Bookmark text resolution stops at the target paragraph boundary.
-
-The `\r` switch uses the same full-context number as `\w`. It does not calculate Word's relative number.
-
-Live `REF` resolution covers the document body, footnotes, and endnotes. Header, footer, and text-box results keep their saved values.
-
-## `NOTEREF` fields
-
-`NOTEREF` resolves the display number of a bookmarked footnote or endnote reference. It honors section number formats and `eachSect` restarts.
-
-The editor keeps the saved result for `\p`, `\f`, `eachPage` restarts, and custom note marks. With `\h`, clicking the result follows the bookmarked note reference.
-
-## Cross-reference navigation
-
-`REF`, `PAGEREF`, and `NOTEREF` fields with `\h` link to their bookmarks. This works for complex fields and `w:fldSimple`, including instructions split across runs. Missing bookmarks do not navigate. References without `\h` remain ordinary field results.
-
-Navigation also works with saved results, including the `\p` above/below form. This does not change which field values the editor evaluates. An enclosing explicit hyperlink keeps its own target.
-
-## `AUTONUM` fields
-
-Each `AUTONUM` field kind has its own sequence. The editor numbers each sequence in document order.
-
-Word can restart these counters by heading context. The editor does not apply that restart behavior.
-
-The `\*` switch supports Arabic, alphabetic, Roman, ordinal, cardinal text, ordinal text, and hexadecimal formats. The `\e` switch removes the trailing period.
-
-An unsupported switch produces no generated value. Save does not add result runs because Word does not store results for these fields.
-
-## `LISTNUM` fields
-
-A `LISTNUM` field in the document body shows the next number of a list. The editor computes the number from the list definitions in the document. It never runs the instruction. The number replaces any saved result.
-
-- **List.** If the field names a list whose numbering definition has that name, the field counts on that list. The field and the numbered paragraphs of the list then continue each other. The names `NumberDefault`, `OutlineDefault`, and `LegalDefault`, and any other name, count on one built-in list. The name selects only the number formats.
-- **List without a name.** The field uses the list of its own numbered paragraph. Otherwise, it uses the list of the last numbered paragraph before it. If there is none, it uses the built-in list.
-- **Level.** The `\l` switch sets the level. Without it, a field in a numbered paragraph of the same list takes the next level down. A field after another field of its list in the same paragraph takes that field's level. A field after a numbered paragraph of its list takes that paragraph's level. On the built-in list, the field takes the outline level of its paragraph, or the level below the last heading.
-- **Value.** The `\s` switch sets the number of the field. Later fields continue from it.
-
-A field on a deeper level counts each unused level above it once. The next field on such a level shows the number after it.
-
-`LISTNUM` fields in headers, footers, notes, and text boxes keep their saved result. Save does not change the field.
-
-## Save-time refresh
-
-`save()` updates calibrated, writable `REF` and `NOTEREF` results in the body, footnotes, and endnotes. It commits all updated parts in one undo step.
-
-The editor skips locked fields, revision markup, nested or unsafe result structures, and protected content controls. A skipped field keeps its saved result.
-
-View mode and read-only sessions do not rewrite results. A collaborative session also exports the saved results without rewriting them.
-
-## Fields that stay inert
-
-`DATE`, `TIME`, `FILENAME`, `SEQ`, `EQ`, `CITATION`, and `BIBLIOGRAPHY` do not calculate a new value. The editor displays a saved result when one exists.
-
-The editor preserves field instructions through save. It does not execute macros, DDE instructions, OLE content, or external include instructions.
+- Locked fields, revision markup, nested or unsafe results, and protected content controls keep their saved result.
+- View mode, read-only sessions, and collaborative sessions do not rewrite results.
+- `REF` updates only when its saved result at open matches the computed value or is empty. Otherwise the saved result stays.
 
 ## Legacy text form fields
 
-Select a `FORMTEXT` field, then double-click it or choose **Edit field…** from the context menu. Set its default value, type (regular text, number, or date), maximum length, format, and **Fill-in enabled** setting. A maximum length of zero means unlimited. React and Vue share the same default behavior.
+Legacy `FORMTEXT` fields open the **Field Options** popup on double-click. Configure the popups and date parsing with these props:
 
-### Edit an unprotected field
+| Prop | Purpose |
+| --- | --- |
+| `popups.textFormField` | Replaces the **Field Options** popup (default value, type, maximum length, format, fill-in). |
+| `popups.invalidTextFormField` | Replaces the alert for an invalid number or date. |
+| `locale` | Parses date input. Defaults to `en-US`. |
+| `i18n` | Sets interface strings. Independent of `locale`. |
 
-Partial edits keep the field definition; replacing its whole result removes it. Typing at the end of the field inserts ordinary text after it, including at the end of a paragraph.
-
-Deleting a word from a field boundary removes the complete field. Backspace at the end, or Delete at the start, first selects the field. Press again to remove it. Shift+Backspace follows the same behavior as Backspace.
-
-### Fill a protected field
-
-Use **Review > Protect Document for Forms** to enable [forms protection](/docs/2.x/guides/document-protection). Filling a protected field keeps its definition. Tab and Shift+Tab move between enabled text fields.
-
-Protected fields validate and format input when you leave. Pasted text is limited to the remaining capacity. Invalid numbers or dates open an alert; acknowledging it clears the input, which can be restored with Undo.
-
-Save also validates pending protected field input and applies its format. Invalid input rejects the save with code `invalidArgs`. The input stays available for correction, and save does not open an alert.
-
-Use `popups.textFormField` for Field Options and `popups.invalidTextFormField` for the validation alert. See [Customize popups](/docs/2.x/guides/customize-dialogs).
-
-### Date input and UI language
-
-`locale` controls date input; `i18n` controls UI strings. For Polish dates with the default English UI, use:
+This example accepts Polish dates with the default English interface:
 
 ```tsx
 <DocxEditor document={bytes} locale="pl-PL" />
 ```
 
-With `pl-PL`, `01.02.2030` means February 1. The default `en-US` interprets `01/02/2030` as January 2. ISO input (`2030-02-01`) works in every locale. Each field's format controls its displayed result. Changing locale preserves existing dates and applies to subsequent edits.
+With `pl-PL`, `01.02.2030` means February 1. ISO input (`2030-02-01`) works in every locale. For popup composition, see [Customize popups](/docs/2.x/guides/customize-dialogs).
 
-Date input supports Gregorian numeric dates, regional digits, and full English month names. Localized month names and non-Gregorian dates are not supported.
+- Unprotected fields: partial edits keep the field definition. Replacing the whole result removes the field definition.
+- Protected fields: with [forms protection](/docs/2.x/guides/document-protection), filling keeps the definition and Tab moves between fields.
+- Protected input validates and formats when the user leaves the field.
+- Invalid pending protected input makes `save()` reject with code `invalidArgs`. The input stays for correction.
+- Date input supports Gregorian numeric dates and full English month names only.
+- A maximum length of `0` sets no length limit.
 
-Only plain text results and the dialog's listed types and formats support editing and protected filling. The editor preserves other field structures.
+`FORMCHECKBOX` and `FORMDROPDOWN` fields toggle or select in one undo step. Disabled fields and viewing mode refuse changes. Suggesting mode also refuses them, because the value has no tracked form. Entry and exit macros never run.
 
-## Legacy checkbox form fields
+## Remove a table of contents
 
-A legacy checkbox (`FORMCHECKBOX`) uses the field's saved size. Its pointer target is at least 24 CSS pixels without changing the document layout.
+Run the `removeToc` command to remove a generated table of contents (TOC):
 
-Click the checkbox or press Space to toggle it. Tab moves focus between checkboxes. A toggle changes only `w:checked`. Disabled fields, viewing mode, and comments-only protection refuse changes.
+```ts
+const tocId = editor.snapshot().tocContext?.id;
+editor.exec({ type: 'removeToc', ...(tocId ? { tocId } : {}) });
+```
 
-You can toggle these fields in edit mode or with forms protection enabled. Word requires forms protection.
+Without `tocId`, the command targets the last right-clicked TOC, the TOC at the selection, or the only TOC. The removal is one undo step and synchronizes in collaboration sessions. The context menu offers **Remove table of contents**.
 
-## Legacy dropdown form fields
+The command refuses and leaves the document unchanged in these cases:
 
-Legacy dropdown form fields (`FORMDROPDOWN`) use a native select. Click the value or focus it with Tab to choose a declared entry. Each choice updates the displayed text and saved selection in one undo step. Disabled fields and viewing or suggesting mode refuse changes. Forms protection permits filling.
+- Suggesting mode. A removal has no tracked form.
+- Locked or data-bound TOC content.
+- A section break before the end of the field, or a table or content control inside the field.
 
-For customizable list popups, use [content controls](/docs/2.x/guides/content-controls).
+A successful removal handles nearby content as follows:
 
-## Form field accessibility and macros
+| Content | After removal |
+| --- | --- |
+| Text before and after the field | Stays, joined into one paragraph. |
+| A section break at the end of the TOC | Stays, in the joined paragraph or in an empty paragraph. |
+| Comments and footnotes anchored wholly inside the TOC | Removed. |
+| Bookmark and comment ranges that partly overlap the TOC | Stay. Their removed ends move to the deletion point. |
+| A wrapper control locked only against deletion | Stays with its heading. The command removes only the field. |
 
-A field's `w:name` supplies its accessible name as bounded plain text. Fields with entry or exit macro references supply no name through this path. Macro values are not read. Entry and exit macros never run.
+Generated TOC rows are read-only. Delete and Backspace do not remove them.
 
-## Mixed-script cached field results
+## Limits
 
-Cached atomic field results can contain Latin and East Asian text. The layout selects the declared East Asian font for eligible display runs. All display slices keep the field's original model range. Navigation spans and explicit measurement reservations keep their existing behavior. Canonical field data and calculation support retain their existing behavior.
+- Computed fields stay atomic in every mode.
+- Field instructions stay inert. Macros, DDE, OLE, and external include instructions never execute.
+- Saved results inside another field's instruction do not display.
+- `LISTNUM` and `REF` in headers, footers, and text boxes keep their saved result.
+- `NOTEREF` with `\p` or `\f` keeps its saved result.
+- `STYLEREF` results longer than 4,096 characters keep their saved result.
+- Header `STYLEREF` fields keep their saved results when the body exceeds the scan limits.
+- Header `STYLEREF` pagination stops with an error if it does not settle within its pass limit.
+- Option+F9 (macOS) or Alt+F9 (Windows) shows field instructions without changing the document.
 
-## Next steps
+## See also
 
-- [Headers and footers](/docs/2.x/guides/headers-footers): Add page-number fields.
-- [Loading and saving](/docs/2.x/guides/loading-and-saving): Save updated field results.
-- [Word fidelity](/docs/2.x/word-fidelity): Review field support status.
+- [Fields and pagination](/docs/2.x/editor-api/fields)
+- [Headers and footers](/docs/2.x/guides/headers-footers)
+- [DOCX fidelity](/docs/2.x/docx-fidelity)

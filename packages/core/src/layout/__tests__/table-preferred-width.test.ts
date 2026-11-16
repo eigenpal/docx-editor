@@ -144,12 +144,13 @@ describe('w:tcW overrides the grid it seeds, resolving conflicts by maximum', ()
     expect(structure.columnWidthsPt).toEqual([144, 144]);
   });
 
-  test('a cell asking for less than the grid does not shrink it', () => {
+  test('a cell asking for less than the grid narrows its column', () => {
+    // Measured: a stated cell width replaces the grid's width for its column.
     const structure = structureOf(
       `<w:tbl><w:tblPr/>${grid(3000, 1680)}` +
         `<w:tr>${cell(tcW('1000'))}${cell(tcW('1000'))}</w:tr></w:tbl>`
     );
-    expect(structure.columnWidthsPt).toEqual([150, 84]);
+    expect(structure.columnWidthsPt).toEqual([50, 50]);
   });
 
   test('rows that disagree resolve to the maximum, not to whichever came first', () => {
@@ -239,10 +240,12 @@ describe('w:tblGrid seeds what it can and no more', () => {
 
   test('w:wBefore states the skipped band instead of leaving a phantom gutter', () => {
     // 17.18.87: "the width of the skipped grid columns is set using the wBefore property".
+    // Another row reaches the skipped column, so it keeps a width.
     const structure = structureOf(
       `<w:tbl><w:tblPr/><w:tr>` +
         `<w:trPr><w:gridBefore w:val="1"/><w:wBefore w:w="1440" w:type="dxa"/></w:trPr>` +
-        `${cell(tcW('1440'))}${cell(tcW('1440'))}</w:tr></w:tbl>`
+        `${cell(tcW('1440'))}${cell(tcW('1440'))}</w:tr>` +
+        `<w:tr>${cell()}${cell()}${cell()}</w:tr></w:tbl>`
     );
     expect(structure.columnWidthsPt).toEqual([72, 72, 72]);
   });
@@ -320,11 +323,11 @@ describe('w:tblW bounds the total', () => {
     expect(structure.columnWidthsPt[0]).toBeCloseTo(234, 6);
   });
 
-  test('a dxa table width does NOT stretch a narrow table', () => {
+  test('a dxa table width stretches a narrow table too', () => {
     const structure = structureOf(
       `<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/></w:tblPr>${narrow}</w:tbl>`
     );
-    expect(total(structure.columnWidthsPt)).toBeCloseTo(144, 6);
+    expect(total(structure.columnWidthsPt)).toBeCloseTo(468, 6);
   });
 
   test('a dxa table width past the text column stretches a narrower grid up to it', () => {
@@ -564,27 +567,27 @@ describe('structure memoization over immutable table nodes', () => {
   });
 });
 
-describe('a stated w:tblW makes the authored grid the settled layout', () => {
+describe('a stated cell width replaces the grid width under a stated table width too', () => {
   // `template-with-hf-rule.docx`, the four-column "HISTÓRICO DE REVISÕES" table. Both the
   // grid and the cell preferences total the stated 9026 twips, and they disagree column by
-  // column. Taking the maximum of the two and rescaling gave 87.38 / 85.90 / 173.04 / 104.99,
-  // which is narrow enough that `{revision_number}` broke mid-word. The reference renders the
-  // authored grid.
+  // column. Measured: the cell widths win (two 1684-twip cells over a 1000/2368 grid under a
+  // 3368-twip width lay out equal). In this table AutoFit then widens the first column to
+  // hold `{revision_number}` whole, as the reference renders it.
   const REVISION_HISTORY =
     '<w:tbl><w:tblPr><w:tblW w:w="9026" w:type="dxa"/></w:tblPr>' +
     `${grid(1831, 1770, 3321, 2104)}<w:tr>` +
     `${cell(tcW('1400'))}${cell(tcW('1800'))}${cell(tcW('3626'))}${cell(tcW('2200'))}` +
     '</w:tr></w:tbl>';
 
-  test('a dxa cell preference does not restate a column the grid already settled', () => {
+  test('a dxa cell preference restates the column the grid seeded', () => {
     const structure = structureOf(REVISION_HISTORY);
-    expect(structure.columnWidthsPt).toEqual([91.55, 88.5, 166.05, 105.2]);
+    expect(structure.columnWidthsPt).toEqual([70, 90, 181.3, 110]);
     expect(total(structure.columnWidthsPt)).toBeCloseTo(451.3, 6);
   });
 
-  test('the grid still scales to the stated total when the two disagree', () => {
+  test('the cell widths keep their proportions under the stated total', () => {
     // `footer-page-number.docx`: a seven-column grid totalling 12330 twips in a table that
-    // states 9746. The grid keeps its proportions and the cell preferences change nothing.
+    // states 9746, whose cells state 9746 between them.
     const structure = structureOf(
       '<w:tbl><w:tblPr><w:tblW w:w="9746" w:type="dxa"/></w:tblPr>' +
         `${grid(2332, 1411, 1521, 1411, 1742, 1671, 2242)}<w:tr>` +
@@ -594,17 +597,17 @@ describe('a stated w:tblW makes the authored grid the settled layout', () => {
       487.3
     );
     expect(total(structure.columnWidthsPt)).toBeCloseTo(487.3, 6);
-    expect(structure.columnWidthsPt[0]).toBeCloseTo(92.164, 3);
-    expect(structure.columnWidthsPt[6]).toBeCloseTo(88.607, 3);
+    expect(structure.columnWidthsPt[0]).toBeCloseTo(75, 3);
+    expect(structure.columnWidthsPt[6]).toBeCloseTo(146.3, 3);
   });
 
-  test('a column the grid leaves open is still settled by the cell preference', () => {
+  test('a column the grid leaves open is settled by the cell preference', () => {
     const structure = structureOf(
       '<w:tbl><w:tblPr><w:tblW w:w="4320" w:type="dxa"/></w:tblPr>' +
         '<w:tblGrid><w:gridCol w:w="1440"/><w:gridCol/></w:tblGrid>' +
         `<w:tr>${cell(tcW('2880'))}${cell(tcW('2880'))}</w:tr></w:tbl>`
     );
-    expect(structure.columnWidthsPt).toEqual([72, 144]);
+    expect(structure.columnWidthsPt).toEqual([108, 108]);
   });
 
   test('a pct cell preference keeps the older reconciliation, rounding and all', () => {

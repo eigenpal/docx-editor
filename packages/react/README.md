@@ -129,25 +129,20 @@ Read `isEnabled` to set the disabled state. Show `disabledReason` when the comma
 
 ## Which API for which job
 
-| Job | Use |
-| --- | --- |
-| Build a review UI in the browser | The React or Vue adapter hooks, plus the review hooks and `DocxEditorReview` from `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue`. |
-| Edit in a headless, server, or agent pipeline | The editing API in `@docx-editor.dev/editor-api`, which follows the Office.js object model. |
+Use the React or Vue adapter hooks, the review hooks, and `DocxEditorReview` from `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue` to build browser review controls. Use the editing API in `@docx-editor.dev/editor-api` for document automation. It follows the Office.js object model and runs in browser and server hosts.
 
-| Task | Browser host (React or Vue) | Headless, server, or agent |
+| Task | Browser controls (React or Vue) | Document automation |
 | --- | --- | --- |
 | [Comment on found text](https://www.docx-editor.dev/docs/2.x/recipes/comment-on-found-text) | `editor.findMatches`, `editor.selectMatch`, then `useReview().comment` | `body.search`, then `Range.insertComment` |
-| Reply to a thread | `useReview().reply(item, text)` | `Comment.reply(text)` |
+| [Reply to a thread](https://www.docx-editor.dev/docs/2.x/pro/comments) | `useReview().reply(item, text)` | `Comment.reply(text)` |
 | [Record a tracked replacement](https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement) | Suggesting mode, then `editor.exec({ type: 'replaceMatch', match, text })` | `document.changeTrackingMode = 'TrackMineOnly'`, then `Range.insertText(text, 'Replace')` |
-| [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite) | The same code through `DocxEditor.createBrowser` from `@docx-editor.dev/editor-api/browser` | `prepareRewrite` from `@docx-editor.dev/editor-api/agent` |
+| [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite) | `prepareRewrite` through `DocxEditor.createBrowser` | `prepareRewrite` from `@docx-editor.dev/editor-api/agent` |
 | [Accept or reject a change](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().accept(item)` or `useReview().reject(item)` | `Revision.accept()` or `Revision.reject()` |
-| [Open or reveal a change without scrolling](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().setActive(key, { reveal: false })` | Not applicable: no viewport |
+| [Open a change without scrolling](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().setActive(key, { reveal: false })` | Not applicable: no viewport |
 | [Highlight ranges](https://www.docx-editor.dev/docs/2.x/recipes/highlight-ranges) | `useHighlights(name, source, options)` | Not applicable |
-| [Custom review rail cards](https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards) | `DocxEditorReview` with `preset` set to `false`, `useReview().items`, `useStackedReviewPositions`, and `useReviewRailMetrics` | Not applicable |
+| [Custom review rail cards](https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards) | `DocxEditorReview` with `preset` set to `false`, `useReviewCardHeights`, `useStackedReviewPositions`, and `useReviewRailMetrics` | Not applicable |
 | Comment-on-selection button | `DocxEditorReview.AddComment` as a direct child of `DocxEditorReview`, or `useEditorCommand('review.addComment')` | Not applicable |
-| Page setup and paragraph dialogs from a custom toolbar | `DocxEditor.PageSetupDialog` or `DocxEditor.ParagraphDialog` with `open` and a close handler (`onClose` in React, `@close` in Vue); enable the button from `usePageSetup().isEnabled` or `useParagraphFormat().isEnabled` | `Section.pageSetup`, and `Paragraph` properties such as `alignment` |
-
-The review hooks need `reviewModule()` from `@docx-editor.dev/pro` in the editor's modules, and an editor `author` for comments and tracked changes. The editing API takes its author from the `author` option of `DocxEditor.createServer`, imported from `@docx-editor.dev/editor-api`, or of `DocxEditor.createBrowser`, imported from `@docx-editor.dev/editor-api/browser`.
+| [Page setup and paragraph dialogs](https://www.docx-editor.dev/docs/2.x/customization/dialogs) | `DocxEditor.PageSetupDialog` or `DocxEditor.ParagraphDialog` | `Section.pageSetup`, and `Paragraph` properties such as `alignment` |
 
 This package ships the task recipes in [`docs/index.md`](./docs/index.md). They are also on the site: [Task recipes](https://www.docx-editor.dev/docs/2.x/recipes).
 
@@ -166,8 +161,7 @@ Apache-2.0
 
 ### Custom unsupported content
 
-Register components under `DocxEditor` or `DocxEditor.Root`. Each declaration
-handles matching unsupported content, including opaque inline and block elements.
+Register components under `DocxEditor` or `DocxEditor.Root`. Each declaration handles matching unsupported content, including opaque inline and block elements.
 
 ```tsx
 <DocxEditor document={bytes}>
@@ -183,30 +177,10 @@ handles matching unsupported content, including opaque inline and block elements
 </DocxEditor>
 ```
 
-The first mounted matching declaration wins. Prop updates retain its priority.
-Removing and mounting a declaration again gives it a later priority. To disable a
-specific renderer temporarily, keep it mounted and change `match`, or use
-matchers that do not overlap.
-Omit `match` for a catch-all. Use source metadata in predicates; geometry is not
-available before pagination. Return `null` to keep the default placeholder.
-An empty result does not select the next declaration.
+The first mounted matching declaration wins. Prop updates retain its priority. Removing and mounting a declaration again gives it a later priority. To disable a specific renderer temporarily, keep it mounted and change `match`, or use matchers that do not overlap. Omit `match` for a catch-all. Use source metadata in predicates; geometry is not available before pagination. Return `null` to keep the default placeholder. An empty result does not select the next declaration.
 
-`UnsupportedElement` exposes `nodeId`, `ownerPartName`, `namespaceUri`,
-`localName`, `source`, `placement`, and `label`. `bounds` describes the reserved
-box after layout. Optional `drawing` and `equation` records provide specialized
-metadata. Treat source content as read-only and untrusted.
+`UnsupportedElement` exposes `nodeId`, `ownerPartName`, `namespaceUri`, `localName`, `source`, `placement`, and `label`. `bounds` describes the reserved box after layout. Optional `drawing` and `equation` records provide specialized metadata. Treat source content as read-only and untrusted.
 
-`layout` reserves width and height in document points for opaque elements.
-Source placement determines inline or block flow. Without `layout`, opaque
-inline elements reserve 120 × 24 points; blocks reserve 240 × 96 points.
-Dimensions must be positive, finite, and at most 100,000 points.
-Drawing and equation fallbacks retain their existing geometry.
-Unmatched opaque content retains its existing invisible behavior.
-Properties, metadata, and nested payloads inside unsupported elements are not
-independent content occurrences.
+`layout` reserves width and height in document points for opaque elements. Source placement determines inline or block flow. Without `layout`, opaque inline elements reserve 120 × 24 points; blocks reserve 240 × 96 points. Dimensions must be positive, finite, and at most 100,000 points. Drawing and equation fallbacks retain their existing geometry. Unmatched opaque content retains its existing invisible behavior. Properties, metadata, and nested payloads inside unsupported elements are not independent content occurrences.
 
-Components retain framework context and local state across same-page repaints.
-They can remount when pagination, virtualization, or document changes remove an
-occurrence. Keep durable application data outside the component.
-Prop updates and declaration removal preserve document edits and undo history.
-Custom rendering does not change saved DOCX content.
+Components retain framework context and local state across same-page repaints. They can remount when pagination, virtualization, or document changes remove an occurrence. Keep durable application data outside the component. Prop updates and declaration removal preserve document edits and undo history. Custom rendering does not change saved DOCX content.

@@ -1,5 +1,30 @@
 # @docx-editor.dev/docx-to-markdown
 
+## 2.37.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.37.0, @docx-editor.dev/fonts@2.37.0
+
+## 2.36.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.36.0, @docx-editor.dev/fonts@2.36.0
+
+## 2.35.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.35.0, @docx-editor.dev/fonts@2.35.0
+
+## 2.34.0
+
+### Patch Changes
+
+- 620b7ca: Markdown conversion and PDF export build against the latest layout records again.
+- Updated dependencies: @docx-editor.dev/core@2.34.0, @docx-editor.dev/fonts@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes

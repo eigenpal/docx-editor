@@ -52,10 +52,7 @@ const NOTES_LAYOUT_INPUT_MEMO_ROLES = Object.freeze({
 } satisfies Readonly<Record<keyof NotesLayoutInput, NotesMemoInputRole>>);
 
 type NoteStoryOptionRole =
-  | NotesMemoInputRole
-  | 'note-mark-context'
-  | 'per-call-bound'
-  | 'derived-owner';
+  NotesMemoInputRole | 'note-mark-context' | 'per-call-bound' | 'derived-owner';
 
 /**
  * Second half of the ratchet: every option the cached story walk can consume must name the

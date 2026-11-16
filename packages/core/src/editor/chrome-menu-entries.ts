@@ -26,9 +26,10 @@ export interface ChromeMenuItemEntry {
   /**
    * The row opens a size PICKER instead of firing on click — Word's insert-table grid.
    * The slot still owns the label, the icon and the enabled state; only the dispatch
-   * differs, and the picked size is what the host sends.
+   * differs, and the picked size is what the host sends. `chartType` opens the list of chart
+   * types, and the picked type is what the host inserts.
    */
-  readonly picker?: 'tableGrid';
+  readonly picker?: 'tableGrid' | 'chartType';
 }
 
 /**
@@ -55,9 +56,7 @@ export interface ChromeMenuSeparatorEntry {
 
 /** One row of a chrome menu. @public */
 export type ChromeMenuEntry =
-  | ChromeMenuItemEntry
-  | ChromeMenuSubmenuEntry
-  | ChromeMenuSeparatorEntry;
+  ChromeMenuItemEntry | ChromeMenuSubmenuEntry | ChromeMenuSeparatorEntry;
 
 /**
  * Every menu id, as a literal union. Stable public API; renaming one is a breaking change,

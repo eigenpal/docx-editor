@@ -12,6 +12,9 @@
  * `packages/pro`, so the recipes meet the same types the packages build against. Vue templates
  * are not checked here; `check:docs-vue-refs` covers their most common mistake.
  *
+ * A `ts` block whose first line is a `// name.ts` comment is a module the next blocks import
+ * as `./name`. It joins both programs, so a React and a Vue block can share it.
+ *
  * Recipes leave a few inputs to the reader, such as the document `bytes` and the search text.
  * `PLACEHOLDERS` declares them. Add a name there only for a value the reader supplies.
  *
@@ -77,6 +80,11 @@ export function codeBlocks(text) {
     i = end;
   }
   return blocks;
+}
+
+/** The module name a `ts` block's leading `// name.ts` comment gives it, or undefined. */
+export function tsModuleName(code) {
+  return /^\/\/ ([\w-]+)\.ts\s*(?:\n|$)/.exec(code)?.[1];
 }
 
 /**
@@ -188,9 +196,16 @@ function main() {
     }
     blocks.forEach((block, index) => {
       if (block.lang === 'ts' || block.lang === 'tsx') {
-        const name = `${slug}-${index + 1}.${block.lang}`;
-        programs.react.push({ name, code: block.code });
-        origins.set(`react/${name}`, { file, line: block.line });
+        const module = block.lang === 'ts' ? tsModuleName(block.code) : undefined;
+        const name = module ? `${module}.ts` : `${slug}-${index + 1}.${block.lang}`;
+        if (module && origins.has(`react/${name}`)) {
+          throw new Error(`${file}:${block.line}: a recipe already defines ${name}`);
+        }
+        // A named module is imported by later blocks of either framework.
+        for (const program of module ? ['react', 'vue'] : ['react']) {
+          programs[program].push({ name, code: block.code });
+          origins.set(`${program}/${name}`, { file, line: block.line });
+        }
       } else if (block.lang === 'vue') {
         const { name: component, script } = vueScript(block.code);
         // A named component is imported by the next block, so it keeps its own name.

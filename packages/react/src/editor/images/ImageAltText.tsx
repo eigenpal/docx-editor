@@ -11,6 +11,7 @@ import { useEditorValueCommand } from '../useEditorValueCommand';
 import { useToolbarLabel } from '../toolbar/toolbar-context';
 import { chromeControlForSlot, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { Slot } from '../toolbar/Slot';
+import { PanelRowContent, triggerClassName, usePanelRow } from '../toolbar/panel-row';
 import { hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
 
 /** Props for `DocxEditorToolbar.ImageAltText`. @public */
@@ -35,6 +36,7 @@ export function ImageAltText({ className, hidden, asChild, children }: ImageAltT
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelId = useId();
+  const panelRow = usePanelRow(asChild, children);
 
   useEffect(() => {
     if (open) setDraft(value ?? '');
@@ -79,7 +81,7 @@ export function ImageAltText({ className, hidden, asChild, children }: ImageAltT
   const shared = {
     type: 'button' as const,
     ref: triggerRef,
-    className: `docx-toolbar__button docx-toolbar__alt-text-trigger${className ? ` ${className}` : ''}`,
+    className: `${triggerClassName(panelRow)} docx-toolbar__alt-text-trigger${className ? ` ${className}` : ''}`,
     'data-slot': 'image.altText',
     disabled: !isEnabled,
     ...(!isEnabled ? { 'data-disabled': '' } : {}),
@@ -107,7 +109,10 @@ export function ImageAltText({ className, hidden, asChild, children }: ImageAltT
       {asChild ? (
         <Slot {...shared}>{children}</Slot>
       ) : (
-        <button {...shared}>{children ?? text}</button>
+        <button {...shared}>
+          {/* The bar shows the label as text; the panel row has no icon for it. */}
+          {panelRow ? <PanelRowContent icon={null} label={text} /> : (children ?? text)}
+        </button>
       )}
       {open && popups?.imageAltText !== false ? (
         popups?.imageAltText ? (

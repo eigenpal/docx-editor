@@ -18,6 +18,15 @@
 export type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 export type { FontShapingOptions } from '../layout/font-shaping-policy.ts';
 export type { TrackedChangeFilterMode, TrackedChangePredicate } from '../contracts/editor.ts';
+export type {
+  ShapeColorValue,
+  ShapeFillState,
+  ShapeFormatState,
+  ShapeOutlineState,
+  ShapeThemeColor,
+  ShapeThemeColorName,
+  ShapeOutlineDash,
+} from '../contracts/editor.ts';
 export {
   createLayoutShaping,
   disposeLayoutShaping,
@@ -49,7 +58,13 @@ export {
 export { deferFonts } from '../layout/defer-fonts.ts';
 export { blankDocumentBytes, type BlankDocumentOptions } from './blank-document.ts';
 export { keepScrollAtInlineEnd } from './scroll-inline-end.ts';
-export { placeSubmenu, submenuKeys } from './submenu-placement.ts';
+export {
+  placeContextMenu,
+  placeSubmenu,
+  revealMenuItem,
+  showInTopLayer,
+  submenuKeys,
+} from './submenu-placement.ts';
 export { hostDirectionOf, observeHostDirection } from './host-direction.ts';
 export { clipboardDropLandsText, clipboardPasteLandsContent } from './clipboard-file-lane.ts';
 export {
@@ -152,6 +167,8 @@ export {
   toolbarPopupLeft,
   TOOLBAR_COLLAPSE_ORDER,
   TOOLBAR_OVERFLOW_HYSTERESIS,
+  TOOLBAR_OVERFLOW_LEADING_GROUPS,
+  orderToolbarOverflowSections,
   TOOLBAR_PANEL_EDGE_MARGIN,
   TOOLBAR_PINNED_GROUPS,
   type ToolbarHostGroupPlacement,
@@ -250,6 +267,11 @@ export {
   type SurfaceFormatting,
 } from './paginated-surface.ts';
 export type { OpeningIndicatorHost } from './surface-opening-indicator.ts';
+export type { SurfacePointHit } from './surface-pointer.ts';
+// `PaginatedSurface` extends it, so its indent and list members need the name.
+export type { SurfaceIndentAndListOps } from './surface-indent-list-contract.ts';
+// `PaginatedSurface.removeTocRefusal` answers with it.
+export type { TocRemovalRefusal } from './surface-toc-commands.ts';
 export {
   createDocxEditor,
   type DocxEditorInstance,
@@ -284,6 +306,14 @@ export {
   type BrowserAutomationHost,
   type HistoryGroupRun,
 } from './automation-host.ts';
+// `BrowserAutomationHost.highlightRangeOf` takes a span, which these types spell out.
+export type {
+  AutomationEndpoint,
+  AutomationHandle,
+  AutomationHandleRef,
+  AutomationObjectKind,
+  AutomationSpan,
+} from '../automation/index.ts';
 // The fork a browser automation preview paints from. Internal to the editor-api runtime.
 export {
   beginEditorPreview,
@@ -302,6 +332,16 @@ export type { ReviewDiagnosticCode, ReviewOperation } from '../automation/diagno
 export {
   resolveEditorModules,
   type CollectReviewItems,
+  type CompareDocumentsBackgroundEngine,
+  type CompareDocumentsBackgroundResult,
+  type CompareDocumentsEngine,
+  type CompareDocumentsEngineErrorCode,
+  type CompareDocumentsErrorCode,
+  type CompareDocumentsRefusalReason,
+  type CompareDocumentsEngineOptions,
+  type CompareDocumentsEngineResult,
+  type CompareDocumentsPhase,
+  type CompareDocumentsProgress,
   type EditorModule,
   type EditorModuleRegistry,
   type ReviewModelInput,
@@ -324,7 +364,6 @@ export {
   captureImageMutationPreconditions,
   executeImageCommand,
   selectedImageStateOf,
-  selectedDrawingOverlayTargetOf,
   computeMovedImagePosition,
   computeResizedImageExtentEmu,
   isStaleImageInteractionCommit,
@@ -340,6 +379,7 @@ export {
   type ImageResizeHandle,
   type SelectedDrawingOverlayTarget,
 } from './docx-editor-images.ts';
+export { selectedDrawingOverlayTargetOf } from './drawing-overlay-target.ts';
 export { historyShortcutOf, type HistoryShortcutKeys } from './history-shortcut.ts';
 export { surfaceExtent, type SurfaceExtent } from './surface-pages.ts';
 // The fit's vocabulary — only the part an adapter actually needs, so the published surface
@@ -373,6 +413,7 @@ export {
   createImageOverlayScrollPort,
   cssPixelsToLayoutPoints,
   layoutPointsToCssPixels,
+  overlayFrameCssBox,
   overlayFrameToSheetCssPixels,
   overlayHostOrigin,
   resizePreservesAspect,
@@ -384,6 +425,7 @@ export {
   type OverlayFrameRect,
   type SurfaceOverlayCoordinates,
 } from './surface-overlay-coordinates.ts';
+export type { OverlayFrameTurn } from './shape-drawings.ts';
 export {
   IMAGE_WRAP_TARGETS,
   type ImageWrapTarget,
@@ -436,6 +478,7 @@ export type { HyperlinkActivation, SurfaceNavigation } from './surface-navigatio
 // `engine-layout` for a parameter type would be reaching past the boundary for a name.
 export type {
   SectionProperties,
+  SectionVerticalAlign,
   NavigationCommand,
   SemanticPosition,
   SemanticSelection,
@@ -564,6 +607,11 @@ export {
 
 export { createDocumentRefresh, DocumentRefreshError } from './document-refresh.ts';
 export { HIGHLIGHT_REFRESH_MS, watchHighlights } from './watch-highlights.ts';
+export {
+  acceptedOffsetFromText,
+  acceptedTextRanges,
+  textOffsetFromAccepted,
+} from './paragraph-text-ranges.ts';
 export type {
   HighlightSource,
   HighlightWatch,
@@ -589,6 +637,10 @@ export type {
   DocumentRefreshState,
   RefreshSubmission,
   RefreshUpdate,
+  RefreshRefusal,
+  RefreshRefusalFields,
+  RefreshRefusalReason,
+  RefreshUpdateMode,
   RefreshResult,
   RefreshFailureCode,
   RefreshChange,
@@ -604,28 +656,53 @@ export type {
   AnchorHighlightOptions,
   ClearAnchorHighlightOptions,
   HighlightHit,
+  HighlightKind,
+  NavigateHighlightCommand,
   HighlightOptions,
   HighlightRange,
   HighlightRect,
   HighlightResult,
+  AcceptedTextRange,
+  ParagraphText,
+  ParagraphsChangeEvent,
   ReviewItemHit,
   ScrollPlacement,
   ScrollToAnchorOptions,
+  ParagraphTextProofing,
+  ParagraphTextReadOptions,
+  ParagraphTextSpan,
+  ReplaceAcceptedTextCommand,
   HistoryGroup,
   HistoryGroupOptions,
+  CommentTextOptions,
+  // What `getDocumentHandle` returns and `replaceDocument` takes as `expected`.
+  DocumentHandle,
   // What `findMatches` returns and `selectMatch`/`replaceMatch` take.
   TextMatch,
+  ReplaceAllMatchesOutcome,
 } from '../contracts/editor.ts';
 
 export { runChromeExport, ChromeExportError } from './chrome-export.ts';
 export type {
   ChromeExportView,
+  ChromePrintSettings,
   ChromeExportFormat,
   ChromeExportHandlers,
   ChromeExportResult,
 } from './chrome-export.ts';
-export { runChromePrint, ChromePrintError, isChromePrintShortcut } from './chrome-print.ts';
-export type { ChromePrintErrorCode, ChromePrintJob, ChromePrintOptions } from './chrome-print.ts';
+export {
+  runChromePrint,
+  ChromePrintError,
+  isChromePrintShortcut,
+  initialChromePrintSettings,
+  CHROME_PRINT_DISPLAY_MODES,
+} from './chrome-print.ts';
+export type {
+  ChromePrintErrorCode,
+  ChromePrintJob,
+  ChromePrintOptions,
+  ResolvedChromePrintSettings,
+} from './chrome-print.ts';
 
 export {
   DEFAULT_REVIEW_PANE,
@@ -660,6 +737,28 @@ export type {
   RevisionMarkupTextStyle,
 } from '../contracts/revision-markup.ts';
 export type { RevisionMarkupDialog, RevisionMarkupDialogHost } from '../contracts/modules.ts';
+export type { CompareDocumentsDialog, CompareDocumentsDialogHost } from '../contracts/modules.ts';
+export type {
+  CompareDocumentsChromeHandlers,
+  CompareDocumentsDialogSession,
+  CompareDocumentsOutcome,
+  CompareDocumentsRequest,
+} from '../contracts/compare-documents.ts';
+export {
+  COMPARE_DOCUMENTS_ACCEPT,
+  compareDocumentsErrorKey,
+} from '../contracts/compare-documents.ts';
+export type {
+  ReplaceDocumentErrorCode,
+  ReplaceDocumentOutcome,
+  ReplaceDocumentRefusal,
+  ReplaceDocumentRefusalReason,
+  ReplaceDocumentRequest,
+} from '../contracts/replace-document.ts';
+export {
+  COMPARE_DOCUMENTS_PHASE_ATTRIBUTE,
+  focusCompareDocumentsControl,
+} from './compare-documents-focus.ts';
 
 /** The watermark shape box that `setWatermark` writes, for previews. */
 export {
@@ -695,3 +794,192 @@ export type {
   DrawingPreviewPackageLimits,
   DrawingPreviewPackageResult,
 } from '../store/package/drawing-preview-package.ts';
+export {
+  CHART_INSERT_CHOICES,
+  chartTypeLabelKey,
+  chartTypeIconPaths,
+  listenPaneRequests,
+  requestPane,
+  takePaneRequest,
+  takePaneRequestFor,
+  openChartPaneFor,
+  chartPaneAvailable,
+  openChartPaneAt,
+  paneAvailable,
+  type EditorPaneId,
+  type PaneRequest,
+  type PaneRequestListenerOptions,
+  type PaneRequestOptions,
+} from './chart-chrome.ts';
+export {
+  CHART_LEGEND_CHOICES,
+  CHART_STANDARD_COLORS,
+  CHART_THEME_SLOTS,
+  CHART_TYPE_CHOICES,
+  MAX_CHART_POINTS,
+  MAX_CHART_SERIES,
+  chartAxisTitleLabels,
+  chartColorCommand,
+  chartColorGrid,
+  chartColorLabel,
+  chartColorOfPick,
+  chartColorPick,
+  chartColorPickOf,
+  chartColorPicks,
+  chartPaneCommand,
+  chartPaneDraftContinues,
+  chartPaneDraftKey,
+  chartPaneNumericX,
+  chartPickHex,
+  chartRowFocusAfterRemove,
+  chartSeriesNote,
+  chartThemeHexes,
+  chartTitleCommand,
+  chartTypeChangeNote,
+  chartTypeHint,
+  chartValueText,
+  focusChartPane,
+  focusChartSwatch,
+  moveChartSwatchFocus,
+  nextChartCategoryLabel,
+  parseChartValue,
+  type ChartColorPick,
+  type ChartPaneChange,
+  type ChartPaneResult,
+  type ChartSwatch,
+  type ChartTranslate,
+} from './chart-pane.ts';
+export {
+  editSelectedChartData,
+  execSelectedChart,
+  readSelectedChart,
+  type SelectedChartCommand,
+  type SelectedChartView,
+} from './selected-chart.ts';
+export {
+  openShapePane,
+  paneTitleKey,
+  selectionPane,
+  shapePaneAvailable,
+  sidePanelPane,
+} from './shape-chrome.ts';
+export {
+  SHAPE_OUTLINE_WIDTHS,
+  shapeColorPick,
+  shapeFillPick,
+  shapeOutlinePick,
+  shapeFillEditable,
+  shapeFillLabelKey,
+  shapeFillSummary,
+  shapeOutlineSummary,
+  shapeHexText,
+  shapePaneColorHex,
+  shapePaneCommand,
+  shapeSwatchCurrent,
+  shapeTransparencyText,
+  shapeWidthText,
+  SHAPE_OUTLINE_DASHES,
+  shapeDashLabelKey,
+  shapeDashValue,
+  type ShapePaneChange,
+  type ShapePaneError,
+  type ShapePaneResult,
+} from './shape-pane.ts';
+export {
+  editSelectedShape,
+  execSelectedShape,
+  readSelectedShape,
+  sameSelectedShape,
+  type SelectedShapeCommand,
+  type SelectedShapeView,
+} from './selected-shape.ts';
+export {
+  COLOR_PICKER_STANDARD_COLORS,
+  COLOR_PICKER_THEME_SLOTS,
+  colorPickerGrid,
+  colorPickFromHexText,
+  colorPickHex,
+  colorPickIsCurrent,
+  colorPickLabel,
+  colorPickOf,
+  colorPickTheme,
+  documentThemeHexes,
+  alignColorPickerPopover,
+  focusColorSwatch,
+  moveColorSwatchFocus,
+  type ColorPick,
+  type ColorPickerGrid,
+  type ColorPickerThemeSlot,
+  type ColorPickerTranslate,
+  type ColorSwatch,
+} from './color-picker.ts';
+export {
+  CHART_AXES_OFF_REASON,
+  CHART_NO_AXES_REASON,
+  chartSlotIsToggle,
+  commandForObjectSlotValue,
+  isChartChromeSlot,
+  isObjectChromeSlot,
+  isShapeChromeSlot,
+  objectSlotOptions,
+  objectSlotValue,
+  type ChartChromeSlotId,
+  type ObjectSlotReadValueMap,
+  type ObjectSlotValueMap,
+  type ObjectToggleSlotId,
+  type ShapeChromeSlotId,
+} from './object-chrome-slots.ts';
+export {
+  PANE_SECTIONS,
+  paneSections,
+  paneSlots,
+  type PaneSection,
+  type PaneSectionId,
+  type PaneSectionIds,
+} from './pane-sections.ts';
+export type { SurfaceChartOps } from './surface-chart-ops.ts';
+export type {
+  ChartCopySource,
+  ChartIntentResult,
+  ChartLanes,
+  DuplicateChartInput,
+  InsertChartInput,
+} from '../store/store/tree-package-charts.ts';
+export type {
+  ChartColor,
+  ChartColorEntry,
+  ChartData,
+  ChartDataCategory,
+  ChartDataKind,
+  ChartDataRead,
+  ChartDataSeries,
+  ChartFormat,
+  ChartFormatChange,
+  ChartFormatRead,
+  ChartLegendPosition,
+  ChartThemeColor,
+  ChartType,
+  ChartWorkbookState,
+  NewChartData,
+  SelectedChartState,
+} from '../contracts/chart.ts';
+
+export { editorDropHandled } from './surface-drop.ts';
+export type {
+  SemanticHit,
+  SemanticHitDrawing,
+  TableCellAddress,
+} from '../layout/semantic-hit-test.ts';
+export type { CaretGeometry } from '../layout/semantic-interaction.ts';
+export type {
+  EditorPointPosition,
+  EditorDropEvent,
+  EditorHostDragEvent,
+} from '../contracts/editor-drop.ts';
+export { canMoveInlineImage, beginInlineImageDrag } from './inline-image-drag.ts';
+export {
+  drawingFramePressTarget,
+  type DrawingFramePress,
+  passDrawingFramePress,
+} from './drawing-overlay-press.ts';
+export { leaveGroupMember } from './group-member-selection.ts';

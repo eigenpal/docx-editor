@@ -1,24 +1,15 @@
 ---
 title: '@docx-editor.dev/pro'
-description: 'Add tracked changes, comments, collaboration, and custom nodes to React or Vue through editor modules.'
+description: 'Add tracked changes, comments, collaboration, drawing rendering, and custom nodes to React or Vue through editor modules.'
 category: 'Pro'
 order: 60
 ---
 
 <PackageStats name="@docx-editor.dev/pro" />
 
-`@docx-editor.dev/pro` adds these capabilities to the Vue and React editors:
+`@docx-editor.dev/pro` adds review, collaboration, drawing, and custom-node modules to the React and Vue editors. Production use requires the [EigenPal Pro License](#configure-licensing).
 
-- [Tracked changes](/docs/2.x/pro/tracked-changes): Use suggesting mode, render markup, and accept or reject changes.
-- [Comments](/docs/2.x/pro/comments): Add threads and replies to a text range.
-- [Review colors and styling](/docs/2.x/pro/review-styling): Color review content by author or by change type.
-- [Custom nodes](/docs/2.x/pro/custom-nodes): Store your inline node types as Word content controls.
-- [Advanced drawing rendering](/docs/2.x/pro/drawing): Render charts, SmartArt layout, drawing effects, WordArt, and EMF and WMF pictures.
-- [DOCX collaboration reference](/docs/2.x/pro/collaboration): Configure rooms, providers, presence, and recovery.
-
-Both adapter entries export custom-node chip and context-menu chrome.
-
-## Install
+## Install the package
 
 Install the Pro package with your adapter and the core engine:
 
@@ -29,8 +20,6 @@ Install the Pro package with your adapter and the core engine:
 npm install @docx-editor.dev/react @docx-editor.dev/core @docx-editor.dev/pro
 ```
 
-Import the review rail from `@docx-editor.dev/pro/react`.
-
 </Framework>
 <Framework value="vue">
 
@@ -38,18 +27,21 @@ Import the review rail from `@docx-editor.dev/pro/react`.
 npm install @docx-editor.dev/vue @docx-editor.dev/core @docx-editor.dev/pro
 ```
 
-Import the review rail from `@docx-editor.dev/pro/vue`.
-
 </Framework>
 </FrameworkTabs>
 
+The package has these main entry points:
+
+| Entry point | Contents |
+| --- | --- |
+| `@docx-editor.dev/pro` | Framework-neutral modules and functions, such as `reviewModule` and `customNodesModule` |
+| `@docx-editor.dev/pro/react` | React review rail, `useReview()`, and custom-node chrome |
+| `@docx-editor.dev/pro/vue` | Vue review rail, `useReview()`, and custom-node chrome |
+| `@docx-editor.dev/pro/drawing` | `drawingModule` and `installDrawing` |
+
 ## Register a module
 
-Pass review capabilities to the editor root through `modules`.
-
-The editor registers modules during creation. Keep the module array stable across renders.
-
-This example registers `reviewModule` and adds the review rail:
+This example registers `reviewModule`, sets the author, and adds the review rail:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -58,7 +50,7 @@ This example registers `reviewModule` and adds the review rail:
 import { DocxEditor } from '@docx-editor.dev/react';
 import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
 
-// Module array built once, outside render.
+// Build the module array once, outside render.
 const MODULES = [reviewModule()];
 
 export function Reviewer({ bytes }: { bytes: Uint8Array }) {
@@ -67,7 +59,6 @@ export function Reviewer({ bytes }: { bytes: Uint8Array }) {
       <DocxEditor.Toolbar />
       <DocxEditor.Viewport>
         <DocxEditor.Content />
-        {/* The review sidebar: tracked changes and comments as cards beside the page. */}
         <DocxEditorReview />
       </DocxEditor.Viewport>
     </DocxEditor.Root>
@@ -107,17 +98,35 @@ const modules = [reviewModule()];
 </Framework>
 </FrameworkTabs>
 
-The packaged `DocxEditor` component also accepts `modules` in each adapter.
+The editor registers modules during creation, so keep the module array stable across renders. The packaged `DocxEditor` component also accepts `modules`.
 
-Without a review module, the editor still opens documents that contain revisions and comments.
+- **Author:** Comments and tracked changes require an `author`, because OOXML requires one. Without an author, `useReview().comment()` and `reply()` return `false`, editor commands return an `ExecResult` with `ok: false`, and document API calls throw a structured error.
+- **No review module:** The editor still opens and saves revisions and comments unchanged. It renders revisions in their final state and shows no review controls.
 
-The editor saves that review content without changes. It renders revisions in their final state and provides no review interface.
+## Choose a feature
 
-Register the module to show review content and provide review actions.
+| Feature | Module | Guide |
+| --- | --- | --- |
+| Suggesting mode, markup, accept and reject | `reviewModule` | [Tracked changes](/docs/2.x/pro/tracked-changes) |
+| Comment threads and replies | `reviewModule` | [Comments](/docs/2.x/pro/comments) |
+| Author colors and review card styles | `reviewModule` | [Review colors and styling](/docs/2.x/pro/review-styling) |
+| Compare two DOCX files as tracked changes | `reviewModule` | [Compare documents](/docs/2.x/pro/compare-documents) |
+| Inline node types stored as content controls | `customNodesModule` | [Custom nodes](/docs/2.x/pro/custom-nodes) |
+| Charts, DrawingML diagram layout, effects, VML text paths, EMF, and WMF | `drawingModule` | [Advanced drawing rendering](/docs/2.x/pro/drawing) |
+| Rooms, providers, presence, and recovery | `collaborationModule` | [DOCX collaboration reference](/docs/2.x/pro/collaboration) |
 
-### Control the review pane
+For the review hook, `useReview()`, see [Tracked changes](/docs/2.x/pro/tracked-changes).
 
-The review pane settings decide when the pane opens and where review items appear. They apply to one editor instance. The editor never saves them into the document or shares them with other participants.
+## Control the review pane
+
+Set the starting pane options on the module, and change them at runtime with `setReviewPaneOptions`:
+
+```ts
+const MODULES = [reviewModule({ pane: { revisionsIn: 'balloons', opening: 'manual' } })];
+
+editor.setReviewPaneOptions({ commentMarkers: 'initials', overflow: 'scroll' });
+const revisionsIn = editor.snapshot().reviewPane.revisionsIn;
+```
 
 | Setting          | Values                          | Default |
 | ---------------- | ------------------------------- | ------- |
@@ -126,149 +135,28 @@ The review pane settings decide when the pane opens and where review items appea
 | `commentMarkers` | `initials`, `icon`              | `icon`  |
 | `overflow`       | `float`, `shrinkPage`, `scroll` | `float` |
 
-With `opening: 'auto'`, the editor opens the pane when a document loads with items that the pane lists. It also opens the pane when you make a tracked change while the pane is closed, and when **Next Change** or **Previous Change** reaches a card. With `opening: 'manual'`, the pane stays closed until your app or the user opens it. Under both settings, a click on a comment marker or on text that has an open comment opens the pane. Use `'manual'` if your app shows review items in its own way, such as in tracked change balloons or margin markers.
+The settings apply to one editor instance and are never saved to the document. `setReviewPaneOptions` returns an `ExecResult`: `invalidArgs` for an unknown field or value, and `unsupported` without a review module. For what each value does, see [Tracked changes customization](/docs/2.x/customization/tracked-changes).
 
-With `revisionsIn: 'pane'`, the sidebar lists comments and tracked changes. The open card stays beside its text, and the cards around it move up or down to make room. A replacement opens as its deletion and insertion cards together. With `revisionsIn: 'balloons'`, the sidebar lists comments only. Each tracked change opens beside its text in a tracked change balloon. Replies to tracked changes stay with those changes.
+- When another participant resolves a tracked change during your reply, the balloon keeps your draft.
+- With `overflow: 'scroll'` and a mounted pane, fit zoom ignores padding that your app adds to the scroll container.
 
-Click a change or use **Next Change** or **Previous Change** to open it. Moving the caret alone does not open it. Tracked change balloons appear only in **All Markup**.
+## Configure licensing
 
-Each tracked change balloon includes the author, date, changed text, replies, and review controls. An adjacent deletion and insertion from one author appear as one replacement. **Accept** and **Reject** resolve the change. Escape, typing, or clicking elsewhere closes the component.
+This package uses the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/pro/LICENSE.md). Production use requires one. For license and support options, see [pricing](https://www.docx-editor.dev/pricing).
 
-Keyboard navigation moves focus into the tracked change balloon. Screen readers announce it. If another participant resolves the change during a reply, your draft remains available.
-
-For styling and custom components, see [Tracked changes customization](/docs/2.x/customization/tracked-changes).
-
-With `commentMarkers: 'icon'`, a collapsed comment marker shows the comment icon. With `commentMarkers: 'initials'`, the marker shows the thread author's initials in their color. A small count shows the number of replies, and a check mark replaces the initials when the thread is resolved. A `DocxEditorReview.Markers` part with an `icon` function overrides both values.
-
-To show initials, set `commentMarkers` on the module or at runtime:
-
-```ts
-const MODULES = [reviewModule({ pane: { commentMarkers: 'initials' } })];
-
-editor.setReviewPaneOptions({ commentMarkers: 'initials' });
-```
-
-`overflow` decides what the open pane does when its card column does not fit beside the page:
-
-- `'float'`: the pane changes to a marker strip and floats the active card over the page.
-- `'shrinkPage'`: a fit zoom mode can shrink the page so that the full column fits. For more information, see [Make room for the review pane](/docs/2.x/guides/zoom#make-room-for-the-review-pane).
-- `'scroll'`: the page keeps one size whether the pane is open or closed, and the full column stays beside it. The document and the column scroll together, so the viewport scrolls sideways to reach the cards. A fit zoom with a maximum fits the viewport width less the closed pane's marker strip and less the room an open navigation pane takes. The fit does not subtract padding that your app adds to the scroll container.
-
-`overflow` applies to the review pane only. The navigation pane stays docked at its side in every mode. It doesn't scroll sideways with the document, and it takes its room beside the page in the same way as when no review pane is mounted.
-
-Set the starting values on the module:
-
-```ts
-const MODULES = [reviewModule({ pane: { revisionsIn: 'balloons', opening: 'manual' } })];
-```
-
-To change a setting at runtime, call `setReviewPaneOptions` with only the settings that change. Read the values in force from `snapshot().reviewPane`:
-
-```ts
-editor.setReviewPaneOptions({ revisionsIn: 'balloons' });
-editor.setReviewPaneOptions({ commentMarkers: 'initials', overflow: 'scroll' });
-const revisionsIn = editor.snapshot().reviewPane.revisionsIn;
-```
-
-`DocxEditorReview` reads the settings from the editor and updates when they change. The settings stay in force when you load another document. `setReviewPaneOptions` returns an `ExecResult`. It refuses an unknown field or value with `invalidArgs`, and refuses with `unsupported` when no review module is registered. A refusal changes nothing. Switching `revisionsIn` to `'balloons'` closes an open pane that has nothing left to list.
-
-To open or close the pane, call `setPaneOpen` from `useReview()`, or run the `toggleReviewPane` command.
-
-## Author attribution
-
-Comments and tracked changes require an author. Office Open XML (OOXML) requires this value.
-
-Set `author` on the root.
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-<DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<DocxEditorRoot :document="bytes" :modules="modules" author="Jess Lin">
-  <!-- Editor parts -->
-</DocxEditorRoot>
-```
-
-</Framework>
-</FrameworkTabs>
-
-Write calls return whether the editor applied the change. They do not throw for an unavailable author.
-
-For example, a reply without an author returns `false`. The editor does not create an invalid document.
-
-## Choose the review rail or composables
-
-`useReview()` provides all capabilities in the packaged review rail. Use the rail, or render your own interface.
-
-This example shows the number of pending items:
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-import { useReview } from '@docx-editor.dev/pro/react';
-
-function ChangeCount() {
-  const { items, ready } = useReview();
-  if (!ready) return null;
-  return <span>{items.length} pending</span>;
-}
-```
-
-React hooks return the values directly.
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<script setup lang="ts">
-import { computed } from 'vue';
-import { useReview } from '@docx-editor.dev/pro/vue';
-
-const review = useReview();
-const pending = computed(() => review.items.value.length);
-</script>
-
-<template>
-  <span v-if="review.ready.value">{{ pending }} pending</span>
-</template>
-```
-
-Vue composables return computed refs, so read them with `.value` in script code.
-
-</Framework>
-</FrameworkTabs>
-
-For the complete composable API, see [Tracked changes](/docs/2.x/pro/tracked-changes).
-
-To arrange editor parts, see [Vue composition](/docs/2.x/vue/composition) or [React composition](/docs/2.x/react/composition).
-
-## Licensing
-
-This package uses the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/pro/LICENSE.md). See [pricing](https://www.docx-editor.dev/pricing) for license and support options.
-
-`reviewModule`, `customNodesModule`, `collaborationModule`, `drawingModule`, and `installDrawing` accept an optional `licenseKey`. Pass the key once, to any of them. The key is optional and is never validated or sent anywhere: every module works the same with or without it. Production use requires an EigenPal Pro License, and the key identifies yours when you contact support. The key is not a secret, so you can ship it in browser code. `@docx-editor.dev/docx-to-pdf` includes the drawing module and needs no separate key.
-
-Module construction does not validate the key or access the network. This example passes a key to `reviewModule`:
+`reviewModule`, `customNodesModule`, `collaborationModule`, `drawingModule`, and `installDrawing` accept an optional `licenseKey`. Pass it once, to any of them:
 
 ```ts
 const MODULES = [reviewModule({ licenseKey: process.env.NEXT_PUBLIC_DOCX_LICENSE })];
 ```
 
-For a Vue application, read the key from your build tool instead of `process.env`.
+- The key identifies your license when you contact support. Every module works the same without it.
+- The editor never validates or transmits the key, and module construction makes no network request.
+- The key is not a secret, so you can ship it in browser code. In Vue, read it from your build tool.
+- `@docx-editor.dev/docx-to-pdf` includes the drawing module and needs no separate key.
 
-## Next steps
+## See also
 
-- [Tracked changes](/docs/2.x/pro/tracked-changes): Configure suggesting mode and the review interface.
-- [Comments](/docs/2.x/pro/comments): Add, reply to, resolve, and reopen comment threads.
-- [Review colors and styling](/docs/2.x/pro/review-styling): Give each reviewer a color and an avatar.
-- [Custom nodes](/docs/2.x/pro/custom-nodes): Add custom-node chrome.
-- [Vue composition](/docs/2.x/vue/composition): Arrange Vue editor parts.
-- [React composition](/docs/2.x/react/composition): Arrange React editor parts.
+- [Tracked changes](/docs/2.x/pro/tracked-changes)
+- [React composition](/docs/2.x/react/composition)
+- [Vue composition](/docs/2.x/vue/composition)

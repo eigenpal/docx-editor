@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -95,6 +95,7 @@ export interface ReviewActions {
   readonly commentResolutionDisabledReason: string | null;
   remove(item: ReviewItemView): boolean;
   reply(item: ReviewItemView, text: string, author?: string): boolean;
+  edit(item: ReviewItemView, text: string, expectedText?: string): boolean;
   readonly selectionAnchorY: number | null;
   comment(text: string, author?: string): boolean;
   readonly lastRefusal: ReviewWriteRefusal | null;

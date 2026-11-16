@@ -200,6 +200,8 @@ export {
   type TableCellFragmentRecord,
   type TableFragmentRecord,
   type TableRowFragmentRecord,
+  type TableSpacingShading,
+  type TableSpacingFrame,
   type TextMeasurer,
   type TextOutline,
 } from './semantic-records.ts';
@@ -258,6 +260,7 @@ export type {
   DrawingGeometry,
   DrawingInsets,
   DrawingPoint,
+  DrawingRegionCuts,
 } from './drawing-geometry.ts';
 export type {
   DrawingAccessibility,
@@ -424,6 +427,8 @@ export type { CjkTypographySettings } from './cjk-typography.ts';
 export {
   layoutEquation,
   type EquationBarGeometry,
+  type EquationBorderBoxGeometry,
+  type EquationDiagonal,
   type EquationFractionGeometry,
   type EquationGeometry,
   type EquationNaryGeometry,
@@ -433,6 +438,7 @@ export {
   type EquationSpanRecord,
   type EquationTextGeometry,
 } from './equation-layout.ts';
+export type { EquationDelimiterGeometry, EquationStretch } from './equation-delimiter.ts';
 export {
   DEFAULT_CANVAS_FONT_STACK,
   isCanvasMeasurementAvailable,
@@ -608,6 +614,7 @@ export {
   type SectionMargins,
   type SectionPageNumbering,
   type SectionProperties,
+  type SectionVerticalAlign,
 } from './section-properties.ts';
 export {
   PAGE_BORDER_SIDES,
@@ -645,6 +652,7 @@ export {
   type VerticalAlign,
 } from './run-style.ts';
 export { runBorderStrokesForLine } from './run-border-strokes.ts';
+export { createRunProofingReader, eastAsianTextRanges, type RunProofing } from './run-proofing.ts';
 export {
   MAX_STYLE_BASED_ON_DEPTH,
   MAX_STYLE_DEFINITIONS,
@@ -740,6 +748,11 @@ export {
   type TableRowHeightRule,
 } from './semantic-table.ts';
 export type { AutofitFieldContext, TableAutofitContext } from './table-autofit-widths.ts';
+export {
+  tableSpacingShadingRegions,
+  type TableSpacingShadingRegion,
+} from './table-spacing-shading.ts';
+export { spacedTableFrameBorders } from './table-spacing-frame.ts';
 export { paragraphMarkDeleted, revisionRemovesParagraph } from './revision-visibility.ts';
 export {
   MAX_TABLE_ROW_FRAGMENTS,

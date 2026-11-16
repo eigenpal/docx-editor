@@ -111,8 +111,16 @@ export interface MetafileRenderOptions {
   readonly textAdvance: (text: string, font: MetafileFont) => number;
 }
 
-/** A replayed metafile. `complete` is false when a bound stopped recording early. @internal */
+/**
+ * A replayed metafile. `complete` is false when a bound or a malformed record stopped recording
+ * early, and `stop` then says which. @internal
+ */
 export interface MetafileReplay {
   readonly drawing: MetafileDrawing;
   readonly complete: boolean;
+  /**
+   * Why recording stopped early: a resource bound, or a record that does not fit. Absent when
+   * the replay is complete; a renderer that does not tell the two apart also leaves it out.
+   */
+  readonly stop?: 'resource-bound' | 'malformed-record';
 }

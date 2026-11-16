@@ -183,7 +183,10 @@ describe('a merge that starts inside another merge and ends after it', () => {
     // A lead line and the 2 + 4 + 5 planned lines fill the content box exactly. Sizing row 0
     // to the first merge's whole content, as before, does not fit.
     const layout = layoutOn(`${p('Lead')}${staircase(6, 9)}`, 12 * LINE_PT);
-    expect(layout.pages).toHaveLength(1);
+    // The table stays on the first page; the empty paragraph the body reads after it, which
+    // the full page cannot hold, starts the second.
+    expect(layout.pages).toHaveLength(2);
+    expect(layout.pages[1]!.fragments.map((fragment) => fragment.kind)).toEqual(['paragraph']);
     expect(rowLines(tablesOn(layout, 0)[0]!)).toEqual([2, 4, 5]);
   });
 

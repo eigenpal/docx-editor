@@ -21,8 +21,8 @@ export interface NoteSplitReasons {
  *
  * `w:widowControl` (§17.3.1.44) governs a note paragraph exactly as it governs a body one:
  * never one line alone on either side of the break. A three-line endnote with room for two
- * therefore moves whole, which is what the reference does — `demo.docx` page 8 kept two of
- * its lines and stranded the third, and the reference opens the area on page 9 instead.
+ * therefore moves whole, which is what the reference does: a corpus document once kept two of
+ * its lines and stranded the third, and the reference opens the area on the next page instead.
  *
  * `canRetreat` is the fail-open switch. Retreating is only safe when the next page offers
  * more room than this one; when the note already has the full column, a paragraph that

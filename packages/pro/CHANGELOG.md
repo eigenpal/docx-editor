@@ -1,5 +1,64 @@
 # @docx-editor.dev/pro
 
+## 2.37.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.37.0, @docx-editor.dev/react@2.37.0, @docx-editor.dev/vue@2.37.0
+
+## 2.36.0
+
+### Patch Changes
+
+- 01211a9: Update HarfBuzz to 15.0.0 and refresh patch and minor dependency versions.
+- f189d65: EMF+ pictures display without clipping. Small EMF and WMF pictures remain sharp in the editor.
+- c0a36f9: PDF export draws more EMF and WMF picture content, and places each EMF picture in its frame.
+- b4623d4: Published JavaScript files include license headers for `pro`, `editor-api`, `docx-to-pdf`, and `telemetry`. The `core`, `pro`, `react`, and `vue` packages include license texts for bundled third-party material.
+- Updated dependencies: @docx-editor.dev/core@2.36.0, @docx-editor.dev/react@2.36.0, @docx-editor.dev/vue@2.36.0
+
+## 2.35.0
+
+### Minor Changes
+
+- 68ad495: Add Compare documents, which records the differences between two documents as tracked changes, in the editor, through `Document.compareFromBase64`, or with `compareDocuments`. The dialog compares in a worker by default, with progress and cancel.
+- 5ab8978: A new link in a collaboration session now adds the hyperlink style when the document has a styles part without one, as it does outside a session. Undo of that link keeps the style for links that other participants made, and participants who add the style while apart end with one copy.
+
+### Patch Changes
+
+- 5993bd2: Stop the browser from suggesting saved form entries in the comment and reply fields.
+- 29535a6: Correct the `customNodesOf` reference documentation, which now states that it reads every story, including headers, footers, and notes.
+- e61aaec: Formatting a paragraph that has many differently formatted runs, and opening such a paragraph, now takes time in proportion to its length. Fixes #1796.
+- Updated dependencies: @docx-editor.dev/core@2.35.0, @docx-editor.dev/react@2.35.0, @docx-editor.dev/vue@2.35.0
+
+## 2.34.0
+
+### Minor Changes
+
+- 502d273: Breaking collaboration upgrade (format `docx-collaboration:1.5.3.1`): concurrent paragraph splits show in text order, Reject All restores a paragraph that peers split, rejecting a proposed paragraph break keeps the first paragraph, undoing an inserted paragraph keeps text that others typed in it, and typing beside deleted, moved, or redone text keeps its place; export saved rooms with your current release and reseed them, see [Upgrade rooms to format 1.5.3.1](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1531). Fixes #1652, #1654, #1398, #1607, #1394, #1354.
+- 230afcf: Collaboration format `docx-collaboration:1.5.3.1` preserves review decisions, deletions, block order, and caret placement during concurrent edits. Export saved rooms with the previous compatible release, then reseed them: [Upgrade rooms to format 1.5.3.1](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1531).
+- 0282006: Breaking collaboration upgrade (format `docx-collaboration:1.5.3.1`): moving a paragraph that a concurrent split created keeps the text of both new paragraphs; see [Upgrade rooms to format 1.5.3.1](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1531).
+- 6907dc9: A new link in a document without a hyperlink style now shows in the link color with an underline, except in a collaboration session. Insert link or Add comment with the caret inside a word applies to that word, and undo after Remove or Refresh table of contents from its menu returns the caret to the table of contents.
+- 04b4619: Received footnote and endnote edits now match the author before the receiving participant opens the note, and `subscribeResourcePressure` notifies hosts before a collaboration room reaches a size limit, which the failure detail names when it ends the room. Fixes #580.
+
+### Patch Changes
+
+- 795c6c6: In a collaboration session, undoing a format change over text that another participant typed before an undone split keeps that text.
+- 74b3b0e: In a collaboration session, moving a block toward the start of its container, or formatting text whose properties are stored out of order, no longer removes a neighboring block or property for every participant. A table moved after concurrent moves of the same table keeps the empty paragraph between it and the next table. Fixes #1572. Fixes #1606.
+- 2a69317: In a collaboration session, rejecting every change of a paragraph that holds a tracked break and a tracked paragraph mark rejects both in one call. Fixes #1655.
+- 2a69317: In a collaboration session, text that a participant types in the middle paragraph of a split into three paragraphs stays when the author of the split undoes it.
+- 3235b53: Paragraphs from concurrent splits of one paragraph keep their order when a participant deletes or joins one of them, and every participant shows the same order after a peer's moved text arrives.
+- c5f6f77: Removing a hyperlink or content control, accepting or rejecting a change, and a tracked deletion inside a container keep one tracked change as one piece, so typing and decisions reach all of it; in a collaboration session, a concurrent accept, reject, or deletion also reaches every character it names. Fixes #1701
+- aa81fb2: In a collaboration session, text that a participant types in a paragraph of a split that trims its delimiters stays when the author of the split undoes it.
+- 4fbfb16: In a collaboration session, a table row, column, table, or paragraph that two participants delete at the same time stays deleted when one of them undoes, and typing that a participant undoes no longer shows again in a copy that a concurrent join made. An undo next to moved blocks no longer removes another participant's text or leaves a moved table's empty paragraph without the identity that remote carets need. Fixes #1601.
+- d9e6873: A letter that an undo puts back stays after the letter typed before it, instead of also showing in another participant's paragraph.
+- bd947a7: Keep numbering definitions in schema order across participants when one edit creates multiple list definitions.
+- e2800c7: When two people type at the same place at the same time, each person's characters now stay in the order they typed them. Fixes #1693.
+- 9c02206: Equation border boxes and fitted text boxes render; collaboration is unchanged.
+- 0648f54: Keep collaboration recoverable when a list, comment, or note edit is refused while a peer's update is still arriving.
+- f182c70: Find the right header, note, section, or link for content another participant created during a collaboration session, so table controls, page setup, comments, custom nodes, and the content control at the caret act on it. Fixes #1633.
+- 26d02bd: Collaboration undo and redo keep the same behavior after an internal code move.
+- Updated dependencies: @docx-editor.dev/core@2.34.0, @docx-editor.dev/react@2.34.0, @docx-editor.dev/vue@2.34.0
+
 ## 2.33.0
 
 ### Minor Changes

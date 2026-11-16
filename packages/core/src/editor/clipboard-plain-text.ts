@@ -160,7 +160,7 @@ function withoutTrailingTabs(line: string): string {
  * An unclosed `<script>` drops everything after it rather than pasting its body.
  */
 function rawTextEnd(html: string, name: string, from: number): number {
-  for (let at = from; at < html.length; ) {
+  for (let at = from; at < html.length;) {
     const close = html.indexOf('</', at);
     if (close === -1) return html.length;
     let after = close + 2;

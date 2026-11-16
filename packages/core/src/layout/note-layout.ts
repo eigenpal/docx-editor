@@ -231,16 +231,47 @@ export function normalNotesOf(part: OoxmlPart | null | undefined): readonly Ooxm
   return out;
 }
 
+type SpecialNoteType = 'separator' | 'continuationSeparator' | 'continuationNotice';
+
+/**
+ * The first note of each special type in a notes part root. The tree is immutable, so one
+ * scan of a root answers every later lookup: a reserve search lays out the separator once per
+ * computation, and a scan per lookup grew with the note count each time.
+ */
+const specialNotes = new WeakMap<
+  OoxmlNode,
+  Readonly<Record<SpecialNoteType, OoxmlElement | undefined>>
+>();
+
+/** The first note of a special type in a notes part, from one scan per part root. */
+export function findSpecialNote(
+  part: OoxmlPart | null | undefined,
+  kind: SpecialNoteType
+): OoxmlElement | undefined {
+  if (!part) return undefined;
+  let found = specialNotes.get(part.root);
+  if (found === undefined) {
+    const first: Record<SpecialNoteType, OoxmlElement | undefined> = {
+      separator: undefined,
+      continuationSeparator: undefined,
+      continuationNotice: undefined,
+    };
+    for (const note of notesOf(part.root)) {
+      const type = noteTypeOf(note);
+      if (type !== undefined && type !== 'normal') first[type] ??= note;
+    }
+    found = first;
+    specialNotes.set(part.root, found);
+  }
+  return found[kind];
+}
+
 /** Find separator / continuationSeparator note body in a notes part. */
 export function findSeparatorNote(
   part: OoxmlPart | null | undefined,
   kind: 'separator' | 'continuationSeparator'
 ): OoxmlElement | undefined {
-  if (!part) return undefined;
-  for (const note of notesOf(part.root)) {
-    if (noteTypeOf(note) === kind) return note;
-  }
-  return undefined;
+  return findSpecialNote(part, kind);
 }
 
 /**

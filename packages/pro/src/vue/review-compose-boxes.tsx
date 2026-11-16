@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -151,6 +151,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
                       id: fieldId,
                       'data-testid': 'review-draft-input',
                       class: 'docx-review__input',
+                      autocomplete: 'off',
                       value: text.value,
                       placeholder: t('comments.addComment'),
                       readonly: readOnly,
@@ -336,6 +337,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
           id={fieldId}
           data-testid="review-reply-input"
           class="docx-review__input"
+          autocomplete="off"
           placeholder={t('comments.replyPlaceholder')}
           readonly={readOnly}
           {...(refused.value ? { 'aria-invalid': true, 'data-refused': '' } : {})}

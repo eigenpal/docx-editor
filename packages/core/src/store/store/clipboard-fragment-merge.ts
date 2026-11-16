@@ -78,10 +78,7 @@ const NUMBERING_CT = 'application/vnd.openxmlformats-officedocument.wordprocessi
 const STYLES_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml';
 
 export type FragmentMergeRejection =
-  | 'no-fragment-document'
-  | 'no-target-part'
-  | 'merge-refused'
-  | 'unsupported-content';
+  'no-fragment-document' | 'no-target-part' | 'merge-refused' | 'unsupported-content';
 
 export type FragmentMergeResult =
   | {

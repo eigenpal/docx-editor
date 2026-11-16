@@ -1,4 +1,4 @@
-# Word document automation
+# DOCX document automation
 
 `@docx-editor.dev/editor-api` opens DOCX bytes, queues edits, and saves the edited document. This example fills template placeholders without a browser.
 
@@ -95,6 +95,6 @@ Deletion needs no author. `Comment.delete()` removes the root thread and anchors
 
 ## Office.js compatibility
 
-The API implements a documented subset of the Word Office.js object model. It runs outside Office and requires no Microsoft package. Matching signatures do not guarantee full runtime compatibility.
+The API implements a documented subset of the Office.js object model. It runs without an Office.js host and requires no Office.js package. Matching signatures do not guarantee full runtime compatibility.
 
 For supported members and runtime differences, see [Office.js compatibility](../../docs/site/content/editor-api/office-js-api.mdx).

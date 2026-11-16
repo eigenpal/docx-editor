@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -23,6 +23,14 @@ export {
 export { Document } from './document.ts';
 export { DocumentProperties } from './document-properties.ts';
 export { Font, UnderlineType } from './font.ts';
+export {
+  BorderUniversal,
+  BorderUniversalCollection,
+  type BorderUniversalUpdateData,
+  type UpdateOptions,
+} from './borders.ts';
+export { BorderLineStyle, ColorIndex, LineWidth } from './border-enums.ts';
+export { PageBorderArt } from './page-border-art.ts';
 export { List, ListCollection, ListItem, ListBullet, ListNumbering } from './lists.ts';
 export { NoteItem, NoteItemCollection, type NoteItemType } from './notes.ts';
 export {
@@ -52,8 +60,21 @@ export type {
   RangeInsertTextLocation,
   SelectionMode,
 } from './locations.ts';
-export { Paragraph, type ParagraphAlignment, type ParagraphReadingOrder } from './paragraph.ts';
+export {
+  Paragraph,
+  type ParagraphAlignment,
+  type ParagraphLineSpacingRule,
+  type ParagraphReadingOrder,
+} from './paragraph.ts';
 export { Range } from './range.ts';
+export { Annotation, AnnotationCollection, CritiqueAnnotation } from './annotations.ts';
+export {
+  AnnotationState,
+  CritiqueColorScheme,
+  type AnnotationSet,
+  type Critique,
+  type CritiquePopupOptions,
+} from './annotation-input.ts';
 export {
   getReviewItemRange,
   getReviewItemRangeOrNullObject,
@@ -72,12 +93,15 @@ export {
 
 export { InlinePicture, InlinePictureCollection } from './pictures.ts';
 export { Shape, ShapeCollection, ShapeType } from './shapes.ts';
+export { ShapeFill, ShapeFillType } from './shape-fill.ts';
 
 export { Field, FieldCollection } from './fields.ts';
 export { FieldType, type FieldTypeLiteral } from './field-types.ts';
 
 export {
   RemoveDocInfoType,
+  CompareTarget,
+  type DocumentCompareOptions,
   InsertLocation,
   Alignment,
   PageOrientation,

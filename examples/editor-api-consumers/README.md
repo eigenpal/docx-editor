@@ -34,11 +34,11 @@ bun run --filter '@docx-editor-examples/editor-api-consumers' test:published
 
 This command uses Node 24 or newer after package builds to test the same exports a package consumer receives. It also runs in CI after the build. Node ignores workspace TypeScript aliases. Ordinary Bun execution in this workspace resolves source aliases. See `fresh-contract-feedback.md` and `fresh-tables-feedback.md` for the blind findings, fixes, remaining explicit batching limits, and the scope of the developer-experience score.
 
-## Manual Microsoft Word round trip
+## Manual desktop word processor round trip
 
 1. Generate the contract fixture with `test:published`.
 2. Copy `contract-pending.docx` into a temporary directory.
-3. Open the copy in Word. Append ` — WORD CHECK` to `SERVICE AGREEMENT`, and verify undo and redo.
+3. Open the copy in a desktop word processor. Append ` — WORD CHECK` to `SERVICE AGREEMENT`, and verify undo and redo.
 4. Save the document with tracked changes pending.
 5. Run the checker against built package exports:
 
@@ -46,4 +46,4 @@ This command uses Node 24 or newer after package builds to test the same exports
 node examples/editor-api-consumers/word-roundtrip-check.ts /path/to/disposable-directory
 ```
 
-It verifies preserved controls, locks, hyperlinks, comments, replies, and revisions after Word serialization. It then accepts revisions through editor-api and checks save/reopen. Open `contract-word-then-api-accepted.docx` in Word to verify the final layout and accepted text. This manual check does not run in CI or execute native Office.js calls.
+It verifies preserved controls, locks, hyperlinks, comments, replies, and revisions after the word processor saves the file. It then accepts revisions through editor-api and checks save/reopen. Open `contract-word-then-api-accepted.docx` in the same word processor to verify the final layout and accepted text. This manual check does not run in CI or execute native Office.js calls.

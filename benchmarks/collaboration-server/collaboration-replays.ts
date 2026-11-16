@@ -13,7 +13,7 @@ import path from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { readCase, replayOf } from './scenario-case.ts';
 import { replayActions } from './scenario-harness.ts';
-import { DEFAULT_DOCUMENT, documentFor } from './scenarios.ts';
+import { configFor, DEFAULT_DOCUMENT, documentFor } from './scenarios.ts';
 
 const directory = path.join(import.meta.dirname, 'replays');
 const fallback = new Uint8Array(readFileSync(DEFAULT_DOCUMENT));
@@ -31,7 +31,8 @@ export function replayShare(share: number): void {
     for (const file of files) {
       test(file.replace(/\.json$/, ''), async () => {
         const saved = readCase(path.join(directory, file));
-        const { problems } = await replayActions(documentFor(saved.config, fallback), {
+        // `configFor` also turns on the oracles that only some shapes run.
+        const { problems } = await replayActions(documentFor(configFor(saved.config), fallback), {
           ...replayOf(saved),
           strict: true,
         });

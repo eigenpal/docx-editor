@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A custom geometry path with a command before its first moveTo, or a line or curve after close, still painted parts of the shape, and an arc of many turns spread one chord budget over every turn.",
+  "after": "A custom geometry path with a command that has no current point paints no fill and no outline for the whole shape, with no placeholder, and an arc sweep beyond one turn drops whole pairs of turns before flattening.",
+  "reason": "Only derived drawing geometry and its paint change. Canonical OOXML, source offsets, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/drawing-geometry-engine.test.ts",
+    "packages/core/src/store/__tests__/drawing-vector-paths.test.ts",
+    "packages/core/src/editor/__tests__/custom-geometry-blank-paint.test.ts"
+  ],
+  "changeset": "custom-geometry-path-start",
+  "migration": null
+}

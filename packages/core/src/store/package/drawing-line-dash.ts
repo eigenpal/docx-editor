@@ -5,6 +5,7 @@ import { findDirectChild } from './drawing-shape-readers.ts';
 import { isElement } from './drawing-projection-walk.ts';
 import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
+import type { ShapeOutlineDash } from '../store/tree-op-types.ts';
 
 const A = DRAWINGML_MAIN_NAMESPACE_URI;
 /** A custom dash list longer than this paints solid: it adds nothing visible. */
@@ -24,6 +25,40 @@ const PRESET_DASHES: ReadonlyMap<string, readonly number[] | null> = new Map([
   ['sysDashDot', [3, 1, 1, 1]],
   ['sysDashDotDot', [3, 1, 1, 1, 1, 1]],
 ]);
+
+/** The preset dashes a shape outline can take, in the order a dash list offers them. */
+export const SHAPE_OUTLINE_DASH_PRESETS: readonly ShapeOutlineDash[] = [
+  'solid',
+  'sysDot',
+  'sysDash',
+  'dash',
+  'dashDot',
+  'lgDash',
+  'lgDashDot',
+  'lgDashDotDot',
+  'sysDashDot',
+  'sysDashDotDot',
+  'dot',
+];
+
+/** Whether `value` names a preset dash. */
+export function isShapeOutlineDash(value: unknown): value is ShapeOutlineDash {
+  return typeof value === 'string' && PRESET_DASHES.has(value);
+}
+
+/**
+ * The preset whose pattern is `pattern` (null is `solid`), or `custom` for any other pattern.
+ * The legacy VML styles use the same patterns, so one lookup names both.
+ */
+export function dashPresetOf(
+  pattern: readonly number[] | null | undefined
+): ShapeOutlineDash | 'custom' {
+  if (!pattern) return 'solid';
+  for (const [name, preset] of PRESET_DASHES)
+    if (preset && preset.length === pattern.length && preset.every((v, i) => v === pattern[i]))
+      return name as ShapeOutlineDash;
+  return 'custom';
+}
 
 function percent(element: OoxmlElement, name: string): number | null {
   const raw = schemaAttributeValue(element.attributes, name);

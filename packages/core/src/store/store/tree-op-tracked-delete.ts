@@ -192,7 +192,7 @@ export function applyDeleteTracked(
           .filter((owner) => owner.kind === 'contentControl')
           .map((owner) => contentControlPropertiesOf(owner).lock);
         const span = { start: from, end: to };
-        if (strikesWholeControl(span, { start, end }, resolveContentControlLock(locks))) {
+        if (strikesWholeControl(span, { start, end }, resolveContentControlLock(locks), node)) {
           cursor.offset = to;
           // The author's own proposal is taken back, not struck.
           if (insertionAuthor(stack) === revision.author) continue;
@@ -215,10 +215,10 @@ export function applyDeleteTracked(
           node.kind === 'contentControl' ||
           node.kind === 'contentControlContent')
       ) {
-        const rebuilt = rebuild(
-          node.children,
-          [...stack, node],
-          nextInlineContainerDepth(node, containerDepth)
+        // Runs struck one by one inside the container are one deletion there too, as at the top.
+        const rebuilt = mergedRevisions(
+          mint,
+          rebuild(node.children, [...stack, node], nextInlineContainerDepth(node, containerDepth))
         );
         // A wrapper emptied by the removal of our own insertion goes with it; one that
         // still holds content stays, because it is still saying something about that

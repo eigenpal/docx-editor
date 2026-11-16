@@ -4,6 +4,9 @@
 
 ```ts
 
+import { acceptedOffsetFromText } from '@docx-editor.dev/core/editor';
+import { AcceptedTextRange } from '@docx-editor.dev/core/contracts/editor';
+import { acceptedTextRanges } from '@docx-editor.dev/core/editor';
 import { AnchorHighlightAnimation } from '@docx-editor.dev/core/contracts/editor';
 import { AnchorHighlightOptions } from '@docx-editor.dev/core/contracts/editor';
 import { BookmarkSortOrder } from '@docx-editor.dev/core/editor';
@@ -11,6 +14,14 @@ import { BookmarkSummary } from '@docx-editor.dev/core/contracts/editor';
 import { ButtonHTMLAttributes } from 'react';
 import { CalendarDay } from '@docx-editor.dev/core/editor';
 import { CalendarMonth } from '@docx-editor.dev/core/editor';
+import { CHART_TYPE_CHOICES } from '@docx-editor.dev/core/editor';
+import { ChartColor } from '@docx-editor.dev/core/editor';
+import { ChartData } from '@docx-editor.dev/core/editor';
+import { ChartFormat } from '@docx-editor.dev/core/editor';
+import { ChartFormatChange } from '@docx-editor.dev/core/editor';
+import { ChartPaneChange } from '@docx-editor.dev/core/editor';
+import { ChartType } from '@docx-editor.dev/core/editor';
+import { chartTypeLabelKey } from '@docx-editor.dev/core/editor';
 import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
 import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
 import { ChromeExportFormat } from '@docx-editor.dev/core/editor';
@@ -23,11 +34,21 @@ import { ChromeMenuItemEntry } from '@docx-editor.dev/core/editor';
 import { ChromeMenuSeparatorEntry } from '@docx-editor.dev/core/editor';
 import { chromeMenuSlots } from '@docx-editor.dev/core/editor';
 import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core/editor';
+import { ChromePrintSettings } from '@docx-editor.dev/core/editor';
 import { ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { ClearAnchorHighlightOptions } from '@docx-editor.dev/core/contracts/editor';
 import { ClearRefreshHighlightsOptions } from '@docx-editor.dev/core/editor';
+import { ColorPick } from '@docx-editor.dev/core/editor';
 import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsChromeHandlers } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsDialogSession } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsEngineErrorCode } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsErrorCode } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsOutcome } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsProgress } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsRefusalReason } from '@docx-editor.dev/core/editor';
+import { CompareDocumentsRequest } from '@docx-editor.dev/core/editor';
 import { ComponentType } from 'react';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
 import { composeFontOrigins } from '@docx-editor.dev/core/editor';
@@ -67,6 +88,7 @@ import { EditorExecOptions } from '@docx-editor.dev/core/contracts/editor';
 import { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 import { EditorFontErrorCode } from '@docx-editor.dev/core/contracts/editor';
 import { EditorModule } from '@docx-editor.dev/core/editor';
+import { EditorPaneId } from '@docx-editor.dev/core/editor';
 import { EditorQuery } from '@docx-editor.dev/core/contracts/editor';
 import { EditorScope } from '@docx-editor.dev/core/contracts/editor';
 import { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
@@ -90,6 +112,7 @@ import { ForwardRefExoticComponent } from 'react';
 import { generateRulerTicks } from '@docx-editor.dev/core/editor';
 import { HIGHLIGHT_REFRESH_MS } from '@docx-editor.dev/core/editor';
 import { HighlightHit } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightKind } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightOptions } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightRange } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightRect } from '@docx-editor.dev/core/contracts/editor';
@@ -110,16 +133,32 @@ import { LocaleStrings } from '@docx-editor.dev/i18n';
 import { LockedControlNavigation } from '@docx-editor.dev/core/editor';
 import { MarkedFontResolver } from '@docx-editor.dev/core/editor';
 import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
+import { NavigateHighlightCommand } from '@docx-editor.dev/core/contracts/editor';
 import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
+import { ObjectSlotReadValueMap } from '@docx-editor.dev/core/editor';
+import { ObjectSlotValueMap } from '@docx-editor.dev/core/editor';
+import { ObjectToggleSlotId } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
+import { PANE_SECTIONS } from '@docx-editor.dev/core/editor';
+import { PaneRequest } from '@docx-editor.dev/core/editor';
+import { PaneRequestListenerOptions } from '@docx-editor.dev/core/editor';
+import { PaneSection } from '@docx-editor.dev/core/editor';
+import { PaneSectionId } from '@docx-editor.dev/core/editor';
+import { PaneSectionIds } from '@docx-editor.dev/core/editor';
+import { paneSections } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogFields } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogMixed } from '@docx-editor.dev/core/editor';
 import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
 import { ParagraphFormatRead } from '@docx-editor.dev/core/editor';
 import { ParagraphFormatUpdate } from '@docx-editor.dev/core/editor';
+import { ParagraphsChangeEvent } from '@docx-editor.dev/core/contracts/editor';
 import { ParagraphTabStop } from '@docx-editor.dev/core/editor';
+import { ParagraphText } from '@docx-editor.dev/core/contracts/editor';
+import { ParagraphTextProofing } from '@docx-editor.dev/core/contracts/editor';
+import { ParagraphTextReadOptions } from '@docx-editor.dev/core/contracts/editor';
+import { ParagraphTextSpan } from '@docx-editor.dev/core/contracts/editor';
 import { PX_PER_CM } from '@docx-editor.dev/core/editor';
 import { PX_PER_INCH } from '@docx-editor.dev/core/editor';
 import * as react from 'react';
@@ -134,9 +173,20 @@ import { RefreshFailureCode } from '@docx-editor.dev/core/editor';
 import { RefreshHighlightAnimation } from '@docx-editor.dev/core/editor';
 import { RefreshHighlightOptions } from '@docx-editor.dev/core/editor';
 import { RefreshLocation } from '@docx-editor.dev/core/editor';
+import { RefreshRefusal } from '@docx-editor.dev/core/editor';
+import { RefreshRefusalFields } from '@docx-editor.dev/core/editor';
+import { RefreshRefusalReason } from '@docx-editor.dev/core/editor';
 import { RefreshResult } from '@docx-editor.dev/core/editor';
 import { RefreshSubmission } from '@docx-editor.dev/core/editor';
 import { RefreshUpdate } from '@docx-editor.dev/core/editor';
+import { RefreshUpdateMode } from '@docx-editor.dev/core/editor';
+import { ReplaceAcceptedTextCommand } from '@docx-editor.dev/core/contracts/editor';
+import { ReplaceDocumentErrorCode } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentOutcome } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentRefusal } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentRefusalReason } from '@docx-editor.dev/core/editor';
+import { ReplaceDocumentRequest } from '@docx-editor.dev/core/editor';
+import { ResolvedChromePrintSettings } from '@docx-editor.dev/core/editor';
 import { ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
 import { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
 import { ReviewDisplayMode } from '@docx-editor.dev/core/editor';
@@ -162,6 +212,16 @@ import { SEARCH_HIGHLIGHT_PRIORITY } from '@docx-editor.dev/core/editor';
 import { SEARCH_HIGHLIGHT_SET } from '@docx-editor.dev/core/editor';
 import { SEARCH_MATCH_LIMIT } from '@docx-editor.dev/core/editor';
 import { SectionProperties } from '@docx-editor.dev/core/editor';
+import { SelectedChartCommand } from '@docx-editor.dev/core/editor';
+import { SelectedChartState } from '@docx-editor.dev/core/editor';
+import { SelectedShapeCommand } from '@docx-editor.dev/core/editor';
+import { SHAPE_OUTLINE_DASHES } from '@docx-editor.dev/core/editor';
+import { SHAPE_OUTLINE_WIDTHS } from '@docx-editor.dev/core/editor';
+import { ShapeFillState } from '@docx-editor.dev/core/editor';
+import { ShapeFormatState } from '@docx-editor.dev/core/editor';
+import { ShapeOutlineDash } from '@docx-editor.dev/core/editor';
+import { ShapeOutlineState } from '@docx-editor.dev/core/editor';
+import { ShapePaneChange } from '@docx-editor.dev/core/editor';
 import { SplitCellLimits } from '@docx-editor.dev/core/editor';
 import { SupportedImageMime } from '@docx-editor.dev/core/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core/editor';
@@ -171,6 +231,7 @@ import { TableInteractionLabelKey } from '@docx-editor.dev/core/contracts/editor
 import { TextFormFieldDialogSession } from '@docx-editor.dev/core/editor';
 import { TextMatch } from '@docx-editor.dev/core/contracts/editor';
 import { TextMeasurer } from '@docx-editor.dev/core/editor';
+import { textOffsetFromAccepted } from '@docx-editor.dev/core/editor';
 import { TFunction } from '@docx-editor.dev/i18n';
 import { Theme } from '@docx-editor.dev/core/contracts/editor';
 import { ToolbarCommandState } from '@docx-editor.dev/core/editor';
@@ -187,6 +248,12 @@ import { WatermarkState } from '@docx-editor.dev/core/contracts/editor';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
 import { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
 
+export { acceptedOffsetFromText }
+
+export { AcceptedTextRange }
+
+export { acceptedTextRanges }
+
 export { AnchorHighlightAnimation }
 
 export { AnchorHighlightOptions }
@@ -198,6 +265,62 @@ export interface BookmarkDialogFields {
     // (undocumented)
     sortBy: BookmarkSortOrder;
 }
+
+export { CHART_TYPE_CHOICES }
+
+export { ChartColor }
+
+export { ChartData }
+
+export { ChartFormat }
+
+export { ChartFormatChange }
+
+// @public
+export function ChartInsert(input: ChartInsertProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ChartInsert {
+    var // (undocumented)
+    docxSlot: "insert.chart";
+}
+
+// @public (undocumented)
+export interface ChartInsertPartComponent {
+    // (undocumented)
+    (props: ChartInsertProps): ReactElement | null;
+    // (undocumented)
+    readonly docxSlot: 'insert.chart';
+}
+
+// @public
+export interface ChartInsertProps {
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+}
+
+export { ChartPaneChange }
+
+// @public
+export type ChartPartProps = ObjectControlProps;
+
+// @public
+export interface ChartSeriesColorsProps extends ChartPartProps {
+    index?: number;
+}
+
+// @public
+export type ChartTogglePartProps = ObjectButtonPartProps;
+
+export { ChartType }
+
+export { chartTypeLabelKey }
 
 export { CHROME_GROUPS }
 
@@ -230,7 +353,100 @@ export { ClearAnchorHighlightOptions }
 
 export { ClearRefreshHighlightsOptions }
 
+export { ColorPick }
+
+// @public
+export const ColorPicker: {
+    readonly Content: ForwardRefExoticComponent<ColorPickerContentProps & RefAttributes<HTMLDivElement>>;
+    readonly Grid: () => ReactElement;
+    readonly HexInput: (props: ColorPickerHexInputProps) => ReactElement;
+    readonly NoColor: (props: ColorPickerNoColorProps) => ReactElement | null;
+    readonly Root: (props: ColorPickerRootProps) => ReactElement;
+    readonly Swatch: (props: ColorPickerSwatchProps) => ReactElement;
+    readonly Trigger: ForwardRefExoticComponent<ColorPickerTriggerProps & RefAttributes<HTMLButtonElement>>;
+};
+
+// @public
+export type ColorPickerCompound = typeof ColorPicker;
+
+// @public
+export interface ColorPickerContentProps extends HTMLAttributes<HTMLDivElement> {
+    className?: string;
+    container?: Element | null;
+    hexInput?: boolean;
+    inline?: boolean;
+}
+
+// @public
+export interface ColorPickerHexInputProps {
+    className?: string;
+}
+
+// @public
+export interface ColorPickerNoColorProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+    className?: string;
+}
+
+// @public
+export interface ColorPickerRootProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> {
+    // (undocumented)
+    asChild?: boolean;
+    automaticHex?: string;
+    className?: string;
+    // (undocumented)
+    disabled?: boolean;
+    noColor?: 'none' | 'auto' | false;
+    // (undocumented)
+    onOpenChange?: (open: boolean) => void;
+    onPick: (pick: ColorPick | 'none') => void;
+    open?: boolean;
+    themeHexes?: readonly string[];
+    value: ColorPickerValue;
+}
+
+// @public
+export interface ColorPickerSwatchProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'value'> {
+    className?: string;
+    hex?: string;
+    // (undocumented)
+    pick: ColorPick;
+}
+
+// @public
+export interface ColorPickerTriggerProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+    // (undocumented)
+    asChild?: boolean;
+    className?: string;
+}
+
+// @public
+export type ColorPickerValue = ColorPick | 'none' | null;
+
 export { commandForSlot }
+
+export { CompareDocumentsChromeHandlers }
+
+export { CompareDocumentsDialogSession }
+
+// @public
+export interface CompareDocumentsDialogValues {
+    // (undocumented)
+    readonly authorName: string;
+    // (undocumented)
+    readonly detectFormatChanges: boolean;
+    readonly removeDateAndTime: boolean;
+    readonly revised: File | null;
+}
+
+export { CompareDocumentsEngineErrorCode }
+
+export { CompareDocumentsErrorCode }
+
+export { CompareDocumentsOutcome }
+
+export { CompareDocumentsRefusalReason }
+
+export { CompareDocumentsRequest }
 
 export { composeFontConfiguration }
 
@@ -320,9 +536,8 @@ export interface ContentControlWidgetPictureProps extends DocxEditorContentContr
 
 // @public
 export interface ContextMenuAnchor {
-    // (undocumented)
+    readonly trigger: 'pointer' | 'keyboard';
     readonly x: number;
-    // (undocumented)
     readonly y: number;
 }
 
@@ -469,6 +684,11 @@ export const ContextMenuRefreshTocPageNumbers: ((input: ContextMenuCommandProps)
 };
 
 // @public
+export const ContextMenuRemoveToc: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
 export const ContextMenuSelectAll: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
     docxRow: string;
 };
@@ -482,6 +702,21 @@ export const ContextMenuSelectTable: ((input: ContextMenuTableRowProps) => react
 export const ContextMenuSplitCell: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
     docxRow: string;
 };
+
+// @public
+export function ContextMenuStart(input: ContextMenuStartProps): react.JSX.Element;
+
+// @public (undocumented)
+export namespace ContextMenuStart {
+    var // (undocumented)
+    docxRowPlacement: "start";
+}
+
+// @public
+export interface ContextMenuStartProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+}
 
 // @public
 export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
@@ -615,10 +850,84 @@ export interface DocxEditorBookmarkDialogProps extends DialogCustomizationProps 
 }
 
 // @public
+export const DocxEditorChartAxes: ObjectPartComponent<ObjectButtonPartProps, "chart.axes">;
+
+// @public
+export const DocxEditorChartCategoryAxisTitle: ObjectPartComponent<ObjectControlProps, "chart.categoryAxisTitle">;
+
+// @public
+export const DocxEditorChartData: ObjectPartComponent<ObjectControlProps, "chart.data">;
+
+// @public
+export const DocxEditorChartDataLabels: ObjectPartComponent<ObjectButtonPartProps, "chart.dataLabels">;
+
+// @public
+export const DocxEditorChartGridlines: ObjectPartComponent<ObjectButtonPartProps, "chart.gridlines">;
+
+// @public
+export const DocxEditorChartLegend: ObjectPartComponent<ObjectControlProps, "chart.legend">;
+
+// @public
+export function DocxEditorChartPane(input: DocxEditorChartPaneProps): ReactElement;
+
+// @public
+export interface DocxEditorChartPaneProps {
+    className?: string;
+}
+
+// @public
+export const DocxEditorChartSeriesColors: ObjectPartComponent<ChartSeriesColorsProps, "chart.seriesColor">;
+
+// @public
+export const DocxEditorChartTitle: ObjectPartComponent<ObjectControlProps, "chart.title">;
+
+// @public
+export const DocxEditorChartType: ObjectPartComponent<ObjectControlProps, "chart.type">;
+
+// @public
+export const DocxEditorChartValueAxisTitle: ObjectPartComponent<ObjectControlProps, "chart.valueAxisTitle">;
+
+// @public
 export type DocxEditorChildren = ReactNode;
 
 // @public
 export function DocxEditorColorByChangeType(): null;
+
+// @public
+export const DocxEditorCompareDocumentsDialog: typeof CompareDocumentsDialogRoot & {
+    Apply: (props: DialogPartProps & {
+        name?: keyof CompareDocumentsDialogValues | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Body: (props: DialogPartProps & {
+        name?: keyof CompareDocumentsDialogValues | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Cancel: (props: DialogPartProps & {
+        name?: keyof CompareDocumentsDialogValues | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Error: (props: DialogPartProps & {
+        name?: keyof CompareDocumentsDialogValues | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Field: (props: DialogPartProps & {
+        name: keyof CompareDocumentsDialogValues;
+    }) => react.ReactNode;
+    Footer: (props: DialogPartProps & {
+        name?: keyof CompareDocumentsDialogValues | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Header: (props: DialogPartProps & {
+        name?: keyof CompareDocumentsDialogValues | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Notice: (props: DialogPartProps) => react.ReactNode;
+    Progress: (props: DialogPartProps) => react.ReactNode;
+    Title: (props: DialogPartProps & {
+        name?: keyof CompareDocumentsDialogValues | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+};
+
+// @public
+export interface DocxEditorCompareDocumentsDialogProps extends DialogCustomizationProps {
+    // (undocumented)
+    session: CompareDocumentsDialogSession | null;
+}
 
 // @public
 export function DocxEditorContent(input: DocxEditorContentProps): react.JSX.Element;
@@ -770,6 +1079,8 @@ export interface DocxEditorContextMenuNamespace {
     readonly RefreshToc: typeof ContextMenuRefreshToc;
     // (undocumented)
     readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
+    // (undocumented)
+    readonly RemoveToc: typeof ContextMenuRemoveToc;
     readonly Row: typeof MenuRow;
     // (undocumented)
     readonly SelectAll: typeof ContextMenuSelectAll;
@@ -780,6 +1091,7 @@ export interface DocxEditorContextMenuNamespace {
     readonly Slot: typeof MenuItem;
     // (undocumented)
     readonly SplitCell: typeof ContextMenuSplitCell;
+    readonly Start: typeof ContextMenuStart;
     // (undocumented)
     readonly Submenu: typeof MenuSubmenu;
 }
@@ -1025,6 +1337,7 @@ export interface DocxEditorMenuProps {
     onSave?: () => void;
     overflow?: boolean;
     preset?: boolean;
+    printSettings?: boolean;
     reportIssue?: boolean;
     t?: ToolbarTranslate;
 }
@@ -1034,8 +1347,23 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     // (undocumented)
     readonly AuthorStyle: typeof DocxEditorAuthorStyle;
     readonly BookmarkDialog: typeof DocxEditorBookmarkDialog;
+    readonly ChartAxes: typeof DocxEditorChartAxes;
+    readonly ChartCategoryAxisTitle: typeof DocxEditorChartCategoryAxisTitle;
+    readonly ChartData: typeof DocxEditorChartData;
+    readonly ChartDataLabels: typeof DocxEditorChartDataLabels;
+    readonly ChartGridlines: typeof DocxEditorChartGridlines;
+    readonly ChartInsert: typeof ChartInsert;
+    readonly ChartLegend: typeof DocxEditorChartLegend;
+    readonly ChartPane: typeof DocxEditorChartPane;
+    readonly ChartSeriesColors: typeof DocxEditorChartSeriesColors;
+    readonly ChartTitle: typeof DocxEditorChartTitle;
+    readonly ChartType: typeof DocxEditorChartType;
+    readonly ChartValueAxisTitle: typeof DocxEditorChartValueAxisTitle;
     // (undocumented)
     readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
+    readonly ColorPicker: typeof ColorPicker;
+    // (undocumented)
+    readonly CompareDocumentsDialog: typeof DocxEditorCompareDocumentsDialog;
     // (undocumented)
     readonly Content: typeof DocxEditorContent;
     // (undocumented)
@@ -1057,7 +1385,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly InvalidTextFormFieldDialog: typeof DocxEditorInvalidTextFormFieldDialog;
     readonly Loading: typeof DocxEditorLoading;
     readonly Menu: typeof DocxEditorMenu;
-    readonly Navigation: typeof Navigation;
+    readonly Navigation: typeof Navigation_2;
     // (undocumented)
     readonly NotePreview: typeof DocxEditorNotePreview;
     // (undocumented)
@@ -1069,6 +1397,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly OpenFailure: typeof DocxEditorOpenFailure;
     readonly PageNumber: typeof DocxEditorPageNumber;
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
+    readonly PaneSections: typeof DocxEditorPaneSections;
     // (undocumented)
     readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
     readonly PrintDialog: typeof DocxEditorPrintDialog;
@@ -1078,6 +1407,13 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
+    readonly ShapeFill: typeof DocxEditorShapeFill;
+    readonly ShapeFillTransparency: typeof DocxEditorShapeFillTransparency;
+    readonly ShapeOutlineColor: typeof DocxEditorShapeOutlineColor;
+    readonly ShapeOutlineDash: typeof DocxEditorShapeOutlineDash;
+    readonly ShapeOutlineWidth: typeof DocxEditorShapeOutlineWidth;
+    readonly ShapePane: typeof DocxEditorShapePane;
+    readonly SidePanel: typeof DocxEditorSidePanel;
     readonly SplitCellDialog: typeof DocxEditorSplitCellDialog;
     readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
     // (undocumented)
@@ -1300,6 +1636,16 @@ export interface DocxEditorPageSetupDialogProps extends DialogCustomizationProps
 }
 
 // @public
+export function DocxEditorPaneSections<P extends EditorPaneId>(input: DocxEditorPaneSectionsProps<P>): ReactElement;
+
+// @public
+export interface DocxEditorPaneSectionsProps<P extends EditorPaneId = EditorPaneId> {
+    filter?: (section: PaneSection<P>) => boolean;
+    pane: P;
+    sections?: readonly PaneSectionId<P>[];
+}
+
+// @public
 export const DocxEditorParagraphDialog: typeof ParagraphDialogRoot & {
     Apply: (props: DialogPartProps & {
         name?: "alignment" | "contextualSpacing" | "direction" | "indentLeft" | "indentRight" | "keepLines" | "keepNext" | "lineRule" | "lineValue" | "pageBreakBefore" | "spaceAfter" | "spaceBefore" | "special" | "specialBy" | "tabStops" | "widowControl" | undefined;
@@ -1339,6 +1685,7 @@ export type DocxEditorPopup<Props extends object> = false | ((props: Props) => D
 // @public
 export interface DocxEditorPopups {
     bookmark?: DocxEditorPopup<DocxEditorBookmarkDialogProps>;
+    compareDocuments?: DocxEditorPopup<DocxEditorCompareDocumentsDialogProps>;
     // (undocumented)
     contentControl?: DocxEditorPopup<ContentControlProps>;
     contentControlCheckbox?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
@@ -1384,11 +1731,15 @@ export function DocxEditorPrintDialog(input: DocxEditorPrintDialogProps): react.
 // @public
 export interface DocxEditorPrintDialogProps {
     children?: DocxEditorChildren;
+    choosing?: boolean;
     className?: string;
     error: string;
     onClose(): void;
+    onPrint?: () => void;
+    onSettingsChange?: (change: ChromePrintSettings) => void;
     open: boolean;
     pending: boolean;
+    settings?: ResolvedChromePrintSettings;
     style?: CSSProperties;
     url: string;
 }
@@ -1556,6 +1907,29 @@ export interface DocxEditorRulerProps {
     unit?: 'inch' | 'cm';
 }
 
+// @public
+export const DocxEditorShapeFill: ObjectPartComponent<ObjectButtonPartProps, "shape.fill">;
+
+// @public
+export const DocxEditorShapeFillTransparency: ObjectPartComponent<ObjectControlProps, "shape.fillTransparency">;
+
+// @public
+export const DocxEditorShapeOutlineColor: ObjectPartComponent<ObjectButtonPartProps, "shape.outlineColor">;
+
+// @public
+export const DocxEditorShapeOutlineDash: ObjectPartComponent<ObjectControlProps, "shape.outlineDash">;
+
+// @public
+export const DocxEditorShapeOutlineWidth: ObjectPartComponent<ObjectControlProps, "shape.outlineWidth">;
+
+// @public
+export function DocxEditorShapePane(input: DocxEditorShapePaneProps): ReactElement;
+
+// @public
+export interface DocxEditorShapePaneProps {
+    className?: string;
+}
+
 // @public @deprecated
 export function DocxEditorShell(input: {
     className: string | undefined;
@@ -1592,6 +1966,16 @@ export function DocxEditorShell(input: {
     trackedChanges?: readonly TrackedChangeSummary[];
     verticalRulerProps: VerticalRulerProps$1;
 }): react.JSX.Element;
+
+// @public
+export function DocxEditorSidePanel(input: DocxEditorSidePanelProps): ReactElement;
+
+// @public
+export interface DocxEditorSidePanelProps {
+    children?: DocxEditorChildren;
+    className?: string;
+    onClose?: () => void;
+}
 
 // @public
 export const DocxEditorSplitCellDialog: typeof SplitCellDialogRoot & {
@@ -1702,6 +2086,7 @@ export interface DocxEditorToolbarNamespace {
     readonly BulletList: ToolbarPartComponent;
     // (undocumented)
     readonly Button: typeof ToolbarButton$1;
+    readonly ChartInsert: ChartInsertPartComponent;
     // (undocumented)
     readonly ClearFormatting: ToolbarPartComponent;
     // (undocumented)
@@ -1902,9 +2287,9 @@ export { Editor }
 
 // @public
 export interface EditorCaret {
-    // (undocumented)
+    readonly blockId: string;
     readonly offset: number;
-    // (undocumented)
+    // @deprecated
     readonly paragraphId: string;
 }
 
@@ -2056,6 +2441,8 @@ export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState'
 export { HIGHLIGHT_REFRESH_MS }
 
 export { HighlightHit }
+
+export { HighlightKind }
 
 export { HighlightOptions }
 
@@ -2388,6 +2775,8 @@ export interface MenuTableGridProps {
     slot?: ChromeSlotId;
 }
 
+export { NavigateHighlightCommand }
+
 export { NavigateToChangeOptions }
 
 // @public
@@ -2487,6 +2876,61 @@ export type NotePropertiesState = Exclude<ReturnType<Editor['getNotePropertiesSt
 
 // @internal
 export function notificationYieldsToTask(): boolean;
+
+// @public
+export const OBJECT_SLOT_PARTS: Readonly<Record<ObjectSlotId, ComponentType<ObjectControlProps>>>;
+
+// @public
+export interface ObjectButtonPartProps extends ObjectControlProps {
+    asChild?: boolean;
+    children?: DocxEditorChildren;
+    icon?: DocxEditorChildren;
+}
+
+// @public
+export interface ObjectControlProps {
+    className?: string;
+    hidden?: boolean;
+    label?: string;
+    variant?: ObjectControlVariant;
+}
+
+// @public
+export interface ObjectControlState<K extends ObjectSlotId> {
+    readonly disabledReason: string | null;
+    readonly execute: (value: ObjectSlotValueMap[K], options?: EditorExecOptions) => ExecResult;
+    readonly isActive: boolean;
+    // (undocumented)
+    readonly isEnabled: boolean;
+    readonly label: string;
+    readonly options: readonly ObjectSlotValueMap[K][];
+    // (undocumented)
+    readonly slotId: K;
+    readonly value: ObjectSlotReadValueMap[K] | null;
+}
+
+// @public
+export type ObjectControlVariant = 'field' | 'compact';
+
+// @public
+export type ObjectPartComponent<P, S extends ObjectSlotId> = ((props: P) => ReactElement | null) & {
+    readonly docxSlot: S;
+};
+
+// @public
+export type ObjectSlotId = keyof ObjectSlotValueMap;
+
+export { ObjectSlotReadValueMap }
+
+export { ObjectSlotValueMap }
+
+// @public
+export interface ObjectToggleControl {
+    // (undocumented)
+    readonly toggle: (options?: EditorExecOptions) => ExecResult;
+}
+
+export { ObjectToggleSlotId }
 
 // @public (undocumented)
 export const OUTLINE_BUTTON_LEFT_OFFSET = 12;
@@ -2644,6 +3088,16 @@ export interface PaginatedDocxEditorShellProps {
     readonly source: Uint8Array;
 }
 
+export { PANE_SECTIONS }
+
+export { PaneSection }
+
+export { PaneSectionId }
+
+export { PaneSectionIds }
+
+export { paneSections }
+
 // @public
 export type ParagraphAlignment = 'left' | 'center' | 'right' | 'both' | 'distribute';
 
@@ -2652,6 +3106,8 @@ export { ParagraphFlagState }
 export { ParagraphFormatRead }
 
 export { ParagraphFormatUpdate }
+
+export { ParagraphsChangeEvent }
 
 // @public
 export interface ParagraphStyleItemProps extends ParagraphStylePartProps {
@@ -2704,6 +3160,14 @@ export interface ParagraphStyleProps extends ParagraphStylePartProps {
 
 export { ParagraphTabStop }
 
+export { ParagraphText }
+
+export { ParagraphTextProofing }
+
+export { ParagraphTextReadOptions }
+
+export { ParagraphTextSpan }
+
 // @public
 export function provideDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorResult;
 
@@ -2735,11 +3199,31 @@ export { RefreshHighlightOptions }
 
 export { RefreshLocation }
 
+export { RefreshRefusal }
+
+export { RefreshRefusalFields }
+
+export { RefreshRefusalReason }
+
 export { RefreshResult }
 
 export { RefreshSubmission }
 
 export { RefreshUpdate }
+
+export { RefreshUpdateMode }
+
+export { ReplaceAcceptedTextCommand }
+
+export { ReplaceDocumentErrorCode }
+
+export { ReplaceDocumentOutcome }
+
+export { ReplaceDocumentRefusal }
+
+export { ReplaceDocumentRefusalReason }
+
+export { ReplaceDocumentRequest }
 
 // @public
 export type ResolvedColorMode = 'light' | 'dark';
@@ -2844,6 +3328,12 @@ export { SEARCH_HIGHLIGHT_SET }
 
 export { SEARCH_MATCH_LIMIT }
 
+export { SelectedChartCommand }
+
+export { SelectedChartState }
+
+export { SelectedShapeCommand }
+
 // @public
 export interface SelectionFormatting {
     alignment?: ParagraphAlignment;
@@ -2863,6 +3353,26 @@ export interface SelectionFormatting {
     superscript?: boolean;
     underline?: boolean;
 }
+
+export { SHAPE_OUTLINE_DASHES }
+
+export { SHAPE_OUTLINE_WIDTHS }
+
+// @public
+export type ShapeColorPartProps = ObjectButtonPartProps;
+
+export { ShapeFillState }
+
+export { ShapeFormatState }
+
+export { ShapeOutlineDash }
+
+export { ShapeOutlineState }
+
+export { ShapePaneChange }
+
+// @public
+export type ShapePartProps = ObjectControlProps;
 
 // @public
 export function Slot(input: SlotProps): ReactElement<unknown, string | react.JSXElementConstructor<any>> | null;
@@ -3019,6 +3529,8 @@ export interface TextFormFieldDialogFields {
 
 export { TextMatch }
 
+export { textOffsetFromAccepted }
+
 // @public @deprecated (undocumented)
 export function TitleBar(input: TitleBarProps): react__default.JSX.Element;
 
@@ -3069,6 +3581,9 @@ export interface ToolbarButtonProps {
     slot?: ChromeSlotId;
     slotId?: ChromeSlotId;
 }
+
+// @public (undocumented)
+export const ToolbarChartInsert: ChartInsertPartComponent;
 
 export { ToolbarCommandState }
 
@@ -3255,6 +3770,18 @@ export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): Chr
 export function useCommentDraftRequest(handler: (() => void) | null | undefined): void;
 
 // @public
+export function useCompareDocumentsDialog(): UseCompareDocumentsDialogReturn;
+
+// @public
+export interface UseCompareDocumentsDialogReturn extends UseDialogReturn<CompareDocumentsDialogValues> {
+    readonly busy: boolean;
+    readonly cancelable: boolean;
+    readonly notice: string | undefined;
+    readonly originalHasTrackedChanges: boolean;
+    readonly progress: CompareDocumentsProgress | null;
+}
+
+// @public
 export function useContentControl(): UseContentControlResult;
 
 // @public
@@ -3330,6 +3857,12 @@ export interface UseContentControlWidgetResult {
     // (undocumented)
     readonly value: string;
 }
+
+// @public
+export function useContextMenuAnchor(): ContextMenuAnchor | null;
+
+// @public
+export function useContextMenuHighlights<R extends HighlightRange = HighlightRange>(name?: string): readonly HighlightHit<R>[];
 
 // @public
 export function useContextMenuTarget(): HTMLElement | null;
@@ -3447,7 +3980,7 @@ export function useEditorSnapshot(editor: Editor | null): number;
 export function useEditorState<T>(selector: (snapshot: EditorSnapshot) => T, isEqual?: (a: T, b: T) => boolean, options?: UseEditorStateOptions): T;
 
 // @public
-export function useEditorValueCommand<K extends keyof ToolbarValueMap>(slotId: K): EditorValueCommandState<ToolbarValueMap[K]>;
+export function useEditorValueCommand<K extends Exclude<keyof ToolbarValueMap, keyof ObjectSlotValueMap>>(slotId: K): EditorValueCommandState<ToolbarValueMap[K]>;
 
 // @public
 export function useFontFamily(): UseFontFamilyResult;
@@ -3502,7 +4035,12 @@ export function useHeaderFooterState(): HeaderFooterState | null;
 export function useHighlightAt<R extends HighlightRange = HighlightRange>(name?: string): HighlightHit<R> | null;
 
 // @public
-export function useHighlights(name: string, source: HighlightSource, options?: HighlightOptions): HighlightResult;
+export function useHighlights(name: string, source: HighlightSource, options?: HighlightOptions): UseHighlightsReturn;
+
+// @public
+export interface UseHighlightsReturn extends HighlightResult {
+    readonly refresh: () => void;
+}
 
 // @public
 export function useHistoryGroup(input: HistoryGroupBindingOptions): UseHistoryGroupReturn;
@@ -3586,6 +4124,12 @@ export function useNoteScopeState(): Extract<ViewScope, {
 }> | null;
 
 // @public
+export function useObjectControl<K extends ObjectSlotId>(slotId: K): UseObjectControlReturn<K>;
+
+// @public
+export type UseObjectControlReturn<K extends ObjectSlotId> = ObjectControlState<K> & (K extends ObjectToggleSlotId ? ObjectToggleControl : unknown);
+
+// @public
 export function useOpenFailure(options?: UseOpenFailureOptions): UseOpenFailureReturn;
 
 // @public
@@ -3618,6 +4162,9 @@ export interface UsePageSetupReturn {
     readonly isEnabled: boolean;
     readonly pageSetup: PageSetup | null;
 }
+
+// @public
+export function usePaneRequest(listener: (request: PaneRequest) => void, options?: PaneRequestListenerOptions): void;
 
 // @public
 export function useParagraphDialog(): UseParagraphDialogReturn;
@@ -3679,6 +4226,41 @@ export function useScopeClassName(): '' | 'docx-editor ' | 'docx-editor dark ';
 
 // @public
 export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: ScopedChromeAnchorPlacement): ScopedChromeAnchor;
+
+// @public
+export function useSelectedChart(): UseSelectedChartReturn;
+
+// @public
+export interface UseSelectedChartReturn {
+    readonly canEditData: boolean;
+    readonly canEditFormat: boolean;
+    readonly chart: SelectedChartState | null;
+    readonly data: ChartData | null;
+    readonly dataDisabledReason: string | null;
+    readonly editData: (change: ChartPaneChange) => ExecResult;
+    readonly execute: (command: SelectedChartCommand) => ExecResult;
+    readonly format: ChartFormat | null;
+    readonly formatDisabledReason: string | null;
+    readonly readReason: string | null;
+}
+
+// @public
+export function useSelectedShape(): UseSelectedShapeReturn;
+
+// @public
+export interface UseSelectedShapeReturn {
+    readonly canEditFill: boolean;
+    readonly canEditOutline: boolean;
+    readonly canEditTransparency: boolean;
+    readonly drawingNodeId: string | null;
+    readonly edit: (change: ShapePaneChange) => ExecResult;
+    readonly execute: (command: SelectedShapeCommand) => ExecResult;
+    readonly fillDisabledReason: string | null;
+    readonly format: ShapeFormatState | null;
+    readonly memberId: string | null;
+    readonly outlineDisabledReason: string | null;
+    readonly transparencyDisabledReason: string | null;
+}
 
 // @public
 export function useSplitCellDialog(): UseSplitCellDialogReturn;

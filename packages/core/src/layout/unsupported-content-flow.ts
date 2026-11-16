@@ -1,6 +1,6 @@
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { growLineMetrics, type PendingLine } from './pending-line.ts';
-import type { TextMeasurer } from './semantic-records.ts';
+import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
 
 /** Publish a component's reserved box without inventing model characters. */
@@ -26,6 +26,32 @@ export function appendUnsupportedContent(
     ...paragraphSpanMetadata(piece),
   });
   line.width += atomWidth;
+  line.end = piece.end;
+}
+
+/** Publish an equation's laid box on the line's baseline. The caller makes room for it first. */
+export function appendEquation(
+  line: PendingLine,
+  piece: FieldAwarePiece,
+  equation: NonNullable<StyleSpanRecord['equation']>,
+  paragraphId: string,
+  x: number
+): void {
+  const { box, baseline } = equation.geometry;
+  const priorDescent = Math.max(0, line.height - line.baseline);
+  line.baseline = Math.max(line.baseline, baseline);
+  line.height = line.baseline + Math.max(priorDescent, Math.max(0, box.height - baseline));
+  line.spans.push({
+    range: { paragraphId, start: piece.start, end: piece.end },
+    text: '\uFFFC',
+    props: piece.props,
+    style: piece.style,
+    box: { x, y: 0, width: box.width, height: box.height },
+    projected: true,
+    equation,
+    ...paragraphSpanMetadata(piece),
+  });
+  line.width += box.width;
   line.end = piece.end;
 }
 

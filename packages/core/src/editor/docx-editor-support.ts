@@ -6,11 +6,7 @@
 // sub-object references stable across re-derivations.
 
 import { watermarkRefusal } from './docx-editor-watermark.ts';
-import type {
-  DocumentSource,
-  EditorCommand,
-  EditorError,
-} from '@docx-editor.dev/core/contracts/editor';
+import type { EditorCommand, EditorError } from '@docx-editor.dev/core/contracts/editor';
 import type { SemanticSelection as SurfaceSelection } from '@docx-editor.dev/core/layout';
 // Direct, not through the layout barrel: this is an internal bound the write shares with
 // the reader, not something the layout package publishes.
@@ -22,9 +18,23 @@ import {
 } from '../store/store/table-constraints.ts';
 import { fontFamilyName } from '../store/package/font-family-name.ts';
 import { isDocAnchor, isDocAnchorRange } from './anchor-resolution.ts';
-import { blankDocumentBytes } from './blank-document.ts';
 import { tableCommandCanSupport } from './table-command-plan.ts';
 import { replaceMatchArgumentRefusal } from './docx-editor-replace-match.ts';
+import { replaceAcceptedTextArgumentRefusal } from './docx-editor-replace-accepted-text.ts';
+import { navigateHighlightArgumentRefusal } from './highlight-navigation.ts';
+import { replaceAllMatchesArgumentRefusal } from './docx-editor-replace-all.ts';
+import { classifySelectionEdit } from './docx-editor-selection-edits.ts';
+
+import { NOT_A_TEXT_SELECTION, textSelectionOf } from './docx-editor-text-selection.ts';
+export { textSelectionOf, type TextSelectionInput } from './docx-editor-text-selection.ts';
+export { normalizeSource, unloadableSourceReason } from './docx-editor-document-source.ts';
+
+/** A mutating command, or an `invalidArgs` refusal when its arguments give a reason. */
+function mutatingUnlessRefused(refusal: string | null | undefined): CommandSupport {
+  return refusal
+    ? { supported: false, code: 'invalidArgs', reason: refusal }
+    : { supported: true, mutating: true };
+}
 
 /** Recursively freeze plain objects and arrays (idempotent). */
 export function deepFreezeValue<T>(value: T): T {
@@ -183,33 +193,6 @@ export function resolveMarkAttr(command: { mark: string; value: unknown }): Reso
   }
 }
 
-function isSurfacePosition(value: unknown): value is SurfaceSelection['anchor'] {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { paragraphId?: unknown }).paragraphId === 'string' &&
-    typeof (value as { offset?: unknown }).offset === 'number'
-  );
-}
-
-/**
- * The surface's native selection form: paragraph-id + offset endpoints.
- *
- * `DocAnchor` forms (`{ anchor: { paraId } }`, `{ range: { from, to } }` with anchor
- * endpoints) are resolved through the session's paraId index at exec time — see
- * `anchor-resolution.ts`. `DocLocation` and `SemanticTarget` still address the document
- * through indexes this lane does not build, so they stay refused rather than resolved
- * approximately.
- */
-export function isSurfaceSelection(value: unknown): value is SurfaceSelection {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    isSurfacePosition((value as { anchor?: unknown }).anchor) &&
-    isSurfacePosition((value as { head?: unknown }).head)
-  );
-}
-
 export function editorError(code: string, message: string): EditorError {
   const error = new Error(message) as Error & { code?: string };
   error.code = code;
@@ -225,35 +208,6 @@ export function selectionsMatch(a: SurfaceSelection | null, b: SurfaceSelection 
     a.head.paragraphId === b.head.paragraphId &&
     a.head.offset === b.head.offset
   );
-}
-
-export function normalizeSource(source: DocumentSource): Uint8Array | null {
-  // `'blank'` is Word's blank template, minted here rather than by every host: omitting
-  // the document is NOT a way to ask for an empty one, and the engine should not make
-  // hosts discover that the hard way. Fresh bytes per call, so two editors opened blank
-  // never alias one buffer.
-  if (source === 'blank') return blankDocumentBytes();
-  if (source instanceof Uint8Array) return source;
-  if (source instanceof ArrayBuffer) return new Uint8Array(source);
-  // Any OTHER string is a mistake worth naming. Falling through to the handle branch below
-  // would answer a `document="/report.docx"` or a `'Blank'` typo with "a DocumentHandle
-  // cannot be re-loaded", which names a type the caller never mentioned.
-  if (typeof source === 'string') return null;
-  // The remaining form is a DocumentHandle: identity and revision, not content.
-  return null;
-}
-
-/**
- * Why a source produced no bytes, in the caller's own terms.
- *
- * `normalizeSource` answers `null` for two unrelated reasons, and a host that passed a
- * string deserves to hear about the string rather than about handles.
- */
-export function unloadableSourceReason(source: DocumentSource): string {
-  if (typeof source === 'string') {
-    return `'${source}' is not a document; pass DOCX bytes, or 'blank' for an empty one`;
-  }
-  return 'a DocumentHandle cannot be re-loaded; pass DOCX bytes';
 }
 
 /**
@@ -539,6 +493,12 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         command.kind === 'sectionContinuous'
         ? { supported: true, mutating: true }
         : { supported: false, reason: `break kind '${command.kind}' is not supported` };
+    case 'replaceText':
+    case 'applyFormatting':
+    case 'splitParagraph':
+    case 'mergeParagraphs':
+    case 'removeTabMark':
+      return classifySelectionEdit(command);
     case 'insertText':
       return command.target === undefined
         ? { supported: true, mutating: true }
@@ -582,11 +542,17 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       }
       return { supported: true, mutating: true };
     }
-    case 'replaceMatch': {
-      const refusal = replaceMatchArgumentRefusal(command);
+    case 'replaceAllMatches':
+      return mutatingUnlessRefused(replaceAllMatchesArgumentRefusal(command));
+    case 'replaceMatch':
+      return mutatingUnlessRefused(replaceMatchArgumentRefusal(command));
+    case 'replaceAcceptedText':
+      return mutatingUnlessRefused(replaceAcceptedTextArgumentRefusal(command));
+    case 'navigateHighlight': {
+      const refusal = navigateHighlightArgumentRefusal(command);
       return refusal
         ? { supported: false, code: 'invalidArgs', reason: refusal }
-        : { supported: true, mutating: true };
+        : { supported: true, mutating: false };
     }
     case 'proposeDeletion':
       return command.author !== undefined && command.author.trim().length === 0
@@ -698,6 +664,18 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
           supported: false,
           code: 'invalidArgs',
           reason: 'refreshToc tocId must be a non-empty string',
+        };
+      }
+      return { supported: true, mutating: true };
+    case 'removeToc':
+      if (
+        command.tocId !== undefined &&
+        (typeof command.tocId !== 'string' || command.tocId.length === 0)
+      ) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: 'removeToc tocId must be a non-empty string',
         };
       }
       return { supported: true, mutating: true };
@@ -836,20 +814,31 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return command.region === 'table'
         ? { supported: true, mutating: false }
         : { supported: false, reason: `selecting a table ${command.region} is not supported yet` };
-    case 'setSelection':
+    case 'setSelection': {
       // Shape gate only: whether an anchor's paraId exists (and its `search` phrase is
       // unique) is a property of the DOCUMENT, checked at exec — the same split as
       // `insertText`, whose target cannot be pre-verified either.
-      return ('range' in command &&
-        (isSurfaceSelection(command.range) || isDocAnchorRange(command.range))) ||
+      const text = 'range' in command ? textSelectionOf(command.range) : NOT_A_TEXT_SELECTION;
+      if (text.kind === 'invalid') {
+        return { supported: false, code: 'invalidArgs', reason: text.reason };
+      }
+      return text.kind === 'ok' ||
+        ('range' in command && isDocAnchorRange(command.range)) ||
         ('anchor' in command && isDocAnchor(command.anchor))
         ? { supported: true, mutating: false }
         : {
             supported: false,
             reason:
-              'setSelection accepts { anchor: { paraId } }, a { range } whose from/to are paraId anchors, or a { range } carrying a semantic { anchor: { paragraphId, offset }, head } selection',
+              'setSelection accepts { anchor: { paraId } }, a { range } whose from/to are paraId anchors, or a { range } carrying an { anchor: { blockId, offset }, head } selection',
           };
+    }
     case 'insertTextBox':
+      return { supported: true, mutating: true };
+    case 'insertChart':
+    case 'setChartData':
+    case 'setChartType':
+    case 'setChartFormat':
+    case 'setChartColor':
       return { supported: true, mutating: true };
     case 'insertImage':
       return command.data instanceof Uint8Array &&
@@ -896,6 +885,8 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         ? { supported: true, mutating: true }
         : { supported: false, code: 'invalidArgs', reason: 'unsupported transform action' };
     case 'setImagePosition':
+    case 'setShapeFill':
+    case 'setShapeOutline':
       return { supported: true, mutating: true };
     case 'setImageProperties':
       return { supported: true, mutating: true };
@@ -906,12 +897,8 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return typeof command.name === 'string' && command.name.length > 0
         ? { supported: true, mutating: command.type !== 'goToBookmark' }
         : { supported: false, code: 'invalidArgs', reason: `${command.type} needs a name` };
-    case 'setWatermark': {
-      const refusal = watermarkRefusal(command.watermark);
-      return refusal
-        ? { supported: false, code: 'invalidArgs', reason: refusal }
-        : { supported: true, mutating: true };
-    }
+    case 'setWatermark':
+      return mutatingUnlessRefused(watermarkRefusal(command.watermark));
     default:
       return { supported: false, reason: unknownCommandReason(command.type) };
   }
@@ -938,4 +925,5 @@ export {
   pageEqual,
   pageSetupEqual,
   snapshotsEqual,
+  tableContextEqual,
 } from './docx-editor-equality.ts';

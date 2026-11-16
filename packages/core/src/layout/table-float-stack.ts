@@ -142,7 +142,7 @@ export function createStackPlacement(
     takeWaiting(tableId: string, pending: Set<string>): readonly string[] {
       const taken: string[] = [];
       const own = byId.get(tableId);
-      for (let above = own && stackPartner(positioned, own); above; ) {
+      for (let above = own && stackPartner(positioned, own); above;) {
         if (!pending.delete(above.table.id)) break;
         taken.unshift(above.table.id);
         above = stackPartner(positioned, above);

@@ -2,50 +2,67 @@
 
 # Comment on found text
 
-In a browser host, find the text with `editor.findMatches`, select the first match with `editor.selectMatch`, and then call `useReview().comment`. The comment is written as the editor's `author`, so set `author` on the editor and add `reviewModule()` to its modules. `selectMatch` opens the header, footer, or note that holds the match, so a match in any story works.
+Find text with `editor.findMatches`, select a match with `editor.selectMatch`, and comment with `useReview().comment`. On a server, search with `body.search` and call `Range.insertComment`.
+
+## Comment on a search result
+
+The following button comments on the first whole-word match of a term. The editor needs an `author` and `reviewModule()` in its modules.
 
 ```vue
 <script setup lang="ts">
+import { ref } from 'vue';
 import { useDocxEditor } from '@docx-editor.dev/vue';
 import { useReview } from '@docx-editor.dev/pro/vue';
 
 const props = defineProps<{ term: string }>();
 const editor = useDocxEditor();
-const { comment } = useReview();
+const { comment, lastRefusal } = useReview();
+const status = ref('');
 function run() {
   const [match] = editor.value?.findMatches(props.term, { wholeWord: true }) ?? [];
-  if (match && editor.value?.selectMatch(match).ok) comment(`Define "${props.term}".`);
+  if (!match || !editor.value?.selectMatch(match).ok) {
+    status.value = 'No match';
+    return;
+  }
+  if (!comment(`Define "${props.term}".`)) status.value = lastRefusal.value?.code ?? 'Refused';
 }
 </script>
 
 <template>
   <button @click="run">Comment on {{ term }}</button>
+  <span role="status">{{ status }}</span>
 </template>
 ```
 
-`comment` returns `false` when the editor refuses the write. `useReview()` returns `lastRefusal` as a ref, so read `lastRefusal.value?.code` in script, or `lastRefusal?.code` in the template.
+Comment only after `selectMatch(match).ok` is `true`. `selectMatch` opens the header, footer, or note that holds the match. `comment` returns `false` when the editor refuses the write, and `lastRefusal` holds the diagnostic code.
 
-## Comment in a headless pipeline
+## Comment on a server
 
-On a server or in an agent pipeline, search the body and call `Range.insertComment`. The runtime writes the comment as its `author` option.
+The following example searches the body, not every story, and saves the result:
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api';
 
 const runtime = await DocxEditor.createServer(bytes, { author: 'Review bot' });
-await runtime.run(async (context) => {
-  const found = context.document.body.search(term, { matchWholeWord: true });
-  found.load('items');
-  await context.sync();
-  found.items[0]?.insertComment(`Define "${term}".`);
-  await context.sync();
-});
-const saved = await runtime.save();
-runtime.dispose();
+try {
+  await runtime.run(async (context) => {
+    const found = context.document.body.search(term, { matchWholeWord: true });
+    found.load('items');
+    await context.sync();
+    if (found.items.length === 0) return;
+    found.items[0]!.insertComment(`Define "${term}".`);
+    await context.sync();
+  });
+  const saved = await runtime.save();
+} finally {
+  runtime.dispose();
+}
 ```
 
-Both paths save the same comment markup: the same `w:comment` attributes, the same date format, and the same range markers.
+Load the search results before you read them, and end with `await context.sync()` to send the queued comment. The runtime writes the comment as its `author` option.
 
-## Reply to a thread
+## See also
 
-To answer an existing comment, call `useReview().reply(item, text)` in a browser host, or `Comment.reply(text)` in the editing API.
+- [Comments](https://www.docx-editor.dev/docs/2.x/pro/comments)
+- [Diagnostics](https://www.docx-editor.dev/docs/2.x/guides/diagnostics)
+- [Replace as a tracked change](./tracked-replacement.md)

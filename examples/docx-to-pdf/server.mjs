@@ -75,7 +75,7 @@ export async function createPdfDemo({
       const comments = url.searchParams.get('comments') ?? 'true';
       const fidelityPolicy = url.searchParams.get('fidelityPolicy') ?? 'strict';
       if (
-        !['proposed', 'original', 'all-markup'].includes(displayMode) ||
+        !['proposed', 'original', 'all-markup', 'simple-markup'].includes(displayMode) ||
         !['true', 'false'].includes(comments) ||
         !['strict', 'best-effort'].includes(fidelityPolicy)
       )

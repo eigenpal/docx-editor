@@ -42,7 +42,10 @@ test('twenty exact-height lines reserve shared border insets', () => {
     geometry: { width: 200, height: 352, margin: { top: 10, right: 10, bottom: 10, left: 10 } },
     measurer: createFixedMeasurer(5, 12),
   });
-  expect(result.pages).toHaveLength(1);
+  // The table fills the first page exactly; the empty paragraph the body reads after it starts
+  // the next one.
+  expect(result.pages).toHaveLength(2);
+  expect(result.pages[1]!.fragments.map((fragment) => fragment.kind)).toEqual(['paragraph']);
   const rows = result.pages.flatMap((page) =>
     page.fragments.flatMap((fragment) => (fragment.kind === 'table' ? fragment.rows : []))
   );

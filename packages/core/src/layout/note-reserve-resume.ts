@@ -97,29 +97,33 @@ export function resumeLimitBeforePage(
 }
 
 /**
- * Whether the previous pass's pages from `fromPage` on can be reused `delta` pages later: each
- * of them must find the same reserve at its new page, and no reserve may appear on a page
- * that had none.
+ * The last page of the previous pass whose reserve differs from this pass's reserve `delta`
+ * pages later, or -1 when none does; null when the session holds no previous pass.
+ *
+ * The previous pass's pages from `fromPage` on can be reused `delta` pages later when this is
+ * below `fromPage`: each of them then finds the same reserve at its new page, and no reserve
+ * appears on a page that had none. One answer per `delta` serves every `fromPage`, so a pass
+ * that converges on many pages compares the reserves once, not once per page.
  */
-export function tailReservesMatch(
+export function lastTailMismatch(
   session: LayoutSession,
   reserves: ReadonlyMap<number, number> | undefined,
   pageIndexStart: number,
-  fromPage: number,
   delta: number
-): boolean {
+): number | null {
   const previous = reserveContexts.get(session);
-  if (!previous) return false;
+  if (!previous) return null;
   // The reused pages land at [fromPage + delta, pageCount + delta]; slots past them belong to
   // another section.
   const next = localReserves(reserves, pageIndexStart, previous.pageCount + delta + 1);
+  let last = -1;
   for (const [slot, height] of previous.reserves) {
-    if (slot >= fromPage && next.get(slot + delta) !== height) return false;
+    if (slot > last && next.get(slot + delta) !== height) last = slot;
   }
   for (const [slot, height] of next) {
-    if (slot >= fromPage + delta && previous.reserves.get(slot - delta) !== height) return false;
+    if (slot - delta > last && previous.reserves.get(slot - delta) !== height) last = slot - delta;
   }
-  return true;
+  return last;
 }
 
 /**
@@ -272,6 +276,8 @@ export function sectionReserveResume(
   const reads = new Map<number, number>();
   let shift = 0;
   let tail: ReadReserves | undefined;
+  /** By page shift: the last previous page whose reserve the shift breaks; see `tailHolds`. */
+  const tailMismatches = new Map<number, number | null>();
   const reserveAt = (page: number): number | undefined => {
     if (!reading) return reserves?.get(pageIndexStart + page);
     let read = reads.get(page);
@@ -315,16 +321,19 @@ export function sectionReserveResume(
             resumeLimitBeforePage(checkpoints, moved),
             Math.max(0, checkpoints.length - 2)
           ),
-    tailHolds: (mark, pageCount) =>
-      moved === undefined ||
-      (session !== undefined &&
-        tailReservesMatch(
-          session,
-          reserves,
-          pageIndexStart,
-          mark.pageCount,
-          pageCount - mark.pageCount
-        )),
+    tailHolds: (mark, pageCount) => {
+      if (moved === undefined) return true;
+      if (session === undefined) return false;
+      // Asked at each block of each converging page: the reserves and the previous pass stay
+      // as they are for the whole pass, so one comparison per page shift serves them all.
+      const delta = pageCount - mark.pageCount;
+      let last = tailMismatches.get(delta);
+      if (last === undefined) {
+        last = lastTailMismatch(session, reserves, pageIndexStart, delta);
+        tailMismatches.set(delta, last);
+      }
+      return last !== null && last < mark.pageCount;
+    },
     reserveAt,
     followShift: (next) => {
       shift = next;

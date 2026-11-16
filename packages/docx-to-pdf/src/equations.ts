@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -10,7 +10,7 @@ import type {
   SemanticSpanVisit,
 } from '@docx-editor.dev/core/layout';
 import { TextWriter } from './text.ts';
-import { Work, color } from './context.ts';
+import { Work, color, number } from './context.ts';
 import { pageHeight, rect } from './context.ts';
 import { mergeEquationText } from './equation-text-merge.ts';
 
@@ -36,43 +36,52 @@ export function paintEquation(
       y = parentY + g.box.y;
     switch (g.kind) {
       case 'text':
-      case 'fallback':
+      case 'fallback': {
         if (g.kind === 'fallback')
           work.report('equation-fallback', 'Core uses fallback equation text', visit.page.index);
-        out.push(
-          text.paint(
-            {
-              ...visit,
-              storyOrigin: { x: 0, y: 0 },
-              line: { ...visit.line, box: { ...visit.line.box, y }, baseline: g.baseline },
-              absoluteBox: { ...g.box, x, y },
-              span: {
-                ...visit.span,
-                text: g.text,
-                equation: undefined,
-                glyphOffsetPt: 0,
-                // The face layout measured: the math face, or an authored text face.
-                style: {
-                  ...visit.span.style,
-                  ...(g.runStyle
-                    ? {
-                        fontFamily: g.runStyle.fontFamily,
-                        fontFamilyEastAsia: g.runStyle.fontFamilyEastAsia,
-                        bold: g.runStyle.bold,
-                        italic: g.runStyle.italic,
-                        characterSpacingPt: g.runStyle.characterSpacingPt,
-                      }
-                    : { fontFamily: 'Cambria Math', fontFamilyEastAsia: 'Cambria Math' }),
-                  fontSizePt: g.fontSizePt,
-                  verticalAlign: 'baseline',
-                  baselineShiftPt: 0,
-                },
+        const painted = text.paint(
+          {
+            ...visit,
+            storyOrigin: { x: 0, y: 0 },
+            line: { ...visit.line, box: { ...visit.line.box, y }, baseline: g.baseline },
+            absoluteBox: { ...g.box, x, y },
+            span: {
+              ...visit.span,
+              text: g.text,
+              equation: undefined,
+              glyphOffsetPt: 0,
+              // The face layout measured: the math face, or an authored text face.
+              style: {
+                ...visit.span.style,
+                ...(g.runStyle
+                  ? {
+                      fontFamily: g.runStyle.fontFamily,
+                      fontFamilyEastAsia: g.runStyle.fontFamilyEastAsia,
+                      bold: g.runStyle.bold,
+                      italic: g.runStyle.italic,
+                      characterSpacingPt: g.runStyle.characterSpacingPt,
+                    }
+                  : { fontFamily: 'Cambria Math', fontFamilyEastAsia: 'Cambria Math' }),
+                fontSizePt: g.fontSizePt,
+                verticalAlign: 'baseline',
+                baselineShiftPt: 0,
               },
             },
-            page
-          )
+          },
+          page
+        );
+        const stretch = g.kind === 'text' ? g.stretch : undefined;
+        if (!stretch) {
+          out.push(painted);
+          return;
+        }
+        // A grown delimiter character scales vertically about a fixed line of its box.
+        const fixed = pageHeight(page) - (y + stretch.originY - visit.page.box.y);
+        out.push(
+          `q 1 0 0 ${number(stretch.scale)} 0 ${number(fixed * (1 - stretch.scale))} cm\n${painted}\nQ`
         );
         return;
+      }
       case 'row':
         for (const child of g.items) node(child, x, y);
         return;
@@ -91,6 +100,23 @@ export function paintEquation(
         bar(g.bar, x, y);
         node(g.body, x, y);
         return;
+      case 'delimiter':
+        for (const fence of g.fences) node(fence, x, y);
+        for (const item of g.items) node(item, x, y);
+        return;
+      case 'borderBox': {
+        for (const stroke of g.rules) bar(stroke, x, y);
+        const height = pageHeight(page);
+        const px = (value: number) => (x + value - visit.page.box.x).toFixed(3);
+        const py = (value: number) => (height - (y + value - visit.page.box.y)).toFixed(3);
+        for (const line of g.diagonals)
+          out.push(
+            `q ${color(visit.span.style.color)} RG ${g.thickness.toFixed(3)} w ` +
+              `${px(line.x1)} ${py(line.y1)} m ${px(line.x2)} ${py(line.y2)} l S Q`
+          );
+        node(g.body, x, y);
+        return;
+      }
       case 'script':
         node(g.base, x, y);
         if (g.subscript) node(g.subscript, x, y);

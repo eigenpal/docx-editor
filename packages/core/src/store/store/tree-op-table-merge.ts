@@ -25,7 +25,6 @@ import { fromEdit, TEXT_DEPS } from './tree-op-nodes.ts';
 import type { PlacedCell } from './tree-op-table-cell-properties.ts';
 import {
   cellBlocks,
-  cellHasRevision,
   cellIsBlank,
   cellPropertiesFor,
   cellWithProperties,
@@ -35,6 +34,12 @@ import {
   visualCellOf,
   type MergeableTable,
 } from './tree-op-table-cell-shape.ts';
+import {
+  cellBlocksStructureEdit,
+  freshCellJoiningInsertion,
+  paragraphJoiningInsertion,
+} from './tree-op-table-pending-insertion.ts';
+import { invalidRevisionAttribution } from './tree-op-revision-attribution.ts';
 import { insertedCellParagraphContent } from './tree-op-table-row-paragraph.ts';
 import { wmlChildNamed } from './tree-op-table-shared.ts';
 import {
@@ -72,12 +77,15 @@ function readCellIds(op: MergeTableCellsOp): readonly string[] | null {
 function planMerge(
   part: OoxmlPart,
   op: MergeTableCellsOp,
-  limits?: TableTopologyLimits
+  limits?: TableTopologyLimits,
+  checkRevisions = true
 ):
   | { readonly ok: true; readonly plan: MergePlan }
   | { readonly ok: false; readonly reason: TreeOpRejection } {
   const ids = readCellIds(op);
   if (!ids) return { ok: false, reason: 'invalidArgs' };
+  if (op.revision !== undefined && invalidRevisionAttribution(op.revision))
+    return { ok: false, reason: 'invalid-property-value' };
   const read = readMergeableTable(part, op.tableId, limits);
   if (!read.ok) return read;
   const { table } = read;
@@ -113,7 +121,8 @@ function planMerge(
       ) {
         return { ok: false, reason: 'cells-not-rectangle' };
       }
-      if (cellHasRevision(table, entry)) return { ok: false, reason: 'cell-has-revision' };
+      if (checkRevisions && cellBlocksStructureEdit(table, entry, op.revision?.author))
+        return { ok: false, reason: 'cell-has-revision' };
       inside.push(entry);
       owners.add(visual.owner.cell.id);
       covered += entry.span;
@@ -135,7 +144,10 @@ export function validateMergeTableCells(
   return planned.ok ? null : planned.reason;
 }
 
-/** The cell a merge of `cellIds` merges into, or why the merge would be refused. */
+/**
+ * The cell a merge of `cellIds` merges into, or why its rectangle would be refused. Pending
+ * revisions are left to the merge itself, which knows whether it is tracked.
+ */
 export function mergeTargetCell(
   part: OoxmlPart,
   tableId: string,
@@ -143,7 +155,7 @@ export function mergeTargetCell(
 ):
   | { readonly ok: true; readonly cellId: string }
   | { readonly ok: false; readonly reason: TreeOpRejection } {
-  const planned = planMerge(part, { op: 'mergeTableCells', tableId, cellIds });
+  const planned = planMerge(part, { op: 'mergeTableCells', tableId, cellIds }, undefined, false);
   return planned.ok ? { ok: true, cellId: planned.plan.rows[0]![0]!.cell.id } : planned;
 }
 
@@ -187,8 +199,11 @@ export function applyMergeTableCells(
   // A blank head gives way to the content moved into it.
   if (filled.length > 0 && !movedFrom.has(head.cell.id))
     deleted.push(...paragraphIdsWithin(head.cell));
+  // Inside a pending table insertion, every new cell and paragraph mark joins that insertion.
+  const joining = op.revision !== undefined;
   if (headBlocks.at(-1)?.kind !== 'paragraph') {
-    const end = emptyParagraph(part, tableNode, nextId, `${head.cell.id}:merge:end`, used, wml);
+    const fresh = emptyParagraph(part, tableNode, nextId, `${head.cell.id}:merge:end`, used, wml);
+    const end = joining ? paragraphJoiningInsertion(fresh, head.cell, nextId, wml) : fresh;
     headBlocks.push(end);
     created.push(end.id);
   }
@@ -227,11 +242,10 @@ export function applyMergeTableCells(
         wml,
         content
       );
-      const continuation = freshTableCell(
-        nextId,
-        [freshTcPr, paragraph],
-        wml
-      ) as OoxmlTableCellNode;
+      const fresh = freshTableCell(nextId, [freshTcPr, paragraph], wml) as OoxmlTableCellNode;
+      const continuation = joining
+        ? freshCellJoiningInsertion(fresh, first!.cell, nextId, wml)
+        : fresh;
       created.push(continuation.id, paragraph.id);
       deleted.push(first!.cell.id);
       replacements.set(first!.cell.id, continuation);

@@ -87,14 +87,17 @@ describe('CT_PPr child order', () => {
     expect(propertiesKind(part)).toBe('paragraphProperties');
   });
 
-  test('an ordinary property after the mark is still a violation and demotes', () => {
-    // Only `w:sectPr` and `w:pPrChange` follow `w:rPr` in CT_PPr. Anything else after it is
-    // out of schema order, and demotion to generic stays the safe, lossless answer.
+  test('an ordinary property after the mark opens in schema order and stays typed', () => {
+    // Only `w:sectPr` and `w:pPrChange` follow `w:rPr` in CT_PPr. The reader puts anything
+    // else back before the mark, so the alignment stays visible and saves where it belongs.
     const part = load(
       '<w:p><w:pPr><w:rPr><w:b/></w:rPr><w:jc w:val="center"/></w:pPr>' +
         '<w:r><w:t>out of order</w:t></w:r></w:p>'
     );
-    expect(propertiesKind(part)).toBe('generic');
+    expect(propertiesKind(part)).toBe('paragraphProperties');
+    expect(serializeOoxmlPart(part)).toContain(
+      '<w:pPr><w:jc w:val="center"/><w:rPr><w:b/></w:rPr></w:pPr>'
+    );
   });
 
   test('a foreign-namespace element after the mark demotes', () => {

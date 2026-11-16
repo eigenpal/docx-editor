@@ -61,3 +61,25 @@ export function* withRelabeledProgress<T>(
       : progress;
   }
 }
+
+/**
+ * `steps` with every interim layout passed through `align` last, after note areas: section
+ * vertical alignment, applied as the finished pass applies it. `align` moves only the pages
+ * the pass completed; the pages after them come from the published layout, aligned already.
+ */
+export function* withAlignedProgress<T>(
+  steps: LayoutSteps<T>,
+  align: ((layout: SemanticLayout, completed: number) => SemanticLayout) | undefined
+): LayoutSteps<T> {
+  if (!align) return yield* steps;
+  for (;;) {
+    const next = steps.next();
+    if (next.done) return next.value;
+    const progress = next.value;
+    const finalize = progress?.finalize;
+    const completed = progress?.pages.length ?? 0;
+    yield finalize
+      ? { ...progress, finalize: (pages) => align(finalize(pages), completed) }
+      : progress;
+  }
+}

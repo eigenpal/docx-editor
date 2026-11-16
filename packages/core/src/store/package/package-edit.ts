@@ -99,8 +99,7 @@ export interface PackageInvariantIssue {
 
 /** Whether a package satisfies its cross-part invariants, listing every violation otherwise. */
 export type PackageInvariantResult =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly issues: readonly PackageInvariantIssue[] };
+  { readonly ok: true } | { readonly ok: false; readonly issues: readonly PackageInvariantIssue[] };
 
 /** Relationship records owned by one part, in authored order. */
 export function relationshipsOf(

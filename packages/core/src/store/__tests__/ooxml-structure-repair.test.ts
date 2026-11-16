@@ -243,7 +243,8 @@ describe('run content', () => {
       expect(all.filter((entry) => entry.startsWith(`${name}:`))).not.toContainEqual(
         `${name}:generic`
       );
-    expect(savedBody(part)).toBe(body);
+    // The body ends with the table, so it saves the empty paragraph it reads after it.
+    expect(savedBody(part)).toBe(`${body}<w:p/>`);
   });
 });
 

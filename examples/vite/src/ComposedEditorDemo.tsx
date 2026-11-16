@@ -37,9 +37,15 @@ import { packagedFonts } from '@docx-editor.dev/fonts';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
-import { SourceLink } from '../../shared/SourceLink';
-import { ReviewSettings, storedReviewPane } from './ReviewSettings';
-import { ThemeToggle } from './ThemeToggle';
+import { sourceUrlFor } from '../../shared/config';
+import { DEMO_GITHUB_MARK } from '../../shared/demo-icons';
+import { storedRulers, saveRulers, DEMO_ZOOM_MODE } from '../../shared/demo-view';
+import { DemoExportMenu } from './DemoExportMenu';
+import { ReviewSettings, storedReviewPane, useStoredReviewPane } from './ReviewSettings';
+import { DemoSidePanel, useChartPaneRequests } from './DemoSidePanel';
+import { DemoIcon } from './DemoIcon';
+import type { DemoPanelTab } from '../../shared/demo-tabs';
+import { exampleText as t } from '../../shared/example-text';
 import { DrawingsE2eBridge } from './DrawingsE2eBridge';
 import { ReviewWritesE2eBridge } from './ReviewWritesE2eBridge';
 import { keepCaret } from './demoButtons';
@@ -343,27 +349,38 @@ function PerfHud() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// The chrome under Root: header (demo-owned) + the library toolbar
+// The chrome under Root: the demo's top bar, and the library toolbar as a dock
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** Save the document as a download named after the title. */
+function useSaveDocument(title: string): () => void {
+  const editor = useDocxEditor();
+  return () => {
+    void editor?.save().then((buffer) => {
+      const base = title.trim() || 'document';
+      downloadDocx(buffer, `${base}.docx`);
+    });
+  };
+}
 
 function EditorChrome({
   title,
   onTitleChange,
-  colorMode,
-  onColorModeChange,
   onInsertCitation,
   showAdapterSwitcher,
   collaborating,
   collaborationControl,
+  panelOpen,
+  onTogglePanel,
 }: {
   title: string;
   onTitleChange: (next: string) => void;
-  colorMode: 'light' | 'dark';
-  onColorModeChange: (next: 'light' | 'dark') => void;
   onInsertCitation: (at: EditorCaret | null) => void;
   showAdapterSwitcher: boolean;
   collaborating: boolean;
   collaborationControl: ReactNode;
+  panelOpen: boolean;
+  onTogglePanel: () => void;
 }) {
   const editor = useDocxEditor();
   // While a large file opens, the previous document is still mounted: Open and New wait.
@@ -376,11 +393,19 @@ function EditorChrome({
   const caret = useEditorCaret();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [showPageSetup, setShowPageSetup] = useState(false);
+  const saveDocument = useSaveDocument(title);
+  // What an export is doing, beside the file name. It clears itself.
+  const [status, setStatus] = useState('');
+  useEffect(() => {
+    if (!status) return undefined;
+    const timer = window.setTimeout(() => setStatus(''), 2600);
+    return () => window.clearTimeout(timer);
+  }, [status]);
 
   const openFile = (file: File) => {
     if (collaborating) return;
-    // The title follows the opened file, so the header names the document actually
-    // on screen — and the download the Save button writes names itself after it too.
+    // The title follows the opened file, so the top bar names the document actually on
+    // screen — and the download Save writes names itself after it too.
     onTitleChange(file.name.replace(/\.docx$/i, ''));
     void file.arrayBuffer().then((buffer) => {
       editor?.load(new Uint8Array(buffer));
@@ -402,42 +427,23 @@ function EditorChrome({
         )
       );
   };
-  const saveDocument = () => {
-    void editor?.save().then((buffer) => {
-      const base = title.trim() || 'document';
-      downloadDocx(buffer, `${base}.docx`);
-    });
-  };
+  const busy = !editor || collaborating || opening;
 
   return (
-    // The chrome surface is header + toolbar ONLY: its seam (border + shadow)
-    // closes directly under the toolbar pill. The horizontal-ruler row renders
-    // BELOW the seam, on the gray workspace background — the chrome spec
-    // treats the ruler as workspace furniture, not header surface.
+    // The top bar sits on the canvas, as in the editor at docx-editor.dev. The formatting
+    // toolbar is not here: it floats over the page column (`DocumentDock`).
     <div className="demo-chrome">
-      <header className="demo-header">
-        <div className="demo-header__left">
-          <BrandLogo />
-          <div className="demo-header__adapter">
-            {showAdapterSwitcher ? <AdapterSwitcher current="react" /> : null}
-            <SourceLink example="Vite" />
-          </div>
+      <header className="demo-topbar">
+        <div className="demo-topbar__brand">
+          <BrandLogo byline={false} />
+          {showAdapterSwitcher ? (
+            <span className="demo-topbar__adapter">
+              <AdapterSwitcher current="react" />
+            </span>
+          ) : null}
         </div>
-
-        {/* Title with the LIBRARY menu bar beneath, Docs-style.
-
-            `DocxEditor.Menu` is the packaged bar: every row is a chrome slot, so it
-            shares its label, icon, command and enabled state with the toolbar control
-            for the same capability, and a row the engine cannot honour yet shows the
-            engine's own reason. Two customizations demonstrate the ladder:
-
-            - a demo-owned "New" row appended into the File menu by name;
-            - the whole Help menu replaced in place, because documentation is the
-              product's, not the library's.
-
-            Open is handled by the demo (it already owns the file input the Open DOCX
-            button uses); Save routes to the same download the header button runs. */}
-        <div className="demo-header__title-block">
+        <span className="demo-topbar__divider" aria-hidden="true" />
+        <div className="demo-file">
           <input
             className="demo-title"
             value={title}
@@ -445,93 +451,140 @@ function EditorChrome({
             aria-label="Document title"
             spellCheck={false}
           />
-          <DocxEditor.Menu
-            exporters={demoExporters}
-            fileName={title}
-            onOpen={collaborating ? undefined : () => fileInputRef.current?.click()}
-            onSave={saveDocument}
-            onPageSetup={() => setShowPageSetup(true)}
-          >
-            {/* preset={false}: the demo wants New BETWEEN Open and Save, and stating the
-                order is clearer than merging into it. */}
-            <DocxEditor.Menu.File preset={false}>
-              <DocxEditor.Menu.Open />
-              <DocxEditor.Menu.Row
-                onSelect={newDocument}
-                disabled={!editor || collaborating || opening}
-              >
-                New
-              </DocxEditor.Menu.Row>
-              <DocxEditor.Menu.Save />
-              <DocxEditor.Menu.Submenu labelKey="toolbar.export">
-                <DocxEditor.Menu.ExportMarkdown />
-                <DocxEditor.Menu.ExportPdf />
-              </DocxEditor.Menu.Submenu>
-              <DocxEditor.Menu.Print />
-              <DocxEditor.Menu.Separator />
-              <DocxEditor.Menu.PageSetup />
-            </DocxEditor.Menu.File>
-            {/* Row-level override: the packaged rows stay, one is swapped in place. */}
-            <DocxEditor.Menu.Insert>
-              <DocxEditor.Menu.Row
-                icon={<span aria-hidden="true">✎</span>}
-                onSelect={() => window.alert('A host action, in the packaged menu.')}
-              >
-                Clause library
-              </DocxEditor.Menu.Row>
-            </DocxEditor.Menu.Insert>
-            {/* Help is the host's: drop the packaged report row, keep the menu. */}
-            <DocxEditor.Menu.Help>
-              <DocxEditor.Menu.ReportIssue hidden />
-              <a
-                className="docx-toolbar__menu-item docx-menubar__item"
-                href="https://docx-editor.dev/docs"
-                target="_blank"
-                rel="noreferrer"
-                role="menuitem"
-              >
-                <span className="docx-menubar__item-icon" aria-hidden="true" />
-                <span className="docx-menubar__item-label">Documentation</span>
-              </a>
-            </DocxEditor.Menu.Help>
-            {/* A menu the library knows nothing about, with the host's own id and label —
-                here it carries the PRO custom-node insert. One call authors a tagged,
-                contentLocked control at the caret: a recognized citation chip in this editor,
-                and in Word a control whose text cannot be typed over. */}
-            <DocxEditor.Menu.Menu id="my-menu" label="My Menu">
-              {/* `Menu.Group` is a real `role="group"` taking its heading as the accessible
-                  name, so rows a product ADDS are visibly its own without a hand-rolled
-                  heading breaking the menu's ownership of its items. */}
-              <DocxEditor.Menu.Group label="Custom elements">
-                <DocxEditor.Menu.Row
-                  onSelect={() => {
-                    if (!editor) return;
-                    // Capture the caret NOW: the dialog's inputs take focus, and inserting
-                    // at "wherever the selection is by then" lands the chip wrong.
-                    onInsertCitation(caret);
-                  }}
-                >
-                  Insert citation
-                </DocxEditor.Menu.Row>
-              </DocxEditor.Menu.Group>
-            </DocxEditor.Menu.Menu>
-          </DocxEditor.Menu>
+          <span className="demo-file__ext" aria-hidden="true">
+            .docx
+          </span>
+          <span className="demo-file__status" role="status" aria-live="polite">
+            {status}
+          </span>
         </div>
 
-        <div className="demo-header__right">
-          <ThemeToggle value={colorMode} onChange={onColorModeChange} />
-          <ReviewSettings />
+        {/* `DocxEditor.Menu` is the packaged bar: every row is a chrome slot, so it shares
+            its label, icon, command and enabled state with the toolbar control for the same
+            capability, and a row the engine cannot honour yet shows the engine's own reason.
+            Two customizations demonstrate the ladder:
+
+            - a demo-owned "New" row placed into the File menu by name;
+            - the whole Help menu replaced in place, because documentation is the product's,
+              not the library's.
+
+            Open is handled by the demo (it owns the file input the Open button uses); Save
+            routes to the same download the Save button runs. */}
+        <DocxEditor.Menu
+          className="demo-menubar"
+          exporters={demoExporters}
+          fileName={title}
+          onOpen={collaborating ? undefined : () => fileInputRef.current?.click()}
+          onSave={saveDocument}
+          onPageSetup={() => setShowPageSetup(true)}
+        >
+          {/* preset={false}: the demo wants New BETWEEN Open and Save, and stating the
+              order is clearer than merging into it. */}
+          <DocxEditor.Menu.File preset={false}>
+            <DocxEditor.Menu.Open />
+            <DocxEditor.Menu.Row onSelect={newDocument} disabled={busy}>
+              New
+            </DocxEditor.Menu.Row>
+            <DocxEditor.Menu.Save />
+            <DocxEditor.Menu.Submenu labelKey="toolbar.export">
+              <DocxEditor.Menu.ExportMarkdown />
+              <DocxEditor.Menu.ExportPdf />
+            </DocxEditor.Menu.Submenu>
+            <DocxEditor.Menu.Print />
+            <DocxEditor.Menu.Separator />
+            <DocxEditor.Menu.PageSetup />
+          </DocxEditor.Menu.File>
+          {/* Row-level override: the packaged rows stay, one is swapped in place. */}
+          <DocxEditor.Menu.Insert>
+            <DocxEditor.Menu.Row
+              icon={<span aria-hidden="true">✎</span>}
+              onSelect={() => window.alert('A host action, in the packaged menu.')}
+            >
+              Clause library
+            </DocxEditor.Menu.Row>
+          </DocxEditor.Menu.Insert>
+          {/* Help is the host's: drop the packaged report row, keep the menu. */}
+          <DocxEditor.Menu.Help>
+            <DocxEditor.Menu.ReportIssue hidden />
+            <a
+              className="docx-toolbar__menu-item docx-menubar__item"
+              href="https://docx-editor.dev/docs"
+              target="_blank"
+              rel="noreferrer"
+              role="menuitem"
+            >
+              <span className="docx-menubar__item-icon" aria-hidden="true" />
+              <span className="docx-menubar__item-label">Documentation</span>
+            </a>
+          </DocxEditor.Menu.Help>
+          {/* A menu the library knows nothing about, with the host's own id and label —
+              here it carries the PRO custom-node insert. One call authors a tagged,
+              contentLocked control at the caret: a recognized citation chip in this editor,
+              and in other editors a control whose text cannot be typed over. */}
+          <DocxEditor.Menu.Menu id="my-menu" label="My Menu">
+            {/* `Menu.Group` is a real `role="group"` taking its heading as the accessible
+                name, so rows a product ADDS are visibly its own without a hand-rolled
+                heading breaking the menu's ownership of its items. */}
+            <DocxEditor.Menu.Group label="Custom elements">
+              <DocxEditor.Menu.Row
+                onSelect={() => {
+                  if (!editor) return;
+                  // Capture the caret NOW: the dialog's inputs take focus, and inserting
+                  // at "wherever the selection is by then" lands the chip wrong.
+                  onInsertCitation(caret);
+                }}
+              >
+                Insert citation
+              </DocxEditor.Menu.Row>
+            </DocxEditor.Menu.Group>
+          </DocxEditor.Menu.Menu>
+        </DocxEditor.Menu>
+
+        <div className="demo-topbar__actions">
+          <a
+            className="demo-header-action demo-header-action--outline demo-source"
+            href={sourceUrlFor('Vite')}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={t('demoTopbar.sourceTitle')}
+            title={t('demoTopbar.sourceTitle')}
+          >
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
+              <path d={DEMO_GITHUB_MARK} />
+            </svg>
+            <span className="demo-header-action__label">{t('demoTopbar.source')}</span>
+          </a>
+          {/* Editing, suggesting, or viewing: the packaged control, alone in its own bar. */}
+          <DocxEditor.Toolbar preset={false} className="demo-modebar">
+            <DocxEditor.Toolbar.EditingMode />
+          </DocxEditor.Toolbar>
+          {collaborationControl}
+          <span className="demo-topbar__divider" aria-hidden="true" />
           <DemoHeaderButton
-            variant="primary"
-            disabled={!editor || collaborating || opening}
+            aria-label={t('demoTopbar.openDocx')}
+            title={t('demoTopbar.openDocx')}
+            disabled={busy}
             onClick={() => fileInputRef.current?.click()}
           >
-            Open DOCX
+            <DemoIcon name="open" />
+            <span className="demo-header-action__label">{t('demoTopbar.open')}</span>
           </DemoHeaderButton>
-          <DemoHeaderButton disabled={!editor || collaborating || opening} onClick={newDocument}>
-            New
+          <DemoHeaderButton aria-label={t('demoTopbar.new')} disabled={busy} onClick={newDocument}>
+            <DemoIcon name="new" />
+            <span className="demo-header-action__label">{t('demoTopbar.new')}</span>
           </DemoHeaderButton>
-          {collaborationControl}
+          <DemoExportMenu title={title} onStatus={setStatus} />
+          {/* One toggle, always in this place: it shows the side panel and hides it. */}
+          <DemoHeaderButton
+            variant="icon"
+            aria-expanded={panelOpen}
+            aria-controls={panelOpen ? 'demo-side-panel' : undefined}
+            aria-label={t(panelOpen ? 'demoTopbar.panelClose' : 'demoTopbar.panelOpen')}
+            title={t(panelOpen ? 'demoTopbar.panelClose' : 'demoTopbar.panelOpen')}
+            onClick={onTogglePanel}
+          >
+            <DemoIcon name={panelOpen ? 'panelClose' : 'panelOpen'} />
+          </DemoHeaderButton>
         </div>
       </header>
 
@@ -549,9 +602,7 @@ function EditorChrome({
         }}
       />
 
-      <DocxEditor.Toolbar onSave={saveDocument} />
-
-      {/* Word-style compatibility bar when document fonts render in substitutes. */}
+      {/* A compatibility bar when document fonts render in substitutes. */}
       <DocxEditor.FontNotice />
 
       {/* Explains a file that did not open, with an action to try another one. */}
@@ -574,8 +625,35 @@ function EditorChrome({
 }
 
 /**
- * The context-fed horizontal ruler: the first workspace row, sitting on the gray
- * `--doc-bg` BELOW the chrome seam, centered over the page column. It follows an
+ * The library toolbar as a floating dock over the page column. Editing mode lives in the top
+ * bar and zoom in the corner of the canvas, so the dock hides those two in place and keeps its
+ * room for formatting.
+ */
+function DocumentDock({ title }: { title: string }) {
+  const saveDocument = useSaveDocument(title);
+  return (
+    <div className="demo-dock">
+      <DocxEditor.Toolbar className="demo-docbar" onSave={saveDocument}>
+        <DocxEditor.Toolbar.EditingMode hidden />
+        <DocxEditor.Toolbar.Zoom hidden />
+      </DocxEditor.Toolbar>
+    </div>
+  );
+}
+
+/**
+ * Work every editor instance needs, once, under the Root: the saved review settings, and the
+ * Chart pane requests that open the side panel.
+ */
+function DemoEditorEffects({ onChartPane }: { onChartPane: (tab: DemoPanelTab) => void }) {
+  useStoredReviewPane();
+  useChartPaneRequests(onChartPane);
+  return null;
+}
+
+/**
+ * The context-fed horizontal ruler: the row under the dock, on the gray `--doc-bg`
+ * canvas, centered over the page column. It follows an
  * open navigation pane on its own — the part reads the pane's published shift —
  * so this row carries no pane-aware class of its own.
  */
@@ -611,6 +689,20 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
         ?.replace(/\.docx$/i, '') ?? 'Document'
   );
   const [showOutline, setShowOutline] = useState(false);
+  // The rulers are off, as in the studio at docx-editor.dev; Settings turns them on.
+  const [rulers, setRulers] = useState(storedRulers);
+  const changeRulers = useCallback((show: boolean) => {
+    setRulers(show);
+    saveRulers(show);
+  }, []);
+  // The side panel: closed at first, on the Settings tab when opened. Insert > Chart and
+  // Edit chart open it on the Chart tab (`DemoEditorEffects`).
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [panelTab, setPanelTab] = useState<DemoPanelTab>('settings');
+  const showPanel = useCallback((tab: DemoPanelTab) => {
+    setPanelTab(tab);
+    setPanelOpen(true);
+  }, []);
   const collaboration = useWebrtcCollaboration({ modules: PRO_MODULES });
   // The citation details card, owned HERE so both openers share it: a click on the chip
   // (`CustomNodeChrome.onNodeClick`) and the context menu's Edit row (`onEditNode`).
@@ -691,15 +783,17 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
             // The demo always opens ready to type: without an explicit mode, a document
             // carrying `w:trackRevisions` opens in suggesting (the Root follows the file).
             mode="edit"
+            zoomMode={DEMO_ZOOM_MODE}
             modules={collaboration.modules}
             {...(fonts ? { fonts } : {})}
             onFontError={(error) => console.warn(`[fonts] ${error.code}: ${error.message}`)}
           >
+            <DemoEditorEffects onChartPane={showPanel} />
             <EditorChrome
               title={title}
               onTitleChange={setTitle}
-              colorMode={colorMode}
-              onColorModeChange={setColorMode}
+              panelOpen={panelOpen}
+              onTogglePanel={() => setPanelOpen((open) => !open)}
               onInsertCitation={(at) => setCitationForm({ mode: 'insert', at })}
               showAdapterSwitcher={showAdapterSwitcher}
               collaborating={collaboration.session !== null}
@@ -712,90 +806,127 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                 />
               }
             />
-            <RulerRow />
-            {/* The viewport stays FULL-WIDTH so the vertical ruler (an absolute
+            {/* The workspace: the page column with its dock, and the side panel beside it. */}
+            <div className="demo-workspace">
+              <section className="demo-docpane" aria-label="Document">
+                <DocumentDock title={title} />
+                {rulers ? <RulerRow /> : null}
+                {/* The viewport stays FULL-WIDTH so the vertical ruler (an absolute
               child of the scroll container, pinned at left: 0) never moves. The
               navigation pane floats over the gutter to the LEFT of the centered
               page and moves the document only when the window is too narrow to
               hold both — it owns that measurement, so the demo supplies nothing
               but the positioned row it anchors to. */}
-            <div className="demo-main">
-              <DocxEditor.Navigation
-                open={showOutline}
-                onOpenChange={setShowOutline}
-                paneWidth={280}
-              />
-              <DocxEditor.Viewport className="demo-viewport">
-                {/* The vertical ruler rides INSIDE the scroll container as an
+                <div className="demo-main">
+                  <DocxEditor.Navigation
+                    open={showOutline}
+                    onOpenChange={setShowOutline}
+                    paneWidth={280}
+                  />
+                  <DocxEditor.Viewport className="demo-viewport">
+                    {/* The vertical ruler rides INSIDE the scroll container as an
                   absolutely positioned child, so it scrolls with the document and
                   its top offset lines up with the first page's top edge. */}
-                <div className="demo-vruler">
-                  <DocxEditor.VerticalRuler />
-                </div>
-                {/* Furniture / note chrome — sugar `<DocxEditor chrome>` mounts these; a
+                    {rulers ? (
+                      <div className="demo-vruler">
+                        <DocxEditor.VerticalRuler />
+                      </div>
+                    ) : null}
+                    {/* Furniture / note chrome — sugar `<DocxEditor chrome>` mounts these; a
                   composed tree must place them by name or enter/exit has no overlay UI. */}
-                <DocxEditor.HeaderFooterChrome />
-                <DocxEditor.NotesChrome />
-                <DocxEditor.Content />
-                {/* The right-click menu, with the PRO custom-node section on top: pointing
+                    <DocxEditor.HeaderFooterChrome />
+                    <DocxEditor.NotesChrome />
+                    <DocxEditor.Content />
+                    {/* The right-click menu, with the PRO custom-node section on top: pointing
                   at a citation chip shows its data and "Edit Citation" above the packaged
                   rows. Chips are content-locked, so the menu is the editing entry point. */}
-                <DocxEditor.ContextMenu>
-                  <CustomNodeContextMenu
-                    onEditNode={(node) =>
-                      node.nodeId
-                        ? setCitationForm({
-                            mode: 'edit',
-                            nodeId: node.nodeId,
-                            data: node.data,
-                          })
-                        : setCitationCard(citationCardAt(node, 'open'))
-                    }
-                  />
-                </DocxEditor.ContextMenu>
-                <DrawingsE2eBridge />
-                <ReviewWritesE2eBridge />
-                {/* Custom remote-caret labels (PRO): the engine positions and colours each
+                    <DocxEditor.ContextMenu>
+                      <CustomNodeContextMenu
+                        onEditNode={(node) =>
+                          node.nodeId
+                            ? setCitationForm({
+                                mode: 'edit',
+                                nodeId: node.nodeId,
+                                data: node.data,
+                              })
+                            : setCitationCard(citationCardAt(node, 'open'))
+                        }
+                      />
+                    </DocxEditor.ContextMenu>
+                    <DrawingsE2eBridge />
+                    <ReviewWritesE2eBridge />
+                    {/* Custom remote-caret labels (PRO): the engine positions and colours each
                   label, the demo renders its content — name plus a live page count read
                   through `useEditorState`, proving the label runs inside the provider
                   tree with the opened document in reach. */}
-                <CollaborationCaretLabelDemo session={collaboration.session} />
-                {/* The link popover. Inside the viewport so it stays with the page while
+                    <CollaborationCaretLabelDemo session={collaboration.session} />
+                    {/* The link popover. Inside the viewport so it stays with the page while
                   scrolling. `<DocxEditor>` mounts it for you; a composition like this one
                   places it by name, exactly like the rulers above. */}
-                <DocxEditor.HyperLink />
-                <DocxEditor.Equation />
-                {/* The review rail (PRO): tracked changes and comments as cards beside the
+                    <DocxEditor.HyperLink />
+                    <DocxEditor.Equation />
+                    {/* The review rail (PRO): tracked changes and comments as cards beside the
                   page, with accept / reject / reply. Imported from
                   `@docx-editor.dev/pro/react` and enabled by the `reviewModule()` on the
                   Root. Inside the viewport for the same reason as the popover — it
                   scrolls with the document rather than chasing it. */}
-                <DocxEditorReview card={{ className: 'demo-review-card' }}>
-                  {/* Host content inside every card: `useReviewItem()` scopes it to
+                    <DocxEditorReview card={{ className: 'demo-review-card' }}>
+                      {/* Host content inside every card: `useReviewItem()` scopes it to
                     citation cards, the packaged parts stay. A custom node's card carries
                     `data-node-name`, so `demo-review-card[data-node-name='citation']`
                     styles citations without inspecting its own children to find them. */}
-                  <CitationCardActions />
-                </DocxEditorReview>
-              </DocxEditor.Viewport>
-              {/* Absolute in `.demo-main`, the positioned row. Placed inside the viewport, it would
+                      <CitationCardActions />
+                    </DocxEditorReview>
+                  </DocxEditor.Viewport>
+                  {/* Absolute in `.demo-main`, the positioned row. Placed inside the viewport, it would
                 still render into this row, so it never scrolls away with the pages. */}
-              <DocxEditor.PageNumber />
-              {/* The library's loading overlay, pinned over the workspace (`.demo-main` is
+                  <DocxEditor.PageNumber />
+                  {/* The library's loading overlay, pinned over the workspace (`.demo-main` is
                 the positioned ancestor). Zero conditions wired here: the engine opens a
                 big file behind one painted frame and reports `isOpening`, so picking a
                 large document through Open DOCX shows this screen instead of freezing
                 on the old one. It renders nothing while the document is on screen. */}
-              <DocxEditor.Loading overlay />
-              {/* Floating diagnostics chrome, above the overlay panels. */}
-              <PerfHud />
-              <CitationPopover
-                card={citationCard}
-                onOpen={setCitationCard}
-                onClose={closeCitationCard}
-              />
-              {citationForm ? (
-                <CitationDialog form={citationForm} onClose={closeCitationForm} />
+                  <DocxEditor.Loading overlay />
+                  {/* Floating diagnostics chrome, above the overlay panels. */}
+                  <PerfHud />
+                  <CitationPopover
+                    card={citationCard}
+                    onOpen={setCitationCard}
+                    onClose={closeCitationCard}
+                  />
+                  {citationForm ? (
+                    <CitationDialog form={citationForm} onClose={closeCitationForm} />
+                  ) : null}
+                </div>
+                {/* Zoom, in the corner of the canvas. */}
+                <DocxEditor.Toolbar preset={false} className="demo-zoombar">
+                  <DocxEditor.Toolbar.Zoom />
+                </DocxEditor.Toolbar>
+              </section>
+              {panelOpen ? (
+                <>
+                  {/* Where the panel covers the page, a press beside it closes it. */}
+                  <button
+                    type="button"
+                    className="demo-scrim"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    onClick={() => setPanelOpen(false)}
+                  />
+                  <DemoSidePanel
+                    tab={panelTab}
+                    onTabChange={setPanelTab}
+                    onClose={() => setPanelOpen(false)}
+                    settings={
+                      <ReviewSettings
+                        colorMode={colorMode}
+                        onColorModeChange={setColorMode}
+                        rulers={rulers}
+                        onRulersChange={changeRulers}
+                      />
+                    }
+                  />
+                </>
               ) : null}
             </div>
           </DocxEditor.Root>

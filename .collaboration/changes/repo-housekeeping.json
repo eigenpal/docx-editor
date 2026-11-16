@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Pro source files name the licensor EigenPal, Inc. in their license header.",
+  "after": "Pro source files name the licensor Eigenpal, Inc. in their license header, and the built files carry the header too.",
+  "reason": "Only comments, license texts, and build output headers change. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": ["packages/pro/src/collaboration/__tests__/paragraph-linear-corpus.test.ts"],
+  "changeset": "repo-housekeeping",
+  "migration": null
+}

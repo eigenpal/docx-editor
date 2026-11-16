@@ -59,8 +59,10 @@ const INTENT_COVERAGE: Record<ReviewWriteIntent, true> = {
   'comment-delete': true,
   'comment-reply': true,
   'comment-resolve': true,
+  'comment-edit': true,
   'package-scoped': true,
   'revision-resolve': true,
+  'revision-attribution': true,
 };
 
 const ALL_INTENTS = Object.keys(INTENT_COVERAGE) as readonly ReviewWriteIntent[];
@@ -71,8 +73,10 @@ const PROVEN: readonly ReviewWriteIntent[] = [
   'comment-delete',
   'comment-reply',
   'comment-resolve',
+  'comment-edit',
   'package-scoped',
   'revision-resolve',
+  'revision-attribution',
 ];
 
 describe('review writes with a replica attached', () => {

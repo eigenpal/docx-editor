@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -17,9 +17,6 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // - Undo and redo refuse while a group is open, and change nothing.
 // - An ungrouped agent write keeps the timing rule and never joins a group's step.
 // - Replicas converge, and the saved document reopens with the same text.
-//
-// Undo and redo near text that a person's split moved have open defects that do not depend
-// on groups (#1393, #1394). The checks that those defects break relax once text moved.
 //
 // Environment:
 // - `UNDO_GROUP_FUZZ_SEEDS` and `UNDO_GROUP_FUZZ_FROM` choose the seeds.
@@ -152,7 +149,7 @@ function bracketed(name: string, before: string | undefined, after: string | und
 /** `offset`, moved to the end of any token of `text` it falls inside. */
 function outsideTokens(text: string, offset: number, tokens: ReadonlySet<string>): number {
   let at = offset;
-  for (let moved = true; moved; ) {
+  for (let moved = true; moved;) {
     moved = false;
     for (const token of tokens) {
       for (let from = text.indexOf(token); from >= 0; from = text.indexOf(token, from + 1)) {
@@ -220,7 +217,6 @@ const EMPTY_STATS = {
   tokenChecks: 0,
   tokensExempt: 0,
   redoExact: 0,
-  redoTokensMoved: 0,
   openRefusals: 0,
   ungroupedSteps: 0,
 };
@@ -228,8 +224,6 @@ const totals = { ...EMPTY_STATS };
 
 interface Group {
   readonly tokens: string[];
-  /** Paragraphs the group's splits created. Its undo removes them, with what they hold. */
-  readonly created: Set<string>;
   /** A step of ungrouped writes, which the timing rule shapes. */
   readonly ungrouped?: boolean;
 }
@@ -248,12 +242,6 @@ class Run {
   private readonly everyToken = new Set<string>();
   /** Tokens a person's action took from view: a later undo of it may bring back copies. */
   private readonly uncertain = new Set<string>();
-  /**
-   * A person split or removed a paragraph, which moves text. Undo and redo of text near
-   * moved text have open defects that are not about group boundaries (#1393, #1394), so
-   * some checks relax once text moved.
-   */
-  private moved = false;
   /** How often each check ran, and how often an exemption applied. */
   readonly stats = { ...EMPTY_STATS };
   /** When the agent's last ungrouped write landed, and whether the next one may join it. */
@@ -344,9 +332,6 @@ class Run {
     const op = bind(this.person, edit, this.everyToken);
     if (!op) return null;
     this.asPerson(() => `person ${JSON.stringify(op)} ${this.write(this.person, op)}`);
-    if (op.op === 'splitParagraph' || op.op === 'deleteBlock') {
-      this.moved = true;
-    }
     if (op.op === 'insertText') this.everyToken.add(op.text);
     return 'paragraphId' in op ? op.paragraphId : op.op === 'deleteBlock' ? op.blockId : null;
   }
@@ -354,7 +339,6 @@ class Run {
   private agentEdit(edit: Edit): void {
     const op = bind(this.agent, edit, this.everyToken);
     if (!op) return;
-    const before = new Set(paragraphIds(this.agent));
     const steps = this.undoSteps();
     const ok = this.write(this.agent, op);
     this.note(`agent ${JSON.stringify(op)} ${ok}`);
@@ -367,7 +351,7 @@ class Run {
       const added = this.undoSteps() - steps;
       const top = this.done[this.done.length - 1];
       if (added === 1) {
-        group = { tokens: [], created: new Set(), ungrouped: true };
+        group = { tokens: [], ungrouped: true };
         this.stats.ungroupedSteps += 1;
         this.done.push(group);
         this.undone.length = 0;
@@ -382,7 +366,6 @@ class Run {
       this.mergeable = true;
     }
     if (!group) return;
-    for (const id of paragraphIds(this.agent)) if (!before.has(id)) group.created.add(id);
     if (op.op === 'insertText') {
       this.everyToken.add(op.text);
       group.tokens.push(op.text);
@@ -407,7 +390,7 @@ class Run {
         if (this.handle) return;
         this.mergeable = false;
         this.handle = this.agent.room.session.beginUndoGroup();
-        this.group = { tokens: [], created: new Set() };
+        this.group = { tokens: [] };
         this.groupSteps = this.undoSteps();
         this.landed = false;
         this.note('agent begin');
@@ -494,7 +477,6 @@ class Run {
   private agentUndo(action: Extract<Action, { kind: 'agentUndo' }>): void {
     this.settle();
     if (this.done.length === 0 || this.handle) return;
-    const idsBefore = paragraphIds(this.agent);
     const textBefore = texts(this.agent);
     const presentBefore = present(this.agent, this.everyToken);
     if (action.typing) {
@@ -522,22 +504,9 @@ class Run {
     }
     const group: Group = {
       tokens: steps.flatMap((step) => step.tokens),
-      created: new Set(steps.flatMap((step) => [...step.created])),
       ...(steps[0]!.ungrouped ? { ungrouped: true } : {}),
     };
-    // Undo of a split removes the paragraph it created, and with it what a person typed
-    // there (#1398). That is the split's own undo rule, not the group's, so those tokens are
-    // exempt.
-    const inCreated = textBefore
-      .filter((_, index) => group.created.has(idsBefore[index]!))
-      .join('\n');
-    // Text the removal joins back can still be lost by a later undo (#1393).
-    for (const token of this.everyToken) if (inCreated.includes(token)) this.uncertain.add(token);
-    const others = new Set(
-      [...presentBefore].filter(
-        (token) => !group.tokens.includes(token) && !inCreated.includes(token)
-      )
-    );
+    const others = new Set([...presentBefore].filter((token) => !group.tokens.includes(token)));
     this.done.splice(-steps.length, steps.length - 1);
     this.mergeable = false;
     this.done.pop();
@@ -548,46 +517,23 @@ class Run {
       this.note('agent redo');
       this.done.push(group);
       this.undone.pop();
-      // The text must read exactly as before. Once a person's split moved text, a redo can
-      // write the group's own tokens in another place, or show one again where a person
-      // removed it (#1394). Only then, and only the group's tokens, may differ.
-      const without = (lines: string[]): string => {
-        let text = lines.join('\n');
-        for (const token of group.tokens) text = text.split(token).join('');
-        return text;
-      };
-      const after = texts(this.agent);
-      const exact = JSON.stringify(after) === JSON.stringify(textBefore);
-      if (exact) this.stats.redoExact += 1;
-      else if (this.moved && without(after) === without(textBefore))
-        this.stats.redoTokensMoved += 1;
-      else {
+      // The text must read exactly as before.
+      if (JSON.stringify(texts(this.agent)) === JSON.stringify(textBefore)) {
+        this.stats.redoExact += 1;
+      } else {
         this.fail(
           `undo then redo changed the text: ${JSON.stringify(textBefore)} -> ${JSON.stringify(texts(this.agent))}`
         );
       }
       return;
     }
-    // A person who types near moved text before the undo arrives can write a copy of that
-    // text as their own, and the copy stays (#1394). The group's tokens are then exempt
-    // from the check that the undo removed them.
-    const concurrentCopy = action.typing !== null && this.moved;
-    if (action.typing) {
-      const tokensBefore = new Set(this.everyToken);
-      const target = this.personEdit(action.typing);
-      // Typing into a paragraph that the undo removes joins the text it is joined back to,
-      // where a later undo can lose it (#1393).
-      if (target !== null && group.created.has(target)) {
-        for (const token of this.everyToken)
-          if (!tokensBefore.has(token)) this.uncertain.add(token);
-      }
-    }
+    if (action.typing) this.personEdit(action.typing);
     this.settle();
     for (const replica of [this.agent, this.person]) {
       this.stats.undoChecks += 1;
       this.stats.tokenChecks += group.tokens.length;
       for (const token of present(replica, group.tokens)) {
-        if (this.uncertain.has(token) || concurrentCopy) this.stats.tokensExempt += 1;
+        if (this.uncertain.has(token)) this.stats.tokensExempt += 1;
         else this.fail(`undo left the group's token ${token}`);
       }
       const kept = present(replica, others);

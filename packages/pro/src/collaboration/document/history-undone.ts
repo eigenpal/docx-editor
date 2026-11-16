@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -16,20 +16,23 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import * as Y from 'yjs';
 import type { LogicalId } from './identity.ts';
 import type { DocumentRegistry } from './registry.ts';
-import { RESTORE_ORIGIN } from './paragraph-text-restore.ts';
+import { markRestoredText, RESTORE_ORIGIN } from './paragraph-text-restore.ts';
+import { relistSplitEntries } from './split-points.ts';
 import { isElementRecord, isNodeMap, NODE_UNDONE_FIELD } from './schema.ts';
 import { textDeletionsOf, type DeletedRun } from './paragraph-text-deletions.ts';
 import { deleteSetRuns, structAt } from './yjs-items.ts';
 import { textMarksOf } from './paragraph-text-marks.ts';
 import { INLINE_FIELD } from './paragraph-text.ts';
-import { whileUndoingCreations } from './undo-delete-filter.ts';
+import { whileSteppingReplaced, whileUndoingCreations } from './undo-delete-filter.ts';
 import { ownDeletedRecords, redoRefusedDeletes } from './tombstone-guard.ts';
+import { noteUndoneParagraphTargets, undoKeeps } from './undo-unlisted-text.ts';
 
 /**
  * The part members a part always lists. Numbering definitions are not among them: concurrent
- * list edits leave them loose by design, and the repair is how they show.
+ * list edits leave them loose by design, and the repair is how they show. A comment's thread
+ * record (`w15:commentEx`) is one: an undo that removes it must not see it adopted back.
  */
-const LISTED_MEMBERS = new Set(['comment', 'footnote', 'endnote']);
+const LISTED_MEMBERS = new Set(['comment', 'commentEx', 'footnote', 'endnote']);
 
 /** The meta key under which a history step keeps the records its undo marked. */
 const MARKED = 'docx-undone-records';
@@ -100,6 +103,20 @@ interface HistoryStack {
 }
 
 /**
+ * Repairs what an undo or redo step restored, after Yjs wrote it. `from` is this client's clock
+ * before the step: split text anchors, restored text marks and split entries written since
+ * then are put back the way the step's peers read them.
+ */
+export function repairRestored(registry: DocumentRegistry, doc: Y.Doc, from: number): void {
+  registry.normalizeRestoredSplitTextAnchors();
+  markRestoredText(doc, from);
+  doc.transact(
+    () => relistSplitEntries(doc, (id) => registry.schema.nodes.get(id), from),
+    RESTORE_ORIGIN
+  );
+}
+
+/**
  * Undo or redo one step, with what only the stepping replica knows.
  *
  * A peer's Enter or join before typed text moves it: the moved paragraph shows copies of the
@@ -145,8 +162,25 @@ export function stepHistory(
     const below = stack.splice(0, grouped ? stack.length - 1 : aboveLastGroupStep(stack));
     try {
       if (direction === 'undo') {
-        whileUndoingCreations(registry.schema, createdBy(registry, popped), () => history.undo());
-      } else history.redo();
+        noteUndoneParagraphTargets(registry.doc, registry.schema.nodes, popped, (write) =>
+          registry.doc.transact(write, RESTORE_ORIGIN)
+        );
+        whileUndoingCreations(
+          registry.schema,
+          createdBy(registry, popped),
+          () =>
+            whileSteppingReplaced(
+              registry.doc,
+              registry.schema,
+              popped as YjsStep | undefined,
+              () => history.undo()
+            ),
+          undoKeeps(registry.doc, registry.schema.nodes, popped)
+        );
+      } else
+        whileSteppingReplaced(registry.doc, registry.schema, popped as YjsStep | undefined, () =>
+          history.redo()
+        );
     } finally {
       if (below.length > 0) {
         const restored = below.concat(stack);
@@ -214,7 +248,7 @@ function identitySpans(
   to: number
 ): { client: number; from: number; to: number }[] {
   const spans: { client: number; from: number; to: number }[] = [];
-  for (let at = from; at < to; ) {
+  for (let at = from; at < to;) {
     const restored = marks.origin('restore', client, at);
     if (restored === null || restored.client !== client) {
       // Without a mark here, the rest of the insert has none either: a mark covers whole
@@ -248,7 +282,7 @@ function createdBy(registry: DocumentRegistry, step: StackItemShape | undefined)
   const created = new Set<string>();
   const nodes = registry.schema.nodes as unknown;
   for (const run of deleteSetRuns((step as { insertions?: unknown } | undefined)?.insertions)) {
-    for (let clock = run.clock; clock < run.clock + run.length; ) {
+    for (let clock = run.clock; clock < run.clock + run.length;) {
       const item = structAt(registry.doc, { client: run.client, clock });
       if (!item) break;
       if ((item.parent as unknown) === nodes && item.parentSub !== null) {
@@ -265,6 +299,12 @@ function isParagraphCharacter(item: Y.Item): boolean {
   if (!(item.content instanceof Y.ContentString) && !(item.content instanceof Y.ContentEmbed)) {
     return false;
   }
+  return inParagraphText(item);
+}
+
+/** Whether `item` sits in a paragraph's shared text; a deleted item may keep no content. */
+function inParagraphText(item: Y.Item): boolean {
+  if (item.content instanceof Y.ContentFormat) return false;
   return item.parent instanceof Y.Text && item.parent._item?.parentSub === INLINE_FIELD;
 }
 
@@ -304,7 +344,7 @@ function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined):
   };
   for (const run of deleteSetRuns((step as { insertions?: unknown } | undefined)?.insertions)) {
     const runEnd = run.clock + run.length;
-    for (let clock = run.clock; clock < runEnd; ) {
+    for (let clock = run.clock; clock < runEnd;) {
       const item = structAt(registry.doc, { client: run.client, clock });
       const end = item ? Math.min(item.id.clock + item.length, runEnd) : clock + 1;
       // A peer that edits the paragraph a move took typed text to writes a copy of it there,
@@ -319,8 +359,11 @@ function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined):
         // wrote of another character records only its own item, which names nothing else.
         // Otherwise spans first, characters only where an index run holds a copy: an undo
         // of a long paste reads its marks once per insert, not once per character.
+        // A character already deleted counts too: a peer can copy it before the deletion
+        // reaches them, as a split of a paragraph another peer deleted does, and that copy
+        // reaches this replica after the undo.
         const shown =
-          (!!item && !item.deleted && isParagraphCharacter(item)) ||
+          (!!item && (item.deleted ? inParagraphText(item) : isParagraphCharacter(item))) ||
           spans.some(
             (span) =>
               follow.holdsCopyIn(span.client, span.from, span.to) &&
@@ -350,7 +393,7 @@ function nothingElse(registry: DocumentRegistry, step: StackItemShape | undefine
     [deleteSetRuns(shape.insertions), false],
   ] as const) {
     for (const run of runs) {
-      for (let clock = run.clock; clock < run.clock + run.length; ) {
+      for (let clock = run.clock; clock < run.clock + run.length;) {
         const item = structAt(registry.doc, { client: run.client, clock });
         if (!item) return false;
         if (inScope(item, scope) && (deletion || !item.deleted)) return false;

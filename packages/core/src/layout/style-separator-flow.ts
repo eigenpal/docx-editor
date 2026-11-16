@@ -127,7 +127,7 @@ function continuationToken(input: ReturnType<typeof resolveParagraphLayoutInputs
       flags.set(property.localName, property.attributes?.val ?? 'true');
   return JSON.stringify({
     direction: paragraphIsRtl(input.props),
-    typography: resolveCjkTypography(input.props),
+    typography: resolveCjkTypography(input.props, undefined, input.markRunProperties),
     flow: [...flags].sort(([a], [b]) => a.localeCompare(b)),
     keeps,
     left: input.indent.left,

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -56,7 +56,7 @@ test('an exact half-unit baseline rounds toward the page top', async () => {
     );
     expect(ties).toHaveLength(6);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -131,6 +131,6 @@ test('ties reached by accumulation resolve like exact ones', async () => {
     );
     expect(ties.length).toBeGreaterThanOrEqual(5);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

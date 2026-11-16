@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -262,6 +262,8 @@ export interface UseReviewReturn {
    * For headless or server use, see `Comment.reply` in `@docx-editor.dev/editor-api`.
    */
   readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
+  /** Edit your own comment or reply. Pass its displayed text to reject stale edits. */
+  readonly edit: (item: ReviewItemView, text: string, expectedText?: string) => boolean;
   /**
    * Where a comment on the current selection would sit, or null when nothing is selected.
    *
@@ -509,6 +511,14 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     [editor, settle]
   );
 
+  const edit = useCallback(
+    (item: ReviewItemView, text: string, expectedText?: string): boolean => {
+      if (!editor || item.kind !== 'comment') return false;
+      return settle('edit', item.key, editor.setCommentText(item.key, text, { expectedText }));
+    },
+    [editor, settle]
+  );
+
   const reply = useCallback(
     (item: ReviewItemView, text: string, author?: string): boolean => {
       if (text.trim().length === 0 || !editor) return false;
@@ -564,6 +574,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       commentResolutionDisabledReason,
       remove,
       reply,
+      edit,
       selectionAnchorY,
       comment,
       lastRefusal,
@@ -591,6 +602,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       commentResolutionDisabledReason,
       remove,
       reply,
+      edit,
       selectionAnchorY,
       comment,
       lastRefusal,
@@ -602,7 +614,8 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
 }
 
 /**
- * Non-overlapping Y positions for cards you have measured.
+ * Non-overlapping Y positions for cards you have measured. Measure them with
+ * {@link useReviewCardHeights}.
  *
  * Separate from `useReview` because only the CALLER knows how tall its cards are — a host
  * rendering its own markup can be told where each anchor is, but not how much room its card

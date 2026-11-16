@@ -309,10 +309,11 @@ describe('a clearing break across a region boundary', () => {
   const tall = (height: number) => ({ x: 0, y: 0, width: 100, height });
 
   test('a cell row continued on the next page does not clear the float it left behind', () => {
-    // 25 fill lines put the cell at 300 pt; its 500 pt float stays on the first page.
+    // 25 fill lines put the cell at 300 pt; its 340 pt float ends at 640 on the first page,
+    // so the cleared line opens the next one.
     const result = layout(
       fill(25) +
-        table(paragraph(run('Before') + float(tall(500)) + br('all') + run('After'))) +
+        table(paragraph(run('Before') + float(tall(340)) + br('all') + run('After'))) +
         paragraph(run('Next'))
     );
     expect(lineAt(result, 'After')).toMatchObject({ pageIndex: 1, y: 0 });
@@ -344,10 +345,10 @@ describe('a clearing break across a region boundary', () => {
     });
   }
 
-  /** `Before`, a 500 pt float, then 40 short lines. */
+  /** `Before`, a 340 pt float that ends above the bottom margin, then 40 short lines. */
   const spilling = () =>
     run('Before') +
-    float(tall(500)) +
+    float(tall(340)) +
     Array.from({ length: 40 }, (_, index) => br() + run(`W${index}`)).join('');
   const spilledLines = (result: SemanticLayout) =>
     linesOf({ ...result, pages: [result.pages[1]!] }).filter((line) =>
@@ -363,7 +364,10 @@ describe('a clearing break across a region boundary', () => {
       expect(anchoredDrawingsOf(result.pages[1]!)).toHaveLength(0);
       const lines = spilledLines(result);
       expect(lines.length).toBeGreaterThan(0);
-      for (const line of lines) expect(round(line.contentX)).toBe(0);
+      // An unstyled table keeps its outer edge on the text edge, so cell text starts after
+      // the 10-twip fallback margin.
+      const textEdge = where === 'a table cell' ? 0.5 : 0;
+      for (const line of lines) expect(round(line.contentX)).toBe(textEdge);
     });
   }
 });

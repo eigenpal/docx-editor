@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -20,12 +20,7 @@ import { RewriteError } from './rewrite-error.ts';
  * @public
  */
 export type RewritePlaceholderKind =
-  | 'field'
-  | 'content-control'
-  | 'picture'
-  | 'equation'
-  | 'note-reference'
-  | 'line-break';
+  'field' | 'content-control' | 'picture' | 'equation' | 'note-reference' | 'line-break';
 
 /**
  * One placeholder in the draft text, and what it stands for.
@@ -230,7 +225,7 @@ export function tokensOf(text: string, syntax: PlaceholderSyntax): ModelToken[] 
     if (piece !== '') tokens.push({ text: piece, atom: null });
     piece = '';
   };
-  for (let index = 0; index < text.length; ) {
+  for (let index = 0; index < text.length;) {
     const placeholder = text.startsWith(syntax.open, index) ? at.exec(text.slice(index)) : null;
     if (placeholder) {
       flush();

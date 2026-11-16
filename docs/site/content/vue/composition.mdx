@@ -1,134 +1,61 @@
 ---
 title: 'Composition'
-description: 'Build a Vue DOCX editor with packaged parts, selected toolbar controls, and your own components.'
+description: 'Build a custom Vue DOCX editor from primitives, compound parts, and composables.'
 category: 'Vue'
 order: 37
 ---
 
-`<DocxEditor>` combines public components into a packaged editor. Arrange these components yourself, or connect your own controls to the same commands and state.
+`<DocxEditor>` is a packaged arrangement of public components. Compose those components yourself when you need a different layout or your own controls.
 
-## Arrange editor components
+## Compose an editor
 
-Choose toolbar controls, placement, labels, spacing, and styles. Add optional document controls, then copy the selected Vue components and CSS.
-
-The demo shows a subset of the available components and options. These layouts demonstrate composition; they are not packaged toolbar presets.
-
-Use your own Vue components for toolbars, menus, and panels. Connect them with [Vue composables](/docs/2.x/vue/composables), combine them with packaged parts, and supply your own CSS.
-
-<VueCompositionDemo />
-
-## Composition requirements
-
-| Requirement | When required | Purpose |
-| --- | --- | --- |
-| `DocxEditorRoot` | Every composed editor | Owns and provides the editor instance |
-| `DocxEditorViewport` | Every composed editor | Supplies the scroll container and page-layout classes |
-| `DocxEditorContent` | Every composed editor | Mounts the painted document surface |
-| Editor stylesheet | Every composed editor | Styles the viewport and packaged controls |
-| `.docx-editor` wrapper | Custom controls that use editor styles | Supplies scoped styles and tokens |
-| Container height | Every composed editor | Gives the viewport room to render |
-| Flex column to the viewport | When chrome shares the container height | Gives the viewport the height that the chrome does not use |
-| Popovers | When you use links, content controls, equations, or the context menu | Mounts the popovers that `<DocxEditor>` mounts for you |
-| Remount `:key` | When you change modules | Loads the new modules |
-| Positioned workspace row | When you place the navigation pane beside the viewport | Anchors the navigation pane |
-| Pro review module | When you use Pro review chrome | Enables comments, tracked changes, and custom-node review chrome |
-
-If you use Pro review chrome, register its modules once on `DocxEditorRoot`. For setup, see the [Pro package documentation](/docs/2.x/pro).
-
-## Primitives
-
-Every editor needs these three components in this order:
+This example mounts a toolbar and the document in a bounded flex column:
 
 ```vue
 <script setup lang="ts">
-import { DocxEditorContent, DocxEditorRoot, DocxEditorViewport } from '@docx-editor.dev/vue';
+import {
+  DocxEditorContent,
+  DocxEditorContextMenu,
+  DocxEditorHyperLink,
+  DocxEditorRoot,
+  DocxEditorToolbar,
+  DocxEditorViewport,
+} from '@docx-editor.dev/vue';
 import '@docx-editor.dev/vue/styles.css';
 
 defineProps<{ bytes: Uint8Array }>();
 </script>
 
 <template>
-  <div class="docx-editor" style="height: 100vh">
+  <div class="docx-editor" style="display: flex; flex-direction: column; height: 100vh">
     <DocxEditorRoot :document="bytes">
-      <DocxEditorViewport style="height: 100%">
+      <DocxEditorToolbar />
+      <DocxEditorViewport style="flex: 1; min-height: 0">
         <DocxEditorContent />
+        <DocxEditorHyperLink />
+        <DocxEditorContextMenu />
       </DocxEditorViewport>
     </DocxEditorRoot>
   </div>
 </template>
 ```
 
-You can place all optional chrome inside `DocxEditorRoot`.
+| Requirement | Why |
+| --- | --- |
+| `DocxEditorRoot` | Owns the editor instance. It renders no DOM element, so its children sit in your flex column. |
+| `DocxEditorViewport` | Supplies the scroll container. `DocxEditorContent` must be inside it. |
+| `DocxEditorContent` | Mounts the painted, editable pages. |
+| Editor stylesheet | Styles the viewport and packaged parts. Import it once. |
+| Bounded height | Gives the viewport room. Use `flex: 1` and `min-height: 0` on the viewport and on any element between it and the container. |
+| `.docx-editor` wrapper | Makes editor styles and `--doc-*` tokens available to your own controls. |
 
-### Popovers
+If you use Pro review chrome, register its modules once on `DocxEditorRoot`. For setup, see the [Pro package documentation](/docs/2.x/pro).
 
-`DocxEditorRoot` does not mount the hyperlink, content control, equation, or context menu popovers. `<DocxEditor>` mounts all four for you: `DocxEditorHyperLink`, `DocxEditorContentControl`, `DocxEditorEquation`, and `DocxEditorContextMenu`. In a composed editor, mount the popovers that you use. Without `DocxEditorHyperLink`, the link button, the context menu's **Insert link** row, and Ctrl+K (⌘+K on macOS) do not open a panel. Without `DocxEditorContextMenu`, a right-click opens the browser menu.
-
-You can mount a popover in one of two ways. The first way is to add it as a child of `DocxEditorViewport`, as in [Full composition](#full-composition):
-
-```vue
-<template>
-  <DocxEditorViewport>
-    <DocxEditorContent />
-    <DocxEditorHyperLink />
-    <DocxEditorContextMenu />
-  </DocxEditorViewport>
-</template>
-```
-
-The second way is to pass it to `DocxEditorRoot` in the `popups` prop, wrapped with `definePopup`. `DocxEditorContent` renders the `popups` entries:
-
-```vue
-<script setup lang="ts">
-import {
-  DocxEditorContentControl,
-  DocxEditorContextMenu,
-  DocxEditorEquation,
-  DocxEditorHyperLink,
-  DocxEditorRoot,
-  definePopup,
-} from '@docx-editor.dev/vue';
-
-defineProps<{ bytes: Uint8Array }>();
-
-const popups = {
-  hyperlink: definePopup(DocxEditorHyperLink),
-  contentControl: definePopup(DocxEditorContentControl),
-  equation: definePopup(DocxEditorEquation),
-  contextMenu: definePopup(DocxEditorContextMenu),
-};
-</script>
-
-<template>
-  <DocxEditorRoot :document="bytes" :popups="popups">
-    <!-- Toolbar, viewport, and content -->
-  </DocxEditorRoot>
-</template>
-```
-
-To customize a popover, pass your own component to `definePopup`.
-
-### Root props
-
-`DocxEditorRoot` accepts these document-level props:
-
-- `document`, `fonts`, `author`, `locale`, `mode`, and `modules`
-- `zoom` and `zoomMode`
-- `colorMode` (`'light'`, `'dark'`, or `'system'`), which sets the chrome theme for every composed part, including dialogs and a pop-out window
-- `translate` and `tableInteractionLabel`
-- `imageDecodePort`
-
-Listen for `@ready`, `@change`, and `@font-error` on the root.
-
-The root rebuilds for `document` and `imageDecodePort` identity changes. Changes to `fonts`, `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, `colorMode`, and the locale catalog apply without a rebuild. Existing revisions keep their authors. The root ignores a later `modules` array change until you remount it with a different `:key`.
-
-`locale` selects regional date input and generated document labels. It defaults to `en-US`.
-
-For full prop types, see the [Vue API reference](/docs/2.x/api/vue).
+<VueCompositionDemo />
 
 ### UI language and date input
 
-`DocxEditorRoot` reads UI translations from `LocaleProvider`; it has no `i18n` prop. Set `locale` separately for regional date input. This example uses Polish for both:
+`DocxEditorRoot` reads UI strings from `LocaleProvider` and has no `i18n` prop. Set `locale` separately for regional date input:
 
 ```vue
 <script setup lang="ts">
@@ -164,283 +91,99 @@ const LocalizedToolbar = defineComponent({
 </template>
 ```
 
-Without the provider, UI strings remain English unless an ancestor supplies a catalog. See [internationalization](/docs/2.x/i18n) for catalog imports and defaults.
+Pass a `Map` to `useChromeTranslate(overrides)` to rename labels. For catalogs, see [Internationalization](/docs/2.x/i18n).
 
-## `provideDocxEditor()`
+## Reach the editor from a parent
 
-Call `provideDocxEditor()` when a parent layout holds the editor. The helper provides one editor instance to the returned root and its descendants.
+Components inside the root call [`useDocxEditor()`](/docs/2.x/vue/composables#usedocxeditor). A parent layout that holds the editor calls `provideDocxEditor()`:
 
 ```vue
 <script setup lang="ts">
 import { provideDocxEditor } from '@docx-editor.dev/vue';
 
+const props = defineProps<{ bytes: Uint8Array }>();
 const { DocxEditorRoot, rootProps, rootListeners, editorRef } = provideDocxEditor({
-  document: bytes,
-  onReady,
+  document: props.bytes,
 });
 </script>
 
 <template>
-  <DocxEditorRoot v-bind="rootProps" v-on="rootListeners">
-    <!-- Add chrome and the viewport here. -->
+  <button :disabled="!editorRef" @click="editorRef?.save()">Save</button>
+  <DocxEditorRoot v-bind="{ ...rootProps, ...rootListeners }">
+    <!-- Toolbar, viewport, and content -->
   </DocxEditorRoot>
 </template>
 ```
 
-`editorRef` tracks the same instance that `useDocxEditor()` returns in descendants.
+| Member | Type | Use |
+| --- | --- | --- |
+| `DocxEditorRoot` | `typeof DocxEditorRoot` | The root to render. It provides the shared instance. |
+| `rootProps` | `ShallowRef<DocxEditorRootProps>` without listeners | Spread into `v-bind` with `rootListeners`. |
+| `rootListeners` | `DocxEditorRootListeners` | Listener props (`onReady`, `onChange`, `onFontError`, `onRevisionMarkupChange`). Spread into `v-bind`, not `v-on`. |
+| `editorRef` | `ShallowRef<DocxEditorInstance \| null>` | The same instance that `useDocxEditor()` returns in descendants. |
 
-For composed chrome, call `useChromeTranslate()` inside the locale provider and pass its result through each part's `t` prop.
+## Choose optional components
 
-## Customization options
+Mount only the parts that your layout needs. An omitted part renders no interface.
 
-Choose the amount of customization you need:
+| Part | Purpose | Owner guide |
+| --- | --- | --- |
+| `DocxEditorToolbar`, `DocxEditorMenu` | Formatting toolbar and menu bar | [Toolbar](/docs/2.x/customization/toolbar), [Menus](/docs/2.x/customization/menus) |
+| `DocxEditorHyperLink`, `DocxEditorContentControl`, `DocxEditorEquation`, `DocxEditorContextMenu` | Popovers. Mount each one you use. | [Customize popups](/docs/2.x/guides/customize-dialogs) |
+| `DocxEditorHorizontalRuler`, `DocxEditorVerticalRuler` | Margin and indent rulers. A drag commits one undo entry. | None |
+| `DocxEditorNavigation` | Headings, Find, and Bookmarks pane. Uses its `t` prop, else the `translate` of `DocxEditorRoot`, else the locale catalog. | [Navigation](/docs/2.x/guides/navigation) |
+| `DocxEditorLoading` | Loading screen and open overlay | [Custom loading screen](#custom-loading-screen) |
+| `DocxEditorPageSetupDialog`, `DocxEditorParagraphDialog` | Controlled dialogs with `open` and `@close` | [Dialogs](/docs/2.x/customization/dialogs) |
+| `DocxEditorPageNumber` | Current and total page count | None |
+| `DocxEditorHeaderFooterChrome`, `DocxEditorNotesChrome` | Header, footer, and note editing controls | [Headers and footers](/docs/2.x/guides/headers-footers) |
+| `DocxEditorFontNotice` | Families without a compatible face | [Fonts](/docs/2.x/guides/fonts) |
+| `DocxEditorOpenFailure` | Why a file did not open | [Open failures](/docs/2.x/guides/open-failures) |
+| `DocxEditorDocumentOutline` | Standalone heading list | [Navigation](/docs/2.x/guides/navigation) |
+| `DocxEditorAuthorStyle`, `DocxEditorColorByChangeType` | Review colors | [Review styling](/docs/2.x/pro/review-styling) |
+| `DocxEditorWindow` | Moves wrapped parts to a pop-out window | [Pop-out windows](/docs/2.x/guides/pop-out-windows) |
+| `DocxEditorReview` (Pro) | Comment and tracked-change cards | [Review cards](/docs/2.x/customization/review-cards) |
+| `CustomNodeChrome` (Pro) | Custom-node markers and menu rows | [Custom nodes](/docs/2.x/pro/custom-nodes) |
 
-1. Set a class or a `--doc-*` color token.
-2. Replace a part's `icon` prop.
-3. Use `as-child` to merge behavior into your element.
-4. Override one compound part.
-5. Add your controls to the preset with `DocxEditorToolbar.Group`, or replace a slot's content with `DocxEditorToolbar.Slot`.
-6. Set `:preset="false"` and arrange all parts.
-7. Build your markup with [Vue composables](/docs/2.x/vue/composables).
+### Mount popovers
 
-### Use `as-child`
-
-`as-child` merges a part's behavior and accessibility attributes into one child. It does not render a wrapper.
-
-```vue
-<DocxEditorToolbar.Bold as-child>
-  <MyButton variant="ghost">Bold</MyButton>
-</DocxEditorToolbar.Bold>
-```
-
-The child must render one element.
-
-### Override a slot
-
-A named part replaces the matching part in the preset. The `hidden` prop removes that part.
-
-```vue
-<DocxEditorToolbar>
-  <DocxEditorToolbar.Bold class="my-bold" />
-  <DocxEditorToolbar.Highlight hidden />
-</DocxEditorToolbar>
-```
-
-A group whose slots are all hidden is removed with its separator.
-
-### Add controls to the preset toolbar
-
-`DocxEditorToolbar.Group` adds your controls to the preset toolbar as a group. When the toolbar runs out of width, the group's children move into the **More** panel together, as one control. `DocxEditorToolbar.Slot` replaces one built-in slot with your own content in the slot's place:
-
-```vue
-<DocxEditorToolbar>
-  <DocxEditorToolbar.Group id="review-nav" label="Review" :priority="15">
-    <DocxEditorToolbar.Action label="Next change" @select="next" />
-  </DocxEditorToolbar.Group>
-  <DocxEditorToolbar.Group id="review">
-    <DocxEditorToolbar.AddComment />
-  </DocxEditorToolbar.Group>
-  <DocxEditorToolbar.Slot slot-id="zoom.level">
-    <ZoomPicker />
-  </DocxEditorToolbar.Slot>
-  <DocxEditorToolbar.Group id="zoom" hidden />
-</DocxEditorToolbar>
-```
-
-For placement, collapse priorities, and panel content, see [Keep host controls responsive](/docs/2.x/guides/toolbar#keep-host-controls-responsive).
-
-## Custom toolbar
-
-Set `:preset="false"` to include only your chosen parts. Their template order sets the toolbar order. Each part reads command state and disabled reasons from the editor.
-
-This example combines selected packaged parts:
-
-```vue
-<DocxEditorToolbar :preset="false" class-name="my-toolbar">
-  <DocxEditorToolbar.Undo />
-  <DocxEditorToolbar.Redo />
-  <DocxEditorToolbar.Separator />
-  <DocxEditorToolbar.StylePicker />
-  <DocxEditorToolbar.FontFamily />
-  <DocxEditorToolbar.FontSize />
-  <DocxEditorToolbar.Separator />
-  <DocxEditorToolbar.Bold />
-  <DocxEditorToolbar.Italic />
-  <DocxEditorToolbar.FontColor />
-  <DocxEditorToolbar.Zoom />
-</DocxEditorToolbar>
-```
-
-Most named parts map to one `ChromeSlotId`. `Alignment` combines the four `alignment.*` slots. The [chrome slot reference](/docs/2.x/guides/chrome-slots) lists every slot and named React and Vue part.
-
-### Add a host toolbar action
-
-Use `DocxEditorToolbar.Action` for an action without a registry slot. Call `useEditorCommand()` to read whether the command can run.
+`DocxEditorRoot` does not mount the four popovers that `<DocxEditor>` mounts. Add each one as a child of `DocxEditorViewport`, or register it in the `popups` prop:
 
 ```vue
 <script setup lang="ts">
-import { computed } from 'vue';
 import {
-  DocxEditorToolbar,
-  useEditorCommand,
-  useEditorState,
-  type EditorCommand,
+  DocxEditorContentControl,
+  DocxEditorContextMenu,
+  DocxEditorEquation,
+  DocxEditorHyperLink,
+  DocxEditorRoot,
+  definePopup,
 } from '@docx-editor.dev/vue';
 
-const command: EditorCommand = {
-  type: 'setMarkAttr',
-  mark: 'highlight',
-  attr: 'val',
-  value: 'cyan',
+defineProps<{ bytes: Uint8Array }>();
+
+const popups = {
+  hyperlink: definePopup(DocxEditorHyperLink),
+  contentControl: definePopup(DocxEditorContentControl),
+  equation: definePopup(DocxEditorEquation),
+  contextMenu: definePopup(DocxEditorContextMenu),
 };
-const action = useEditorCommand(command);
-const collapsed = useEditorState((state) => state.selectionCollapsed);
-const enabled = computed(() => action.isEnabled.value && !collapsed.value);
-const reason = computed(() =>
-  collapsed.value && action.isEnabled.value ? 'Nothing is selected' : action.disabledReason.value
-);
 </script>
 
 <template>
-  <DocxEditorToolbar.Action
-    label="Highlight"
-    :disabled="!enabled"
-    :disabled-reason="reason ?? undefined"
-    @select="action.execute"
-  />
+  <DocxEditorRoot :document="bytes" :popups="popups">
+    <!-- Toolbar, viewport, and content -->
+  </DocxEditorRoot>
 </template>
 ```
 
-Reuse this logic for each surface that exposes the action.
+Without `DocxEditorHyperLink`, the link button, the **Insert link** row, and Ctrl+K open nothing. Without `DocxEditorContextMenu`, a right-click opens the browser menu.
 
-## Custom context menu
+### Custom loading screen
 
-You can keep packaged rows, remove rows, add registry slots, and add host rows.
-
-To remove a row, render its slot override with `hidden`, such as `<DocxEditorContextMenu.Slot slot-id="edit.cut" hidden />`. A named row part is shorthand for that override: `<DocxEditorContextMenu.Cut hidden />` removes the same row in place. The toolbar and the menu bar follow the same rule.
+`DocxEditorLoading` shows before the bytes arrive and while a large document opens. This example replaces the spinner and covers the previous document during a reopen:
 
 ```vue
-<DocxEditorContextMenu class-name="my-menu">
-  <DocxEditorContextMenu.Cut />
-  <DocxEditorContextMenu.Copy />
-  <DocxEditorContextMenu.Slot slot-id="review.addComment" hidden />
-
-  <DocxEditorContextMenu.Row
-    :disabled="!enabled"
-    :title="reason ?? undefined"
-    @select="action.execute"
-  >
-    Highlight
-  </DocxEditorContextMenu.Row>
-
-  <DocxEditorContextMenu.Submenu label-key="my.insert">
-    <DocxEditorContextMenu.Row
-      @select="editorRef?.exec({ type: 'insertBreak', kind: 'page' })"
-    >
-      Page break
-    </DocxEditorContextMenu.Row>
-  </DocxEditorContextMenu.Submenu>
-
-  <DocxEditorContextMenu.Slot slot-id="format.clear" />
-</DocxEditorContextMenu>
-```
-
-`DocxEditorContextMenu.Slot` gets its label, icon, state, and command from the registry.
-
-## Custom menu bar
-
-The menu bar stays on one line. Menus that do not fit move into one `⋯` menu as submenus. Set `:overflow="false"` to let the bar wrap instead. For details, see [Menu bar overflow](/docs/2.x/guides/toolbar#menu-bar-overflow).
-
-Pass `exporters` to the menu to connect export and print handlers. For setup, see [Print documents](/docs/2.x/guides/print).
-
-`DocxEditorMenu` derives its default menus from `CHROME_MENUS`. Override only the menus that your product changes.
-
-```vue
-<DocxEditorMenu class-name="my-menubar" :open-handler="openFile" :save-handler="saveFile">
-  <DocxEditorMenu.File />
-  <DocxEditorMenu.Format />
-  <DocxEditorMenu.Insert />
-
-  <DocxEditorMenu.Menu id="review" label="Review" :preset="false">
-    <DocxEditorMenu.Row :disabled="!enabled" @select="action.execute">
-      Highlight passage
-    </DocxEditorMenu.Row>
-    <DocxEditorMenu.Separator />
-    <DocxEditorMenu.Row
-      shortcut="Ctrl+Enter"
-      @select="editorRef?.exec({ type: 'insertBreak', kind: 'page' })"
-    >
-      Page break
-    </DocxEditorMenu.Row>
-  </DocxEditorMenu.Menu>
-
-  <DocxEditorMenu.Help :preset="false">
-    <DocxEditorMenu.Row @select="openDocumentation">
-      Documentation
-    </DocxEditorMenu.Row>
-  </DocxEditorMenu.Help>
-</DocxEditorMenu>
-```
-
-Use `open-handler` and `save-handler` for composed Vue menu actions. `<DocxEditor>` exposes these actions as `@open` and `@save`.
-
-## Custom navigation pane
-
-Each navigation part accepts its own class.
-
-```vue
-<DocxEditorNavigation class-name="my-nav" :toggle="{ className: 'my-nav__toggle' }">
-  <DocxEditorNavigation.Header class-name="my-nav__header">
-    <DocxEditorNavigation.Close class-name="my-nav__close" />
-    <DocxEditorNavigation.Title class-name="my-nav__title" />
-  </DocxEditorNavigation.Header>
-  <DocxEditorNavigation.Tabs class-name="my-nav__tabs" />
-  <DocxEditorNavigation.Headings class-name="my-nav__headings" />
-  <DocxEditorNavigation.Find class-name="my-nav__find" />
-</DocxEditorNavigation>
-```
-
-The headings list uses the document outline from the editor.
-
-### Place the navigation pane
-
-Place `DocxEditorNavigation` as a direct child of `DocxEditorViewport`, or beside the viewport in a positioned container. As a direct child of the viewport, the pane stays in place while the pages scroll. In both positions, the pane moves the page only when the left margin area cannot hold it.
-
-If the viewport leaves less than `NAVIGATION_PANE_MIN_PAGE_ROOM` (320 pixels) beside the pane, the pane covers the page instead. The review pane's visible room counts against the viewport. With the review pane's `overflow: 'scroll'`, only its marker strip counts, because the card column scrolls out of view. It then spans the viewport width less its inset on each side, and the page doesn't move. The pane closes after you choose a heading or a result. `useNavigationPane().overlay` reports this mode.
-
-The pane takes its labels from its `t` prop. Without `t`, it uses the `translate` function of `DocxEditorRoot`, then the active locale catalog.
-
-## Custom loading screen
-
-`DocxEditorLoading` covers the time before bytes arrive and the time while a document opens.
-
-```vue
-<DocxEditorViewport>
-  <DocxEditorLoading>
-    <div class="my-loading">
-      <MySpinner />
-      <span>Opening document</span>
-    </div>
-  </DocxEditorLoading>
-  <DocxEditorContent />
-</DocxEditorViewport>
-```
-
-Set `overlay` to cover the previous document while the next document opens.
-
-```vue
-<div class="workspace">
-  <DocxEditorViewport>
-    <DocxEditorContent />
-  </DocxEditorViewport>
-  <DocxEditorLoading overlay />
-</div>
-```
-
-Give `.workspace` a positioning context. With `overlay`, the indicator moves onto the first page once the first pages of a large document show. It stays there, and scrolls with the page, until the editor lays out the remaining pages. To replace only the spinner in both places, use the `indicator` slot. Keep the packaged page and its position:
-
-```vue
-<div class="workspace">
+<div style="position: relative">
   <DocxEditorViewport>
     <DocxEditorContent />
   </DocxEditorViewport>
@@ -452,351 +195,65 @@ Give `.workspace` a positioning context. With `overlay`, the indicator moves ont
 </div>
 ```
 
-The default slot replaces the whole first screen, and the first page then shows the `indicator` slot, or the packaged spinner without it. The `loadingIndicator` slot of `DocxEditor` fills the `indicator` slot.
+The default slot replaces the whole first screen; the `indicator` slot replaces only the spinner. Keep `DocxEditorContent` mounted while the open completes. For the loading flow, see [Loading and saving](/docs/2.x/guides/loading-and-saving).
 
-Use `DocxEditorLoading.Spinner` or `DocxEditorLoadingSpinner` to style the packaged spinner.
+## Override a component
 
-To add an animated loading screen, pass it in the default slot of `DocxEditorLoading`. The component keeps the screen mounted while the editor instance changes. This prevents that change from restarting the screen’s entry animation.
-
-```vue
-<DocxEditorLoading overlay>
-  <MyAnimatedLoadingScreen />
-</DocxEditorLoading>
-```
-
-Prefer this component to a loading screen controlled only by `isLoading || isOpening`. Both flags can briefly read `false` during editor replacement.
-
-## Custom hyperlink popover
-
-`DocxEditorHyperLink` shows the link target and editing actions.
+A named child replaces the matching slot in the preset. `hidden` removes it, and `as-child` merges the part's behavior into your element:
 
 ```vue
-<DocxEditorHyperLink class-name="my-popover">
-  <DocxEditorHyperLink.Copy hidden />
-  <DocxEditorHyperLink.Unlink :icon="unlinkIcon" />
-</DocxEditorHyperLink>
+<DocxEditorToolbar>
+  <DocxEditorToolbar.Bold as-child>
+    <MyButton variant="ghost">Bold</MyButton>
+  </DocxEditorToolbar.Bold>
+  <DocxEditorToolbar.Highlight hidden />
+</DocxEditorToolbar>
 ```
 
-Its parts are `Url`, `Fields`, `Edit`, `Apply`, `Cancel`, `Copy`, `Unlink`, and `Error`. Use `useHyperlinkPopup()` when you need different markup. While a component that calls it is mounted, link clicks, Ctrl+K or Cmd+K, the toolbar **Link** button, and the context menu **Insert link** row open its state. If no link panel is mounted, those controls are disabled.
+`as-child` passes handlers, disabled state, and accessibility attributes to one child element without a wrapper. A group whose slots are all hidden disappears with its separator.
 
-## Rulers
+### Custom toolbar
 
-The rulers read page setup and zoom from the editor. A drag creates one undo entry when you release the handle.
-
-Use Tab to focus a vertical ruler margin handle. Arrow Up increases the margin; Arrow Down decreases it. Hold Shift to change one twip. Home and End select the permitted limits. Each change creates one undo entry.
+Set `:preset="false"` to render only the parts that you list, in template order:
 
 ```vue
-<DocxEditorRoot :document="bytes">
-  <DocxEditorHorizontalRuler />
-  <DocxEditorViewport>
-    <DocxEditorVerticalRuler />
-    <DocxEditorContent />
-  </DocxEditorViewport>
-</DocxEditorRoot>
+<DocxEditorToolbar :preset="false" class-name="my-toolbar">
+  <DocxEditorToolbar.Undo />
+  <DocxEditorToolbar.Redo />
+  <DocxEditorToolbar.Separator />
+  <DocxEditorToolbar.FontFamily />
+  <DocxEditorToolbar.Bold />
+  <DocxEditorToolbar.Zoom />
+</DocxEditorToolbar>
 ```
 
-Read-only documents keep the ruler handles inactive.
+Each part reads enabled state, active state, and commands from the engine. For `DocxEditorToolbar.Group`, `DocxEditorToolbar.Slot`, and `DocxEditorToolbar.Action`, see [Customize the toolbar](/docs/2.x/customization/toolbar). For every slot and named part, see the [chrome slot reference](/docs/2.x/guides/chrome-slots).
 
-## Page setup and paragraph dialogs
+## Control lifetime and focus
 
-You control `DocxEditorPageSetupDialog` and `DocxEditorParagraphDialog` with `open` and `@close`.
+`DocxEditorRoot` reads its props at construction. This table shows how each prop behaves after a change:
 
-### Open the dialogs from your own toolbar
+| Prop or event | Type | Behavior |
+| --- | --- | --- |
+| `document` | `DocumentSource` | Rebuilds the editor. |
+| `imageDecodePort` | `ImageDecodePort` | Rebuilds the editor. |
+| `modules` | `readonly EditorModule[]` | Ignored. Change the `:key` to remount with new modules. |
+| `fonts` | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Replaces fonts in place. |
+| `author` | `string` | Applies to later comments and changes. Existing revisions keep their authors. |
+| `locale` | `string` | Updates date input and labels. Defaults to `en-US`. |
+| `mode` | `'edit' \| 'view' \| 'suggesting'` | Updates in place. |
+| `zoom`, `zoomMode` | `number`, `ZoomMode \| 'auto'` | Updates in place. |
+| `colorMode` | `'light' \| 'dark' \| 'system'` | Updates the chrome theme, including dialogs and pop-out windows. |
+| `translate` | `(key, params?) => string` | Updates surface labels in place. |
+| `tableInteractionLabel` | `(key) => string` | Resolves table insertion and select-handle labels. |
+| `popups` | Popup map | Lists popups that `DocxEditorContent` renders. |
+| `@ready`, `@change`, `@font-error` | Events | Report readiness, document changes, and font errors. |
 
-To open a dialog from your own toolbar, keep its `open` state in your component and render the dialog inside `DocxEditorRoot`. Take the button's enabled state from `usePageSetup()` or `useParagraphFormat()`. These composables ask the engine whether the document accepts the change, so the button is disabled when the dialog could not apply it:
+In-place updates keep edits, the caret, and undo history. For exact types, see the [Vue API reference](/docs/2.x/api/vue).
+
+A `mousedown` that reaches the pages moves the caret. Prevent it on custom chrome, but not on form fields:
 
 ```vue
-<script setup lang="ts">
-import { ref } from 'vue';
-import {
-  DocxEditorPageSetupDialog,
-  DocxEditorParagraphDialog,
-  usePageSetup,
-  useParagraphFormat,
-} from '@docx-editor.dev/vue';
-
-const pageSetupOpen = ref(false);
-const paragraphOpen = ref(false);
-const pageSetup = usePageSetup();
-const paragraph = useParagraphFormat();
-</script>
-
-<template>
-  <button type="button" :disabled="!pageSetup.isEnabled.value" @click="pageSetupOpen = true">
-    Page setup
-  </button>
-  <button type="button" :disabled="!paragraph.isEnabled.value" @click="paragraphOpen = true">
-    Paragraph
-  </button>
-  <DocxEditorPageSetupDialog :open="pageSetupOpen" @close="pageSetupOpen = false" />
-  <DocxEditorParagraphDialog :open="paragraphOpen" @close="paragraphOpen = false" />
-</template>
-```
-
-The `file.pageSetup` and `paragraph.dialog` slots do not open a dialog. Their values come from the dialog form, so `useEditorCommand('file.pageSetup').execute()` and `useEditorCommand('paragraph.dialog').execute()` return `false`. `usePageSetupDialog()` and `useParagraphDialog()` read the draft of an open dialog from inside it; they do not open it.
-
-Use `usePageSetup()` to build a different form.
-
-Page setup, paragraph options, and legacy text field options expose replaceable parts and draft contexts. Import `definePopup` from `@docx-editor.dev/vue` and pass your component through the editor's `popups` map.
-
-Use `popups.export` for export feedback and `popups.print` for print feedback. The packaged dialogs are `DocxEditor.ExportDialog` and `DocxEditor.PrintDialog`. For examples, see [Customize popups](/docs/2.x/guides/customize-dialogs).
-
-## Content-control panel
-
-`DocxEditorContentControl` inspects the content control at the caret.
-
-```vue
-<DocxEditorContentControl>
-  <DocxEditorContentControl.Header />
-  <DocxEditorContentControl.Fields />
-  <DocxEditorContentControl.Remove />
-</DocxEditorContentControl>
-```
-
-The parts support the same class, `as-child`, and `hidden` controls. For content control behavior, see [Content controls](/docs/2.x/guides/content-controls).
-
-## Page furniture
-
-Mount a part only when your layout needs its interface:
-
-| Part                           | Interface                                     |
-| ------------------------------ | --------------------------------------------- |
-| `DocxEditorPageNumber`         | Current and total page count during scrolling |
-| `DocxEditorAuthorStyle`        | Review style for one author                   |
-| `DocxEditorColorByChangeType`  | Tracked-change colors by change type          |
-| `DocxEditorFontNotice`         | Rendered families without a compatible face   |
-| `DocxEditorOpenFailure`        | Why a file did not open, with host actions    |
-| `DocxEditorDocumentOutline`    | Standalone heading list with caret navigation |
-| `DocxEditorHeaderFooterChrome` | Header and footer editing controls            |
-| `DocxEditorNotesChrome`        | Footnote and endnote controls                 |
-
-For review colors, see [Tracked changes](/docs/2.x/pro/tracked-changes).
-
-## Custom labels
-
-Chrome resolves labels from the active locale catalog. Pass a translator only when you need label overrides.
-
-```vue
-<script setup lang="ts">
-import { DocxEditorToolbar, useChromeTranslate } from '@docx-editor.dev/vue';
-
-const overrides = new Map([
-  ['contextMenu.cut', 'Cut text'],
-  ['formattingBar.bold', 'Heavy'],
-]);
-const t = useChromeTranslate(overrides);
-</script>
-
-<template>
-  <DocxEditorToolbar :t="t" />
-</template>
-```
-
-Keys outside the map continue to use the locale catalog.
-
-## Custom colors
-
-Set `--doc-*` tokens on a host scope. The tokens apply to chrome descendants.
-
-```css
-.my-nav {
-  --doc-surface: transparent;
-  --doc-text: #fff;
-  --doc-border: rgb(255 255 255 / 25%);
-}
-```
-
-Do not style internal `docx-*` classes. Do not theme the document canvas. The canvas must show the document's saved colors.
-
-## Custom tracked changes and comments
-
-Vue review chrome comes from `@docx-editor.dev/pro/vue`.
-
-```vue
-<script setup lang="ts">
-import { h } from 'vue';
-import { DocxEditorReview } from '@docx-editor.dev/pro/vue';
-import ReviewFilters from './ReviewFilters.vue';
-
-const reviewFurniture = h(ReviewFilters);
-const commentsOnly = (item: { kind: string }) => item.kind === 'comment';
-</script>
-
-<template>
-  <DocxEditorReview
-    class-name="my-review"
-    :filter="commentsOnly"
-    :structural="false"
-    :formatting="false"
-    stack
-    :gap="12"
-    :furniture="reviewFurniture"
-  />
-</template>
-```
-
-Place the review rail inside the viewport. It then scrolls with the document.
-
-### Custom review cards
-
-Override review card parts in place:
-
-```vue
-<DocxEditorReview class-name="my-review">
-  <DocxEditorReview.List>
-    <DocxEditorReview.Card class-name="my-card">
-      <DocxEditorReview.Avatar class-name="my-avatar" />
-      <DocxEditorReview.Author />
-      <DocxEditorReview.Time hidden />
-      <DocxEditorReview.Summary />
-      <DocxEditorReview.Accept />
-      <DocxEditorReview.Reject />
-      <DocxEditorReview.Replies />
-      <DocxEditorReview.Reply />
-    </DocxEditorReview.Card>
-    <DocxEditorReview.Empty>Nothing to review</DocxEditorReview.Empty>
-  </DocxEditorReview.List>
-</DocxEditorReview>
-```
-
-Use the `item` slot for unrelated card markup:
-
-```vue
-<DocxEditorReview>
-  <DocxEditorReview.AddComment as-child>
-    <MyAddCommentButton />
-  </DocxEditorReview.AddComment>
-  <DocxEditorReview.List>
-    <template #item="{ item }">
-      <MyReviewCard :item="item" />
-    </template>
-  </DocxEditorReview.List>
-</DocxEditorReview>
-```
-
-Set `:preset="false"` to arrange all rail parts. Use `useReview()` for data without chrome. Use `useReviewItem()` inside a card.
-
-## Custom-node chrome
-
-Import the custom-node components from the Vue Pro entry:
-
-```vue
-<script setup lang="ts">
-import { CustomNodeChrome, CustomNodeContextMenu } from '@docx-editor.dev/pro/vue';
-import type { ActivatedCustomNode } from '@docx-editor.dev/pro';
-
-const openNode = (node: ActivatedCustomNode) => {
-  // Open your popover or form.
-};
-</script>
-
-<template>
-  <CustomNodeChrome :on-node-click="openNode" />
-  <DocxEditor.ContextMenu>
-    <CustomNodeContextMenu :on-edit-node="openNode" />
-  </DocxEditor.ContextMenu>
-</template>
-```
-
-`CustomNodeChrome` applies each definition's chip color. It also dispatches click and hover activation. `CustomNodeContextMenu` adds information, edit, and remove rows before the packaged rows.
-
-## Full composition
-
-This example places the main parts by name:
-
-```vue
-<script setup lang="ts">
-import {
-  DocxEditorContent,
-  DocxEditorContextMenu,
-  DocxEditorHeaderFooterChrome,
-  DocxEditorHorizontalRuler,
-  DocxEditorHyperLink,
-  DocxEditorNavigation,
-  DocxEditorNotesChrome,
-  DocxEditorPageNumber,
-  DocxEditorRoot,
-  DocxEditorVerticalRuler,
-  DocxEditorViewport,
-} from '@docx-editor.dev/vue';
-</script>
-
-<template>
-  <DocxEditorRoot :document="bytes" author="Jess Lin">
-    <MyBrandHeader />
-    <MyMenu />
-    <MyToolbar />
-    <DocxEditorHorizontalRuler />
-
-    <div class="workspace">
-      <DocxEditorNavigation />
-      <DocxEditorViewport>
-        <DocxEditorVerticalRuler />
-        <DocxEditorHeaderFooterChrome />
-        <DocxEditorNotesChrome />
-        <DocxEditorContent />
-        <DocxEditorHyperLink />
-        <DocxEditorContextMenu />
-      </DocxEditorViewport>
-      <DocxEditorPageNumber />
-    </div>
-  </DocxEditorRoot>
-</template>
-```
-
-An omitted part has no interface.
-
-## Pop-out window
-
-Wrap parts of the composition in `DocxEditorWindow` to show them in their own browser window. The root stays in the main window, so the editor keeps its document, undo history, and selection as it moves. The following example pops out the toolbar and the pages:
-
-```vue
-<DocxEditorWindow v-model:open="popped">
-  <DocxEditorToolbar />
-  <DocxEditorViewport>
-    <DocxEditorContent />
-  </DocxEditorViewport>
-</DocxEditorWindow>
-```
-
-For more information, see [Pop-out windows and iframes](/docs/2.x/guides/pop-out-windows).
-
-## Layout constraints
-
-Import the stylesheet once and give the editor container a height. Use a flex column when chrome shares that height. Packaged controls and the viewport apply their own `.docx-editor` scope. The wrapper in [Primitives](#primitives) also makes editor styles and tokens available to custom controls.
-
-`DocxEditorRoot` does not render a DOM element, so the chrome and the viewport are children of the flex column. Give the viewport `flex: 1` and `min-height: 0`. The viewport then takes the height that the chrome does not use, and the pages scroll inside it:
-
-```vue
-<template>
-  <div class="docx-editor" style="display: flex; flex-direction: column; height: 100vh">
-    <DocxEditorRoot :document="bytes" :popups="popups">
-      <DocxEditorToolbar />
-      <DocxEditorViewport style="flex: 1; min-height: 0">
-        <DocxEditorContent />
-      </DocxEditorViewport>
-    </DocxEditorRoot>
-  </div>
-</template>
-```
-
-If you put an element between the container and the viewport, give that element the same `flex: 1` and `min-height: 0`, and make it a flex column too.
-
-Inside `DocxEditorViewport`, the navigation pane is sticky and needs no positioning context. If you place the pane beside the viewport instead, put both in a row with `position: relative`. Beside the viewport, the pane uses that row as its positioning context.
-
-`DocxEditorPageNumber` uses absolute positioning against the same positioning context. Place it beside the viewport or inside it. Inside the viewport, it renders into the viewport's parent element, so it stays in view while the pages scroll.
-
-Do not set `z-index` on the workspace row or viewport. Either value creates a stacking context that can put a fixed context menu below other chrome.
-
-## Keep the caret
-
-A mousedown event that reaches the document moves the caret. Prevent the event on host chrome that must keep the document selection.
-
-```vue
-<div @mousedown="keepCaret">
-  <!-- Add your toolbar here. -->
-</div>
-
 <script setup lang="ts">
 function keepCaret(event: MouseEvent) {
   const tag = (event.target as HTMLElement | null)?.tagName;
@@ -804,12 +261,31 @@ function keepCaret(event: MouseEvent) {
   event.preventDefault();
 }
 </script>
+
+<template>
+  <div @mousedown="keepCaret"><!-- Your toolbar --></div>
+</template>
 ```
 
-Packaged chrome already applies this behavior.
+Packaged chrome already applies this rule.
 
-## Next steps
+## Limits
+
+- `DocxEditorContent` must be inside `DocxEditorViewport`, and the viewport needs a bounded height.
+- Composed editors mount popovers explicitly or register them in `popups`.
+- A composed `DocxEditorMenu` takes `open-handler` and `save-handler`. The packaged `<DocxEditor>` emits `@open` and `@save` instead.
+- The `file.pageSetup` and `paragraph.dialog` slots do not open a dialog. Their `execute()` returns `false`.
+- Use `isLoading`, not `isOpening`, to mount content conditionally. Both flags can read `false` briefly while the instance changes.
+- Place `DocxEditorNavigation` inside `DocxEditorViewport`, or beside it in a row with `position: relative`.
+- `DocxEditorNavigation` overlays the page when less than 320 pixels remain beside it. Visible review space reduces that room. With review `overflow: 'scroll'`, only the marker strip counts.
+- Give the viewport's parent `position: relative` for `DocxEditorPageNumber`. An indicator inside the viewport renders into that parent.
+- With the context-menu preset enabled, unmatched children appear after the packaged rows.
+- Do not set `z-index` on the workspace row or viewport. It can trap the context menu under other chrome.
+- `as-child` requires exactly one child element.
+- Theme chrome with `--doc-*` tokens. Do not target `docx-*` classes or theme the document canvas. See [Appearance](/docs/2.x/customization/appearance).
+
+## See also
 
 - [Vue composables](/docs/2.x/vue/composables)
 - [Vue props](/docs/2.x/vue/props)
-- [Toolbar guide](/docs/2.x/guides/toolbar)
+- [Vite and Vue example](/docs/2.x/frameworks/vite-vue)

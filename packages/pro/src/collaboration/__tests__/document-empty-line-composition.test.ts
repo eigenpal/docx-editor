@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -48,6 +48,8 @@ function compose(peer: ReturnType<typeof mount>, text: string) {
   else line.insertBefore(textNode, line.firstChild);
   document.getSelection()!.setBaseAndExtent(textNode, text.length, textNode, text.length);
   pages.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: text }));
+  // Composed text commits on a later task, as typed text does; land it now.
+  peer.editor.surface!.flushPendingInput();
 }
 
 test('empty paragraph composition converges, retains remote carets, and survives undo and reopen', async () => {

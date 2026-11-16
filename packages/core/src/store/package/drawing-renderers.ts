@@ -88,6 +88,26 @@ export interface DrawingEffectsRenderer {
   ) => PictureEffectsProjection | null;
 }
 
+/** The long edge, in pixels, a metafile raster scales up toward to stay sharp on the page. */
+const METAFILE_SHARP_EDGE = 2048;
+/** The largest resolution multiplier the metafile rasterizer accepts. */
+const METAFILE_MAX_SCALE = 4;
+
+/**
+ * Rasterizer options for a metafile raster no larger than `maxEdge` pixels on a side. A
+ * metafile's own size is its recording device's pixels, often far smaller than the picture
+ * shows on the page, so it renders at up to 4x toward a 2048-pixel long edge. The converter
+ * lowers the render scale itself to fit the bounds, so no separate size read is needed.
+ *
+ * @internal
+ */
+export function metafileRasterOptions(
+  maxEdge: number
+): Readonly<{ dpiScale: number; maxWidth: number; maxHeight: number }> {
+  const edge = Math.max(1, Math.min(METAFILE_SHARP_EDGE, Math.floor(maxEdge)));
+  return { dpiScale: METAFILE_MAX_SCALE, maxWidth: edge, maxHeight: edge };
+}
+
 /** A metafile raster for the editor: PNG bytes the image pipeline validates again. @internal */
 export interface MetafileRasterImage {
   readonly bytes: Uint8Array;

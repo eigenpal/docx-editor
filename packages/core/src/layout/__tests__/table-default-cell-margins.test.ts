@@ -14,7 +14,7 @@ import { cascadeTableFormatting } from '../style-cascade.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import { caretAt, documentOrder } from '../semantic-interaction.ts';
-import { hitTestPage } from '../semantic-hit-test.ts';
+import { hitTestFragments, hitTestPage } from '../semantic-hit-test.ts';
 import type { SemanticLayout, TableFragmentRecord } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -370,10 +370,11 @@ describe('the empty paragraph a nested table forces at the end of a cell', () =>
       )!;
       const rowTop = fragment.rows[0]!.box.y;
       const rowBottom = rowTop + fragment.rows[0]!.box.height;
+      // The cell's terminator; the body's own empty paragraph after the table comes last.
       const order = documentOrder(layout);
       const caret = caretAt(
         layout,
-        { paragraphId: order[order.length - 1]!, offset: 0 },
+        { paragraphId: order[order.length - 2]!, offset: 0 },
         { measurer }
       )!;
       expect(caret.y).toBeGreaterThanOrEqual(rowTop - 0.001);
@@ -389,13 +390,26 @@ describe('the empty paragraph a nested table forces at the end of a cell', () =>
     // actually true is that the nested table owns the band under its own column and the
     // terminator owns the rest of the cell — so both halves are pinned at one y.
     const layout = layoutOf(cellWithNestedTable('<w:p/>'));
+    // The body's own empty paragraph after the table comes last in document order. The points
+    // sit below the table, so the walk runs over the table alone, as in a header that ends
+    // with it; in the body they land in that paragraph.
     const order = documentOrder(layout);
-    const terminator = order[order.length - 1]!;
-    const nestedParagraph = order[order.length - 2]!;
+    const terminator = order[order.length - 2]!;
+    const nestedParagraph = order[order.length - 3]!;
     const page = layout.pages[0]!;
+    const table = page.fragments.filter((fragment) => fragment.kind === 'table');
     const at = (x: number, y: number) =>
-      hitTestPage(layout, 0, { x: page.contentBox.x + x, y: page.contentBox.y + y }, { measurer })
-        ?.position?.paragraphId;
+      hitTestFragments(
+        layout,
+        0,
+        table,
+        { x: page.contentBox.x + x, y: page.contentBox.y + y },
+        { measurer }
+      )?.position?.paragraphId;
+    expect(
+      hitTestPage(layout, 0, { x: 10, y: page.contentBox.y + 20 }, { measurer })?.position
+        ?.paragraphId
+    ).toBe(order.at(-1));
     expect(at(10, 20)).toBe(nestedParagraph);
     expect(at(240, 20)).toBe(terminator);
   });

@@ -1,30 +1,13 @@
 ---
 title: 'Installation'
-description: 'Install the DOCX editor in React or Vue. Add the stylesheet and set a client-only boundary for server-rendered apps.'
+description: 'Install the DOCX editor in React or Vue, add the stylesheet, and set a client-only boundary for server-rendered apps.'
 category: 'Getting started'
 order: 2
 ---
 
-Use one of these supported framework versions:
+## Install packages
 
-- React `^18 || ^19`
-- Vue `^3.3`
-
-## Node version
-
-To run the engine outside a browser, use Node `^20.16.0 || >=22.3.0`.
-
-Anything that measures text needs the text shaper. The shaper reaches Node builtins through `process.getBuiltinModule`, which arrived in Node 20.16.0 and 22.3.0. On an earlier version the shaper does not start. The engine then reports the Node version as the cause, rather than a missing binary.
-
-This applies to server-side rendering, headless automation with `@docx-editor.dev/editor-api`, and build-time rendering. A browser-only app is unaffected.
-
-Text measurement determines line wraps and page breaks. If the shaper cannot start, the resulting layout can differ from Word.
-
-## Pick a package
-
-Each adapter declares the engine as a peer dependency. Install the engine and one adapter.
-
-Use these commands to install the packages that your app needs:
+Install one adapter and the engine. Each adapter declares `@docx-editor.dev/core` as a peer and needs one shared copy.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -43,24 +26,27 @@ npm install @docx-editor.dev/vue @docx-editor.dev/core
 </Framework>
 </FrameworkTabs>
 
-The other packages are the same for both adapters:
+Add optional packages as your app needs them:
 
-```bash
-# Tracked changes, comments, custom nodes
-# EigenPal Pro License: https://www.docx-editor.dev/pricing
-npm install @docx-editor.dev/pro
+| Package | Adds | License |
+| --- | --- | --- |
+| `@docx-editor.dev/pro` | Tracked changes, comments, and custom nodes | [EigenPal Pro License](https://www.docx-editor.dev/pricing) |
+| `@docx-editor.dev/editor-api` | Office.js-compatible editing on a server or with an open editor. Install with `@docx-editor.dev/core`. | [EigenPal Pro License](https://www.docx-editor.dev/pricing) |
+| `@docx-editor.dev/fonts` | Open-licensed substitutes for common DOCX default fonts | Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License |
 
-# Office.js-compatible editing API, on a server or with an active editor instance
-# EigenPal Pro License: https://www.docx-editor.dev/pricing
-npm install @docx-editor.dev/editor-api @docx-editor.dev/core
+## Check runtime requirements
 
-# Open-licensed substitutes for common Word fonts (optional)
-npm install @docx-editor.dev/fonts
-```
+| Runtime                                                  | Supported versions       |
+| -------------------------------------------------------- | ------------------------ |
+| React                                                    | `^18 \|\| ^19`           |
+| Vue                                                      | `^3.3`                   |
+| Node.js (SSR, headless automation, build-time rendering) | `^20.16.0 \|\| >=22.3.0` |
 
-## Mount the editor
+Text measurement needs a text shaper. On an older Node.js version the shaper does not start, and the engine reports the Node.js version as the cause. Browser-only apps do not need Node.js.
 
-Import the component and the stylesheet once. This example creates an empty document:
+## Add styles and a container
+
+Import the stylesheet once and give the parent a height:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -88,124 +74,48 @@ import '@docx-editor.dev/vue/styles.css';
 </script>
 
 <template>
-  <div class="editor-host">
+  <div style="height: 100vh">
     <DocxEditor document="blank" />
   </div>
 </template>
-
-<style>
-.editor-host {
-  height: 100vh;
-}
-</style>
-```
-
-The Vue stylesheet imports the core stylesheet that React uses.
-
-</Framework>
-</FrameworkTabs>
-
-Your app does not need Tailwind or an icon font.
-
-`document` accepts an `ArrayBuffer`, `Uint8Array`, `DocumentHandle`, or `'blank'`. Use `'blank'` for an empty document. If you omit `document`, the editor stays idle until you pass document bytes.
-
-Meet these layout requirements in both adapters:
-
-- Import the stylesheet to style the editor controls.
-- You do not need Tailwind because the precompiled CSS uses the `.docx-editor` scope.
-- Give the parent element a height because `<DocxEditor>` fills its parent.
-- A parent without a height collapses, so the editor does not appear.
-
-## Use server-rendered frameworks
-
-The editor uses the Document Object Model (DOM) to measure text when it mounts. You must render the editor on the client. Vite apps need no extra boundary. Server-side rendering (SSR) frameworks need a client-only boundary.
-
-Use the guide for your framework:
-
-<Cards>
-  <Card
-    href="/docs/2.x/frameworks/nextjs"
-    title="Next.js"
-    description="Use dynamic() with ssr: false to prevent 'window is not defined'."
-  />
-  <Card
-    href="/docs/2.x/frameworks/vite"
-    title="Vite"
-    description="Set up a client-rendered React app without an SSR boundary."
-  />
-  <Card
-    href="/docs/2.x/frameworks/vite-vue"
-    title="Vite with Vue"
-    description="Set up a client-rendered Vue app with the Vue stylesheet."
-  />
-  <Card
-    href="/docs/2.x/frameworks/nuxt"
-    title="Nuxt"
-    description="Set up the Vue adapter with a client-only component."
-  />
-  <Card
-    href="/docs/2.x/frameworks/remix"
-    title="Remix"
-    description="Use a mount check and React.lazy."
-  />
-  <Card
-    href="/docs/2.x/frameworks/astro"
-    title="Astro"
-    description="Use a React island with client:only."
-  />
-</Cards>
-
-## Fonts
-
-The editor uses font bytes to measure line wraps and page breaks. It loads embedded document fonts without configuration. Some documents reference Word default fonts without embedding them. For these documents, `@docx-editor.dev/fonts` supplies open-licensed substitutes. Five families match advance widths. The Century Gothic substitute stays within 1% in the package fidelity check.
-
-`packagedFonts()` supplies them per document: the editor calls it after parsing with the families that file declares. It loads only requested families and the default font. No request leaves your origin.
-
-The resolver also requests the configured default font. With the default Calibri configuration, it loads Carlito for text without an explicit font.
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-import { DocxEditor, useFonts } from '@docx-editor.dev/react';
-import { packagedFonts } from '@docx-editor.dev/fonts';
-
-function Editor({ bytes }: { bytes: Uint8Array }) {
-  const fonts = useFonts(packagedFonts());
-  return <DocxEditor document={bytes} fonts={fonts} />;
-}
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<script setup lang="ts">
-import { DocxEditor, useFonts } from '@docx-editor.dev/vue';
-import { packagedFonts } from '@docx-editor.dev/fonts';
-
-defineProps<{ bytes: Uint8Array }>();
-const fonts = useFonts(packagedFonts());
-</script>
-
-<template>
-  <DocxEditor :document="bytes" :fonts="fonts" />
-</template>
 ```
 
 </Framework>
 </FrameworkTabs>
 
-`packagedFonts()` resolves after the document is parsed, so the first layout can use fallback measurement. The editor updates pagination when the fonts arrive. Font arrivals preserve edits, selection, and undo history. For a document that must paginate correctly on the first pass, use `defaultFonts()` instead. For more information, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
+- The stylesheet is required. The Vue stylesheet imports the same core stylesheet that React uses.
+- `<DocxEditor>` fills its parent. A parent without a height collapses, and the editor does not appear.
+- Your app does not need Tailwind or an icon font. The precompiled CSS uses the `.docx-editor` scope.
 
-## Edit documents without a browser
+For a complete load and save flow, see the [quickstart](/docs/2.x/quickstart).
 
-Use [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) to edit a `.docx` without a browser. You can use it on a server, in a worker, or in a script. The package opens document bytes and uses an Office.js-compatible batching object model. It saves your changes as document bytes.
+## Choose a framework setup
+
+The editor uses the DOM to measure text, so it renders on the client only. Server-rendered frameworks need a client-only boundary.
+
+| Framework | Boundary | Guide |
+| --- | --- | --- |
+| Vite with React | None | [Vite](/docs/2.x/frameworks/vite) |
+| Vite with Vue | None | [Vite with Vue](/docs/2.x/frameworks/vite-vue) |
+| Next.js | `dynamic()` with `ssr: false` | [Next.js](/docs/2.x/frameworks/nextjs) |
+| Remix | Mount check and `React.lazy` | [Remix](/docs/2.x/frameworks/remix) |
+| Astro | React island with `client:only` | [Astro](/docs/2.x/frameworks/astro) |
+| Nuxt | `.client.vue` component | [Nuxt](/docs/2.x/frameworks/nuxt) |
+
+## Test a canary build
+
+Canary builds publish each night from `main` when it has unreleased changes that passed CI. They have no support guarantee. Use the `canary` tag on every `@docx-editor.dev` package in your app:
+
+```bash
+npm install @docx-editor.dev/react@canary @docx-editor.dev/core@canary
+```
+
+- A canary version looks like `2.35.0-canary.20261103032300.sha-b20ba9f`: next release, UTC build time, and source commit.
+- The packages of one canary pin each other to that exact version. Install every package from the same tag.
+- Version ranges such as `^2.34.0` never select a canary.
 
 ## Next steps
 
-- Follow the [quickstart](/docs/2.x/quickstart) to load, edit, and save a `.docx`.
-- Read [React composition](/docs/2.x/react/composition) to build custom editor controls.
-- Read [Vue composition](/docs/2.x/vue/composition) to compose the editor with Vue components.
-- Review [Word fidelity](/docs/2.x/word-fidelity) for feature support and round-trip behavior.
-- Review [React props](/docs/2.x/react/props) and the [React API reference](/docs/2.x/api/react).
+- [Quickstart](/docs/2.x/quickstart): Load, edit, and save a `.docx`.
+- [Fonts and measurement](/docs/2.x/guides/fonts): Load fonts for accurate line and page breaks.
+- [Editing API](/docs/2.x/editor-api): Edit documents without a browser.

@@ -54,3 +54,12 @@ export const previewAllows = (
   !guarded.has(container) &&
   previewing.has(container) &&
   PREVIEW_READ_ONLY_COMMANDS.has(command.type);
+
+/** The refusal of `command` while a guard blocks writes to the editor in `container`, or null. */
+export const writeBlockRefusal = (
+  container: HTMLElement | null | undefined,
+  command: { readonly type: string }
+): { readonly ok: false; readonly code: 'unsupported'; readonly reason: string } | null =>
+  container && refreshWriteBlocked(container) && !previewAllows(container, command)
+    ? { ok: false, code: 'unsupported', reason: writeBlockReason(container) }
+    : null;

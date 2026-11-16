@@ -82,7 +82,8 @@ describe('bottom-to-top table cell text', () => {
         '</w:tc></w:tr></w:tbl>'
     );
     const page = bodyLayout.pages[0]!;
-    const fragments = page.fragments;
+    // The table alone: headers and notes keep a final table without the body's empty paragraph.
+    const fragments = page.fragments.filter((fragment) => fragment.kind === 'table');
     const storyLayouts: SemanticLayout[] = [
       {
         ...bodyLayout,

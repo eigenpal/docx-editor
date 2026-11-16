@@ -155,3 +155,27 @@ test('a host panel that calls useHyperlinkPopup() keeps the controls working', a
   await flush();
   expect(container.querySelector('[data-testid="host-link-panel"]')!.textContent).toBe('editing');
 });
+
+test('a caret inside a word opens the panel with that word, and Apply links it', async () => {
+  const { container, editor } = await mount(true);
+  editor().surface!.setSelection({
+    anchor: { paragraphId: PID, offset: 8 },
+    head: { paragraphId: PID, offset: 8 },
+  });
+  await flush();
+  toolbarLink(container).click();
+  await flush();
+  const text = container.querySelector<HTMLInputElement>('[data-testid="hyperlink-popup-text"]')!;
+  expect(text.value).toBe('example');
+  const url = container.querySelector<HTMLInputElement>(
+    '[data-testid="hyperlink-popup-url-input"]'
+  )!;
+  url.value = 'https://example.com';
+  url.dispatchEvent(new Event('input', { bubbles: true }));
+  await flush();
+  container.querySelector<HTMLButtonElement>('[data-testid="hyperlink-popup-apply"]')!.click();
+  await flush();
+  const [link] = editor().surface!.hyperlinks.linksInCaretParagraph();
+  expect(link?.text).toBe('example');
+  expect(editor().surface!.session.bodyText()).toBe('Visit example today');
+});

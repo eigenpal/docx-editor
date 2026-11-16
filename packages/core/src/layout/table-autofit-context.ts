@@ -14,6 +14,8 @@ import type { AutofitFieldContext, TableAutofitContext } from './table-autofit-w
 /** What a table flow carries that autofit reads. */
 export interface AutofitFlowDeps extends AutofitFieldContext {
   readonly measurer: TextMeasurer;
+  /** The tables read with these deps sit in a fixed-layout table's cell. */
+  readonly parentTableFixed?: true | undefined;
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
   readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
   readonly drawingTokenForParagraph?: (paragraph: OoxmlElement) => string;
@@ -69,6 +71,7 @@ export function autofitContextOf(deps: AutofitFlowDeps): TableAutofitContext {
     ...(deps.defaultTabStopPt !== undefined ? { defaultTabStopPt: deps.defaultTabStopPt } : {}),
     ...(deps.compatibilityMode !== undefined ? { compatibilityMode: deps.compatibilityMode } : {}),
     passToken,
+    ...(deps.parentTableFixed ? { parentTableFixed: true as const } : {}),
     paragraphToken: (paragraph) => {
       const known = paragraphTokens.get(paragraph);
       if (known !== undefined) return known;

@@ -1,11 +1,9 @@
 ---
 title: 'Vite'
-description: 'Build a Vite DOCX editor with React. Install the package, mount the component, open a .docx from disk, edit it, and download the edited result.'
+description: 'Build a client-rendered Vite DOCX editor with React.'
 category: 'Frameworks'
 seoTitle: 'Vite DOCX editor setup'
 ---
-
-This guide shows an open-edit-download flow in a Vite + React app. Vite is client-rendered, so there is no SSR boundary to set up.
 
 ## Install
 
@@ -15,7 +13,7 @@ npm install @docx-editor.dev/react @docx-editor.dev/core
 
 ## Mount the editor
 
-Add these two files. The mount ID must match your `index.html`; the standard Vite React template uses `root`.
+Vite renders on the client, so you do not need a server-rendering boundary. Mount the app on the element from your `index.html`:
 
 ```tsx
 // src/main.tsx
@@ -28,70 +26,40 @@ if (container) {
 }
 ```
 
+The app imports the stylesheet and fills a container with a height:
+
 ```tsx
 // src/App.tsx
-import { useRef, useState } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
+import { DocxEditor } from '@docx-editor.dev/react';
 import '@docx-editor.dev/core/styles/editor.css';
 
 export function App() {
-  const editorRef = useRef<DocxEditorRef>(null);
-  const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
-  const [fileName, setFileName] = useState('document.docx');
-
-  async function onFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setBuffer(await file.arrayBuffer());
-    setFileName(file.name);
-  }
-
-  async function onSave() {
-    const out = await editorRef.current?.save();
-    if (!out) return;
-    const blob = new Blob([out], {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: 8, display: 'flex', gap: 8 }}>
-        <input type="file" accept=".docx" onChange={onFileSelect} />
-        <button onClick={onSave}>Save .docx</button>
-      </div>
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <DocxEditor ref={editorRef} document={buffer ?? 'blank'} />
-      </div>
+    <div style={{ height: '100vh' }}>
+      <DocxEditor document="blank" />
     </div>
   );
 }
 ```
 
-`document` and `save()` work as described in the [Quickstart](/docs/2.x/quickstart); the only Vite-specific fact is that there is no SSR boundary to manage.
+To open and download files, use the component from the [quickstart](/docs/2.x/quickstart).
 
-The full example also includes composed chrome, the review sidebar, and a custom node. See [`examples/vite`](https://github.com/eigenpal/docx-editor/tree/main/examples/vite) in the repo. For agent-driven editing, see [`examples/agent`](https://github.com/eigenpal/docx-editor/tree/main/examples/agent).
+## Limits
+
+- The element ID must match `index.html`. The standard Vite React template uses `root`.
+- This setup assumes a client-rendered Vite app. For server rendering, see [Installation](/docs/2.x/installation#choose-a-framework-setup).
+- Import the stylesheet once, and give the editor's parent a measured height.
 
 ## Run the example
 
-The Vite example aliases `@docx-editor.dev/*` to workspace source, so no build step is needed:
+The [`examples/vite`](https://github.com/eigenpal/docx-editor/tree/main/examples/vite) starter aliases package source, so it needs no package build. It also shows composed chrome, the review sidebar, and a custom node. After you clone the repository and run `bun install`, run:
 
 ```bash
-git clone https://github.com/eigenpal/docx-editor.git
-cd docx-editor
-bun install
 bun run dev:react   # http://localhost:5173
 ```
 
 ## Next steps
 
-- [Quickstart](/docs/2.x/quickstart): the load, edit, save flow in detail
-- [Loading and saving](/docs/2.x/guides/loading-and-saving): URLs, autosave, upload to your API
-- [Vite DOCX editor guide](/blog/vite-docx-editor): the detailed walkthrough
-- [Vite example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/vite)
+- [Quickstart](/docs/2.x/quickstart): Load, edit, and save a document.
+- [Examples](/docs/2.x/examples): Agent and custom node starters.
+- [Vite DOCX editor guide](/blog/vite-docx-editor): Detailed walkthrough.

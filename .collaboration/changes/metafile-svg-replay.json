@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "PDF export replays EMF and WMF pictures by recording the converter's canvas calls.",
+  "after": "PDF export replays EMF and WMF pictures from the converter's SVG output and places each EMF in its header frame.",
+  "reason": "Only PDF and browser raster output of metafile pictures changes. Shared nodes, text offsets, operations, and package serialization stay the same, and the picture bytes round-trip untouched.",
+  "tests": [
+    "packages/pro/src/drawing/__tests__/metafile-replay.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-compatibility.test.ts"
+  ],
+  "changeset": "metafile-svg-replay",
+  "migration": null
+}

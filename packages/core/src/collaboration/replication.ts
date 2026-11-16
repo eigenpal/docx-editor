@@ -138,7 +138,7 @@ export {
   createCollaborationDocumentPort,
   type CreateCollaborationDocumentPortOptions,
 } from './document-port.ts';
-export { historyGroupOfJournal } from './primitive-journal.ts';
+export { historyGroupOfJournal, isJournalOutsideUndo } from './primitive-journal.ts';
 export { mapOffsetAcrossText } from './offset-mapping.ts';
 export type { HistoryGroup } from '../store/store/history-group.ts';
 export type {

@@ -16,6 +16,7 @@ import { selectionsEqual, spanSearchRoots } from './dom-selection.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import { collapsedAt } from './surface-selection-ops.ts';
 import { paintedTextIn } from './surface-composition-readback.ts';
+import type { ImeDeletionPlan } from './surface-ime-deletion.ts';
 import { historyShortcutOf } from './history-shortcut.ts';
 import {
   moveByTabInTable,
@@ -474,11 +475,14 @@ export function createClipboardHandlers(surface: PaginatedSurface): {
       event.preventDefault();
       return false;
     }
-    if (!flavours.text || !event.clipboardData) return false;
+    // A chart's name can be empty; its HTML flavour still carries the copy.
+    if ((!flavours.text && !flavours.chartDrawingNodeId) || !event.clipboardData) return false;
     event.clipboardData?.setData('text/plain', flavours.text);
     if (flavours.html) event.clipboardData?.setData('text/html', flavours.html);
+    chartCut = flavours.chartDrawingNodeId ?? null;
     return true;
   };
+  let chartCut: string | null = null;
 
   const onCopy = (event: ClipboardEvent): void => {
     if (!writeFlavours(event)) return;
@@ -492,7 +496,9 @@ export function createClipboardHandlers(surface: PaginatedSurface): {
       return;
     }
     if (!writeFlavours(event)) return;
-    surface.deleteSelection();
+    // A cut of one selected chart deletes that chart; there is no text range to delete.
+    if (chartCut) surface.deleteImage(chartCut);
+    else surface.deleteSelection();
     event.preventDefault();
   };
 
@@ -529,8 +535,35 @@ export function createBeforeInputHandler(
      * selection and treats the queued echo as the browser's, not the user's.
      */
     readonly onBrowserSelectionFixup?: () => void;
+    /**
+     * How a `deleteContentBackward` / `deleteContentForward` event deletes: the steps its
+     * target range names at the caret, or a range the browser shows selected. Without it,
+     * each event is one step. See surface-ime-deletion.ts.
+     */
+    readonly deletionPlan?: (
+      event: InputEvent,
+      direction: 'backward' | 'forward'
+    ) => ImeDeletionPlan;
+    /** Run that many steps, stopping at one that changes nothing. Without it, all run. */
+    readonly runDeletionSteps?: (count: number, step: () => void) => void;
+    /** A deletion arrived as `beforeinput`: from an input method, never from the keymap. */
+    readonly onInputMethodDeletion?: () => void;
   }
 ): (event: InputEvent) => void {
+  const deleteBy = (event: InputEvent, direction: 'backward' | 'forward'): void => {
+    const step = direction === 'backward' ? surface.deleteBackward : surface.deleteForward;
+    const plan = hooks.deletionPlan?.(event, direction) ?? { kind: 'steps', count: 1 };
+    if (plan.kind === 'selection') {
+      surface.setSelection(plan.selection);
+      step.call(surface);
+    } else {
+      const run = () => step.call(surface);
+      // Without the hook, one step: the planner that counts is the same lane that runs them.
+      if (hooks.runDeletionSteps) hooks.runDeletionSteps(plan.count, run);
+      else run();
+    }
+    hooks.onInputMethodDeletion?.();
+  };
   return (event: InputEvent): void => {
     // PREVENTED FIRST, dispatched second.
     //
@@ -569,19 +602,21 @@ export function createBeforeInputHandler(
       return;
     }
     if (event.inputType === 'deleteContentBackward') {
-      surface.deleteBackward();
+      deleteBy(event, 'backward');
       return;
     }
     if (event.inputType === 'deleteWordBackward') {
       surface.deleteWordBackward();
+      hooks.onInputMethodDeletion?.();
       return;
     }
     if (event.inputType === 'deleteContentForward') {
-      surface.deleteForward();
+      deleteBy(event, 'forward');
       return;
     }
     if (event.inputType === 'deleteWordForward') {
       surface.deleteWordForward();
+      hooks.onInputMethodDeletion?.();
       return;
     }
     if (event.inputType === 'insertLineBreak') {
@@ -716,10 +751,11 @@ export function paintedTextOf(
   pagesLayer: HTMLElement,
   paragraphId: string,
   modelText: string,
-  anchor: Node | null = null
+  anchor: Node | null = null,
+  erased?: ReadonlySet<string>
 ): string | null {
   for (const root of spanSearchRoots(pagesLayer)) {
-    const painted = paintedTextIn(root, paragraphId, modelText, anchor);
+    const painted = paintedTextIn(root, paragraphId, modelText, anchor, erased);
     if (painted !== null) return painted;
   }
   return null;

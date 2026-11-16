@@ -1,10 +1,11 @@
-// The review settings panel: one gear in the header that opens a small settings panel.
+// The Settings tab of the side panel: the theme, the interface language, and how comments and
+// tracked changes appear.
 //
 // The model (starting settings, saved copy, and the choices) lives in
-// `examples/shared/review-settings.ts`, which the Vue example uses too. Every control writes
-// through `editor.setReviewPaneOptions()` and reads back from `snapshot.reviewPane`, so the
-// panel shows what the editor uses, not a copy of it.
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+// `examples/shared/review-settings.ts`, which the Vue example uses too. Every review control
+// writes through `editor.setReviewPaneOptions()` and reads back from `snapshot.reviewPane`, so
+// the tab shows what the editor uses, not a copy of it.
+import { useEffect, useId, type ReactNode } from 'react';
 import { useDocxEditor, useEditorState } from '@docx-editor.dev/react';
 import type { ResolvedReviewPane, ReviewPaneOptions } from '@docx-editor.dev/core/editor';
 import { exampleText as t } from '../../shared/example-text';
@@ -18,8 +19,8 @@ import {
 } from '../../shared/review-settings';
 import { DEMO_LANGUAGES, demoLanguage, switchDemoLanguage } from '../../shared/demo-language';
 import type { LocaleCode } from '@docx-editor.dev/i18n';
-import { DemoHeaderButton } from './DemoHeaderButton';
 import '../../shared/review-settings.css';
+import { DemoIcon } from './DemoIcon';
 
 export { EXAMPLE_REVIEW_PANE, storedReviewPane };
 
@@ -32,54 +33,35 @@ const PREVIEWS: Record<ReviewSettingsPreview, ReactNode> = {
   icon: <CommentIcon />,
 };
 
-export function ReviewSettings() {
+/**
+ * Give each new editor instance the saved review settings. A collaboration session builds a
+ * new instance, which starts from the module's settings. Mount it once, under the Root.
+ */
+export function useStoredReviewPane(): void {
   const editor = useDocxEditor();
-  const pane = useEditorState((snapshot) => snapshot.reviewPane);
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLElement>(null);
-  const id = useId();
-  const titleId = `${id}-title`;
-  const panelId = `${id}-panel`;
-
-  // A new editor instance starts from the module's settings; give it the saved ones too.
   useEffect(() => {
     if (editor) editor.setReviewPaneOptions(storedReviewPane());
   }, [editor]);
+}
 
-  // Opening moves focus to the first group's selected option.
-  useEffect(() => {
-    if (!open) return;
-    panelRef.current?.querySelector<HTMLInputElement>('input:checked')?.focus();
-  }, [open]);
+export interface ReviewSettingsProps {
+  readonly colorMode: 'light' | 'dark';
+  readonly onColorModeChange: (next: 'light' | 'dark') => void;
+  /** Whether the rulers show. */
+  readonly rulers: boolean;
+  readonly onRulersChange: (show: boolean) => void;
+}
 
-  // Escape from the panel or the gear closes it and returns focus to the gear. An Escape
-  // elsewhere, such as in the document or in a menu that handled it, belongs to that
-  // surface. A press outside the panel closes it.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return;
-      const root = rootRef.current;
-      const fromSettings =
-        root !== null &&
-        (root.contains(event.target as Node) || root.contains(document.activeElement));
-      if (!fromSettings) return;
-      event.preventDefault();
-      setOpen(false);
-      triggerRef.current?.focus();
-    };
-    const onDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener('keydown', onKey);
-    document.addEventListener('pointerdown', onDown);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.removeEventListener('pointerdown', onDown);
-    };
-  }, [open]);
+/** The settings of the demo, as the body of the Settings tab. */
+export function ReviewSettings({
+  colorMode,
+  onColorModeChange,
+  rulers,
+  onRulersChange,
+}: ReviewSettingsProps) {
+  const editor = useDocxEditor();
+  const pane = useEditorState((snapshot) => snapshot.reviewPane);
+  const id = useId();
 
   const apply = (options: ReviewPaneOptions | ResolvedReviewPane, save: boolean) => {
     if (!editor) return;
@@ -88,149 +70,122 @@ export function ReviewSettings() {
   };
 
   return (
-    <div className="demo-settings" ref={rootRef}>
-      <DemoHeaderButton
-        ref={triggerRef}
-        className="demo-settings__trigger"
-        aria-label={t('reviewSettings.open')}
-        title={t('reviewSettings.open')}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
-        disabled={!editor}
-        style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 8px' }}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <GearIcon />
-      </DemoHeaderButton>
-      {open ? (
-        <section
-          ref={panelRef}
-          id={panelId}
-          className="demo-settings__panel"
-          role="dialog"
-          aria-labelledby={titleId}
+    <div className="demo-settings__body">
+      <fieldset className="demo-settings__group">
+        <legend>{t('demoPanel.theme')}</legend>
+        <div className="demo-settings__segments" data-count={2}>
+          {(['light', 'dark'] as const).map((mode) => (
+            <label key={mode} className="demo-settings__segment">
+              <input
+                type="radio"
+                name={`${id}-theme`}
+                value={mode}
+                checked={colorMode === mode}
+                onChange={() => onColorModeChange(mode)}
+              />
+              <span>
+                <DemoIcon name={mode === 'light' ? 'sun' : 'moon'} />
+                {t(`demoPanel.theme.${mode}`)}
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset className="demo-settings__group">
+        <legend>{t('demoPanel.view')}</legend>
+        <label className="demo-settings__switch">
+          <span>{t('demoPanel.rulers')}</span>
+          <input
+            type="checkbox"
+            checked={rulers}
+            onChange={(event) => onRulersChange(event.target.checked)}
+          />
+        </label>
+      </fieldset>
+      <div className="demo-settings__group">
+        <label className="demo-settings__label" htmlFor={`${id}-language`}>
+          {t('reviewSettings.language')}
+        </label>
+        <select
+          id={`${id}-language`}
+          className="demo-settings__select"
+          value={demoLanguage()}
+          aria-describedby={`${id}-language-help`}
+          onChange={(event) => switchDemoLanguage(event.target.value as LocaleCode)}
         >
-          <header className="demo-settings__header">
-            <div>
-              <h2 id={titleId}>{t('reviewSettings.title')}</h2>
-              <p>{t('reviewSettings.subtitle')}</p>
+          {DEMO_LANGUAGES.map((language) => (
+            <option key={language.code} value={language.code} lang={language.code}>
+              {language.name}
+            </option>
+          ))}
+        </select>
+        <p id={`${id}-language-help`} className="demo-settings__help">
+          {t('reviewSettings.languageHelp')}
+        </p>
+      </div>
+      {REVIEW_SETTINGS_GROUPS.map((group) => {
+        const current = pane[group.field];
+        const help = reviewSettingsHelp(group, current);
+        const helpId = `${id}-${group.field}-help`;
+        return (
+          <fieldset
+            key={group.field}
+            className="demo-settings__group"
+            aria-describedby={help ? helpId : undefined}
+          >
+            <legend>{t(group.label)}</legend>
+            <div className="demo-settings__segments" data-count={group.options.length}>
+              {group.options.map((option) => (
+                <label key={option.value} className="demo-settings__segment">
+                  <input
+                    type="radio"
+                    name={`${id}-${group.field}`}
+                    value={option.value}
+                    checked={current === option.value}
+                    disabled={!editor}
+                    onChange={() => apply({ [group.field]: option.value }, true)}
+                  />
+                  <span>
+                    {option.preview ? PREVIEWS[option.preview] : null}
+                    {t(option.label)}
+                  </span>
+                </label>
+              ))}
             </div>
-            <button
-              type="button"
-              className="demo-settings__close"
-              aria-label={t('reviewSettings.close')}
-              onClick={() => {
-                setOpen(false);
-                triggerRef.current?.focus();
-              }}
-            >
-              <CloseIcon />
-            </button>
-          </header>
-          <div className="demo-settings__body">
-            <div className="demo-settings__group">
-              <label className="demo-settings__label" htmlFor={`${id}-language`}>
-                {t('reviewSettings.language')}
-              </label>
-              <select
-                id={`${id}-language`}
-                className="demo-settings__select"
-                value={demoLanguage()}
-                aria-describedby={`${id}-language-help`}
-                onChange={(event) => switchDemoLanguage(event.target.value as LocaleCode)}
-              >
-                {DEMO_LANGUAGES.map((language) => (
-                  <option key={language.code} value={language.code} lang={language.code}>
-                    {language.name}
-                  </option>
-                ))}
-              </select>
-              <p id={`${id}-language-help`} className="demo-settings__help">
-                {t('reviewSettings.languageHelp')}
+            {help ? (
+              <p id={helpId} className="demo-settings__help">
+                {t(help)}
               </p>
-            </div>
-            {REVIEW_SETTINGS_GROUPS.map((group) => {
-              const current = pane[group.field];
-              const help = reviewSettingsHelp(group, current);
-              const helpId = `${id}-${group.field}-help`;
-              return (
-                <fieldset
-                  key={group.field}
-                  className="demo-settings__group"
-                  aria-describedby={help ? helpId : undefined}
-                >
-                  <legend>{t(group.label)}</legend>
-                  <div className="demo-settings__segments" data-count={group.options.length}>
-                    {group.options.map((option) => (
-                      <label key={option.value} className="demo-settings__segment">
-                        <input
-                          type="radio"
-                          name={`${id}-${group.field}`}
-                          value={option.value}
-                          checked={current === option.value}
-                          onChange={() => apply({ [group.field]: option.value }, true)}
-                        />
-                        <span>
-                          {option.preview ? PREVIEWS[option.preview] : null}
-                          {t(option.label)}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                  {help ? (
-                    <p id={helpId} className="demo-settings__help">
-                      {t(help)}
-                    </p>
-                  ) : null}
-                </fieldset>
-              );
-            })}
-          </div>
-          <footer className="demo-settings__footer">
-            <button
-              type="button"
-              className="demo-settings__reset"
-              onClick={() => apply(EXAMPLE_REVIEW_PANE, false)}
-            >
-              {t('reviewSettings.reset')}
-            </button>
-          </footer>
-        </section>
-      ) : null}
+            ) : null}
+          </fieldset>
+        );
+      })}
+      <button
+        type="button"
+        className="demo-settings__reset"
+        disabled={!editor}
+        onClick={() => apply(EXAMPLE_REVIEW_PANE, false)}
+      >
+        {t('reviewSettings.reset')}
+      </button>
     </div>
   );
 }
 
-const svg = (children: ReactNode, size = 16) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    {children}
-  </svg>
-);
-
-function GearIcon() {
-  return svg(
-    <>
-      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-      <circle cx="12" cy="12" r="3" />
-    </>
-  );
-}
-
-function CloseIcon() {
-  return svg(<path d="M18 6 6 18M6 6l12 12" />);
-}
-
 function CommentIcon() {
-  return svg(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />, 14);
+  return (
+    <svg
+      width={14}
+      height={14}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
 }

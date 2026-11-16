@@ -346,10 +346,15 @@ const paragraphRowAnchorsCache = new FieldResultsModeMemo<
   readonly (readonly [string, SiteLocation])[]
 >();
 
+/** Text boxes inside text boxes past this depth get no review range. */
+const MAX_BOX_DEPTH = 8;
+
 function locateInParagraph(
   paragraph: OoxmlParagraphNode,
   located: Map<string, SiteLocation>,
-  retainAcrossReads: boolean
+  retainAcrossReads: boolean,
+  /** How many text boxes deep this paragraph sits. */
+  boxDepth = 0
 ): void {
   const offsets = retainAcrossReads
     ? paragraphOffsetIndex(paragraph)
@@ -358,6 +363,17 @@ function locateInParagraph(
     if (node.kind === 'textValue' || depth > 64) return;
     located.set(node.id, { paragraphId: paragraph.id, start, end });
     for (const child of node.children) place(child, start, end, depth + 1);
+  };
+  // A text box rides in a run and holds paragraphs of its own. Its changes sit in THOSE
+  // paragraphs, at their offsets: stopping at the run left them with no range, so they
+  // listed in the pane but could not be opened or reached by Next and Previous.
+  const nestedParagraphs = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || depth > 64 || boxDepth >= MAX_BOX_DEPTH) return;
+    if (node.kind === 'paragraph') {
+      locateInParagraph(node, located, retainAcrossReads, boxDepth + 1);
+      return;
+    }
+    for (const child of node.children) nestedParagraphs(child, depth + 1);
   };
   const visit = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue' || depth > 64) return;
@@ -378,6 +394,7 @@ function locateInParagraph(
       // stayed on offer.
       for (const child of node.children) {
         if (child.kind === 'runProperties') place(child, span.start, span.end, depth + 1);
+        else nestedParagraphs(child, depth + 1);
       }
       return;
     }

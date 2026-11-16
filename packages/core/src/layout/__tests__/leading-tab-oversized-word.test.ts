@@ -91,7 +91,7 @@ test('right-aligned tabs retain their segment placement', () => {
 
 test('a table cell does not gain a tab-only line', () => {
   const result = layout(`<w:r><w:tab/></w:r>${run(word)}`, '', 'left', true);
-  expect(texts(result)).toEqual(['\tABCDEFGH', 'IJKLMN']);
+  expect(texts(result)).toEqual(['\tABCDEFGH', 'IJKLMN', '']);
   const table = result.pages[0]!.fragments[0]!;
   expect(table.kind).toBe('table');
   if (table.kind === 'table') expect(table.rows[0]!.box.height).toBe(24);

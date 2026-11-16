@@ -102,6 +102,28 @@ export function furnitureHasHiddenWrap(
   return stories.some((story) => story?.anchoredDrawings?.some(retryableWrap) ?? false);
 }
 
+type FurnitureRetryOptions = {
+  readonly drawingExclusionPass?: number;
+  readonly drawingExclusionConverged?: boolean;
+  readonly yieldHiddenFurnitureZones?: boolean;
+  readonly furniture?: PageFurniture;
+  readonly continuedPageFurniture?: ContinuedPageFurniture;
+};
+
+/**
+ * Whether a layout refusal under `options` gets the retry of `refusalYieldsHiddenFurniture`:
+ * the outermost call, not yet yielding, with hidden or unsupported furniture. Never during
+ * that retry, so a refusal there must be handled where it happens.
+ */
+export function refusalRetriesWithoutHiddenFurniture(options: FurnitureRetryOptions): boolean {
+  return (
+    options.drawingExclusionPass === undefined &&
+    !options.drawingExclusionConverged &&
+    !options.yieldHiddenFurnitureZones &&
+    furnitureHasHiddenWrap(options.furniture, options.continuedPageFurniture)
+  );
+}
+
 /**
  * Whether a refused flow retries without blocking unsupported header and footer zones.
  *
@@ -111,21 +133,9 @@ export function furnitureHasHiddenWrap(
  */
 export function refusalYieldsHiddenFurniture(
   error: unknown,
-  options: {
-    readonly drawingExclusionPass?: number;
-    readonly drawingExclusionConverged?: boolean;
-    readonly yieldHiddenFurnitureZones?: boolean;
-    readonly furniture?: PageFurniture;
-    readonly continuedPageFurniture?: ContinuedPageFurniture;
-  }
+  options: FurnitureRetryOptions
 ): boolean {
-  if (
-    options.drawingExclusionPass !== undefined ||
-    options.drawingExclusionConverged ||
-    options.yieldHiddenFurnitureZones ||
-    !furnitureHasHiddenWrap(options.furniture, options.continuedPageFurniture)
-  )
-    return false;
+  if (!refusalRetriesWithoutHiddenFurniture(options)) return false;
   // Host callbacks can throw proxies whose prototype traps also throw. Preserve the
   // original failure instead of replacing it with an error from retry classification.
   try {

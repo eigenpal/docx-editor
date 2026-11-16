@@ -8,12 +8,23 @@ import {
   ref,
   shallowRef,
   watch,
-  watchEffect,
   type CSSProperties,
   type PropType,
   type VNode,
 } from 'vue';
-import { isHTMLElementNode, hostDocumentOf, hostWindowOf } from '@docx-editor.dev/core/editor';
+import {
+  isHTMLElementNode,
+  hostDocumentOf,
+  hostWindowOf,
+  chartPaneAvailable,
+  openChartPaneFor,
+  placeContextMenu,
+  revealMenuItem,
+  shapePaneAvailable,
+  showInTopLayer,
+} from '@docx-editor.dev/core/editor';
+import { useEditorCommand } from '../useEditorCommand';
+import { useEditorState } from '../useEditorState';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { mergeArrangement } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
@@ -38,7 +49,17 @@ import {
 } from '../menu/parts';
 import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
 import { contextMenuRowId } from './row-alias';
-import { isDocumentContextMenuTarget } from './menu-target';
+import {
+  ContextMenuStart,
+  StartPlacementRegion,
+  startPlacedChild,
+  warnPackagedRowsIn,
+} from './start';
+import {
+  contextMenuAnchorOf,
+  isDocumentContextMenuTarget,
+  isKeyboardContextMenu,
+} from './menu-target';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
   ContextMenuCopy,
@@ -63,6 +84,7 @@ import {
   ContextMenuSelectAll,
   ContextMenuRefreshToc,
   ContextMenuRefreshTocPageNumbers,
+  ContextMenuRemoveToc,
   useTableContextMenuVisible,
 } from './parts';
 import { useChromeScopeClassName } from '../color-mode-context';
@@ -70,7 +92,8 @@ import { MenuLinkRow } from '../menu/menu-link-row';
 import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
 import { useChromeDir } from '../../i18n';
 
-const VIEWPORT_INSET = 8;
+/** Where the measured panel sits, and the height past which it scrolls. */
+type ContextMenuPlacement = ReturnType<typeof placeContextMenu>;
 
 /** @public */
 export interface DocxEditorContextMenuProps {
@@ -138,8 +161,71 @@ const ContextMenuEditField = defineComponent({
   },
 });
 
+/** Edit chart, on a selected chart: opens the Chart pane, as a double press does. */
+const ContextMenuEditChart = defineComponent({
+  name: 'ContextMenuEditChart',
+  setup() {
+    const editor = useDocxEditor();
+    const menu = useMenuContext();
+    const label = useMenuLabel();
+    const chartId = useEditorState((snapshot) => snapshot.chart?.drawingNodeId ?? null);
+    return () => {
+      const instance = editor.value;
+      const id = chartId.value;
+      if (!instance || !id || !chartPaneAvailable(instance)) return null;
+      return (
+        <MenuRow
+          rowSlot="image.editChart"
+          onSelect={() => {
+            menu.value.setOpenMenu(null);
+            openChartPaneFor(instance, id);
+          }}
+        >
+          {{ default: () => label('chart.edit') }}
+        </MenuRow>
+      );
+    };
+  },
+});
+
+/** Format shape, on a selected shape, text box, line, or group: opens the Format shape pane. */
+const ContextMenuFormatShape = defineComponent({
+  name: 'ContextMenuFormatShape',
+  setup() {
+    const editor = useDocxEditor();
+    const menu = useMenuContext();
+    const label = useMenuLabel();
+    const shapeId = useEditorState((snapshot) =>
+      snapshot.image?.shapeFormat ? snapshot.image.id : null
+    );
+    // Enabled state and its reason come from the slot (`toolbarCommandState`), as on the toolbar.
+    const command = useEditorCommand('image.formatShape');
+    return () => {
+      const instance = editor.value;
+      const id = shapeId.value;
+      if (!instance || !id || !shapePaneAvailable(instance)) return null;
+      return (
+        <MenuRow
+          icon={chromeIcon(chromeControlForSlot('image.formatShape')?.paths) ?? undefined}
+          rowSlot="image.formatShape"
+          disabled={!command.isEnabled.value}
+          {...(command.disabledReason.value ? { title: command.disabledReason.value } : {})}
+          onSelect={() => {
+            menu.value.setOpenMenu(null);
+            command.execute();
+          }}
+        >
+          {{ default: () => label('shape.formatShape') }}
+        </MenuRow>
+      );
+    };
+  },
+});
+
 const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   { kind: 'row', id: 'field.edit', render: () => <ContextMenuEditField /> },
+  { kind: 'row', id: 'image.editChart', render: () => <ContextMenuEditChart /> },
+  { kind: 'row', id: 'image.formatShape', render: () => <ContextMenuFormatShape /> },
   { kind: 'row', id: 'edit.cut', render: () => <ContextMenuCut /> },
   { kind: 'row', id: 'edit.copy', render: () => <ContextMenuCopy /> },
   { kind: 'row', id: 'edit.paste', render: () => <ContextMenuPaste /> },
@@ -241,6 +327,7 @@ function tocContextEntries(): readonly DefaultEntry[] {
       id: ContextMenuRefreshTocPageNumbers.docxRow,
       render: () => <ContextMenuRefreshTocPageNumbers />,
     },
+    { kind: 'row', id: ContextMenuRemoveToc.docxRow, render: () => <ContextMenuRemoveToc /> },
   ];
 }
 
@@ -278,13 +365,6 @@ function rowOfChild(child: unknown): string | null {
   return null;
 }
 
-function startPlacedChild(child: unknown): boolean {
-  if (!isVNodeElement(child)) return false;
-  const type = child.type as { docxRowPlacement?: unknown };
-  if (typeof type !== 'function' && typeof type !== 'object') return false;
-  return type.docxRowPlacement === 'start';
-}
-
 function scrollerFor(anchor: HTMLElement | null): HTMLElement | null {
   return anchor?.closest<HTMLElement>('.docx-editor__scroll-container') ?? null;
 }
@@ -311,7 +391,7 @@ export const DocxEditorContextMenu = defineComponent({
     const anchor = ref<ContextMenuAnchor | null>(null);
     const tocId = ref<string | null>(null);
     const target = ref<HTMLElement | null>(null);
-    const placement = ref<ContextMenuAnchor | null>(null);
+    const placement = ref<ContextMenuPlacement | null>(null);
     const clipboardRefusal = ref<string | null>(null);
     const wasOpen = ref(false);
     const openChangeRef = shallowRef(props.onOpenChange);
@@ -344,38 +424,44 @@ export const DocxEditorContextMenu = defineComponent({
 
     /** The scroller the open menu came from: its document and window own the menu. */
     let menuScroller: HTMLElement | null = null;
-    watchEffect((onCleanup) => {
+    // Re-resolved on each state change, so a scroller that mounts later is found. The listener
+    // below follows only the element: a keystroke that leaves it in place re-binds nothing.
+    const listenScroller = computed(() => {
       void stateTick.value;
-      if (props.disabled) return;
-      const scroller =
+      if (props.disabled) return null;
+      return (
         scrollerFor(hostRef.value) ??
         (hostRef.value
           ? hostDocumentOf(hostRef.value).querySelector<HTMLElement>(
               '.docx-editor__scroll-container'
             )
-          : null);
-      if (!scroller) return;
-      const onContextMenu = (event: MouseEvent) => {
-        // A second right-click on the open panel neither moves it nor shows the browser's menu.
-        if (panelRef.value?.contains(event.target as Node | null)) {
-          event.preventDefault();
-          return;
-        }
-        // Chrome in the scroller, such as the link popover, keeps the browser's own menu.
-        if (!isDocumentContextMenuTarget(scroller, event.target)) return;
-        event.preventDefault();
-        const keyboard = event.button === -1 || (event.clientX === 0 && event.clientY === 0);
-        const box = scroller.getBoundingClientRect();
-        menuScroller = scroller;
-        tocId.value = editorRef.value?.snapshot().tocContext?.id ?? null;
-        target.value = keyboard || !isHTMLElementNode(event.target) ? null : event.target;
-        anchor.value = keyboard
-          ? { x: box.left + 16, y: box.top + 16 }
-          : { x: event.clientX, y: event.clientY };
-      };
-      scroller.addEventListener('contextmenu', onContextMenu);
-      onCleanup(() => scroller.removeEventListener('contextmenu', onContextMenu));
+          : null)
+      );
     });
+    watch(
+      listenScroller,
+      (scroller, _previous, onCleanup) => {
+        if (!scroller) return;
+        const onContextMenu = (event: MouseEvent) => {
+          // A second right-click on the open panel neither moves it nor shows the browser's menu.
+          if (panelRef.value?.contains(event.target as Node | null)) {
+            event.preventDefault();
+            return;
+          }
+          // Chrome in the scroller, such as the link popover, keeps the browser's own menu.
+          if (!isDocumentContextMenuTarget(scroller, event.target)) return;
+          event.preventDefault();
+          const keyboard = isKeyboardContextMenu(event);
+          menuScroller = scroller;
+          tocId.value = editorRef.value?.snapshot().tocContext?.id ?? null;
+          target.value = keyboard || !isHTMLElementNode(event.target) ? null : event.target;
+          anchor.value = contextMenuAnchorOf(event, keyboard, editorRef.value, scroller);
+        };
+        scroller.addEventListener('contextmenu', onContextMenu);
+        onCleanup(() => scroller.removeEventListener('contextmenu', onContextMenu));
+      },
+      { immediate: true }
+    );
 
     watch(
       anchor,
@@ -392,7 +478,13 @@ export const DocxEditorContextMenu = defineComponent({
             close();
           }
         };
-        const onScroll = () => close();
+        const onScroll = (event: Event) => {
+          // The panel's own scroll, when a long menu scrolls inside, is not the user moving on.
+          if (event.type === 'scroll' && panelRef.value?.contains(event.target as Node | null)) {
+            return;
+          }
+          close();
+        };
         const doc = hostDocumentOf(menuScroller ?? hostRef.value);
         const win = hostWindowOf(menuScroller ?? hostRef.value);
         doc.addEventListener('pointerdown', onPointerDown, true);
@@ -419,29 +511,32 @@ export const DocxEditorContextMenu = defineComponent({
         await nextTick();
         const panel = panelRef.value;
         if (!panel || !anchor.value) return;
+        // The top layer first: a host's stacking context otherwise paints over the panel
+        // whatever its own `z-index`. The panel must also be open there to be measured.
+        showInTopLayer(panel);
         const { width, height } = panel.getBoundingClientRect();
         const win = hostWindowOf(panel);
-        const maxX = win.innerWidth - width - VIEWPORT_INSET;
-        const maxY = win.innerHeight - height - VIEWPORT_INSET;
         // Right-to-left chrome opens toward the left of the pointer, and flips right instead.
         const rtl = win.getComputedStyle(panel).direction === 'rtl';
-        const leftward = rtl ? anchor.value.x - width >= VIEWPORT_INSET : anchor.value.x > maxX;
-        const x = Math.max(
-          VIEWPORT_INSET,
-          Math.min(leftward ? anchor.value.x - width : anchor.value.x, maxX)
+        placement.value = placeContextMenu(
+          anchor.value,
+          { width, height },
+          { width: win.innerWidth, height: win.innerHeight },
+          rtl
         );
-        const y = Math.max(
-          VIEWPORT_INSET,
-          anchor.value.y > maxY ? anchor.value.y - height : anchor.value.y
-        );
-        placement.value = { x, y };
       },
       { flush: 'post' }
     );
 
-    watch(placement, (current) => {
-      if (current) panelRef.value?.focus({ preventScroll: true });
-    });
+    // After the render that makes the panel visible: a `visibility: hidden` panel is not
+    // focusable, and the arrow keys are handled on the panel.
+    watch(
+      placement,
+      (current) => {
+        if (current) panelRef.value?.focus({ preventScroll: true });
+      },
+      { flush: 'post' }
+    );
 
     watch(anchor, (current) => {
       const open = current !== null;
@@ -480,35 +575,44 @@ export const DocxEditorContextMenu = defineComponent({
     return () => {
       const style: CSSProperties = {
         position: 'fixed',
-        left: `${(placement.value ?? anchor.value)?.x ?? 0}px`,
-        top: `${(placement.value ?? anchor.value)?.y ?? 0}px`,
+        left: `${placement.value?.left ?? anchor.value?.x ?? 0}px`,
+        top: `${placement.value?.top ?? anchor.value?.y ?? 0}px`,
+        ...(placement.value
+          ? {
+              maxWidth: `${placement.value.maxWidth}px`,
+              maxHeight: `${placement.value.maxHeight}px`,
+            }
+          : {}),
         visibility: placement.value ? 'visible' : 'hidden',
         pointerEvents: 'auto',
       };
 
       const children = flattenChildren(slots.default?.() ?? []);
       const startRows = children.filter(startPlacedChild);
+      if (props.preset !== false) warnPackagedRowsIn(startRows, rowOfChild);
       const restChildren = children.filter((child) => !startPlacedChild(child));
 
       const rows =
         props.preset === false
-          ? children
+          ? [h(StartPlacementRegion, { placement: 'verbatim' }, () => children)]
           : [
-              ...startRows,
-              ...mergeArrangement({
-                entries: defaultSet.value,
-                children: restChildren,
-                preset: props.preset,
-                keyOfEntry: (entry) => entry.id,
-                keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),
-                renderEntry: (entry) =>
-                  entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
-                onUnmatched: (id, vnode) => {
-                  // An unmatched override is the host's own row, unless it is hidden.
-                  const hidden = vnode.props?.hidden;
-                  if (hidden === true || hidden === '') warnUnmatchedHiddenRow(id);
-                },
-              }),
+              h(StartPlacementRegion, { placement: 'hoisted' }, () => startRows),
+              h(StartPlacementRegion, { placement: 'appended' }, () =>
+                mergeArrangement({
+                  entries: defaultSet.value,
+                  children: restChildren,
+                  preset: props.preset,
+                  keyOfEntry: (entry) => entry.id,
+                  keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),
+                  renderEntry: (entry) =>
+                    entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
+                  onUnmatched: (id, vnode) => {
+                    // An unmatched override is the host's own row, unless it is hidden.
+                    const hidden = vnode.props?.hidden;
+                    if (hidden === true || hidden === '') warnUnmatchedHiddenRow(id);
+                  },
+                })
+              ),
             ];
 
       return h(
@@ -552,19 +656,24 @@ export const DocxEditorContextMenu = defineComponent({
                     const panel = panelRef.value;
                     if (!panel) return;
                     const items = panelItems(panel);
+                    const doc = hostDocumentOf(panel);
                     if (event.key === 'ArrowDown') {
                       event.preventDefault();
-                      focusBy(items, hostDocumentOf(panel).activeElement, 1);
+                      focusBy(items, doc.activeElement, 1);
                     } else if (event.key === 'ArrowUp') {
                       event.preventDefault();
-                      focusBy(items, hostDocumentOf(panel).activeElement, -1);
+                      focusBy(items, doc.activeElement, -1);
                     } else if (event.key === 'Home') {
                       event.preventDefault();
                       focusEdge(items, 'first');
                     } else if (event.key === 'End') {
                       event.preventDefault();
                       focusEdge(items, 'last');
+                    } else {
+                      return;
                     }
+                    // A menu taller than the window scrolls; keep the focused row in view.
+                    revealMenuItem(panel, doc.activeElement);
                   },
                 },
                 rows
@@ -598,7 +707,10 @@ export interface DocxEditorContextMenuNamespace {
   readonly CellVerticalAlignment: typeof ContextMenuCellVerticalAlignment;
   readonly RefreshToc: typeof ContextMenuRefreshToc;
   readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
+  readonly RemoveToc: typeof ContextMenuRemoveToc;
   readonly Item: typeof ContextMenuItem;
+  /** Host rows that render above the packaged rows instead of after them. */
+  readonly Start: typeof ContextMenuStart;
   readonly Slot: typeof MenuItem;
   readonly Row: typeof MenuRow;
   readonly Group: typeof MenuGroup;
@@ -627,7 +739,9 @@ export const ContextMenu = Object.assign(DocxEditorContextMenu, {
   CellVerticalAlignment: ContextMenuCellVerticalAlignment,
   RefreshToc: ContextMenuRefreshToc,
   RefreshTocPageNumbers: ContextMenuRefreshTocPageNumbers,
+  RemoveToc: ContextMenuRemoveToc,
   Item: ContextMenuItem,
+  Start: ContextMenuStart,
   Slot: MenuItem,
   Row: MenuRow,
   Group: MenuGroup,

@@ -2,6 +2,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { PAINTED_PAGE } from './painted-page.ts';
+import { closeDemoPanel, openDemoSettings } from './demo-settings.ts';
 
 const VUE_URL = 'http://localhost:5274/';
 const CLEAN_URL = `${VUE_URL}?fixture=review-clean-demo.docx`;
@@ -11,6 +12,8 @@ async function waitForEditor(page: Page, url = VUE_URL): Promise<void> {
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('composed-mount')).toBeVisible();
   await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
+  // The side panel starts open where it fits. These cases need the room for the review rail.
+  await closeDemoPanel(page);
 }
 
 async function openContextMenu(page: Page): Promise<{ x: number; y: number }> {
@@ -68,6 +71,12 @@ test.describe('Vue review chrome', () => {
 
   test('rulers match the page and Page Setup stays a dialog', async ({ page }) => {
     await waitForEditor(page, CLEAN_URL);
+    // The rulers are off until the reader turns them on in Settings.
+    await expect(page.locator('.docx-horizontal-ruler')).toHaveCount(0);
+    const settings = await openDemoSettings(page);
+    await settings.getByRole('checkbox', { name: 'Show rulers', exact: true }).check();
+    await closeDemoPanel(page);
+    await expect(page.locator('.docx-horizontal-ruler')).toBeVisible();
     const pageBox = await page.locator(PAINTED_PAGE).first().boundingBox();
     const horizontal = await page.locator('.docx-horizontal-ruler').boundingBox();
     const vertical = await page.locator('.docx-vertical-ruler').boundingBox();
@@ -113,9 +122,7 @@ test.describe('Vue review chrome', () => {
   });
 
   test('commented fixture renders existing review cards', async ({ page }) => {
-    await page.goto(COMMENTED_URL, { waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
+    await waitForEditor(page, COMMENTED_URL);
     await ensureReviewPaneOpen(page);
     await expect(page.locator('[data-testid="review-card"]')).toHaveCount(1, { timeout: 15_000 });
     await expect(page.getByTestId('review-card')).toBeVisible();

@@ -1,6 +1,11 @@
 import { isContentControl } from '../package/content-control-walk.ts';
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '../package/ooxml-tree.ts';
 import { tableChildren } from './revision-table-children.ts';
+import {
+  storyEndsWithParagraph,
+  storyEndsWithTable,
+  withStoryEndParagraph,
+} from '../package/ooxml-story-end-repair.ts';
 import { isInertMarker } from './revision-marker-content.ts';
 import { ooxmlTreesEqual } from '../package/ooxml-serialize.ts';
 import { contentWithText, editedProperties } from './tree-op-content-controls.ts';
@@ -58,6 +63,30 @@ function prepend(paragraph: OoxmlElement, content: readonly OoxmlNode[]): OoxmlE
     ],
   } as OoxmlElement;
 }
+/**
+ * A run of paragraphs joined by rejecting an inserted paragraph mark. The joined paragraph is
+ * the first one, with its attributes, as a join by deleting a mark keeps the paragraph before
+ * it: an undo of the split that inserted the mark removes the paragraph after it, so a
+ * rejection and that undo made at the same time keep the same paragraph. It takes the
+ * properties of the mark that remains, the last paragraph's, and the content of every
+ * paragraph in order.
+ */
+function joinedInto(
+  first: OoxmlElement,
+  last: OoxmlElement,
+  carried: readonly OoxmlNode[]
+): OoxmlElement {
+  const merged = prepend(last, carried);
+  const { id, attributes } = first;
+  // The last paragraph's content stays, so the prefixes only it declared stay declared.
+  const bound = new Set(first.namespaceBindings.map((binding) => binding.prefix));
+  const namespaceBindings = [
+    ...first.namespaceBindings,
+    ...last.namespaceBindings.filter((binding) => !bound.has(binding.prefix)),
+  ];
+  return { ...merged, id, attributes, namespaceBindings } as OoxmlElement;
+}
+
 function replaceIn(node: OoxmlNode, target: OoxmlElement): OoxmlNode {
   if (node.id === target.id) return target;
   if (node.kind === 'textValue') return node;
@@ -67,14 +96,37 @@ function replaceIn(node: OoxmlNode, target: OoxmlElement): OoxmlNode {
     : node;
 }
 
-/** Merge after rebuilding: a removed table/row cannot receive or swallow carried text. */
+/**
+ * Merge after rebuilding: a removed table/row cannot receive or swallow carried text. A
+ * decision never leaves a body, note, or text box ending with a table: the story then gets an
+ * empty paragraph after it, as a read gives it (`ooxml-story-end-repair.ts`).
+ */
 export function mergeRevisionParagraphs(
   children: OoxmlNode[],
   marks: ReadonlySet<string>,
   mint: () => string,
   cell = false,
+  container = '',
+  keepsFirst: ReadonlyMap<string, boolean> = NO_PARAGRAPHS
+): OoxmlNode[] {
+  const merged = mergedParagraphs(children, marks, mint, cell, container, keepsFirst);
+  const story = storyEndsWithParagraph({ namespaceUri: WML_NAMESPACE_URI, localName: container });
+  return story && storyEndsWithTable(merged) ? [...withStoryEndParagraph(merged, mint)] : merged;
+}
+
+function mergedParagraphs(
+  children: OoxmlNode[],
+  marks: ReadonlySet<string>,
+  mint: () => string,
+  cell = false,
   /** The element that holds `children`, such as `body` or `txbxContent`. */
-  container = ''
+  container = '',
+  /**
+   * Paragraphs whose inserted mark the decision rejects. A join they start keeps the first
+   * paragraph that brings content, or one that held nothing before the decision (`true`), as
+   * a split at its start leaves; every other join keeps the last paragraph.
+   */
+  keepsFirst: ReadonlyMap<string, boolean> = NO_PARAGRAPHS
 ): OoxmlNode[] {
   if (
     !children.some((n) => marks.has(n.id) || (isNamed(n, 'customXml') && emptiedBlock(n, marks)))
@@ -96,6 +148,10 @@ export function mergeRevisionParagraphs(
   const tail = lastTwoBlocks(children);
   const out: OoxmlNode[] = [];
   let carried: OoxmlNode[] = [];
+  /** The first paragraph of a run of joined ones: the joined paragraph keeps its identity. */
+  let carrier: OoxmlElement | null = null;
+  /** Paragraphs this pass drops or joins on, for the story-end check of the ones after them. */
+  const dropped = new Set<string>();
   for (const [index, node] of children.entries()) {
     if (node.kind === 'paragraph') {
       // A paragraph the decision emptied and whose mark it removed, with no paragraph to join,
@@ -108,24 +164,46 @@ export function mergeRevisionParagraphs(
         blocks.length > 1 &&
         node.children.every((child) => properties(child) || emptyRun(child)) &&
         ((DROPS_LAST_PARAGRAPH.has(container) &&
+          !(container === 'txbxContent' && keepsStoryEnd(children, dropped, node.id)) &&
           // A custom XML block every paragraph of which goes keeps its last one here, so the
           // block around it goes whole rather than staying hollow.
           (container !== 'customXml' || keepsAParagraph)) ||
           index < lastTextAt)
-      )
+      ) {
+        dropped.add(node.id);
         continue;
+      }
       if (marks.has(node.id) && sources.has(node.id)) {
+        dropped.add(node.id);
         // A dropped paragraph only adds to the carried content; the one that keeps its mark
         // is built once, so a long run of joins stays linear.
         for (const child of node.children) if (!properties(child)) carried.push(child);
+        // Only a paragraph that brings content is the one a rejected insertion keeps. A
+        // paragraph the decision emptied goes, and the paragraph after it keeps its identity.
+        if (
+          !carrier &&
+          keepsFirst.has(node.id) &&
+          (keepsFirst.get(node.id) || node.children.some(bringsContent))
+        )
+          carrier = node as OoxmlElement;
         continue;
       }
-      out.push(carried.length ? prepend(node, carried) : node);
+      // An emptied paragraph can still carry bookmarks, comment starts, and inert markers;
+      // the paragraph that keeps its identity takes them.
+      out.push(
+        carrier
+          ? joinedInto(carrier, node as OoxmlElement, carried)
+          : carried.length
+            ? prepend(node as OoxmlElement, carried)
+            : node
+      );
       carried = [];
+      carrier = null;
     } else if (node.kind === 'table' && carried.length) {
       const target = tableParagraphMergeTarget(node)!;
       out.push(replaceIn(node, prepend(target, carried)));
       carried = [];
+      carrier = null;
     } else if (carried.length && isInertMarker(node)) {
       // A bookmark or comment boundary between the joined paragraphs marks the join point,
       // so it goes after the carried text, not before the whole joined paragraph. It is a new
@@ -325,8 +403,29 @@ function lastTwoBlocks(children: readonly OoxmlNode[]): readonly OoxmlNode[] {
   return tail;
 }
 
+const NO_PARAGRAPHS: ReadonlyMap<string, boolean> = new Map();
+
 /** Containers whose emptied last paragraph goes with its content. */
 const DROPS_LAST_PARAGRAPH: ReadonlySet<string> = new Set(['txbxContent', 'customXml']);
+
+/**
+ * Whether a text box keeps paragraph `id`: dropping it with the ones this pass already
+ * dropped would leave the story ending with a table (`ooxml-story-end-repair.ts`).
+ */
+function keepsStoryEnd(children: readonly OoxmlNode[], dropped: Set<string>, id: string): boolean {
+  dropped.add(id);
+  const ends = storyEndsWithTable(children, dropped) && !storyEndsWithTable(children);
+  dropped.delete(id);
+  return ends;
+}
+
+/** A child a joined paragraph carries that is content: not properties, a marker, or empty. */
+const bringsContent = (node: OoxmlNode) =>
+  !properties(node) && !emptyRun(node) && (node.kind === 'textValue' || !isInertMarker(node));
+
+/** Whether a paragraph holds content: not only properties, markers, or empty runs. */
+export const holdsContent = (paragraph: OoxmlNode | null): boolean =>
+  paragraph !== null && paragraph.kind !== 'textValue' && paragraph.children.some(bringsContent);
 
 const emptyRun = (node: OoxmlNode) =>
   node.kind === 'run' && node.children.every((child) => isNamed(child, 'rPr'));

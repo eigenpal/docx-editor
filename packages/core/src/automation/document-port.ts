@@ -46,6 +46,7 @@ export type AutomationCommentWrite =
       readonly author: string;
       readonly date?: string;
     }
+  | { readonly kind: 'edit'; readonly commentId: string; readonly text: string }
   | { readonly kind: 'resolve'; readonly commentId: string; readonly resolved: boolean }
   | {
       readonly kind: 'delete';
@@ -86,6 +87,11 @@ export type AutomationStagedOps = (
 /** Pure package updates committed atomically with the batch's tree operations. */
 export type AutomationPackageEdit = (pkg: OoxmlPackage) => OoxmlPackage;
 
+/** The outcome of a whole-document replacement, with a refusal already in protocol terms. */
+export type AutomationDocumentReplaceResult =
+  | { readonly ok: true; readonly changed: boolean }
+  | { readonly ok: false; readonly error: import('./protocol.ts').AutomationError };
+
 export interface AutomationDocumentPort {
   prepare?(request: import('./protocol.ts').AutomationBatchRequest): Promise<void>;
   fieldPageContext?(
@@ -97,6 +103,13 @@ export interface AutomationDocumentPort {
   readonly localChangeTracking?: true;
   /** True when a live collaboration session replicates package edits. */
   readonly collaborative?: () => boolean;
+  /** The document compare engine a review module provides, when one is installed. */
+  readonly compareDocuments?: import('../contracts/document-compare.ts').CompareDocumentsEngine;
+  /**
+   * True when this owner commits document setup (a built-in style a link needs) outside
+   * shared undo in a collaboration session, so a collaborative write may add it.
+   */
+  readonly setupOutsideUndo?: () => boolean;
   /**
    * The collaboration actor this owner's commits mint ids under, or undefined when it has none.
    *
@@ -204,6 +217,15 @@ export interface AutomationDocumentPort {
    * here is exactly one write and atomicity still means what it says.
    */
   applyCustomNodeWrite(write: InsertCustomNodeWrite, scope: StoryScope): AutomationPortApplyResult;
+  /**
+   * Replace the whole document with a DOCX file as ONE undoable package update.
+   *
+   * OPTIONAL: an owner without it refuses the operation. The owner opens the bytes as a load
+   * opens them, aligns node ids with the open document, and records the difference as an ordinary
+   * edit, so a collaboration session shares it. Every refusal leaves the document and its
+   * history unchanged. Solitary: the planner refuses it any company.
+   */
+  replaceDocument?(docx: Uint8Array): AutomationDocumentReplaceResult;
   /** DOCX bytes through the normalizing serializer, or null when there is no document. */
   save(): Uint8Array | null;
   /**

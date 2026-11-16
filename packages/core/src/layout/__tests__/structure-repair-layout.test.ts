@@ -150,8 +150,9 @@ describe('tables in a broken shape', () => {
         '<w:tr><w:tc><w:p><w:r><w:t>Merged</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:p/>'
     );
     const [table] = tables(layout);
-    // 468pt of content width, a 200pt table aligned right.
-    expect(table!.box).toMatchObject({ x: 268, width: 200 });
+    // 468pt of content width, a 200pt table aligned right. Its absolute width puts the cell
+    // content, not the outer edge, on the right text edge: one 0.5pt fallback margin out.
+    expect(table!.box).toMatchObject({ x: 268.5, width: 200 });
     expect(table!.columnEdges).toEqual([0, 200]);
   });
 

@@ -49,9 +49,8 @@ describe('planNumberingImport', () => {
 
   test('under an actor, fresh ids sit in the actor stripe and differ between actors', () => {
     const numIdAs = (actor: string) =>
-      runWithTransactionActor(
-        actor,
-        () => planNumberingImport(FRAGMENT, TARGET)!.numIdMap.get('1')!
+      runWithTransactionActor(actor, () =>
+        planNumberingImport(FRAGMENT, TARGET)!.numIdMap.get('1')!
       );
     const alice = Number(numIdAs('alice'));
     const bob = Number(numIdAs('bob'));

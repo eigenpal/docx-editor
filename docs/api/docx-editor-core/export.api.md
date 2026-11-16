@@ -364,6 +364,7 @@ export interface MetafileReplay {
     readonly complete: boolean;
     // (undocumented)
     readonly drawing: MetafileDrawing;
+    readonly stop?: 'resource-bound' | 'malformed-record';
 }
 
 // @internal

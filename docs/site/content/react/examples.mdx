@@ -1,112 +1,37 @@
 ---
 title: 'React examples'
-description: 'Load, save, compose, and automate documents with the React adapter.'
+description: 'Find React examples for loading, saving, custom chrome, and automating an open editor.'
 category: 'React'
 order: 34
 ---
 
-Import `@docx-editor.dev/core/styles/editor.css` once in your application entry. Give each editor a container with a height.
+## Choose an example
 
-These examples import public APIs from package roots.
-
-## Load DOCX bytes
-
-This component fetches a DOCX file and passes its bytes to the editor:
-
-```tsx
-import { DocxEditor, useDocxSource } from '@docx-editor.dev/react';
-
-export function Editor({ url }: { url: string }) {
-  const { document, error } = useDocxSource(url);
-  if (error) return <p role="alert">{error.message}</p>;
-
-  return (
-    <div style={{ height: '100vh' }}>
-      <DocxEditor document={document} title="Proposal.docx" />
-    </div>
-  );
-}
-```
-
-## Save through the ref
-
-This component calls `DocxEditorRef.save()` and uploads the result:
-
-```tsx
-import { useRef } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
-
-export function SaveButton({ bytes }: { bytes: Uint8Array }) {
-  const ref = useRef<DocxEditorRef>(null);
-
-  async function save() {
-    const next = await ref.current?.save();
-    if (!next) return;
-    await fetch('/api/documents/42', { method: 'PUT', body: next });
-  }
-
-  return (
-    <>
-      <button onClick={() => void save()}>Save</button>
-      <DocxEditor ref={ref} document={bytes} />
-    </>
-  );
-}
-```
-
-## Compose custom chrome
-
-This example replaces the packaged frame with composition primitives. The custom **Bold** button gets its state from `useEditorCommand`:
-
-```tsx
-import { DocxEditor, useEditorCommand } from '@docx-editor.dev/react';
-
-function BoldButton() {
-  const bold = useEditorCommand('text.bold');
-  return (
-    <button
-      // Prevent toolbar actions from moving the document caret.
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={() => bold.execute()}
-      disabled={!bold.isEnabled}
-    >
-      Bold
-    </button>
-  );
-}
-
-export function CustomChrome({ bytes }: { bytes: Uint8Array }) {
-  return (
-    <div
-      className="docx-editor"
-      style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}
-    >
-      <DocxEditor.Root document={bytes}>
-        <DocxEditor.Toolbar>
-          <BoldButton />
-        </DocxEditor.Toolbar>
-        <DocxEditor.Viewport style={{ flex: 1, minHeight: 0 }}>
-          <DocxEditor.Navigation />
-          <DocxEditor.Content />
-          <DocxEditor.HyperLink />
-          <DocxEditor.ContextMenu />
-        </DocxEditor.Viewport>
-      </DocxEditor.Root>
-    </div>
-  );
-}
-```
+| Task | Source |
+| --- | --- |
+| Load from a URL and save through the ref | [Loading and saving](/docs/2.x/guides/loading-and-saving) |
+| Build custom toolbar buttons | [React hooks](/docs/2.x/react/hooks) |
+| Arrange editor parts | [React composition](/docs/2.x/react/composition) |
+| Automate the open document | [Automate an open editor](#automate-an-open-editor) |
 
 ## Automate an open editor
 
-Render this component inside `DocxEditor.Root`. It reads the first paragraph and disposes the browser runtime after the operation:
+Install the editing API. It requires the [EigenPal Pro License](https://www.docx-editor.dev/pricing).
+
+```bash
+npm install @docx-editor.dev/editor-api
+```
+
+Render this component inside `DocxEditor.Root`. It reads the first paragraph and shows its text:
 
 ```tsx
+import { useState } from 'react';
 import { useDocxEditor } from '@docx-editor.dev/react';
 import { DocxEditor as BrowserDocxEditor } from '@docx-editor.dev/editor-api/browser';
 
-export function AutomateButton() {
+export function FirstParagraph() {
   const editor = useDocxEditor();
+  const [text, setText] = useState('');
 
   async function run() {
     if (!editor) return;
@@ -117,19 +42,37 @@ export function AutomateButton() {
         const first = context.document.body.paragraphs.getFirst();
         first.load('text');
         await context.sync();
+        setText(first.text);
       });
     } finally {
       runtime.dispose();
     }
   }
 
-  return <button onClick={() => void run()}>Inspect first paragraph</button>;
+  return (
+    <>
+      <button disabled={!editor} onClick={() => void run()}>
+        Read first paragraph
+      </button>
+      <output>{text}</output>
+    </>
+  );
 }
 ```
 
+## Run the React example
+
+The [`examples/vite`](https://github.com/eigenpal/docx-editor/tree/main/examples/vite) app shows composed chrome, the review sidebar, and a custom node. Run it from the repository root with `bun run dev:react`.
+
+## Limits
+
+- Render automation components inside `DocxEditor.Root`. Wait for a non-null editor before you create the runtime.
+- Load explicit properties, such as `load('text')`, and await `context.sync()` before you read them.
+- Dispose the runtime in `finally`.
+- `save()` on the ref can return `null`. Your app owns any upload of the saved bytes.
+
 ## Next steps
 
-- [React package overview](/docs/2.x/react)
-- [React props](/docs/2.x/react/props)
-- [Toolbar guide](/docs/2.x/guides/toolbar)
-- [Editing API documentation](/docs/2.x/editor-api)
+- [React props](/docs/2.x/react/props): Configure `<DocxEditor>` and its ref.
+- [Editing API](/docs/2.x/editor-api): Use the Office.js-shaped object model.
+- [Toolbar guide](/docs/2.x/guides/toolbar): Find command slot IDs.

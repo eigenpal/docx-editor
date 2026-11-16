@@ -10,12 +10,13 @@ import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 
 /**
- * The engine's reason for a refused copy, cut or paste of content that holds a chart. Adapters
+ * The engine's reason for a refused copy, cut or paste of content that holds a chart with other
+ * content; one selected chart copies through `chart-clipboard.ts`. Adapters
  * translate it through `DISABLED_REASON_KEYS` in `@docx-editor.dev/i18n`, so the two sentences
  * must stay the same.
  */
 export const CHART_CLIPBOARD_REASON =
-  'the selection contains a chart; a chart cannot be copied, cut or pasted';
+  'a chart can be copied, cut or pasted only on its own, not with other content';
 
 /**
  * Check canonical content, including unpainted atoms and stories outside the body, for an

@@ -301,6 +301,11 @@ export function warmLayoutNodeDigests(nodes: readonly OoxmlNode[]): void {
   }
 }
 
+/** The layout digest of `node`'s content, from the live digest memo. */
+export function layoutNodeDigest(node: OoxmlNode): string {
+  return nodeLayoutIdentity(node, sharedLayoutKeyMemoScope);
+}
+
 /** An element whose children are all text values, or that has none. */
 function holdsOnlyText(node: Exclude<OoxmlNode, { kind: 'textValue' }>): boolean {
   for (const child of node.children) if (child.kind !== 'textValue') return false;

@@ -1,5 +1,17 @@
 # @docx-editor.dev/fonts
 
+## 2.37.0
+
+No changes in this release.
+
+## 2.36.0
+
+No changes in this release.
+
+## 2.35.0
+
+## 2.34.0
+
 ## 2.33.0
 
 ### Minor Changes

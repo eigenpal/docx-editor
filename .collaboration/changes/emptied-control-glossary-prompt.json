@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A text, date, or list control that an edit emptied showed the type's default English prompt, such as Click here to enter text., even when its w:placeholder/w:docPart named a glossary block. The open path already showed that block.",
+  "after": "An emptied control shows the text of the first paragraph of the glossary block that its w:placeholder/w:docPart names. Without that block, the type's default prompt stands in as before.",
+  "reason": "The editing peer writes the restored prompt as ordinary run text under w:showingPlcHdr, which the canonical primitive journal replicates and released readers already apply. Every peer holds the same glossary, so peers agree on the text. Stored fields, operation encoding, identities, and repair rules do not change.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-control-glossary-prompt.test.ts",
+    "packages/core/src/editor/__tests__/content-control-glossary-prompt.test.ts"
+  ],
+  "changeset": "emptied-control-glossary-prompt",
+  "migration": null
+}

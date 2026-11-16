@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -267,6 +267,27 @@ export function markPlaced(node: OoxmlNode, placed: Set<LogicalId>): boolean {
     if (!markPlaced(child, placed)) uncontested = false;
   }
   return uncontested;
+}
+
+/**
+ * Add to `dirty` the ancestors each changed node showed under in the last tree. Every
+ * ancestor of a changed node has to rebuild. The registry's parent index says where a node
+ * lives NOW; a node a peer moved or detached is still shown under its old ancestors, and they
+ * must rebuild too, or the view keeps the stale subtree.
+ */
+export function addShownAncestors(
+  dirty: Set<LogicalId>,
+  changed: ReadonlySet<LogicalId>,
+  shownUnder: ReadonlyMap<LogicalId, LogicalId>,
+  maxDepth: number
+): void {
+  for (const id of changed) {
+    let at = shownUnder.get(id);
+    for (let depth = 0; at !== undefined && depth < maxDepth; depth++) {
+      dirty.add(at);
+      at = shownUnder.get(at);
+    }
+  }
 }
 
 export function expandAncestors(

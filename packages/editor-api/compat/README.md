@@ -1,4 +1,4 @@
-# DocxEditor / Word JavaScript API compatibility
+# DocxEditor / Office.js API compatibility
 
 ## Informational document editing report
 
@@ -51,7 +51,7 @@ Runtime infrastructure stays outside the editing scope too. `runtime.run(options
 
 ## Selected subset conformance
 
-The selected-subset check compares repository-authored declarations in `docxeditor/declarations.ts` with normalized Word API reference data. The published package does not include or depend on Microsoft's declarations. Reference maintenance scripts extract names, signatures, requirement sets, and provenance from a pinned upstream release.
+The selected-subset check compares repository-authored declarations in `docxeditor/declarations.ts` with normalized Office.js API reference data. The published package does not include or depend on the official Office.js declarations. Reference maintenance scripts extract names, signatures, requirement sets, and provenance from a pinned upstream release.
 
 ## Layout
 
@@ -70,7 +70,7 @@ The selected-subset check compares repository-authored declarations in `docxedit
 
 ## Offline compatibility checks
 
-Compatibility tests and reports read committed reference data. They do not fetch Microsoft declarations during installation, builds, or tests. Only explicit reference-maintenance commands and the scheduled drift workflow fetch upstream reference data.
+Compatibility tests and reports read committed reference data. They do not fetch the official Office.js declarations during installation, builds, or tests. Only explicit reference-maintenance commands and the scheduled drift workflow fetch upstream reference data.
 
 ## Regenerating
 
@@ -133,4 +133,4 @@ The fixture does not list all runtime capabilities. `compat:report` checks table
 
 The same `compat:report` command reports the fixed 81-member scope in `agent-editing-scope.json`. CI includes both the broad editing inventory and this ordinary-document profile in its informational job summary. Download the artifact for `agent-editing-report.json` and `agent-editing-report.md`, including expected and actual signatures and endpoint runtime notes.
 
-Member presence, exact signatures, and tested behavior are separate evidence. An exact signature does not imply every enum value, advanced structure, batching pattern, or Word behavior is supported. The Office guide explains the runtime contracts; `openspec/changes/agent-editing-subset/` records workflow and consumer verification. Both scopes share one normalized upstream inventory.
+Member presence, exact signatures, and tested behavior are separate evidence. An exact signature does not imply every enum value, advanced structure, batching pattern, or Office.js behavior is supported. The Office.js guide explains the runtime contracts; `openspec/changes/agent-editing-subset/` records workflow and consumer verification. Both scopes share one normalized upstream inventory.

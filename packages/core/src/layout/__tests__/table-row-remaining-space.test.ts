@@ -49,6 +49,7 @@ for (const properties of [
       'cell 2',
       'cell 3',
       'cell 4',
+      '',
     ]);
   });
 }
@@ -101,6 +102,7 @@ test('a row moves when the remaining band cannot start every cell', () => {
     'cell 3',
     'cell 4',
     'Tall',
+    '',
   ]);
 });
 
@@ -109,7 +111,10 @@ const tallCell =
 
 test('a repeated header is omitted when it prevents one cell from starting', () => {
   const result = layout('', true, tallCell, 15);
-  expect(result.pages).toHaveLength(2);
+  // Pages through the table; the empty paragraph the body reads after it may take one more.
+  expect(
+    result.pages.findLastIndex((page) => page.fragments.some((f) => f.kind === 'table')) + 1
+  ).toBe(2);
   const rows = result.pages[1]!.fragments.flatMap((f) => (f.kind === 'table' ? f.rows : []));
   expect(rows).toHaveLength(1);
   expect(rows[0]!.isHeaderRepeat).not.toBe(true);
@@ -118,7 +123,9 @@ test('a repeated header is omitted when it prevents one cell from starting', () 
 
 test('before mode 15, a repeated header stays when it prevents one cell from starting', () => {
   const result = layout('', true, tallCell, 14);
-  expect(result.pages).toHaveLength(2);
+  expect(
+    result.pages.findLastIndex((page) => page.fragments.some((f) => f.kind === 'table')) + 1
+  ).toBe(2);
   const rows = result.pages[1]!.fragments.flatMap((f) => (f.kind === 'table' ? f.rows : []));
   expect(rows.map((row) => row.isHeaderRepeat === true)).toEqual([true, false]);
   // The whole row sits below the 10pt repeat: its 65pt line ends past the 70pt page.

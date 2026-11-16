@@ -3,6 +3,9 @@
 import type { FieldResultsMode } from '../package/field-result-mode.ts';
 import type { ContentLockPolicy } from '../package/ooxml-edit.ts';
 import type { OoxmlPart } from '../package/ooxml-tree.ts';
+import type { OoxmlPackage } from '../package/ooxml-package.ts';
+import { settingsPartOf } from '../package/note-properties.ts';
+import { placeholderTextOf } from '../package/building-blocks.ts';
 import type { HistoryGroup } from './history-group.ts';
 import type { ImpactClass } from './tree-op-types.ts';
 import type { TreeStoryRef } from './tree-store.ts';
@@ -68,4 +71,33 @@ export interface TreeDocumentStoreOptions {
    * absent, `contentLocked` and `sdtContentLocked` refuse formatting like any other write.
    */
   readonly contentLockPolicy?: ContentLockPolicy;
+  /**
+   * The glossary prompt a control's `w:placeholder/w:docPart` names, for a store built from
+   * a PART. Its synthetic package holds no glossary, so an emptied control in a header or a
+   * note would show the type's default prompt instead of the document's own.
+   *
+   * @internal
+   */
+  readonly placeholderText?: (docPart: string) => string | undefined;
+}
+
+/**
+ * What the body and every story store of one package open with. `settingsPart` is the SAME
+ * live getter for all of them: a story store is built from a PART, whose synthetic package holds
+ * no `settings.xml`, and a store keeps its own working copy, so a replaced `settings.xml` left one
+ * story reading stale protection. Protection that holds in a header but not the body is worse
+ * than none: it looks enforced. The lock policy and the glossary prompts reach every story for
+ * the same reason.
+ */
+export function storyStoreOptionsFor(
+  pkg: () => OoxmlPackage,
+  historyLimit: number,
+  contentLockPolicy: ContentLockPolicy | undefined
+): TreeDocumentStoreOptions {
+  return {
+    historyLimit,
+    settingsPart: () => settingsPartOf(pkg()),
+    placeholderText: (docPart) => placeholderTextOf(pkg(), docPart),
+    ...(contentLockPolicy ? { contentLockPolicy } : {}),
+  };
 }

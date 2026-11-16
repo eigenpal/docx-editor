@@ -3,6 +3,7 @@ import { computed, defineComponent, ref, watch, type PropType, type VNode } from
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import {
+  colorPickerGrid,
   commandForSlotValue,
   type ChromeSlotId,
   listenForOutsidePress,
@@ -90,39 +91,17 @@ const THEME_COLUMN_KEYS: readonly string[] = [
   'colorPicker.theme.accent6',
 ];
 
-interface ThemeVariant {
-  readonly labelKey: string;
-  readonly apply: (c: number) => number;
-}
-
-const lighter = (percent: number): ThemeVariant => ({
-  labelKey: `colorPicker.theme.lighter${percent}`,
-  apply: (c) => c + (255 - c) * (percent / 100),
-});
-const darker = (percent: number): ThemeVariant => ({
-  labelKey: `colorPicker.theme.darker${percent}`,
-  apply: (c) => c * (1 - percent / 100),
-});
-
-function themeVariantsFor(baseHex: string): readonly ThemeVariant[] {
-  const channels = [0, 2, 4].map((at) => parseInt(baseHex.slice(at, at + 2), 16));
-  const lightness = (Math.max(...channels) + Math.min(...channels)) / 2 / 255;
-  if (lightness === 1) return [darker(5), darker(15), darker(25), darker(35), darker(50)];
-  if (lightness === 0) return [lighter(50), lighter(35), lighter(25), lighter(15), lighter(5)];
-  if (lightness >= 0.8) return [darker(10), darker(25), darker(50), darker(75), darker(90)];
-  return [lighter(80), lighter(60), lighter(40), darker(25), darker(50)];
+/**
+ * The label key of a tint or shade row: `accent1:40` is Lighter 40%, `accent1:-25` Darker 25%.
+ * The paint comes from core's `colorPickerGrid`, the same luminance model as every other colour
+ * picker, so one swatch paints one colour everywhere.
+ */
+function variantLabelKey(pick: string): string {
+  const shift = Number(pick.split(':')[1] ?? 0);
+  return shift > 0 ? `colorPicker.theme.lighter${shift}` : `colorPicker.theme.darker${-shift}`;
 }
 
 const HEX_VALUE = /^[0-9A-Fa-f]{6}$/;
-
-function variantHex(baseHex: string, apply: (channel: number) => number): string {
-  let out = '';
-  for (let i = 0; i < 6; i += 2) {
-    const channel = Math.round(apply(parseInt(baseHex.slice(i, i + 2), 16)));
-    out += Math.max(0, Math.min(255, channel)).toString(16).padStart(2, '0');
-  }
-  return out.toUpperCase();
-}
 
 function isLightHex(hex: string): boolean {
   const r = parseInt(hex.slice(0, 2), 16);
@@ -189,8 +168,7 @@ const ThemeMatrix = defineComponent({
   },
   setup(props) {
     return () => {
-      const ladders = props.themeHexes.map(themeVariantsFor);
-      const rows = [0, 1, 2, 3, 4];
+      const rows = colorPickerGrid(props.themeHexes).theme.slice(1);
       return (
         <div class="docx-toolbar__swatch-section">
           <div class="docx-toolbar__swatch-heading">{props.label('colorPicker.themeColors')}</div>
@@ -205,16 +183,15 @@ const ThemeMatrix = defineComponent({
                 apply={props.apply}
               />
             ))}
-            {rows.flatMap((row) =>
-              props.themeHexes.map((base, column) => {
-                const variant = ladders[column]![row]!;
-                const hex = variantHex(base, variant.apply);
+            {rows.flatMap((row, index) =>
+              row.map((swatch, column) => {
+                const hex = swatch.hex.slice(1);
                 return (
                   <ToolbarColorSwatch
-                    key={`${row}-${column}`}
+                    key={`${index}-${column}`}
                     value={hex}
                     css={`#${hex.toLowerCase()}`}
-                    title={`${props.label(THEME_COLUMN_KEYS[column]!)}, ${props.label(variant.labelKey)}`}
+                    title={`${props.label(THEME_COLUMN_KEYS[column]!)}, ${props.label(variantLabelKey(swatch.pick))}`}
                     selected={props.current === hex}
                     apply={props.apply}
                   />

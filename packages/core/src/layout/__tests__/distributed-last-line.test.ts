@@ -45,8 +45,10 @@ test('distributed paragraphs stretch the final line in a table cell', () => {
   const lines = layout(
     `<w:tbl><w:tblPr><w:tblW w:w="2000" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr>${paragraph('distribute', 'aa bb cc dd ee ff gg hh ii')}</w:tc></w:tr></w:tbl>`
   );
-  expect(lines.length).toBeGreaterThan(1);
-  for (const line of lines) expect(end(line.spans)).toBeCloseTo(100, 7);
+  // The cell's lines; the empty paragraph the body reads after the table has no text.
+  const cell = lines.filter((line) => line.spans.some((span) => span.text.length > 0));
+  expect(cell.length).toBeGreaterThan(1);
+  for (const line of cell) expect(end(line.spans)).toBeCloseTo(100, 7);
 });
 
 function parts(line: LineRecord) {

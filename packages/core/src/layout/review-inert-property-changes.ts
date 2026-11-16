@@ -61,7 +61,10 @@ function isCandidate(item: ReviewItem): item is ReviewRevisionItem {
   );
 }
 
-/** The paragraph holding `id`, or null when it sits in a table cell or in no paragraph. */
+/**
+ * The paragraph holding `id`, or null when it sits in a table cell, in a text box, or in no
+ * paragraph.
+ */
 function paragraphAbove(part: OoxmlPart, id: string): OoxmlElement | null {
   let paragraph: OoxmlElement | null = null;
   let current = parentNodeOf(part, id);
@@ -69,7 +72,12 @@ function paragraphAbove(part: OoxmlPart, id: string): OoxmlElement | null {
     // Table styles are not resolved by the check, so content in a table always lists.
     // A cell demoted to a generic node is still a cell.
     if (current.kind === 'tableCell' || current.localName === 'tc') return null;
-    if (current.kind === 'paragraph') paragraph ??= current;
+    if (current.kind === 'paragraph') {
+      // A paragraph inside a paragraph is text box content. Its marks are painted whatever
+      // the check decides, so a site there always lists.
+      if (paragraph) return null;
+      paragraph = current;
+    }
     current = parentNodeOf(part, current.id);
   }
   return current ? null : paragraph;
@@ -86,8 +94,8 @@ function siteIsInert(
   const current = parentNodeOf(part, id);
   if (!current) return false;
   const paragraph = paragraphAbove(part, current.id);
-  // A site in a paragraph the item has no range in (a text box shares the record's id) could not
-  // be left unmarked on the page, so the record keeps its card.
+  // A site in a paragraph the item has no range in could not be left unmarked on the page, so
+  // the record keeps its card.
   if (!paragraph || !located.has(paragraph.id)) return false;
   const pPr = findParagraphProperties(paragraph);
   const known = answers.get(change);

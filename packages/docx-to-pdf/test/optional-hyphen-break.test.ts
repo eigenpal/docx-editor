@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -8,7 +8,8 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { exportPdf } from '../src/index.ts';
 import { docx } from './fixture.ts';
 
-const RUN = '<w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="24"/></w:rPr>';
+const RUN =
+  '<w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="24"/></w:rPr>';
 
 test('a line that breaks at an optional hyphen paints and extracts a hyphen', async () => {
   // About 100pt of measure: ten 7.2pt characters and a hyphen fit, twenty characters do not.
@@ -29,7 +30,7 @@ test('a line that breaks at an optional hyphen paints and extracts a hyphen', as
     }
     expect([...lines.values()].map((line) => line.trim())).toEqual(['aaaaaaaaaa-', 'bbbbbbbbbb']);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -47,6 +48,6 @@ test('a literal U+00AD extracts as a hyphen and an unbroken optional hyphen extr
     expect(text).toContain('aaaa-bbbb');
     expect(text).toContain('ccccdddd');
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });

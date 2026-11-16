@@ -322,7 +322,7 @@ describe('read-only and comments-only refusals', () => {
   });
 
   test('package-only comment writes respect the protection mode', () => {
-    // Resolve and delete carry no story op, so the per-op gate never sees them and the
+    // Resolve, edit and delete carry no story op, so the per-op gate never sees them and the
     // package channel cannot refuse forms without also refusing a legitimate field fill.
     // Ungated, a form sent out for filling came back with every thread resolved by a reader
     // who could not type a character.
@@ -334,6 +334,9 @@ describe('read-only and comments-only refusals', () => {
         mode === 'comments' ? null : 'locked'
       );
       expect(lifecycleProtectionRefusal(settings, { op: 'deleteComments' })).toBe(
+        mode === 'comments' ? null : 'locked'
+      );
+      expect(lifecycleProtectionRefusal(settings, { op: 'setCommentText' })).toBe(
         mode === 'comments' ? null : 'locked'
       );
     }

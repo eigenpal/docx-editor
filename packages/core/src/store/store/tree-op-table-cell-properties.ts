@@ -33,7 +33,7 @@ import {
   type TableTopologyLimits,
 } from './table-constraints.ts';
 import { TABLE_BORDER_STYLES } from '../table-border-style.ts';
-import { patchTcPrChild } from './tree-op-table-properties.ts';
+import { patchTcPrChild, removeTcPrChild } from './tree-op-table-properties.ts';
 import { fromEdit, ok, TEXT_DEPS } from './tree-op-nodes.ts';
 import { isWmlElement, wmlAttributeValue, wmlChildNamed } from './tree-op-table-shared.ts';
 import { readEditableTableTopology, type EditableTableTopology } from './tree-op-table-topology.ts';
@@ -1040,6 +1040,12 @@ function patchShdFillInPlace(
 ): { readonly container: OoxmlElement | null; readonly changed: boolean } {
   if (color === null) {
     if (!existing) return { container: null, changed: false };
+    // A `w:shd` with no pattern still paints no colour over the table style once its fill
+    // goes, so clearing removes the whole element and lets the style show. That includes a
+    // leftover element with no fill at all, which earlier clears wrote.
+    const val = wmlAttributeValue(existing, 'val');
+    if (val === undefined || val === 'clear' || val === 'nil')
+      return { container: null, changed: true };
     const attributes = removeWmlAttributes(existing.attributes, SHD_FILL_WML_ATTRS);
     if (attributesEqual(existing.attributes, attributes))
       return { container: existing, changed: false };
@@ -1268,9 +1274,12 @@ function patchCellFill(
   if (merged.container === null && !existingShd) return null;
 
   let tcPr = existingTcPr;
-  if (merged.container === null) return null;
-
-  if (tcPr) {
+  if (merged.container === null) {
+    if (!tcPr) return null;
+    const removed = removeTcPrChild(tcPr, 'shd');
+    if (!removed.ok) return null;
+    tcPr = removed.container;
+  } else if (tcPr) {
     const patched = patchTcPrChild(tcPr, merged.container);
     if (!patched.ok) return null;
     tcPr = patched.container;

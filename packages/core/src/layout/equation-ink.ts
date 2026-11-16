@@ -27,7 +27,10 @@ function children(node: EquationGeometry): readonly EquationGeometry[] {
     case 'radical':
       return node.degree ? [node.sign, node.radicand, node.degree] : [node.sign, node.radicand];
     case 'bar':
+    case 'borderBox':
       return [node.body];
+    case 'delimiter':
+      return [...node.fences, ...node.items];
     case 'script':
       return [node.base, node.subscript, node.superscript].filter(
         (child): child is EquationGeometry => child !== undefined
@@ -39,10 +42,11 @@ function children(node: EquationGeometry): readonly EquationGeometry[] {
   }
 }
 
-function rule(node: EquationGeometry): LayoutBox | null {
+function rules(node: EquationGeometry): readonly LayoutBox[] {
+  if (node.kind === 'borderBox') return node.rules;
   return node.kind === 'fraction' || node.kind === 'radical' || node.kind === 'bar'
-    ? node.bar
-    : null;
+    ? [node.bar]
+    : [];
 }
 
 // Ink of one grapheme in one face, per measurer. Equations repeat a small set of letters,
@@ -143,10 +147,22 @@ export function equationInk(node: EquationGeometry, measurer: TextMeasurer): Equ
 
 function measureInk(node: EquationGeometry, measurer: TextMeasurer): EquationInk {
   if (node.kind === 'text' || node.kind === 'fallback') {
-    const ink = node.text && node.runStyle ? textInk(node.text, node.runStyle, measurer) : null;
-    return (
-      ink ?? { ascent: node.baseline, descent: node.box.height - node.baseline, fromFontBox: true }
-    );
+    const ink = (node.text && node.runStyle
+      ? textInk(node.text, node.runStyle, measurer)
+      : null) ?? {
+      ascent: node.baseline,
+      descent: node.box.height - node.baseline,
+      fromFontBox: true as const,
+    };
+    const stretch = node.kind === 'text' ? node.stretch : undefined;
+    if (!stretch) return ink;
+    // A grown character scales about a fixed height above its baseline.
+    const fixed = node.baseline - stretch.originY;
+    return {
+      ...ink,
+      ascent: fixed + (ink.ascent - fixed) * stretch.scale,
+      descent: (ink.descent + fixed) * stretch.scale - fixed,
+    };
   }
   let top = Number.POSITIVE_INFINITY;
   let bottom = Number.NEGATIVE_INFINITY;
@@ -158,8 +174,8 @@ function measureInk(node: EquationGeometry, measurer: TextMeasurer): EquationInk
     top = Math.min(top, baseline - ink.ascent);
     bottom = Math.max(bottom, baseline + ink.descent);
   }
-  const stroke = rule(node);
-  if (stroke && stroke.height > 0) {
+  for (const stroke of rules(node)) {
+    if (stroke.height <= 0) continue;
     top = Math.min(top, stroke.y);
     bottom = Math.max(bottom, stroke.y + stroke.height);
   }

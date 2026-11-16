@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -42,7 +42,7 @@ test('an overline equation paints its body and its bar', async () => {
     });
     expect(fills.length).toBe(1);
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
   }
 });
 
@@ -62,6 +62,83 @@ test('equation digits paint in the authored text face that layout measured', asy
       'fontName' in letter! && letter.fontName
     );
   } finally {
-    await pdf.destroy();
+    await pdf.loadingTask.destroy();
+  }
+});
+
+test('a border box paints its edges, its strikes, and a stroked diagonal', async () => {
+  const { result, pdf, content, operators } = await pageOf(
+    equation(
+      '<m:borderBox><m:borderBoxPr><m:hideTop/><m:strikeH/><m:strikeBLTR/></m:borderBoxPr>' +
+        '<m:e><m:r><m:t>abc</m:t></m:r></m:e></m:borderBox>'
+    )
+  );
+  try {
+    const codes = result.diagnostics.map((entry) => entry.code);
+    expect(codes).not.toContain('equation-unsupported');
+    expect(codes).not.toContain('equation-fallback');
+    const text = content.items.map((item) => ('str' in item ? item.str : '')).join('');
+    // Math italic letters, as layout draws them.
+    expect(text).toContain('\u{1d44e}\u{1d44f}\u{1d450}');
+    const painted = (wanted: readonly number[]) =>
+      operators.fnArray.filter((op, index) => {
+        const drawn = op === OPS.constructPath ? operators.argsArray[index]?.[0] : op;
+        return wanted.includes(drawn as number);
+      }).length;
+    // Three shown edges and the horizontal strike fill; the diagonal strokes.
+    expect(painted([OPS.fill, OPS.eoFill])).toBe(4);
+    expect(painted([OPS.stroke])).toBe(1);
+  } finally {
+    await pdf.loadingTask.destroy();
+  }
+});
+
+test('a delimiter around a fraction paints its characters scaled vertically', async () => {
+  const { result, pdf, content, operators } = await pageOf(
+    equation(
+      '<m:d><m:dPr><m:begChr m:val="["/><m:endChr m:val="]"/></m:dPr><m:e>' +
+        '<m:f><m:num><m:r><m:t>a</m:t></m:r></m:num><m:den><m:r><m:t>b</m:t></m:r></m:den></m:f>' +
+        '</m:e></m:d>'
+    )
+  );
+  try {
+    const codes = result.diagnostics.map((entry) => entry.code);
+    expect(codes).not.toContain('equation-unsupported');
+    expect(codes).not.toContain('equation-fallback');
+    const text = content.items.map((item) => ('str' in item ? item.str : '')).join('');
+    expect(text).toContain('[');
+    expect(text).toContain(']');
+    // Each bracket draws under its own vertical scale; nothing else on the page is scaled.
+    const scales = operators.fnArray.flatMap((op, index) => {
+      if (op !== OPS.transform) return [];
+      const [a, b, c, d] = operators.argsArray[index] as number[];
+      return a === 1 && b === 0 && c === 0 && d! > 1 ? [d!] : [];
+    });
+    expect(scales).toHaveLength(2);
+  } finally {
+    await pdf.loadingTask.destroy();
+  }
+});
+
+test('a delimiter character that cannot grow paints at its own size', async () => {
+  const { result, pdf, content, operators } = await pageOf(
+    equation(
+      '<m:d><m:dPr><m:begChr m:val="−"/><m:endChr m:val="_"/></m:dPr><m:e>' +
+        '<m:f><m:num><m:r><m:t>a</m:t></m:r></m:num><m:den><m:r><m:t>b</m:t></m:r></m:den></m:f>' +
+        '</m:e></m:d>'
+    )
+  );
+  try {
+    expect(result.diagnostics.map((entry) => entry.code)).not.toContain('equation-fallback');
+    const text = content.items.map((item) => ('str' in item ? item.str : '')).join('');
+    expect(text).toContain('_');
+    const scaled = operators.fnArray.some((op, index) => {
+      if (op !== OPS.transform) return false;
+      const [a, b, c, d] = operators.argsArray[index] as number[];
+      return a === 1 && b === 0 && c === 0 && d! > 1;
+    });
+    expect(scaled).toBe(false);
+  } finally {
+    await pdf.loadingTask.destroy();
   }
 });

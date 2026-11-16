@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -44,8 +44,9 @@ test('trace selects nearby table geometry and retains canonical table identity',
   expect(tables.records).toHaveLength(1);
   expect(tables.records[0]!.kind).toBe('table');
   const paragraphs = await traceDocument(source, 1, 80, 'paragraph');
-  expect(paragraphs.records).toHaveLength(1);
-  expect(paragraphs.records[0]!.kind).toBe('paragraph');
+  // The cell's paragraph, and the empty paragraph the body reads after its final table.
+  expect(paragraphs.records).toHaveLength(2);
+  expect(paragraphs.records.every((record) => record.kind === 'paragraph')).toBe(true);
   const drawings = await traceDocument(source, 1, 80, 'drawing');
   expect(drawings.records).toHaveLength(0);
   expect(drawings.recordsMatched).toBe(0);

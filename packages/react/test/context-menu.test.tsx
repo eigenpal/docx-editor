@@ -858,14 +858,14 @@ describe('table context rows (Task 10)', () => {
     return element;
   }
 
-  test('right-clicking a TOC appends its update rows, with icons, to the packaged set', () => {
+  test('right-clicking a TOC appends its rows, with icons, to the packaged set', () => {
     const { view } = mountDocument(TOC_DOCUMENT);
     rightClickOn(tocRow(view));
     const slots = rows(view).map((row) => row.dataset.slot);
     // Appended, not substituted: the ordinary rows are still the same rows.
     expect(slots).toContain('edit.copy');
-    expect(slots.slice(-2)).toEqual(['toc.refresh', 'toc.refreshPageNumbers']);
-    for (const slot of ['toc.refresh', 'toc.refreshPageNumbers']) {
+    expect(slots.slice(-3)).toEqual(['toc.refresh', 'toc.refreshPageNumbers', 'toc.remove']);
+    for (const slot of ['toc.refresh', 'toc.refreshPageNumbers', 'toc.remove']) {
       expect(rowNamed(view, slot).querySelector('svg')).not.toBeNull();
     }
     expect(rowNamed(view, 'toc.refresh').textContent).toContain('toc.refresh');
@@ -889,8 +889,8 @@ describe('table context rows (Task 10)', () => {
     expect(
       rows(view)
         .map((row) => row.dataset.slot)
-        .slice(-2)
-    ).toEqual(['toc.refresh', 'toc.refreshPageNumbers']);
+        .slice(-3)
+    ).toEqual(['toc.refresh', 'toc.refreshPageNumbers', 'toc.remove']);
   });
 
   test('the rows keep addressing the TOC the open captured, not the caret', () => {
@@ -911,6 +911,21 @@ describe('table context rows (Task 10)', () => {
     const slots = rows(view).map((row) => row.dataset.slot);
     expect(slots).not.toContain('toc.refresh');
     expect(slots).not.toContain('toc.refreshPageNumbers');
+    expect(slots).not.toContain('toc.remove');
+  });
+
+  test('selecting the remove row removes the pointed-at TOC and closes the panel', () => {
+    const { view, editor } = mountDocument(TOC_DOCUMENT);
+    rightClickOn(tocRow(view));
+    expect(rowNamed(view, 'toc.remove').textContent).toContain('toc.remove');
+    act(() => {
+      fireEvent.click(rowNamed(view, 'toc.remove'));
+    });
+    expect(panel(view)).toBeNull();
+    expect(view.container.querySelector('[data-docx-read-only]')).toBeNull();
+    expect(editor().snapshot().tocContext).toBeNull();
+    expect(editor().exec({ type: 'undo' }).ok).toBe(true);
+    expect(view.container.querySelector('[data-docx-read-only]')).not.toBeNull();
   });
 
   test('selecting the update row refreshes the pointed-at TOC and closes the panel', () => {

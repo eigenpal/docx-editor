@@ -18,17 +18,18 @@ export interface ReviewItemQuery {
   /** When false, skip layout geometry; metadata is unchanged and anchors are null. Default true. */
   readonly placement?: boolean;
   /**
-   * Whether to list a deletion and the insertion that directly follows it as one
-   * `'replace'` item. Default true. Set it to false to list the deletion and the insertion as
+   * Whether to list a deletion and the insertion that touches it as one `'replace'` item.
+   * Typing over a selection writes the deletion first; a document compare writes the
+   * insertion first. Both pair. Default true. Set it to false to list the deletion and the insertion as
    * separate items, for example to accept or reject each half on its own.
    *
    * A host that steps through the list with `setActiveReviewItem` stops once on
    * each replacement with the default, as Next Change does.
    *
-   * Two revisions pair when they are next to each other among the queue's revisions, the
-   * deletion comes first, both have the same author, nesting level and `readOnly` value, and
-   * the deletion's last range ends at the same paragraph and offset where the insertion's
-   * first range starts. The pair's `text` is the inserted words and `replacedText` the
+   * Two revisions pair when they are next to each other among the queue's revisions, in
+   * either order, both have the same author, nesting level and `readOnly` value, and the
+   * first one's last range ends at the same paragraph and offset where the second one's first
+   * range starts. The pair takes the first one's place in the list. The pair's `text` is the inserted words and `replacedText` the
    * deleted words. The two halves are not listed separately.
    *
    * Kinds in {@link excludeRevisionKinds} are removed before pairing, so an excluded deletion

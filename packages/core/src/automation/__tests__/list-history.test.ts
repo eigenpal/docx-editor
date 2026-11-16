@@ -13,9 +13,8 @@ test('package-only list format saves, undoes and redoes while preserving later s
   const xml = () =>
     strFromU8(unzipSync(writeOoxmlPackage(store.currentPackage()))['word/numbering.xml']!);
   const change = store.transact({ kind: 'body' }, (ctx) => {
-    ctx.applyPackage(
-      (pkg) =>
-        formatAutomationListLevel(pkg, first.numId, 0, { numbering: 'Arabic', startingNumber: 6 })!
+    ctx.applyPackage((pkg) =>
+      formatAutomationListLevel(pkg, first.numId, 0, { numbering: 'Arabic', startingNumber: 6 })!
     );
   });
   expect(change.ok).toBe(true);

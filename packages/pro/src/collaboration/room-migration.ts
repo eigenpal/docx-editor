@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -22,7 +22,7 @@ import {
   readOoxmlPackage,
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
-import { readCollaborationDocument } from './document-read.ts';
+import { readCollaborationDocumentKeepingRevisionIds } from './document-read.ts';
 import { validateDocumentId } from './document-awareness.ts';
 import { COLLABORATION_FORMAT_VERSION, readCollaborationFormatVersion } from './document-format.ts';
 import { PACKAGE_META_KEY } from './document/schema.ts';
@@ -69,12 +69,7 @@ export function collaborationMigrationNeed(state: Uint8Array): CollaborationMigr
  * @public
  */
 export type CollaborationMigrationCheck =
-  | 'paragraphs'
-  | 'text'
-  | 'formatting'
-  | 'structure'
-  | 'media'
-  | 'links';
+  'paragraphs' | 'text' | 'formatting' | 'structure' | 'media' | 'links';
 
 /** A paragraph by its part and its position in that part, from 1. @public */
 export interface CollaborationMigrationPosition {
@@ -232,8 +227,9 @@ export async function migrateCollaborationRoom(
   }
   const documentId = validateDocumentId(given);
   // One step at a time, so a step's memory is free before the next step needs its own.
-  const state = await seedGeneration(options.exported, documentId);
-  const after = withRoom(state, (room) => readCollaborationDocument(room));
+  // The earlier room's content as it is: migration changes the format, not what it shows.
+  const state = await seedGeneration(options.exported, documentId, { keepBound: true });
+  const after = withRoom(state, (room) => readCollaborationDocumentKeepingRevisionIds(room));
   const before = await migrationContentsOf(options.exported);
   const report = compareMigrationContents(before, await migrationContentsOf(after), {
     from: earlier.format ?? 'unversioned',

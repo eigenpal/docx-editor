@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -153,12 +153,22 @@ export class FieldCollection extends ItemCollection<Field> {
   getFirst(): Field {
     return this.edge('first', 'getFirst', false);
   }
+  /**
+   * The last field. Throws `ItemNotFound` at sync when there is none.
+   *
+   * @docxEditorExtension
+   */
   getLast(): Field {
     return this.edge('last', 'getLast', false);
   }
   getFirstOrNullObject(): Field {
     return this.edge('first', 'getFirstOrNullObject', true);
   }
+  /**
+   * The last field, or a null object when there is none.
+   *
+   * @docxEditorExtension
+   */
   getLastOrNullObject(): Field {
     return this.edge('last', 'getLastOrNullObject', true);
   }

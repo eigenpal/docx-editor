@@ -12,8 +12,12 @@ import {
   visualCellOf,
 } from '../store/store/tree-op-table-cell-shape.ts';
 import type { TreeDocOp, TreeOpRejection } from '../store/store/tree-op-types.ts';
+import { isOwnPendingTableInsertion } from '../store/store/table-authoring-plan.ts';
 
-/** Cell merge and split have no tracked form, so suggesting refuses them. */
+/**
+ * Suggesting refuses cell merge and split outside the author's own proposed table, where they
+ * have no tracked form. The sentence is the i18n key for the disabled reason.
+ */
 export const SUGGESTING_CELL_STRUCTURE_REFUSAL =
   'suggesting cannot merge or split cells; stop suggesting to change the table structure';
 
@@ -76,6 +80,26 @@ export function splitCellShapeRefusal(
     return null;
   }
   return `splitCell rows and cols must be whole numbers from 1 to ${MAX_CELL_SPLIT_COUNT}, and not both 1`;
+}
+
+/** The author while suggesting, for the planner's tracked merge and split. */
+export function suggestingAuthorOf(surface: {
+  author(): string | undefined;
+  editingMode(): string;
+}): { suggestingAuthor?: string } {
+  const author = surface.author()?.trim();
+  return surface.editingMode() === 'suggest' && author ? { suggestingAuthor: author } : {};
+}
+
+/**
+ * The op as suggesting will write it, for validation. Suggesting attributes the op after
+ * planning, and inside the author's own proposed table the store refuses an untracked one.
+ */
+export function asSuggested(part: OoxmlPart, op: TreeDocOp, author: string | undefined): TreeDocOp {
+  if (!author || (op.op !== 'mergeTableCells' && op.op !== 'splitTableCell')) return op;
+  return isOwnPendingTableInsertion(part.root, op.tableId, author)
+    ? { ...op, revision: { author } }
+    : op;
 }
 
 interface CellAnchor {

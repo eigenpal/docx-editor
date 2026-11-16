@@ -50,6 +50,7 @@ import { isRunKerningEnabled, kernsText } from './run-kerning.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { glyphSizeFactorOf, type ResolvedRunStyle } from './run-style.ts';
 import { createFixedMeasurer } from './fixed-measurer.ts';
+import { authoredLineBox, recordedLineBoxFamily } from './authored-line-boxes.ts';
 import { segmentGraphemes } from './grapheme.ts';
 import { fontFamilyClassFromName } from '../store/package/font-family-class.ts';
 
@@ -64,21 +65,31 @@ export const DEFAULT_CANVAS_FONT_STACK = 'Calibri, Carlito, Helvetica, Arial, sa
 
 const SERIF_FALLBACK_STACK = '"Times New Roman", "Liberation Serif", Tinos, serif';
 const MONO_FALLBACK_STACK = '"Courier New", "Liberation Mono", Cousine, monospace';
+/**
+ * Serif Hangul faces: Batang, then the faces macOS and Linux install. The glyphs that a serif
+ * Korean face lacks draw in Batang, not in a Gothic face.
+ */
+const SERIF_HANGUL_FALLBACK_STACK = 'Batang, AppleMyungjo, "Noto Serif CJK KR", serif';
 
 /**
- * The stack a declared family falls through to when no face for it is installed: one of the
- * family's own class when its name states one ("… Serif", "… Mono"), else `base`. A missing
- * serif family set in the sans-serif default changed the look of every line it drew. Paint
- * and the canvas measurer both build their stack here, so they keep falling back to the same
- * face. The class decides alone, not `base`: paint never sees a host's own base, so a
- * classed family taking that base in one path and the class stack in the other would draw
- * with a face the layout did not measure.
+ * The stack a declared family falls through to when no face for it is installed, or when its
+ * face lacks a glyph: one of the family's own class when its name states one ("… Serif",
+ * "… Mono"), else `base`. A missing serif family set in the sans-serif default changed the
+ * look of every line it drew. Paint and the canvas measurer both build their stack here, so
+ * they keep falling back to the same face. The class decides alone, not `base`: paint never
+ * sees a host's own base, so a classed family taking that base in one path and the class
+ * stack in the other would draw with a face the layout did not measure.
+ *
+ * `serifHangulFace` tells the families that the document's font table records as serif faces
+ * of a Korean character set. Those fall back to serif Hangul faces.
  */
 export function fallbackStackForFamily(
   family: string | null,
-  base: string = DEFAULT_CANVAS_FONT_STACK
+  base: string = DEFAULT_CANVAS_FONT_STACK,
+  serifHangulFace?: (family: string) => boolean
 ): string {
   if (!family) return base;
+  if (serifHangulFace?.(family)) return SERIF_HANGUL_FALLBACK_STACK;
   const kind = fontFamilyClassFromName(family);
   return kind === 'serif' ? SERIF_FALLBACK_STACK : kind === 'mono' ? MONO_FALLBACK_STACK : base;
 }
@@ -233,6 +244,8 @@ export interface CanvasTextContext {
   font: string;
   /** Optional browser kerning control; older contexts retain their native behavior. */
   fontKerning?: 'auto' | 'normal' | 'none';
+  /** Optional glyph advance control; older contexts retain their native behavior. */
+  textRendering?: 'auto' | 'optimizeSpeed' | 'optimizeLegibility' | 'geometricPrecision';
   textAlign?: 'left' | 'right' | 'center' | 'start' | 'end';
   direction?: 'ltr' | 'rtl' | 'inherit';
   textBaseline?: 'top' | 'hanging' | 'middle' | 'alphabetic' | 'ideographic' | 'bottom';
@@ -264,6 +277,12 @@ export interface CanvasMeasurerOptions {
    * point and page break would be taken from a font the reader never sees.
    */
   readonly fontAlias?: (family: string) => string | undefined;
+  /**
+   * Whether the document's font table records a family as a serif Korean face. Paint takes
+   * the same lookup, so the glyphs that such a face lacks measure in the face they paint in.
+   * @internal
+   */
+  readonly serifHangulFace?: (family: string) => boolean;
   /**
    * Injected 2d text context from the editor/browser seam.
    *
@@ -326,6 +345,9 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
   if (!isCanvasMeasurementAvailable(context)) return null;
   // Narrowed by the guard above.
   const ctx = context!;
+  // Paint draws unhinted advances (`isolatePageFromHost`). Hinted canvas advances, rounded to
+  // whole pixels for a web font on Chromium for Linux, would measure other widths.
+  if ('textRendering' in ctx) ctx.textRendering = 'geometricPrecision';
 
   const widthCache = createBoundedLruCache<string, number>(
     normalizeCacheCapacity(options.maxWidthEntries, DEFAULT_MAX_CANVAS_WIDTH_CACHE_ENTRIES)
@@ -335,6 +357,27 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
   );
 
   const fontAlias = options.fontAlias;
+  // Whether the browser resolves a recorded family: the advance of a sample changes from the
+  // generic face's when it does. Only recorded family names reach the probe.
+  const familyProbes = new Map<string, boolean>();
+  const browserHasFamily = (family: string): boolean => {
+    const known = familyProbes.get(family);
+    if (known !== undefined) return known;
+    const sample = 'The quick brown fox 0123';
+    let resolved = false;
+    for (const generic of ['monospace', 'serif']) {
+      ctx.font = `32px ${generic}`;
+      const base = ctx.measureText(sample).width;
+      ctx.font = `32px "${family}", ${generic}`;
+      if (ctx.measureText(sample).width !== base) {
+        resolved = true;
+        break;
+      }
+    }
+    familyProbes.set(family, resolved);
+    return resolved;
+  };
+
   const fontOf = (style: ResolvedRunStyle): string => {
     // Re-validated at the sink: a font name is file-derived and this builds a CSS font
     // shorthand, so a name that could close the string is refused rather than escaped.
@@ -343,7 +386,7 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
     const declared = style.fontFamily && FONT_NAME.test(style.fontFamily) ? style.fontFamily : null;
     const aliased = declared ? fontAlias?.(declared) : undefined;
     const alias = aliased && FONT_NAME.test(aliased) ? aliased : null;
-    const stack = fallbackStackForFamily(declared, fallbackFamily);
+    const stack = fallbackStackForFamily(declared, fallbackFamily, options.serifHangulFace);
     const family = declared
       ? alias
         ? `"${alias}", "${declared}", ${stack}`
@@ -440,6 +483,14 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
       const font = fontOf(style);
       const cached = metricsCache.get(font);
       if (cached) return cached;
+      // A recorded family the browser has no face for keeps its authored box on the face it
+      // falls back to. A face the browser has keeps its own box.
+      const recorded = recordedLineBoxFamily(style.fontFamily);
+      const authored = recorded && !browserHasFamily(recorded.family) && authoredLineBox(style);
+      if (authored) {
+        metricsCache.set(font, authored);
+        return authored;
+      }
 
       // Deterministic fallback: same 1.15 / 0.8 ratios the pre-canvas path used when the
       // host could not report font bounding boxes.

@@ -30,8 +30,8 @@ const SECT =
   'w:left="400" w:right="400" w:header="0" w:footer="0" w:gutter="0"/>';
 
 const p = (runs: string, pPr = '') =>
-  `<w:p><w:pPr>${pPr}<w:widowControl w:val="0"/>` +
-  `<w:spacing w:before="0" w:after="0" w:line="280" w:lineRule="exact"/></w:pPr>${runs}</w:p>`;
+  '<w:p><w:pPr><w:widowControl w:val="0"/>' +
+  `<w:spacing w:before="0" w:after="0" w:line="280" w:lineRule="exact"/>${pPr}</w:pPr>${runs}</w:p>`;
 const text = (value: string) => `<w:r><w:t xml:space="preserve">${value}</w:t></w:r>`;
 const tc = (content: string) => `<w:tc><w:tcPr></w:tcPr>${content}</w:tc>`;
 const tr = (cells: readonly string[], trPr = '') =>

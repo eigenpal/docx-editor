@@ -1,3 +1,4 @@
+import { behindDrawingAt, repeatedPressOnObject, surfacePointAt } from './surface-point.ts';
 // Pointer gestures over the painted pages.
 //
 // The surface owns this rather than each host, so React, Vue and a plain page get identical
@@ -53,6 +54,7 @@ import {
   findNoteAtSheetPoint,
   findStoryAtSheetPoint,
   hitTestStoryAtLocalPoint,
+  activeStoryDrawingAtSheetPoint,
   isBodyContentPoint,
   scopedDocumentOrder,
   storyHitYieldsToBody,
@@ -60,6 +62,7 @@ import {
   type HeaderFooterScopeBinding,
 } from './surface-scope.ts';
 import { autoScrollDelta } from './surface-drag-autoscroll.ts';
+import { isApplePlatform } from '@docx-editor.dev/i18n';
 
 /** Active header/footer scope as seen by the pointer layer. */
 export interface ActiveHeaderFooterPointerState {
@@ -178,7 +181,18 @@ export interface PointerControllerOptions {
   readonly atomicInlineControls?: boolean;
 }
 
+/** A resolved surface hit and its caret origin in sheet coordinates. @public */
+export interface SurfacePointHit {
+  readonly hit: SemanticHit;
+  /** Caret origin in unscaled sheet coordinates. */
+  readonly x: number;
+  readonly y: number;
+}
+
 export interface PointerController {
+  pointAt(clientX: number, clientY: number): SurfacePointHit | null;
+  /** The body drawing a press there reaches by geometry (`behindDrawingAt`). */
+  behindDrawingAt(clientX: number, clientY: number): ReturnType<typeof behindDrawingAt>;
   /**
    * True while a gesture owns the selection.
    *
@@ -244,10 +258,6 @@ export function createPointerController(
   host: PointerHost,
   options: PointerControllerOptions = {}
 ): PointerController {
-  if (options.mode === 'native') {
-    return { dragging: () => false, cancelGesture: () => {}, destroy: () => {} };
-  }
-
   const { pagesLayer } = host;
   const atomicInlineControls = options.atomicInlineControls === true;
   const frames = hostTimers(() => pagesLayer);
@@ -336,8 +346,9 @@ export function createPointerController(
         measurer ? { measurer } : {}
       );
     }
-    // Open furniture scope: only the active story is a valid hit target during a gesture.
-    return null;
+    // Open furniture scope: only the active story is a valid hit target during a gesture,
+    // past its band through its own drawings alone (a watermark).
+    return activeStoryDrawingAtSheetPoint(layout, scopeBinding(active), sheet, host.pageOffsetX);
   }
 
   function enterRequestFromStoryHit(
@@ -569,10 +580,74 @@ export function createPointerController(
 
   const GRANULARITIES: readonly Granularity[] = ['character', 'word', 'paragraph'];
 
+  /** Targets whose own selection a right-click must keep: furniture, widgets and pictures. */
+  const SECONDARY_PRESS_KEEPS_SELECTION =
+    '[data-docx-hf], [data-docx-cc-widget], [data-docx-note-ref], [data-drawing-paragraph-id], ' +
+    '.docx-image-selection-overlay, .docx-drawing-textbox, input, textarea, select';
+
+  /** On Apple platforms Control with the primary button opens the context menu, as a right-click. */
+  const isContextClick = (event: PointerEvent): boolean =>
+    event.button === 0 && event.ctrlKey && !event.metaKey && isApplePlatform();
+
+  /**
+   * A secondary press in body text outside the selection moves the caret to the press, so the
+   * context menu acts on the text under the pointer and not on a selection the user cannot
+   * see. A press inside a range keeps that range, so Cut and Copy still act on it. This never
+   * prevents the press, so the context menu still opens.
+   */
+  function placeCaretForSecondaryPress(event: PointerEvent): void {
+    if (event.pointerType === 'touch') return;
+    if (event.button !== 2 && !isContextClick(event)) return;
+    if (host.activeHeaderFooter?.() || host.activeNote?.()) return;
+    const target = event.target as Element | null;
+    if (target?.closest?.(SECONDARY_PRESS_KEEPS_SELECTION)) return;
+    const layout = host.layout();
+    if (!isBodyContentPoint(layout, sheetPoint(event.clientX, event.clientY), host.pageOffsetX)) {
+      return;
+    }
+    const hit = resolveBody(event.clientX, event.clientY);
+    if (!hit) return;
+    if (
+      host.isReadOnlyPosition?.(hit.position) ??
+      host.isReadOnlyParagraph?.(hit.position.paragraphId)
+    ) {
+      return;
+    }
+    const current = host.selection();
+    const reversed = isBefore(layout, current.head, current.anchor);
+    const from = reversed ? current.head : current.anchor;
+    const to = reversed ? current.anchor : current.head;
+    if (!isBefore(layout, hit.position, from) && !isBefore(layout, to, hit.position)) return;
+    host.focus();
+    // A placeholder prompt is selected whole, as a primary press selects it.
+    const placeholder = placeholderAtHit(layout, hit);
+    if (placeholder) {
+      if (host.selectContentControl?.(placeholder.id)) return;
+      const unit = placeholderSelectionRange(layout, placeholder);
+      if (unit) {
+        host.setSelection({ anchor: unit.from, head: unit.to });
+        return;
+      }
+    }
+    host.setSelection({ anchor: hit.position, head: hit.position }, hit.caret);
+  }
+
   const onPointerDown = (event: PointerEvent): void => {
-    // Anything but the primary button keeps its native behaviour: a right-click must reach the
-    // context menu with the existing selection intact, not move the caret out from under it.
-    if (event.button !== 0) return;
+    // Other non-primary buttons keep their native behaviour. A right-click, or a Control-click
+    // on Apple platforms, places the caret only when it lands outside the selection; see
+    // `placeCaretForSecondaryPress`. A Control-click is a primary press to the browser, whose
+    // native mousedown would collapse the selection, so it is prevented as every engine press
+    // is; the context menu still opens.
+    if (isContextClick(event)) {
+      const target = event.target as Element | null;
+      if (!target?.closest?.('input, textarea, select')) event.preventDefault();
+      placeCaretForSecondaryPress(event);
+      return;
+    }
+    if (event.button !== 0) {
+      placeCaretForSecondaryPress(event);
+      return;
+    }
     // Content-control widgets: prevent mousedown so chrome does not steal the caret, then
     // dispatch the engine-level interaction (checkbox toggle, dropdown menu, date picker).
     // (Furniture clicks continue below into the scoped header/footer / note enter paths.)
@@ -708,12 +783,16 @@ export function createPointerController(
         host.focus();
         host.enterHeaderFooter?.(enterRequestFromStoryHit(storyHit, positionInStory(storyHit)));
         return;
-      } else if (isBodyContentPoint(layout, sheet, host.pageOffsetX)) {
-        event.preventDefault();
-        host.exitHeaderFooter?.(true);
-        host.focus();
-        return;
-      } else {
+      } else if (
+        !activeStoryDrawingAtSheetPoint(layout, scopeBinding(active), sheet, host.pageOffsetX)
+      ) {
+        // The story's own drawing past its band (a watermark) takes the press below.
+        if (isBodyContentPoint(layout, sheet, host.pageOffsetX)) {
+          event.preventDefault();
+          host.exitHeaderFooter?.(true);
+          host.focus();
+          return;
+        }
         // While a header is open, double-clicking the blank footer band (or vice versa)
         // creates and opens that story — Word's behaviour — instead of swallowing the press.
         const empty =
@@ -814,9 +893,10 @@ export function createPointerController(
     gestureDocument.addEventListener('pointercancel', onPointerUp);
 
     const count = clicks();
-    const granularity = event.shiftKey
-      ? 'character'
-      : GRANULARITIES[(count - 1) % GRANULARITIES.length]!;
+    // A repeated press on a picture or a chart keeps it selected, never the word beside it.
+    const onObject = repeatedPressOnObject(layout, hit, target);
+    const granularity =
+      event.shiftKey || onObject ? 'character' : GRANULARITIES[(count - 1) % GRANULARITIES.length]!;
 
     const placeholder = placeholderAtHit(layout, hit);
     if (placeholder && !event.shiftKey) {
@@ -995,7 +1075,7 @@ export function createPointerController(
     layerRect = null;
   };
 
-  pagesLayer.addEventListener('pointerdown', onPointerDown);
+  if (options.mode !== 'native') pagesLayer.addEventListener('pointerdown', onPointerDown);
   // Anything that can move the layer under a live pointer invalidates the cached origin: the
   // scroller this surface sits in, an ancestor or the window can scroll, and a resize
   // re-centres the page stack. Capture phase on the window, because a scroll on an inner
@@ -1006,6 +1086,8 @@ export function createPointerController(
   ];
 
   return {
+    pointAt: (x, y) => surfacePointAt(host, x, y),
+    behindDrawingAt: (x, y) => behindDrawingAt(host, x, y),
     dragging: () => gesture !== null,
     cancelGesture: endGesture,
     destroy() {

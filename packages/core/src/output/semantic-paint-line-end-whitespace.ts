@@ -1,5 +1,6 @@
 import type { StyleSpanRecord } from '../layout/semantic-records.ts';
 import { isSoundMark } from '../layout/sound-mark-spacing.ts';
+import { paintedLetterSpacingPx, syntheticBoldSpacingPt } from './semantic-paint-letter-gap.ts';
 
 /**
  * Keep clipped fill geometry outside glyph scaling. The expanded vertical clip preserves
@@ -26,8 +27,12 @@ export function prepareTextPaintHost(
     glyph.dataset.docxGlyphOffset = '';
     // Measurement scales the glyph advance before adding tracking. CSS scales both,
     // so convert tracking back to the glyph's local coordinates first.
-    if (horizontalScale !== 1)
-      glyph.style.letterSpacing = `${(span.style.characterSpacingPt * scale) / horizontalScale}px`;
+    if (horizontalScale !== 1) {
+      glyph.style.letterSpacing = `${paintedLetterSpacingPx(element, span, scale, horizontalScale)}px`;
+      // Layout scales the extra advance with the glyphs, so it needs no conversion.
+      const boldSpacing = syntheticBoldSpacingPt(span);
+      if (boldSpacing) glyph.style.wordSpacing = `${-boldSpacing * scale}px`;
+    }
     if (span.glyphOffsetPt) {
       glyph.dataset.docxShiftedInk = '';
       // Keep the shadow in forced-colour modes, but inherit their accessible ink
@@ -67,9 +72,11 @@ export function prepareTextPaintHost(
   if (scaledBidi) {
     const factor = span.style.horizontalScalePercent / 100;
     glyph.style.width = `${(span.box.width * scale) / factor}px`;
-    glyph.style.letterSpacing = `${(span.style.characterSpacingPt * scale) / factor}px`;
-    if (span.style.shaping?.wordSpacingPt)
-      glyph.style.wordSpacing = `${(span.style.shaping.wordSpacingPt * scale) / factor}px`;
+    glyph.style.letterSpacing = `${paintedLetterSpacingPx(element, span, scale, factor)}px`;
+    const wordSpacing =
+      ((span.style.shaping?.wordSpacingPt ?? 0) * scale) / factor -
+      syntheticBoldSpacingPt(span) * scale;
+    if (wordSpacing) glyph.style.wordSpacing = `${wordSpacing}px`;
     glyph.style.direction = span.style.shaping?.direction ?? 'ltr';
     glyph.style.transformOrigin = glyph.style.direction === 'rtl' ? 'right' : 'left';
   }

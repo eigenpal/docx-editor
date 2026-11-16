@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -224,6 +224,50 @@ export function isCopyAt(
   return identities.moved[position] === true || identities.restored[position] === true;
 }
 
+/**
+ * The typed character an undo or redo copied into `text` at `item`, when that typing stood in
+ * the same text, or null. A copy of a moved copy stands where the move put it, and the typing
+ * it copies stood elsewhere.
+ */
+function retypedOf(text: Y.Text, marks: MarkLookup, item: Y.Item): [number, number] | null {
+  const [client, clock] = identityParts(marks, item.id.client, item.id.clock);
+  const doc = text.doc;
+  return doc && structAt(doc, { client, clock })?.parent === text ? [client, clock] : null;
+}
+
+/**
+ * What the typed character `client:clock` was typed after, from `insertFollow`, the mark of
+ * its insert. That mark names what the first character of the insert was typed after; every
+ * later character was typed after the one before it. An undo can put back one later
+ * character alone, and that copy follows the character before it, not the insert's anchor,
+ * which would take it away from the characters typed before it. Text the mark keeps where it
+ * was typed stays, whichever character it is.
+ */
+function retypedFollow(
+  marks: MarkLookup,
+  [client, clock]: readonly [number, number],
+  insertFollow: FollowAnchor | null
+): FollowAnchor | null {
+  if (!insertFollow || insertFollow.identity === STAY) return insertFollow;
+  if (marks.followStart(client, clock) === clock) return insertFollow;
+  return { identity: `${client}:${clock - 1}`, before: false };
+}
+
+/**
+ * The characters a copy went in after, nearest first: the deleted ones, then the nearest one
+ * still in the text. A redo writes typed text again where Yjs placed its first write, which
+ * can be behind characters a split moved away. When that first write named the character it
+ * was typed after, the copy names that one instead, so it follows where the typing did.
+ */
+function copiedAfterOf(
+  marks: MarkLookup,
+  typed: FollowAnchor | null,
+  walk: LeftWalk
+): readonly Identity[] {
+  if (!typed) return [...walk.deleted, ...(walk.live === null ? [] : [walk.live])];
+  return typed.identity === STAY || typed.before ? [] : [resolvedIdentity(marks, typed.identity)];
+}
+
 /** The identities of a paragraph's shared text, read from its Yjs items. */
 export function textIdentities(text: Y.Text): TextIdentities {
   const start = firstItem(text);
@@ -257,8 +301,21 @@ export function textIdentities(text: Y.Text): TextIdentities {
       isText && marks.origin('move', item.id.client, clock) !== null;
     const restoredAt = (clock: number): boolean =>
       isText && !movedAt(clock) && marks.origin('restore', item.id.client, clock) !== null;
-    const isCopy = movedAt(item.id.clock) || restoredAt(item.id.clock);
-    const stored = placed ? marks.follow(item.id.client, item.id.clock) : null;
+    const isRestored = restoredAt(item.id.clock);
+    const isCopy = movedAt(item.id.clock) || isRestored;
+    // An undo or redo writes typed text again where Yjs put its first write, and that copy
+    // follows a move as the typing did: by the anchor the typing named, or the characters it
+    // went in after.
+    const retyped = isRestored ? retypedOf(text, marks, item) : null;
+    const typed = placed && (!isCopy || retyped !== null);
+    // The mark of the insert the copied typing came in, which names what its first character
+    // was typed after.
+    const insertFollow = retyped ? marks.follow(...retyped) : null;
+    const stored = !placed
+      ? null
+      : retyped
+        ? retypedFollow(marks, retyped, insertFollow)
+        : marks.follow(item.id.client, item.id.clock);
     const follow =
       stored && stored.identity !== STAY
         ? { ...stored, identity: resolvedIdentity(marks, stored.identity) }
@@ -267,9 +324,9 @@ export function textIdentities(text: Y.Text): TextIdentities {
     // A follow attribute is what the typer meant, so it is the only anchor. Without one, the
     // deleted characters the text was typed after are, nearest first.
     let anchor: FollowAnchor[] | null = null;
-    if (placed && !isCopy && follow && (walk.deleted.length > 0 || walk.live === null)) {
+    if (typed && follow && (walk.deleted.length > 0 || walk.live === null)) {
       anchor = [follow];
-    } else if (placed && !isCopy && walk.deleted.length > 0) {
+    } else if (typed && walk.deleted.length > 0) {
       anchor = walk.deleted.map((identity) => ({ identity, before: false }));
     }
     if (anchor) hasAnchors = true;
@@ -281,7 +338,8 @@ export function textIdentities(text: Y.Text): TextIdentities {
       const right = typedInFrontOf(doc, item, identityAt);
       if (right) anchor = [...(anchor ?? []), { identity: right, before: true }];
     }
-    const after = isCopy ? [...walk.deleted, ...(walk.live === null ? [] : [walk.live])] : null;
+    // Out of a deleted paragraph, a copy goes where the typing it copies went as one insert.
+    const after = isCopy ? copiedAfterOf(marks, insertFollow, walk) : null;
     for (let offset = 0; offset < item.length; offset += 1) {
       items.push(`${item.id.client}:${item.id.clock + offset}`);
       origins.push(
@@ -302,8 +360,7 @@ export function textIdentities(text: Y.Text): TextIdentities {
         clocks.push(-1);
       }
       moved.push(movedAt(item.id.clock + offset));
-      const isRestored = restoredAt(item.id.clock + offset);
-      restored.push(isRestored);
+      restored.push(restoredAt(item.id.clock + offset));
       deleted.push(
         isText &&
           deletions !== null &&

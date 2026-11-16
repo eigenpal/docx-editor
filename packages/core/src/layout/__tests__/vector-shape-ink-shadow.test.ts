@@ -11,7 +11,7 @@ const BOX = { x: 100, y: 100, width: 100, height: 50 };
 function drawing(component: VectorShapeComponent): InlineDrawingRecord {
   return {
     paintBounds: BOX,
-    geometry: { contentBounds: BOX },
+    geometry: { contentBounds: BOX, effectInsets: { top: 0, right: 0, bottom: 0, left: 0 } },
     vectorShape: {
       extentEmu: { cx: 1_270_000, cy: 635_000 },
       subpathsEmu: component.subpathsEmu,

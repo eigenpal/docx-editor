@@ -64,6 +64,9 @@ function types(...overrides: string[]): string {
 
 const ROOT_RELS = `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`;
 
+/** The surface `withSurface` mounted, so a composition helper can land what it queued. */
+let mounted: PaginatedSurface | null = null;
+
 function withSurface(
   bytes: Uint8Array,
   run: (surface: PaginatedSurface, container: HTMLElement) => void,
@@ -73,9 +76,11 @@ function withSurface(
   document.body.append(container);
   const opened = mountPaginatedSurface(container, bytes, { scale: 1, ...options });
   if (!opened.ok) throw new Error(opened.reason);
+  mounted = opened.surface;
   try {
     run(opened.surface, container);
   } finally {
+    mounted = null;
     opened.surface.destroy();
     container.remove();
     document.getSelection()?.removeAllRanges();
@@ -110,6 +115,9 @@ function composeInto(container: HTMLElement, span: HTMLElement, text: string): v
   selection.removeAllRanges();
   selection.addRange(range);
   pages.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+  // A plain composed insertion commits on a later task, as typed text does; the flush
+  // lands it, as any later edit or read would.
+  mounted?.flushPendingInput();
 }
 
 // ---------------------------------------------------------------- unpainted model offsets

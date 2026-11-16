@@ -15,6 +15,7 @@
 //         remarks: "...",            // @remarks block
 //         examples: ["..."],         // each @example block, code only
 //         deprecated: null | "...",  // @deprecated text
+//         extension: true,           // only when tagged @docxEditorExtension (not in Office.js)
 //         signature: "function useAutoSave(doc: Document, options?: UseAutoSaveOptions): UseAutoSaveReturn",
 //         source: {                  // GitHub link, joined from a separate source index
 //           path: "packages/react/src/hooks/useAutoSave.ts",
@@ -35,7 +36,12 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { TSDocParser, TSDocConfiguration, TSDocTagDefinition, TSDocTagSyntaxKind } from '@microsoft/tsdoc';
+import {
+  TSDocParser,
+  TSDocConfiguration,
+  TSDocTagDefinition,
+  TSDocTagSyntaxKind,
+} from '@microsoft/tsdoc';
 
 // ─── TSDoc parsing ────────────────────────────────────────────────────────
 
@@ -57,6 +63,9 @@ const CUSTOM_TAGS = [
   { tagName: '@sealed', syntaxKind: TSDocTagSyntaxKind.ModifierTag },
   { tagName: '@virtual', syntaxKind: TSDocTagSyntaxKind.ModifierTag },
   { tagName: '@decorator', syntaxKind: TSDocTagSyntaxKind.BlockTag },
+  // A member the editing API adds to the Office.js shape: code that uses it does not run in an
+  // Office.js host.
+  { tagName: '@docxEditorExtension', syntaxKind: TSDocTagSyntaxKind.ModifierTag },
 ];
 for (const t of CUSTOM_TAGS) {
   if (!tsdocConfig.tryGetTagDefinition(t.tagName)) {
@@ -179,6 +188,7 @@ function parseDocComment(rawDocComment) {
       remarks: '',
       examples: [],
       deprecated: null,
+      extension: false,
       paramDescriptions: new Map(),
       returnsDescription: '',
     };
@@ -194,19 +204,25 @@ function parseDocComment(rawDocComment) {
   // `deprecated` is either the explanation string from `@deprecated <text>`
   // or an empty string for the bare `@deprecated` modifier. Never `true`.
   // Stable shape: `string | null`.
-  const deprecated = doc.deprecatedBlock
-    ? renderSection(doc.deprecatedBlock.content) || ''
-    : null;
+  const deprecated = doc.deprecatedBlock ? renderSection(doc.deprecatedBlock.content) || '' : null;
 
   const paramDescriptions = new Map();
   for (const p of doc.params.blocks) {
     paramDescriptions.set(p.parameterName, renderSection(p.content));
   }
-  const returnsDescription = doc.returnsBlock
-    ? renderSection(doc.returnsBlock.content)
-    : '';
+  const returnsDescription = doc.returnsBlock ? renderSection(doc.returnsBlock.content) : '';
 
-  return { summary, remarks, examples, deprecated, paramDescriptions, returnsDescription };
+  const extension = doc.modifierTagSet.hasTagName('@docxEditorExtension');
+
+  return {
+    summary,
+    remarks,
+    examples,
+    deprecated,
+    extension,
+    paramDescriptions,
+    returnsDescription,
+  };
 }
 
 // ─── Excerpt rendering ────────────────────────────────────────────────────
@@ -215,10 +231,11 @@ function parseDocComment(rawDocComment) {
 // and `Reference` tokens spanning the entire declaration) back into a
 // signature string, optionally a sliced range.
 function renderExcerpt(tokens, range) {
-  const slice = range
-    ? tokens.slice(range.startIndex, range.endIndex)
-    : tokens;
-  return slice.map((t) => t.text).join('').trim();
+  const slice = range ? tokens.slice(range.startIndex, range.endIndex) : tokens;
+  return slice
+    .map((t) => t.text)
+    .join('')
+    .trim();
 }
 
 // Same as `renderExcerpt` but also returns the canonical references the
@@ -226,7 +243,10 @@ function renderExcerpt(tokens, range) {
 // to their own pages.
 function renderExcerptWithRefs(tokens, range) {
   const slice = range ? tokens.slice(range.startIndex, range.endIndex) : tokens;
-  const text = slice.map((t) => t.text).join('').trim();
+  const text = slice
+    .map((t) => t.text)
+    .join('')
+    .trim();
   const refs = [];
   for (const t of slice) {
     if (t.kind === 'Reference' && t.canonicalReference) {
@@ -281,6 +301,8 @@ function transformItem(item, sourceIndex, github) {
     deprecated: docs.deprecated,
     signature: renderExcerpt(tokens),
   };
+  // Present only when true, so untagged entries keep their shape.
+  if (docs.extension) out.extension = true;
 
   const source = sourceIndex.get(item.name);
   if (source) {
@@ -324,8 +346,10 @@ function transformItem(item, sourceIndex, github) {
   // Property: declared type. API Extractor uses `propertyTypeTokenRange`
   // for PropertySignature/Property; Variables use `variableTypeTokenRange`
   // instead (different field, handled in the next branch).
-  if ((item.kind === 'PropertySignature' || item.kind === 'Property')
-      && item.propertyTypeTokenRange) {
+  if (
+    (item.kind === 'PropertySignature' || item.kind === 'Property') &&
+    item.propertyTypeTokenRange
+  ) {
     const { text, refs } = renderExcerptWithRefs(tokens, item.propertyTypeTokenRange);
     out.type = text;
     if (refs.length) out.typeRefs = refs;
@@ -361,7 +385,10 @@ function makeGithubUrl(relPath, line, github) {
 
 // ─── Top-level entry transform ────────────────────────────────────────────
 
-export function transformApiPackageJson(rawJson, { sourceIndex, github, packageName, subpath, version, entryDocBlock }) {
+export function transformApiPackageJson(
+  rawJson,
+  { sourceIndex, github, packageName, subpath, version, entryDocBlock }
+) {
   // The doc-model file always has a single Package as the root, with one
   // EntryPoint child whose `members` array is the public surface. The
   // EntryPoint may carry its own `docComment` if the entry barrel has a
@@ -377,8 +404,7 @@ export function transformApiPackageJson(rawJson, { sourceIndex, github, packageN
     throw new Error(`No EntryPoint child found in package ${packageName}`);
   }
 
-  const docCommentSource =
-    entryPoint.docComment || pkg.docComment || entryDocBlock || '';
+  const docCommentSource = entryPoint.docComment || pkg.docComment || entryDocBlock || '';
   const entryDocs = parseDocComment(docCommentSource);
   // Strip a leading `<scope>/<pkg>[/<subpath>]` line from the entry
   // summary. Our barrels start every `@packageDocumentation` block
@@ -386,9 +412,7 @@ export function transformApiPackageJson(rawJson, { sourceIndex, github, packageN
   // and drops the `@`, leaving prose like `eigenpal/docx-editor-react/...`
   // in front of the real description. The package/subpath are already
   // structured fields below, so the line is duplicate noise.
-  entryDocs.summary = entryDocs.summary
-    .replace(/^[\w-]+\/[\w/-]+\s+/, '')
-    .trim();
+  entryDocs.summary = entryDocs.summary.replace(/^[\w-]+\/[\w/-]+\s+/, '').trim();
   const exports = (entryPoint.members || [])
     .map((m) => transformItem(m, sourceIndex, github))
     .filter((m) => m.releaseTag !== 'internal' && m.releaseTag !== 'none');

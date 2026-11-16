@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Paragraph borders were read only: the editing API had no border members and no operation could add, change, or remove a w:pBdr.",
+  "after": "Paragraph.borders reads the five edges through the style cascade and writes them through a new local setParagraphBorders operation that replaces the paragraph's own w:pBdr, tracked as a paragraph property revision when change tracking is on.",
+  "reason": "The new operation applies on the writer's tree and replicates as ordinary node changes inside w:pPr, the same generic w:pBdr nodes released peers already read from documents. No shared field, operation encoding, offset rule, or repair rule changes, and concurrent writes merge under the existing singleton-property rule.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-paragraph-borders.test.ts",
+    "packages/core/src/store/__tests__/paragraph-borders-op.test.ts",
+    "packages/core/src/automation/__tests__/automation-paragraph-borders.test.ts",
+    "packages/editor-api/src/model/__tests__/model-paragraph-borders.test.ts"
+  ],
+  "changeset": "paragraph-borders-api",
+  "migration": null
+}

@@ -15,6 +15,7 @@ import { hostsTextboxStory } from './group-textbox-projection.ts';
 import type { GroupTextboxProjection } from './group-textbox-projection.ts';
 import { HYPERLINK_RELATIONSHIP_TYPE, type RelationshipTargetResolver } from './hyperlink.ts';
 import { resolveRelationship } from './relationships.ts';
+import { mergedDrawingLocks, shapeLocksOf } from './drawing-shape-locks.ts';
 import {
   MAX_XML_DEPTH,
   ST_COORDINATE_MAX,
@@ -958,18 +959,6 @@ function readFrameLocks(node: OoxmlElement | null): DrawingLocksInput {
   };
 }
 
-function mergeLocks(anchorLocked: boolean, frame: DrawingLocksInput): DrawingLocks {
-  if (anchorLocked) {
-    return Object.freeze({ select: true, move: true, resize: true, changeAspect: true });
-  }
-  return Object.freeze({
-    select: frame.select ?? false,
-    move: frame.move ?? false,
-    resize: frame.resize ?? false,
-    changeAspect: frame.changeAspect ?? false,
-  });
-}
-
 function readDocPrMetadata(
   anchor: OoxmlElement,
   compatibilityMode: boolean,
@@ -1466,7 +1455,7 @@ export function projectDrawingWithState(
           localName: 'cNvGraphicFramePr',
         })
       : null);
-  const locks = mergeLocks(anchorFlag('locked') ?? false, readFrameLocks(framePr));
+  const locks = mergedDrawingLocks(readFrameLocks(framePr), shapeLocksOf(anchor));
   const pictureResult = projectPicture(anchor, state, ctx, namespaceScope, compatibilityMode);
   if (pictureResult.diagnostic) state.diagnostics.push(pictureResult.diagnostic);
   if (state.refused) {

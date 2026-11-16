@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A browser font face for an embedded bold slot registered at the weight of the slot, 700, even when the slot held a regular face.",
+  "after": "A bold slot that holds a regular face registers at weight 599, so that bold text still selects it and the browser emboldens it. Layout and paint give its bold text the extra advance of synthesized bold.",
+  "reason": "Font registration, measurement, and paint are local to each participant. No shared field, operation, node identity, snapshot, or awareness payload changes.",
+  "tests": [
+    "packages/core/src/editor/__tests__/embedded-font-faces.test.ts",
+    "packages/core/src/layout/__tests__/synthetic-bold.test.ts",
+    "packages/core/src/output/__tests__/synthetic-bold-paint.test.ts"
+  ],
+  "changeset": "embedded-bold-slot-synthetic-bold",
+  "migration": null
+}

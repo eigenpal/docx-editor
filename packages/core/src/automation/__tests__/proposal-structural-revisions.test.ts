@@ -53,7 +53,7 @@ for (const revision of ['ins', 'del'] as const) {
             host.execute({ operations: [{ op: 'getParagraphs', body }] }),
             0
           );
-          expect(paragraphs).toHaveLength(5);
+          expect(paragraphs).toHaveLength(6); // The last is the body's paragraph after the table.
           const before = savedMainXml(host);
           const revisionBefore = host.revision();
           // First/later paragraphs, another cell, and a nested table share the row revision.
@@ -96,7 +96,7 @@ for (const revision of ['cellIns', 'cellDel']) {
         host.execute({ operations: [{ op: 'getParagraphs', body }] }),
         0
       );
-      for (const paragraph of paragraphs.slice(1)) {
+      for (const paragraph of paragraphs.slice(1, 3)) {
         expect(host.execute({ operations: [proposal(paragraph, 'replacement', false)] }).ok).toBe(
           false
         );
@@ -157,7 +157,8 @@ for (const revision of ['rowIns', 'rowDel', 'cellMerge', 'inlineIns'] as const) 
             host.execute({ operations: [{ op: 'getParagraphs', body }] }),
             0
           );
-          for (const paragraph of paragraphs) {
+          // A note that ends with a table reads an empty paragraph after it, outside the table.
+          for (const paragraph of revision === 'inlineIns' ? paragraphs : paragraphs.slice(0, -1)) {
             const operations: AutomationOperation[] = tracked
               ? [{ op: 'setChangeTrackingMode', mode: 'TrackMineOnly', author: 'Agent' }]
               : [];
@@ -221,11 +222,14 @@ test("a tracked replacement nests in another author's insertion in one note only
     expect(xml).toMatch(
       /<w:ins w:author="Human" w:id="1"><w:r>[^<]*<w:t[^>]*>head <\/w:t><\/w:r><w:del w:author="Agent"/
     );
-    expect(xml).toContain(
-      '<w:ins w:author="Human" w:id="1"><w:r><w:t>head target tail</w:t></w:r></w:ins>'
+    // The other note's insertion shared the id in the file. It is another note's change, so
+    // the saved copy gives it its own; the pieces of this note's insertion keep id 1.
+    const other = xml.match(
+      /<w:ins w:author="Human" w:id="(\d+)"><w:r><w:t>head target tail<\/w:t><\/w:r><\/w:ins>/
     );
-    // The author's own deletion and insertion each resolve alone, although the insertion
-    // around the deletion shares its identity with the other note.
+    expect(other?.[1]).toBeDefined();
+    expect(other?.[1]).not.toBe('1');
+    // The author's own deletion and insertion each resolve alone.
     const saved = host.save();
     if (!saved.ok) throw new Error(saved.error.code);
     for (const action of ['acceptRevision', 'rejectRevision'] as const) {

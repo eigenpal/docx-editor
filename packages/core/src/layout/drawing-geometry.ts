@@ -44,6 +44,48 @@ export interface DrawingGeometry {
   readonly clipPolygon: readonly DrawingPoint[] | null;
   readonly clipFallback: DrawingClipFallback;
   readonly effectInsets: DrawingInsets;
+  /**
+   * How far a layout region, such as a cell or the page, cut into the extent on each side.
+   * Absent when no region did. An inline drawing's own line and column clip does not count.
+   * A shape that paints past its extent stays cut at the region edge on these sides.
+   */
+  readonly regionCuts?: DrawingRegionCuts;
+}
+
+/**
+ * How far inside each extent side a layout region's edge sits, in points: the deepest cut of
+ * every region the drawing was clipped to. Zero where no region cut that side.
+ */
+export interface DrawingRegionCuts {
+  /** How far below the extent's top edge a region's top edge sits. */
+  readonly top: number;
+  /** How far left of the extent's right edge a region's right edge sits. */
+  readonly right: number;
+  /** How far above the extent's bottom edge a region's bottom edge sits. */
+  readonly bottom: number;
+  /** How far right of the extent's left edge a region's left edge sits. */
+  readonly left: number;
+}
+
+/** How far inside the extent edge a region edge must sit to cut it, in points. */
+const REGION_CUT_EPSILON = 1e-3;
+
+/** The extent sides `region` cuts into, and how deep, merged with earlier cuts. */
+function regionCutsOf(geometry: DrawingGeometry, region: LayoutBox): DrawingRegionCuts | undefined {
+  const content = geometry.contentBounds;
+  const previous = geometry.regionCuts;
+  // `depth` is how far inside the extent edge the region edge sits.
+  const cuts = (depth: number, before = 0) =>
+    depth > REGION_CUT_EPSILON ? Math.max(depth, before) : before;
+  const result = {
+    top: cuts(region.y - content.y, previous?.top),
+    right: cuts(content.x + content.width - (region.x + region.width), previous?.right),
+    bottom: cuts(content.y + content.height - (region.y + region.height), previous?.bottom),
+    left: cuts(region.x - content.x, previous?.left),
+  };
+  return result.top > 0 || result.right > 0 || result.bottom > 0 || result.left > 0
+    ? Object.freeze(result)
+    : undefined;
 }
 
 export interface DrawingGeometryInput {
@@ -630,7 +672,12 @@ export { pointInDrawingClip } from './drawing-wrap.ts';
 
 export function clipGeometryToRegion(
   geometry: DrawingGeometry,
-  region: LayoutBox
+  region: LayoutBox,
+  /**
+   * False for a clip that is no layout region a shape that paints past its extent stays cut
+   * at: an inline drawing's own line, column, or reach. A cell, a frame, or a page records it.
+   */
+  recordCut = true
 ): DrawingGeometry {
   const paintBounds = clipBoxToRegion(geometry.paintBounds, region);
   const hitBounds =
@@ -642,6 +689,7 @@ export function clipGeometryToRegion(
     const clipped = clipPolygonToBox(points, region);
     return clipped.length >= 3 ? Object.freeze(clipped.map(finitePoint)) : Object.freeze([]);
   };
+  const regionCuts = recordCut ? regionCutsOf(geometry, region) : geometry.regionCuts;
   return Object.freeze({
     ...geometry,
     paintBounds,
@@ -650,6 +698,7 @@ export function clipGeometryToRegion(
       clipPoints(geometry.transformedCorners) ?? geometry.transformedCorners
     ),
     clipPolygon: clipPoints(geometry.clipPolygon),
+    ...(regionCuts ? { regionCuts } : {}),
   });
 }
 

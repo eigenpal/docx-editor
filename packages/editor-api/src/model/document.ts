@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -28,10 +28,15 @@ import { CommentCollection, RevisionCollection } from './review.ts';
 import { SectionCollection } from './sections.ts';
 import { StyleCollection } from './styles.ts';
 import { Range } from './range.ts';
+import { annotationById, type Annotation } from './annotations.ts';
 
 /** Office.js tracking mode names. TrackAll is recognized but currently refused. @public */
 export { ChangeTrackingMode } from './editing-enums.ts';
-import { ChangeTrackingMode, RemoveDocInfoType } from './editing-enums.ts';
+import {
+  ChangeTrackingMode,
+  RemoveDocInfoType,
+  type DocumentCompareOptions,
+} from './editing-enums.ts';
 
 /**
  * The document: the root every other object is reached from.
@@ -160,6 +165,80 @@ export class Document extends ModelObject {
     }));
   }
 
+  /**
+   * Compare this document (the original) with the revised document in `base64File`, and record
+   * the differences as tracked changes in this document.
+   *
+   * Needs the review module (`modules: [reviewModule()]` from `@docx-editor.dev/pro`); without
+   * it the sync fails with `NotSupported`. Only `CompareTargetCurrent` is supported. Must be the
+   * only write in its sync. Refused in a collaboration session.
+   *
+   * @example
+   * ```ts
+   * context.document.compareFromBase64(revisedBase64, { authorName: 'Legal' });
+   * await context.sync();
+   * ```
+   */
+  compareFromBase64(base64File: string, documentCompareOptions?: DocumentCompareOptions): void {
+    const target = `${this.path.label}.compareFromBase64`;
+    const options = documentCompareOptions ?? {};
+    this.command('compareFromBase64', () => {
+      if (typeof base64File !== 'string' || base64File.length === 0) {
+        fail({ code: 'InvalidArgument', target });
+      }
+      for (const flag of [
+        'detectFormatChanges',
+        'removeDateAndTime',
+        'removePersonalInformation',
+        'addToRecentFiles',
+        'ignoreAllComparisonWarnings',
+      ] as const) {
+        if (options[flag] !== undefined && typeof options[flag] !== 'boolean') {
+          fail({ code: 'InvalidArgument', target: `${target}.${flag}` });
+        }
+      }
+      if (
+        options.compareTarget !== undefined &&
+        !['CompareTargetCurrent', 'CompareTargetNew', 'CompareTargetSelected'].includes(
+          options.compareTarget
+        )
+      ) {
+        fail({ code: 'InvalidArgument', target: `${target}.compareTarget` });
+      }
+      if (options.compareTarget !== undefined && options.compareTarget !== 'CompareTargetCurrent') {
+        fail({ code: 'NotSupported', target: `${target}.compareTarget` });
+      }
+      if (options.removePersonalInformation === true) {
+        fail({ code: 'NotSupported', target: `${target}.removePersonalInformation` });
+      }
+      if (options.authorName !== undefined && typeof options.authorName !== 'string') {
+        fail({ code: 'InvalidArgument', target: `${target}.authorName` });
+      }
+      return {
+        op: 'compareFromBase64',
+        base64: base64File,
+        ...(options.authorName === undefined ? {} : { authorName: options.authorName }),
+        ...(options.detectFormatChanges === undefined
+          ? {}
+          : { detectFormatChanges: options.detectFormatChanges }),
+        ...(options.removeDateAndTime === undefined
+          ? {}
+          : { removeDateAndTime: options.removeDateAndTime }),
+      };
+    });
+  }
+
+  /**
+   * Refuses with `NotSupported` at the sync: the document model has no file system. Read the
+   * file yourself and call {@link Document.compareFromBase64}.
+   */
+  compare(filePath: string, documentCompareOptions?: DocumentCompareOptions): void {
+    const target = `${this.path.label}.compare`;
+    void filePath;
+    void documentCompareOptions;
+    this.command('compare', () => fail({ code: 'NotSupported', target }));
+  }
+
   /** Core document metadata. Reads require load; writes commit at sync. */
   get properties(): DocumentProperties {
     this.#properties ??= DocumentProperties.of(this.context, this.path);
@@ -249,6 +328,8 @@ export class Document extends ModelObject {
    * The document's footnotes, in the order its notes part writes them.
    *
    * Legacy document-wide accessor. Prefer the Office.js-shaped `body.footnotes` accessor.
+   *
+   * @docxEditorExtension
    */
   get footnotes(): NoteItemCollection {
     const document = this.path.handle();
@@ -261,7 +342,11 @@ export class Document extends ModelObject {
     return this.#footnotes;
   }
 
-  /** The document's endnotes, in the order its notes part writes them. */
+  /**
+   * The document's endnotes, in the order its notes part writes them.
+   *
+   * @docxEditorExtension
+   */
   get endnotes(): NoteItemCollection {
     const document = this.path.handle();
     this.#endnotes ??= NoteItemCollection.of(this.context, 'document.endnotes', this.path, () => ({
@@ -335,6 +420,21 @@ export class Document extends ModelObject {
       }
     );
     return found;
+  }
+
+  /**
+   * The proofing annotation with this id, as `Paragraph.insertAnnotations` answered it. A
+   * decided annotation is found too, with its `state`. `ItemNotFound` at the sync when this
+   * runtime holds no annotation with the id, including one that was deleted or that an edit
+   * to its text removed.
+   */
+  getAnnotationById(id: string): Annotation {
+    return annotationById(
+      this.context,
+      (action) => this.enqueue(action),
+      `${this.path.label}.getAnnotationById`,
+      id
+    );
   }
 
   /** @internal Plan the read this object's `load(...)` asked for. */

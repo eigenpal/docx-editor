@@ -107,6 +107,12 @@ export function extensionKey(extension: string): string {
   return asciiFold(extension.replace(/^\./, ''));
 }
 
+/** The normalized, case-folded Override key, or null for an invalid part name. */
+export function overrideKeyOf(partName: string): string | null {
+  const norm = normalizePartName(partName);
+  return norm.ok ? partNameKey(norm.partName) : null;
+}
+
 /** The resolved lookup: Override by case-folded part name, Default by case-insensitive extension. */
 export interface ContentTypeIndex {
   /** ext key -> single MIME (identical duplicates collapsed). */
@@ -237,10 +243,6 @@ export function buildTolerantContentTypeIndex(
     return { ok: false, error: { code: 'too-many-records', limit: maxRecords } };
   const extensions = new Set<string>();
   const overrideKeys = new Set<string>();
-  const overrideKeyOf = (partName: string): string | null => {
-    const norm = normalizePartName(partName);
-    return norm.ok ? partNameKey(norm.partName) : null;
-  };
   const validDefaults = records.defaults.filter((record) => {
     if (isValidMime(record.contentType)) return true;
     extensions.add(extensionKey(record.extension));

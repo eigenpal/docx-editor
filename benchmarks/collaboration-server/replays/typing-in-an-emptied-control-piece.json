@@ -1,0 +1,147 @@
+{
+  "config": "trackedStructuresSequential",
+  "seed": 79,
+  "replicas": 3,
+  "delivery": "in-order",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertInlineContentControl",
+          "offset": 0,
+          "tag": "fuzz",
+          "text": "value"
+        },
+        "paragraphs": [4]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertTable",
+          "beforeParagraphId": "",
+          "rows": 2,
+          "cols": 1,
+          "columnWidthTwips": 2000
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertHyperlink",
+          "start": 1,
+          "end": 4,
+          "anchor": "_fuzz"
+        },
+        "paragraphs": [6]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 5,
+          "text": " ip",
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T23:43:02Z"
+          }
+        },
+        "paragraphs": [4]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 1,
+          "end": 6,
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T07:43:08Z"
+          }
+        },
+        "paragraphs": [6]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "insertTableColumn",
+          "tableId": "",
+          "gridColumnId": "",
+          "where": "right"
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 0
+          },
+          {
+            "field": "gridColumnId",
+            "localName": "gridCol",
+            "index": 0,
+            "within": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "acceptRevision",
+          "revision": {
+            "id": "97380",
+            "author": "Author 2",
+            "date": "2026-01-01T07:43:08Z"
+          },
+          "localName": "del"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 10,
+          "text": "m "
+        },
+        "paragraphs": [8]
+      }
+    }
+  ]
+}

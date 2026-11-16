@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -24,8 +24,8 @@ import {
   type ItemId,
 } from './yjs-items.ts';
 import { textMarksOf } from './paragraph-text-marks.ts';
-import { textDeletionsOf, type DeletedRun } from './paragraph-text-deletions.ts';
-import { asLogicalId, isNextClock, parseClientClock, type LogicalId } from './identity.ts';
+import { deletedRunsOf, textDeletionsOf } from './paragraph-text-deletions.ts';
+import { asLogicalId, isNextClock, type LogicalId } from './identity.ts';
 import { rejectDangerousKey } from './limits.ts';
 import type { DocumentRegistry } from './registry.ts';
 import {
@@ -33,6 +33,7 @@ import {
   diffTokens,
   tokensOfParagraph,
   tokensOfText,
+  typedStartIn,
   type Step,
   type Token,
 } from './paragraph-text-diff.ts';
@@ -42,6 +43,7 @@ import {
   encodeAttributes,
   type InlineAttributes,
 } from './paragraph-text.ts';
+import { recordSplitPoints } from './split-points.ts';
 import {
   insertCopy,
   markMoves,
@@ -57,10 +59,12 @@ import {
 } from './paragraph-text-identity.ts';
 import { rebaseRevisions } from './paragraph-text-revisions.ts';
 import { formatDecidedDeletions } from './paragraph-text-decision-span.ts';
+import { formatDecision } from './paragraph-text-decisions.ts';
 import { writeInlineText } from './paragraph-text-view.ts';
 import { positionsNow, type FollowingText } from './paragraph-text-follow.ts';
 import { placeFollowingText } from './paragraph-text-placement.ts';
 import type { InlinePlan } from './paragraph-text-writer.ts';
+import { recordStrikesSeen, sharedDelta, withoutStrikesSeen } from './paragraph-text-strikes.ts';
 
 interface Block {
   /** Equal tokens, or a run of deletions and insertions. */
@@ -180,7 +184,12 @@ export function insertFollowing(
   if (item) textMarksOf(text.doc!).markFollow(item.id.client, item.id.clock, value.length, anchor);
 }
 
-/** The attributes of each position of a shared text, hidden positions too. */
+/**
+ * The attributes of each position of a shared text, hidden positions too, as Yjs stores them:
+ * an insert compares its attributes with these and writes a marker for each that differs. A
+ * strike a character is left out of (`sharedDelta`) still counts here, so an insert after it
+ * carries the strike on in `b` and writes no marker that a peer's decision would not reach.
+ */
 function attributesByPosition(text: Y.Text): InlineAttributes[] {
   const out: InlineAttributes[] = [];
   for (const op of text.toDelta() as { insert: unknown; attributes?: InlineAttributes }[]) {
@@ -270,7 +279,18 @@ function writeParagraphText(
       }
       for (let at = runs.length - 1; at >= 0; at -= 1) {
         const run = runs[at]!;
-        text.format(run[0]!.position, run.length, run[0]!.changes!);
+        const changes = identities
+          ? recordStrikesSeen(
+              run[0]!.changes!,
+              // The item each character stands in, not its identity: a reader compares a
+              // character's own item ID, and a moved copy has its own.
+              run.map(({ position }) => {
+                const [client, clock] = (identities.items[position] ?? '-1:-1').split(':');
+                return { client: Number(client), clock: Number(clock) };
+              })
+            )
+          : run[0]!.changes!;
+        formatDecision(text, changes, identities?.items, run);
       }
       continue;
     }
@@ -290,7 +310,10 @@ function writeParagraphText(
     for (const group of groups(inserted, (token) =>
       typeof token.insert === 'string' ? `c${attributeSignature(token.attributes)}` : `e${embeds++}`
     )) {
-      const first = { ...group[0]!, attributes: rebase(left, group[0]!.attributes, true) };
+      const first = {
+        ...group[0]!,
+        attributes: withoutStrikesSeen(rebase(left, group[0]!.attributes, true)),
+      };
       left = first.attributes;
       if (typeof first.insert !== 'string') {
         const typed =
@@ -314,7 +337,7 @@ function writeParagraphText(
       position += value.length;
     }
     const shift = position - (deleted.length > 0 ? deleted[0]! : block.after);
-    for (let at = deleted.length - 1; at >= 0; ) {
+    for (let at = deleted.length - 1; at >= 0;) {
       let start = at;
       while (start > 0 && deleted[start - 1]! + 1 === deleted[start]!) start -= 1;
       deleteContent(text, deleted[start]! + shift, at - start + 1);
@@ -325,17 +348,21 @@ function writeParagraphText(
 
 /**
  * Write the text that follows a move into a planned paragraph as its own: a copy marked with
- * the identities of the characters it copies, so they hide where they were typed. A deleted
- * paragraph that held them deletes them. Returns the paragraphs the text came from.
+ * the identities of the characters it copies, so they hide where they were typed. Every source
+ * keeps its characters, a deleted paragraph's too: the characters keep their follow anchors
+ * there, so they follow again when an undo takes the copy out, and an undo that put deleted
+ * originals back would give them none. Returns the paragraphs the text came from, and whether
+ * it wrote anything: an embed it already moved can still show as incoming until the
+ * transaction settles, and adopting it again writes nothing.
  */
 function adoptFollowingText(
   registry: DocumentRegistry,
   paragraphId: LogicalId,
   text: Y.Text
-): readonly LogicalId[] {
+): { readonly sources: readonly LogicalId[]; readonly wrote: boolean } {
   const view = registry.inline.viewOf(paragraphId);
   const shown = view.shown(text);
-  if (shown.incoming.length === 0) return [];
+  if (shown.incoming.length === 0) return { sources: [], wrote: false };
   const { ids } = shown.identities;
   // Written where the view shows it, so the write that follows reads the paragraph in the
   // order the editor showed it.
@@ -344,7 +371,10 @@ function adoptFollowingText(
   interface Placed {
     readonly following: FollowingText;
     readonly order: number;
-    /** The character it goes before or after, or for a piece at the end, the text length. */
+    /**
+     * The character it goes before or after; for a piece at the end, the text length, and for
+     * one at the start, -1, so it goes in last, in front of every other piece.
+     */
     readonly at: number;
     readonly atEnd?: true;
   }
@@ -357,6 +387,9 @@ function adoptFollowingText(
   for (const following of placement.atEnd) {
     placed.push({ following, order: orderOf.get(following)!, at: ids.length, atEnd: true });
   }
+  for (const following of placement.atStart) {
+    placed.push({ following, order: orderOf.get(following)!, at: -1, atEnd: true });
+  }
   // From the end back; at one character, the text after it before the text before it, and
   // of two pieces on one side, the later first: each goes in at the same place, so the
   // pieces keep the order they show in. Pieces at the end show in order, on either side.
@@ -366,13 +399,14 @@ function adoptFollowingText(
       (right.atEnd ? 0 : Number(right.following.before)) ||
     right.order - left.order;
   placed.sort(byPlace);
-  /** For each source, the identities of the characters it passed on. */
-  const deletions = new Map<LogicalId, string[]>();
+  /** The paragraphs the text came from. */
+  const sources = new Set<LogicalId>();
   /**
    * Sources whose text this adoption changed. Their cached identities name the positions
    * before the change, and a write of one in the same plan read stale hidden positions.
    */
   const changedSources = new Set<LogicalId>();
+  let wrote = false;
   // Embeds this paragraph passed on to itself, by where they stood: each one deleted before a
   // place moves that place back by one.
   const movedOut: number[] = [];
@@ -387,7 +421,7 @@ function adoptFollowingText(
   const readOf = (id: LogicalId, source: Y.Text) => {
     let read = reads.get(id);
     if (!read) {
-      read = { identities: textIdentities(source), delta: source.toDelta() as Delta };
+      read = { identities: textIdentities(source), delta: sharedDelta(source) as Delta };
       reads.set(id, read);
     }
     return read;
@@ -477,13 +511,16 @@ function adoptFollowingText(
     let insertAt = start;
     // A copy takes the revision attributes of the character it lands after, as typing does
     // (`rebaseRevisions`), so it writes no marker for another author's revision.
+    // Copies are inserted characters: a strike they take covers them, as with any insert.
     const landing = (at: number, attributes: Record<string, string>): InlineAttributes =>
-      rebaseRevisions(
-        at > 0 ? (attributesByPosition(text)[at - 1] ?? {}) : {},
-        attributes,
-        true,
-        registry.limits,
-        paragraphId
+      withoutStrikesSeen(
+        rebaseRevisions(
+          at > 0 ? (attributesByPosition(text)[at - 1] ?? {}) : {},
+          attributes,
+          true,
+          registry.limits,
+          paragraphId
+        )
       );
     for (const run of runs) {
       const first = run[0]!;
@@ -512,10 +549,8 @@ function adoptFollowingText(
     }
     // This paragraph's text changed; a later piece can follow out of it too.
     reads.delete(paragraphId);
-    const copied = pieces.flatMap((piece) =>
-      piece.kind === 'char' && piece.identity ? [piece.identity] : []
-    );
-    deletions.set(following.source, [...(deletions.get(following.source) ?? []), ...copied]);
+    sources.add(following.source);
+    if (runs.length > 0) wrote = true;
     return { positions, landed };
   };
   /** Pieces whose character inside another piece the write did not copy. */
@@ -540,35 +575,17 @@ function adoptFollowingText(
     }
   };
   for (const root of placed) {
-    const start = root.atEnd ? root.at : root.following.before ? root.at : root.at + 1;
+    const start = root.atEnd ? Math.max(root.at, 0) : root.following.before ? root.at : root.at + 1;
     adoptInside(root.following, adoptPiece(root.following, now(start)));
   }
   // Still written, at the end: lost, the write would have typed it again without its identity.
   for (const following of unplaced) {
     adoptInside(following, adoptPiece(following, text.length));
   }
-  for (const [source, copied] of deletions) {
-    const sourceText = registry.inline.textOf(source);
-    if (!sourceText) continue;
-    // A live source keeps its characters: the copy hides them, and they show again if a peer
-    // deletes the paragraph that holds the copy meanwhile. Deleting them lost the text then.
-    // Found by identity: a moved embed and the copies this write made shift positions. Text
-    // that followed within this paragraph is kept as a live source's is: by identity, the
-    // deletion also found the copies this write made.
-    if (source !== paragraphId && registry.inline.isDeletedParagraph(source)) {
-      const gone = new Set(copied);
-      const sourceIds = textIdentities(sourceText).ids;
-      deletePositions(
-        sourceText,
-        sourceIds.flatMap((id, position) => (id && gone.has(id) ? [position] : []))
-      );
-      changedSources.add(source);
-    }
-  }
   for (const source of changedSources) registry.inline.follow.invalidate(source);
   registry.inline.follow.invalidate(paragraphId);
   registry.inline.noteDrift();
-  return [...deletions.keys()];
+  return { sources: [...sources], wrote };
 }
 
 /** What a write deletes from where its paragraph showed it, by identity. */
@@ -794,25 +811,8 @@ export function recordDeletions(
 ): void {
   const deleted = new Set(written.deleted);
   for (const identities of removedShown.values()) for (const id of identities) deleted.add(id);
-  const runs = runsOf([...deleted].filter((id) => !written.copied.has(id)));
+  const runs = deletedRunsOf([...deleted].filter((id) => !written.copied.has(id)));
   if (runs.length > 0) textDeletionsOf(registry.doc).record(runs);
-}
-
-/** Identities as runs of consecutive clocks, sorted by client and clock. */
-function runsOf(identities: readonly string[]): DeletedRun[] {
-  const parsed = identities
-    .flatMap((identity) => parseClientClock(identity) ?? [])
-    .sort((left, right) => left.client - right.client || left.clock - right.clock);
-  const runs: { client: number; from: number; to: number }[] = [];
-  for (const { client, clock } of parsed) {
-    const last = runs[runs.length - 1];
-    if (last && last.client === client && clock <= last.to) {
-      last.to = Math.max(last.to, clock + 1);
-    } else {
-      runs.push({ client, from: clock, to: clock + 1 });
-    }
-  }
-  return runs;
 }
 
 /** What one plan's writes did: the identities they copied and deleted, the records they embed. */
@@ -859,8 +859,11 @@ export function applyInlinePlan(
   registry: DocumentRegistry,
   plan: InlinePlan,
   /** Each plan paragraph's tokens, encoded before the write began. */
-  encoded: ReadonlyMap<LogicalId, Token[]> = new Map()
+  encoded: ReadonlyMap<LogicalId, Token[]> = new Map(),
+  /** The paragraphs this edit removes: a join moves their text, so they are written. */
+  removedHere: ReadonlySet<LogicalId> = new Set()
 ): InlineWritten {
+  const typed = plan.typed;
   const embedsAfter = new Set<string>();
   // Block children are records the record pipeline writes; the rest is shared text.
   const writes: (ParagraphWrite<Token> & {
@@ -872,15 +875,24 @@ export function applyInlinePlan(
   })[] = [];
   // Following text becomes its target's own first. The plan read it where it was typed too,
   // so a deleted paragraph whose following text moved is not written from that stale read.
-  // A live one's view never showed it, so its plan holds only its own edits. Text that follows
-  // within its own paragraph stays there, and that paragraph is written: a join that deletes
-  // it moves its text, and only its write names the text the join moves.
+  // A live one's view never showed it, so its plan holds only its own edits. A paragraph this
+  // edit removes, and one whose text follows within itself, is written: a join that deletes it
+  // moves its text, and only its write marks the join's text as copies a peer's delete hides.
+  // An adoption changes the texts it takes from, and so what another planned paragraph shows:
+  // an embed moving out can leave text beside a hidden duplicate, which then shows as that
+  // paragraph's following text. Paragraphs adopt again until a pass writes nothing.
   const adopted = new Set<LogicalId>();
-  for (const { id } of plan.paragraphs) {
-    const text = registry.inline.textOf(id);
-    if (!text) continue;
-    for (const source of adoptFollowingText(registry, id, text)) {
-      if (source !== id && registry.inline.isDeletedParagraph(source)) adopted.add(source);
+  for (let pass = 0, again = true; again && pass <= plan.paragraphs.length; pass += 1) {
+    again = false;
+    for (const { id } of plan.paragraphs) {
+      const text = registry.inline.textOf(id);
+      if (!text) continue;
+      const { sources, wrote } = adoptFollowingText(registry, id, text);
+      if (wrote) again = true;
+      for (const source of sources) {
+        if (source === id || removedHere.has(source)) continue;
+        if (registry.inline.isDeletedParagraph(source)) adopted.add(source);
+      }
     }
   }
   for (const { id, after } of plan.paragraphs) {
@@ -907,7 +919,7 @@ export function applyInlinePlan(
       text,
       before,
       after: tokens,
-      steps: diffTokens(before, tokens),
+      steps: diffTokens(before, tokens, true, typed && typedStartIn(after, typed)),
       identities: shown?.identities.ids ?? [],
       shownIdentities: shown?.identities ?? null,
       hidden: shown?.hidden ?? new Set(),
@@ -925,6 +937,7 @@ export function applyInlinePlan(
       decodeAttributes(token.attributes, registry.limits, writes[paragraph]!.id).text?.id ?? '',
     (paragraph) => storyRootOf(registry, writes[paragraph]!.id)
   );
+  recordSplitPoints(writes);
   for (const write of writes) {
     const text = write.text ?? writeInlineText(write.record, []);
     writeParagraphText(

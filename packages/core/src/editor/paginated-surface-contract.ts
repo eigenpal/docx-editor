@@ -17,6 +17,7 @@ import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 import type { RevisionStyles } from '../output/revision-presentation.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { EquationOps } from './surface-equations.ts';
+import type { TocRemovalRefusal } from './surface-toc-commands.ts';
 import type { SurfaceNavigation } from './surface-navigation.ts';
 import type {
   CellSelection,
@@ -47,6 +48,8 @@ import type {
   FormatPainterSurfaceState,
 } from './surface-format-painter-contract.ts';
 import type { PaginatedSurfacePerf } from './surface-perf-contract.ts';
+import type { SurfaceIndentAndListOps } from './surface-indent-list-contract.ts';
+import type { SurfaceChartOps } from './surface-chart-ops.ts';
 export type { ReviewWriteIntent, ContentControlOps, ContentControlSurfaceState };
 export type {
   FormatPainterLevel,
@@ -98,7 +101,7 @@ export type SectionBreakInsertType = 'nextPage' | 'continuous';
  * Every write goes through the guarded mutation path on this object. Reaching past it into
  * `session` to apply ops directly bypasses the layout invalidation and the caret bookkeeping.
  */
-export interface PaginatedSurface {
+export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartOps {
   readonly session: TreeDocxSessionView;
   /** The collaboration replica a `collaborationModule` attached, or null. */
   collaborationSession(): import('../collaboration/index.ts').EditorCollaborationSession | null;
@@ -125,6 +128,7 @@ export interface PaginatedSurface {
       readonly commitGuard?: () => boolean;
     }
   ): Promise<import('../store/store/tree-package-images.ts').ImageIntentResult>;
+  pointAt(clientX: number, clientY: number): import('./surface-pointer.ts').SurfacePointHit | null;
   layout(): SemanticLayout;
   /** The measurer layout uses; sizes engine-authored shapes such as a watermark. */
   textMeasurer?(): import('../layout/semantic-records.ts').TextMeasurer;
@@ -184,87 +188,6 @@ export interface PaginatedSurface {
   insertLineBreak(): void;
   /** A `w:br w:type="page"` — Ctrl+Enter, a hard page break inside the paragraph. */
   insertPageBreak(): void;
-  /**
-   * Word's Increase/Decrease Indent, over every paragraph the selection touches.
-   *
-   * A NUMBERED or BULLETED paragraph changes LEVEL: `w:numPr/w:ilvl` moves by one, which
-   * re-resolves its marker from `numbering.xml` — so a bullet becomes a hollow circle, a
-   * `1.` becomes an `a.`, exactly as Word demotes a list item. A level the definition
-   * does not declare is DECLARED on the way, with Word's default format for that depth
-   * (its stock bullets and number formats cycle every three levels) — a definition that
-   * stops at `ilvl 0` never blocks the press. Everything else moves its `w:ind/@left` by
-   * one default tab stop, never past the margin.
-   *
-   * Answers whether anything changed, so a caller can fall back (Tab inserting a tab
-   * where there is no list to demote).
-   */
-  adjustIndent(direction: 'increase' | 'decrease'): boolean;
-  /**
-   * Tab (`increase`) or Shift+Tab (`decrease`) over a selection outside a list and outside a
-   * table cell (the key moves between cells there): change the indent and keep the text.
-   *
-   * A selection over two or more paragraphs, or a cell rectangle (only from a host calling
-   * this directly), steps the left indent of each paragraph. A selection in one paragraph that starts at the paragraph start, whole or
-   * partial, works on the first line: Tab sets a first-line indent of one default tab stop
-   * (`w:defaultTabStop`), or steps the left indent when the first line already has that
-   * indent or more, or a hanging indent. Shift+Tab clears a first-line indent that the
-   * paragraph states itself, so a style value applies again, and otherwise steps the left
-   * indent back. A paragraph the selection reaches only at its start is not touched by this
-   * rule, unless it is the empty last paragraph of the story.
-   *
-   * Answers true when the selection takes this rule, also when the write is refused or
-   * changes nothing, so the text is never replaced. Answers false for a caret and for a
-   * selection in one paragraph that starts inside the text; there Tab types a tab character
-   * and Shift+Tab steps the left indent.
-   */
-  indentWithTab(direction: 'increase' | 'decrease'): boolean;
-  /**
-   * Set indent to exact values on every paragraph the selection touches — what a ruler
-   * drag and an indent spinner both need, where {@link adjustIndent} only steps.
-   *
-   * Twips. Omitting a field leaves it as authored; `null` CLEARS it, so the paragraph
-   * falls back to its style — distinct from zero, which blocks the cascade.
-   *
-   * `firstLine` is ONE SIGNED offset, negative for a hanging indent; the two OOXML
-   * spellings are written for it, the unused one as an explicit zero. Answers whether
-   * anything was committed.
-   */
-  setIndent(update: {
-    readonly left?: number | null;
-    readonly right?: number | null;
-    readonly firstLine?: number | null;
-  }): boolean;
-  /**
-   * Whether Increase/Decrease Indent would do anything right now.
-   *
-   * A list item at level 0 cannot outdent and one at level 8 cannot indent — `w:ilvl`
-   * has nine levels and Word greys the control out at the ends. A missing level
-   * DEFINITION never disables it: `adjustIndent` declares the level as it goes. The one
-   * residue: a `w:numStyleLink` definition missing the level refuses the declaration
-   * (its levels belong to the linked style), so there the press is a safe no-op rather
-   * than a greyed control.
-   */
-  canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
-  /**
-   * Enter on an empty list item: outdent a level, or leave the list at level 0. Backspace
-   * at an item's start (`removeListNumber`): drop its number and keep the text in place.
-   * Both answer false when they did not handle the key, so the caller splits or joins.
-   */
-  exitListOnEmptyItem(): boolean;
-  /** Backspace at the start of `paragraphId`: drop its list number; false if it is not one. */
-  removeListNumber(paragraphId: string): boolean;
-  /** Whether the paragraph at the caret is a list item, for Tab's Word-like fallback. */
-  isListParagraph(): boolean;
-  /**
-   * Word's Bullets and Numbering buttons.
-   *
-   * Turns every paragraph the selection touches into a list of `kind`, or takes them all
-   * out when they are already one. The definition is created in `numbering.xml` on first
-   * use — a document that has never carried a list has no numbering part at all.
-   */
-  toggleList(kind: 'bullet' | 'ordered'): boolean;
-  /** Whether every paragraph the selection touches is already a list of `kind`. */
-  isListActive(kind: 'bullet' | 'ordered'): boolean;
   /** Select the whole document. */
   selectAll(): void;
   /**
@@ -305,6 +228,11 @@ export interface PaginatedSurface {
    */
   selectDrawing(drawingNodeId: string, hostParagraphId: string): boolean;
   /**
+   * Select one shape inside the selected group, as a second press on the group does, or the
+   * group again with null. False when no group is selected or it holds no such shape.
+   */
+  selectDrawingMember(memberNodeId: string | null): boolean;
+  /**
    * Select a rectangle of table cells, or clear one with null.
    *
    * The equivalent text range is installed alongside it, so `state().selection` stays valid
@@ -332,6 +260,14 @@ export interface PaginatedSurface {
    * terms as `toggleRunProperty`, and returns a refusal the same way.
    */
   setRunProperty(localName: string, attributes?: Record<string, string>): string | null;
+  /**
+   * Several run properties over the selection in ONE transaction: the store accepts or
+   * refuses them together, and they undo as one step. `setRunProperty` is this with a
+   * single entry.
+   */
+  setRunProperties(
+    entries: readonly { localName: string; attributes?: Record<string, string> }[]
+  ): string | null;
   /**
    * Set a property on every paragraph the selection touches — alignment, style, spacing.
    *
@@ -497,6 +433,16 @@ export interface PaginatedSurface {
   editTextFormField(): boolean;
   refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
   /**
+   * Why the addressed (or right-clicked, or caret-local) body TOC cannot be removed now, or
+   * null when it can: `notFound` when there is none, `unsupported` with the reason otherwise.
+   */
+  removeTocRefusal(tocId?: string): TocRemovalRefusal | null;
+  /**
+   * Remove a body TOC: its field, or the table of contents control around it with its
+   * heading. Text before and after the field stays. One undo step. Refused while suggesting.
+   */
+  removeToc(tocId?: string): boolean;
+  /**
    * Rewrite stale REF field results in the body, footnote and endnote stories so a save
    * exports what the pages paint. Fresh results commit nothing (no transaction, no revision
    * bump, no undo entry); a rewrite is ONE transaction and ONE undo unit across every stale
@@ -640,7 +586,12 @@ export interface PaginatedSurface {
     packageEdits?: readonly ((
       pkg: import('../store/package/ooxml-package.ts').OoxmlPackage
     ) => import('../store/package/ooxml-package.ts').OoxmlPackage)[],
-    requiresReview?: boolean
+    requiresReview?: boolean,
+    /**
+     * Carry the reader's selection across the committed ops, before it is clamped to the open
+     * story. Omitted, the selection keeps its offsets.
+     */
+    carry?: (selection: SemanticSelection) => SemanticSelection
   ): TreeApplyResult;
   /**
    * Which revision halves this surface is SHOWING.
@@ -720,6 +671,18 @@ export interface PaginatedSurface {
    */
   overlayCoordinates(): import('./surface-overlay-coordinates.ts').SurfaceOverlayCoordinates;
   /**
+   * The insertion point at the selection head in client pixels, as the painted caret places
+   * it, whether or not it paints right now. Null when the head is not on a painted page.
+   * Runs a pending layout pass first, so the geometry and a carried caret are current. Typed
+   * characters still buffered under input pressure stay buffered, as they stay unpainted.
+   */
+  caretClientRect(): import('../contracts/editor-highlights.ts').HighlightRect | null;
+  /**
+   * Whether a remote commit is waiting for the next layout pass to carry the selection. Until
+   * it runs, `state().selection` addresses the text from before that commit.
+   */
+  remoteSelectionPending(): boolean;
+  /**
    * The comment, tracked change or carded custom node the caret is in, as the painted bands
    * report it. A custom node without `reviewCard` is never the answer: it has no card.
    *
@@ -794,12 +757,15 @@ export interface PaginatedSurface {
    * Every clipboard flavour for the current selection: plain text, and the interop HTML
    * carrying the embedded fragment when the selection is a body-story range. A cell rectangle
    * answers grid text plus a flattened table; `html` is null where only plain text should be
-   * written. A chart refuses as `'chart-content'`, another object as `'unsupported-content'`.
+   * written. One selected chart copies whole and names its drawing in `chartDrawingNodeId`,
+   * which a cut deletes. A chart inside a wider selection refuses as `'chart-content'`, another
+   * object as `'unsupported-content'`.
    */
   copyFlavours(): {
     readonly text: string;
     readonly html: string | null;
     readonly reason?: 'unsupported-content' | 'chart-content';
+    readonly chartDrawingNodeId?: string;
   };
   /**
    * Route one paste payload by fidelity: embedded fragment, then external HTML, then
@@ -904,8 +870,7 @@ export interface PaginatedSurface {
     readonly sectionIndex?: number;
     /** `setWatermark` only: the new watermark, or null to remove it. */
     readonly watermark?:
-      | import('../store/package/watermark-package.ts').PackageWatermarkWrite
-      | null;
+      import('../store/package/watermark-package.ts').PackageWatermarkWrite | null;
     /** `setDocumentProtection` only: enforce filling-in-forms protection, or lift it. */
     readonly enforce?: boolean;
     readonly kind?: 'header' | 'footer';

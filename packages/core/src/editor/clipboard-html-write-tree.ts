@@ -9,6 +9,7 @@ import {
 } from '../store/package/ooxml-tree.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import { readTwipsMeasure } from '../store/units.ts';
+import { statedShadingFill } from '../layout/ooxml-shading.ts';
 
 export function isElement(node: OoxmlNode): node is OoxmlElement {
   return node.kind !== 'textValue';
@@ -89,6 +90,15 @@ export const escapeAttr = escapeHtml;
 export function cssHexColor(raw: string | undefined): string | null {
   if (raw === undefined || raw.toLowerCase() === 'auto') return null;
   return /^[0-9A-Fa-f]{6}$/.test(raw) ? `#${raw.toLowerCase()}` : null;
+}
+
+/**
+ * A `w:shd` as a CSS colour, painted the way layout paints it: a pattern mixes into one
+ * colour. `null` when it states shading with no colour, undefined when it states none.
+ */
+export function cssShading(shd: OoxmlElement | null): string | null | undefined {
+  const fill = statedShadingFill(shd);
+  return typeof fill === 'string' ? `#${fill.toLowerCase()}` : fill;
 }
 
 /** Twips → pt, trimmed to two decimals. */

@@ -11,6 +11,7 @@ import {
   recordSetNamespaceBinding,
   recordSpliceChildren,
   recordSpliceText,
+  textSpliceHint,
 } from './canonical-primitive-capture.ts';
 import type {
   CanonicalAttributeName,
@@ -36,12 +37,25 @@ function attributeKey(attribute: OoxmlAttribute): string {
 
 function textSplice(
   previous: string,
-  next: string
+  next: string,
+  hint?: number
 ): {
   readonly utf16Start: number;
   readonly deleteCount: number;
   readonly insert: string;
 } {
+  // Beside equal letters, an insert could stand at several places; the edit says which one.
+  // A peer's caret follows letters by identity, so the wrong one moves it into the new text.
+  const added = next.length - previous.length;
+  if (
+    hint !== undefined &&
+    added > 0 &&
+    hint <= previous.length &&
+    next.startsWith(previous.slice(0, hint)) &&
+    next.endsWith(previous.slice(hint))
+  ) {
+    return { utf16Start: hint, deleteCount: 0, insert: next.slice(hint, hint + added) };
+  }
   let prefix = 0;
   const shared = Math.min(previous.length, next.length);
   while (prefix < shared && previous.charCodeAt(prefix) === next.charCodeAt(prefix)) prefix += 1;
@@ -177,7 +191,7 @@ function lowerSameIdentity(
   if (previous.kind === 'textValue' || next.kind === 'textValue') {
     const before = previous.kind === 'textValue' ? previous.value : '';
     const after = next.kind === 'textValue' ? next.value : '';
-    const splice = textSplice(before, after);
+    const splice = textSplice(before, after, textSpliceHint(previous.id));
     recordSpliceText(previous.id, splice.utf16Start, splice.deleteCount, splice.insert);
     return;
   }
@@ -457,6 +471,72 @@ export function captureReplaceNode(
   indexSubtree(previous, previousNodes);
   expandInserted(replacement, knownIds, previousNodes);
   recordSpliceChildren(parent.id, index, 1, [replacement.id]);
+}
+
+/**
+ * Lower an id-aligned rewrite of one subtree: `next` keeps the ids of `previous` wherever the
+ * two describe the same node, and every other node in `next` carries an id `previous` lacks.
+ *
+ * Kept children appear in the same relative order in both lists, so a two-pointer walk finds
+ * them without the bounded LCS of {@link lowerChildList}. A kept child therefore never lowers as
+ * a deletion plus a reinsertion, which a peer would read as moving content it is editing.
+ */
+export function captureAlignedSubtree(previous: OoxmlNode, next: OoxmlNode): void {
+  if (!isCanonicalPrimitiveCaptureActive() || previous === next) return;
+  lowerAligned(previous, next);
+}
+
+function lowerAligned(previous: OoxmlNode, next: OoxmlNode): void {
+  if (previous === next) return;
+  if (previous.kind === 'textValue' || next.kind === 'textValue') {
+    lowerSameIdentity(previous, next);
+    return;
+  }
+  if (qnameChanged(previous, next)) recordPutNode(nodeDescriptor(next));
+  lowerAttributes(previous.id, previous, next);
+  lowerNamespaceBindings(previous.id, previous, next);
+  if (previous.children === next.children) return;
+  const nextIds = new Set<string>();
+  for (const child of next.children) nextIds.add(child.id);
+  const previousById = new Map<string, OoxmlNode>();
+  for (const child of previous.children) previousById.set(child.id, child);
+  let cursor = 0;
+  let at = 0;
+  const before = previous.children;
+  const after = next.children;
+  let index = 0;
+  while (index < after.length || at < before.length) {
+    // Children `next` dropped leave first, as one splice per run.
+    let removed = 0;
+    while (at + removed < before.length && !nextIds.has(before[at + removed]!.id)) removed += 1;
+    // Children only `next` holds arrive as one splice per run.
+    const inserted: OoxmlNode[] = [];
+    while (index < after.length && !previousById.has(after[index]!.id)) {
+      inserted.push(after[index]!);
+      index += 1;
+    }
+    if (removed > 0 || inserted.length > 0) {
+      for (const node of inserted) expandInserted(node);
+      recordSpliceChildren(
+        previous.id,
+        cursor,
+        removed,
+        inserted.map((node) => node.id)
+      );
+      at += removed;
+      cursor += inserted.length;
+    }
+    if (index < after.length && at < before.length) {
+      // A kept child out of order would need a move; alignment never produces one.
+      if (before[at]!.id !== after[index]!.id) throw new Error('unaligned children');
+      lowerAligned(before[at]!, after[index]!);
+      at += 1;
+      index += 1;
+      cursor += 1;
+    } else if (removed === 0 && inserted.length === 0) {
+      break;
+    }
+  }
 }
 
 /** Lower a new or replaced XML part root before `putXmlPart`. */

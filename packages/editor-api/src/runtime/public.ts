@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -27,6 +27,8 @@ export {
   Shape,
   ShapeCollection,
   ShapeType,
+  ShapeFill,
+  ShapeFillType,
   Table,
   TableRow,
   TableCell,
@@ -35,6 +37,10 @@ export {
   TableCellCollection,
   Bookmark,
   BookmarkCollection,
+  Annotation,
+  AnnotationCollection,
+  AnnotationState,
+  type AnnotationSet,
   Comment,
   CommentCollection,
   CommentReply,
@@ -45,6 +51,14 @@ export {
   DocumentProperties,
   Font,
   UnderlineType,
+  BorderUniversal,
+  BorderUniversalCollection,
+  type BorderUniversalUpdateData,
+  type UpdateOptions,
+  BorderLineStyle,
+  ColorIndex,
+  LineWidth,
+  PageBorderArt,
   List,
   ListBullet,
   ListCollection,
@@ -75,6 +89,12 @@ export {
   type ContentControlValue,
   type HeaderFooterType,
   RemoveDocInfoType,
+  CompareTarget,
+  type DocumentCompareOptions,
+  type Critique,
+  CritiqueAnnotation,
+  CritiqueColorScheme,
+  type CritiquePopupOptions,
   InsertLocation,
   Alignment,
   VerticalAlignment,
@@ -83,6 +103,7 @@ export {
   type NoteItemType,
   PageOrientation,
   type ParagraphAlignment,
+  type ParagraphLineSpacingRule,
   type ParagraphReadingOrder,
   type ParagraphInsertTextLocation,
   type RangeInsertTextLocation,

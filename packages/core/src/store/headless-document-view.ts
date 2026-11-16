@@ -19,6 +19,7 @@ import {
 import { resolveRelationship } from './package/relationships.ts';
 import { type OoxmlElement, type OoxmlPart } from './package/ooxml-tree.ts';
 import { normalizeParagraphIdentity } from './package/para-id.ts';
+import { refreshBoundContent } from './store/bound-content-refresh.ts';
 import { materializeGlossaryPlaceholders } from './store/placeholder-materialize.ts';
 import { relationshipTargetIn } from './package/hyperlink-part.ts';
 import { collectThemeSchemeFaces } from './package/theme-font-scheme.ts';
@@ -119,18 +120,20 @@ export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentRes
       ...(loaded.detail ? { detail: loaded.detail } : {}),
     };
   }
-  const main = loaded.package.parts.get(loaded.package.mainDocumentPart);
+  // Bound controls show their store's current value, not the text cached at save.
+  const pkg = refreshBoundContent(loaded.package);
+  const main = pkg.parts.get(pkg.mainDocumentPart);
   if (!main) {
     return {
       ok: false,
       reason: 'no-main-document-tree',
-      detail: loaded.package.mainDocumentPart,
+      detail: pkg.mainDocumentPart,
     };
   }
 
   const store = new TreePackageStore(
-    loaded.package,
-    materializeGlossaryPlaceholders(loaded.package, normalizeParagraphIdentity(main))
+    pkg,
+    materializeGlossaryPlaceholders(pkg, normalizeParagraphIdentity(main))
   );
   return { ok: true, view: headlessViewOfStore(store) };
 }

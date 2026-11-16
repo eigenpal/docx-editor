@@ -1,4 +1,10 @@
-import type { FontConfiguration, FontSourceSubstitution } from '../contracts/editor.ts';
+import { recordedLineBoxFamily } from './authored-line-boxes.ts';
+import type {
+  FontConfiguration,
+  FontFaceRequest,
+  FontSourceSubstitution,
+} from '../contracts/editor.ts';
+import { plannedFontFaces } from './planned-font-faces.ts';
 import type { HeadlessDocumentView } from '../store/headless-document-view.ts';
 import { fontTableAlternates, fontTableClasses } from '../store/package/font-table-alternates.ts';
 import {
@@ -6,7 +12,7 @@ import {
   fontFamilyClassFromName,
   type FontFamilyClass,
 } from '../store/package/font-family-class.ts';
-import { fontFamilyName } from '../store/package/font-family-name.ts';
+import { fontFamilyName, paintedFontFamilyName } from '../store/package/font-family-name.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { SYMBOL_ENCODED_FAMILIES } from '../store/package/symbol-encoding.ts';
@@ -33,6 +39,12 @@ export interface DocumentFontSubstitutionPlan {
   readonly alternates: ReadonlyMap<string, string>;
   readonly fallbacks: ReadonlyMap<string, string>;
   readonly ambiguousFamilies: readonly string[];
+  /**
+   * The families that can stand in for each requested family, case-folded key: its English
+   * name, its font-table alternate, and its script or class defaults. A face that text uses
+   * in a family needs the same face of these.
+   */
+  readonly standIns?: ReadonlyMap<string, readonly string[]>;
 }
 
 /** Report admitted document substitutions without reporting generic host metric twins. */
@@ -170,7 +182,10 @@ function scriptDefaults(
             ['eastAsia', eastAsia],
             ['cs', complex],
           ] as const) {
-            const family = fontFamilyName(wordAttribute(node, slot));
+            // The family the slot paints in: a list's first item, or the unmatched face.
+            const family = fontFamilyName(
+              paintedFontFamilyName(wordAttribute(node, slot)) ?? undefined
+            );
             if (!family || !target) continue;
             const key = family.trim().toLowerCase();
             const targets = needs.get(key) ?? new Set<string>();
@@ -230,6 +245,16 @@ export function documentFontSubstitutionPlan(
   const scriptRequests = families
     .flatMap((family) => scripts.defaults.get(family.trim().toLowerCase()) ?? [])
     .filter((family) => family.trim().toLowerCase() !== defaultFamily.trim().toLowerCase());
+  const standIns = new Map<string, readonly string[]>();
+  for (const family of families) {
+    const key = family.trim().toLowerCase();
+    const alternate = alternates.get(key);
+    standIns.set(key, [
+      englishFamily(family),
+      ...(alternate ? [alternate] : []),
+      ...(scripts.defaults.get(key) ?? []),
+    ]);
+  }
   for (const raw of [...families, ...targets, ...defaults, ...scriptRequests]) {
     const family = fontFamilyName(raw);
     if (family && !requested.has(family.trim().toLowerCase()))
@@ -241,18 +266,41 @@ export function documentFontSubstitutionPlan(
     alternates,
     fallbacks: scripts.fallbacks,
     ambiguousFamilies: scripts.ambiguousFamilies,
+    standIns,
   };
 }
 
-/** Keep the resolver request and document fallback plan on the same configured default. */
+/**
+ * Keep the resolver request and document fallback plan on the same configured default. The
+ * request names `asked.families` and, with `asked.faces`, the faces of the planned families
+ * (`plannedFontFaces`). The plan covers `asked.documentFamilies` too: a follow-up asks about a
+ * few families, but the document's substitutions still cover every family it uses.
+ */
 export function documentFontResolutionRequest(
   view: Pick<HeadlessDocumentView, 'currentPackage' | 'stylesRoot' | 'documentThemeFonts'>,
-  families: readonly string[],
+  asked: {
+    readonly families: readonly string[];
+    readonly faces?: readonly FontFaceRequest[];
+    readonly documentFamilies?: readonly string[];
+  },
   configuration?: FontCatalogConfiguration
 ) {
   const defaultFamily = configuredDefaultFontFamily(configuration);
-  const plan = documentFontSubstitutionPlan(view, families, [], defaultFamily);
-  return { plan, request: { families: plan.families, defaultFamily } };
+  const requested = documentFontSubstitutionPlan(view, asked.families, [], defaultFamily);
+  const folded = new Set(asked.families.map((family) => family.trim().toLowerCase()));
+  const plan = asked.documentFamilies?.some((family) => !folded.has(family.trim().toLowerCase()))
+    ? documentFontSubstitutionPlan(
+        view,
+        [...asked.families, ...asked.documentFamilies],
+        [],
+        defaultFamily
+      )
+    : requested;
+  const faces = asked.faces && plannedFontFaces(requested, defaultFamily, asked.faces);
+  return {
+    plan,
+    request: { families: requested.families, defaultFamily, ...(faces ? { faces } : {}) },
+  };
 }
 
 /** A direct face wins. A whole table alias precedes a host's generic substitute. */
@@ -302,9 +350,13 @@ export function applyDocumentFontSubstitutions(
         if (sources.has(fontRequestKey(from))) continue;
         // A family the host substitutes itself (Arial to Liberation Sans) keeps that face unless
         // the document names a face the host supplies directly, as before: following the host's
-        // substitutions for a fallback is only for families the host has no answer for.
+        // substitutions for a fallback is only for families the host has no answer for. The
+        // class fallback is not a face the document names: a host substitute (Segoe UI to its
+        // metric twin) keeps the family even when the host has the fallback face installed.
         const hostAnswered = hostSubstitutions.has(fontRequestKey(from));
-        for (const candidate of [english, alternate, fallback]) {
+        for (const candidate of hostAnswered
+          ? [english, alternate]
+          : [english, alternate, fallback]) {
           if (!candidate || candidate.trim().toLowerCase() === key) continue;
           const request = { family: candidate, weight, style };
           const direct = sources.get(fontRequestKey(request));
@@ -314,7 +366,9 @@ export function applyDocumentFontSubstitutions(
             if (remaining === 0) break;
             remaining--;
           }
-          substitutions.push({ from, ...supplied });
+          // A recorded family keeps its authored line box on the face that stands in for it.
+          const authored = recordedLineBoxFamily(family)?.em;
+          substitutions.push({ from, ...supplied, ...(authored ? { lineMetrics: authored } : {}) });
           break;
         }
       }

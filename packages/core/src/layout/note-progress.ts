@@ -8,6 +8,8 @@ export type NotesBodyOptions = Pick<NotesLayoutInput, 'styleCascade' | 'numberin
   noteMarks?: NoteMarkContext;
   pageBottomReserves?: ReadonlyMap<number, number>;
   pageBottomReservesFromPreviousPass?: boolean;
+  pageBottomReservesFollowFlow?: boolean;
+  noteRoundBlockLimit?: number;
   session?: {
     previous: SemanticLayout | null;
     multi: unknown;

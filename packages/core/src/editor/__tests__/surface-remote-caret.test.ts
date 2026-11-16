@@ -97,6 +97,16 @@ describe('createRemoteCaret', () => {
     expect(view.caretOf.map(chosen)).toBe(chosen);
   });
 
+  test('a remote edit that does not move the caret returns the same selection', () => {
+    // The surface takes a new selection as a caret move, which drops the line the caret was
+    // painted on: a peer typing elsewhere must not do that.
+    const view = screen({ a: 'Alpha', b: 'Bravo' });
+    const held = caret('a', 3);
+    view.caretOf.note(held, [], true);
+    view.show({ a: 'Alpha', b: 'Bravo charlie' });
+    expect(view.caretOf.map(held)).toBe(held);
+  });
+
   test('a split that arrives with other edits still carries the caret with its text', () => {
     // One burst: a peer presses Enter before the caret, and another types at the start of the
     // paragraph. The head no longer starts the old text, so the split check misses.
@@ -228,7 +238,7 @@ describe('createRemoteCaret with a selection the session carried', () => {
     const view = screen({ a: 'Alpha paragraph' }, () => carried);
     view.caretOf.note(caret('a', 7), [], true);
     view.show({ a: 'Alpha pparagraph' });
-    expect(view.caretOf.map(caret('a', 7))).toBe(carried.to);
+    expect(view.caretOf.map(caret('a', 7))).toEqual(carried.to);
   });
 
   test('maps by text when the session carried another selection', () => {

@@ -55,6 +55,14 @@ export const MODE_RULES = {
     'An autofit column minimum leaves out a positive first-line indent: a word too wide for the first line breaks there',
     'ECMA-376 Part 1 §17.3.1.12 ind'
   ),
+  autofitMinimumHyphenatesWords: modern(
+    'With automatic hyphenation on, an autofit column minimum lets a word break between letters; legacy modes keep each word whole',
+    'ECMA-376 Part 1 §17.15.1.10 autoHyphenation'
+  ),
+  autofitRefitsNestedCells: modern(
+    'A nested autofit table whose stated cell widths pass its room gives way above each column content minimum',
+    'ECMA-376 Part 1 §17.4.64 tblLayout'
+  ),
   anchorOnlyParagraphSeeding: modern(
     'Seed the pages of consecutive anchor-only paragraphs before later bands wrap earlier text',
     'ECMA-376 Part 1 §20.4.2.3 anchor'
@@ -72,7 +80,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.18.44 ST_Jc'
   ),
   fixedTableContentEdgeOrigin: legacy(
-    'A collapsed fixed left table aligns its leading cell content edge with the text column',
+    'A table with an absolute width aligns the content edge of its aligned outer cell with the text column, with or without cell spacing; a leading alignment without a stated indent or table style keeps the outer edge',
     'ECMA-376 Part 1 §17.4.52 tblLayout'
   ),
   floatingTableContentOrigin: legacy(
@@ -95,6 +103,10 @@ export const MODE_RULES = {
     'Justified lines may shrink spaces to fit one more word',
     'ECMA-376 Part 1 §17.3.1.13 jc'
   ),
+  balancedSpaceShrink: modern(
+    'With balanced single-byte and double-byte widths, a space at the balanced width keeps it when justified and distributed lines shrink their spaces',
+    'ECMA-376 Part 1 §17.15.3.3 balanceSingleByteDoubleByteWidth'
+  ),
   keepNextGivesTailLines: modern(
     'A keep-with-next paragraph that fits whole gives its last lines to the next page with its successor',
     'ECMA-376 Part 1 §17.3.1.15 keepNext'
@@ -104,7 +116,11 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.4.63 tblW'
   ),
   legacySharedGridLineSideRules: legacy(
-    'Collapsed side rules center on shared grid lines for every simple top-level table',
+    'Collapsed side rules center on shared grid lines for every simple table, in either direction; a percent width keeps the legacy reference box',
+    'ECMA-376 Part 1 §17.4.38 tblBorders'
+  ),
+  legacySpacedFrameRuleCenters: legacy(
+    'A spaced table aligns the centers of its outer frame rules; later modes align their outer edges',
     'ECMA-376 Part 1 §17.4.38 tblBorders'
   ),
   modernBidiTableRuleShift: modern(
@@ -112,8 +128,16 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.4.1 bidiVisual'
   ),
   modernGridLineSideRules: modern(
-    'Side rules center on grid lines for covered dxa/auto width shapes; edge-aligned grids move by half a rule',
+    'Side rules center on grid lines for covered dxa/auto shapes and one-rule percent widths; edge-aligned grids move by half a rule',
     'ECMA-376 Part 1 §17.4.38 tblBorders'
+  ),
+  noteAreaHoldsLineSpacing: modern(
+    'Auto line spacing below a body line must fit above the footnote area; legacy modes let it cross the area as it crosses a bottom margin',
+    'ECMA-376 Part 1 §17.11 Footnotes and Endnotes'
+  ),
+  noteAreaHoldsSpaceAfter: modern(
+    'A paragraph space after must fit above the footnote area; legacy modes let a paragraph that cites no footnote cross the area as it crosses a bottom margin',
+    'ECMA-376 Part 1 §17.11 Footnotes and Endnotes'
   ),
   noteTableCellKeeps: modern(
     'Note reference bands in table rows honor cell widow control and keep-lines cuts',
@@ -195,6 +219,18 @@ export const MODE_RULES = {
     'Merged cell text moves whole into the next row when the head row cannot hold it',
     'ECMA-376 Part 1 §17.4.84 vMerge'
   ),
+  wrappedAnchorsEndAtBottomMargin: modern(
+    'A wrapping object positioned from its paragraph or line moves up to end at the bottom margin. When that would lift it above its line, the line moves to the next page, and an object that still crosses the margin there ends the page. In a table cell, the row splits before that line',
+    'ECMA-376 Part 1 §20.4.2.11 positionV'
+  ),
+  wrappedAnchorsEndOnSheet: legacy(
+    'A wrapping object positioned from its paragraph or line moves up to end at the bottom page edge, and never above the top page edge. A row whose cell object would cross the bottom margin moves to the next page',
+    'ECMA-376 Part 1 §20.4.2.11 positionV'
+  ),
+  lineAnchorsBeforeBandPush: legacy(
+    'An object positioned from the first line of a paragraph measures from where that line was before a wrapping band above pushed it down',
+    'ECMA-376 Part 1 §20.4.2.11 positionV'
+  ),
   wrappedAnchorsStayBelowTopMargin: modern(
     'A wrapping object positioned from its paragraph never starts above the top margin',
     'ECMA-376 Part 1 §20.4.2.11 positionV'
@@ -221,7 +257,7 @@ export const PROFILE_RULES = {
   },
   fixedParagraphSpacing: {
     behavior:
-      'Adjacent paragraph spacing adds up, and automatic spacing is a fixed 5pt before and 10pt after',
+      'Adjacent paragraph spacing adds up, and automatic spacing keeps the authored measurement',
     source: 'ECMA-376 Part 4 §14.8.3.15 doNotUseHTMLParagraphAutoSpacing',
     applies: (p) => p.legacy.doNotUseHTMLParagraphAutoSpacing === true,
   },

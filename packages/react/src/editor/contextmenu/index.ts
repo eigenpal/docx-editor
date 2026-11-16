@@ -27,12 +27,17 @@ export {
   ContextMenuSelectAll,
   ContextMenuRefreshToc,
   ContextMenuRefreshTocPageNumbers,
+  ContextMenuRemoveToc,
   type ContextMenuCommandProps,
   type ContextMenuItemProps,
+  type ContextMenuStartProps,
   type ContextMenuTableRowProps,
 } from './parts';
 export {
+  useContextMenuAnchor,
+  useContextMenuHighlights,
   useContextMenuTarget,
   type ContextMenuAnchor,
   type ContextMenuContextValue,
 } from './contextmenu-context';
+export { ContextMenuStart } from './start';

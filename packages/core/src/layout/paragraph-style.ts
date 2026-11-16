@@ -86,14 +86,6 @@ export interface ParagraphSpacing {
 export const AUTO_PARAGRAPH_SPACING_PT = 14;
 
 /**
- * The fixed automatic spacing of `w:doNotUseHTMLParagraphAutoSpacing` (ISO/IEC 29500-1 §17.15.3,
- * "Use Fixed Paragraph Spacing for HTML Auto Setting"): with the setting on, `w:beforeAutospacing`
- * gives 5pt before and `w:afterAutospacing` 10pt after, in place of the HTML `<p>` margin.
- */
-const FIXED_AUTO_SPACING_BEFORE_PT = 5;
-const FIXED_AUTO_SPACING_AFTER_PT = 10;
-
-/**
  * Where a paragraph sits, for the contexts in which Word's auto spacing resolves to 0
  * instead of {@link AUTO_PARAGRAPH_SPACING_PT}.
  *
@@ -119,8 +111,10 @@ export interface ParagraphAutoSpacingContext {
   /** Section grid pitch in points; no grid uses Word's fixed 12pt line unit. */
   readonly lineUnitPt?: number;
   /**
-   * `w:doNotUseHTMLParagraphAutoSpacing` is on: automatic spacing outside a list resolves to
-   * the fixed 5pt before and 10pt after instead of {@link AUTO_PARAGRAPH_SPACING_PT}.
+   * `w:doNotUseHTMLParagraphAutoSpacing` is on (§17.15.3, "Use Fixed Paragraph Spacing for
+   * HTML Auto Setting"): `w:beforeAutospacing` / `w:afterAutospacing` have no effect, and each
+   * side keeps its authored measurement, in a list, a table cell or at a story edge alike.
+   * Captured references put 5pt on each side for `w:before="100"` and 15pt for `"300"`.
    */
   readonly fixedAutoSpacing?: boolean;
 }
@@ -169,8 +163,7 @@ export interface ParagraphLineSpacing {
 /** The document-level line rules a style cascade turns on for every paragraph it resolves. */
 export function cascadeLineSpacingFlags(
   cascade:
-    | { readonly preserveExactLineBaseline?: true; readonly drawingTextLines?: true }
-    | undefined
+    { readonly preserveExactLineBaseline?: true; readonly drawingTextLines?: true } | undefined
 ): Pick<ParagraphLineSpacing, 'preserveExactBaseline' | 'descentAnchored'> {
   return {
     ...(cascade?.preserveExactLineBaseline ? { preserveExactBaseline: true as const } : {}),
@@ -325,12 +318,17 @@ export function cascadedParagraphAttributes(
  * rather than an authored measurement.
  *
  * Callers that know a paragraph sits at a container edge need this: the auto value is
- * suppressed there, an authored one is not.
+ * suppressed there, an authored one is not. With `fixedAutoSpacing`
+ * (`w:doNotUseHTMLParagraphAutoSpacing`) nothing is substituted, so neither side is.
  */
-export function paragraphAutoSpacingSides(props: readonly OoxmlProperty[]): {
+export function paragraphAutoSpacingSides(
+  props: readonly OoxmlProperty[],
+  context?: Pick<ParagraphAutoSpacingContext, 'fixedAutoSpacing'>
+): {
   readonly before: boolean;
   readonly after: boolean;
 } {
+  if (context?.fixedAutoSpacing === true) return { before: false, after: false };
   let before = false;
   let after = false;
   for (const property of props) {
@@ -350,7 +348,8 @@ export function paragraphAutoSpacingSides(props: readonly OoxmlProperty[]): {
  * height, not the gap between paragraphs — and is not resolved here.
  *
  * `w:beforeAutospacing` / `w:afterAutospacing` REPLACE the authored measurement on their own
- * side rather than adding to it; see {@link AUTO_PARAGRAPH_SPACING_PT}.
+ * side rather than adding to it; see {@link AUTO_PARAGRAPH_SPACING_PT}. With
+ * {@link ParagraphAutoSpacingContext.fixedAutoSpacing} they are ignored instead.
  */
 export function paragraphSpacing(
   props: readonly OoxmlProperty[],
@@ -396,12 +395,10 @@ export function paragraphSpacing(
       (afterLines * (context?.lineUnitPt ?? 12)) / 100,
       MAX_PARAGRAPH_SPACING_PT
     );
-  if (beforeAuto || afterAuto) {
-    const fixed = context?.fixedAutoSpacing === true;
-    const autoBefore = fixed ? FIXED_AUTO_SPACING_BEFORE_PT : AUTO_PARAGRAPH_SPACING_PT;
-    const autoAfter = fixed ? FIXED_AUTO_SPACING_AFTER_PT : AUTO_PARAGRAPH_SPACING_PT;
-    if (beforeAuto) before = context?.inList ? 0 : autoBefore;
-    if (afterAuto) after = context?.inList ? 0 : autoAfter;
+  if (context?.fixedAutoSpacing !== true) {
+    const auto = context?.inList ? 0 : AUTO_PARAGRAPH_SPACING_PT;
+    if (beforeAuto) before = auto;
+    if (afterAuto) after = auto;
   }
   return { before, after };
 }
@@ -606,12 +603,19 @@ export function paragraphBorders(pPr: OoxmlNode | undefined): ParagraphBorders {
   return bordersOfElement(pBdr);
 }
 
+/** The element one edge reads from: the physical name, else its logical alias. */
+function edgeElementOf(pBdr: OoxmlElement, side: ParagraphBorderSide): OoxmlElement | undefined {
+  if (side === 'left') return childNamed(pBdr, 'left') ?? childNamed(pBdr, 'start');
+  if (side === 'right') return childNamed(pBdr, 'right') ?? childNamed(pBdr, 'end');
+  return childNamed(pBdr, side);
+}
+
 /**
- * `w:pBdr` after the style cascade: a later `w:pBdr` replaces an earlier one WHOLESALE.
+ * `w:pBdr` after the style cascade, folded EDGE BY EDGE.
  *
- * Word does not merge edges across the cascade. A style that states only `w:bottom` discards
- * the box its `basedOn` ancestor declared, so folding edge by edge would leave a lone
- * underline surrounded by a box no one authored. Absence inherits; `nil`/`none` clear.
+ * Each level overrides only the edges it states: a `basedOn` style that adds `w:left` keeps
+ * its ancestor's top and bottom, and a paragraph's own `w:bottom` replaces only the bottom.
+ * An absent edge inherits; `nil`/`none` turn an inherited edge off.
  */
 export function cascadedParagraphBorders(
   paragraphPropertyNodes: readonly OoxmlNode[]
@@ -621,7 +625,16 @@ export function cascadedParagraphBorders(
     if (!node || node.kind === 'textValue') continue;
     const pBdr = childNamed(node, 'pBdr');
     if (!pBdr) continue;
-    borders = bordersOfElement(pBdr);
+    let next: { -readonly [Side in ParagraphBorderSide]?: ParagraphBorderEdge } | undefined;
+    for (const side of PARAGRAPH_BORDER_SIDES) {
+      const element = edgeElementOf(pBdr, side);
+      if (!element) continue;
+      next ??= { ...borders };
+      const edge = borderEdgeOf(element);
+      if (edge) next[side] = edge;
+      else delete next[side];
+    }
+    if (next) borders = next;
   }
   return borders;
 }

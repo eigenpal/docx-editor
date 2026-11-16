@@ -245,6 +245,10 @@ export const NativeDialog = defineComponent({
     sessionSignal: Object as PropType<AbortSignal>,
     /** The id of the element that describes the dialog, such as an alert's message. */
     describedBy: String,
+    /** True while the dialog works, such as during a compare. */
+    busy: Boolean,
+    /** Receives the native dialog element while it is mounted. */
+    panelRef: Object as PropType<Ref<HTMLDialogElement | null>>,
     content: Function as PropType<() => import('vue').VNodeChild>,
   },
   setup(p, { attrs, slots }) {
@@ -255,10 +259,12 @@ export const NativeDialog = defineComponent({
     watch(
       [panel, () => p.sessionSignal],
       ([value, signal], _old, onCleanup) => {
+        if (p.panelRef) p.panelRef.value = value ?? null;
         if (!value) return;
         defaultScope.value = !value.parentElement?.closest('.docx-editor');
         const active = hostDocumentOf(value).activeElement;
-        opener = isHTMLElementNode(active) ? active : null;
+        // The page itself is no opener: restoring it would take focus from the editor.
+        opener = isHTMLElementNode(active) && active !== active.ownerDocument.body ? active : null;
         const abort = () => {
           if (value.open) value.close?.();
         };
@@ -279,6 +285,7 @@ export const NativeDialog = defineComponent({
       { flush: 'post' }
     );
     onBeforeUnmount(() => {
+      if (p.panelRef) p.panelRef.value = null;
       if (panel.value?.open) panel.value.close?.();
       if (p.restoreFocus && opener?.isConnected) opener.focus({ preventScroll: true });
     });
@@ -304,6 +311,8 @@ export const NativeDialog = defineComponent({
           'aria-modal': true,
           'aria-label': p.label,
           ...(p.describedBy ? { 'aria-describedby': p.describedBy } : {}),
+          // A styling hook only: aria-busy on the whole modal would hold back its live regions.
+          ...(p.busy ? { 'data-docx-busy': '' } : {}),
           'data-docx-dialog': p.kind,
           class: [
             'docx-dialog',

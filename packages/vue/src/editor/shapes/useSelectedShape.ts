@@ -1,0 +1,93 @@
+// `useSelectedShape`: the selected shape for a host's own Format shape controls, the Vue twin of
+// the React hook (`packages/react/src/editor/shapes/useSelectedShape.ts`). The reads and the
+// commands come from core (`selected-shape.ts`).
+
+import { computed, type ComputedRef } from 'vue';
+import {
+  editSelectedShape,
+  execSelectedShape,
+  readSelectedShape,
+  sameSelectedShape,
+  type SelectedShapeCommand,
+  type ShapeFormatState,
+  type ShapePaneChange,
+} from '@docx-editor.dev/core/editor';
+import type { EditorSnapshot, ExecResult } from '@docx-editor.dev/core/contracts/editor';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
+import { useTranslation } from '../../i18n';
+import { useDocxEditor } from '../context';
+import { useEditorState } from '../useEditorState';
+
+/** What `useSelectedShape` returns. @public */
+export interface UseSelectedShapeReturn {
+  /** The drawing node id of the selected shape, text box, line, or group, or null. */
+  readonly drawingNodeId: ComputedRef<string | null>;
+  /** The shape selected inside the group by a second press, or null. */
+  readonly memberId: ComputedRef<string | null>;
+  /** The fill and outline, or null when no shape with a fill or outline is selected. */
+  readonly format: ComputedRef<ShapeFormatState | null>;
+  /** Whether `setShapeFill` can run now. */
+  readonly canEditFill: ComputedRef<boolean>;
+  /** Whether the transparency of a solid fill can change now. */
+  readonly canEditTransparency: ComputedRef<boolean>;
+  /** Whether `setShapeOutline` can run now. */
+  readonly canEditOutline: ComputedRef<boolean>;
+  /** Why the fill cannot change, translated, or null when it can. */
+  readonly fillDisabledReason: ComputedRef<string | null>;
+  /** Why the transparency cannot change, translated, or null when it can. */
+  readonly transparencyDisabledReason: ComputedRef<string | null>;
+  /** Why the outline cannot change, translated, or null when it can. */
+  readonly outlineDisabledReason: ComputedRef<string | null>;
+  /**
+   * Run a fill or outline edit on the shape this composable shows, as `editor.exec` does,
+   * without the `drawingNodeId`: `execute({ type: 'setShapeOutline', color: '0070C0',
+   * widthPt: 3 })`. A refusal's reason is translated.
+   */
+  readonly execute: (command: SelectedShapeCommand) => ExecResult;
+  /**
+   * Apply one checked change, as the packaged pane does: `edit({ type: 'fillColor',
+   * color: 'accent1' })` or `edit({ type: 'outlineWidth', text: '3' })`. A theme color resolves
+   * through the document's theme. Text the pane cannot read refuses with a translated reason.
+   * One undo step.
+   */
+  readonly edit: (change: ShapePaneChange) => ExecResult;
+}
+
+const selectImage = (snapshot: EditorSnapshot) => snapshot.image;
+
+/**
+ * The selected shape, its fill and outline, whether each can change, and `execute` for the
+ * shape commands. Use it inside `DocxEditor.Root` to build a Format shape pane of your own. It
+ * reads the shape on every editor change, because protection, locks, and collaboration change
+ * what `can` answers. Every refusal reason it returns is translated. @public
+ */
+export function useSelectedShape(): UseSelectedShapeReturn {
+  const editorRef = useDocxEditor();
+  const { t } = useTranslation();
+  const view = useEditorState(
+    (snapshot: EditorSnapshot) => readSelectedShape(editorRef.value, snapshot.image),
+    sameSelectedShape
+  );
+  const image = useEditorState(selectImage);
+  const localized = (result: ExecResult): ExecResult =>
+    result.ok
+      ? result
+      : { ...result, reason: localizeDisabledReason(result.reason, t) ?? result.reason };
+  return {
+    drawingNodeId: computed(() => view.value.drawingNodeId),
+    memberId: computed(() => view.value.memberId),
+    format: computed(() => view.value.format),
+    canEditFill: computed(() => view.value.canEditFill),
+    canEditTransparency: computed(() => view.value.canEditTransparency),
+    canEditOutline: computed(() => view.value.canEditOutline),
+    fillDisabledReason: computed(() => localizeDisabledReason(view.value.fillDisabledReason, t)),
+    transparencyDisabledReason: computed(() =>
+      localizeDisabledReason(view.value.transparencyDisabledReason, t)
+    ),
+    outlineDisabledReason: computed(() =>
+      localizeDisabledReason(view.value.outlineDisabledReason, t)
+    ),
+    execute: (command) => localized(execSelectedShape(editorRef.value, image.value, command)),
+    edit: (change) => localized(editSelectedShape(editorRef.value, image.value, change)),
+  };
+}

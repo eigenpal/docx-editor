@@ -62,7 +62,7 @@ import {
   HARD_MAX_FONT_SOURCES,
   fontByteLength,
   fontRequestKey,
-  prepareFontResourceDefinition,
+  prepareFontResourceDefinitionAsync,
   type FontResourceInstrumentation,
 } from './font-resource.ts';
 
@@ -402,7 +402,7 @@ async function composeFontOriginsInternal(
     // Faces recomputed per origin rather than accumulated, because a substitution an
     // earlier origin emitted can become paintable when a LATER origin supplies its target.
     const covered = paintableFaces(inherited, sourceFaces, substitutions);
-    let sampledAnswer: ReturnType<typeof validateOriginAnswer> | undefined;
+    let sampledAnswer: Awaited<ReturnType<typeof validateOriginAnswer>> | undefined;
     let pendingLate: Promise<FontConfigurationFragment | undefined> | undefined;
     try {
       const observation = observed[originIndex]!;
@@ -475,9 +475,9 @@ async function composeFontOriginsInternal(
       // `request`, an unusable family — throws in `faceKey`, and an origin half-ingested
       // is worse than one skipped: it would sit in `present` with its faces unrecorded and
       // break composition later, outside anyone's catch.
-      let sampledOrigin: ReturnType<typeof validateOriginAnswer>;
+      let sampledOrigin: Awaited<ReturnType<typeof validateOriginAnswer>>;
       try {
-        sampledOrigin = validateOriginAnswer(
+        sampledOrigin = await validateOriginAnswer(
           answer,
           committedSourceKeys,
           committedSourceBytes,
@@ -499,6 +499,7 @@ async function composeFontOriginsInternal(
         throw cause;
       }
       sampledAnswer = sampledOrigin;
+      throwIfFontResolutionAborted(request.signal);
       // A dropped face degraded alone; its siblings still compose below. Report each drop the
       // same way a whole-origin failure is reported, so hosts see exactly what went missing.
       for (const cause of new Set([...sampledOrigin.dropped, ...partialFailures])) {
@@ -658,7 +659,7 @@ function observePromiseOrigin(origin: FontOrigin): Promise<ObservedOriginOutcome
   );
 }
 
-function validateOriginAnswer(
+async function validateOriginAnswer(
   answer: FontConfiguration | FontConfigurationFragment,
   committedSourceKeys: ReadonlySet<string>,
   committedSourceBytes: number,
@@ -667,7 +668,7 @@ function validateOriginAnswer(
   reserveOwnedBytes?: (byteLength: number) => () => void,
   instrumentation?: Pick<FontResourceInstrumentation, 'onOwnedByteCopy' | 'onHash'>,
   executionCeiling = HARD_MAX_FONT_BYTES
-): {
+): Promise<{
   readonly fragment: FontConfiguration | FontConfigurationFragment;
   readonly sourceKeys: readonly string[];
   readonly ownedBytes: number;
@@ -675,7 +676,7 @@ function validateOriginAnswer(
   readonly dropped: readonly unknown[];
   /** Undoes this answer's owned-byte reservation if the origin fails before it commits. */
   readonly releaseOwnedBytes: (() => void) | undefined;
-} {
+}> {
   const sourceInput = answer.sources ?? [];
   const substitutionInput = answer.substitutions ?? [];
   const configuredMaxInput = 'maxFontBytes' in answer ? answer.maxFontBytes : undefined;
@@ -869,6 +870,7 @@ function validateOriginAnswer(
   if (languageInput !== undefined && typeof languageInput !== 'string') {
     throw new TypeError('Font shaping language must be a string');
   }
+  const supportedFamilies = supportedFontFamilies([answer.supportedFamilies]);
   let releaseReservation: (() => void) | undefined;
   if (aggregateBytes > 0 && reserveOwnedBytes) {
     try {
@@ -877,10 +879,10 @@ function validateOriginAnswer(
       throw new FontOwnershipReservationError(cause);
     }
   }
-  let sources: ReturnType<typeof prepareFontResourceDefinition>[];
+  let sources: Awaited<ReturnType<typeof prepareFontResourceDefinitionAsync>>[];
   try {
-    sources = candidateSources.map((source) =>
-      prepareFontResourceDefinition(source, instrumentation)
+    sources = await Promise.all(
+      candidateSources.map((source) => prepareFontResourceDefinitionAsync(source, instrumentation))
     );
   } catch (error) {
     releaseReservation?.();
@@ -888,7 +890,7 @@ function validateOriginAnswer(
   }
   return {
     fragment: Object.freeze({
-      supportedFamilies: supportedFontFamilies([answer.supportedFamilies]),
+      supportedFamilies,
       sources: Object.freeze(sources),
       substitutions: Object.freeze(substitutions),
       ...(epochInput !== undefined ? { epoch: epochInput } : {}),

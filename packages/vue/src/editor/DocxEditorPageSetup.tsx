@@ -252,10 +252,7 @@ const PageSetupDialogImpl = defineComponent({
             </div>
             {margins.map((side) => {
               const name = `margin${side[0].toUpperCase()}${side.slice(1)}` as
-                | 'marginTop'
-                | 'marginBottom'
-                | 'marginLeft'
-                | 'marginRight';
+                'marginTop' | 'marginBottom' | 'marginLeft' | 'marginRight';
               return field(
                 name,
                 t(`dialogs.pageSetup.${side}`),

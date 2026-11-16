@@ -37,21 +37,26 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 
 | Rule | Applies in | Behavior |
 | --- | --- | --- |
+| `autofitRefitsNestedCells` | `modern` | A nested autofit table whose stated cell widths pass its room gives way above each column's content minimum, as a top-level table does |
 | `anchorOnlyParagraphSeeding` | `modern` | Seeds the pages of consecutive anchor-only paragraphs first |
 | `anchorOnlyParagraphWrapExclusion` | `modern` | An anchor-only paragraph wraps around its own anchors |
 | `anchorsLayOutInCell` | `modern` | Every anchored object in a table cell lays out in its cell |
 | `distributedLinesSpreadCharacters` | `legacy` | A distributed paragraph spreads every line after every character, kerned runs included; a space first takes up to the face average character width less its own advance |
-| `fixedTableContentEdgeOrigin` | `legacy` | A fixed left table aligns its first content edge with the text column |
+| `fixedTableContentEdgeOrigin` | `legacy` | A table with an absolute width, or a fixed table with an automatic width, aligns the content edge of its aligned outer cell with the text column. A leading-aligned table without an indent or a table style keeps its outer edge there. A table with cell spacing aligns the same content edge, so its frame reaches past the text column. Rows that skip grid columns follow the grid. In a text box, only a leading-aligned table takes this rule, fixed or AutoFit, in either direction |
 | `floatingTableContentOrigin` | `legacy` | A floating table with a numeric text anchor or a right alignment positions its cell content |
 | `floatingTableOverlapMovesLeft` | `modern` | A floating table that may not overlap tries the left side before it moves down |
 | `headerFooterAnchorsWrapText` | `modern` | Header and footer text wraps around anchored objects |
 | `headerRowsKeepWithBody` | `modern` | Header rows keep with the opening body rows |
 | `justifiedSpaceShrink` | `modern` | Justified lines may shrink spaces |
+| `balancedSpaceShrink` | `modern` | With `w:balanceSingleByteDoubleByteWidth`, a space at the balanced width keeps it when a justified or distributed line shrinks its spaces |
 | `keepNextGivesTailLines` | `modern` | A keep-with-next paragraph gives its last lines to the next page |
 | `legacyPercentTableContentWidth` | `legacy` | A percent-width table resolves against the legacy content width |
-| `legacySharedGridLineSideRules` | `legacy` | Side rules center on shared grid lines |
+| `legacySharedGridLineSideRules` | `legacy` | Side rules center on shared grid lines, in left-to-right, right-to-left, and nested tables |
+| `legacySpacedFrameRuleCenters` | `legacy` | A spaced table aligns the centers of its outer frame rules; later modes align their outer edges |
 | `modernBidiTableRuleShift` | `modern` | A right-to-left table sits half its mean outer side rule toward its visual left |
-| `modernGridLineSideRules` | `modern` | Side rules center on grid lines for covered shapes; edge-aligned grids move by half a rule |
+| `modernGridLineSideRules` | `modern` | Side rules center on grid lines for covered shapes, including one-rule percent widths; edge-aligned grids move by half a rule |
+| `noteAreaHoldsLineSpacing` | `modern` | Auto line spacing below a body line must fit above the footnote area |
+| `noteAreaHoldsSpaceAfter` | `modern` | A paragraph's space after must fit above the footnote area; in legacy modes, only a paragraph that cites a footnote needs it to fit |
 | `noteTableCellKeeps` | `modern` | Note bands in table rows honor cell widow control and `w:keepLines` |
 | `openingColumnBreakTakesNoLine` | `legacy` | A column break that opens a paragraph leaves no line in the column it ends |
 | `oversizedRowKeepGroupReleases` | `legacy` | Oversized kept row groups release before placement, except below authored headers |
@@ -66,11 +71,14 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `tallRowStaysWhole` | `legacy` | A row that cannot split and is taller than a page stays whole on its page and runs past the bottom margin |
 | `tableParagraphWidowControl` | `modern` | Paragraphs that split in table cells apply widow control |
 | `vMergeTextMovesPastHeadRow` | `modern` | Merged cell text moves whole past a head row that cannot hold it |
+| `wrappedAnchorsEndAtBottomMargin` | `modern` | A wrapping object positioned from its paragraph or line moves up to end at the bottom margin. When that would lift it above its line, the line moves to the next page, and an object that still crosses the margin ends the page. In a table cell, the row splits before that line |
+| `wrappedAnchorsEndOnSheet` | `legacy` | A wrapping object positioned from its paragraph or line moves up to end at the bottom page edge, never above the top page edge. Its line never moves. A row whose cell object would cross the bottom margin moves to the next page |
 | `wrappedAnchorsStayBelowTopMargin` | `modern` | A wrapping object positioned from its paragraph never starts above the top margin |
+| `lineAnchorsBeforeBandPush` | `legacy` | An object positioned from the first line of a paragraph measures from where that line was before a wrapping band above pushed it down |
 | `adjustLineHeightInTable` | `w:adjustLineHeightInTable` | Cell paragraphs snap to the line grid |
 | `noColumnBalance` | `w:noColumnBalance` in `legacy` modes | Columns fill in order without balancing |
 | `doNotBreakWrappedTables` | `w:doNotBreakWrappedTables` | A floating table that fits a page does not break |
-| `fixedParagraphSpacing` | `w:doNotUseHTMLParagraphAutoSpacing` | Adjacent paragraph spacing adds up |
+| `fixedParagraphSpacing` | `w:doNotUseHTMLParagraphAutoSpacing` | Adjacent paragraph spacing adds up, and automatic spacing keeps the authored measurement |
 | `ignoreIndentAsNumberingTabStop` | `w:doNotUseIndentAsNumberingTabStop` | A numbering tab ignores the hanging indent |
 | `optionalLigatures` | `enableOpenTypeFeatures`, else `modern` | Optional OpenType ligatures apply |
 | `pageBreakMarkOnNextPage` | `w:splitPgBreakAndParaMark` in a legacy mode | The paragraph mark after a closing page break takes a line at the top of the next page |

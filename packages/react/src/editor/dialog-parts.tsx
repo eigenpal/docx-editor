@@ -235,9 +235,11 @@ export function DialogFrame({
   sessionSignal,
   restoreFocus = true,
   describedBy,
+  busy,
 }: {
   kind:
     | 'revisionMarkup'
+    | 'compareDocuments'
     | 'pageSetup'
     | 'paragraph'
     | 'watermark'
@@ -262,6 +264,8 @@ export function DialogFrame({
   restoreFocus?: boolean;
   /** The id of the element that describes the dialog, such as an alert's message. */
   describedBy?: string;
+  /** True while the dialog works, such as during a compare. */
+  busy?: boolean;
 }) {
   const ownRef = useRef<HTMLDialogElement | null>(null);
   const ref = panelRef ?? ownRef;
@@ -275,7 +279,9 @@ export function DialogFrame({
     const panel = ref.current;
     if (!panel) return;
     setOwnScope(!panel.parentElement?.closest('.docx-editor'));
-    const opener = panel.ownerDocument.activeElement as HTMLElement | null;
+    // The page itself is no opener: restoring it would take focus from the editor.
+    const active = panel.ownerDocument.activeElement as HTMLElement | null;
+    const opener = active === panel.ownerDocument.body ? null : active;
     const closeNative = () => {
       if (panel.open) panel.close?.();
     };
@@ -302,6 +308,8 @@ export function DialogFrame({
       aria-modal="true"
       aria-label={label}
       aria-describedby={describedBy}
+      // A styling hook only: aria-busy on the whole modal would hold back its live regions.
+      data-docx-busy={busy ? '' : undefined}
       className={`docx-dialog${ownScope ? ` docx-editor${chromeDark ? ' dark' : ''}` : ''}${className ? ` ${className}` : ''}`}
       style={style}
       data-docx-dialog={kind}

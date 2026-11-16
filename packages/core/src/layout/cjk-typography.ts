@@ -2,7 +2,7 @@
 // producer fingerprint invalidates all stories when document typography changes.
 // References: ECMA-376 §17.3.1.16, §17.3.1.21, §17.15.1.18, §17.15.1.58–59, §17.15.1.82.
 import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
-import { isEastAsianFace } from '../store/package/default-font-faces.ts';
+import { isDefaultEastAsianFace } from '../store/package/default-font-faces.ts';
 import { omittedDocDefaults } from '../store/package/application-doc-defaults.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
 import { resolveRunStyle, type ThemeFonts } from './run-style.ts';
@@ -31,11 +31,19 @@ export interface CjkTypographySettings {
    */
   readonly legacyLineEndPunctuation?: true;
   /**
-   * The compatibility setting `w:balanceSingleByteDoubleByteWidth`: lines in a legacy mode keep
-   * their natural inter-word spaces, also with punctuation compression.
+   * The compatibility setting `w:balanceSingleByteDoubleByteWidth`: a space beside East Asian
+   * text, and each space of a run of spaces, takes the balanced width (`balanced-space-widths.ts`).
+   * Lines in a legacy mode keep their natural inter-word spaces, also with punctuation
+   * compression.
    * @internal
    */
   readonly balancedWidths?: true;
+  /**
+   * `balancedWidths` in a modern compatibility mode (`balancedSpaceShrink`): a space at the
+   * balanced width keeps it when a justified or distributed line shrinks its spaces.
+   * @internal
+   */
+  readonly balancedSpaceShrink?: true;
   /**
    * The compatibility setting `w:useWord97LineBreakRules`. With `balancedWidths`, lines in a
    * legacy mode keep natural inter-word spaces in proportional faces.
@@ -44,9 +52,7 @@ export interface CjkTypographySettings {
   readonly word97LineBreaks?: true;
   /** Whitespace compression selected by `w:characterSpacingControl`. */
   readonly compression:
-    | 'doNotCompress'
-    | 'compressPunctuation'
-    | 'compressPunctuationAndJapaneseKana';
+    'doNotCompress' | 'compressPunctuation' | 'compressPunctuationAndJapaneseKana';
   /** Custom no-line-start characters, keyed by normalized language tag. */
   readonly before: Readonly<Record<string, string>>;
   /** Custom no-line-end characters, keyed by normalized language tag. */
@@ -66,7 +72,15 @@ export interface CjkParagraphTypography {
    * resolved) means the authored switch decides.
    */
   readonly hangingPunctuation?: boolean;
+  /** `w:wordWrap` is off: lines may open between any two characters, not only between words. */
   readonly characterWrap: boolean;
+  /**
+   * Character wrapping keeps Latin words whole in Korean text: the paragraph mark and the run
+   * on both sides of a boundary resolve to a Korean East Asian language. Set only with
+   * `characterWrap`.
+   * @internal
+   */
+  readonly koreanWordWrap?: true;
   /** Automatic spacing at number/East Asian boundaries; absent means enabled. */
   readonly autoSpaceDN?: boolean;
   /** Automatic spacing at Latin/East Asian boundaries; absent means enabled. */
@@ -170,9 +184,29 @@ function compatFlag(compat: OoxmlElement, name: string): boolean {
   return false;
 }
 
+/**
+ * Whether cascaded run properties name Korean as their East Asian language. Only
+ * `w:lang/@w:eastAsia` counts here: a Korean `w:val` alone does not make text Korean for
+ * character wrapping, and a `w:val` in another language does not cancel an inherited
+ * Korean `w:eastAsia`.
+ */
+export function eastAsiaIsKorean(props: readonly OoxmlProperty[]): boolean {
+  let korean = false;
+  for (const prop of props) {
+    const eastAsia = prop.localName === 'lang' ? prop.attributes?.eastAsia : undefined;
+    if (eastAsia) korean = /^ko(?:-|$)/i.test(eastAsia);
+  }
+  return korean;
+}
+
+/**
+ * `markRunProperties` is the paragraph mark's cascaded run properties: its East Asian language
+ * decides whether character wrapping keeps Latin words whole (`koreanWordWrap`).
+ */
 export function resolveCjkTypography(
   props: readonly OoxmlProperty[],
-  settings?: CjkTypographySettings
+  settings?: CjkTypographySettings,
+  markRunProperties?: readonly OoxmlProperty[]
 ): CjkParagraphTypography {
   let { kinsoku, overflowPunctuation, characterWrap } = DEFAULT_CJK_TYPOGRAPHY;
   let justified = false;
@@ -209,6 +243,9 @@ export function resolveCjkTypography(
     hangingPunctuation:
       overflowPunctuation && settings !== undefined && (distributed || hangingAlignment),
     characterWrap,
+    ...(characterWrap && markRunProperties && eastAsiaIsKorean(markRunProperties)
+      ? { koreanWordWrap: true as const }
+      : {}),
     autoSpaceDN,
     autoSpaceDE,
     ...(spacingOff && distributed ? { automaticSpacingNeedsEastAsianFont: true as const } : {}),
@@ -306,7 +343,7 @@ export function kinsokuCharacters(
  * Whether the authored document defaults select an East Asian face as the East Asian font.
  * Adjacent full-width punctuation compression needs one. Only `w:rPrDefault` counts: an
  * application or theme fallback alone does not. The resolved face must be a Chinese,
- * Japanese, or Korean font (`isEastAsianFace`). An empty theme slot resolves to a built-in
+ * Japanese, or Korean font (`isDefaultEastAsianFace`). An empty theme slot resolves to a built-in
  * East Asian face.
  */
 export function defaultsSelectEastAsianFace(
@@ -315,7 +352,7 @@ export function defaultsSelectEastAsianFace(
 ): boolean {
   if (!namesEastAsianFont(defaultRun)) return false;
   const face = resolveRunStyle(defaultRun, themeFonts).fontFamilyEastAsia;
-  return isEastAsianFace(face, themeFonts.eastAsianFontTableFaces);
+  return isDefaultEastAsianFace(face, themeFonts.eastAsianFontTableFaces);
 }
 
 /** Whether run defaults name an East Asian face slot (`w:eastAsia` or `w:eastAsiaTheme`). */

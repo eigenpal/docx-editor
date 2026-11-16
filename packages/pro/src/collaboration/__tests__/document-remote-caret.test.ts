@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -54,8 +54,12 @@ async function editorWithPeer() {
   // The peer joins from the editor's state and relays every later update both ways.
   const host = { ydoc } as unknown as Peer;
   const peer = await harness.join(host, 'peer');
+  // While paused, updates wait, as they do for a participant that is offline.
+  let held: [Y.Doc, Uint8Array][] | null = null;
   const forward = (target: Y.Doc) => (update: Uint8Array, origin: unknown) => {
-    if (origin !== 'relay') Y.applyUpdate(target, update, 'relay');
+    if (origin === 'relay') return;
+    if (held) held.push([target, update]);
+    else Y.applyUpdate(target, update, 'relay');
   };
   ydoc.on('update', forward(peer.ydoc));
   peer.ydoc.on('update', forward(ydoc));
@@ -81,6 +85,14 @@ async function editorWithPeer() {
     peer,
     harness,
     textOf,
+    pause() {
+      held = [];
+    },
+    resume() {
+      const updates = held ?? [];
+      held = null;
+      for (const [target, update] of updates) Y.applyUpdate(target, update, 'relay');
+    },
     cleanup() {
       editor.destroy();
       container.remove();
@@ -205,6 +217,43 @@ describe('local caret across remote edits', () => {
       ]);
       surface.type('!');
       expect(textOf(0)).toBe('Alpha paragraphBravo! paragraph');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('typing in a paragraph a peer joins away offline keeps the caret after it', async () => {
+    const { surface, room, peer, harness, textOf, pause, resume, cleanup } = await editorWithPeer();
+    try {
+      const second = surface.session.paragraphIds()[1]!;
+      pause();
+      surface.setSelection({
+        anchor: { paragraphId: second, offset: 0 },
+        head: { paragraphId: second, offset: 0 },
+      });
+      surface.type('!');
+      harness.apply(peer, [
+        {
+          op: 'joinParagraphs',
+          firstId: harness.paragraphIdAt(peer, 0),
+          secondId: harness.paragraphIdAt(peer, 1),
+        },
+      ]);
+      harness.apply(peer, [
+        { op: 'insertText', paragraphId: harness.paragraphIdAt(peer, 0), offset: 0, text: 'Big ' },
+      ]);
+      resume();
+      // The typing follows the join into the first paragraph, and the session carries the
+      // caret with it: the editor maps by text only when the session carries nothing.
+      expect(textOf(0)).toBe('Big Alpha paragraph!Bravo paragraph');
+      const carried = room.session.remoteSelectionMove?.();
+      expect(carried?.to.head).toEqual({
+        nodeId: surface.session.paragraphIds()[0]!,
+        offset: 'Big Alpha paragraph!'.length,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      surface.type('?');
+      expect(textOf(0)).toBe('Big Alpha paragraph!?Bravo paragraph');
     } finally {
       cleanup();
     }
@@ -355,6 +404,40 @@ describe('local caret across remote edits', () => {
     }
   });
 
+  test('a caret beside a tab this user inserted is carried on its character once the tab is built', async () => {
+    const { surface, room, peer, harness, textOf, cleanup } = await editorWithPeer();
+    try {
+      const id = surface.session.paragraphIds()[0]!;
+      // "Alpha\t| paragraph": no build holds the local tab yet, so the caret has no anchor.
+      surface.setSelection({
+        anchor: { paragraphId: id, offset: 5 },
+        head: { paragraphId: id, offset: 5 },
+      });
+      surface.insertTab();
+      expect(surface.state().selection.head).toEqual({ paragraphId: id, offset: 6 });
+      // A peer edit elsewhere leaves the caret where it is, and builds the tab.
+      harness.apply(peer, [
+        { op: 'insertText', paragraphId: harness.paragraphIdAt(peer, 1), offset: 0, text: 'Big ' },
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(surface.state().selection.head).toEqual({ paragraphId: id, offset: 6 });
+      harness.apply(peer, [
+        { op: 'insertText', paragraphId: harness.paragraphIdAt(peer, 0), offset: 0, text: 'Big ' },
+      ]);
+      // The next change is carried on the tab before the caret, not left to text mapping.
+      expect(room.session.remoteSelectionMove?.()).toEqual({
+        from: { anchor: { nodeId: id, offset: 6 }, head: { nodeId: id, offset: 6 } },
+        to: { anchor: { nodeId: id, offset: 10 }, head: { nodeId: id, offset: 10 } },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      surface.type('!');
+      // The peer's text reads text values only, so the tab before the "!" does not show here.
+      expect(textOf(0)).toBe('Big Alpha! paragraph');
+    } finally {
+      cleanup();
+    }
+  });
+
   test('a peer splitting and joining back the caret paragraph keeps the caret after its character', async () => {
     const { surface, peer, harness, textOf, cleanup } = await editorWithPeer();
     try {
@@ -378,6 +461,68 @@ describe('local caret across remote edits', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
       surface.type('!');
       expect(textOf(0)).toBe('Alpha para!graph');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('typing a peer splits away and joins back while another splits it offline keeps the caret', async () => {
+    const { surface, room, ydoc, peer, harness, textOf, pause, resume, cleanup } =
+      await editorWithPeer();
+    // A second peer works offline; its updates are delivered by hand.
+    const offline = await harness.joinDetached(peer, 'offline');
+    const peerUpdates: Uint8Array[] = [];
+    peer.ydoc.on('update', (update: Uint8Array, origin: unknown) => {
+      if (origin !== 'relay') peerUpdates.push(update);
+    });
+    try {
+      const id = surface.session.paragraphIds()[0]!;
+      // "Alpha para|graph"
+      surface.setSelection({
+        anchor: { paragraphId: id, offset: 10 },
+        head: { paragraphId: id, offset: 10 },
+      });
+      pause();
+      surface.type('!');
+      // Neither peer sees the typing: one splits the paragraph and joins it back, and the
+      // other splits it at the same point offline.
+      harness.apply(peer, [
+        { op: 'splitParagraph', paragraphId: harness.paragraphIdAt(peer, 0), offset: 3 },
+      ]);
+      harness.apply(peer, [
+        {
+          op: 'joinParagraphs',
+          firstId: harness.paragraphIdAt(peer, 0),
+          secondId: harness.paragraphIdAt(peer, 1),
+        },
+      ]);
+      harness.apply(offline, [
+        { op: 'splitParagraph', paragraphId: harness.paragraphIdAt(offline, 0), offset: 3 },
+      ]);
+      expect(peerUpdates).toHaveLength(2);
+      // The split arrives first: the typing follows it, and so does the caret.
+      Y.applyUpdate(ydoc, peerUpdates[0]!, 'relay');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      // The join and the offline split arrive together. The typing follows the join back, and
+      // the offline split on into its new paragraph: the caret is carried there, beside it.
+      Y.applyUpdate(
+        ydoc,
+        Y.mergeUpdates([peerUpdates[1]!, Y.encodeStateAsUpdate(offline.ydoc)]),
+        'relay'
+      );
+      const second = surface.session.paragraphIds()[1];
+      expect(surface.session.bodyText().split('\n').slice(0, 2)).toEqual(['Alp', 'ha para!graph']);
+      expect(room.session.remoteSelectionMove?.()?.to.head).toEqual({
+        nodeId: second,
+        offset: 'ha para!'.length,
+      });
+      resume();
+      Y.applyUpdate(offline.ydoc, Y.encodeStateAsUpdate(peer.ydoc), 'relay');
+      Y.applyUpdate(peer.ydoc, Y.encodeStateAsUpdate(offline.ydoc), 'relay');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      surface.type('?');
+      expect(textOf(0)).toBe('Alp');
+      expect(textOf(1)).toBe('ha para!?graph');
     } finally {
       cleanup();
     }

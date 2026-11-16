@@ -13,7 +13,10 @@ export {
   pendingCanonicalJournalCount,
   storeHasPendingCanonicalJournals,
 } from '../store/package/canonical-primitive-publish.ts';
-export { historyGroupOfJournal } from '../store/package/canonical-primitive-journal.ts';
+export {
+  historyGroupOfJournal,
+  isJournalOutsideUndo,
+} from '../store/package/canonical-primitive-journal.ts';
 
 export type {
   CanonicalAttributeName,

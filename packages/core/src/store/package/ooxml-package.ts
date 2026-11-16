@@ -18,7 +18,9 @@
 // One deliberate tolerance: a content-type record with malformed MIME syntax is ignored
 // (treated as absent) unless it decides the type of a part the document needs.
 
+import { contentTypeExportPackage } from './content-type-export.ts';
 import { textboxFallbackExportPackageSteps } from './textbox-fallback-export.ts';
+import { shapeFormatExportPackage } from './shape-format-export.ts';
 import { readOoxmlPartSteps } from './ooxml-part-steps.ts';
 import {
   readZip,
@@ -55,6 +57,7 @@ import type { OoxmlPart, OoxmlReadRejection } from './ooxml-tree.ts';
 import { serializeOoxmlPartSteps } from './ooxml-serialize-steps.ts';
 import { captureXmlPartRoot } from './canonical-primitive-lower.ts';
 import { commentExportPackage } from './comment-export-cleanup.ts';
+import { uniqueRevisionIdsExportPackageSteps } from './revision-id-export.ts';
 import { withoutDuplicateNoteProperties } from './note-lifecycle-props.ts';
 
 const CONTENT_TYPES_PART = '/[Content_Types].xml';
@@ -620,9 +623,28 @@ export function* readOoxmlPackageSteps(
  *
  * `writeZip` re-validates every part name, so a name that became unsafe between load and
  * save cannot be smuggled into the archive.
+ *
+ * Every revision element in the saved file has its own `@w:id`, unique across all parts and
+ * within the 32-bit signed range. The ids in `pkg` do not change.
  */
 export function writeOoxmlPackage(pkg: OoxmlPackage): Uint8Array {
-  const steps = writeOoxmlPackageSteps(pkg);
+  return runSteps(writeOoxmlPackageSteps(pkg));
+}
+
+/**
+ * {@link writeOoxmlPackage}, keeping every revision `@w:id` as `pkg` holds it.
+ *
+ * For bytes that a replica loads as the shared document, such as a peer joining a
+ * collaboration room. The loaded tree must hold the same revision ids as the shared state,
+ * so the save-time renumbering does not apply.
+ *
+ * @internal
+ */
+export function writeOoxmlPackageKeepingRevisionIds(pkg: OoxmlPackage): Uint8Array {
+  return runSteps(writeOoxmlPackageSteps(pkg, { keepRevisionIds: true }));
+}
+
+function runSteps(steps: Generator<void, Uint8Array>): Uint8Array {
   for (;;) {
     const next = steps.next();
     if (next.done) return next.value;
@@ -640,11 +662,21 @@ export function writeOoxmlPackage(pkg: OoxmlPackage): Uint8Array {
  *
  * @internal
  */
-export function* writeOoxmlPackageSteps(pkg: OoxmlPackage): Generator<void, Uint8Array> {
+export function* writeOoxmlPackageSteps(
+  pkg: OoxmlPackage,
+  options: { readonly keepRevisionIds?: boolean } = {}
+): Generator<void, Uint8Array> {
   // Concurrent note property writes can leave a repeated element in shared state; the saved
   // file keeps the first copy, which is the one every reader uses.
+  // A room keeps its seeded [Content_Types].xml bytes; the saved file takes its content type
+  // index. Concurrent shape fill writes can leave an empty hidden fill or a disagreeing VML copy.
+  const cleaned = shapeFormatExportPackage(
+    commentExportPackage(contentTypeExportPackage(withoutDuplicateNoteProperties(pkg)))
+  );
+  // Revision ids are made unique before the text box fallbacks re-sync, so a fallback copies
+  // the ids its choice saves with.
   const exported = yield* textboxFallbackExportPackageSteps(
-    commentExportPackage(withoutDuplicateNoteProperties(pkg))
+    options.keepRevisionIds ? cleaned : yield* uniqueRevisionIdsExportPackageSteps(cleaned)
   );
   yield;
   const entries = new Map<string, Uint8Array>(exported.partBytes);
@@ -653,6 +685,21 @@ export function* writeOoxmlPackageSteps(pkg: OoxmlPackage): Generator<void, Uint
     yield;
   }
   return yield* writeZipSteps(entries);
+}
+
+/** A package holding exactly one part, for callers that never open a real one. */
+export function singlePartPackage(part: OoxmlPart): OoxmlPackage {
+  return Object.freeze({
+    parts: new Map([[part.name, part]]),
+    partBytes: new Map(),
+    relationships: new Map(),
+    externalTargets: [],
+    contentTypes: {
+      defaults: new Map(),
+      overrides: new Map([[part.name.toLowerCase(), part.contentType]]),
+    },
+    mainDocumentPart: part.name,
+  }) as OoxmlPackage;
 }
 
 /** Replace one part's tree, returning a new package. Pure, like the tree edits themselves. */

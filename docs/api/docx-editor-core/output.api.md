@@ -171,6 +171,8 @@ export interface PaintOptions {
     readonly revisionMarkup?: ResolvedRevisionMarkup;
     readonly revisionStyles?: RevisionStyles;
     readonly scale?: number;
+    // @internal
+    readonly serifHangulFace?: (family: string) => boolean;
     readonly shadeFormFields?: boolean;
     readonly showParagraphMarks?: boolean;
     // (undocumented)

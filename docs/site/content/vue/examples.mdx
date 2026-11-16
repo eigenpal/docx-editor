@@ -1,117 +1,39 @@
 ---
 title: 'Vue examples'
-description: 'Patterns for the Vue root surface: mount bytes, save through the ref, compose custom chrome, and automate an open editor.'
+description: 'Find Vue examples for loading, saving, custom chrome, and automating an open editor.'
 category: 'Vue'
 order: 39
 ---
 
-Import `@docx-editor.dev/vue/styles.css` once in your application entry. Give each editor a container with a height.
+## Choose an example
 
-## Load DOCX bytes
+| Task | Source |
+| --- | --- |
+| Load from a URL and save through the ref | [Loading and saving](/docs/2.x/guides/loading-and-saving) |
+| Build custom toolbar buttons | [Vue composables](/docs/2.x/vue/composables) |
+| Arrange editor parts | [Vue composition](/docs/2.x/vue/composition) |
+| Automate the open document | [Automate an open editor](#automate-an-open-editor) |
 
-```vue
-<script setup lang="ts">
-import { DocxEditor, useDocxSource } from '@docx-editor.dev/vue';
+## Automate an open editor
 
-const { document, error } = useDocxSource('/template.docx');
-</script>
+Install the editing API. It requires the [EigenPal Pro License](https://www.docx-editor.dev/pricing).
 
-<template>
-  <p v-if="error" role="alert">{{ error.message }}</p>
-  <div v-else style="height: 100vh">
-    <DocxEditor :document="document" title="Proposal.docx" />
-  </div>
-</template>
+```bash
+npm install @docx-editor.dev/editor-api
 ```
 
-## Save through the ref
+Render this component inside `DocxEditor.Root`. It reads the first paragraph and shows its text:
 
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue';
-import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
-
-defineProps<{ bytes: Uint8Array }>();
-const editorRef = ref<DocxEditorRef | null>(null);
-
-async function save() {
-  const next = await editorRef.value?.save();
-  if (!next) return;
-  await fetch('/api/documents/42', { method: 'PUT', body: next });
-}
-</script>
-
-<template>
-  <button @click="save">Save</button>
-  <DocxEditor ref="editorRef" :document="bytes" />
-</template>
-```
-
-## Compose custom chrome
-
-Create a button that uses the editor context:
-
-```vue
-<script setup lang="ts">
-import { useEditorCommand } from '@docx-editor.dev/vue';
-
-const bold = useEditorCommand('text.bold');
-</script>
-
-<template>
-  <button
-    @mousedown.prevent
-    :disabled="!bold.isEnabled.value"
-    :aria-pressed="bold.isActive.value"
-    :title="bold.disabledReason.value ?? 'Bold'"
-    @click="bold.execute()"
-  >
-    Bold
-  </button>
-</template>
-```
-
-Then place the button and editor parts under the root:
-
-```vue
-<script setup lang="ts">
-import { DocxEditor } from '@docx-editor.dev/vue';
-import BoldButton from './BoldButton.vue';
-
-defineProps<{ bytes: Uint8Array }>();
-</script>
-
-<template>
-  <div class="docx-editor" style="height: 100vh; display: flex; flex-direction: column">
-    <DocxEditor.Root :document="bytes">
-      <DocxEditor.Toolbar>
-        <BoldButton />
-      </DocxEditor.Toolbar>
-      <DocxEditor.Viewport style="flex: 1; min-height: 0">
-        <DocxEditor.Navigation />
-        <DocxEditor.Content />
-        <DocxEditor.HyperLink />
-        <DocxEditor.ContextMenu />
-      </DocxEditor.Viewport>
-    </DocxEditor.Root>
-  </div>
-</template>
-```
-
-`DocxEditor.Navigation` shares the viewport with the document and stays in place while the pages scroll. `DocxEditor.HyperLink` and `DocxEditor.ContextMenu` provide overlay chrome.
-
-## Automate an open editor
-
-Render this component as a descendant of `DocxEditor.Root`:
-
-```vue
-<script setup lang="ts">
 import { useDocxEditor } from '@docx-editor.dev/vue';
 import { DocxEditor as AutomationEditor } from '@docx-editor.dev/editor-api/browser';
 
 const editor = useDocxEditor();
+const text = ref('');
 
-async function inspectFirstParagraph() {
+async function readFirstParagraph() {
   if (!editor.value) return;
   const runtime = AutomationEditor.createBrowser(editor.value);
 
@@ -120,7 +42,7 @@ async function inspectFirstParagraph() {
       const first = context.document.body.paragraphs.getFirst();
       first.load('text');
       await context.sync();
-      console.log(first.text);
+      text.value = first.text;
     });
   } finally {
     runtime.dispose();
@@ -129,59 +51,24 @@ async function inspectFirstParagraph() {
 </script>
 
 <template>
-  <button :disabled="!editor" @click="inspectFirstParagraph">Inspect first paragraph</button>
+  <button :disabled="!editor" @click="readFirstParagraph">Read first paragraph</button>
+  <output>{{ text }}</output>
 </template>
 ```
 
-Install `@docx-editor.dev/editor-api` before you use this example. The runtime uses the editor that `DocxEditor.Root` created.
+## Run the Vue example
 
-## Fetch bytes and fonts together
+The [`examples/vue`](https://github.com/eigenpal/docx-editor/tree/main/examples/vue) app shows composed chrome, menu overrides, rulers, and navigation. Run it from the repository root with `bun run dev:vue`.
 
-Install `@docx-editor.dev/fonts` to use the packaged font resolver:
+## Limits
 
-```bash
-npm install @docx-editor.dev/fonts
-```
-
-Load document bytes with fonts for measurement:
-
-```vue
-<script setup lang="ts">
-import {
-  DocxEditorRoot,
-  DocxEditorViewport,
-  DocxEditorContent,
-  useDocxSource,
-} from '@docx-editor.dev/vue';
-import { packagedFonts } from '@docx-editor.dev/fonts';
-
-const { document, fonts, error, isLoading } = useDocxSource('/sample.docx', {
-  fonts: packagedFonts(),
-});
-</script>
-
-<template>
-  <div v-if="document" style="height: 100vh">
-    <DocxEditorRoot :document="document" :fonts="fonts">
-      <DocxEditorViewport style="height: 100%">
-        <DocxEditorContent />
-      </DocxEditorViewport>
-    </DocxEditorRoot>
-  </div>
-  <p v-else-if="error">{{ error.message }}</p>
-  <p v-else-if="isLoading" aria-live="polite">Loading document</p>
-</template>
-```
-
-## Live demo
-
-The [`examples/vue` application](https://github.com/eigenpal/docx-editor/tree/main/examples/vue) shows composition chrome, menu overrides, rulers, navigation, and package build mode. Run it with `bun run dev:vue`.
-
-The [adapter parity demo](/) serves React and Vue builds from `examples/parity/dist`.
+- Render automation components inside `DocxEditor.Root`. Read the editor through `editor.value`, and wait for it before you create the runtime.
+- Load explicit properties, such as `load('text')`, and await `context.sync()` before you read them.
+- Dispose the runtime in `finally`.
+- `save()` on the ref can return `null`. Your app owns any upload of the saved bytes.
 
 ## Next steps
 
-- [Vue composition](/docs/2.x/vue/composition): arrange editor parts.
-- [Vue composables](/docs/2.x/vue/composables): build reactive controls.
-- [Toolbar guide](/docs/2.x/guides/toolbar): find command slot IDs.
-- [Editing API](/docs/2.x/editor-api): automate the open document.
+- [Vue props](/docs/2.x/vue/props): Configure `<DocxEditor>` and its ref.
+- [Editing API](/docs/2.x/editor-api): Use the Office.js-shaped object model.
+- [Toolbar guide](/docs/2.x/guides/toolbar): Find command slot IDs.

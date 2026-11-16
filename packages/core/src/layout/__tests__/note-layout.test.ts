@@ -630,8 +630,7 @@ describe('note layout + pagination', () => {
     // Ref must not appear on every page that merely hosts the same paragraph id.
     const paragraphId = (
       layout.pages[0]!.fragments.find((f) => f.kind === 'paragraph') as
-        | { paragraphId: string }
-        | undefined
+        { paragraphId: string } | undefined
     )?.paragraphId;
     expect(paragraphId).toBeTruthy();
     const pagesHostingParagraph = layout.pages.filter((page) =>

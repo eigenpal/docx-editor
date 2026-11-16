@@ -5,6 +5,8 @@
 // to the run's size, not a fixed hairline at one quarter of the font size. Calibri 11pt
 // gives 0.720pt at 2.75pt; Arial at the same 11pt gives 0.548pt at 2.847pt.
 
+import { HEAD_TAG, OS2_TAG, tableDirectoryBase, tableOffset } from './sfnt-tables.ts';
+
 /** A strikeout stroke, as a fraction of the em. `offsetEm` is the stroke TOP. */
 export interface StrikeoutStrokeEm {
   /** `yStrikeoutPosition` over `unitsPerEm`. Positive is above the baseline. */
@@ -21,11 +23,6 @@ export interface StrikeoutStrokePt {
   readonly thicknessPt: number;
 }
 
-const TTC_TAG = 0x74746366;
-const HEAD_TAG = 0x68656164;
-const OS2_TAG = 0x4f532f32;
-/** Most table records one face may declare. A directory is file-supplied. */
-const MAX_TABLE_RECORDS = 4096;
 /**
  * Em bounds on the two int16 the face supplies.
  *
@@ -36,36 +33,6 @@ const MAX_TABLE_RECORDS = 4096;
  */
 const MAX_THICKNESS_EM = 1;
 const MAX_ABS_OFFSET_EM = 1;
-
-function tableDirectoryBase(view: DataView, byteLength: number, faceIndex: number): number | null {
-  if (byteLength < 12) return null;
-  if (view.getUint32(0) !== TTC_TAG) return 0;
-  const index = Number.isSafeInteger(faceIndex) && faceIndex > 0 ? faceIndex : 0;
-  const entry = 12 + index * 4;
-  if (entry + 4 > byteLength) return null;
-  const base = view.getUint32(entry);
-  return base + 12 <= byteLength ? base : null;
-}
-
-function tableOffset(
-  view: DataView,
-  byteLength: number,
-  base: number,
-  tag: number,
-  minimumLength: number
-): number | null {
-  const count = view.getUint16(base + 4);
-  if (count > MAX_TABLE_RECORDS || base + 12 + count * 16 > byteLength) return null;
-  for (let index = 0; index < count; index += 1) {
-    const record = base + 12 + index * 16;
-    if (view.getUint32(record) !== tag) continue;
-    const offset = view.getUint32(record + 8);
-    const length = view.getUint32(record + 12);
-    if (length < minimumLength || offset + length > byteLength) return null;
-    return offset;
-  }
-  return null;
-}
 
 /**
  * Read `yStrikeoutSize` / `yStrikeoutPosition` from a face, as em fractions.

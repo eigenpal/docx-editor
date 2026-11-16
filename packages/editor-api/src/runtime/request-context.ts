@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -30,6 +30,7 @@ import type {
 } from '@docx-editor.dev/core/automation';
 import type { Document } from '../model/document.ts';
 import { batchFailure, planBatch, settleBatch } from './batch.ts';
+import type { AnnotationStore } from './annotation-store.ts';
 import type { ClientObject } from './client-object.ts';
 import { DocxEditorError, fail, isDocxEditorError } from './errors.ts';
 import type { DocumentCapabilities, RevisionTextView } from './runtime.ts';
@@ -65,6 +66,8 @@ export interface RuntimeSession {
   readonly onException?: (error: unknown, operations: readonly AutomationOperation[]) => void;
   /** Identity for adoption checks. The session object itself. */
   readonly id: object;
+  /** This runtime's proofing annotations. Absent in a preview, which refuses them. */
+  readonly annotations?: AnnotationStore;
   roots(): RootHandles;
   /** Refuse if the runtime has been disposed. */
   assertLive(target?: string): void;
@@ -118,6 +121,7 @@ export class RequestContext {
       capabilities: session.capabilities,
       ...(session.author === undefined ? {} : { author: session.author }),
       revisionTextView: session.revisionTextView,
+      ...(session.annotations === undefined ? {} : { annotations: session.annotations }),
       queue: this.#queue,
       session: session.id,
       roots: () => session.roots(),
@@ -176,7 +180,11 @@ export class RequestContext {
     return this.#document;
   }
 
-  /** What the document host behind this context can do. */
+  /**
+   * What the document host behind this context can do.
+   *
+   * @docxEditorExtension
+   */
   get capabilities(): DocumentCapabilities {
     return this.#session.capabilities;
   }
@@ -272,6 +280,8 @@ export class RequestContext {
       for (const action of actions) action.dispose?.();
       for (const action of this.#queue.takeContinuations()) action.dispose?.();
       this.#syncInFlight = false;
+      // View state: annotation marks follow what this sync did, whether or not it succeeded.
+      this.#session.annotations?.paintIfChanged();
     }
   }
 

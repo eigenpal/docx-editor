@@ -9,13 +9,16 @@ import type {
   SupportedImageMime,
 } from '../store/package/image-resources.ts';
 import type { ImageResourceLimits } from '../store/runtime/limits.ts';
-import { drawingRenderers } from '../store/package/drawing-renderers.ts';
+import { drawingRenderers, metafileRasterOptions } from '../store/package/drawing-renderers.ts';
 import { decodeTiffFrame } from '../store/package/tiff-frame.ts';
 
 export { decodeTiffFrame, type DecodedTiffFrame } from '../store/package/tiff-frame.ts';
 
-/** Output bounds handed to the metafile rasterizer — well under every resource pixel cap. */
-const MAX_METAFILE_RASTER_EDGE = 4096;
+/**
+ * Output bounds handed to every metafile rasterizer, well under every resource pixel cap. It
+ * matches the 2048-pixel preview limit in `metafileRasterOptions` and the documentation.
+ */
+const MAX_METAFILE_RASTER_EDGE = 2048;
 
 /** A converted raster, or null when the format was declined and the placeholder stands. */
 type ConvertedRaster = Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }> | null;
@@ -72,7 +75,7 @@ export function tryCreateBrowserImageDecodePort(ownerDocument: Document): ImageD
 }
 
 /**
- * EMF/WMF → PNG through the installed metafile renderer's rasterizer, or through the plain
+ * EMF/WMF → PNG through the installed metafile renderer's rasterizer, or through the
  * `emf-converter` rasterizer when no renderer is installed (Canvas-based, lazily imported so
  * only documents that contain metafiles load it). Exported for direct unit coverage — the
  * port factory gates on `createImageBitmap`, which headless DOMs lack.
@@ -83,23 +86,22 @@ export async function convertBrowserMetafile(
   _limits: ImageResourceLimits
 ): Promise<Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }> | null> {
   const rasterize = drawingRenderers().metafile?.rasterize;
-  if (!rasterize) return convertPlainMetafile(bytes, mime);
+  if (!rasterize) return convertPlainMetafile(bytes);
   const raster = await rasterize(bytes, mime, { maxEdge: MAX_METAFILE_RASTER_EDGE });
   return raster ? Object.freeze({ bytes: raster.bytes, mime: raster.mime }) : null;
 }
 
 async function convertPlainMetafile(
-  bytes: Uint8Array,
-  mime: MetafileImageMime
+  bytes: Uint8Array
 ): Promise<Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }> | null> {
-  const { convertEmfToDataUrl, convertWmfToDataUrl } = await import('emf-converter');
+  // Keep the full converter: its embedded image decoders preserve TIFF and CMYK JPEG content.
+  const { convertMetafileToDataUrl } = await import('emf-converter');
   const copy = new Uint8Array(bytes);
   const buffer = copy.buffer.slice(copy.byteOffset, copy.byteOffset + copy.byteLength);
-  const options = { maxWidth: MAX_METAFILE_RASTER_EDGE, maxHeight: MAX_METAFILE_RASTER_EDGE };
-  const dataUrl =
-    mime === 'image/x-emf'
-      ? await convertEmfToDataUrl(buffer, options)
-      : await convertWmfToDataUrl(buffer, options);
+  const dataUrl = await convertMetafileToDataUrl(
+    buffer,
+    metafileRasterOptions(MAX_METAFILE_RASTER_EDGE)
+  );
   const prefix = 'data:image/png;base64,';
   if (!dataUrl?.startsWith(prefix)) return null;
   const binary = atob(dataUrl.slice(prefix.length));

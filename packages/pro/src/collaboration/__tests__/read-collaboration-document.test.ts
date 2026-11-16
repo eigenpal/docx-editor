@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -89,7 +89,9 @@ describe('readCollaborationDocument', () => {
     ['sharedSchemaVersion', 6, 'schema-version-mismatch'],
     ['protocolVersion', 0, 'protocol-version-mismatch'],
     ['repairVersion', 1, 'schema-version-mismatch'],
+    ['repairVersion', 2, 'schema-version-mismatch'],
     ['repairVersion', 3, 'schema-version-mismatch'],
+    ['repairVersion', 5, 'schema-version-mismatch'],
     ['canonicalModelVersion', 2, 'schema-version-mismatch'],
   ] as const) {
     test(`refuses ${field} ${version} before interpreting persisted split metadata`, async () => {

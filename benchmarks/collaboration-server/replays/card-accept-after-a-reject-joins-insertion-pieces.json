@@ -1,0 +1,85 @@
+{
+  "config": "trackedStructuresSequential",
+  "seed": 57,
+  "replicas": 3,
+  "delivery": "in-order",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 16,
+          "text": "lor ",
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T17:28:22Z"
+          }
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 18,
+          "text": "r ",
+          "revision": {
+            "author": "Author 1",
+            "date": "2026-01-01T05:30:17Z"
+          }
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "rejectRevision",
+          "revision": {
+            "id": "33053",
+            "author": "Author 1",
+            "date": "2026-01-01T05:30:17Z"
+          },
+          "localName": "ins"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "acceptAllRevisions",
+          "siteNodeIds": []
+        },
+        "targets": [
+          {
+            "field": "siteNodeIds",
+            "localName": "ins",
+            "index": 0,
+            "array": true,
+            "identity": {
+              "id": "31844",
+              "author": "Author 2",
+              "date": "2026-01-01T17:28:22Z"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

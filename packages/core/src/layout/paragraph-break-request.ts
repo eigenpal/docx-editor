@@ -268,7 +268,11 @@ function breakPreparedParagraphLines(request: ParagraphBreakRequest): readonly P
         hasCompatibilityRule(request.compatibilityMode, 'wrapIgnoresMultipleSpacingExtra')
           ? { ...formatting.lineSpacing, wrapsContentOnly: true }
           : formatting.lineSpacing,
-      typography: resolveCjkTypography(formatting.props, styleCascade?.typography),
+      typography: resolveCjkTypography(
+        formatting.props,
+        styleCascade?.typography,
+        formatting.markRunProperties
+      ),
       equationCacheToken: request.producer,
       ...(styleCascade ? { themeFonts: styleCascade.themeFonts } : {}),
       markRunProperties: formatting.markRunProperties,

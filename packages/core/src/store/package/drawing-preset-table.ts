@@ -3,13 +3,61 @@
 //
 // Preset shape geometry from presetShapeDefinitions.xml in the electronic annex of
 // ECMA-376 Part 1 (Office Open XML File Formats, Fundamentals and Markup Language Reference).
-// Copyright Ecma International. The Ecma notice in packages/core/licenses/ECMA-376.md applies
-// to this table. Adjust handles and connection sites are omitted.
+// Copyright Ecma International. The Ecma notice below and in packages/core/licenses/ECMA-376.md
+// applies to this table, not the Apache License. Adjust handles and connection sites are omitted.
 //
 // One line per preset: name|avLst|gdLst|text rect|paths. Guides are `name=formula` joined
 // by ';'. Paths are `w h fill stroke:commands` joined by '!', where a command is one of
 // M x y, L x y, A wR hR stAng swAng, Q x1 y1 x2 y2, C x1 y1 x2 y2 x3 y3, Z.
 
+/*!
+ * ECMA-376 preset shape geometry. The guide formulas and paths below are derived from
+ * presetShapeDefinitions.xml in the electronic annex of ECMA-376 Part 1, (c) Ecma International.
+ * They implement the functionality of the standard in a conformant product, item (iv) of the Ecma
+ * copyright notice, and the Ecma terms below apply to them, not the Apache License of
+ * @docx-editor.dev/core.
+ *
+ * COPYRIGHT NOTICE
+ *
+ * © Ecma International
+ *
+ * By obtaining and/or copying this work, you (the licensee) agree that you have read, understood,
+ * and will comply with the following terms and conditions.
+ *
+ * This document may be copied, published and distributed to others, and certain derivative works
+ * of it may be prepared, copied, published, and distributed, in whole or in part, provided that
+ * the above copyright notice and this Copyright License and Disclaimer are included on all such
+ * copies and derivative works. The only derivative works that are permissible under this Copyright
+ * License and Disclaimer are:
+ *
+ * (i) works which incorporate all or portion of this document for the purpose of providing
+ * commentary or explanation (such as an annotated version of the document),
+ *
+ * (ii) works which incorporate all or portion of this document for the purpose of incorporating
+ * features that provide accessibility,
+ *
+ * (iii) translations of this document into languages other than English and into different formats
+ * and
+ *
+ * (iv) works by making use of this specification in standard conformant products by implementing
+ * (e.g. by copy and paste wholly or partly) the functionality therein.
+ *
+ * However, the content of this document itself may not be modified in any way, including by
+ * removing the copyright notice or references to Ecma International, except as required to
+ * translate it into languages other than English or into a different format.
+ *
+ * The official version of an Ecma International document is the English language version on the
+ * Ecma International website. In the event of discrepancies between a translated version and the
+ * official version, the official version shall govern.
+ *
+ * The limited permissions granted above are perpetual and will not be revoked by Ecma
+ * International or its successors or assigns.
+ *
+ * This document and the information contained herein is provided on an "AS IS" basis and ECMA
+ * INTERNATIONAL DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY
+ * WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY OWNERSHIP RIGHTS OR ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+ */
 export const PRESET_SHAPE_SOURCE = `
 accentBorderCallout1|adj1=val 18750;adj2=val -8333;adj3=val 112500;adj4=val -38333|y1=*/ h adj1 100000;x1=*/ w adj2 100000;y2=*/ h adj3 100000;x2=*/ w adj4 100000|l t r b|0 0 norm 1:M l t L r t L r b L l b Z!0 0 none 1:M x1 t Z L x1 b!0 0 none 1:M x1 y1 L x2 y2
 accentBorderCallout2|adj1=val 18750;adj2=val -8333;adj3=val 18750;adj4=val -16667;adj5=val 112500;adj6=val -46667|y1=*/ h adj1 100000;x1=*/ w adj2 100000;y2=*/ h adj3 100000;x2=*/ w adj4 100000;y3=*/ h adj5 100000;x3=*/ w adj6 100000|l t r b|0 0 norm 1:M l t L r t L r b L l b Z!0 0 none 1:M x1 t Z L x1 b!0 0 none 1:M x1 y1 L x2 y2 L x3 y3

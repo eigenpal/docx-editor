@@ -2,30 +2,35 @@
 
 # Accept or reject without scrolling
 
-When your own list drives the scroll, open an item with `useReview().setActive(key, { reveal: false })`. The caret moves to the item, and the page stays where it is. Then resolve the item with `accept(item)` or `reject(item)`. Review writes such as accept, reject, and comment never scroll the page.
+Resolve a tracked change from your own list with `useReview().accept(item)` or `reject(item)`. Review writes such as accept, reject, and comment never scroll the page, and they need no prior activation.
+
+## Resolve a change without scrolling
+
+The following row opens its item without scrolling and resolves it from two buttons:
 
 ```vue
 <script setup lang="ts">
 import { useReview, type ReviewItemView } from '@docx-editor.dev/pro/vue';
 
 defineProps<{ item: ReviewItemView }>();
-const { setActive, accept, reject } = useReview();
+const { setActive, accept, reject, lastRefusal } = useReview();
 </script>
 
 <template>
-  <li @click="setActive(item.key, { reveal: false })">
-    {{ item.text }}
-    <button :disabled="item.readOnly" @click.stop="accept(item)">Accept</button>
-    <button :disabled="item.readOnly" @click.stop="reject(item)">Reject</button>
+  <li>
+    <button @click="setActive(item.key, { reveal: false })">{{ item.text }}</button>
+    <button :disabled="item.readOnly" @click="accept(item)">Accept</button>
+    <button :disabled="item.readOnly" @click="reject(item)">Reject</button>
+    <p v-if="lastRefusal?.key === item.key" role="alert">{{ lastRefusal.code }}</p>
   </li>
 </template>
 ```
 
-`accept` and `reject` return `false` when the editor refuses the decision, for example in viewing mode. `useReview()` returns `lastRefusal` as a ref, so read `lastRefusal.value?.code` in script, or `lastRefusal?.code` in the template.
+`accept` and `reject` return `false` when the editor refuses the decision, for example in viewing mode. `lastRefusal` holds the item key and the diagnostic code. In Vue it is a ref, so read `lastRefusal.value?.code` in script.
 
-The buttons stop the click from reaching the row, so a decision does not also activate the item.
+## Activate without scrolling
 
-`reveal` takes `false` or one of four placements:
+`setActive(key, { reveal: false })` moves the caret to the item and keeps the scroll position. `reveal` takes `false` or one of four placements:
 
 | Value | Where the item lands |
 | --- | --- |
@@ -36,23 +41,14 @@ The buttons stop the click from reaching the row, so a decision does not also ac
 
 Add `announce: true` to open the packaged balloon or card for the item.
 
-## Decide in a headless pipeline
+## Limits
 
-The editing API has no viewport. Load the revisions and call `Revision.accept()` or `Revision.reject()`.
+- Disable the decision buttons for items where `item.readOnly` is `true`.
+- If the whole row is clickable, stop button clicks from reaching it, so a decision does not also activate the item.
+- Headless pipelines have no viewport. To decide changes on a server, call `Revision.accept()` or `Revision.reject()`. For more information, see [Tracked changes](https://www.docx-editor.dev/docs/2.x/editor-api/revisions).
 
-```ts
-import { DocxEditor } from '@docx-editor.dev/editor-api';
+## See also
 
-const runtime = await DocxEditor.createServer(bytes, { author: 'Review bot' });
-await runtime.run(async (context) => {
-  const revisions = context.document.body.revisions;
-  revisions.load('items/author');
-  await context.sync();
-  for (const revision of revisions.items) {
-    if (revision.author === 'Review bot') revision.accept();
-  }
-  await context.sync();
-});
-const saved = await runtime.save();
-runtime.dispose();
-```
+- [Tracked changes](https://www.docx-editor.dev/docs/2.x/pro/tracked-changes)
+- [Diagnostics](https://www.docx-editor.dev/docs/2.x/guides/diagnostics)
+- [Custom cards in the review rail](./custom-review-cards.md)

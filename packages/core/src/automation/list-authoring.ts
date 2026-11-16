@@ -7,20 +7,9 @@ import { WML_NAMESPACE_URI as W } from '../store/package/ooxml-shared.ts';
 import { readTwipsMeasure } from '../store/units.ts';
 
 export type AutomationListBullet =
-  | 'Custom'
-  | 'Solid'
-  | 'Hollow'
-  | 'Square'
-  | 'Diamonds'
-  | 'Arrow'
-  | 'Checkmark';
+  'Custom' | 'Solid' | 'Hollow' | 'Square' | 'Diamonds' | 'Arrow' | 'Checkmark';
 export type AutomationListNumbering =
-  | 'None'
-  | 'Arabic'
-  | 'UpperRoman'
-  | 'LowerRoman'
-  | 'UpperLetter'
-  | 'LowerLetter';
+  'None' | 'Arabic' | 'UpperRoman' | 'LowerRoman' | 'UpperLetter' | 'LowerLetter';
 export interface AutomationListLevelFormat {
   readonly bullet?: AutomationListBullet;
   readonly charCode?: number;

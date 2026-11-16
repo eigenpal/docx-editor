@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
@@ -23,6 +23,8 @@ import {
 } from './singleton-children.ts';
 import { PACKAGE_NODES_KEY, NODE_TEXT_FIELD, makeTextRecord, type SharedRecord } from './schema.ts';
 import { splitWinnerOrder } from './split-dedup.ts';
+import { splitSiblingOrder, type SiblingRanks } from './split-sibling-order.ts';
+import { markPropertiesEnd, splitMarkMoves } from './split-mark-moves.ts';
 import { typedInsertOf, type TypedInsert } from './paragraph-text-typing.ts';
 import type { DocumentRegistry } from './registry.ts';
 import type { LogicalId } from './identity.ts';
@@ -274,7 +276,8 @@ class VisibleJournalProjection extends JournalProjection {
       const adopted = [...this.shared.adoptedChildren(id), ...this.mergedOf(id)].filter(
         (child, at, all) => !node.children.includes(child) && all.indexOf(child) === at
       );
-      const children = adopted.length > 0 ? [...node.children, ...adopted] : node.children;
+      const listed = adopted.length > 0 ? [...node.children, ...adopted] : node.children;
+      const children = splitMarkMoves(this.shared).shownChildIds(id, listed);
       node.children =
         this.shownOf(id)?.slice() ??
         this.visibleIndexes(id, children).map((index) => children[index]!);
@@ -302,17 +305,33 @@ export interface ProjectedJournal {
 }
 
 /**
+ * What the editor's tree shows, as the materializer last built it. A local journal addresses
+ * that tree, so its projection reads it where shared state alone does not say. It is current
+ * because the session publishes the shared view again after a local edit that renames or
+ * moves what shared text shows, and a pass that does not install its tree leaves a refusal,
+ * not lost content: the realign that follows rebuilds from shared state.
+ */
+export interface ShownTree {
+  /** The children a member part's root shows, in order, or null. */
+  shownPartChildren(rootId: LogicalId): readonly LogicalId[] | null;
+  /** The node the tree shows `id` under, or null when it does not show it. */
+  shownParentOf(id: LogicalId): LogicalId | null;
+}
+
+const NOTHING_SHOWN: ShownTree = { shownPartChildren: () => null, shownParentOf: () => null };
+
+/**
  * A local journal in shared coordinates: typing at one place as the insert it writes
  * (`typedInsertOf`), and any other journal projected (`projectJournalToShared`).
  */
 export function projectTypingOrJournal(
   registry: DocumentRegistry,
   original: CanonicalPrimitiveJournal,
-  shownPartChildren?: (rootId: LogicalId) => readonly LogicalId[] | null
+  tree?: ShownTree
 ): ProjectedJournal | ProjectionRefusal {
   const typed = typedInsertOf(registry, original);
   if (typed) return { ok: true, journal: { ...original, effects: [] }, plan: null, typed };
-  return projectJournalToShared(registry, original, shownPartChildren);
+  return projectJournalToShared(registry, original, tree);
 }
 
 /**
@@ -324,10 +343,10 @@ export function projectTypingOrJournal(
 export function projectJournalToShared(
   registry: DocumentRegistry,
   original: CanonicalPrimitiveJournal,
-  shownPartChildren: (rootId: LogicalId) => readonly LogicalId[] | null = () => null
+  tree: ShownTree = NOTHING_SHOWN
 ): ProjectedJournal | ProjectionRefusal {
   // Paragraph inline content is written to shared text; only the rest is projected here.
-  const routed = routeInlineEffects(registry, original.effects);
+  const routed = routeInlineEffects(registry, original.effects, (id) => tree.shownParentOf(id));
   if (routed.refusal) return { ok: false, ...routed.refusal };
   const journal = routed.plan ? { ...original, effects: routed.passThrough } : original;
   const incoming = journal.effects.map(sharedEffect);
@@ -339,13 +358,22 @@ export function projectJournalToShared(
   // Bound incoming lists before collecting future moves. Do not flatten unvalidated
   // child arrays into an additional unbounded allocation.
   const reinserted = new Set<LogicalId>();
+  // The parents this journal lists each child in, so releasing a child's other listings
+  // never deletes the listing the same journal writes.
+  const insertedInto = new Map<LogicalId, Set<LogicalId>>();
+  const noteInsert = (id: LogicalId, parentId: LogicalId): void => {
+    reinserted.add(id);
+    const parents = insertedInto.get(id) ?? new Set<LogicalId>();
+    parents.add(parentId);
+    insertedInto.set(id, parents);
+  };
   for (const effect of incoming) {
     if (effect.kind === 'spliceChildren') {
       if (effect.childLogicalIds.length > registry.limits.maxChildren)
         return { ok: false, code: 'too-many-children' };
-      for (const id of effect.childLogicalIds) reinserted.add(id);
+      for (const id of effect.childLogicalIds) noteInsert(id, effect.parentLogicalId);
     } else if (effect.kind === 'moveNode') {
-      reinserted.add(effect.logicalId);
+      noteInsert(effect.logicalId, effect.destinationParentLogicalId);
     }
     if (reinserted.size > registry.limits.maxNodes) return { ok: false, code: 'too-many-nodes' };
   }
@@ -357,7 +385,7 @@ export function projectJournalToShared(
     raw,
     text,
     (id) => mergedChildrenOf(id),
-    (id) => shownPartChildren(id)
+    (id) => tree.shownPartChildren(id)
   );
   const descriptors = new Map<LogicalId, SharedNodeDescriptor>();
   const kindOf = (id: LogicalId): string | null => descriptors.get(id)?.kind ?? registry.kindOf(id);
@@ -378,6 +406,23 @@ export function projectJournalToShared(
   // concurrent peer duplicated. A node this journal creates is live by definition.
   // `companions` maps a shown singleton's index to the hidden copies it stands for, and
   // `repeats` maps a shown child's index to its other listings in the same parent.
+  // Children this journal listed right after a concurrent split sibling, by parent, with the
+  // child each was listed after: each follows that one wherever the rule shows it, as the
+  // shared order does once it holds the edit, though the stored ranks do not name it yet.
+  const attached = new Map<LogicalId, Map<LogicalId, LogicalId>>();
+  const ranksWith = (parentId: LogicalId, children: readonly LogicalId[]): SiblingRanks => {
+    const ranks = registry.splitSiblings.ranksOf(parentId);
+    const after = attached.get(parentId);
+    if (!ranks || !after) return ranks;
+    const out = new Map(ranks);
+    let step = 0;
+    for (const id of children) {
+      const anchor = after.get(id);
+      const rank = anchor === undefined || out.has(id) ? undefined : out.get(anchor);
+      if (rank) out.set(id, { group: rank.group, rank: rank.rank + (step += 1) / 1e6 });
+    }
+    return out;
+  };
   const visibleLayout = (
     parentId: LogicalId,
     children: readonly LogicalId[]
@@ -389,7 +434,7 @@ export function projectJournalToShared(
     const seen = new Map<LogicalId, number>();
     const repeats = new Map<number, number[]>();
     const base: number[] = [];
-    const order =
+    const winners =
       hidden.size === 0
         ? null
         : splitWinnerOrder(
@@ -397,7 +442,13 @@ export function projectJournalToShared(
             (id) => hidden.has(id),
             (id) => registry.splitLineageOf(id)
           );
-    (order ?? children.map((_, index) => index)).forEach((index) => {
+    const shared = winners ?? children.map((_, index) => index);
+    // Then the materializer's order of concurrent split siblings, over the same ids.
+    const siblings = splitSiblingOrder(
+      shared.map((index) => children[index]!),
+      ranksWith(parentId, children)
+    );
+    (siblings ? siblings.map((at) => shared[at]!) : shared).forEach((index) => {
       const id = children[index]!;
       if (id === parentId || hidden.has(id)) return;
       const first = seen.get(id);
@@ -408,6 +459,17 @@ export function projectJournalToShared(
         repeats.set(first, others);
         return;
       }
+      // Two parents can list one child after concurrent moves, and the first one in document
+      // order shows it. A listing here that lost to another parent shows nothing here, so it
+      // takes no visible index. A child this journal lists is placed where the journal puts it.
+      const placed = reinserted.has(id) ? parentId : registry.parentOf(id);
+      if (
+        placed !== null &&
+        placed !== parentId &&
+        registry.listingParents(id).includes(parentId)
+      ) {
+        return;
+      }
       seen.set(id, index);
       // A tombstone is not shown, nor is a child whose record has not arrived yet, nor a split
       // text whose source has not: the materializer shows none of them. One record read, as
@@ -415,8 +477,10 @@ export function projectJournalToShared(
       if (!descriptors.has(id) && !registry.showsAsChild(id)) return;
       base.push(index);
     });
+    // A generic parent, such as a shape's properties, takes its rules from its element name.
+    const parentKind = kindOf(parentId);
     const layout = singletonLayout(
-      kindOf(parentId),
+      parentKind === 'generic' ? (shellOf(parentId) ?? parentKind) : parentKind,
       base.map((index) => children[index]!),
       shellOf
     );
@@ -447,6 +511,23 @@ export function projectJournalToShared(
   ): number => {
     const positions = visibleIndexes(parentId, children);
     const before = positions[visibleAt] ?? children.length;
+    // Beside concurrent split siblings shown in another order than listed, a child goes right
+    // after the one shown before it: it then follows that sibling wherever the rule puts it.
+    const ranks = ranksWith(parentId, children);
+    const left = visibleAt > 0 ? positions[visibleAt - 1] : undefined;
+    const shownAt = positions[visibleAt];
+    if (
+      ranks &&
+      left !== undefined &&
+      (ranks.has(children[left]!) || (shownAt !== undefined && ranks.has(children[shownAt]!)))
+    ) {
+      if (ranks.has(children[left]!)) {
+        const after = attached.get(parentId) ?? new Map<LogicalId, LogicalId>();
+        ids.forEach((id, at) => after.set(id, at === 0 ? children[left]! : ids[at - 1]!));
+        attached.set(parentId, after);
+      }
+      return left + 1;
+    }
     if (!permuted(positions)) return before;
     const after = visibleAt > 0 ? positions[visibleAt - 1]! + 1 : 0;
     for (const at of [before, after, children.length]) {
@@ -488,6 +569,28 @@ export function projectJournalToShared(
       }
     }
   };
+  // A child removed from the parent that shows it can still be listed by a parent that lost
+  // its placement. Left there, that listing showed the child again: a deleted block came
+  // back, or a block moved in its parent showed inside the other one. So removing a child
+  // from where it shows removes its other listings too, except those this journal writes.
+  const releaseOtherListings = (id: LogicalId, parentId: LogicalId): void => {
+    if (registry.parentOf(id) !== parentId) return;
+    for (const lister of registry.listingParents(id)) {
+      if (lister === parentId || insertedInto.get(id)?.has(lister)) continue;
+      const other = raw.node(lister);
+      if (!other || other.isText) continue;
+      for (let at = other.children.length - 1; at >= 0; at -= 1) {
+        if (other.children[at] !== id) continue;
+        emit({
+          kind: 'spliceChildren',
+          parentLogicalId: lister,
+          start: at,
+          deleteCount: 1,
+          childLogicalIds: [],
+        });
+      }
+    }
+  };
   // An adopted child is shown under the join survivor but listed under the tombstone it
   // came from. Before a journal addresses the survivor's children, list the adopted ones
   // where they are shown, so shared state holds the order the local edit was made against.
@@ -498,7 +601,7 @@ export function projectJournalToShared(
   const listPartMembersAsShown = (parentId: LogicalId): void => {
     if (listedAsShown.has(parentId)) return;
     listedAsShown.add(parentId);
-    const shown = shownPartChildren(parentId);
+    const shown = tree.shownPartChildren(parentId);
     const parent = raw.node(parentId);
     if (!shown || !parent || parent.isText) return;
     const listed = parent.children;
@@ -526,6 +629,34 @@ export function projectJournalToShared(
       deleteCount: listed.length,
       childLogicalIds: [...shown, ...kept],
     });
+  };
+  // A proposal of a concurrent split shows on another paragraph mark than the one that lists
+  // it (`split-mark-moves.ts`). Before a journal addresses either, list it where it shows.
+  const marksWhereShown = new Set<LogicalId>();
+  const listMarksWhereShown = (parentId: LogicalId): void => {
+    for (const move of splitMarkMoves(registry).movesAt(parentId)) {
+      if (marksWhereShown.has(move.node)) continue;
+      marksWhereShown.add(move.node);
+      const from = raw.node(move.from);
+      const to = raw.node(move.to);
+      if (!from || from.isText || !to || to.isText) continue;
+      const at = from.children.indexOf(move.node);
+      if (at < 0 || to.children.includes(move.node)) continue;
+      emit({
+        kind: 'spliceChildren',
+        parentLogicalId: move.from,
+        start: at,
+        deleteCount: 1,
+        childLogicalIds: [],
+      });
+      emit({
+        kind: 'spliceChildren',
+        parentLogicalId: move.to,
+        start: move.first ? 0 : markPropertiesEnd(registry, to.children),
+        deleteCount: 0,
+        childLogicalIds: [move.node],
+      });
+    }
   };
   const listedWhereShown = new Set<LogicalId>();
   const listAdoptedWhereShown = (parentId: LogicalId): void => {
@@ -555,10 +686,13 @@ export function projectJournalToShared(
         });
       }
     }
+    // They show after the survivor's own children, so they go in after the last one shown,
+    // which beside reordered split siblings is not the last one listed.
+    const shownCount = visibleIndexes(parentId, parent.children).length;
     emit({
       kind: 'spliceChildren',
       parentLogicalId: parentId,
-      start: parent.children.length,
+      start: insertionIndex(parentId, parent.children, shownCount, adopted),
       deleteCount: 0,
       childLogicalIds: adopted,
     });
@@ -678,6 +812,7 @@ export function projectJournalToShared(
         );
       } else if (effect.kind === 'spliceChildren') {
         listPartMembersAsShown(effect.parentLogicalId);
+        listMarksWhereShown(effect.parentLogicalId);
         listAdoptedWhereShown(effect.parentLogicalId);
         listMergedWhereShown(effect.parentLogicalId);
         const parent = raw.node(effect.parentLogicalId);
@@ -737,7 +872,10 @@ export function projectJournalToShared(
         }
         // A deleted block takes what it showed with it, as a Yjs node takes its nested content.
         if (!refusal) {
-          for (const id of removed) if (!reinserted.has(id)) releaseElsewhere(id);
+          for (const id of removed) {
+            releaseOtherListings(id, effect.parentLogicalId);
+            if (!reinserted.has(id)) releaseElsewhere(id);
+          }
         }
         if (!refusal && effect.childLogicalIds.length > 0) {
           for (const id of removed) {
@@ -749,6 +887,7 @@ export function projectJournalToShared(
       } else if (effect.kind === 'moveNode') {
         // moveNode's destination index is measured AFTER unlinking the source.
         listPartMembersAsShown(effect.destinationParentLogicalId);
+        listMarksWhereShown(effect.destinationParentLogicalId);
         listAdoptedWhereShown(effect.destinationParentLogicalId);
         listMergedWhereShown(effect.destinationParentLogicalId);
         const parent = raw.node(effect.destinationParentLogicalId);

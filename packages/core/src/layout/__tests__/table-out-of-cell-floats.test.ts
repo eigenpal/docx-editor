@@ -14,8 +14,7 @@ function layout(options: Parameters<typeof squareAnchorInCell>[0], compatibility
     compatibilityMode,
   }).pages[0]!;
   const table = page.fragments.find((fragment) => fragment.kind === 'table') as
-    | TableFragmentRecord
-    | undefined;
+    TableFragmentRecord | undefined;
   expect(table).toBeDefined();
   const drawing = page.anchoredDrawings?.[0];
   expect(drawing).toBeDefined();
@@ -59,8 +58,7 @@ describe('out-of-cell floats push the table rows (mode 14)', () => {
       }).pages[0]!;
       expect(page.anchoredDrawings?.[0]?.behindDocument).toBe(behindDoc === '1');
       const table = page.fragments.find((fragment) => fragment.kind === 'table') as
-        | TableFragmentRecord
-        | undefined;
+        TableFragmentRecord | undefined;
       expect(table).toBeDefined();
       return table!.box.y;
     };

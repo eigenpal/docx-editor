@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Suggesting mode in the editor refused Merge cells and Split cells in every table.",
+  "after": "Suggesting mode allows them in the author's own pending table insertion, through the tracked merge and split ops the document API already writes.",
+  "reason": "The editor now emits the same tracked mergeTableCells and splitTableCell ops as the document API, which write only existing table, row, cell, paragraph, and revision-marker node shapes. Released participants read and merge these nodes with their current rules.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-api-tracked-table-structure.test.ts",
+    "packages/core/src/editor/__tests__/suggesting-own-table-structure.test.ts"
+  ],
+  "changeset": "suggesting-own-table-merge",
+  "migration": null
+}

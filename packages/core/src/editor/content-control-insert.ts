@@ -63,8 +63,7 @@ function isDocRange(target: DocTarget): target is DocRange {
 }
 
 type SpanResolution =
-  | { ok: true; span: Span }
-  | { ok: false; code: ExecErrorCode; reason: string; target?: DocTarget };
+  { ok: true; span: Span } | { ok: false; code: ExecErrorCode; reason: string; target?: DocTarget };
 
 function spanOfTarget(surface: PaginatedSurface, target: DocTarget): SpanResolution {
   const part = surface.session.part();

@@ -117,7 +117,7 @@ export interface EditorExecOptions extends HistoryGroupOptions {
   readonly scope?: EditorScope;
   /**
    * An open handle from this editor. Supported for synchronous formatting commands, tracked
-   * proposals (`proposeInsertion`, `proposeDeletion`, `proposeReplacement`),
+   * proposals (`proposeInsertion`, `proposeDeletion`, `proposeReplacement`), `replaceMatch`,
    * `resolveAllReviewChanges`, and `setReviewChangesAuthor`. Other commands refuse a handle
    * with `code: 'unsupported'`.
    * Intervening writes and undo/redo can split a gesture; inspect `ExecResult.history`.
@@ -131,4 +131,13 @@ export interface EditorExecOptions extends HistoryGroupOptions {
 export interface HistoryDiagnostic {
   readonly kind: 'split' | 'possible-ungrouped-gesture' | 'possible-fragmented-gesture';
   readonly reason: string;
+}
+
+/** Options for replacing a comment body without overwriting a newer edit. @public */
+export interface CommentTextOptions extends HistoryGroupOptions {
+  /**
+   * The exact displayed text read when editing started. A mismatch refuses the write with
+   * `invalidArgs` and reason `comment-text-changed`. Omit to replace the current body.
+   */
+  readonly expectedText?: string;
 }

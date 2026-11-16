@@ -78,7 +78,7 @@ Not exercised:
 
 - Every `a:srcRect` in the file is `<a:srcRect/>` — **empty**. This one is a genuine repository-wide gap: no fixture anywhere carries a non-empty `a:srcRect`, so cropping has no coverage at all.
 - `r:link` and external-mode image relationships — none here. Coverage does exist elsewhere: `list-pagination-break.docx` carries **27** image relationships with `TargetMode="External"`. The security rule is therefore testable today.
-- Wrap modes other than `wrapSquare` — none here, but `float-wrap-comprehensive-test.docx`, `image-layout-modes-demo.docx`, `issue-705-anchored-header-letterhead.docx`, and `demo.docx` cover `wrapTight`, `wrapThrough`, and `wrapTopAndBottom`.
+- Wrap modes other than `wrapSquare` — none here, but `float-wrap-comprehensive-test.docx`, `image-layout-modes-demo.docx`, and `issue-705-anchored-header-letterhead.docx` cover `wrapTight`, `wrapThrough`, and `wrapTopAndBottom`.
 - `@behindDoc="1"` — nothing behind text.
 - Rotation, `@flipH` / `@flipV`, `a:ln` borders, `a:effectLst`, `a:tile`.
 - Non-PNG media: no JPEG, GIF, SVG, TIFF, EMF, or WMF.

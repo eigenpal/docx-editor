@@ -29,7 +29,7 @@ export function chromeIcon(paths: readonly string[] | null | undefined): VNode |
   if (!paths) return null;
   return h(
     'svg',
-    { viewBox: '0 -960 960 960', width: 18, height: 18, ariaHidden: 'true', focusable: 'false' },
+    { viewBox: '0 -960 960 960', width: 18, height: 18, 'aria-hidden': 'true', focusable: 'false' },
     paths.map((d) => h('path', { key: d, d, fill: 'currentColor' }))
   );
 }
