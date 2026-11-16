@@ -1,0 +1,16 @@
+{
+  "impact": "migration-required",
+  "fields": ["repairVersion"],
+  "before": "Text boxes, shapes, lines, and groups take no text wrap change. A height resize of a text box with a:spAutoFit writes only wp:extent. The singleton rules know drawing children by typed kind only, so a drawing inside mc:Choice, whose wp: elements are generic, has no rule: two peers who move one such text box at once leave two wp:positionV children and a schema-invalid anchor.",
+  "after": "setDrawingWrap applies to DrawingML text boxes, shapes, lines, and groups, and a height resize of a text box with a:spAutoFit replaces it with a:noAutofit in the same op. Generic wp: elements under a drawing in mc:Choice take the typed rule names (anchor, inline, position, wrap and the other once-only anchor children), and a wps:bodyPr holds one autofit choice. When two peers write such a child at once, each replica shows the first live copy. repairVersion increases to 5, so the format becomes docx-collaboration:1.5.5.1.",
+  "reason": "The singleton rule decides which conflicting node survives for the same shared state, so it is repair semantics. A wrap change replaces the anchor's wrap element, a move replaces a position's content, and a fit release replaces a:spAutoFit; each writes a new child. Two current participants who change one drawing at once therefore each insert a child. A replica with repairVersion 4 lacks the rules for generic drawing elements and wps:bodyPr, shows both copies, and saves a schema-invalid drawing. repairVersion increases to 5, so replicas with repairVersion 4 refuse these rooms before any update applies, and rooms created with repairVersion 4 keep the earlier rules. No stored field or identity changes; the ops write ordinary element and attribute records. The rule is derived on each replica from shared child order, and hidden copies stay in Yjs for undo.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/shape-wrap-peers.test.ts",
+    "packages/pro/src/collaboration/__tests__/format-1551-migration.test.ts",
+    "packages/pro/src/collaboration/__tests__/read-collaboration-document.test.ts",
+    "packages/core/src/editor/__tests__/shape-wrap.test.ts",
+    "packages/core/src/editor/__tests__/textbox-fit-resize.test.ts"
+  ],
+  "changeset": "textbox-shape-wrap",
+  "migration": "upgrade-rooms-to-format-1551"
+}

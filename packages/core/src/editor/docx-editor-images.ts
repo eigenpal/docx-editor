@@ -13,12 +13,20 @@ import { inlineToFloatingPosition } from './inline-wrap-placement.ts';
 import { reanchorMovedDrawing } from './drawing-reanchor.ts';
 import { preserveWrapExtentOps, type WrapExtentOverrides } from './image-wrap-extent.ts';
 import { reportCommandResult } from './command-reporting.ts';
-import { chartDrawingRefusal, drawingGate, type ChartGate } from './image-state-rules.ts';
+import {
+  chartDrawingRefusal,
+  drawingGate,
+  intrinsicOf,
+  type ChartGate,
+} from './image-state-rules.ts';
 import {
   isShapeDrawing,
   overlayFrameTurnOf,
   shapePictureCommandRefusal,
   selectedShapeFormat,
+  fittedTextboxHeightEmu,
+  textFitRelease,
+  shapeFrameWraps,
   shapeKeepsGeometrySize,
   type OverlayFrameTurn,
 } from './shape-drawings.ts';
@@ -244,21 +252,11 @@ function positionInputOf(projection: DrawingProjection): DrawingPositionInput | 
   });
 }
 
-function intrinsicOf(record: SelectedDrawingRecord): SelectedImageState['intrinsic'] {
-  const resource = record.resource;
-  if (resource.kind !== 'ready') return null;
-  return Object.freeze({
-    pixelWidth: resource.pixelWidth,
-    pixelHeight: resource.pixelHeight,
-    dpiX: resource.dpiX,
-    dpiY: resource.dpiY,
-  });
-}
-
 function capabilityFlags(
   projection: DrawingProjection,
   chart: ChartGate,
-  gateLocks: DrawingLocks
+  gateLocks: DrawingLocks,
+  shapeWraps = false
 ): Pick<SelectedImageState, 'canResize' | 'canMove' | 'canChangeWrap' | 'canCrop'> {
   const locks = chart === 'locked' ? { resize: true, move: true, changeAspect: true } : gateLocks;
   // An inline text box flows with its line: it resizes in place but is never dragged.
@@ -268,7 +266,7 @@ function capabilityFlags(
     canResize: !shape && !locks.resize && !projection.hidden,
     canMove: !fixed && !locks.move && !projection.hidden,
     canChangeWrap:
-      (chart === 'frame' || (chart === 'none' && projection.picture !== null)) &&
+      (chart === 'frame' || (chart === 'none' && (projection.picture !== null || shapeWraps))) &&
       !locks.move &&
       !projection.hidden,
     canCrop:
@@ -316,7 +314,7 @@ export function selectedImageStateOf(surface: PaginatedSurface | null): Selected
     id: record.drawingNodeId,
     kind: projection.kind,
     widthEmu: projection.extentEmu.cx,
-    heightEmu: projection.extentEmu.cy,
+    heightEmu: fittedTextboxHeightEmu(record) ?? projection.extentEmu.cy,
     crop: cropPercentFromSourceCrop(record.crop),
     rotationDegrees: transform.rotationDegrees || (record.vectorShape?.rotationDegrees ?? 0),
     wrap: wrapOf(record),
@@ -329,7 +327,7 @@ export function selectedImageStateOf(surface: PaginatedSurface | null): Selected
     hidden: projection.hidden,
     resourceStatus: record.resource.kind,
     intrinsic: intrinsicOf(record),
-    ...capabilityFlags(projection, chart, locks),
+    ...capabilityFlags(projection, chart, locks, shapeFrameWraps(surface!, projection, chart)),
     ...member.memberImageFields(surface!, record.drawingNodeId),
     shapeFormat: chart === 'none' ? selectedShapeFormat(surface!, record.drawingNodeId) : null,
   });
@@ -910,6 +908,7 @@ export function execImageCommand(
             cx: command.widthEmu ?? image.widthEmu,
             cy: command.heightEmu ?? image.heightEmu,
           },
+          ...textFitRelease(command.heightEmu, resolveSelectedDrawingRecord(surface)),
         });
       }
       if (command.crop !== undefined) {
@@ -1268,7 +1267,8 @@ export function freshSelectedDrawingOverlayTarget(
     height: frame.height,
     kind: record.kind === 'inlineDrawing' ? 'inline' : 'anchored',
     widthEmu: projection?.extentEmu.cx ?? pointsToEmu(frame.width),
-    heightEmu: projection?.extentEmu.cy ?? pointsToEmu(frame.height),
+    heightEmu:
+      fittedTextboxHeightEmu(record) ?? projection?.extentEmu.cy ?? pointsToEmu(frame.height),
     position: projection ? positionInputOf(projection) : null,
     anchorFrameOrigin,
     transform: record.transform,

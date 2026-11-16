@@ -5862,6 +5862,7 @@ export type TreeDocOp = SetFieldCodeOp | SetParagraphBordersOp | {
         readonly cy: number;
     };
     readonly op: 'resizeDrawing';
+    readonly textFit?: 'release';
 } | {
     readonly crop: SourceCrop;
     readonly drawingNodeId: string;

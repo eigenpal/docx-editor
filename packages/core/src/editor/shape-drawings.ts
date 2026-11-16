@@ -6,6 +6,9 @@ import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawi
 import { holdsDiagramGraphic } from '../store/package/diagram-frame.ts';
 import type { DrawingProjection } from '../store/package/drawing-projection.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
+import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { pointsToEmu } from './image-overlay-geometry.ts';
+import { validateDrawingOp } from '../store/store/tree-op-drawings.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import { selectedGroupMember } from './group-member-selection.ts';
@@ -58,6 +61,59 @@ export function shapePictureCommandRefusal(
         ? 'replacing the picture is'
         : 'hyperlinks are';
   return { ok: false, code: 'unsupported', reason: `${what} not supported for ${kind}` };
+}
+
+/**
+ * Whether the store takes a text wrap change for a text box, shape, line or group: a DrawingML
+ * frame (`wp:anchor` or `wp:inline`) that no move lock holds. A legacy VML shape has no such frame.
+ */
+export function shapeFrameWraps(
+  surface: PaginatedSurface,
+  projection: DrawingProjection,
+  chart: 'none' | 'frame' | 'locked'
+): boolean {
+  if (chart !== 'none' || projection.picture !== null) return false;
+  const { drawingNodeId } = projection;
+  const part = partOfNodeId(surface.session, drawingNodeId) ?? surface.session.part();
+  // A part is immutable, so its answer holds until an edit makes a new part. The selected image
+  // is read on every snapshot, and the check projects the drawing again.
+  let answers = frameWrapAnswers.get(part);
+  if (!answers) frameWrapAnswers.set(part, (answers = new Map()));
+  let answer = answers.get(drawingNodeId);
+  if (answer === undefined) {
+    answer =
+      validateDrawingOp(part, { op: 'setDrawingWrap', drawingNodeId, wrap: 'square' }) === null;
+    answers.set(drawingNodeId, answer);
+  }
+  return answer;
+}
+
+const frameWrapAnswers = new WeakMap<OoxmlPart, Map<string, boolean>>();
+
+/**
+ * The painted height, in EMU, of a text box that fits its text ("Resize shape to fit text"), or
+ * null for any other drawing. Its `wp:extent` height is not what the page shows, so the selected
+ * image and a resize report and start from this height, and a resize that keeps it keeps the fit.
+ */
+export function fittedTextboxHeightEmu(
+  record: InlineDrawingRecord | AnchoredDrawingRecord | null
+): number | null {
+  const height = record && 'textboxStory' in record ? record.textboxStory?.extentHeight : undefined;
+  return height === undefined ? null : pointsToEmu(height);
+}
+
+/**
+ * `textFit: 'release'` for a resize that changes the painted height of a text box that fits its
+ * text, so the box keeps the new height; nothing for any other resize or drawing.
+ */
+export function textFitRelease(
+  heightEmu: number | undefined,
+  record: InlineDrawingRecord | AnchoredDrawingRecord | null
+): { readonly textFit?: 'release' } {
+  const fitted = fittedTextboxHeightEmu(record);
+  return fitted !== null && heightEmu !== undefined && heightEmu !== fitted
+    ? { textFit: 'release' }
+    : {};
 }
 
 /**

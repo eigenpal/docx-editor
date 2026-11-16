@@ -140,7 +140,8 @@ describe('upgrade rooms to format 1.5.4.1', () => {
     expect(collaborationMigrationNeed(state)).toBe('earlier-format');
     expect(() => validateRoom(state)).toThrow(CollaborationSchemaError);
     expect(Buffer.from(state).toString('hex')).toBe(before);
-    expect(COLLABORATION_FORMAT_VERSION).toBe('docx-collaboration:1.5.4.1');
+    // Later formats keep refusing it: the current repair version is above 3.
+    expect(DOCUMENT_COLLABORATION_VERSIONS.repairVersion).toBeGreaterThan(3);
   });
 
   test('the guide steps export, dry-run, migrate, and rerun a room with shapes', async () => {

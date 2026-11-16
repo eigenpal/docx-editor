@@ -53,6 +53,10 @@ export function paintGroupTextboxStories(
     content.style.width = `${story.contentWidth * scale}px`;
     content.style.height = `${Math.max(0, story.contentHeight) * scale}px`;
     content.style.overflow = 'hidden';
+    // A run paints bold or italic only when it is, so the story must not inherit either from the
+    // line that holds an inline box, which carries its paragraph mark's face.
+    content.style.fontWeight = 'normal';
+    content.style.fontStyle = 'normal';
     const turn = member.rotationDegrees;
     if (turn !== 0 && Number.isFinite(turn)) {
       // The member turns about its box center, which sits here in content-box coordinates.

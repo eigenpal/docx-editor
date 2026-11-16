@@ -1030,6 +1030,11 @@ export type TreeDocOp =
       readonly op: 'resizeDrawing';
       readonly drawingNodeId: string;
       readonly extentEmu: { readonly cx: number; readonly cy: number };
+      /**
+       * `release` turns off a text box's "Resize shape to fit text": `a:spAutoFit` becomes
+       * `a:noAutofit`, so the box keeps the height given. Absent keeps the fit.
+       */
+      readonly textFit?: 'release';
     }
   | { readonly op: 'cropDrawing'; readonly drawingNodeId: string; readonly crop: SourceCrop }
   | {
