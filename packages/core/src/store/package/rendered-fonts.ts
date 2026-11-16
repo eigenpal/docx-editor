@@ -31,7 +31,7 @@
 //   `w:tab`, …). An empty paragraph's mark metrics do move layout, but the notice's
 //   contract is "text renders in the wrong face". A `w:sym` naming a face of its own is
 //   the one mark that does NOT count, because layout paints it in that face instead of the
-//   run's — see `GLYPH_MARKS` below.
+//   run's — see `GLYPH_MARKS` below. The broad export answer adds marks (`applyMark`).
 
 import { isEastAsianCodePoint } from './east-asian-code-points.ts';
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
@@ -105,6 +105,8 @@ interface RunProfile {
   readonly runStyle: string | null;
   readonly paragraphStyle?: string | null;
   readonly tableStyle?: string | null | false;
+  /** A paragraph mark (§17.3.1.29), not a run: only the broad answer counts it. */
+  readonly mark?: true;
 }
 
 /** What one subtree's rendered text uses. Composes by union across sibling subtrees. */
@@ -132,6 +134,7 @@ function profileKey(profile: RunProfile): string {
     profile.runStyle,
     profile.paragraphStyle === undefined ? 0 : profile.paragraphStyle,
     profile.tableStyle === undefined ? 0 : profile.tableStyle,
+    profile.mark === true,
   ]);
 }
 
@@ -356,7 +359,28 @@ function applyNode(
     addProfile(summary, PROJECTED_FIELD_PROFILE);
   }
   if (node.localName === 'r') applyRun(node, summary, themeFonts, projectedGlyphIds);
-  else if (isStyledBlock(node)) closeContext(summary, node);
+  else if (isStyledBlock(node)) {
+    if (node.localName === 'p') applyMark(node, summary, themeFonts);
+    closeContext(summary, node);
+  }
+}
+
+/** The mark's `w:pPr/w:rPr` face. Its `w:rStyle` sizes only an empty line (layout). */
+function applyMark(paragraph: OoxmlElement, summary: MutableSummary, theme: DocumentThemeFonts) {
+  const pPr = childElement(paragraph, 'pPr');
+  const rPr = pPr ? childElement(pPr, 'rPr') : undefined;
+  const rFonts = rPr ? childElement(rPr, 'rFonts') : undefined;
+  const rStyle = rPr ? childElement(rPr, 'rStyle') : undefined;
+  let hasContent = false;
+  for (const profile of summary.profiles.values()) {
+    hasContent ||= profile.mark !== true && profile.paragraphStyle === undefined;
+  }
+  addProfile(summary, {
+    ...PROJECTED_FIELD_PROFILE,
+    latin: rFonts ? familyFromRFonts(rFonts, theme) : null,
+    runStyle: hasContent ? null : validStyleId(rStyle ? attributeValue(rStyle, 'val') : undefined),
+    mark: true,
+  });
 }
 
 /**
@@ -820,15 +844,17 @@ function addBroadFamilies(
       ? EMPTY_CHAIN
       : index.chain(profile.tableStyle ?? index.defaultTable),
   ];
+  // An empty mark is measured in its Latin face only (`shaped-measurer.ts` `lineMetrics`).
+  const eastAsian = profile.mark !== true;
   for (const chain of chains) {
-    addFamily(inherited, chain.eastAsia);
+    if (eastAsian) addFamily(inherited, chain.eastAsia);
     addFamily(inherited, chain.latin);
     if (profile.hasHAnsi) addFamily(inherited, chain.hAnsi);
     for (const family of chain.conditional) addFamily(inherited, family);
-    for (const family of chain.conditionalEastAsia) addFamily(inherited, family);
+    if (eastAsian) for (const family of chain.conditionalEastAsia) addFamily(inherited, family);
   }
   addFamily(inherited, index.docDefaultLatin);
-  addFamily(inherited, index.docDefaultEastAsia);
+  if (eastAsian) addFamily(inherited, index.docDefaultEastAsia);
   if (profile.hasHAnsi) addFamily(inherited, index.docDefaultHAnsi);
 }
 
@@ -943,6 +969,7 @@ function collectCandidates(
       );
     }
     for (const profile of rootSummary.profiles.values()) {
+      if (profile.mark && !broad) continue;
       // A run that reached the story root with no table around it is outside any table.
       const placed =
         profile.tableStyle === undefined ? { ...profile, tableStyle: false as const } : profile;

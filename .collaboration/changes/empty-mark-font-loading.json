@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Export loaded only the fonts that text runs resolve to, so empty paragraph marks could be measured in a fallback face.",
+  "after": "Export also loads the fonts that paragraph marks resolve to, from mark run properties, paragraph and table styles, and document defaults.",
+  "reason": "Font loading for export is local to the exporting process. Shared nodes, text offsets, operations, and package serialization stay unchanged.",
+  "tests": ["packages/core/src/export/__tests__/paragraph-mark-fonts.test.ts"],
+  "changeset": "empty-mark-font-loading",
+  "migration": null
+}
