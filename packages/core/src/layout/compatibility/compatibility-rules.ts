@@ -227,6 +227,10 @@ export const MODE_RULES = {
     'A wrapping object positioned from its paragraph or line moves up to end at the bottom page edge, and never above the top page edge. A row whose cell object would cross the bottom margin moves to the next page',
     'ECMA-376 Part 1 §20.4.2.11 positionV'
   ),
+  columnAlignmentFollowsIndents: legacy(
+    'An object aligned left or right in its column aligns with the left or right indent of its anchor paragraph',
+    'ECMA-376 Part 1 §20.4.2.10 positionH'
+  ),
   lineAnchorsBeforeBandPush: legacy(
     'An object positioned from the first line of a paragraph measures from where that line was before a wrapping band above pushed it down',
     'ECMA-376 Part 1 §20.4.2.11 positionV'

@@ -7,7 +7,10 @@
 // about where the object is. Each rule below was printed from Word 16.113 under modes
 // absent, 12, 14, 15 and 16.
 
-import type { DrawingProjection } from '../store/package/drawing-projection.ts';
+import type {
+  DrawingProjection,
+  DrawingVerticalReferenceFrame,
+} from '../store/package/drawing-projection.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import type { LayoutBox } from './semantic-records.ts';
 
@@ -120,4 +123,24 @@ export function cellAnchorFlow(
     anchorCellBox: Object.freeze({ x: 0, y: 0, width, height: Math.max(1, available) }),
     cellAnchorScope: scope,
   };
+}
+
+/**
+ * Whether a vertical alignment in a table cell resolves to the top of its frame. The reference
+ * rendering places an object centered or bottom-aligned on the page, margin or paragraph at the
+ * top of that frame, as if top-aligned: the cell's height is not known when the object is
+ * placed (ECMA-376 Part 1 §20.4.2.11 positionV, §20.4.3.2 ST_AlignV).
+ */
+export function alignsToCellFrameTop(
+  frame: DrawingVerticalReferenceFrame,
+  align: string | null
+): boolean {
+  if (align !== 'center' && align !== 'bottom') return false;
+  return (
+    frame === 'page' ||
+    frame === 'margin' ||
+    frame === 'paragraph' ||
+    frame === 'topMargin' ||
+    frame === 'bottomMargin'
+  );
 }

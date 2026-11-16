@@ -565,12 +565,13 @@ function anchorFrameContext(
 }
 
 describe('resolves anchored position frames', () => {
-  test('cell column alignment uses text padding while other frames retain the physical cell', () => {
+  test('cell column and margin alignment use text padding while page keeps the physical cell', () => {
     const cellBox = { x: 100, y: 40, width: 200, height: 100 };
     const cellContentBox = { ...cellBox, x: 112, width: 170 };
-    for (const [frame, right] of [
-      ['column', 282],
-      ['margin', 300],
+    for (const [frame, right, outside] of [
+      ['column', 282, 468],
+      ['margin', 282, 468],
+      ['page', 300, 540],
     ] as const) {
       const projection = projectDrawing(
         drawingOf(
@@ -591,7 +592,7 @@ describe('resolves anchored position frames', () => {
           projection,
           anchorFrameContext({ cellBox, cellContentBox, layoutInCell: false })
         ).x + 72
-      ).toBeCloseTo(468, 5);
+      ).toBeCloseTo(outside, 5);
     }
   });
   test('margin right align places the right edge at the content edge', () => {

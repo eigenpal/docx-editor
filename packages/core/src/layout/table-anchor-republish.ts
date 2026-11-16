@@ -39,12 +39,35 @@ export type DeferredRowAnchor = {
   readonly cellContentWidth: number;
 };
 
+/**
+ * Where the text area of a flowed cell starts and how far its bottom margin reaches up, by
+ * cell id: what positions an object laid out in the cell against its margins.
+ */
+export type CellTextAreas = ReadonlyMap<string, { readonly top: number; readonly bottom: number }>;
+
+/** The text areas of a row's flowed cells. A bottom-to-top cell keeps its whole box. */
+export function cellTextAreas(
+  flowed: readonly {
+    readonly cell: { readonly id: string; readonly textDirection?: string };
+    readonly contentTop: number;
+    readonly insets: { readonly bottom: number };
+  }[]
+): CellTextAreas {
+  const areas = new Map<string, { readonly top: number; readonly bottom: number }>();
+  for (const entry of flowed) {
+    if (entry.cell.textDirection === 'btLr') continue;
+    areas.set(entry.cell.id, { top: entry.contentTop, bottom: entry.insets.bottom });
+  }
+  return areas;
+}
+
 export function publishDeferredRowAnchors(
   deferredRowAnchors: readonly DeferredRowAnchor[],
   cells: readonly TableCellFragmentRecord[],
   rowTop: number,
   rowHeight: number,
-  deps: TableFlowDeps
+  deps: TableFlowDeps,
+  textAreas?: CellTextAreas
 ): void {
   const publish = anchorPublishSink(deps);
   if (
@@ -59,6 +82,7 @@ export function publishDeferredRowAnchors(
   for (const pending of deferredRowAnchors) {
     let paragraphBox: LayoutBox | null = null;
     let cellFrameBox: LayoutBox | null = null;
+    let cellId: string | null = null;
     let lines: readonly LineRecord[] = pending.lines;
     for (const cell of cells) {
       for (const block of cell.blocks) {
@@ -66,6 +90,7 @@ export function publishDeferredRowAnchors(
           paragraphBox = block.box;
           lines = block.lines;
           cellFrameBox = cell.box;
+          cellId = cell.id;
           break;
         }
       }
@@ -80,6 +105,9 @@ export function publishDeferredRowAnchors(
         width: pending.cellContentWidth,
         height: rowHeight,
       });
+    const area = cellId === null ? undefined : textAreas?.get(cellId);
+    const contentTop = area?.top ?? cellBox.y;
+    const contentBottom = cellBox.y + cellBox.height - (area?.bottom ?? 0);
     publish(
       publishAnchoredDrawingsForParagraph({
         paragraph: pending.paragraph,
@@ -90,7 +118,12 @@ export function publishDeferredRowAnchors(
         frameBase: deps.anchorFrameBase(),
         columnBox: deps.columnBoxForParagraph?.(paragraphBox) ?? paragraphBox,
         cellBox,
-        cellContentBox: { ...cellBox, x: pending.cellOriginX, width: pending.cellContentWidth },
+        cellContentBox: {
+          x: pending.cellOriginX,
+          y: contentTop,
+          width: pending.cellContentWidth,
+          height: Math.max(0, contentBottom - contentTop),
+        },
         pageClip: deps.pageContentClip(),
         cellAnchorScope: cellAnchorScope(true, deps),
         measurer: deps.measurer,
@@ -156,7 +189,8 @@ export function rowDepsForAnchors(
   readonly flushDeferred: (
     cells: readonly TableCellFragmentRecord[],
     rowTop: number,
-    rowHeight: number
+    rowHeight: number,
+    textAreas?: CellTextAreas
   ) => void;
 } {
   const publishAnchoredDrawings = anchorPublishSink(deps);
@@ -175,11 +209,12 @@ export function rowDepsForAnchors(
   const flushDeferred = (
     cells: readonly TableCellFragmentRecord[],
     rowTop: number,
-    rowHeight: number
+    rowHeight: number,
+    textAreas?: CellTextAreas
   ): void => {
     if (deferredRowAnchors.length === 0) return;
     if (publishAnchoredDrawings && !deps.anchorDeferOnly) {
-      publishDeferredRowAnchors(deferredRowAnchors, cells, rowTop, rowHeight, deps);
+      publishDeferredRowAnchors(deferredRowAnchors, cells, rowTop, rowHeight, deps, textAreas);
     } else if (parentDefer) {
       for (const pending of deferredRowAnchors) parentDefer(pending);
     }

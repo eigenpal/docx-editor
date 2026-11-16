@@ -278,9 +278,10 @@ export function finalizeTableRows(
                 occurrenceInsets?.get(row)?.get(cell.id) ??
                 sharedCellContentInsets(authored, structure.cellSpacingPt === 0);
               const cellContentBox = {
-                ...finalizedCellBox,
                 x: finalizedCellBox.x + insets.left,
+                y: finalizedCellBox.y + insets.top,
                 width: Math.max(1, finalizedCellBox.width - insets.left - insets.right),
+                height: Math.max(0, finalizedCellBox.height - insets.top - insets.bottom),
               };
               republishAnchoredParagraphsInBlocks(
                 blocks,
