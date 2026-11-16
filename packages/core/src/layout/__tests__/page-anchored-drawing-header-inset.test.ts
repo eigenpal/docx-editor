@@ -140,7 +140,7 @@ function story(kind: 'header' | 'footer', lines: number) {
 
 /**
  * Two furniture lines beat the 20pt margins of {@link GEOMETRY} and nothing in {@link ROOMY}.
- * A line count instead of `true` asks for a taller band — 20 lines runs past the 40% cap.
+ * A line count instead of `true` asks for a taller band — 20 lines run past two fifths of the sheet.
  */
 function furniture(opts: {
   readonly header?: boolean | number;
@@ -302,14 +302,14 @@ describe('the margin frames are page-setup landmarks, not furniture-relative', (
     expect(sheetTop(layout)).toBeCloseTo(GEOMETRY.height - GEOMETRY.margin.bottom, 3);
   });
 
-  // The cap is where `effectiveTop` STOPS tracking the header, so it is the case most likely
-  // to rot: a landmark that reads the inset must still land on the authored line there.
-  test('the landmarks hold once the 40% furniture cap clamps the inset', () => {
-    const capped = { furniture: furniture({ header: 20 }) };
-    expect(contentInset(lay({ frame: 'page' }, capped))).toBeCloseTo(GEOMETRY.height * 0.4, 3);
-    expect(sheetTop(lay({ frame: 'page' }, capped))).toBeCloseTo(0, 3);
-    expect(sheetTop(lay({ frame: 'topMargin' }, capped))).toBeCloseTo(0, 3);
-    expect(sheetTop(lay({ frame: 'bottomMargin' }, capped))).toBeCloseTo(
+  // A header that pushes the body far down the sheet is the case most likely to rot: a
+  // landmark that reads the inset must still land on the authored line there.
+  test('the landmarks hold when a tall header pushes the inset past two fifths', () => {
+    const tall = { furniture: furniture({ header: 20 }) };
+    expect(contentInset(lay({ frame: 'page' }, tall))).toBeGreaterThan(GEOMETRY.height * 0.4);
+    expect(sheetTop(lay({ frame: 'page' }, tall))).toBeCloseTo(0, 3);
+    expect(sheetTop(lay({ frame: 'topMargin' }, tall))).toBeCloseTo(0, 3);
+    expect(sheetTop(lay({ frame: 'bottomMargin' }, tall))).toBeCloseTo(
       GEOMETRY.height - GEOMETRY.margin.bottom,
       3
     );

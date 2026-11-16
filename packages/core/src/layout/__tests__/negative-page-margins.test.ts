@@ -4,8 +4,8 @@
 // negative one is exact: the body starts at its absolute value whatever the header's height,
 // and the header overlaps the body. The bottom margin mirrors this against the footer. Before
 // this, the signed value reached the inset arithmetic as a small number that any header beat,
-// so a tall header (a column of line numbers down the page, say) pushed every page's body to
-// the furniture cap and more than doubled the page count.
+// so a tall header (a column of line numbers down the page, say) pushed every page's body below
+// the header and more than doubled the page count.
 
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
@@ -184,6 +184,9 @@ function layoutDoc(
 }
 
 const topInset = (page: PageRecord) => page.contentBox.y - page.box.y;
+/** Where the page's header ends, measured from the sheet top (§17.10). */
+const headerBottom = (page: PageRecord) =>
+  page.header!.box.y + page.header!.box.height - page.box.y;
 const bottomInset = (page: PageRecord) =>
   page.box.y + page.box.height - (page.contentBox.y + page.contentBox.height);
 
@@ -253,19 +256,21 @@ describe('page content insets for a negative margin', () => {
 
   test('a positive margin of the same size is still a minimum the furniture pushes', () => {
     const insets = createPageContentInsets({ ...inputs, marginTop: TOP, marginBottom: BOTTOM })(0);
-    // Both edges hit the 40% cap: 36 + 400 and 7.2 + 400 are past 316.8.
-    expect(insets.top).toBeCloseTo(PAGE_HEIGHT * 0.4, 6);
-    expect(insets.bottom).toBeCloseTo(PAGE_HEIGHT * 0.4, 6);
+    // The header takes its full 36 + 400. The footer wants 7.2 + 400 but stops where one
+    // point of column is left, so pagination still has a box to flow into.
+    expect(insets.top).toBeCloseTo(HEADER_DISTANCE + 400, 6);
+    expect(insets.height).toBeCloseTo(1, 6);
   });
 
-  test('the cap bounds a negative margin too, so the column never collapses', () => {
+  test('a negative margin past two fifths of the sheet stays exact (§17.6.11)', () => {
     const insets = createPageContentInsets({
       ...inputs,
       marginTop: -500,
       marginBottom: 72,
     })(0);
-    expect(insets.top).toBeCloseTo(PAGE_HEIGHT * 0.4, 6);
-    expect(insets.height).toBeGreaterThanOrEqual(PAGE_HEIGHT * 0.2 - 1e-9);
+    expect(insets.top).toBeCloseTo(500, 6);
+    // The positive bottom lets the footer push up to the one-point column floor.
+    expect(insets.height).toBeCloseTo(1, 6);
   });
 });
 
@@ -297,7 +302,8 @@ describe('body flow with negative vertical margins and tall furniture', () => {
   test('the same magnitudes, positive, still let the tall header push the body down', () => {
     const negative = layoutDoc({ top: -1296, bottom: -1152, body });
     const positive = layoutDoc({ top: 1296, bottom: 1152, body });
-    expect(topInset(positive.pages[0]!)).toBeCloseTo(PAGE_HEIGHT * 0.4, 6);
+    expect(topInset(positive.pages[0]!)).toBeCloseTo(headerBottom(positive.pages[0]!), 6);
+    expect(topInset(positive.pages[0]!)).toBeGreaterThan(PAGE_HEIGHT * 0.4);
     expect(positive.pages.length).toBeGreaterThan(negative.pages.length);
   });
 
@@ -332,7 +338,7 @@ describe('body flow with negative vertical margins and tall furniture', () => {
   });
 
   test('a continuous negative-margin section keeps the host sheet box, then its own', () => {
-    // Section 1: positive margins, so its tall header pushes its body to the cap.
+    // Section 1: positive margins, so its tall header pushes its body below the header.
     // Section 2: continuous and negative, so its own later sheets start at |top|.
     const docBody =
       lines(10, 'Host') +
@@ -346,7 +352,7 @@ describe('body flow with negative vertical margins and tall furniture', () => {
       producer: 'test',
       sectionFurniture: furnitureOf(pkg, part, { titlePage: false }),
     });
-    expect(topInset(layout.pages[0]!)).toBeCloseTo(PAGE_HEIGHT * 0.4, 6);
+    expect(topInset(layout.pages[0]!)).toBeCloseTo(headerBottom(layout.pages[0]!), 6);
     const later = layout.pages.slice(1);
     expect(later.length).toBeGreaterThan(0);
     for (const page of later) expect(topInset(page)).toBeCloseTo(TOP, 6);
@@ -438,10 +444,12 @@ describe('notes and incremental reuse under negative vertical margins', () => {
         session,
         sectionFurniture: furnitureOf(doc.pkg, doc.part, { titlePage: false }),
       });
-    expect(topInset(run(positive, 1).pages[1]!)).toBeCloseTo(PAGE_HEIGHT * 0.4, 6);
+    const warm = run(positive, 1).pages[1]!;
+    expect(topInset(warm)).toBeCloseTo(headerBottom(warm), 6);
     const flipped = run(negative, 2);
     for (const page of flipped.pages) expect(topInset(page)).toBeCloseTo(TOP, 6);
-    expect(topInset(run(positive, 3).pages[1]!)).toBeCloseTo(PAGE_HEIGHT * 0.4, 6);
+    const rewarmed = run(positive, 3).pages[1]!;
+    expect(topInset(rewarmed)).toBeCloseTo(headerBottom(rewarmed), 6);
   });
 });
 
