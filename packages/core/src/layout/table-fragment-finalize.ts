@@ -228,7 +228,12 @@ export function finalizeTableRows(
             // A merged `btLr` head lays its text along the rows its merge covers in this fragment.
             let blocks =
               (span > 1 && relayOutMergedBottomToTop(cell.blocks, height)) || cell.blocks;
-            if (authored && authored.vAlign !== 'top' && blocks.length > 0) {
+            // A cell holding floats keeps the alignment its row gave it: its floats stay where
+            // they were placed, so the band of its blocks no longer says where the text began.
+            const holdsFloats = blocks.some(
+              (block) => block.kind === 'table' && block.floatingWrap
+            );
+            if (authored && authored.vAlign !== 'top' && blocks.length > 0 && !holdsFloats) {
               const insets =
                 occurrenceInsets?.get(row)?.get(cell.id) ??
                 sharedCellContentInsets(authored, structure.cellSpacingPt === 0);

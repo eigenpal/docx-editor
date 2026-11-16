@@ -12,6 +12,7 @@ import {
 } from './table-exact-terminal-border.ts';
 import { cellContextualSpacing, contextualCellNeighbours } from './contextual-paragraph-spacing.ts';
 import { emitNestedTable } from './nested-table-layout.ts';
+import { alignCellContent, createCellFloats, withCellFloatBox } from './cell-float-tables.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import { paragraphBoxOutdent } from './paragraph-indent.ts';
 import { lineContentX, pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
@@ -153,7 +154,7 @@ import {
   rememberBottomToTopRelayouts,
   waitsForRowHeight,
 } from './table-cell-text-direction.ts';
-import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
+import { finalizeTableRows } from './table-fragment-finalize.ts';
 import { cellAnchorFlow, cellAnchorScope } from './cell-anchor-layout.ts';
 import { cellBottomWithAnchors, publishCellParagraphAnchors } from './cell-paragraph-anchors.ts';
 import { cellAnchorPageFit } from './cell-paragraph-anchors.ts';
@@ -357,6 +358,8 @@ export interface TableFlowDeps {
   readonly pageExclusionZones?: () => readonly import('./drawing-exclusion.ts').ExclusionZone[];
   /** Document-order index for filtering wrap zones to earlier anchors only. */
   readonly paragraphOrderIndex?: (paragraphId: string) => number | undefined;
+  /** The cell box whose flow places nested floating tables (`cell-float-tables.ts`). */
+  readonly cellFloatBox?: import('./cell-float-tables.ts').CellFloatBox;
   /**
    * Reports every break-cache key a cell paragraph is cached under, so the host's
    * cache retention can name a table's cell entries without laying the table out.
@@ -1074,6 +1077,7 @@ function flowBlocksInBoxBounded(
   let nestedSplitBlocked = false;
   // Carried across page cuts by the cursor; never re-derived from the source node's kind.
   let lastEmittedTable = cursor.precededByEmittedTable;
+  const floats = inTableCell ? createCellFloats(blocks, left, right, deps) : undefined;
 
   while (blockIndex < blocks.length) {
     const block = blocks[blockIndex]!;
@@ -1083,7 +1087,7 @@ function flowBlocksInBoxBounded(
         lineIndex = 0;
       }
       previousSpaceAfter = 0;
-      const nested = emitNestedTable(
+      const nested = (floats?.emit ?? emitNestedTable)(
         block,
         left,
         right,
@@ -1133,7 +1137,7 @@ function flowBlocksInBoxBounded(
       left,
       Math.max(1, right - left),
       y,
-      deps,
+      floats ? floats.paragraphDeps(deps) : deps,
       previousSpaceAfter,
       {
         inTableCell,
@@ -1182,7 +1186,7 @@ function flowBlocksInBoxBounded(
       // Paragraph continues on the next page.
       return {
         blocks: fragments,
-        bottom: y,
+        bottom: floats?.bottom(y) ?? y,
         cursor: continuedCellCursor(blockIndex, placed, paragraphFragmentIndex, lastEmittedTable),
         complete: false,
         fitted: true,
@@ -1193,7 +1197,7 @@ function flowBlocksInBoxBounded(
 
   return {
     blocks: fragments,
-    bottom: cellBottomWithAnchors(y, blocks, fragments, deps, inTableCell),
+    bottom: cellBottomWithAnchors(floats?.bottom(y) ?? y, blocks, fragments, deps, inTableCell),
     cursor: {
       blockIndex,
       lineIndex,
@@ -1411,7 +1415,10 @@ export function layoutRowFragmentBounded(
     let nestedSplitBlocked = false;
     // Pictures paint over the cell margins and crop at the cell box (a btLr cell: its text).
     const pictureRoom = vertical ? undefined : { left: cellX, right: cellX + cellW };
-    const cellDeps = withInlinePictureRoom(flowDeps, pictureRoom);
+    const cellDeps = withInlinePictureRoom(
+      withCellFloatBox(flowDeps, cell.blocks, pictureRoom, rowTop),
+      pictureRoom
+    );
     const flowTo = (right: number, relayout = false): ReturnType<typeof flowBlocksInBoxBounded> =>
       flowBlocksInBoxBounded(
         cell.blocks,
@@ -1585,7 +1592,7 @@ export function layoutRowFragmentBounded(
               contentHeight
             );
       if (available > 0)
-        blocks = shiftBlocks(blocks, cellAlignmentShift(entry.cell.vAlign, available));
+        blocks = alignCellContent(blocks, cellAlignmentShift(entry.cell.vAlign, available));
     }
     return {
       id: entry.cell.id,

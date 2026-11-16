@@ -46,6 +46,13 @@ function sameAttributes(a: OoxmlElement, b: OoxmlElement): boolean {
   );
 }
 
+/** Whether two tables carry `w:tblpPr` elements with identical attributes. */
+export function sameTablePosition(a: OoxmlElement, b: OoxmlElement): boolean {
+  const own = tblpPr(a);
+  const theirs = tblpPr(b);
+  return own !== undefined && theirs !== undefined && sameAttributes(own, theirs);
+}
+
 /** The table `table` stacks below: the floating table right before it with the same position. */
 export function stackPartner(
   positioned: readonly PositionedTableAnchor[],
@@ -53,9 +60,7 @@ export function stackPartner(
 ): PositionedTableAnchor | undefined {
   const previous = positioned.find((candidate) => candidate.sourceIndex === table.sourceIndex - 1);
   if (!previous || previous.anchorId !== table.anchorId) return undefined;
-  const own = tblpPr(table.table);
-  const theirs = tblpPr(previous.table);
-  return own && theirs && sameAttributes(own, theirs) ? previous : undefined;
+  return sameTablePosition(table.table, previous.table) ? previous : undefined;
 }
 
 /** The last fragment of `tableId` among `fragments`, when that table is on the page. */

@@ -5,13 +5,10 @@ import { hardBreakKind } from '../store/package/hard-break.ts';
 import { paragraphBreaksBefore } from './paragraph-style.ts';
 import type { PreparedBlock } from './section-prepass-types.ts';
 import { framedTokenJoin } from './layout-cache.ts';
-import {
-  TABLE_WRAP_MIN_PASSAGE_PT,
-  type ExclusionZone,
-  type ExclusionColumnLayout,
-} from './drawing-exclusion.ts';
-import type { BlockFragmentRecord, PageRecord, TableFragmentRecord } from './semantic-records.ts';
+import type { ExclusionZone, ExclusionColumnLayout } from './drawing-exclusion.ts';
+import type { BlockFragmentRecord, PageRecord } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
+import { floatingTableZone, leavesNoPassage } from './table-wrap-zone.ts';
 import {
   positionedTablesByAnchor,
   positionedTableAnchors,
@@ -116,41 +113,6 @@ const floatingTableLists = new WeakMap<
   }
 >();
 
-/**
- * How far a floating table's own outer rules reach past its grid, per side.
- *
- * Word clears text beside a floating table at the grid edge PLUS the table's authored outer
- * border width PLUS `w:leftFromText`/`w:rightFromText`. The fragment box IS the grid
- * (`columnEdges` run from 0 to `box.width`), so the rule adds a term rather than replacing
- * one, and a table with no authored outer rule adds nothing.
- *
- * Captured against a six-case control over an 8x range of border width: the term is the
- * FULL authored width, not the half a collapsed grid line paints on this side.
- */
-function outerRuleWidths(fragment: TableFragmentRecord): {
-  readonly left: number;
-  readonly right: number;
-} {
-  const columnCount = Math.max(0, fragment.columnEdges.length - 1);
-  let left = 0;
-  let right = 0;
-  for (const row of fragment.rows) {
-    for (const cell of row.cells) {
-      const borders = cell.borders;
-      if (!borders) continue;
-      const first = cell.gridColumn <= 0;
-      const last = cell.gridColumn + cell.gridSpan >= columnCount;
-      if (first) left = Math.max(left, borders.left?.widthPt ?? 0);
-      if (last) right = Math.max(right, borders.right?.widthPt ?? 0);
-      for (const segment of borders.edgeSegments ?? []) {
-        if (first && segment.side === 'left') left = Math.max(left, segment.edge.widthPt);
-        if (last && segment.side === 'right') right = Math.max(right, segment.edge.widthPt);
-      }
-    }
-  }
-  return { left, right };
-}
-
 export function addFloatingTableExclusions(
   pages: readonly Pick<PageRecord, 'fragments'>[],
   drawingZones: ReadonlyMap<number, readonly ExclusionZone[]>,
@@ -168,75 +130,21 @@ export function addFloatingTableExclusions(
       if (block.kind !== 'table') continue;
       const metadata = block.floatingWrap;
       if (!metadata) continue;
-      const grid = block.box;
-      const distances = metadata.float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
-      // A zero authored distance is the one case the control leaves unexplained, so the
-      // border term stays off there rather than guessing at Word's minimum separation.
-      const rules = outerRuleWidths(block);
-      const ruleLeft = distances.left > 0 ? rules.left : 0;
-      const ruleRight = distances.right > 0 ? rules.right : 0;
-      const box = {
-        x: grid.x - ruleLeft,
-        y: grid.y,
-        width: grid.width + ruleLeft + ruleRight,
-        height: grid.height,
-      };
       const column = metadata.columnIndex;
       const left = columns.columnLefts?.[column] ?? 0;
       const width = columns.columnWidths?.[column] ?? columns.contentWidth;
-      const spans = leavesNoPassage(
-        grid.x - distances.left,
-        grid.x + grid.width + distances.right,
+      const zone = floatingTableZone(block, metadata, {
         left,
-        width
-      );
-      const pageFramed = inBodyFlow && metadata.float.vertAnchor !== 'text';
-      // Only in one column: the anchor pricing that keeps a raised table's move on its page
-      // (`coveredLinesAnchorBand`) does not model column bottoms.
-      const reaches =
-        inBodyFlow &&
-        !pageFramed &&
-        spans &&
-        singleColumn(width, columns.contentWidth) &&
-        raisedAboveText(metadata.float);
-      const zone: ExclusionZone = {
-        sourceKind: 'table',
-        drawingNodeId: `table:${block.tableId}`,
-        anchorParagraphId: metadata.anchorId,
-        anchorModelStart: 0,
-        sourceOrder: metadata.sourceOrder,
-        paintLayer: 'inFront',
-        relativeHeight: 0,
-        allowOverlap: true,
+        width,
         columnIndex: column,
-        // A page- or margin-positioned table does not move with the text before it, so it also
-        // wraps or moves the earlier lines it covers on its page.
-        ...(pageFramed ? { pageFramedBand: true } : reaches ? { reachesEarlierLines: true } : {}),
-        y: box.y,
-        verticalBand: {
-          x: box.x - distances.left,
-          y: box.y - distances.top,
-          width: box.width + distances.left + distances.right,
-          height: box.height + distances.top + distances.bottom,
-        },
-        input: {
-          // A band that leaves no passage and moves earlier lines moves empty ones too.
-          mode:
-            (box.x - distances.left <= left &&
-              box.x + box.width + distances.right >= left + width) ||
-            (spans && (pageFramed || reaches))
-              ? 'topAndBottom'
-              : 'square',
-          contentBounds: box,
-          polygon: null,
-          clipPolygon: null,
-          wrapDistances: distances,
-          effectInsets: { top: 0, right: 0, bottom: 0, left: 0 },
-          textSide: 'bothSides',
-          contentLeft: left,
-          contentRight: left + width,
-        },
-      };
+        pageFramed: inBodyFlow && metadata.float.vertAnchor !== 'text',
+        // Only in one column: the anchor pricing that keeps a raised table's move on its page
+        // (`coveredLinesAnchorBand`) does not model column bottoms.
+        reachesWhenSpanning:
+          inBodyFlow &&
+          singleColumn(width, columns.contentWidth) &&
+          raisedAboveText(metadata.float),
+      });
       if (!pageZones) {
         result ??= new Map(drawingZones);
         pageZones = [...(drawingZones.get(pageIndex) ?? [])];
@@ -263,19 +171,6 @@ function singleColumn(columnWidth: number, textWidth: number): boolean {
   return columnWidth >= textWidth - 0.5;
 }
 
-/**
- * Whether a table band from `bandLeft` to `bandRight` (its grid plus its side text distances)
- * leaves no passage for text in the column: none wider than a quarter inch on either side.
- */
-function leavesNoPassage(
-  bandLeft: number,
-  bandRight: number,
-  columnLeft: number,
-  columnWidth: number
-): boolean {
-  const passage = Math.max(bandLeft - columnLeft, columnLeft + columnWidth - bandRight);
-  return passage <= TABLE_WRAP_MIN_PASSAGE_PT;
-}
 const NO_SHIFT: { readonly dx: number; readonly dy: number; readonly band?: NoOverlapObstacle } =
   Object.freeze({ dx: 0, dy: 0 });
 
