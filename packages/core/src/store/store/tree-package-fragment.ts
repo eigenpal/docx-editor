@@ -169,8 +169,8 @@ export function applyFragmentPaste(
   storyStore.graftPackage(() => store.currentPackage());
   let blockCount = 0;
   let refusalDetail = '';
+  let tailDistance: number | null = null;
 
-  const partBefore = storyStore.part;
   const outcome: FragmentPasteResult = runObservedStoreTransaction(
     store,
     () => {
@@ -245,6 +245,8 @@ export function applyFragmentPaste(
       // unit below publishes a synthetic change without one, so it travels on the result.
       const caret = result.change.caret;
       const end = caret ? { paragraphId: caret.paragraphId, offset: caret.start } : undefined;
+      if (end)
+        tailDistance = paragraphDistance(storyStore.part, input.paragraphId, end.paragraphId);
       const change = store.promoteStoryTransactionToPackageUnit(
         beforePackage,
         storyStore,
@@ -260,40 +262,51 @@ export function applyFragmentPaste(
   const published = store.resolveStory(scope);
   const end = publishedPasteEnd(
     transactionEnd,
-    partBefore,
+    input.paragraphId,
+    tailDistance,
     published.ok ? published.store.part : null
   );
   return end ? { ...rest, end } : rest;
 }
 
 /** The paragraphs of every story in a part, in the order the editor addresses them. */
-function paragraphIdsOf(part: OoxmlPart | null): readonly string[] {
-  if (!part) return [];
+function paragraphIdsOf(part: OoxmlPart): readonly string[] {
   return storyRootsOf(part).flatMap((story) => storyParagraphs(story.root).map((node) => node.id));
+}
+
+/** How many paragraphs `to` follows `from` by, or null when either is missing. */
+function paragraphDistance(part: OoxmlPart, from: string, to: string): number | null {
+  if (from === to) return 0;
+  const ids = paragraphIdsOf(part);
+  const start = ids.indexOf(from);
+  const end = ids.indexOf(to);
+  return start === -1 || end === -1 ? null : end - start;
 }
 
 /**
  * The paste end in the ids the story holds after the change published.
  *
  * A collaboration session re-keys the paragraphs a paste creates when it publishes the change,
- * so the transaction's id for the landing paragraph can be gone. `insertFragment` lands every
- * block, cell paragraphs included, before the split tail, and the tail holds the end. So the
- * tail is the last paragraph the paste created, and the offset stands.
+ * so the transaction's id for the landing paragraph can be gone, or name another node. The host
+ * paragraph keeps its id, and every paragraph between it and the landing paragraph is pasted
+ * content, so the landing paragraph is the same distance after the host.
  */
 function publishedPasteEnd(
   end: FragmentPasteEnd,
-  before: OoxmlPart | null,
+  hostId: string,
+  distance: number | null,
   after: OoxmlPart | null
 ): FragmentPasteEnd | undefined {
-  if (!after) return undefined;
-  const landing = findNode(after, end.paragraphId);
-  if (landing && landing.kind === 'paragraph') return end;
-  const known = new Set(paragraphIdsOf(before));
-  const created = paragraphIdsOf(after).filter((id) => !known.has(id));
-  const tail = created[created.length - 1];
-  if (!tail) return undefined;
-  const node = findNode(after, tail);
-  const length =
-    node && node.kind === 'paragraph' ? paragraphLength(node as OoxmlParagraphNode) : 0;
-  return { paragraphId: tail, offset: Math.min(end.offset, length) };
+  if (!after || distance === null) return undefined;
+  let paragraphId: string | undefined = hostId;
+  if (distance > 0) {
+    const ids = paragraphIdsOf(after);
+    const host = ids.indexOf(hostId);
+    paragraphId = host === -1 ? undefined : ids[host + distance];
+  }
+  if (paragraphId === undefined) return undefined;
+  const node = findNode(after, paragraphId);
+  if (!node || node.kind !== 'paragraph') return undefined;
+  const length = paragraphLength(node as OoxmlParagraphNode);
+  return { paragraphId, offset: Math.min(end.offset, length) };
 }

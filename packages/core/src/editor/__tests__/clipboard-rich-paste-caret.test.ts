@@ -153,3 +153,23 @@ describe('the caret after a rich paste', () => {
     expect(target.session.bodyText()).toBe('helloworld');
   });
 });
+
+describe('the caret after redo of a rich paste', () => {
+  test('redo leaves the caret at the end of the paste again', () => {
+    const inline = surfaceOf(paragraph('helloworld'));
+    putCaret(inline, 5);
+    inline.pasteRich('ext', '<p><b>ext</b></p>');
+    inline.undo();
+    inline.redo();
+    inline.type('X');
+    expect(inline.session.bodyText()).toBe('helloextXworld');
+
+    const structural = surfaceOf(paragraph('helloworld'));
+    putCaret(structural, 5);
+    structural.pasteRich('one\ntwo', '<p>one</p><p>two</p>');
+    structural.undo();
+    structural.redo();
+    structural.type('X');
+    expect(structural.session.bodyText()).toBe('helloone\ntwoXworld');
+  });
+});

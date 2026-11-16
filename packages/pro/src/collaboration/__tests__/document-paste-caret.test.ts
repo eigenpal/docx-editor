@@ -153,3 +153,16 @@ test('the store reports a paste end the session still holds after it re-keys', a
   };
   expect(texts(bob)).toBe('helloonetwoXworld');
 });
+
+test('a paste with a table in the middle ends after its last line on both participants', async () => {
+  const r = await room();
+  caretAt(r.alice, 5);
+  surfaceOf(r.alice).pasteRich(
+    'one\na\ntwo',
+    '<p>one</p><table><tr><td>a</td><td>b</td></tr></table><p>two</p>'
+  );
+  surfaceOf(r.alice).type('X');
+  r.sync();
+  expect(text(r.alice)).toBe('helloone\na\nb\ntwoXworld');
+  expect(text(r.bob)).toBe(text(r.alice));
+});

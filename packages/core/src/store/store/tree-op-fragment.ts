@@ -303,7 +303,7 @@ export function applyInsertFragment(
       options
     );
     if (!joined.ok) return joined;
-    // Unmeasurable, the caret stays where the paste started, as before the end was reported.
+    // Unmeasurable (a broken invariant), the caret stays where the paste started.
     const caret = pasteEnd(joined.part, host.id, hostTrailing) ?? {
       paragraphId: host.id,
       offset: op.offset,
