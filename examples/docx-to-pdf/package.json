@@ -25,7 +25,7 @@
     "@embedpdf/plugin-render": "^2.15.0",
     "@embedpdf/plugin-rotate": "^2.15.0",
     "@embedpdf/plugin-scroll": "^2.15.0",
-    "@embedpdf/plugin-search": "^2.15.0",
+    "@embedpdf/plugin-search": "^3.1.0",
     "@embedpdf/plugin-selection": "^2.15.0",
     "@embedpdf/plugin-thumbnail": "^2.15.0",
     "@embedpdf/plugin-tiling": "^2.15.0",
