@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Table style conditions read w:tblLook attributes with a bitmask fallback, treated a missing look as all conditions off with both bands, used w:cnfStyle as a condition, and applied the header row format to row 0 only.",
+  "after": "w:tblLook is read as named attributes, the bitmask, or the 04A0 default; w:cnfStyle is not read; the header row format covers the repeating header rows; column bands layer over row bands. Painting and clipboard HTML use the same reading.",
+  "reason": "Only the derived table style formatting at render and copy time changes. Shared nodes, operation shapes, offsets, and package serialization remain unchanged, so every participant derives the same formatting from the same tree.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-styles.test.ts",
+    "packages/core/src/layout/__tests__/table-word-fidelity.test.ts",
+    "packages/core/src/editor/__tests__/clipboard-html-write.test.ts"
+  ],
+  "changeset": "table-look-conditions",
+  "migration": null
+}

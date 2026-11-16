@@ -800,6 +800,37 @@ describe('interopHtmlFromFragment', () => {
     expect(cells[2]).not.toContain('background-color');
   });
 
+  test('copied table shading reads w:tblLook the way the page paints it', () => {
+    // 17.4.56: no w:tblLook is 04A0 (header row, first column, row bands); a column band
+    // paints over a row band.
+    const cell = (text: string) => `<w:tc><w:tcPr/><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const condition = (type: string, fill: string) =>
+      `<w:tblStylePr w:type="${type}"><w:tcPr>` +
+      `<w:shd w:val="clear" w:color="auto" w:fill="${fill}"/></w:tcPr></w:tblStylePr>`;
+    const styles =
+      '<w:style w:type="table" w:styleId="Banded">' +
+      condition('firstRow', '0000FF') +
+      condition('band1Horz', '00FF00') +
+      condition('band1Vert', 'FF0000') +
+      '</w:style>';
+    const row = `<w:tr>${cell('a')}${cell('b')}</w:tr>`;
+    const cellsOf = (look: string) =>
+      interopHtmlFromFragment(
+        fragment({
+          styles,
+          body: `<w:tbl><w:tblPr><w:tblStyle w:val="Banded"/>${look}</w:tblPr>${row}${row}</w:tbl>`,
+        })
+      ).match(/<td[^>]*>/g) ?? [];
+    const absent = cellsOf('');
+    expect(absent[0]).toContain('background-color:#0000ff');
+    expect(absent[2]).toContain('background-color:#00ff00');
+    const bothBands = cellsOf(
+      '<w:tblLook w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" ' +
+        'w:noHBand="0" w:noVBand="0"/>'
+    );
+    expect(bothBands[2]).toContain('background-color:#ff0000');
+  });
+
   test('a condition with an auto fill clears the style fill, and wholeTable paints none', () => {
     const cell = (text: string) => `<w:tc><w:tcPr/><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
     const html = interopHtmlFromFragment(

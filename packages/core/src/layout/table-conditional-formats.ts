@@ -1,5 +1,5 @@
-// Which of a table style's conditional formats apply to one cell: `w:tblLook`, `w:cnfStyle`
-// and the layering order of the result.
+// Which of a table style's conditional formats apply to one cell: `w:tblLook`, the header
+// block and the layering order of the result.
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 
 function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
@@ -16,9 +16,20 @@ function attributeValue(node: OoxmlElement, localName: string): string | undefin
 /**
  * `w:tblLook` (17.4.56): which conditional formats of the table style are live.
  *
- * Word writes both the modern attributes (`w:firstRow="1"`) and the legacy `w:val`
- * bitmask, and older producers write only the bitmask. Both are read; an attribute wins
- * where the two disagree, because that is the newer statement.
+ * The element has two encodings: the legacy `w:val` bitmask and six named attributes
+ * (`w:firstRow`, `w:lastRow`, `w:firstColumn`, `w:lastColumn`, `w:noHBand`, `w:noVBand`).
+ * They are never merged:
+ *
+ *   - With any named attribute present, the named attributes are the whole statement and
+ *     `w:val` is ignored. A named attribute the element leaves out reads as ON, so
+ *     `<w:tblLook w:firstRow="1"/>` also turns on the last row, both columns, and both
+ *     "no band" flags.
+ *   - With only `w:val`, the bitmask decides.
+ *   - With neither, including no element at all, the look is `04A0`: header row, first
+ *     column and row banding.
+ *
+ * Measured against reference renders in compatibility modes 12, 14 and 15 with a style
+ * that shades every condition differently.
  */
 export interface TableLook {
   readonly firstRow: boolean;
@@ -29,21 +40,24 @@ export interface TableLook {
   readonly columnBanding: boolean;
 }
 
-/**
- * No `w:tblLook` at all says exactly what an empty `<w:tblLook/>` says. `noHBand`/`noVBand`
- * are NEGATIVE flags and the legacy bitmask defaults to `0000`, so 17.4.56's default is to
- * apply row and column banding but neither the first/last row nor the first/last column
- * format. Reading the absent element as "nothing is live" made the same semantic state
- * render two different ways depending on whether the producer wrote the empty tag.
- */
+/** `04A0`: the look of a table with no `w:tblLook`, or one that states nothing. */
 const DEFAULT_TABLE_LOOK: TableLook = Object.freeze({
-  firstRow: false,
+  firstRow: true,
   lastRow: false,
-  firstColumn: false,
+  firstColumn: true,
   lastColumn: false,
   rowBanding: true,
-  columnBanding: true,
+  columnBanding: false,
 });
+
+const NAMED_LOOK_ATTRIBUTES = [
+  'firstRow',
+  'lastRow',
+  'firstColumn',
+  'lastColumn',
+  'noHBand',
+  'noVBand',
+] as const;
 
 function onOff(node: OoxmlElement, name: string): boolean | undefined {
   const raw = attributeValue(node, name);
@@ -58,88 +72,50 @@ function onOff(node: OoxmlElement, name: string): boolean | undefined {
  * the style, not of the style — and Word writes one on every table it creates.
  */
 export function readTableLook(tblPr: OoxmlElement | undefined): TableLook {
-  const look = tblPr && childNamed(tblPr, 'tblLook');
+  return tableLookOf(tblPr && childNamed(tblPr, 'tblLook'));
+}
+
+/** {@link readTableLook} for the `w:tblLook` element itself. */
+export function tableLookOf(look: OoxmlElement | null | undefined): TableLook {
   if (!look) return DEFAULT_TABLE_LOOK;
+  if (NAMED_LOOK_ATTRIBUTES.some((name) => attributeValue(look, name) !== undefined)) {
+    // A named attribute the element leaves out reads as on.
+    const named = (name: (typeof NAMED_LOOK_ATTRIBUTES)[number]): boolean =>
+      onOff(look, name) ?? true;
+    return {
+      firstRow: named('firstRow'),
+      lastRow: named('lastRow'),
+      firstColumn: named('firstColumn'),
+      lastColumn: named('lastColumn'),
+      rowBanding: !named('noHBand'),
+      columnBanding: !named('noVBand'),
+    };
+  }
+  const rawVal = attributeValue(look, 'val');
+  if (rawVal === undefined || !/^[0-9A-Fa-f]{1,4}$/.test(rawVal)) return DEFAULT_TABLE_LOOK;
   // The legacy bitmask: 0x0020 firstRow, 0x0040 lastRow, 0x0080 firstColumn,
   // 0x0100 lastColumn, 0x0200 NO row banding, 0x0400 NO column banding.
-  const rawVal = attributeValue(look, 'val');
-  const mask = rawVal && /^[0-9A-Fa-f]{1,4}$/.test(rawVal) ? Number.parseInt(rawVal, 16) : 0;
+  const mask = Number.parseInt(rawVal, 16);
   return {
-    firstRow: onOff(look, 'firstRow') ?? (mask & 0x0020) !== 0,
-    lastRow: onOff(look, 'lastRow') ?? (mask & 0x0040) !== 0,
-    firstColumn: onOff(look, 'firstColumn') ?? (mask & 0x0080) !== 0,
-    lastColumn: onOff(look, 'lastColumn') ?? (mask & 0x0100) !== 0,
-    rowBanding:
-      onOff(look, 'noHBand') === undefined ? (mask & 0x0200) === 0 : !onOff(look, 'noHBand'),
-    columnBanding:
-      onOff(look, 'noVBand') === undefined ? (mask & 0x0400) === 0 : !onOff(look, 'noVBand'),
+    firstRow: (mask & 0x0020) !== 0,
+    lastRow: (mask & 0x0040) !== 0,
+    firstColumn: (mask & 0x0080) !== 0,
+    lastColumn: (mask & 0x0100) !== 0,
+    rowBanding: (mask & 0x0200) === 0,
+    columnBanding: (mask & 0x0400) === 0,
   };
 }
 
-/** Bit positions of `w:cnfStyle/@w:val` (17.4.7 row, 17.4.8 cell), most significant first. */
-const CNF_BITS = [
-  'firstRow',
-  'lastRow',
-  'firstCol',
-  'lastCol',
-  'band1Vert',
-  'band2Vert',
-  'band1Horz',
-  'band2Horz',
-  'nwCell',
-  'neCell',
-  'swCell',
-  'seCell',
-] as const;
-
-/** The same twelve conditions as named `w:cnfStyle` attributes (CT_Cnf), in bit order. */
-const CNF_ATTRIBUTES = [
-  'firstRow',
-  'lastRow',
-  'firstColumn',
-  'lastColumn',
-  'oddVBand',
-  'evenVBand',
-  'oddHBand',
-  'evenHBand',
-  'firstRowFirstColumn',
-  'firstRowLastColumn',
-  'lastRowFirstColumn',
-  'lastRowLastColumn',
-] as const;
-
 /**
- * `w:cnfStyle`: the producer stating which conditions a row or cell is under.
- *
- * Read like `w:tblLook`, from both encodings — the legacy `w:val` bitmask and the named
- * attributes, which are all a strict-conformant producer writes.
- */
-function readCnfStyle(container: OoxmlElement | undefined, into: Set<string>): void {
-  const cnf = container && childNamed(container, 'cnfStyle');
-  if (!cnf) return;
-  const raw = attributeValue(cnf, 'val');
-  if (raw && /^[01]{1,12}$/.test(raw)) {
-    for (let index = 0; index < raw.length && index < CNF_BITS.length; index += 1) {
-      if (raw[index] === '1') into.add(CNF_BITS[index]!);
-    }
-  }
-  for (let index = 0; index < CNF_ATTRIBUTES.length; index += 1) {
-    if (onOff(cnf, CNF_ATTRIBUTES[index]!) === true) into.add(CNF_BITS[index]!);
-  }
-}
-
-/**
- * Word layers a table style's conditional formats weakest first: the whole table, then the
- * bands, then first/last column, then first/last row, then the four corners (17.7.6). Both
- * the derived and the stated conditions emit through this one order — `w:cnfStyle` lists
- * its conditions in BIT order, which puts the bands last and let a banding fill overwrite
- * the shading of a styled header row.
+ * Word layers a table style's conditional formats weakest first (17.7.6): the whole table,
+ * then the row bands, then the column bands, then first/last column, then first/last row,
+ * then the four corners. A column band paints over a row band where the two cross.
  */
 const CONDITION_PRECEDENCE = [
-  'band1Vert',
-  'band2Vert',
   'band1Horz',
   'band2Horz',
+  'band1Vert',
+  'band2Vert',
   'firstCol',
   'lastCol',
   'firstRow',
@@ -149,44 +125,63 @@ const CONDITION_PRECEDENCE = [
   'swCell',
   'seCell',
 ] as const;
+
+/**
+ * How many leading rows form the table's header block.
+ *
+ * The header row condition does not stop at row 0. With the look's header row on, it covers
+ * row 0 and then every following row that repeats as a header (`w:tblHeader`, 17.4.49),
+ * whether or not row 0 itself repeats. With the header row off, the block is the run of
+ * repeating rows that starts at row 0, or nothing. Rows in the block take no row band, and
+ * banding counts from the first row after it. The last row format still reaches a block row
+ * when the header row format is off.
+ *
+ * `repeats(rowIndex)` answers for one row; it is asked in order and only while the run lasts.
+ */
+export function headerBlockRowCount(
+  look: TableLook,
+  rowCount: number,
+  repeats: (rowIndex: number) => boolean
+): number {
+  if (rowCount === 0 || (!look.firstRow && !repeats(0))) return 0;
+  let count = 1;
+  while (count < rowCount && repeats(count)) count += 1;
+  return count;
+}
 
 /**
  * Which of the style's conditional formats apply to one cell, weakest first.
  *
- * A `w:cnfStyle` is added to the derivation rather than replacing it: it is a cache the
- * producer wrote, and a row that states "I am the header" is still in whichever column and
- * band the grid puts it in. Structural conditions key on the GRID COLUMN the cell occupies,
- * so a `gridSpan` or a `w:gridBefore` earlier in the row cannot shift them.
+ * Everything is derived from the look and the cell's place in the grid. A `w:cnfStyle`
+ * (17.4.7, 17.4.8) is a record the producer wrote of the conditions it applied; it can be
+ * stale after an edit and is not read. Structural conditions key on the GRID COLUMN the
+ * cell occupies, so a `gridSpan` or a `w:gridBefore` earlier in the row cannot shift them.
  */
 export function conditionalTypesFor(input: {
   readonly look: TableLook;
   readonly rowIndex: number;
   readonly rowCount: number;
+  /** Leading rows of the header block ({@link headerBlockRowCount}). */
+  readonly headerRows: number;
   readonly gridColumn: number;
   readonly gridSpan: number;
   readonly columnCount: number;
-  readonly rowProperties: OoxmlElement | undefined;
-  readonly cellProperties: OoxmlElement | undefined;
 }): readonly string[] {
   const active = new Set<string>();
-  readCnfStyle(input.rowProperties, active);
-  readCnfStyle(input.cellProperties, active);
+  const { look, rowIndex, rowCount, headerRows, gridColumn, gridSpan, columnCount } = input;
+  const inHeaderBlock = rowIndex < headerRows;
+  const isFirstRow = look.firstRow && inHeaderBlock;
+  // The header row format, where it covers the last row, takes it from the last row format.
+  const isLastRow = look.lastRow && rowIndex === rowCount - 1 && !isFirstRow;
+  const isFirstColumn = look.firstColumn && gridColumn === 0;
+  const isLastColumn = look.lastColumn && gridColumn + gridSpan >= columnCount;
 
-  const { look, rowIndex, rowCount, gridColumn, gridSpan, columnCount } = input;
-  const isFirstRow = active.has('firstRow') || (look.firstRow && rowIndex === 0);
-  const isLastRow = active.has('lastRow') || (look.lastRow && rowIndex === rowCount - 1);
-  const isFirstColumn = active.has('firstCol') || (look.firstColumn && gridColumn === 0);
-  const isLastColumn =
-    active.has('lastCol') || (look.lastColumn && gridColumn + gridSpan >= columnCount);
-
-  const statedVBand = active.has('band1Vert') || active.has('band2Vert');
-  if (!statedVBand && look.columnBanding && !isFirstColumn && !isLastColumn) {
+  if (look.columnBanding && !isFirstColumn && !isLastColumn) {
     const band = gridColumn - (look.firstColumn ? 1 : 0);
     active.add(band % 2 === 0 ? 'band1Vert' : 'band2Vert');
   }
-  const statedHBand = active.has('band1Horz') || active.has('band2Horz');
-  if (!statedHBand && look.rowBanding && !isFirstRow && !isLastRow) {
-    const band = rowIndex - (look.firstRow ? 1 : 0);
+  if (look.rowBanding && !inHeaderBlock && !isLastRow) {
+    const band = rowIndex - headerRows;
     active.add(band % 2 === 0 ? 'band1Horz' : 'band2Horz');
   }
   if (isFirstColumn) active.add('firstCol');
@@ -201,4 +196,30 @@ export function conditionalTypesFor(input: {
   const ordered: string[] = [];
   for (const condition of CONDITION_PRECEDENCE) if (active.has(condition)) ordered.push(condition);
   return ordered;
+}
+
+/**
+ * The conditions a whole row is under: the cell conditions of one cell spanning the grid.
+ *
+ * Whether a row repeats (`w:tblHeader` through a conditional format) decides how far the
+ * header block reaches, and the block decides the row's conditions, so the caller reads the
+ * repeat flags first with only row 0 as the header row.
+ */
+export function rowConditionTypes(
+  look: TableLook,
+  rowIndex: number,
+  rowCount: number,
+  headerRows: number,
+  columnCount: number
+): readonly string[] {
+  const columns = Math.max(1, columnCount);
+  return conditionalTypesFor({
+    look,
+    rowIndex,
+    rowCount,
+    headerRows,
+    gridColumn: 0,
+    gridSpan: columns,
+    columnCount: columns,
+  });
 }

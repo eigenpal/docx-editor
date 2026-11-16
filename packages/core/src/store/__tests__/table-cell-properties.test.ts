@@ -1165,7 +1165,8 @@ describe('table cell property fix round 2', () => {
 
   test('clearing direct fill exposes table-style band shading again', () => {
     const part = load(
-      `<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/><w:tblLook w:noVBand="1"/></w:tblPr>` +
+      `<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/>` +
+        `<w:tblLook w:firstRow="0" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>` +
         `<w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="2400"/></w:tblGrid>` +
         `${ROW(CELL('a1'), CELL('a2'))}${ROW(CELL('b1'), CELL('b2'))}${ROW(CELL('c1'), CELL('c2'))}</w:tbl>`
     );

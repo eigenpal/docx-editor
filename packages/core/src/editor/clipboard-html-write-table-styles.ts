@@ -4,6 +4,7 @@ import { readTwipsMeasure } from '../store/units.ts';
 import { wordBorderCss } from './clipboard-html-word-elements.ts';
 import { tableSide } from './clipboard-table-direction.ts';
 import { cssShading, wmlChild } from './clipboard-html-write-tree.ts';
+import { tableLookOf } from '../layout/table-conditional-formats.ts';
 
 function twipsAttribute(element: OoxmlElement | null, name: string): number | null {
   if (element === null) return null;
@@ -58,18 +59,6 @@ export interface TableConditionalFormats {
   readonly vBandingEnabled: boolean;
 }
 
-/** `w:tblLook` flags: modern boolean attributes, or the legacy `w:val` bitmask. */
-function tblLookFlag(tblLook: OoxmlElement | null, name: string, bit: number): boolean | null {
-  if (tblLook === null) return null;
-  const attr = attributeValueOf(tblLook, name, WML_NAMESPACE_URI);
-  // ST_OnOff: anything except an explicit off value is on, like the painter reads it.
-  if (attr !== undefined) return !(attr === '0' || attr === 'false' || attr === 'off');
-  // The legacy bitmask is ST_ShortHexNumber: at most 4 hex digits, like the painter.
-  const raw = attributeValueOf(tblLook, 'val', WML_NAMESPACE_URI);
-  if (raw === undefined || !/^[0-9A-Fa-f]{1,4}$/.test(raw)) return null;
-  return (Number.parseInt(raw, 16) & bit) !== 0;
-}
-
 /**
  * The `w:tblStylePr` formatting a table style declares for the whole table, the
  * first row/column and the horizontal bands, gated by `w:tblLook` — Word's
@@ -104,20 +93,22 @@ export function tableConditionalFormats(
       });
     }
   }
+  // The same reading of `w:tblLook` (17.4.56) the painter uses.
+  const look = tableLookOf(tblLook);
   return {
     byType,
     styleFill,
-    firstRowEnabled: tblLookFlag(tblLook, 'firstRow', 0x0020) ?? false,
-    lastRowEnabled: tblLookFlag(tblLook, 'lastRow', 0x0040) ?? false,
-    firstColumnEnabled: tblLookFlag(tblLook, 'firstColumn', 0x0080) ?? false,
-    lastColumnEnabled: tblLookFlag(tblLook, 'lastColumn', 0x0100) ?? false,
-    hBandingEnabled: !(tblLookFlag(tblLook, 'noHBand', 0x0200) ?? false),
-    vBandingEnabled: !(tblLookFlag(tblLook, 'noVBand', 0x0400) ?? false),
+    firstRowEnabled: look.firstRow,
+    lastRowEnabled: look.lastRow,
+    firstColumnEnabled: look.firstColumn,
+    lastColumnEnabled: look.lastColumn,
+    hBandingEnabled: look.rowBanding,
+    vBandingEnabled: look.columnBanding,
   };
 }
 
 /** The strongest applicable condition for one cell, or null. §17.7.6.6 order,
- *  weakest to strongest: vertical bands, horizontal bands, firstCol, lastCol,
+ *  weakest to strongest: horizontal bands, vertical bands, firstCol, lastCol,
  *  firstRow, lastRow, corners — resolved strongest-first below. `wholeTable` is
  *  NOT resolved here; it layers under the result. */
 export function conditionalCellFormat(
@@ -129,7 +120,8 @@ export function conditionalCellFormat(
   gridColumn: number
 ): TableConditionalFormat | null {
   const firstRow = formats.firstRowEnabled && rowIndex === 0;
-  const lastRow = formats.lastRowEnabled && rowIndex === rowCount - 1;
+  // The header row format, where it covers the last row, takes it from the last row format.
+  const lastRow = formats.lastRowEnabled && rowIndex === rowCount - 1 && !firstRow;
   const firstCol = formats.firstColumnEnabled && firstGridColumn;
   const lastCol = formats.lastColumnEnabled && lastGridColumn;
   const pick = (type: ConditionType): TableConditionalFormat | null =>
@@ -142,18 +134,18 @@ export function conditionalCellFormat(
   if (firstRow && pick('firstRow')) return pick('firstRow');
   if (lastCol && pick('lastCol')) return pick('lastCol');
   if (firstCol && pick('firstCol')) return pick('firstCol');
+  if (formats.vBandingEnabled) {
+    const bandIndex = gridColumn - (formats.firstColumnEnabled ? 1 : 0);
+    if (bandIndex >= 0) {
+      const band = pick(bandIndex % 2 === 0 ? 'band1Vert' : 'band2Vert');
+      if (band) return band;
+    }
+  }
   if (formats.hBandingEnabled) {
     // A header row without its own firstRow format is NOT part of the banding.
     const bandIndex = rowIndex - (formats.firstRowEnabled ? 1 : 0);
     if (bandIndex >= 0) {
       const band = pick(bandIndex % 2 === 0 ? 'band1Horz' : 'band2Horz');
-      if (band) return band;
-    }
-  }
-  if (formats.vBandingEnabled) {
-    const bandIndex = gridColumn - (formats.firstColumnEnabled ? 1 : 0);
-    if (bandIndex >= 0) {
-      const band = pick(bandIndex % 2 === 0 ? 'band1Vert' : 'band2Vert');
       if (band) return band;
     }
   }
