@@ -650,7 +650,8 @@ export class TreeDocumentStore {
       if (result.effect.join) splitJoin.push({ join: result.effect.join });
       if (IMPACT_RANK[result.effect.impact] > IMPACT_RANK[impact]) impact = result.effect.impact;
       if (result.effect.caret) {
-        opCaret = { paragraphId: result.effect.caret.paragraphId, start: 0, end: 0 };
+        const offset = result.effect.caret.offset ?? 0;
+        opCaret = { paragraphId: result.effect.caret.paragraphId, start: offset, end: offset };
       }
       return true;
     };

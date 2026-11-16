@@ -360,6 +360,9 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     const target = plan.replaceAt ?? plan.collapseTo;
     let landed = false;
     let unsupported = false;
+    // Only the store knows where the pasted content ends: the landing paragraph is minted
+    // inside the transaction, after the selection-clearing ops have moved the offsets.
+    let pastedEnd: { readonly paragraphId: string; readonly start: number } | undefined;
     deps.commit(
       () => {
         // The readiness gate the typing lane asks. A fragment paste reaches the store
@@ -389,6 +392,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
           }
         );
         landed = result.ok;
+        if (result.ok) pastedEnd = result.caret;
         if (landed && suggestion) deps.trackedChangeLanded?.();
         unsupported = !result.ok && result.detail === 'fragment-merge:unsupported-content';
         return {
@@ -398,7 +402,10 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
           ...(result.ok ? {} : { reason: result.detail ?? result.reason }),
         } as unknown as TreeApplyResult;
       },
-      () => collapsedAt(target)
+      () =>
+        collapsedAt(
+          pastedEnd ? { paragraphId: pastedEnd.paragraphId, offset: pastedEnd.start } : target
+        )
     );
     return unsupported ? 'unsupported-content' : landed;
   }

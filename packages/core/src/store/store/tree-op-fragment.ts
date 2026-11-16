@@ -217,6 +217,14 @@ export function applyInsertFragment(
 ): TreeOpResult {
   const host = findNode(hostPart, op.paragraphId);
   if (!host || host.kind !== 'paragraph') return { ok: false, reason: 'unknown-paragraph' };
+  // The host's text after the offset ends the landing paragraph, whatever the fragment
+  // holds, so the pasted content ends exactly that far from its end.
+  const suffixLength = paragraphLength(host) - op.offset;
+  const caretAtEndOf = (part: OoxmlPart, paragraphId: string): TreeOpEffect['caret'] => {
+    const landing = findNode(part, paragraphId);
+    if (!landing || landing.kind !== 'paragraph') return undefined;
+    return { paragraphId, offset: Math.max(0, paragraphLength(landing) - suffixLength) };
+  };
 
   // Clone every block with fresh node ids and fresh paragraph identities: the fragment's
   // ids belong to another document, and a second paste of the same payload must not
@@ -280,10 +288,12 @@ export function applyInsertFragment(
       options
     );
     if (!joined.ok) return joined;
+    const caret = caretAtEndOf(joined.part, host.id);
     const effect: TreeOpEffect = {
       dirty: [host.id],
       created: [],
       deleted: [],
+      ...(caret ? { caret } : {}),
       dependencyKeys: TEXT_DEPS,
       impact: 'flow-structural',
     };
@@ -368,11 +378,12 @@ export function applyInsertFragment(
     for (const block of middle) created.push(block.id);
   }
 
+  const caret = caretAtEndOf(current, tailId);
   const effect: TreeOpEffect = {
     dirty: [host.id, tailId],
     created,
     deleted: [],
-    ...(op.lastMarkCovered === true ? { caret: { paragraphId: tailId } } : {}),
+    ...(caret ? { caret } : {}),
     dependencyKeys: TEXT_DEPS,
     impact: 'flow-structural',
   };

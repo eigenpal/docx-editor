@@ -1136,8 +1136,8 @@ export interface TreeOpEffect {
   readonly join?: { readonly kept: string; readonly removed: string };
   readonly dependencyKeys: readonly string[];
   readonly impact: ImpactClass;
-  /** First post-edit caret paragraph for table column structural ops. */
-  readonly caret?: { readonly paragraphId: string };
+  /** Post-edit caret: the first cell paragraph of a table op, or the end of a fragment. */
+  readonly caret?: { readonly paragraphId: string; readonly offset?: number };
 }
 
 /** Post-edit caret target published by a committed store transaction. */

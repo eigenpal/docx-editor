@@ -21,6 +21,7 @@ import {
 } from './tree-op-fragment.ts';
 import type { OoxmlNode } from '../package/ooxml-tree.ts';
 import type { PackageTransactResult, StoryScope, TreePackageStore } from './tree-package-store.ts';
+import type { SelectionMark } from './tree-store.ts';
 import type { TreeDocOp } from './tree-op-types.ts';
 import type { RevisionAttributionInput } from './tree-op-validate.ts';
 import { trackedFragment } from './clipboard-fragment-tracked.ts';
@@ -53,7 +54,14 @@ export interface FragmentPasteInput {
 }
 
 export type FragmentPasteResult =
-  | (Extract<PackageTransactResult, { ok: true }> & { readonly blockCount: number })
+  | (Extract<PackageTransactResult, { ok: true }> & {
+      readonly blockCount: number;
+      /**
+       * The collapsed caret after the pasted content. Read it here, not from the published
+       * change: the package-unit promotion publishes a synthetic change that has no caret.
+       */
+      readonly caret?: SelectionMark;
+    })
   | Extract<PackageTransactResult, { ok: false }>;
 
 /**
@@ -215,12 +223,13 @@ export function applyFragmentPaste(
       }
       if (!result.change) return { ok: true as const, change: null, blockCount };
 
+      const caret = result.change.caret;
       const change = store.promoteStoryTransactionToPackageUnit(
         beforePackage,
         storyStore,
         checkpoint
       );
-      return { ok: true as const, change, blockCount };
+      return { ok: true as const, change, blockCount, ...(caret ? { caret } : {}) };
     },
     (outcome) => packageTransactionPublished(outcome)
   );
