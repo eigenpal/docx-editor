@@ -65,7 +65,21 @@ interface RowPlacement {
   readonly terminalBorderPt: number;
 }
 
-const placements = new WeakMap<object, RowPlacement>();
+/**
+ * Placements per row key, newest last. A pass that a newer edit supersedes still records its
+ * probes, but its rows never publish, so the published row may stand at an older top. A few
+ * tops per row keep the published one findable.
+ */
+const placements = new WeakMap<object, RowPlacement[]>();
+const PLACEMENTS_PER_ROW = 4;
+
+function placementAt(key: object | undefined, top: number): RowPlacement | undefined {
+  const tops = key ? placements.get(key) : undefined;
+  if (!tops) return undefined;
+  for (let index = tops.length - 1; index >= 0; index -= 1)
+    if (tops[index]!.top === top) return tops[index];
+  return undefined;
+}
 
 /** Everything outside a cell's lines that sets its vertical geometry, for `deps` at this row. */
 function verticalInputs(row: SemanticTableRow, deps: TableFlowDeps): (number | string)[] {
@@ -125,7 +139,10 @@ export function rememberRowPlacement(
 ): void {
   const key = result.remainder === null ? keyOf(result.record) : undefined;
   if (!key) return;
-  placements.set(key, {
+  const tops = placements.get(key)?.filter((placement) => placement.top !== top) ?? [];
+  if (tops.length >= PLACEMENTS_PER_ROW) tops.shift();
+  placements.set(key, tops);
+  tops.push({
     top,
     bottom: result.bottom,
     height: result.record.box.height,
@@ -162,7 +179,7 @@ export function placementFromPrevious(
   const previous = previousRowRecord(candidate);
   if (compact && compact.source !== row) return null;
   const key = keyOf(previous);
-  const known = key ? placements.get(key) : undefined;
+  const known = placementAt(key, previous.box.y);
   if (
     !known ||
     previous.box.y !== known.top ||
