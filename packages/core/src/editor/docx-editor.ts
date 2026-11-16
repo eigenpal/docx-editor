@@ -203,6 +203,7 @@ import {
 } from './late-font-arrival.ts';
 import { initializeHarfBuzz } from '../layout/harfbuzz-shaper.ts';
 import { availableFontFamilies, configuredDefaultFontFamily } from './font-catalog.ts';
+import { createFontPickHold } from './font-pick-hold.ts';
 import {
   documentFontResolutionRequest,
   admittedDocumentSubstitutions,
@@ -498,6 +499,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     report: (cause) => reportFontError(toEditorFontError(cause)),
     editedAt: () => localEditAt(surface),
   });
+  const fontHold = createFontPickHold({
+    dynamic: () => typeof configuredFonts === 'function',
+    shaping: () => !!shapedMeasurer,
+    covered: (family) => fontFamilyCovered(family),
+    served: () => fontConfiguration()?.supportedFamilies,
+    asked: (family) => liveFonts.asked(family),
+  });
   /**
    * Local-resolution probe for the compatibility notice, created against the attached
    * container's document and dropped with it — a probe answers for ONE platform's font
@@ -538,7 +546,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       fontFamilyCovered,
       probeLocalFont,
       documentSubstitutedFamilies
-    );
+    ).filter((family) => !fontHold.loading(family));
   };
 
   // ── State tick + cached snapshot ─────────────────────────────────────────────────────
@@ -719,7 +727,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),
-      ...(embeddedFaces ? { fontAlias: embeddedFaces.alias } : {}),
+      ...(embeddedFaces ? { fontAlias: fontHold.alias(embeddedFaces.alias) } : {}),
       ...configSurfaceOptions(config),
       ...(fieldScope.mode === 'editable' ? { fieldResults: fieldScope.mode } : {}),
     };
@@ -978,7 +986,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     disposeEmbeddedFaces();
     disposeShapedFonts();
     disposeShapedFonts = () => {};
-    fontsResolving = false;
+    ((fontsResolving = false), fontHold.clear());
   }
 
   /** {@link forgetFonts}, then measure the mounted document with the fallback measurer. */
@@ -1227,16 +1235,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       } finally {
         reportDocumentDrops();
       }
-      // Paint-side twin, BEFORE the remount so the first shaped paint already carries the
-      // glyphs. Only faces the validator ADMITTED are handed over, and each resolves
-      // through the shaping snapshot so the bytes registered are the validated, owned
-      // copies — never the raw file view.
-      //
-      // App-supplied sources register alongside the embedded ones. They measure shaped
-      // either way, but unregistered they PAINT in whatever the platform picks for the
-      // name, so a document laid out on Carlito metrics would be drawn in something else
-      // — correct pagination, wrong glyphs. Aliasing (rather than registering the family
-      // name itself) is what keeps that safe; see `embedded-font-faces.ts`.
+      // Paint-side twin, BEFORE the remount: only ADMITTED faces, as the validated copies.
+      // App sources register too, or paint would draw a name in whatever the platform picks
+      // over shaped metrics. Aliases keep that safe; see `embedded-font-faces.ts`.
       const admitted = admittedFontSources(fonts.sources, shaping.fonts);
       const registration = await registerEmbeddedFontFaces(
         admitted,
@@ -1266,11 +1267,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           shaping.fonts,
           explicit?.substitutions
         );
+        fontHold.release(fontFamilyCovered); // a picked family whose face arrived shows in it
+        const paintAlias = fontHold.alias(embeddedFaces?.alias);
         const fallbackResolution = browserFallbackMeasurer(
           container,
           scaleOf(),
           mounted.session,
-          embeddedFaces?.alias
+          paintAlias
         );
         const measurement = resolvedFontMeasurement(
           shaping,
@@ -1278,7 +1281,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           fallbackResolution,
           scaleOf(),
           ++fontMeasurementEpoch,
-          (error) => current() && reportForLoad(error)
+          (error) => current() && reportForLoad(error),
+          fontHold.family
         );
         shapedMeasurer = measurement.measurer;
         shapedProducer = measurement.producer;
@@ -1287,7 +1291,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           updateSurfaceMeasurement(surface, {
             measurer: shapedMeasurer,
             producer: shapedProducer,
-            fontAlias: embeddedFaces?.alias,
+            fontAlias: paintAlias,
             defaultFontFamily: configuredDefaultFontFamily(fontConfiguration()),
           });
         }
@@ -1461,14 +1465,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // snapshots, and a host subscribed through `useSyncExternalStore` never re-renders —
       // freezing every control whose state is a question the snapshot does not carry,
       // because `toolbarCommandState` re-asks `Editor.can`/`isActive` only on a store tick.
-      //
-      // Caret: Decrease Indent stayed live on a list item already at the outermost level,
-      // and the bullet button stayed pressed after the caret moved into a numbered one.
-      //
-      // Revision: an edit that changes only STRUCTURE leaves formatting, page, canUndo and
-      // canRedo all equal at an unmoved caret. Toggling a bullet OFF (a second press) left
-      // the button pressed, and one Increase Indent that reached the deepest level a
-      // definition declares left the button live for a press that could only be refused.
+      // A structure-only edit at an unmoved caret leaves every compared field equal.
       if (
         snapshotsEqual(next, previous) &&
         caretUnmoved &&
@@ -2004,6 +2001,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         );
       }
       historyGroups.note(command);
+      if (command.type === 'setMarkAttr' && command.mark === 'fontFamily')
+        fontHold.pick(command.value, snapshotNow().formatting?.fontFamily);
       // A view command: it edits nothing, so it runs before the document gate, and it works
       // on a document that failed to open — the pane is still the reader's to close. Not on a
       // DESTROYED editor, though: there is no reader left.

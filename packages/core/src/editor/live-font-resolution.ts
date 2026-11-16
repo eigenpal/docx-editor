@@ -101,6 +101,8 @@ export function createLiveFontResolution<Late>(
    * them. They install after any resolution in flight, so the two never race.
    */
   deliver(generation: number, late: Late): void;
+  /** Whether this document's resolution asked the resolver for `family` already. */
+  asked(family: string): boolean;
 } {
   let current:
     | {
@@ -204,5 +206,9 @@ export function createLiveFontResolution<Late>(
     current.late.push(late);
     schedule();
   };
-  return { schedule, deliver };
+  const asked = (family: string): boolean => {
+    const key = family.trim().toLowerCase();
+    return !!current && (current.requested.has(key) || current.everyFace.has(key));
+  };
+  return { schedule, deliver, asked };
 }
