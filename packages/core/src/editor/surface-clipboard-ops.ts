@@ -48,6 +48,7 @@ import { fieldResultSpeller, REMOVED_COPY_UNIT, copiedText } from '../layout/fie
 import { paragraphMarkDeleted } from '../layout/revision-visibility.ts';
 import type { OoxmlPart } from '@docx-editor.dev/core/store';
 import { findNode, parentNodeOf } from '../store/package/ooxml-edit.ts';
+import type { FragmentPasteEnd } from '../store/store/tree-package-fragment.ts';
 import { clampTextFormPaste } from './text-form-field-paste.ts';
 import {
   collapsedAt,
@@ -385,6 +386,8 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     const target = plan.replaceAt ?? plan.collapseTo;
     let landed = false;
     let unsupported = false;
+    let end: FragmentPasteEnd | undefined;
+    const before = new Set(session.paragraphIdsIn({ kind: 'body' }));
     deps.commit(
       () => {
         // The readiness gate the typing lane asks. A fragment paste reaches the store
@@ -414,6 +417,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
           }
         );
         landed = result.ok;
+        if (result.ok) end = result.end;
         if (landed && suggestion) deps.trackedChangeLanded?.();
         unsupported = !result.ok && result.detail === 'fragment-merge:unsupported-content';
         return {
@@ -440,10 +444,29 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
             break;
           }
         }
-        return collapsedAt(target);
+        return collapsedAt(pasteEndIn(end, before) ?? target);
       }
     );
     return unsupported ? 'unsupported-content' : landed;
+  }
+
+  /**
+   * Word leaves the caret at the END of the pasted content, as the plain lane does. The
+   * store reports that end, because the landing paragraph is minted inside the transaction.
+   * A collaboration session can re-key a minted paragraph when it publishes, so an id the
+   * story no longer holds names the last new paragraph instead: `insertFragment` lands every
+   * block before the split tail, and the tail is where the paste ends.
+   */
+  function pasteEndIn(
+    end: FragmentPasteEnd | undefined,
+    before: ReadonlySet<string>
+  ): FragmentPasteEnd | undefined {
+    if (!end) return undefined;
+    const ids = session.paragraphIdsIn({ kind: 'body' });
+    if (ids.includes(end.paragraphId)) return end;
+    const minted = ids.filter((id) => !before.has(id));
+    const landing = minted[minted.length - 1];
+    return landing ? { paragraphId: landing, offset: end.offset } : undefined;
   }
 
   /** The paste router entry — fidelity order with continuous degrade to plain. */

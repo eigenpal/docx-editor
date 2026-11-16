@@ -47,6 +47,7 @@ export {
   MAX_FRAGMENT_DECODED_BYTES,
   applyFragmentPaste,
   type FragmentPasteInput,
+  type FragmentPasteEnd,
   type FragmentPasteResult,
 } from './tree-package-fragment.ts';
 export {

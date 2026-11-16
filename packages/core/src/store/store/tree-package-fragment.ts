@@ -53,8 +53,20 @@ export interface FragmentPasteInput {
   readonly revision?: RevisionAttributionInput;
 }
 
+/** The end of the pasted content: where Word leaves the caret after a paste. */
+export interface FragmentPasteEnd {
+  /** The paragraph that holds the end: the host's trailing text follows it. */
+  readonly paragraphId: string;
+  /** The UTF-16 offset in that paragraph, just after the last pasted unit. */
+  readonly offset: number;
+}
+
 export type FragmentPasteResult =
-  | (Extract<PackageTransactResult, { ok: true }> & { readonly blockCount: number })
+  | (Extract<PackageTransactResult, { ok: true }> & {
+      readonly blockCount: number;
+      /** Where the pasted content ends. Absent when the paste changed nothing. */
+      readonly end?: FragmentPasteEnd;
+    })
   | Extract<PackageTransactResult, { ok: false }>;
 
 /**
@@ -217,12 +229,16 @@ export function applyFragmentPaste(
       }
       if (!result.change) return { ok: true as const, change: null, blockCount };
 
+      // `insertFragment` commits the paste end as the story change's caret. The package
+      // unit below publishes a synthetic change without one, so it travels on the result.
+      const caret = result.change.caret;
+      const end = caret ? { paragraphId: caret.paragraphId, offset: caret.start } : undefined;
       const change = store.promoteStoryTransactionToPackageUnit(
         beforePackage,
         storyStore,
         checkpoint
       );
-      return { ok: true as const, change, blockCount };
+      return { ok: true as const, change, blockCount, ...(end ? { end } : {}) };
     },
     (outcome) => packageTransactionPublished(outcome)
   );

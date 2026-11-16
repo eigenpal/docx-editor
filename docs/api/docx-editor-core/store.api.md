@@ -1935,6 +1935,12 @@ export type FragmentMergeResult = {
     readonly reason: FragmentMergeRejection;
 };
 
+// @public
+export interface FragmentPasteEnd {
+    readonly offset: number;
+    readonly paragraphId: string;
+}
+
 // @public (undocumented)
 export interface FragmentPasteInput {
     readonly actorId?: string;
@@ -1954,6 +1960,7 @@ export type FragmentPasteResult = (Extract<PackageTransactResult, {
     ok: true;
 }> & {
     readonly blockCount: number;
+    readonly end?: FragmentPasteEnd;
 }) | Extract<PackageTransactResult, {
     ok: false;
 }>;

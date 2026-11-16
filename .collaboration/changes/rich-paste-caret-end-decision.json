@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A rich paste left the local caret at the start of the pasted content.",
+  "after": "A rich paste leaves the local caret at the end of the pasted content. insertFragment reports that end as its committed caret, and applyFragmentPaste returns it as end.",
+  "reason": "The caret and the paste end are local to the pasting client. The pasted blocks, the resource merge, the replicated primitive journal, text offsets, and package serialization stay unchanged. A re-keyed landing paragraph resolves through the local paragraph order.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-paste-caret.test.ts",
+    "packages/core/src/editor/__tests__/clipboard-rich-paste-caret.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-paste.test.ts"
+  ],
+  "changeset": "rich-paste-caret-end",
+  "migration": null
+}
