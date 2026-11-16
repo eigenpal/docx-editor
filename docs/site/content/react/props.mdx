@@ -61,7 +61,7 @@ For generated signatures, see the [React API reference](/docs/2.x/api/react).
 | `fonts` | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes or a resolver for text shaping and pagination. Each new value replaces the fonts without a remount. |
 | `onFontError` | `(error: EditorFontError) => void` | Reports corrupt data, HTTP errors, or hash mismatches. |
 
-Wrap resolvers such as `packagedFonts()` in `useFonts` to keep one identity. For loading choices, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
+Wrap resolvers such as `packagedFonts()` in `useFonts` to keep one identity. For loading choices, see [Fonts and measurement](/docs/2.x/guides/fonts#load-fonts-before-or-after-the-document-opens).
 
 ### Dark mode
 

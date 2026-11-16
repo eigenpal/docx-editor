@@ -76,8 +76,8 @@ Set `loading` on either resolver to choose how the faces of each family load:
 
 | `loading` | Behavior |
 | --- | --- |
-| `'progressive'` (default) | The text shows when its faces arrive, and the other faces load in the background. |
-| `'eager'` | Every face loads before the text shows. |
+| `'progressive'` (default) | The text switches to its own fonts when the faces it uses arrive, and the other faces load in the background. |
+| `'eager'` | The text switches to its own fonts when every face of its families arrives. |
 | `'lazy'` | Each face loads when the text first uses it. |
 
 To load all 20 faces of the five default families before opening a document, use `defaultFonts()`. This loads 7.4 MB and avoids repagination when fonts arrive:

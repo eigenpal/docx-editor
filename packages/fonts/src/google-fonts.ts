@@ -192,13 +192,14 @@ export interface GoogleFontsOptions {
   readonly onFailure?: (failure: GoogleFontLoadFailure) => void;
   /**
    * How the faces of each font family load. A family has up to four faces: regular, bold,
-   * italic, and bold italic.
+   * italic, and bold italic. The text shows with estimated measurements until its fonts arrive.
    *
-   * - `'progressive'` (default): the text shows as soon as the faces it uses arrive. The other
-   *   faces of the same families then load in the background, when the browser is idle, and
-   *   install in one step ({@link GoogleFontsFragment.deferred}). A later bold or italic edit needs no
-   *   download. Outside a browser, the other faces load when text first uses them.
-   * - `'eager'`: every face of each family loads before the text shows.
+   * - `'progressive'` (default): the text switches to its own fonts when the faces it uses
+   *   arrive. The other faces of the same families then load in the background, when the
+   *   browser is idle, and install in one step ({@link GoogleFontsFragment.deferred}). A later bold
+   *   or italic edit needs no download. Outside a browser, the other faces load when text
+   *   first uses them.
+   * - `'eager'`: the text switches to its own fonts when every face of its families arrives.
    * - `'lazy'`: only the faces the text uses load. Another face loads when text first uses
    *   it, and the text lays out again when it arrives.
    */
