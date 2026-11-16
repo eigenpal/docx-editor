@@ -2792,6 +2792,9 @@ export interface GoToChromeHandlers {
     readonly shortcut?: boolean;
 }
 
+// @internal
+export function goToHeading(editor: Editor, blockId: string): boolean;
+
 // @public
 export function handlePosition(handle: RulerIndentHandle, indent: RulerIndent, page: RulerPageMetrics): number;
 

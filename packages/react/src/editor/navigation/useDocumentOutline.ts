@@ -13,6 +13,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import { goToHeading } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 
@@ -82,13 +83,8 @@ export function useDocumentOutline(): UseDocumentOutlineResult {
   const goTo = useCallback(
     (blockId: string) => {
       if (!editor || typeof blockId !== 'string' || blockId.length === 0) return;
-      // Focus first, so the surface owns the selection it is about to paint.
-      editor.focus();
-      // Anchor and head equal is what a caret is, so this collapses the selection at the
-      // start of the heading rather than selecting it.
-      const position = { paragraphId: blockId, offset: 0 };
-      editor.exec({ type: 'setSelection', range: { anchor: position, head: position } });
-      editor.scrollToBlock(blockId);
+      // The engine places the caret at the heading text, past a leading page break.
+      goToHeading(editor, blockId);
       setSelectedBlockId(blockId);
     },
     [editor]

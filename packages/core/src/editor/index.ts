@@ -617,6 +617,7 @@ export type {
   HighlightWatch,
   WatchHighlightsOptions,
 } from './watch-highlights.ts';
+export { goToHeading } from './heading-navigation.ts';
 export {
   createDocumentSearch,
   SEARCH_DEBOUNCE_MS,

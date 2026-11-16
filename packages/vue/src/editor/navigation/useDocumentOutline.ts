@@ -1,5 +1,6 @@
 import { computed, ref, type ComputedRef } from 'vue';
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import { goToHeading } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 
@@ -45,10 +46,8 @@ export function useDocumentOutline(): UseDocumentOutlineResult {
   const goTo = (blockId: string) => {
     const editor = editorRef.value;
     if (!editor || typeof blockId !== 'string' || blockId.length === 0) return;
-    editorRef.value!.focus();
-    const position = { paragraphId: blockId, offset: 0 };
-    editorRef.value!.exec({ type: 'setSelection', range: { anchor: position, head: position } });
-    editor.scrollToBlock(blockId);
+    // The engine places the caret at the heading text, past a leading page break.
+    goToHeading(editor, blockId);
     selectedBlockId.value = blockId;
   };
 

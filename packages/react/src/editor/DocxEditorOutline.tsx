@@ -6,16 +6,17 @@
 // and the ruler parts — so the panel follows edits (retitling, adding or deleting a
 // heading) without a bespoke channel.
 //
-// A heading click both MOVES THE CARET and BRINGS THE HEADING INTO VIEW: the selection
-// goes to the heading paragraph's start through the facade's semantic `setSelection`, and
-// `scrollToBlock` reveals it. The two are separate because moving the caret does not move
-// the viewport — a heading twenty pages down was selected where nobody could see it.
+// A heading click both MOVES THE CARET and BRINGS THE HEADING INTO VIEW through the
+// engine's `goToHeading`: the caret goes to the start of the heading text (past a leading
+// page break), and `scrollToBlock` reveals it. Moving the caret alone does not move the
+// viewport — a heading twenty pages down was selected where nobody could see it.
 // The reveal resolves through layout rather than the DOM, so it works for a page that has
 // not been materialized yet, which is exactly the page an outline jump asks for.
 
 import { useCallback, useMemo } from 'react';
 import type { ReactElement } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import { goToHeading } from '@docx-editor.dev/core/editor';
 import { DocumentOutline, type OutlineHeading } from '../components/DocumentOutline';
 import { useDocxEditor } from './context';
 import { selectDocumentAbsent } from './document-presence';
@@ -58,19 +59,9 @@ export function DocxEditorDocumentOutline(
   const handleHeadingClick = useCallback(
     (blockId: string) => {
       if (!editor) return;
-      // Focus first, so the surface owns the selection it is about to paint.
-      editor.focus();
-      // Anchor and head equal is what a caret is, so this collapses the selection at the
-      // start of the heading rather than selecting it.
-      const position = { paragraphId: blockId, offset: 0 };
-      editor.exec({
-        type: 'setSelection',
-        range: { anchor: position, head: position },
-      });
-      // Moving the caret does not move the VIEWPORT — a heading twenty pages down was
-      // selected where the user could not see it. The engine knows which page the block
-      // is on, so the outline asks it to reveal rather than reaching into the DOM.
-      editor.scrollToBlock(blockId);
+      // The engine places the caret at the heading text, past a leading page break, and
+      // reveals it: it knows the heading's page, so the outline never reaches into the DOM.
+      goToHeading(editor, blockId);
     },
     [editor]
   );

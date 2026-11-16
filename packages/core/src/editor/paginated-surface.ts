@@ -5028,9 +5028,9 @@ export function mountPaginatedSurface(
 
     revealParagraph(paragraphId, options) {
       beginReveal();
-      // The paragraph's own line, not the top of its page: a heading two thirds down a
-      // page is the thing the caller asked to see.
-      const start = { paragraphId, offset: 0 };
+      // The paragraph's own line, not the top of its page, and its text, not a leading page
+      // break at the bottom of the page before: the heading is what the caller asked to see.
+      const start = pastLeadingBreaks(editingLayout().pages, { paragraphId, offset: 0 });
       const caret = caretAt(editingLayout(), start);
       if (!caret && laterOnOpening(start, () => surface.revealParagraph(paragraphId, options)))
         return true;

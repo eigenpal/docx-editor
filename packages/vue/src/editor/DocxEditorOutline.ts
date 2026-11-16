@@ -1,5 +1,6 @@
 import { computed, defineComponent, h, type PropType } from 'vue';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import { goToHeading } from '@docx-editor.dev/core/editor';
 import { DocumentOutline } from '../components/DocumentOutline';
 import { useDocxEditor } from './context';
 import { selectDocumentAbsent } from './document-presence';
@@ -34,13 +35,8 @@ export const DocxEditorDocumentOutline = defineComponent({
     const handleHeadingClick = (blockId: string) => {
       const editor = editorRef.value;
       if (!editor) return;
-      editor.focus();
-      const position = { paragraphId: blockId, offset: 0 };
-      editor.exec({
-        type: 'setSelection',
-        range: { anchor: position, head: position },
-      });
-      editor.scrollToBlock(blockId);
+      // The engine places the caret at the heading text, past a leading page break.
+      goToHeading(editor, blockId);
     };
 
     return () => {

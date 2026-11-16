@@ -236,6 +236,18 @@ describe('table of contents for a heading that opens with a page break', () => {
       paragraphId: ids[ids.length - 1]!,
       offset: 1,
     });
+
+    // `scrollToBlock`, which the outline uses, shows the same line: the heading text on
+    // page 2, not the break at the bottom of page 1. Both put the line 24px below the top.
+    const scroller = scrollerOf(editor);
+    const linkTop = scroller.scrollTop;
+    expect(linkTop).toBeGreaterThan(0);
+    scroller.scrollTop = 0;
+    // A reveal needs a viewport with a height; happy-dom lays nothing out.
+    Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 600 });
+    Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 100_000 });
+    expect(editor.scrollToBlock(ids[ids.length - 1]!)).toBe(true);
+    expect(scroller.scrollTop).toBe(linkTop);
   });
 
   test('the page number survives save and reopen', async () => {
