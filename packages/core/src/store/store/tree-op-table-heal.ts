@@ -88,6 +88,12 @@ export function tableIdOf(op: TreeDocOp): string | null {
   return typeof id === 'string' ? id : null;
 }
 
+// Tables whose rows and cells repeat no property container. Nodes never change in place, so
+// the answer holds for as long as the node does, and an edited table is a new node. Without
+// it, every check of a table edit scans every row: a toolbar asks about each of its table
+// controls whenever the caret enters another cell.
+const tablesWithoutRepeats = new WeakSet<OoxmlElement>();
+
 /**
  * `part` with the rows and cells of table `tableId` merged to one of each property container,
  * `part` itself when none repeats or the table is not found, or null when a write fails. A
@@ -102,6 +108,7 @@ export function healedTableProperties(
   if (!table || table.kind === 'textValue' || table.namespaceUri !== WML_NAMESPACE_URI) {
     return part;
   }
+  if (tablesWithoutRepeats.has(table)) return part;
   let nextId: (() => string) | null = null;
   const mint = () => (nextId ??= createNodeIdAllocator(part, 'new'))();
   const writes: Write[] = [];
@@ -129,6 +136,10 @@ export function healedTableProperties(
   for (const row of after.children) {
     if (!isWmlElement(row, 'tr')) continue;
     for (const cell of row.children) if (isWmlElement(cell, 'tc')) repeatWrites(cell, repeats);
+  }
+  if (writes.length === 0 && repeats.length === 0) {
+    tablesWithoutRepeats.add(table);
+    return part;
   }
   for (const write of repeats) {
     const result = removeNode(healed, write.id, options);
