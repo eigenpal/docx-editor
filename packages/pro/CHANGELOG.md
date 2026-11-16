@@ -6,7 +6,7 @@
 
 - 592db9f: Add shape and chart controls for custom toolbars and panes, with a shared color picker and outline dash control. Correct theme tint and shade swatches in font and table color pickers.
 - 05856f6: Prevent React review rail render loops and keep resolved comments open during keyboard navigation. Add `useReviewCardHeights()` for custom review cards in React and Vue. Fixes #1981
-- a1c7a8f: Add shape fill and outline editing through `setShapeFill`, `setShapeOutline`, and `Shape.fill`, with concurrent edit support. Breaking collaboration format `docx-collaboration:1.5.4.1` requires exporting existing rooms before upgrade and [reseeding them afterward](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1541).
+- a1c7a8f: Add shape fill and outline editing through `setShapeFill`, `setShapeOutline`, and `Shape.fill`, with concurrent edit support. Breaking collaboration upgrade (format `docx-collaboration:1.5.4.1`): this requires exporting existing rooms before upgrade and [reseeding them afterward](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1541).
 
 ### Patch Changes
 
