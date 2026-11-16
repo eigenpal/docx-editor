@@ -20,7 +20,8 @@ import {
   MAX_FRAGMENT_INSERT_BLOCKS,
   MAX_FRAGMENT_NODES,
 } from './tree-op-fragment.ts';
-import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import { paragraphLength } from './tree-op-segments.ts';
 import { findNode } from '../package/ooxml-edit.ts';
 import { storyParagraphs, storyRootsOf } from '../package/story-blocks.ts';
 import type { PackageTransactResult, StoryScope, TreePackageStore } from './tree-package-store.ts';
@@ -71,7 +72,10 @@ export interface FragmentPasteEnd {
 export type FragmentPasteResult =
   | (Extract<PackageTransactResult, { ok: true }> & {
       readonly blockCount: number;
-      /** Where the pasted content ends. Absent when the paste changed nothing. */
+      /**
+       * Where the pasted content ends. Absent when the paste changed nothing, or when the
+       * story no longer holds the paragraph that the paste ended in.
+       */
       readonly end?: FragmentPasteEnd;
     })
   | Extract<PackageTransactResult, { ok: false }>;
@@ -281,5 +285,9 @@ function publishedPasteEnd(
   const known = new Set(paragraphIdsOf(before));
   const created = paragraphIdsOf(after).filter((id) => !known.has(id));
   const tail = created[created.length - 1];
-  return tail ? { paragraphId: tail, offset: end.offset } : undefined;
+  if (!tail) return undefined;
+  const node = findNode(after, tail);
+  const length =
+    node && node.kind === 'paragraph' ? paragraphLength(node as OoxmlParagraphNode) : 0;
+  return { paragraphId: tail, offset: Math.min(end.offset, length) };
 }

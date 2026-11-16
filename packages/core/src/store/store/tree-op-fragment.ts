@@ -219,8 +219,8 @@ function paragraphLengthIn(part: OoxmlPart, paragraphId: string): number | null 
 /**
  * The end of the pasted content, where Word leaves the caret: in the paragraph that now holds
  * the host's trailing text, just before that text. The trailing text keeps its length through
- * the landing, so the end is that paragraph's length minus it. The end is only a caret hint:
- * when it cannot be measured, the content still lands and the op reports no caret.
+ * the landing, so the end is that paragraph's length minus it. Null when it cannot be measured:
+ * the end is only a caret hint, so the content still lands.
  */
 function pasteEnd(
   part: OoxmlPart,
@@ -303,12 +303,16 @@ export function applyInsertFragment(
       options
     );
     if (!joined.ok) return joined;
-    const caret = pasteEnd(joined.part, host.id, hostTrailing);
+    // Unmeasurable, the caret stays where the paste started, as before the end was reported.
+    const caret = pasteEnd(joined.part, host.id, hostTrailing) ?? {
+      paragraphId: host.id,
+      offset: op.offset,
+    };
     const effect: TreeOpEffect = {
       dirty: [host.id],
       created: [],
       deleted: [],
-      ...(caret ? { caret } : {}),
+      caret,
       dependencyKeys: TEXT_DEPS,
       impact: 'flow-structural',
     };
@@ -394,12 +398,14 @@ export function applyInsertFragment(
     for (const block of middle) created.push(block.id);
   }
 
-  const caret = pasteEnd(current, tailId, hostTrailing);
+  // Unmeasurable, the caret goes to the start of the tail: the end when the last block was
+  // not merged into it.
+  const caret = pasteEnd(current, tailId, hostTrailing) ?? { paragraphId: tailId, offset: 0 };
   const effect: TreeOpEffect = {
     dirty: [host.id, tailId],
     created,
     deleted: [],
-    ...(caret ? { caret } : {}),
+    caret,
     dependencyKeys: TEXT_DEPS,
     impact: 'flow-structural',
   };
