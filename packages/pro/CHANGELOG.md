@@ -1,5 +1,25 @@
 # @docx-editor.dev/pro
 
+## 2.38.0
+
+### Minor Changes
+
+- 592db9f: Add shape and chart controls for custom toolbars and panes, with a shared color picker and outline dash control. Correct theme tint and shade swatches in font and table color pickers.
+- 05856f6: Prevent React review rail render loops and keep resolved comments open during keyboard navigation. Add `useReviewCardHeights()` for custom review cards in React and Vue. Fixes #1981
+- a1c7a8f: Add shape fill and outline editing through `setShapeFill`, `setShapeOutline`, and `Shape.fill`, with concurrent edit support. Breaking collaboration format `docx-collaboration:1.5.4.1` requires exporting existing rooms before upgrade and [reseeding them afterward](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1541).
+
+### Patch Changes
+
+- 30ee904: Keep the caret after typed text when collaborators concurrently join paragraphs and split them offline. Fixes #1941
+- 2c9fa77: Preserve split paragraph text when collaborators merge the same table cell and undo a merge. Fixes #1940
+- 9812818: Allow collaborative edits in paragraphs that share an inline element after a split.
+- b166f8c: In a collaborative session, text typed while participants split and join the same paragraph at once no longer shows twice. Fixes #1962
+- 3376544: In a collaborative session, text a participant typed no longer shows twice after concurrent joins of the same paragraphs. Fixes #1973
+- 0f262d8: Keep deleted text hidden when another collaborator splits the same paragraph immediately after it. Fixes #1964
+- 87360b9: In a collaborative session, splitting a paragraph that an undo of a join put back keeps the paragraphs in order. Fixes #1966
+- 0ab7d97: Prevent collaboration errors when undoing a picture resize after another participant resizes the same picture. Fixes #1965
+- Updated dependencies: @docx-editor.dev/core@2.38.0, @docx-editor.dev/react@2.38.0, @docx-editor.dev/vue@2.38.0
+
 ## 2.37.0
 
 ### Patch Changes
