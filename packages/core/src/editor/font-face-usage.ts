@@ -95,3 +95,16 @@ export function registerUsedFontFaces(surface: object, faces: () => readonly Use
 export function usedFontFacesOf(surface: object): readonly UsedFontFace[] | undefined {
   return usageBySurface.get(surface)?.();
 }
+
+/**
+ * Whether every family that laid-out text uses has a face, so the text shows in its own fonts.
+ * False before any text is laid out. A run that names no font uses `defaultFamily`.
+ */
+export function usedFamiliesCovered(
+  surface: object | null | undefined,
+  defaultFamily: string,
+  covered: (family: string) => boolean
+): boolean {
+  const used = surface ? usedFontFacesOf(surface) : undefined;
+  return !!used && used.every((face) => covered(face.family?.trim() ? face.family : defaultFamily));
+}

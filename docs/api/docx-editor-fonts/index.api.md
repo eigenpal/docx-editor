@@ -97,6 +97,9 @@ export interface FontAssetManifestEntry {
 }
 
 // @public
+export type FontLoading = 'progressive' | 'eager' | 'lazy';
+
+// @public
 export interface FontOriginRequest {
     readonly defaultFamily: string;
     readonly faces?: readonly ResolvedFontFace[];
@@ -146,8 +149,8 @@ export interface PackagedFontsOptions {
     readonly fetcher?: typeof fetch;
     // @deprecated
     readonly install?: boolean;
+    readonly loading?: FontLoading;
     readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
-    readonly otherFaces?: 'background' | 'on-demand';
 }
 
 // @public

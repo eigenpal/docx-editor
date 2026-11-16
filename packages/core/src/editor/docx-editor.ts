@@ -15,6 +15,7 @@ import { reviewChangesLocked } from './command-protection.ts';
 import { createPlacementKeeper, createReviewRanker } from './review-ranking.ts';
 import { browserFallbackMeasurer, resolvedFontMeasurement } from './resolved-font-measurement.ts';
 import { updateSurfaceMeasurement, usedFontFacesOf } from './surface-measurement.ts';
+import { usedFamiliesCovered } from './font-face-usage.ts';
 import { fontInstallKey } from './font-install-key.ts';
 import {
   createLiveFontResolution,
@@ -464,6 +465,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const fontConfiguration = (): FontConfigurationBase | undefined =>
     typeof configuredFonts === 'function' ? resolvedFontConfiguration : configuredFonts;
   const liveFontDefaultFamily = () => configuredDefaultFontFamily(fontConfiguration());
+  const textInOwnFonts = () =>
+    usedFamiliesCovered(surface, liveFontDefaultFamily(), (family) => fontFamilyCovered(family));
   const liveFonts = createLiveFontResolution(
     () => {
       const session = preparedFontSession ?? surface?.session;
@@ -1858,7 +1861,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     fontMeasurement: () => ({
       measurer: shapedMeasurer && !stillOpening() ? ('shaped' as const) : ('fixed' as const),
-      resolving: fontsResolving || lateFonts.pending() || stillOpening(),
+      resolving: fontsResolving || stillOpening() || (lateFonts.pending() && !textInOwnFonts()),
       ...(shapedMeasurer && shapedProducer && !stillOpening() ? { producer: shapedProducer } : {}),
     }),
 
@@ -2413,19 +2416,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // selection below gets clamped inside the open story and no body card can ever
         // become active again. A change in a text box opens that box (`review-story-entry.ts`).
         openBodyStoryOf(surface, (reviewItemSpan(item!) ?? range).start);
-        // A CARET AT THE START, not a selection over the span.
-        //
-        // Opening a card is a request to look at a change, not a request to select its
-        // text — and selecting it took the reader's own selection away to say something
-        // the page already said: the open item draws its own `--active` band, at full
-        // tint with a rule under it, which is what marks the change while the card is
-        // open. The selection added a second, competing highlight and left the reader
-        // holding a range they never made, one keystroke from replacing the text under review.
-        //
-        // The caret still MOVES, to the start of the span. That is what keeps the keyboard
-        // where the reader is looking, what `activeReviewKey` classifies at, and what the
-        // reveal below scrolls to; a header, footer or note card has always landed a bare
-        // caret this way, so the body branch now agrees with them.
+        // A CARET AT THE START, not a selection over the span. Opening a card asks to look at
+        // a change: the open item draws its own `--active` band, and a selection would add a
+        // second highlight and leave the reader holding a range one keystroke from replacing
+        // the text under review. The caret still MOVES to the start of the span, so the
+        // keyboard, `activeReviewKey` and the reveal below follow it, as for header, footer
+        // and note cards.
         const span = reviewItemSpan(item!) ?? range;
         const caret = { paragraphId: span.start.paragraphId, offset: span.start.offset };
         // Through `activateReview`, not `setSelection`: the card this opens has to be named

@@ -84,6 +84,7 @@ import { loadDefaultFonts } from './index.ts';
 import type {
   DefaultFontSource,
   DefaultFontSubstitution,
+  FontLoading,
   FontOriginRequest,
   FontResolverMark,
 } from './index.ts';
@@ -122,6 +123,7 @@ export type {
   DefaultFontFaceRequest,
   DefaultFontSource,
   DefaultFontSubstitution,
+  FontLoading,
   FontOriginRequest,
   FontResolverMark,
   ResolvedFontFace,
@@ -189,17 +191,18 @@ export interface GoogleFontsOptions {
   /** Per-face failures. Defaults to a console warning; pass a handler to route them. */
   readonly onFailure?: (failure: GoogleFontLoadFailure) => void;
   /**
-   * What happens to the faces of a family in use that no text uses yet, such as its bold, when
-   * the request names the faces (`faces`).
+   * How the faces of each font family load. A family has up to four faces: regular, bold,
+   * italic, and bold italic.
    *
-   * - `'background'` (default): after the faces in use arrive, load the others when the
-   *   browser is idle, at low priority, and install them in one step
-   *   ({@link GoogleFontsFragment.deferred}). A later bold or italic edit then needs no
-   *   download and no second layout. Outside a browser, they load on demand.
-   * - `'on-demand'`: load a face only when text starts to use it. The text lays out again
-   *   when the face arrives.
+   * - `'progressive'` (default): the text shows as soon as the faces it uses arrive. The other
+   *   faces of the same families then load in the background, when the browser is idle, and
+   *   install in one step ({@link GoogleFontsFragment.deferred}). A later bold or italic edit needs no
+   *   download. Outside a browser, the other faces load when text first uses them.
+   * - `'eager'`: every face of each family loads before the text shows.
+   * - `'lazy'`: only the faces the text uses load. Another face loads when text first uses
+   *   it, and the text lays out again when it arrives.
    */
-  readonly otherFaces?: 'background' | 'on-demand';
+  readonly loading?: FontLoading;
   /**
    * Serve Chinese, Japanese, and Korean families, such as SimSun, MS Mincho, and Malgun
    * Gothic, with the regional Noto Sans face for each: JP, SC, TC, or KR. Off by default.
@@ -261,7 +264,7 @@ export interface GoogleFontsFragment {
   /**
    * The faces that load in the background, settled after they download: the CJK faces with
    * `cjk.background`, and the other faces of the families in use
-   * ({@link GoogleFontsOptions.otherFaces}).
+   * ({@link GoogleFontsOptions.loading}).
    */
   readonly deferred?: Promise<GoogleFontsFragment>;
 }
@@ -365,7 +368,8 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
     const otherCatalogFaces = new Map<GoogleFontFace, string[]>();
     // The faces the document uses under one declared name, or every face when the request
     // does not say.
-    const neededFaces = facesNeeded(request.faces);
+    // `'eager'` loads every face, as if the request named none.
+    const neededFaces = facesNeeded(options.loading === 'eager' ? undefined : request.faces);
     const needs = (declared: string, face: { weight: number; style: string }): boolean =>
       neededFaces(declared).some(
         (need) => need.weight === face.weight && need.style === face.style
@@ -618,7 +622,13 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
      * loaded when the browser is idle after the faces in use: they never share its bandwidth.
      */
     function loadOtherFacesLater(): Promise<GoogleFontsFragment> | undefined {
-      if (!request.faces || options.otherFaces === 'on-demand' || request.signal?.aborted) return;
+      if (
+        !request.faces ||
+        options.loading === 'lazy' ||
+        options.loading === 'eager' ||
+        request.signal?.aborted
+      )
+        return;
       if (!canIdle()) return;
       const covered = (family: string, weight: number, style: string): boolean =>
         already.has(faceKey(family, weight, style));

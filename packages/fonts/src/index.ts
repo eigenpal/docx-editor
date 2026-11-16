@@ -88,6 +88,14 @@ export interface DefaultFontFaceRequest {
   readonly style: 'normal' | 'italic';
 }
 
+/**
+ * How a font loader loads the faces of each family: `'progressive'` (the default), `'eager'`, or
+ * `'lazy'`. See {@link PackagedFontsOptions.loading}.
+ *
+ * @public
+ */
+export type FontLoading = 'progressive' | 'eager' | 'lazy';
+
 /** One face of a family, by weight and style. */
 export interface DefaultFontStyle {
   /** CSS numeric weight. The packaged faces are 400 and 700: 600 or more selects 700. */
@@ -549,17 +557,18 @@ export interface PackagedFontsOptions {
    */
   readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
   /**
-   * What happens to the faces of a family in use that no text uses yet, such as its bold, when
-   * the request names the faces (`faces`).
+   * How the faces of each font family load. A family has up to four faces: regular, bold,
+   * italic, and bold italic.
    *
-   * - `'background'` (default): after the faces in use arrive, load the others when the
-   *   browser is idle, at low priority, and install them in one step
-   *   ({@link PackagedFontsFragment.deferred}). A later bold or italic edit then needs no
-   *   download and no second layout. Outside a browser, they load on demand.
-   * - `'on-demand'`: load a face only when text starts to use it. The text lays out again
-   *   when the face arrives.
+   * - `'progressive'` (default): the text shows as soon as the faces it uses arrive. The other
+   *   faces of the same families then load in the background, when the browser is idle, and
+   *   install in one step ({@link PackagedFontsFragment.deferred}). A later bold or italic edit needs no
+   *   download. Outside a browser, the other faces load when text first uses them.
+   * - `'eager'`: every face of each family loads before the text shows.
+   * - `'lazy'`: only the faces the text uses load. Another face loads when text first uses
+   *   it, and the text lays out again when it arrives.
    */
-  readonly otherFaces?: 'background' | 'on-demand';
+  readonly loading?: FontLoading;
   /**
    * Legacy registration option, retained for source compatibility.
    *
@@ -590,7 +599,7 @@ export interface PackagedFontsFragment extends DefaultFontsFragment {
   readonly families: readonly DefaultFontFamily[];
   /**
    * The other faces of the families in use, settled after they load in the background
-   * ({@link PackagedFontsOptions.otherFaces}). The editor installs them when they arrive.
+   * ({@link PackagedFontsOptions.loading}). The editor installs them when they arrive.
    */
   readonly deferred?: Promise<PackagedFontsFragment>;
 }
@@ -645,7 +654,7 @@ const aliasesByFoldedName: ReadonlyMap<string, DefaultFontFamily> = new Map(
  * AFTER the parse, and the editor names the faces that the laid-out text uses
  * ({@link FontOriginRequest.faces}). A file whose text is only regular Times New Roman shows
  * after one Liberation Serif face arrives. The other faces of the families in use then load in
- * the background and install in one step (see {@link PackagedFontsOptions.otherFaces}), so a
+ * the background and install in one step (see {@link PackagedFontsOptions.loading}), so a
  * later bold or italic edit needs no download. A face of a family that no text used before,
  * such as a font picked in the toolbar, loads when the editor asks for it.
  *
@@ -688,7 +697,8 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     );
     // The faces the document uses under one declared name, or every face when the request
     // does not say.
-    const neededFaces = facesNeeded(request.faces);
+    // `'eager'` loads every face, as if the request named none.
+    const neededFaces = facesNeeded(options.loading === 'eager' ? undefined : request.faces);
     /** Faces to load, by Word family. */
     const toLoad = new Map<DefaultFontFamily, Set<(typeof FACES)[number]>>();
     const load = (family: DefaultFontFamily, face: (typeof FACES)[number]): void => {
@@ -815,7 +825,13 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     already: ReadonlySet<string>,
     aliases: ReadonlyMap<DefaultFontFamily, readonly string[]>
   ): Promise<PackagedFontsFragment> | undefined {
-    if (!request.faces || options.otherFaces === 'on-demand' || request.signal?.aborted) return;
+    if (
+      !request.faces ||
+      options.loading === 'lazy' ||
+      options.loading === 'eager' ||
+      request.signal?.aborted
+    )
+      return;
     if (!canIdle()) return;
     const covered = (family: string, weight: number, style: string): boolean =>
       already.has(faceKey(family, weight, style));

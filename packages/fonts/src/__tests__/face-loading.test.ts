@@ -114,7 +114,7 @@ describe('loadDefaultFonts with faces', () => {
 describe('packagedFonts with faces', () => {
   test('loads the faces the text uses, and nothing for a family no text uses', async () => {
     const { fetcher, files } = fakeFetcher();
-    const fragment = await packagedFonts({ fetcher, otherFaces: 'on-demand' })({
+    const fragment = await packagedFonts({ fetcher, loading: 'lazy' })({
       families: ['Times New Roman', 'Courier New'],
       defaultFamily: 'Calibri',
       faces: [
@@ -128,7 +128,7 @@ describe('packagedFonts with faces', () => {
 
   test('an alias loads the face of its family that its text uses', async () => {
     const { fetcher, files } = fakeFetcher();
-    const fragment = await packagedFonts({ fetcher, otherFaces: 'on-demand' })({
+    const fragment = await packagedFonts({ fetcher, loading: 'lazy' })({
       families: ['Helvetica'],
       defaultFamily: 'Helvetica',
       faces: [{ family: 'Helvetica', weight: 700, style: 'normal' }],
@@ -142,7 +142,7 @@ describe('packagedFonts with faces', () => {
   test('an alias face points at the packaged face, not at a redirect of its family', async () => {
     const { fetcher, files } = fakeFetcher();
     // An earlier answer installed Liberation Sans Bold and mapped Arial 700 onto it.
-    const fragment = await packagedFonts({ fetcher, otherFaces: 'on-demand' })({
+    const fragment = await packagedFonts({ fetcher, loading: 'lazy' })({
       families: ['Helvetica'],
       defaultFamily: 'Helvetica',
       resolvedFaces: [
@@ -279,14 +279,32 @@ describe('packagedFonts with faces', () => {
     expect(files()).toEqual(['Carlito-Regular.ttf']);
   });
 
-  test("otherFaces: 'on-demand' loads nothing ahead", async () => {
+  test("loading: 'lazy' loads nothing ahead", async () => {
     withIdle();
     const { fetcher } = fakeFetcher();
-    const fragment = await packagedFonts({ fetcher, otherFaces: 'on-demand' })({
+    const fragment = await packagedFonts({ fetcher, loading: 'lazy' })({
       families: [],
       defaultFamily: 'Calibri',
       faces: [{ family: 'Calibri', weight: 400, style: 'normal' }],
     });
+    expect(fragment.deferred).toBeUndefined();
+    expect(idle).toHaveLength(0);
+  });
+
+  test("loading: 'eager' loads every face before the text shows", async () => {
+    withIdle();
+    const { fetcher, files } = fakeFetcher();
+    const fragment = await packagedFonts({ fetcher, loading: 'eager' })({
+      families: [],
+      defaultFamily: 'Calibri',
+      faces: [{ family: 'Calibri', weight: 400, style: 'normal' }],
+    });
+    expect([...files()].sort()).toEqual([
+      'Carlito-Bold.ttf',
+      'Carlito-BoldItalic.ttf',
+      'Carlito-Italic.ttf',
+      'Carlito-Regular.ttf',
+    ]);
     expect(fragment.deferred).toBeUndefined();
     expect(idle).toHaveLength(0);
   });
@@ -370,7 +388,7 @@ describe('googleFonts with faces', () => {
     const { fetcher, files } = fakeFetcher();
     const roboto = GOOGLE_FONT_CATALOG.filter((face) => face.family === 'Roboto');
     expect(roboto.length).toBeGreaterThan(1);
-    const fragment = await googleFonts({ fetcher, otherFaces: 'on-demand', onFailure: () => {} })({
+    const fragment = await googleFonts({ fetcher, loading: 'lazy', onFailure: () => {} })({
       families: ['Roboto'],
       defaultFamily: 'Roboto',
       faces: [{ family: 'Roboto', weight: 400, style: 'normal' }],
@@ -381,9 +399,23 @@ describe('googleFonts with faces', () => {
     ).toEqual(['400 normal']);
   });
 
+  test("loading: 'eager' fetches every catalog face of a family in use", async () => {
+    withIdle();
+    const { fetcher, files } = fakeFetcher();
+    const roboto = GOOGLE_FONT_CATALOG.filter((face) => face.family === 'Roboto');
+    const fragment = await googleFonts({ fetcher, loading: 'eager', onFailure: () => {} })({
+      families: ['Roboto'],
+      defaultFamily: 'Roboto',
+      faces: [{ family: 'Roboto', weight: 400, style: 'normal' }],
+    });
+    expect(files()).toHaveLength(roboto.length);
+    expect(fragment.deferred).toBeUndefined();
+    expect(idle).toHaveLength(0);
+  });
+
   test('a family no text uses fetches nothing', async () => {
     const { fetcher, files } = fakeFetcher();
-    await googleFonts({ fetcher, otherFaces: 'on-demand', onFailure: () => {} })({
+    await googleFonts({ fetcher, loading: 'lazy', onFailure: () => {} })({
       families: ['Roboto'],
       defaultFamily: 'Calibri',
       faces: [{ family: 'Calibri', weight: 400, style: 'normal' }],

@@ -121,13 +121,21 @@ The preferred names `DefaultFontFamily`, `DEFAULT_FONT_FAMILIES`, and `ALL_DEFAU
 | First layout | Fallback measurement, then re-paginates | Correct on the first pass |
 | Undo history across the swap | Kept | Kept |
 
-### Load only the faces the text uses
+### Choose how font faces load
 
-`packagedFonts()` and `googleFonts()` first load only the faces that the laid-out text uses. For example, a document with only regular Arial text shows after one file arrives, not four.
+A font family has up to four faces: regular, bold, italic, and bold italic. Set `loading` on `packagedFonts()` or `googleFonts()`:
 
-After those faces arrive, both resolvers load the other faces of the same families when the browser is idle, at low priority. The editor installs them in one step and lays out the document once more. It waits for a 1-second pause in your editing, for at most 3 seconds, so the layout rarely interrupts typing. Edits from other collaborators do not delay it. A later bold or italic edit then needs no download and no second layout. A face of a family that no text used before, such as a font that you pick in the toolbar, loads when the text first uses it. If the resolver lists that family in `supportedFamilies`, the text keeps its previous font until the new face arrives, and then changes once. The font notice does not show while the face loads.
+```ts
+packagedFonts({ loading: 'eager' });
+```
 
-To load a face only when text uses it, pass `otherFaces: 'on-demand'`. Each new face then lays out the document again when it arrives.
+| `loading` | Behavior |
+| --- | --- |
+| `'progressive'` (default) | The text shows when its faces arrive, and the other faces load in the background. |
+| `'eager'` | Every face loads before the text shows. |
+| `'lazy'` | Each face loads when the text first uses it. |
+
+A font that you pick in the toolbar keeps the text in its previous font until the new font loads.
 
 A large document (over about 512 KB of uncompressed content) resolves its fonts before its first layout, so it loads every face of its families and lays out once.
 
@@ -289,7 +297,7 @@ Read `editor.fontMeasurement()` to inspect measurement.
 | Field | Meaning |
 | --- | --- |
 | `measurer` | `'shaped'` or `'fixed'` |
-| `resolving` | `true` while font resolution runs, also while background faces load, for at most 10 seconds |
+| `resolving` | `true` until the text shows in its own fonts. Faces that load in the background do not count. |
 | `producer` | Optional source identifier |
 
 `{ measurer: 'fixed', resolving: false }` means no usable font source remains.

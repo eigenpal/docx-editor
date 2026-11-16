@@ -164,7 +164,7 @@ describe('packagedFonts under that request', () => {
     'loads Carlito Regular for a document that names none of the six',
     async () => {
       const { fetcher, files } = countingFetcher();
-      await open(docxNaming('Montserrat'), packagedFonts({ fetcher, otherFaces: 'on-demand' }));
+      await open(docxNaming('Montserrat'), packagedFonts({ fetcher, loading: 'lazy' }));
 
       // The floor: the default family's regular face, for the paragraph mark. "Costs nothing
       // at all" was never true through the engine.
@@ -200,7 +200,7 @@ describe('packagedFonts under that request', () => {
       const { fetcher, files } = countingFetcher();
       const editor = await open(
         docxNaming('Times New Roman'),
-        packagedFonts({ fetcher, otherFaces: 'on-demand' })
+        packagedFonts({ fetcher, loading: 'lazy' })
       );
       expect(files).not.toContain('LiberationSerif-Bold.ttf');
       editor.surface!.selectAll();
@@ -248,10 +248,7 @@ describe('packagedFonts under that request', () => {
     'loads the named family ON TOP of the default one',
     async () => {
       const { fetcher, files } = countingFetcher();
-      await open(
-        docxNaming('Times New Roman'),
-        packagedFonts({ fetcher, otherFaces: 'on-demand' })
-      );
+      await open(docxNaming('Times New Roman'), packagedFonts({ fetcher, loading: 'lazy' }));
 
       // Liberation Serif for what the document names, Carlito for the default it inherits.
       // A file using only Times New Roman does not cost Liberation Serif alone.
@@ -264,7 +261,7 @@ describe('packagedFonts under that request', () => {
     'serves Century Gothic, the family the two default lists were split for',
     async () => {
       const { fetcher, files } = countingFetcher();
-      await open(docxNaming('Century Gothic'), packagedFonts({ fetcher, otherFaces: 'on-demand' }));
+      await open(docxNaming('Century Gothic'), packagedFonts({ fetcher, loading: 'lazy' }));
 
       // `defaultFonts()` deliberately does NOT load this one — it would cost every
       // document ~709 KB for a family most never name. On demand is the other half of

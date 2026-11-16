@@ -71,7 +71,7 @@ test('a picked family that is still loading keeps the face the text had', async 
   document.body.append(container);
   const editor = createDocxEditor({
     document: bytes,
-    fonts: packagedFonts({ fetcher, otherFaces: 'on-demand' }),
+    fonts: packagedFonts({ fetcher, loading: 'lazy' }),
   });
   cleanup.push(() => (editor.destroy(), container.remove()));
   editor.attach(container);

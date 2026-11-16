@@ -72,7 +72,13 @@ const fonts = useFonts(packagedFonts(), googleFonts());
 
 Call `useFonts()` inside a component.
 
-Both resolvers first load only the faces that the document's text uses, so the document shows sooner. When the browser is idle, they load the other faces of the same families at low priority, and the editor installs them in one step. A later bold or italic edit then needs no download. Pass `otherFaces: 'on-demand'` to load a face only when text uses it.
+Set `loading` on either resolver to choose how the faces of each family load:
+
+| `loading` | Behavior |
+| --- | --- |
+| `'progressive'` (default) | The text shows when its faces arrive, and the other faces load in the background. |
+| `'eager'` | Every face loads before the text shows. |
+| `'lazy'` | Each face loads when the text first uses it. |
 
 To load all 20 faces of the five default families before opening a document, use `defaultFonts()`. This loads 7.4 MB and avoids repagination when fonts arrive:
 
