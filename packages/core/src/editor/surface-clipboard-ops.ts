@@ -387,7 +387,8 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     let landed = false;
     let unsupported = false;
     let end: FragmentPasteEnd | undefined;
-    const before = new Set(session.paragraphIdsIn({ kind: 'body' }));
+    const paragraphIds = () => deps.paragraphIds?.() ?? session.paragraphIdsIn({ kind: 'body' });
+    const before = new Set(paragraphIds());
     deps.commit(
       () => {
         // The readiness gate the typing lane asks. A fragment paste reaches the store
@@ -444,7 +445,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
             break;
           }
         }
-        return collapsedAt(pasteEndIn(end, before) ?? target);
+        return collapsedAt(pasteEndIn(end, before, paragraphIds()) ?? target);
       }
     );
     return unsupported ? 'unsupported-content' : landed;
@@ -455,14 +456,15 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
    * store reports that end, because the landing paragraph is minted inside the transaction.
    * A collaboration session can re-key a minted paragraph when it publishes, so an id the
    * story no longer holds names the last new paragraph instead: `insertFragment` lands every
-   * block before the split tail, and the tail is where the paste ends.
+   * block, cell paragraphs included, before the split tail, and the tail is where the paste
+   * ends. This is the minted-tail diff the plain lane and Enter use.
    */
   function pasteEndIn(
     end: FragmentPasteEnd | undefined,
-    before: ReadonlySet<string>
+    before: ReadonlySet<string>,
+    ids: readonly string[]
   ): FragmentPasteEnd | undefined {
     if (!end) return undefined;
-    const ids = session.paragraphIdsIn({ kind: 'body' });
     if (ids.includes(end.paragraphId)) return end;
     const minted = ids.filter((id) => !before.has(id));
     const landing = minted[minted.length - 1];

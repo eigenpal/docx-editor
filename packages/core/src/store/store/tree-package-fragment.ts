@@ -53,7 +53,14 @@ export interface FragmentPasteInput {
   readonly revision?: RevisionAttributionInput;
 }
 
-/** The end of the pasted content: where Word leaves the caret after a paste. */
+/**
+ * The end of the pasted content: where Word leaves the caret after a paste.
+ *
+ * The id is the one the paste transaction gave the paragraph. A collaboration session can
+ * re-key a paragraph that the paste created when it publishes the change. If the story no
+ * longer holds `paragraphId`, the end is in the last paragraph that the paste created, at the
+ * same offset.
+ */
 export interface FragmentPasteEnd {
   /** The paragraph that holds the end: the host's trailing text follows it. */
   readonly paragraphId: string;

@@ -210,28 +210,25 @@ function rebuiltParagraph(
   return pPr ? [pPr, ...inline] : inline;
 }
 
-/** The length of the split's tail: the host text after the landing offset. */
-function trailingLength(part: OoxmlPart, tailId: string): number | null {
-  const tail = findNode(part, tailId);
-  return tail && tail.kind === 'paragraph' ? paragraphLength(tail as OoxmlParagraphNode) : null;
+/** The length of one paragraph in `part`, or null when the id names no paragraph. */
+function paragraphLengthIn(part: OoxmlPart, paragraphId: string): number | null {
+  const node = findNode(part, paragraphId);
+  return node && node.kind === 'paragraph' ? paragraphLength(node as OoxmlParagraphNode) : null;
 }
 
 /**
- * The end of the pasted content, where Word leaves the caret: in the paragraph that now
- * carries the host's trailing text, just before that text. The trailing text keeps its
- * length through the landing, so the end is that paragraph's length minus it.
+ * The end of the pasted content, where Word leaves the caret: in the paragraph that now holds
+ * the host's trailing text, just before that text. The trailing text keeps its length through
+ * the landing, so the end is that paragraph's length minus it. Null breaks the invariant.
  */
 function pasteEnd(
   part: OoxmlPart,
   paragraphId: string,
   trailing: number
-): { readonly paragraphId: string; readonly offset: number } {
-  const landing = findNode(part, paragraphId);
-  const length =
-    landing && landing.kind === 'paragraph'
-      ? paragraphLength(landing as OoxmlParagraphNode)
-      : trailing;
-  return { paragraphId, offset: Math.max(0, length - trailing) };
+): { readonly paragraphId: string; readonly offset: number } | null {
+  const length = paragraphLengthIn(part, paragraphId);
+  if (length === null || length < trailing) return null;
+  return { paragraphId, offset: length - trailing };
 }
 
 export function applyInsertFragment(
@@ -288,7 +285,7 @@ export function applyInsertFragment(
     if (!tailId) return { ok: false, reason: 'tree-invariant' };
     const head = findNode(split.part, host.id);
     if (!head || head.kind !== 'paragraph') return { ok: false, reason: 'tree-invariant' };
-    const hostTrailing = trailingLength(split.part, tailId);
+    const hostTrailing = paragraphLengthIn(split.part, tailId);
     if (hostTrailing === null) return { ok: false, reason: 'tree-invariant' };
     const appended = replaceChildren(
       split.part,
@@ -306,11 +303,13 @@ export function applyInsertFragment(
       options
     );
     if (!joined.ok) return joined;
+    const caret = pasteEnd(joined.part, host.id, hostTrailing);
+    if (!caret) return { ok: false, reason: 'tree-invariant' };
     const effect: TreeOpEffect = {
       dirty: [host.id],
       created: [],
       deleted: [],
-      caret: pasteEnd(joined.part, host.id, hostTrailing),
+      caret,
       dependencyKeys: TEXT_DEPS,
       impact: 'flow-structural',
     };
@@ -327,7 +326,7 @@ export function applyInsertFragment(
   const tailId = split.effect.split?.tail;
   if (!tailId) return { ok: false, reason: 'tree-invariant' };
   let current = split.part;
-  const hostTrailing = trailingLength(current, tailId);
+  const hostTrailing = paragraphLengthIn(current, tailId);
   if (hostTrailing === null) return { ok: false, reason: 'tree-invariant' };
 
   const middle: OoxmlNode[] = [...blocks];
@@ -397,11 +396,13 @@ export function applyInsertFragment(
     for (const block of middle) created.push(block.id);
   }
 
+  const caret = pasteEnd(current, tailId, hostTrailing);
+  if (!caret) return { ok: false, reason: 'tree-invariant' };
   const effect: TreeOpEffect = {
     dirty: [host.id, tailId],
     created,
     deleted: [],
-    caret: pasteEnd(current, tailId, hostTrailing),
+    caret,
     dependencyKeys: TEXT_DEPS,
     impact: 'flow-structural',
   };
