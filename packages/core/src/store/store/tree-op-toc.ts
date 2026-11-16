@@ -24,7 +24,12 @@ import {
   replaceChildren,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import type {
+  OoxmlElement,
+  OoxmlNode,
+  OoxmlParagraphNode,
+  OoxmlPart,
+} from '../package/ooxml-tree.ts';
 import { MAX_INLINE_CONTAINER_DEPTH, nextInlineContainerDepth } from '../package/ooxml-shared.ts';
 import {
   cloneWithNewIds,
@@ -40,6 +45,9 @@ import { isValidXmlText } from '../package/sinks.ts';
 import { usedParaIds, w14PrefixInScopeAt, withFreshParaIds } from '../package/para-id.ts';
 import { actorScopedSeed } from '../package/actor-scoped-ids.ts';
 import { nextBookmarkId } from './tree-op-bookmark-ids.ts';
+import { markerSiteAt } from './tree-op-comments.ts';
+import { segmentsOf } from './tree-op-segments.ts';
+import { hardBreakKind } from '../package/hard-break.ts';
 import type { TreeDocOp, TreeOpEffect, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
 
 export type ReplaceTocResultOp = Extract<TreeDocOp, { op: 'replaceTocResult' }>;
@@ -215,6 +223,29 @@ export function validateRewriteTocPageNumbers(
   return tocRestriction(part, toc);
 }
 
+/** A `w:br` that ends the page or the column, as opposed to a line break. */
+function isPageOrColumnBreak(node: OoxmlNode): boolean {
+  if (node.kind !== 'hardBreak') return false;
+  const kind = hardBreakKind(node);
+  return kind === 'page' || kind === 'column';
+}
+
+/**
+ * The model offset after a paragraph's leading page and column breaks, or 0 when it has
+ * none. A paragraph made only of breaks answers 0: its bookmark stays at the front. This
+ * matches where layout starts the paragraph's text (`leadingBreakTextStarts`).
+ */
+function leadingBreaksEnd(paragraph: OoxmlParagraphNode): number {
+  let offset = 0;
+  for (const segment of segmentsOf(paragraph)) {
+    if (segment.start !== offset || !isPageOrColumnBreak(segment.node)) {
+      return offset;
+    }
+    offset = segment.end;
+  }
+  return 0;
+}
+
 function insertBookmarks(
   part: OoxmlPart,
   bookmarks: readonly { paragraphId: string; name: string }[],
@@ -231,17 +262,30 @@ function insertBookmarks(
     }
     const bookmarkId = mintBookmarkId();
     const pair = bookmarkPairNodes(mint, bookmark.name, bookmarkId);
-    // Place start at front (after pPr if any), end at end.
+    // The end goes last in the paragraph. The start goes in front of the heading text, after
+    // pPr and after any leading page or column break, so a PAGEREF to it, a link that follows
+    // it, and an exported PDF destination all name the page where the heading text is.
+    const textStart = paragraph.kind === 'paragraph' ? leadingBreaksEnd(paragraph) : 0;
     const children = [...paragraph.children];
     let insertAt = 0;
     if (children[0] && children[0].kind !== 'textValue' && children[0].localName === 'pPr') {
       insertAt = 1;
     }
-    children.splice(insertAt, 0, pair.start);
+    if (textStart === 0) children.splice(insertAt, 0, pair.start);
     children.push(pair.end);
     const replaced = replaceChildren(current, paragraph.id, children, options);
     if (!replaced.ok) return { ok: false, reason: 'tree-invariant', detail: 'bookmark-insert' };
     current = replaced.part;
+    if (textStart > 0) {
+      const reloaded = findNode(current, paragraph.id);
+      if (!reloaded || reloaded.kind !== 'paragraph')
+        return { ok: false, reason: 'tree-invariant' };
+      const site = markerSiteAt(current, reloaded, textStart, options);
+      if (!site.ok) return site;
+      const placed = insertChildren(site.part, site.containerId, site.index, [pair.start], options);
+      if (!placed.ok) return { ok: false, reason: 'tree-invariant', detail: 'bookmark-insert' };
+      current = placed.part;
+    }
     dirty.push(paragraph.id);
   }
   return ok(current, {

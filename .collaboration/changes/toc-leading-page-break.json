@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A table of contents row and a PAGEREF result named the page of a heading's first fragment, which holds only a leading page break. New _Toc bookmarks started before that break.",
+  "after": "They name the page where the heading text is painted. New _Toc bookmarks start after leading page and column breaks. Shared operations and their fields are unchanged.",
+  "reason": "Peers replicate the resulting tree, not the replaceTocResult or rewriteTocPageNumbers operations, so the bookmark position a peer writes reaches every peer as ordinary content. An older peer that refreshes writes its own page number text, which every peer applies normally.",
+  "tests": [
+    "packages/core/src/editor/__tests__/toc-leading-page-break.test.ts",
+    "packages/core/src/export/__tests__/export-document-resources.test.ts",
+    "packages/core/src/layout/__tests__/paragraph-start-page.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-toc-leading-page-break.test.ts"
+  ],
+  "changeset": "toc-leading-page-break",
+  "migration": null
+}

@@ -102,6 +102,24 @@ test('immutable byte export provides frozen metadata and destinations from one l
   opened.session.dispose();
 });
 
+test('a destination before a leading page break resolves to the page of the text', async () => {
+  // Older files keep a heading bookmark in front of the break. The link still lands on page 2.
+  const opened = openDocumentForExport(
+    docxBytes(
+      '<w:p><w:hyperlink w:anchor="Second"><w:r><w:t>Go</w:t></w:r></w:hyperlink></w:p>' +
+        '<w:p><w:bookmarkStart w:id="1" w:name="Second"/><w:r><w:br w:type="page"/></w:r>' +
+        '<w:r><w:t>Second heading</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p>'
+    )
+  );
+  if (!opened.ok) throw new Error(String(opened.reason));
+  const layout = await opened.session.layout();
+  expect(layout.pages.length).toBe(2);
+  const destination = exportDestinationNamed(layout, 'Second');
+  expect(destination?.pageIndex).toBe(1);
+  expect(destination?.anchor.offset).toBe(0);
+  opened.session.dispose();
+});
+
 test('byte export without docProps publishes empty frozen metadata and destinations', async () => {
   const opened = openDocumentForExport(
     docxBytes('<w:p><w:r><w:t>No metadata</w:t></w:r></w:p>', false)
