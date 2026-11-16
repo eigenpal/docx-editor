@@ -279,8 +279,10 @@ describe('automatic list spacing matches Word', () => {
         (value) => value.spacing
       )
     ).toEqual([
+      // One list run in the cell: nothing between its items, nothing before it at the cell
+      // top, and the run's automatic margin after it at the cell end.
       { before: 0, after: 0 },
-      { before: 0, after: 0 },
+      { before: 0, after: 14 },
     ]);
   });
 });

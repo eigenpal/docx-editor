@@ -109,7 +109,7 @@ import {
   paragraphBorderExtentPt,
   paragraphBorderStrokeWidthPt,
 } from './paragraph-style.ts';
-import { cellEdgeAutoSpacing } from './table-cell-edge-spacing.ts';
+import { cellAutoSpacing } from './table-cell-edge-spacing.ts';
 import {
   positionedParagraphExclusionToken,
   breakPreparedParagraphLazily,
@@ -434,10 +434,13 @@ function placeCellParagraph(
     borders,
     shading,
   } = layoutInputs;
-  const edgeSpacing = cellEdgeAutoSpacing(authoredSpacing, props, {
+  const edgeSpacing = cellAutoSpacing(authoredSpacing, props, {
     firstInCell: options?.firstInCell === true,
     lastInCell: options?.lastInCell === true,
     fixedAutoSpacing: deps.styleCascade?.fixedParagraphSpacing === true,
+    list: options?.inTableCell === true ? listItem : undefined,
+    listItems: deps.listItems,
+    neighbours: options?.borderNeighbours,
   });
   const spacing = cellContextualSpacing(
     edgeSpacing,

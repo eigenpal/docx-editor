@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Numbered paragraphs with automatic spacing in a table cell had no automatic space at all, so a list in a cell had no margin before its first item or after its last.",
+  "after": "A list run in a cell keeps its automatic margin before its first item and after its last, drops it between its own items, drops the margin before at the cell top, and keeps the margin after at the cell end.",
+  "reason": "Only paragraph spacing at layout time changes. Shared nodes, operation shapes, offsets, and package serialization remain unchanged.",
+  "tests": ["packages/core/src/layout/__tests__/cell-list-auto-spacing.test.ts"],
+  "changeset": "cell-list-auto-spacing",
+  "migration": null
+}
