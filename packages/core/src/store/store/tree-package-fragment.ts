@@ -170,7 +170,7 @@ export function applyFragmentPaste(
   let blockCount = 0;
   let refusalDetail = '';
 
-  const partBefore = store.partFor(scope);
+  const partBefore = storyStore.part;
   const outcome: FragmentPasteResult = runObservedStoreTransaction(
     store,
     () => {
@@ -256,7 +256,13 @@ export function applyFragmentPaste(
   );
   if (!outcome.ok || !outcome.end) return outcome;
   const { end: transactionEnd, ...rest } = outcome;
-  const end = publishedPasteEnd(transactionEnd, partBefore, store.partFor(scope));
+  // Resolved again: a collaboration publish can install a new story store for the part.
+  const published = store.resolveStory(scope);
+  const end = publishedPasteEnd(
+    transactionEnd,
+    partBefore,
+    published.ok ? published.store.part : null
+  );
   return end ? { ...rest, end } : rest;
 }
 
