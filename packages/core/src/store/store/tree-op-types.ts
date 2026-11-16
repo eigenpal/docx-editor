@@ -1265,7 +1265,10 @@ export interface TreeOpEffect {
   readonly join?: { readonly kept: string; readonly removed: string };
   readonly dependencyKeys: readonly string[];
   readonly impact: ImpactClass;
-  /** Post-edit caret paragraph for structural ops, at `offset` (default 0). */
+  /**
+   * Post-edit caret paragraph, at `offset` (default 0). Structural ops set it, and
+   * `insertFragment` sets it to the end of the inserted content.
+   */
   readonly caret?: { readonly paragraphId: string; readonly offset?: number };
 }
 

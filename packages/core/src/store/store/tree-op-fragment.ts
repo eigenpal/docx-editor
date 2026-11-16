@@ -210,6 +210,28 @@ function rebuiltParagraph(
   return pPr ? [pPr, ...inline] : inline;
 }
 
+/** The length of one paragraph in `part`, or null when the id names no paragraph. */
+function paragraphLengthIn(part: OoxmlPart, paragraphId: string): number | null {
+  const node = findNode(part, paragraphId);
+  return node && node.kind === 'paragraph' ? paragraphLength(node as OoxmlParagraphNode) : null;
+}
+
+/**
+ * The end of the pasted content, where Word leaves the caret: in the paragraph that now holds
+ * the host's trailing text, just before that text. The trailing text keeps its length through
+ * the landing, so the end is that paragraph's length minus it. Null when it cannot be measured:
+ * the end is only a caret hint, so the content still lands.
+ */
+function pasteEnd(
+  part: OoxmlPart,
+  paragraphId: string,
+  trailing: number | null
+): { readonly paragraphId: string; readonly offset: number } | null {
+  const length = paragraphLengthIn(part, paragraphId);
+  if (length === null || trailing === null || length < trailing) return null;
+  return { paragraphId, offset: length - trailing };
+}
+
 export function applyInsertFragment(
   hostPart: OoxmlPart,
   op: InsertFragmentOp,
@@ -264,6 +286,7 @@ export function applyInsertFragment(
     if (!tailId) return { ok: false, reason: 'tree-invariant' };
     const head = findNode(split.part, host.id);
     if (!head || head.kind !== 'paragraph') return { ok: false, reason: 'tree-invariant' };
+    const hostTrailing = paragraphLengthIn(split.part, tailId);
     const appended = replaceChildren(
       split.part,
       head.id,
@@ -280,10 +303,16 @@ export function applyInsertFragment(
       options
     );
     if (!joined.ok) return joined;
+    // Unmeasurable (a broken invariant), the caret stays where the paste started.
+    const caret = pasteEnd(joined.part, host.id, hostTrailing) ?? {
+      paragraphId: host.id,
+      offset: op.offset,
+    };
     const effect: TreeOpEffect = {
       dirty: [host.id],
       created: [],
       deleted: [],
+      caret,
       dependencyKeys: TEXT_DEPS,
       impact: 'flow-structural',
     };
@@ -300,6 +329,7 @@ export function applyInsertFragment(
   const tailId = split.effect.split?.tail;
   if (!tailId) return { ok: false, reason: 'tree-invariant' };
   let current = split.part;
+  const hostTrailing = paragraphLengthIn(current, tailId);
 
   const middle: OoxmlNode[] = [...blocks];
   const created: string[] = [tailId];
@@ -368,11 +398,14 @@ export function applyInsertFragment(
     for (const block of middle) created.push(block.id);
   }
 
+  // Unmeasurable, the caret goes to the start of the tail: the end when the last block was
+  // not merged into it.
+  const caret = pasteEnd(current, tailId, hostTrailing) ?? { paragraphId: tailId, offset: 0 };
   const effect: TreeOpEffect = {
     dirty: [host.id, tailId],
     created,
     deleted: [],
-    ...(op.lastMarkCovered === true ? { caret: { paragraphId: tailId } } : {}),
+    caret,
     dependencyKeys: TEXT_DEPS,
     impact: 'flow-structural',
   };

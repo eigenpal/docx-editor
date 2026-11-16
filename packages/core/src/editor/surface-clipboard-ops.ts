@@ -48,6 +48,7 @@ import { fieldResultSpeller, REMOVED_COPY_UNIT, copiedText } from '../layout/fie
 import { paragraphMarkDeleted } from '../layout/revision-visibility.ts';
 import type { OoxmlPart } from '@docx-editor.dev/core/store';
 import { findNode, parentNodeOf } from '../store/package/ooxml-edit.ts';
+import type { FragmentPasteEnd } from '../store/store/tree-package-fragment.ts';
 import { clampTextFormPaste } from './text-form-field-paste.ts';
 import {
   collapsedAt,
@@ -385,6 +386,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     const target = plan.replaceAt ?? plan.collapseTo;
     let landed = false;
     let unsupported = false;
+    let end: FragmentPasteEnd | undefined;
     deps.commit(
       () => {
         // The readiness gate the typing lane asks. A fragment paste reaches the store
@@ -414,6 +416,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
           }
         );
         landed = result.ok;
+        if (result.ok) end = result.end;
         if (landed && suggestion) deps.trackedChangeLanded?.();
         unsupported = !result.ok && result.detail === 'fragment-merge:unsupported-content';
         return {
@@ -440,7 +443,9 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
             break;
           }
         }
-        return collapsedAt(target);
+        // Word leaves the caret at the END of the pasted content, as the plain lane does.
+        // The landing paragraph is created inside the transaction, so the store reports it.
+        return collapsedAt(end ?? target);
       }
     );
     return unsupported ? 'unsupported-content' : landed;
