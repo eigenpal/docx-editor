@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "An empty w:hideMark cell kept one line of the paragraph mark, so a row of empty hidden-mark cells took a full line.",
+  "after": "The empty final paragraph of a w:hideMark cell takes no height, also in an otherwise empty cell; cell margins, w:trHeight, paragraph borders, list markers and markup-view mark revisions still reserve space.",
+  "reason": "Only row height at layout time changes. Shared nodes, operation shapes, offsets, and package serialization remain unchanged, and the collapsed paragraph keeps its addressable line.",
+  "tests": ["packages/core/src/layout/__tests__/table-cell-hide-mark.test.ts"],
+  "changeset": "hidden-mark-empty-cells",
+  "migration": null
+}

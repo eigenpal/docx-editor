@@ -601,10 +601,13 @@ function placeCellParagraph(
     listItem !== undefined ||
     (deps.displayMode === 'all-markup' &&
       paragraphMarkMarkupVisible(paragraph, 'all-markup', deps.revisionAuthorFilter));
-  // An empty cell keeps its line box. An empty final paragraph after other content in a
-  // `w:hideMark` cell collapses instead (`cellTerminatorCollapses`).
+  // An empty final paragraph in a `w:hideMark` cell collapses (`cellTerminatorCollapses`).
+  // In an otherwise empty cell, a paragraph border still draws and keeps the line.
   const lines = brokenLines;
-  const collapseHeight = (options?.collapseHeight ?? false) && !publishesPlacedGlyphs();
+  const keepsBorderedLine =
+    (options?.collapseInEmptyCell ?? false) && (topEdge !== undefined || closingEdge !== undefined);
+  const collapseHeight =
+    (options?.collapseHeight ?? false) && !keepsBorderedLine && !publishesPlacedGlyphs();
 
   const appliedBefore =
     startsParagraph && !collapseHeight
@@ -1115,7 +1118,6 @@ function flowBlocksInBoxBounded(
       last: blockIndex === blocks.length - 1,
       afterEmittedTable: lastEmittedTable,
       hideEndMark,
-      afterPlacedContent: fragments.length > 0,
     });
     const placed = placeCellParagraph(
       block,
@@ -1145,6 +1147,7 @@ function flowBlocksInBoxBounded(
         hideEndMark: hideEndMark && blockIndex === blocks.length - 1,
         cellEndMarkMinBottom: blockIndex === blocks.length - 1 ? cellEndMarkMinBottom : undefined,
         collapseHeight: collapsible,
+        collapseInEmptyCell: collapsible && fragments.length === 0,
         collapseBandAbove: y - top,
         ...(tableCellStyle ? { tableCellStyle } : {}),
         borderNeighbours: {

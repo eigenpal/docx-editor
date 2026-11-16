@@ -41,6 +41,8 @@ export interface CellParagraphPlacementOptions {
    * box. That is how the format's producers draw it.
    */
   readonly collapseHeight?: boolean;
+  /** The collapsing paragraph is the cell's only content; its paragraph borders keep its line. */
+  readonly collapseInEmptyCell?: boolean;
   /**
    * How much flowed content sits above the collapse point inside this cell.
    *
