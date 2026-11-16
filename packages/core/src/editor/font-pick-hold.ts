@@ -17,6 +17,8 @@ export interface PickState {
   readonly served: () => readonly string[] | undefined;
   /** The resolver was asked for the family before. */
   readonly asked: (family: string) => boolean;
+  /** The families that the next request asks for, such as the families the document uses. */
+  readonly requested: () => readonly string[];
 }
 
 /** Families that render in the face they had before a pick, until their own face installs. */
@@ -31,8 +33,9 @@ export interface FontPickHold {
   /** Release every held family that `covered` says has its own face now. */
   readonly release: (covered: (family: string) => boolean) => void;
   /**
-   * Whether `family` still loads: an on-demand resolver was not asked for it yet, such as
-   * just after a pick, before its request starts. A loading family is not substituted.
+   * Whether `family` still loads: an on-demand resolver will ask for it but was not asked yet,
+   * such as just after a pick, before its request starts. A loading family is not substituted.
+   * A family the resolver is never asked for, such as one over the family cap, is not loading.
    */
   readonly loading: (family: string) => boolean;
   /** Release every hold, for a new document. */
@@ -57,7 +60,10 @@ export function createFontPickHold(state: PickState): FontPickHold {
     release: (covered) => {
       for (const key of held.keys()) if (covered(key)) held.delete(key);
     },
-    loading: (name) => state.dynamic() && !state.asked(name),
+    loading: (name) =>
+      state.dynamic() &&
+      !state.asked(name) &&
+      state.requested().some((requested) => fold(requested) === fold(name)),
     clear: () => held.clear(),
     alias: (base) => (name) => {
       const previous = family(name);

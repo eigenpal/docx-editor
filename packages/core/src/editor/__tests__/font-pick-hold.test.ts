@@ -11,6 +11,7 @@ function state(overrides: Partial<Record<keyof PickState, unknown>> = {}) {
     covered: (family) => covered.has(family.toLowerCase()),
     served: () => ['Arial', 'Roboto'],
     asked: (family) => asked.has(family.toLowerCase()),
+    requested: () => ['Arial', 'Roboto'],
   };
   return { state: { ...base, ...overrides } as PickState, covered, asked };
 }
@@ -56,13 +57,19 @@ test('no hold without an on-demand resolver, shaping, a previous face, or a fami
   expect(hold.family('Roboto')).toBeUndefined();
 });
 
-test('a family the resolver was not asked for yet is loading, not substituted', () => {
+test('a family the next request asks for, and was not asked for yet, is loading', () => {
   const { state: s, asked } = state();
   const hold = createFontPickHold(s);
-  expect(hold.loading('Roboto')).toBe(true);
+  expect(hold.loading('roboto')).toBe(true);
   asked.add('roboto');
   expect(hold.loading('Roboto')).toBe(false);
   expect(createFontPickHold(state({ dynamic: () => false }).state).loading('Roboto')).toBe(false);
+});
+
+test('a family the resolver is never asked for, such as one over the cap, is not loading', () => {
+  const hold = createFontPickHold(state().state);
+  // Not in the next request: it stays in the notice when no face covers it.
+  expect(hold.loading('Over The Cap Serif')).toBe(false);
 });
 
 test('a second pick keeps the first hold, and clear releases every hold', () => {

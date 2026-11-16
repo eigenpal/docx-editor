@@ -463,6 +463,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let resolvedFontConfiguration: FontConfigurationBase | undefined;
   const fontConfiguration = (): FontConfigurationBase | undefined =>
     typeof configuredFonts === 'function' ? resolvedFontConfiguration : configuredFonts;
+  const liveFontDefaultFamily = () => configuredDefaultFontFamily(fontConfiguration());
   const liveFonts = createLiveFontResolution(
     () => {
       const session = preparedFontSession ?? surface?.session;
@@ -470,7 +471,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // A document still preparing has laid out nothing: the surface is the previous one.
       const laidOut = preparedFontSession ? undefined : surface;
       const caret = laidOut && (snapshotNow().formatting ?? undefined);
-      const defaultFamily = configuredDefaultFontFamily(fontConfiguration());
+      const defaultFamily = liveFontDefaultFamily();
       return {
         generation: fontLifetime.generation,
         dynamic: typeof configuredFonts === 'function',
@@ -505,6 +506,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     covered: (family) => fontFamilyCovered(family),
     served: () => fontConfiguration()?.supportedFamilies,
     asked: (family) => liveFonts.asked(family),
+    requested: () =>
+      surface ? liveFontFamilies(surface.session, undefined, liveFontDefaultFamily()) : [],
   });
   /**
    * Local-resolution probe for the compatibility notice, created against the attached
@@ -1337,12 +1340,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const scope = surface?.activeScope?.() ?? SCOPE_BODY;
     return {
       scope,
-      // "No document to work with, and nothing went wrong" — deliberately NOT "nothing
-      // painted". Bytes count from the moment they are handed over, whether they are
-      // still waiting for `attach` (`pendingBytes`) or already mounted (`surface`), so
-      // this survives a detach/remount and never depends on a mount point existing.
-      //
-      // That distinction is load-bearing: a host may legitimately gate its
+      // "No document to work with, and nothing went wrong" — NOT "nothing painted". Bytes
+      // count once handed over, pending (`pendingBytes`) or mounted (`surface`), so this
+      // survives a detach/remount. That is load-bearing: a host may legitimately gate its
       // `DocxEditor.Content` on this flag, and a definition that only cleared once pages
       // painted would deadlock — nothing paints until Content mounts, and Content never
       // mounts while the flag is set. A parse failure clears it too; a document that
