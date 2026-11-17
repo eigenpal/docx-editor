@@ -786,7 +786,7 @@ export function* paginateTableInFlowSteps(
         const placementDeps = rowDeps();
         let placed =
           (!vMerge && !deferred
-            ? rowProbes.take(row, tableLeft, flow.cursorY, placementDeps)
+            ? rowProbes.place(row, tableLeft, flow.cursorY, placementDeps)
             : null) ??
           layoutRowFragment(
             deferred?.headRow ?? row,

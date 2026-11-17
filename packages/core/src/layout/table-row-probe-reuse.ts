@@ -68,7 +68,7 @@ export function createRowProbeReuse(
       facts.ordinary && !row.cells.some((c) => c.blocks.some((b) => deps.listItems?.has(b.id)))
     );
   };
-  return {
+  const reuse = {
     measure(row: SemanticTableRow, left: number, top: number, deps: TableFlowDeps): number {
       probe = undefined;
       const zones = !!deps.pageExclusionZones?.().length;
@@ -110,38 +110,60 @@ export function createRowProbeReuse(
     forget(): void {
       probe = undefined;
     },
-    take(row: SemanticTableRow, left: number, top: number, deps: TableFlowDeps): Placement | null {
-      const known = probe;
-      probe = undefined;
-      if (
-        !known ||
-        known.row !== row ||
-        known.left !== left ||
-        known.top !== top ||
-        deps.pageExclusionZones?.().length
-      )
+    /** The kept probe of `row` at `top` as its placement, or null when it does not match. */
+    take: takeKept,
+    /**
+     * `take`, or a new probe at `top` when the kept one missed. A row that opens a page was
+     * probed at the old page bottom. The new probe costs what a fresh placement costs, and it
+     * records the placement, so the next pass can move the row instead of laying it out again.
+     * Null for a row the probes do not cover.
+     */
+    place(row: SemanticTableRow, left: number, top: number, deps: TableFlowDeps): Placement | null {
+      const kept = takeKept(row, left, top, deps);
+      if (kept) return kept;
+      if (cellSpacingPt !== 0 || deps.pageExclusionZones?.().length || !ordinary(row, deps))
         return null;
-      if (!sameProbeDeps(deps, known.deps)) return null;
-      // A prior finalized row already carries the same paragraph-local line ids. Keep its
-      // records when no id changes; remapping must still call nextLineId for every line.
-      let cells: (typeof known.result.record.cells)[number][] | undefined;
-      for (let cellIndex = 0; cellIndex < known.result.record.cells.length; cellIndex++) {
-        const cell = known.result.record.cells[cellIndex]!;
-        let blocks: (typeof cell.blocks)[number][] | undefined;
-        for (let blockIndex = 0; blockIndex < cell.blocks.length; blockIndex++) {
-          const block = cell.blocks[blockIndex]!;
-          if (block.kind !== 'paragraph') throw new Error('Ordinary row probe contains a table');
-          let lines: (typeof block.lines)[number][] | undefined;
-          for (let index = 0; index < block.lines.length; index++) {
-            const line = block.lines[index]!;
-            const id = deps.nextLineId(line.range.paragraphId, line.range.start, index);
-            if (id !== line.id) (lines ??= block.lines.slice())[index] = { ...line, id };
-          }
-          if (lines) (blocks ??= cell.blocks.slice())[blockIndex] = withLines(block, lines);
-        }
-        if (blocks) (cells ??= known.result.record.cells.slice())[cellIndex] = { ...cell, blocks };
-      }
-      return cells ? { ...known.result, record: { ...known.result.record, cells } } : known.result;
+      reuse.measure(row, left, top, deps);
+      return takeKept(row, left, top, deps);
     },
   };
+  function takeKept(
+    row: SemanticTableRow,
+    left: number,
+    top: number,
+    deps: TableFlowDeps
+  ): Placement | null {
+    const known = probe;
+    probe = undefined;
+    if (
+      !known ||
+      known.row !== row ||
+      known.left !== left ||
+      known.top !== top ||
+      deps.pageExclusionZones?.().length
+    )
+      return null;
+    if (!sameProbeDeps(deps, known.deps)) return null;
+    // A prior finalized row already carries the same paragraph-local line ids. Keep its
+    // records when no id changes; remapping must still call nextLineId for every line.
+    let cells: (typeof known.result.record.cells)[number][] | undefined;
+    for (let cellIndex = 0; cellIndex < known.result.record.cells.length; cellIndex++) {
+      const cell = known.result.record.cells[cellIndex]!;
+      let blocks: (typeof cell.blocks)[number][] | undefined;
+      for (let blockIndex = 0; blockIndex < cell.blocks.length; blockIndex++) {
+        const block = cell.blocks[blockIndex]!;
+        if (block.kind !== 'paragraph') throw new Error('Ordinary row probe contains a table');
+        let lines: (typeof block.lines)[number][] | undefined;
+        for (let index = 0; index < block.lines.length; index++) {
+          const line = block.lines[index]!;
+          const id = deps.nextLineId(line.range.paragraphId, line.range.start, index);
+          if (id !== line.id) (lines ??= block.lines.slice())[index] = { ...line, id };
+        }
+        if (lines) (blocks ??= cell.blocks.slice())[blockIndex] = withLines(block, lines);
+      }
+      if (blocks) (cells ??= known.result.record.cells.slice())[cellIndex] = { ...cell, blocks };
+    }
+    return cells ? { ...known.result, record: { ...known.result.record, cells } } : known.result;
+  }
+  return reuse;
 }
