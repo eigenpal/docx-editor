@@ -195,8 +195,11 @@ interface ReadbackWalk {
   readonly paragraphId: string;
   readonly modelText: string;
   readonly pieces: PaintedPiece[];
-  /** Model ranges already contributed, so a repeat cannot contribute twice. */
-  readonly ranges: Set<string>;
+  /**
+   * Model ranges already contributed, so a repeat cannot contribute twice: where the span that
+   * contributed sat, and what it contributed.
+   */
+  readonly ranges: Map<string, { readonly parent: Node | null; readonly text: string }>;
   /** The model offset just past the last span walked: where a stray text node sits. */
   end: number;
   /** DOM order, so a stray keeps the side of a span the browser put it on. */
@@ -255,8 +258,21 @@ function walkContainer(container: Element, walk: ReadbackWalk): void {
     // republishes the same model range; a paragraph crossing a page paints its ranges on both
     // sheets. Either way the second one is the same characters, not more of them.
     const key = `${piece.start}:${piece.end}`;
-    if (walk.ranges.has(key)) continue;
-    walk.ranges.add(key);
+    const first = walk.ranges.get(key);
+    if (first) {
+      // UNLESS THE BROWSER MADE IT. Composing over a selection set in another face than the
+      // text on both sides of it (a Latin word between Hangul), Chromium removes the selected
+      // spans and writes the composed text into a copy of a neighbouring span — its range
+      // attributes included — beside the original, in the same line. Layout never paints one
+      // range twice in a line with different text, so that text is composed, not a repeat:
+      // dropped, the composition erased the selection and kept nothing of what was typed.
+      // It reads as a stray where the browser put it.
+      if (element.parentNode === first.parent && piece.text !== first.text) {
+        walk.pieces.push({ start: walk.end, end: walk.end, text: piece.text, seq: piece.seq });
+      }
+      continue;
+    }
+    walk.ranges.set(key, { parent: element.parentNode, text: piece.text });
     walk.pieces.push(piece);
   }
 }
@@ -326,7 +342,7 @@ function sweepUncoveredSpans(
     // An erased range keeps its other painted copies (a repeated header row) out: the copy the
     // input method wrote into is the one that says what the text is now.
     if (walk.ranges.has(key) || erased.has(key)) continue;
-    walk.ranges.add(key);
+    walk.ranges.set(key, { parent: element.parentNode, text: piece.text });
     walk.pieces.push(piece);
   }
 }
@@ -377,7 +393,7 @@ export function paintedTextIn(
     paragraphId,
     modelText,
     pieces: [],
-    ranges: new Set<string>(),
+    ranges: new Map(),
     end: 0,
     seq: 0,
   };

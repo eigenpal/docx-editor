@@ -374,6 +374,39 @@ describe('a composition that erases a whole word', () => {
     });
   });
 
+  test('text composed over the erased word into a copy of the span before it is kept', () => {
+    // Chromium, composing over a selection whose text has another font than the text on both
+    // sides of it (Latin between Hangul), removes the selected spans and writes the composed
+    // text into a NEW span it copied from the one before — attributes and all — inside a
+    // `<font>` that carries the erased text's face.
+    const body =
+      '<w:p><w:r><w:t>시험번호</w:t></w:r><w:r><w:t>GMEB-26202</w:t></w:r>' +
+      '<w:r><w:t xml:space="preserve">의 제출문이다.</w:t></w:r></w:p>';
+    withSurface(body, (surface, container, [id]) => {
+      surface.setSelection({
+        anchor: { paragraphId: id!, offset: 4 },
+        head: { paragraphId: id!, offset: 14 },
+      });
+      const layer = pages(container);
+      layer.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      const [before] = domPoint(container, id!, 0);
+      const kept = before.parentNode as HTMLElement;
+      for (const span of layer.querySelectorAll<HTMLElement>('[data-start]')) {
+        const start = Number(span.dataset.start);
+        if (start >= 4 && start < 14) span.remove();
+      }
+      const copy = kept.cloneNode(false) as HTMLElement;
+      const face = document.createElement('font');
+      face.textContent = '한';
+      copy.append(face);
+      kept.after(copy);
+      const end = new CompositionEvent('compositionend', { bubbles: true });
+      Object.defineProperty(end, 'data', { value: '한' });
+      layer.dispatchEvent(end);
+      expect(textOf(surface, id!)).toBe('시험번호한의 제출문이다.');
+    });
+  });
+
   test('a span lost to a repaint, with its line, is not read as erased', () => {
     withSurface(p('Hello world'), (surface, container, [id]) => {
       caretAt(surface, id!, 11);
