@@ -145,7 +145,6 @@ import {
   exclusionLayoutToken,
   MAX_ANCHOR_PAGE_DEFERRALS,
   sortDrawingsForPaint,
-  topAndBottomSkipBeforeLine,
   travellingTopAndBottomSkip,
   withAnchoredDrawingLayoutFallback,
   type ExclusionZone,
@@ -167,6 +166,7 @@ import { createPageContentInsets, registerOverflowPageShell } from './page-furni
 import { convergenceTailShiftAllowed } from './page-reuse-guards.ts';
 import { commonKeyPrefix, commonKeySuffix } from './flow-key-diff.ts';
 import { createPreviousPassZones } from './previous-pass-zones.ts';
+import { lineBandSkip, tableBandSpaceAfter } from './table-band-space-after.ts';
 import { layoutPassContextKey } from './layout-pass-context-key.ts';
 import {
   contentControlContextToken,
@@ -1142,7 +1142,7 @@ function* layoutBlocksPass(
   const stacks = createStackPlacement(positionedTables, {
     fragments: () => pageFragments,
     cursorY: () => cursorY,
-    pushOf: (anchorId) => earlierLinePush.of(pages.length, anchorId),
+    pushOf: (anchorId, order) => earlierLinePush.of(pages.length, anchorId, order),
   });
   // A table stays when its band pushes its own anchor on (`ownTableStaysForAnchor`).
   const ownTableStays = (anchorId: string, extent: number): boolean =>
@@ -1609,7 +1609,8 @@ function* layoutBlocksPass(
     fragmentParagraphStartY: number,
     pendingLine: PendingLine,
     appliedSkipByLineIndex: ReadonlyMap<number, number>,
-    spaceBefore: number
+    spaceBefore: number,
+    bandAfter: number
   ): number => {
     if (anchorLineSkipsExclusion(entry.paragraph, options.inlineDrawingLayout, pendingLine))
       return 0;
@@ -1625,7 +1626,7 @@ function* layoutBlocksPass(
     );
     const above = lineIndex === fragmentFirstLine ? spaceBefore : 0;
     const live =
-      zones.length > 0 ? topAndBottomSkipBeforeLine(cursorY, pendingLine.height, zones, above) : 0;
+      zones.length > 0 ? lineBandSkip(cursorY, pendingLine.height, zones, above, bandAfter) : 0;
     const breakSkip = pendingLine.exclusionSkipBefore ?? 0;
     return Math.max(live, breakSkip);
   };
@@ -2482,6 +2483,9 @@ function* layoutBlocksPass(
       // where the NEXT paragraph starts, never whether this line fits, and it clips at the
       // page boundary rather than carrying over. Above a footnote area it must fit too.
       const tail = isLastLine ? borderExtent + closingAfter(pendingLine) : 0;
+      const bandAfter = isLastLine
+        ? tableBandSpaceAfter(options.compatibilityMode, spacing.after)
+        : 0;
       if (lineIndex === fragmentFirstLine) {
         fragmentParagraphStartY = cursorY;
       }
@@ -2496,7 +2500,8 @@ function* layoutBlocksPass(
             fragmentParagraphStartY,
             pendingLine,
             appliedSkipByLineIndex,
-            fragmentBefore
+            fragmentBefore,
+            bandAfter
           );
       // Auto spacing below the glyph band may cross the bottom text margin, not a footnote
       // area. The painted line keeps its full box; only the pagination budget drops it.
@@ -2615,7 +2620,7 @@ function* layoutBlocksPass(
           pages.length,
           paragraphId,
           cursorY,
-          pendingLine.height,
+          pendingLine.height + bandAfter,
           skipBefore,
           pageExclusionZones()
         );
