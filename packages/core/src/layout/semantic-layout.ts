@@ -115,6 +115,7 @@ import {
 import { shiftAnchoredDrawingY } from './drawing-overlap.ts';
 import { createOwnAnchorPageFit, linesWithOwnAnchorNeeds } from './paragraph-own-anchors.ts';
 import { collectAnchoredDrawings as collectAnchoredDrawingRecords } from './anchored-drawing-collect.ts';
+import { keptFloatAnchor } from './balanced-float-anchors.ts';
 import { createEarlierLinePush, ownTableStaysForAnchor } from './earlier-line-push.ts';
 import { createStackPlacement } from './table-float-stack.ts';
 import { isBareSectionMark } from './section-mark-break.ts';
@@ -232,7 +233,6 @@ import {
   type BlockLayoutOptions as ColumnBalanceBlockLayoutOptions,
   type BlockLayoutResult,
 } from './column-balance-layout.ts';
-
 import type { SemanticLayoutOptions } from './semantic-layout-options.ts';
 import type { PreparedBlock, SectionPrepass } from './section-prepass-types.ts';
 import { sectionFlowKeys } from './section-flow-keys.ts';
@@ -1119,9 +1119,8 @@ function* layoutBlocksPass(
   }
   const positionedFlow = tableFloat.positionedTableFlow(positionedTables, flowKeys);
   const positionedByTable = new Map(positionedTables.map((anchor) => [anchor.table.id, anchor]));
-  const earlierLinePush = createEarlierLinePush(
-    (id) => paragraphDocumentOrder.get(id),
-    (page, anchorId) => paragraphDrawingWrap.tablePush(page, anchorId)
+  const earlierLinePush = createEarlierLinePush(paragraphDocumentOrder, (page, anchorId) =>
+    paragraphDrawingWrap.tablePush(page, anchorId)
   );
   let pageFragments: BlockFragmentRecord[] = [];
   let columnIndex = 0;
@@ -1144,13 +1143,13 @@ function* layoutBlocksPass(
   const stacks = createStackPlacement(positionedTables, {
     fragments: () => pageFragments,
     cursorY: () => cursorY,
-    pushOf: (anchorId, order) => earlierLinePush.of(pages.length, anchorId, order),
+    pushOf: (anchorId, order) => earlierLinePush.of(pages.length, flowColumnIndex, anchorId, order),
   });
   // A table stays when its band pushes its own anchor on (`ownTableStaysForAnchor`).
   const ownTableStays = (anchorId: string, extent: number): boolean =>
     ownTableStaysForAnchor(pageExclusionZones(), anchorId, {
       column: columns.count > 1 ? flowColumnIndex : undefined,
-      pushed: earlierLinePush.of(pages.length, anchorId),
+      pushed: earlierLinePush.of(pages.length, flowColumnIndex, anchorId),
       overrun: cursorY + extent - contentHeight(),
     });
   /** Records that `anchorId` reached `anchorY` on the page being filled. */
@@ -1461,7 +1460,7 @@ function* layoutBlocksPass(
       prepared.findIndex((entry) => entry.kind === 'paragraph' && entry.paragraph.id === id),
     tableIndex: (id) =>
       prepared.findIndex((entry) => entry.kind === 'table' && entry.table.id === id),
-    columnCount,
+    columns,
   });
 
   const { breaksBeforeAt, keepsBeforeAtPageStart, spaceBeforeAt } = pageBreakBeforeRules(
@@ -1765,7 +1764,7 @@ function* layoutBlocksPass(
           // A raised table keeps the place its anchor had before it pushed earlier lines down.
           const start = tableWrap.positionedTableStart(
             table,
-            anchorY - stacks.push(table.id),
+            keptFloatAnchor(options, pages.length, table.id) ?? anchorY - stacks.push(table.id),
             columnWidth(),
             anchorFrames(),
             pageFragments,
@@ -2620,6 +2619,7 @@ function* layoutBlocksPass(
       if (skipBefore > 0)
         earlierLinePush.note(
           pages.length,
+          flowColumnIndex,
           paragraphId,
           cursorY,
           pendingLine.height + bandAfter,

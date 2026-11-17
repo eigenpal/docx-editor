@@ -45,12 +45,14 @@ interface AnchorPush {
 }
 
 export function createEarlierLinePush(
-  orderOf: (paragraphId: string) => number | undefined,
+  /** The document order of each paragraph, by id. */
+  paragraphOrder: ReadonlyMap<string, number>,
   /** The lines rising table bands of `anchorId` add by wrap on `page` (`wrapsEarlierLines`). */
   wrapPush: (page: number, anchorId: string) => number = () => 0
 ) {
+  const orderOf = (paragraphId: string) => paragraphOrder.get(paragraphId);
   const pushes = new Map<string, AnchorPush>();
-  const key = (page: number, anchorId: string) => `${page}:${anchorId}`;
+  const key = (page: number, column: number, anchorId: string) => `${page}:${column}:${anchorId}`;
   return {
     /**
      * Records a line of `paragraphId` that moved from `top` down by `skip` on `page`, when it
@@ -61,9 +63,13 @@ export function createEarlierLinePush(
      * then, and each moves the earlier lines its band covers below it. So a table leaves out of
      * its own position only the move it and the later tables of its anchor cause: where the line
      * landed, less where the bands before it would have left the line.
+     *
+     * The push is kept per column: only a line in the column of the anchor moves the anchor, and
+     * a band that crosses into another column moves the lines there without moving its anchor.
      */
     note(
       page: number,
+      column: number,
       paragraphId: string,
       top: number,
       height: number,
@@ -87,7 +93,7 @@ export function createEarlierLinePush(
         } else if (anchorOrder <= order || zone.pageFramedBand) others.push(zone);
       }
       for (const [anchorId, own] of raised) {
-        const id = key(page, anchorId);
+        const id = key(page, column, anchorId);
         if (pushes.has(id)) continue;
         own.sort((a, b) => a.sourceOrder - b.sourceOrder);
         // Where the line stands when each table is placed: below the bands before it.
@@ -105,13 +111,13 @@ export function createEarlierLinePush(
       }
     },
     /**
-     * The push the raised tables anchored at `anchorId` leave out of its top on `page`, with the
+     * The push the raised tables anchored at `anchorId` in `column` leave out of its top on `page`, with the
      * lines that rising bands add by wrap. With `sourceOrder`, the part the table at that order and
      * the later ones caused.
      */
-    of(page: number, anchorId: string, sourceOrder?: number): number {
+    of(page: number, column: number, anchorId: string, sourceOrder?: number): number {
       const wrapped = wrapPush(page, anchorId);
-      const push = pushes.get(key(page, anchorId));
+      const push = pushes.get(key(page, column, anchorId));
       if (!push) return wrapped;
       const first = push.before[0]?.y ?? push.landed;
       if (sourceOrder === undefined) return push.landed - first + wrapped;

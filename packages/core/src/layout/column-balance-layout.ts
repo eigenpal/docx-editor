@@ -11,6 +11,8 @@ import { DEFAULT_SECTION_PROPERTIES, type SectionColumns } from './section-prope
 import type { LayoutBox, PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { resultUnsettled } from './unsettled-exclusion-layout.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
+import { raisedFloatAnchors } from './balanced-float-anchors.ts';
 
 /** Result shared by ordinary and column-balanced block-flow passes. @internal */
 export interface BlockLayoutResult {
@@ -63,6 +65,12 @@ export type BlockLayoutOptions<HostOptions extends object = object> = HostOption
   readonly columnRegionBottom?: number;
   /** Section-local page selected for column balancing; defaults to the first page. */
   readonly columnRegionPage?: number;
+  /**
+   * The anchor tops that the raised floating tables on the balanced page keep from the
+   * unbalanced layout (`raisedFloatKeepsUnbalancedPlace`), by table id.
+   */
+  readonly raisedFloatAnchors?: ReadonlyMap<string, number>;
+  readonly compatibilityMode?: number;
   /**
    * Set on a balance search trial, which reads any layout refusal as a band that does not fit,
    * so a wrap reflow that does not settle refuses there instead of publishing.
@@ -215,6 +223,10 @@ export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
   }
   balancePage = natural.pages.length - 1;
   regionTop = balancePage === 0 ? (options.flowStartY ?? 0) : 0;
+  const pinned = hasCompatibilityRule(options.compatibilityMode, 'raisedFloatKeepsUnbalancedPlace')
+    ? raisedFloatAnchors(natural.pages[balancePage])
+    : undefined;
+  const pins = pinned ? { raisedFloatAnchors: pinned } : {};
   const naturalBottoms = columnBottomsOf(natural.pages[balancePage]!, columns, regionTop);
   const total = naturalBottoms.reduce((sum, bottom) => sum + Math.max(0, bottom - regionTop), 0);
   if (total <= 0) {
@@ -239,6 +251,7 @@ export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
     try {
       const trial = yield* layoutPass(bodies, revision, {
         ...trialOptions,
+        ...pins,
         columnBalanceTrial: true,
         columnRegionBottom: limit,
         columnRegionPage: balancePage,
@@ -271,6 +284,7 @@ export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
 
   const final = yield* layoutPass(bodies, revision, {
     ...options,
+    ...pins,
     columnRegionBottom: high,
     columnRegionPage: balancePage,
   });

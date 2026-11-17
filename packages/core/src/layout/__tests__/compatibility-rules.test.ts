@@ -30,6 +30,7 @@ const MODE_MATRIX = {
   rowExceptionAlignment: 'legacy',
   firstRowExceptionAlignsTable: 'modern',
   floatingTableContentOrigin: 'legacy',
+  raisedFloatKeepsUnbalancedPlace: 'legacy',
   floatingTableOverlapMovesLeft: 'modern',
   headerFooterAnchorsWrapText: 'modern',
   headerRowsKeepWithBody: 'modern',
