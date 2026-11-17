@@ -36,6 +36,7 @@ import {
   readGridSkip,
   readGridSpan,
   readRowHeight,
+  exactRowHeightWithBottomMargin,
   readVMerge,
 } from './table-row-properties.ts';
 import { readTableFloatPosition, type TableFloatPosition } from './table-float-properties.ts';
@@ -303,7 +304,7 @@ export interface SemanticTableRow {
    * row starts on a fresh page and splits there, so its content is kept.
    */
   readonly cantSplit: boolean;
-  /** `w:trPr/w:trHeight` — auto / atLeast floor / exact (clipped) row height. */
+  /** `w:trPr/w:trHeight` — auto / atLeast floor / exact row height plus bottom cell margin. */
   readonly height: TableRowHeight;
   readonly cells: readonly SemanticTableCell[];
   /** The table's fill (its style, `w:tblPr`, then this row's `w:tblPrEx`) in spaced gaps. */
@@ -804,7 +805,7 @@ function readTableStructureUncached(
       isHeader,
       cantSplit: readFlag(rowProperties, 'cantSplit'),
       ...rowExceptionAlignment(rowNode),
-      height: readRowHeight(rowProperties),
+      height: exactRowHeightWithBottomMargin(readRowHeight(rowProperties), cells),
       cells,
     });
   }

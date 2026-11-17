@@ -93,3 +93,20 @@ export function readRowHeight(rowProperties: OoxmlElement | undefined): TableRow
   const effective: 'atLeast' | 'exact' = rule === 'exact' ? 'exact' : 'atLeast';
   return { rule: effective, valuePt };
 }
+
+/**
+ * An exact row height (`w:hRule="exact"`, ECMA-376 Part 1, 17.4.81) measures the cells from
+ * their top edge to the bottom of their content: the cell bottom margin (17.4.42, 17.4.69) lies
+ * below it, and the row grows by the largest bottom margin of its cells. The top margin stays
+ * inside the authored height. Every other height rule is returned unchanged.
+ */
+export function exactRowHeightWithBottomMargin(
+  height: TableRowHeight,
+  cells: readonly { readonly margins: { readonly bottom: number } }[]
+): TableRowHeight {
+  if (height.rule !== 'exact') return height;
+  const bottom = cells.reduce((largest, cell) => Math.max(largest, cell.margins.bottom), 0);
+  return bottom > 0
+    ? { rule: 'exact', valuePt: Math.min(height.valuePt + bottom, MAX_TABLE_ROW_HEIGHT_PT) }
+    : height;
+}
