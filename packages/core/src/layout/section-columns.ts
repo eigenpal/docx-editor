@@ -76,6 +76,17 @@ export function resolveSectionColumns(
   };
 }
 
+/** The column `index` across the height of `box`; `fallbackWidth` past the last column. */
+export function columnBoxAt(
+  columns: ResolvedSectionColumns,
+  index: number,
+  fallbackWidth: number,
+  box: LayoutBox
+): LayoutBox {
+  const width = columns.widths[index] ?? fallbackWidth;
+  return Object.freeze({ x: columns.lefts[index] ?? 0, y: box.y, width, height: box.height });
+}
+
 /** The 0.75pt rule centered in each column gap, from `top` down to the lowest placed content. */
 export function columnSeparatorBoxes(
   columns: ResolvedSectionColumns,

@@ -4614,6 +4614,8 @@ export interface StyleCascadeTable {
     readonly strictTableStyleHierarchy?: boolean;
     // (undocumented)
     readonly styles: ReadonlyMap<string, StyleDefinition>;
+    // @internal
+    readonly textBesideBrokenFloatingTable?: true;
     readonly themeFonts: ThemeFonts;
     // (undocumented)
     readonly typography?: CjkTypographySettings;

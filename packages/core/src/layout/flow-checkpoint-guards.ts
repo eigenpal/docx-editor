@@ -42,6 +42,8 @@ export const FLOW_CHECKPOINT_GUARDS = {
   anchorPageDeferCounts: 'compared', // sameDeferCounts
   pendingPositionedTableTokens: 'compared',
   positionedTableAnchorSignals: 'compared',
+  // A flow that still owes later pages table fragments is not one that owes them nothing.
+  heldTablePages: 'compared', // sameHeldTablePages
   cursorY: 'compared',
   lineCounter: 'restore-only',
   previousSpaceAfter: 'compared',

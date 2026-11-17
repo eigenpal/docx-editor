@@ -25,6 +25,7 @@ import {
   type PositionedTableAnchor,
   type PositionedTableAnchorSignal,
 } from '../table-float-position.ts';
+import { TextTableCarry } from '../table-text-carry.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -81,7 +82,11 @@ function populatedCheckpoint() {
   positionedFlow.add(pendingFloatIds, 'table');
   positionedFlow.note(floatSignals, 'anchor', 0, 0, 12);
   const anchorPageDeferCounts = new Map([['drawing', 1]]);
+  // The carry reads only its held pages here.
+  const textCarry = new TextTableCarry({} as ConstructorParameters<typeof TextTableCarry>[0]);
+  textCarry.restore([[fragment]]);
   const owner = new FlowCheckpointOwner({
+    textCarry,
     paragraphFrames,
     positionedFlow,
     pendingFloatIds,
@@ -120,6 +125,7 @@ const changes = {
   deferredAnchoredDrawings: (c) => ({ ...c, deferredAnchoredDrawings: [] }),
   anchorPageDeferCounts: (c) => ({ ...c, anchorPageDeferCounts: new Map([['drawing', 2]]) }),
   pendingPositionedTableTokens: (c) => ({ ...c, pendingPositionedTableTokens: undefined }),
+  heldTablePages: (c) => ({ ...c, heldTablePages: undefined }),
   positionedTableAnchorSignals: (c) => ({
     ...c,
     positionedTableAnchorSignals: [{ ...c.positionedTableAnchorSignals![0]!, anchorY: 99 }],

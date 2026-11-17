@@ -14,6 +14,7 @@ export interface CascadeCompatibility {
   readonly unstretchedManualBreakLines?: true;
   readonly pageBreakLinesStretch?: true;
   readonly pageBreakMarkOnNextPage?: true;
+  readonly textBesideBrokenFloatingTable?: true;
 }
 
 const CASCADE_RULES = [
@@ -26,6 +27,7 @@ const CASCADE_RULES = [
   'unstretchedManualBreakLines',
   'pageBreakLinesStretch',
   'pageBreakMarkOnNextPage',
+  'textBesideBrokenFloatingTable',
 ] as const satisfies readonly (keyof CascadeCompatibility)[];
 
 /** The cascade options a profile turns on, in a fixed key order. */

@@ -32,6 +32,8 @@ export interface FlowCheckpoint {
   /** Sheet-positioned tables and zero-line anchors still owed by the open page. */
   readonly pendingPositionedTableTokens?: import('./table-float-position.ts').PendingPositionedTableTokens;
   readonly positionedTableAnchorSignals?: readonly PositionedTableAnchorSignal[];
+  /** Fragments of a broken text-anchored table held for later pages (`table-text-carry.ts`). */
+  readonly heldTablePages?: import('./table-text-carry.ts').HeldTablePages;
   readonly cursorY: number;
   readonly lineCounter: number;
   /** Trailing paragraph spacing participating in adjacent-spacing collapse. */

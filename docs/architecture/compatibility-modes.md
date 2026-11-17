@@ -90,6 +90,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `pageBreakMarkOnNextPage` | `w:splitPgBreakAndParaMark` in a legacy mode | The paragraph mark after a closing page break takes a line at the top of the next page |
 | `preserveExactLineBaseline` | `w:noExtraLineSpacing`, in every mode | An exact-height line keeps the face baseline |
 | `strictTableStyleHierarchy` | `overrideTableStyleFontSizeAndJustification` | Table style size and justification win |
+| `textBesideBrokenFloatingTable` | `allowTextAfterFloatingTableBreak` in `modern` modes | Text after a text-anchored floating table that breaks starts beside its first fragment, and every fragment wraps text |
 | `unstretchedManualBreakLines` | `w:doNotExpandShiftReturn` | A justified line before a manual line break keeps its spacing |
 
 Each rule in `compatibility-rules.ts` also names the specification section of the construct it acts on.

@@ -114,7 +114,10 @@ import {
 } from './body-flow-helpers.ts';
 import { shiftAnchoredDrawingY } from './drawing-overlap.ts';
 import { createOwnAnchorPageFit, linesWithOwnAnchorNeeds } from './paragraph-own-anchors.ts';
-import { collectAnchoredDrawings as collectAnchoredDrawingRecords } from './anchored-drawing-collect.ts';
+import {
+  collectAnchoredDrawings as collectAnchoredDrawingRecords,
+  drawingSourceOrder,
+} from './anchored-drawing-collect.ts';
 import { keptFloatAnchor } from './balanced-float-anchors.ts';
 import { createEarlierLinePush, ownTableStaysForAnchor } from './earlier-line-push.ts';
 import { createStackPlacement } from './table-float-stack.ts';
@@ -169,6 +172,7 @@ import { commonKeyPrefix, commonKeySuffix } from './flow-key-diff.ts';
 import { createPreviousPassZones } from './previous-pass-zones.ts';
 import { lineBandSkip, tableBandSpaceAfter } from './table-band-space-after.ts';
 import { hostSheetGeometry } from './continued-sheet-geometry.ts';
+import { TextTableCarry } from './table-text-carry.ts';
 import { layoutPassContextKey } from './layout-pass-context-key.ts';
 import {
   contentControlContextToken,
@@ -183,7 +187,7 @@ import {
 } from './section-properties.ts';
 import { pageBreakBeforeRules } from './page-break-before.ts';
 import { previousBodyLayout } from './previous-body-pages.ts';
-import { columnSeparatorBoxes, resolveSectionColumns } from './section-columns.ts';
+import { columnBoxAt, columnSeparatorBoxes, resolveSectionColumns } from './section-columns.ts';
 import {
   inheritNotesLayoutInput,
   layoutSemanticDocumentWithNotesSteps,
@@ -1170,7 +1174,15 @@ function* layoutBlocksPass(
   let lineCounter = lineCounterStart;
   let previousSpaceAfter = spaceBeforeCarry;
   const checkpoints: FlowCheckpoint[] = [];
+  const textCarry = new TextTableCarry({
+    fragments: () => pageFragments,
+    setFragments: (next) => void (pageFragments = next),
+    column: () => ({ left: columnLeft(), width: columnWidth() }),
+    enabled: styleCascade?.textBesideBrokenFloatingTable === true,
+    applies: () => columns.count === 1 && !(continuedInsets && pages.length === 0),
+  });
   const checkpointOwner = new FlowCheckpointOwner({
+    textCarry,
     paragraphFrames,
     positionedFlow,
     pendingFloatIds,
@@ -1238,15 +1250,8 @@ function* layoutBlocksPass(
   };
 
   const columnCount = columns.count;
-  const columnOffsetX = columnLeft;
-
-  const anchorColumnBox = (_paragraphBox: LayoutBox): LayoutBox =>
-    Object.freeze({
-      x: columns.lefts[flowColumnIndex] ?? 0,
-      y: _paragraphBox.y,
-      width: columns.widths[flowColumnIndex] ?? contentWidth,
-      height: _paragraphBox.height,
-    });
+  const anchorColumnBox = (box: LayoutBox) =>
+    columnBoxAt(columns, flowColumnIndex, contentWidth, box);
 
   const anchorFrameBase = () =>
     bodyAnchorFrameBase({
@@ -1273,12 +1278,7 @@ function* layoutBlocksPass(
     layoutTextboxStory: hostedStory?.layoutTextboxStoryFor,
   };
 
-  const sourceOrderOf = (drawingNodeId: string): number | undefined => {
-    const projectedId =
-      options.inlineDrawingLayout?.projectionForAtom?.(drawingNodeId)?.drawingNodeId ??
-      drawingNodeId;
-    return options.drawingSourceOrder?.get(projectedId);
-  };
+  const sourceOrderOf = drawingSourceOrder(options.inlineDrawingLayout, options.drawingSourceOrder);
 
   const collectAnchoredDrawings = (drawings: readonly AnchoredDrawingRecord[]): void =>
     collectAnchoredDrawingRecords(
@@ -1317,7 +1317,7 @@ function* layoutBlocksPass(
         ? { anchoredDrawings: sortDrawingsForPaint(pendingAnchoredDrawings) }
         : {}),
     });
-    pageFragments = [];
+    pageFragments = textCarry.nextPage();
     pendingAnchoredDrawings = [];
     cursorY = 0;
     columnIndex = 0;
@@ -1489,7 +1489,7 @@ function* layoutBlocksPass(
         ((tocChromeParagraphIds?.has(paragraphId) ?? false) ||
           (emptyTocSuppressedResultIds?.has(paragraphId) ?? false)));
     const available = entry.available;
-    const columnX = columnOffsetX();
+    const columnX = columnLeft();
     // Exclusions are in placed coordinates. The flow cursor still precedes paragraph
     // spacing and the opening border here; measuring at that cursor can wrap a line
     // around an already-cleared float, or let it paint through one below the gap.
@@ -1596,7 +1596,7 @@ function* layoutBlocksPass(
     pageZones: pageExclusionZonesForEntry,
     band: (entry) =>
       columnCount > 1
-        ? { left: columnOffsetX(), right: columnOffsetX() + columnWidth() }
+        ? { left: columnLeft(), right: columnLeft() + columnWidth() }
         : { left: 0, right: entry.indent.left + entry.available + entry.indent.right },
     paragraphTop: (id, y) => y - paragraphDrawingWrap.displacement(pages.length, id),
     columnIndex: () => flowColumnIndex,
@@ -1698,6 +1698,8 @@ function* layoutBlocksPass(
   ): LayoutSteps<boolean> {
     const savedCursorY = cursorY;
     const positioned = positionedByTable.get(table.id);
+    // Text beside a broken text-anchored table's first fragment (`table-text-carry.ts`).
+    const carry = textCarry.open(positionTextTable ? undefined : positioned, anchorY);
     // The paginator owns the cursor. The adapter syncs it around each story-flow advance.
     const flow: TableFlowCursor = {
       positionTextTable,
@@ -1710,14 +1712,16 @@ function* layoutBlocksPass(
       contentHeight,
       unreservedContentHeight,
       advanceColumn: () => {
+        if (carry.hold(flow)) return;
         cursorY = flow.cursorY;
         advanceColumn();
-        flow.cursorY = cursorY;
+        flow.cursorY = carry.moved(cursorY);
       },
       advancePage: () => {
+        if (carry.hold(flow)) return;
         flushPage();
         carryDeferredToNextPage();
-        flow.cursorY = cursorY;
+        flow.cursorY = carry.moved(cursorY);
       },
       pageHoldsContent: (top) => pageFragments.length > 0 || top > 0,
       // One column opens every continuation at the page top, and resumes only run there.
@@ -1739,14 +1743,16 @@ function* layoutBlocksPass(
       // A sink, not the array: completing a page replaces `pageFragments`, and a reference
       // taken when the table started would collect its later fragments into a dead array.
       publishFragment: (fragment, wraps) =>
-        pageFragments.push(
-          tableWrap.withFloatingWrap(fragment, positioned, flowColumnIndex, wraps)
+        carry.published(
+          pageFragments.push(
+            tableWrap.withFloatingWrap(fragment, positioned, flowColumnIndex, wraps)
+          )
         ),
       followingKeepOpening: (room) =>
         next === undefined ? undefined : keepChains.opening(next, room),
     };
     const result = yield* paginateTableInFlowSteps(table, flow);
-    cursorY = result.outOfFlow ? savedCursorY : flow.cursorY;
+    cursorY = result.outOfFlow ? savedCursorY : (carry.close() ?? flow.cursorY);
     return result.outOfFlow;
   }
 
@@ -2119,7 +2125,7 @@ function* layoutBlocksPass(
     const pageFit = createOwnAnchorPageFit(paragraph, {
       ...anchorScope,
       frameBase: anchorFrameBase,
-      column: () => ({ x: columnOffsetX(), width: columnWidth() }),
+      column: () => ({ x: columnLeft(), width: columnWidth() }),
     });
     let keepTailAt = -1; // Where a kept paragraph that splits early breaks; a rebreak clears it.
     const rebreakInCurrentColumn = (startOffset: number, placedParagraphStartY?: number): void => {
@@ -2300,7 +2306,7 @@ function* layoutBlocksPass(
     const flushFragment = (isLast: boolean): void => {
       if (pending.length === 0) return;
       const regionX = columnLeft();
-      const columnX = columnOffsetX();
+      const columnX = columnLeft();
       const linesTop = pending[0]!.box.y;
       const top = linesTop - fragmentBefore - fragmentTopExtent;
       const linesBottom =
@@ -2621,7 +2627,7 @@ function* layoutBlocksPass(
         }
       }
       emptyFurnitureAdvances = 0;
-      const columnX = columnOffsetX();
+      const columnX = columnLeft();
       appliedSkipByLineIndex.set(lineIndex, skipBefore);
       if (skipBefore > 0)
         earlierLinePush.note(
@@ -2688,7 +2694,7 @@ function* layoutBlocksPass(
         range: { paragraphId, start: pendingLine.start, end: pendingLine.end },
         spans: alignedSpans,
         box: {
-          x: columnOffsetX() + indent.left,
+          x: columnLeft() + indent.left,
           y: cursorY,
           width: available,
           height: pendingLine.height,
@@ -2795,6 +2801,7 @@ function* layoutBlocksPass(
       positionedFrameBottom(pages.at(-1)!.fragments, pages.at(-1)!.contentBox.height)
     );
   }
+  while (!converged && (textCarry.pending || pageFragments.length > 0)) flushPage();
   let terminalFlushAttempts = 0;
   const maxTerminalFlushAttempts = MAX_ANCHOR_PAGE_DEFERRALS * 4 + 8;
   while (
