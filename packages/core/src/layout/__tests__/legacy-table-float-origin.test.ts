@@ -53,10 +53,38 @@ test('legacy numeric text anchors align the leading content edge across cell mar
   }
 });
 
-test('modern, aligned, separated, and bidirectional tables retain their outer-edge anchor', () => {
+test('legacy anchors of every kind and left alignments align the leading content edge', () => {
+  // ECMA-376 Part 1, 17.4.58 and 17.4.66: the anchor kind does not change the content origin.
+  for (const anchors of [
+    'w:horzAnchor="margin" w:vertAnchor="text"',
+    'w:horzAnchor="text" w:vertAnchor="margin"',
+    'w:horzAnchor="margin" w:vertAnchor="page"',
+  ]) {
+    const read = (extra: string) => {
+      const table = structure(108, '', extra);
+      return { ...table, float: { ...table.float!, ...anchorsOf(anchors) } };
+    };
+    expect(positionedTableOriginX(read('w:tblpY="1"'), frames, 12)).toBeCloseTo(66.35, 6);
+    expect(positionedTableOriginX(read('w:tblpXSpec="left"'), frames, 12)).toBeCloseTo(66.35, 6);
+    expect(positionedTableOriginX(read('w:tblpXSpec="inside"'), frames, 12)).toBeCloseTo(66.35, 6);
+  }
+  // The outer edge may leave the sheet.
+  const page = { ...structure(108, '', 'w:tblpXSpec="left"') };
+  const atPage = { ...page, float: { ...page.float!, horzAnchor: 'page' as const } };
+  expect(positionedTableOriginX(atPage, frames, 12)).toBeCloseTo(-5.65, 6);
+});
+
+function anchorsOf(attributes: string) {
+  const horzAnchor = /w:horzAnchor="(\w+)"/.exec(attributes)![1] as 'text' | 'margin' | 'page';
+  const vertAnchor = /w:vertAnchor="(\w+)"/.exec(attributes)![1] as 'text' | 'margin' | 'page';
+  return { horzAnchor, vertAnchor };
+}
+
+test('modern, centered, separated, and bidirectional tables retain their outer-edge anchor', () => {
   expect(positionedTableOriginX(structure(), frames, 15)).toBe(72);
   expect(positionedTableOriginX(structure(), frames, 99)).toBe(72);
-  expect(positionedTableOriginX(structure(108, '', 'w:tblpXSpec="left"'), frames, 12)).toBe(72);
+  expect(positionedTableOriginX(structure(108, '', 'w:tblpXSpec="left"'), frames, 15)).toBe(72);
+  expect(positionedTableOriginX(structure(108, '', 'w:tblpXSpec="center"'), frames, 12)).toBe(234);
   expect(
     positionedTableOriginX(structure(108, '<w:tblCellSpacing w:type="dxa" w:w="20"/>'), frames, 12)
   ).toBe(72);

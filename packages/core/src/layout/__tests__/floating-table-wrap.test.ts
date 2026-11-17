@@ -15,7 +15,7 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const p = (text: string, props = '') =>
   `<w:p><w:pPr><w:widowControl w:val="0"/><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="exact"/>${props}</w:pPr><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 const table = (width = 80, offset = 0, extra = '') =>
-  `<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" w:horzAnchor="text" w:tblpX="1" w:tblpY="${offset * 20 + 1}" ${extra}/><w:tblLayout w:type="fixed"/><w:tblW w:type="dxa" w:w="${width * 20}"/><w:tblCellMar><w:top w:type="dxa" w:w="0"/><w:bottom w:type="dxa" w:w="0"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="${width * 20}"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="800" w:hRule="exact"/></w:trPr><w:tc>${p('Cell')}</w:tc></w:tr></w:tbl>`;
+  `<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" w:horzAnchor="text" w:tblpX="1" w:tblpY="${offset * 20 + 1}" ${extra}/><w:tblLayout w:type="fixed"/><w:tblW w:type="dxa" w:w="${width * 20}"/><w:tblCellMar><w:top w:type="dxa" w:w="0"/><w:left w:type="dxa" w:w="0"/><w:bottom w:type="dxa" w:w="0"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="${width * 20}"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="800" w:hRule="exact"/></w:trPr><w:tc>${p('Cell')}</w:tc></w:tr></w:tbl>`;
 const part = (body: string) => {
   const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
     name: '/word/document.xml',
@@ -190,9 +190,8 @@ test('wraps in the anchor column without narrowing another column', () => {
   const anchor = paragraphs(layout).find(
     (fragment) => fragment.paragraphId === floating.floatingWrap?.anchorId
   )!;
-  // The legacy text anchor aligns the cell content; its omitted-margin 0.5pt inset
-  // extends the outer table edge into the column gutter.
-  expect(floating.box.x).toBeCloseTo(105 - 0.5, 6);
+  // The legacy text anchor aligns the cell content. The fixture has no left cell margin.
+  expect(floating.box.x).toBeCloseTo(105, 6);
   expect(floating.floatingWrap?.columnIndex).toBe(1);
   expect(anchor.lines[0]!.spans[0]!.box.x).toBeGreaterThanOrEqual(
     floating.box.x + floating.box.width

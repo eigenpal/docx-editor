@@ -92,7 +92,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.4.61 tblPrEx'
   ),
   floatingTableContentOrigin: legacy(
-    'A floating table with a numeric text anchor or a right alignment positions its cell content, not its outer edge',
+    'A floating table with a numeric offset or a left, inside, right, or outside alignment positions its cell content, not its outer edge',
     'ECMA-376 Part 1 §17.4.57 tblpPr'
   ),
   floatingTableOverlapMovesLeft: modern(

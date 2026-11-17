@@ -45,7 +45,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `distributedLinesSpreadCharacters` | `legacy` | A distributed paragraph spreads every line after every character, kerned runs included; a space first takes up to the face average character width less its own advance |
 | `fixedTableContentEdgeOrigin` | `legacy` | A table with an absolute width, or a fixed table with an automatic width, aligns the content edge of its aligned outer cell with the text column. A leading-aligned table without an indent or a table style keeps its outer edge there. A table with cell spacing aligns the same content edge, so its frame reaches past the text column. Rows that skip grid columns follow the grid. In a text box, only a leading-aligned table takes this rule, fixed or AutoFit, in either direction |
 | `firstRowExceptionAlignsTable` | `modern` | The first row's `w:tblPrEx` alignment aligns the whole table. Later rows' alignments do not apply |
-| `floatingTableContentOrigin` | `legacy` | A floating table with a numeric text anchor or a right alignment positions its cell content |
+| `floatingTableContentOrigin` | `legacy` | A floating table with a numeric offset or a left, inside, right, or outside alignment positions its cell content |
 | `floatingTableOverlapMovesLeft` | `modern` | A floating table that may not overlap tries the left side before it moves down |
 | `headerFooterAnchorsWrapText` | `modern` | Header and footer text wraps around anchored objects |
 | `headerRowsKeepWithBody` | `modern` | Header rows keep with the opening body rows |
