@@ -140,6 +140,7 @@ import type {
 import { type ResolvedListItem } from './list-resolve.ts';
 import {
   directionalListFirstLineShift,
+  listMarkerAlignShift,
   listMarkerFirstLineMetrics,
   publishListMarker,
 } from './list-marker.ts';
@@ -695,6 +696,8 @@ function placeCellParagraph(
     rtl,
     inTableCell: options?.inTableCell === true,
   };
+  // How far alignment moved the fragment's first line; its list marker moves with it.
+  let firstAlignOffset = 0;
   for (let lineIndex = lineStart; lineIndex < lineEnd; lineIndex += 1) {
     const pendingLine = lines[lineIndex]!;
     const isLastLine = lineIndex === lines.length - 1;
@@ -724,6 +727,7 @@ function placeCellParagraph(
       lineAlignment
     );
     const { spans: alignedSpans, offset: alignOffset } = content;
+    if (lineIndex === lineStart) firstAlignOffset = alignOffset;
     const alignedDrawings = content.drawings.map((drawing) =>
       clipInlineDrawingRecordToRegion(drawing, cellClip)
     );
@@ -913,7 +917,7 @@ function placeCellParagraph(
         listItem,
         deps.measurer,
         rawRecords[0],
-        originX,
+        originX + listMarkerAlignShift(firstAlignOffset, alignment, rtl),
         // The content box: indents wider than a narrow cell would mirror the marker out of it.
         rtl ? cellContentWidth : undefined,
         deps.inlineDrawingLayout?.pictureBulletResource

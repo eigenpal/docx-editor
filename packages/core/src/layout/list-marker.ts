@@ -1,6 +1,7 @@
 // Publish a list-marker record from a resolved list item + measured first line.
 
 import type { ResolvedTabStops } from './paragraph-tabs.ts';
+import type { Alignment } from './paragraph-alignment.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import type { ImageResourceState } from '../store/package/image-resources.ts';
 import type { LayoutBox, ListMarkerRecord } from './semantic-records.ts';
@@ -152,6 +153,21 @@ export function createListFirstLineMetrics(
 export function markerLineStart(lines: readonly PendingLine[]): number | undefined {
   if (lines.length < 2 || !holdsOnlyPageBreak(lines[0]!)) return undefined;
   return lines.find((line) => !holdsOnlyPageBreak(line))?.start;
+}
+
+/**
+ * How far a list marker moves with its first line's alignment. In a centered or right-aligned
+ * paragraph the marker and its suffix belong to the first line (17.9.7, 17.3.1.13): the text
+ * keeps its distance from the marker, so the marker moves as far as alignment moves the text.
+ * Left-to-right centered and right-aligned paragraphs only; a justified line keeps its start.
+ */
+export function listMarkerAlignShift(
+  alignOffset: number,
+  alignment: Alignment,
+  rtl: boolean
+): number {
+  if (rtl || (alignment !== 'center' && alignment !== 'right')) return 0;
+  return Number.isFinite(alignOffset) ? alignOffset : 0;
 }
 
 /**

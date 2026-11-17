@@ -202,7 +202,12 @@ import { withResolvedListItems, withResolvedListItemsForSession } from './list-r
 import { listItemToken, markerFlowToken, relabelListMarkers } from './list-marker-reuse.ts';
 import { limitBodyBlocks } from './body-block-limit.ts';
 import { refTokenForTableBlock } from './field-ref.ts';
-import { createListFirstLineMetrics, markerLineStart, publishListMarker } from './list-marker.ts';
+import {
+  createListFirstLineMetrics,
+  listMarkerAlignShift,
+  markerLineStart,
+  publishListMarker,
+} from './list-marker.ts';
 import { FlowCheckpointOwner, flowCheckpointsMatch } from './flow-checkpoint.ts';
 import { sectionReserveResume } from './note-reserve-resume.ts';
 import {
@@ -2273,6 +2278,8 @@ function* layoutBlocksPass(
     let fragmentParagraphStartY = cursorY;
     /** Clearance applied above the fragment's first placed line, for anchor framing. */
     let fragmentFirstLineSkip = 0;
+    /** How far alignment moved the fragment's first line; its list marker moves with it. */
+    let fragmentFirstAlignOffset = 0;
     const appliedSkipByLineIndex = new Map<number, number>();
     previousSpaceAfter = 0;
     const paragraphHasAnchors =
@@ -2353,7 +2360,7 @@ function* layoutBlocksPass(
             listItem,
             measurer,
             pending[0],
-            0,
+            listMarkerAlignShift(fragmentFirstAlignOffset, alignment, rtl),
             rtl ? indent.left + available + indent.right : undefined,
             options.inlineDrawingLayout?.pictureBulletResource
           )
@@ -2705,7 +2712,10 @@ function* layoutBlocksPass(
         ...(pendingLine.changeSites ? { changeSites: pendingLine.changeSites } : {}),
       };
       lineCounter += 1;
-      if (pending.length === 0) fragmentFirstLineSkip = skipBefore;
+      if (pending.length === 0) {
+        fragmentFirstLineSkip = skipBefore;
+        fragmentFirstAlignOffset = alignOffset;
+      }
       pending.push(record);
       cursorY += pendingLine.height;
       // An own object that still crosses the bottom margin here ends the page after its line.
