@@ -6,7 +6,7 @@ import { paragraphBreaksBefore } from './paragraph-style.ts';
 import type { PreparedBlock } from './section-prepass-types.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import type { ExclusionZone, ExclusionColumnLayout } from './drawing-exclusion.ts';
-import type { BlockFragmentRecord, PageRecord } from './semantic-records.ts';
+import type { BlockFragmentRecord, LayoutBox, PageRecord } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { floatingTableZone, leavesNoPassage } from './table-wrap-zone.ts';
 import {
@@ -138,17 +138,10 @@ export function addFloatingTableExclusions(
         width,
         columnIndex: column,
         pageFramed: inBodyFlow && metadata.float.vertAnchor !== 'text',
-        // Only in one column: the anchor pricing that keeps a raised table's move on its page
-        // (`coveredLinesAnchorBand`) does not model column bottoms.
-        reachesWhenSpanning:
-          inBodyFlow &&
-          singleColumn(width, columns.contentWidth) &&
-          raisedAboveText(metadata.float),
-        // The earlier lines a rising band crosses wrap beside it, in one column for the same reason.
-        wrapsWhenRising:
-          inBodyFlow &&
-          singleColumn(width, columns.contentWidth) &&
-          bandRisesAboveText(metadata.float),
+        // In every column: the anchor pricing (`coveredLinesAnchorBand`) reads the anchor's column.
+        reachesWhenSpanning: inBodyFlow && raisedAboveText(metadata.float),
+        // The earlier lines a rising band crosses wrap beside it, in every column too.
+        wrapsWhenRising: inBodyFlow && bandRisesAboveText(metadata.float),
       });
       if (!pageZones) {
         result ??= new Map(drawingZones);
@@ -423,15 +416,20 @@ function coveredLinesAnchorBand(
   const raised = raisedAboveText(anchor.float);
   if (
     (anchor.float.vertAnchor === 'text' && !raised) ||
-    column.left > placement.frames.margin.left + 0.5 ||
-    !singleColumn(column.width, placement.frames.margin.width)
+    (!raised &&
+      (column.left > placement.frames.margin.left + 0.5 ||
+        !singleColumn(column.width, placement.frames.margin.width)))
   )
     return 0;
-  // A raised table's band moves only paragraph lines: the flow never moves a table for it.
+  // A raised table's band moves only paragraph lines: the flow never moves a table for it. Only
+  // the lines of the anchor's column move the anchor; a band that crosses another column moves
+  // the lines there on their own.
+  const inColumn = (box: LayoutBox) =>
+    box.x + 0.5 >= column.left && box.x < column.left + column.width;
   const lineBoxes = placement.earlier.flatMap((block) => {
     if (isOutOfFlowFragment(block) || (block.kind === 'table' && block.floatingWrap)) return [];
     if (block.kind === 'table') return raised ? [] : [block.box];
-    return block.lines.map((line) => line.box);
+    return block.lines.map((line) => line.box).filter(inColumn);
   });
   if (lineBoxes.length === 0) return 0;
   const structure = floatTableStructure(anchor.table, width, deps);
@@ -735,13 +733,11 @@ export function clearEarlierText(
   // A raised table that leaves no passage beside it keeps its place: the earlier lines it
   // covers move below it instead (`reachesEarlierLines`).
   const right = left + tableWidth + distances.left + distances.right;
-  // In one column only, as `reachesEarlierLines` is: elsewhere the table clears the text.
   const spans = leavesNoPassage(left, right, frames.text.left, frames.text.width);
-  const oneColumn = singleColumn(frames.text.width, frames.margin.width);
-  if (oneColumn && spans && raisedAboveText(float)) return anchorY;
+  if (spans && raisedAboveText(float)) return anchorY;
   // A band that rises above the anchor and leaves a passage clears only earlier in-flow tables:
   // the earlier lines it crosses wrap beside it instead (`wrapsEarlierLines`).
-  const wrapsText = oneColumn && !spans && bandRisesAboveText(float);
+  const wrapsText = !spans && bandRisesAboveText(float);
   const height = floatingTableBand(table, width, deps) - Math.max(0, float.yPt) + distances.top;
   let top = anchorY + float.yPt - distances.top;
   const ink = earlier

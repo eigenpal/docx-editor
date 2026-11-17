@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A raised text-anchored floating table in a multi-column section moved below the earlier text, and followed its anchor into balanced columns in every mode.",
+  "after": "The table keeps its raised place and the earlier lines it covers move below it, or wrap beside a band that rises through its top distance, in every column it crosses; before mode 15 it keeps its unbalanced place in balanced columns.",
+  "reason": "Layout-only change; the shared document format and operations do not change.",
+  "tests": [
+    "packages/core/src/layout/__tests__/column-raised-float.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-column-raised-float.test.ts"
+  ],
+  "changeset": "column-raised-float",
+  "migration": null
+}

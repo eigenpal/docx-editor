@@ -199,11 +199,11 @@ test('earlier lines wrap beside a narrow page-positioned table', () => {
   expect(lineCount(beside)).toBeGreaterThan(lineCount(lay(words + p('Head'))));
 });
 
-test('in two columns a raised table moves below the earlier text instead', () => {
+test('in two columns a raised table as wide as its column moves the earlier lines too', () => {
   const columns = '<w:sectPr><w:cols w:num="2" w:space="720"/></w:sectPr>';
   const raised = placed(lay(p('A') + p('B') + p('C') + table(RAISED, 4320) + p('Head') + columns));
-  expect(raised.slice(0, 3)).toEqual(['0:A@0.0', '0:B@12.7', '0:C@25.5']);
-  expect(raised).toContain('0:T@38.2');
+  // The table keeps the place its anchor had (38.2 less the 30 pt rise); A, B and C move below.
+  expect(raised).toEqual(['0:A@68.1', '0:B@80.9', '0:C@93.6', '0:T@8.1', '0:Head@106.3']);
 });
 
 test('in two columns a warm pass near a column bottom lays out like a cold one', () => {

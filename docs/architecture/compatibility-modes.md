@@ -47,6 +47,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `firstRowExceptionAlignsTable` | `modern` | The first row's `w:tblPrEx` alignment aligns the whole table. Later rows' alignments do not apply |
 | `floatingTableContentOrigin` | `legacy` | A floating table with a numeric offset or a left, inside, right, or outside alignment positions its cell content |
 | `floatingTableBandHoldsSpaceAfter` | `legacy` | The last line of a paragraph and its space after must both clear a floating table band that leaves no passage |
+| `raisedFloatKeepsUnbalancedPlace` | `legacy` | A text-anchored floating table raised above its anchor in balanced section columns keeps its place from the unbalanced layout |
 | `floatingTableOverlapMovesLeft` | `modern` | A floating table that may not overlap tries the left side before it moves down |
 | `headerFooterAnchorsWrapText` | `modern` | Header and footer text wraps around anchored objects |
 | `headerRowsKeepWithBody` | `modern` | Header rows keep with the opening body rows |

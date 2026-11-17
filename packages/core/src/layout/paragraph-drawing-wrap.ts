@@ -28,7 +28,12 @@ export function createParagraphDrawingWrap(options: {
   readonly paragraphIndex: (id: string) => number;
   /** The block index of an in-flow table that a floating table anchors at, else -1. */
   readonly tableIndex?: (id: string) => number;
-  readonly columnCount: number;
+  /** The section's text columns, in the zones' coordinates. */
+  readonly columns: {
+    readonly count: number;
+    readonly lefts: readonly number[];
+    readonly widths: readonly number[];
+  };
   readonly seedForwardOnly?: boolean;
   readonly compatibilityMode?: number;
   readonly displayMode?: RevisionDisplayMode;
@@ -204,7 +209,16 @@ export function createParagraphDrawingWrap(options: {
               if (tableIndex < 0 || tableIndex > index) return false;
             } else if (anchorIndex > index && !reachesBack) return false;
           }
-          if (options.columnCount > 1 && zone.columnIndex !== columnIndex) return false;
+          if (
+            options.columns.count > 1 &&
+            zone.columnIndex !== columnIndex &&
+            !reachesAcross(
+              zone,
+              options.columns.lefts[columnIndex],
+              options.columns.widths[columnIndex]
+            )
+          )
+            return false;
           return !(
             placement &&
             !zone.sourceKind &&
@@ -285,4 +299,18 @@ export function createParagraphDrawingWrap(options: {
       return (displacements.get(key) ?? 0) + lifted;
     },
   };
+}
+
+/**
+ * A raised table that moves the earlier lines it covers moves them in every column its band
+ * crosses, not only in the column of its anchor.
+ */
+function reachesAcross(
+  zone: ExclusionZone,
+  left: number | undefined,
+  width: number | undefined
+): boolean {
+  if (zone.reachesEarlierLines !== true || left === undefined || width === undefined) return false;
+  const band = zone.verticalBand;
+  return band.x < left + width && band.x + band.width > left;
 }
