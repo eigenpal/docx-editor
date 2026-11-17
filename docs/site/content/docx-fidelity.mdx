@@ -242,6 +242,10 @@ Compact equation replacement is disabled when it cannot keep the source. The equ
 - A text-anchored table breaks across pages when the space left holds its opening: the header rows and the first line of each cell in the first body row.
 - A text-anchored table stays whole when it has a text distance above, a negative offset, more than one section column, or `w:doNotBreakWrappedTables`. A table taller than a page still breaks.
 - A header or footer table wraps body text on every page that shows that part.
+- A floating table in a table cell is positioned within that cell and stays inside the cell box. The cell text wraps around it, and the cell grows to hold it.
+- In a cell, `page` and `margin` vertical anchors measure from the top of the cell. Floats in one cell do not overlap. Vertical cell alignment moves the text but not the floats.
+- A cell float that does not fit the space left on the page breaks there. Its next part floats at the top of the cell.
+- A cell float with a vertical alignment other than `top` stays in the text flow. Earlier lines of the cell do not wrap around a cell float.
 - You cannot edit floating-table properties. Save keeps them.
 
 ### Pages and sections

@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A nested table with w:tblpPr laid out in the cell flow.",
+  "after": "A nested table with w:tblpPr floats in its cell, the cell text wraps around it, and the cell grows to hold it. Shared document state and operations are unchanged.",
+  "reason": "The change is confined to layout. Replicas compute the same layout from the same tree, and saved documents keep the same XML.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-cell-float-table.test.ts",
+    "packages/core/src/layout/__tests__/cell-float-tables.test.ts"
+  ],
+  "changeset": "nested-floating-tables",
+  "migration": null
+}

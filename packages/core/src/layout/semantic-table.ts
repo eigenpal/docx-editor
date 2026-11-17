@@ -822,8 +822,8 @@ function readTableStructureUncached(
   // negative indent, and leave a nested table where a zero indent puts it.
   const readIndentPt = depth === 0 ? statedIndentPt : Math.max(0, statedIndentPt);
   const alignment = readTableAlignment(tblPr) ?? style.alignment ?? 'left';
-  // A nested table's position is stated against its cell, not the page — `w:tblpPr` inside
-  // one is honoured by Word only for the top-level table, so deeper tables stay in flow.
+  // A nested table's `w:tblpPr` positions it against its cell, not the page; the cell flow
+  // places it (`cell-float-tables.ts`), so its structure is read as an in-flow table.
   const float = depth === 0 ? (readTableFloatPosition(tblPr) ?? style.float) : undefined;
   const cellSpacingPt =
     preferredLengthPt(tblPr && childNamed(tblPr, 'tblCellSpacing'), MAX_CELL_MARGIN_PT) ??

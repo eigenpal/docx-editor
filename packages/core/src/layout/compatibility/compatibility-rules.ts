@@ -91,6 +91,10 @@ export const MODE_RULES = {
     'A floating table that may not overlap moves left of the table it meets when the right side has no room',
     'ECMA-376 Part 1 §17.4.56 tblOverlap'
   ),
+  cellFloatMovedDownIndents: modern(
+    'A floating table in a table cell that moves below an earlier one also moves right by its own left text distance',
+    'ECMA-376 Part 1 §17.4.56 tblOverlap'
+  ),
   headerFooterAnchorsWrapText: modern(
     'Header and footer text outside tables wraps around anchored objects',
     'ECMA-376 Part 1 §20.4.2.3 anchor'
