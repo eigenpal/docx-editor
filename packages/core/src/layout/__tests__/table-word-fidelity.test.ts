@@ -1,5 +1,5 @@
 // Word-fidelity divergences in the table path: conditional-format precedence, the
-// `w:tblLook` default, grid-column (not cell-index) structural conditions, an explicit
+// `w:tblLook` encodings, grid-column (not cell-index) structural conditions, an explicit
 // `w:val="nil"` against an inherited interior rule, border conflict weight, and the two
 // unbounded file-derived numbers in table geometry.
 //
@@ -80,57 +80,71 @@ const shadingGrid = (structure: ReturnType<typeof structureOf>) =>
   structure.rows.map((row) => row.cells.map((c) => c.shading));
 
 describe('B3 — conditional formats apply in Word’s precedence, not bit order', () => {
-  // 17.7.6: a table style's conditional formats are layered whole table < banding <
-  // first/last column < first/last row < corners. `w:cnfStyle/@w:val` (17.4.7) lists its
-  // conditions in BIT order, which puts the bands after the rows.
-  test('a stated firstRow beats a stated band in the same w:cnfStyle', () => {
+  // 17.7.6: a table style's conditional formats are layered whole table < row bands <
+  // column bands < first/last column < first/last row < corners.
+  const ALL_ON =
+    '<w:tblLook w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" ' +
+    'w:noHBand="0" w:noVBand="0"/>';
+
+  test('the header row beats the row band, and both columns rules still apply', () => {
     const structure = structureOf(
-      '<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/></w:tblPr>' +
-        // firstRow (bit 0) and band1Horz (bit 6) both stated on the row.
+      `<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/>${ALL_ON}</w:tblPr>` +
+        `<w:tr>${cell()}${cell()}</w:tr><w:tr>${cell()}${cell()}</w:tr></w:tbl>`
+    );
+    const first = structure.rows[0]!.cells[0]!;
+    expect(first.shading).toBe('4472C4');
+    expect(first.borders.left).toMatchObject({ state: 'edge', color: 'FF0000' });
+  });
+
+  test('a column band paints over a row band where the two cross', () => {
+    const structure = structureOf(
+      `<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/>${ALL_ON}</w:tblPr>` +
+        `<w:tr>${cell()}${cell()}${cell()}</w:tr><w:tr>${cell()}${cell()}${cell()}</w:tr></w:tbl>`
+    );
+    // Row 1 is the first row band; column 1 is the first column band after the first column.
+    expect(structure.rows[1]!.cells[1]!.shading).toBe('AAAAAA');
+    expect(structure.rows[1]!.cells[2]!.shading).toBe('BBBBBB');
+  });
+
+  test('a stated w:cnfStyle adds no condition the look does not derive', () => {
+    const structure = structureOf(
+      '<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/><w:tblLook w:val="0600"/></w:tblPr>' +
+        // firstRow (bit 0) and band1Horz (bit 6) stated on a row whose look has neither.
         `<w:tr><w:trPr><w:cnfStyle w:val="100000100000"/></w:trPr>${cell()}</w:tr>` +
         '</w:tbl>'
     );
-    expect(structure.rows[0]!.cells[0]!.shading).toBe('4472C4');
-  });
-
-  test('a stated w:cnfStyle does not switch off the derived conditions', () => {
-    const structure = structureOf(
-      '<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/>' +
-        '<w:tblLook w:firstRow="1" w:firstColumn="1"/></w:tblPr>' +
-        `<w:tr><w:trPr><w:cnfStyle w:val="100000000000"/></w:trPr>${cell()}${cell()}</w:tr>` +
-        `<w:tr>${cell()}${cell()}</w:tr>` +
-        '</w:tbl>'
-    );
-    const first = structure.rows[0]!.cells[0]!;
-    // The row said "first row"; the cell is still in the first column and Word says so.
-    expect(first.shading).toBe('4472C4');
-    expect(first.borders.left).toMatchObject({ state: 'edge', color: 'FF0000' });
+    expect(structure.rows[0]!.cells[0]!.shading).toBeUndefined();
   });
 });
 
 describe('B13 — a missing w:tblLook is the same statement as an empty one', () => {
-  // 17.4.56: `noHBand`/`noVBand` are negative flags; the default is to apply row and column
-  // banding but neither the first/last row nor the first/last column formats.
+  // 17.4.56: with neither the named attributes nor `w:val`, the look is 04A0 — header row,
+  // first column and row banding. `noHBand`/`noVBand` are negative flags.
   const rows = (count: number) =>
     Array.from({ length: count }, () => `<w:tr>${cell()}</w:tr>`).join('');
 
-  test('absent and empty w:tblLook resolve identically, and both band', () => {
+  test('absent and empty w:tblLook resolve identically to 04A0', () => {
     const absent = structureOf(
       `<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/></w:tblPr>${rows(3)}</w:tbl>`
     );
     const empty = structureOf(
       `<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/><w:tblLook/></w:tblPr>${rows(3)}</w:tbl>`
     );
+    const legacy = structureOf(
+      `<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/><w:tblLook w:val="04A0"/></w:tblPr>${rows(3)}</w:tbl>`
+    );
     expect(shadingGrid(absent)).toEqual(shadingGrid(empty));
-    expect(shadingGrid(absent).map((row) => row[0])).toEqual(['D9E2F3', 'EEEEEE', 'D9E2F3']);
+    expect(shadingGrid(absent)).toEqual(shadingGrid(legacy));
+    expect(shadingGrid(absent).map((row) => row[0])).toEqual(['4472C4', 'D9E2F3', 'EEEEEE']);
   });
 
-  test('noHBand still turns row banding off', () => {
+  test('named attributes the look leaves out read as on', () => {
+    // firstRow and lastRow are missing, so both apply; noHBand turns row banding off.
     const structure = structureOf(
       '<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/>' +
         `<w:tblLook w:noHBand="1" w:noVBand="1"/></w:tblPr>${rows(3)}</w:tbl>`
     );
-    expect(shadingGrid(structure).map((row) => row[0])).toEqual([undefined, undefined, undefined]);
+    expect(shadingGrid(structure).map((row) => row[0])).toEqual(['4472C4', undefined, '222222']);
   });
 });
 
@@ -156,7 +170,8 @@ describe('B14 — structural conditions key on the grid column, not the cell ind
   test('vertical banding follows the grid column across a gridSpan', () => {
     const structure = structureOf(
       '<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/>' +
-        '<w:tblLook w:noHBand="1"/></w:tblPr>' +
+        '<w:tblLook w:firstRow="0" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" ' +
+        'w:noHBand="1" w:noVBand="0"/></w:tblPr>' +
         grid(4) +
         '<w:tr>' +
         cell('<w:tcPr><w:gridSpan w:val="2"/></w:tcPr>') +
@@ -193,10 +208,32 @@ describe('B14 — structural conditions key on the grid column, not the cell ind
     expect(structure.rows[0]!.cells[1]!.borders.right.state).toBe('omitted');
   });
 
-  test('a one-row table still takes lastRow when the look asks for it', () => {
+  test('a one-row table takes the header row, not the last row', () => {
+    // The only row is the header block; a row in the block is never the last row.
     const structure = structureOf(
       '<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/>' +
-        `<w:tblLook w:lastRow="1"/></w:tblPr><w:tr>${cell()}</w:tr></w:tbl>`
+        `<w:tblLook w:firstRow="1" w:lastRow="1"/></w:tblPr><w:tr>${cell()}</w:tr></w:tbl>`
+    );
+    expect(structure.rows[0]!.cells[0]!.shading).toBe('4472C4');
+  });
+
+  test('a repeating last row takes the last row format only when the header row is off', () => {
+    // 17.4.49 `w:tblHeader` on every row puts every row in the header block.
+    const rows = Array.from(
+      { length: 3 },
+      () => `<w:tr><w:trPr><w:tblHeader/></w:trPr>${cell()}</w:tr>`
+    ).join('');
+    const lastRowOf = (look: string) =>
+      structureOf(`<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/>${look}</w:tblPr>${rows}</w:tbl>`)
+        .rows[2]!.cells[0]!.shading;
+    expect(lastRowOf('<w:tblLook w:firstRow="0" w:lastRow="1" w:noHBand="1"/>')).toBe('222222');
+    expect(lastRowOf('<w:tblLook w:firstRow="1" w:lastRow="1" w:noHBand="1"/>')).toBe('4472C4');
+  });
+
+  test('a one-row table takes the last row when the header row is off', () => {
+    const structure = structureOf(
+      '<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/>' +
+        `<w:tblLook w:firstRow="0" w:lastRow="1"/></w:tblPr><w:tr>${cell()}</w:tr></w:tbl>`
     );
     expect(structure.rows[0]!.cells[0]!.shading).toBe('222222');
   });

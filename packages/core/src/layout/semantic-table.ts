@@ -106,7 +106,12 @@ import { uniformRowCellSpacingPt } from './table-row-cell-spacing.ts';
 import { modernSharedPercentWidth, resolveTableWidthPlacement } from './table-width-placement.ts';
 import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
 import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
-import { conditionalTypesFor, readTableLook } from './table-conditional-formats.ts';
+import {
+  conditionalTypesFor,
+  headerBlockRowCount,
+  readTableLook,
+  rowConditionTypes,
+} from './table-conditional-formats.ts';
 import { cellShading } from './table-cell-shading.ts';
 import { withRowSpacingShading } from './table-spacing-shading.ts';
 import type { TableSpacingFrame, TableSpacingShading } from './semantic-records.ts';
@@ -676,20 +681,21 @@ function readTableStructureUncached(
   // nothing to continue, so it starts its own merge and paints its own content.
   let mergedAbove = new Set<number>();
   let cellsAbove: SemanticTableCell[] = [];
+  const rowConditionsFor = (rowIndex: number, headerRows: number): readonly string[] =>
+    rowConditionTypes(look, rowIndex, bodyRows, headerRows, styleColumns);
+  // A row's own repeat flag is read with only row 0 as the header row.
+  const headerRows = headerBlockRowCount(look, bodyRows, (rowIndex) =>
+    tableRowIsHeader(
+      tableStyle,
+      rowConditionsFor(rowIndex, look.firstRow ? 1 : 0),
+      plans[rowIndex]!.properties
+    )
+  );
   for (let rowIndex = 0; rowIndex < plans.length; rowIndex += 1) {
     const plan = plans[rowIndex]!;
     const rowNode = plan.node;
     const rowProperties = plan.properties;
-    const rowConditions = conditionalTypesFor({
-      look,
-      rowIndex,
-      rowCount: bodyRows,
-      gridColumn: 0,
-      gridSpan: Math.max(1, styleColumns),
-      columnCount: Math.max(1, styleColumns),
-      rowProperties,
-      cellProperties: undefined,
-    });
+    const rowConditions = rowConditionsFor(rowIndex, headerRows);
     const isHeader = tableRowIsHeader(tableStyle, rowConditions, rowProperties);
     const rowTableBorders = rowExceptionBorders(rowNode, tableBorders);
     let cellIndex = 0;
@@ -707,12 +713,10 @@ function readTableStructureUncached(
         look,
         rowIndex,
         rowCount: bodyRows,
+        headerRows,
         gridColumn: gridColumn + lead,
         gridSpan,
         columnCount: styleColumns,
-        // A producer may state the conditions itself rather than leave them to be derived.
-        rowProperties,
-        cellProperties,
       });
       cellIndex += 1;
       let conditionalBorders = EMPTY_CELL_BORDER_BOX;

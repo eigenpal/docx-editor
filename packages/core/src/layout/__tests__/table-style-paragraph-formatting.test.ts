@@ -32,7 +32,9 @@ const STYLES =
   '<w:tblStylePr w:type="band1Horz"><w:rPr><w:color w:val="0000FF"/></w:rPr></w:tblStylePr>' +
   '</w:style></w:styles>';
 
-const LOOK = '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="0"/>';
+const LOOK =
+  '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" ' +
+  'w:noHBand="0" w:noVBand="1"/>';
 
 function part(xml: string, name: string): OoxmlPart {
   const result = readOoxmlPart(xml, { name, contentType: 'app/xml' });

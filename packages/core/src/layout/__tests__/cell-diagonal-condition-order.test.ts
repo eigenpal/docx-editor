@@ -25,16 +25,22 @@ function borders(base: string, derived: string, direct = '') {
   const table = body.children.find((node: any) => node.localName === 'tbl')!;
   return readTableStructure(table, 468, 0, buildStyleCascadeTable(styles.root))!.rows[0]!.cells[0]!;
 }
-const blueFirst = condition('firstRow', diagonal('tl2br', 'single', '0000FF'));
-test('later inherited lastRow diagonal wins over earlier direct firstRow', () => {
-  const cell = borders(condition('lastRow', diagonal()), blueFirst + condition('lastRow', shading));
+// A one-cell table is in the first row, the first and last column, and both top corners
+// (17.7.6): firstCol < lastCol < firstRow < nwCell < neCell. A one-row table is never the last
+// row while the header row applies.
+const blueFirst = condition('firstCol', diagonal('tl2br', 'single', '0000FF'));
+test('later inherited firstRow diagonal wins over earlier direct firstCol', () => {
+  const cell = borders(
+    condition('firstRow', diagonal()),
+    blueFirst + condition('firstRow', shading)
+  );
   expect(cell.borders.tl2br).toMatchObject({ state: 'edge', color: 'FF0000' });
   expect(cell.shading).toBe('ABCDEF');
 });
 test('intersecting conditional inheritance resolves both diagonal directions independently', () => {
   const cell = borders(
-    condition('lastRow', diagonal('tr2bl')),
-    condition('firstRow', diagonal('tr2bl', 'single', '0000FF')) + condition('lastRow', shading)
+    condition('firstRow', diagonal('tr2bl')),
+    condition('firstCol', diagonal('tr2bl', 'single', '0000FF')) + condition('firstRow', shading)
   );
   expect(cell.borders.tr2bl).toMatchObject({ state: 'edge', color: 'FF0000' });
   expect(cell.borders.tl2br?.state ?? 'omitted').toBe('omitted');
@@ -42,47 +48,47 @@ test('intersecting conditional inheritance resolves both diagonal directions ind
 test('later inherited nil suppresses an earlier direct diagonal', () => {
   expect(
     borders(
-      condition('lastRow', diagonal('tl2br', 'nil')),
-      blueFirst + condition('lastRow', shading)
+      condition('firstRow', diagonal('tl2br', 'nil')),
+      blueFirst + condition('firstRow', shading)
     ).borders.tl2br?.state
   ).toBe('none');
 });
 test('later inherited none suppresses an earlier direct diagonal', () => {
   expect(
     borders(
-      condition('lastRow', diagonal('tl2br', 'none')),
-      blueFirst + condition('lastRow', shading)
+      condition('firstRow', diagonal('tl2br', 'none')),
+      blueFirst + condition('firstRow', shading)
     ).borders.tl2br?.state
   ).toBe('none');
 });
 test('derived explicit nil overrides its inherited condition diagonal', () => {
   expect(
     borders(
-      condition('lastRow', diagonal()),
-      blueFirst + condition('lastRow', diagonal('tl2br', 'nil'))
+      condition('firstRow', diagonal()),
+      blueFirst + condition('firstRow', diagonal('tl2br', 'nil'))
     ).borders.tl2br?.state
   ).toBe('none');
 });
 test('later inherited corner wins over earlier direct row and corner', () => {
   const cell = borders(
-    condition('seCell', diagonal()),
+    condition('neCell', diagonal()),
     blueFirst +
       condition('nwCell', diagonal('tl2br', 'single', '00FF00')) +
-      condition('seCell', shading)
+      condition('neCell', shading)
   );
   expect(cell.borders.tl2br).toMatchObject({ state: 'edge', color: 'FF0000' });
 });
 test('later inherited corner nil suppresses an earlier direct corner', () => {
   const cell = borders(
-    condition('seCell', diagonal('tr2bl', 'nil')),
-    condition('nwCell', diagonal('tr2bl')) + condition('seCell', shading)
+    condition('neCell', diagonal('tr2bl', 'nil')),
+    condition('nwCell', diagonal('tr2bl')) + condition('neCell', shading)
   );
   expect(cell.borders.tr2bl?.state).toBe('none');
 });
 test('direct cell suppression still overrides resolved conditional corners', () => {
   const cell = borders(
-    condition('seCell', diagonal()),
-    blueFirst + condition('seCell', shading),
+    condition('neCell', diagonal()),
+    blueFirst + condition('neCell', shading),
     diagonal('tl2br', 'none')
   );
   expect(cell.borders.tl2br?.state).toBe('none');
