@@ -286,25 +286,19 @@ test('top-clearance displacement participates in page admission at nonnegative o
   }
 });
 
-test('text-relative vertical alignments retain row flow and supersede numeric offsets', () => {
-  for (const alignment of ['top', 'inside', 'center', 'bottom', 'outside']) {
+test('text-relative vertical alignments float at the anchor top and supersede offsets', () => {
+  for (const alignment of ['top', 'inside', 'center', 'bottom', 'outside', 'inline']) {
     const source = part(table(80, 1000, `w:tblpYSpec="${alignment}"`) + p('Anchor'));
     const layout = render(source);
     expect(layout.pages).toHaveLength(1);
     const floating = tables(layout)[0]!;
-    expect(isOutOfFlowTableFragment(floating)).toBe(false);
+    expect(isOutOfFlowTableFragment(floating)).toBe(true);
     expect(floating.box.y).toBe(0);
     expect(floating.rows).toHaveLength(1);
-    expect(
-      floating.rows
-        .flatMap((row) => row.cells.flatMap((cell) => cell.blocks))
-        .some(
-          (block) =>
-            block.kind === 'paragraph' &&
-            block.lines.some((line) => line.spans.some((span) => span.text === 'Cell'))
-        )
-    ).toBe(true);
-    expect(paragraphs(layout).at(-1)!.lines[0]!.box.y).toBe(40);
+    // ECMA-376 Part 1, 17.4.65: the anchor paragraph wraps beside the table.
+    const anchor = paragraphs(layout).at(-1)!.lines[0]!;
+    expect(anchor.box.y).toBe(0);
+    expect(anchor.spans[0]!.box.x).toBeGreaterThanOrEqual(floating.box.x + floating.box.width);
   }
 });
 

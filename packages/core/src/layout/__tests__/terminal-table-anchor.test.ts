@@ -136,14 +136,12 @@ describe('terminal empty text-table anchors', () => {
     }
   });
 
-  test('retains explicit inline positioning and genuine inline overflow', () => {
+  test('retains genuine inline overflow', () => {
     const inline = table().replace(/<w:tblpPr[^>]+\/>/, '');
-    for (const source of [fixture(inline), fixture(table(230, 'w:tblpYSpec="inline"'))]) {
-      const layout = render(source);
-      expect(layout.pages).toHaveLength(1);
-      expect(tablesOf(layout).some(isOutOfFlowTableFragment)).toBe(false);
-      expect(paragraphsOf(layout).at(-1)!.box.y).toBeCloseTo(657.6, 3);
-    }
+    const layout = render(fixture(inline));
+    expect(layout.pages).toHaveLength(1);
+    expect(tablesOf(layout).some(isOutOfFlowTableFragment)).toBe(false);
+    expect(paragraphsOf(layout).at(-1)!.box.y).toBeCloseTo(657.6, 3);
     expect(render(fixture(inline, p(31.2), 606.7)).pages).toHaveLength(2);
   });
 
