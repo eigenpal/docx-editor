@@ -1,0 +1,18 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Column breaks in cells, w:kern in math runs, table style size rules, cell list markers, and multi-series pie legends laid out differently.",
+  "after": "Layout and chart projection follow the measured rules. Shared nodes, text offsets, operations, and saved XML do not change.",
+  "reason": "Only layout, paint geometry, and chart projection change. The math run reader accepts w:kern as a typography property and keeps the source; no shared state, operation, or serialization changes.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-cell-column-breaks.test.ts",
+    "packages/core/src/layout/__tests__/equation-run-kerning.test.ts",
+    "packages/core/src/store/__tests__/omml-run-format.test.ts",
+    "packages/pro/src/drawing/__tests__/chart-pie-series-legend.test.ts",
+    "packages/core/src/layout/__tests__/table-style-legacy-size.test.ts",
+    "packages/core/src/layout/__tests__/list-marker-aligned-line.test.ts",
+    "packages/core/src/layout/__tests__/cell-list-marker.test.ts"
+  ],
+  "changeset": "table-misc-fidelity",
+  "migration": null
+}

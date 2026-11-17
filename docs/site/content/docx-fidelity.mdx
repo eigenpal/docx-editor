@@ -76,6 +76,7 @@ The matrix reports editing, rendering, and round-trip support separately. A feat
 
 - Lists that share one `w:abstractNum` count on one number per level.
 - A `w:startOverride` restarts that number once, at the first item of its list, on the overridden level only. Other lists continue from the restarted number. When the same `w:lvlOverride` replaces the level, its `w:start` takes precedence.
+- In a centered or right-aligned paragraph, the marker moves with the first line's text. In a table cell, the marker takes the table style's run formatting.
 - Header and footer lists share one count that the body and notes do not join. The count runs over each section's referenced parts, in order. Hidden parts still count, and each explicit reference counts again. An inherited part reuses the earlier section's numbers.
 
 ### Tables
@@ -109,6 +110,7 @@ For image movement, pointer placement, accepted formats, and custom drop handler
 
 - Groups with unsupported effects or 3D properties keep their unsupported behavior as a whole. The editor does not render only their supported members.
 - `w14:textOutline` renders when it is an opaque solid RGB outline. PDF export does not paint text outlines.
+- A pie chart draws its first series, and its legend lists that series' categories.
 - Charts take the picture frame commands but refuse crop, replace, and rotate. Deleting a chart removes its fallback too.
 - A right-to-left line beside a floating object fills the passage to the right of the object first. Text never reorders across the object.
 
@@ -168,6 +170,7 @@ The compatibility mode in `w:compat` changes clipping, page counts, table placem
 | Kana fitting in Traditional Chinese runs | Off. | On. |
 | Distributed text with pair kerning | Kerned runs keep their letters together. | Kerned runs spread too. |
 | Left-to-right justified text beside floating objects | Each passage compresses its own spaces. | No per-passage rule. |
+| Table style and the default paragraph style | The default paragraph style's size and alignment win, unless `overrideTableStyleFontSizeAndJustification` is off. | A table style with paragraph or run formatting replaces an 11pt or 12pt default size. A left alignment yields to it. |
 
 ## Layout limits
 
@@ -257,6 +260,7 @@ Compact equation replacement is disabled when it cannot keep the source. The equ
 | Page break exceptions | A paragraph with only one break, or with hidden content after it, keeps the ordinary rule. So does a paragraph that anchors a floating object. |
 | Page break and line break | A page break directly followed by a line break starts no page. |
 | Column break at paragraph start | The following content starts in the next column, or on the next page after the last column. |
+| Column break in a table cell | Breaks nothing. The text continues on the same line. |
 | Continuous section | Shares the previous page when page size and orientation match. Its header and footer start on the next page. |
 | Odd-page and even-page sections | Can insert an empty sheet. `NUMPAGES` counts it; `SECTIONPAGES` does not. |
 | Empty paragraph that ends a section | Ignores its own page break before and adds no blank page. Text, a tab, hidden text, or a field turns this off. |
