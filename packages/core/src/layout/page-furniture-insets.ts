@@ -12,9 +12,10 @@ import {
 // page, so that page's body starts at `w:pgMar/@w:top` — not below the default header's height.
 //
 // The authored margin is a floor (§17.6.11 `w:pgMar`); the header or footer pushes the body
-// past it by its own full height, with no fixed share of the sheet as a limit. The only bound
-// keeps the column open: a hostile header of five hundred paragraphs stops one point short of
-// the opposite margin, so pagination never flows into a zero-height or negative column.
+// past it by its own full height, with no share of the sheet as a limit, even below the sheet
+// edge. Where the two edges leave no column, the top wins and the body keeps one point of
+// column below it: each page then holds one line, and pagination never flows into a
+// zero-height or negative column. Margins that alone pass the sheet height do the same.
 
 import type { HeaderFooterStoryLayout } from './hf-layout.ts';
 import type {
@@ -127,20 +128,14 @@ export function createPageContentInsets(
     distance: number,
     story: HeaderFooterStoryLayout | undefined,
     margin: number,
-    room: number,
     reserveHeight = 0
   ) =>
     // A negative margin is exact (§17.6.11): the header or footer overlaps the body instead of
     // pushing it. An absent variant reserves nothing: the page has no furniture on that edge
-    // at all, so the authored margin is the whole inset. `room` bounds only how far furniture
-    // pushes PAST the margin, never the margin itself: `geometryOfSection` already keeps the
-    // two authored margins inside the sheet.
+    // at all, so the authored margin is the whole inset.
     marginIgnoresFurniture(margin)
       ? marginInset(margin)
-      : Math.max(
-          margin,
-          Math.min(room, story ? distance + Math.max(story.flowHeight, reserveHeight) : 0)
-        );
+      : Math.max(margin, story ? distance + Math.max(story.flowHeight, reserveHeight) : 0);
   return (index: number): PageContentInsets => {
     // Local page 0 of a continued section is the host's sheet, not this section's first page.
     if (index === 0 && inputs.continuedPageInsets) return inputs.continuedPageInsets;
@@ -157,15 +152,12 @@ export function createPageContentInsets(
       inputs.headerDistance,
       header,
       marginTop,
-      pageHeight - marginInset(marginBottom) - MIN_FURNITURE_COLUMN,
       header && !marginIgnoresFurniture(marginTop)
         ? characterHeaderReserveHeight(furniture, inputs.pageIndexStart + index)
         : 0
     );
-    const bottom = edge(
-      inputs.footerDistance,
-      furniture?.footers.get(variant),
-      marginBottom,
+    const bottom = Math.min(
+      edge(inputs.footerDistance, furniture?.footers.get(variant), marginBottom),
       pageHeight - top - MIN_FURNITURE_COLUMN
     );
     const insets: PageContentInsets = Object.freeze({

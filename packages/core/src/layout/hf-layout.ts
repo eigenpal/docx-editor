@@ -44,11 +44,11 @@ import type { DrawingAnchorFrameContext } from './drawing-layout.ts';
 import { inlinePictureRoomOf, storyPageClip } from './drawing-page-clip.ts';
 import {
   MAX_DRAWING_EXCLUSION_REFLOW_PASSES,
-  collectExclusionZonesFromDrawings,
   exclusionLayoutToken,
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { sortStoryDrawingsForPaint } from './drawing-overlap.ts';
+import { storyDrawingWrapZones } from './hf-cell-anchor-wrap.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
 import { noteUnsettledExclusionReflow } from './unsettled-exclusion-layout.ts';
 import {
@@ -545,11 +545,11 @@ export function layoutHeaderFooterStory(
           pendingAnchoredDrawings.splice(0, pendingAnchoredDrawings.length);
           lineCounter = firstLine;
           flow = flowBlocksInBox(source, 0, width, 0, 0, drawingDeps(collect, storyEnd));
-          const drawingZones = collectExclusionZonesFromDrawings(
+          const drawingZones = storyDrawingWrapZones(
             pendingAnchoredDrawings,
             inlineDrawingLayout,
-            0,
-            contentWidth
+            contentWidth,
+            source
           );
           const nextZones = tableZones.length ? [...tableZones, ...drawingZones] : drawingZones;
           if (drawingZones.length === 0) {

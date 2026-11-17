@@ -84,9 +84,24 @@ describe('§17.10 header and footer height past the authored margin', () => {
     expect(insets({ top: 72, bottom: 72, footer: 517 }).bottom).toBeCloseTo(DISTANCE + 517, 6);
   });
 
-  test('a header taller than the sheet stops one point short of the bottom margin', () => {
-    const box = insets({ top: 72, bottom: 72, header: 2000 });
-    expect(box.top).toBeCloseTo(LETTER - 72 - 1, 6);
+  test('a header taller than the page pushes the body below the sheet edge', () => {
+    // 80 lines of 11.5pt: the body starts under the whole header, off the sheet, and keeps
+    // one point of column there, so each page holds one line.
+    const box = insets({ top: 72, bottom: 72, header: 920 });
+    expect(box.top).toBeCloseTo(DISTANCE + 920, 6);
+    expect(box.height).toBeCloseTo(1, 6);
+  });
+
+  test('a header past the bottom margin keeps its full push, not one point short of it', () => {
+    // 60 lines of 11.5pt: the body top lands at 726pt, below the 720pt bottom margin.
+    const box = insets({ top: 72, bottom: 72, header: 690 });
+    expect(box.top).toBeCloseTo(726, 6);
+    expect(box.height).toBeCloseTo(1, 6);
+  });
+
+  test('a header and a footer that meet keep the header push and one point of column', () => {
+    const box = insets({ top: 72, bottom: 72, header: 402.5, footer: 402.5 });
+    expect(box.top).toBeCloseTo(DISTANCE + 402.5, 6);
     expect(box.height).toBeCloseTo(1, 6);
   });
 

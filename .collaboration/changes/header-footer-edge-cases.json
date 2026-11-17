@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A tall header or footer pushed the body only to one point above the opposite margin and painted every line; margins taller than the page fell back to one inch; an out-of-cell picture in a table cell took its paragraph offset from the paragraph and wrapped header table cells.",
+  "after": "Header and footer height pushes the body by its full height, overflowing furniture paints the lines that fit in two fifths of the page, margins stay as authored, and an out-of-cell picture takes its paragraph offset from its row and wraps no header or footer text.",
+  "reason": "The change only affects layout geometry and painting derived locally from each replica's document. It does not change shared document state, operations, or the synchronization format.",
+  "tests": [
+    "packages/core/src/layout/__tests__/furniture-overflow-clip.test.ts",
+    "packages/core/src/layout/__tests__/out-of-cell-anchor-row-frame.test.ts",
+    "packages/core/src/layout/__tests__/page-margin-furniture-room.test.ts",
+    "packages/core/src/layout/__tests__/negative-page-margins.test.ts"
+  ],
+  "changeset": "header-footer-edge-cases",
+  "migration": null
+}
