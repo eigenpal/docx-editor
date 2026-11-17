@@ -9,7 +9,11 @@ import { clipBoxToRegion, hitBoundsOf } from './drawing-clip-box.ts';
 export { clipBoxHorizontally, clipBoxToRegion } from './drawing-clip-box.ts';
 
 import type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
-import { anchorLaidOutInCell, type CellAnchorScope } from './cell-anchor-layout.ts';
+import {
+  alignsToCellFrameTop,
+  anchorLaidOutInCell,
+  type CellAnchorScope,
+} from './cell-anchor-layout.ts';
 import {
   drawingAccessibility,
   type DrawingAccessibility,
@@ -476,6 +480,8 @@ export interface DrawingAnchorFrameContext {
    * top (`wrappedAnchorsStayBelowTopMargin`). Set by the body frame base in modern modes.
    */
   readonly wrappedParagraphAnchorsBelowContentTop?: boolean;
+  /** A column `left`/`right` alignment keeps the paragraph indents (legacy modes). */
+  readonly columnAlignmentFollowsIndents?: boolean;
   /**
    * Where a wrapping body object positioned from its paragraph or line must end: the content
    * box bottom in modern modes (`wrappedAnchorsEndAtBottomMargin`), the sheet bottom in legacy
@@ -554,21 +560,20 @@ function horizontalEdges(
     const cellBox = ctx.cellBox;
     if (!cellBox) return null;
     const { x, width } = cellBox;
+    // The cell stands in for the page: `page` is the whole cell, `margin` and `column` its
+    // text area inside the cell margins, and the side margin bands lie between the two.
+    const content = ctx.cellContentBox ?? cellBox;
+    const contentRight = content.x + content.width;
     switch (frame) {
-      case 'column': {
-        const column = ctx.cellContentBox ?? cellBox;
-        return {
-          left: column.x,
-          right: column.x + column.width,
-          center: column.x + column.width / 2,
-        };
-      }
-      case 'page':
+      case 'column':
       case 'margin':
+        return { left: content.x, right: contentRight, center: content.x + content.width / 2 };
+      case 'page':
+        return { left: x, right: x + width, center: x + width / 2 };
       case 'leftMargin':
-        return { left: x, right: x + width, center: x + width / 2 };
+        return { left: x, right: content.x, center: (x + content.x) / 2 };
       case 'rightMargin':
-        return { left: x, right: x + width, center: x + width / 2 };
+        return { left: contentRight, right: x + width, center: (contentRight + x + width) / 2 };
       case 'character':
         return {
           left: ctx.anchorCharacterX,
@@ -637,8 +642,15 @@ function verticalEdges(
       case 'page':
       case 'margin':
       case 'topMargin':
-      case 'bottomMargin':
-        return { top: y, bottom: y + height, center: y + height / 2 };
+      case 'bottomMargin': {
+        // Every page-like frame starts at the top of the cell's text area, below its margin.
+        const content = ctx.cellContentBox ?? cellBox;
+        return {
+          top: content.y,
+          bottom: content.y + content.height,
+          center: content.y + content.height / 2,
+        };
+      }
       case 'paragraph':
         return {
           top: ctx.paragraphBox.y,
@@ -770,6 +782,16 @@ function resolveInsideOutsideVerticalAlign(
   return null;
 }
 
+/** The anchor paragraph's indents inside the box it flows in: its cell text area or column. */
+function columnAlignmentIndents(
+  ctx: DrawingAnchorFrameContext
+): { readonly left: number; readonly right: number } | null {
+  if (ctx.columnAlignmentFollowsIndents !== true) return null;
+  const home = ctx.cellBox === null ? ctx.columnBox : (ctx.cellContentBox ?? ctx.cellBox);
+  const text = ctx.paragraphBox;
+  return { left: text.x - home.x, right: home.x + home.width - (text.x + text.width) };
+}
+
 function positionFromHorizontal(
   frame: DrawingHorizontalReferenceFrame,
   align: string | null,
@@ -781,9 +803,10 @@ function positionFromHorizontal(
   if (!edges) return null;
   const offset = axisOffsetPoints(offsetEmu);
   if (offset === null) return null;
-  if (align === 'left') return edges.left + offset;
+  const indents = frame === 'column' ? columnAlignmentIndents(ctx) : null;
+  if (align === 'left') return edges.left + (indents?.left ?? 0) + offset;
   if (align === 'center') return edges.center - objectWidth / 2 + offset;
-  if (align === 'right') return edges.right - objectWidth + offset;
+  if (align === 'right') return edges.right - (indents?.right ?? 0) - objectWidth + offset;
   if (align === 'inside' || align === 'outside') {
     const resolved = resolveInsideOutsideHorizontalAlign(align, objectWidth, ctx);
     if (resolved !== null) return resolved + offset;
@@ -802,7 +825,8 @@ function positionFromVertical(
   if (!edges) return null;
   const offset = axisOffsetPoints(offsetEmu);
   if (offset === null) return null;
-  if (align === 'top') return edges.top + offset;
+  const cellTop = ctx.inTableCell === true && usesCellLayoutBox(frame, ctx);
+  if (align === 'top' || (cellTop && alignsToCellFrameTop(frame, align))) return edges.top + offset;
   if (align === 'center') return edges.center - objectHeight / 2 + offset;
   if (align === 'bottom') return edges.bottom - objectHeight + offset;
   if (align === 'inside' || align === 'outside') {

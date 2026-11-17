@@ -90,7 +90,11 @@ import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.t
 import { resolvedParagraphMarkChangeSites } from './revision-formatting-projection.ts';
 import { paragraphMergeGroupOf } from './story-roots.ts';
 import { cellTerminatorCollapses } from './table-cell-terminator.ts';
-import { rowDepsForAnchors, type DeferredRowAnchor } from './table-anchor-republish.ts';
+import {
+  cellTextAreas,
+  rowDepsForAnchors,
+  type DeferredRowAnchor,
+} from './table-anchor-republish.ts';
 import {
   markRevisionFields,
   paragraphMarkMarkupVisible,
@@ -1610,7 +1614,7 @@ export function layoutRowFragmentBounded(
   const complete = clipExact || flowed.every((entry) => entry.complete);
 
   rememberBottomToTopRelayouts(flowed, cells);
-  flushDeferred(cells, rowTop, rowHeight);
+  flushDeferred(cells, rowTop, rowHeight, cellTextAreas(flowed));
 
   return {
     record: {

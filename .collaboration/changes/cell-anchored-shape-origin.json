@@ -1,0 +1,12 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "An object laid out in a table cell measured its margin frame and its vertical page frame from the outer cell box, and legacy-mode column alignment ignored the paragraph indents.",
+  "after": "An object laid out in a table cell measures its margin frames from the cell text area inside the cell margins, its vertical page frames from the top of that text area, and legacy-mode column alignment keeps the paragraph indents.",
+  "reason": "The change affects only how each client positions floating objects in layout. Shared nodes, text offsets, operations, and package serialization stay unchanged, and every client derives the same layout from the same tree.",
+  "tests": [
+    "packages/core/src/layout/__tests__/cell-anchor-frames.test.ts"
+  ],
+  "changeset": "cell-anchored-shape-origin",
+  "migration": null
+}

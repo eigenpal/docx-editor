@@ -54,6 +54,9 @@ export function bodyAnchorFrameBase(input: BodyAnchorFrameInput): BodyAnchorFram
     contentBandHeight: insets.height,
     ownerPartName: input.ownerPartName,
     storyKind: 'body',
+    ...(hasCompatibilityRule(input.compatibilityMode, 'columnAlignmentFollowsIndents')
+      ? { columnAlignmentFollowsIndents: true }
+      : {}),
     ...(hasCompatibilityRule(input.compatibilityMode, 'wrappedAnchorsStayBelowTopMargin')
       ? { wrappedParagraphAnchorsBelowContentTop: true }
       : {}),
