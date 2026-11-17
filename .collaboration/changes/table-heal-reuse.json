@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Each check of a table edit scans every row and cell for repeated property containers.",
+  "after": "A table or row version found without repeated property containers is not scanned again; a table or row that an edit or merge changes is a new version and is scanned.",
+  "reason": "Only the cost of validation changes. Heal writes, operations, shared nodes, and serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/table-property-heal-reuse.test.ts",
+    "packages/core/src/store/__tests__/table-property-heal.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-table-property-containers.test.ts"
+  ],
+  "changeset": "table-heal-reuse",
+  "migration": null
+}
