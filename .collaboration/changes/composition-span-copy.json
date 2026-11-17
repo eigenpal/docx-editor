@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A composition over a selection set in another face than the text on both sides of it erased the selection and dropped the composed text: Chromium wrote that text into its own copy of the adjacent span, and the readback read each model range once.",
+  "after": "The readback reads a span that the browser added during the composition, beside a span with the same range, as text the browser wrote there. The composition-start snapshot identifies the added span, so a range that layout paints more than once still contributes once.",
+  "reason": "The composed text still reaches the document through the existing composition readback lane, as the same tree operations as typing over a selection. Shared nodes, offsets, operation shapes, and serialization are unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-input-method-deletion.test.ts",
+    "packages/core/src/editor/__tests__/input-method-deletion.test.ts",
+    "packages/core/src/editor/__tests__/composition-readback-span-copy.test.ts",
+    "packages/core/src/editor/__tests__/selection-integrity.test.ts"
+  ],
+  "changeset": "composition-span-copy",
+  "migration": null
+}

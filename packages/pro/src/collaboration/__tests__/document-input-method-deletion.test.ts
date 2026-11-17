@@ -176,3 +176,77 @@ test('a composition that erases a word converges and stays erased', async () => 
   converge();
   expect(bob.editor.surface!.session.bodyText()).toBe('Oh. Hello ');
 });
+
+/**
+ * Compose `text` over `[from, to)` the way Chromium does when the selection is set in another
+ * face than the text on both sides of it: the selected spans go, and the composed text lands in
+ * a copy of the span before, range attributes included.
+ */
+function composeIntoSpanCopy(peer: Mounted, from: number, to: number, text: string): void {
+  const paragraphId = peer.editor.surface!.session.paragraphIds()[0]!;
+  peer.editor.surface!.setSelection({
+    anchor: { paragraphId, offset: from },
+    head: { paragraphId, offset: to },
+  });
+  const pages = peer.container.querySelector('.docx-pages')!;
+  pages.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+  const kept = domPoint(peer, 0).node.parentNode as HTMLElement;
+  for (const span of pages.querySelectorAll<HTMLElement>('[data-start]')) {
+    const start = Number(span.dataset.start);
+    if (start >= from && start < to) span.remove();
+  }
+  const copy = kept.cloneNode(false) as HTMLElement;
+  copy.textContent = text;
+  kept.after(copy);
+  const end = new CompositionEvent('compositionend', { bubbles: true });
+  Object.defineProperty(end, 'data', { value: text });
+  pages.dispatchEvent(end);
+}
+
+const CODE_BETWEEN_HANGUL =
+  '<w:p><w:r><w:t>시험번호</w:t></w:r><w:r><w:t>GMEB-26202</w:t></w:r>' +
+  '<w:r><w:t xml:space="preserve">의 제출문이다.</w:t></w:r></w:p>';
+
+test("text composed into the browser's copy of a span converges, undoes, and reopens", async () => {
+  const { alice, bob, peers, converge } = await pair(CODE_BETWEEN_HANGUL);
+  peers.pause();
+  composeIntoSpanCopy(alice, 4, 14, '한글');
+  expect(alice.editor.surface!.session.bodyText()).toBe('시험번호한글의 제출문이다.');
+  caret(bob, 22);
+  expect(bob.editor.exec({ type: 'insertText', text: '!' }).ok).toBe(true);
+  peers.alice.room.session.flushPendingJournals();
+  peers.bob.room.session.flushPendingJournals();
+  peers.resume();
+  converge();
+  expect(bob.editor.surface!.session.bodyText()).toBe('시험번호한글의 제출문이다.!');
+
+  expect(alice.editor.exec({ type: 'undo' }).ok).toBe(true);
+  converge();
+  expect(bob.editor.surface!.session.bodyText()).toBe('시험번호GMEB-26202의 제출문이다.!');
+  expect(alice.editor.exec({ type: 'redo' }).ok).toBe(true);
+  converge();
+  expect(bob.editor.surface!.session.bodyText()).toBe('시험번호한글의 제출문이다.!');
+
+  const reopened = mount({ document: new Uint8Array(await bob.editor.save()) });
+  expect(reopened.editor.surface!.session.bodyText()).toBe('시험번호한글의 제출문이다.!');
+  expect(saveReopenDigest(reopened.editor.surface!.session.currentPackage())).toEqual(
+    saveReopenDigest(bob.editor.surface!.session.currentPackage())
+  );
+});
+
+test('a composition into a span copy converges with a peer deleting the selection', async () => {
+  const { alice, bob, peers, converge } = await pair(CODE_BETWEEN_HANGUL);
+  peers.pause();
+  composeIntoSpanCopy(alice, 4, 14, '한글');
+  const paragraphId = bob.editor.surface!.session.paragraphIds()[0]!;
+  bob.editor.surface!.setSelection({
+    anchor: { paragraphId, offset: 4 },
+    head: { paragraphId, offset: 14 },
+  });
+  bob.editor.surface!.deleteBackward();
+  peers.alice.room.session.flushPendingJournals();
+  peers.bob.room.session.flushPendingJournals();
+  peers.resume();
+  converge();
+  expect(alice.editor.surface!.session.bodyText()).toBe('시험번호한글의 제출문이다.');
+});
