@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A text-anchored table counted its offset from the first line of its anchor, below the anchor's space before, and the paragraphs around a waiting table collapsed their spacing as if they were adjacent.",
+  "after": "The offset counts from the anchor paragraph top, the space after above the table stays whole, contextual spacing joins the paragraphs around it, and the anchor no longer opens the section. Shared document state and operations are unchanged.",
+  "reason": "The change is confined to layout. Replicas compute the same layout from the same tree, and saved documents keep the same XML.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-float-anchor-top.test.ts",
+    "packages/core/src/layout/__tests__/table-float-anchor-top.test.ts"
+  ],
+  "changeset": "floating-table-anchor-top",
+  "migration": null
+}

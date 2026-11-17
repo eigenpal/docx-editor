@@ -33,14 +33,16 @@ const TOUCH_TOLERANCE_PT = 0.01;
  *
  * `spaceAbove` is the paragraph spacing above a paragraph's first line. A drawing's band that
  * crosses that spacing or the line moves the line to the band bottom, and the line keeps its
- * spacing below the band. Floating tables, frames, and header or footer objects keep the plain
- * rule.
+ * spacing below the band. So does the band of a floating table that `ownAnchorId`, the line's
+ * paragraph, anchors: such a table is positioned from the top of that paragraph, above its
+ * spacing. Other floating tables, frames, and header or footer objects keep the plain rule.
  */
 export function topAndBottomSkipBeforeLine(
   lineTopY: number,
   lineHeight: number,
   zones: readonly ExclusionZone[],
-  spaceAbove = 0
+  spaceAbove = 0,
+  ownAnchorId?: string
 ): number {
   if (lineHeight <= 0 || zones.length === 0) return 0;
   let skip = 0;
@@ -48,7 +50,11 @@ export function topAndBottomSkipBeforeLine(
     let spacedBottom = -Infinity;
     for (const zone of zones) {
       // Only a drawing's band. The line after a floating table or frame starts at its bottom.
-      if (zone.input.mode !== 'topAndBottom' || zone.sourceKind) continue;
+      const own =
+        ownAnchorId !== undefined &&
+        zone.sourceKind === 'table' &&
+        zone.anchorParagraphId === ownAnchorId;
+      if (zone.input.mode !== 'topAndBottom' || (zone.sourceKind && !own)) continue;
       const bandTop = zone.verticalBand.y;
       const bandBottom = bandTop + zone.verticalBand.height;
       if (

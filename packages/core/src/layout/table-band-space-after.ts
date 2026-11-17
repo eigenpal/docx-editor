@@ -20,16 +20,18 @@ export function tableBandSpaceAfter(compatibilityMode: number | undefined, after
 
 /**
  * The skip that moves a line below the top-and-bottom bands of `zones` (see
- * `topAndBottomSkipBeforeLine`), and the line with its `after` below their floating table bands.
+ * `topAndBottomSkipBeforeLine`, which also takes `ownAnchorId`), and the line with its `after`
+ * below their floating table bands.
  */
 export function lineBandSkip(
   top: number,
   height: number,
   zones: readonly ExclusionZone[],
   spaceAbove: number,
-  after: number
+  after: number,
+  ownAnchorId?: string
 ): number {
-  const skip = topAndBottomSkipBeforeLine(top, height, zones, spaceAbove);
+  const skip = topAndBottomSkipBeforeLine(top, height, zones, spaceAbove, ownAnchorId);
   if (after <= 0) return skip;
   const tables = zones.filter((zone) => zone.sourceKind === 'table');
   return tables.length > 0
