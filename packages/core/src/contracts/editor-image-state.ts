@@ -26,6 +26,10 @@ export interface SelectedImageState {
   readonly id: string;
   readonly kind: DrawingKind;
   readonly widthEmu: number;
+  /**
+   * The extent height. For a text box that fits its text ("Resize shape to fit text"), the
+   * height the page shows; a `setImageProperties` height other than it turns the fit off.
+   */
   readonly heightEmu: number;
   /** Crop inset per edge in UI percent (0–100); OOXML stores permille (×1000). */
   readonly crop: ImageCropPercent;
@@ -58,7 +62,11 @@ export interface SelectedImageState {
    * viewing mode.
    */
   readonly canMove: boolean;
-  /** Whether `setImageWrapType` applies: pictures only, never text boxes. */
+  /**
+   * Whether `setImageWrapType` applies: a picture, chart, diagram, or DrawingML text box, shape,
+   * line or group. False for a legacy VML shape, a move-locked or hidden drawing, and a shape
+   * selected inside a group.
+   */
   readonly canChangeWrap: boolean;
   /** Whether `setImageProperties` can crop: pictures only, never text boxes. */
   readonly canCrop: boolean;

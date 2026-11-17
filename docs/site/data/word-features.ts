@@ -675,7 +675,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Edit text in supported upright text boxes in the body, headers, and footers, including during collaboration. Tables and rotated text remain read-only. Nested boxes, linked boxes, and automatic text shrinking can clip or show a placeholder.',
+      'Edit the text, size, and text wrap of supported upright text boxes in the body, headers, and footers. A height change turns off Resize shape to fit text, so the box keeps that height. Tables and rotated text are read-only; nested boxes, linked boxes, and text shrinking can clip.',
   },
   {
     id: 'images.shapes',
@@ -687,7 +687,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Preset and supported custom shapes and groups display with fills, outlines, outer shadows, rotation, and flips. You can set solid fills and outline colors, widths, and dash types, and move or delete shapes. Resizing, rotation, shape text, gradients, and patterns are read-only, and some rotated or flipped groups show placeholders.',
+      'Preset and supported custom shapes and groups display with fills, outlines, outer shadows, rotation, and flips. You can set solid fills, outline colors, widths, dashes, and text wrap, and move or delete shapes. Resizing, rotation, shape text, gradients, and patterns are read-only, and some rotated or flipped groups show placeholders.',
   },
   {
     id: 'images.legacy-vml',

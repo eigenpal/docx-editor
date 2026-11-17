@@ -135,14 +135,15 @@ Outside a component, call `editor.getSelectedImage()` or read `editor.snapshot()
 
 | Field | Meaning |
 | --- | --- |
-| `widthEmu`, `heightEmu` | Extent in EMUs |
+| `widthEmu`, `heightEmu` | Extent in EMUs. For a text box that fits its text, `heightEmu` is the height that the page shows. |
 | `crop` | Crop inset per edge, in percent (0 to 100) |
 | `wrap` | Wrap target (see the next table) |
 | `position`, `rotationDegrees`, `locks`, `hidden` | Placement and lock state |
 | `title`, `description`, `hyperlink` | Alternative text and link |
 | `resourceStatus` | `pending`, `ready`, `unrenderable`, `external`, or `missing` |
 | `canResize`, `canMove` | False for locked or hidden drawings, rotated legacy VML text boxes, and viewing mode. `canMove` is also false for inline drawings. |
-| `canChangeWrap`, `canCrop` | True for pictures only, never text boxes |
+| `canChangeWrap` | True for pictures, charts, diagrams, and DrawingML text boxes, shapes, lines, and groups. False for legacy VML shapes, move-locked drawings, and a shape selected inside a group. |
+| `canCrop` | True for pictures only |
 
 Check `canResize`, `canMove`, `canChangeWrap`, and `canCrop` before you offer the matching control.
 
@@ -187,6 +188,8 @@ The pane lives in `DocxEditor.SidePanel`, which shows it while a shape is select
 Each field is also a part that you can place in your own toolbar, popover, or drawer. For more information, see [Place shape and chart controls](/docs/2.x/guides/object-controls).
 
 Each change is one undo step. A gradient, pattern, or picture fill shows by name; a picked color or No fill replaces it. A theme color saves as a theme reference with its tint or shade, so it follows a theme change. A hex color saves as RGB and never shows as a theme color.
+
+A shape, line, or group also takes a text wrap, as a picture does. Use **Wrap text** on the toolbar, the `image.wrap` slot, or `setImageWrapType`.
 
 In a group, the first press selects the group and a fill applies to every shape in it. A second press selects the shape under the pointer, and the pane then edits that shape alone. Press Escape to select the group again. A shape inside a group does not move, resize, or delete on its own, and it takes its wrap and alt text from the group. Only a pointer selects a shape inside a group; the keyboard selects the group. The selection is local to each editor in a collaboration session.
 
@@ -239,6 +242,8 @@ if (editor.can({ type: 'insertTextBox' }).ok) {
 The toolbar slot is `insert.textBox`. Insertion in tables, headers, and footers is unavailable.
 
 - Click a body text box to edit it. Drag the frame to move an anchored box, or drag its handles to resize. An inline box resizes but moves only with its line.
+- **Wrap text** on the toolbar sets how body text flows around a text box, for example **Behind Text** or **In Front of Text**. The `image.wrap` slot and `setImageWrapType` take the same targets as for a picture.
+- A box with **Resize shape to fit text** (`a:spAutoFit`) takes the height of its text. A resize that changes its height writes `a:noAutofit`, so the box keeps the new height. A resize that changes only the width keeps the fit.
 - Double-click a header or footer text box to open the header or footer with the caret in the box. Press **Escape** once to select the box and twice to close the header or footer.
 - Pasting into a text box inserts plain text. Table insertion is unavailable inside a text box.
 - Rotated or vertical text, and boxes that hold a table, take no caret. Clicking selects the box and its frame states the reason.

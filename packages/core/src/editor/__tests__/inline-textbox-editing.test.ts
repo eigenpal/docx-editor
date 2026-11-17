@@ -125,7 +125,8 @@ test('selecting a match selects the inline box, which resizes but does not move'
     expect(image?.kind).toBe('inline');
     expect(image?.canMove).toBe(false);
     expect(image?.canResize).toBe(true);
-    expect(image?.canChangeWrap).toBe(false);
+    // A DrawingML text box takes a wrap change, inline or floating, as a picture does.
+    expect(image?.canChangeWrap).toBe(true);
     const overlay = selectedDrawingOverlayTargetOf(editor.surface!);
     expect(overlay?.textbox).toBe(true);
     expect(overlay?.canMove).toBe(false);

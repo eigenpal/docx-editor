@@ -1499,6 +1499,32 @@ a.docx-hyperlink:focus-visible {
   cursor: text;
 }
 
+/* A press on a text box's edge selects the box, and a press inside places the caret. The inset
+ * band alone can be 3px high, so the edge gets a 7px ring inside the frame, over the edge of the
+ * text area, with the move cursor. The clip cuts the middle out, so a press there still reaches
+ * the text. The ring is in screen pixels, so it keeps its size at every zoom, and it turns with
+ * a rotated box. The drawing clips what lies past its frame, so the ring stays inside. */
+.docx-drawing-textbox-box::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  cursor: move;
+  clip-path: polygon(
+    evenodd,
+    0 0,
+    100% 0,
+    100% 100%,
+    0 100%,
+    0 0,
+    7px 7px,
+    7px calc(100% - 7px),
+    calc(100% - 7px) calc(100% - 7px),
+    calc(100% - 7px) 7px,
+    7px 7px
+  );
+}
+
 .docx-drawing-layer {
   position: absolute;
   inset: 0;
@@ -3530,6 +3556,10 @@ a.docx-hyperlink:focus-visible {
 .docx-paginated-surface--viewing .docx-drawing-textbox {
   cursor: default;
 }
+/* Viewing selects no object, so a text box's edge ring has nothing to do. */
+.docx-paginated-surface--viewing .docx-drawing-textbox-box::after {
+  display: none;
+}
 
 @media print {
   .docx-hf--placeholder,
@@ -3904,6 +3934,7 @@ a.docx-hyperlink:focus-visible {
 .docx-pages[data-format-painter] .docx-page-content,
 .docx-pages[data-format-painter] .docx-page,
 .docx-pages[data-format-painter] .docx-drawing-textbox,
+.docx-pages[data-format-painter] .docx-drawing-textbox-box::after,
 .docx-pages[data-format-painter] .docx-hf,
 .docx-pages[data-format-painter] .docx-hf-hover,
 .docx-pages[data-format-painter] .docx-hyperlink {
@@ -4659,6 +4690,15 @@ a.docx-hyperlink:focus-visible {
 .docx-toolbar__alignment-option[data-active]:hover {
   background: var(--doc-primary-light);
   color: var(--doc-primary);
+}
+
+/* Alt text has no glyph, so the bar shows its label: one line, sized to the text. */
+.docx-toolbar__button.docx-toolbar__alt-text-trigger {
+  width: auto;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 /* Split colour controls (font colour, highlight): the two-half button —
@@ -10150,20 +10190,125 @@ p.docx-review__refused {
   gap: 4px;
 }
 .docx-editor .docx-object-control--compact .docx-chart-pane__field {
+  position: relative;
   gap: 0;
 }
-.docx-editor .docx-object-control--compact .docx-dialog__select,
 .docx-editor .docx-object-control--compact .docx-dialog__input {
   height: 28px;
   min-width: 0;
   max-width: 160px;
   font-size: 13px;
 }
-.docx-editor .docx-object-control--compact .docx-color-picker__trigger {
+/* In a toolbar a list reads as the toolbar's own pickers (the style picker): no box, a muted
+   chevron, the hover slab. The native list still opens, so the keyboard and screen readers keep
+   the platform behavior. */
+.docx-editor .docx-object-control--compact .docx-dialog__select {
+  appearance: none;
+  flex: none;
   width: auto;
-  min-height: 28px;
-  padding: 0 6px;
-  gap: 4px;
+  min-width: 0;
+  max-width: 160px;
+  height: 28px;
+  padding: 0 20px 0 8px;
+  font-size: 13px;
+  line-height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  transition: background-color 0.12s ease;
+}
+.docx-editor
+  .docx-object-control--compact
+  .docx-chart-pane__field:has(.docx-dialog__select)::after {
+  content: '▾';
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--doc-text-muted);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.docx-editor .docx-object-control--compact .docx-dialog__select {
+  text-overflow: ellipsis;
+}
+.docx-editor .docx-object-control--compact[data-slot='shape.outlineWidth'] .docx-dialog__select {
+  width: 72px;
+}
+.docx-editor .docx-object-control--compact[data-slot='shape.outlineDash'] .docx-dialog__select {
+  width: 120px;
+}
+.docx-editor .docx-object-control--compact .docx-dialog__select:where(:hover:not(:disabled)) {
+  background: var(--doc-border);
+}
+.docx-editor .docx-object-control--compact .docx-dialog__select:where(:focus-visible) {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: -2px;
+}
+.docx-editor .docx-object-control--compact .docx-dialog__select:where(:disabled) {
+  opacity: 0.5;
+  cursor: default;
+}
+/* In a toolbar a colour reads as font colour does: the glyph over a 16×4 bar of the colour, and
+   a muted chevron, on a borderless button. The bar covers the glyph's own bar. */
+.docx-editor .docx-object-control--compact .docx-color-picker__trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  width: auto;
+  min-height: 0;
+  height: 28px;
+  padding: 0 4px 0 5px;
+  color: var(--doc-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+.docx-editor .docx-object-control--compact .docx-color-picker__trigger::after {
+  content: '▾';
+  font-size: 10px;
+  line-height: 1;
+  color: var(--doc-text-muted);
+}
+@media (hover: hover) and (pointer: fine) {
+  .docx-editor
+    .docx-object-control--compact
+    .docx-color-picker__trigger:where(:hover:not(:disabled)) {
+    color: var(--doc-text);
+    background: var(--doc-border);
+  }
+}
+.docx-editor .docx-object-control--compact .docx-color-picker__trigger:where(:disabled) {
+  opacity: 0.5;
+}
+.docx-editor .docx-object-control--compact .docx-object-control__icon {
+  display: inline-flex;
+}
+.docx-editor .docx-object-control--compact .docx-color-picker__chip {
+  position: absolute;
+  top: 20px;
+  left: 6px;
+  width: 16px;
+  height: 4px;
+  border: none;
+  border-radius: 1px;
+  pointer-events: none;
+}
+/* White, and no colour, would vanish on the toolbar: both keep a hairline edge. */
+.docx-editor
+  .docx-object-control--compact
+  .docx-color-picker__trigger:where([data-color='#FFFFFF' i])
+  .docx-color-picker__chip,
+.docx-editor .docx-object-control--compact .docx-color-picker__chip:where([data-none='true']) {
+  box-shadow: inset 0 0 0 1px var(--doc-border-dark);
+}
+.docx-editor .docx-object-control--compact .docx-color-picker__chip:where([data-none='true']) {
+  background: var(--doc-surface);
 }
 .docx-editor .docx-object-control--compact .docx-color-picker__summary {
   display: none;

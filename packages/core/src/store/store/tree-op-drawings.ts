@@ -60,6 +60,8 @@ import {
 } from './tree-op-drawing-kinds.ts';
 import { chartDrawingOf, chartFrameEdit } from './tree-op-chart-drawing.ts';
 import { DIAGRAM_FRAME_EDITS } from './tree-op-diagram-drawing.ts';
+import { isWrapElement, withCreatedNodesGeneric } from './drawing-wrap-nodes.ts';
+import { releaseTextFit } from './textbox-fit-release.ts';
 import { holdsDiagramGraphic, holdsShapeGraphic } from '../package/diagram-frame.ts';
 import { mergedDrawingLocks, shapeLocksOf } from '../package/drawing-shape-locks.ts';
 import { holdsChartGraphic } from '../package/mc-fallback-projection.ts';
@@ -97,7 +99,9 @@ function ooxmlBooleanString(value: boolean): string {
   return value ? '1' : '0';
 }
 
+/** An anchor-only child, which `wp:inline` does not take: a position, a wrap, a relative size. */
 function isPositionOrWrapChild(child: OoxmlElement): boolean {
+  if (child.localName === 'sizeRelH' || child.localName === 'sizeRelV') return true;
   if (
     child.kind === 'drawingSimplePos' ||
     child.kind === 'drawingPositionH' ||
@@ -1322,18 +1326,7 @@ function convertWrap(
   let updatedAnchor = replaceNodeShallow(anchor, {
     attributes: setSchemaAttribute(anchor.attributes, 'behindDoc', spec.behindDocument ? '1' : '0'),
   });
-  const withoutWrap = updatedAnchor.children.filter((child) => {
-    if (!isElement(child)) return true;
-    if (child.id === existingWrap?.id) return false;
-    return !(
-      child.kind === 'drawingWrapNone' ||
-      child.kind === 'drawingWrapSquare' ||
-      child.kind === 'drawingWrapTight' ||
-      child.kind === 'drawingWrapThrough' ||
-      child.kind === 'drawingWrapTopBottom' ||
-      (child.namespaceUri === WP_NAMESPACE_URI && child.localName.startsWith('wrap'))
-    );
-  });
+  const withoutWrap = updatedAnchor.children.filter((child) => !isWrapElement(child));
   const docPrIndex = withoutWrap.findIndex(
     (child) => isElement(child) && (child.kind === 'drawingDocPr' || child.localName === 'docPr')
   );
@@ -1344,20 +1337,7 @@ function convertWrap(
 }
 
 function findWrapChild(anchor: OoxmlElement): OoxmlElement | null {
-  for (const child of anchor.children) {
-    if (!isElement(child)) continue;
-    if (
-      child.kind === 'drawingWrapNone' ||
-      child.kind === 'drawingWrapSquare' ||
-      child.kind === 'drawingWrapTight' ||
-      child.kind === 'drawingWrapThrough' ||
-      child.kind === 'drawingWrapTopBottom' ||
-      (child.namespaceUri === WP_NAMESPACE_URI && child.localName.startsWith('wrap'))
-    ) {
-      return child;
-    }
-  }
-  return null;
+  return (anchor.children as readonly OoxmlNode[]).find(isWrapElement) ?? null;
 }
 
 function updateAxisPosition(
@@ -1598,7 +1578,8 @@ export function applyDrawingOp(
     case 'resizeDrawing': {
       const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return { ok: false, reason: ctx };
-      const updatedAnchor = updateExtent(ctx.anchor, op.extentEmu.cx, op.extentEmu.cy);
+      const resized = updateExtent(ctx.anchor, op.extentEmu.cx, op.extentEmu.cy);
+      const updatedAnchor = op.textFit === 'release' ? releaseTextFit(resized, nextId) : resized;
       return replaceDrawingAnchor(part, ctx.drawing, updatedAnchor, op, options);
     }
     case 'cropDrawing': {
@@ -1616,7 +1597,12 @@ export function applyDrawingOp(
     case 'setDrawingWrap': {
       const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return { ok: false, reason: ctx };
-      const updatedDrawing = convertWrap(ctx.drawing, ctx.anchor, ctx.projection, op.wrap, nextId);
+      const converted = convertWrap(ctx.drawing, ctx.anchor, ctx.projection, op.wrap, nextId);
+      // A drawing in `mc:Choice` is stored generic, so the nodes the edit writes are too.
+      const updatedDrawing =
+        ctx.drawing.kind === 'drawing'
+          ? converted
+          : withCreatedNodesGeneric(ctx.drawing, converted);
       const replaced = replaceNode(part, ctx.drawing.id, updatedDrawing, options);
       return fromEdit(replaced, drawingEffect(part, ctx.drawing.id, op));
     }

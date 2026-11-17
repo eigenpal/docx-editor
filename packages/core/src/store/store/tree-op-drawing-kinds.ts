@@ -82,20 +82,25 @@ export function isValidXmlMetadata(value: string): boolean {
   return true;
 }
 
-/** The frame edits a text box takes: its size lives in `wp:extent`. */
+/**
+ * The frame edits a text box takes: its size lives in `wp:extent`, and its text wrap in the
+ * `wp:anchor` or `wp:inline` frame, as a picture's does.
+ */
 export const TEXTBOX_FRAME_EDITS: ReadonlySet<DrawingTreeDocOp['op']> = new Set([
   'resizeDrawing',
   'positionDrawing',
+  'setDrawingWrap',
   'deleteDrawing',
   'setDrawingMetadata',
 ]);
 
 /**
- * The frame edits a shape, line or group takes: its place, removal and alt text. Its size
- * also lives in its own geometry (`a:xfrm`, a group's child extents), so a resize is refused.
+ * The frame edits a shape, line or group takes: its place, text wrap, removal and alt text. Its
+ * size also lives in its own geometry (`a:xfrm`, a group's child extents), so a resize is refused.
  */
 export const SHAPE_FRAME_EDITS: ReadonlySet<DrawingTreeDocOp['op']> = new Set([
   'positionDrawing',
+  'setDrawingWrap',
   'deleteDrawing',
   'setDrawingMetadata',
 ]);
