@@ -3362,7 +3362,7 @@ export function mountPaginatedSurface(
     const previousToc = tocAtPosition(session.part(), selection.head)?.id;
     retireActivationPin();
     selection = next;
-    followOpenNoteToHead(noteOps, editingLayout(), next); // The open note follows the head.
+    followOpenNoteToHead(noteOps, editingLayout(), next, pointerCaret?.pageIndex); // Note follows.
     // Any plain selection cancels a rectangle. A caret placed by a click, a keystroke or an
     // edit is a text selection by definition, and leaving the rectangle behind would keep
     // painting cells that are no longer chosen.

@@ -11,8 +11,12 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { gateCommand } from '../docx-editor-derive.ts';
-import { CROSS_NOTE_EDIT_REFUSAL, sameNoteStory } from '../surface-note-story.ts';
-import type { ParagraphFragmentRecord, SemanticPosition } from '@docx-editor.dev/core/layout';
+import { CROSS_NOTE_EDIT_REFUSAL, followNoteOfHead, sameNoteStory } from '../surface-note-story.ts';
+import type {
+  ParagraphFragmentRecord,
+  SemanticLayout,
+  SemanticPosition,
+} from '@docx-editor.dev/core/layout';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -294,6 +298,31 @@ describe('note story selection (issue #2010)', () => {
     }
   });
 
+  test('every command that replaces the selection is disabled across notes; formatting is not', () => {
+    const { surface } = mount();
+    selectAcrossNotes(surface);
+    for (const command of [
+      { type: 'paste', text: 'x' },
+      { type: 'insertText', text: 'x' },
+      { type: 'insertBreak', kind: 'line' },
+    ] as const) {
+      const gate = gateCommand(command as never, surface, 'edit');
+      expect(gate.ok ? null : gate.refusal.reason).toBe(CROSS_NOTE_EDIT_REFUSAL);
+    }
+    expect(gateCommand({ type: 'toggleMark', mark: 'bold' }, surface, 'edit').ok).toBe(true);
+  });
+
+  test('a selection set from a snapshot round-trips across notes', () => {
+    const { surface } = mount();
+    selectAcrossNotes(surface);
+    const saved = surface.state().selection;
+    surface.exitNote();
+    expect(surface.enterNote('footnote:2')).toBe(true);
+    surface.setSelection(saved);
+    expect(surface.state().selection).toEqual(saved);
+    expect(surface.activeScope()).toEqual({ kind: 'note', id: 'footnote:3' });
+  });
+
   test('a cut over notes copies nothing, because it deletes nothing', () => {
     const { surface, pages } = mount();
     selectAcrossNotes(surface);
@@ -309,5 +338,73 @@ describe('note story selection (issue #2010)', () => {
     expect(data.getData('text/plain')).toBe('');
     expect(footnoteText(surface)).toBe(before);
     expect(surface.state().lastRejection).toBe(CROSS_NOTE_EDIT_REFUSAL);
+  });
+});
+
+describe('the open note follows the head onto the page it is on', () => {
+  // Footnote 1 continues from page 0 onto page 1; footnote 2 is on page 1.
+  const fragment = (paragraphId: string) =>
+    ({ kind: 'paragraph', paragraphId, lines: [] }) as unknown as ParagraphFragmentRecord;
+  const area = (notes: readonly [string, string][]) => ({
+    kind: 'footnotes',
+    placement: 'pageBottom',
+    box: { x: 0, y: 700, width: 100, height: 40 },
+    notes: notes.map(([scopeId, paragraphId]) => ({
+      noteKind: 'footnote',
+      noteId: Number(scopeId.split(':')[1]),
+      scopeId,
+      mark: scopeId.split(':')[1],
+      box: { x: 0, y: 700, width: 100, height: 20 },
+      fragments: [fragment(paragraphId)],
+    })),
+  });
+  const layout = {
+    revision: 1,
+    pages: [
+      { index: 0, footnotes: area([['footnote:1', 'p1']]) },
+      {
+        index: 1,
+        footnotes: area([
+          ['footnote:1', 'p1'],
+          ['footnote:2', 'p2'],
+        ]),
+      },
+    ],
+  } as unknown as SemanticLayout;
+  const caretIn = (paragraphId: string) => ({
+    anchor: { paragraphId: 'p1', offset: 1 },
+    head: { paragraphId, offset: 2 },
+  });
+
+  test('a pointer on the continuation page of the open note moves its page', () => {
+    const moves: [string, number][] = [];
+    followNoteOfHead(
+      layout,
+      { scopeId: 'footnote:1', pageIndex: 0 },
+      caretIn('p1'),
+      (...move) => moves.push(move),
+      1
+    );
+    expect(moves).toEqual([['footnote:1', 1]]);
+  });
+
+  test('without a pointer page, the open note keeps its page', () => {
+    const moves: [string, number][] = [];
+    followNoteOfHead(layout, { scopeId: 'footnote:1', pageIndex: 0 }, caretIn('p1'), (...move) =>
+      moves.push(move)
+    );
+    expect(moves).toEqual([]);
+  });
+
+  test('a head in another note opens that note on the page the pointer named', () => {
+    const moves: [string, number][] = [];
+    followNoteOfHead(
+      layout,
+      { scopeId: 'footnote:1', pageIndex: 0 },
+      caretIn('p2'),
+      (...move) => moves.push(move),
+      1
+    );
+    expect(moves).toEqual([['footnote:2', 1]]);
   });
 });

@@ -426,6 +426,7 @@ test('object-only and mixed cuts refuse before writing or deleting the source', 
     const handlers = createClipboardHandlers({
       copyFlavours: () => flavours,
       editingMode: () => 'edit',
+      activeScope: () => ({ kind: 'body' }),
       deleteSelection: () => {
         throw new Error('must not delete');
       },

@@ -90,8 +90,8 @@ describe('a control in any story is addressable by paraId', () => {
   }
 });
 
-describe('setSelection refuses a selection that spans two notes', () => {
-  test('two footnotes in one notes part are two stories', () => {
+describe('setSelection across two notes of one kind', () => {
+  test('selects across them as in Word, and never half-applies an edit', () => {
     const host = document.createElement('div');
     document.body.append(host);
     const editor = createDocxEditor({ document: twoFootnoteDocx(), author: 'Parity' });
@@ -114,9 +114,10 @@ describe('setSelection refuses a selection that spans two notes', () => {
         throw new Error(`no laid-out paragraph for ${scopeId}`);
       };
 
-      // `StoryScope` answers `notesPart/footnote` for EVERY footnote, so a scope comparison
-      // cannot separate them. The guard passed, entered the head's note, and left the anchor
-      // in a note that store had never heard of — the half-applied state it exists to refuse.
+      // `StoryScope` answers `notesPart/footnote` for EVERY footnote. Word's notes part is one
+      // story (issue #2010), so the range is accepted and the head's note opens. What the old
+      // refusal protected against — typing that deleted neither endpoint and landed in the
+      // wrong note — is refused at the write instead, with both notes left whole.
       const result = editor.exec({
         type: 'setSelection',
         range: {
@@ -124,11 +125,14 @@ describe('setSelection refuses a selection that spans two notes', () => {
           to: { paraId: anchors.paraIdByNode.get(firstParagraphOf('footnote:2'))! },
         },
       });
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.reason).toBe('a selection cannot span two stories');
-      // And the scope did not move to a story only one endpoint is in.
-      expect(surface.activeScope()).toEqual({ kind: 'note', id: 'footnote:1' });
+      expect(result.ok, result.ok ? '' : result.reason).toBe(true);
+      expect(surface.activeScope()).toEqual({ kind: 'note', id: 'footnote:2' });
+      const { anchor, head } = surface.state().selection;
+      expect(anchor.paragraphId).toBe(firstParagraphOf('footnote:1'));
+      expect(head.paragraphId).toBe(firstParagraphOf('footnote:2'));
+      const before = surface.session.storyText({ kind: 'notesPart', noteKind: 'footnote' });
+      expect(editor.exec({ type: 'insertText', text: 'x' }).ok).toBe(false);
+      expect(surface.session.storyText({ kind: 'notesPart', noteKind: 'footnote' })).toBe(before);
     } finally {
       editor.destroy();
       host.remove();

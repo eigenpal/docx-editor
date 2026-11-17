@@ -6,7 +6,6 @@
 // the selection lanes from the open note to every note of its kind. Edits that would join two
 // notes are refused (`crossNoteWriteRefusal`), the way Word refuses them.
 
-import { paragraphFragmentsOfBlocks } from '@docx-editor.dev/core/layout';
 import type {
   BlockFragmentRecord,
   SemanticLayout,
@@ -18,6 +17,7 @@ import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
 import type { NoteOps } from './surface-note-ops.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { notePagesIndexOf, noteScopeIndexOf } from './layout-paragraph-indexes.ts';
 
 /** Refusal reason when an edit would remove the boundary between two notes. */
 export const CROSS_NOTE_EDIT_REFUSAL = 'this is not a valid action for a selection across notes';
@@ -95,52 +95,52 @@ export function hitNoteStoryAtSheetPoint(
   });
 }
 
-/** The painted note of the open story that holds a paragraph, and its first page. */
+/**
+ * The painted note of the open story that holds a paragraph, and the page to show it on: the
+ * preferred page when the paragraph paints there, else its first page. Reads the per-layout
+ * indexes, so a caret move in a long document does not walk every page.
+ */
 export function noteOfParagraphInStory(
   layout: SemanticLayout,
   scopeId: string,
   paragraphId: string,
   preferredPageIndex?: number | null
 ): { readonly scopeId: string; readonly pageIndex: number } | null {
-  let found: { scopeId: string; pageIndex: number } | null = null;
-  for (const page of layout.pages) {
-    for (const area of [page.footnotes, page.endnotes]) {
-      for (const note of area?.notes ?? []) {
-        if (!sameNoteStory(note.scopeId, scopeId)) continue;
-        const holds = paragraphFragmentsOfBlocks(note.fragments).some(
-          (fragment) => fragment.paragraphId === paragraphId
-        );
-        if (!holds) continue;
-        if (page.index === preferredPageIndex)
-          return { scopeId: note.scopeId, pageIndex: page.index };
-        found ??= { scopeId: note.scopeId, pageIndex: page.index };
-      }
-    }
-  }
-  return found;
+  const holder = noteScopeIndexOf(layout).get(paragraphId);
+  const pages = notePagesIndexOf(layout).get(paragraphId);
+  if (!holder || !pages?.length || !sameNoteStory(holder, scopeId)) return null;
+  const pageIndex =
+    preferredPageIndex != null && pages.includes(preferredPageIndex)
+      ? preferredPageIndex
+      : pages[0]!;
+  return { scopeId: holder, pageIndex };
 }
 
 /**
  * Follow the selection head into the note that holds it.
  *
- * The open note names the frame, the label and the caret host, so it has to be the note the
- * caret is in. A selection that leaves the story, or stays in the open note, changes nothing.
+ * The open note names the frame, the label and the caret host, so it has to be the note, and
+ * the page, the caret is on. `headPageIndex` is the page a pointer placed the head on; without
+ * it the open note keeps its page while the head stays in it, which is what lets entry reveal
+ * the note and arrows retarget its continuations themselves. A head outside the story changes
+ * nothing.
  */
 export function followNoteOfHead(
   layout: SemanticLayout,
   active: { readonly scopeId: string; readonly pageIndex: number | null },
   selection: SemanticSelection,
-  retarget: (scopeId: string, pageIndex: number) => void
+  retarget: (scopeId: string, pageIndex: number) => void,
+  headPageIndex?: number
 ): void {
   const next = noteOfParagraphInStory(
     layout,
     active.scopeId,
     selection.head.paragraphId,
-    active.pageIndex
+    headPageIndex ?? active.pageIndex
   );
   if (!next) return;
-  // The same note keeps its page: entry reveals it, and arrows retarget continuations.
-  if (next.scopeId === active.scopeId) return;
+  const samePage = headPageIndex === undefined || next.pageIndex === active.pageIndex;
+  if (next.scopeId === active.scopeId && samePage) return;
   retarget(next.scopeId, next.pageIndex);
 }
 
@@ -148,14 +148,14 @@ export function followNoteOfHead(
 export function followOpenNoteToHead(
   notes: Pick<NoteOps, 'activeNoteScope' | 'activeNotePageIndex' | 'followNote'> | null,
   layout: SemanticLayout,
-  selection: SemanticSelection
+  selection: SemanticSelection,
+  headPageIndex?: number
 ): void {
   const open = notes?.activeNoteScope();
   if (!notes || !open) return;
   const active = { scopeId: open.id, pageIndex: notes.activeNotePageIndex() };
-  followNoteOfHead(layout, active, selection, (scopeId, pageIndex) =>
-    notes.followNote(scopeId, pageIndex)
-  );
+  const retarget = (scopeId: string, pageIndex: number) => notes.followNote(scopeId, pageIndex);
+  followNoteOfHead(layout, active, selection, retarget, headPageIndex);
 }
 
 /**
@@ -171,10 +171,13 @@ export function crossNoteEditRefusal(
   selection: SemanticSelection
 ): string | null {
   if (!scopeId || selection.anchor.paragraphId === selection.head.paragraphId) return null;
-  const anchor = noteOfParagraphInStory(layout, scopeId, selection.anchor.paragraphId);
-  const head = noteOfParagraphInStory(layout, scopeId, selection.head.paragraphId);
-  if (!anchor || !head) return null;
-  return anchor.scopeId === head.scopeId ? null : CROSS_NOTE_EDIT_REFUSAL;
+  const index = noteScopeIndexOf(layout);
+  const anchor = index.get(selection.anchor.paragraphId);
+  const head = index.get(selection.head.paragraphId);
+  if (!anchor || !head || anchor === head) return null;
+  return sameNoteStory(anchor, scopeId) && sameNoteStory(head, scopeId)
+    ? CROSS_NOTE_EDIT_REFUSAL
+    : null;
 }
 
 /** Ops that take content out of the story: the part of a replacing edit that would join notes. */
@@ -208,6 +211,31 @@ export function crossNoteWriteRefusal(
 ): string | null {
   if (!scopeId || !ops.some(removesContent)) return null;
   return crossNoteEditRefusal(layout, scopeId, selection);
+}
+
+/**
+ * Commands that replace the selection, so a cross-note selection refuses them before they run:
+ * the gate and the write agree, and the control shows disabled rather than failing on press.
+ */
+const SELECTION_REPLACING_COMMANDS: ReadonlySet<string> = new Set([
+  'cut',
+  'deleteText',
+  'paste',
+  'pasteWithoutFormatting',
+  'insertText',
+  'insertBreak',
+  'insertChart',
+  'insertHyperlink',
+  'insertImage',
+  'insertPageField',
+  'insertTable',
+  'insertTextBox',
+  'insertToc',
+]);
+
+/** Whether a command type replaces the selection, and so cannot run across notes. */
+export function replacesSelection(commandType: string): boolean {
+  return SELECTION_REPLACING_COMMANDS.has(commandType);
 }
 
 /** {@link crossNoteEditRefusal} for the surface's own selection, for gates that run before a write. */
