@@ -4804,7 +4804,6 @@ export interface SelectedImageState {
     readonly crop: ImageCropPercent;
     // (undocumented)
     readonly description: string;
-    // (undocumented)
     readonly heightEmu: number;
     // (undocumented)
     readonly hidden: boolean;
