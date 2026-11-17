@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A cap of two fifths of the sheet height limited both the authored top or bottom page margin and the header or footer height that pushed the body.",
+  "after": "The authored page margin always holds, and header or footer height pushes the body by its full height, leaving at least one point of column.",
+  "reason": "The change only affects per-page content-box layout geometry derived locally from each replica's document. It does not change shared document state, operations, or the synchronization format.",
+  "tests": [
+    "packages/core/src/layout/__tests__/page-margin-furniture-room.test.ts",
+    "packages/core/src/layout/__tests__/negative-page-margins.test.ts"
+  ],
+  "changeset": "page-margin-furniture-room",
+  "migration": null
+}
