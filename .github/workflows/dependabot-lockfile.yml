@@ -6,7 +6,8 @@ name: Dependabot lockfile refresh + CI
 #   1. checkout the PR branch
 #   2. refresh `bun.lock`
 #   3. commit + push it back (so the PR is mergeable as-is)
-#   4. run the same lint/typecheck/test/build checks as `ci.yml` inline
+#   4. run the same lint/typecheck/build checks as `ci.yml` inline
+#   5. run the unit suite in six shards (`unit`) after the refresh
 #
 # The standard `ci.yml` skips dependabot PRs (`if: github.actor != 'dependabot[bot]'`)
 # so we don't double-run.
@@ -98,8 +99,8 @@ jobs:
       - name: i18n locale + typed-exports sync check
         run: bun run i18n:validate
 
-      - name: Run tests
-        run: bun run test
+      # The unit suite runs in the `unit` job below, split across six runners
+      # like ci.yml. On one runner it takes more than this job's time limit.
 
       - name: Build packages
         run: bun run build:packages
@@ -140,3 +141,47 @@ jobs:
 
       - name: Docs JSON generation (smoke test)
         run: bun run docs:json
+
+  # Six shards, as in ci.yml. The whole suite on one runner took longer than
+  # the 45-minute limit above, so the job was cancelled without a test failure.
+  unit:
+    if: github.actor == 'dependabot[bot]'
+    needs: refresh-and-verify
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: ['1/6', '2/6', '3/6', '4/6', '5/6', '6/6']
+    name: unit (${{ matrix.shard }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      # The branch head, so the shards test the lockfile the refresh pushed.
+      - name: Checkout PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+          no-cache: true
+
+      - name: Install dependencies
+        env:
+          HUSKY: 0
+        run: bash scripts/ci/install-dependencies.sh
+
+      # A dependency bump can change collaboration behavior, so the
+      # collaboration scenarios stay in, unlike the ci.yml pull request run.
+      - name: Run unit test shard
+        env:
+          TEST_SHARD: '${{ matrix.shard }}'
+        run: bun run test --shard "$TEST_SHARD" --fail-fast --retry-failed
