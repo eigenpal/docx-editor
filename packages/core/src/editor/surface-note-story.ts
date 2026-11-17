@@ -171,18 +171,35 @@ export function crossNoteEditRefusal(
   selection: SemanticSelection
 ): string | null {
   if (!scopeId || selection.anchor.paragraphId === selection.head.paragraphId) return null;
+  // Any two notes, of either kind: a host can set a range from a footnote into an endnote,
+  // and that edit would address two parts at once.
   const index = noteScopeIndexOf(layout);
   const anchor = index.get(selection.anchor.paragraphId);
   const head = index.get(selection.head.paragraphId);
-  if (!anchor || !head || anchor === head) return null;
-  return sameNoteStory(anchor, scopeId) && sameNoteStory(head, scopeId)
-    ? CROSS_NOTE_EDIT_REFUSAL
-    : null;
+  return anchor && head && anchor !== head ? CROSS_NOTE_EDIT_REFUSAL : null;
 }
 
-/** Ops that take content out of the story: the part of a replacing edit that would join notes. */
-function removesContent(op: TreeDocOp): boolean {
+/**
+ * Ops a range across notes cannot take. Removing content would merge the notes or strand their
+ * marks; a range marker (bookmark, comment, link, control) would open in one note and close in
+ * another, which no later note edit keeps paired. An insertion replaces the range, so it is
+ * refused with it: alone it means the removal was dropped, as for a range into an endnote.
+ */
+function crossesNotes(op: TreeDocOp): boolean {
   switch (op.op) {
+    case 'insertText':
+    case 'insertTab':
+    case 'insertHardBreak':
+    case 'insertPageBreak':
+    case 'insertFragment':
+    case 'insertDrawing':
+    case 'insertTable':
+    case 'insertEquation':
+    case 'insertComplexField':
+    case 'insertPageField':
+    case 'insertBuildingBlock':
+    case 'splitParagraph':
+    case 'splitParagraphMany':
     case 'deleteText':
     case 'joinParagraphs':
     case 'deleteBlock':
@@ -190,6 +207,11 @@ function removesContent(op: TreeDocOp): boolean {
     case 'removeMathEquation':
     case 'proposeParagraphMerge':
     case 'replaceStoryBlocks':
+    case 'insertBookmark':
+    case 'insertCommentMarker':
+    case 'insertHyperlink':
+    case 'insertContentControl':
+    case 'insertInlineContentControl':
       return true;
     case 'setParagraphMarkRevision':
       return op.kind === 'del';
@@ -199,9 +221,9 @@ function removesContent(op: TreeDocOp): boolean {
 }
 
 /**
- * {@link crossNoteEditRefusal} for a write about to apply at the selection. Only writes that
- * remove content refuse: typing, deletion, paste and cut each start with one. Formatting does
- * not, so bold or a style still applies across notes, as in Word.
+ * {@link crossNoteEditRefusal} for a write about to apply at the selection. Writes that insert,
+ * remove or place a range marker refuse: typing, deletion, paste and cut. Formatting does none
+ * of these, so bold or a style still applies across notes, as in Word.
  */
 export function crossNoteWriteRefusal(
   layout: SemanticLayout,
@@ -209,7 +231,7 @@ export function crossNoteWriteRefusal(
   selection: SemanticSelection,
   ops: readonly TreeDocOp[]
 ): string | null {
-  if (!scopeId || !ops.some(removesContent)) return null;
+  if (!scopeId || !ops.some(crossesNotes)) return null;
   return crossNoteEditRefusal(layout, scopeId, selection);
 }
 
@@ -220,16 +242,19 @@ export function crossNoteWriteRefusal(
 const SELECTION_REPLACING_COMMANDS: ReadonlySet<string> = new Set([
   'cut',
   'deleteText',
+  'replaceText',
+  'splitParagraph',
+  'mergeParagraphs',
   'paste',
   'pasteWithoutFormatting',
   'insertText',
   'insertBreak',
+  'insertBookmark',
   'insertChart',
   'insertHyperlink',
   'insertImage',
   'insertPageField',
   'insertTable',
-  'insertTextBox',
   'insertToc',
 ]);
 
@@ -245,4 +270,20 @@ export function surfaceCrossNoteRefusal(
   const scope = surface.activeScope();
   if (scope.kind !== 'note') return null;
   return crossNoteEditRefusal(surface.layout(), scope.id, surface.state().selection);
+}
+
+/**
+ * The paragraphs of the open note in `order`, or `order` itself outside a note.
+ *
+ * Selection spans the whole note story, but a collapsed Delete or Backspace at a note's edge,
+ * and Tab between form controls, stay in the open note: in Word they never reach another note.
+ */
+export function withinOpenNote(
+  layout: SemanticLayout,
+  scopeId: string | null,
+  order: readonly string[]
+): readonly string[] {
+  if (!scopeId) return order;
+  const index = noteScopeIndexOf(layout);
+  return order.filter((paragraphId) => index.get(paragraphId) === scopeId);
 }

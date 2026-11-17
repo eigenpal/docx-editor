@@ -14,26 +14,7 @@ import { fragmentParagraphs } from '../layout/line-segments.ts';
  */
 const noteScopeIndexCache = new WeakMap<SemanticLayout, Map<string, string>>();
 export function noteScopeIndexOf(layout: SemanticLayout): Map<string, string> {
-  const cached = noteScopeIndexCache.get(layout);
-  if (cached) return cached;
-  const index = new Map<string, string>();
-  for (const page of layout.pages) {
-    for (const area of [page.footnotes, page.endnotes]) {
-      if (!area) continue;
-      for (const note of area.notes) {
-        for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
-          // Every paragraph the fragment DRAWS. A note whose paragraphs a resolved view
-          // merges publishes one fragment, and an absorbed member with no scope made its
-          // card look like a body card: no note to accept it in, no note to scroll to.
-          for (const paragraphId of fragmentParagraphs(fragment)) {
-            if (!index.has(paragraphId)) index.set(paragraphId, note.scopeId);
-          }
-        }
-      }
-    }
-  }
-  noteScopeIndexCache.set(layout, index);
-  return index;
+  return noteScopeIndexCache.get(layout) ?? buildNoteIndexes(layout).scopes;
 }
 
 /** Paragraph id to document position, memoized per layout. */
@@ -52,26 +33,37 @@ export function paragraphOrderOf(layout: SemanticLayout): Map<string, number> {
  *
  * {@link noteScopeIndexOf} names the note; this names where it is. A note paragraph that
  * continues onto the next page paints on both, and the open note's caret host is chosen by
- * page. Merged paragraphs of a resolved view are included, as they are there.
+ * page. Both indexes come from one walk of the painted notes.
  */
 const notePagesIndexCache = new WeakMap<SemanticLayout, Map<string, readonly number[]>>();
 export function notePagesIndexOf(layout: SemanticLayout): Map<string, readonly number[]> {
-  const cached = notePagesIndexCache.get(layout);
-  if (cached) return cached;
-  const index = new Map<string, number[]>();
+  return notePagesIndexCache.get(layout) ?? buildNoteIndexes(layout).pages;
+}
+
+function buildNoteIndexes(layout: SemanticLayout): {
+  scopes: Map<string, string>;
+  pages: Map<string, readonly number[]>;
+} {
+  const scopes = new Map<string, string>();
+  const pages = new Map<string, number[]>();
   for (const page of layout.pages) {
     for (const area of [page.footnotes, page.endnotes]) {
       for (const note of area?.notes ?? []) {
         for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
+          // Every paragraph the fragment DRAWS. A note whose paragraphs a resolved view
+          // merges publishes one fragment, and an absorbed member with no scope made its
+          // card look like a body card: no note to accept it in, no note to scroll to.
           for (const paragraphId of fragmentParagraphs(fragment)) {
-            const pages = index.get(paragraphId) ?? [];
-            if (pages.at(-1) !== page.index) pages.push(page.index);
-            index.set(paragraphId, pages);
+            if (!scopes.has(paragraphId)) scopes.set(paragraphId, note.scopeId);
+            const painted = pages.get(paragraphId) ?? [];
+            if (painted.at(-1) !== page.index) painted.push(page.index);
+            pages.set(paragraphId, painted);
           }
         }
       }
     }
   }
-  notePagesIndexCache.set(layout, index);
-  return index;
+  noteScopeIndexCache.set(layout, scopes);
+  notePagesIndexCache.set(layout, pages);
+  return { scopes, pages };
 }

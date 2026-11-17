@@ -312,6 +312,46 @@ describe('note story selection (issue #2010)', () => {
     expect(gateCommand({ type: 'toggleMark', mark: 'bold' }, surface, 'edit').ok).toBe(true);
   });
 
+  test('Delete at the end of a note and Backspace at its start stay in that note', () => {
+    const { surface } = mount();
+    expect(surface.enterNote('footnote:1')).toBe(true);
+    const paragraph = noteParagraph(surface, 'footnote:1').paragraphId;
+    const end = { paragraphId: paragraph, offset: 1 + ' Alpha note.'.length };
+    surface.setSelection({ anchor: end, head: end });
+    const before = footnoteText(surface);
+    surface.deleteForward();
+    expect(footnoteText(surface)).toBe(before);
+    expect(surface.state().lastRejection).toBeNull();
+    expect(surface.state().selection.head).toEqual(end);
+
+    expect(surface.enterNote('footnote:2')).toBe(true);
+    const start = { paragraphId: noteParagraph(surface, 'footnote:2').paragraphId, offset: 0 };
+    surface.setSelection({ anchor: start, head: start });
+    surface.deleteBackward();
+    expect(surface.state().selection.head.paragraphId).toBe(start.paragraphId);
+    expect(surface.activeScope()).toEqual({ kind: 'note', id: 'footnote:2' });
+  });
+
+  test('a range from a footnote into an endnote is refused for edits too', () => {
+    const { surface } = mount();
+    expect(surface.enterNote('footnote:3')).toBe(true);
+    const before = footnoteText(surface);
+    surface.setSelection({
+      anchor: inNote(surface, 'footnote:3', 2),
+      head: inNote(surface, 'endnote:1', 3),
+    });
+    surface.type('x');
+    expect(surface.state().lastRejection).toBe(CROSS_NOTE_EDIT_REFUSAL);
+    expect(footnoteText(surface)).toBe(before);
+  });
+
+  test('a bookmark over notes is refused rather than split across them', () => {
+    const { surface } = mount();
+    selectAcrossNotes(surface);
+    const gate = gateCommand({ type: 'insertBookmark', name: 'Across' } as never, surface, 'edit');
+    expect(gate.ok ? null : gate.refusal.reason).toBe(CROSS_NOTE_EDIT_REFUSAL);
+  });
+
   test('a selection set from a snapshot round-trips across notes', () => {
     const { surface } = mount();
     selectAcrossNotes(surface);
