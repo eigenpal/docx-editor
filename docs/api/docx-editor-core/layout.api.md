@@ -2054,6 +2054,15 @@ export interface LayoutShapingOptions {
     readonly shaper: TextShaper;
 }
 
+// @internal
+export interface LeadingBreakTextStart {
+    readonly fragmentIndex: number;
+    readonly offset: number;
+}
+
+// @internal
+export function leadingBreakTextStarts(pages: readonly PageRecord[]): ReadonlyMap<string, LeadingBreakTextStart>;
+
 // @public
 export interface LevelOverride {
     readonly level?: NumberingLevel;

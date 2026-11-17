@@ -1,6 +1,7 @@
 // Exporter-neutral document metadata and internal destination geometry.
 
 import { caretAt } from '../layout/semantic-interaction.ts';
+import { pastLeadingBreaks } from '../layout/paragraph-start-page.ts';
 import type { SemanticLayout } from '../layout/semantic-records.ts';
 import { pageContentOrigin, storyContentOffset } from '../layout/selection-rects.ts';
 import {
@@ -92,7 +93,8 @@ function resolveExportDestinationGeometry(
   layout: SemanticLayout,
   anchor: ExportDestinationAnchor
 ): ExportDestinationGeometry | null {
-  const caret = caretAt(layout, anchor);
+  // A heading bookmark written before a leading page break points at the heading text.
+  const caret = caretAt(layout, pastLeadingBreaks(layout.pages, anchor));
   if (!caret) return null;
   const page = layout.pages[caret.pageIndex];
   if (!page) return null;

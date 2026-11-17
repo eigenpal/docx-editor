@@ -33,6 +33,7 @@ import type {
   StyleSpanRecord,
 } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
+import { paragraphStartPages } from './paragraph-start-page.ts';
 import {
   completedStories,
   deferLiveStory,
@@ -427,26 +428,6 @@ function collectPageRefTargets(block: BlockFragmentRecord, into: Set<string>): v
   }
 }
 
-/** Record the first page hosting each wanted paragraph, walking nested table cells too. */
-function recordPageRefHosts(
-  block: BlockFragmentRecord,
-  wanted: ReadonlySet<string>,
-  host: PageRefHostRecord,
-  hosts: Map<string, PageRefHostRecord>
-): void {
-  if (block.kind === 'paragraph') {
-    if (wanted.has(block.paragraphId) && !hosts.has(block.paragraphId)) {
-      hosts.set(block.paragraphId, host);
-    }
-    return;
-  }
-  for (const row of block.rows) {
-    for (const cell of row.cells) {
-      for (const inner of cell.blocks) recordPageRefHosts(inner, wanted, host, hosts);
-    }
-  }
-}
-
 /** The resolved PAGEREF target → host-page map for one finalize, plus its reuse token. */
 interface PageRefTargetIndex {
   readonly hosts: ReadonlyMap<string, PageRefHostRecord>;
@@ -485,17 +466,15 @@ function buildPageRefTargetIndexUncached(pages: readonly PageRecord[]): PageRefT
     }
   }
   if (!wanted || wanted.size === 0) return null;
+  // A target that opens with a page break starts on the page its text is painted on. The
+  // table of contents reads the same helper, so its rows and PAGEREF results agree.
   const hosts = new Map<string, PageRefHostRecord>();
-  for (const page of pages) {
-    if (hosts.size >= wanted.size) break;
+  for (const [paragraphId, page] of paragraphStartPages(pages, wanted)) {
     const source = page.pageFieldSource;
-    const host: PageRefHostRecord = {
+    hosts.set(paragraphId, {
       pageNumber: source?.pageNumber ?? page.index + 1,
       ...(source?.format ? { format: source.format } : {}),
-    };
-    for (const fragment of page.fragments) {
-      recordPageRefHosts(fragment, wanted, host, hosts);
-    }
+    });
   }
   let token = '';
   for (const [paragraphId, host] of hosts) {

@@ -8,6 +8,7 @@ import type { MediaRendering, AnchorProjection } from './markdown-media.ts';
 
 import type {
   BlockFragmentRecord,
+  LeadingBreakTextStart,
   ParagraphFragmentRecord,
   SemanticLayout,
   TableFragmentRecord,
@@ -39,6 +40,11 @@ export interface TranslationContext {
     NonNullable<ParagraphFragmentRecord['marker']>
   >;
   readonly tablesById: ReadonlyMap<string, TableProjection>;
+  /**
+   * Where the text starts in each paragraph that opens with page or column breaks. The fragments
+   * before it hold only the breaks and write no Markdown.
+   */
+  readonly textStartByParagraphId?: ReadonlyMap<string, LeadingBreakTextStart>;
   readonly sourceCapture?: MarkdownSourceCapture;
   /** Labels emitted into the current page body, when page-local note visibility is tracked. */
   readonly emittedNoteLabels?: Set<string>;

@@ -221,9 +221,8 @@ describe('TOC refresh editor lane', () => {
     });
     expect(await documentXml(editor)).toContain('<w:t>1</w:t>');
 
-    // Push the heading onto page 2, which makes the digit the refresh wrote stale. The break
-    // goes in the paragraph BEFORE the heading: a break inside the heading itself would leave
-    // the heading's first fragment — and so its page number — on page 1.
+    // Push the heading onto page 2, which makes the digit the refresh wrote stale. A break
+    // at the start of the heading itself is covered in toc-leading-page-break.test.ts.
     const filler = [...container.querySelectorAll<HTMLElement>('.docx-paragraph-fragment')].find(
       (fragment) => fragment.textContent === 'Filler'
     )!;

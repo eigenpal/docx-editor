@@ -20,6 +20,7 @@
 import { isUnsupportedComponentTarget } from '../output/unsupported-elements.ts';
 import { caretAt, type SemanticLayout } from '@docx-editor.dev/core/layout';
 import { storyContentBox } from './surface-story-geometry.ts';
+import { pastLeadingBreaks } from '../layout/paragraph-start-page.ts';
 import { sanitizeHref } from '../store/package/sinks.ts';
 import type { BookmarkIndex } from '@docx-editor.dev/core/store';
 import type { SurfaceHyperlink } from './surface-hyperlinks.ts';
@@ -206,7 +207,11 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
 
   const goToBookmark = (name: string): boolean => {
     const anchor = deps.bookmarks().get(name);
-    return anchor ? goToPosition(anchor) === true : false;
+    if (!anchor) return false;
+    // A bookmark in front of a leading page break lands on the text after the break. Only the
+    // position goes on: the bookmark record also carries its name, which a caret must not.
+    const { paragraphId, offset } = anchor;
+    return goToPosition(pastLeadingBreaks(deps.layout().pages, { paragraphId, offset })) === true;
   };
 
   /**

@@ -123,11 +123,12 @@ describe('server-first defaults', () => {
         pages: 25,
         bodyLineCount: 280,
         // Includes the four checkbox symbols, two authored nonbreaking hyphens, and the
-        // operator of the one n-ary equation.
-        markdownLength: 17_202,
+        // operator of the one n-ary equation. A leading column break writes no whitespace-only
+        // line in front of its paragraph.
+        markdownLength: 17_199,
         headers: 24,
         footers: 24,
-        markdownHash: 'ac074362687021a44c72b570b9115da792a5c5a9f4bc6181b5edc605b8efe8f9',
+        markdownHash: 'bfaf24d39c4b75d0e96452e812ccfce3376a133cf61d9b3019d73b3f234d2de2',
       });
       expect(translated.markdown).toContain('Summation: ∑i\\=1ni');
       expect(translated.markdown).toStartWith('**COMPREHENSIVE WORD ELEMENT**');

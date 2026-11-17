@@ -183,6 +183,7 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { rangesOnPages } from '../layout/selection-rects.ts';
+import { paragraphStartPages, pastLeadingBreaks } from '../layout/paragraph-start-page.ts';
 import { keyedRangeRectsWithTextboxes } from './textbox-presence-layout.ts';
 import { refreshSurfaceRefFieldResults } from './surface-ref-field-refresh.ts';
 import { type RevisionAuthorFilter } from '../layout/revision-projection.ts';
@@ -1180,7 +1181,9 @@ export function mountPaginatedSurface(
     orderedRange: () => orderedRange(),
     writeRefusal: () => writeRefusal(true),
     commit: (run, selectionAfter) => commit(run, selectionAfter),
-    goToPosition: (position, options) => navigation.goToPosition(position, options),
+    // Show the text after a leading page break; `goTo` still selects the whole bookmark.
+    goToPosition: (position, options) =>
+      navigation.goToPosition(pastLeadingBreaks(editingLayout().pages, position), options),
     setSelection: (next) => setSelection(next),
     beforeChange: flushPendingInputAndLayout,
     repaint: () => render(false),
@@ -4045,17 +4048,11 @@ export function mountPaginatedSurface(
     layout: SemanticLayout,
     paragraphIds: readonly string[]
   ): ReadonlyMap<string, string> {
-    const wanted = new Set(paragraphIds);
+    // A heading that opens with a page break starts on the page its text is painted on.
     const result = new Map<string, string>();
-    for (const page of layout.pages) {
-      for (const fragment of paragraphFragmentsOf(page)) {
-        if (!wanted.has(fragment.paragraphId) || result.has(fragment.paragraphId)) continue;
-        const source = page.pageFieldSource;
-        result.set(
-          fragment.paragraphId,
-          formatPageNumber(source?.pageNumber ?? page.index + 1, source?.format)
-        );
-      }
+    for (const [id, page] of paragraphStartPages(layout.pages, new Set(paragraphIds))) {
+      const source = page.pageFieldSource;
+      result.set(id, formatPageNumber(source?.pageNumber ?? page.index + 1, source?.format));
     }
     return result;
   }
@@ -5031,9 +5028,9 @@ export function mountPaginatedSurface(
 
     revealParagraph(paragraphId, options) {
       beginReveal();
-      // The paragraph's own line, not the top of its page: a heading two thirds down a
-      // page is the thing the caller asked to see.
-      const start = { paragraphId, offset: 0 };
+      // The paragraph's own line, not the top of its page, and its text, not a leading page
+      // break at the bottom of the page before: the heading is what the caller asked to see.
+      const start = pastLeadingBreaks(editingLayout().pages, { paragraphId, offset: 0 });
       const caret = caretAt(editingLayout(), start);
       if (!caret && laterOnOpening(start, () => surface.revealParagraph(paragraphId, options)))
         return true;

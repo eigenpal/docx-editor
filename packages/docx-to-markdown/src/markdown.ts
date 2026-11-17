@@ -18,6 +18,7 @@ import type { MarkdownImageAsset } from './media-types.ts';
 
 import {
   forEachSemanticStory,
+  leadingBreakTextStarts,
   lineSegments,
   type AnchoredDrawingRecord,
   type BlockFragmentRecord,
@@ -346,12 +347,20 @@ function paragraphIsUniformlyBold(fragments: readonly ParagraphFragmentRecord[])
 }
 
 function paragraphMarkdown(
-  fragments: readonly ParagraphFragmentRecord[],
+  laidOut: readonly ParagraphFragmentRecord[],
   context: TranslationContext,
   logical = true
 ): MappedMarkdown {
+  // A paragraph that opens with a page or column break lays it out at the end of the page before.
+  // The break writes nothing, so the text after it starts the paragraph and carries its heading.
+  const textStart = context.textStartByParagraphId?.get(laidOut[0]?.paragraphId ?? '');
+  const fragments =
+    textStart === undefined
+      ? laidOut
+      : laidOut.filter((fragment) => fragment.fragmentIndex >= textStart.fragmentIndex);
   const first = fragments[0];
   if (!first) return EMPTY_MAPPED_MARKDOWN;
+  const continues = first.fragmentIndex > (textStart?.fragmentIndex ?? 0);
   const headingLevel = first.outlineLevel === null ? null : first.outlineLevel + 1;
   const heading =
     !context.tableCell && headingLevel !== null && headingLevel >= 1 && headingLevel <= 9
@@ -379,7 +388,7 @@ function paragraphMarkdown(
   let projected: MappedMarkdown;
   // A page's fragment without its own marker continues the item. That includes the line of a
   // page break that opens the item, whose marker layout publishes with the text after it.
-  if (!logical && !first.marker && (first.fragmentIndex > 0 || marker)) {
+  if (!logical && !first.marker && (continues || marker)) {
     if (!marker) projected = body;
     else {
       const bullet = marker.numFmt === 'bullet' ? '-' : `${marker.ordinal ?? 1}.`;
@@ -400,7 +409,8 @@ function paragraphMarkdown(
       end: Math.max(...ranges.map((range) => range.end)),
     };
   };
-  const extents = fragments.map(extentOf);
+  // The source range still covers the leading break, so review marks on it keep their place.
+  const extents = laidOut.map(extentOf);
   return withSourceParagraphs(projected, [
     {
       sourceScope: context.sourceScope,
@@ -490,7 +500,10 @@ function indexLists(
 
 function buildTranslationIndexes(
   layout: SemanticLayout
-): Pick<TranslationContext, 'listIndentByParagraphId' | 'listMarkerByParagraphId' | 'tablesById'> {
+): Pick<
+  TranslationContext,
+  'listIndentByParagraphId' | 'listMarkerByParagraphId' | 'tablesById' | 'textStartByParagraphId'
+> {
   const listIndentByParagraphId = new Map<string, number>();
   const listMarkerByParagraphId = new Map<string, NonNullable<ParagraphFragmentRecord['marker']>>();
   const tablesById = new Map<string, TableProjection>();
@@ -503,7 +516,12 @@ function buildTranslationIndexes(
     if (story === 'header' || story === 'footer' || story === 'note-separator') return;
     indexTableBlocks(host.fragments, tablesById);
   });
-  return { listIndentByParagraphId, listMarkerByParagraphId, tablesById };
+  return {
+    listIndentByParagraphId,
+    listMarkerByParagraphId,
+    tablesById,
+    textStartByParagraphId: leadingBreakTextStarts(layout.pages),
+  };
 }
 
 function pageBody(

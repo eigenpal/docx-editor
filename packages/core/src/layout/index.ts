@@ -153,6 +153,7 @@ export {
   captureOperationSnapshot,
   guardOperationSnapshot,
 } from './resolved-cache.ts';
+export { leadingBreakTextStarts, type LeadingBreakTextStart } from './paragraph-start-page.ts';
 export {
   DEFAULT_PAGE_GEOMETRY,
   contentControlsOfLayout,
