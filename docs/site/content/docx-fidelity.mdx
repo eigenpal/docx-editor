@@ -179,7 +179,8 @@ The editor calculates layout from document fonts, themes, section geometry, and 
 | Letters | Latin and Greek letters use mathematical italic from the math font, unless `m:sty` sets plain, bold, or bold italic. Run bold and italic do not change them. |
 | Digits | ASCII digits in an authored text font use that font with the math style and run bold or italic. Bold math styles keep mathematical bold digits. |
 | Mixed fonts | `w:rFonts` slots select faces by script, as in ordinary text. A run that needs two faces shows a text fallback. |
-| Sizes | Each run uses its `w:sz`, from 1 through 9999 half-points. `w:szCs` alone does not set the size. Conflicting sizes show a text fallback. |
+| Sizes | Each run and control uses its `w:sz`, from 1 through 9999 half-points. `w:szCs` alone does not set the size. |
+| Complex-script formatting | `w:bCs` and a `w:szCs` that differs from `w:sz` format only complex-script characters, such as Hebrew, Arabic, and Thai. Controls and text without such characters ignore both. A run with such characters shows a text fallback. |
 | Script and fraction text | 73 percent of the run size, rounded down to a half point. Nested scripts use 60 percent. |
 | Display equations | `m:oMathPara`, or an `m:oMath` alone in its paragraph. No display style: they use inline fraction rules and part sizes. |
 | N-ary operators | Inline: limits sit to the right, whatever `m:limLoc` says. Display: the operator enlarges and limits follow `m:limLoc`. |

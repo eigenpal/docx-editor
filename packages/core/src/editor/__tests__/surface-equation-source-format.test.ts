@@ -54,8 +54,8 @@ const cases = [
   ],
   ['other control font', fraction('<w:rFonts w:ascii="Public Math"/><w:i/>'), true],
   ['italic off', fraction('<w:i w:val="0"/>'), true],
-  // Unequal sizes are outside both allowlists, so the equation keeps the text fallback.
-  ['fallback for unequal control sizes', fraction('<w:sz w:val="24"/><w:szCs w:val="28"/>'), false],
+  // A complex-script size applies to no control character, but it is not default.
+  ['unequal control sizes', fraction('<w:sz w:val="24"/><w:szCs w:val="28"/>'), true],
   ['default beside bold control properties', fraction(DEFAULT) + fraction('<w:b/>'), true],
   [
     'sizes that differ between structures',

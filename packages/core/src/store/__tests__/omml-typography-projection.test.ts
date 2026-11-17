@@ -93,10 +93,18 @@ test.each([
   '<m:rPr><m:unknown/></m:rPr>',
   '<w:rPr><w:constructor/></w:rPr>',
   '<m:rPr><m:__proto__/></m:rPr>',
-  '<w:rPr><w:sz w:val="28"/><w:szCs w:val="24"/></w:rPr>',
 ])('keeps unsupported source typography in the bounded fallback', (properties) => {
   const projection = project(
     `<m:sSup><m:e>${run('Q', properties)}</m:e><m:sup>${run('2')}</m:sup></m:sSup>`
   );
   expect(projection.expression).toEqual({ kind: 'fallback', text: 'Q2' });
+});
+
+test('keeps conflicting sizes on complex-script text in the bounded fallback', () => {
+  // `w:szCs` sizes the Hebrew letter, and the lane draws one size per run.
+  const projection = project(
+    `<m:sSup><m:e>${run('Qש', '<w:rPr><w:sz w:val="28"/><w:szCs w:val="24"/></w:rPr>')}</m:e>` +
+      `<m:sup>${run('2')}</m:sup></m:sSup>`
+  );
+  expect(projection.expression).toEqual({ kind: 'fallback', text: 'Qש2' });
 });

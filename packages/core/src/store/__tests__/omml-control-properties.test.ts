@@ -123,6 +123,7 @@ test('keeps compact syntax for the same structure without m:ctrlPr', () => {
 
 test.each([
   ['bold', '<m:ctrlPr><w:rPr><w:b/></w:rPr></m:ctrlPr>'],
+  ['complex-script bold', '<m:ctrlPr><w:rPr><w:bCs/><w:i/></w:rPr></m:ctrlPr>'],
   [
     'tracked insertion',
     '<m:ctrlPr><w:ins w:id="7" w:author="Public Author" w:date="2026-01-02T03:04:05Z">' +
@@ -142,6 +143,91 @@ test.each([
     denominator: { kind: 'text', value: 'b' },
     controlProperties: true,
   });
+});
+
+test('projects a bracketed fraction that carries complex-script properties', () => {
+  // Complex-script bold on each control, and a complex-script size that differs from the size
+  // on each run, as DOCX applications write them. The text has no complex-script character.
+  const fonts =
+    '<w:rFonts w:ascii="Cambria Math" w:eastAsia="Public East" w:hAnsi="Cambria Math" w:cs="Public Complex"/>';
+  const control = `<m:ctrlPr><w:rPr>${fonts}<w:bCs/><w:i/><w:sz w:val="22"/></w:rPr></m:ctrlPr>`;
+  const text = (value: string) =>
+    `<m:r><m:rPr><m:sty m:val="p"/></m:rPr><w:rPr>${fonts}<w:sz w:val="22"/>` +
+    `<w:szCs w:val="20"/></w:rPr><m:t>${value}</m:t></m:r>`;
+  const projection = project(
+    `<m:d><m:dPr><m:begChr m:val="["/><m:endChr m:val="]"/>${control}</m:dPr><m:e>` +
+      `<m:f><m:fPr>${control}</m:fPr><m:num>${text('ODexp-ODblnk')}</m:num>` +
+      `<m:den>${text('ODcon-ODblnk')}</m:den></m:f></m:e></m:d>`
+  );
+  expect(projection.expression).toMatchObject({
+    kind: 'delimiter',
+    controlProperties: true,
+    items: [
+      {
+        kind: 'fraction',
+        controlProperties: true,
+        numerator: { kind: 'text', value: 'ODexp-ODblnk', format: { fontSizePt: 11 } },
+        denominator: { kind: 'text', value: 'ODcon-ODblnk', format: { fontSizePt: 11 } },
+      },
+    ],
+  });
+});
+
+test('projects a fraction whose controls repeat the run sizes, with a larger complex-script size', () => {
+  const properties =
+    '<w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math" w:cs="Public Complex"/>' +
+    '<w:sz w:val="28"/><w:szCs w:val="32"/><w:lang w:bidi="ar-LY"/>';
+  const text = (value: string) => `<m:r><w:rPr>${properties}</w:rPr><m:t>${value}</m:t></m:r>`;
+  const projection = project(
+    `<m:f><m:fPr><m:ctrlPr><w:rPr>${properties.replace('<w:sz', '<w:i/><w:sz')}</w:rPr>` +
+      `</m:ctrlPr></m:fPr><m:num>${text('a')}</m:num><m:den>${text('b')}</m:den></m:f>`
+  );
+  expect(projection.expression).toMatchObject({
+    kind: 'fraction',
+    controlProperties: true,
+    controlFontSizePt: 14,
+    numerator: { kind: 'text', value: 'a', format: { fontSizePt: 14 } },
+    denominator: { kind: 'text', value: 'b', format: { fontSizePt: 14 } },
+  });
+});
+
+const complexScriptControl = (properties: string) =>
+  `<m:ctrlPr><w:rPr>${properties}<w:sz w:val="22"/></w:rPr></m:ctrlPr>`;
+
+test.each([
+  ['a Hebrew opening delimiter', 'dPr', '<m:begChr m:val="א"/>'],
+  ['Arabic ornate parentheses', 'dPr', '<m:begChr m:val="\uFD3E"/><m:endChr m:val="\uFD3F"/>'],
+  ['an Arabic separator', 'dPr', '<m:sepChr m:val="ب"/>'],
+])(
+  'keeps the bounded fallback for complex-script control formatting on %s',
+  (_name, _property, characters) => {
+    for (const formatting of ['<w:bCs/>', '<w:szCs w:val="40"/>']) {
+      const projection = project(
+        `<m:d><m:dPr>${characters}${complexScriptControl(formatting)}</m:dPr>` +
+          `<m:e>${run('a')}</m:e><m:e>${run('b')}</m:e></m:d>`
+      );
+      expect(projection.expression.kind).toBe('fallback');
+    }
+  }
+);
+
+test('keeps the bounded fallback for complex-script control formatting on an Arabic operator', () => {
+  const projection = project(
+    `<m:nary><m:naryPr><m:chr m:val="ب"/>${complexScriptControl('<w:bCs/>')}</m:naryPr>` +
+      `<m:sub/><m:sup/><m:e>${run('x')}</m:e></m:nary>`
+  );
+  expect(projection.expression.kind).toBe('fallback');
+});
+
+test.each([
+  ['a Hebrew delimiter without complex-script formatting', '<m:begChr m:val="א"/>', ''],
+  ['default delimiters with complex-script formatting', '', '<w:bCs/><w:szCs w:val="40"/>'],
+])('projects %s', (_name, characters, formatting) => {
+  const projection = project(
+    `<m:d><m:dPr>${characters}${complexScriptControl(formatting)}</m:dPr>` +
+      `<m:e>${run('a')}</m:e></m:d>`
+  );
+  expect(projection.expression).toMatchObject({ kind: 'delimiter', controlFontSizePt: 11 });
 });
 
 test.each([

@@ -1,0 +1,16 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "An equation run that named w:bCs, or a w:szCs that differs from w:sz, and control properties that named w:bCs or differing sizes, showed the equation as a text fallback, whatever the run text.",
+  "after": "Those properties format only complex-script characters, so the equation draws from the same unchanged document tree when no character they apply to is one. Runs with complex-script text, and controls with a complex-script delimiter or operator character, keep the fallback.",
+  "reason": "The change reads the shared tree for layout and paint only. It adds no operation and no shared field, and compact replacement stays disabled for these equations, so their source is never rewritten.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-equation-complex-script-formatting.test.ts",
+    "packages/core/src/store/__tests__/omml-run-format.test.ts",
+    "packages/core/src/store/__tests__/omml-control-properties.test.ts",
+    "packages/core/src/store/__tests__/omml-typography-projection.test.ts",
+    "packages/core/src/editor/__tests__/surface-equation-source-format.test.ts"
+  ],
+  "changeset": "equation-complex-script-formatting",
+  "migration": null
+}

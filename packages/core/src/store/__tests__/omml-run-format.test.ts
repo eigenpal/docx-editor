@@ -87,10 +87,34 @@ test.each([
   '<w:sz m:val="24"/>',
   '<w:sz w:val="24"><w:b/></w:sz>',
   '<w:sz w:val="24"/><w:sz w:val="24"/>',
-  '<w:sz w:val="24"/><w:szCs w:val="48"/>',
-  '<w:szCs w:val="48"/><w:sz w:val="24"/>',
+  '<w:bCs w:val="maybe"/><w:sz w:val="24"/>',
+  '<w:bCs><w:b/></w:bCs><w:sz w:val="24"/>',
 ])('rejects invalid or conflicting size properties %s', (properties) => {
   expect(equationRunFormat(run(`<w:rPr>${properties}</w:rPr>`))).toBeNull();
+});
+
+// `w:bCs` and `w:szCs` format complex-script characters only (ISO/IEC 29500-1 17.3.2.2,
+// 17.3.2.39), so text without them draws with `w:sz` and no bold.
+test.each([
+  ['a smaller complex-script size', '<w:sz w:val="22"/><w:szCs w:val="20"/>'],
+  ['a complex-script size before the size', '<w:szCs w:val="48"/><w:sz w:val="22"/>'],
+  ['complex-script bold', '<w:bCs/><w:sz w:val="22"/>'],
+  ['complex-script bold turned off', '<w:bCs w:val="0"/><w:sz w:val="22"/>'],
+])('draws text without complex-script characters through %s', (_name, properties) => {
+  expect(equationRunFormat(run(`<w:rPr>${properties}</w:rPr>`, 'ODexp-1'))).toEqual({
+    fontSizePt: 11,
+  });
+});
+
+test.each([
+  ['a different complex-script size', '<w:sz w:val="22"/><w:szCs w:val="20"/>'],
+  ['complex-script bold', '<w:bCs/><w:sz w:val="22"/>'],
+])('rejects %s on complex-script text', (_name, properties) => {
+  expect(equationRunFormat(run(`<w:rPr>${properties}</w:rPr>`, 'xשלום'))).toBeNull();
+});
+
+test('keeps the fallback when complex-script bold is all a run names, so replacement cannot drop it', () => {
+  expect(equationRunFormat(run('<w:rPr><w:bCs/></w:rPr>'))).toBeNull();
 });
 
 const slotFonts =
