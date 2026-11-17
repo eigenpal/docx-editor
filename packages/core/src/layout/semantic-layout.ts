@@ -2015,6 +2015,10 @@ function* layoutBlocksPass(
         registerTableCellBreakKeys(waitingTable, collectingCellBreakKeys.keys());
         collectingCellBreakKeys.end();
       }
+      // Text frames (17.3.1.11) before an ordinary table anchor at the table; it then stands
+      // beside them or below them (`table-float-collision.ts`).
+      if (!inFlow && tableDeps.pageExclusionZones && paragraphFrames.checkpoint())
+        publishParagraphFrames(entry.table.id, cursorY);
       // An in-flow table anchors the floating tables before it, and starts below the bands
       // of those floats, or of a page-positioned float spanning the column, that cross its top.
       cursorY = positionedFlow.noteTable(

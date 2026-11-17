@@ -197,6 +197,11 @@ export function tableFloatClearance(
   const inset = contentAlignedReachPt(structure);
   const reaches = (zone: ExclusionZone, column: number | undefined): boolean => {
     if (zone.sourceKind === 'furniture') return true;
+    // A text frame stands in the way of the table it anchors at.
+    if (zone.sourceKind === 'frame')
+      return (
+        zone.anchorParagraphId === tableId && (column === undefined || zone.columnIndex === column)
+      );
     if (zone.sourceKind !== undefined && zone.sourceKind !== 'table') return false;
     // A float an earlier section left on this sheet is anchored before every table here.
     if (zone.earlierSection) return true;
