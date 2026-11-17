@@ -72,7 +72,10 @@ function twipsSide(node: OoxmlElement | undefined): number | undefined {
   if (!node) return undefined;
   const raw = attributeValue(node, 'w');
   const twips = readTwipsMeasure(raw);
-  if (twips === null || twips < 0) return undefined;
+  if (twips === null) return undefined;
+  // A negative margin (`ST_MeasurementOrPercent`, §17.4.43) states a side of no padding: it
+  // pads like 0 and still replaces the table style's margin for that side.
+  if (twips < 0) return 0;
   const pt = twips / 20;
   return pt > MAX_CELL_MARGIN_PT ? MAX_CELL_MARGIN_PT : pt;
 }
