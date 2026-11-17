@@ -145,6 +145,7 @@ import {
   publishListMarker,
 } from './list-marker.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
+import { cellListItem } from './cell-list-marker.ts';
 import { type TableBorderOwnershipBudget } from './table-borders.ts';
 import { type TableVMergeResolveBudget } from './table-vmerge.ts';
 import { type CellContentInsets } from './table-cell-geometry.ts';
@@ -401,13 +402,20 @@ function placeCellParagraph(
 } {
   const paragraphId = paragraph.id;
   const keyFor = deps.cache?.keyFor?.bind(deps.cache) ?? paragraphLayoutKey;
-  const listItem = deps.listItems?.get(paragraphId);
+  const storyListItem = deps.listItems?.get(paragraphId);
+  // The marker is measured and painted with the table style's run formatting.
+  const listItem = cellListItem(
+    storyListItem,
+    paragraph,
+    deps.styleCascade,
+    options?.tableCellStyle
+  );
   const layoutInputs = withStoryLineGrid(
     cellParagraphInputs(
       paragraph,
       cellContentWidth,
       deps.styleCascade,
-      listItem,
+      storyListItem,
       options?.tableCellStyle,
       deps.paragraphLineUnitPt
     ),
