@@ -165,6 +165,8 @@ import type { BodyPageFieldContext } from './field-page-furniture.ts';
 import { createSectionPageFurniture } from './section-page-furniture.ts';
 import { createPageContentInsets, registerOverflowPageShell } from './page-furniture-insets.ts';
 import { convergenceTailShiftAllowed } from './page-reuse-guards.ts';
+import { commonKeyPrefix, commonKeySuffix } from './flow-key-diff.ts';
+import { createPreviousPassZones } from './previous-pass-zones.ts';
 import { layoutPassContextKey } from './layout-pass-context-key.ts';
 import {
   contentControlContextToken,
@@ -641,26 +643,15 @@ function* layoutBlocksPass(
     retainedFurnitureWrap(furniture, options.yieldHiddenFurnitureZones, furnitureZonesFor),
     continuedZones
   );
-  let exclusionPageIndex = -1;
-  let currentPageZones: readonly ExclusionZone[] = Object.freeze([]);
   const liveZones = createLiveExclusionZones(options, columns, contentWidthForReflow, bodies);
+  const previousPassZones = createPreviousPassZones({
+    byPage: options.drawingExclusionZonesByPage,
+    hostZones: continuedZones,
+    furnitureHoldsTables,
+    furnitureZones: (index) => furnitureZonesFor(index, options.yieldHiddenFurnitureZones),
+  });
   const pageExclusionZones = (): readonly ExclusionZone[] =>
-    liveZones.zones(pages, pendingAnchoredDrawings, previousPassZones());
-  const previousPassZones = (): readonly ExclusionZone[] => {
-    const index = pages.length;
-    if (exclusionPageIndex === index) return currentPageZones;
-    const bodyZones = options.drawingExclusionZonesByPage?.get(index) ?? Object.freeze([]);
-    exclusionPageIndex = index;
-    currentPageZones = bodyZones;
-    const hostZones = index === 0 ? continuedZones : undefined;
-    if (hostZones) {
-      if (hostZones.length) currentPageZones = Object.freeze([...bodyZones, ...hostZones]);
-    } else if (furnitureHoldsTables) {
-      const zones = furnitureZonesFor(index, options.yieldHiddenFurnitureZones);
-      if (zones.length) currentPageZones = Object.freeze([...bodyZones, ...zones]);
-    }
-    return currentPageZones;
-  };
+    liveZones.zones(pages, pendingAnchoredDrawings, previousPassZones(pages.length));
 
   /**
    * Available body height on the page currently being filled (`pages.length`).
@@ -1110,33 +1101,12 @@ function* layoutBlocksPass(
   const resumable = columns.count === 1 && comparable;
 
   /** The first paragraph whose layout inputs differ from the previous pass. */
-  let firstChanged = 0;
-  if (comparable) {
-    const limit = Math.min(flowKeys.length, session.keys.length);
-    while (firstChanged < limit && flowKeys[firstChanged] === session.keys[firstChanged]) {
-      firstChanged += 1;
-    }
-    firstChanged = reserveResume.resumeLimit(session.checkpoints, firstChanged);
-  }
-
-  /**
-   * How many trailing paragraphs are unchanged.
-   *
-   * Where the flow may reconverge: everything after an edit can only be reused verbatim if
-   * it is the same content AND lands in the same place, and this bounds the first half of
-   * that question.
-   */
-  let commonSuffix = 0;
-  if (resumable) {
-    const maxSuffix = Math.min(flowKeys.length, session.keys.length) - firstChanged;
-    while (
-      commonSuffix < maxSuffix &&
-      flowKeys[flowKeys.length - 1 - commonSuffix] ===
-        session.keys[session.keys.length - 1 - commonSuffix]
-    ) {
-      commonSuffix += 1;
-    }
-  }
+  const firstChanged = comparable
+    ? reserveResume.resumeLimit(session.checkpoints, commonKeyPrefix(flowKeys, session.keys))
+    : 0;
+  // How many trailing paragraphs are unchanged: where the flow may reconverge. Content after an
+  // edit is reused only if it is the same AND lands in the same place; this bounds the first half.
+  const commonSuffix = resumable ? commonKeySuffix(flowKeys, session.keys, firstChanged) : 0;
 
   // NOTHING CHANGED. Every key matches and the document is the same length, so the previous
   // layout still describes it exactly — re-placing it would allocate a second set of
