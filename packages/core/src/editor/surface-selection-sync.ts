@@ -21,7 +21,8 @@ import {
   semanticSelectionFromDom,
 } from './dom-selection.ts';
 import {
-  erasedSpanRanges,
+  compositionSpanChanges,
+  type CompositionSpanChanges,
   snapshotPaintedSpans,
   type PaintedSpanSnapshot,
 } from './surface-composition-readback.ts';
@@ -219,7 +220,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   function reconcileParagraphFromDom(
     paragraphId: string,
     owner: { readonly offset: number; readonly controlId: string } | null,
-    erased: ReadonlySet<string>,
+    changes: CompositionSpanChanges,
     base: ComposingBase | null
   ): boolean {
     // Read against the text the page shows, which is the text the composition began over.
@@ -232,7 +233,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       paragraphId,
       base?.read ?? baseText,
       hostDocument().getSelection()?.anchorNode ?? null,
-      erased
+      changes
     );
     if (read === null) return false;
     // A plain insertion queues as typing does; until it lands, a caret echo is not the user's.
@@ -677,7 +678,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       composingOwner = null;
       const acrossParagraphs = composingAcrossParagraphs;
       composingAcrossParagraphs = false;
-      const erased = erasedSpanRanges(composingSpans);
+      const changes = compositionSpanChanges(composingSpans);
       const base = composingBase;
       composingBase = null;
       composingSpans = [];
@@ -706,7 +707,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
         // The composed text is in the DOM and nowhere else. Read it back, diff it against
         // what the model holds for that paragraph, and commit the difference — the only
         // route by which an IME edit can reach the tree, since it could not be intercepted.
-        queued = reconcileParagraphFromDom(paragraphId, owner, erased, base);
+        queued = reconcileParagraphFromDom(paragraphId, owner, changes, base);
       }
 
       session.endComposition();

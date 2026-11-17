@@ -15,7 +15,7 @@ import { plainTextFromTransfer } from './clipboard-plain-text.ts';
 import { selectionsEqual, spanSearchRoots } from './dom-selection.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import { collapsedAt } from './surface-selection-ops.ts';
-import { paintedTextIn } from './surface-composition-readback.ts';
+import { paintedTextIn, type CompositionSpanChanges } from './surface-composition-readback.ts';
 import type { ImeDeletionPlan } from './surface-ime-deletion.ts';
 import { historyShortcutOf } from './history-shortcut.ts';
 import {
@@ -752,10 +752,10 @@ export function paintedTextOf(
   paragraphId: string,
   modelText: string,
   anchor: Node | null = null,
-  erased?: ReadonlySet<string>
+  changes?: CompositionSpanChanges
 ): string | null {
   for (const root of spanSearchRoots(pagesLayer)) {
-    const painted = paintedTextIn(root, paragraphId, modelText, anchor, erased);
+    const painted = paintedTextIn(root, paragraphId, modelText, anchor, changes);
     if (painted !== null) return painted;
   }
   return null;
