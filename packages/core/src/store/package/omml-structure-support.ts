@@ -66,7 +66,32 @@ function propertyIsSupported(
   if (!property) return true;
   if (!hasOnlyMathChildren(property, { ...counts, ctrlPr: OPTIONAL })) return false;
   const control = namedChild(property, 'ctrlPr');
-  return (!control || equationControlPropertiesAreSupported(control)) && values(property);
+  return (
+    (!control || equationControlPropertiesAreSupported(control, controlCharacters(property))) &&
+    values(property)
+  );
+}
+
+const CONTROL_CHARACTER_PROPERTIES: ReadonlySet<string> = new Set([
+  'begChr',
+  'sepChr',
+  'endChr',
+  'chr',
+]);
+
+/**
+ * The characters a structure's properties name for its controls: delimiter characters and
+ * the `m:chr` of an operator, accent, or group character. Defaults are never complex-script
+ * characters, so only the named ones matter.
+ */
+function controlCharacters(property: OoxmlGenericElementNode): string {
+  let characters = '';
+  for (const child of property.children) {
+    if (isMathElement(child) && CONTROL_CHARACTER_PROPERTIES.has(child.localName)) {
+      characters += mathVal(child) ?? '';
+    }
+  }
+  return characters;
 }
 
 /** True when the structure's property element carries `m:ctrlPr`. */

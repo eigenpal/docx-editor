@@ -145,9 +145,9 @@ test.each([
   });
 });
 
-test('projects a bracketed fraction that carries complex-script properties, as Word writes one', () => {
-  // A Word formula: complex-script bold on each control, and a complex-script size that
-  // differs from the size on each run. Its text has no complex-script character.
+test('projects a bracketed fraction that carries complex-script properties', () => {
+  // Complex-script bold on each control, and a complex-script size that differs from the size
+  // on each run, as DOCX applications write them. The text has no complex-script character.
   const fonts =
     '<w:rFonts w:ascii="Cambria Math" w:eastAsia="Public East" w:hAnsi="Cambria Math" w:cs="Public Complex"/>';
   const control = `<m:ctrlPr><w:rPr>${fonts}<w:bCs/><w:i/><w:sz w:val="22"/></w:rPr></m:ctrlPr>`;
@@ -171,6 +171,63 @@ test('projects a bracketed fraction that carries complex-script properties, as W
       },
     ],
   });
+});
+
+test('projects a fraction whose controls repeat the run sizes, with a larger complex-script size', () => {
+  const properties =
+    '<w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math" w:cs="Public Complex"/>' +
+    '<w:sz w:val="28"/><w:szCs w:val="32"/><w:lang w:bidi="ar-LY"/>';
+  const text = (value: string) => `<m:r><w:rPr>${properties}</w:rPr><m:t>${value}</m:t></m:r>`;
+  const projection = project(
+    `<m:f><m:fPr><m:ctrlPr><w:rPr>${properties.replace('<w:sz', '<w:i/><w:sz')}</w:rPr>` +
+      `</m:ctrlPr></m:fPr><m:num>${text('a')}</m:num><m:den>${text('b')}</m:den></m:f>`
+  );
+  expect(projection.expression).toMatchObject({
+    kind: 'fraction',
+    controlProperties: true,
+    controlFontSizePt: 14,
+    numerator: { kind: 'text', value: 'a', format: { fontSizePt: 14 } },
+    denominator: { kind: 'text', value: 'b', format: { fontSizePt: 14 } },
+  });
+});
+
+const complexScriptControl = (properties: string) =>
+  `<m:ctrlPr><w:rPr>${properties}<w:sz w:val="22"/></w:rPr></m:ctrlPr>`;
+
+test.each([
+  ['a Hebrew opening delimiter', 'dPr', '<m:begChr m:val="א"/>'],
+  ['Arabic ornate parentheses', 'dPr', '<m:begChr m:val="\uFD3E"/><m:endChr m:val="\uFD3F"/>'],
+  ['an Arabic separator', 'dPr', '<m:sepChr m:val="ب"/>'],
+])(
+  'keeps the bounded fallback for complex-script control formatting on %s',
+  (_name, _property, characters) => {
+    for (const formatting of ['<w:bCs/>', '<w:szCs w:val="40"/>']) {
+      const projection = project(
+        `<m:d><m:dPr>${characters}${complexScriptControl(formatting)}</m:dPr>` +
+          `<m:e>${run('a')}</m:e><m:e>${run('b')}</m:e></m:d>`
+      );
+      expect(projection.expression.kind).toBe('fallback');
+    }
+  }
+);
+
+test('keeps the bounded fallback for complex-script control formatting on an Arabic operator', () => {
+  const projection = project(
+    `<m:nary><m:naryPr><m:chr m:val="ب"/>${complexScriptControl('<w:bCs/>')}</m:naryPr>` +
+      `<m:sub/><m:sup/><m:e>${run('x')}</m:e></m:nary>`
+  );
+  expect(projection.expression.kind).toBe('fallback');
+});
+
+test.each([
+  ['a Hebrew delimiter without complex-script formatting', '<m:begChr m:val="א"/>', ''],
+  ['default delimiters with complex-script formatting', '', '<w:bCs/><w:szCs w:val="40"/>'],
+])('projects %s', (_name, characters, formatting) => {
+  const projection = project(
+    `<m:d><m:dPr>${characters}${complexScriptControl(formatting)}</m:dPr>` +
+      `<m:e>${run('a')}</m:e></m:d>`
+  );
+  expect(projection.expression).toMatchObject({ kind: 'delimiter', controlFontSizePt: 11 });
 });
 
 test.each([

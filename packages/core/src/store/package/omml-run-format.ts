@@ -86,10 +86,11 @@ function runFace(fonts: ReadonlyMap<FontSlot, string>, text: string): string | u
 }
 
 /**
- * Whether a run names formatting for complex-script characters only: `w:bCs`, or a `w:szCs`
- * that differs from `w:sz` (ISO/IEC 29500-1 17.3.2.2, 17.3.2.39). The lane does not draw it,
- * so it is supported only on text without a complex-script character. (`w:iCs` is part of the
- * default math formatting, which the default reader accepts.)
+ * Whether run properties name formatting for complex-script characters only: `w:bCs`, or a
+ * `w:szCs` that differs from `w:sz` (ISO/IEC 29500-1 17.3.2.2, 17.3.2.39). The lane does not
+ * draw it, so it is supported only where no complex-script character can take it: run text
+ * without one, and control properties, whose control characters are math operators. (`w:iCs`
+ * is part of the default math formatting, which the default reader accepts.)
  */
 interface ComplexScriptFormatting {
   named: boolean;
@@ -99,16 +100,15 @@ interface ComplexScriptFormatting {
  * Read one `w:rPr` or `m:rPr` into `format`. False means an unsupported property. The named
  * `w:rFonts` slots go into `fonts`; the caller resolves them against the run text.
  *
- * With `complexScript`, complex-script-only formatting is recorded there for the caller to
- * check against the run text. Without it, as for control properties, which have no text,
- * `w:bCs` is accepted as `w:b` is, and differing sizes are not.
+ * Complex-script-only formatting is recorded in `complexScript` for the caller to check
+ * against the run text. `w:sz` gives the size either way.
  */
 function readRunProperties(
   child: OoxmlElement,
   word: boolean,
   format: MutableRunFormat,
   fonts: Map<FontSlot, string> = new Map(),
-  complexScript?: ComplexScriptFormatting
+  complexScript: ComplexScriptFormatting = { named: false }
 ): boolean {
   if (child.attributes.length !== 0) return false;
   const namespace = word ? WML_NAMESPACE_URI : MATH;
@@ -147,15 +147,12 @@ function readRunProperties(
       )
         return false;
       const points = Number(attribute.value) / 2;
-      if (size !== undefined && size !== points) {
-        if (!complexScript) return false;
-        complexScript.named = true;
-      }
+      if (size !== undefined && size !== points) complexScript.named = true;
       size = points;
       if (property.localName === 'sz') format.fontSizePt = points;
     } else if (word && property.localName === 'bCs') {
       if (toggle(property, namespace) === null) return false;
-      if (complexScript) complexScript.named = true;
+      complexScript.named = true;
     } else if (word && property.localName === 'lang') {
       // Language takes no part in equation layout. The source keeps it on save.
       if (!equationLanguagePropertyIsSupported(property)) return false;
@@ -285,16 +282,21 @@ export function equationControlFontSizePt(control: OoxmlElement): number | undef
 /**
  * True when an `m:ctrlPr` holds only source the equation lane can preserve: default control
  * properties, one `w:rPr` within the math run allowlist, or one tracked `w:ins`/`w:del` around
- * such a `w:rPr`.
- * Any other content keeps the bounded fallback.
+ * such a `w:rPr`. Complex-script-only formatting is allowed unless `characters`, the
+ * structure's control characters, include a complex-script character: the lane does not draw
+ * it, and no other control character can take it. Such properties are not default, so they
+ * keep the source. Any other content keeps the bounded fallback.
  */
-export function equationControlPropertiesAreSupported(node: OoxmlElement): boolean {
+export function equationControlPropertiesAreSupported(
+  node: OoxmlElement,
+  characters = ''
+): boolean {
   if (equationControlPropertiesAreDefault(node)) return true;
   if (node.attributes.length !== 0 || node.children.length > 1) return false;
   const child = node.children[0];
   if (!child) return true;
   if (child.kind === 'textValue') return false;
-  if (element(child, WML_NAMESPACE_URI, 'rPr')) return readRunProperties(child, true, {});
+  if (element(child, WML_NAMESPACE_URI, 'rPr')) return controlRunProperties(child, characters);
   if (!element(child, WML_NAMESPACE_URI, 'ins') && !element(child, WML_NAMESPACE_URI, 'del'))
     return false;
   const names = new Set<string>();
@@ -313,8 +315,15 @@ export function equationControlPropertiesAreSupported(node: OoxmlElement): boole
     properties === undefined ||
     (properties.kind !== 'textValue' &&
       element(properties, WML_NAMESPACE_URI, 'rPr') &&
-      readRunProperties(properties, true, {}))
+      controlRunProperties(properties, characters))
   );
+}
+
+/** One control `w:rPr` within the math run allowlist, checked against its control characters. */
+function controlRunProperties(properties: OoxmlElement, characters: string): boolean {
+  const complexScript: ComplexScriptFormatting = { named: false };
+  if (!readRunProperties(properties, true, {}, new Map(), complexScript)) return false;
+  return !complexScript.named || !textFontSlots(characters).has('cs');
 }
 
 function isMathElement(node: OoxmlNode, localName?: string): node is OoxmlGenericElementNode {
