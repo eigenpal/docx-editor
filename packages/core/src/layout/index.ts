@@ -762,6 +762,12 @@ export {
 } from './semantic-table-layout.ts';
 export { compoundBorderStrokesForExtentPt, type CompoundBorderStroke } from './border-metrics.ts';
 export {
+  borderDashPatternPt,
+  borderLineStrokesForExtentPt,
+  DASH_DOT_STROKED_HATCH,
+  type BorderLineStroke,
+} from './border-line-styles.ts';
+export {
   borderExtentPt,
   borderWeight,
   COMPOUND_BORDER_MIN_GAP_PT,
@@ -785,6 +791,7 @@ export {
   type TableBorderSideName,
   type TableBorderStrokeRecord,
   type TableCellDiagonalRecord,
+  type TableBorderLine,
   type TableBorderStyle,
 } from './table-borders.ts';
 

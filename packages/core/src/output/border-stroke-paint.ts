@@ -9,6 +9,12 @@
 // compound styles (`border-metrics.ts`), and these functions only choose how to fill it.
 
 import { compoundBorderStrokesForExtentPt } from '../layout/border-metrics.ts';
+import { borderDashPatternPt, borderLineStrokesForExtentPt } from '../layout/border-line-styles.ts';
+import {
+  applyDashBackground,
+  applyHatchBackground,
+  applyParallelBands,
+} from './border-pattern-css.ts';
 
 /** Compound `ST_Border` values that layout already inflated — do not hairline-snap. */
 export function isCompoundParagraphBorder(val: string): boolean {
@@ -36,27 +42,21 @@ export function applyParagraphBorderStyle(
   scale: number
 ): void {
   switch (val) {
+    case 'dotted':
     case 'dashed':
     case 'dashSmallGap':
     case 'dotDash':
-    case 'dotDotDash':
-    case 'dashDotStroked': {
-      const period = Math.max(4, 4 * scale);
-      // The gaps are the gradient's transparent stops. Both callers fill the rule with the ink
-      // colour first, so that fill must go, or every gap shows the same colour and the rule reads
-      // solid.
-      rule.style.backgroundColor = 'transparent';
-      rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'bottom' : 'right'}, #${color} 60%, transparent 60%)`;
-      rule.style.backgroundSize = vertical ? `100% ${period}px` : `${period}px 100%`;
+    case 'dotDotDash': {
+      // The measured dash lengths of each style, in multiples of the band. The gaps are the
+      // gradient's transparent stops. Both callers fill the rule with the ink colour first, so
+      // that fill must go, or every gap shows the same colour and the rule reads solid.
+      const dashes = scale > 0 ? borderDashPatternPt(val, thicknessPx / scale) : null;
+      if (dashes) applyDashBackground(rule, color, dashes, vertical, scale);
       return;
     }
-    case 'dotted': {
-      const period = Math.max(3, 3 * scale);
-      rule.style.backgroundColor = 'transparent';
-      rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'bottom' : 'right'}, #${color} 35%, transparent 35%)`;
-      rule.style.backgroundSize = vertical ? `100% ${period}px` : `${period}px 100%`;
+    case 'dashDotStroked':
+      applyHatchBackground(rule, color, scale);
       return;
-    }
     case 'triple': {
       // Three equal strokes with equal gaps fill the five-stroke band layout published.
       const line = thicknessPx / 5;
@@ -108,6 +108,19 @@ export function applyParagraphBorderStyle(
       return;
     }
     case 'threeDEmboss':
+    case 'threeDEngrave': {
+      // Three toned strokes across the band layout published, as in the PDF.
+      const strokes =
+        scale > 0 ? borderLineStrokesForExtentPt(val, thicknessPx / scale, color) : null;
+      if (strokes)
+        applyParallelBands(
+          rule,
+          strokes.map((stroke) => ({ ...stroke, color: stroke.color ?? color })),
+          vertical,
+          scale
+        );
+      return;
+    }
     case 'ridge': {
       rule.style.backgroundColor = 'transparent';
       const side = vertical ? 'borderLeft' : 'borderTop';
@@ -116,7 +129,6 @@ export function applyParagraphBorderStyle(
       else rule.style.height = '0px';
       return;
     }
-    case 'threeDEngrave':
     case 'groove': {
       rule.style.backgroundColor = 'transparent';
       const side = vertical ? 'borderLeft' : 'borderTop';

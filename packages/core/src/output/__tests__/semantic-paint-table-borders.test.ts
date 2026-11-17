@@ -127,8 +127,9 @@ describe('table cell border paint', () => {
     expect(restart.querySelector('.docx-table-border-double')).not.toBeNull();
     expect(restart.style.borderRightStyle).toBe('none');
     const restartRight = rightRule(restart);
-    expect(restartRight.style.borderLeft).toContain('dashed');
-    expect(restartRight.style.borderLeft).toContain('#CC3333');
+    // A dashed rule paints its measured dash pattern (ECMA-376 §17.18.2) as a gradient.
+    expect(restartRight.style.backgroundImage).toContain('linear-gradient(to bottom');
+    expect(restartRight.style.backgroundImage).toContain('#CC3333');
     expect(parsePx(restartRight.style.left)).toBe(parsePx(restart.style.width));
     expect(restart.dataset.rowSpan).toBe('2');
 
@@ -140,9 +141,10 @@ describe('table cell border paint', () => {
 
     const topRight = cells[1]!;
     expect(topRight.style.borderTopStyle).toBe('none');
+    // A dotted rule paints dots and gaps one width long (ECMA-376 §17.18.2).
     expect(
-      topRight.querySelector<HTMLElement>('.docx-table-border-edge-stroke')!.style.borderTopStyle
-    ).toBe('dotted');
+      topRight.querySelector<HTMLElement>('.docx-table-border-edge-stroke')!.style.backgroundImage
+    ).toContain('linear-gradient(to right');
     expect(topRight.style.borderTopColor).toBe('#339933');
     // Triple uses an inert overlay.
     const bottomRight = cells[3]!;
@@ -332,7 +334,7 @@ describe('table cell border paint', () => {
     expect(cell.style.borderTopStyle).toBe('none');
     expect(cell.style.borderRightStyle).toBe('none');
     const dashedRight = rightRule(cell);
-    expect(dashedRight.style.borderLeft).toContain('dashed');
+    expect(dashedRight.style.backgroundImage).toContain('linear-gradient(to bottom');
     expect(parsePx(dashedRight.style.left)).toBe(parsePx(cell.style.width));
     expect(cell.querySelectorAll('.docx-table-border-double')).toHaveLength(1);
     expect(cell.querySelector('.docx-table-border-triple')).toBeNull();
@@ -540,7 +542,7 @@ describe('table cell border paint', () => {
     expect(doubleBlue!.style.borderLeftStyle).toBe('none');
     expect(doubleBlue!.style.borderBottomStyle).toBe('none');
     expect(doubleBlue!.style.borderRightStyle).toBe('none');
-    expect(rightRule(doubleBlue!).style.borderLeft).toContain('dashed');
+    expect(rightRule(doubleBlue!).style.backgroundImage).toContain('linear-gradient(to bottom');
     expect(doubleBlue!.querySelectorAll('.docx-table-border-double')).toHaveLength(1);
     const segs = strokeSegs(doubleBlue!);
     expect(segs).toHaveLength(6); // top/left/bottom × outer+inner
