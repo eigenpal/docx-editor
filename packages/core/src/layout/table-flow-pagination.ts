@@ -2,7 +2,6 @@ import { takePreviousRows } from './table-row-placement-reuse.ts';
 import { createRowProbeReuse } from './table-row-probe-reuse.ts';
 import { clippedExactRow, overheightRowError } from './table-exact-row-clip.ts';
 // Placing ONE top-level table into the body flow, row by row, across page breaks.
-//
 // A table advances the same cursor a paragraph does, but decides per ROW whether to place,
 // move, split or fail, and re-emits repeated header rows on every page it runs onto.
 //
@@ -202,6 +201,7 @@ export function* paginateTableInFlowSteps(
       : tableFloatClearance(structure, table.id, tableDeps, {
           flow,
           left: () => tableLeft,
+          place: (left) => (tableLeft = left),
           bottom: contentHeight,
           opensRegion: () =>
             rows.every((placed) => placed.isHeaderRepeat) && !flow.regionHoldsContent(fragmentTop),

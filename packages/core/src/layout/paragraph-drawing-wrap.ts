@@ -26,6 +26,8 @@ export function createParagraphDrawingWrap(options: {
   readonly paragraphAt: (index: number) => WrapParagraph | undefined;
   readonly paragraphOrder: ReadonlyMap<string, number>;
   readonly paragraphIndex: (id: string) => number;
+  /** The block index of an in-flow table that a floating table anchors at, else -1. */
+  readonly tableIndex?: (id: string) => number;
   readonly columnCount: number;
   readonly seedForwardOnly?: boolean;
   readonly compatibilityMode?: number;
@@ -166,7 +168,11 @@ export function createParagraphDrawingWrap(options: {
             if (anchorOrder > entryOrder && !reachesBack) return false;
           } else {
             const anchorIndex = options.paragraphIndex(zone.anchorParagraphId);
-            if (anchorIndex < 0 || (anchorIndex > index && !reachesBack)) return false;
+            if (anchorIndex < 0) {
+              // A floating table anchored at an in-flow table wraps the text after that table.
+              const tableIndex = options.tableIndex?.(zone.anchorParagraphId) ?? -1;
+              if (tableIndex < 0 || tableIndex > index) return false;
+            } else if (anchorIndex > index && !reachesBack) return false;
           }
           if (options.columnCount > 1 && zone.columnIndex !== columnIndex) return false;
           return !(

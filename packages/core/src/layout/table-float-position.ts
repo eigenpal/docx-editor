@@ -194,7 +194,8 @@ export function positionedTableFlow(
     /**
      * Note an in-flow table as the anchor of the floating tables before it, and return where
      * the table itself starts: below those floats, or below a page-positioned float spanning
-     * the column, when their bands cross its top.
+     * the column, when their bands cross its top. An `ordinary` table, without `w:tblpPr`,
+     * leaves the floats it anchors to its own clearance, which can place it beside them.
      */
     noteTable(
       signals: PositionedTableAnchorSignal[],
@@ -202,7 +203,8 @@ export function positionedTableFlow(
       column: number,
       fragmentIndex: number,
       top: number,
-      zones: readonly ExclusionZone[]
+      zones: readonly ExclusionZone[],
+      ordinary = false
     ): number {
       if (anchorIds.has(tableId))
         signals.push({ anchorId: tableId, column, fragmentIndex, anchorY: top });
@@ -210,7 +212,8 @@ export function positionedTableFlow(
       for (const zone of zones) {
         const band = zone.verticalBand;
         if (zone.sourceKind !== 'table') continue;
-        if (zone.anchorParagraphId !== tableId && zone.pageFramedBand !== true) continue;
+        if (zone.pageFramedBand !== true && (zone.anchorParagraphId !== tableId || ordinary))
+          continue;
         if (band.y <= start + 0.001 && band.y + band.height > start) start = band.y + band.height;
       }
       return start;

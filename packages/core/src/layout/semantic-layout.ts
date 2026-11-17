@@ -1487,6 +1487,8 @@ function* layoutBlocksPass(
     paragraphOrder: paragraphDocumentOrder,
     paragraphIndex: (id) =>
       prepared.findIndex((entry) => entry.kind === 'paragraph' && entry.paragraph.id === id),
+    tableIndex: (id) =>
+      prepared.findIndex((entry) => entry.kind === 'table' && entry.table.id === id),
     columnCount,
   });
 
@@ -2021,7 +2023,9 @@ function* layoutBlocksPass(
         flowColumnIndex,
         pageFragments.length,
         cursorY,
-        pageExclusionZones()
+        pageExclusionZones(),
+        // Its clearance needs the published wrap zones (`table-float-collision.ts`).
+        !inFlow && tableDeps.pageExclusionZones !== undefined
       );
       const top = stacks.anchor(entry.table.id);
       collectingCellBreakKeys.begin();
