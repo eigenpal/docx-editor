@@ -2,7 +2,9 @@
 //
 // A table does not wrap its cell text beside a float that crosses it. When a fragment of a
 // top-level table opens on a page (the table start, or its continuation after a break), and
-// its rows would reach a crossing float's wrap band, the whole fragment starts below the band.
+// its rows would reach a crossing float's wrap band, it moves into a passage beside the bands
+// it would reach when one holds its width: it keeps its `w:jc` alignment (ECMA-376 Part 1,
+// 17.4.28) and indent inside that passage. Otherwise the whole fragment starts below the band.
 // A table that ends above the band stays where it is. Rows never move inside a fragment that
 // is already open, so a fragment never gets a gap between its rows.
 //
@@ -15,7 +17,7 @@
 // The band is the float's wrap outline: a tight or through outline ends at its polygon, not
 // at the picture's extent, plus the wrap distances. Floats anchored inside the table keep
 // their own rules (`table-out-of-cell-floats.ts`, cell flow), and floats anchored after the
-// table cannot reach back to it. Floating tables and frames are not obstacles here.
+// table cannot reach back to it. Floating tables are obstacles too; frames are not.
 //
 // A kept row that exceeds the fresh band below a float can split inside that band.
 
@@ -23,6 +25,7 @@ import type { ExclusionZone } from './drawing-exclusion.ts';
 import { squareExclusionBounds } from './drawing-wrap.ts';
 import type { SemanticTableRow, SemanticTableStructure } from './semantic-table.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
+import { contentAlignedReachPt, tableOriginX } from './table-origin.ts';
 
 const EPSILON = 0.001;
 const MAX_CLEARANCE_STEPS = 16;
@@ -46,9 +49,17 @@ export interface PendingTableFragment {
 
 /** What the clearance reads from, and moves, in the paginator that owns the table. */
 export interface TableFloatClearanceHost {
-  readonly flow: { cursorY: number; readonly flowColumn?: () => number | undefined };
+  readonly flow: {
+    cursorY: number;
+    readonly flowColumn?: () => number | undefined;
+    /** The text column the table is placed in. */
+    readonly columnLeft?: () => number;
+    readonly columnWidth?: () => number;
+  };
   /** Left edge of the table in page-content points, which moves between fragments. */
   readonly left: () => number;
+  /** Moves the table, which has no rows yet, to the left edge `left` beside a band. */
+  readonly place?: (left: number) => void;
   /** Bottom of the band the page being filled offers the table. */
   readonly bottom: () => number;
   /**
@@ -182,21 +193,33 @@ export function tableFloatClearance(
   const start = orderOf ? tableStartOrder(structure, orderOf) : undefined;
   const ownPrefix = `${tableId}.`;
   const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
+  // A legacy table that puts its cell content on the text edges reaches past them.
+  const inset = contentAlignedReachPt(structure);
   const reaches = (zone: ExclusionZone, column: number | undefined): boolean => {
     if (zone.sourceKind === 'furniture') return true;
+    // A text frame stands in the way of the table it anchors at.
+    if (zone.sourceKind === 'frame')
+      return (
+        zone.anchorParagraphId === tableId && (column === undefined || zone.columnIndex === column)
+      );
     if (zone.sourceKind !== undefined && zone.sourceKind !== 'table') return false;
     // A float an earlier section left on this sheet is anchored before every table here.
     if (zone.earlierSection) return true;
     if (start === undefined || !orderOf) return false;
     if (column !== undefined && zone.columnIndex !== column) return false;
     if (zone.anchorParagraphId.startsWith(ownPrefix)) return false;
+    // A floating table this table anchors stands at the table's top.
+    if (zone.anchorParagraphId === tableId) return true;
     const order = orderOf(zone.anchorParagraphId);
     return order !== undefined && order < start;
   };
   let bandsFor: readonly ExclusionZone[] | undefined;
   let bandsColumn: number | undefined;
   let bands: readonly CollisionBand[] = [];
-  const clearedTop = (top: number, fragment: PendingTableFragment): number => {
+  const clearedTop = (
+    top: number,
+    fragment: PendingTableFragment
+  ): { readonly top: number; readonly left?: number } => {
     const zones = zonesOf();
     const column = host.flow.flowColumn?.();
     if (zones !== bandsFor || column !== bandsColumn) {
@@ -220,16 +243,52 @@ export function tableFloatClearance(
       // Sorted by top: when the fragment does not reach the first band still below it, it
       // reaches none of the later ones.
       const band = crossing.find((candidate) => candidate.bottom > y + EPSILON);
-      if (!band || !fragment.reaches(y, band.top)) return y;
+      if (!band || !fragment.reaches(y, band.top)) return { top: y };
+      const beside = passageLeft(y, fragment, bottom);
+      if (beside !== undefined) return { top: y, left: beside };
       y = band.bottom;
     }
-    return y;
+    return { top: y };
+  };
+  /** Where the table stands in the first passage at `top` that holds it beside every band. */
+  const passageLeft = (
+    top: number,
+    fragment: PendingTableFragment,
+    bottom: number
+  ): number | undefined => {
+    const { columnLeft, columnWidth } = host.flow;
+    if (!columnLeft || !columnWidth || !host.place) return undefined;
+    const column = { left: columnLeft(), width: columnWidth() };
+    const reached = bands.filter(
+      (band) =>
+        band.bottom > top + EPSILON &&
+        band.bottom < bottom - EPSILON &&
+        (band.top <= top + EPSILON || fragment.reaches(top, band.top))
+    );
+    const blocked = reached
+      .map((band) => [band.left, band.right] as const)
+      .sort((a, b) => a[0] - b[0]);
+    let start = column.left;
+    const end = column.left + column.width;
+    for (const [left, right] of [...blocked, [end, end] as const]) {
+      const gap = Math.min(left, end) - start;
+      if (gap > 0) {
+        // The table keeps its alignment and indent inside the passage, as in a narrower column.
+        const x = start + tableOriginX(structure, gap);
+        if (x >= start - EPSILON - inset && x + width <= start + gap + EPSILON + inset) return x;
+      }
+      start = Math.max(start, right);
+      if (start >= end - EPSILON) return undefined;
+    }
+    return undefined;
   };
   const clearance: TableFloatClearance = {
     pending: undefined,
     clear(fragment) {
       const top = host.flow.cursorY;
-      const cleared = clearedTop(top, fragment);
+      const placed = clearedTop(top, fragment);
+      if (placed.left !== undefined) host.place!(placed.left);
+      const cleared = placed.top;
       if (cleared <= top + EPSILON || cleared >= host.bottom() - EPSILON) return false;
       const opensRegion = host.opensRegion();
       if (opensRegion && !fragment.fitsAt(cleared)) return false;

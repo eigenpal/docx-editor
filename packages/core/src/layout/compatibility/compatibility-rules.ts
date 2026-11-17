@@ -92,7 +92,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.4.61 tblPrEx'
   ),
   floatingTableContentOrigin: legacy(
-    'A floating table with a numeric text anchor or a right alignment positions its cell content, not its outer edge',
+    'A floating table with a numeric offset or a left, inside, right, or outside alignment positions its cell content, not its outer edge',
     'ECMA-376 Part 1 §17.4.57 tblpPr'
   ),
   floatingTableOverlapMovesLeft: modern(
@@ -267,9 +267,10 @@ export const PROFILE_RULES = {
     applies: (p) => p.legacy.adjustLineHeightInTable === true,
   },
   doNotBreakWrappedTables: {
-    behavior: 'A floating table that fits a full page does not break across pages',
+    behavior:
+      'A floating table never breaks across pages, and moves up onto the sheet when it passes the bottom edge. Only legacy modes read the option',
     source: 'ECMA-376 Part 4 §14.8.3.10 doNotBreakWrappedTables',
-    applies: (p) => p.legacy.doNotBreakWrappedTables === true,
+    applies: (p) => p.legacy.doNotBreakWrappedTables === true && p.modeClass === 'legacy',
   },
   fixedParagraphSpacing: {
     behavior:

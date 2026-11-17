@@ -117,7 +117,10 @@ const PROFILE_MATRIX: Record<
     on: ['absent', '11', '12', '14', 'refused'],
   },
   adjustLineHeightInTable: { options: '<w:adjustLineHeightInTable/>', on: EVERY_MODE },
-  doNotBreakWrappedTables: { options: '<w:doNotBreakWrappedTables/>', on: EVERY_MODE },
+  doNotBreakWrappedTables: {
+    options: '<w:doNotBreakWrappedTables/>',
+    on: ['absent', '11', '12', '14', 'refused'],
+  },
   fixedParagraphSpacing: { options: '<w:doNotUseHTMLParagraphAutoSpacing/>', on: EVERY_MODE },
   ignoreIndentAsNumberingTabStop: {
     options: '<w:doNotUseIndentAsNumberingTabStop/>',

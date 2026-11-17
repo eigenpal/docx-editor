@@ -10,7 +10,8 @@ import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
  * Where a table's left edge sits, floated or not.
  *
  * Before mode 15 a floating table aligns its cell content, not its outer edges. A numeric
- * text anchor positions the first row's leading cell content edge. A right or outside
+ * offset or a left or inside alignment, against any anchor, positions the first row's leading
+ * cell content edge; a centered table keeps its outer edges. A right or outside
  * alignment, against any anchor, moves the table right by its own right cell margin, so its
  * content ends at the frame edge. A table whose wrap band already covers the text column's
  * leading edge keeps its outer edge, and so its place across the column.
@@ -36,11 +37,11 @@ export function positionedTableOriginX(
     if (origin - (float.distances?.left ?? 0) <= frames.text.left) return origin;
     return origin + structure.defaultMargins.right;
   }
-  if (!first || first.gridColumn !== 0) return origin;
-  if (float.horzAnchor !== 'text' || float.vertAnchor !== 'text' || float.xSpec !== undefined)
-    return origin;
+  if (!first || first.gridColumn !== 0 || float.xSpec === 'center') return origin;
+  // Any anchor (17.4.58, 17.4.66), with a `w:tblpX` offset or a left or inside alignment: the
+  // leading cell content edge takes the position, and the outer edge may leave the sheet.
   const inset = contentInsets(first.margins, first.contentBorders ?? first.borders).left;
-  return Math.max(frames.page.left, origin - inset);
+  return origin - inset;
 }
 
 /** The painted width of a simple side rule, else `0`. */

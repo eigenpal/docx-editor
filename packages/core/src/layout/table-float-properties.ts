@@ -110,14 +110,18 @@ export function readTableFloatPosition(
     rawYSpec === 'outside'
       ? rawYSpec
       : undefined;
+  // An omitted vertical anchor measures `w:tblpY` from the top margin, not from the text.
+  const vertAnchor = readFloatAnchor(attributeValue(tblpPr, 'vertAnchor')) ?? 'margin';
+  // Against the text, every `w:tblpYSpec` (17.4.65) puts the table at the top of its anchor
+  // paragraph, and it still supersedes `w:tblpY`: the table floats there with no offset.
+  const textAligned = ySpec !== undefined && vertAnchor === 'text';
   return {
     horzAnchor: readFloatAnchor(attributeValue(tblpPr, 'horzAnchor')) ?? 'text',
-    // An omitted vertical anchor measures `w:tblpY` from the top margin, not from the text.
-    vertAnchor: readFloatAnchor(attributeValue(tblpPr, 'vertAnchor')) ?? 'margin',
+    vertAnchor,
     ...(xSpec ? { xSpec } : {}),
     xPt: readSignedTwipsPt(attributeValue(tblpPr, 'tblpX'), true) ?? 0,
-    ...(ySpec ? { ySpec } : {}),
-    yPt: readSignedTwipsPt(attributeValue(tblpPr, 'tblpY'), true) ?? 0,
+    ...(ySpec && !textAligned ? { ySpec } : {}),
+    yPt: textAligned ? 0 : (readSignedTwipsPt(attributeValue(tblpPr, 'tblpY'), true) ?? 0),
     ...(['topFromText', 'rightFromText', 'bottomFromText', 'leftFromText'].some(
       (name) => attributeValue(tblpPr, name) !== undefined
     )

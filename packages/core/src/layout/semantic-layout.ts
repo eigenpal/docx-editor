@@ -1487,6 +1487,8 @@ function* layoutBlocksPass(
     paragraphOrder: paragraphDocumentOrder,
     paragraphIndex: (id) =>
       prepared.findIndex((entry) => entry.kind === 'paragraph' && entry.paragraph.id === id),
+    tableIndex: (id) =>
+      prepared.findIndex((entry) => entry.kind === 'table' && entry.table.id === id),
     columnCount,
   });
 
@@ -2013,6 +2015,10 @@ function* layoutBlocksPass(
         registerTableCellBreakKeys(waitingTable, collectingCellBreakKeys.keys());
         collectingCellBreakKeys.end();
       }
+      // Text frames (17.3.1.11) before an ordinary table anchor at the table; it then stands
+      // beside them or below them (`table-float-collision.ts`).
+      if (!inFlow && tableDeps.pageExclusionZones && paragraphFrames.checkpoint())
+        publishParagraphFrames(entry.table.id, cursorY);
       // An in-flow table anchors the floating tables before it, and starts below the bands
       // of those floats, or of a page-positioned float spanning the column, that cross its top.
       cursorY = positionedFlow.noteTable(
@@ -2021,7 +2027,9 @@ function* layoutBlocksPass(
         flowColumnIndex,
         pageFragments.length,
         cursorY,
-        pageExclusionZones()
+        pageExclusionZones(),
+        // Its clearance needs the published wrap zones (`table-float-collision.ts`).
+        !inFlow && tableDeps.pageExclusionZones !== undefined
       );
       const top = stacks.anchor(entry.table.id);
       collectingCellBreakKeys.begin();

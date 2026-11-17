@@ -35,7 +35,7 @@ const table = ({
   distance = '',
   body = '',
 } = {}) =>
-  `<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" ${anchor} ${distance} w:tblpY="${offset * 20 + (offset < 0 ? -1 : 1)}"/>${extra}<w:tblLayout w:type="fixed"/><w:tblW w:type="dxa" w:w="${width * 20}"/><w:tblCellMar><w:top w:type="dxa" w:w="0"/><w:bottom w:type="dxa" w:w="0"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="${width * 20}"/></w:tblGrid>${
+  `<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" ${anchor} ${distance} w:tblpY="${offset * 20 + (offset < 0 ? -1 : 1)}"/>${extra}<w:tblLayout w:type="fixed"/><w:tblW w:type="dxa" w:w="${width * 20}"/><w:tblCellMar><w:top w:type="dxa" w:w="0"/><w:left w:type="dxa" w:w="0"/><w:bottom w:type="dxa" w:w="0"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="${width * 20}"/></w:tblGrid>${
     body || Array.from({ length: rows }, (_, index) => row(index, header && index === 0)).join('')
   }</w:tbl>`;
 /** A row of `lines` 12 pt lines and no authored height, which may split between lines. */

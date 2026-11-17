@@ -155,6 +155,8 @@ The compatibility mode in `w:compat` changes clipping, page counts, table placem
 | Page- or margin-anchored floating table past the bottom | The first part ends at the bottom margin. | Breaks only past the page edge, and can reach that edge. |
 | No-overlap floating table | Can move left or right of an earlier table. | Moves right only, then below. |
 | Right-aligned floating table in the body | Keeps its position. | Moves right by its right cell margin. |
+| Floating table with an offset or a left alignment | Its outer edge takes the position. | Its first cell content takes the position. |
+| `w:doNotBreakWrappedTables` | No effect. | Floating tables never break. A table past the bottom page edge moves up to end there. |
 | Percentage-width tables | A percentage excludes the outer side rules. | Top-level tables measure against the text column plus outer cell margins, and align content with the text edge. |
 | Right-to-left table | Moves left by half the mean width of its outer side rules. | No shift. |
 | First-line indent in AutoFit minimum | Included. | Excluded. A word too wide for the indented first line breaks there. |
@@ -206,6 +208,7 @@ Compact equation replacement is disabled when it cannot keep the source. The equ
 
 - Body frames support numeric and relative positions, fixed or column width, and `auto`, `atLeast`, and `exact` heights. Exact heights clip content.
 - Adjacent paragraphs with identical resolved `w:framePr` share one frame.
+- A frame right before a table is positioned at that table.
 - All `ST_Wrap` values use a rectangular contour. `none`, `notBeside`, and vertical `inline` move text below the frame.
 - Single-line left-to-right dropped caps are supported. Multiline and right-to-left dropped caps keep ordinary flow.
 - Support covers single-column sections only. Frames with unsupported drawings, notes, or revisions keep ordinary flow.
@@ -245,7 +248,9 @@ Compact equation replacement is disabled when it cannot keep the source. The equ
 - When the anchor has a page break before it, a text-anchored table that fits the space left stays on the current page. Only the anchor starts the next page.
 - Two tables with identical positions and no paragraph between them stack into one table.
 - A text-anchored table breaks across pages when the space left holds its opening: the header rows and the first line of each cell in the first body row.
-- A text-anchored table stays whole when it has a text distance above, a negative offset, more than one section column, or `w:doNotBreakWrappedTables`. A table taller than a page still breaks.
+- A text-anchored table stays whole when it has a text distance above, a negative offset, or more than one section column. A table taller than a page still breaks.
+- A text-anchored table with a vertical alignment floats at the top of its anchor paragraph.
+- An ordinary table moves beside a floating table, a wrapping picture, or a text frame when the space beside it holds the table. The table keeps its alignment there. Otherwise it starts below.
 - A header or footer table wraps body text on every page that shows that part.
 - A floating table in a table cell is positioned within that cell and stays inside the cell box. The cell text wraps around it, and the cell grows to hold it.
 - In a cell, `page` and `margin` vertical anchors measure from the top of the cell. Floats in one cell do not overlap. Vertical cell alignment moves the text but not the floats.

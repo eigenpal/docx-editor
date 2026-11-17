@@ -194,7 +194,8 @@ export function positionedTableFlow(
     /**
      * Note an in-flow table as the anchor of the floating tables before it, and return where
      * the table itself starts: below those floats, or below a page-positioned float spanning
-     * the column, when their bands cross its top.
+     * the column, when their bands cross its top. An `ordinary` table, without `w:tblpPr`,
+     * leaves the floats it anchors to its own clearance, which can place it beside them.
      */
     noteTable(
       signals: PositionedTableAnchorSignal[],
@@ -202,7 +203,8 @@ export function positionedTableFlow(
       column: number,
       fragmentIndex: number,
       top: number,
-      zones: readonly ExclusionZone[]
+      zones: readonly ExclusionZone[],
+      ordinary = false
     ): number {
       if (anchorIds.has(tableId))
         signals.push({ anchorId: tableId, column, fragmentIndex, anchorY: top });
@@ -210,7 +212,8 @@ export function positionedTableFlow(
       for (const zone of zones) {
         const band = zone.verticalBand;
         if (zone.sourceKind !== 'table') continue;
-        if (zone.anchorParagraphId !== tableId && zone.pageFramedBand !== true) continue;
+        if (zone.pageFramedBand !== true && (zone.anchorParagraphId !== tableId || ordinary))
+          continue;
         if (band.y <= start + 0.001 && band.y + band.height > start) start = band.y + band.height;
       }
       return start;
@@ -375,11 +378,16 @@ export function hasFlowFragments(
  *
  * A vertical alignment supersedes `w:tblpY`. `inside` and `outside` use top and bottom until
  * mirrored page margins are modelled. The clamp keeps the leading edge on the sheet.
+ *
+ * `keepWhole` is set when `w:doNotBreakWrappedTables` (ECMA-376 Part 4, 14.8.3.10) keeps the
+ * table in one piece. A table that would then pass the bottom edge of the sheet moves up until
+ * its bottom edge meets it, but never above the top edge of the sheet.
  */
 export function tableFloatOriginY(
   float: TableFloatPosition,
   tableHeightPt: number,
-  frames: TableVerticalAnchorFrames
+  frames: TableVerticalAnchorFrames,
+  keepWhole = false
 ): number {
   const frame = frames[float.vertAnchor];
   const slack = frame.height - tableHeightPt;
@@ -390,5 +398,6 @@ export function tableFloatOriginY(
   else y = frame.top + float.yPt;
   if (!Number.isFinite(y)) return frame.top;
   const pageBottom = frames.page.top + frames.page.height;
+  if (keepWhole) y = Math.min(y, pageBottom - tableHeightPt);
   return Math.max(frames.page.top, Math.min(y, pageBottom));
 }
