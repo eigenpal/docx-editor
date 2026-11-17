@@ -44,7 +44,11 @@ interface AnchorPush {
   readonly before: readonly { readonly order: number; readonly y: number }[];
 }
 
-export function createEarlierLinePush(orderOf: (paragraphId: string) => number | undefined) {
+export function createEarlierLinePush(
+  orderOf: (paragraphId: string) => number | undefined,
+  /** The lines rising table bands of `anchorId` add by wrap on `page` (`wrapsEarlierLines`). */
+  wrapPush: (page: number, anchorId: string) => number = () => 0
+) {
   const pushes = new Map<string, AnchorPush>();
   const key = (page: number, anchorId: string) => `${page}:${anchorId}`;
   return {
@@ -101,16 +105,18 @@ export function createEarlierLinePush(orderOf: (paragraphId: string) => number |
       }
     },
     /**
-     * The push the raised tables anchored at `anchorId` leave out of its top on `page`. With
-     * `sourceOrder`, the part the table at that order and the later ones caused.
+     * The push the raised tables anchored at `anchorId` leave out of its top on `page`, with the
+     * lines that rising bands add by wrap. With `sourceOrder`, the part the table at that order and
+     * the later ones caused.
      */
     of(page: number, anchorId: string, sourceOrder?: number): number {
+      const wrapped = wrapPush(page, anchorId);
       const push = pushes.get(key(page, anchorId));
-      if (!push) return 0;
+      if (!push) return wrapped;
       const first = push.before[0]?.y ?? push.landed;
-      if (sourceOrder === undefined) return push.landed - first;
+      if (sourceOrder === undefined) return push.landed - first + wrapped;
       const own = push.before.find((entry) => entry.order >= sourceOrder);
-      return own ? push.landed - own.y : 0;
+      return (own ? push.landed - own.y : 0) + wrapped;
     },
   };
 }

@@ -134,6 +134,13 @@ export interface ExclusionZone {
    * leaves out that move, so it does not chase its anchor.
    */
   readonly reachesEarlierLines?: boolean;
+  /**
+   * A text-anchored table, beside which text passes, whose band rises above its anchor top: a
+   * negative `w:tblpY`, or a `w:topFromText` larger than the offset. The earlier lines on its page
+   * that the band crosses wrap beside it. Its own position leaves out the lines that wrap adds
+   * (`tableWrapShares` in `paragraph-drawing-wrap.ts`), so it does not chase its anchor.
+   */
+  readonly wrapsEarlierLines?: boolean;
   readonly sourceOrder: number;
   readonly paintLayer: DrawingPaintLayer;
   readonly relativeHeight: number;

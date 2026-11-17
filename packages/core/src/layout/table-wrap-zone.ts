@@ -70,6 +70,11 @@ export interface TableWrapColumn {
    * {@link ExclusionZone.reachesEarlierLines}); the caller decides when that applies.
    */
   readonly reachesWhenSpanning: boolean;
+  /**
+   * Whether a band that leaves a passage wraps the earlier lines it crosses (see
+   * {@link ExclusionZone.wrapsEarlierLines}); the caller decides when that applies.
+   */
+  readonly wrapsWhenRising?: boolean;
 }
 
 /** The wrap exclusion of one placed floating table fragment. */
@@ -116,6 +121,7 @@ export function floatingTableZone(
     // A page- or margin-positioned table does not move with the text before it, so it also
     // wraps or moves the earlier lines it covers on its page.
     ...(pageFramed ? { pageFramedBand: true } : reaches ? { reachesEarlierLines: true } : {}),
+    ...(!pageFramed && !spans && column.wrapsWhenRising ? { wrapsEarlierLines: true } : {}),
     y: box.y,
     verticalBand: {
       x: box.x - distances.left,

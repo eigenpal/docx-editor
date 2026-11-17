@@ -1117,10 +1117,12 @@ function* layoutBlocksPass(
     publishRetainedKeys();
     return { ...unchanged, overflowShellAt };
   }
-
   const positionedFlow = tableFloat.positionedTableFlow(positionedTables, flowKeys);
   const positionedByTable = new Map(positionedTables.map((anchor) => [anchor.table.id, anchor]));
-  const earlierLinePush = createEarlierLinePush((id) => paragraphDocumentOrder.get(id));
+  const earlierLinePush = createEarlierLinePush(
+    (id) => paragraphDocumentOrder.get(id),
+    (page, anchorId) => paragraphDrawingWrap.tablePush(page, anchorId)
+  );
   let pageFragments: BlockFragmentRecord[] = [];
   let columnIndex = 0;
   let regionFragmentStart = 0;

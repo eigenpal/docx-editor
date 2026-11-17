@@ -166,15 +166,17 @@ test('moves a floating table with its anchor when its band cannot fit the page r
   expect(layout.pages[1]!.fragments.some((fragment) => fragment.kind === 'paragraph')).toBe(true);
 });
 
-test('preserves a negative offset beside earlier ink and displaces collisions below it', () => {
+test('keeps a negative offset, and the earlier line it meets wraps beside the table', () => {
   const clear = render(
     part(p('Lead') + table(80, -6).replace('w:tblpX="1"', 'w:tblpX="2001"') + p('Anchor'))
   );
   expect(tables(clear)[0]!.box.y).toBe(6);
+  // The band of a raised table that leaves a passage wraps the earlier lines it crosses.
   const colliding = render(part(p('Lead') + table(80, -6) + p('Anchor')));
-  const leadInk = paragraphs(colliding)[0]!.lines[0]!.spans[0]!.box;
-  expect(tables(colliding)[0]!.box.y).toBeCloseTo(leadInk.y + leadInk.height, 6);
-  expect(paragraphs(colliding)[0]!.lines[0]!.spans[0]!.box.y).toBe(0);
+  const lead = paragraphs(colliding)[0]!.lines[0]!;
+  expect(tables(colliding)[0]!.box.y).toBe(6);
+  expect(lead.box.y).toBe(0);
+  expect(lead.spans[0]!.box.x).toBeGreaterThanOrEqual(80);
 });
 
 test('wraps in the anchor column without narrowing another column', () => {
@@ -237,7 +239,7 @@ test('distance-only table edits invalidate wrapping while preserving warm/cold g
   }
 });
 
-test('reserves collision displacement before admitting the table on its anchor page', () => {
+test('a raised table stays on its anchor page beside a taller earlier line', () => {
   const lead = p('Lead', '<w:spacing w:line="200" w:lineRule="exact"/>').replace(
     '<w:r>',
     '<w:r><w:rPr><w:sz w:val="72"/></w:rPr>'
@@ -247,10 +249,10 @@ test('reserves collision displacement before admitting the table on its anchor p
     ...options,
     geometry: { ...options.geometry, height: 60 },
   });
-  expect(layout.pages).toHaveLength(2);
-  const floating = tables(layout)[0]!;
-  expect(floating.box.y + floating.box.height).toBeLessThanOrEqual(60);
-  expect(layout.pages[0]!.fragments.every((fragment) => fragment.kind !== 'table')).toBe(true);
+  // The lead line wraps beside the table, which keeps its place 6 pt above the anchor.
+  expect(layout.pages).toHaveLength(1);
+  expect(tables(layout)[0]!.box.y).toBe(4);
+  expect(paragraphs(layout)[0]!.lines[0]!.spans[0]!.box.x).toBeGreaterThanOrEqual(80);
 });
 
 test('negative offsets clear preceding in-flow tables and authored top padding', () => {
@@ -261,16 +263,21 @@ test('negative offsets clear preceding in-flow tables and authored top padding',
   expect(floating!.box.y).toBeGreaterThanOrEqual(first!.box.y + first!.box.height + 6);
 });
 
-test('zero and positive offsets preserve top clearance from earlier text', () => {
-  for (const offset of [0, 6, 18]) {
+test('a top distance above the anchor wraps the earlier line, and a lower one clears it', () => {
+  // A 12 pt top distance rises above the anchor at offsets 0 and 6: the lead wraps beside it.
+  for (const offset of [0, 6]) {
     const layout = render(part(p('Lead') + table(80, offset, 'w:topFromText="240"') + p('Anchor')));
-    const ink = paragraphs(layout)[0]!.lines[0]!.spans[0]!.box;
-    expect(tables(layout)[0]!.box.y).toBeCloseTo(Math.max(12 + offset, ink.y + ink.height + 12), 6);
+    expect(tables(layout)[0]!.box.y).toBe(12 + offset);
+    expect(paragraphs(layout)[0]!.lines[0]!.spans[0]!.box.x).toBeGreaterThanOrEqual(80);
   }
+  const layout = render(part(p('Lead') + table(80, 18, 'w:topFromText="240"') + p('Anchor')));
+  const ink = paragraphs(layout)[0]!.lines[0]!.spans[0]!.box;
+  expect(tables(layout)[0]!.box.y).toBeCloseTo(Math.max(30, ink.y + ink.height + 12), 6);
 });
 
-test('top-clearance displacement participates in page admission at nonnegative offsets', () => {
-  for (const offset of [0, 6]) {
+test('top-clearance displacement participates in page admission', () => {
+  // At offset 18 the band starts below the anchor top, so the table clears the lead line.
+  for (const offset of [18]) {
     const source = part(p('Lead') + table(80, offset, 'w:topFromText="240"') + p('Anchor'));
     const small = { ...options, geometry: { ...options.geometry, height: 60 } };
     const session = createLayoutSession();
