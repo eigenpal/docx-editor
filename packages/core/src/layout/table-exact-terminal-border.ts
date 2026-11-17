@@ -115,7 +115,11 @@ function closingBudget(
     );
     if (
       edge.state !== 'edge' ||
-      edge.style !== 'single' ||
+      // Every one-band line style (ECMA-376 §17.18.2) closes an exact row as a single rule
+      // does: thick, the dash family, and the patterned and compound bands. Double and triple
+      // rules keep their own extent geometry.
+      edge.style === 'double' ||
+      edge.style === 'triple' ||
       !Number.isFinite(edge.widthPt) ||
       edge.widthPt <= 0 ||
       edge.widthPt > 12

@@ -123,6 +123,9 @@ export interface BidiEmbeddingLevels {
 // @public
 export type BlockFragmentRecord = ParagraphFragmentRecord | TableFragmentRecord;
 
+// @internal
+export function borderDashPatternPt(val: string, widthPt: number): readonly number[] | null;
+
 // @public
 export function borderExtentPt(edge: ResolvedTableBorderEdge | TableBorderSide | undefined): number;
 
@@ -142,6 +145,18 @@ export interface BorderGridGeometry {
         readonly y: number;
     }[];
 }
+
+// @public
+export interface BorderLineStroke {
+    readonly color: string | null;
+    // (undocumented)
+    readonly offsetPt: number;
+    // (undocumented)
+    readonly widthPt: number;
+}
+
+// @internal
+export function borderLineStrokesForExtentPt(val: string, extentPt: number, color: string | null): readonly BorderLineStroke[] | null;
 
 // @public
 export function borderWeight(side: TableBorderSide): number;
@@ -722,6 +737,13 @@ export const createShapingEnvironment: (input: ShapingEnvironmentInput) => Shapi
 export function createUnsupportedContentProjector(resolve: UnsupportedContentResolver): {
     part(part: OoxmlPart): OoxmlPart;
     view(view: HeadlessDocumentView): HeadlessDocumentView;
+};
+
+// @internal
+export const DASH_DOT_STROKED_HATCH: {
+    readonly lineWidthPt: 0.24;
+    readonly pitchPt: 0.72;
+    readonly slots: readonly [true, true, true, false, true, false, true, true];
 };
 
 // @public
@@ -3316,9 +3338,10 @@ export interface ResolvedSurfaceMeasurer {
 export interface ResolvedTableBorderEdge {
     // (undocumented)
     readonly color: string | null;
+    readonly line?: TableBorderLine;
+    readonly sizePt?: number;
     // (undocumented)
     readonly style: TableBorderStyle;
-    // (undocumented)
     readonly widthPt: number;
 }
 
@@ -4729,12 +4752,17 @@ export interface TableBorderBox {
 }
 
 // @public
+export type TableBorderLine = 'dotDash' | 'dotDotDash' | 'dashSmallGap' | 'dashDotStroked' | 'threeDEmboss' | 'threeDEngrave' | 'thinThickSmallGap' | 'thickThinSmallGap' | 'thinThickThinSmallGap' | 'thinThickMediumGap' | 'thickThinMediumGap' | 'thinThickThinMediumGap' | 'thinThickLargeGap' | 'thickThinLargeGap' | 'thinThickThinLargeGap';
+
+// @public
 export type TableBorderSide = {
     readonly state: 'omitted';
 } | {
     readonly state: 'none';
 } | {
     readonly color: string | null;
+    readonly line?: TableBorderLine;
+    readonly sizePt?: number;
     readonly state: 'edge';
     readonly style: TableBorderStyle;
     readonly widthPt: number;
@@ -4748,6 +4776,8 @@ export interface TableBorderStrokeRecord {
     // (undocumented)
     readonly color: string | null;
     readonly cssStyle: 'solid' | 'dashed' | 'dotted';
+    readonly dashPt?: readonly number[];
+    readonly hatch?: true;
     // (undocumented)
     readonly height: number;
     // (undocumented)

@@ -31,17 +31,21 @@ const pageBorder = (val: string) =>
       '</w:sectPr>'
   );
 const redFills = (stream: string) => [...stream.matchAll(/1 0 0 rg [\d.\s-]+ re f/g)].length;
-const redDashes = (stream: string) => [...stream.matchAll(/1 0 0 RG [\d.]+ w \[/g)].length;
+const redDashes = (stream: string) => [...stream.matchAll(/1 0 0 RG [\d.]+ w (?:0 J )?\[/g)].length;
 
 test('compound page borders paint filled bands, not dashes', async () => {
-  for (const val of ['thinThickThinSmallGap', 'thickThinMediumGap']) {
+  // ECMA-376 §17.18.2: a thin-thick-thin band has three strokes, a thick-thin band two.
+  for (const [val, strokes] of [
+    ['thinThickThinSmallGap', 3],
+    ['thickThinMediumGap', 2],
+  ] as const) {
     const stream = await commands(
       (await exportPdf(pageBorder(val), { fidelityPolicy: 'best-effort', useSystemFonts: false }))
         .bytes
     );
     expect(redDashes(stream)).toBe(0);
-    // Two strokes on each of the four edges.
-    expect(redFills(stream)).toBe(8);
+    // Each stroke on each of the four edges.
+    expect(redFills(stream)).toBe(strokes * 4);
   }
 });
 

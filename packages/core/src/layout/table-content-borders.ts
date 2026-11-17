@@ -59,7 +59,7 @@ function resolveRowTopBands(
   resolved: readonly (readonly ResolvedCellBorders[])[],
   merged: ReadonlyMap<string, number>,
   columns: number
-): readonly number[] {
+): readonly { readonly band: number; readonly ownsTop: boolean }[] {
   // Painted band width feeding each row, per grid column: the rule published by whichever
   // cell's span ENDS on the boundary above. A suppressed vMerge seam leaves it at zero.
   const bandPt = rows.map(() => new Float64Array(columns));
@@ -83,14 +83,17 @@ function resolveRowTopBands(
   // cell: the captured mixed-width control charges `m3` and `m6` by their single 4pt column.
   return rows.map((row, rowIndex) => {
     let widest = 0;
+    let ownsTop = rowIndex === 0;
     const tableSide = rowIndex === 0 ? table.top : table.insideH;
     for (const cell of row.cells) {
-      widest = Math.max(widest, ownTopBandWidthPt(cell.borders.top, tableSide));
+      const own = ownTopBandWidthPt(cell.borders.top, tableSide);
+      if (own > 0) ownsTop = true;
+      widest = Math.max(widest, own);
       const last = Math.min(cell.gridColumn + cell.gridSpan, columns);
       for (let column = cell.gridColumn; column < last; column += 1)
         widest = Math.max(widest, bandPt[rowIndex]?.[column] ?? 0);
     }
-    return widest;
+    return { band: widest, ownsTop };
   });
 }
 
@@ -186,7 +189,12 @@ export function withTableContentBorders(
   return rows.map((row, index) => ({
     ...row,
     cells: row.cells.map((cell) => {
-      const topBandClearancePt = topBands[index]!;
+      const { band, ownsTop } = topBands[index]!;
+      // A row that states no top rule of its own, directly or through `w:insideH`, lets the
+      // band of the row above share its top margin: its content starts at the wider of the
+      // two rather than below both. Reference renders of `w:tcBorders` (ECMA-376 §17.4.66)
+      // and `w:tcMar` (§17.4.43) show it in every compatibility mode, nested or not.
+      const topBandClearancePt = ownsTop ? band : Math.max(0, band - cell.margins.top);
       return cell.vMergeContinue
         ? { ...cell, topBandClearancePt }
         : {

@@ -50,6 +50,30 @@ export function hasPartialSimpleSideGrid(
   return value;
 }
 
+/**
+ * The leading rule width of a partial grid ({@link hasPartialSimpleSideGrid}) whose every row
+ * opens with a simple left rule of that one width, in points; else `undefined`.
+ *
+ * Mode-15 reference renders of `w:tblBorders` frames without inside rules (ECMA-376
+ * §17.4.38) put the outer edge of that leading rule on the aligned edge, as for a complete
+ * grid: the grid moves inward by half the rule, at every cell margin and table indent.
+ */
+export function partialSimpleSideGridLeadPt(
+  rows: readonly SemanticTableRow[],
+  columns: number
+): number | undefined {
+  if (!hasPartialSimpleSideGrid(rows, columns)) return undefined;
+  let lead: number | undefined;
+  for (const row of rows) {
+    const first = row.cells[0];
+    if (!first || first.gridColumn !== 0 || first.vMergeContinue) return undefined;
+    const left = (first.contentBorders ?? first.borders).left;
+    if (left.state !== 'edge' || (lead !== undefined && left.widthPt !== lead)) return undefined;
+    lead = left.widthPt;
+  }
+  return lead;
+}
+
 /** Carry the answer when a row copy changes only its side-rule layout flags. */
 export function carryPartialSimpleSideGrid(
   source: readonly SemanticTableRow[],

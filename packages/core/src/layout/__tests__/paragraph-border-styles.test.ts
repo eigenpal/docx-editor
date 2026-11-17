@@ -181,11 +181,15 @@ describe('paragraph ST_Border styles — paint', () => {
     }
   });
 
-  test('threeDEmboss approximates as ridge; art borders stay solid', () => {
+  test('threeDEmboss paints three toned strokes; art borders stay solid', () => {
     const emboss = painted(
       paragraph('x', '<w:pBdr><w:top w:val="threeDEmboss" w:sz="16" w:color="808080"/></w:pBdr>')
     ).querySelector<HTMLElement>('.docx-paragraph-border-top')!;
-    expect(emboss.style.borderTop).toContain('ridge');
+    // ECMA-376 §17.18.2: light, middle and dark tones of the edge colour, top to bottom.
+    expect(emboss.style.backgroundImage).toContain('#7F7F7F');
+    expect(emboss.style.backgroundImage).toContain('#353535');
+    expect(emboss.style.backgroundImage).toContain('#2A2A2A');
+    expect(emboss.style.borderTop).toBe('');
     expect(emboss.style.backgroundColor).toBe('transparent');
 
     const art = painted(

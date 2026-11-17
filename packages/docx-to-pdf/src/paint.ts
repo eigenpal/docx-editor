@@ -23,7 +23,6 @@ import {
   forEachSemanticSpan,
   forEachSemanticStory,
   forEachSemanticDrawing,
-  compoundBorderStrokesForExtentPt,
   runBorderStrokesForLine,
   spacedTableFrameBorders,
   tableSpacingShadingRegions,
@@ -46,6 +45,7 @@ import {
   onDeviceGrid,
 } from './context.ts';
 import { cellDiagonalCommands } from './table-cell-diagonals.ts';
+import { FAITHFUL_RULES, rule, strokeRule } from './border-rule.ts';
 import { TextWriter } from './text.ts';
 import { comments, destinations, linkAnnotation } from './annotations.ts';
 import { markerMarkBox, markerRevisions } from './marker-markup.ts';
@@ -72,119 +72,6 @@ function spanLogicalText(visit: SemanticSpanVisit): string {
   );
 }
 
-/** Border styles `rule()` draws as authored; any other style is drawn as an approximation. */
-const FAITHFUL_RULES: ReadonlySet<string> = new Set([
-  'single',
-  'thick',
-  'dashed',
-  'dotted',
-  'double',
-  'triple',
-  'thinThickSmallGap',
-  'thickThinSmallGap',
-  'thinThickThinSmallGap',
-  'thinThickMediumGap',
-  'thickThinMediumGap',
-  'thinThickThinMediumGap',
-  'thinThickLargeGap',
-  'thickThinLargeGap',
-  'thinThickThinLargeGap',
-]);
-
-const DASHED_RULES = new Set([
-  'dotted',
-  'dashed',
-  'dashSmallGap',
-  'dotDash',
-  'dotDotDash',
-  'dashDotStroked',
-]);
-
-function rule(
-  box: LayoutBox,
-  colorHex: string | null,
-  style: string,
-  x: number,
-  y: number,
-  height: number
-): string {
-  // A triple rule draws three equal strokes in its five-stroke band.
-  if (style === 'triple') {
-    const horizontal = box.width >= box.height;
-    const fifth = (horizontal ? box.height : box.width) / 5;
-    return [0, 2 * fifth, 4 * fifth]
-      .map((offset) =>
-        rule(
-          {
-            ...box,
-            x: box.x + (horizontal ? 0 : offset),
-            y: box.y + (horizontal ? offset : 0),
-            width: horizontal ? box.width : fifth,
-            height: horizontal ? fifth : box.height,
-          },
-          colorHex,
-          'single',
-          x,
-          y,
-          height
-        )
-      )
-      .join('\n');
-  }
-  // Compound styles fill their published band as the double approximation, as on screen.
-  if (
-    style === 'double' ||
-    style === 'doubleWave' ||
-    style.startsWith('thinThick') ||
-    style.startsWith('thickThin')
-  ) {
-    const horizontal = box.width >= box.height;
-    const third = (horizontal ? box.height : box.width) / 3;
-    return [0, 2 * third]
-      .map((offset) =>
-        rule(
-          {
-            ...box,
-            x: box.x + (horizontal ? 0 : offset),
-            y: box.y + (horizontal ? offset : 0),
-            width: horizontal ? box.width : third,
-            height: horizontal ? third : box.height,
-          },
-          colorHex,
-          'single',
-          x,
-          y,
-          height
-        )
-      )
-      .join('\n');
-  }
-  const horizontalBand = box.width >= box.height;
-  const strokes = compoundBorderStrokesForExtentPt(style, horizontalBand ? box.height : box.width);
-  if (strokes) {
-    return strokes
-      .map((stroke) =>
-        rule(
-          horizontalBand
-            ? { ...box, y: box.y + stroke.offsetPt, height: stroke.widthPt }
-            : { ...box, x: box.x + stroke.offsetPt, width: stroke.widthPt },
-          colorHex,
-          'single',
-          x,
-          y,
-          height
-        )
-      )
-      .join('\n');
-  }
-  // Only the dash family breaks the rule; other line styles and art borders fill it.
-  if (!DASHED_RULES.has(style)) return `${color(colorHex)} rg ${rect(box, x, y, height, true)} f`;
-  const horizontal = box.width >= box.height;
-  const width = horizontal ? box.height : box.width;
-  const sx = box.x + x + (horizontal ? 0 : width / 2),
-    sy = height - box.y - y - (horizontal ? width / 2 : 0);
-  return `${color(colorHex)} RG ${n(width)} w [${n(style === 'dotted' ? width : width * 3)} ${n(width * 2)}] 0 d ${n(sx)} ${n(sy)} m ${n(sx + (horizontal ? box.width : 0))} ${n(sy - (horizontal ? 0 : box.height))} l S [] 0 d`;
-}
 /**
  * The transform that turns a `btLr` cell's laid-out plane into its place on the page.
  *
@@ -240,16 +127,7 @@ function decorations(
       }
       // A spaced table's frame: its outer borders around the fragment, over the gap fill.
       for (const stroke of spacedTableFrameBorders(block)?.strokes ?? [])
-        out.push(
-          rule(
-            stroke,
-            stroke.color,
-            stroke.cssStyle,
-            x + block.box.x,
-            y + block.box.y,
-            pageHeight(page)
-          )
-        );
+        out.push(strokeRule(stroke, x + block.box.x, y + block.box.y, pageHeight(page)));
       // Complete the backgrounds before drawing shared borders. Later cells and
       // nested paragraph shading must not erase an earlier cell's owned edge.
       for (const row of block.rows)
@@ -279,16 +157,7 @@ function decorations(
           if (cell.paintInert || cell.vMergeContinue) continue;
           out.push(...cellDiagonalCommands(cell, x, y, pageHeight(page)));
           for (const stroke of cell.borders?.strokes ?? [])
-            out.push(
-              rule(
-                stroke,
-                stroke.color,
-                stroke.cssStyle,
-                x + cell.box.x,
-                y + cell.box.y,
-                pageHeight(page)
-              )
-            );
+            out.push(strokeRule(stroke, x + cell.box.x, y + cell.box.y, pageHeight(page)));
           const publishedSides = new Set(
             (cell.borders?.strokes ?? []).map((stroke) => stroke.side)
           );

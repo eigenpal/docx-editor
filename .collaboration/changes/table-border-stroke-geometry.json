@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Compound, three-dimensional and patterned table borders painted as approximations, and wide outer rules were centered on the indent.",
+  "after": "Layout publishes measured stroke records and places wide rules against the indent; the document tree, operations and saved XML do not change.",
+  "reason": "The change reads existing border attributes and adds no shared state, operation or stored field.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-border-line-styles.test.ts",
+    "packages/core/src/layout/__tests__/table-thick-border-placement.test.ts"
+  ],
+  "changeset": "table-border-stroke-geometry",
+  "migration": null
+}

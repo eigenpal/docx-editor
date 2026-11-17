@@ -9,6 +9,7 @@ import type {
   TableBorderStrokeRecord,
 } from '@docx-editor.dev/core/layout';
 
+import { applyDashBackground, applyHatchBackground } from './border-pattern-css.ts';
 import { paintCellDiagonals } from './table-cell-diagonal-paint.ts';
 
 const HEX = /^[0-9A-Fa-f]{6}$/;
@@ -90,7 +91,11 @@ function appendStroke(
   seg.style.width = `${stroke.width * scale}px`;
   seg.style.height = `${stroke.height * scale}px`;
   seg.style.pointerEvents = 'none';
-  if (stroke.cssStyle === 'solid') seg.style.backgroundColor = `#${hexColor(stroke.color)}`;
+  const vertical = stroke.side === 'left' || stroke.side === 'right';
+  if (stroke.hatch) applyHatchBackground(seg, hexColor(stroke.color), scale);
+  else if (stroke.dashPt)
+    applyDashBackground(seg, hexColor(stroke.color), stroke.dashPt, vertical, scale);
+  else if (stroke.cssStyle === 'solid') seg.style.backgroundColor = `#${hexColor(stroke.color)}`;
   else {
     const horizontal = stroke.side === 'top' || stroke.side === 'bottom';
     seg.style.boxSizing = 'border-box';

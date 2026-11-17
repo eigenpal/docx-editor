@@ -134,10 +134,27 @@ export function compoundBorderStrokesForExtentPt(
   return compoundBorderStrokesPt(val, Math.max(0, (extentPt - b) / a));
 }
 
+/** The painted band of `dashDotStroked`, in points, whatever the authored width. */
+export const DASH_DOT_STROKED_BAND_PT = 3;
+
+/** True for the two three-dimensional line styles (ECMA-376 §17.18.2). */
+export function isThreeDBorderVal(val: string): boolean {
+  return val === 'threeDEmboss' || val === 'threeDEngrave';
+}
+
+/**
+ * Each outer stroke of a three-dimensional border, in points: 0.75pt, or 1.5pt from an
+ * authored width of 3pt. The authored width is the middle stroke.
+ */
+export function threeDBorderOuterPt(widthPt: number): number {
+  return widthPt >= 3 ? 1.5 : 0.75;
+}
+
 /**
  * Visual thickness of one border edge in points — the stroke box height/width layout
  * publishes. Double borders include both strokes and their gap; triple and thin-thick styles
- * span their own strokes and gaps; everything else uses `w:sz`.
+ * span their own strokes and gaps; a three-dimensional style adds its two outer strokes;
+ * `dashDotStroked` has a fixed band; everything else uses `w:sz`.
  */
 export function borderStrokeWidthPt(val: string, widthPt: number): number {
   const strokes = compoundBorderStrokesPt(val, widthPt);
@@ -146,6 +163,8 @@ export function borderStrokeWidthPt(val: string, widthPt: number): number {
     return last.offsetPt + last.widthPt;
   }
   if (isCompoundBorderVal(val)) return computeDoubleBorderMetricsPt(widthPt).extentPt;
+  if (isThreeDBorderVal(val)) return widthPt + 2 * threeDBorderOuterPt(widthPt);
+  if (val === 'dashDotStroked') return DASH_DOT_STROKED_BAND_PT;
   return widthPt;
 }
 

@@ -24,12 +24,8 @@ function validMarginBox(box: OoxmlElement): boolean {
     const widths = side.attributes.filter((item) => item.localName === 'w');
     const types = side.attributes.filter((item) => item.localName === 'type');
     const width = widths.length === 1 ? readTwipsMeasure(widths[0]!.value) : null;
-    if (
-      width === null ||
-      widths[0]!.namespaceUri !== WML_NAMESPACE_URI ||
-      width < 0 ||
-      width > 31_680
-    )
+    // A negative side pads like 0 (`readMarginSides`), so it states a margin like any other.
+    if (width === null || widths[0]!.namespaceUri !== WML_NAMESPACE_URI || width > 31_680)
       return false;
     // Absent CT_TblWidth type is dxa; unsupported units do not prove an outer margin.
     if (

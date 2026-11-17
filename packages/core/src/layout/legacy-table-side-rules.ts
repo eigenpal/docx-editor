@@ -8,6 +8,7 @@ import {
   carryPartialSimpleSideGrid,
   hasPartialSimpleSideGrid,
   mixedSimpleSideGridLeadPt,
+  partialSimpleSideGridLeadPt,
 } from './table-partial-side-grid.ts';
 import { carryWidenedCellContentInsets } from './cell-content-insets-memo.ts';
 
@@ -460,6 +461,14 @@ function sharedGridLineDecision(
       ? null
       : { legacyMode, modernGridWidth, outerRuleOffsetPt: lead / 2, unequalSides: true };
   }
+  // A left-aligned partial grid whose rows all open with one leading rule moves inward by
+  // half that rule, as a complete grid does.
+  const partialLead =
+    partialGrid && table.alignment === 'left'
+      ? partialSimpleSideGridLeadPt(rows, table.columnWidthsPt.length)
+      : undefined;
+  if (partialLead !== undefined)
+    return { legacyMode, modernGridWidth, outerRuleOffsetPt: partialLead / 2 };
   return { legacyMode, modernGridWidth, outerRuleOffsetPt };
 }
 
