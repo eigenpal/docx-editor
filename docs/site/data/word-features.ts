@@ -374,7 +374,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Edit paragraph shading in the editor, and paragraph borders through the editing API. The editor has no border controls. Decorative and three-dimensional borders display as approximations.',
+      'Edit paragraph shading in the editor, and paragraph borders through the editing API. The editor has no border controls. Wave borders display as approximations.',
   },
   {
     id: 'paragraphs.tabs',

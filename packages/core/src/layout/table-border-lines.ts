@@ -13,8 +13,29 @@ import {
 } from './border-line-styles.ts';
 import type { TableBorderStrokeRecord } from './table-borders.ts';
 
+/**
+ * An authored line style a table edge draws beyond its border category: a dash pattern, the
+ * `dashDotStroked` hatch, a three-dimensional band or a thin-thick compound band.
+ */
+export type TableBorderLine =
+  | 'dotDash'
+  | 'dotDotDash'
+  | 'dashSmallGap'
+  | 'dashDotStroked'
+  | 'threeDEmboss'
+  | 'threeDEngrave'
+  | 'thinThickSmallGap'
+  | 'thickThinSmallGap'
+  | 'thinThickThinSmallGap'
+  | 'thinThickMediumGap'
+  | 'thickThinMediumGap'
+  | 'thinThickThinMediumGap'
+  | 'thinThickLargeGap'
+  | 'thickThinLargeGap'
+  | 'thinThickThinLargeGap';
+
 /** The line styles a table edge paints as a pattern or as parallel strokes. */
-const TABLE_BORDER_LINES = [
+const TABLE_BORDER_LINES: readonly TableBorderLine[] = [
   'dotDash',
   'dotDotDash',
   'dashSmallGap',
@@ -30,13 +51,7 @@ const TABLE_BORDER_LINES = [
   'thinThickLargeGap',
   'thickThinLargeGap',
   'thinThickThinLargeGap',
-] as const;
-
-/**
- * An authored line style a table edge draws beyond its border category: a dash pattern, the
- * `dashDotStroked` hatch, a three-dimensional band or a thin-thick compound band.
- */
-export type TableBorderLine = (typeof TABLE_BORDER_LINES)[number];
+];
 
 const LINES: ReadonlySet<string> = new Set(TABLE_BORDER_LINES);
 
