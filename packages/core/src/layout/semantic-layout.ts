@@ -168,6 +168,7 @@ import { convergenceTailShiftAllowed } from './page-reuse-guards.ts';
 import { commonKeyPrefix, commonKeySuffix } from './flow-key-diff.ts';
 import { createPreviousPassZones } from './previous-pass-zones.ts';
 import { lineBandSkip, tableBandSpaceAfter } from './table-band-space-after.ts';
+import { hostSheetGeometry } from './continued-sheet-geometry.ts';
 import { layoutPassContextKey } from './layout-pass-context-key.ts';
 import {
   contentControlContextToken,
@@ -1251,7 +1252,8 @@ function* layoutBlocksPass(
     bodyAnchorFrameBase({
       pageNumber: pageIndexStart + pages.length + 1,
       onPageParityRead: markPageParityRead,
-      geometry,
+      // A continued section's first sheet keeps the host's bottom margin (17.6.11, 17.6.22).
+      geometry: hostSheetGeometry(geometry, pages.length === 0 ? continuedInsets : undefined),
       insets: insetsFor(pages.length),
       contentWidth,
       contentHeight: contentHeight(),

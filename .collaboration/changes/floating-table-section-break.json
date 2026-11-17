@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A page- or margin-positioned table on the first sheet of a continuous section broke at the continued section's own bottom margin, so it could run past the margin of the sheet it shares with the section before.",
+  "after": "The table breaks at the bottom margin of the sheet it is on, which the earlier section sets. Shared document state and operations are unchanged.",
+  "reason": "The change is confined to layout. Replicas compute the same layout from the same tree, and saved documents keep the same XML.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-continued-sheet-float.test.ts",
+    "packages/core/src/layout/__tests__/continued-sheet-float-break.test.ts"
+  ],
+  "changeset": "floating-table-section-break",
+  "migration": null
+}
