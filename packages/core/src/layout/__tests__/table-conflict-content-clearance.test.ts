@@ -69,13 +69,15 @@ test('separated cells keep independent edges', () => {
   expect(b!.blocks[0]!.box.x - b!.box.x).toBeCloseTo(6, 6);
 });
 
+// The opposing 6pt rule is then the table's only side rule. A legacy automatic-width AutoFit
+// table centres it on the grid line, so each cell clears half of it (17.4.53).
 for (const own of ['none', 'nil'])
   test(`an explicit ${own} clears an opposing authored rule`, () => {
     const table = layout(
       `<w:tr>${cell(border('right', 4, own))}${cell(border('left', 48))}</w:tr>`
     );
     const a = table.rows[0]!.cells[0]!;
-    expect(a.box.x + a.box.width - a.blocks[0]!.box.x - a.blocks[0]!.box.width).toBeCloseTo(6, 6);
+    expect(a.box.x + a.box.width - a.blocks[0]!.box.x - a.blocks[0]!.box.width).toBeCloseTo(3, 6);
   });
 
 // The receiving row carries the whole band, at its own 6pt top rule, and the row above

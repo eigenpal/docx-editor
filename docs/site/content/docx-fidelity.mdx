@@ -157,6 +157,7 @@ The compatibility mode in `w:compat` changes clipping, page counts, table placem
 | Right-to-left table | Moves left by half the mean width of its outer side rules. | No shift. |
 | First-line indent in AutoFit minimum | Included. | Excluded. A word too wide for the indented first line breaks there. |
 | Fixed tables, left-aligned, top-level | Keep their geometry. | First-cell content aligns with the table indent. |
+| Header rows that do not fit below earlier content | The table starts on the next page. A header group taller than a page breaks there like ordinary rows. | The group breaks between rows, and each row stays whole. Header rows repeat after the last of them. |
 | Last page of a table that leaves out its repeated header rows | Following content starts on the next page, even when it fits. | No forced page break. |
 | First body row below a repeated header | Reserves the border it shares with the row above. | Reserves the wider of its top border and the header's bottom border. |
 | Row that does not fit below repeated headers | The repeat is omitted. The row starts the page. | Headers stay. The row stays whole below them and runs past the bottom margin. |

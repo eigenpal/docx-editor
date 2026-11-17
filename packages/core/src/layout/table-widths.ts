@@ -551,9 +551,12 @@ export function resolveColumnWidthsPt(input: {
     return columnsAroundCells(cells, gaps);
   }
   if (total > target + WIDTH_EPSILON_PT) {
-    // The gaps, and a stated absolute width, come out above each column's minimum.
+    // The gaps, a stated absolute width, and a fixed table's percentage width come out above
+    // each column's minimum (17.4.53, 17.4.63).
+    const aboveMinimums =
+      gaps > 0 || tableWidth.type === 'dxa' || (tableWidth.type === 'pct' && input.layoutFixed);
     cells =
-      input.minimumsPt && (gaps > 0 || tableWidth.type === 'dxa')
+      input.minimumsPt && aboveMinimums
         ? fitColumnsAboveMinimums(resolved, target, input.minimumsPt)
         : resolved.map((width) => (width * target) / total);
   } else if (total < target - WIDTH_EPSILON_PT && statedTableWidth > 0) {

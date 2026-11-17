@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Header groups always moved whole; legacy AutoFit columns added the side rule width; fixed percentage tables shrank in proportion",
+  "after": "Layout places header rows and sizes columns by the compatibility mode rules",
+  "reason": "Layout-only change: no shared document data, operation or update format changes, so released participants keep the same meaning",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-header-group-start.test.ts",
+    "packages/core/src/layout/__tests__/table-autofit-legacy-rules.test.ts"
+  ],
+  "changeset": "table-header-rows-and-autofit",
+  "migration": null
+}
