@@ -296,9 +296,13 @@ export const PROFILE_RULES = {
     applies: (p) => p.legacy.noExtraLineSpacing === true,
   },
   strictTableStyleHierarchy: {
-    behavior: 'Table style font size and justification apply over the default paragraph style',
+    behavior:
+      'Table style font size and justification apply over the default paragraph style. Without the setting, compatibility mode 15 and later behave so too',
     source: '[MS-DOCX] 2.3.1 overrideTableStyleFontSizeAndJustification',
-    applies: (p) => p.settings.overrideTableStyleFontSizeAndJustification === true,
+    applies: (p) => {
+      const setting = p.settings.overrideTableStyleFontSizeAndJustification;
+      return setting === undefined ? p.modeClass === 'modern' : setting === true;
+    },
   },
   unstretchedManualBreakLines: {
     behavior:

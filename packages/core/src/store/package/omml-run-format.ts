@@ -21,6 +21,20 @@ export interface EquationRunFormat {
   readonly literal?: boolean;
   readonly normalText?: boolean;
   readonly mathStyle?: 'p' | 'b' | 'i' | 'bi';
+  /**
+   * `w:kern` (17.3.2.19): the smallest font size, in points, that takes pair kerning. Zero
+   * turns kerning off.
+   */
+  readonly kerningMinPt?: number;
+}
+
+/**
+ * The kerning threshold a math run's format states, in points (`w:kern`, 17.3.2.19). The
+ * projected expression type does not name it, so layout reads it through this helper.
+ */
+export function equationFormatKerningMinPt(format: object | undefined): number | undefined {
+  const value = format ? (format as EquationRunFormat).kerningMinPt : undefined;
+  return typeof value === 'number' ? value : undefined;
 }
 
 function element(node: OoxmlNode, namespace: string, localName: string): boolean {
@@ -153,6 +167,17 @@ function readRunProperties(
     } else if (word && property.localName === 'bCs') {
       if (toggle(property, namespace) === null) return false;
       complexScript.named = true;
+    } else if (word && property.localName === 'kern') {
+      const attribute = property.attributes[0];
+      if (
+        property.children.length !== 0 ||
+        property.attributes.length !== 1 ||
+        attribute?.namespaceUri !== namespace ||
+        attribute.localName !== 'val' ||
+        !/^(?:0|[1-9][0-9]{0,3})$/.test(attribute.value)
+      )
+        return false;
+      format.kerningMinPt = Number(attribute.value) / 2;
     } else if (word && property.localName === 'lang') {
       // Language takes no part in equation layout. The source keeps it on save.
       if (!equationLanguagePropertyIsSupported(property)) return false;

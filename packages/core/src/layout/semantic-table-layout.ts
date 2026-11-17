@@ -140,10 +140,13 @@ import type {
 import { type ResolvedListItem } from './list-resolve.ts';
 import {
   directionalListFirstLineShift,
+  listMarkerAlignShift,
+  listMarkerLineOffset,
   listMarkerFirstLineMetrics,
   publishListMarker,
 } from './list-marker.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
+import { cellListItem } from './cell-list-marker.ts';
 import { type TableBorderOwnershipBudget } from './table-borders.ts';
 import { type TableVMergeResolveBudget } from './table-vmerge.ts';
 import { type CellContentInsets } from './table-cell-geometry.ts';
@@ -400,13 +403,20 @@ function placeCellParagraph(
 } {
   const paragraphId = paragraph.id;
   const keyFor = deps.cache?.keyFor?.bind(deps.cache) ?? paragraphLayoutKey;
-  const listItem = deps.listItems?.get(paragraphId);
+  const storyListItem = deps.listItems?.get(paragraphId);
+  // The marker is measured and painted with the table style's run formatting.
+  const listItem = cellListItem(
+    storyListItem,
+    paragraph,
+    deps.styleCascade,
+    options?.tableCellStyle
+  );
   const layoutInputs = withStoryLineGrid(
     cellParagraphInputs(
       paragraph,
       cellContentWidth,
       deps.styleCascade,
-      listItem,
+      storyListItem,
       options?.tableCellStyle,
       deps.paragraphLineUnitPt
     ),
@@ -695,6 +705,8 @@ function placeCellParagraph(
     rtl,
     inTableCell: options?.inTableCell === true,
   };
+  // How far alignment moved the fragment's first line; its list marker moves with it.
+  let firstAlignOffset = 0;
   for (let lineIndex = lineStart; lineIndex < lineEnd; lineIndex += 1) {
     const pendingLine = lines[lineIndex]!;
     const isLastLine = lineIndex === lines.length - 1;
@@ -724,6 +736,8 @@ function placeCellParagraph(
       lineAlignment
     );
     const { spans: alignedSpans, offset: alignOffset } = content;
+    if (lineIndex === lineStart)
+      firstAlignOffset = listMarkerLineOffset(alignOffset, lineAvailableWidth);
     const alignedDrawings = content.drawings.map((drawing) =>
       clipInlineDrawingRecordToRegion(drawing, cellClip)
     );
@@ -913,7 +927,7 @@ function placeCellParagraph(
         listItem,
         deps.measurer,
         rawRecords[0],
-        originX,
+        originX + listMarkerAlignShift(firstAlignOffset, alignment, rtl),
         // The content box: indents wider than a narrow cell would mirror the marker out of it.
         rtl ? cellContentWidth : undefined,
         deps.inlineDrawingLayout?.pictureBulletResource

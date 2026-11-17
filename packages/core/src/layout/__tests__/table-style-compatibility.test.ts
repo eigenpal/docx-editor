@@ -221,8 +221,10 @@ test('inherited and conditional table style sizes count as table style sizes', (
     undefined,
     probeSettings(12, false)
   );
+  // A condition that states run formatting makes the style state it for every row: the
+  // second row takes the document default size, not the default paragraph style's.
   expect(probeSizes(probeDocument('<w:tblStyle w:val="Probe"/>', 2), headed)).toEqual({
     body: 12,
-    table: [10, 12],
+    table: [10, 11],
   });
 });

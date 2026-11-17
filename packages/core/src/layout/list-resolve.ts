@@ -38,6 +38,7 @@ import {
 import { mapSymbolPuaText, mapSymbolBulletText } from './symbol-encoding.ts';
 import { markerSymbolFontAvailability } from './marker-symbol-font.ts';
 import { bulletMarkerStyle } from './marker-symbol-face.ts';
+import { withListMarkerSource } from './cell-list-marker.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { DEPENDENCY_KEY_IDS } from '../store/registry/frozen-ids.ts';
@@ -422,6 +423,10 @@ function resolveListSequence(
       item,
       framedTokenJoin([...tokenParts.slice(0, 12), ...tokenParts.slice(13)])
     );
+    withListMarkerSource(item, {
+      level: advanced.level.runProperties,
+      markerText: advanced.markerText,
+    });
     listItemNumberSources.set(item, {
       levels: numberLevelsOf(linked, advanced.numId),
       ilvl: advanced.ilvl,
