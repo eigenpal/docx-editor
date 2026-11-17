@@ -141,6 +141,7 @@ import { type ResolvedListItem } from './list-resolve.ts';
 import {
   directionalListFirstLineShift,
   listMarkerAlignShift,
+  listMarkerLineOffset,
   listMarkerFirstLineMetrics,
   publishListMarker,
 } from './list-marker.ts';
@@ -735,7 +736,8 @@ function placeCellParagraph(
       lineAlignment
     );
     const { spans: alignedSpans, offset: alignOffset } = content;
-    if (lineIndex === lineStart) firstAlignOffset = alignOffset;
+    if (lineIndex === lineStart)
+      firstAlignOffset = listMarkerLineOffset(alignOffset, lineAvailableWidth);
     const alignedDrawings = content.drawings.map((drawing) =>
       clipInlineDrawingRecordToRegion(drawing, cellClip)
     );

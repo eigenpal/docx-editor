@@ -205,6 +205,7 @@ import { refTokenForTableBlock } from './field-ref.ts';
 import {
   createListFirstLineMetrics,
   listMarkerAlignShift,
+  listMarkerLineOffset,
   markerLineStart,
   publishListMarker,
 } from './list-marker.ts';
@@ -2714,7 +2715,7 @@ function* layoutBlocksPass(
       lineCounter += 1;
       if (pending.length === 0) {
         fragmentFirstLineSkip = skipBefore;
-        fragmentFirstAlignOffset = alignOffset;
+        fragmentFirstAlignOffset = listMarkerLineOffset(alignOffset, lineAvailableWidth);
       }
       pending.push(record);
       cursorY += pendingLine.height;

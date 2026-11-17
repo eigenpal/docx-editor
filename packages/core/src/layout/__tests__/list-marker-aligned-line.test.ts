@@ -24,13 +24,14 @@ const numberingIndex = buildNumberingIndex(
   ).root
 );
 
-function layOut(jc: string, table: boolean) {
+function layOut(jc: string, table: boolean, text = 'Item text', cellWidth = 5000) {
+  const run = text ? `<w:r><w:t>${text}</w:t></w:r>` : '';
   const paragraph =
     `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>` +
-    `${jc ? `<w:jc w:val="${jc}"/>` : ''}</w:pPr><w:r><w:t>Item text</w:t></w:r></w:p>`;
+    `${jc ? `<w:jc w:val="${jc}"/>` : ''}</w:pPr>${run}</w:p>`;
   const body = table
-    ? '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr>' +
-      `<w:tblGrid><w:gridCol w:w="5000"/></w:tblGrid><w:tr><w:tc>${paragraph}</w:tc></w:tr></w:tbl><w:p/>`
+    ? `<w:tbl><w:tblPr><w:tblW w:w="${cellWidth}" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr>` +
+      `<w:tblGrid><w:gridCol w:w="${cellWidth}"/></w:tblGrid><w:tr><w:tc>${paragraph}</w:tc></w:tr></w:tbl><w:p/>`
     : paragraph;
   const layout = layoutSemanticDocument(
     part(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`),
@@ -42,7 +43,7 @@ function layOut(jc: string, table: boolean) {
     }
   );
   const fragment = [...paragraphFragmentsOf(layout.pages[0]!)].find((entry) => entry.marker)!;
-  const textX = Math.min(...fragment.lines[0]!.spans.map((span) => span.box.x));
+  const textX = Math.min(Infinity, ...fragment.lines[0]!.spans.map((span) => span.box.x));
   return { markerX: fragment.marker!.box.x, textX };
 }
 
@@ -59,4 +60,21 @@ describe('list marker on an aligned first line', () => {
       }
     });
   }
+
+  for (const table of [false, true]) {
+    test(`moves with the empty first line of a centered paragraph (table=${table})`, () => {
+      const left = layOut('', table, '');
+      expect(layOut('center', table, '').markerX).toBeGreaterThan(left.markerX + 1);
+    });
+  }
+
+  test('keeps its slot when the indents leave the line no room', () => {
+    // A 492-twip cell holds less than the 36pt list indent, so the line has no slack.
+    for (const text of ['', 'Item text']) {
+      const left = layOut('', true, text, 492);
+      for (const jc of ['center', 'right']) {
+        expect(layOut(jc, true, text, 492).markerX).toBeCloseTo(left.markerX, 5);
+      }
+    }
+  });
 });
