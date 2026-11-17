@@ -13,7 +13,7 @@ import {
   framedParagraphFlow,
 } from './body-paragraph-flow.ts';
 import { layoutWithCharacterHeadersSteps } from './character-header-layout.ts';
-import { contextualParagraphSpacing, flowNeighbourStyle } from './contextual-paragraph-spacing.ts';
+import { contextualParagraphSpacing, flowNeighbourBeside } from './contextual-paragraph-spacing.ts';
 import { resolveParagraphFrame } from './paragraph-drop-cap.ts';
 import {
   anchorLineSkipsExclusion,
@@ -1497,7 +1497,7 @@ function* layoutBlocksPass(
       const previous = prepared[entryIndex - 1];
       const sameStyle =
         entry.styleId !== null &&
-        flowNeighbourStyle(entry.paragraph, -1, previous, styleCascade) === entry.styleId;
+        flowNeighbourBeside(prepared, entryIndex, -1, styleCascade) === entry.styleId;
       const before =
         entry.contextualSpacing && sameStyle
           ? 0
@@ -1627,7 +1627,9 @@ function* layoutBlocksPass(
     );
     const above = lineIndex === fragmentFirstLine ? spaceBefore : 0;
     const live =
-      zones.length > 0 ? lineBandSkip(cursorY, pendingLine.height, zones, above, bandAfter) : 0;
+      zones.length > 0
+        ? lineBandSkip(cursorY, pendingLine.height, zones, above, bandAfter, entry.paragraph.id)
+        : 0;
     const breakSkip = pendingLine.exclusionSkipBefore ?? 0;
     return Math.max(live, breakSkip);
   };
@@ -1973,6 +1975,9 @@ function* layoutBlocksPass(
         })
       ) {
         positionedFlow.add(pendingFloatIds, entry.table.id);
+        // It stands in the flow: the space after above it is whole; it opens the section.
+        if (positionedByTable.get(entry.table.id)?.float.vertAnchor === 'text')
+          [previousSpaceAfter, firstParagraphOfSection] = [0, false];
         continue;
       }
       // Tables waiting for the anchor of a text-anchored table placed in the flow are placed
@@ -2105,8 +2110,8 @@ function* layoutBlocksPass(
       collapsedMark ? { before: 0, after: 0 } : authoredSpacing,
       contextualSpacing,
       styleId,
-      flowNeighbourStyle(paragraph, -1, previousEntry, styleCascade),
-      flowNeighbourStyle(paragraph, 1, nextEntry, styleCascade)
+      flowNeighbourBeside(prepared, index, -1, styleCascade),
+      flowNeighbourBeside(prepared, index, 1, styleCascade)
     );
     // Whether a line's own wrapping objects still cross the margin (`wrappedAnchorsEndAtBottomMargin`).
     const pageFit = createOwnAnchorPageFit(paragraph, {
@@ -2351,7 +2356,7 @@ function* layoutBlocksPass(
         : undefined;
       if (!frame && fragmentIndex === 0) {
         publishParagraphFrames(paragraphId, fragmentParagraphStartY, pending);
-        noteAnchor(paragraphId, fragmentParagraphStartY);
+        noteAnchor(paragraphId, fragmentParagraphStartY - fragmentBefore - fragmentTopExtent);
       }
       const publishedFragment: ParagraphFragmentRecord = {
         kind: 'paragraph',

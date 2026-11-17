@@ -8,6 +8,8 @@ import {
 } from './style-cascade.ts';
 import { propertiesOf } from './paragraph-flow.ts';
 import { hiddenMarkNeighboursOf } from './hidden-paragraph-mark.ts';
+import { readTableFloatPosition } from './table-float-properties.ts';
+import { wmlChildNamed } from '../store/store/tree-op-table-shared.ts';
 import type { CellEdgeNeighbours } from './cell-edge-neighbours.ts';
 
 /** An unnamed paragraph uses the same implicit default style as its unnamed neighbours. */
@@ -69,6 +71,28 @@ interface FlowNeighbour {
   readonly styleId?: string | null;
   readonly contextualSpacing?: boolean;
   readonly paragraph?: OoxmlElement;
+  readonly table?: OoxmlElement;
+}
+
+/** Whether `entry` is a table positioned against the text (17.4.57, 17.4.66). */
+function textAnchoredTable(entry: FlowNeighbour): boolean {
+  if (entry.kind !== 'table' || !entry.table) return false;
+  return readTableFloatPosition(wmlChildNamed(entry.table, 'tblPr'))?.vertAnchor === 'text';
+}
+
+/**
+ * The block next to `prepared[index]` on `side` for contextual spacing. A table positioned
+ * against the text stands aside: the paragraphs around it are neighbours, so the space between
+ * them collapses across it when their style asks for it.
+ */
+export function flowNeighbourAt<T extends FlowNeighbour>(
+  prepared: readonly T[],
+  index: number,
+  side: -1 | 1
+): T | undefined {
+  let at = index + side;
+  while (prepared[at] && textAnchoredTable(prepared[at]!)) at += side;
+  return prepared[at];
 }
 
 /**
@@ -93,6 +117,19 @@ export function flowNeighbourStyle(
   return adjacent?.kind === 'paragraph' ? adjacent.styleId : undefined;
 }
 
+/** {@link flowNeighbourStyle} of the paragraph `prepared[index]`, past text-anchored tables. */
+export function flowNeighbourBeside(
+  prepared: readonly FlowNeighbour[],
+  index: number,
+  side: -1 | 1,
+  styles: StyleCascadeTable | undefined
+): string | null | undefined {
+  const paragraph = prepared[index]?.paragraph;
+  return paragraph
+    ? flowNeighbourStyle(paragraph, side, flowNeighbourAt(prepared, index, side), styles)
+    : undefined;
+}
+
 /**
  * {@link flowNeighbourStyle} as the flow keys read it: `null` never matches, and an
  * unnamed style is `''`, the same encoding as the block's own style.
@@ -105,7 +142,7 @@ export function flowNeighbourStyleAt(
 ): string | null {
   const paragraph = prepared[index]?.paragraph;
   if (!paragraph) return null;
-  const style = flowNeighbourStyle(paragraph, side, prepared[index + side], styles);
+  const style = flowNeighbourStyle(paragraph, side, flowNeighbourAt(prepared, index, side), styles);
   return style === undefined ? null : (style ?? '');
 }
 

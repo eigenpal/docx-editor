@@ -235,7 +235,7 @@ describe('terminal empty text-table anchors', () => {
     }
   });
 
-  test('collapses lead and anchor spacing while retaining one page', () => {
+  test('keeps lead and anchor spacing whole beside the table while retaining one page', () => {
     for (const [after, before] of [
       [120, 0],
       [0, 120],
@@ -255,8 +255,11 @@ describe('terminal empty text-table anchors', () => {
       const anchor = paragraphsOf(layout).at(-1)!;
       const floating = tablesOf(layout)[0]!;
       expect(isOutOfFlowTableFragment(floating)).toBe(true);
-      expect(anchor.lines[0]!.box.y).toBeCloseTo(595.2 + Math.max(after!, before!) / 20, 3);
-      expect(floating.box.y).toBeCloseTo(anchor.lines[0]!.box.y + 11.5, 3);
+      // A text-anchored table stands between them, so the two spaces add (17.3.1.33).
+      expect(anchor.lines[0]!.box.y).toBeCloseTo(595.2 + (after! + before!) / 20, 3);
+      // The offset counts from the anchor paragraph top: below the lead's space after, above
+      // the anchor's own space before (17.4.57, 17.3.1.33).
+      expect(floating.box.y).toBeCloseTo(595.2 + after! / 20 + 11.5, 3);
     }
   });
 
