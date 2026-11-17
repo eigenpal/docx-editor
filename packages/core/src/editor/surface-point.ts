@@ -1,3 +1,4 @@
+import { sameNoteStory } from './surface-note-story.ts';
 import type { PointerHost, SurfacePointHit } from './surface-pointer.ts';
 import type { SemanticLayout } from '../layout/semantic-records.ts';
 import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
@@ -49,7 +50,7 @@ export function surfacePointAt(
   const activeStory = host.activeHeaderFooter?.();
   if (activeNote) {
     const note = findNoteAtSheetPoint(pageLayout, sheet, host.pageOffsetX);
-    if (!note || note.scopeId !== activeNote.scopeId) return null;
+    if (!note || !sameNoteStory(note.scopeId, activeNote.scopeId)) return null;
     origin = { x: sheet.x - note.local.x, y: sheet.y - note.local.y };
     hit = hitTestFragments(layout, index, note.fragments, note.local, options);
   } else if (activeStory) {

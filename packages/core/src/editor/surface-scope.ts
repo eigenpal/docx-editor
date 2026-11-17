@@ -40,6 +40,7 @@ import {
   type SemanticHit,
 } from '../layout/semantic-hit-test.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
+import { sameNoteStory } from './surface-note-story.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { logicalLineSegments } from '../layout/line-segments.ts';
 
@@ -199,7 +200,10 @@ export function viewScopeOf(
   return SCOPE_BODY;
 }
 
-/** Paragraph fragments addressable under the active scope (body / HF / note). */
+/**
+ * Paragraph fragments addressable under the active scope (body / HF / note). An open note
+ * addresses every note of its kind, because Word's notes part is one story for selection.
+ */
 export function scopedParagraphFragments(
   page: SemanticLayout['pages'][number],
   active: HeaderFooterScopeBinding | null,
@@ -210,7 +214,7 @@ export function scopedParagraphFragments(
     for (const area of [page.footnotes, page.endnotes]) {
       if (!area) continue;
       for (const note of area.notes) {
-        if (note.scopeId !== noteScopeId) continue;
+        if (!sameNoteStory(note.scopeId, noteScopeId)) continue;
         notes.push(...paragraphFragmentsFromBlocks(note.fragments));
       }
     }
@@ -340,7 +344,10 @@ export function activeStoryCaretStops(
   return caretStopsForBlocks(layout, active.pageIndex, story.fragments, measurer);
 }
 
-/** Story-scoped caret stops for one open footnote/endnote, including continuations. */
+/**
+ * Story-scoped caret stops for an open footnote/endnote, including continuations. The stops
+ * cover every note of its kind, so arrows and Shift+arrows cross from one note to the next.
+ */
 export function activeNoteCaretStops(
   layout: SemanticLayout,
   scopeId: string,
@@ -349,9 +356,12 @@ export function activeNoteCaretStops(
   const stops: CaretGeometry[] = [];
   for (const page of layout.pages) {
     for (const area of [page.footnotes, page.endnotes]) {
-      const note = area?.notes.find((candidate) => candidate.scopeId === scopeId);
-      if (!note) continue;
-      stops.push(...caretStopsForBlocks(layout, page.index, note.fragments, measurer));
+      for (const note of area?.notes ?? []) {
+        if (!sameNoteStory(note.scopeId, scopeId)) continue;
+        for (const stop of caretStopsForBlocks(layout, page.index, note.fragments, measurer)) {
+          stops.push(stop);
+        }
+      }
     }
   }
   return stops.length > 0 ? stops : null;

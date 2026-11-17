@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A selection that started in a footnote or endnote stopped at the end of that note.",
+  "after": "A selection extends across notes of the same kind by drag, Shift+click, and Shift+arrow. The open note follows the selection head. Typing, deletion, paste, and cut over a range that spans notes are refused locally; formatting applies through the ordinary run-property ops.",
+  "reason": "Selection and the open note are local to each client. A refused edit sends no operations. Formatting across notes uses the existing setRunProperties operations on the notes part, so the replicated journal, text offsets, and package serialization stay unchanged. Remote selections already carry paragraph ids from any story.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-note-story-selection.test.ts",
+    "packages/core/src/editor/__tests__/note-story-selection.test.ts"
+  ],
+  "changeset": "note-story-selection",
+  "migration": null
+}

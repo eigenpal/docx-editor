@@ -18,6 +18,7 @@ import { collapsedAt } from './surface-selection-ops.ts';
 import { paintedTextIn, type CompositionSpanChanges } from './surface-composition-readback.ts';
 import type { ImeDeletionPlan } from './surface-ime-deletion.ts';
 import { historyShortcutOf } from './history-shortcut.ts';
+import { surfaceCrossNoteRefusal } from './surface-note-story.ts';
 import {
   moveByTabInTable,
   selectionHeadInTableCell,
@@ -493,6 +494,12 @@ export function createClipboardHandlers(surface: PaginatedSurface): {
     // Viewing refuses the delete, so the cut copies nothing either. A cut is never a copy.
     if (surface.editingMode() === 'view') {
       event.preventDefault();
+      return;
+    }
+    // Across notes the delete is refused, so the cut copies nothing either, like Word.
+    if (surfaceCrossNoteRefusal(surface)) {
+      event.preventDefault();
+      surface.deleteSelection(); // Publishes the refusal reason.
       return;
     }
     if (!writeFlavours(event)) return;

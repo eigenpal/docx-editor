@@ -1,5 +1,6 @@
 import { textboxInsertionRefusal } from './textbox-commands.ts';
 import { tocAtPosition } from './surface-toc-ranges.ts';
+import { surfaceCrossNoteRefusal } from './surface-note-story.ts';
 import { formsProtectionRefusal } from '../store/store/tree-op-content-controls.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import {
@@ -418,6 +419,10 @@ export function gateCommand(
         refusal: { ok: false, code: 'unsupported', reason: 'nothing is selected' },
       };
     }
+    // Copy works across notes; Cut and Delete would join them, which Word refuses.
+    const crossNote = command.type === 'copy' ? null : surfaceCrossNoteRefusal(surface);
+    if (crossNote)
+      return { ok: false, refusal: { ok: false, code: 'unsupported', reason: crossNote } };
   }
   // The style picker's probe promises "a well-formed pick would be honoured": on a
   // document that defines no paragraph styles, no pick can be — every styleId is refused

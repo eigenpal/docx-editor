@@ -175,12 +175,45 @@ describe('scopedDocumentOrder HF / note bounds', () => {
     ]);
   });
 
-  test('note scope lists only that note’s paragraphs', () => {
+  test('note scope lists the paragraphs of its note story', () => {
     const layout = scopedLayout();
     expect(scopedDocumentOrder(layout, null, 'footnote:1')).toEqual([
       '/word/footnotes.xml#0.2.0',
       '/word/footnotes.xml#0.2.1',
     ]);
+  });
+
+  test('note scope spans every note of its kind and no note of the other kind', () => {
+    // Word's notes part is one story: a selection from footnote 1 extends into footnote 2,
+    // but never into an endnote, which is the other story.
+    const layout = scopedLayout();
+    const page = layout.pages[0]!;
+    const second: NoteStoryRecord = {
+      ...page.footnotes!.notes[0]!,
+      noteId: 2,
+      scopeId: 'footnote:2',
+      mark: '2',
+      fragments: [para('/word/footnotes.xml#0.3.0')],
+    };
+    const multi: SemanticLayout = {
+      ...layout,
+      pages: [
+        {
+          ...page,
+          footnotes: { ...page.footnotes!, notes: [...page.footnotes!.notes, second] },
+          endnotes: noteArea('endnote:1', 'endnote', [para('/word/endnotes.xml#0.2.0')]),
+        },
+        layout.pages[1]!,
+      ],
+    };
+    const footnoteStory = [
+      '/word/footnotes.xml#0.2.0',
+      '/word/footnotes.xml#0.2.1',
+      '/word/footnotes.xml#0.3.0',
+    ];
+    expect(scopedDocumentOrder(multi, null, 'footnote:1')).toEqual(footnoteStory);
+    expect(scopedDocumentOrder(multi, null, 'footnote:2')).toEqual(footnoteStory);
+    expect(scopedDocumentOrder(multi, null, 'endnote:1')).toEqual(['/word/endnotes.xml#0.2.0']);
   });
 
   test('HF / note orders are not the memoized body documentOrder', () => {

@@ -309,6 +309,7 @@ import { authoredRunPropertiesAt, type SurfaceProperty } from './surface-formatt
 import { mergedRunWrite } from '../store/store/direct-properties.ts';
 import { bindDirectionChord, createDirectionChordHandler } from './surface-direction-chord.ts';
 import { createPointerController, type PointerController } from './surface-pointer.ts';
+import { crossNoteWriteRefusal, followOpenNoteToHead } from './surface-note-story.ts';
 import { absorbAtomicControls, leaveAtomicControl } from './surface-atomic-controls.ts';
 import { createReviewViewState } from './surface-review-view.ts';
 import { selectionsEqual } from './dom-selection.ts';
@@ -3013,6 +3014,10 @@ export function mountPaginatedSurface(
     ) {
       return TOC_READ_ONLY_REFUSAL;
     }
+    const crossNote = checkSelection
+      ? crossNoteWriteRefusal(editingLayout(), noteScopeId(), selection, ops)
+      : null;
+    if (crossNote) return crossNote; // Word refuses typing or deletion across notes.
     // Without an author, refuse every suggested edit instead of writing untracked changes.
     if (editingMode === 'suggest' && !author?.trim() && edits) return AUTHOR_WRITE_REFUSAL;
     if (editingMode === 'suggest') return suggestingRefusalIn(session, author, ops);
@@ -3357,6 +3362,7 @@ export function mountPaginatedSurface(
     const previousToc = tocAtPosition(session.part(), selection.head)?.id;
     retireActivationPin();
     selection = next;
+    followOpenNoteToHead(noteOps, editingLayout(), next); // The open note follows the head.
     // Any plain selection cancels a rectangle. A caret placed by a click, a keystroke or an
     // edit is a text selection by definition, and leaving the rectangle behind would keep
     // painting cells that are no longer chosen.
@@ -3440,6 +3446,7 @@ export function mountPaginatedSurface(
       releaseRetainedIfEscaped(next);
       retireActivationPin();
       selection = next;
+      followOpenNoteToHead(noteOps, editingLayout(), next);
       desiredX = null;
       caretFollowPending = true;
       // A gesture the queued `selectionchange` had not delivered still MOVED this caret, so

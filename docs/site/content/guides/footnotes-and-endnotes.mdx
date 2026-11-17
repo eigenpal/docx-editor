@@ -49,6 +49,12 @@ In the browser, these APIs expose the active note:
 
 Text, lists, tables, pictures, and bookmarks work inside a note. Comments need the review module and an EigenPal Pro License.
 
+## Select across notes
+
+All footnotes form one story, and all endnotes form another, as in Word. A selection that starts in a note extends into the next notes of the same kind when you drag, Shift+click, or press Shift with an arrow key. The open note follows the caret.
+
+Over a selection that spans notes, copy and formatting work. Typing, deleting, pasting, and cutting are refused, because they would merge the notes. The refusal reason is in `snapshot().lastRejection`.
+
 ## Convert or delete a note
 
 The packaged note controls convert a footnote to an endnote, or an endnote to a footnote. In edit mode, deleting a note removes its reference and body, then renumbers later notes.
