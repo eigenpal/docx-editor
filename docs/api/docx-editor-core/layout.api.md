@@ -4872,6 +4872,7 @@ export interface TableCellStyleFormatting {
     readonly paragraphProperties: readonly OoxmlProperty[];
     readonly paragraphPropertyNodes: readonly OoxmlElement[];
     readonly runProperties: readonly OoxmlProperty[];
+    readonly statesTypography?: true;
 }
 
 // @public
