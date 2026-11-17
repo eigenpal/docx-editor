@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A table that opened the body collapsed every empty hidden end-mark cell, so its first row fell to its minimum height.",
+  "after": "The first paragraph of the document keeps its end-of-cell line, so the first row of such a table is at least one line tall. Shared document state and operations are unchanged.",
+  "reason": "The change is confined to layout. Replicas compute the same layout from the same tree, and saved documents keep the same XML.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-table-document-start.test.ts",
+    "packages/core/src/layout/__tests__/table-document-start-end-mark.test.ts"
+  ],
+  "changeset": "table-document-start-end-mark",
+  "migration": null
+}

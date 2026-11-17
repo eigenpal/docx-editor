@@ -173,6 +173,7 @@ import { createPreviousPassZones } from './previous-pass-zones.ts';
 import { lineBandSkip, tableBandSpaceAfter } from './table-band-space-after.ts';
 import { hostSheetGeometry } from './continued-sheet-geometry.ts';
 import { TextTableCarry } from './table-text-carry.ts';
+import { documentOpeningCellParagraph } from './table-cell-terminator.ts';
 import { layoutPassContextKey } from './layout-pass-context-key.ts';
 import {
   contentControlContextToken,
@@ -1359,6 +1360,11 @@ function* layoutBlocksPass(
     // across this section's own pages, and an absolute index went stale on any remap.
     pageOccurrenceKey: () => String(pages.length),
     styleCascade,
+    // The document's first paragraph keeps its end mark (`cellHidesEndMark`).
+    documentFirstParagraphId:
+      pageIndexStart === 0 && flowStartY === 0
+        ? documentOpeningCellParagraph(bodies[0])
+        : undefined,
     tableTopLeads: tableTopLeads(prepared),
     listItems,
     ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),

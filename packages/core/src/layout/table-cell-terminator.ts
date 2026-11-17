@@ -1,4 +1,4 @@
-import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
+import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '@docx-editor.dev/core/store';
 import { isCellTerminatorMarker, isEmptyCellTerminator } from './story-roots.ts';
 
 /** Where a cell's final paragraph sits in the cell walk. */
@@ -75,4 +75,37 @@ function runHoldsNoText(run: OoxmlElement): boolean {
       if (text.kind !== 'textValue' || text.value.length > 0) return false;
   }
   return true;
+}
+
+/**
+ * Whether a cell hides its end mark from row height (`w:hideMark`, 17.4.25). The first paragraph
+ * of the document keeps its mark: a table that opens the body keeps the end-of-cell line of its
+ * first cell, so its first row is at least one line tall. `documentFirstParagraphId` names that
+ * paragraph when a table opens the body.
+ */
+export function cellHidesEndMark(
+  cell: { readonly hideEndMark?: boolean; readonly blocks: readonly { readonly id: string }[] },
+  documentFirstParagraphId: string | undefined
+): boolean {
+  return cell.hideEndMark === true && cell.blocks.at(-1)?.id !== documentFirstParagraphId;
+}
+
+/**
+ * The first paragraph of a table that opens the body: the last block of its first cell when that
+ * cell holds one paragraph and nothing else. `undefined` for any other first block.
+ */
+export function documentOpeningCellParagraph(first: OoxmlNode | undefined): string | undefined {
+  const elements = (node: OoxmlNode | undefined): OoxmlElement[] => {
+    const found: OoxmlElement[] = [];
+    if (node && node.kind !== 'textValue')
+      for (const item of node.children as readonly OoxmlNode[])
+        if (item.kind !== 'textValue' && item.namespaceUri === WML_NAMESPACE_URI)
+          found.push(item as OoxmlElement);
+    return found;
+  };
+  if (!first || first.kind === 'textValue' || first.localName !== 'tbl') return undefined;
+  const row = elements(first).find((item) => item.localName === 'tr');
+  const cell = elements(row).find((item) => item.localName === 'tc');
+  const blocks = elements(cell).filter((item) => item.localName !== 'tcPr');
+  return blocks.length === 1 && blocks[0]!.localName === 'p' ? blocks[0]!.id : undefined;
 }
