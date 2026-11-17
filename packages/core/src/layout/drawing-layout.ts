@@ -698,12 +698,19 @@ function verticalEdges(
       return { top: pageTop, bottom: pageBottomSheet, center: (pageTop + pageBottomSheet) / 2 };
     case 'margin':
       return { top: marginTop, bottom: marginBottom, center: (marginTop + marginBottom) / 2 };
-    case 'paragraph':
+    case 'paragraph': {
+      // An object a table cell anchors but lays out against the page (§20.4.2.3
+      // `layoutInCell="0"`) measures a paragraph offset from the top of its row, not from
+      // the paragraph: cell margins, borders and earlier paragraphs of the cell do not move it.
+      const row = ctx.inTableCell && !ctx.layoutInCell ? ctx.cellBox : null;
+      if (row && Number.isFinite(row.y))
+        return { top: row.y, bottom: row.y + row.height, center: row.y + row.height / 2 };
       return {
         top: ctx.paragraphBox.y,
         bottom: ctx.paragraphBox.y + ctx.paragraphBox.height,
         center: ctx.paragraphBox.y + ctx.paragraphBox.height / 2,
       };
+    }
     case 'line':
       return {
         top: ctx.anchorLineBox.y,
