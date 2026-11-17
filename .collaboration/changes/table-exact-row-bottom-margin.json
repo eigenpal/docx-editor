@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "An exact row height included the cell bottom margin.",
+  "after": "An exact row height excludes the cell bottom margin, which lies below the row content.",
+  "reason": "Layout-only change; the shared document format and operations do not change.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-exact-row-bottom-margin.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-exact-row-bottom-margin.test.ts"
+  ],
+  "changeset": "table-exact-row-bottom-margin",
+  "migration": null
+}
