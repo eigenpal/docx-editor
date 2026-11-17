@@ -10,7 +10,6 @@ import {
   documentOrder,
   moveCaret,
   paragraphFragmentsOf,
-  paragraphFragmentsOfBlocks,
 } from '@docx-editor.dev/core/layout';
 import type {
   BlockFragmentRecord,
@@ -40,6 +39,8 @@ import {
   type SemanticHit,
 } from '../layout/semantic-hit-test.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
+import { sameNoteStory } from './surface-note-story.ts';
+import { noteScopeIndexOf } from './layout-paragraph-indexes.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { logicalLineSegments } from '../layout/line-segments.ts';
 
@@ -199,7 +200,10 @@ export function viewScopeOf(
   return SCOPE_BODY;
 }
 
-/** Paragraph fragments addressable under the active scope (body / HF / note). */
+/**
+ * Paragraph fragments addressable under the active scope (body / HF / note). An open note
+ * addresses every note of its kind, because Word's notes part is one story for selection.
+ */
 export function scopedParagraphFragments(
   page: SemanticLayout['pages'][number],
   active: HeaderFooterScopeBinding | null,
@@ -210,7 +214,7 @@ export function scopedParagraphFragments(
     for (const area of [page.footnotes, page.endnotes]) {
       if (!area) continue;
       for (const note of area.notes) {
-        if (note.scopeId !== noteScopeId) continue;
+        if (!sameNoteStory(note.scopeId, noteScopeId)) continue;
         notes.push(...paragraphFragmentsFromBlocks(note.fragments));
       }
     }
@@ -340,21 +344,44 @@ export function activeStoryCaretStops(
   return caretStopsForBlocks(layout, active.pageIndex, story.fragments, measurer);
 }
 
-/** Story-scoped caret stops for one open footnote/endnote, including continuations. */
+/** Caret stops per layout and note kind; arrow keys ask on every press. */
+const noteStoryStopsCache = new WeakMap<
+  SemanticLayout,
+  Map<string, { readonly measurer?: TextMeasurer; readonly stops: CaretGeometry[] | null }>
+>();
+
+/**
+ * Story-scoped caret stops for an open footnote/endnote, including continuations. The stops
+ * cover every note of its kind, so arrows and Shift+arrows cross from one note to the next.
+ *
+ * For NAVIGATION only, so each stop is moved from its note's box onto the page: two notes on
+ * one page each measure from their own top, and Page Up/Down compares heights across them.
+ * The caret itself is placed by `caretAt`, which keeps the note-relative geometry.
+ */
 export function activeNoteCaretStops(
   layout: SemanticLayout,
   scopeId: string,
   measurer?: TextMeasurer
 ): CaretGeometry[] | null {
+  const kind = parseNoteScopeId(scopeId)?.noteKind ?? scopeId;
+  let byKind = noteStoryStopsCache.get(layout);
+  const cached = byKind?.get(kind);
+  if (cached && cached.measurer === measurer) return cached.stops;
   const stops: CaretGeometry[] = [];
   for (const page of layout.pages) {
     for (const area of [page.footnotes, page.endnotes]) {
-      const note = area?.notes.find((candidate) => candidate.scopeId === scopeId);
-      if (!note) continue;
-      stops.push(...caretStopsForBlocks(layout, page.index, note.fragments, measurer));
+      for (const note of area?.notes ?? []) {
+        if (!sameNoteStory(note.scopeId, scopeId)) continue;
+        for (const stop of caretStopsForBlocks(layout, page.index, note.fragments, measurer)) {
+          stops.push({ ...stop, x: stop.x + note.box.x, y: stop.y + note.box.y });
+        }
+      }
     }
   }
-  return stops.length > 0 ? stops : null;
+  const result = stops.length > 0 ? stops : null;
+  if (!byKind) noteStoryStopsCache.set(layout, (byKind = new Map()));
+  byKind.set(kind, { ...(measurer ? { measurer } : {}), stops: result });
+  return result;
 }
 
 /** Active `[data-docx-hf-active]` host for the preferred furniture page, if any. */
@@ -729,6 +756,11 @@ export function scopedDocumentOrder(
   noteScopeId?: string | null
 ): string[] {
   if (!active && !noteScopeId) return documentOrder(layout);
+  // A note story is every note of its kind, so its order is cached per layout like the body's.
+  const noteKind =
+    !active && noteScopeId ? (parseNoteScopeId(noteScopeId)?.noteKind ?? null) : null;
+  const cachedNotes = noteKind ? noteStoryOrderCache.get(layout)?.get(noteKind) : undefined;
+  if (cachedNotes) return cachedNotes;
   const seen = new Set<string>();
   const order: string[] = [];
   for (const page of layout.pages) {
@@ -750,8 +782,16 @@ export function scopedDocumentOrder(
       }
     }
   }
+  if (noteKind) {
+    let byKind = noteStoryOrderCache.get(layout);
+    if (!byKind) noteStoryOrderCache.set(layout, (byKind = new Map()));
+    byKind.set(noteKind, order);
+  }
   return order;
 }
+
+/** Note story orders per layout and note kind; see {@link scopedDocumentOrder}. */
+const noteStoryOrderCache = new WeakMap<SemanticLayout, Map<string, string[]>>();
 
 export function clampSelectionToScope(
   layout: SemanticLayout,
@@ -791,15 +831,5 @@ function paragraphFragmentsFromBlocks(
 
 /** The note whose painted fragments hold this paragraph, or null. */
 export function noteScopeIdInLayout(layout: SemanticLayout, paragraphId: string): string | null {
-  for (const page of layout.pages) {
-    for (const area of [page.footnotes, page.endnotes]) {
-      if (!area) continue;
-      for (const note of area.notes) {
-        for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
-          if (fragment.paragraphId === paragraphId) return note.scopeId;
-        }
-      }
-    }
-  }
-  return null;
+  return noteScopeIndexOf(layout).get(paragraphId) ?? null;
 }

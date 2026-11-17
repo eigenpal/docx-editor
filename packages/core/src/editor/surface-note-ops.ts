@@ -59,6 +59,11 @@ export interface NoteOps {
    * Used when arrow navigation crosses continuation pages.
    */
   setActiveNotePageIndex(pageIndex: number): void;
+  /**
+   * Make another note of the open story the open note, keeping the selection and the body
+   * selection to restore. The selection head moved into it: notes of one kind are one story.
+   */
+  followNote(scopeId: string, pageIndex: number): void;
 }
 
 export function createNoteOps(deps: {
@@ -272,6 +277,14 @@ export function createNoteOps(deps: {
 
     activeNotePageIndex() {
       return activeNotePageIndex;
+    },
+
+    followNote(scopeId, pageIndex) {
+      const parsed = parseNoteScopeId(scopeId);
+      const open = activeNote ? parseNoteScopeId(activeNote.id) : null;
+      if (!parsed || !open || parsed.noteKind !== open.noteKind) return;
+      activeNote = { kind: 'note', id: formatNoteScopeId(parsed.noteKind, parsed.noteId) };
+      activeNotePageIndex = Number.isInteger(pageIndex) ? pageIndex : activeNotePageIndex;
     },
 
     setActiveNotePageIndex(pageIndex) {

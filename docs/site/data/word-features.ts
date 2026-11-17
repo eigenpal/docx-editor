@@ -861,7 +861,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Both adapters let you insert, edit, delete, and convert footnotes and endnotes. Notes continue across pages according to their placement and paragraph settings. The automation API edits existing notes but cannot create them; notes in headers and footers are unsupported.',
+      'Both adapters let you insert, edit, delete, and convert notes, and select across notes of one kind. Notes continue across pages according to their placement and paragraph settings. Automation cannot create notes, and notes in headers and footers are unsupported.',
     docsLink: '/docs/2.x/guides/footnotes-and-endnotes',
   },
   {

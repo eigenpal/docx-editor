@@ -309,6 +309,11 @@ import { authoredRunPropertiesAt, type SurfaceProperty } from './surface-formatt
 import { mergedRunWrite } from '../store/store/direct-properties.ts';
 import { bindDirectionChord, createDirectionChordHandler } from './surface-direction-chord.ts';
 import { createPointerController, type PointerController } from './surface-pointer.ts';
+import {
+  crossNoteWriteRefusal,
+  followOpenNoteToHead,
+  withinOpenNote,
+} from './surface-note-story.ts';
 import { absorbAtomicControls, leaveAtomicControl } from './surface-atomic-controls.ts';
 import { createReviewViewState } from './surface-review-view.ts';
 import { selectionsEqual } from './dom-selection.ts';
@@ -2267,12 +2272,9 @@ export function mountPaginatedSurface(
   function editableControlsInOrder(): ContentControlBoundaryRecord[] {
     const scope = storyScope();
     const storyPart = scope.kind === 'body' ? null : session.partFor(scope);
-    // A notes PART holds every note in the document, so its controls are not one story's.
-    // Rostered whole, Tab walked out of the open footnote and into the next one — the same
-    // escape this roster was scoped to stop, one level down — and the keystrokes after it
-    // landed in a note the reader was not in. `paragraphOrder()` is already bounded to the
-    // open note, so it is what bounds this.
-    const withinNote = scope.kind === 'notesPart' ? new Set(paragraphOrder()) : undefined;
+    // A notes PART holds every note; Tab, and the keystrokes after it, stay in the open one.
+    const order = withinOpenNote(editingLayout(), noteScopeId(), paragraphOrder());
+    const withinNote = scope.kind === 'notesPart' ? new Set(order) : undefined;
     const controls = storyPart
       ? [...contentControlRecordsInPart(storyPart, withinNote)]
       : [...contentControlsInLayout(currentLayout)];
@@ -3013,6 +3015,10 @@ export function mountPaginatedSurface(
     ) {
       return TOC_READ_ONLY_REFUSAL;
     }
+    const crossNote = checkSelection
+      ? crossNoteWriteRefusal(editingLayout(), noteScopeId(), selection, ops)
+      : null;
+    if (crossNote) return crossNote; // Word refuses typing or deletion across notes.
     // Without an author, refuse every suggested edit instead of writing untracked changes.
     if (editingMode === 'suggest' && !author?.trim() && edits) return AUTHOR_WRITE_REFUSAL;
     if (editingMode === 'suggest') return suggestingRefusalIn(session, author, ops);
@@ -3357,6 +3363,7 @@ export function mountPaginatedSurface(
     const previousToc = tocAtPosition(session.part(), selection.head)?.id;
     retireActivationPin();
     selection = next;
+    followOpenNoteToHead(noteOps, editingLayout(), next, pointerCaret?.pageIndex); // Note follows.
     // Any plain selection cancels a rectangle. A caret placed by a click, a keystroke or an
     // edit is a text selection by definition, and leaving the rectangle behind would keep
     // painting cells that are no longer chosen.
@@ -3440,6 +3447,7 @@ export function mountPaginatedSurface(
       releaseRetainedIfEscaped(next);
       retireActivationPin();
       selection = next;
+      followOpenNoteToHead(noteOps, editingLayout(), next);
       desiredX = null;
       caretFollowPending = true;
       // A gesture the queued `selectionchange` had not delivered still MOVED this caret, so
@@ -4621,7 +4629,7 @@ export function mountPaginatedSurface(
         // Number first, then indent: Backspace reaches the paragraph break only after both.
         if (surface.removeListNumber(position.paragraphId)) return;
         if (surface.removeParagraphIndent(position.paragraphId)) return;
-        const order = paragraphOrder();
+        const order = withinOpenNote(editingLayout(), noteScopeId(), paragraphOrder()); // Not past it.
         const index = order.indexOf(position.paragraphId);
         const previous = order[index - 1];
         if (!previous) return;
@@ -4956,7 +4964,7 @@ export function mountPaginatedSurface(
       // At the end of a paragraph, Delete pulls the NEXT one up — the mirror of Backspace at
       // offset zero, and the reason a document can be flattened without reaching for a mouse.
       if (paragraphOrder().at(-1) === position.paragraphId) completeProgressiveOpen(surface); // Its successor needs the rest of a large open laid out.
-      const order = paragraphOrder();
+      const order = withinOpenNote(editingLayout(), noteScopeId(), paragraphOrder()); // Not past it.
       const next = order[order.indexOf(position.paragraphId) + 1];
       if (!next) return;
       // Unless the break is one a resolved view already merged away. The reader sees one

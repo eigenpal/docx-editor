@@ -26,6 +26,8 @@ import { NOTHING_TO_COPY_FORMATTING, NOTHING_TO_PAINT } from './surface-format-p
 import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import { storyScopeOfNodeId } from './surface-scope.ts';
+import { sameNoteStory } from './surface-note-story.ts';
+import { noteScopeIndexOf } from './layout-paragraph-indexes.ts';
 import { openTextboxForSelection, textboxSelectionRefusal } from './review-story-entry.ts';
 import type { StoryScope } from '@docx-editor.dev/core/store';
 import { paragraphFragmentsOfBlocks } from '@docx-editor.dev/core/layout';
@@ -681,17 +683,7 @@ function clipboardWindow(editor: object | undefined): Window | undefined {
 }
 
 function noteScopeHolding(mounted: PaginatedSurface, paragraphId: string): string | null {
-  for (const page of mounted.layout().pages) {
-    for (const area of [page.footnotes, page.endnotes]) {
-      if (!area) continue;
-      for (const note of area.notes) {
-        for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
-          if (fragment.paragraphId === paragraphId) return note.scopeId;
-        }
-      }
-    }
-  }
-  return null;
+  return noteScopeIndexOf(mounted.layout()).get(paragraphId) ?? null;
 }
 
 /**
@@ -786,11 +778,9 @@ function enterStoryForSelection(
   // painted layout is what knows which one that is.
   //
   // BOTH endpoints, because `StoryScope` cannot tell two footnotes apart: every footnote in a
-  // document answers `{ kind: 'notesPart', noteKind: 'footnote' }`. So the story comparison
-  // above passed a selection running from footnote 1 to footnote 2, and this entered the
-  // head's note with the anchor left in a note that store has never heard of — the exact
-  // half-applied state the comparison exists to refuse. Typing over such a selection deleted
-  // neither endpoint's text and inserted at offset 0 of the wrong note.
+  // document answers `{ kind: 'notesPart', noteKind: 'footnote' }`. The anchor must be in a
+  // note of the head's kind. A range across notes is then the selection a drag makes; the
+  // surface refuses typing and deletion over it (`crossNoteWriteRefusal`), never half-applies.
   const scopeId = noteScopeHolding(mounted, selection.head.paragraphId);
   if (!scopeId) {
     return { ok: false, code: 'notFound', reason: 'that note is not laid out' };
@@ -799,10 +789,15 @@ function enterStoryForSelection(
     selection.anchor.paragraphId === selection.head.paragraphId
       ? scopeId
       : noteScopeHolding(mounted, selection.anchor.paragraphId);
-  if (anchorScopeId !== scopeId) {
+  // Notes of one kind are one story, as in Word: a range from footnote 1 into footnote 3 opens
+  // the head's note, the way a drag across them leaves it. Edits over it are refused later.
+  if (!anchorScopeId || !sameNoteStory(anchorScopeId, scopeId)) {
     return { ok: false, code: 'unsupported', reason: 'a selection cannot span two stories' };
   }
-  if (active.kind === 'note' && active.id === scopeId) return { ok: true, changed: false };
+  // Already in that story: the open note follows the head when the selection lands.
+  if (active.kind === 'note' && sameNoteStory(active.id, scopeId)) {
+    return { ok: true, changed: false };
+  }
   mounted.exitHeaderFooter?.();
   const opened = mounted.enterNote?.(scopeId);
   return opened

@@ -1,5 +1,6 @@
 import { textboxInsertionRefusal } from './textbox-commands.ts';
 import { tocAtPosition } from './surface-toc-ranges.ts';
+import { replacesSelection, surfaceCrossNoteRefusal } from './surface-note-story.ts';
 import { formsProtectionRefusal } from '../store/store/tree-op-content-controls.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import {
@@ -419,6 +420,11 @@ export function gateCommand(
       };
     }
   }
+  // Over a selection across notes, a command that replaces it would merge them; Word refuses.
+  // Copy and formatting still run there.
+  const crossNote = replacesSelection(command.type) ? surfaceCrossNoteRefusal(surface) : null;
+  if (crossNote)
+    return { ok: false, refusal: { ok: false, code: 'unsupported', reason: crossNote } };
   // The style picker's probe promises "a well-formed pick would be honoured": on a
   // document that defines no paragraph styles, no pick can be — every styleId is refused
   // at exec — so the control must grey out rather than open an empty, dead listbox.

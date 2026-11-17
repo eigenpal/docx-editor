@@ -62,6 +62,7 @@ import {
   type HeaderFooterScopeBinding,
 } from './surface-scope.ts';
 import { autoScrollDelta } from './surface-drag-autoscroll.ts';
+import { hitNoteStoryAtSheetPoint, sameNoteStory } from './surface-note-story.ts';
 import { isApplePlatform } from '@docx-editor.dev/i18n';
 
 /** Active header/footer scope as seen by the pointer layer. */
@@ -322,13 +323,8 @@ export function createPointerController(
   function resolve(clientX: number, clientY: number): SemanticHit | null {
     const activeNote = host.activeNote?.() ?? null;
     if (activeNote) {
-      const layout = host.layout();
-      const noteHit = findNoteAtSheetPoint(layout, sheetPoint(clientX, clientY), host.pageOffsetX);
-      if (!noteHit || noteHit.scopeId !== activeNote.scopeId) return null;
-      const measurer = host.measurer();
-      return hitTestFragments(layout, noteHit.pageIndex, noteHit.fragments, noteHit.local, {
-        ...(measurer ? { measurer } : {}),
-      });
+      // Every note of the open note's kind, as in Word: a drag crosses into the next note.
+      return hitNoteStoryAtSheetPoint(host, sheetPoint(clientX, clientY), activeNote.scopeId);
     }
     const active = host.activeHeaderFooter?.() ?? null;
     if (!active) return resolveBody(clientX, clientY);
@@ -739,17 +735,13 @@ export function createPointerController(
       const hit = hitTestFragments(layout, noteHit.pageIndex, noteHit.fragments, noteHit.local, {
         ...(measurer ? { measurer } : {}),
       });
-      if (!activeNote || activeNote.scopeId !== noteHit.scopeId) {
-        event.preventDefault();
-        host.focus();
-        host.enterNote?.(
-          noteHit.scopeId,
-          hit ? { paragraphId: hit.position.paragraphId, offset: hit.position.offset } : undefined,
-          noteHit.pageIndex
-        );
-        return;
-      }
-      if (activeNote.pageIndex !== noteHit.pageIndex) {
+      // Notes of one kind are one story: a press on the same page, or a Shift press anywhere,
+      // takes the ordinary gesture lane, and the open note follows the selection head.
+      const sameStory =
+        activeNote !== null &&
+        sameNoteStory(activeNote.scopeId, noteHit.scopeId) &&
+        (event.shiftKey || activeNote.pageIndex === noteHit.pageIndex);
+      if (!sameStory) {
         event.preventDefault();
         host.focus();
         host.enterNote?.(
