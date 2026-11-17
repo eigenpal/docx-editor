@@ -4,6 +4,7 @@ import type { EquationExpression, OmmlEquationProjection } from '@docx-editor.de
 import { measureDisplayText, withFontFamily, type ResolvedRunStyle } from './run-style.ts';
 import type { LayoutBox, TextMeasurer } from './semantic-records.ts';
 import { equationDisplayText } from './equation-display-text.ts';
+import { equationFormatKerningMinPt } from '../store/package/omml-run-format.ts';
 import { equationInk } from './equation-ink.ts';
 import { fitEquationLineExtent, type EquationTextBand } from './equation-line-extent.ts';
 import { attachScripts, box, naryLimitsBeside, shifted } from './equation-scripts.ts';
@@ -417,8 +418,10 @@ function layoutText(
   let formats = cache.formats.get(formatKey);
   let formatted = formats?.get(digits);
   if (!formatted) {
+    const kerningMinPt = equationFormatKerningMinPt(expression.format);
     const face = Object.freeze({
       ...familyStyle,
+      ...(kerningMinPt === undefined ? {} : { kerningMinPt, kerningEnabled: kerningMinPt > 0 }),
       fontSizePt: textSizePt(expression, familyStyle),
       // Mathematical alphanumeric glyphs already carry their style in this
       // regular face. Do not request a second italic or bold font program.

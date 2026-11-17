@@ -201,3 +201,25 @@ test.each([
   expect(equationRunFormat(node)).toBeNull();
   expect(JSON.stringify(node)).toBe(before);
 });
+
+test.each([
+  ['0', 0],
+  ['2', 1],
+  ['40', 20],
+])('reads the kerning threshold w:kern %s', (value, points) => {
+  const node = run(`<w:rPr><w:kern w:val="${value}"/><w:sz w:val="40"/></w:rPr>`);
+  expect(equationRunFormat(node)).toEqual({ kerningMinPt: points, fontSizePt: 20 });
+});
+
+test.each([
+  '<w:kern w:val="-2"/>',
+  '<w:kern w:val="1.5"/>',
+  '<w:kern w:val="10000"/>',
+  '<w:kern w:val="02"/>',
+  '<w:kern/>',
+  '<w:kern m:val="2"/>',
+  '<w:kern w:val="2"><w:b/></w:kern>',
+  '<w:kern w:val="0"/><w:kern w:val="2"/>',
+])('rejects invalid kerning properties %s', (properties) => {
+  expect(equationRunFormat(run(`<w:rPr>${properties}</w:rPr>`))).toBeNull();
+});
