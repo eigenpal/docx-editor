@@ -49,6 +49,7 @@ import { cellContentInsets, type CellContentInsets } from './table-cell-geometry
 import { admitVMergeSpansAt, type RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
 import type { HeaderGroupPlan } from './table-header-vmerge.ts';
 import { createFlowHeaderReuse } from './table-header-flow-reuse.ts';
+import { headerGroupStart } from './table-header-group-start.ts';
 import { createMergedTextCarry, deferMergedTextPastHeadRow } from './table-vmerge-boundary.ts';
 import {
   createVMergeFragmentCarry,
@@ -172,8 +173,8 @@ export function* paginateTableInFlowSteps(
     admitted: !outOfFlow && !structure.float && !pinnedBreak,
   });
   const headerPlanAt = (top: number): HeaderGroupPlan => headers.plan(top);
-  // Word treats a header prefix taller than a true fresh page as ordinary authored rows. A note
-  // reservation only shrinks an advisory band and must never split an otherwise valid prefix.
+  // A header prefix taller than a true fresh page lays out as ordinary rows; a note reservation
+  // only shrinks an advisory band and must never split an otherwise valid prefix.
   const initialHeaderPlan = headerPlanAt(flow.cursorY);
   const headerGroupHeight = initialHeaderPlan.heightPt;
   const headerMerged = initialHeaderPlan.planned;
@@ -386,28 +387,28 @@ export function* paginateTableInFlowSteps(
       heightOf: cachedRowHeights(candidates, terminal.withRule(rowHeightOf, tableDeps), first),
       following: (room) => flow.followingKeepOpening?.(room),
     });
-  const headerFollowsContent = flow.regionHoldsContent(fragmentTop);
+  const start = headerGroupStart({
+    laterLayout,
+    breaksPages,
+    group: headerRows.length === 0 ? 'none' : initialHeaderGroupDegraded ? 'tall' : 'fits',
+    followsContent: flow.regionHoldsContent(fragmentTop),
+    top: flow.cursorY,
+    room: contentHeight() - flow.cursorY - headerGroupHeight,
+  });
+  initialHeaderGroupDegraded ||= start === 'ordinary' || start === 'whole-rows';
+  repeatsEnabled = !initialHeaderGroupDegraded;
   if (!initialHeaderGroupDegraded && headerRows.length > 0) clearAuthoredHeader();
-
-  // Mode 15 and later: header rows keep with the body rows' opening (`headerGroupMoves`).
-  // When both do not fit below content already on the page, the table starts on the next one.
-  // Earlier layout leaves the header rows and repeats them above the body rows.
+  const fresh = contentHeight() - headerGroupHeight;
+  const room = contentHeight() - flow.cursorY - headerGroupHeight;
+  const body = () => keptSource(structure.rows.slice(headerRows.length), undefined, fresh);
   if (
-    laterLayout &&
-    breaksPages &&
-    !initialHeaderGroupDegraded &&
-    headerRows.length > 0 &&
-    headerFollowsContent &&
-    flow.cursorY > 0.001
+    start === 'ordinary-next-page' ||
+    (start === 'kept' && headerGroupMoves(body(), room, fresh))
   ) {
-    const fresh = contentHeight() - headerGroupHeight;
-    const body = keptSource(structure.rows.slice(headerRows.length), undefined, fresh);
-    if (headerGroupMoves(body, contentHeight() - flow.cursorY - headerGroupHeight, fresh)) {
-      closeTableFragment();
-      advanceColumn();
-      tableLeft = originX();
-      fragmentTop = flow.cursorY;
-    }
+    closeTableFragment();
+    advanceColumn();
+    tableLeft = originX();
+    fragmentTop = flow.cursorY;
   }
 
   // Initial authored header group (not repeats) — atomic with body-row pagination below.
@@ -480,6 +481,7 @@ export function* paginateTableInFlowSteps(
       contentHeight()
     );
     if (initialHeaderGroupDegraded && bodyRowIndex >= headerRows.length) repeatsEnabled = true;
+    const cantSplit = row.cantSplit || (start === 'whole-rows' && bodyRowIndex < headerRows.length);
     const forceBreak = forceNextFragment;
     forceNextFragment = false;
     if (floats) {
@@ -537,7 +539,7 @@ export function* paginateTableInFlowSteps(
     // a page that can hold it when its authored minimum does not fit the room below `top`
     // (`bottomToTopTextKeepsRowWhole`).
     const keepsWholeAt = (top: number): boolean =>
-      row.cantSplit ||
+      cantSplit ||
       bottomToTopTextKeepsRowWhole(
         row,
         contentHeight() - top,
@@ -834,12 +836,10 @@ export function* paginateTableInFlowSteps(
       // Does not fit the remaining band.
       // Exact rows are atomic (Word clips overflow inside the fixed box; they do not
       // continue across pages). Same keep-together path as `w:cantSplit`.
-      // Not on a CONTINUATION: this row already split, so `w:cantSplit` is a decision that
-      // was made and lost an iteration ago. Re-taking it here reaches the throw below with
-      // `cursorY === 0` — a fresh page the row was just moved to — and aborts a layout
-      // nothing in `core` catches, on a path the module comment calls a recovery.
+      // Not on a CONTINUATION: this row already split, so `w:cantSplit` was decided an
+      // iteration ago. Re-taking it here would reach the throw below on the fresh page.
       const splitStartMisses = onlyRepeatedHeaderRows(rows) && startMissesBelowRepeat(flow.cursorY);
-      if (!isContinuation && (row.cantSplit || row.height.rule === 'exact' || splitStartMisses)) {
+      if (!isContinuation && (cantSplit || row.height.rule === 'exact' || splitStartMisses)) {
         // No page holds this row. Before mode 15 it stays whole on its fresh page and runs past
         // the bottom margin (`tallRowStaysWhole`); later modes split it there.
         const tall = row.height.rule !== 'exact' && !pageHoldsRow();

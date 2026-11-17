@@ -60,12 +60,14 @@ function authoredHeaderLocation(result: SemanticLayout, text: string): string | 
 
 function layoutWithReserves(
   part: OoxmlPart,
-  pageBottomReserves: ReadonlyMap<number, number>
+  pageBottomReserves: ReadonlyMap<number, number>,
+  compatibilityMode?: number
 ): SemanticLayout {
   return layoutSemanticDocument(part, 0, {
     measurer: createFixedMeasurer(),
     geometry: TINY,
     pageBottomReserves,
+    compatibilityMode,
   });
 }
 
@@ -142,7 +144,9 @@ test('an authored header rechecks a smaller page reached by its atomic move', ()
 
   const result = layoutWithReserves(
     loadPart(`${filler}<w:tbl>${headers}${body}</w:tbl>`),
-    new Map([[1, 60]])
+    new Map([[1, 60]]),
+    // Mode 15 moves the whole group; earlier modes break it between its rows.
+    15
   );
 
   expectNoOverflow(result);

@@ -721,13 +721,13 @@ describe('table row pagination (tiny page)', () => {
 
   test('header group moves whole when the remainder fits one header but not the group', () => {
     // TINY content = 80pt; one para row is 12.73pt. Five filler paras leave 16.4pt — enough
-    // for H1 alone, not H1+H2. The group must move intact rather than split.
+    // for H1 alone, not H1+H2. In mode 15 the group must move intact rather than split.
     const filler = Array.from({ length: 5 }, (_, i) => p(`F${i}`)).join('');
     const h1 = tr(tc(p('H1')), '<w:trPr><w:tblHeader/></w:trPr>');
     const h2 = tr(tc(p('H2')), '<w:trPr><w:tblHeader/></w:trPr>');
     const body = tr(tc(p('body')));
     const part = loadPart(`${filler}<w:tbl>${h1}${h2}${body}</w:tbl>`);
-    const result = layoutTiny(part);
+    const result = layoutTiny(part, undefined, 15);
     assertNoContentOverflow(result);
     expect(result.pages.length).toBeGreaterThan(1);
     // The whole group moved: page 1 keeps the filler and NO table row, even though H1
