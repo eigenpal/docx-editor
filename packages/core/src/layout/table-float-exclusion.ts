@@ -144,6 +144,11 @@ export function addFloatingTableExclusions(
           inBodyFlow &&
           singleColumn(width, columns.contentWidth) &&
           raisedAboveText(metadata.float),
+        // The earlier lines a rising band crosses wrap beside it, in one column for the same reason.
+        wrapsWhenRising:
+          inBodyFlow &&
+          singleColumn(width, columns.contentWidth) &&
+          bandRisesAboveText(metadata.float),
       });
       if (!pageZones) {
         result ??= new Map(drawingZones);
@@ -164,6 +169,15 @@ const NO_DISTANCES = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
  */
 function raisedAboveText(float: TableFloatPosition): boolean {
   return float.vertAnchor === 'text' && !float.ySpec && float.yPt < -0.051;
+}
+
+/**
+ * Whether the band of a text-anchored table rises above its anchor top: the offset less the
+ * `w:topFromText` distance is more negative than the one twip of storage bias.
+ */
+function bandRisesAboveText(float: TableFloatPosition): boolean {
+  const top = float.distances?.top ?? 0;
+  return float.vertAnchor === 'text' && !float.ySpec && float.yPt - top < -0.051;
 }
 
 /** Whether the column being filled is the whole text width: a single-column section. */
@@ -722,17 +736,18 @@ export function clearEarlierText(
   // covers move below it instead (`reachesEarlierLines`).
   const right = left + tableWidth + distances.left + distances.right;
   // In one column only, as `reachesEarlierLines` is: elsewhere the table clears the text.
-  if (
-    singleColumn(frames.text.width, frames.margin.width) &&
-    raisedAboveText(float) &&
-    leavesNoPassage(left, right, frames.text.left, frames.text.width)
-  )
-    return anchorY;
+  const spans = leavesNoPassage(left, right, frames.text.left, frames.text.width);
+  const oneColumn = singleColumn(frames.text.width, frames.margin.width);
+  if (oneColumn && spans && raisedAboveText(float)) return anchorY;
+  // A band that rises above the anchor and leaves a passage clears only earlier in-flow tables:
+  // the earlier lines it crosses wrap beside it instead (`wrapsEarlierLines`).
+  const wrapsText = oneColumn && !spans && bandRisesAboveText(float);
   const height = floatingTableBand(table, width, deps) - Math.max(0, float.yPt) + distances.top;
   let top = anchorY + float.yPt - distances.top;
   const ink = earlier
     .flatMap((block) => {
       if (block.kind === 'table') return block.floatingWrap ? [] : [block.box];
+      if (wrapsText) return [];
       return block.lines.flatMap((line) => [
         ...line.spans.filter((span) => span.text.trim()).map((span) => span.box),
         ...(line.drawings ?? []).map((drawing) => drawing.paintBounds),

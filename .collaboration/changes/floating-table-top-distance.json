@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A text-anchored floating table whose top distance or negative offset rose above its anchor moved down below the earlier text, which kept its full width.",
+  "after": "The table keeps the place of its anchor, and the earlier lines its band crosses wrap beside it. Shared document state and operations are unchanged.",
+  "reason": "The change is confined to layout. Replicas compute the same layout from the same tree, and saved documents keep the same XML.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-table-top-distance.test.ts",
+    "packages/core/src/layout/__tests__/table-top-distance-wrap.test.ts"
+  ],
+  "changeset": "floating-table-top-distance",
+  "migration": null
+}

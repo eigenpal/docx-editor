@@ -41,6 +41,8 @@ export function createParagraphDrawingWrap(options: {
   // its own wrap caused there, just as a top-and-bottom anchor excludes its own skip.
   const displacements = new Map<string, number>();
   const liftedDisplacements = new Map<string, Map<string, number>>();
+  // The lines a rising table band adds to each earlier paragraph on its page, by table anchor.
+  const tableWrapShares = new Map<string, Map<string, number>>();
   const followingAnchors = new Map<string, ReadonlySet<string>>();
   const followingAnchor = (zone: ExclusionZone, index: number): boolean => {
     if (
@@ -102,6 +104,33 @@ export function createParagraphDrawingWrap(options: {
   };
   const extent = (lines: readonly PendingLine[]) =>
     lines.reduce((sum, line) => sum + line.height + (line.exclusionSkipBefore ?? 0), 0);
+  /** Records the lines each rising table band anchored after paragraph `entryId` adds to it. */
+  const measureTableShares = (
+    pageIndex: number,
+    entryId: string,
+    zones: readonly ExclusionZone[],
+    lines: readonly PendingLine[],
+    breakWithout: (anchorId: string) => readonly PendingLine[]
+  ): void => {
+    for (const [key, shares] of tableWrapShares)
+      if (key.startsWith(`${pageIndex}:`)) shares.delete(entryId);
+    const entryOrder = options.paragraphOrder.get(entryId);
+    if (entryOrder === undefined || options.seedForwardOnly) return;
+    const anchors = new Set<string>();
+    for (const zone of zones) {
+      const anchorOrder = options.paragraphOrder.get(zone.anchorParagraphId);
+      if (zone.wrapsEarlierLines && anchorOrder !== undefined && anchorOrder > entryOrder)
+        anchors.add(zone.anchorParagraphId);
+    }
+    for (const anchorId of anchors) {
+      const share = Math.max(0, extent(lines) - extent(breakWithout(anchorId)));
+      if (share <= 0.001) continue;
+      const key = `${pageIndex}:${anchorId}`;
+      const shares = tableWrapShares.get(key) ?? new Map<string, number>();
+      shares.set(entryId, share);
+      tableWrapShares.set(key, shares);
+    }
+  };
   return {
     breakZones(
       entry: WrapParagraph,
@@ -162,6 +191,7 @@ export function createParagraphDrawingWrap(options: {
             (!options.seedForwardOnly &&
               (zone.pageFramedBand === true ||
                 zone.reachesEarlierLines === true ||
+                zone.wrapsEarlierLines === true ||
                 liftedAnchor(zone, index))) ||
             (!placement && followingAnchor(zone, index));
           if (entryOrder !== undefined && anchorOrder !== undefined) {
@@ -225,6 +255,7 @@ export function createParagraphDrawingWrap(options: {
       if (entryId === undefined) return;
       for (const [key, shares] of liftedDisplacements)
         if (key.startsWith(`${pageIndex}:`)) shares.delete(entryId);
+      measureTableShares(pageIndex, entryId, zones, lines, breakWithout);
       if (!lines.some((line) => (line.exclusionSkipBefore ?? 0) > 0.001)) return;
       const anchors = new Set(
         zones
@@ -239,6 +270,13 @@ export function createParagraphDrawingWrap(options: {
         shares.set(entryId, share);
         liftedDisplacements.set(key, shares);
       }
+    },
+    /** The lines rising table bands of `anchorId` added to earlier paragraphs on the page. */
+    tablePush(pageIndex: number, anchorId: string): number {
+      let push = 0;
+      for (const share of tableWrapShares.get(`${pageIndex}:${anchorId}`)?.values() ?? [])
+        push += share;
+      return push;
     },
     displacement(pageIndex: number, paragraphId: string): number {
       const key = `${pageIndex}:${paragraphId}`;

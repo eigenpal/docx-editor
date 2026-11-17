@@ -130,7 +130,9 @@ export function createStackPlacement(
      */
     push(tableId: string): number {
       const own = byId.get(tableId);
-      return own && own.float.yPt < -0.051 && !own.float.ySpec
+      // A band that rises above the anchor through `w:topFromText` takes the push too.
+      const rise = own ? own.float.yPt - (own.float.distances?.top ?? 0) : 0;
+      return own && rise < -0.051 && !own.float.ySpec
         ? flow.pushOf(own.anchorId, own.sourceIndex)
         : 0;
     },
