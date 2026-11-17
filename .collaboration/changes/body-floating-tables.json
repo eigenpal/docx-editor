@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "In-flow tables always started below floating tables, text frames before a table anchored after it, and several positioned-table rules differed.",
+  "after": "In-flow tables stand beside floats and frames that leave room, and positioned tables follow the corrected alignment, admission, and keep-whole rules. Shared document state and operations are unchanged.",
+  "reason": "The change is confined to layout. Replicas compute the same layout from the same tree, and saved documents keep the same XML.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-table-beside-float.test.ts",
+    "packages/core/src/layout/__tests__/table-beside-float.test.ts",
+    "packages/core/src/layout/__tests__/frame-before-table.test.ts"
+  ],
+  "changeset": "body-floating-tables",
+  "migration": null
+}

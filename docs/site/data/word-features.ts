@@ -567,7 +567,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Text wraps around floating tables at their saved positions, also in table cells. Page breaks depend on the anchor, available space, and document compatibility settings. You cannot edit floating-table positions from the interface.',
+      'Text and narrower tables wrap around floating tables at their saved positions, also in table cells. Page breaks depend on the anchor, available space, and document compatibility settings. You cannot edit floating-table positions from the interface.',
   },
   {
     id: 'tables.text-direction',
