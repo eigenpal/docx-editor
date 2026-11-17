@@ -11,8 +11,6 @@ export interface CellTerminatorPosition {
   readonly afterEmittedTable: boolean;
   /** The cell hides its end mark from row height (`w:hideMark`). */
   readonly hideEndMark: boolean;
-  /** Content of this cell was already placed in the same fragment. */
-  readonly afterPlacedContent: boolean;
 }
 
 /**
@@ -30,18 +28,19 @@ export interface CellTerminatorPosition {
  *   terminator, which paints as a hairline. Runs that hold no text keep it empty, in every
  *   mode: its spacing, mark size, exact line height, borders and shading take no room either.
  *   A space or a tab is text, and so is a second paragraph between it and the table.
- * - The empty last paragraph of a `w:hideMark` cell after other content. The end-of-cell
- *   mark does not count toward row height (17.4.25), and an empty final paragraph holds
- *   nothing else, so the row ends with the content above it: no line, spacing, or rule.
- *   An empty cell has no content above its mark and keeps the mark's line.
+ * - The empty last paragraph of a `w:hideMark` cell. The end-of-cell mark does not count
+ *   toward row height (17.4.25), and an empty final paragraph holds nothing else, so the row
+ *   ends with the content above it: no line and no spacing. That holds for an empty cell
+ *   too, whose row is then as tall as its cell margins, its `w:trHeight`, or its other
+ *   cells. Paragraph borders still draw in an otherwise empty cell, so placement keeps such a
+ *   paragraph's line (`collapseInEmptyCell`).
  */
 export function cellTerminatorCollapses(
   block: OoxmlElement,
   position: CellTerminatorPosition
 ): boolean {
   if (!position.inTableCell || !position.last) return false;
-  const terminator =
-    position.afterEmittedTable || (position.hideEndMark && position.afterPlacedContent);
+  const terminator = position.afterEmittedTable || position.hideEndMark;
   if (!terminator) return false;
   return isEmptyCellTerminator(block) || (position.afterEmittedTable && holdsNoText(block));
 }
