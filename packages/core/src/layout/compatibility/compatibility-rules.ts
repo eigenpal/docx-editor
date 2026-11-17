@@ -95,6 +95,10 @@ export const MODE_RULES = {
     'A floating table with a numeric offset or a left, inside, right, or outside alignment positions its cell content, not its outer edge',
     'ECMA-376 Part 1 §17.4.57 tblpPr'
   ),
+  floatingTableBandHoldsSpaceAfter: legacy(
+    'The last line of a paragraph and its space after must both clear a floating table band; later modes test the line alone',
+    'ECMA-376 Part 1 §17.4.57 tblpPr'
+  ),
   floatingTableOverlapMovesLeft: modern(
     'A floating table that may not overlap moves left of the table it meets when the right side has no room',
     'ECMA-376 Part 1 §17.4.56 tblOverlap'

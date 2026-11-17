@@ -4,7 +4,8 @@
 // earlier lines it covers below it (`reachesEarlierLines` zones). The anchor follows them, but
 // the table keeps the place its anchor had before the move: its top is the anchor top minus
 // this push, plus the offset. The first earlier line the band pushes sets the push; the lines
-// after it follow without a skip of their own.
+// after it follow without a skip of their own. A table of the same anchor that comes after the
+// pushing one in source order is placed after the move and takes no push.
 //
 // The zones come from the previous pass, so the push is measured in the pass it applies to and
 // an edit above the table moves the table with its text. When the moved lines would carry the
@@ -12,17 +13,50 @@
 // its table to the next page first, so no zone is left behind on this one.
 
 import type { ExclusionZone } from './drawing-exclusion.ts';
+import type { LayoutBox } from './semantic-records.ts';
 
 const EPSILON = 0.5;
+const TOUCH = 0.01;
+
+/** Whether a line at `top` crosses `band`; a line that only touches it stays. */
+function crosses(top: number, height: number, band: LayoutBox): boolean {
+  return top < band.y + band.height - TOUCH && top + height > band.y + TOUCH;
+}
+
+/** Where a line at `top` lands below the top-and-bottom bands of `zones` it falls through. */
+function fallThrough(top: number, height: number, zones: readonly ExclusionZone[]): number {
+  let y = top;
+  for (let moved = true; moved;) {
+    moved = false;
+    for (const zone of zones) {
+      if (!crosses(y, height, zone.verticalBand)) continue;
+      y = zone.verticalBand.y + zone.verticalBand.height;
+      moved = true;
+    }
+  }
+  return y;
+}
+
+/** The push of one anchor on one page: where its pushed line landed, and where it stood. */
+interface AnchorPush {
+  readonly landed: number;
+  /** Per raised table of the anchor, source order first: where the line stood before it. */
+  readonly before: readonly { readonly order: number; readonly y: number }[];
+}
 
 export function createEarlierLinePush(orderOf: (paragraphId: string) => number | undefined) {
-  const pushes = new Map<string, number>();
+  const pushes = new Map<string, AnchorPush>();
   const key = (page: number, anchorId: string) => `${page}:${anchorId}`;
   return {
     /**
      * Records a line of `paragraphId` that moved from `top` down by `skip` on `page`, when it
-     * crossed the bands of the raised tables anchored after that paragraph and landed at the
-     * bottom of the lowest one. Tables stacked on one anchor push as one.
+     * crossed the band of a raised table anchored after that paragraph, also after an earlier
+     * band moved it there, and landed at or below that band.
+     *
+     * The tables of one anchor are placed in source order, each from the flow as it stands
+     * then, and each moves the earlier lines its band covers below it. So a table leaves out of
+     * its own position only the move it and the later tables of its anchor cause: where the line
+     * landed, less where the bands before it would have left the line.
      */
     note(
       page: number,
@@ -35,29 +69,48 @@ export function createEarlierLinePush(orderOf: (paragraphId: string) => number |
       if (skip <= 0) return;
       const order = orderOf(paragraphId);
       if (order === undefined) return;
-      const bottoms = new Map<string, number>();
-      const crossed = new Set<string>();
+      const landed = top + skip;
+      const raised = new Map<string, ExclusionZone[]>();
+      const others: ExclusionZone[] = [];
       for (const zone of zones) {
-        if (!zone.reachesEarlierLines) continue;
+        if (zone.input.mode !== 'topAndBottom') continue;
         const anchorOrder = orderOf(zone.anchorParagraphId);
-        if (anchorOrder === undefined || anchorOrder <= order) continue;
-        const band = zone.verticalBand;
-        const bottom = band.y + band.height;
-        bottoms.set(
-          zone.anchorParagraphId,
-          Math.max(bottoms.get(zone.anchorParagraphId) ?? 0, bottom)
-        );
-        if (top < bottom && top + height > band.y) crossed.add(zone.anchorParagraphId);
+        if (anchorOrder === undefined) continue;
+        if (zone.reachesEarlierLines && anchorOrder > order) {
+          const own = raised.get(zone.anchorParagraphId) ?? [];
+          own.push(zone);
+          raised.set(zone.anchorParagraphId, own);
+        } else if (anchorOrder <= order || zone.pageFramedBand) others.push(zone);
       }
-      for (const anchorId of crossed) {
+      for (const [anchorId, own] of raised) {
         const id = key(page, anchorId);
-        if (!pushes.has(id) && Math.abs(top + skip - bottoms.get(anchorId)!) <= EPSILON)
-          pushes.set(id, skip);
+        if (pushes.has(id)) continue;
+        own.sort((a, b) => a.sourceOrder - b.sourceOrder);
+        // Where the line stands when each table is placed: below the bands before it.
+        const before = own.map((zone, index) => ({
+          order: zone.sourceOrder,
+          y: Math.min(landed, fallThrough(top, height, [...others, ...own.slice(0, index)])),
+        }));
+        // The first table whose band the line crosses from there pushes it.
+        const pusher = own.findIndex((zone, index) =>
+          crosses(before[index]!.y, height, zone.verticalBand)
+        );
+        const band = pusher < 0 ? undefined : own[pusher]!.verticalBand;
+        if (!band || landed < band.y + band.height - EPSILON) continue;
+        pushes.set(id, { landed, before });
       }
     },
-    /** The push the raised tables anchored at `anchorId` leave out of its top on `page`. */
-    of(page: number, anchorId: string): number {
-      return pushes.get(key(page, anchorId)) ?? 0;
+    /**
+     * The push the raised tables anchored at `anchorId` leave out of its top on `page`. With
+     * `sourceOrder`, the part the table at that order and the later ones caused.
+     */
+    of(page: number, anchorId: string, sourceOrder?: number): number {
+      const push = pushes.get(key(page, anchorId));
+      if (!push) return 0;
+      const first = push.before[0]?.y ?? push.landed;
+      if (sourceOrder === undefined) return push.landed - first;
+      const own = push.before.find((entry) => entry.order >= sourceOrder);
+      return own ? push.landed - own.y : 0;
     },
   };
 }

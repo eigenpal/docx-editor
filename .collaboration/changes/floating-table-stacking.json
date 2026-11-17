@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Every raised text-anchored table of one anchor kept the place its anchor had before the earlier lines moved, and legacy modes tested a line alone against a floating table band.",
+  "after": "Each table of an anchor opens from the flow after the moves the tables before it caused, and legacy modes test a paragraph's last line with its space after. Shared document state and operations are unchanged.",
+  "reason": "The change is confined to layout. Replicas compute the same layout from the same tree, and saved documents keep the same XML.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-raised-table-push.test.ts",
+    "packages/core/src/layout/__tests__/raised-table-push-order.test.ts"
+  ],
+  "changeset": "floating-table-stacking",
+  "migration": null
+}

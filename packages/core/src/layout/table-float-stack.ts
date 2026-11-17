@@ -110,8 +110,11 @@ interface StackFlow {
   /** The fragments of the page being filled. */
   readonly fragments: () => readonly BlockFragmentRecord[];
   readonly cursorY: () => number;
-  /** How far the raised tables of one anchor pushed the earlier lines on this page. */
-  readonly pushOf: (anchorId: string) => number;
+  /**
+   * How far the raised tables of one anchor pushed the earlier lines on this page, for the
+   * table at `sourceOrder` (see `earlier-line-push.ts`).
+   */
+  readonly pushOf: (anchorId: string, sourceOrder: number) => number;
 }
 
 /** Stack placement over one story's positioned tables, reading the flow as it advances. */
@@ -127,7 +130,9 @@ export function createStackPlacement(
      */
     push(tableId: string): number {
       const own = byId.get(tableId);
-      return own && own.float.yPt < -0.051 && !own.float.ySpec ? flow.pushOf(own.anchorId) : 0;
+      return own && own.float.yPt < -0.051 && !own.float.ySpec
+        ? flow.pushOf(own.anchorId, own.sourceIndex)
+        : 0;
     },
     /** The top a waiting table stacks at on this page, when it stacks. */
     top(tableId: string): number | undefined {
