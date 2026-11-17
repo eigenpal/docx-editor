@@ -69,7 +69,10 @@ import {
 } from './style-chain.ts';
 import { resolveParagraphOutlineLevel } from './paragraph-outline-level.ts';
 import { paragraphMarkRunProperties } from './paragraph-mark-run.ts';
-import { legacyTableDefaultProperties } from './table-style-compatibility.ts';
+import {
+  legacyTableDefaultProperties,
+  tableStyleStatesTypography,
+} from './table-style-compatibility.ts';
 import { autoHyphenationFromSettings } from './auto-hyphenation.ts';
 import {
   findParagraphProperties,
@@ -415,6 +418,8 @@ export interface TableCellStyleFormatting {
   readonly paragraphPropertyNodes: readonly OoxmlElement[];
   /** Inherited run properties for every run in the cell, before the paragraph style. */
   readonly runProperties: readonly OoxmlProperty[];
+  /** The table style states paragraph or run formatting (`tableStyleStatesTypography`). */
+  readonly statesTypography?: true;
 }
 
 export const EMPTY_TABLE_CELL_STYLE_FORMATTING: TableCellStyleFormatting = Object.freeze({
@@ -442,14 +447,19 @@ export function tableCellStyleFormatting(
     const conditionRPr = findRunProperties(format);
     if (conditionRPr) runProperties.push(...withoutChangeRecords(propertiesOf(conditionRPr)));
   }
+  const stated = tableStyleStatesTypography(formatting)
+    ? ({ statesTypography: true } as const)
+    : {};
   if (
     paragraphPropertyNodes.length === 0 &&
     paragraphProperties.length === 0 &&
     runProperties.length === 0
   ) {
-    return EMPTY_TABLE_CELL_STYLE_FORMATTING;
+    return 'statesTypography' in stated
+      ? { ...EMPTY_TABLE_CELL_STYLE_FORMATTING, ...stated }
+      : EMPTY_TABLE_CELL_STYLE_FORMATTING;
   }
-  return { paragraphProperties, paragraphPropertyNodes, runProperties };
+  return { paragraphProperties, paragraphPropertyNodes, runProperties, ...stated };
 }
 
 /**
@@ -636,7 +646,11 @@ export function cascadeParagraphWithNumbering(
     tableCellStyle &&
     !table.strictTableStyleHierarchy &&
     style.styleId === table.defaultParagraphStyleId
-      ? legacyTableDefaultProperties(properties, tableCellStyle.runProperties)
+      ? legacyTableDefaultProperties(
+          properties,
+          tableCellStyle.runProperties,
+          tableCellStyle.statesTypography
+        )
       : properties;
 
   const chainProperties = chain.map((style) => styleProperties(style, style.paragraphProperties));
