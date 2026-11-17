@@ -86,14 +86,29 @@ function runFace(fonts: ReadonlyMap<FontSlot, string>, text: string): string | u
 }
 
 /**
+ * Whether a run names formatting for complex-script characters only: `w:bCs`, or a `w:szCs`
+ * that differs from `w:sz` (ISO/IEC 29500-1 17.3.2.2, 17.3.2.39). The lane does not draw it,
+ * so it is supported only on text without a complex-script character. (`w:iCs` is part of the
+ * default math formatting, which the default reader accepts.)
+ */
+interface ComplexScriptFormatting {
+  named: boolean;
+}
+
+/**
  * Read one `w:rPr` or `m:rPr` into `format`. False means an unsupported property. The named
  * `w:rFonts` slots go into `fonts`; the caller resolves them against the run text.
+ *
+ * With `complexScript`, complex-script-only formatting is recorded there for the caller to
+ * check against the run text. Without it, as for control properties, which have no text,
+ * `w:bCs` is accepted as `w:b` is, and differing sizes are not.
  */
 function readRunProperties(
   child: OoxmlElement,
   word: boolean,
   format: MutableRunFormat,
-  fonts: Map<FontSlot, string> = new Map()
+  fonts: Map<FontSlot, string> = new Map(),
+  complexScript?: ComplexScriptFormatting
 ): boolean {
   if (child.attributes.length !== 0) return false;
   const namespace = word ? WML_NAMESPACE_URI : MATH;
@@ -132,9 +147,15 @@ function readRunProperties(
       )
         return false;
       const points = Number(attribute.value) / 2;
-      if (size !== undefined && size !== points) return false;
+      if (size !== undefined && size !== points) {
+        if (!complexScript) return false;
+        complexScript.named = true;
+      }
       size = points;
       if (property.localName === 'sz') format.fontSizePt = points;
+    } else if (word && property.localName === 'bCs') {
+      if (toggle(property, namespace) === null) return false;
+      if (complexScript) complexScript.named = true;
     } else if (word && property.localName === 'lang') {
       // Language takes no part in equation layout. The source keeps it on save.
       if (!equationLanguagePropertyIsSupported(property)) return false;
@@ -195,6 +216,7 @@ function readRunFormat(run: OoxmlElement): EquationRunFormat | null {
   if (run.attributes.length !== 0) return null;
   const format: MutableRunFormat = {};
   const fonts = new Map<FontSlot, string>();
+  const complexScript: ComplexScriptFormatting = { named: false };
   const seen = new Set<string>();
   let text = '';
   for (const child of run.children) {
@@ -208,14 +230,17 @@ function readRunFormat(run: OoxmlElement): EquationRunFormat | null {
     const namespace = word ? WML_NAMESPACE_URI : MATH;
     if (seen.has(namespace)) return null;
     seen.add(namespace);
-    if (!readRunProperties(child, word, format, fonts)) return null;
+    if (!readRunProperties(child, word, format, fonts, complexScript)) return null;
   }
+  if (complexScript.named && textFontSlots(text).has('cs')) return null;
   const face = runFace(fonts, text);
   if (face === null) return null;
   if (face !== undefined) format.fontFamily = face;
-  // A format keeps compact replacement refused, so a language is never written away. A run
-  // whose only other properties are default leaves the decision to the default reader.
-  if (Object.keys(format).length === 0 && runNamesLanguage(run)) return null;
+  // A format keeps compact replacement refused, so a language or complex-script formatting is
+  // never written away. A run whose only other properties are default leaves the decision to
+  // the default reader.
+  if (Object.keys(format).length === 0 && (complexScript.named || runNamesLanguage(run)))
+    return null;
   return Object.freeze(format);
 }
 
