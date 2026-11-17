@@ -237,6 +237,20 @@ describe('legacy fixed table content edges', () => {
       expect(tableOriginX(s, 300)).toBe(5.4);
     }
   });
+  test('a row margin exception on top and bottom only keeps the legacy origin', () => {
+    // 17.4.60 `w:tblPrEx`, 17.4.42 `w:tblCellMar`: no leading margin changes, so the
+    // content edge stays where the table's own margin places it.
+    const xml = serializeOoxmlPart(document());
+    const row = xml.match(/<w:tr>[\s\S]*?<\/w:tr>/)![0];
+    const exception =
+      '<w:tblPrEx><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPrEx>';
+    const changed = row.replace('<w:tr>', `<w:tr>${exception}`);
+    const base = structure();
+    const s = structure(part(xml.replace('</w:tbl>', changed + '</w:tbl>')));
+    expect(base.outerRuleOffsetPt).toBeDefined();
+    expect(s.outerRuleOffsetPt).toBe(base.outerRuleOffsetPt);
+    expect(tableOriginX(s, 300)).toBe(tableOriginX(base, 300));
+  });
   test('vertical merge continuation keeps the same leading content edge', () => {
     const xml = serializeOoxmlPart(document());
     const row = xml.match(/<w:tr>[\s\S]*?<\/w:tr>/)![0];

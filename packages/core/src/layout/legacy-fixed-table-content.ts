@@ -10,6 +10,8 @@ import { hasSupportedLegacyTableMargins } from './legacy-table-margins.ts';
 import { readTableIndentPt } from './table-widths.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
+const VERTICAL_SIDES: ReadonlySet<string> = new Set(['top', 'bottom']);
+
 /** Row exceptions or grid offsets whose geometry the structure reader does not resolve. */
 export function hasUnsupportedRowGeometry(table: OoxmlElement, allowGridSkips = false): boolean {
   const pending = [...table.children];
@@ -19,20 +21,20 @@ export function hasUnsupportedRowGeometry(table: OoxmlElement, allowGridSkips = 
     const node = pending.pop()!;
     if (node.kind === 'textValue' || node.kind === 'paragraph' || node.kind === 'table') continue;
     // Row exceptions are preserved, but the structure reader does not resolve their geometry.
+    // A margin exception is resolved per cell; one stating only top and bottom sides leaves
+    // the leading edge, and so this placement, unchanged.
     if (
       node.localName === 'tblPrEx' &&
       node.children.some(
         (child) =>
           child.kind !== 'textValue' &&
-          [
-            'tblW',
-            'jc',
-            'tblCellSpacing',
-            'tblInd',
-            'tblBorders',
-            'tblLayout',
-            'tblCellMar',
-          ].includes(child.localName)
+          (['tblW', 'jc', 'tblCellSpacing', 'tblInd', 'tblBorders', 'tblLayout'].includes(
+            child.localName
+          ) ||
+            (child.localName === 'tblCellMar' &&
+              child.children.some(
+                (side) => side.kind !== 'textValue' && !VERTICAL_SIDES.has(side.localName)
+              )))
       )
     )
       return true;
