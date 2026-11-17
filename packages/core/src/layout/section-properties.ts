@@ -27,7 +27,6 @@ import {
 } from '@docx-editor.dev/core/store';
 import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
 import { parsePageBorders, type SectionPageBorders } from './page-borders.ts';
-import { marginInset } from './page-body-margins.ts';
 import { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './semantic-records.ts';
 import { storyBlocks } from './story-roots.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
@@ -721,12 +720,11 @@ export function geometryOfSection(section: SectionProperties): PageGeometry {
   const top = twipsToPoints(asTwips(section.margins.topTwips));
   const bottom = twipsToPoints(asTwips(section.margins.bottomTwips));
 
-  // A page whose margins exceed it has no content area at all, and paginating into a
-  // zero-height column never terminates. Fall back rather than hang. Top and bottom keep
-  // their authored sign (a negative one is exact, not smaller), so the test reads the insets.
-  if (width - left - right <= 0 || height - marginInset(top) - marginInset(bottom) <= 0) {
-    return DEFAULT_PAGE_GEOMETRY;
-  }
+  // A page whose side margins exceed it has no content width at all. Fall back rather than
+  // lay out into it. Top and bottom margins that together pass the sheet height stay as
+  // authored (§17.6.11): the body starts at the top margin and the content box keeps one
+  // point of column there (`page-furniture-insets.ts`), so each page holds one line.
+  if (width - left - right <= 0) return DEFAULT_PAGE_GEOMETRY;
   return {
     width,
     height,

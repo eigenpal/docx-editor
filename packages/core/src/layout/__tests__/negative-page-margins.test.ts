@@ -218,14 +218,22 @@ describe('signed vertical page margins in section geometry', () => {
     expect(geometry.margin.bottom).toBeCloseTo(-BOTTOM, 6);
   });
 
-  test('falls back when the magnitudes swallow the page, whatever their sign', () => {
-    // 8000 + 8000 twips is taller than the 15840-twip sheet. The signed sum is negative and
-    // used to pass the guard, handing layout a content box taller than the page.
+  test('keeps top and bottom margins that together pass the sheet height', () => {
+    // 8000 + 8000 twips is taller than the 15840-twip sheet. The margins stay as authored;
+    // the content box keeps one point of column at the top margin instead.
     const geometry = geometryOf(
-      '<w:pgMar w:top="-8000" w:right="720" w:bottom="-8000" w:left="720" w:header="720" w:footer="720" w:gutter="0"/>'
+      '<w:pgMar w:top="8000" w:right="720" w:bottom="8000" w:left="720" w:header="720" w:footer="720" w:gutter="0"/>'
     );
-    expect(geometry.margin.top).toBe(72);
-    expect(geometry.margin.bottom).toBe(72);
+    expect(geometry.margin.top).toBe(400);
+    expect(geometry.margin.bottom).toBe(400);
+  });
+
+  test('still falls back when the side margins leave no content width', () => {
+    const geometry = geometryOf(
+      '<w:pgMar w:top="1440" w:right="6200" w:bottom="1440" w:left="6200" w:header="720" w:footer="720" w:gutter="0"/>'
+    );
+    expect(geometry.margin.left).toBe(72);
+    expect(geometry.margin.right).toBe(72);
   });
 });
 

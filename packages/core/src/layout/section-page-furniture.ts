@@ -20,6 +20,7 @@ import {
 import { pageBorderFrame } from './page-border-frame.ts';
 import type { ExclusionZone } from './drawing-exclusion.ts';
 import { furnitureDrawingExclusionsForPage } from './furniture-drawing-exclusion.ts';
+import { clipFurnitureFragments, furniturePaintLimit } from './furniture-overflow-clip.ts';
 import type { SectionPageBorders } from './page-borders.ts';
 import type {
   HeaderFooterStoryRecord,
@@ -96,14 +97,20 @@ interface StoryPlacement {
   readonly footerDistance: number;
   readonly contentWidth: number;
   readonly insets: PageContentInsets;
+  /** The height the story may paint, when the page's furniture is too tall to show whole. */
+  readonly paintLimit?: number;
 }
 
 function placeStory(at: StoryPlacement, laid: HeaderFooterStoryLayout): HeaderFooterStoryRecord {
   const { kind, box, geometry } = at;
+  const shown =
+    at.paintLimit !== undefined && laid.flowHeight > at.paintLimit
+      ? clipFurnitureFragments(laid.fragments, at.paintLimit)
+      : { fragments: laid.fragments, height: laid.flowHeight };
   const storyY =
     kind === 'header'
       ? box.y + at.headerDistance
-      : box.y + geometry.height - at.footerDistance - laid.flowHeight;
+      : box.y + geometry.height - at.footerDistance - shown.height;
   return {
     kind,
     variant: at.variant,
@@ -114,9 +121,9 @@ function placeStory(at: StoryPlacement, laid: HeaderFooterStoryLayout): HeaderFo
       x: box.x + geometry.margin.left,
       y: storyY,
       width: at.contentWidth,
-      height: laid.flowHeight,
+      height: shown.height,
     },
-    fragments: laid.fragments,
+    fragments: shown.fragments,
     ...(laid.anchoredDrawings ? { anchoredDrawings: laid.anchoredDrawings } : {}),
   };
 }
@@ -184,12 +191,16 @@ export function createSectionPageFurniture(
   ): HeaderFooterStoryRecord | undefined => {
     if (!furniture) return undefined;
     const variant = variantFor(index, pageNumberShift);
-    const story =
-      kind === 'header'
-        ? headerStoryForPage(furniture, variant, pageIndexStart + index)
-        : furniture.footers.get(variant);
-    // An absent variant shows nothing — Word falls back to blank, not to `default`.
+    const header = headerStoryForPage(furniture, variant, pageIndexStart + index);
+    const footer = furniture.footers.get(variant);
+    const story = kind === 'header' ? header : footer;
+    // An absent variant shows nothing: the page falls back to blank, not to `default`.
     if (!story) return undefined;
+    const paintLimit = furniturePaintLimit(
+      geometry.height,
+      header?.flowHeight ?? 0,
+      footer?.flowHeight ?? 0
+    );
     const pageNumber = (inputs.pageNumberStart ?? pageIndexStart + 1) + pageNumberShift + index;
     const pageContext: FieldPageContext = {
       pageNumber,
@@ -207,6 +218,7 @@ export function createSectionPageFurniture(
       footerDistance,
       contentWidth: inputs.contentWidth,
       insets: inputs.insetsFor(index),
+      ...(paintLimit !== undefined ? { paintLimit } : {}),
     };
     const needs = story.pageFieldNeeds;
     const needsPerPageLayout =
