@@ -219,6 +219,7 @@ import { withAlignedProgress, withInterimLayout, withRelabeledProgress } from '.
 import { layoutWithFurnitureRetry } from './furniture-retry-layout.ts';
 import { drainLayoutSteps, stepsInFieldResultsMode, type LayoutSteps } from './layout-steps.ts';
 import { preparedBlocks } from './prepared-block-memo.ts';
+import { tableTopLeads } from './cell-edge-neighbours.ts';
 import {
   type BlockLayoutOptions as ColumnBalanceBlockLayoutOptions,
   type BlockLayoutResult,
@@ -1379,6 +1380,7 @@ function* layoutBlocksPass(
     // across this section's own pages, and an absolute index went stale on any remap.
     pageOccurrenceKey: () => String(pages.length),
     styleCascade,
+    tableTopLeads: tableTopLeads(prepared),
     listItems,
     ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
     compatibilityMode: options.compatibilityMode,

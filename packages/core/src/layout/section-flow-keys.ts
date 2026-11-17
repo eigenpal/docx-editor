@@ -1,7 +1,8 @@
 // The section prepass's flow keys: each prepared block's own key, extended by every input a
-// neighbour decides — positioned tables, paragraph frames, list auto spacing, leading break
-// groups, contextual spacing, border groups, TOC verdicts, list markers, and keep chains. A
-// block whose flow key is unchanged lays out the same at the same flow position.
+// neighbour decides — positioned tables, table lead styles, paragraph frames, list auto
+// spacing, leading break groups, contextual spacing, border groups, TOC verdicts, list
+// markers, and keep chains. A block whose flow key is unchanged lays out the same at the
+// same flow position.
 
 import { contextualFlowInputs } from './contextual-paragraph-spacing.ts';
 import { withFlowKeyIntern, type FlowKeyIntern } from './flow-key-intern.ts';
@@ -14,6 +15,7 @@ import { paragraphSectionNode } from './section-properties.ts';
 import type { PreparedBlock } from './section-prepass-types.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { anchorFlowKeys, type PositionedTableFlowPolicy } from './table-float-exclusion.ts';
+import { tableLeadFlowKeys } from './cell-edge-neighbours.ts';
 import type { TableKeepDecisions } from './table-row-keeps.ts';
 import type { TerminalTextTableGroup } from './terminal-table-anchor.ts';
 import { tocVerdictFor, type TocIdSets } from './toc-id-sets.ts';
@@ -66,7 +68,10 @@ export function sectionFlowKeys(input: SectionFlowKeyInputs): {
     composeFlowKeys(
       input.leadingBreakFlowKeys(
         listAutoSpacingFlowKeys(
-          paragraphFrameFlowKeys(anchorFlowKeys(input.keys, input.positioned), prepared),
+          paragraphFrameFlowKeys(
+            anchorFlowKeys(tableLeadFlowKeys(input.keys, prepared), input.positioned),
+            prepared
+          ),
           prepared
         ),
         prepared

@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A w:contextualSpacing paragraph at a table cell edge had no neighbour on that side, so it always kept its space before or after.",
+  "after": "At a cell edge the paragraph compares with the last or first paragraph of the neighbouring cell in the row, with the row end mark (default paragraph style) at the start and end of a row, and with the paragraph before the table in the first row of a body table.",
+  "reason": "Only paragraph spacing at layout time changes. Shared nodes, operation shapes, offsets, and package serialization remain unchanged.",
+  "tests": ["packages/core/src/layout/__tests__/cell-edge-contextual-spacing.test.ts"],
+  "changeset": "cell-edge-contextual-spacing",
+  "migration": null
+}
