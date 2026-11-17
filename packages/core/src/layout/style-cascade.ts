@@ -105,6 +105,11 @@ export interface StyleCascadeTable {
   readonly noColumnBalance?: true;
   /** Keep floating tables that fit a full page together under the compatibility flag. */
   readonly doNotBreakWrappedTables?: true;
+  /**
+   * Text after a broken text-anchored float starts beside its first fragment (`table-text-carry.ts`).
+   * @internal
+   */
+  readonly textBesideBrokenFloatingTable?: true;
   /** Legacy or explicitly disabled optional OpenType substitutions. */
   readonly disableOptionalLigatures?: true;
   /**

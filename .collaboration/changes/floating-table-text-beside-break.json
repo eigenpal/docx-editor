@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "With allowTextAfterFloatingTableBreak in compatibility mode 15, the text after a text-anchored floating table that broke across pages started on the page of its last fragment.",
+  "after": "The text starts beside the first fragment, and every fragment wraps the text on its page. Shared document state and operations are unchanged.",
+  "reason": "The change is confined to layout. Replicas compute the same layout from the same tree, and saved documents keep the same XML.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-text-beside-broken-table.test.ts",
+    "packages/core/src/layout/__tests__/text-beside-broken-table.test.ts"
+  ],
+  "changeset": "floating-table-text-beside-break",
+  "migration": null
+}

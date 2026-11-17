@@ -1,6 +1,6 @@
 // The anchored drawings a page collects as the body flow places their paragraphs.
 
-import type { AnchoredDrawingRecord } from './drawing-layout.ts';
+import type { AnchoredDrawingRecord, InlineDrawingLayoutContext } from './drawing-layout.ts';
 import {
   MAX_ANCHOR_PAGE_DEFERRALS,
   withAnchoredDrawingLayoutFallback,
@@ -12,6 +12,18 @@ export interface AnchoredDrawingCollection {
   readonly pending: AnchoredDrawingRecord[];
   readonly deferred: AnchoredDrawingRecord[];
   readonly deferCounts: Map<string, number>;
+}
+
+/**
+ * The source order of a drawing, looked up by the drawing its atom projects, when the layout
+ * maps atoms to drawings.
+ */
+export function drawingSourceOrder(
+  layout: InlineDrawingLayoutContext | undefined,
+  order: ReadonlyMap<string, number> | undefined
+): (drawingNodeId: string) => number | undefined {
+  return (drawingNodeId) =>
+    order?.get(layout?.projectionForAtom?.(drawingNodeId)?.drawingNodeId ?? drawingNodeId);
 }
 
 /**

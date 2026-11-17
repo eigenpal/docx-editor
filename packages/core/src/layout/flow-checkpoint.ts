@@ -5,6 +5,7 @@ import type { AnchoredDrawingRecord } from './drawing-layout.ts';
 import type { FlowCheckpoint } from './layout-session.ts';
 import { samePendingParagraphFrames, type ParagraphFrameFlow } from './paragraph-frame-flow.ts';
 import type { BlockFragmentRecord } from './semantic-records.ts';
+import { sameHeldTablePages, type TextTableCarry } from './table-text-carry.ts';
 import {
   NO_DEFERRED_DRAWINGS,
   NO_DEFER_COUNTS,
@@ -36,6 +37,8 @@ interface FlowCheckpointDependencies {
   readonly pendingFloatIds: Set<string>;
   readonly floatSignals: PositionedTableAnchorSignal[];
   readonly anchorPageDeferCounts: Map<string, number>;
+  /** Fragments of a broken text-anchored table held for later pages (`table-text-carry.ts`). */
+  readonly textCarry: TextTableCarry;
 }
 
 /** Owns capture, restoration and convergence for one pass's complete checkpoint state. */
@@ -49,8 +52,11 @@ export class FlowCheckpointOwner {
       pendingFloatIds,
       floatSignals,
       anchorPageDeferCounts,
+      textCarry,
     } = this.dependencies;
+    const heldTablePages = textCarry.checkpoint();
     return {
+      ...(heldTablePages ? { heldTablePages } : {}),
       pageCount: state.pageCount,
       pageFragments: [...state.pageFragments],
       pendingAnchoredDrawings: [...state.pendingAnchoredDrawings],
@@ -77,7 +83,9 @@ export class FlowCheckpointOwner {
       pendingFloatIds,
       floatSignals,
       anchorPageDeferCounts,
+      textCarry,
     } = this.dependencies;
+    textCarry.restore(checkpoint.heldTablePages);
     paragraphFrames.restore(checkpoint.pendingParagraphFrames);
     anchorPageDeferCounts.clear();
     for (const [id, count] of checkpoint.anchorPageDeferCounts)
@@ -111,6 +119,7 @@ export function flowCheckpointsMatch(mark: FlowCheckpoint, current: FlowCheckpoi
     sameAnchoredDrawings(mark.pendingAnchoredDrawings, current.pendingAnchoredDrawings) &&
     sameAnchoredDrawings(mark.deferredAnchoredDrawings, current.deferredAnchoredDrawings) &&
     sameDeferCounts(mark.anchorPageDeferCounts, current.anchorPageDeferCounts) &&
-    samePositionedTableCheckpoints(mark, current)
+    samePositionedTableCheckpoints(mark, current) &&
+    sameHeldTablePages(mark.heldTablePages, current.heldTablePages)
   );
 }

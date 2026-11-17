@@ -321,6 +321,13 @@ export const PROFILE_RULES = {
       return setting === undefined ? p.modeClass === 'modern' : setting === true;
     },
   },
+  textBesideBrokenFloatingTable: {
+    behavior:
+      'Text after a text-anchored floating table that breaks across pages starts beside its first fragment, and every fragment wraps text. Only modern modes read the setting',
+    source: '[MS-DOCX] 2.3.1 allowTextAfterFloatingTableBreak',
+    applies: (p) =>
+      p.settings.allowTextAfterFloatingTableBreak === true && p.modeClass === 'modern',
+  },
   unstretchedManualBreakLines: {
     behavior:
       'A justified line that ends in a manual line break keeps its natural spacing, as a last line does. A distributed line still stretches',

@@ -32,6 +32,8 @@
 //   `addFloatingTableExclusions` turns it into a zone. Text that starts there sits at the top of
 //   the page, so its space before collapses. A page- or margin-positioned table that breaks
 //   (`table-pinned-break.ts`) resumes the text by the same rule.
+// - With `textBesideBrokenFloatingTable`, the text starts beside the first fragment instead, and
+//   every fragment wraps text on its page (`table-text-carry.ts`).
 // - An earlier floating table that waits for the same anchor paragraph is placed where the body
 //   reached this table (`noteAnchor` in `semantic-layout.ts`), even when the table then moves on.
 //

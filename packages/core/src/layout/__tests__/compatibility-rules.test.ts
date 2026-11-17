@@ -142,6 +142,11 @@ const PROFILE_MATRIX: Record<
     on: EVERY_MODE,
     withoutOptions: ['15', '16'],
   },
+  // Modes 12 and 14 ignore the setting.
+  textBesideBrokenFloatingTable: {
+    options: setting('allowTextAfterFloatingTableBreak', '1'),
+    on: ['15', '16'],
+  },
   unstretchedManualBreakLines: { options: '<w:doNotExpandShiftReturn/>', on: EVERY_MODE },
 };
 

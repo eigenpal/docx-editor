@@ -44,6 +44,7 @@ const LEGACY_OPTIONS = {
 
 /** Word `w:compatSetting`s ([MS-DOCX] 2.3) that rules read. */
 const WORD_SETTINGS = {
+  allowTextAfterFloatingTableBreak: ['explicit-on', 'last'],
   enableOpenTypeFeatures: ['explicit-on', 'refuse'],
   overrideTableStyleFontSizeAndJustification: ['explicit-on', 'last'],
 } as const satisfies Record<string, Reading>;
