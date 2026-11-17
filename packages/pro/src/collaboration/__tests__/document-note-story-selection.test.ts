@@ -82,7 +82,7 @@ function at(editor: DocxEditorInstance, index: number, offset: number): Semantic
 }
 
 function footnotes(editor: DocxEditorInstance): string {
-  return editor.surface!.session.storyText({ kind: 'notesPart', noteKind: 'footnote' });
+  return editor.surface!.session.storyText({ kind: 'notesPart', noteKind: 'footnote' }) ?? '';
 }
 
 function boldAt(editor: DocxEditorInstance, index: number): boolean {
