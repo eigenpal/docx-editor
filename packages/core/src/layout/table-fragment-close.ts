@@ -116,8 +116,12 @@ export function closeTableFragmentRows(input: TableFragmentClose): {
     input.outOfFlow && structure.float && input.verticalFrames && input.stackTop === undefined
       ? shiftTableFragment(
           fragment,
-          tableFloatOriginY(structure.float, fragment.box.height, input.verticalFrames) -
-            fragment.box.y,
+          tableFloatOriginY(
+            structure.float,
+            fragment.box.height,
+            input.verticalFrames,
+            tableDeps.styleCascade?.doNotBreakWrappedTables
+          ) - fragment.box.y,
           input.shiftAnchor
         )
       : fragment;

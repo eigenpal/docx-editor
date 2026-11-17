@@ -305,13 +305,15 @@ export function admitsAtAnchor(
 ): boolean {
   if (hasEarlierCellExclusions(table, flow.zones, deps, flow.page)) return false;
   if (breaksAcrossPages(table, deps, flow)) return false;
+  // `w:doNotBreakWrappedTables` (ECMA-376 Part 4, 14.8.3.10) keeps every positioned table
+  // whole, also one taller than a page: placement then moves it up onto the sheet.
+  if (deps.styleCascade?.doNotBreakWrappedTables) return true;
   // Rows that fit keep the table whole, even when its `w:bottomFromText` reaches past the room.
   // Only rows taller than a page take row pagination: a table that a page holds stays whole
   // although its `w:tblpY` pushes it past the bottom margin.
   const float = floatTableStructure(table, flow.width, deps)?.float;
   const band = floatingTableBand(table, flow.width, deps) - (float?.distances?.bottom ?? 0);
   if (band - Math.max(0, float?.yPt ?? 0) > flow.bottom) return false;
-  if (deps.styleCascade?.doNotBreakWrappedTables) return true;
   return (
     band <= flow.bottom - flowTop(flow) ||
     !flow.allowBreak ||

@@ -267,9 +267,10 @@ export const PROFILE_RULES = {
     applies: (p) => p.legacy.adjustLineHeightInTable === true,
   },
   doNotBreakWrappedTables: {
-    behavior: 'A floating table that fits a full page does not break across pages',
+    behavior:
+      'A floating table never breaks across pages, and moves up onto the sheet when it passes the bottom edge. Only legacy modes read the option',
     source: 'ECMA-376 Part 4 §14.8.3.10 doNotBreakWrappedTables',
-    applies: (p) => p.legacy.doNotBreakWrappedTables === true,
+    applies: (p) => p.legacy.doNotBreakWrappedTables === true && p.modeClass === 'legacy',
   },
   fixedParagraphSpacing: {
     behavior:
