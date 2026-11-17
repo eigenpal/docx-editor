@@ -7,7 +7,7 @@ import {
   wmlRevisionChild,
   wmlRevisionAttribute,
 } from './revision-cell-shading.ts';
-import { readTableAlignment } from './table-alignment.ts';
+import { mirroredAlignment, tableAlignmentOf, tableIndentNode } from './table-alignment.ts';
 import {
   autoWidthOuterRulePt,
   modernPercentRulePt,
@@ -106,6 +106,7 @@ import { cellIgnoresEndMark, cellNoWrap } from './table-cell-hide-mark.ts';
 import { uniformRowCellSpacingPt } from './table-row-cell-spacing.ts';
 import { modernSharedPercentWidth, resolveTableWidthPlacement } from './table-width-placement.ts';
 import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
+import { rowExceptionAlignment, withLegacyRowPlacement } from './legacy-row-placement.ts';
 import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 import {
   conditionalTypesFor,
@@ -308,7 +309,10 @@ export interface SemanticTableRow {
   /** The table's fill (its style, `w:tblPr`, then this row's `w:tblPrEx`) in spaced gaps. */
   readonly spacingShading?: TableSpacingShading;
   /** How far a spaced table's frame moves this row's cells in (`table-spacing-frame.ts`). */
-  readonly spacingFrame?: TableSpacingFrame;
+  readonly spacingFrame?: TableSpacingFrame; /** `w:tblPrEx/w:jc` (17.4.61, 17.4.28): the row's own alignment. */
+  readonly alignment?: TableAlignment;
+  /** Derived, never serialized: how far a legacy table moves this row right of its grid. */
+  readonly xShiftPt?: number;
 }
 
 /**
@@ -799,6 +803,7 @@ function readTableStructureUncached(
       ...(plan.changeSites ? { changeSites: plan.changeSites } : {}),
       isHeader,
       cantSplit: readFlag(rowProperties, 'cantSplit'),
+      ...rowExceptionAlignment(rowNode),
       height: readRowHeight(rowProperties),
       cells,
     });
@@ -814,14 +819,13 @@ function readTableStructureUncached(
   const layoutFixed = tblLayout
     ? attributeValue(tblLayout, 'type') === 'fixed'
     : (style.layoutFixed ?? false);
-  const statedIndentPt =
-    readTableIndentPt(tblPr && childNamed(tblPr, 'tblInd'), MAX_TABLE_INDENT_PT) ??
-    style.indentPt ??
-    0;
+  const indentNode = tableIndentNode(tblPr, plans[0]?.node);
+  const statedIndentPt = readTableIndentPt(indentNode, MAX_TABLE_INDENT_PT) ?? style.indentPt ?? 0;
   // Captured controls pull a top-level table (bidiVisual too) into the leading margin by a
   // negative indent, and leave a nested table where a zero indent puts it.
   const readIndentPt = depth === 0 ? statedIndentPt : Math.max(0, statedIndentPt);
-  const alignment = readTableAlignment(tblPr) ?? style.alignment ?? 'left';
+  const alignment =
+    tableAlignmentOf(tblPr, plans[0]?.node, compatibilityMode) ?? style.alignment ?? 'left';
   // A nested table's `w:tblpPr` positions it against its cell, not the page; the cell flow
   // places it (`cell-float-tables.ts`), so its structure is read as an in-flow table.
   const float = depth === 0 ? (readTableFloatPosition(tblPr) ?? style.float) : undefined;
@@ -846,7 +850,7 @@ function readTableStructureUncached(
     alignment,
     bidiVisual,
     indentPt: readIndentPt,
-    indentStated: Boolean(tblPr && childNamed(tblPr, 'tblInd')) || style.indentPt !== undefined,
+    indentStated: Boolean(indentNode) || style.indentPt !== undefined,
     leadingSkipPt: leadingSkipPt(authoredGrid, lead),
     tableBorders,
     claims: claimsWithinGrid(claims, columnCount),
@@ -949,45 +953,42 @@ function readTableStructureUncached(
       cellSpacingPt,
     }
   );
-  return {
-    ...(bidiVisual ? { bidiVisual: true as const } : {}),
-    columnWidthsPt: bidiVisual ? [...columnWidthsPt].reverse() : columnWidthsPt,
-    ...(statedOut.widths
-      ? { statedColumnWidthsPt: visualOrder(statedOut.widths, bidiVisual) }
-      : {}),
-    rows:
-      legacyWidth === undefined
-        ? shadedRows
-        : shadedRows.map((row) => ({
-            ...row,
-            cells: row.cells.map((cell) => ({ ...cell, legacyContentAlignment: true as const })),
-          })),
-    ...(legacyWidth === undefined ? {} : { legacyContentAlignment: true as const }),
-    ...(legacy?.trailingOuterEdge ? { legacyTrailingOuterEdge: true as const } : {}),
-    ...(outerRuleOffsetPt === undefined ? {} : { outerRuleOffsetPt }),
-    ...(contentOffset === undefined ? {} : { legacyContentOffsetPt: contentOffset }),
-    ...(autoOuterRulePt > 0 ? { autoOuterRulePt } : {}),
-    ...(sideRules.holdsWhenWidened ? { sharedGridLinesHold: true as const } : {}),
-    ...(placement.textBoxBidiShiftPt ? { textBoxBidiShiftPt: placement.textBoxBidiShiftPt } : {}),
-    ...(textBox ? { textBox: true as const } : {}),
-    ...(pastTextColumn ? { pastTextColumn: true as const } : {}),
-    tableWidth: structureWidth,
-    layoutFixed,
-    indentPt,
-    alignment: bidiVisual
-      ? alignment === 'left'
-        ? 'right'
-        : alignment === 'right'
-          ? 'left'
-          : alignment
-      : alignment,
-    ...(float ? { float } : {}),
-    cellSpacingPt,
-    tableBorders: visualBorders,
-    defaultMargins: bidiVisual
-      ? { ...defaultMargins, left: defaultMargins.right, right: defaultMargins.left }
-      : defaultMargins,
-  };
+  return withLegacyRowPlacement(
+    {
+      ...(bidiVisual ? { bidiVisual: true as const } : {}),
+      columnWidthsPt: bidiVisual ? [...columnWidthsPt].reverse() : columnWidthsPt,
+      ...(statedOut.widths
+        ? { statedColumnWidthsPt: visualOrder(statedOut.widths, bidiVisual) }
+        : {}),
+      rows:
+        legacyWidth === undefined
+          ? shadedRows
+          : shadedRows.map((row) => ({
+              ...row,
+              cells: row.cells.map((cell) => ({ ...cell, legacyContentAlignment: true as const })),
+            })),
+      ...(legacyWidth === undefined ? {} : { legacyContentAlignment: true as const }),
+      ...(legacy?.trailingOuterEdge ? { legacyTrailingOuterEdge: true as const } : {}),
+      ...(outerRuleOffsetPt === undefined ? {} : { outerRuleOffsetPt }),
+      ...(contentOffset === undefined ? {} : { legacyContentOffsetPt: contentOffset }),
+      ...(autoOuterRulePt > 0 ? { autoOuterRulePt } : {}),
+      ...(sideRules.holdsWhenWidened ? { sharedGridLinesHold: true as const } : {}),
+      ...(placement.textBoxBidiShiftPt ? { textBoxBidiShiftPt: placement.textBoxBidiShiftPt } : {}),
+      ...(textBox ? { textBox: true as const } : {}),
+      ...(pastTextColumn ? { pastTextColumn: true as const } : {}),
+      tableWidth: structureWidth,
+      layoutFixed,
+      indentPt,
+      alignment: bidiVisual ? mirroredAlignment(alignment) : alignment,
+      ...(float ? { float } : {}),
+      cellSpacingPt,
+      tableBorders: visualBorders,
+      defaultMargins: bidiVisual
+        ? { ...defaultMargins, left: defaultMargins.right, right: defaultMargins.left }
+        : defaultMargins,
+    },
+    { compatibilityMode, depth, contentWidthPt }
+  );
 }
 import { physicalTableRows, withTableContentBorders } from './table-content-borders.ts';
 import { withSpacingFrame } from './table-spacing-frame.ts';

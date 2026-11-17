@@ -9,11 +9,32 @@ import type { SideRuleTableShape } from './legacy-table-side-rules.ts';
 import { hasSupportedLegacyTableMargins } from './legacy-table-margins.ts';
 import { readTableIndentPt } from './table-widths.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
+import { rowAlignment, trailingPlacementInsetPt } from './legacy-row-placement.ts';
 
 const VERTICAL_SIDES: ReadonlySet<string> = new Set(['top', 'bottom']);
 
-/** Row exceptions or grid offsets whose geometry the structure reader does not resolve. */
-export function hasUnsupportedRowGeometry(table: OoxmlElement, allowGridSkips = false): boolean {
+/** Row exception properties a legacy table that places its rows alone resolves. */
+const PLACED_EXCEPTIONS: ReadonlySet<string> = new Set([
+  'tblW',
+  'jc',
+  'tblInd',
+  'tblBorders',
+  'tblLayout',
+  'tblCellMar',
+]);
+
+/**
+ * Row exceptions or grid offsets whose geometry the structure reader does not resolve.
+ * `placedRows`: the table places its rows one by one (`legacy-row-placement.ts`), which
+ * resolves a row's own alignment and margins. Width and layout exceptions leave the rows where
+ * they are, the first row's indent is the table's (`tableIndentNode`) and a later row's is
+ * ignored, and border exceptions draw beside their row.
+ */
+export function hasUnsupportedRowGeometry(
+  table: OoxmlElement,
+  allowGridSkips = false,
+  placedRows = false
+): boolean {
   const pending = [...table.children];
   let visited = 0;
   while (pending.length > 0) {
@@ -28,6 +49,7 @@ export function hasUnsupportedRowGeometry(table: OoxmlElement, allowGridSkips = 
       node.children.some(
         (child) =>
           child.kind !== 'textValue' &&
+          !(placedRows && PLACED_EXCEPTIONS.has(child.localName)) &&
           (['tblW', 'jc', 'tblCellSpacing', 'tblInd', 'tblBorders', 'tblLayout'].includes(
             child.localName
           ) ||
@@ -80,6 +102,8 @@ export function legacyFixedTableContentOffset(
   tableBorders?: TableBorderBox
 ): number | undefined {
   const spaced = shape.cellSpacingPt !== 0;
+  // A left-to-right table without cell spacing outside a text box places its rows alone.
+  const placed = !spaced && !shape.bidiVisual && !shape.textBox;
   if (
     !hasCompatibilityRule(shape.compatibilityMode, 'fixedTableContentEdgeOrigin') ||
     shape.depth !== 0 ||
@@ -97,7 +121,7 @@ export function legacyFixedTableContentOffset(
     // outer edge on the trailing text edge.
     (shape.textBox && shape.alignment !== 'left') ||
     !hasSupportedLegacyTableMargins(table, propertyNodes) ||
-    hasUnsupportedRowGeometry(table, !shape.bidiVisual)
+    hasUnsupportedRowGeometry(table, !shape.bidiVisual, placed)
   )
     return undefined;
   const leadingAlignment = shape.alignment === 'left';
@@ -146,9 +170,17 @@ export function legacyFixedTableContentOffset(
       ? cell?.gridColumn === 0
       : cell !== undefined && cell.gridColumn + cell.gridSpan === columns;
   };
-  const edgeRow = rows.find(reachesEdge);
+  // A row aligned by its own exception is placed apart (`legacy-row-placement.ts`).
+  const aligned = (row: SemanticTableRow) =>
+    !placed || rowAlignment(row, shape) === shape.alignment;
+  const edgeRow = rows.find((row) => aligned(row) && reachesEdge(row));
   const edgeCell = side === 'left' ? visualLeft : visualRight;
-  const leading = edgeRow && edgeCell(edgeRow)?.margins[side];
+  // A trailing-aligned row places by the leading margin of its first cell.
+  const leading =
+    edgeRow &&
+    (placed && side === 'right'
+      ? trailingPlacementInsetPt(edgeRow)
+      : edgeCell(edgeRow)?.margins[side]);
   if (leading === undefined || !Number.isFinite(leading) || leading < 0) return undefined;
   // A spaced table places its cells by the first edge row's borders; rows whose edge cells
   // draw another width are unmeasured, so they keep the outer edge.
@@ -164,7 +196,8 @@ export function legacyFixedTableContentOffset(
     if (
       !first ||
       !last ||
-      (reachesEdge(row) && edgeCell(row)?.margins[side] !== leading) ||
+      // Rows placed alone keep the shared origin or move by their own margins.
+      (!placed && reachesEdge(row) && edgeCell(row)?.margins[side] !== leading) ||
       (spaced && reachesEdge(row) && edgeRuleOf(row) !== edgeRule) ||
       (shape.bidiVisual && (first.gridColumn !== 0 || last.gridColumn + last.gridSpan !== columns))
     )
@@ -172,7 +205,9 @@ export function legacyFixedTableContentOffset(
     for (const cell of row.cells) {
       if (cell.vMergeContinue) continue;
       const borders = cell.contentBorders ?? cell.borders;
+      // A row's exception borders leave rows placed alone where they are.
       if (
+        !(placed && cell.rowTableBorders) &&
         borders.left.state === 'edge' &&
         borders.right.state === 'edge' &&
         borders.left.widthPt !== borders.right.widthPt

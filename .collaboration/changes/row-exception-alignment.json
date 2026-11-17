@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Table layout ignored row-level alignment and indent exceptions, and a right-aligned legacy table placed its rows by the trailing cell margin.",
+  "after": "The first row's indent exception indents the table. In the legacy modes each row follows its own alignment exception, and a right-aligned row ends past the text edge by its first cell's left margin; in mode 15 the first row's alignment aligns the table.",
+  "reason": "The change affects only how each client lays out tables. Shared nodes, text offsets, operations, and package serialization stay unchanged, and every client derives the same layout from the same tree.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-row-exception-alignment.test.ts",
+    "packages/core/src/layout/__tests__/legacy-fixed-table-content.test.ts"
+  ],
+  "changeset": "row-exception-alignment",
+  "migration": null
+}

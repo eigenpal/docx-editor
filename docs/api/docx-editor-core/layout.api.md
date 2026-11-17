@@ -4158,6 +4158,8 @@ export interface SemanticTableCell {
 
 // @public
 export interface SemanticTableRow {
+    // (undocumented)
+    readonly alignment?: TableAlignment;
     readonly cantSplit: boolean;
     // (undocumented)
     readonly cells: readonly SemanticTableCell[];
@@ -4174,6 +4176,7 @@ export interface SemanticTableRow {
     readonly revisionKind?: 'insert' | 'delete';
     readonly spacingFrame?: TableSpacingFrame;
     readonly spacingShading?: TableSpacingShading;
+    readonly xShiftPt?: number;
 }
 
 // @public
