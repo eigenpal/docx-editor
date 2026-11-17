@@ -6,6 +6,7 @@ import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts'
 import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
 import { applyLineSpacing, type ParagraphSpacing } from './paragraph-style.ts';
 import { hasShownRunContent } from './cell-end-paragraph-content.ts';
+import { cellHidesEndMark } from './table-cell-terminator.ts';
 
 const markStyles = new WeakMap<
   ParagraphLayoutInputs['markRunProperties'],
@@ -44,7 +45,7 @@ function endMarkBox(
   width: number,
   deps: TableFlowDeps
 ): EndMarkBox | null {
-  if (cell.hideEndMark) return null;
+  if (cellHidesEndMark(cell, deps.documentFirstParagraphId)) return null;
   const paragraph = cell.blocks.at(-1);
   if (paragraph?.kind !== 'paragraph') return null;
   const inputs = cellParagraphInputs(

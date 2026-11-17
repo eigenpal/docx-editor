@@ -32,8 +32,12 @@ const row = (cells: string, properties = '') =>
   `<w:tr><w:trPr>${properties}</w:trPr>${cells}</w:tr>`;
 const table = (rows: string, properties = '') =>
   `<w:tbl><w:tblPr>${properties}<w:tblCellMar>${['top', 'bottom', 'left', 'right'].map((s) => `<w:${s} w:w="0" w:type="dxa"/>`).join('')}</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>${rows}</w:tbl>`;
+// A table that opens the body keeps the end mark of its first cell
+// (`table-document-start-end-mark.test.ts`), so each fixture follows an empty paragraph.
 const documentPart = (body: string) =>
-  part(`<w:document xmlns:w="${W}" xmlns:x="urn:foreign"><w:body>${body}</w:body></w:document>`);
+  part(
+    `<w:document xmlns:w="${W}" xmlns:x="urn:foreign"><w:body><w:p/>${body}</w:body></w:document>`
+  );
 // Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
 const FORMAT_DOC_DEFAULTS =
   '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
@@ -45,8 +49,8 @@ const styles = (body: string) =>
 const style = (id: string, content: string, base = '') =>
   `<w:style w:type="table" w:styleId="${id}">${base ? `<w:basedOn w:val="${base}"/>` : ''}${content}</w:style>`;
 const geometry = { width: 150, height: 100, margin: { top: 0, bottom: 0, left: 0, right: 0 } };
-/** The table's lines: the empty paragraph the body reads after its final table comes last. */
-const cellLinesOf = (result: Parameters<typeof linesOf>[0]) => linesOf(result).slice(0, -1);
+/** The table's lines: after the leading paragraph, and before the empty one the body reads last. */
+const cellLinesOf = (result: Parameters<typeof linesOf>[0]) => linesOf(result).slice(1, -1);
 
 function run(body: string, styleCascade?: ReturnType<typeof styles>) {
   const source = documentPart(body),
@@ -86,8 +90,8 @@ test('an empty cell with a hidden mark takes no row height but keeps an addressa
   const result = run(table(row(cell(paragraph())) + row(cell(paragraph(text)))));
   expect(rows(result).map((r) => r.box.height)).toEqual([0, 5]);
   expect(cellLinesOf(result)).toHaveLength(2);
-  expect(linesOf(result)[0]!.range).toMatchObject({ start: 0, end: 0 });
-  expect(linesOf(result)[0]!.box.height).toBe(0);
+  expect(cellLinesOf(result)[0]!.range).toMatchObject({ start: 0, end: 0 });
+  expect(cellLinesOf(result)[0]!.box.height).toBe(0);
   expect(rows(result)[1]!.box.y).toBe(rows(result)[0]!.box.y);
   // A visible mark keeps the line.
   expect(height(table(row(cell(paragraph(), ''))))).toBe(20);
@@ -262,7 +266,7 @@ test('hidden markers retain manual line breaks and earlier printable text', () =
 test('vertical cells exclude hidden markers but retain printable content', () => {
   const properties = '<w:textDirection w:val="btLr"/><w:hideMark/>';
   const result = run(table(row(cell(paragraph(text), properties))));
-  expect(linesOf(result)[0]!.box.height).toBe(5);
+  expect(cellLinesOf(result)[0]!.box.height).toBe(5);
   expect(height(table(row(cell(paragraph(), properties))))).toBe(0);
   expect(height(table(row(cell(paragraph('', '<w:jc w:val="center"/>'), properties))))).toBe(0);
 });
@@ -342,7 +346,7 @@ test('hideMark keeps a terminal inline picture and its source position', () => {
     },
   });
   const placedCell = rows(result)[0]!.cells[0]!;
-  const line = linesOf(result)[0]!;
+  const line = cellLinesOf(result)[0]!;
   expect(line.range.end - line.range.start).toBe(1);
   expect(line.drawings).toHaveLength(1);
   const picture = line.drawings![0]!;

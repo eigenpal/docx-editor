@@ -91,7 +91,7 @@ import { type PendingLine } from './paragraph-flow.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { resolvedParagraphMarkChangeSites } from './revision-formatting-projection.ts';
 import { paragraphMergeGroupOf } from './story-roots.ts';
-import { cellTerminatorCollapses } from './table-cell-terminator.ts';
+import { cellHidesEndMark, cellTerminatorCollapses } from './table-cell-terminator.ts';
 import {
   cellTextAreas,
   rowDepsForAnchors,
@@ -361,6 +361,8 @@ export interface TableFlowDeps {
   readonly pageExclusionZones?: () => readonly import('./drawing-exclusion.ts').ExclusionZone[];
   /** Document-order index for filtering wrap zones to earlier anchors only. */
   readonly paragraphOrderIndex?: (paragraphId: string) => number | undefined;
+  /** The first paragraph of a table that opens the body, which keeps its end mark (`cellHidesEndMark`). */
+  readonly documentFirstParagraphId?: string;
   /** The cell box whose flow places nested floating tables (`cell-float-tables.ts`). */
   readonly cellFloatBox?: import('./cell-float-tables.ts').CellFloatBox;
   /**
@@ -1453,7 +1455,7 @@ export function layoutRowFragmentBounded(
         vertical
           ? undefined
           : rowTop + Math.min(markFloor, exactHeightPt ?? Infinity) - insets.bottom,
-        cell.hideEndMark,
+        cellHidesEndMark(cell, deps.documentFirstParagraphId),
         // Fixed cell boxes clip; their bottom is not a paragraph page break. A detached head
         // answers to its span, not to its own row's rule.
         !vertical && (isDetached ? !clipsSpan : exactHeightPt === undefined),
@@ -1538,11 +1540,14 @@ export function layoutRowFragmentBounded(
   // head and authored row heights already supply their required span geometry.
   if (
     rowBottom <= rowTop + 0.001 &&
-    flowed.some((entry) => !entry.cell.vMergeContinue && !entry.cell.hideEndMark)
+    flowed.some(
+      (entry) =>
+        !entry.cell.vMergeContinue && !cellHidesEndMark(entry.cell, deps.documentFirstParagraphId)
+    )
   ) {
     let lineBottom = rowTop;
     for (const entry of flowed) {
-      if (entry.cell.hideEndMark) continue;
+      if (cellHidesEndMark(entry.cell, deps.documentFirstParagraphId)) continue;
       const line = rowTop + entry.insets.top + defaultLineHeight + entry.insets.bottom;
       if (line > lineBottom) lineBottom = line;
     }
