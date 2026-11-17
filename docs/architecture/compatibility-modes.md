@@ -44,6 +44,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `cellFloatMovedDownIndents` | `modern` | A floating table in a table cell that moves below an earlier one also moves right by its own left text distance |
 | `distributedLinesSpreadCharacters` | `legacy` | A distributed paragraph spreads every line after every character, kerned runs included; a space first takes up to the face average character width less its own advance |
 | `fixedTableContentEdgeOrigin` | `legacy` | A table with an absolute width, or a fixed table with an automatic width, aligns the content edge of its aligned outer cell with the text column. A leading-aligned table without an indent or a table style keeps its outer edge there. A table with cell spacing aligns the same content edge, so its frame reaches past the text column. Rows that skip grid columns follow the grid. In a text box, only a leading-aligned table takes this rule, fixed or AutoFit, in either direction |
+| `firstRowExceptionAlignsTable` | `modern` | The first row's `w:tblPrEx` alignment aligns the whole table. Later rows' alignments do not apply |
 | `floatingTableContentOrigin` | `legacy` | A floating table with a numeric text anchor or a right alignment positions its cell content |
 | `floatingTableOverlapMovesLeft` | `modern` | A floating table that may not overlap tries the left side before it moves down |
 | `headerFooterAnchorsWrapText` | `modern` | Header and footer text wraps around anchored objects |
@@ -68,6 +69,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `repeatBoundaryUsesHeaderRule` | `legacy` | A complete body row directly below a repeated header row reserves the wider of its own top border and the header row's bottom border. In `modern` modes it keeps the band of the row it follows in the table |
 | `repeatKeepsWholeRow` | `legacy` | Repeated header rows stay above a row that cannot split and does not fit below them, or a row whose first line, or the first row of a nested table that opens a cell, does not fit below them, also when the row continues from the previous page; the row stays whole and runs past the bottom margin |
 | `repeatedHeaderYieldsToTerminalRule` | `modern` | Repeated header rows yield when the last fixed-height row fits below them only without its bottom rule |
+| `rowExceptionAlignment` | `legacy` | A row places itself by its own `w:tblPrEx` alignment. A centered row centers its outer edges. A trailing-aligned row ends past the text edge by the leading margin of its first cell, so a row whose leading margin differs moves. Leading-aligned rows share the origin of the first of them |
 | `rowPageBreakYieldsToKeep` | `modern` | A row with a page break follows a row that keeps with it |
 | `tallRowStaysWhole` | `legacy` | A row that cannot split and is taller than a page stays whole on its page and runs past the bottom margin |
 | `tableParagraphWidowControl` | `modern` | Paragraphs that split in table cells apply widow control |

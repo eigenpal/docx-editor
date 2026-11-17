@@ -1302,7 +1302,7 @@ export interface LayoutRowBoundedResult {
 export function layoutRowFragmentBounded(
   row: SemanticTableRow,
   cols: readonly number[],
-  left: number,
+  tableLeft: number,
   rowTop: number,
   maxBottom: number,
   isHeaderRepeat: boolean,
@@ -1314,6 +1314,8 @@ export function layoutRowFragmentBounded(
   vMerge?: RowVMergeLayoutOptions,
   detachedBottomPt = maxBottom
 ): LayoutRowBoundedResult {
+  // A legacy table can place a row apart from its grid (`legacy-row-placement.ts`).
+  const left = tableLeft + (row.xShiftPt ?? 0);
   const detachedSpans = vMerge?.detachedSpanHeightPtByCellId;
   const total = sumCols(cols, 0, cols.length);
   // `w:tblCellSpacing` (17.4.45) is the space on each side of every cell, so neighbouring

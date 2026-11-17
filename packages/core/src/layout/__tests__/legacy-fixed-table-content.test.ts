@@ -211,30 +211,43 @@ describe('legacy fixed table content edges', () => {
     ])
       expect(structure(document('', cell)).outerRuleOffsetPt).toBeUndefined();
   });
-  test('different leading margins keep the original origin', () => {
+  test('a later row with another leading margin keeps the first row origin', () => {
+    // 17.4.43 `w:tcMar`: leading-aligned rows share the origin of the first of them.
     const xml = serializeOoxmlPart(document());
     const row = xml.match(/<w:tr>[\s\S]*?<\/w:tr>/)![0];
     const changed = row.replace(
       '</w:tcPr>',
       '<w:tcMar><w:left w:w="240" w:type="dxa"/></w:tcMar></w:tcPr>'
     );
-    expect(
-      structure(part(xml.replace('</w:tbl>', changed + '</w:tbl>'))).outerRuleOffsetPt
-    ).toBeUndefined();
+    const base = structure();
+    const s = structure(part(xml.replace('</w:tbl>', changed + '</w:tbl>')));
+    expect(s.outerRuleOffsetPt).toBe(base.outerRuleOffsetPt);
+    expect(tableOriginX(s, 300)).toBeCloseTo(0, 8);
+    expect(s.rows.map((r) => r.xShiftPt)).toEqual([undefined, undefined]);
   });
-  test('unresolved row geometry exceptions retain the original table origin', () => {
+  test('unresolved row cell spacing retains the original table origin', () => {
+    const xml = serializeOoxmlPart(document());
+    const row = xml.match(/<w:tr>[\s\S]*?<\/w:tr>/)![0];
+    const exception = '<w:tblCellSpacing w:w="240" w:type="dxa"/>';
+    const changed = row.replace('<w:tr>', `<w:tr><w:tblPrEx>${exception}</w:tblPrEx>`);
+    const s = structure(part(xml.replace('</w:tbl>', changed + '</w:tbl>')));
+    expect(s.outerRuleOffsetPt).toBeUndefined();
+    expect(tableOriginX(s, 300)).toBe(5.4);
+  });
+  test('row width, indent, layout and margin exceptions keep the legacy origin', () => {
+    // 17.4.61 `w:tblPrEx`: these exceptions leave a leading-aligned row on the shared origin.
     const xml = serializeOoxmlPart(document());
     const row = xml.match(/<w:tr>[\s\S]*?<\/w:tr>/)![0];
     for (const exception of [
-      '<w:tblCellSpacing w:w="240" w:type="dxa"/>',
       '<w:tblCellMar><w:left w:w="360" w:type="dxa"/></w:tblCellMar>',
       '<w:tblInd w:w="240" w:type="dxa"/>',
       '<w:tblW w:w="4000" w:type="dxa"/>',
+      '<w:tblLayout w:type="autofit"/>',
     ]) {
       const changed = row.replace('<w:tr>', `<w:tr><w:tblPrEx>${exception}</w:tblPrEx>`);
       const s = structure(part(xml.replace('</w:tbl>', changed + '</w:tbl>')));
-      expect(s.outerRuleOffsetPt).toBeUndefined();
-      expect(tableOriginX(s, 300)).toBe(5.4);
+      expect(s.outerRuleOffsetPt).toBe(-5.4);
+      expect(tableOriginX(s, 300)).toBeCloseTo(0, 8);
     }
   });
   test('a row margin exception on top and bottom only keeps the legacy origin', () => {

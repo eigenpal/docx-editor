@@ -27,6 +27,8 @@ const MODE_MATRIX = {
   cellFloatMovedDownIndents: 'modern',
   distributedLinesSpreadCharacters: 'legacy',
   fixedTableContentEdgeOrigin: 'legacy',
+  rowExceptionAlignment: 'legacy',
+  firstRowExceptionAlignsTable: 'modern',
   floatingTableContentOrigin: 'legacy',
   floatingTableOverlapMovesLeft: 'modern',
   headerFooterAnchorsWrapText: 'modern',

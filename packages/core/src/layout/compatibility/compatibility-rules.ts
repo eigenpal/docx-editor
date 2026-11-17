@@ -83,6 +83,14 @@ export const MODE_RULES = {
     'A table with an absolute width aligns the content edge of its aligned outer cell with the text column, with or without cell spacing; a leading alignment without a stated indent or table style keeps the outer edge',
     'ECMA-376 Part 1 §17.4.52 tblLayout'
   ),
+  rowExceptionAlignment: legacy(
+    "A table row places itself by its own w:tblPrEx alignment; a trailing-aligned row ends past the text edge by its first cell's leading margin",
+    'ECMA-376 Part 1 §17.4.61 tblPrEx'
+  ),
+  firstRowExceptionAlignsTable: modern(
+    "The first row's w:tblPrEx alignment aligns the whole table; later rows' alignments do not apply",
+    'ECMA-376 Part 1 §17.4.61 tblPrEx'
+  ),
   floatingTableContentOrigin: legacy(
     'A floating table with a numeric text anchor or a right alignment positions its cell content, not its outer edge',
     'ECMA-376 Part 1 §17.4.57 tblpPr'
