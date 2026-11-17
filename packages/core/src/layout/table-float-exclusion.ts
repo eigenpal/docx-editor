@@ -801,20 +801,26 @@ export function hasEarlierCellExclusions(
   }
   const earliestOrder = memo.remainingOrders[low]?.[1];
   if (earliestOrder === undefined || earliestOrder === Infinity) return false;
-  const pending = [table];
+  // Only objects anchored before the table wrap its cells from outside. An object anchored in
+  // one of the table's own cells (`wp:anchor`, ECMA-376 Part 1, 20.4.2.3) moves with the
+  // table, so it never keeps the table from floating.
+  return earliestOrder < firstParagraphOrder(table, deps);
+}
+
+/** The document order of the table's first paragraph, in a bounded preorder walk. */
+function firstParagraphOrder(table: OoxmlElement, deps: TableFlowDeps): number {
+  const pending: OoxmlNode[] = [table];
   let visits = 0;
   while (pending.length) {
     const node = pending.pop()!;
-    if (++visits > 10000) return true;
-    if (node.kind === 'paragraph') {
-      if (earliestOrder <= (deps.paragraphOrderIndex?.(node.id) ?? Number.MAX_SAFE_INTEGER))
-        return true;
-      continue;
-    }
-    if (visits + pending.length + node.children.length > 10000) return true;
-    for (const child of node.children) if (child.kind !== 'textValue') pending.push(child);
+    if (++visits > 10000) break;
+    if (node.kind === 'textValue') continue;
+    if (node.kind === 'paragraph')
+      return deps.paragraphOrderIndex?.(node.id) ?? Number.MAX_SAFE_INTEGER;
+    for (let index = node.children.length - 1; index >= 0; index--)
+      pending.push(node.children[index]!);
   }
-  return false;
+  return Number.MAX_SAFE_INTEGER;
 }
 
 /**
