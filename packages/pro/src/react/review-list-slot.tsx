@@ -27,17 +27,48 @@ export interface ReviewListSlotProps {
 
 const NO_THREAD: ReadonlyMap<string, ReviewItemView> = new Map();
 
+type CardTemplate = (item: ReviewItemView) => ReactNode;
+
+const templateKeys = new WeakMap<CardTemplate, string>();
+const sourceKeys = new Map<string, string>();
+
+/**
+ * The React key of the component that runs `render`. Two functions with the same source text
+ * have one key, and two functions with different source text have different keys.
+ *
+ * The render prop runs as a component's render, so React binds the hooks it calls to that
+ * component. A host that writes the render prop inline passes a new function on each render,
+ * with the same source and so the same hooks: the card must stay mounted and keep its state.
+ * A host that passes another render prop can pass one that calls other hooks, which React
+ * refuses on a mounted component: the card must mount again. The source text tells the two
+ * apart, where the identity of the function cannot.
+ */
+export function cardTemplateKey(render: CardTemplate): string {
+  let key = templateKeys.get(render);
+  if (key === undefined) {
+    const source = Function.prototype.toString.call(render);
+    key = sourceKeys.get(source);
+    if (key === undefined) {
+      key = `t${sourceKeys.size}`;
+      sourceKeys.set(source, key);
+    }
+    templateKeys.set(render, key);
+  }
+  return key;
+}
+
 /**
  * The host's render prop for one item, as a component. It renders again only when the item
  * changes or the host passes another function. The render prop runs as this component's own
- * render, so the hooks it calls belong to the card and keep their state.
+ * render, so the hooks it calls belong to the card and keep their state. Give it a key from
+ * `cardTemplateKey`, so another render prop mounts it again.
  */
 export const ReviewRenderedCard = memo(function ReviewRenderedCard({
   entry,
   render,
 }: {
   readonly entry: ReviewItemView;
-  readonly render: (item: ReviewItemView) => ReactNode;
+  readonly render: CardTemplate;
 }) {
   return render(entry);
 });
@@ -62,7 +93,11 @@ export const ReviewListSlot = memo(
       () => (kept.length === 0 ? NO_THREAD : new Map(kept.map((reply) => [reply.id, reply]))),
       [kept]
     );
-    const content = render ? <ReviewRenderedCard entry={entry} render={render} /> : card;
+    const content = render ? (
+      <ReviewRenderedCard key={cardTemplateKey(render)} entry={entry} render={render} />
+    ) : (
+      card
+    );
     const style: CSSProperties = top === null ? {} : { position: 'absolute', top };
     return (
       <ReviewItemContext.Provider value={entry}>

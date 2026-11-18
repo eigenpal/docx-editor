@@ -147,6 +147,14 @@ export function cardOf(container: Element, key: string): HTMLElement | null {
   );
 }
 
+/** The authors the mounted packaged cards name, each once, in the order of the cards. */
+export function authorsOf(container: Element): string[] {
+  const authors = [...container.querySelectorAll<HTMLElement>('[data-testid="review-card"]')].map(
+    (card) => card.dataset.reviewAuthor ?? ''
+  );
+  return [...new Set(authors)];
+}
+
 /**
  * Select the first `length` characters of paragraph `index` and comment on them as `author`.
  * Answers the key of the new comment.
