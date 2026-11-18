@@ -24,6 +24,12 @@ function lineIntervalIntersectsTopAndBottomBand(
 
 const TOUCH_TOLERANCE_PT = 0.01;
 
+/** The paragraph of a line and the spacing that line keeps below a floating table it anchors. */
+export interface OwnTableAnchor {
+  readonly id: string;
+  readonly spaceAbove: number;
+}
+
 /**
  * Vertical skip before placing a line whose [top, bottom] interval intersects a topAndBottom band.
  *
@@ -33,28 +39,32 @@ const TOUCH_TOLERANCE_PT = 0.01;
  *
  * `spaceAbove` is the paragraph spacing above a paragraph's first line. A drawing's band that
  * crosses that spacing or the line moves the line to the band bottom, and the line keeps its
- * spacing below the band. So does the band of a floating table that `ownAnchorId`, the line's
+ * spacing below the band. So does the band of a floating table that `ownAnchor`, the line's
  * paragraph, anchors: such a table is positioned from the top of that paragraph, above its
- * spacing. Other floating tables, frames, and header or footer objects keep the plain rule.
+ * spacing, and the line keeps `ownAnchor.spaceAbove` below it. That spacing includes space
+ * before that the top of a page suppressed, because the line no longer opens the page. Other
+ * floating tables, frames, and header or footer objects keep the plain rule.
  */
 export function topAndBottomSkipBeforeLine(
   lineTopY: number,
   lineHeight: number,
   zones: readonly ExclusionZone[],
   spaceAbove = 0,
-  ownAnchorId?: string
+  ownAnchor?: OwnTableAnchor
 ): number {
   if (lineHeight <= 0 || zones.length === 0) return 0;
   let skip = 0;
-  if (spaceAbove > 0.001) {
-    let spacedBottom = -Infinity;
+  if (spaceAbove > 0.001 || (ownAnchor?.spaceAbove ?? 0) > 0.001) {
+    let spacedTarget = -Infinity;
     for (const zone of zones) {
       // Only a drawing's band. The line after a floating table or frame starts at its bottom.
       const own =
-        ownAnchorId !== undefined &&
+        ownAnchor !== undefined &&
         zone.sourceKind === 'table' &&
-        zone.anchorParagraphId === ownAnchorId;
+        zone.anchorParagraphId === ownAnchor.id;
       if (zone.input.mode !== 'topAndBottom' || (zone.sourceKind && !own)) continue;
+      const kept = own ? Math.max(spaceAbove, ownAnchor.spaceAbove) : spaceAbove;
+      if (kept <= 0.001) continue;
       const bandTop = zone.verticalBand.y;
       const bandBottom = bandTop + zone.verticalBand.height;
       if (
@@ -65,9 +75,9 @@ export function topAndBottomSkipBeforeLine(
           bandBottom
         )
       )
-        spacedBottom = Math.max(spacedBottom, bandBottom);
+        spacedTarget = Math.max(spacedTarget, bandBottom + kept);
     }
-    if (spacedBottom > -Infinity) skip = Math.max(0, spacedBottom + spaceAbove - lineTopY);
+    if (spacedTarget > -Infinity) skip = Math.max(0, spacedTarget - lineTopY);
   }
   for (let attempt = 0; attempt < MAX_TOP_AND_BOTTOM_CLEARANCE_ATTEMPTS; attempt += 1) {
     const intervalTop = lineTopY + skip;

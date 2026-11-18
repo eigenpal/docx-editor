@@ -1619,7 +1619,8 @@ function* layoutBlocksPass(
     pendingLine: PendingLine,
     appliedSkipByLineIndex: ReadonlyMap<number, number>,
     spaceBefore: number,
-    bandAfter: number
+    bandAfter: number,
+    ownBefore: number
   ): number => {
     if (anchorLineSkipsExclusion(entry.paragraph, options.inlineDrawingLayout, pendingLine))
       return 0;
@@ -1636,7 +1637,10 @@ function* layoutBlocksPass(
     const above = lineIndex === fragmentFirstLine ? spaceBefore : 0;
     const live =
       zones.length > 0
-        ? lineBandSkip(cursorY, pendingLine.height, zones, above, bandAfter, entry.paragraph.id)
+        ? lineBandSkip(cursorY, pendingLine.height, zones, above, bandAfter, {
+            id: entry.paragraph.id,
+            spaceAbove: lineIndex === fragmentFirstLine ? ownBefore : 0,
+          })
         : 0;
     const breakSkip = pendingLine.exclusionSkipBefore ?? 0;
     return Math.max(live, breakSkip);
@@ -2240,6 +2244,10 @@ function* layoutBlocksPass(
           frame ? false : keepsBeforeAtPageStart(index, entry)
         );
     if (appliedBefore > 0) cursorY += appliedBefore;
+    // Below its own floating table the anchor no longer opens the page: it keeps that space.
+    const ownTableBefore = breakLinesOnly
+      ? 0
+      : collapsedSpaceBefore(spacing.before, previousSpaceAfter);
     // The top rule and its gap are flow height above the first line, exactly as the bottom
     // rule is flow height below the last — pagination has to see both or a boxed paragraph
     // overhangs the bottom margin by the height of its own frame.
@@ -2521,7 +2529,8 @@ function* layoutBlocksPass(
             pendingLine,
             appliedSkipByLineIndex,
             fragmentBefore,
-            bandAfter
+            bandAfter,
+            fragmentIndex === 0 ? ownTableBefore : 0
           );
       // Auto spacing below the glyph band may cross the bottom text margin, not a footnote
       // area. The painted line keeps its full box; only the pagination budget drops it.

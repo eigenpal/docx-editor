@@ -96,3 +96,12 @@ test('an anchor its own table covers keeps its space before below the table', ()
   expect(placed.TWO).toBeCloseTo(12 + 11.95, 1);
   expect(placed.MID).toBeCloseTo(12 + 11.95 + 100 + 8, 1);
 });
+
+test('an anchor its own table covers at the top of the first page keeps its space before', () => {
+  // The table opens the page, so the anchor would lose its space before at the top. Its own
+  // table covers the anchor line, so the line moves below the table and keeps that space.
+  const placed = tops(lay(float(-200, 9400) + p('MID', spacing(160, 0)) + p('END', plain)));
+  // Raised 10pt above the anchor top, less the one-twip storage bias.
+  expect(placed.TWO).toBeCloseTo(-10.05, 1);
+  expect(placed.MID).toBeCloseTo(-10.05 + 100 + 8, 1);
+});

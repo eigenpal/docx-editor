@@ -9,7 +9,7 @@
 
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import type { ExclusionZone } from './drawing-exclusion.ts';
-import { topAndBottomSkipBeforeLine } from './top-and-bottom-clearance.ts';
+import { type OwnTableAnchor, topAndBottomSkipBeforeLine } from './top-and-bottom-clearance.ts';
 
 /** The space after a line adds to its extent against floating table bands. */
 export function tableBandSpaceAfter(compatibilityMode: number | undefined, after: number): number {
@@ -20,7 +20,7 @@ export function tableBandSpaceAfter(compatibilityMode: number | undefined, after
 
 /**
  * The skip that moves a line below the top-and-bottom bands of `zones` (see
- * `topAndBottomSkipBeforeLine`, which also takes `ownAnchorId`), and the line with its `after`
+ * `topAndBottomSkipBeforeLine`, which also takes `ownAnchor`), and the line with its `after`
  * below their floating table bands.
  */
 export function lineBandSkip(
@@ -29,9 +29,9 @@ export function lineBandSkip(
   zones: readonly ExclusionZone[],
   spaceAbove: number,
   after: number,
-  ownAnchorId?: string
+  ownAnchor?: OwnTableAnchor
 ): number {
-  const skip = topAndBottomSkipBeforeLine(top, height, zones, spaceAbove, ownAnchorId);
+  const skip = topAndBottomSkipBeforeLine(top, height, zones, spaceAbove, ownAnchor);
   if (after <= 0) return skip;
   const tables = zones.filter((zone) => zone.sourceKind === 'table');
   return tables.length > 0
