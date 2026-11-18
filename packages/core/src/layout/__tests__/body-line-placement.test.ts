@@ -319,6 +319,7 @@ describe('placeBodyLine', () => {
     ['paragraph direction', { rtl: true }],
     ['paragraph properties', { props: [{ localName: 'jc', attributes: { val: 'distribute' } }] }],
     ['measurer', { measurer: createFixedMeasurer(7) }],
+    ['style cascade', { styleCascade: {} as BodyLinePlacement['styleCascade'] }],
     ['paragraph', { paragraphId: 'p2' }],
     ['line index', { lineIndex: 3 }],
   ] as const satisfies readonly (readonly [string, Partial<BodyLinePlacement>])[]) {
@@ -408,7 +409,7 @@ describe('placeBodyLine', () => {
     expect(counts.reused).toBe(4);
   });
 
-  test('a kept record cannot change', () => {
+  test('a kept record, its box, and its span list are frozen', () => {
     const line = frozenLine(pending());
     const kept = placeBodyLine(placement(line)).record;
     const moved = placeBodyLine(placement(line, { y: 240 })).record;

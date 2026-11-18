@@ -200,7 +200,7 @@ function comparedInputs(placement: BodyLinePlacement): Pick<BodyLinePlacement, C
 
 /**
  * A kept record is in every layout that placed its line there, so nothing may change it. The
- * spans of a broken line are frozen for the same reason.
+ * record, its box, and its span list are frozen, so a write to one of them fails at once.
  */
 function shared(record: LineRecord): LineRecord {
   Object.freeze(record.spans);
