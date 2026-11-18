@@ -179,3 +179,35 @@ test('a property change after accept all lays the document out under the plain k
     measured.dispose();
   }
 });
+
+test('the kept key holds through a change of view and back', () => {
+  using view = mount(CHANGES);
+  expect(view.editor.exec({ type: 'resolveAllReviewChanges', action: 'accept' }).ok).toBe(true);
+  view.surface.layout();
+  expect(view.editor.exec({ type: 'setReviewDisplayMode', mode: 'simple-markup' }).ok).toBe(true);
+  view.surface.layout();
+  const measured = measuredParagraphTestRecorder();
+  try {
+    expect(view.editor.exec({ type: 'setReviewDisplayMode', mode: 'all-markup' }).ok).toBe(true);
+    view.surface.layout();
+    // Every block is still cached under the key the view had before.
+    expect(measured.paragraphIds).toEqual([]);
+  } finally {
+    measured.dispose();
+  }
+});
+
+test('hiding an author while the key is kept lays the document out under another key', () => {
+  using view = mount(CHANGES);
+  expect(view.editor.exec({ type: 'resolveAllReviewChanges', action: 'accept' }).ok).toBe(true);
+  view.surface.layout();
+  const measured = measuredParagraphTestRecorder();
+  try {
+    view.editor.setReviewAuthorVisible('Grace', false);
+    view.surface.layout();
+    // The reviewer filter is part of the key, kept or not.
+    expect(new Set(measured.paragraphIds).size).toBe(view.ids.length);
+  } finally {
+    measured.dispose();
+  }
+});
