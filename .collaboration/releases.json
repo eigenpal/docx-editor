@@ -828,6 +828,42 @@
         "package-lock.json": "b2509e87c8335f84f870e2bbd59e5954a414f5196c89d2f6eb4745ed49258008",
         "fixture.json": "ed20c71d7e2b1cb7bfdd0f9097fef26f4dc79f354be8dd4660c1f13c4ee2db37"
       }
+    },
+    {
+      "version": "2.39.0",
+      "commit": "621ff044290fe48bc5e4e3d0325c99da203374d7",
+      "sourceLockHash": "85c4968488b25390965c3b27104baa24f9186f4b36cba24d24ba148894b845a5",
+      "format": "docx-collaboration:1.5.5.1",
+      "versions": {
+        "protocolVersion": 1,
+        "sharedSchemaVersion": 5,
+        "repairVersion": 5,
+        "canonicalModelVersion": 1
+      },
+      "directory": ".collaboration/releases/2.39.0",
+      "packages": {
+        "@docx-editor.dev/i18n": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/i18n/-/i18n-2.39.0.tgz",
+          "integrity": "sha512-8P8UryXXAY9upicqooWhUYiB8XqF9GtXJyac+gQ7lpGhJsnFn6knHVBsg5R79XsI251oRoA7aT8ZY68+4+XgsQ=="
+        },
+        "@docx-editor.dev/core": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/core/-/core-2.39.0.tgz",
+          "integrity": "sha512-SWyqyRNMWFm/Kc7o6RbXdGc1uJi42rn4bW7yjMu/mpYBR0DmVpddCLTJFA2s0pa+g9c8Se//BGa6/OMt9l8yVA=="
+        },
+        "@docx-editor.dev/editor-api": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/editor-api/-/editor-api-2.39.0.tgz",
+          "integrity": "sha512-9qmTSKnuhehbJFpG4U/Z0dERJsLyI0GqHd8z3uLAUqmAoouCEzesoy/cxg1BGfCmtjldNwBR5ry9yDqmQ8fVzg=="
+        },
+        "@docx-editor.dev/pro": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/pro/-/pro-2.39.0.tgz",
+          "integrity": "sha512-tD9blmVdh7XARL+LBUzZPCF3prj05o3xHLahoWGC+mNVHFxYBArwZpwkRzsnbg+v1Tq/DS+c75FmKyu2IxL9pQ=="
+        }
+      },
+      "hashes": {
+        "package.json": "9255fe4e498f096f42b38aeac8e2c84f94f3ef081a24d85d0cf6fc8b7bb79f56",
+        "package-lock.json": "dc0676ed47be0866fc13f2361c8383fc91553d12831afcb65eafc1a1629e79a3",
+        "fixture.json": "38c99a61f5d8268a69215c1fb292f789a1bc26eea3706bcc4176f0a940617219"
+      }
     }
   ]
 }
