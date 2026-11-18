@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // The rail's private contexts and the two public hooks that read them. The Vue twin is
 // `../vue/review-context.ts`.
 
-import { createContext, useCallback, useContext, useRef } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import type { CommentMarkerStyle, RevisionDisplay } from '@docx-editor.dev/core/editor';
 import {
@@ -159,17 +159,80 @@ export function useCardRail(): ReviewCardRailValue {
 }
 
 /**
+ * The review hook's value as a card reads it. Built from the fields themselves, so it keeps
+ * its identity while each of them does, and a change of the item list does not replace it.
+ */
+export function useCardActions(review: ReturnType<typeof useReview>): ReviewCardActions {
+  const {
+    setActive,
+    accept,
+    reject,
+    adopt,
+    resolve,
+    reopen,
+    commentResolutionDisabledReason,
+    remove,
+    reply,
+    edit,
+    comment,
+    lastRefusal,
+    paneOpen,
+    setPaneOpen,
+    ready,
+  } = review;
+  return useMemo<ReviewCardActions>(
+    () => ({
+      setActive,
+      accept,
+      reject,
+      adopt,
+      resolve,
+      reopen,
+      commentResolutionDisabledReason,
+      remove,
+      reply,
+      edit,
+      comment,
+      lastRefusal,
+      paneOpen,
+      setPaneOpen,
+      ready,
+    }),
+    [
+      setActive,
+      accept,
+      reject,
+      adopt,
+      resolve,
+      reopen,
+      commentResolutionDisabledReason,
+      remove,
+      reply,
+      edit,
+      comment,
+      lastRefusal,
+      paneOpen,
+      setPaneOpen,
+      ready,
+    ]
+  );
+}
+
+/**
  * `next`, or the value this hook returned before when `same` says the two are equal. Keeps
  * the identity of a derived value whose content did not change, so memos that depend on it hold.
  *
- * It writes a ref while rendering, which is safe for this one use: the kept value is replaced
- * only by a value with other content, so each render answers content equal to `next`, also
- * when React drops a render it started.
+ * The kept value is state, replaced while rendering when the content changes. React then
+ * renders the component again at once, before its children, with the new value. A render that
+ * React drops takes its update along, so the hook is safe in StrictMode and in concurrent
+ * rendering. `next` must be equal by `same` from one render to the next while nothing changed,
+ * as a prop or a memoized value is, or the renders do not end.
  */
 export function useKept<T>(next: T, same: (a: T, b: T) => boolean): T {
-  const kept = useRef(next);
-  if (kept.current !== next && !same(kept.current, next)) kept.current = next;
-  return kept.current;
+  const [kept, setKept] = useState(next);
+  if (kept === next || same(kept, next)) return kept;
+  setKept(next);
+  return next;
 }
 
 /**

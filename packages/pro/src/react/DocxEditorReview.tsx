@@ -75,12 +75,14 @@ import {
   ReviewContext,
   ReviewItemContext,
   ReviewThreadContext,
+  useCardActions,
   useKept,
   type ReviewCardRailValue,
   type ReviewRailValue,
 } from './review-context.ts';
-import { reviewRootsOf, sameEntries, sameFields } from '../review/review-roots.ts';
+import { reviewRootsOf, sameEntries } from '../review/review-roots.ts';
 import { railWindowFollowsScroll } from '../review/rail-window.ts';
+import { ReviewRenderedCard } from './review-list-slot.tsx';
 import { ReviewRailMetricsContext } from './useReviewRailMetrics.ts';
 import { isCompactReviewColumn } from '../review/rail-metrics.ts';
 import {
@@ -472,14 +474,7 @@ function ReviewRoot({
   const draftAuthorInfo = configuredAuthor ? authorInfo.get(configuredAuthor) : undefined;
   // What a card reads. None of it follows the item list, so an edit that changes one item
   // renders that item's card and no other.
-  const {
-    items: _items,
-    activeKey: _activeKey,
-    activatedKey: _activatedKey,
-    selectionAnchorY: _selectionAnchorY,
-    ...reviewActions
-  } = review;
-  const cardReview = useKept(reviewActions, sameFields);
+  const cardReview = useCardActions(review);
   const cardRail = useMemo<ReviewCardRailValue>(
     () => ({
       t: hostT,
@@ -652,7 +647,10 @@ function ReviewRoot({
   const listParts =
     typeof cardTemplate === 'function' ? null : partitionReviewChildren(cardTemplate, 'list');
   const compactCardInner = fromList.hidden ? null : typeof cardTemplate === 'function' ? (
-    activeRoot && cardTemplate(activeRoot)
+    activeRoot && (
+      // Keyed, so the hooks the render prop calls start again for another item.
+      <ReviewRenderedCard key={activeRoot.key} entry={activeRoot} render={cardTemplate} />
+    )
   ) : listParts?.parts.Card && isValidElement<{ className?: string }>(listParts.parts.Card) ? (
     cloneReviewCard(listParts.parts.Card, cardClassName)
   ) : preset || fromList.fromList ? (

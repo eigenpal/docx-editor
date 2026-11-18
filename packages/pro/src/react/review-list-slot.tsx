@@ -28,6 +28,21 @@ export interface ReviewListSlotProps {
 const NO_THREAD: ReadonlyMap<string, ReviewItemView> = new Map();
 
 /**
+ * The host's render prop for one item, as a component. It renders again only when the item
+ * changes or the host passes another function. The render prop runs as this component's own
+ * render, so the hooks it calls belong to the card and keep their state.
+ */
+export const ReviewRenderedCard = memo(function ReviewRenderedCard({
+  entry,
+  render,
+}: {
+  readonly entry: ReviewItemView;
+  readonly render: (item: ReviewItemView) => ReactNode;
+}) {
+  return render(entry);
+});
+
+/**
  * A card at its position. It renders again only when one of its own inputs changes: the item,
  * a reply, the position, or the card template. A move renders the positioned element alone,
  * because the card inside keeps its identity.
@@ -47,7 +62,7 @@ export const ReviewListSlot = memo(
       () => (kept.length === 0 ? NO_THREAD : new Map(kept.map((reply) => [reply.id, reply]))),
       [kept]
     );
-    const content = useMemo(() => (render ? render(entry) : card), [render, entry, card]);
+    const content = render ? <ReviewRenderedCard entry={entry} render={render} /> : card;
     const style: CSSProperties = top === null ? {} : { position: 'absolute', top };
     return (
       <ReviewItemContext.Provider value={entry}>
