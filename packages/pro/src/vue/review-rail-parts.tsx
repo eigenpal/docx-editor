@@ -91,7 +91,9 @@ import {
  * holds a `Card` part, or part overrides for the packaged card.
  *
  * The rail calls a slot for a card when the item of the card changes, when reactive state
- * that the slot reads changes, or when the parent passes another slot function. A slot that
+ * that the slot reads changes, or when a render function passes another slot function. A
+ * template passes a new function on each render, so there the function does not count,
+ * unless `v-if` or `v-for` chooses the slot or the slot reads a `v-for` variable. A slot that
  * reads a variable that is not reactive can show an old value, because a change of that
  * variable does not tell the rail to call the slot. If the slot reads a value that changes,
  * keep the value in a `ref` or another reactive source, or read it inside the card component.

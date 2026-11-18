@@ -6,9 +6,24 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // The Vue mount of the review rail render tests: an editor with a rail, and a rail whose
 // cards count their renders. The React twin is `review-rail-render-work-react-harness.tsx`.
 
-import { h, type App, type ComponentPublicInstance, type VNode } from 'vue';
+import {
+  createApp,
+  defineComponent,
+  h,
+  type App,
+  type Component,
+  type ComponentPublicInstance,
+  type RenderFunction,
+  type VNode,
+} from 'vue';
+// The build of Vue that holds the template compiler. It runs on the runtime that `vue` names.
+// @ts-expect-error The file has no declaration of its own.
+import { compile } from 'vue/dist/vue.esm-bundler.js';
 import type { DocxEditorInstance, EditorModule } from '@docx-editor.dev/core/editor';
 import { flush, mountEditorTree } from '../../../vue/test/helpers/mount.ts';
+import { DocxEditorRoot } from '../../../vue/src/editor/DocxEditorRoot';
+import { DocxEditorViewport } from '../../../vue/src/editor/DocxEditorViewport';
+import { DocxEditorContent } from '../../../vue/src/editor/DocxEditorContent';
 import { reviewModule } from '../index.ts';
 import { DocxEditorReview, type ReviewItemView } from '../vue/index.ts';
 import {
@@ -118,4 +133,90 @@ export async function mountCountingRail(
     rail.reset();
   };
   return { ...mounted, templates, cards, rail, reset };
+}
+
+/** Compile a template as a single-file component compiles it: slots carry their flags. */
+export function compileTemplate(template: string): RenderFunction {
+  return (compile as (source: string) => RenderFunction)(template);
+}
+
+/** The components a template of these tests can name. */
+export const TEMPLATE_COMPONENTS = {
+  DocxEditorRoot,
+  DocxEditorViewport,
+  DocxEditorContent,
+  DocxEditorReview,
+  ReviewList: DocxEditorReview.List,
+  ReviewCard: DocxEditorReview.Card,
+};
+
+/**
+ * The editor around `rail` as a template: the root, the viewport, the content, and the rail.
+ * `beside` is text the viewport's slot draws next to the rail.
+ */
+export function editorTemplate(rail: string): string {
+  return (
+    '<DocxEditorRoot :document="source" :modules="modules" :author="author" @ready="onReady">' +
+    '<DocxEditorViewport><DocxEditorContent />' +
+    '<span data-testid="beside">{{ beside }}</span>' +
+    rail +
+    '</DocxEditorViewport></DocxEditorRoot>'
+  );
+}
+
+/**
+ * A host written as a compiled template. `state` answers what the template reads, once, as
+ * `setup` does. `called` counts each run of a slot that draws `{{ called(item.key) }}`, in
+ * `templates`; `cards` and `rail` count renders as `mountCountingRail` does.
+ */
+export async function mountTemplateHost(
+  template: string,
+  state: () => Record<string, unknown> = () => ({}),
+  options: Pick<MountRailOptions, 'ready' | 'source'> & {
+    /** More components the template names. */
+    readonly components?: Record<string, Component>;
+  } = {}
+) {
+  const templates = counter();
+  const cards = counter();
+  const rail = counter();
+  let editor: DocxEditorInstance | null = null;
+  const source = options.source ?? pagedTrackedDocument();
+  const Host = defineComponent({
+    name: 'TemplateHost',
+    components: { ...TEMPLATE_COMPONENTS, ...options.components },
+    setup: () => ({
+      source,
+      modules: [reviewModule()],
+      author: AUTHOR,
+      beside: '',
+      onReady: (instance: unknown) => {
+        editor = instance as DocxEditorInstance;
+      },
+      called: (key: string) => {
+        templates.add(key);
+        return '';
+      },
+      ...state(),
+    }),
+    render: compileTemplate(template),
+  });
+  const container = document.createElement('div');
+  document.body.append(container);
+  const app = createApp(Host);
+  countRenders(app, cards, rail);
+  app.mount(container);
+  mountedRails.push(() => {
+    app.unmount();
+    container.remove();
+  });
+  const ready = options.ready ?? 'review-card';
+  await waitFor(() => container.querySelector(`[data-testid="${ready}"]`) !== null);
+  await settle(60);
+  const reset = () => {
+    templates.reset();
+    cards.reset();
+    rail.reset();
+  };
+  return { container, editor: editor!, Host, templates, cards, rail, reset };
 }

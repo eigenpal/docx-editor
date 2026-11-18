@@ -862,7 +862,9 @@ export type {
  *
  * SLOTS. An `#item` slot on the rail is the `#item` slot of its list. The rail calls a card
  * slot for a card when the item of the card changes, when reactive state that the slot reads
- * changes, or when the parent passes another slot function. A slot that reads a variable that
+ * changes, or when a render function passes another slot function. A template passes a new
+ * function on each render, so there the function does not count, unless `v-if` or `v-for`
+ * chooses the slot or the slot reads a `v-for` variable. A slot that reads a variable that
  * is not reactive can show an old value. If the slot reads a value that changes, keep the
  * value in a `ref` or another reactive source, or read it inside the card component.
  *
