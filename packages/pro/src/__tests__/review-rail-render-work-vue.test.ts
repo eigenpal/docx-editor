@@ -277,6 +277,45 @@ describe('review rail render work (Vue)', () => {
     ]);
   });
 
+  test('an item slot that changes the order of its keyed roots moves their elements', async () => {
+    const flipped = ref(false);
+    const { container } = await mountRail(() =>
+      h(DocxEditorReview, null, {
+        item: ({ item }: { item: ReviewItemView }) => {
+          const roots = [
+            h('div', { key: 'a', 'data-card-key': item.key }, [
+              h('input', { 'data-testid': 'host-input' }),
+              h(DocxEditorReview.Card),
+            ]),
+            h('hr', { key: 'b' }),
+          ];
+          return flipped.value ? roots.reverse() : roots;
+        },
+      })
+    );
+    const [first] = mountedCards(container);
+    const root = () => container.querySelector<HTMLElement>(`[data-card-key="${first!}"]`)!;
+    const field = () => root().querySelector<HTMLInputElement>('[data-testid="host-input"]')!;
+    /** The element children of the slot of the first card, by tag name. */
+    const order = () => [...root().parentElement!.children].map((child) => child.localName);
+    expect(order()).toEqual(['div', 'hr']);
+
+    // What a reader holds in the card: the element, the text typed in it, and the focus.
+    const before = { root: root(), field: field(), rule: root().nextElementSibling };
+    before.field.focus();
+    before.field.value = 'typed text';
+    expect(document.activeElement).toBe(before.field);
+
+    flipped.value = true;
+    await settle();
+    expect(order()).toEqual(['hr', 'div']);
+    expect(root()).toBe(before.root);
+    expect(field()).toBe(before.field);
+    expect(root().previousElementSibling).toBe(before.rule);
+    expect(field().value).toBe('typed text');
+    expect(document.activeElement).toBe(before.field);
+  });
+
   test('another item slot function renders each mounted card once', async () => {
     const calls = counter();
     // Plain values: the slot reads no reactive state, so only its identity tells of a change.

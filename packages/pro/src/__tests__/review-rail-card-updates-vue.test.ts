@@ -13,6 +13,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { h, shallowRef, type VNode } from 'vue';
 import { LocaleProvider } from '@docx-editor.dev/vue';
+import { RAIL_BAND_STEP } from '../review/rail-window.ts';
 import { installRailGeometry } from './review-rail-metrics-harness.ts';
 import {
   AUTHOR,
@@ -21,8 +22,15 @@ import {
   installViewHeight,
   mountedCards,
   pagedTrackedDocument,
+  scrollTo,
+  scrollerOf,
 } from './review-rail-render-work-harness.ts';
-import { mountCountingRail, settle, unmountRails } from './review-rail-render-work-vue-harness.ts';
+import {
+  mountCountingRail,
+  settle,
+  unmountRails,
+  waitFor,
+} from './review-rail-render-work-vue-harness.ts';
 
 let restore: (() => void)[] = [];
 beforeAll(() => {
@@ -190,5 +198,52 @@ describe('review rail cards follow their data (Vue)', () => {
     expect(cardOf(container, back[0]!)?.textContent).toContain('added 0');
     expect(back.slice(1)).toEqual(rest);
     for (const key of rest) expect(cards.of(key)).toBe(0);
+  });
+
+  test('a reply draft and its focus stay while another card changes', async () => {
+    const { container, editor, rail, reset } = await mountCountingRail();
+    const changes = mountedCards(container);
+    expect(changes.length).toBeGreaterThan(1);
+    const comment = commentOn(editor, 0, 'please check');
+    await settle();
+    const wrapper = () => container.querySelector<HTMLElement>(`[data-card-key="${comment}"]`);
+    const field = () =>
+      cardOf(container, comment)?.querySelector<HTMLInputElement>(
+        '[data-testid="review-reply-input"]'
+      ) ?? null;
+
+    // A new comment starts open. Closed, its card shows no reply box, and a click opens it.
+    expect(editor.setActiveReviewItem(null, { reveal: false }).ok).toBe(true);
+    await settle();
+    expect(field()).toBeNull();
+    cardOf(container, comment)!.click();
+    await waitFor(() => field() !== null);
+    const before = { wrapper: wrapper()!, card: cardOf(container, comment)!, field: field()! };
+    before.field.focus();
+    before.field.value = 'a draft';
+    before.field.dispatchEvent(new Event('input', { bubbles: true }));
+    await settle();
+    expect(document.activeElement).toBe(before.field);
+    expect(container.querySelector('[data-testid="review-reply-cancel"]')).not.toBeNull();
+
+    // Another card changes: a tracked change takes a reply, and the one after it is accepted.
+    expect(editor.replyToReviewItem(changes[0]!, 'an answer', AUTHOR).ok).toBe(true);
+    await settle();
+    expect(editor.acceptReviewItem(changes[1]!).ok).toBe(true);
+    await settle();
+    expect(cardOf(container, changes[0]!)?.textContent).toContain('an answer');
+    expect(cardOf(container, changes[1]!)).toBeNull();
+
+    // The scroll crosses one band step, and the card with the draft stays in the band.
+    reset();
+    scrollTo(scrollerOf(container), RAIL_BAND_STEP + 20);
+    await settle();
+    expect(rail.total()).toBeGreaterThan(0);
+
+    expect(wrapper()).toBe(before.wrapper);
+    expect(cardOf(container, comment)).toBe(before.card);
+    expect(field()).toBe(before.field);
+    expect(field()!.value).toBe('a draft');
+    expect(document.activeElement).toBe(before.field);
   });
 });

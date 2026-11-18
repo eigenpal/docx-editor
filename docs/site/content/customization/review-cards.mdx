@@ -141,7 +141,7 @@ If the template reads a value that changes, use one of these options:
 
 A function that you create on each render is a new function each time. Examples are an inline React render prop and a slot function in a Vue render function. Each mounted card then runs the template once for each render of your component. The cards stay mounted and keep their state.
 
-In a Vue template, the rail does not compare slot functions, so a render of your component runs no card template. This rule has one exception. If `v-if` or `v-for` selects the slot, or if the slot reads a `v-for` variable, each mounted card runs the template once for each render of your component.
+In a Vue template, the rail does not compare slot functions, so a render of your component runs no card template. The rail compares slot functions again in these cases: `v-if` or `v-for` selects the slot, or the slot reads a `v-for` or `v-slot` variable around it. Then each mounted card runs the template once for each render of your component.
 
 The Vue rail needs Vue 3.4 or later to skip these renders.
 

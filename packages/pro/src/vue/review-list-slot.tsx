@@ -108,7 +108,15 @@ export const ReviewListSlot = defineComponent({
           style,
           replies: props.replies,
         },
-        () => nodes.value.map((node, index) => h(ReviewListNode, { key: index, node }))
+        // A root node keeps its own key, so a slot that changes the order of its keyed
+        // roots moves their elements. A root without a key takes its place in the slot.
+        () =>
+          nodes.value.map((node, index) =>
+            h(ReviewListNode, {
+              key: isVNode(node) && node.key != null ? `k:${String(node.key)}` : index,
+              node,
+            })
+          )
       );
     };
   },

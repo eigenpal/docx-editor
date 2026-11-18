@@ -48,8 +48,8 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
    * hook inside the card.
    *
    * The callback runs as the render of a component that belongs to the card, so it can call
-   * hooks. Call the same hooks on each run, as in a component. A callback with other source
-   * code mounts each card again, so it can call other hooks.
+   * hooks. Call the same hooks on each run, as in a component. To switch between callbacks
+   * that call different hooks, set a different `key` on the rail for each one.
    *
    * ```tsx
    * <DocxEditor.Review>

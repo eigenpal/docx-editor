@@ -115,7 +115,7 @@ function isCompiledSlot(value: unknown): boolean {
  * the functions say nothing. Vue marks such slots stable (`_: 1`) when they read nothing but
  * the owner's state, and then a change reaches the slot content through reactivity alone.
  * Those slots compare by which of them exist. A template with `v-if` or `v-for` on a slot,
- * or a slot that reads a `v-for` variable around it, is not marked stable, and its functions
+ * or a slot that reads a `v-for` or `v-slot` variable around it, is not marked stable, and its functions
  * are compared like plain functions. So are plain functions under a stable flag, which a JSX
  * transform can write for a slot that reads a local variable.
  *
