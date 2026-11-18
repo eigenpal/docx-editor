@@ -76,34 +76,63 @@ export interface PlacedBodyLine {
   readonly alignOffset: number;
 }
 
+/**
+ * How each input of a placement reaches the kept placement. Every input is named here, so a new
+ * one does not compile until it is given a role:
+ *
+ * - `line`: the frozen broken line, the key the placement is kept under.
+ * - `top`: the line's top, kept with each record.
+ * - `compared`: compared with the kept value. One that differs places the line in full.
+ * - `pictures`: read only for a line with inline pictures, which is never kept.
+ */
+const PLACEMENT_INPUT_ROLES = {
+  pendingLine: 'line',
+  y: 'top',
+  paragraphId: 'compared',
+  lineIndex: 'compared',
+  isLastLine: 'compared',
+  columnX: 'compared',
+  indentLeft: 'compared',
+  available: 'compared',
+  rtl: 'compared',
+  alignment: 'compared',
+  props: 'compared',
+  styleCascade: 'compared',
+  measurer: 'compared',
+  clipDrawing: 'pictures',
+} as const satisfies Record<keyof BodyLinePlacement, 'line' | 'top' | 'compared' | 'pictures'>;
+
+type ComparedInput = {
+  [
+    Key in keyof typeof PLACEMENT_INPUT_ROLES
+  ]: (typeof PLACEMENT_INPUT_ROLES)[Key] extends 'compared' ? Key : never;
+}[keyof typeof PLACEMENT_INPUT_ROLES];
+
+const COMPARED_INPUTS = (Object.keys(PLACEMENT_INPUT_ROLES) as (keyof BodyLinePlacement)[]).filter(
+  (key): key is ComparedInput => PLACEMENT_INPUT_ROLES[key] === 'compared'
+);
+
 /** One top a line was placed at, and the record of that placement while a layout holds it. */
 interface KeptRecord {
   readonly y: number;
   readonly record: WeakRef<LineRecord>;
+  /** Whether a later placement took this record: a top a search or a layout came back to. */
+  reused: boolean;
 }
 
 /** What the last placements of one frozen line read and produced. */
 interface KeptPlacement {
-  readonly paragraphId: string;
-  readonly lineIndex: number;
-  readonly isLastLine: boolean;
-  readonly columnX: number;
-  readonly indentLeft: number;
-  readonly available: number;
-  readonly rtl: boolean;
-  readonly alignment: Alignment;
-  readonly props: readonly OoxmlProperty[];
-  readonly styleCascade: StyleCascadeTable | undefined;
-  readonly measurer: TextMeasurer;
+  readonly inputs: Pick<BodyLinePlacement, ComparedInput>;
   readonly alignOffset: number;
   /** The placements at the last tops, newest first, at most {@link MAX_KEPT_TOPS}. */
   readonly tops: KeptRecord[];
 }
 
 /**
- * Tops kept for one line. When a new top makes one too many, the newest of the others goes:
- * that one is a trial top of the running search, while an older one is where a layout that was
- * published holds the line, and the last round of the search places it there again.
+ * Tops kept for one line. A search for footnote reserves places a line at trial tops, then
+ * again at the top a published layout holds it at. When a new top makes one too many, the
+ * oldest top that no placement came back to goes: a trial top of an earlier search. A top that
+ * a placement came back to stays while another can go.
  */
 const MAX_KEPT_TOPS = 4;
 
@@ -159,19 +188,35 @@ export function bodyLinePlacementTestRecorder(disabled = false): {
 
 /** Whether `kept` read what `placement` reads, the line's top aside. */
 function sameAlignment(kept: KeptPlacement, placement: BodyLinePlacement): boolean {
-  return (
-    kept.paragraphId === placement.paragraphId &&
-    kept.lineIndex === placement.lineIndex &&
-    kept.isLastLine === placement.isLastLine &&
-    kept.columnX === placement.columnX &&
-    kept.indentLeft === placement.indentLeft &&
-    kept.available === placement.available &&
-    kept.rtl === placement.rtl &&
-    kept.alignment === placement.alignment &&
-    kept.props === placement.props &&
-    kept.styleCascade === placement.styleCascade &&
-    kept.measurer === placement.measurer
-  );
+  for (const key of COMPARED_INPUTS) if (kept.inputs[key] !== placement[key]) return false;
+  return true;
+}
+
+function comparedInputs(placement: BodyLinePlacement): Pick<BodyLinePlacement, ComparedInput> {
+  const inputs: Partial<Record<ComparedInput, unknown>> = {};
+  for (const key of COMPARED_INPUTS) inputs[key] = placement[key];
+  return inputs as Pick<BodyLinePlacement, ComparedInput>;
+}
+
+/**
+ * A kept record is in every layout that placed its line there, so nothing may change it. The
+ * spans of a broken line are frozen for the same reason.
+ */
+function shared(record: LineRecord): LineRecord {
+  Object.freeze(record.spans);
+  Object.freeze(record.box);
+  return Object.freeze(record);
+}
+
+/** Make room for one more top; see {@link MAX_KEPT_TOPS}. */
+function dropOneTop(tops: KeptRecord[]): void {
+  for (let index = tops.length - 1; index >= 0; index -= 1) {
+    if (!tops[index]!.reused) {
+      tops.splice(index, 1);
+      return;
+    }
+  }
+  tops.pop();
 }
 
 /** `record` with its box and every span box at the top `y`. Nothing else of a line holds a top. */
@@ -275,19 +320,16 @@ export function placeBodyLine(placement: BodyLinePlacement): PlacedBodyLine {
         continue;
       }
       if (top.y === y) {
-        if (index > 0) {
-          kept.tops.splice(index, 1);
-          kept.tops.unshift(top);
-        }
+        top.reused = true;
         if (observer) observer.reused += 1;
         return { record, alignOffset: kept.alignOffset };
       }
       source ??= record;
     }
     if (source) {
-      const record = atTop(source, y);
-      kept.tops.unshift({ y, record: new WeakRef(record) });
-      if (kept.tops.length > MAX_KEPT_TOPS) kept.tops.splice(1, 1);
+      const record = shared(atTop(source, y));
+      if (kept.tops.length >= MAX_KEPT_TOPS) dropOneTop(kept.tops);
+      kept.tops.unshift({ y, record: new WeakRef(record), reused: false });
       if (observer) observer.moved += 1;
       return { record, alignOffset: kept.alignOffset };
     }
@@ -295,19 +337,9 @@ export function placeBodyLine(placement: BodyLinePlacement): PlacedBodyLine {
   if (observer) observer.placed += 1;
   const placed = place(placement);
   keptPlacements.set(pendingLine, {
-    paragraphId: placement.paragraphId,
-    lineIndex: placement.lineIndex,
-    isLastLine: placement.isLastLine,
-    columnX: placement.columnX,
-    indentLeft: placement.indentLeft,
-    available: placement.available,
-    rtl: placement.rtl,
-    alignment: placement.alignment,
-    props: placement.props,
-    styleCascade: placement.styleCascade,
-    measurer: placement.measurer,
+    inputs: comparedInputs(placement),
     alignOffset: placed.alignOffset,
-    tops: [{ y, record: new WeakRef(placed.record) }],
+    tops: [{ y, record: new WeakRef(shared(placed.record)), reused: false }],
   });
   return placed;
 }

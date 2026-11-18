@@ -25,6 +25,7 @@ import { DEFAULT_RUN_STYLE } from '../run-style.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
 import type { NotesLayoutInput } from '../note-pagination.ts';
 import type { OoxmlPart } from '../../store/package/ooxml-package.ts';
+import type { InlineDrawingRecord } from '../drawing-layout.ts';
 import type { LineRecord, SemanticLayout, StyleSpanRecord } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -177,8 +178,11 @@ describe('a full pass over unchanged content', () => {
     );
     const lines = bodyLines(layout).length;
     // A reserve round places a line again at the same top or at another top; neither aligns.
-    expect(counts.placed).toBe(lines);
-    expect(counts.placed + counts.moved + counts.reused).toBeGreaterThan(lines);
+    // A record that no round holds any more can be placed in full again, so the count of
+    // full placements has no exact upper bound here.
+    expect(counts.placed).toBeGreaterThanOrEqual(lines);
+    expect(counts.moved + counts.reused).toBeGreaterThan(0);
+    expect(counts.placed).toBeLessThan(counts.placed + counts.moved + counts.reused);
   });
 
   test('lines an edit moved up keep their alignment and equal a pass without reuse', () => {
@@ -329,6 +333,91 @@ describe('placeBodyLine', () => {
       expect(other.record).toEqual(plain(placement(line, change)));
     });
   }
+
+  test('a right-to-left line at another top equals a full placement', () => {
+    const line = frozenLine({ ...pending(), firstLineOffset: 18 });
+    const rtl = { rtl: true, alignment: 'right' } as const;
+    const counts = record();
+    const first = placeBodyLine(placement(line, rtl));
+    const lower = placeBodyLine(placement(line, { ...rtl, y: 240 }));
+    expect(counts.moved).toBe(1);
+    expect(first.record).toEqual(plain(placement(line, rtl)));
+    expect(lower.record).toEqual(plain(placement(line, { ...rtl, y: 240 })));
+    expect(lower.alignOffset).toBe(first.alignOffset);
+  });
+
+  test('one broken line placed for two paragraphs gives each its own record', () => {
+    const line = frozenLine(pending());
+    const counts = record();
+    const first = placeBodyLine(placement(line));
+    const second = placeBodyLine(placement(line, { paragraphId: 'p2' }));
+    const firstAgain = placeBodyLine(placement(line));
+    expect(counts.moved + counts.reused).toBe(0);
+    expect(second.record.range.paragraphId).toBe('p2');
+    expect(second.record.spans.every((placed) => placed.range.paragraphId === 'p2')).toBe(true);
+    expect(firstAgain.record).toEqual(first.record);
+    expect(firstAgain.record.range.paragraphId).toBe('p1');
+  });
+
+  test('a line with an inline picture is placed every time', () => {
+    const box = { x: 48, y: 0, width: 12, height: 12 };
+    const picture = {
+      kind: 'inlineDrawing',
+      drawingNodeId: 'd1',
+      paragraphId: 'p1',
+      ownerPartName: '/word/document.xml',
+      start: 8,
+      x: 48,
+      y: 0,
+      advanceStart: 48,
+      advanceEnd: 60,
+      paintBounds: box,
+      hitBounds: box,
+      geometry: { contentBounds: box, paintBounds: box, hitBounds: box, transformedCorners: [] },
+    } as unknown as InlineDrawingRecord;
+    const line = frozenLine({ ...pending(), drawings: [picture], end: 9, width: 60 });
+    const counts = record();
+    let clips = 0;
+    const clipDrawing = (drawing: InlineDrawingRecord) => {
+      clips += 1;
+      return drawing;
+    };
+    const first = placeBodyLine(placement(line, { clipDrawing }));
+    const second = placeBodyLine(placement(line, { clipDrawing }));
+    expect(counts.placed).toBe(2);
+    expect(clips).toBe(2);
+    expect(first.record.drawings?.length).toBe(1);
+    expect(second.record).not.toBe(first.record);
+  });
+
+  test('a top that a placement came back to outlives the trial tops of later searches', () => {
+    const line = frozenLine(pending());
+    const counts = record();
+    // Hold every record, as the layouts of a search do until it ends.
+    const held = [placeBodyLine(placement(line)).record];
+    // A second pass finds the line at the same top: that top is now one to come back to.
+    expect(placeBodyLine(placement(line)).record).toBe(held[0]!);
+    for (let round = 0; round < 3; round += 1) {
+      for (const trial of [1, 2, 3, 4, 5]) {
+        held.push(placeBodyLine(placement(line, { y: 1000 * (round + 1) + trial })).record);
+      }
+      // Each search ends at the published top and takes the record kept there.
+      expect(placeBodyLine(placement(line)).record).toBe(held[0]!);
+    }
+    expect(counts.placed).toBe(1);
+    expect(counts.reused).toBe(4);
+  });
+
+  test('a kept record cannot change', () => {
+    const line = frozenLine(pending());
+    const kept = placeBodyLine(placement(line)).record;
+    const moved = placeBodyLine(placement(line, { y: 240 })).record;
+    for (const placed of [kept, moved]) {
+      expect(Object.isFrozen(placed)).toBe(true);
+      expect(Object.isFrozen(placed.spans)).toBe(true);
+      expect(Object.isFrozen(placed.box)).toBe(true);
+    }
+  });
 
   test('a line that is not frozen is placed every time', () => {
     const line = pending();
