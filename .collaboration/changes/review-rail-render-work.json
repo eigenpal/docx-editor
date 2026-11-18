@@ -7,7 +7,11 @@
   "tests": [
     "packages/pro/src/__tests__/review-rail-render-work.test.tsx",
     "packages/pro/src/__tests__/review-rail-render-work-vue.test.ts",
-    "packages/pro/src/__tests__/review-rail-band-step.test.ts"
+    "packages/pro/src/__tests__/review-rail-band-step.test.ts",
+    "packages/pro/src/__tests__/review-rail-card-updates.test.tsx",
+    "packages/pro/src/__tests__/review-rail-card-updates-vue.test.ts",
+    "packages/pro/src/collaboration/__tests__/review-rail-remote-update.test.tsx",
+    "packages/pro/src/collaboration/__tests__/review-rail-remote-update-vue.test.ts"
   ],
   "changeset": "review-rail-render-work",
   "migration": null

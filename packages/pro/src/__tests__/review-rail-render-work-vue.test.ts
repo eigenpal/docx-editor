@@ -11,25 +11,29 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
-import { h, ref, type App, type ComponentPublicInstance, type VNode } from 'vue';
-import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
-import { flush, mountEditorTree } from '../../../vue/test/helpers/mount.ts';
-import { reviewModule } from '../index.ts';
-import { DocxEditorReview, type ReviewItemView } from '../vue/index.ts';
+import { defineComponent, h, ref } from 'vue';
+import { DocxEditorReview, useReviewItem, type ReviewItemView } from '../vue/index.ts';
 import { RAIL_BAND_STEP } from '../review/rail-window.ts';
 import { insertBanner, installRailGeometry, railGeometry } from './review-rail-metrics-harness.ts';
 import {
   INSIDE_INSERTION,
   compactCardTop,
   PAGES,
+  counter,
   installViewHeight,
   mountedCards,
-  pagedTrackedDocument,
   scrollTo,
   scrollerOf,
   typeIn,
   unplaceItem,
 } from './review-rail-render-work-harness.ts';
+import {
+  mountCountingRail,
+  mountRail,
+  settle,
+  unmountRails,
+  waitFor,
+} from './review-rail-render-work-vue-harness.ts';
 
 let restore: (() => void)[] = [];
 beforeAll(() => {
@@ -39,107 +43,10 @@ afterAll(() => {
   for (const undo of restore) undo();
 });
 
-let unmount: (() => void) | null = null;
 afterEach(() => {
-  unmount?.();
-  unmount = null;
+  unmountRails();
   railGeometry.clientWidth = 1400;
 });
-
-async function settle(ms = 30): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-  await flush();
-}
-
-async function waitFor(predicate: () => boolean, attempts = 80): Promise<void> {
-  for (let i = 0; i < attempts && !predicate(); i++) await settle(25);
-}
-
-/** Render counts by card key, since the last `reset`. */
-function counter() {
-  const counts = new Map<string, number>();
-  return {
-    add: (key: string) => void counts.set(key, (counts.get(key) ?? 0) + 1),
-    of: (key: string) => counts.get(key) ?? 0,
-    total: () => [...counts.values()].reduce((sum, count) => sum + count, 0),
-    keys: () => [...counts.keys()],
-    reset: () => counts.clear(),
-  };
-}
-
-type Counter = ReturnType<typeof counter>;
-
-/**
- * Count each component that mounts or updates inside the rail: in `cards` by the card it
- * belongs to, and in `rail` when it belongs to no card.
- */
-function countRenders(app: App, cards: Counter, rail: Counter): void {
-  const record = (instance: ComponentPublicInstance): void => {
-    const node = instance.$el as Node | null;
-    const element = node instanceof Element ? node : (node?.parentElement ?? null);
-    if (!element?.closest('.docx-review')) return;
-    const card = element.closest<HTMLElement>('[data-card-key]');
-    if (card) cards.add(card.dataset.cardKey!);
-    else rail.add(instance.$options.name ?? 'component');
-  };
-  app.mixin({
-    mounted() {
-      record(this as ComponentPublicInstance);
-    },
-    updated() {
-      record(this as ComponentPublicInstance);
-    },
-  });
-}
-
-async function mountRail(
-  review: () => VNode,
-  configure?: (app: App) => void,
-  ready = 'review-card'
-) {
-  const mounted = mountEditorTree(
-    () => [],
-    pagedTrackedDocument(),
-    () => [review()],
-    [reviewModule()],
-    // The author of the document's changes, so a reply adds no author and can be edited.
-    { author: 'Ada Lovelace' },
-    undefined,
-    configure
-  );
-  unmount = mounted.unmount;
-  const { container } = mounted;
-  await waitFor(() => container.querySelector(`[data-testid="${ready}"]`) !== null);
-  await settle(60);
-  return { container, editor: mounted.editor() as DocxEditorInstance };
-}
-
-/**
- * A rail whose cards come from an item slot. `templates` counts the calls of the slot,
- * `cards` the renders of the components of each card, and `rail` the renders of the rail's
- * own components.
- */
-async function mountCountingRail() {
-  const templates = counter();
-  const cards = counter();
-  const rail = counter();
-  const slots = {
-    item: ({ item }: { item: ReviewItemView }) => {
-      templates.add(item.key);
-      return h('div', { 'data-card-key': item.key }, [h(DocxEditorReview.Card)]);
-    },
-  };
-  const mounted = await mountRail(
-    () => h(DocxEditorReview, null, slots),
-    (app) => countRenders(app, cards, rail)
-  );
-  const reset = () => {
-    templates.reset();
-    cards.reset();
-    rail.reset();
-  };
-  return { ...mounted, templates, cards, rail, reset };
-}
 
 describe('review rail render work (Vue)', () => {
   test('a scroll inside one band step renders nothing in the rail', async () => {
@@ -293,11 +200,9 @@ describe('review rail render work (Vue)', () => {
   test('the compact card of an item without a placement follows each scroll position', async () => {
     // Too narrow for the column: the rail shows markers and floats the active item's card.
     railGeometry.clientWidth = 1000;
-    const { container, editor } = await mountRail(
-      () => h(DocxEditorReview),
-      undefined,
-      'review-marker'
-    );
+    const { container, editor } = await mountRail(() => h(DocxEditorReview), {
+      ready: 'review-marker',
+    });
     expect(
       container.querySelector('[data-testid="review-rail"]')?.hasAttribute('data-compact')
     ).toBe(true);
@@ -338,6 +243,91 @@ describe('review rail render work (Vue)', () => {
     await settle();
     for (const key of mounted) expect(calls.of(key)).toBe(1);
     expect(container.querySelectorAll('[data-label="two"]')).toHaveLength(mounted.length);
+  });
+
+  test('another item slot function renders each mounted card once', async () => {
+    const calls = counter();
+    // Plain values: the slot reads no reactive state, so only its identity tells of a change.
+    let label = 'one';
+    const epoch = ref(0);
+    const Host = defineComponent({
+      name: 'Host',
+      setup() {
+        return () => {
+          void epoch.value;
+          const shown = label;
+          return h(DocxEditorReview, null, {
+            item: ({ item }: { item: ReviewItemView }) => {
+              calls.add(item.key);
+              return h('div', { 'data-card-key': item.key, 'data-label': shown }, [
+                h(DocxEditorReview.Card),
+              ]);
+            },
+          });
+        };
+      },
+    });
+    const { container } = await mountRail(() => h(Host));
+    const mounted = mountedCards(container);
+    expect(mounted.length).toBeGreaterThan(1);
+    expect(container.querySelectorAll('[data-label="one"]')).toHaveLength(mounted.length);
+
+    // The host renders again and passes a new slot function over the new value.
+    calls.reset();
+    label = 'two';
+    epoch.value += 1;
+    await settle();
+    for (const key of mounted) expect(calls.of(key)).toBe(1);
+    expect(container.querySelectorAll('[data-label="two"]')).toHaveLength(mounted.length);
+    expect(container.querySelectorAll('[data-label="one"]')).toHaveLength(0);
+  });
+
+  test('another default slot with a Card renders each mounted card once', async () => {
+    const renders = counter();
+    const Probe = defineComponent({
+      name: 'Probe',
+      props: { label: { type: String, required: true } },
+      setup(props) {
+        const item = useReviewItem();
+        return () => {
+          renders.add(item.value!.key);
+          return h('span', { 'data-testid': 'host-extra', 'data-label': props.label });
+        };
+      },
+    });
+    let label = 'one';
+    const epoch = ref(0);
+    const Host = defineComponent({
+      name: 'Host',
+      setup() {
+        return () => {
+          void epoch.value;
+          const shown = label;
+          return h(DocxEditorReview, null, () =>
+            h(DocxEditorReview.List, null, () =>
+              h(DocxEditorReview.Card, { className: 'host-card' }, () => [
+                h(DocxEditorReview.Summary),
+                h(Probe, { label: shown }),
+              ])
+            )
+          );
+        };
+      },
+    });
+    const { container } = await mountRail(() => h(Host));
+    const mounted = container.querySelectorAll('.host-card').length;
+    expect(mounted).toBeGreaterThan(1);
+    expect(renders.keys()).toHaveLength(mounted);
+    expect(container.querySelectorAll('[data-label="one"]')).toHaveLength(mounted);
+
+    const cards = renders.keys();
+    renders.reset();
+    label = 'two';
+    epoch.value += 1;
+    await settle();
+    for (const key of cards) expect(renders.of(key)).toBe(1);
+    expect(container.querySelectorAll('[data-label="two"]')).toHaveLength(mounted);
+    expect(container.querySelectorAll('[data-label="one"]')).toHaveLength(0);
   });
 
   test('a change of the rail settings renders every mounted card', async () => {

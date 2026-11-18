@@ -13,31 +13,30 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
-import { Profiler, type ReactNode } from 'react';
-import { act, cleanup, render } from '@testing-library/react';
-import {
-  DocxEditorContent,
-  DocxEditorRoot,
-  DocxEditorViewport,
-  type ToolbarTranslate,
-} from '@docx-editor.dev/react';
-import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
-import { reviewModule } from '../index.ts';
-import { DocxEditorReview, type ReviewItemView } from '../react/index.ts';
+import { useState } from 'react';
+import { act, cleanup } from '@testing-library/react';
+import type { ToolbarTranslate } from '@docx-editor.dev/react';
+import { DocxEditorReview, useReviewItem, type ReviewItemView } from '../react/index.ts';
 import { RAIL_BAND_STEP } from '../review/rail-window.ts';
 import { insertBanner, installRailGeometry, railGeometry } from './review-rail-metrics-harness.ts';
 import {
   INSIDE_INSERTION,
   PAGES,
   compactCardTop,
+  counter,
   installViewHeight,
   mountedCards,
-  pagedTrackedDocument,
   scrollTo,
   scrollerOf,
   typeIn,
   unplaceItem,
 } from './review-rail-render-work-harness.ts';
+import {
+  countingRail,
+  mountRail,
+  settle,
+  waitFor,
+} from './review-rail-render-work-react-harness.tsx';
 
 let restore: (() => void)[] = [];
 beforeAll(() => {
@@ -50,84 +49,6 @@ afterEach(() => {
   cleanup();
   railGeometry.clientWidth = 1400;
 });
-
-async function settle(ms = 30): Promise<void> {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, ms));
-  });
-}
-
-async function waitFor(predicate: () => boolean, attempts = 80): Promise<void> {
-  for (let i = 0; i < attempts && !predicate(); i++) await settle(25);
-}
-
-/** Render counts by card key, since the last `reset`. */
-function counter() {
-  const counts = new Map<string, number>();
-  return {
-    add: (key: string) => void counts.set(key, (counts.get(key) ?? 0) + 1),
-    of: (key: string) => counts.get(key) ?? 0,
-    total: () => [...counts.values()].reduce((sum, count) => sum + count, 0),
-    keys: () => [...counts.keys()],
-    reset: () => counts.clear(),
-  };
-}
-
-async function mountRail(review: ReactNode, ready = 'review-card') {
-  let editor: DocxEditorInstance | null = null;
-  const source = pagedTrackedDocument();
-  const tree = (rail: ReactNode) => (
-    <DocxEditorRoot
-      document={source}
-      modules={[reviewModule()]}
-      // The author of the document's changes, so a reply adds no author and can be edited.
-      author="Ada Lovelace"
-      onReady={(instance) => {
-        editor = instance as DocxEditorInstance;
-      }}
-    >
-      <DocxEditorViewport>
-        <DocxEditorContent />
-        {rail}
-      </DocxEditorViewport>
-    </DocxEditorRoot>
-  );
-  const view = render(tree(review));
-  await waitFor(() => view.container.querySelector(`[data-testid="${ready}"]`) !== null);
-  await settle(60);
-  return {
-    container: view.container,
-    editor: editor!,
-    rerender: (rail: ReactNode) => view.rerender(tree(rail)),
-  };
-}
-
-/** A rail whose cards come from a render prop that counts its calls and the card's renders. */
-function countingRail() {
-  const templates = counter();
-  const cards = counter();
-  const commits = counter();
-  const rail = (
-    <Profiler id="rail" onRender={(id) => commits.add(id)}>
-      <DocxEditorReview>
-        {(item: ReviewItemView) => (
-          <Profiler id={item.key} onRender={(id) => cards.add(id)}>
-            {(templates.add(item.key), null)}
-            <div data-card-key={item.key}>
-              <DocxEditorReview.Card />
-            </div>
-          </Profiler>
-        )}
-      </DocxEditorReview>
-    </Profiler>
-  );
-  const reset = () => {
-    templates.reset();
-    cards.reset();
-    commits.reset();
-  };
-  return { rail, templates, cards, commits, reset };
-}
 
 describe('review rail render work', () => {
   test('a scroll inside one band step renders nothing in the rail', async () => {
@@ -302,7 +223,7 @@ describe('review rail render work', () => {
   test('the compact card of an item without a placement follows each scroll position', async () => {
     // Too narrow for the column: the rail shows markers and floats the active item's card.
     railGeometry.clientWidth = 1000;
-    const { container, editor } = await mountRail(<DocxEditorReview />, 'review-marker');
+    const { container, editor } = await mountRail(<DocxEditorReview />, { ready: 'review-marker' });
     expect(
       container.querySelector('[data-testid="review-rail"]')?.hasAttribute('data-compact')
     ).toBe(true);
@@ -346,6 +267,130 @@ describe('review rail render work', () => {
     await settle();
     for (const key of mounted) expect(calls.of(key)).toBe(1);
     expect(container.querySelectorAll('[data-label="two"]')).toHaveLength(mounted.length);
+  });
+
+  test('another Card template renders each mounted card once', async () => {
+    const renders = counter();
+    function Probe({ label }: { label: string }) {
+      const item = useReviewItem();
+      renders.add(item!.key);
+      return <span data-testid="host-extra" data-label={label} />;
+    }
+    const railWith = (label: string) => (
+      <DocxEditorReview>
+        <DocxEditorReview.List>
+          <DocxEditorReview.Card className="host-card">
+            <DocxEditorReview.Summary />
+            <Probe label={label} />
+          </DocxEditorReview.Card>
+        </DocxEditorReview.List>
+      </DocxEditorReview>
+    );
+    const { container, rerender } = await mountRail(railWith('one'));
+    const mounted = container.querySelectorAll('.host-card').length;
+    expect(mounted).toBeGreaterThan(1);
+    expect(container.querySelectorAll('[data-label="one"]')).toHaveLength(mounted);
+
+    const cards = renders.keys();
+    expect(cards).toHaveLength(mounted);
+    renders.reset();
+    await act(async () => rerender(railWith('two')));
+    await settle();
+    for (const key of cards) expect(renders.of(key)).toBe(1);
+    expect(container.querySelectorAll('[data-label="two"]')).toHaveLength(mounted);
+    expect(container.querySelectorAll('[data-label="one"]')).toHaveLength(0);
+  });
+
+  /** A rail whose render prop holds state of its own, and the errors React reports for it. */
+  function statefulRail() {
+    const errors: unknown[][] = [];
+    const report = console.error;
+    console.error = (...args: unknown[]) => void errors.push(args);
+    const rail = (
+      <DocxEditorReview>
+        {(item: ReviewItemView) => {
+          const [presses, setPresses] = useState(0);
+          return (
+            <div data-card-key={item.key} data-presses={presses}>
+              <button type="button" data-testid="press" onClick={() => setPresses(presses + 1)} />
+              <DocxEditorReview.Card />
+            </div>
+          );
+        }}
+      </DocxEditorReview>
+    );
+    return {
+      rail,
+      errors,
+      restoreConsole: () => {
+        console.error = report;
+      },
+    };
+  }
+
+  test('a render prop that calls a hook keeps the state of each card', async () => {
+    const { rail, errors, restoreConsole } = statefulRail();
+    try {
+      const { container, editor } = await mountRail(rail);
+      const mounted = mountedCards(container);
+      expect(mounted.length).toBeGreaterThan(1);
+      const wrapper = (key: string) =>
+        container.querySelector<HTMLElement>(`[data-card-key="${key}"]`)!;
+      const press = async (key: string) =>
+        act(async () => wrapper(key).querySelector<HTMLElement>('[data-testid="press"]')!.click());
+      await press(mounted[0]!);
+      await press(mounted[0]!);
+      expect(wrapper(mounted[0]!).dataset.presses).toBe('2');
+      expect(wrapper(mounted[1]!).dataset.presses).toBe('0');
+
+      // The item changes and the render prop runs again: the card keeps its state.
+      await act(async () => {
+        typeIn(editor, 1, INSIDE_INSERTION);
+      });
+      await settle();
+      expect(wrapper(mounted[0]!).textContent).toContain('adxded 0');
+      expect(wrapper(mounted[0]!).dataset.presses).toBe('2');
+      expect(errors).toEqual([]);
+    } finally {
+      restoreConsole();
+    }
+  });
+
+  test('the compact card runs a render prop that calls a hook', async () => {
+    railGeometry.clientWidth = 1000;
+    const { rail, errors, restoreConsole } = statefulRail();
+    try {
+      const { container, editor } = await mountRail(rail, { ready: 'review-marker' });
+      const [first, second] = editor.getReviewItems().map((entry) => entry.key);
+      const floating = () =>
+        container
+          .querySelector('[data-testid="review-compact-card"]')
+          ?.querySelector<HTMLElement>('[data-card-key]');
+      const activate = async (key: string) => {
+        await act(async () => {
+          expect(editor.setActiveReviewItem(key, { reveal: false }).ok).toBe(true);
+        });
+        await waitFor(() => floating()?.dataset.cardKey === key);
+        expect(floating()?.dataset.cardKey).toBe(key);
+      };
+      // The rail renders with and without the card: the hook is the card's, not the rail's.
+      await activate(first!);
+      await act(async () => {
+        floating()!.querySelector<HTMLElement>('[data-testid="press"]')!.click();
+      });
+      expect(floating()?.dataset.presses).toBe('1');
+      // Another item starts from its own state.
+      await activate(second!);
+      expect(floating()?.dataset.presses).toBe('0');
+      await act(async () => {
+        expect(editor.setActiveReviewItem(null).ok).toBe(true);
+      });
+      await waitFor(() => floating() === undefined);
+      expect(floating()).toBeUndefined();
+      expect(errors).toEqual([]);
+    } finally {
+      restoreConsole();
+    }
   });
 
   test('a change of the rail settings renders every mounted card', async () => {

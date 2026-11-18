@@ -20,18 +20,24 @@ export const PAGES = 12;
 /** The visible height the scroller reports, in CSS pixels. */
 export const VIEW_HEIGHT = 800;
 
+/** The author of every tracked change, unless a test names another for a page. */
+export const AUTHOR = 'Ada Lovelace';
+
 /**
  * `PAGES` pages. Page `n` holds paragraph `2n` (plain text) and paragraph `2n + 1` (a tracked
  * insertion), so the cards sit about one page apart and a scroll changes which ones mount.
+ * `authorOf` names the author of the insertion on a page.
  */
-export function pagedTrackedDocument(): Uint8Array {
+export function pagedTrackedDocument(
+  authorOf: (page: number) => string = () => AUTHOR
+): Uint8Array {
   let body = '';
   for (let page = 0; page < PAGES; page += 1) {
     body +=
       `<w:p>${page > 0 ? '<w:r><w:br w:type="page"/></w:r>' : ''}` +
       `<w:r><w:t>plain ${page}</w:t></w:r></w:p>` +
       '<w:p><w:r><w:t xml:space="preserve">base </w:t></w:r>' +
-      `<w:ins w:id="${page + 1}" w:author="Ada Lovelace" w:date="2026-01-01T00:00:00Z">` +
+      `<w:ins w:id="${page + 1}" w:author="${authorOf(page)}" w:date="2026-01-01T00:00:00Z">` +
       `<w:r><w:t>added ${page}</w:t></w:r></w:ins></w:p>`;
   }
   return zipSync({
@@ -118,4 +124,47 @@ export function unplaceItem(editor: DocxEditorInstance, key: string): () => void
 export function compactCardTop(container: Element): number | null {
   const card = container.querySelector<HTMLElement>('[data-testid="review-compact-card"]');
   return card ? Number.parseFloat(card.style.top) : null;
+}
+
+/** Render counts by card key, since the last `reset`. */
+export function counter() {
+  const counts = new Map<string, number>();
+  return {
+    add: (key: string) => void counts.set(key, (counts.get(key) ?? 0) + 1),
+    of: (key: string) => counts.get(key) ?? 0,
+    total: () => [...counts.values()].reduce((sum, count) => sum + count, 0),
+    keys: () => [...counts.keys()],
+    reset: () => counts.clear(),
+  };
+}
+
+export type Counter = ReturnType<typeof counter>;
+
+/** The packaged card element of the item `key`, inside the wrapper a test's template draws. */
+export function cardOf(container: Element, key: string): HTMLElement | null {
+  return container.querySelector<HTMLElement>(
+    `[data-card-key="${key}"] [data-testid="review-card"]`
+  );
+}
+
+/**
+ * Select the first `length` characters of paragraph `index` and comment on them as `author`.
+ * Answers the key of the new comment.
+ */
+export function commentOn(
+  editor: DocxEditorInstance,
+  index: number,
+  text: string,
+  author: string = AUTHOR,
+  length = 5
+): string {
+  const paragraphId = editor.surface!.session.paragraphIds()[index]!;
+  editor.surface!.setSelection({
+    anchor: { paragraphId, offset: 0 },
+    head: { paragraphId, offset: length },
+  });
+  const known = new Set(editor.getReviewItems().map((entry) => entry.key));
+  const result = editor.addComment(text, author);
+  if (!result.ok) throw new Error(`the comment was refused: ${JSON.stringify(result)}`);
+  return editor.getReviewItems().find((entry) => !known.has(entry.key))!.key;
 }
