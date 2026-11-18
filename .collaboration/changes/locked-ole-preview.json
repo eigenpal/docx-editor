@@ -6,7 +6,8 @@
   "reason": "Existing XML and relationship parts are preserved. No shared state, operation kind, snapshot field or protocol message changes. As with existing VML projection subsets, an inline preview occupies one local offset and a mixed-version selection may differ by one offset per newly projected object.",
   "tests": [
     "packages/core/src/store/__tests__/legacy-vml-object-preview.test.ts",
-    "packages/core/src/layout/__tests__/legacy-vml-layout.test.ts"
+    "packages/core/src/layout/__tests__/legacy-vml-layout.test.ts",
+    "packages/pro/src/collaboration/__tests__/locked-ole-preview-editors.test.ts"
   ],
   "changeset": "locked-ole-preview",
   "migration": null
