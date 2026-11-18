@@ -30,6 +30,12 @@
 // state that keeps the suppression without a painted caret is a range the browser itself
 // shows as a range: it draws no caret there, and lifting the suppression would restyle
 // every painted page for nothing.
+//
+//   state                                         painted caret   native caret
+//   collapsed, focused, placed by layout          shown           suppressed
+//   range the browser shows with text             none            suppressed (it draws none)
+//   range the browser shows as a caret            none            handed back
+//   unfocused, composing, suppressed, unplaced    none            handed back
 
 import {
   caretAt,
@@ -112,6 +118,25 @@ export interface SurfaceCaret {
 /** Appearance — width, colour, blink — lives in the stylesheet under these names. */
 const CARET_CLASS = 'docx-editor-one-surface__caret';
 const STEADY_CLASS = 'docx-editor-one-surface__caret--steady';
+
+/** `Node.TEXT_NODE`, as a number: a node from another window is no instance of this one's. */
+const TEXT_NODE = 3;
+
+/**
+ * Whether a selection end sits in painted run text with a character on the range's side.
+ *
+ * Both ends in ONE text node of a selection that is not collapsed hold the characters between
+ * them. An end in another node than the other end can be the range's start or its end, so one
+ * character beside it is not proof; a character on BOTH sides of it in its own text node is.
+ * Anything else answers false and leaves the question to the selection's text.
+ */
+function endsInRunText(node: Node | null, offset: number, other: Node | null): boolean {
+  if (!node || node.nodeType !== TEXT_NODE) return false;
+  if (!node.parentElement?.closest('[data-paragraph-id][data-start]')) return false;
+  const length = (node as Text).length;
+  if (node === other) return length > 0;
+  return offset > 0 && offset < length;
+}
 
 /**
  * How long a moved caret stays solid before it resumes blinking.
@@ -222,6 +247,14 @@ export function createSurfaceCaret(
     const active = document.activeElement;
     if (active && active !== pagesLayer && /^(?:INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) {
       return false;
+    }
+    // A selection end inside painted run text settles it without reading the selected text,
+    // whose length a held range would otherwise pay for on every repaint.
+    if (
+      endsInRunText(selection.anchorNode, selection.anchorOffset, selection.focusNode) ||
+      endsInRunText(selection.focusNode, selection.focusOffset, selection.anchorNode)
+    ) {
+      return true;
     }
     return selection.toString() !== '';
   }

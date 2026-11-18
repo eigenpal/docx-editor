@@ -297,14 +297,39 @@ describe('the painted caret', () => {
   });
 
   test('a range that holds no text gets the native caret back', () => {
+    // The two sides of hidden text are different places in the document and one place on
+    // screen: a browser can draw such a range as a caret, and it must stay visible.
+    const { surface, container, pages } = mount(
+      '<w:p><w:r><w:t>hello</w:t></w:r>' +
+        '<w:r><w:rPr><w:vanish/></w:rPr><w:t>XXX</w:t></w:r>' +
+        '<w:r><w:t>world</w:t></w:r></w:p>'
+    );
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    putCaret(surface, 2);
+    expect(pages.style.caretColor).toBe('transparent');
+    surface.setSelection({
+      anchor: { paragraphId, offset: 5 },
+      head: { paragraphId, offset: 8 },
+    });
+    const browser = document.getSelection()!;
+    expect(browser.toString()).toBe('');
+    expect(caretElement(container)).toBeNull();
+    expect(pages.style.caretColor).toBe('');
+    surface.destroy();
+    container.remove();
+  });
+
+  test('a range that ends inside run text keeps the suppression without reading its text', () => {
     const { surface, container, pages } = mount(paragraph('hello world'));
     const paragraphId = surface.session.paragraphIds()[0]!;
     putCaret(surface, 3);
     const browser = document.getSelection()!;
     const text = browser.toString;
-    // The two sides of hidden text are different places in the page and one place on screen:
-    // a browser can draw such a range as a caret, and it must stay visible.
-    browser.toString = () => '';
+    let reads = 0;
+    browser.toString = () => {
+      reads += 1;
+      return text.call(browser);
+    };
     try {
       surface.setSelection({
         anchor: { paragraphId, offset: 1 },
@@ -314,8 +339,8 @@ describe('the painted caret', () => {
       browser.toString = text;
     }
     expect(browser.isCollapsed).toBe(false);
-    expect(caretElement(container)).toBeNull();
-    expect(pages.style.caretColor).toBe('');
+    expect(reads).toBe(0);
+    expect(pages.style.caretColor).toBe('transparent');
     surface.destroy();
     container.remove();
   });

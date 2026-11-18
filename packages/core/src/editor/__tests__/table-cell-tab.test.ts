@@ -386,7 +386,9 @@ describe('the work Tab does after typing in a cell', () => {
       tab(surface);
       const layout = surface.publishedLayout()!;
       // Tab selects a range, and the first read of a range orders its ends. That read must
-      // not index every paragraph of the document again after each typed character.
+      // not index every paragraph of the document again after each typed character. The
+      // index is kept per layout chain by `documentOrderIndex`; a read of another surface's
+      // layout between these two reads would replace it and fail this identity check.
       expect(paragraphOrderOf(layout)).toBe(before);
       expect([...paragraphOrderOf(layout).keys()]).toEqual(ids(surface));
     } finally {
