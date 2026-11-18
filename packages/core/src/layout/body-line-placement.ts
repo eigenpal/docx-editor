@@ -155,6 +155,9 @@ let observer: PlacementObserver | null = null;
  * `reused` as the record of a kept placement. `disabled` places every line in full, exactly as
  * without the reuse. A recorder made while another is active counts until it is disposed, then
  * the other counts again.
+ *
+ * The recorder is one module variable, as the other layout test recorders are. With none
+ * active, a placement reads it once and finds it null.
  */
 export function bodyLinePlacementTestRecorder(disabled = false): {
   readonly placed: number;
@@ -192,18 +195,39 @@ function sameAlignment(kept: KeptPlacement, placement: BodyLinePlacement): boole
   return true;
 }
 
+/** The compared inputs of `placement`. The type names each one, so none can be left out. */
 function comparedInputs(placement: BodyLinePlacement): Pick<BodyLinePlacement, ComparedInput> {
-  const inputs: Partial<Record<ComparedInput, unknown>> = {};
-  for (const key of COMPARED_INPUTS) inputs[key] = placement[key];
-  return inputs as Pick<BodyLinePlacement, ComparedInput>;
+  return {
+    paragraphId: placement.paragraphId,
+    lineIndex: placement.lineIndex,
+    isLastLine: placement.isLastLine,
+    columnX: placement.columnX,
+    indentLeft: placement.indentLeft,
+    available: placement.available,
+    rtl: placement.rtl,
+    alignment: placement.alignment,
+    props: placement.props,
+    styleCascade: placement.styleCascade,
+    measurer: placement.measurer,
+  };
 }
 
 /**
  * A kept record is in every layout that placed its line there, so nothing may change it. The
- * record, its box, and its span list are frozen, so a write to one of them fails at once.
+ * record, its box, each span, and each span box are frozen, so a write to one of them fails at
+ * once. Every span here is a copy this module or alignment made for the record, never a span of
+ * the broken line or of another record.
+ *
+ * The span list itself is not frozen. A frozen array is slower to freeze and to read in some
+ * script engines than all the other freezes together, and every reader of a line walks its
+ * spans. The list is typed `readonly`, and nothing reorders or resizes the spans of a published
+ * line.
  */
 function shared(record: LineRecord): LineRecord {
-  Object.freeze(record.spans);
+  for (const span of record.spans) {
+    Object.freeze(span.box);
+    Object.freeze(span);
+  }
   Object.freeze(record.box);
   return Object.freeze(record);
 }
@@ -298,13 +322,12 @@ function place(placement: BodyLinePlacement): PlacedBodyLine {
  */
 export function placeBodyLine(placement: BodyLinePlacement): PlacedBodyLine {
   const { pendingLine, y } = placement;
+  const counts = observer;
   // Only a frozen line is the same line in a later pass, and only it can never change.
   const keeps =
-    observer?.disabled !== true &&
-    pendingLine.drawings.length === 0 &&
-    Object.isFrozen(pendingLine);
+    counts?.disabled !== true && pendingLine.drawings.length === 0 && Object.isFrozen(pendingLine);
   if (!keeps) {
-    if (observer) observer.placed += 1;
+    if (counts) counts.placed += 1;
     return place(placement);
   }
   const kept = keptPlacements.get(pendingLine);
@@ -321,7 +344,7 @@ export function placeBodyLine(placement: BodyLinePlacement): PlacedBodyLine {
       }
       if (top.y === y) {
         top.reused = true;
-        if (observer) observer.reused += 1;
+        if (counts) counts.reused += 1;
         return { record, alignOffset: kept.alignOffset };
       }
       source ??= record;
@@ -330,11 +353,11 @@ export function placeBodyLine(placement: BodyLinePlacement): PlacedBodyLine {
       const record = shared(atTop(source, y));
       if (kept.tops.length >= MAX_KEPT_TOPS) dropOneTop(kept.tops);
       kept.tops.unshift({ y, record: new WeakRef(record), reused: false });
-      if (observer) observer.moved += 1;
+      if (counts) counts.moved += 1;
       return { record, alignOffset: kept.alignOffset };
     }
   }
-  if (observer) observer.placed += 1;
+  if (counts) counts.placed += 1;
   const placed = place(placement);
   keptPlacements.set(pendingLine, {
     inputs: comparedInputs(placement),
