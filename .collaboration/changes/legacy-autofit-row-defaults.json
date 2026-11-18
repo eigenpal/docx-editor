@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "An AutoFit table could lose its legacy content alignment when its rows repeated the table margins and borders.",
+  "after": "Repeated row margins and borders leave the table alignment in effect.",
+  "reason": "The layout engine compares the row side properties with the table properties before it selects the table grid.",
+  "tests": [
+    "packages/core/src/layout/__tests__/legacy-table-content-width.test.ts",
+    "packages/pro/src/collaboration/__tests__/legacy-autofit-row-defaults-editors.test.ts"
+  ],
+  "changeset": "legacy-autofit-row-defaults",
+  "migration": null
+}
