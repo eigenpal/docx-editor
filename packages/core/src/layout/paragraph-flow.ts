@@ -17,6 +17,7 @@ import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
 import { cellTabReplayScope, tabClosesLine, tabDestinationForFlow } from './paragraph-tab-flow.ts';
 import { growRunBorderLineMetrics } from './run-border-strokes.ts';
 import { lineSpacingBand } from './equation-line-spacing.ts';
+import { setInlineDrawingHighlightHeight } from './inline-drawing-highlight.ts';
 import {
   clipLineDrawingsAtTop,
   growPendingLineDrawingExtent,
@@ -877,6 +878,14 @@ export function breakParagraph(
       line.drawings.length === 0 && lineSpacing.rule !== 'exact'
         ? Math.max(0, Math.min(spaced.trailing ?? Infinity, spacedExtent - naturalHeight))
         : drawingLineTrailing;
+    if (
+      lineSpacing.rule === 'exact' &&
+      line.spans.some((span) => span.style.highlight && span.style.highlight !== 'none')
+    ) {
+      // Exact spacing sets the highlight's vertical extent independently of the font band.
+      line.highlightUsesFullLine = true;
+    }
+    setInlineDrawingHighlightHeight(line, lineSpacing, naturalHeight);
     finalizeTopAndBottomClearance();
     commitBreakClearance();
     if (empty && (wrapAnchorStarts.size > 0 || topAndBottomAnchorStarts.size > 0))

@@ -767,6 +767,7 @@ function placeCellParagraph(
         : pendingLine.baseline,
       leading: collapseHeight ? 0 : pendingLine.leading,
       trailingSpacing: collapseHeight ? 0 : pendingLine.trailingSpacing,
+      ...(pendingLine.highlightUsesFullLine ? { highlightUsesFullLine: true } : {}),
       ...(pendingLine.manualBreakAfter ? { manualBreakAfter: true } : {}),
       ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
       ...(pendingLine.anchorRevisions ? { anchorRevisions: pendingLine.anchorRevisions } : {}),

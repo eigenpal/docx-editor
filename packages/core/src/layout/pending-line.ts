@@ -38,6 +38,9 @@ export interface PendingLine {
    * bottom, while paint keeps the full box and padding.
    */
   trailingSpacing: number;
+  /** Authored text highlight height beside an inline drawing, from the line top. */
+  inlineDrawingHighlightHeight?: number;
+  highlightUsesFullLine?: true;
   /** When true, layout must start a new page after this line is placed. */
   pageBreakAfter?: boolean;
   /** When true, layout must advance to the next authored section column. */
@@ -490,6 +493,10 @@ export function frozenLine(line: PendingLine): PendingLine {
       baseline: line.baseline,
       leading: line.leading,
       trailingSpacing: line.trailingSpacing,
+      ...(line.highlightUsesFullLine ? { highlightUsesFullLine: true } : {}),
+      ...(line.inlineDrawingHighlightHeight !== undefined
+        ? { inlineDrawingHighlightHeight: line.inlineDrawingHighlightHeight }
+        : {}),
       ...(line.pageBreakAfter ? { pageBreakAfter: true } : {}),
       ...(line.columnBreakAfter ? { columnBreakAfter: true } : {}),
       ...(line.manualBreakAfter ? { manualBreakAfter: true } : {}),

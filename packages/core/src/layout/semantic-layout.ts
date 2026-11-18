@@ -2719,6 +2719,12 @@ function* layoutBlocksPass(
         baseline: pendingLine.baseline,
         leading: pendingLine.leading,
         trailingSpacing: pendingLine.trailingSpacing,
+        ...(pendingLine.highlightUsesFullLine ? { highlightUsesFullLine: true } : {}),
+        ...(pendingLine.inlineDrawingHighlightHeight !== undefined
+          ? {
+              inlineDrawingHighlightHeight: pendingLine.inlineDrawingHighlightHeight,
+            }
+          : {}),
         ...(pendingLine.manualBreakAfter ? { manualBreakAfter: true } : {}),
         ...lineBreakAfterFields(pendingLine),
         ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
