@@ -27,6 +27,7 @@ import type { NotesLayoutInput } from '../note-pagination.ts';
 import type { OoxmlPart } from '../../store/package/ooxml-package.ts';
 import type { InlineDrawingRecord } from '../drawing-layout.ts';
 import type { LineRecord, SemanticLayout, StyleSpanRecord } from '../semantic-records.ts';
+import { layoutContext, load as loadPart } from './anchored-drawing-test-fixtures.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -223,6 +224,202 @@ describe('a full pass over unchanged content', () => {
   });
 });
 
+const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+const EMU_PER_PT = 12_700;
+
+/** A square-wrapped picture run, `x` points from its column and at its paragraph's top. */
+function picture(id: number, x: number, width: number, height: number): string {
+  const extent = `cx="${width * EMU_PER_PT}" cy="${height * EMU_PER_PT}"`;
+  return (
+    '<w:r><w:drawing>' +
+    `<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="0" locked="0" allowOverlap="1" layoutInCell="1" relativeHeight="${id}">` +
+    '<wp:simplePos x="0" y="0"/>' +
+    `<wp:positionH relativeFrom="column"><wp:posOffset>${x * EMU_PER_PT}</wp:posOffset></wp:positionH>` +
+    '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+    `<wp:extent ${extent}/>` +
+    '<wp:wrapSquare wrapText="bothSides"/>' +
+    `<wp:docPr id="${id}" name="pic ${id}"/>` +
+    `<a:graphic><a:graphicData uri="${PIC}"><pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name=""/><pic:cNvPicPr/></pic:nvPicPr>` +
+    '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+    `<pic:spPr><a:xfrm><a:ext ${extent}/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr></pic:pic></a:graphicData></a:graphic>` +
+    '</wp:anchor></w:drawing></w:r>'
+  );
+}
+
+/**
+ * Paragraphs of several lines beside two pictures: one at the column's left edge, which leaves
+ * each line one passage, and one inside the column, which leaves each line a passage on each
+ * side. Each picture is taller than its paragraph, so the paragraphs after it wrap too. More
+ * paragraphs follow, onto pages that hold no picture.
+ */
+function floatXml(word: string, paragraphProperties = ''): string {
+  const alignments = ['both', 'center', 'right', 'left'];
+  const paragraph = (index: number, runs = '') =>
+    `<w:p><w:pPr>${paragraphProperties}<w:jc w:val="${alignments[index % alignments.length]}"/></w:pPr>` +
+    `${runs}<w:r><w:t>${`${word} `.repeat(70 + (index % 7) * 9)}</w:t></w:r></w:p>`;
+  const body = [
+    paragraph(0, picture(1, 0, 120, 150)),
+    paragraph(1),
+    paragraph(2),
+    paragraph(3, picture(2, 200, 90, 150)),
+    ...Array.from({ length: 26 }, (_, index) => paragraph(4 + index)),
+  ].join('');
+  return (
+    `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
+    `<w:body>${body}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>` +
+    '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>'
+  );
+}
+
+/** `part` with a paragraph of a few lines first. Every other node keeps its identity. */
+function withLeadingParagraph(part: OoxmlPart): OoxmlPart {
+  const lead = loadPart(
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>${'lead '.repeat(40)}</w:t></w:r></w:p></w:body></w:document>`,
+    '/word/lead.xml'
+  );
+  const leadBody = lead.root.children[0]!;
+  const body = part.root.children[0]!;
+  if (leadBody.kind === 'textValue' || body.kind === 'textValue') throw new Error('no body');
+  return {
+    ...part,
+    root: {
+      ...part.root,
+      children: [{ ...body, children: [leadBody.children[0]!, ...body.children] }],
+    },
+  };
+}
+
+describe('body lines beside a float', () => {
+  const measurer = createFixedMeasurer(6, 14);
+  type BreakCache = ReturnType<typeof createParagraphLayoutCache<readonly PendingLine[]>>;
+  const layout = (
+    part: OoxmlPart,
+    revision: number,
+    cache: BreakCache = createParagraphLayoutCache()
+  ): SemanticLayout =>
+    layoutSemanticDocument(part, revision, {
+      measurer,
+      compatibilityMode: 15,
+      inlineDrawingLayout: layoutContext(part),
+      cache,
+      session: createLayoutSession(),
+      producer: 'body-line-placement-test',
+    });
+  const withoutReuse = <T>(run: () => T): T => {
+    const own = bodyLinePlacementTestRecorder(true);
+    try {
+      return run();
+    } finally {
+      own.dispose();
+    }
+  };
+  /** A cache, and every broken line it was given to hold. */
+  const recordingCache = (): { cache: BreakCache; held: PendingLine[] } => {
+    const cache: BreakCache = createParagraphLayoutCache();
+    const held: PendingLine[] = [];
+    const set = cache.set.bind(cache);
+    cache.set = (key, lines) => {
+      held.push(...lines);
+      set(key, lines);
+    };
+    return { cache, held };
+  };
+  const wrapped = (line: PendingLine): boolean =>
+    line.wrapSegment !== undefined || line.wrapPassages !== undefined;
+
+  for (const [name, rtl, word, properties] of [
+    ['left-to-right', false, 'wrap', ''],
+    ['right-to-left', true, 'אבגד', '<w:bidi/>'],
+  ] as const) {
+    test(`${name} paragraphs an inserted paragraph moved down equal a pass without reuse`, () => {
+      const part = loadPart(floatXml(word, properties));
+      const { cache, held } = recordingCache();
+      const before = layout(part, 1, cache);
+      const linesBefore = bodyLines(before);
+      expect(before.pages.length).toBeGreaterThan(2);
+      // Lines broke beside each picture: one passage, and a passage on each side.
+      const wrappedBefore = held.filter(wrapped).length;
+      expect(held.filter((line) => line.wrapSegment !== undefined).length).toBeGreaterThan(4);
+      expect(held.filter((line) => line.wrapPassages !== undefined).length).toBeGreaterThan(4);
+      expect(held.some((line) => line.wrapMirrored === true)).toBe(rtl);
+      expect(before).toEqual(withoutReuse(() => layout(part, 1)));
+
+      const edited = withLeadingParagraph(part);
+      const counts = record();
+      const after = layout(edited, 2, cache);
+      const linesAfter = bodyLines(after);
+      const lead = linesAfter.findIndex(
+        (line) => line.range.paragraphId === linesBefore[0]!.range.paragraphId
+      );
+      expect(lead).toBeGreaterThan(1);
+      expect(linesAfter.length).toBe(linesBefore.length + lead);
+      expect(linesAfter[lead]!.box.y).toBeGreaterThan(linesBefore[0]!.box.y);
+      // A float's band is at a place on the page, so a line beside it breaks again at its
+      // new top and is placed in full. The lines clear of every float keep their alignment.
+      const brokenAgain = held.filter(wrapped).length - wrappedBefore;
+      expect(brokenAgain).toBeGreaterThan(wrappedBefore / 2);
+      expect(counts.placed).toBeGreaterThanOrEqual(brokenAgain);
+      expect(counts.moved).toBeGreaterThan(linesBefore.length / 3);
+      const reference = withoutReuse(() => layout(edited, 2));
+      const referenceLines = bodyLines(reference);
+      expect(referenceLines.length).toBe(linesAfter.length);
+      for (const [index, line] of linesAfter.entries()) {
+        expect(line).toEqual(referenceLines[index]!);
+      }
+      expect(after).toEqual(reference);
+      // The first pass still holds its own records, at the tops it placed them.
+      expect(before).toEqual(withoutReuse(() => layout(part, 1)));
+    });
+
+    test(`${name} lines broken beside a float move to another top with their passages`, () => {
+      const part = loadPart(floatXml(word, properties));
+      const { cache, held } = recordingCache();
+      layout(part, 1, cache);
+      const lines = held.filter(wrapped);
+      expect(lines.some((line) => line.wrapSegment !== undefined)).toBe(true);
+      expect(lines.some((line) => line.wrapPassages !== undefined)).toBe(true);
+      expect(lines.every(Object.isFrozen)).toBe(true);
+      const counts = record();
+      const props: BodyLinePlacement['props'] = [];
+      let placements = 0;
+      for (const [lineIndex, pendingLine] of lines.entries()) {
+        for (const alignment of ['both', 'center', 'right', 'left'] as const) {
+          const at = (y: number): BodyLinePlacement => ({
+            pendingLine,
+            paragraphId: pendingLine.spans[0]?.range.paragraphId ?? 'p',
+            lineIndex,
+            isLastLine: false,
+            y,
+            columnX: 0,
+            indentLeft: 0,
+            available: 468,
+            rtl,
+            alignment,
+            props,
+            styleCascade: undefined,
+            measurer,
+            clipDrawing: (drawing) => drawing,
+          });
+          const first = placeBodyLine(at(100)).record;
+          const lower = placeBodyLine(at(340)).record;
+          placements += 1;
+          expect(first).toEqual(withoutReuse(() => placeBodyLine(at(100)).record));
+          expect(lower).toEqual(withoutReuse(() => placeBodyLine(at(340)).record));
+          expect(lower.spans.every((span) => span.box.y === 340)).toBe(true);
+          expect(lower.spans.map((span) => span.box.x)).toEqual(
+            first.spans.map((span) => span.box.x)
+          );
+        }
+      }
+      // Each alignment places the line once in full; the lower top takes that alignment.
+      expect(counts.placed).toBe(placements);
+      expect(counts.moved).toBe(placements);
+    });
+  }
+});
+
 describe('placeBodyLine', () => {
   const measurer = createFixedMeasurer();
   const span = (text: string, start: number, x: number): StyleSpanRecord => ({
@@ -408,14 +605,63 @@ describe('placeBodyLine', () => {
     expect(counts.reused).toBe(4);
   });
 
-  test('a kept record, its box, and its span list are frozen', () => {
+  test('a kept record, its box, its spans, and their boxes refuse a write', () => {
     const line = frozenLine(pending());
     const kept = placeBodyLine(placement(line)).record;
     const moved = placeBodyLine(placement(line, { y: 240 })).record;
+    type Writable<T> = { -readonly [Key in keyof T]: T[Key] };
     for (const placed of [kept, moved]) {
-      expect(Object.isFrozen(placed)).toBe(true);
-      expect(Object.isFrozen(placed.spans)).toBe(true);
-      expect(Object.isFrozen(placed.box)).toBe(true);
+      const top = placed.box.y;
+      expect(() => ((placed as Writable<LineRecord>).baseline = 1)).toThrow(TypeError);
+      expect(() => ((placed.box as Writable<LineRecord['box']>).y = 1)).toThrow(TypeError);
+      expect(placed.spans.length).toBe(3);
+      for (const placedSpan of placed.spans) {
+        const span = placedSpan as Writable<StyleSpanRecord>;
+        expect(() => (span.text = 'changed')).toThrow(TypeError);
+        expect(() => (span.box = { x: 0, y: 0, width: 0, height: 0 })).toThrow(TypeError);
+        expect(() => ((span.box as Writable<StyleSpanRecord['box']>).x = 1)).toThrow(TypeError);
+        expect(() => ((span.box as Writable<StyleSpanRecord['box']>).y = 1)).toThrow(TypeError);
+        expect(span.box.y).toBe(top);
+      }
+      // The span list is not frozen: a frozen array costs every reader of the line.
+      expect(Object.isFrozen(placed.spans)).toBe(false);
+    }
+    expect(kept).toEqual(plain(placement(line)));
+    expect(moved).toEqual(plain(placement(line, { y: 240 })));
+  });
+
+  test('a placement after the kept record was collected places the line in full', async () => {
+    const line = frozenLine(pending());
+    const counts = record();
+    // The record leaves this scope at once, as the layout of a dropped pass does.
+    const placeAndDrop = (): WeakRef<LineRecord> =>
+      new WeakRef(placeBodyLine(placement(line)).record);
+    const dropped = placeAndDrop();
+    expect(counts.placed).toBe(1);
+    // A weak reference holds its target until the running task ends, so collect in later tasks.
+    for (let attempt = 0; attempt < 5 && dropped.deref() !== undefined; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      Bun.gc(true);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    const collected = dropped.deref() === undefined;
+    const again = placeBodyLine(placement(line));
+    const lower = placeBodyLine(placement(line, { y: 240 }));
+    // Collected or not, each placement is what a placement without reuse gives.
+    expect(again.record).toEqual(plain(placement(line)));
+    expect(lower.record).toEqual(plain(placement(line, { y: 240 })));
+    expect(counts.moved).toBe(1);
+    if (collected) {
+      // Nothing was left to take or to move: the line was placed and aligned again.
+      expect(counts.placed).toBe(2);
+      expect(counts.reused).toBe(0);
+      expect(Object.isFrozen(again.record)).toBe(true);
+      // The new record is kept in its turn.
+      expect(placeBodyLine(placement(line)).record).toBe(again.record);
+      expect(counts.reused).toBe(1);
+    } else {
+      expect(counts.placed).toBe(1);
+      expect(counts.reused).toBe(1);
     }
   });
 
