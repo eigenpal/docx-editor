@@ -4,7 +4,7 @@ import { createResolvedCjkAutoSpacingGapMetric } from './sfnt-auto-spacing-metri
 import { isRunKerningEnabled } from './run-kerning.ts';
 import { runLigatureFeatureKey } from './run-ligatures.ts';
 import { fontMapsCodePoint } from './sfnt-cmap-coverage.ts';
-import { createShapedLineMetrics } from './shaped-line-metrics.ts';
+import { createShapedLineMetrics, type LineMetricsSlot } from './shaped-line-metrics.ts';
 import { withSymbolFaceMetrics } from './symbol-face-metrics.ts';
 import {
   countAsciiSpaces,
@@ -189,15 +189,31 @@ export function createShapedMeasurer(
       variationAxes: {},
     } satisfies LayoutShapingEnvironment);
 
-  // Nested by font object and half-point size rather than by one concatenated string key:
-  // `measure` runs once per word-boundary probe of every line break in the document, and
-  // building (then hashing) a `identity|size|text` string per call made the KEYS a
-  // measurable slice of a large document's cold open. The font level is a WeakMap so a
-  // font-epoch swap releases its subtree.
-  // Two roots, not one keyed string: the same text and face have different advances with
-  // `smcp`, so a plain run must not reuse a small-cap run's shaped width or the reverse.
-  const widthsByFont = new WeakMap<ResolvedFont, Map<number, Map<string, number>>>();
-  const smallCapsWidthsByFont = new WeakMap<ResolvedFont, Map<number, Map<string, number>>>();
+  // The shaped-width cache, outermost level first:
+  //
+  //   small caps or not   two roots: `smcp` changes the advance of the same text and face
+  //   font object         a WeakMap, so a font-epoch swap releases its subtree
+  //   half-point size     the base size the run shapes at
+  //   shaping variant     kerning, synthesized bold, ligatures, script and direction
+  //   text                the measured text, plus the joining context of a run that has one
+  //
+  // Nested rather than one concatenated string key: `measure` runs once per word-boundary
+  // probe of every line break in the document, and building (then hashing) a key string per
+  // call was a measurable part of a large document's first layout.
+  type WidthsBySize = Map<number, Map<string, Map<string, number>>>;
+  const widthsByFont = new WeakMap<ResolvedFont, WidthsBySize>();
+  const smallCapsWidthsByFont = new WeakMap<ResolvedFont, WidthsBySize>();
+  // What the measurer keeps for one style object. A style object never changes, so it always
+  // resolves to the same face and selects the same text map of the cache above. One lookup
+  // by style gives both, with no key built. One record for each style, not one memo for each
+  // question: a style that is asked about once then costs one entry, as the font memo did.
+  interface StyleEntry extends LineMetricsSlot {
+    /** Null when no face resolves for the style; such a style has no shaped widths. */
+    readonly font: ResolvedFont | null;
+    /** Its text map in the width cache: undefined until the first `measure`. */
+    byText?: Map<string, number>;
+  }
+  const entriesByStyle = new WeakMap<ResolvedRunStyle, StyleEntry>();
   // Sampled once: a shaper's runs keep their environment's face for its whole life.
   const facePreserving = preservesShapingFace(shaper);
   const faceLineMetrics = createShapedLineMetrics(
@@ -207,9 +223,6 @@ export function createShapedMeasurer(
     MAX_FACE_BOX_EM,
     MAX_LINE_GAP_FACE_BOXES
   );
-  // Style objects live inside cached broken lines, so one resolution per style OBJECT
-  // amortizes the family/weight lookup across every probe of the runs that share it.
-  const fontsByStyle = new WeakMap<ResolvedRunStyle, ResolvedFont | null>();
   const smallCapsSupportByFont = new WeakMap<ResolvedFont, boolean>();
   const widthClock = new Array<
     | {
@@ -228,34 +241,59 @@ export function createShapedMeasurer(
     widthClockCursor = (widthClockCursor + 1) % MAX_CACHED_SHAPED_WIDTHS;
   };
 
-  const resolveFontCached = (style: ResolvedRunStyle): ResolvedFont | null => {
-    // A stored `null` ("no font resolves") comes back as null, not undefined, so the
-    // negative answer is cached too.
-    const cached = fontsByStyle.get(style);
-    if (cached !== undefined) return cached;
-    const font = resolveFont(style);
-    fontsByStyle.set(style, font);
-    return font;
+  // Style objects live inside cached broken lines, so one resolution per style OBJECT
+  // amortizes the family/weight lookup across every probe of the runs that share it. A
+  // style that no font resolves for keeps that answer too.
+  const entryOf = (style: ResolvedRunStyle): StyleEntry => {
+    let entry = entriesByStyle.get(style);
+    if (!entry) {
+      entry = { font: resolveFont(style) };
+      entriesByStyle.set(style, entry);
+    }
+    return entry;
   };
+  const resolveFontCached = (style: ResolvedRunStyle): ResolvedFont | null => entryOf(style).font;
 
   const automaticTextSpacingGap = createResolvedCjkAutoSpacingGapMetric(resolveFontCached);
 
+  /**
+   * The text-to-advance map of one style: its face, base size and shaping variant.
+   *
+   * The variant holds every style input of the shaped advance that the font, size and
+   * small-caps levels do not: kerning, synthesized bold, ligatures, and the script and
+   * direction of a shaped run. A run with joining context has a variant of its own, because
+   * its text key also carries the context (see `measure`).
+   */
   const widthsFor = (
+    entry: StyleEntry,
     font: ResolvedFont,
-    halfPoints: number,
-    smallCaps: boolean
+    style: ResolvedRunStyle
   ): Map<string, number> => {
-    const root = smallCaps ? smallCapsWidthsByFont : widthsByFont;
+    if (entry.byText) return entry.byText;
+    const root = style.smallCaps ? smallCapsWidthsByFont : widthsByFont;
     let bySize = root.get(font);
     if (!bySize) {
       bySize = new Map();
       root.set(font, bySize);
     }
-    let byText = bySize.get(halfPoints);
+    const halfPoints = layoutRunHalfPointsOf(style);
+    let byVariant = bySize.get(halfPoints);
+    if (!byVariant) {
+      byVariant = new Map();
+      bySize.set(halfPoints, byVariant);
+    }
+    const shaping = style.shaping;
+    const variant = `${isRunKerningEnabled(style) ? 1 : 0}:${isSyntheticBold(style, font) ? 1 : 0}:${runLigatureFeatureKey(style)}:${
+      shaping
+        ? `${shaping.context ? 2 : 1}:${JSON.stringify([shaping.script, shaping.direction])}`
+        : 0
+    }`;
+    let byText = byVariant.get(variant);
     if (!byText) {
       byText = new Map();
-      bySize.set(halfPoints, byText);
+      byVariant.set(variant, byText);
     }
+    entry.byText = byText;
     return byText;
   };
 
@@ -376,22 +414,17 @@ export function createShapedMeasurer(
     },
     measure(text, style) {
       if (text.length === 0) return 0;
-      const font = resolveFontCached(style);
+      const entry = entryOf(style);
+      const font = entry.font;
       if (!font) return fallbackWidth(text, style);
+      const byText = widthsFor(entry, font, style);
 
-      const byText = widthsFor(font, layoutRunHalfPointsOf(style), style.smallCaps);
       const context = style.shaping?.context;
-      const shapingKey = style.shaping
-        ? `1:${JSON.stringify(
-            context
-              ? [style.shaping.script, style.shaping.direction, text, context.before, context.after]
-              : [style.shaping.script, style.shaping.direction, text]
-          )}`
-        : `0:${text}`;
-      const syntheticBold = isSyntheticBold(style, font);
-      const widthKey = `${isRunKerningEnabled(style) ? 1 : 0}:${syntheticBold ? 1 : 0}:${runLigatureFeatureKey(style)}:${shapingKey}`;
+      // Joining context changes the shaped advance of the same text, so it joins the key.
+      const widthKey = context ? JSON.stringify([text, context.before, context.after]) : text;
       let advance = byText.get(widthKey);
       if (advance === undefined) {
+        const syntheticBold = isSyntheticBold(style, font);
         let total = 0;
         try {
           // Per FACE, so this span and every prefix of it answer the same way.
@@ -517,15 +550,16 @@ export function createShapedMeasurer(
     },
 
     lineMetrics(style, text) {
-      const font = resolveFontCached(style);
+      const entry = entryOf(style);
+      const font = entry.font;
       // No face of its own: a recorded family keeps its authored box on the fallback face.
       if (!font) return authoredLineBox(style) ?? fallback.lineMetrics(style, text);
-      if (!text || /^[\t\n\r\f ]*$/.test(text)) return faceLineMetrics(font, style);
+      if (!text || /^[\t\n\r\f ]*$/.test(text)) return faceLineMetrics(font, style, entry);
       // A shaper that never substitutes a face shapes this text in `font` alone, so its band
       // is the answer; shaping each word again only to read the face back was a third of
       // line breaking. Composed as the span loop below composes one span, to the same bits.
       if (facePreserving) {
-        const metrics = faceLineMetrics(font, style);
+        const metrics = faceLineMetrics(font, style, entry);
         const baseline = Math.max(0, metrics.baseline);
         const descent = Math.max(0, metrics.height - metrics.baseline);
         return baseline + descent > 0 ? { height: baseline + descent, baseline } : metrics;
@@ -537,7 +571,7 @@ export function createShapedMeasurer(
         let baseline = 0;
         let descent = 0;
         for (const span of run.fontSpans) {
-          const metrics = faceLineMetrics(span.font, style);
+          const metrics = faceLineMetrics(span.font, style, entry);
           baseline = Math.max(baseline, metrics.baseline);
           descent = Math.max(descent, metrics.height - metrics.baseline);
         }
@@ -545,7 +579,7 @@ export function createShapedMeasurer(
       } catch {
         // Font/shaping failures retain the bounded primary-face fallback.
       }
-      return faceLineMetrics(font, style);
+      return faceLineMetrics(font, style, entry);
     },
   };
   return withAuthoredCjkGapMetric(measurer, automaticTextSpacingGap!);

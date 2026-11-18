@@ -33,6 +33,18 @@ function drawsAsNamedFace(font: ResolvedFont, style: ResolvedRunStyle): boolean 
   return font.family === style.fontFamily || sameFontFamily(font.family, style.fontFamily);
 }
 
+/**
+ * Where a caller keeps the base-size answer of ONE style object under the face it last asked
+ * with. A style object and a face never change, so the pair always selects the same cache
+ * entry: a later call with the slot reads the answer directly and skips the family
+ * comparison that builds the entry key. Line breaking asks for each word of a run. The
+ * caller owns the slot, one for each style object, and must pass a slot with that style only.
+ */
+export interface LineMetricsSlot {
+  lineFont?: ResolvedFont;
+  lineBase?: { height: number; baseline: number };
+}
+
 /** Cached face metrics, independent of the glyph fallback selected by a run. */
 export function createShapedLineMetrics(
   shaper: TextShaper,
@@ -40,13 +52,20 @@ export function createShapedLineMetrics(
   fallback: TextMeasurer,
   maxFaceBoxEm: number,
   maxLineGapFaceBoxes: number
-): (font: ResolvedFont, style: ResolvedRunStyle) => { height: number; baseline: number } {
+): (
+  font: ResolvedFont,
+  style: ResolvedRunStyle,
+  slot?: LineMetricsSlot
+) => { height: number; baseline: number } {
   const linesByFont = new WeakMap<
     ResolvedFont,
     Map<number, { height: number; baseline: number }>
   >();
-  return (font, style) => {
+  const scaled = (base: { height: number; baseline: number }, factor: number) =>
+    factor === 1 ? base : { height: base.height * factor, baseline: base.baseline * factor };
+  return (font, style, slot) => {
     const factor = glyphSizeFactorOf(style);
+    if (slot?.lineBase && slot.lineFont === font) return scaled(slot.lineBase, factor);
     let bySize = linesByFont.get(font);
     if (!bySize) {
       bySize = new Map();
@@ -61,9 +80,11 @@ export function createShapedLineMetrics(
     const key = (legacyGap ? halfPoints : -halfPoints) + (namedFace ? NAMED_FACE_KEY : 0);
     const cached = bySize.get(key);
     if (cached) {
-      return factor === 1
-        ? cached
-        : { height: cached.height * factor, baseline: cached.baseline * factor };
+      if (slot) {
+        slot.lineFont = font;
+        slot.lineBase = cached;
+      }
+      return scaled(cached, factor);
     }
 
     let metrics: { height: number; baseline: number };
@@ -142,8 +163,10 @@ export function createShapedLineMetrics(
     // size are cached and rescaled.
     if (!scalable) return metrics;
     bySize.set(key, metrics);
-    return factor === 1
-      ? metrics
-      : { height: metrics.height * factor, baseline: metrics.baseline * factor };
+    if (slot) {
+      slot.lineFont = font;
+      slot.lineBase = metrics;
+    }
+    return scaled(metrics, factor);
   };
 }
