@@ -79,6 +79,8 @@ Formatting cards describe tracked highlight changes, such as **Highlight: yellow
 
 A React `List` render prop or a Vue `#item` slot takes over the card. Wrap it in `Card` so parts can read the item.
 
+The rail renders a card again when its item changes. In React, the rail also calls the render prop again when you pass another function, so read changing state from an inline function or from a hook inside your card component. In Vue, the slot follows the reactive state that it reads.
+
 <FrameworkTabs>
 <Framework value="react">
 

@@ -98,3 +98,24 @@ export function typeIn(editor: DocxEditorInstance, index: number, offset = 0): n
   stop();
   return changes;
 }
+
+/**
+ * Make the editor report the item `key` without a placement, as it does for an item whose
+ * page has no layout yet. Answers the function that restores the editor's own read.
+ */
+export function unplaceItem(editor: DocxEditorInstance, key: string): () => void {
+  const read = editor.getReviewItems;
+  editor.getReviewItems = (query) =>
+    read
+      .call(editor, query)
+      .map((entry) => (entry.key === key ? { ...entry, anchorY: null, pageIndex: null } : entry));
+  return () => {
+    editor.getReviewItems = read;
+  };
+}
+
+/** The `top` of the compact rail's floating card, in CSS pixels, or null when none shows. */
+export function compactCardTop(container: Element): number | null {
+  const card = container.querySelector<HTMLElement>('[data-testid="review-compact-card"]');
+  return card ? Number.parseFloat(card.style.top) : null;
+}

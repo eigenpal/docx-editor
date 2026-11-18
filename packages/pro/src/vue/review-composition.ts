@@ -105,6 +105,12 @@ export function listCardTemplate(listPart: VNode | undefined): ListCardTemplate 
  *
  * The slot functions are compared as the parent passed them. The component's own `slots`
  * object wraps a plain function again on each update, so its entries do not compare.
+ *
+ * Two Vue behaviors carry this. The functions come from `vnode.children` of the component
+ * instance, which holds the slots object the parent rendered. And the kept vnodes go to the
+ * renderer again in a later render, which is safe because Vue clones a vnode that is already
+ * mounted before it mounts it a second time. `review-rail-render-work-vue.test.ts` fails if
+ * either stops holding.
  */
 export function useSlotMemo<T>(names: readonly string[], build: () => T): () => T {
   const instance = getCurrentInstance();

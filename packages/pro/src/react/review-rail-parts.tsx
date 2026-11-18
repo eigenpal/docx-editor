@@ -86,8 +86,9 @@ export interface ReviewListProps {
    * Null, or leaving it out, mounts every card. That is correct but costs one card per pending
    * change on each render. Inside the packaged review rail the band arrives on its own, including
    * for a `List` override. A list mounted elsewhere measures its own scroller and passes the
-   * part of it in view, widened by a margin above and below (the rail uses 600 px) so cards
-   * mount before they scroll into view.
+   * part of it in view, widened by a margin above and below so cards mount before they scroll
+   * into view. The rail uses at least 600 px, and moves each edge outwards to a 300 px grid so
+   * the band changes only when the scroll position crosses a grid line.
    */
   window?: { top: number; bottom: number } | null;
   /**

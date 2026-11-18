@@ -11,15 +11,16 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
-import { h, type App, type ComponentPublicInstance, type VNode } from 'vue';
+import { h, ref, type App, type ComponentPublicInstance, type VNode } from 'vue';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { flush, mountEditorTree } from '../../../vue/test/helpers/mount.ts';
 import { reviewModule } from '../index.ts';
 import { DocxEditorReview, type ReviewItemView } from '../vue/index.ts';
 import { RAIL_BAND_STEP } from '../review/rail-window.ts';
-import { insertBanner, installRailGeometry } from './review-rail-metrics-harness.ts';
+import { insertBanner, installRailGeometry, railGeometry } from './review-rail-metrics-harness.ts';
 import {
   INSIDE_INSERTION,
+  compactCardTop,
   PAGES,
   installViewHeight,
   mountedCards,
@@ -27,6 +28,7 @@ import {
   scrollTo,
   scrollerOf,
   typeIn,
+  unplaceItem,
 } from './review-rail-render-work-harness.ts';
 
 let restore: (() => void)[] = [];
@@ -41,6 +43,7 @@ let unmount: (() => void) | null = null;
 afterEach(() => {
   unmount?.();
   unmount = null;
+  railGeometry.clientWidth = 1400;
 });
 
 async function settle(ms = 30): Promise<void> {
@@ -89,7 +92,11 @@ function countRenders(app: App, cards: Counter, rail: Counter): void {
   });
 }
 
-async function mountRail(review: () => VNode, configure?: (app: App) => void) {
+async function mountRail(
+  review: () => VNode,
+  configure?: (app: App) => void,
+  ready = 'review-card'
+) {
   const mounted = mountEditorTree(
     () => [],
     pagedTrackedDocument(),
@@ -102,7 +109,7 @@ async function mountRail(review: () => VNode, configure?: (app: App) => void) {
   );
   unmount = mounted.unmount;
   const { container } = mounted;
-  await waitFor(() => container.querySelector('[data-testid="review-card"]') !== null);
+  await waitFor(() => container.querySelector(`[data-testid="${ready}"]`) !== null);
   await settle(60);
   return { container, editor: mounted.editor() as DocxEditorInstance };
 }
@@ -282,6 +289,56 @@ describe('review rail render work (Vue)', () => {
     const accepts = labels.filter((key) => key === 'review.accept').length;
     expect(accepts).toBeGreaterThan(0);
     expect(accepts).toBeLessThan(mounted);
+  });
+
+  test('the compact card of an item without a placement follows each scroll position', async () => {
+    // Too narrow for the column: the rail shows markers and floats the active item's card.
+    railGeometry.clientWidth = 1000;
+    const { container, editor } = await mountRail(
+      () => h(DocxEditorReview),
+      undefined,
+      'review-marker'
+    );
+    expect(
+      container.querySelector('[data-testid="review-rail"]')?.hasAttribute('data-compact')
+    ).toBe(true);
+    const first = editor.getReviewItems()[0]!.key;
+    const restoreRead = unplaceItem(editor, first);
+    expect(editor.setActiveReviewItem(first, { reveal: false }).ok).toBe(true);
+    await waitFor(() => compactCardTop(container) !== null);
+    const start = compactCardTop(container)!;
+
+    // The card stands on the band's own edge, so it moves with each position, not each step.
+    const scroller = scrollerOf(container);
+    for (const top of [20, 40]) {
+      scrollTo(scroller, top);
+      await settle();
+      expect(compactCardTop(container)).toBe(start + top);
+    }
+    restoreRead();
+  });
+
+  test('state that the item slot reads renders each mounted card once', async () => {
+    const calls = counter();
+    const label = ref('one');
+    const { container } = await mountRail(() =>
+      h(DocxEditorReview, null, {
+        item: ({ item }: { item: ReviewItemView }) => {
+          calls.add(item.key);
+          return h('div', { 'data-card-key': item.key, 'data-label': label.value }, [
+            h(DocxEditorReview.Card),
+          ]);
+        },
+      })
+    );
+    const mounted = mountedCards(container);
+    expect(mounted.length).toBeGreaterThan(1);
+
+    calls.reset();
+    label.value = 'two';
+    await settle();
+    for (const key of mounted) expect(calls.of(key)).toBe(1);
+    expect(container.querySelectorAll('[data-label="two"]')).toHaveLength(mounted.length);
   });
 
   test('the packaged card renders no part for a keystroke that changes no item', async () => {

@@ -40,6 +40,10 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
    * legacy shorthand for a List render callback, but cannot be combined with root siblings;
    * prefer an explicit `<Review.List>{item => ...}</Review.List>` in new code.
    *
+   * The rail calls a render callback for an item when the item changes or when you pass
+   * another function. Pass a new function when the state it reads changes, as an inline
+   * function does.
+   *
    * ```tsx
    * <DocxEditor.Review>
    *   <DocxEditor.Review.List>{(item) => <MyCard item={item} />}</DocxEditor.Review.List>
