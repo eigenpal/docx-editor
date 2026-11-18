@@ -1018,7 +1018,8 @@
     "endnoteKind": "Nota al final",
     "convertAllFootnotes": "Convertir todas las notas al pie en notas al final",
     "convertAllEndnotes": "Convertir todas las notas al final en notas al pie",
-    "inheritedValue": "(heredado)"
+    "inheritedValue": "(heredado)",
+    "menuAriaLabel": null
   },
   "reviewers": {
     "label": "Revisores",

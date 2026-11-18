@@ -900,7 +900,8 @@
     "endnoteKind": "Note de fin",
     "convertAllFootnotes": "Convertir toutes les notes de bas de page en notes de fin",
     "convertAllEndnotes": "Convertir toutes les notes de fin en notes de bas de page",
-    "inheritedValue": "(hérité)"
+    "inheritedValue": "(hérité)",
+    "menuAriaLabel": null
   },
   "review": {
     "accept": "Accepter",

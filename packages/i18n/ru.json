@@ -1044,7 +1044,8 @@
     "previewFallback": "Сноска",
     "scope": "Применить",
     "scopeDocument": "Ко всему документу",
-    "scopeSection": "К текущему разделу"
+    "scopeSection": "К текущему разделу",
+    "menuAriaLabel": null
   },
   "review": {
     "accept": "Принять",

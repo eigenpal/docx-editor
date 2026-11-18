@@ -900,7 +900,8 @@
     "endnoteKind": "एंडनोट",
     "convertAllFootnotes": "सभी फ़ुटनोट को एंडनोट में बदलें",
     "convertAllEndnotes": "सभी एंडनोट को फ़ुटनोट में बदलें",
-    "inheritedValue": "(विरासत में)"
+    "inheritedValue": "(विरासत में)",
+    "menuAriaLabel": null
   },
   "review": {
     "accept": "स्वीकार करें",

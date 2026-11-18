@@ -900,7 +900,8 @@
     "endnoteKind": "Sonnot",
     "convertAllFootnotes": "Tüm dip notları son notlara dönüştür",
     "convertAllEndnotes": "Tüm son notları dip notlara dönüştür",
-    "inheritedValue": "(devralınan)"
+    "inheritedValue": "(devralınan)",
+    "menuAriaLabel": null
   },
   "review": {
     "accept": "Kabul et",
