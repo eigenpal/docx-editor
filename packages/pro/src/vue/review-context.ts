@@ -171,6 +171,10 @@ export function useReviewThread(): ComputedRef<ReadonlyMap<string, ReviewItemVie
  * Answers `next`, or the value it answered before when `same` says the two are equal. Keeps
  * the identity of a derived value whose content did not change, so a computed that returns it
  * does not trigger the parts that read it.
+ *
+ * The render saving needs Vue 3.4 or later, where a computed that answers the same value does
+ * not trigger its readers. Earlier versions in the peer range trigger them for each change of
+ * a dependency: the parts render more often there, and show the same content.
  */
 export function keeper<T>(same: (a: T, b: T) => boolean): (next: T) => T {
   let kept: { readonly value: T } | null = null;
@@ -224,10 +228,12 @@ function withParams(text: string, params: ReviewLabelParams | undefined): string
 
 export function useReviewLabel(): (key: TranslationKey, params?: ReviewLabelParams) => string {
   const rail = useCardRail();
-  const { t } = useTranslation();
+  // Read `t` from the translation at each call: it is replaced when the locale changes, and
+  // a `t` taken once at setup kept the labels of the first locale.
+  const translation = useTranslation();
   return (key: TranslationKey, params?: ReviewLabelParams) => {
     const host = rail.value.t?.(key);
-    return host !== undefined ? withParams(host, params) : t(key, params);
+    return host !== undefined ? withParams(host, params) : translation.t(key, params);
   };
 }
 

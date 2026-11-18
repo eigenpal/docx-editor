@@ -7,7 +7,6 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 /** @jsxImportSource vue */
 
 import {
-  computed,
   defineComponent,
   getCurrentInstance,
   h,
@@ -417,12 +416,14 @@ export const ReviewDelete = markPart(
     setup(props, { slots }) {
       const rail = useCardRail();
       const entryRef = useReviewItem();
-      const { t } = useTranslation();
+      const translation = useTranslation();
       return () => {
         const entry = entryRef.value;
         const { readOnly, review } = rail.value;
         if (props.hidden || !entry || entry.kind === 'custom') return null;
         if (entry.kind === 'revision' && entry.readOnly) return null;
+        // Read in each render: the locale replaces `t`.
+        const { t } = translation;
         const label =
           entry.kind === 'comment' ? t('review.deleteComment') : t('review.discardChange');
         const disabledReason = readOnly ? t('editingMode.viewingHint') : null;
@@ -527,12 +528,14 @@ const ReviewCardPreset = defineComponent({
   name: 'ReviewCardPreset',
   setup(_props, { slots }) {
     const entryRef = useReviewItem();
-    const overrides = computed(() => partOverrides(slots.default?.()));
     return () => {
       const entry = entryRef.value;
       if (!entry) return null;
+      // Read in each render, so the card shows the children the host passed last. A value
+      // kept from the first render showed old children when the host passed other ones.
+      const overrides = partOverrides(slots.default?.());
       const take = (key: string, fallback: VNode | VNode[] | null) =>
-        key in overrides.value ? overrides.value[key] : fallback;
+        key in overrides ? overrides[key] : fallback;
 
       if (entry.kind === 'custom' && entry.item.kind === 'custom') {
         const item = entry.item;
@@ -561,7 +564,7 @@ const ReviewCardPreset = defineComponent({
                 </div>
               ) : null
             )}
-            {overrides.value.__extra}
+            {overrides.__extra}
           </>
         );
       }
@@ -582,7 +585,7 @@ const ReviewCardPreset = defineComponent({
                 {take('Resolve', <ReviewResolve />)}
                 {take('Reopen', <ReviewReopen />)}
                 {entry.kind === 'comment' ? (
-                  <ReviewCommentActions entry={entry} hideDelete={'Delete' in overrides.value} />
+                  <ReviewCommentActions entry={entry} hideDelete={'Delete' in overrides} />
                 ) : null}
                 {take('Delete', null)}
               </div>
@@ -592,7 +595,7 @@ const ReviewCardPreset = defineComponent({
           {take('Refusal', <ReviewRefusal />)}
           {take('Replies', <ReviewReplies />)}
           {take('Reply', <ReviewReply />)}
-          {overrides.value.__extra}
+          {overrides.__extra}
         </>
       );
     };
