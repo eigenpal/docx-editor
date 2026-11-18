@@ -14,7 +14,6 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test';
 import { act, cleanup } from '@testing-library/react';
-import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { collaborationModule, reviewModule } from '../../index.ts';
 import { installRailGeometry } from '../../__tests__/review-rail-metrics-harness.ts';
 import {
@@ -30,10 +29,13 @@ import {
 } from '../../__tests__/review-rail-render-work-react-harness.tsx';
 import { createPeerHarness } from './document-peer-support';
 import { packageFingerprint } from './document-support';
-import { mountRemoteEditor, remoteKeyOf } from './review-rail-remote-support.ts';
+import {
+  mountRemoteEditor,
+  remoteKeyOf,
+  unmountRemoteEditors,
+} from './review-rail-remote-support.ts';
 
 const harness = createPeerHarness('review-rail-remote-update', { offlineEditing: true });
-const editors: DocxEditorInstance[] = [];
 let restore: (() => void)[] = [];
 beforeAll(() => {
   restore = [installRailGeometry(), installViewHeight()];
@@ -43,7 +45,7 @@ afterAll(() => {
 });
 afterEach(() => {
   cleanup();
-  for (const editor of editors.splice(0)) editor.destroy();
+  unmountRemoteEditors();
   harness.cleanup();
 });
 
@@ -57,7 +59,6 @@ test('a remote reply and a remote edit of it render only the card they belong to
     modules: [reviewModule(), collaborationModule({ session: pair.alice.room.session })],
   });
   const bob = mountRemoteEditor(pair.bob);
-  editors.push(bob);
   await settle();
   /** Run `change` on the remote editor, deliver it, and let the local rail render. */
   const remote = async (change: () => { readonly ok: boolean }): Promise<void> => {

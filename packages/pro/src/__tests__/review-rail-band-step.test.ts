@@ -20,7 +20,11 @@ import {
 } from '../review/rail-window.ts';
 import { repliesOf, reviewRootsOf, sameEntries, sameFields } from '../review/review-roots.ts';
 
-afterEach(() => document.body.replaceChildren());
+/** The scrollers a test mounted. Each test takes its own out of the document again. */
+const mounted: HTMLElement[] = [];
+afterEach(() => {
+  for (const scroller of mounted.splice(0)) scroller.remove();
+});
 
 const VIEW = 800;
 
@@ -44,6 +48,7 @@ describe('the stepped rail band', () => {
     const rail = document.createElement('aside');
     scroller.append(rail);
     document.body.append(scroller);
+    mounted.push(scroller);
     Object.defineProperty(scroller, 'clientHeight', { configurable: true, get: () => VIEW });
     const bands: RailWindow[] = [];
     const stop = observeRailWindow(rail, scroller, (band) => bands.push(band), { exact });
