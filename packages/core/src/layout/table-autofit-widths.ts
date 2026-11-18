@@ -70,7 +70,7 @@ import {
   type StyleCascadeTable,
 } from './style-cascade.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
-import { contentAlignedReachPt, leadingIndentPt } from './table-origin.ts';
+import { centeredLegacyReachPt, contentAlignedReachPt, leadingIndentPt } from './table-origin.ts';
 import {
   fixedNestedWidths,
   percentShareWidths,
@@ -941,7 +941,9 @@ export function autofitColumnWidthsPt(
   // table also owns the room its own width already spans.
   const totalPt = structure.columnWidthsPt.reduce((sum, width) => sum + width, 0);
   const legacy = structure.legacyContentAlignment === true;
-  const reachPt = contentAlignedReachPt(structure);
+  const reachPt =
+    contentAlignedReachPt(structure) ||
+    centeredLegacyReachPt(structure, context.compatibilityMode, view.depth ?? 0);
   const availablePt = legacy
     ? Math.max(totalPt, availableFor(contentWidthPt) + reachPt)
     : availableFor(roomWidthPt) + reachPt;
