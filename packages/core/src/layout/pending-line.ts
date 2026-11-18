@@ -40,6 +40,7 @@ export interface PendingLine {
   trailingSpacing: number;
   /** Authored text highlight height beside an inline drawing, from the line top. */
   inlineDrawingHighlightHeight?: number;
+  highlightUsesFullLine?: true;
   /** When true, layout must start a new page after this line is placed. */
   pageBreakAfter?: boolean;
   /** When true, layout must advance to the next authored section column. */
@@ -492,6 +493,7 @@ export function frozenLine(line: PendingLine): PendingLine {
       baseline: line.baseline,
       leading: line.leading,
       trailingSpacing: line.trailingSpacing,
+      ...(line.highlightUsesFullLine ? { highlightUsesFullLine: true } : {}),
       ...(line.inlineDrawingHighlightHeight !== undefined
         ? { inlineDrawingHighlightHeight: line.inlineDrawingHighlightHeight }
         : {}),

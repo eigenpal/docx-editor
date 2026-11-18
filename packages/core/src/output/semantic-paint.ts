@@ -1248,7 +1248,9 @@ function paintLine(
   // painted exactly once — as a stretch or as a margin, never both, never neither.
   let pendingGap = 0;
   let previousSpanAbsorbedGap = false;
-  const highlightHeight = line.inlineDrawingHighlightHeight;
+  const highlightHeight = line.highlightUsesFullLine
+    ? line.box.height
+    : line.inlineDrawingHighlightHeight;
   const highlightLayer = highlightHeight ? document.createElement('span') : null;
   for (const [spanIndex, span] of line.spans.entries()) {
     const flushed = nextInlineDrawing;
@@ -1358,7 +1360,10 @@ function paintLine(
     height: line.box.height,
   });
   if (highlightLayer?.childElementCount) {
-    highlightLayer.className = 'docx-inline-drawing-highlight';
+    highlightLayer.className =
+      line.inlineDrawingHighlightHeight === undefined
+        ? 'docx-exact-line-highlight'
+        : 'docx-inline-drawing-highlight';
     highlightLayer.dataset.docxMarker = '';
     highlightLayer.setAttribute('aria-hidden', 'true');
     highlightLayer.setAttribute('contenteditable', 'false');

@@ -878,6 +878,13 @@ export function breakParagraph(
       line.drawings.length === 0 && lineSpacing.rule !== 'exact'
         ? Math.max(0, Math.min(spaced.trailing ?? Infinity, spacedExtent - naturalHeight))
         : drawingLineTrailing;
+    if (
+      lineSpacing.rule === 'exact' &&
+      line.spans.some((span) => span.style.highlight && span.style.highlight !== 'none')
+    ) {
+      // Exact spacing sets the highlight's vertical extent independently of the font band.
+      line.highlightUsesFullLine = true;
+    }
     setInlineDrawingHighlightHeight(line, lineSpacing, naturalHeight);
     finalizeTopAndBottomClearance();
     commitBreakClearance();
