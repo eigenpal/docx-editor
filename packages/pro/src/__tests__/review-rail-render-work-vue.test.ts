@@ -245,6 +245,38 @@ describe('review rail render work (Vue)', () => {
     expect(container.querySelectorAll('[data-label="two"]')).toHaveLength(mounted.length);
   });
 
+  test('an item slot adds no node of the rail around its own nodes', async () => {
+    /** The children of the first slot element: a tag name, or `#text` with its text. */
+    const childrenOf = (container: Element) =>
+      [...container.querySelector('.docx-review__slot')!.childNodes].map((node) =>
+        node.nodeType === Node.ELEMENT_NODE
+          ? (node as Element).localName
+          : `${node.nodeName}:${node.textContent}`
+      );
+    // The slot element holds one keyed fragment, which Vue marks with an empty text node at
+    // each end. Between them stand the nodes of the slot, and nothing else.
+    const one = await mountRail(() =>
+      h(DocxEditorReview, null, {
+        item: () => h('article', null, [h(DocxEditorReview.Card)]),
+      })
+    );
+    expect(childrenOf(one.container)).toEqual(['#text:', 'article', '#text:']);
+    unmountRails();
+
+    const two = await mountRail(() =>
+      h(DocxEditorReview, null, {
+        item: () => [h('article', null, [h(DocxEditorReview.Card)]), h('footer'), 'note'],
+      })
+    );
+    expect(childrenOf(two.container)).toEqual([
+      '#text:',
+      'article',
+      'footer',
+      '#text:note',
+      '#text:',
+    ]);
+  });
+
   test('another item slot function renders each mounted card once', async () => {
     const calls = counter();
     // Plain values: the slot reads no reactive state, so only its identity tells of a change.

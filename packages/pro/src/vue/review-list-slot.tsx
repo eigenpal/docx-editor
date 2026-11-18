@@ -5,7 +5,18 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // One positioned card of the review list. The React twin is `../react/review-list-slot.tsx`.
 
-import { defineComponent, h, type CSSProperties, type PropType, type VNode } from 'vue';
+import {
+  Fragment,
+  computed,
+  createCommentVNode,
+  createTextVNode,
+  defineComponent,
+  h,
+  isVNode,
+  type CSSProperties,
+  type PropType,
+  type VNode,
+} from 'vue';
 import type { ReviewItemView } from './useReview.ts';
 import { ReviewItemScope, useCardRail } from './review-context.ts';
 import { cloneReviewCard } from './review-composition.ts';
@@ -26,36 +37,36 @@ export interface ReviewListTemplate {
   readonly rest: VNode[];
 }
 
+/** A value a slot function answered, as the vnode Vue makes of it among an element's children. */
+function toNode(child: unknown): VNode {
+  if (isVNode(child)) return child;
+  if (Array.isArray(child)) return h(Fragment, null, child);
+  if (child === null || child === undefined || typeof child === 'boolean') {
+    return createCommentVNode();
+  }
+  return createTextVNode(String(child));
+}
+
 /**
- * The card inside a slot. It takes props only, so it renders again only when its item or the
- * card template changes. A slot that moves keeps it as it is.
+ * One root node of the card inside a slot. It takes the node alone, so it renders again only
+ * for another node. A slot that moves draws the same node, and the card keeps as it is.
+ *
+ * Each root node has a component of its own, because a component with one root adds no DOM
+ * node. One component around several root nodes would be a fragment, which Vue marks with an
+ * empty text node at each end.
  */
-const ReviewListCard = defineComponent({
-  name: 'ReviewListCard',
-  props: {
-    entry: { type: Object as PropType<ReviewItemView>, required: true },
-    template: { type: Object as PropType<ReviewListTemplate>, required: true },
-  },
+const ReviewListNode = defineComponent({
+  name: 'ReviewListNode',
+  props: { node: { type: Object as PropType<VNode>, required: true } },
   setup(props) {
-    const rail = useCardRail();
-    return () => {
-      const { entry, template } = props;
-      if (template.item) {
-        const nodes = template.item(entry);
-        return nodes.length === 1 ? nodes[0] : nodes;
-      }
-      const cardClassName = rail.value.cardClassName;
-      return template.card
-        ? cloneReviewCard(template.card, cardClassName)
-        : h(ReviewCard, cardClassName ? { className: cardClassName } : {}, () => template.rest);
-    };
+    return () => props.node;
   },
 });
 
 /**
  * A card at its position. It takes props only, so it renders again only when one of its own
  * inputs changes: the item, a reply, the position, or the card template. A move renders the
- * positioned element alone, because the card inside gets the same props.
+ * positioned element alone, because each root node of the card is the same vnode.
  */
 export const ReviewListSlot = defineComponent({
   name: 'ReviewListSlot',
@@ -69,8 +80,21 @@ export const ReviewListSlot = defineComponent({
     template: { type: Object as PropType<ReviewListTemplate>, required: true },
   },
   setup(props) {
+    const rail = useCardRail();
+    // The root nodes of the card. They are built again only for another item, another card
+    // template, or a change of reactive state that the template read.
+    const nodes = computed((): VNode[] => {
+      const { entry, template } = props;
+      if (template.item) return template.item(entry).map(toNode);
+      const cardClassName = rail.value.cardClassName;
+      return [
+        template.card
+          ? cloneReviewCard(template.card, cardClassName)
+          : h(ReviewCard, cardClassName ? { className: cardClassName } : {}, () => template.rest),
+      ];
+    });
     return () => {
-      const { entry, top, template } = props;
+      const { entry, top } = props;
       const style: CSSProperties = top === null ? {} : { position: 'absolute', top: `${top}px` };
       return h(
         ReviewItemScope,
@@ -84,7 +108,7 @@ export const ReviewListSlot = defineComponent({
           style,
           replies: props.replies,
         },
-        () => h(ReviewListCard, { entry, template })
+        () => nodes.value.map((node, index) => h(ReviewListNode, { key: index, node }))
       );
     };
   },
