@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A picture bullet drew at its authored shape size times a marker-size scale, so a bullet authored at a large image's size could be taller than the page.",
+  "after": "A picture bullet measures its authored shape height against the image pixel height before the marker-size scale. Shared document state and operations are unchanged.",
+  "reason": "The change is confined to layout. Replicas compute the same layout from the same tree and package, and saved documents keep the same XML.",
+  "tests": [
+    "packages/core/src/layout/__tests__/picture-bullet-pixels.test.ts",
+    "packages/core/src/layout/__tests__/list-picture-bullet.test.ts"
+  ],
+  "changeset": "picture-bullet-pixel-size",
+  "migration": null
+}
