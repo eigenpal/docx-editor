@@ -420,7 +420,7 @@ export function gateCommand(
       };
     }
   }
-  // Over a selection across notes, a command that replaces it would merge them; Word refuses.
+  // Over a selection across notes, a command that replaces it would merge them, so it is refused.
   // Copy and formatting still run there.
   const crossNote = replacesSelection(command.type) ? surfaceCrossNoteRefusal(surface) : null;
   if (crossNote)
