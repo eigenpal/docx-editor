@@ -71,6 +71,36 @@ export function withHiddenRevisionSites(
   return filter;
 }
 
+const emptied = new WeakMap<
+  object,
+  { readonly key: string; readonly filter: RevisionAuthorFilter }
+>();
+
+/**
+ * `base` under the cache key an All Markup queue has when it leaves records out against `key`,
+ * for a queue decided against the same `key` that leaves none out. The same object for the
+ * same pair.
+ *
+ * That key says what the records were decided against, not which records they were, so it
+ * also fits the queue once its last record is gone. A caller that keeps it there keeps every
+ * block cached while records were left out: accepting them all then lays out only the blocks
+ * that held a change. The caller keeps it only while the queue holds no record it could leave
+ * out, so no block cached under the key is served with a record in another state.
+ */
+export function withHiddenRevisionSitesKey(
+  base: RevisionAuthorFilter | undefined,
+  key: string
+): RevisionAuthorFilter {
+  const known = emptied.get(base ?? NO_FILTER);
+  if (known && known.key === key) return known.filter;
+  const filter = Object.freeze({
+    ...(base ?? { hiddenAuthors: EMPTY_REVISION_AUTHOR_SET }),
+    cacheKey: `${base?.cacheKey ?? ''}|unlisted:${key}`,
+  });
+  emptied.set(base ?? NO_FILTER, { key, filter });
+  return filter;
+}
+
 const stripped = new WeakMap<OoxmlNode, { sites: ReadonlySet<string>; result: OoxmlNode }>();
 
 function isUnlistedChange(node: OoxmlNode, sites: ReadonlySet<string>): boolean {
