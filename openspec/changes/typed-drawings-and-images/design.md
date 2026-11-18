@@ -92,7 +92,7 @@ This change owns DrawingML image watermark rendering (`a:lum`, `a:grayscl`, behi
 
 ### I16: Raster signatures select the decoder
 
-Some DOCX generators declare one raster content type for several raster formats. Word and LibreOffice decode these parts from their signatures.
+Some DOCX generators declare one raster content type for several raster formats. Other DOCX applications decode these parts from their signatures (Image Part, ECMA-376 Part 1 §15.2.14).
 
 The engine does the same for supported raster formats. The sniffed signature controls header validation, decoding, and the published MIME type.
 

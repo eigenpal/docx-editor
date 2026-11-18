@@ -543,7 +543,8 @@ describe('image resource validation and cache (task 4)', () => {
       }
     );
 
-    // Word and LibreOffice decode mislabeled rasters from their signatures.
+    // Mislabeled rasters decode from their signatures, not the declared content type
+    // (Image Part, ECMA-376 Part 1 §15.2.14).
     test.each([
       ['declared png, jpeg bytes', 'png', JPEG_1X1, 'image/jpeg', 1, 1],
       ['declared png, gif bytes', 'png', GIF_1X1, 'image/gif', 1, 1],

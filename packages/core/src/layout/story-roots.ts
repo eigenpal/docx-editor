@@ -260,10 +260,9 @@ const CELL_TERMINATOR_MARKERS = new Set([
 /**
  * Does this paragraph carry nothing but properties and structural markers?
  *
- * A `w:tc` must end with a `w:p` (17.4.66), so a cell whose last real block is a `w:tbl`
- * still carries one and Word writes it empty. Word and LibreOffice give that paragraph no
- * line box; charging one for it makes the cell — and with it the row — a full line taller
- * than either draws it. The paragraph stays in the flow so the caret and select-all can
+ * A `w:tc` must end with a `w:p` (ECMA-376 Part 1 §17.4.65), so a cell whose last real block
+ * is a `w:tbl` still carries one, written empty. That paragraph gets no line box; charging
+ * one for it makes the cell — and with it the row — a full line taller than it should be. The paragraph stays in the flow so the caret and select-all can
  * still reach it, and only its HEIGHT collapses; see `placeCellParagraph`.
  *
  * A paragraph with content keeps its height, and so does an empty paragraph anywhere else

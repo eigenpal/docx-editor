@@ -68,7 +68,7 @@ function onOff(node: OoxmlElement, name: string): boolean | undefined {
 /**
  * `w:tblLook` is read from the TABLE's own `w:tblPr` only, never cascaded from the style it
  * names. The schema admits `w:tblLook` inside a table style's `w:tblPr`, but the look
- * (ECMA-376 Part 1 §17.4.56) selects which conditional formats this table uses. It is a
+ * (ECMA-376 Part 1 §17.4.55) selects which conditional formats this table uses. It is a
  * property of this table's use of the style, not of the style itself.
  */
 export function readTableLook(tblPr: OoxmlElement | undefined): TableLook {

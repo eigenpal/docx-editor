@@ -77,7 +77,7 @@ describe('toggle properties combine across the levels of the style hierarchy', (
     });
 
     // An explicit `w:val="0"` at a level SETS the toggle off; it does not toggle and it does
-    // not fall through. LibreOffice resolves it the same way, and so did the base branch.
+    // not fall through (ECMA-376 Part 1 §17.7.3). The base branch resolved it the same way.
     const explicitlyOff = resolveRunStyle(
       cascadeRunProperties(
         inherited,
@@ -191,8 +191,8 @@ describe('toggle properties combine across the levels of the style hierarchy', (
   test('duplicate toggles inside ONE w:rPr resolve last-wins and never cancel', () => {
     // `CT_RPr`'s `EG_RPrBase` is a repeatable choice, so both of these are schema-valid. Two
     // instances in one `w:rPr` are one level, not two, so they cannot toggle each other off.
-    // Which one the level takes is the ordinary last-wins reading, and LibreOffice agrees:
-    // `<w:b w:val="0"/><w:b/>` renders bold.
+    // Which one the level takes is the ordinary last-wins reading:
+    // `<w:b w:val="0"/><w:b/>` renders bold (ECMA-376 Part 1 §17.3.2.1).
     const styles =
       `<w:style w:type="paragraph" w:styleId="Twice"><w:rPr><w:b/><w:b/></w:rPr></w:style>` +
       `<w:style w:type="paragraph" w:styleId="OffThenOn">` +
@@ -255,8 +255,8 @@ describe('toggle properties combine across the levels of the style hierarchy', (
 
   describe('a toggle level is tri-state: on reverses, off sets, absent falls through', () => {
     // §17.7.3 works its XOR through with true values only and never says what an explicit
-    // `w:val="0"` at a level does. LibreOffice and the pre-cascade engine both resolve one as
-    // an explicit OFF, and Word's authoring corroborates the split: a "not bold" character
+    // `w:val="0"` at a level does. The pre-cascade engine resolved one as an explicit OFF,
+    // and authored files corroborate the split (ECMA-376 Part 1 §17.3.2.1): a "not bold" character
     // style over a bold paragraph style is written `<w:b/>`, because the toggle is how you
     // cancel — which leaves `w:val="0"` meaning off and nothing else.
     //
@@ -277,12 +277,10 @@ describe('toggle properties combine across the levels of the style hierarchy', (
       { name: 'docDefaults on, character off', defaults: '', character: ' w:val="0"', bold: false },
       // The short circuit itself: a true document default outlasts any number of `on` levels.
       //
-      // THESE TWO ROWS ARE SPEC-DERIVED AND UNVERIFIED against either implementation. They
-      // follow §17.7.3 literally ("If the value specified by the document defaults is true,
-      // the effective value is true"). LibreOffice renders both REGULAR — it does not
-      // implement the short circuit — and Word has not been measured on them. Every other row
-      // here matches LibreOffice. Do not "fix" these to match one renderer without saying
-      // which renderer and why.
+      // THESE TWO ROWS ARE SPEC-DERIVED AND UNVERIFIED. They follow ECMA-376 Part 1 §17.7.3
+      // literally ("If the value specified by the document defaults is true, the effective
+      // value is true"). Do not "fix" these to match one renderer without saying which
+      // renderer and why.
       { name: 'docDefaults on, paragraph on', defaults: '', paragraph: '', bold: true },
       { name: 'docDefaults on, paragraph on, character on', defaults: '', paragraph: '', character: '', bold: true }, // prettier-ignore
       // An off clears the short circuit, and a stronger `on` then reverses the off.
