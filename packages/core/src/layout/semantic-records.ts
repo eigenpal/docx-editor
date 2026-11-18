@@ -382,6 +382,8 @@ export interface LineRecord {
    * Absent on lines published before this was measured; treat as zero.
    */
   readonly trailingSpacing?: number;
+  /** Height of the shared text highlight band on a line with an inline drawing. */
+  readonly inlineDrawingHighlightHeight?: number;
   /**
    * Model ranges on this line covering DELETED content, absent when there is none.
    *
