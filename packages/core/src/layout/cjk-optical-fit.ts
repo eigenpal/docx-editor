@@ -19,7 +19,11 @@ import {
 import { styleForFontSlot } from './script-itemization.ts';
 import { isDefaultGraphemeBoundary, segmentGraphemes, type GraphemeSegment } from './grapheme.ts';
 import { isCjk, type CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
-import { hangingCjkPunctuationAdvance, hangsWithin } from './cjk-spacing.ts';
+import {
+  hangingCjkPunctuationAdvance,
+  hangsWithin,
+  trackedPunctuationPairBeforeAscii,
+} from './cjk-spacing.ts';
 import { formatRevisionOf } from './revision-projection.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 import {
@@ -174,13 +178,8 @@ function sameFaceImplicitEastAsian(span: StyleSpanRecord): boolean {
     )
   );
 }
-function cellsOf(
-  spans: readonly StyleSpanRecord[],
-  measurer: TextMeasurer,
-  baselinePieces: readonly FieldAwarePiece[],
-  requireLocalQualification: boolean,
-  memo: ClusterMemo
-): Cell[] | undefined {
+function cellsOf(spans: readonly StyleSpanRecord[], context: FitContext): Cell[] | undefined {
+  const { measurer, baselinePieces, requireLocalQualification, memo, trackedAscii } = context;
   const cells: Cell[] = [];
   let length = 0;
   for (const [sourceIndex, span] of spans.entries()) {
@@ -192,7 +191,7 @@ function cellsOf(
     if (requireLocalQualification) {
       const authored = layoutDerivedSpacingStyleForEditing(face);
       if (
-        authored.characterSpacingPt !== 0 ||
+        (authored.characterSpacingPt !== 0 && !(trackedAscii && authored.characterSpacingPt < 0)) ||
         authored.horizontalScalePercent !== 100 ||
         authored.shaping !== undefined ||
         measurer.hasResolvedFont?.(face) !== true
@@ -438,6 +437,7 @@ interface FitContext {
   readonly measurer: TextMeasurer;
   readonly baselinePieces: readonly FieldAwarePiece[];
   readonly requireLocalQualification: boolean;
+  readonly trackedAscii: boolean;
   readonly memo: ClusterMemo;
   /**
    * The cells of the current group's line, kept between its attempts: an attempt that fails
@@ -458,13 +458,7 @@ function lineCells(
   // The first attempt takes the cells as built; a later one copies them with no compression.
   if (context.cells.value !== undefined)
     return context.cells.value?.map((cell) => ({ ...cell, reduction: 0, shift: 0 }));
-  const cells = cellsOf(
-    [...line.spans, ...candidates],
-    context.measurer,
-    context.baselinePieces,
-    context.requireLocalQualification,
-    context.memo
-  );
+  const cells = cellsOf([...line.spans, ...candidates], context);
   context.cells.value = cells ?? null;
   return cells;
 }
@@ -936,6 +930,7 @@ export function createCjkOpticalFitter(
       measurer,
       baselinePieces: pieces,
       requireLocalQualification,
+      trackedAscii: trackedPunctuationPairBeforeAscii(line.spans, candidates),
       memo,
       cells: {},
     };

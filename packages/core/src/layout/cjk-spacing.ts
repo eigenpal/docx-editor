@@ -12,7 +12,10 @@ import {
   koreanFinalMarkHangs,
   type CjkParagraphTypography,
 } from './cjk-typography.ts';
-import { withLayoutDerivedSpacing } from './layout-derived-spacing.ts';
+import {
+  layoutDerivedSpacingStyleForEditing,
+  withLayoutDerivedSpacing,
+} from './layout-derived-spacing.ts';
 import { isRunKerningEnabled } from './run-kerning.ts';
 
 const FULLWIDTH_PUNCTUATION =
@@ -21,6 +24,25 @@ const FULLWIDTH_PUNCTUATION =
 // seam rule because its ink can be centred, depending on the face and locale.
 const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
 const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
+
+/** A compressed punctuation seam can make room for an ASCII word on a tracked line. */
+export function trackedPunctuationPairBeforeAscii(
+  spans: readonly StyleSpanRecord[],
+  candidates: readonly StyleSpanRecord[]
+): boolean {
+  if (!candidates.length || !candidates.every((span) => /^[\x20-\x7e]+$/u.test(span.text)))
+    return false;
+  return spans.some((span, index) => {
+    const opening = spans[index + 1];
+    if (!opening || !CLOSING.test(span.text) || !OPENING.test(opening.text[0] ?? '')) return false;
+    const authored = layoutDerivedSpacingStyleForEditing(span.style).characterSpacingPt;
+    return (
+      span.range.end === opening.range.start &&
+      authored < 0 &&
+      span.style.characterSpacingPt < authored
+    );
+  });
+}
 
 /** A colon cannot borrow an opening bearing across a line or exclusion passage. */
 export function colonLostOpeningBearing(lines: LineSpans): boolean {
