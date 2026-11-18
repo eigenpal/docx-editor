@@ -70,11 +70,18 @@ function contains(range: TocParagraphRange, offset: number): boolean {
 }
 export function tocAtPosition(
   part: OoxmlPart,
-  position: SemanticPosition
+  position: SemanticPosition,
+  crossingRegion = false
 ): DetectedToc | undefined {
-  return tocParagraphRanges(part).find(
-    (r) => r.paragraphId === position.paragraphId && contains(r, position.offset)
-  )?.toc;
+  return tocParagraphRanges(part).find((r) => {
+    if (r.paragraphId !== position.paragraphId) return false;
+    // A line motion crosses the visible end mark. A caret already on the
+    // empty suffix remains editable so the reader can retype a deleted heading.
+    return (
+      contains(r, position.offset) ||
+      (crossingRegion && r.endsHere && !r.startsHere && r.length === 0)
+    );
+  })?.toc;
 }
 export function selectionTouchesTocRange(part: OoxmlPart, selection: SemanticSelection): boolean {
   const { anchor, head } = selection;
