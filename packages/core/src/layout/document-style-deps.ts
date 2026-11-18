@@ -2,6 +2,7 @@
 
 import type { HeadlessDocumentView, OoxmlElement } from '@docx-editor.dev/core/store';
 import { buildNumberingIndex, type NumberingIndex } from './numbering-index.ts';
+import { pictureBulletPixelHeights } from './picture-bullet-pixels.ts';
 import { defaultTabIntervalFromSettings } from './paragraph-tabs.ts';
 import { compatibilityModeFromSettings } from './compatibility/compatibility-profile.ts';
 import { buildStyleCascadeTable, type StyleCascadeTable } from './style-cascade.ts';
@@ -87,7 +88,10 @@ export function createDocumentStyleDependencies(
       const current = view.numberingRoot();
       if (numbering === undefined || current !== numberingRoot) {
         numberingRoot = current;
-        numbering = buildNumberingIndex(current);
+        numbering = buildNumberingIndex(
+          current,
+          pictureBulletPixelHeights(view.currentPackage(), current)
+        );
       }
       return numbering;
     },
