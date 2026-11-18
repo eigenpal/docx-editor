@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // The rail's private contexts and the two public hooks that read them. The Vue twin is
 // `../vue/review-context.ts`.
 
-import { createContext, useCallback, useContext } from 'react';
+import { createContext, useCallback, useContext, useRef } from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import type { CommentMarkerStyle, RevisionDisplay } from '@docx-editor.dev/core/editor';
 import {
@@ -19,6 +19,18 @@ import type { useReview, ReviewItemView } from './useReview.ts';
 
 /** The rail's data, provided once by the Root so a card never re-subscribes. */
 export const ReviewContext = createContext<ReviewRailValue | null>(null);
+/**
+ * The part of the rail's data a card reads. It holds no item list, so an edit that changes
+ * one item does not render the cards of the others. Parts inside a card read it through
+ * {@link useCardRail}.
+ */
+export const ReviewCardRailContext = createContext<ReviewCardRailValue | null>(null);
+/**
+ * The items a card's replies resolve from, by id. Each place that renders a card provides it.
+ * A card in the list gets only its own replies, which change only when one of them does; the
+ * balloon and the compact card, one of each, get every item.
+ */
+export const ReviewThreadContext = createContext<ReadonlyMap<string, ReviewItemView> | null>(null);
 /** The card being rendered, so every part inside it reads one item. */
 export const ReviewItemContext = createContext<ReviewItemView | null>(null);
 
@@ -60,26 +72,27 @@ export function useReviewItem(): ReviewItemView | null {
  * @public
  */
 export function useReviewAuthor(author: string | undefined): ReviewAuthorInfo | undefined {
-  const rail = useContext(ReviewContext);
+  const rail = useContext(ReviewCardRailContext);
   const roster = useReviewAuthors();
   if (author === undefined) return undefined;
   return rail ? rail.authorInfo.get(author) : roster.find((info) => info.author === author);
 }
 
-export interface ReviewRailValue {
+/** The review hook's actions and state, without the fields that follow the item list. */
+export type ReviewCardActions = Omit<
+  ReturnType<typeof useReview>,
+  'items' | 'activeKey' | 'activatedKey' | 'selectionAnchorY'
+>;
+
+/** What a part inside a card reads from the rail. None of it follows the item list. */
+export interface ReviewCardRailValue {
   /** The host's label resolver, when it passed one. Parts read through {@link useReviewLabel}. */
   readonly t: ToolbarTranslate | undefined;
   /** A card's className, from the rail's `card` prop. */
   readonly cardClassName: string | undefined;
   /** Viewing mode keeps review decisions visible but makes every mutation unavailable. */
   readonly readOnly: boolean;
-  readonly review: ReturnType<typeof useReview>;
-  /**
-   * The UNFILTERED queue. The rail's cards render `review.items`, which the structural and
-   * formatting defaults and the host's `filter` have already narrowed — but the balloon
-   * exists precisely for the items those filters hide, so it matches against everything.
-   */
-  readonly allItems: readonly ReviewItemView[];
+  readonly review: ReviewCardActions;
   /** Author colour slot per author, by order of first appearance. */
   readonly authorSlots: ReadonlyMap<string, number>;
   /**
@@ -92,6 +105,25 @@ export interface ReviewRailValue {
   readonly draftAuthor: string | null;
   readonly draftAuthorInfo: ReviewAuthorInfo | undefined;
   readonly draftAuthorSlot: number;
+  /** Open the compose box for the current selection. */
+  readonly beginDraft: () => void;
+  /** Close it, committed or not, and unpin the range. */
+  readonly endDraft: () => void;
+  /** The `commentMarkers` review pane setting: how a comment thread's margin marker looks. */
+  readonly commentMarkers: CommentMarkerStyle;
+  /** The `revisionsIn` review pane setting: tracked changes as rail cards or page balloons. */
+  readonly revisionsIn: RevisionDisplay;
+}
+
+/** Everything the rail's own parts read: the card's share plus the item lists and geometry. */
+export interface ReviewRailValue extends Omit<ReviewCardRailValue, 'review'> {
+  readonly review: ReturnType<typeof useReview>;
+  /**
+   * The UNFILTERED queue. The rail's cards render `review.items`, which the structural and
+   * formatting defaults and the host's `filter` have already narrowed — but the balloon
+   * exists precisely for the items those filters hide, so it matches against everything.
+   */
+  readonly allItems: readonly ReviewItemView[];
   /** Comment items by id, so a card can render its replies without walking the list. */
   readonly byId: ReadonlyMap<string, ReviewItemView>;
   /**
@@ -99,10 +131,6 @@ export interface ReviewRailValue {
    * attaches the slot once. The rail updates only when a height changes.
    */
   readonly slotRef: (key: string) => (node: HTMLElement | null) => void;
-  /** Open the compose box for the current selection. */
-  readonly beginDraft: () => void;
-  /** Close it, committed or not, and unpin the range. */
-  readonly endDraft: () => void;
   /** Whether a comment draft is open. A `Draft` part renders only while it is. */
   readonly drafting: boolean;
   /**
@@ -112,10 +140,6 @@ export interface ReviewRailValue {
   readonly composeTop: number | null;
   /** The compose box's rail-local `left` in the compact rail, or null in the full column. */
   readonly composeLeft: number | null;
-  /** The `commentMarkers` review pane setting: how a comment thread's margin marker looks. */
-  readonly commentMarkers: CommentMarkerStyle;
-  /** The `revisionsIn` review pane setting: tracked changes as rail cards or page balloons. */
-  readonly revisionsIn: RevisionDisplay;
 }
 
 export function useRail(): ReviewRailValue {
@@ -124,6 +148,24 @@ export function useRail(): ReviewRailValue {
   // A part rendered outside the compound by mistake should show nothing, not throw in the
   // middle of someone's render.
   return INERT_RAIL;
+}
+
+/**
+ * The rail as a part inside a card reads it. It does not change when the item list does, so
+ * a card renders again only for its own item, its replies, or the rail's settings.
+ */
+export function useCardRail(): ReviewCardRailValue {
+  return useContext(ReviewCardRailContext) ?? INERT_RAIL;
+}
+
+/**
+ * `next`, or the value this hook returned before when `same` says the two are equal. Keeps
+ * the identity of a derived value whose content did not change, so memos that depend on it hold.
+ */
+export function useKept<T>(next: T, same: (a: T, b: T) => boolean): T {
+  const kept = useRef(next);
+  if (kept.current !== next && !same(kept.current, next)) kept.current = next;
+  return kept.current;
 }
 
 /**
@@ -144,7 +186,7 @@ function withParams(text: string, params: ReviewLabelParams | undefined): string
 }
 
 export function useReviewLabel(): (key: TranslationKey, params?: ReviewLabelParams) => string {
-  const { t: hostT } = useContext(ReviewContext) ?? {};
+  const { t: hostT } = useContext(ReviewCardRailContext) ?? {};
   const { t } = useTranslation();
   return useCallback(
     (key: TranslationKey, params?: ReviewLabelParams) => {

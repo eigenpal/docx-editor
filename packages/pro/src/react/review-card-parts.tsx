@@ -10,7 +10,13 @@ import type { ReactNode } from 'react';
 import { Slot, useTranslation } from '@docx-editor.dev/react';
 import type { ReviewItemView } from './useReview.ts';
 import type { ReviewActionProps, ReviewPartProps } from './review-types.ts';
-import { ReviewItemContext, useRail, useReviewLabel } from './review-context.ts';
+import {
+  ReviewItemContext,
+  ReviewThreadContext,
+  useCardRail,
+  useRail,
+  useReviewLabel,
+} from './review-context.ts';
 import { COMPOSE_KEY, guardMousedown, reviewDateFormat } from './review-shared.ts';
 import { isCardControl, keepsPressFocus } from '../review/card-controls.ts';
 import { authorCardStyle, authorSlot } from './review-author-styles.ts';
@@ -24,7 +30,7 @@ import { revisionItemLabel } from './review-labels.ts';
 import { reviewRefusalFallbackKey, reviewRefusalLabelKey } from '../review/review-refusal.ts';
 
 export const { ReviewResolve, ReviewReopen } = createCommentResolutionParts({
-  useReview: () => useRail().review,
+  useReview: () => useCardRail().review,
   useItem: () => useContext(ReviewItemContext),
   useLabel: useReviewLabel,
   guardMousedown,
@@ -32,6 +38,7 @@ export const { ReviewResolve, ReviewReopen } = createCommentResolutionParts({
 
 export const { ReviewDraft, ReviewReply, ReviewBalloonReply } = createReviewComposeParts({
   useRail,
+  useCardRail,
   useItem: () => useContext(ReviewItemContext),
   useLabel: useReviewLabel,
   guardMousedown,
@@ -63,7 +70,7 @@ ReviewEmpty.docxReviewPart = 'Empty' as const;
  * @public
  */
 export function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
-  const { review, authorSlots, authorInfo, commentMarkers } = useRail();
+  const { review, authorSlots, authorInfo, commentMarkers } = useCardRail();
   const entry = useContext(ReviewItemContext);
   const cardId = useId();
   const t = useReviewLabel();
@@ -261,7 +268,7 @@ function partOverrides(children: ReactNode): Record<string, ReactNode> {
  * live region inside a `role="button"` card is not reliably announced. @public
  */
 export function ReviewRefusal({ className, asChild, hidden, children }: ReviewPartProps) {
-  const { review } = useRail();
+  const { review } = useCardRail();
   const entry = useContext(ReviewItemContext);
   const t = useReviewLabel();
   const refusal = review.lastRefusal;
@@ -290,7 +297,7 @@ ReviewRefusal.docxReviewPart = 'Refusal' as const;
  * Re-keyed per refusal, so the same refusal twice is announced twice.
  */
 export function ReviewRefusalAnnouncer() {
-  const { review } = useRail();
+  const { review } = useCardRail();
   const t = useReviewLabel();
   const refusal = review.lastRefusal;
   return (
@@ -312,7 +319,7 @@ export function ReviewRefusalAnnouncer() {
 
 /** The author's initials, in their colour. @public */
 export function ReviewAvatar({ className, asChild, hidden, children }: ReviewPartProps) {
-  const { authorInfo } = useRail();
+  const { authorInfo } = useCardRail();
   const entry = useContext(ReviewItemContext);
   if (hidden || !entry) return null;
   // Nothing to show is not an empty disc: a custom node's card has no author. Children win,
@@ -466,7 +473,7 @@ export function ReviewAccept({
   children,
   icon: glyph,
 }: ReviewActionProps) {
-  const { readOnly, review } = useRail();
+  const { readOnly, review } = useCardRail();
   const entry = useContext(ReviewItemContext);
   const t = useReviewLabel();
   if (hidden || !entry || entry.kind !== 'revision' || entry.readOnly) return null;
@@ -509,7 +516,7 @@ export function ReviewReject({
   children,
   icon: glyph,
 }: ReviewActionProps) {
-  const { readOnly, review } = useRail();
+  const { readOnly, review } = useCardRail();
   const entry = useContext(ReviewItemContext);
   const t = useReviewLabel();
   if (hidden || !entry || entry.kind !== 'revision' || entry.readOnly) return null;
@@ -575,7 +582,7 @@ export function ReviewDelete({
   children,
   icon: glyph,
 }: ReviewActionProps) {
-  const { readOnly, review } = useRail();
+  const { readOnly, review } = useCardRail();
   const entry = useContext(ReviewItemContext);
   const { t } = useTranslation();
   if (hidden || !entry || entry.kind === 'custom') return null;
@@ -613,9 +620,12 @@ export function ReviewDelete({
 }
 ReviewDelete.docxReviewPart = 'Delete' as const;
 
+const NO_THREAD: ReadonlyMap<string, ReviewItemView> = new Map();
+
 /** The thread under a comment, in document order. @public */
 export function ReviewReplies({ className, hidden }: ReviewPartProps) {
-  const { byId, authorSlots, authorInfo } = useRail();
+  const { authorSlots, authorInfo } = useCardRail();
+  const byId = useContext(ReviewThreadContext) ?? NO_THREAD;
   const entry = useContext(ReviewItemContext);
   // Comments AND revisions. A reply to a tracked change is a comment over that change's range,
   // and refusing to draw it here is what put the reader's answer in a card of its own, floating
