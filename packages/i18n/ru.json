@@ -1045,7 +1045,7 @@
     "scope": "Применить",
     "scopeDocument": "Ко всему документу",
     "scopeSection": "К текущему разделу",
-    "menuAriaLabel": null
+    "menuAriaLabel": "Действия со сноской"
   },
   "review": {
     "accept": "Принять",

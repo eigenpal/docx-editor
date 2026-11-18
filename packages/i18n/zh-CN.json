@@ -901,7 +901,7 @@
     "convertAllFootnotes": "将所有脚注转换为尾注",
     "convertAllEndnotes": "将所有尾注转换为脚注",
     "inheritedValue": "（继承）",
-    "menuAriaLabel": null
+    "menuAriaLabel": "注释操作"
   },
   "review": {
     "accept": "接受",

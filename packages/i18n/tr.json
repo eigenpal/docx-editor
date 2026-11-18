@@ -901,7 +901,7 @@
     "convertAllFootnotes": "Tüm dip notları son notlara dönüştür",
     "convertAllEndnotes": "Tüm son notları dip notlara dönüştür",
     "inheritedValue": "(devralınan)",
-    "menuAriaLabel": null
+    "menuAriaLabel": "Not eylemleri"
   },
   "review": {
     "accept": "Kabul et",
