@@ -72,8 +72,8 @@ export interface SurfaceSelectionSyncDeps {
    */
   holdPaint?(hold: boolean): void;
   /**
-   * Repaint the engine's caret for the selection the mirror is about to write, and run
-   * `write` exactly once. The mirror writes, or declines to write, inside it.
+   * Repaint the engine's caret, and what else follows it, for the selection the mirror is
+   * about to write. Then run `write` once: the mirror writes, or declines to write, inside it.
    */
   repaintCaretAround(write: () => void): void;
   /** The model text of one paragraph, for diffing what an IME wrote against it. */

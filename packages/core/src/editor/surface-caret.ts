@@ -97,11 +97,11 @@ export interface SurfaceCaret {
   /** Repaint from the current layout and selection. Safe to call on every render. */
   update(): void;
   /**
-   * Repaint for the selection that `write` is about to put in the browser, and run `write`.
+   * Repaint for the selection that `write` is about to put in the browser, then run `write`.
    *
    * Whether a range hands the native caret back depends on what the browser shows AFTER the
-   * write, so that decision waits for it. `write` runs exactly once, and the decision is made
-   * even when it throws.
+   * write, so that decision waits for it, and it is made even when `write` throws. `write`
+   * runs once, after the repaint; a repaint that throws leaves it unrun.
    */
   updateAround(write: () => void): void;
   /** The insertion point at the selection head in client pixels, or null when unplaced. */
@@ -210,10 +210,20 @@ export function createSurfaceCaret(
    * page. While the browser shows a range there is no native caret for it to colour, so the
    * suppression can stay as it is and a caret-to-range move costs no restyle. A collapsed or
    * absent browser selection still gets the native caret back.
+   *
+   * Two cases answer false although the selection is not collapsed. A range that holds no
+   * text, such as the two sides of hidden text, can be drawn as a caret. A text control in
+   * the pages that has focus draws its own caret and inherits the same property.
    */
   function browserShowsRange(): boolean {
-    const selection = pagesLayer.ownerDocument.getSelection();
-    return !!selection && selection.rangeCount > 0 && !selection.isCollapsed;
+    const document = pagesLayer.ownerDocument;
+    const selection = document.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return false;
+    const active = document.activeElement;
+    if (active && active !== pagesLayer && /^(?:INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) {
+      return false;
+    }
+    return selection.toString() !== '';
   }
 
   /** Decide the native caret for a range, once the browser's selection is the one to show. */

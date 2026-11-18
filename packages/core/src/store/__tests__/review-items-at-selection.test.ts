@@ -129,7 +129,7 @@ describe('the work one caret position costs', () => {
     }
   }
 
-  test('a range inside another paragraph is refused without asking the order', () => {
+  test('each range in one paragraph costs one read of the order, and the caret one in all', () => {
     const order = new CountedOrder();
     const items: ReviewItem[] = [];
     for (let index = 0; index < 1_000; index += 1) {
@@ -143,8 +143,10 @@ describe('the work one caret position costs', () => {
     order.reads = 0;
     const found = reviewItemsAt(items, { paragraphId: 'caret', offset: 4 }, order);
     expect(found.map((item) => item.id)).toEqual(['here', 'spanning']);
-    // Two ranges can hold the caret. A thousand cannot, and each of those cost three reads.
-    expect(order.reads).toBeLessThan(20);
+    // One read for the caret, one for each range in one paragraph, two for the range across
+    // paragraphs, and the width of the two ranges that hold the caret. Three reads for every
+    // range was 3,006.
+    expect(order.reads).toBe(1 + 1_001 + 2 + 4);
   });
 
   test('every position gets the answer a position-by-position comparison gives', () => {

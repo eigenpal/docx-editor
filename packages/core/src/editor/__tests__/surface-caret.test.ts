@@ -296,6 +296,52 @@ describe('the painted caret', () => {
     container.remove();
   });
 
+  test('a range that holds no text gets the native caret back', () => {
+    const { surface, container, pages } = mount(paragraph('hello world'));
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    putCaret(surface, 3);
+    const browser = document.getSelection()!;
+    const text = browser.toString;
+    // The two sides of hidden text are different places in the page and one place on screen:
+    // a browser can draw such a range as a caret, and it must stay visible.
+    browser.toString = () => '';
+    try {
+      surface.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 4 },
+      });
+    } finally {
+      browser.toString = text;
+    }
+    expect(browser.isCollapsed).toBe(false);
+    expect(caretElement(container)).toBeNull();
+    expect(pages.style.caretColor).toBe('');
+    surface.destroy();
+    container.remove();
+  });
+
+  test('a focused text control in the pages gets the native caret back over a range', () => {
+    const { surface, container, pages } = mount(paragraph('hello world'));
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId, offset: 1 },
+      head: { paragraphId, offset: 4 },
+    });
+    expect(document.getSelection()!.isCollapsed).toBe(false);
+    expect(pages.style.caretColor).toBe('transparent');
+    // The control draws its own caret and inherits the property from the pages.
+    const control = document.createElement('input');
+    pages.append(control);
+    control.focus();
+    expect(document.activeElement).toBe(control);
+    expect(document.getSelection()!.isCollapsed).toBe(false);
+    expect(caretElement(container)).toBeNull();
+    expect(pages.style.caretColor).toBe('');
+    control.remove();
+    surface.destroy();
+    container.remove();
+  });
+
   test('a geometry read inside a commit paints once, with the post-edit caret', () => {
     const { surface, container, pages } = mount(paragraph('hello') + paragraph('world'));
     // What the review module's snapshot does from its document-change handler: read layout

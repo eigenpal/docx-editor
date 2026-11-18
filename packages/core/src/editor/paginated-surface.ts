@@ -3475,10 +3475,10 @@ export function mountPaginatedSurface(
     render: () => render(),
     flushLayout: () => flushLayout(),
     flushToPaint: () => flushToPaint(),
-    repaintCaretAround: (write) =>
+    repaintCaretAround: (writeSelection) =>
       caret.updateAround(() => {
         syncActiveFieldShading(pagesLayer, collapsedCaretPosition());
-        write();
+        writeSelection();
       }),
     textOf: (paragraphId) => textOf(paragraphId),
     pendingFormatOps: (paragraphId, offset, length, replacing) =>
