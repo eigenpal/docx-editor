@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A header or footer taller than the page pushed the body below it by its full height, so each page held one line of body text.",
+  "after": "A header or footer stops at the first line that would pass half the page height, and the body starts below the last line that fits. Shared document state and operations are unchanged.",
+  "reason": "The change is confined to layout. Replicas compute the same layout from the same tree, and saved documents keep the same XML.",
+  "tests": ["packages/core/src/layout/__tests__/furniture-story-limit.test.ts"],
+  "changeset": "header-footer-half-page",
+  "migration": null
+}
