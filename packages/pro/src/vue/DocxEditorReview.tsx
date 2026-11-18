@@ -58,6 +58,7 @@ import {
   listCardTemplate,
   partitionReviewChildren,
   slotNodes,
+  useSlotMemo,
 } from './review-composition.ts';
 import { hasFormattingBalloon } from './review-balloon-anchor.ts';
 import {
@@ -70,8 +71,6 @@ import {
   PAIRED_REVIEW_QUERY,
   RAIL_OVERSCAN,
   guardMousedown,
-  idsOf,
-  isThreadedReply,
   selectCommentMarkers,
   selectDocumentAbsent,
   selectDocumentReadOnly,
@@ -80,11 +79,16 @@ import {
 } from './review-shared.ts';
 import { useRailWindow } from './use-rail-window.ts';
 import {
+  ReviewCardRailKey,
   ReviewContextKey,
   ReviewItemScope,
+  keeper,
   useReviewItem,
+  type ReviewCardActions,
+  type ReviewCardRailValue,
   type ReviewRailValue,
 } from './review-context.ts';
+import { reviewRootsOf, sameEntries, sameFields } from '../review/review-roots.ts';
 import type { ReviewActions } from './review-types.ts';
 import { stackRailCards } from '../review/rail-stack.ts';
 import { useCardSizer } from './use-review-card-heights.ts';
@@ -309,6 +313,9 @@ const ReviewRoot = defineComponent({
       { flush: 'sync' }
     );
     const configuredAuthor = useEditorState(() => editorRef.value?.getConfiguredAuthor() ?? null);
+    // Kept while its content holds: an edit to one item gives a new list with the same
+    // authors, and a new map here would render every card.
+    const keepAuthorSlots = keeper<ReadonlyMap<string, number>>(sameEntries);
     const authorSlots = computed(() => {
       const slotsMap = new Map<string, number>();
       for (const entry of items.value) {
@@ -317,17 +324,20 @@ const ReviewRoot = defineComponent({
       if (configuredAuthor.value && !slotsMap.has(configuredAuthor.value)) {
         slotsMap.set(configuredAuthor.value, slotsMap.size);
       }
-      return slotsMap;
+      return keepAuthorSlots(slotsMap);
     });
     const roster = useReviewAuthors();
     const syntheticAuthors = new Map<string, ReviewAuthorInfo>();
+    const keepAuthorInfo = keeper<ReadonlyMap<string, ReviewAuthorInfo>>(sameEntries);
     const authorInfo = computed(() =>
-      resolveReviewAuthorInfo(
-        roster.value,
-        items.value,
-        authorSlots.value,
-        editorRef.value,
-        syntheticAuthors
+      keepAuthorInfo(
+        resolveReviewAuthorInfo(
+          roster.value,
+          items.value,
+          authorSlots.value,
+          editorRef.value,
+          syntheticAuthors
+        )
       )
     );
 
@@ -411,10 +421,23 @@ const ReviewRoot = defineComponent({
     );
     onUnmounted(() => commentClickCleanup?.());
 
+    // Only what the list renders competes for the column: a threaded reply lives inside its
+    // parent's card.
+    const roots = computed(() => reviewRootsOf(items.value));
+    // The compact card of an active item without a placement sits at the top of the visible
+    // band, so that one case follows each scroll frame. Every other rail takes the stepped band.
+    const exactBand = computed(
+      () =>
+        compact.value &&
+        roots.value.some(
+          (entry) => entry.key === reviewHook.activeKey.value && entry.anchorY === null
+        )
+    );
     const scrollWindow = useRailWindow(
       editorRef,
       railRef,
-      () => !documentAbsent.value && !props.hidden
+      () => !documentAbsent.value && !props.hidden,
+      () => exactBand.value
     );
 
     const draftAnchorY = ref<number | null>(null);
@@ -485,11 +508,6 @@ const ReviewRoot = defineComponent({
 
     const composeAnchorY = computed(() => draftAnchorY.value ?? reviewHook.selectionAnchorY.value);
 
-    const roots = computed(() => {
-      const present = idsOf(items.value);
-      return items.value.filter((entry) => !isThreadedReply(entry, present));
-    });
-
     const stackInput = computed(() => {
       const draftY = draftAnchorY.value;
       if (draftY === null) return roots.value;
@@ -553,35 +571,62 @@ const ReviewRoot = defineComponent({
       return buildReviewActions(reviewHook, items.value);
     });
 
-    const currentRailValue = (): ReviewRailValue => {
+    const setExpandedResolvedKey = (key: string | null): void => {
+      expandedResolvedKey.value = key;
+    };
+    // What a card reads. None of it follows the item list, and it keeps its identity while
+    // its content is equal, so an edit that changes one item renders that item's card and no
+    // other.
+    const keepCardReview = keeper<ReviewCardActions>(sameFields);
+    const keepCardRail = keeper<ReviewCardRailValue>(sameFields);
+    const cardRail = computed((): ReviewCardRailValue => {
       const draftAuthor = configuredAuthor.value;
-      const draftAuthorSlot = draftAuthor ? (authorSlots.value.get(draftAuthor) ?? 0) : 0;
-      return {
+      return keepCardRail({
         t: props.t,
         cardClassName: props.card?.className,
         readOnly: readOnly.value,
-        composeTop: composeTop.value,
-        composeLeft: compact.value ? metrics.value.compactCardLeft : null,
-        drafting: draftAnchorY.value !== null,
-        review: reviewActions.value,
-        allItems: allReview.items.value,
+        review: keepCardReview({
+          setActive: reviewHook.setActive,
+          accept: reviewHook.accept,
+          reject: reviewHook.reject,
+          adopt: reviewHook.adopt,
+          resolve: reviewHook.resolve,
+          reopen: reviewHook.reopen,
+          commentResolutionDisabledReason: reviewHook.commentResolutionDisabledReason.value,
+          remove: reviewHook.remove,
+          reply: reviewHook.reply,
+          edit: reviewHook.edit,
+          comment: reviewHook.comment,
+          lastRefusal: reviewHook.lastRefusal.value,
+          paneOpen: reviewHook.paneOpen.value,
+          setPaneOpen: reviewHook.setPaneOpen,
+          ready: reviewHook.ready.value,
+        }),
         authorSlots: authorSlots.value,
         authorInfo: authorInfo.value,
         draftAuthor,
         draftAuthorInfo: draftAuthor ? authorInfo.value.get(draftAuthor) : undefined,
-        draftAuthorSlot,
-        byId: byId.value,
-        measure: observeSlot,
+        draftAuthorSlot: draftAuthor ? (authorSlots.value.get(draftAuthor) ?? 0) : 0,
         beginDraft,
         endDraft,
         expandedResolvedKey: expandedResolvedKey.value,
-        setExpandedResolvedKey: (key) => {
-          expandedResolvedKey.value = key;
-        },
+        setExpandedResolvedKey,
         commentMarkers: commentMarkers.value,
         revisionsIn: revisionsIn.value,
-      };
-    };
+      });
+    });
+    provide(ReviewCardRailKey, cardRail);
+
+    const currentRailValue = (): ReviewRailValue => ({
+      ...cardRail.value,
+      composeTop: composeTop.value,
+      composeLeft: compact.value ? metrics.value.compactCardLeft : null,
+      drafting: draftAnchorY.value !== null,
+      review: reviewActions.value,
+      allItems: allReview.items.value,
+      byId: byId.value,
+      measure: observeSlot,
+    });
     const railValue = shallowRef<ReviewRailValue>(currentRailValue());
     watchEffect(() => {
       railValue.value = currentRailValue();
@@ -596,6 +641,22 @@ const ReviewRoot = defineComponent({
     );
 
     provide(ReviewContextKey, railValue as unknown as ComputedRef<ReviewRailValue>);
+
+    // The root's children, split once per slot content: a rail that renders for its own state
+    // (a scroll step, a measured height) then hands the list the same card template.
+    const childrenOf = useSlotMemo(['default', 'item'], () => {
+      const defaultNodes = slots.default?.() ?? [];
+      const asChildHost =
+        props.asChild && defaultNodes.length === 1 && isVNode(defaultNodes[0])
+          ? defaultNodes[0]
+          : null;
+      const { parts, rest } = partitionReviewChildren(asChildHost ? [] : defaultNodes, 'root');
+      const listSlots = {
+        ...(rest.length > 0 ? { default: () => rest } : {}),
+        ...(slots.item ? { item: slots.item } : {}),
+      };
+      return { asChildHost, parts, rest, listSlots };
+    });
 
     return () => {
       if (props.hidden || documentAbsent.value) return null;
@@ -632,15 +693,7 @@ const ReviewRoot = defineComponent({
             : { left: `${metrics.value.left}px`, right: 'auto' },
       };
 
-      const defaultNodes = slots.default?.() ?? [];
-      const asChildHost =
-        props.asChild && defaultNodes.length === 1 && isVNode(defaultNodes[0])
-          ? defaultNodes[0]
-          : null;
-      const { parts: rootParts, rest: rootRest } = partitionReviewChildren(
-        asChildHost ? [] : defaultNodes,
-        'root'
-      );
+      const { asChildHost, parts: rootParts, rest: rootRest, listSlots } = childrenOf();
 
       const listProps = {
         stack: props.stack,
@@ -715,14 +768,7 @@ const ReviewRoot = defineComponent({
 
       const body = expanded.value
         ? props.preset || 'List' in rootParts
-          ? takeRoot(
-              'List',
-              h(ReviewList, listProps, {
-                ...(rootRest.length > 0 ? { default: () => rootRest } : {}),
-                ...(slots.item ? { item: slots.item } : {}),
-              }),
-              rootParts
-            )
+          ? takeRoot('List', h(ReviewList, listProps, listSlots), rootParts)
           : rootRest
         : props.preset || 'Markers' in rootParts
           ? [takeRoot('Markers', markers, rootParts), compactCard]

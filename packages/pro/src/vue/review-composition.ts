@@ -4,7 +4,17 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
-import { cloneVNode, Fragment, isVNode, type Slot, type VNode } from 'vue';
+import {
+  cloneVNode,
+  computed,
+  Fragment,
+  getCurrentInstance,
+  isVNode,
+  type ComputedRef,
+  type Slot,
+  type VNode,
+} from 'vue';
+import { sameElements } from '../review/review-roots.ts';
 
 const ROOT_PARTS = new Set(['List', 'Markers', 'AddComment', 'Draft', 'Balloon']);
 const LIST_PARTS = new Set(['Card', 'Empty']);
@@ -82,4 +92,31 @@ export function listCardTemplate(listPart: VNode | undefined): ListCardTemplate 
   const template = { hidden, default: slot('default'), item: slot('item') };
   if (!hidden && !template.default && !template.item) return null;
   return template;
+}
+
+/**
+ * A value a component builds from its slots, for use in its render function. It is built
+ * again only when the parent passes another function for one of `names`, or when reactive
+ * state the build read changes. A render for any other cause answers the same value, with
+ * the same vnodes, so a child that takes it as a prop does not render again.
+ *
+ * The slot functions are compared as the parent passed them. The component's own `slots`
+ * object wraps a plain function again on each update, so its entries do not compare.
+ */
+export function useSlotMemo<T>(names: readonly string[], build: () => T): () => T {
+  const instance = getCurrentInstance();
+  let seen: readonly unknown[] | null = null;
+  let memo: ComputedRef<T> | null = null;
+  return () => {
+    const children: unknown = instance?.vnode.children;
+    const passed =
+      children !== null && typeof children === 'object' && !Array.isArray(children)
+        ? names.map((name) => (children as Record<string, unknown>)[name])
+        : [children];
+    if (memo === null || seen === null || !sameElements(seen, passed)) {
+      seen = passed;
+      memo = computed(build);
+    }
+    return memo.value;
+  };
 }

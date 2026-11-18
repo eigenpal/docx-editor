@@ -40,20 +40,30 @@ import {
   markPart,
   partOverrides,
 } from './review-shared.ts';
-import { ReviewReplyScope, useRail, useReviewItem, useReviewLabel } from './review-context.ts';
+import {
+  ReviewReplyScope,
+  useCardRail,
+  useRail,
+  useReviewItem,
+  useReviewLabel,
+  useReviewThread,
+  type ReviewCardActions,
+  type ReviewCardRailValue,
+} from './review-context.ts';
 import { useReviewStableId } from './stable-id.ts';
 import type { ReviewItemView } from './useReview.ts';
 import { authorCardStyle, authorSlot } from './review-author-styles.ts';
 import { isCardControl, keepsPressFocus } from '../review/card-controls.ts';
 
 const { ReviewResolve, ReviewReopen } = createCommentResolutionParts({
-  useRail,
+  useRail: useCardRail,
   useItem: useReviewItem,
   useLabel: useReviewLabel,
 });
 
 export const { ReviewDraft, ReviewReply, ReviewBalloonReply } = createReviewComposeParts({
   useRail,
+  useCardRail,
   useItem: useReviewItem,
   useLabel: useReviewLabel,
 });
@@ -90,7 +100,7 @@ export const ReviewAvatar = markPart(
     props: { className: String, hidden: Boolean, asChild: Boolean },
     setup(props, { slots }) {
       const entryRef = useReviewItem();
-      const rail = useRail();
+      const rail = useCardRail();
       return () => {
         const entry = entryRef.value;
         if (props.hidden || !entry) return null;
@@ -243,7 +253,7 @@ function createActionPart(
   testId: string,
   labelKey: Parameters<ReturnType<typeof useReviewLabel>>[0],
   defaultIcon: string,
-  run: (review: ReturnType<typeof useRail>['value']['review'], entry: ReviewItemView) => void,
+  run: (review: ReviewCardActions, entry: ReviewItemView) => void,
   visible: (entry: ReviewItemView) => boolean
 ) {
   return markPart(
@@ -256,7 +266,7 @@ function createActionPart(
         icon: { type: [Object, String] as PropType<VNode | string>, default: undefined },
       },
       setup(props, { slots }) {
-        const rail = useRail();
+        const rail = useCardRail();
         const entryRef = useReviewItem();
         const t = useReviewLabel();
         return () => {
@@ -335,7 +345,7 @@ export const ReviewRefusal = markPart(
     name: 'ReviewRefusal',
     props: { className: String, hidden: Boolean, asChild: Boolean },
     setup(props, { slots }) {
-      const rail = useRail();
+      const rail = useCardRail();
       const entryRef = useReviewItem();
       const t = useReviewLabel();
       return () => {
@@ -405,7 +415,7 @@ export const ReviewDelete = markPart(
       icon: { type: [Object, String] as PropType<VNode | string>, default: undefined },
     },
     setup(props, { slots }) {
-      const rail = useRail();
+      const rail = useCardRail();
       const entryRef = useReviewItem();
       const { t } = useTranslation();
       return () => {
@@ -449,10 +459,7 @@ export const ReviewDelete = markPart(
 );
 
 /** A reply's own author hooks, so it draws in its author's colour inside another's card. */
-function replyAuthorAttributes(
-  author: string,
-  rail: ReturnType<typeof useRail>['value']
-): Record<string, unknown> {
+function replyAuthorAttributes(author: string, rail: ReviewCardRailValue): Record<string, unknown> {
   if (!author) return {};
   const info = rail.authorInfo.get(author);
   const slot = rail.authorSlots.get(author) ?? 0;
@@ -469,14 +476,15 @@ export const ReviewReplies = markPart(
     name: 'ReviewReplies',
     props: { className: String, hidden: Boolean },
     setup(props) {
-      const rail = useRail();
+      const rail = useCardRail();
+      const thread = useReviewThread();
       const entryRef = useReviewItem();
       return () => {
         const entry = entryRef.value;
         if (props.hidden || !entry || entry.kind === 'custom') return null;
-        const live = rail.value.byId.get(entry.id) ?? entry;
+        const live = thread.value.get(entry.id) ?? entry;
         const replies = live.replyIds
-          .map((id) => rail.value.byId.get(id))
+          .map((id) => thread.value.get(id))
           .filter((reply): reply is NonNullable<typeof reply> => reply !== undefined);
         if (replies.length === 0) return null;
         return (
@@ -597,7 +605,7 @@ export const ReviewCard = markPart(
     name: 'ReviewCard',
     props: { className: String, hidden: Boolean, asChild: Boolean },
     setup(props, { slots }) {
-      const rail = useRail();
+      const rail = useCardRail();
       const entryRef = useReviewItem();
       const cardId = useReviewStableId('card');
       const t = useReviewLabel();

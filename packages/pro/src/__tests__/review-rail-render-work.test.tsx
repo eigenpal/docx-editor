@@ -15,9 +15,13 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { Profiler, type ReactNode } from 'react';
 import { act, cleanup, render } from '@testing-library/react';
-import { DocxEditorContent, DocxEditorRoot, DocxEditorViewport } from '@docx-editor.dev/react';
+import {
+  DocxEditorContent,
+  DocxEditorRoot,
+  DocxEditorViewport,
+  type ToolbarTranslate,
+} from '@docx-editor.dev/react';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
-import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { reviewModule } from '../index.ts';
 import { DocxEditorReview, type ReviewItemView } from '../react/index.ts';
 import { RAIL_BAND_STEP } from '../review/rail-window.ts';
@@ -71,7 +75,7 @@ async function mountRail(review: ReactNode) {
       document={pagedTrackedDocument()}
       modules={[reviewModule()]}
       onReady={(instance) => {
-        editor = instance;
+        editor = instance as DocxEditorInstance;
       }}
     >
       <DocxEditorViewport>
@@ -194,12 +198,12 @@ describe('review rail render work', () => {
     // The packaged parts ask the host's resolver for their labels on each render, so its
     // calls count the renders of the parts. The rail element asks for its own name on each
     // of its renders; that one is not a card's.
-    let labels: TranslationKey[] = [];
-    const t = (key: TranslationKey): string | undefined => {
+    let labels: string[] = [];
+    const t = (key: string): string | undefined => {
       if (key !== 'review.ariaLabel') labels.push(key);
       return undefined;
     };
-    const { container, editor } = await mountRail(<DocxEditorReview t={t} />);
+    const { container, editor } = await mountRail(<DocxEditorReview t={t as ToolbarTranslate} />);
     expect(labels).toContain('review.accept');
 
     labels = [];
