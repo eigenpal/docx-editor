@@ -66,3 +66,18 @@ export function cellNoWrap(
 ): boolean {
   return cellFlag(style, conditions, direct, 'noWrap');
 }
+
+/**
+ * The autofit minimum of a `w:noWrap` cell's column, given its unwrapped content width with
+ * cell margins. A cell that asks for a `dxa` width holds that width, and its text still wraps.
+ * A cell with an `auto` width holds its unwrapped content, so its text stays on one line; the
+ * other columns give way, or the table grows past `w:tblW` when they hold their own widths.
+ * Measured with the default table style's 5.4pt margins. Other width types hold nothing.
+ */
+export function unwrappedCellHold(
+  width: { readonly type: string; readonly value: number },
+  unwrapped: number
+): number {
+  if (width.type === 'dxa') return width.value;
+  return width.type === 'auto' ? unwrapped : 0;
+}
