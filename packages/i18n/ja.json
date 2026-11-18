@@ -1018,7 +1018,8 @@
     "endnoteKind": "文末脚注",
     "convertAllFootnotes": "すべての脚注を文末脚注に変換",
     "convertAllEndnotes": "すべての文末脚注を脚注に変換",
-    "inheritedValue": "（継承）"
+    "inheritedValue": "（継承）",
+    "menuAriaLabel": null
   },
   "reviewers": {
     "label": "校閲者",

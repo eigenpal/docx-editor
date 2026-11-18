@@ -900,7 +900,8 @@
     "endnoteKind": "Nota de fim",
     "convertAllFootnotes": "Converter todas as notas de rodapé em notas de fim",
     "convertAllEndnotes": "Converter todas as notas de fim em notas de rodapé",
-    "inheritedValue": "(herdado)"
+    "inheritedValue": "(herdado)",
+    "menuAriaLabel": null
   },
   "review": {
     "accept": "Aceitar",

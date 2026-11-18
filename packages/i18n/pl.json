@@ -900,7 +900,8 @@
     "endnoteKind": "Przypis końcowy",
     "convertAllFootnotes": "Konwertuj wszystkie przypisy dolne na przypisy końcowe",
     "convertAllEndnotes": "Konwertuj wszystkie przypisy końcowe na przypisy dolne",
-    "inheritedValue": "(dziedziczone)"
+    "inheritedValue": "(dziedziczone)",
+    "menuAriaLabel": null
   },
   "review": {
     "accept": "Zaakceptuj",

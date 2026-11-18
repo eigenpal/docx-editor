@@ -1027,7 +1027,8 @@
     "endnoteKind": "تعليق ختامي",
     "convertAllFootnotes": "تحويل كل الحواشي السفلية إلى تعليقات ختامية",
     "convertAllEndnotes": "تحويل كل التعليقات الختامية إلى حواشٍ سفلية",
-    "inheritedValue": "(موروث)"
+    "inheritedValue": "(موروث)",
+    "menuAriaLabel": null
   },
   "reviewers": {
     "label": "المراجعون",

@@ -409,6 +409,12 @@ export {
   type PopupFocusLeaveOptions,
 } from './popup-escape.ts';
 export {
+  focusMenuItemForKey,
+  listenForMenuDismiss,
+  noteMenuScopeOf,
+  type MenuDismissOptions,
+} from './note-context-menu.ts';
+export {
   computeImageResizeResult,
   createImageOverlayScrollPort,
   cssPixelsToLayoutPoints,

@@ -901,7 +901,8 @@
     "endnoteKind": "הערת סיום",
     "convertAllFootnotes": "המר את כל הערות השוליים להערות סיום",
     "convertAllEndnotes": "המר את כל הערות הסיום להערות שוליים",
-    "inheritedValue": "(בירושה)"
+    "inheritedValue": "(בירושה)",
+    "menuAriaLabel": null
   },
   "review": {
     "accept": "קבל",

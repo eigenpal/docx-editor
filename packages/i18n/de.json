@@ -900,7 +900,8 @@
     "endnoteKind": "Endnote",
     "convertAllFootnotes": "Alle Fußnoten in Endnoten umwandeln",
     "convertAllEndnotes": "Alle Endnoten in Fußnoten umwandeln",
-    "inheritedValue": "(geerbt)"
+    "inheritedValue": "(geerbt)",
+    "menuAriaLabel": null
   },
   "review": {
     "accept": "Annehmen",

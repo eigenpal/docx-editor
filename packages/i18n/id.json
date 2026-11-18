@@ -900,7 +900,8 @@
     "endnoteKind": "Catatan akhir",
     "convertAllFootnotes": "Konversi semua catatan kaki ke catatan akhir",
     "convertAllEndnotes": "Konversi semua catatan akhir ke catatan kaki",
-    "inheritedValue": "(diwarisi)"
+    "inheritedValue": "(diwarisi)",
+    "menuAriaLabel": null
   },
   "review": {
     "accept": "Terima",

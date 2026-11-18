@@ -469,6 +469,9 @@ export function DocxEditorContextMenu({
         event.preventDefault();
         return;
       }
+      // Another menu already answered this press, such as the note menu on a note that is
+      // not being edited. One press opens one menu.
+      if (event.defaultPrevented) return;
       // Chrome in the scroller, such as the link popover, keeps the browser's own menu.
       if (!isDocumentContextMenuTarget(scroller, event.target)) return;
       event.preventDefault();

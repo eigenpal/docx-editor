@@ -2,7 +2,9 @@ import { renderPopup } from './popup-renderer';
 import {
   hostWindowOf,
   isHTMLElementNode,
+  listenForMenuDismiss,
   listenForOutsidePress,
+  noteMenuScopeOf,
   type HostWindow,
 } from '@docx-editor.dev/core/editor';
 import { usePopupConfig } from './popup-config';
@@ -480,17 +482,16 @@ export const DocxEditorNotesChrome = defineComponent({
           }
         };
 
+        // Capture, so the claim lands before the document menu's own listener on the scroller.
+        // A press in the note being edited is left to the document menu: one press, one menu.
         const onContextMenu = (event: Event) => {
+          if (popups.value?.notesContextMenu === false) return;
           const mouse = event as globalThis.MouseEvent;
-          const target = mouse.target as HTMLElement | null;
-          const note = target?.closest<HTMLElement>('[data-docx-note-scope]');
-          if (!note?.dataset.docxNoteScope) return;
+          const scopeId = noteMenuScopeOf(mouse.target, editor.getActiveScope());
+          if (!scopeId) return;
           mouse.preventDefault();
-          menu.value = {
-            scopeId: note.dataset.docxNoteScope,
-            x: mouse.clientX,
-            y: mouse.clientY,
-          };
+          clearPreview();
+          menu.value = { scopeId, x: mouse.clientX, y: mouse.clientY };
         };
 
         const onPointerOver = (event: Event) => {
@@ -517,16 +518,37 @@ export const DocxEditorNotesChrome = defineComponent({
         };
 
         root.addEventListener('click', onClick);
-        root.addEventListener('contextmenu', onContextMenu);
+        root.addEventListener('contextmenu', onContextMenu, true);
         root.addEventListener('pointerover', onPointerOver);
         root.addEventListener('scroll', clearPreview, true);
         onCleanup(() => {
           root.removeEventListener('click', onClick);
-          root.removeEventListener('contextmenu', onContextMenu);
+          root.removeEventListener('contextmenu', onContextMenu, true);
           root.removeEventListener('pointerover', onPointerOver);
           root.removeEventListener('scroll', clearPreview, true);
           clearPreview();
         });
+      },
+      { flush: 'post' }
+    );
+
+    // Close the menu when the user moves on: a press outside, Escape, Tab, a scroll, or the
+    // window losing focus. The host wraps a custom menu too, so it closes the same way.
+    const menuHostRef = ref<HTMLElement | null>(null);
+    watch(
+      () => menu.value !== null,
+      (open, _previous, onCleanup) => {
+        if (!open) return;
+        onCleanup(
+          listenForMenuDismiss({
+            host: menuHostRef.value ?? chromeRootRef.value,
+            contains: (node) => menuHostRef.value?.contains(node) === true,
+            close: (restoreFocus) => {
+              menu.value = null;
+              if (restoreFocus) editorRef.value?.focus();
+            },
+          })
+        );
       },
       { flush: 'post' }
     );
@@ -610,6 +632,7 @@ export const DocxEditorNotesChrome = defineComponent({
                 if (convertAllCmd.value) runNoteCommand(convertAllCmd.value);
               },
               onOpenProperties: () => {
+                menu.value = null;
                 if (popups.value?.noteProperties !== false) propsOpen.value = true;
               },
               onClose: () => {
@@ -635,7 +658,7 @@ export const DocxEditorNotesChrome = defineComponent({
           class: props.className,
           'data-docx-notes-chrome': '',
           'data-testid': 'docx-notes-chrome',
-          'aria-hidden': noteScope.value ? undefined : true,
+          'aria-hidden': noteScope.value || menu.value || propsOpen.value ? undefined : true,
         },
         [
           noteScope.value && parsedActive ? (
@@ -668,11 +691,19 @@ export const DocxEditorNotesChrome = defineComponent({
             )
           ) : null,
           menuProps && popups.value?.notesContextMenu !== false ? (
-            popups.value?.notesContextMenu ? (
-              renderPopup(popups.value.notesContextMenu, menuProps)
-            ) : (
-              <DocxEditorNotesContextMenu {...menuProps} />
-            )
+            <div
+              ref={(element: unknown) => {
+                menuHostRef.value = isHTMLElementNode(element) ? element : null;
+              }}
+              data-docx-notes-menu-host=""
+              style={{ display: 'contents' }}
+            >
+              {popups.value?.notesContextMenu ? (
+                renderPopup(popups.value.notesContextMenu, menuProps)
+              ) : (
+                <DocxEditorNotesContextMenu {...menuProps} />
+              )}
+            </div>
           ) : null,
           propsOpen.value && popups.value?.noteProperties !== false ? (
             popups.value?.noteProperties ? (

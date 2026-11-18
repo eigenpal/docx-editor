@@ -2637,6 +2637,9 @@ export function focusColorSwatch(grid: HTMLElement | null): void;
 // @public
 export function focusCompareDocumentsControl(dialog: HTMLElement | null | undefined, moment: 'busy' | 'refused' | 'unchanged'): void;
 
+// @internal
+export function focusMenuItemForKey(panel: Element | null, key: string): boolean;
+
 // @public
 export const FONT_RESOLVER_BRAND: unique symbol;
 
@@ -3260,6 +3263,9 @@ export function lineSpacingMenuRows(current: SurfaceFormatting['lineSpacing']): 
 export type LineSpacingMenuValue = NonNullable<SurfaceFormatting['lineSpacing']>;
 
 // @internal
+export function listenForMenuDismiss(options: MenuDismissOptions): () => void;
+
+// @internal
 export function listenForOutsidePress(options: OutsidePressOptions): () => void;
 
 // @internal
@@ -3317,6 +3323,13 @@ export const MAX_CHART_SERIES = 255;
 export const MAX_RESOLVER_FAMILIES = 64;
 
 // @public
+export interface MenuDismissOptions {
+    close(restoreFocus: boolean): void;
+    contains(node: Node): boolean;
+    readonly host: Node | null;
+}
+
+// @public
 export function mixedFieldsOf(format: ParagraphFormatRead): ParagraphDialogMixed;
 
 // @public
@@ -3359,6 +3372,9 @@ export function nextChartCategoryLabel(data: Pick<ChartData, 'kind' | 'categorie
 
 // @public (undocumented)
 export const NO_MIXED_FIELDS: ParagraphDialogMixed;
+
+// @internal
+export function noteMenuScopeOf(target: EventTarget | null, activeScope: ViewScope | null): string | null;
 
 // @public
 export function objectSlotOptions<K extends keyof ObjectSlotValueMap>(id: K): readonly ObjectSlotValueMap[K][];
