@@ -9,7 +9,11 @@
 
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import type { ExclusionZone } from './drawing-exclusion.ts';
-import { type OwnTableAnchor, topAndBottomSkipBeforeLine } from './top-and-bottom-clearance.ts';
+import {
+  type OwnTableAnchor,
+  ownTableCoversTop,
+  topAndBottomSkipBeforeLine,
+} from './top-and-bottom-clearance.ts';
 
 /** The space after a line adds to its extent against floating table bands. */
 export function tableBandSpaceAfter(compatibilityMode: number | undefined, after: number): number {
@@ -37,4 +41,20 @@ export function lineBandSkip(
   return tables.length > 0
     ? Math.max(skip, topAndBottomSkipBeforeLine(top, height + after, tables))
     : skip;
+}
+
+/**
+ * Before compatibility mode 15, a paragraph at the top of a page keeps its space before when a
+ * floating table that it anchors covers the top of the text area. The table can stand beside
+ * the paragraph or span the column.
+ */
+export function ownTableKeepsTop(
+  compatibilityMode: number | undefined,
+  zones: readonly ExclusionZone[],
+  anchorId: string
+): boolean {
+  return (
+    hasCompatibilityRule(compatibilityMode, 'ownTableKeepsPageTopSpaceBefore') &&
+    ownTableCoversTop(zones, anchorId, 0)
+  );
 }

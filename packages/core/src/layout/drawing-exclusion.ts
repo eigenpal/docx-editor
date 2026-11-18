@@ -141,6 +141,8 @@ export interface ExclusionZone {
    * (`tableWrapShares` in `paragraph-drawing-wrap.ts`), so it does not chase its anchor.
    */
   readonly wrapsEarlierLines?: boolean;
+  /** A later part of a floating table that breaks across pages, not the part placed first. */
+  readonly continuedTablePart?: boolean;
   readonly sourceOrder: number;
   readonly paintLayer: DrawingPaintLayer;
   readonly relativeHeight: number;

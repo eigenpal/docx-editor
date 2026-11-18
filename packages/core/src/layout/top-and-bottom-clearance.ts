@@ -31,6 +31,26 @@ export interface OwnTableAnchor {
 }
 
 /**
+ * Whether a floating table that `anchorId` anchors starts on this page and covers `topY`, the
+ * top of the text area. A paragraph at the top of a page then keeps its space before in legacy
+ * layout. The later part of a table that breaks across pages does not count.
+ */
+export function ownTableCoversTop(
+  zones: readonly ExclusionZone[],
+  anchorId: string,
+  topY: number
+): boolean {
+  return zones.some(
+    (zone) =>
+      zone.sourceKind === 'table' &&
+      zone.anchorParagraphId === anchorId &&
+      !zone.continuedTablePart &&
+      zone.verticalBand.y <= topY + TOUCH_TOLERANCE_PT &&
+      zone.verticalBand.y + zone.verticalBand.height > topY + TOUCH_TOLERANCE_PT
+  );
+}
+
+/**
  * Vertical skip before placing a line whose [top, bottom] interval intersects a topAndBottom band.
  *
  * Uses the full final line height, unions overlapping band bottoms, and rechecks until clear or

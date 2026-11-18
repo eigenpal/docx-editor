@@ -4,7 +4,8 @@
 // whole instead of collapsing with the anchor's space before, contextual spacing (17.3.1.9)
 // still joins the paragraphs around the table, and the anchor no longer opens the section, so
 // at the top of a page it loses its space before. When the table covers its own anchor, the
-// anchor keeps its space before below the table.
+// anchor keeps its space before below the table. Before mode 15, an anchor at the top of a page
+// also keeps it when its own table only stands beside it, if that table covers the page top.
 
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
@@ -23,7 +24,7 @@ const float = (tblpY: number, width = 4000) =>
   `w:horzAnchor="margin" w:tblpY="${tblpY}"/><w:tblW w:w="${width}" w:type="dxa"/>` +
   `<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="${width}"/></w:tblGrid>` +
   `<w:tr><w:trPr><w:trHeight w:val="2000" w:hRule="exact"/></w:trPr><w:tc>${p('TWO', plain)}</w:tc></w:tr></w:tbl>`;
-const lay = (body: string): SemanticLayout => {
+const lay = (body: string, compatibilityMode = 15): SemanticLayout => {
   const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
     name: '/word/document.xml',
     contentType: 'app/xml',
@@ -31,7 +32,7 @@ const lay = (body: string): SemanticLayout => {
   if (!read.ok) throw new Error(read.reason);
   return layoutSemanticDocument(read.part, 0, {
     measurer: createFixedMeasurer(6, 12),
-    compatibilityMode: 15,
+    compatibilityMode,
   });
 };
 
@@ -104,4 +105,17 @@ test('an anchor its own table covers at the top of the first page keeps its spac
   // Raised 10pt above the anchor top, less the one-twip storage bias.
   expect(placed.TWO).toBeCloseTo(-10.05, 1);
   expect(placed.MID).toBeCloseTo(-10.05 + 100 + 8, 1);
+});
+
+test('before mode 15, a table beside its anchor at the page top keeps the space before', () => {
+  // A narrow table raised 10pt above the anchor covers the top of the text area.
+  const body = float(-200) + p('MID', spacing(160, 0)) + p('END', plain);
+  expect(tops(lay(body, 14)).MID).toBeCloseTo(8, 1);
+  expect(tops(lay(body, 15)).MID).toBeCloseTo(0, 1);
+});
+
+test('before mode 15, a table below the page top does not keep the space before', () => {
+  const placed = tops(lay(float(600) + p('MID', spacing(160, 0)) + p('END', plain), 14));
+  expect(placed.MID).toBeCloseTo(0, 1);
+  expect(placed.TWO).toBeCloseTo(OFFSET, 1);
 });
