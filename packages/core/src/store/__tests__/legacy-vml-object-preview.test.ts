@@ -148,6 +148,15 @@ describe('embedded object cached previews', () => {
       { template: false },
       { ole: null },
       { objectAttributes: ' w14:anchorId="1A2B3C4D"' },
+      {
+        template: false,
+        shapeExtra:
+          ' o:spt="75" o:preferrelative="t" filled="f" stroked="f" coordsize="21600,21600"',
+        shapeChildren:
+          '<v:path/><v:fill on="f" focussize="0,0"/><v:stroke on="f" joinstyle="miter"/>' +
+          '<o:lock v:ext="edit" aspectratio="t"/><w10:wrap type="none"/><w10:anchorlock/>',
+        ole: '<o:OLEObject Type="Embed" ProgID="Equation.3" ShapeID="_x0000_i1025" DrawAspect="Content" r:id="rOle"><o:LockedField>false</o:LockedField></o:OLEObject>',
+      },
       { ole: '<o:OLEObject Type="Embed" ProgID="Package" DrawAspect="Icon" r:id="rOle"/>' },
       {
         ole: '<o:OLEObject Type="Embed" ProgID="Package" ShapeID="_x0000_i1025" DrawAspect="Content" ObjectID="_1" r:id="rOle"><o:FieldCodes>\\s</o:FieldCodes></o:OLEObject>',
