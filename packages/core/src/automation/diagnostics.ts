@@ -131,6 +131,8 @@ const STORE_EDIT_CODES: Readonly<
   'no-styles-defined': 'edit.no-styles-defined',
   'carries-section-mark': 'edit.section-mark',
   'story-end-paragraph': 'edit.operation-unsupported',
+  // Not a stale target: the block exists, and the story, cell, or table must keep it.
+  'block-required': 'edit.content-required',
   'table-has-merge': 'edit.table-structure-unsupported',
   'row-hides-cell': 'edit.table-structure-unsupported',
   'unknown-grid-column': 'edit.table-structure-unsupported',
@@ -181,7 +183,6 @@ const STORE_EDIT_CODES: Readonly<
   'not-a-paragraph': 'edit.stale-target',
   'unknown-block': 'edit.stale-target',
   'not-a-block': 'edit.stale-target',
-  'block-required': 'edit.stale-target',
   'unknown-part': 'edit.stale-target',
   'unknown-content-control': 'edit.stale-target',
   'not-a-content-control': 'edit.stale-target',

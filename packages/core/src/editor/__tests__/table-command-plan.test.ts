@@ -460,10 +460,10 @@ describe('table command planner and editor parity', () => {
     const editor = mount(body);
     const surface = editor.surface!;
     caret(surface, paragraphByText('A1', surface));
-    const before = paragraphByText('before', surface);
+    const after = paragraphByText('after', surface);
     expect(editor.can({ type: 'deleteTable' }).ok).toBe(true);
     expect(editor.exec({ type: 'deleteTable' }).ok).toBe(true);
-    expect(surface.state().selection.head.paragraphId).toBe(before);
+    expect(surface.state().selection.head).toEqual({ paragraphId: after, offset: 0 });
     editor.exec({ type: 'undo' });
     expect(paragraphTextOf(surface.session.part(), paragraphByText('A1', surface))).toBe('A1');
   });
@@ -1080,12 +1080,12 @@ describe('transaction and selection preservation', () => {
     const editor = mount(body);
     const surface = editor.surface!;
     const a1 = paragraphByText('A1', surface);
-    const before = paragraphByText('before', surface);
+    const after = paragraphByText('after', surface);
     caret(surface, a1, 3);
     const selBefore = { ...surface.state().selection.head };
     editor.exec({ type: 'deleteTable' });
     const afterDelete = { ...surface.state().selection.head };
-    expect(afterDelete.paragraphId).toBe(before);
+    expect(afterDelete).toEqual({ paragraphId: after, offset: 0 });
     editor.exec({ type: 'undo' });
     expect(surface.state().selection.head).toEqual({ paragraphId: a1, offset: selBefore.offset });
     editor.exec({ type: 'redo' });
@@ -1149,7 +1149,9 @@ describe('transaction and selection preservation', () => {
       collectByKind(surface.session.part().root, 'table').some((t) => t.id === outerTableId)
     ).toBe(false);
     const afterDelete = { ...surface.state().selection.head };
-    expect(afterDelete.paragraphId).toBe(lead);
+    const storyEnd = surface.session.paragraphIds().at(-1)!;
+    expect(storyEnd).not.toBe(lead);
+    expect(afterDelete).toEqual({ paragraphId: storyEnd, offset: 0 });
 
     editor.exec({ type: 'undo' });
     expect(tableCount(surface.session.part())).toBe(tablesBefore);
