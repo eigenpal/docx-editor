@@ -182,7 +182,6 @@ describe('a full pass over unchanged content', () => {
     // full placements has no exact upper bound here.
     expect(counts.placed).toBeGreaterThanOrEqual(lines);
     expect(counts.moved + counts.reused).toBeGreaterThan(0);
-    expect(counts.placed).toBeLessThan(counts.placed + counts.moved + counts.reused);
   });
 
   test('lines an edit moved up keep their alignment and equal a pass without reuse', () => {
