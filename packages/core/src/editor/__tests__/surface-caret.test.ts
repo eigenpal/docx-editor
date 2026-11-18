@@ -230,17 +230,70 @@ describe('the painted caret', () => {
     expect(host.lastElementChild).toBe(painted);
   });
 
-  test('it suppresses the native caret only while it is up', () => {
+  test('it suppresses the native caret while it is up', () => {
     const { surface, container, pages } = mount(paragraph('hello world'));
     putCaret(surface, 3);
+    expect(caretElement(container)).not.toBeNull();
     expect(pages.style.caretColor).toBe('transparent');
+    surface.destroy();
+    container.remove();
+  });
 
-    surface.setSelection({
-      anchor: { paragraphId: surface.session.paragraphIds()[0]!, offset: 1 },
-      head: { paragraphId: surface.session.paragraphIds()[0]!, offset: 4 },
-    });
+  test('a range the browser shows as a range keeps the suppression it already has', () => {
+    const { surface, container, pages } = mount(paragraph('hello world'));
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    putCaret(surface, 3);
+    // `caret-color` is inherited, so each change of it on the pages layer restyles every
+    // painted page. A caret that becomes a range and a caret again must not change it.
+    const removed: string[] = [];
+    const removeProperty = pages.style.removeProperty;
+    pages.style.removeProperty = (name: string) => {
+      removed.push(name);
+      return removeProperty.call(pages.style, name);
+    };
+    try {
+      surface.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 4 },
+      });
+      expect(document.getSelection()!.isCollapsed).toBe(false);
+      // No insertion point is painted, and the native one stays suppressed: a range draws none.
+      expect(caretElement(container)).toBeNull();
+      expect(pages.style.caretColor).toBe('transparent');
+
+      putCaret(surface, 4);
+      expect(caretElement(container)).not.toBeNull();
+      expect(pages.style.caretColor).toBe('transparent');
+      expect(removed).not.toContain('caret-color');
+    } finally {
+      pages.style.removeProperty = removeProperty;
+      surface.destroy();
+      container.remove();
+    }
+  });
+
+  test('a model range the browser shows collapsed gets the native caret back', () => {
+    const { surface, container, pages } = mount(paragraph('hello world'));
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    putCaret(surface, 3);
+    const browser = document.getSelection()!;
+    const mirror = browser.setBaseAndExtent.bind(browser);
+    const text = pages.querySelector('[data-paragraph-id]')!.firstChild!;
+    // A browser selection that stays collapsed still draws a caret, so it must be visible.
+    browser.setBaseAndExtent = () => mirror(text, 1, text, 1);
+    try {
+      surface.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 4 },
+      });
+    } finally {
+      browser.setBaseAndExtent = mirror;
+    }
+    expect(browser.isCollapsed).toBe(true);
     expect(caretElement(container)).toBeNull();
     expect(pages.style.caretColor).toBe('');
+    surface.destroy();
+    container.remove();
   });
 
   test('a geometry read inside a commit paints once, with the post-edit caret', () => {

@@ -453,6 +453,15 @@ function rangeGrip(
   position: ReviewPosition,
   order: ReadonlyMap<string, number>
 ): number | null {
+  // Most ranges sit inside one paragraph, and the order gives each paragraph its own
+  // position, so such a range cannot hold a position in another paragraph. Comparing the ids
+  // answers that without three lookups for every range of every item on each caret move.
+  if (
+    range.start.paragraphId === range.end.paragraphId &&
+    range.start.paragraphId !== position.paragraphId
+  ) {
+    return null;
+  }
   const target = order.get(position.paragraphId);
   const start = order.get(range.start.paragraphId);
   const end = order.get(range.end.paragraphId);

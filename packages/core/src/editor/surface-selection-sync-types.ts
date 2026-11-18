@@ -73,6 +73,8 @@ export interface SurfaceSelectionSyncDeps {
   holdPaint?(hold: boolean): void;
   /** The engine's painted caret, repainted with every mirror. */
   updateCaret(): void;
+  /** Called after the mirror wrote, or declined to write, the browser's selection. */
+  settleCaret?(): void;
   /** The model text of one paragraph, for diffing what an IME wrote against it. */
   textOf(paragraphId: string): string;
   /** A plain composed insertion commits on a later task: surface-composition-commit. */

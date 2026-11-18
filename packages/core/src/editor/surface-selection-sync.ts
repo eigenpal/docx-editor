@@ -416,6 +416,15 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     // Ahead of the ownership guard: the caret is this engine's own, painted whether or not
     // the browser's selection lives here.
     deps.updateCaret();
+    try {
+      writeSelectionToDom(claim);
+    } finally {
+      // The caret was repainted against the selection the browser showed BEFORE this write.
+      deps.settleCaret?.();
+    }
+  }
+
+  function writeSelectionToDom(claim: boolean): void {
     // Only when this surface owns the selection. A render runs on mount and on every commit
     // — including one from another editor sharing the store — and writing unconditionally
     // yanked the caret out of whatever the user was actually typing in. A CLAIMED write is

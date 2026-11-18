@@ -81,7 +81,7 @@ import { createDeferredLayout } from './surface-deferred-layout.ts';
 import { createCanonicalLayout } from './surface-canonical-layout.ts';
 import { drainLayoutSteps, type LayoutSteps } from '../layout/layout-steps.ts';
 import { createReviewOrderIndex } from './surface-review-order.ts';
-import { litReviewKeys, reviewItemsByKey } from './review-replacement-pairs.ts';
+import { litReviewKeys } from './review-replacement-pairs.ts';
 import { bodyBlockCountOf, bodyBlockLimitAfter, bodyBlocksOf } from '../layout/body-block-limit.ts';
 import { snapshotLayoutSession } from '../layout/layout-session-snapshot.ts';
 import { furnitureLaterSteps } from './surface-furniture-later.ts';
@@ -215,7 +215,7 @@ import {
   createStableReviewAuthorSlots,
   type ReviewAuthorInfo,
 } from '../output/revision-presentation.ts';
-import { createSurfaceReviewAuthors, reviewItemAuthor } from './surface-review-authors.ts';
+import { createSurfaceReviewAuthors } from './surface-review-authors.ts';
 import { createPresenceColors } from './surface-presence-color.ts';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
@@ -343,7 +343,7 @@ import {
   noteScopeIdInLayout,
 } from './surface-scope.ts';
 import { drawingSelectionIntentKey, memberIntent } from './group-member-selection.ts';
-import { RANGE_SUFFIX, bandClassFor } from './surface-review-band-class.ts';
+import { RANGE_SUFFIX, createBandItemLookup, reviewBands } from './surface-review-band-class.ts';
 import { createCaretViewFollower, type CaretFollowMode } from './surface-caret-follow.ts';
 import { createInPlaceReplacement } from './surface-replace-in-place.ts';
 import {
@@ -3477,9 +3477,10 @@ export function mountPaginatedSurface(
     flushLayout: () => flushLayout(),
     flushToPaint: () => flushToPaint(),
     updateCaret: () => {
-      caret.update();
+      caret.update(true);
       syncActiveFieldShading(pagesLayer, collapsedCaretPosition());
     },
+    settleCaret: () => caret.settle(),
     textOf: (paragraphId) => textOf(paragraphId),
     pendingFormatOps: (paragraphId, offset, length, replacing) =>
       consumePendingFormatOps(paragraphId, offset, length, replacing),
@@ -3870,6 +3871,7 @@ export function mountPaginatedSurface(
   let commentHighlightLayout: SemanticLayout | null = null;
   let commentHighlightActiveKey: string | undefined;
   let commentHighlightAuthors: ReadonlyMap<string, ReviewAuthorInfo> | null = null;
+  const bandItems = createBandItemLookup();
 
   function renderCommentHighlights(force = false): void {
     const active = activeReviewAtCaret();
@@ -3890,33 +3892,10 @@ export function mountPaginatedSurface(
     ) {
       return;
     }
-    // Once per paint, not once per rect: a decision spanning many lines asked the same
-    // question for every one of them.
-    const byKey = reviewItemsByKey(visibleReviewItems());
-    const bands: OverlayRect[] = [];
-    for (const rect of commentRects()) {
-      const className = bandClassFor(rect.key, activeKeys, byKey);
-      if (!className) continue;
-      // WHOSE band, for CSS to key on. The rect's key is suffixed per range for a revision
-      // covering several sites, so the author comes from the decision, as the class does.
-      const decision = rect.key.split(RANGE_SUFFIX)[0]!;
-      const item = byKey.get(decision);
-      const name = item ? reviewItemAuthor(item) : null;
-      const reviewAuthor = name === null || name === '' ? undefined : roster.resolved.get(name);
-      // The author's own active background, on the OPEN revision's band only. The active
-      // test repeats the class's — the decision, not the site — so a multi-range decision
-      // tints every range it covers, and a comment band never takes a revision field.
-      const activeBackground =
-        item?.kind === 'revision' && activeKeys.has(decision)
-          ? reviewAuthor?.style?.activeBackground
-          : undefined;
-      bands.push({
-        ...rect,
-        className,
-        ...(reviewAuthor ? { reviewAuthor } : {}),
-        ...(activeBackground !== undefined ? { activeBackground } : {}),
-      });
-    }
+    // The items behind the measured bands only: see `createBandItemLookup`.
+    const rects = commentRects();
+    const byKey = bandItems(visibleReviewItems(), rects);
+    const bands = reviewBands(rects, activeKeys, byKey, roster.resolved);
     paintSelectionOverlay(commentLayer, currentLayout, bands, {
       scale,
       ...(materializedExtent ? { pageOffsetX: materializedExtent.pageOffsetX } : {}),

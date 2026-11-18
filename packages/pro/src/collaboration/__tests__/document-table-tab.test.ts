@@ -5,7 +5,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // Tab in a table cell, between two collaborating editors: moving between cells changes only the
 // selection; Tab in the last cell adds a row, which converges with concurrent typing, concurrent
-// Tabs, and a concurrent row deletion, through undo and redo, and after save and reopen.
+// Tabs, and a concurrent row deletion, through undo and redo, and after save and reopen. A cell
+// selected with Tab stays selected, with no caret of either kind, through a collaborator's edit.
 import { afterEach, expect, test } from 'bun:test';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { writeOoxmlPackage } from '@docx-editor.dev/core/store';
@@ -17,8 +18,10 @@ import { packageFingerprint, saveReopenDigest } from './document-support.ts';
 const harness = createPeerHarness('table-tab-room', { offlineEditing: true });
 type Editor = ReturnType<typeof createDocxEditor>;
 const editors: Editor[] = [];
+const containers: HTMLElement[] = [];
 afterEach(() => {
   for (const editor of editors.splice(0)) editor.destroy();
+  for (const container of containers.splice(0)) container.remove();
   harness.cleanup();
 });
 
@@ -35,8 +38,10 @@ async function pair() {
   const peers = await harness.pair(zipDocument(body));
   const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
     peer.detach();
+    const container = document.createElement('div');
+    containers.push(container);
     const editor = createDocxEditor({
-      container: document.createElement('div'),
+      container,
       document: peer.room.document,
       modules: [collaborationModule({ session: peer.room.session })],
     });
@@ -158,4 +163,57 @@ test('concurrent Tabs in the last cell, and a Tab against a deleted last row, co
   flush();
   peers.resume();
   converge();
+});
+
+test('a cell selected with Tab keeps its selection and its caret state through a remote edit', async () => {
+  const { alice, bob, surface, flush, converge, caret, tab } = await pair();
+  // The painted caret needs a focused surface in the document.
+  const container = containers[0]!;
+  document.body.append(container);
+  surface(alice).focus();
+  const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+  const painted = () => container.querySelector('.docx-editor-one-surface__caret');
+  const ids = () => [...surface(alice).session.paragraphIds()];
+
+  caret(alice, 0, 2);
+  expect(painted()).not.toBeNull();
+  expect(pages.style.caretColor).toBe('transparent');
+
+  // Tab selects the next cell: a range draws no caret, so the suppression has nothing to
+  // hand back and the pages keep their style.
+  tab(alice);
+  const selected = () => surface(alice).state().selection;
+  expect(selected()).toEqual({
+    anchor: { paragraphId: ids()[1]!, offset: 0 },
+    head: { paragraphId: ids()[1]!, offset: 2 },
+  });
+  expect(painted()).toBeNull();
+  expect(pages.style.caretColor).toBe('transparent');
+
+  // A collaborator types in another cell. The repaint keeps the selection and its caret state.
+  caret(bob, 2, 2);
+  surface(bob).type(' remote');
+  flush();
+  expect(alice.findMatches('A2 remote')).toHaveLength(1);
+  expect(selected().anchor).toEqual({ paragraphId: ids()[1]!, offset: 0 });
+  expect(selected().head).toEqual({ paragraphId: ids()[1]!, offset: 2 });
+  expect(painted()).toBeNull();
+  expect(pages.style.caretColor).toBe('transparent');
+
+  // The next Tab selects the cell the collaborator typed in, with the remote text.
+  tab(alice);
+  expect(selected().head).toEqual({ paragraphId: ids()[2]!, offset: 'A2 remote'.length });
+
+  // Typing replaces it, the caret returns, and both sides converge.
+  surface(alice).type('Mine');
+  expect(painted()).not.toBeNull();
+  expect(pages.style.caretColor).toBe('transparent');
+  converge();
+  expect(bob.findMatches('Mine')).toHaveLength(1);
+  expect(bob.findMatches('A2 remote')).toHaveLength(0);
+
+  // Undo restores the collaborator's text on both sides.
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  converge();
+  expect(bob.findMatches('A2 remote')).toHaveLength(1);
 });
