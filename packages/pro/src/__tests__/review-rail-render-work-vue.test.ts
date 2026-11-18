@@ -287,8 +287,7 @@ describe('review rail render work (Vue)', () => {
     typeIn(editor, 1, INSIDE_INSERTION);
     await settle();
     const accepts = labels.filter((key) => key === 'review.accept').length;
-    expect(accepts).toBeGreaterThan(0);
-    expect(accepts).toBeLessThan(mounted);
+    expect(accepts).toBe(1);
   });
 
   test('the compact card of an item without a placement follows each scroll position', async () => {
@@ -339,6 +338,24 @@ describe('review rail render work (Vue)', () => {
     await settle();
     for (const key of mounted) expect(calls.of(key)).toBe(1);
     expect(container.querySelectorAll('[data-label="two"]')).toHaveLength(mounted.length);
+  });
+
+  test('a change of the rail settings renders every mounted card', async () => {
+    const { container, editor, cards, reset } = await mountCountingRail();
+    const mounted = mountedCards(container);
+    expect(mounted.length).toBeGreaterThan(1);
+    const accepts = () => [
+      ...container.querySelectorAll<HTMLButtonElement>('[data-testid="review-accept"]'),
+    ];
+    expect(accepts().some((button) => button.disabled)).toBe(false);
+
+    // Viewing mode is not an item's data, but each card's actions follow it.
+    reset();
+    editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+    await settle();
+    expect(accepts()).toHaveLength(mounted.length);
+    expect(accepts().every((button) => button.disabled)).toBe(true);
+    for (const key of mounted) expect(cards.of(key)).toBeGreaterThan(0);
   });
 
   test('the packaged card renders no part for a keystroke that changes no item', async () => {

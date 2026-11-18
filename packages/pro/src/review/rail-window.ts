@@ -82,10 +82,10 @@ export interface ObserveRailWindowOptions {
 /**
  * Report the visible band of `scroller` to `onBand`: once now, then after each scroll or
  * resize, coalesced into a frame, and only when it changed. The band is stepped (see
- * {@link steppedRailWindow}) unless `options.exact` asks for the unstepped one. The handler runs on every wheel
- * tick and records two numbers; it reads them in the scroll event, while layout is clean,
- * because by the frame the editor has built the pages scrolled into view and reading there
- * forced a layout of the document. While the reader scrolls, `rail` carries
+ * {@link steppedRailWindow}) unless `options.exact` asks for the unstepped one. The handler
+ * runs on every wheel tick and records two numbers; it reads them in the scroll event, while
+ * layout is clean, because by the frame the editor has built the pages scrolled into view and
+ * reading there forced a layout of the document. While the reader scrolls, `rail` carries
  * `data-scrolling`, which suppresses the cards' `top` transition. Answers the stop function.
  */
 export function observeRailWindow(
