@@ -84,7 +84,20 @@ import {
   type BalloonAnchor,
 } from './review-balloon-anchor.ts';
 
-/** @public */
+/**
+ * The cards, each positioned at its anchor.
+ *
+ * The `#item` slot takes over the card, with the item as its `item` prop. The default slot
+ * holds a `Card` part, or part overrides for the packaged card.
+ *
+ * The rail calls a slot for a card when the item of the card changes, when reactive state
+ * that the slot reads changes, or when the parent passes another slot function. A slot that
+ * reads a variable that is not reactive can show an old value, because a change of that
+ * variable does not tell the rail to call the slot. If the slot reads a value that changes,
+ * keep the value in a `ref` or another reactive source, or read it inside the card component.
+ *
+ * @public
+ */
 export const ReviewList = markPart(
   defineComponent({
     name: 'ReviewList',

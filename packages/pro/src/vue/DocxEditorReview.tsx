@@ -860,6 +860,12 @@ export type {
  *   `Reject`, `Reply`, and the others). Put them inside `DocxEditorReview.List`, or as other
  *   direct children, which become the card template.
  *
+ * SLOTS. An `#item` slot on the rail is the `#item` slot of its list. The rail calls a card
+ * slot for a card when the item of the card changes, when reactive state that the slot reads
+ * changes, or when the parent passes another slot function. A slot that reads a variable that
+ * is not reactive can show an old value. If the slot reads a value that changes, keep the
+ * value in a `ref` or another reactive source, or read it inside the card component.
+ *
  * `:preset="false"` drops the packaged defaults. Root parts you pass still get their wiring, and
  * every other child renders as is inside the rail, where `useReviewRailMetrics()` reads the
  * rail's own measurement. To render your own cards, use `useReview().items`,

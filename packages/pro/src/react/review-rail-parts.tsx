@@ -95,8 +95,15 @@ export interface ReviewListProps {
    * A render prop takes over the card entirely, keeping the rail's subscription, anchoring
    * and stacking. Nodes are treated as part overrides for the packaged card.
    *
-   * The rail calls the render prop for an item when the item changes or when you pass another
-   * function. Pass a new function when the state it reads changes, as an inline function does.
+   * The rail calls the render prop for a card when the item of the card changes, or when you
+   * pass another function. A function that keeps its identity, such as a `useCallback` result
+   * or a module function, can show an old value when it reads a value that React does not
+   * track: a ref or a module variable. If the render prop reads such a value, pass a new
+   * function when the value changes, as an inline function does, or read the value with a hook
+   * inside the card.
+   *
+   * The render prop runs as the render of a component that belongs to the card, so it can
+   * call hooks. Call the same hooks on each run, as in a component.
    */
   children?: ReactNode | ((item: ReviewItemView) => ReactNode);
   className?: string;

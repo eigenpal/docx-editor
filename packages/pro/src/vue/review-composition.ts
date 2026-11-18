@@ -110,7 +110,8 @@ export function listCardTemplate(listPart: VNode | undefined): ListCardTemplate 
  * instance, which holds the slots object the parent rendered. And the kept vnodes go to the
  * renderer again in a later render, which is safe because Vue clones a vnode that is already
  * mounted before it mounts it a second time. `review-rail-render-work-vue.test.ts` fails if
- * either stops holding.
+ * either stops holding: its tests of another item slot function and of another default slot
+ * pass new slot functions to a mounted rail, and its render counts draw the kept vnodes again.
  */
 export function useSlotMemo<T>(names: readonly string[], build: () => T): () => T {
   const instance = getCurrentInstance();
