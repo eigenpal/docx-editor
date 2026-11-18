@@ -156,18 +156,27 @@ describe('the work one caret position costs', () => {
       seed = (seed * 1103515245 + 12345) % 2147483648;
       return seed % bound;
     };
-    const items: ReviewItem[] = [];
-    for (let index = 0; index < 60; index += 1) {
+    const someRange = (): ReviewRange => {
       const from = next(paragraphs.length);
       const to = Math.min(paragraphs.length - 1, from + (next(4) === 0 ? next(3) : 0));
       const start = next(6);
       const end = from === to ? start + next(4) : next(6);
-      items.push(revision(`r${index}`, range(start, end, paragraphs[from]!, paragraphs[to]!)));
+      return range(start, end, paragraphs[from]!, paragraphs[to]!);
+    };
+    const items: ReviewItem[] = [];
+    for (let index = 0; index < 60; index += 1) {
+      // One decision can cover several sites, in one paragraph or in several.
+      const ranges = [someRange()];
+      while (next(3) === 0) ranges.push(someRange());
+      items.push(revision(`r${index}`, ...ranges));
+      if (index % 5 === 0) items.push(comment(`c${index}`, someRange()));
     }
     items.push(revision('elsewhere', range(0, 3, 'not-in-order')));
+    items.push(revision('half-known', range(0, 3, 'a'), range(0, 3, 'not-in-order')));
+    const rangesOf = (item: ReviewItem): readonly ReviewRange[] =>
+      item.kind === 'revision' ? item.ranges : item.range ? [item.range] : [];
     const holds = (item: ReviewItem, at: number, offset: number): boolean => {
-      if (item.kind !== 'revision') return false;
-      return item.ranges.some((candidate) => {
+      return rangesOf(item).some((candidate) => {
         const start = order.get(candidate.start.paragraphId);
         const end = order.get(candidate.end.paragraphId);
         if (start === undefined || end === undefined) return false;

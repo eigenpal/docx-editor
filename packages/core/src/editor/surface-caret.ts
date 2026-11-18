@@ -94,15 +94,16 @@ export interface SurfaceCaretInput {
 }
 
 export interface SurfaceCaret {
+  /** Repaint from the current layout and selection. Safe to call on every render. */
+  update(): void;
   /**
-   * Repaint from the current layout and selection. Safe to call on every render.
+   * Repaint for the selection that `write` is about to put in the browser, and run `write`.
    *
-   * Pass true when a write of the browser's selection follows, and call {@link settle} after
-   * it: whether a range hands the native caret back depends on what the browser then shows.
+   * Whether a range hands the native caret back depends on what the browser shows AFTER the
+   * write, so that decision waits for it. `write` runs exactly once, and the decision is made
+   * even when it throws.
    */
-  update(selectionWriteFollows?: boolean): void;
-  /** Finish an update that waited for the browser's selection to be written. */
-  settle(): void;
+  updateAround(write: () => void): void;
   /** The insertion point at the selection head in client pixels, or null when unplaced. */
   clientRect(): HighlightRect | null;
   destroy(): void;
@@ -177,7 +178,8 @@ export function createSurfaceCaret(
    * Whether a range took the insertion point down while the native caret is still to settle.
    *
    * The mirror repaints the caret BEFORE it writes the browser's selection, so at that
-   * moment the browser still shows the caret it is about to replace with the range.
+   * moment the browser still shows the caret it is about to replace with the range. Only
+   * {@link updateAround} leaves this set, and only for the length of its write.
    */
   let nativeCaretOwed = false;
 
@@ -323,7 +325,20 @@ export function createSurfaceCaret(
     };
   }
 
-  function update(selectionWriteFollows = false): void {
+  function update(): void {
+    repaint(false);
+  }
+
+  function updateAround(write: () => void): void {
+    repaint(true);
+    try {
+      write();
+    } finally {
+      settle();
+    }
+  }
+
+  function repaint(selectionWriteFollows: boolean): void {
     const input = read();
     if (composing || !hasFocus() || input.suppress) {
       hide();
@@ -415,7 +430,7 @@ export function createSurfaceCaret(
 
   return {
     update,
-    settle,
+    updateAround,
     clientRect,
     destroy() {
       pagesLayer.removeEventListener('compositionstart', onCompositionStart);

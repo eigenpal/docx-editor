@@ -3475,11 +3475,11 @@ export function mountPaginatedSurface(
     render: () => render(),
     flushLayout: () => flushLayout(),
     flushToPaint: () => flushToPaint(),
-    updateCaret: () => {
-      caret.update(true);
-      syncActiveFieldShading(pagesLayer, collapsedCaretPosition());
-    },
-    settleCaret: () => caret.settle(),
+    repaintCaretAround: (write) =>
+      caret.updateAround(() => {
+        syncActiveFieldShading(pagesLayer, collapsedCaretPosition());
+        write();
+      }),
     textOf: (paragraphId) => textOf(paragraphId),
     pendingFormatOps: (paragraphId, offset, length, replacing) =>
       consumePendingFormatOps(paragraphId, offset, length, replacing),

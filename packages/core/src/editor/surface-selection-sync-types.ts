@@ -71,10 +71,11 @@ export interface SurfaceSelectionSyncDeps {
    * collaborator's edit does not replace the nodes it composes into; release paints again.
    */
   holdPaint?(hold: boolean): void;
-  /** The engine's painted caret, repainted with every mirror. */
-  updateCaret(): void;
-  /** Called after the mirror wrote, or declined to write, the browser's selection. */
-  settleCaret?(): void;
+  /**
+   * Repaint the engine's caret for the selection the mirror is about to write, and run
+   * `write` exactly once. The mirror writes, or declines to write, inside it.
+   */
+  repaintCaretAround(write: () => void): void;
   /** The model text of one paragraph, for diffing what an IME wrote against it. */
   textOf(paragraphId: string): string;
   /** A plain composed insertion commits on a later task: surface-composition-commit. */

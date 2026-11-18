@@ -414,14 +414,9 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
 
   function mirrorToDom(claim = false): void {
     // Ahead of the ownership guard: the caret is this engine's own, painted whether or not
-    // the browser's selection lives here.
-    deps.updateCaret();
-    try {
-      writeSelectionToDom(claim);
-    } finally {
-      // The caret was repainted against the selection the browser showed BEFORE this write.
-      deps.settleCaret?.();
-    }
+    // the browser's selection lives here. It is repainted BEFORE the write and settles its
+    // native counterpart after it.
+    deps.repaintCaretAround(() => writeSelectionToDom(claim));
   }
 
   function writeSelectionToDom(claim: boolean): void {

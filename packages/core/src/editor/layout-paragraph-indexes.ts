@@ -19,11 +19,10 @@ export function noteScopeIndexOf(layout: SemanticLayout): Map<string, string> {
 }
 
 /**
- * Paragraph id to document position.
+ * Paragraph id to document position, for reads only.
  *
- * The layout's own index, which a layout keeps from the one before it while its pages list
- * the same paragraphs. A separate map here was rebuilt for the whole document after every
- * edit, on the first read that had a range selected.
+ * This is the layout's own index. A layout keeps it from the layout before it while its
+ * pages list the same paragraphs, so a text edit does not index the document again.
  */
 export function paragraphOrderOf(layout: SemanticLayout): ReadonlyMap<string, number> {
   return documentOrderIndex(layout);

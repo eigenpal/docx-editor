@@ -122,6 +122,31 @@ describe('review order index across list edits', () => {
     expect(sequence(order.index())).toEqual(fresh());
   });
 
+  test('every paragraph keeps a position of its own, in every story and after each move', () => {
+    // Readers refuse a range in one paragraph for a position in another by comparing ids, so
+    // two paragraphs must never share a position.
+    const distinct = (index: ReadonlyMap<string, number>): void => {
+      expect(new Set(index.values()).size).toBe(index.size);
+    };
+    for (const body of [PLAIN_BODY, TEXT_BOX_BODY]) {
+      const { session, order } = setup(body);
+      distinct(order.index());
+      const scope = { kind: 'headerFooter', rId: 'rIdH' } as const;
+      // The header ranks after the whole body, text box paragraphs included.
+      expect(order.index().get(session.paragraphIdsIn(scope)[0]!)).toBe(order.index().size - 1);
+      for (const offset of [1, 0]) {
+        const last = session.paragraphIds().at(-1)!;
+        session.applyTreeOps([{ op: 'splitParagraph', paragraphId: last, offset }]);
+        distinct(order.index());
+      }
+      const ids = session.paragraphIds();
+      session.applyTreeOps([{ op: 'joinParagraphs', firstId: ids.at(-2)!, secondId: ids.at(-1)! }]);
+      distinct(order.index());
+      session.applyTreeOps([{ op: 'splitParagraph', paragraphId: ids.at(-2)!, offset: 1 }]);
+      distinct(order.index());
+    }
+  });
+
   test('a split of a paragraph holding a text box rebuilds the index', () => {
     const { session, order, fresh } = setup(TEXT_BOX_BODY);
     const before = order.index();
