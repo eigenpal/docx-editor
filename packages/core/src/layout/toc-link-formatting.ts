@@ -2,10 +2,12 @@ import { FieldResultsModeMemo } from '../store/package/field-result-mode.ts';
 import { fnv1a64Hex } from '../store/comparators/canonical.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { detectBodyTocs, tocFieldRange } from '../store/package/toc-detect.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import type { RunPropertyCascader } from './field-run-text.ts';
+import { cascadeRunProperties, type StyleCascadeTable } from './style-cascade.ts';
 
 export interface TocLinkRange {
   readonly start: number;
@@ -58,9 +60,29 @@ export function tocLinkCascader(
   return (inherited, direct) =>
     cascade(
       inherited,
+      direct,
       ranges.some((r) => position() >= r.start && position() < r.end)
-        ? direct.filter((p) => !(p.localName === 'rStyle' && p.attributes?.val === 'Hyperlink'))
-        : direct
+    );
+}
+
+function isHyperlinkStyleReference(property: OoxmlProperty, styles: StyleCascadeTable): boolean {
+  const id = property.localName === 'rStyle' ? property.attributes?.val : undefined;
+  if (!id) return false;
+  const definition = styles.styles.get(id);
+  return (
+    definition?.type === 'character' &&
+    (id.toLowerCase() === 'hyperlink' || definition.name?.toLowerCase() === 'hyperlink')
+  );
+}
+
+/** The paint and AutoFit walks must both resolve the TOC hyperlink style by its definition. */
+export function tocAwareRunCascader(styles?: StyleCascadeTable): RunPropertyCascader | undefined {
+  if (!styles) return undefined;
+  return (inherited, direct, suppressHyperlinkStyle) =>
+    cascadeRunProperties(
+      inherited,
+      suppressHyperlinkStyle ? direct.filter((p) => !isHyperlinkStyleReference(p, styles)) : direct,
+      styles
     );
 }
 

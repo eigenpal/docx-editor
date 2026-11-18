@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A table of contents entry could show the Hyperlink style if its style ID differed from its name.",
+  "after": "A table of contents entry uses the style definition to identify the Hyperlink style.",
+  "reason": "The change affects layout only. It keeps field ranges, document data, and collaboration formats.",
+  "tests": [
+    "packages/core/src/layout/__tests__/toc-layout.test.ts",
+    "packages/pro/src/collaboration/__tests__/toc-numbered-hyperlink-editors.test.ts"
+  ],
+  "changeset": "toc-hyperlink-style-definition",
+  "migration": null
+}
