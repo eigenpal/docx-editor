@@ -12,6 +12,7 @@ import {
   type ReviewItem,
   type ReviewRevisionKind,
 } from '@docx-editor.dev/core/layout';
+import { parseReviewItemKey } from '../store/store/review-items.ts';
 import type { OverlayRect } from '@docx-editor.dev/core/output';
 import type { ReviewAuthorInfo } from '../output/revision-presentation.ts';
 import { reviewItemAuthor } from './surface-review-authors.ts';
@@ -137,12 +138,20 @@ export function createBandItemLookup(): (
     if (rects.length > 0) {
       const decisions = new Set<string>();
       for (const rect of rects) decisions.add(decisionOf(rect.key));
-      // An item key is its kind, a dash, and its id, so every wanted key ends with a wanted
-      // id. The id set is only a filter: the key itself decides.
-      const ids = new Set<string>();
-      for (const decision of decisions) ids.add(decision.slice(decision.indexOf('-') + 1));
+      // The id each wanted key names, read with the parser that owns the key format. The id
+      // set is only a filter: the key itself decides. A key the parser does not know turns
+      // the filter off, so every item is keyed and compared.
+      let ids: Set<string> | null = new Set<string>();
+      for (const decision of decisions) {
+        const parsed = parseReviewItemKey(decision);
+        if (parsed === null) {
+          ids = null;
+          break;
+        }
+        ids.add(parsed.id);
+      }
       for (const item of items) {
-        if (!ids.has(item.id)) continue;
+        if (ids !== null && !ids.has(item.id)) continue;
         const key = reviewItemKey(item);
         if (decisions.has(key)) byKey.set(key, item);
       }

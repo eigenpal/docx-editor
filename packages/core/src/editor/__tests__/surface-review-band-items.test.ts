@@ -170,6 +170,16 @@ describe('the items behind the review bands', () => {
     expect(found.get('comment-5')).toBe(wholeQueue(items).get('comment-5'));
   });
 
+  test('a band key the key parser does not know still resolves, by comparing every item', () => {
+    // An item of a kind the parser does not list yet: the id filter must not hide its band.
+    const foreign = { ...revision('9'), kind: 'future' } as unknown as ReviewItem;
+    const items = [revision('1'), foreign, comment('2', false)];
+    const found = createBandItemLookup()(items, [rect('future-9'), rect('comment-2')]);
+    expect(found.get('future-9')).toBe(foreign);
+    expect(found.get('comment-2')).toBe(items[2]);
+    expect(found.size).toBe(2);
+  });
+
   test('it builds a key only for the items the bands name', () => {
     let kindReads = 0;
     const counted = (item: ReviewItem): ReviewItem =>
