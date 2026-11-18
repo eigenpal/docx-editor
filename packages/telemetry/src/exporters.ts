@@ -192,6 +192,9 @@ function isFailureKind(event: TelemetryEvent): boolean {
  */
 const EXPECTED_REFUSALS: ReadonlySet<string> = new Set([
   'edit.stale-target',
+  // The last paragraph of a story or cell, or the last row or column of a table: the request is
+  // refused by design, and the document is unchanged.
+  'edit.content-required',
   'edit.read-only',
   'edit.protected-content',
   'edit.refresh-in-progress',

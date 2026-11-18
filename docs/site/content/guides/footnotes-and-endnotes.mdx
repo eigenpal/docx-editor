@@ -47,6 +47,8 @@ In the browser, these APIs expose the active note:
 | `DocxEditor.NotesChrome` | Packaged note controls for React.            |
 | `DocxEditorNotesChrome`  | Packaged note controls for Vue.              |
 
+`Paragraph.delete()` removes one paragraph of a note, and deleting a table inside a note removes it. Each note keeps at least one paragraph. Deleting its last paragraph fails with `NotSupported` and `edit.content-required`, so call `Paragraph.clear()` instead. The first paragraph of a note holds the note's reference number, and deleting that paragraph removes the number with it.
+
 Text, lists, tables, pictures, and bookmarks work inside a note. Comments need the review module and an EigenPal Pro License.
 
 ## Select across notes

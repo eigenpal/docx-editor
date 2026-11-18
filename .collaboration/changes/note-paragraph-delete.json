@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "deleteBlock refused every paragraph or table removal inside a footnote, endnote, or comment with block-required, and allowed removing the only paragraph of a text box.",
+  "after": "deleteBlock removes a paragraph or table from a note, comment, or text box when that story keeps another paragraph, refuses the story's last paragraph, and places the caret at the start of the next paragraph in the same story, or at the end of the previous one.",
+  "reason": "The removal replicates as the same node-removal primitive the body already uses, so released participants apply it unchanged. Validation runs only on the editing client, and the caret is local. The journal format, text offsets, and package serialization stay unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-note-paragraph-delete.test.ts",
+    "packages/core/src/store/__tests__/story-scoped-block-deletion.test.ts"
+  ],
+  "changeset": "note-paragraph-delete",
+  "migration": null
+}
