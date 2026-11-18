@@ -901,7 +901,7 @@
     "convertAllFootnotes": "Konwertuj wszystkie przypisy dolne na przypisy końcowe",
     "convertAllEndnotes": "Konwertuj wszystkie przypisy końcowe na przypisy dolne",
     "inheritedValue": "(dziedziczone)",
-    "menuAriaLabel": null
+    "menuAriaLabel": "Akcje przypisu"
   },
   "review": {
     "accept": "Zaakceptuj",

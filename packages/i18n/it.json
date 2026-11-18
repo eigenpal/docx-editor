@@ -1028,7 +1028,7 @@
     "convertAllFootnotes": "Converti tutte le note a piè di pagina in note di chiusura",
     "convertAllEndnotes": "Converti tutte le note di chiusura in note a piè di pagina",
     "inheritedValue": "(ereditato)",
-    "menuAriaLabel": null
+    "menuAriaLabel": "Azioni della nota"
   },
   "reviewers": {
     "label": "Revisori",

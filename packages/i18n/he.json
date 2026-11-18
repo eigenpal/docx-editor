@@ -902,7 +902,7 @@
     "convertAllFootnotes": "המר את כל הערות השוליים להערות סיום",
     "convertAllEndnotes": "המר את כל הערות הסיום להערות שוליים",
     "inheritedValue": "(בירושה)",
-    "menuAriaLabel": null
+    "menuAriaLabel": "פעולות הערה"
   },
   "review": {
     "accept": "קבל",

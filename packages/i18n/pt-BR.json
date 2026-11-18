@@ -901,7 +901,7 @@
     "convertAllFootnotes": "Converter todas as notas de rodapé em notas de fim",
     "convertAllEndnotes": "Converter todas as notas de fim em notas de rodapé",
     "inheritedValue": "(herdado)",
-    "menuAriaLabel": null
+    "menuAriaLabel": "Ações da nota"
   },
   "review": {
     "accept": "Aceitar",

@@ -901,7 +901,7 @@
     "convertAllFootnotes": "Alle Fußnoten in Endnoten umwandeln",
     "convertAllEndnotes": "Alle Endnoten in Fußnoten umwandeln",
     "inheritedValue": "(geerbt)",
-    "menuAriaLabel": null
+    "menuAriaLabel": "Fußnotenaktionen"
   },
   "review": {
     "accept": "Annehmen",

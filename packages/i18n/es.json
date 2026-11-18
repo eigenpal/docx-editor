@@ -1019,7 +1019,7 @@
     "convertAllFootnotes": "Convertir todas las notas al pie en notas al final",
     "convertAllEndnotes": "Convertir todas las notas al final en notas al pie",
     "inheritedValue": "(heredado)",
-    "menuAriaLabel": null
+    "menuAriaLabel": "Acciones de nota"
   },
   "reviewers": {
     "label": "Revisores",

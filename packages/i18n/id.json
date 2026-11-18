@@ -901,7 +901,7 @@
     "convertAllFootnotes": "Konversi semua catatan kaki ke catatan akhir",
     "convertAllEndnotes": "Konversi semua catatan akhir ke catatan kaki",
     "inheritedValue": "(diwarisi)",
-    "menuAriaLabel": null
+    "menuAriaLabel": "Tindakan catatan"
   },
   "review": {
     "accept": "Terima",

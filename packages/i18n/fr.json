@@ -901,7 +901,7 @@
     "convertAllFootnotes": "Convertir toutes les notes de bas de page en notes de fin",
     "convertAllEndnotes": "Convertir toutes les notes de fin en notes de bas de page",
     "inheritedValue": "(hérité)",
-    "menuAriaLabel": null
+    "menuAriaLabel": "Actions de note"
   },
   "review": {
     "accept": "Accepter",
