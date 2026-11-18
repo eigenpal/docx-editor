@@ -63,7 +63,7 @@ function reactErrors() {
 }
 
 describe('review rail and the renders of its host', () => {
-  test('another render prop can call other hooks', async () => {
+  test('another render prop with other hooks mounts under another key', async () => {
     const counted = (item: ReviewItemView) => {
       const [presses, setPresses] = useState(0);
       return (
@@ -87,7 +87,7 @@ describe('review rail and the renders of its host', () => {
     const { errors, restoreConsole } = reactErrors();
     try {
       const { container, rerender } = await mountRail(
-        <DocxEditorReview>{counted}</DocxEditorReview>
+        <DocxEditorReview key="counted">{counted}</DocxEditorReview>
       );
       const mounted = mountedCards(container);
       expect(mounted.length).toBeGreaterThan(1);
@@ -96,14 +96,14 @@ describe('review rail and the renders of its host', () => {
       });
       expect(container.querySelectorAll('[data-presses="1"]')).toHaveLength(1);
 
-      await act(async () => rerender(<DocxEditorReview>{noted}</DocxEditorReview>));
+      await act(async () => rerender(<DocxEditorReview key="noted">{noted}</DocxEditorReview>));
       await settle();
       expect(mountedCards(container)).toEqual(mounted);
       expect(container.querySelectorAll('[data-template="noted"]')).toHaveLength(mounted.length);
       expect(container.querySelectorAll('[data-template="counted"]')).toHaveLength(0);
 
       // Back to the first one: its cards start from new state.
-      await act(async () => rerender(<DocxEditorReview>{counted}</DocxEditorReview>));
+      await act(async () => rerender(<DocxEditorReview key="counted">{counted}</DocxEditorReview>));
       await settle();
       expect(container.querySelectorAll('[data-presses="0"]')).toHaveLength(mounted.length);
       expect(errors).toEqual([]);

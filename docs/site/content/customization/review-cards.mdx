@@ -149,7 +149,7 @@ The Vue rail needs Vue 3.4 or later to skip these renders.
 
 A React render prop runs as the render of a component that belongs to the card, so it can call hooks. Call the same hooks in the same order on each run, as in any component.
 
-If you pass a render prop with different source code, the rail mounts each card again. The other function can then call other hooks, and each card starts from new state. An inline render prop has the same source code on each render, so its cards stay mounted.
+An inline render prop calls the same hooks on each render, so its cards stay mounted and keep their state. If you switch between two render props that call different hooks, set a different `key` on `DocxEditorReview` for each one. The rail then mounts again, and each card starts from new state.
 
 ## Configure cards and markers
 

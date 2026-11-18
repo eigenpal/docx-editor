@@ -82,7 +82,7 @@ import {
 } from './review-context.ts';
 import { reviewRootsOf, sameEntries } from '../review/review-roots.ts';
 import { railWindowFollowsScroll } from '../review/rail-window.ts';
-import { ReviewRenderedCard, cardTemplateKey } from './review-list-slot.tsx';
+import { ReviewRenderedCard } from './review-list-slot.tsx';
 import { ReviewRailMetricsContext } from './useReviewRailMetrics.ts';
 import { isCompactReviewColumn } from '../review/rail-metrics.ts';
 import {
@@ -648,13 +648,8 @@ function ReviewRoot({
     typeof cardTemplate === 'function' ? null : partitionReviewChildren(cardTemplate, 'list');
   const compactCardInner = fromList.hidden ? null : typeof cardTemplate === 'function' ? (
     activeRoot && (
-      // Keyed, so the hooks the render prop calls start again for another item, and for
-      // another render prop.
-      <ReviewRenderedCard
-        key={`${cardTemplateKey(cardTemplate)}:${activeRoot.key}`}
-        entry={activeRoot}
-        render={cardTemplate}
-      />
+      // Keyed, so the hooks the render prop calls start again for another item.
+      <ReviewRenderedCard key={activeRoot.key} entry={activeRoot} render={cardTemplate} />
     )
   ) : listParts?.parts.Card && isValidElement<{ className?: string }>(listParts.parts.Card) ? (
     cloneReviewCard(listParts.parts.Card, cardClassName)

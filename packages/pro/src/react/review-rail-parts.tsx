@@ -103,8 +103,8 @@ export interface ReviewListProps {
    * inside the card.
    *
    * The render prop runs as the render of a component that belongs to the card, so it can
-   * call hooks. Call the same hooks on each run, as in a component. A render prop with other
-   * source code mounts each card again, so it can call other hooks.
+   * call hooks. Call the same hooks on each run, as in a component. To switch between render
+   * props that call different hooks, set a different `key` on the rail for each one.
    */
   children?: ReactNode | ((item: ReviewItemView) => ReactNode);
   className?: string;
