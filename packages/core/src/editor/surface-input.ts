@@ -496,7 +496,7 @@ export function createClipboardHandlers(surface: PaginatedSurface): {
       event.preventDefault();
       return;
     }
-    // Across notes the delete is refused, so the cut copies nothing either, like Word.
+    // Across notes the delete is refused, so the cut copies nothing either.
     if (surfaceCrossNoteRefusal(surface)) {
       event.preventDefault();
       surface.deleteSelection(); // Publishes the refusal reason.

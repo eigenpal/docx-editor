@@ -1,10 +1,10 @@
-// One footnote or endnote story for selection, as in Word.
+// One footnote or endnote story for selection (ECMA-376 Part 1 §17.11).
 //
 // The editor opens ONE note for editing, so the frame, the label and the caret host have a
-// note to name. Word's notes part is one story, though: a selection that starts in footnote 1
+// note to name. The notes part is one story, though: a selection that starts in footnote 1
 // extends across footnotes 2 to 5 by drag, Shift+click and Shift+arrow. These helpers widen
 // the selection lanes from the open note to every note of its kind. Edits that would join two
-// notes are refused (`crossNoteWriteRefusal`), the way Word refuses them.
+// notes are refused (`crossNoteWriteRefusal`).
 
 import type {
   BlockFragmentRecord,
@@ -44,7 +44,7 @@ export type NoteStoryHit = {
  *
  * A drag keeps extending when the pointer leaves the notes: past the last note, over the gap
  * between two notes or over the body above them, the point clamps to the nearest note of the
- * story on that page, like Word. Null when the page shows no note of the story.
+ * story on that page. Null when the page shows no note of the story.
  */
 export function noteStoryHitAtSheetPoint(
   layout: SemanticLayout,
@@ -161,8 +161,7 @@ export function followOpenNoteToHead(
 /**
  * The refusal for an edit over a selection that spans two notes, or null.
  *
- * Word refuses typing, deletion and paste over such a range ("This is not a valid action for
- * footnotes"). Deleting it would merge the notes or strand a reference mark. Formatting and
+ * Typing, deletion and paste over such a range are refused. Deleting it would merge the notes or strand a reference mark. Formatting and
  * copy still work across notes, and do not ask this.
  */
 export function crossNoteEditRefusal(
@@ -223,7 +222,7 @@ function crossesNotes(op: TreeDocOp): boolean {
 /**
  * {@link crossNoteEditRefusal} for a write about to apply at the selection. Writes that insert,
  * remove or place a range marker refuse: typing, deletion, paste and cut. Formatting does none
- * of these, so bold or a style still applies across notes, as in Word.
+ * of these, so bold or a style still applies across notes.
  */
 export function crossNoteWriteRefusal(
   layout: SemanticLayout,
@@ -276,7 +275,7 @@ export function surfaceCrossNoteRefusal(
  * The paragraphs of the open note in `order`, or `order` itself outside a note.
  *
  * Selection spans the whole note story, but a collapsed Delete or Backspace at a note's edge,
- * and Tab between form controls, stay in the open note: in Word they never reach another note.
+ * and Tab between form controls, stay in the open note and never reach another note.
  */
 export function withinOpenNote(
   layout: SemanticLayout,

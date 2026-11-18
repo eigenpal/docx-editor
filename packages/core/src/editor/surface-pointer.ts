@@ -323,7 +323,7 @@ export function createPointerController(
   function resolve(clientX: number, clientY: number): SemanticHit | null {
     const activeNote = host.activeNote?.() ?? null;
     if (activeNote) {
-      // Every note of the open note's kind, as in Word: a drag crosses into the next note.
+      // Every note of the open note's kind is one story: a drag crosses into the next note.
       return hitNoteStoryAtSheetPoint(host, sheetPoint(clientX, clientY), activeNote.scopeId);
     }
     const active = host.activeHeaderFooter?.() ?? null;

@@ -12,7 +12,7 @@ The editor matrix exercises accept and reject individually and together, DOCX re
 
 ## Native verification and exceptions
 
-The original input and both final editor outputs opened in Word without a recovery prompt. Both outputs also exported to PDF through LibreOffice. The earlier invalid move fixture used deleted text in the move-source run; the corrected synthetic input uses ordinary text. Recovered documents were not used as references.
+The original input and both final editor outputs opened in other DOCX applications without a recovery prompt. Both outputs also exported to PDF. The earlier invalid move fixture used deleted text in the move-source run; the corrected synthetic input uses ordinary text. Recovered documents were not used as references.
 
 Word's bulk command leaves a sole tracked row in a nested table unresolved for the destructive direction: accepting the deleted row or rejecting the inserted row. Repeating Accept All still leaves that deletion pending. These two outputs are excluded from the Word oracle because they are not fully resolved references. The editor's explicit nested-table deletion behavior remains covered by the editor and row-combination tests; this is an interoperability difference, not proven Word parity.
 

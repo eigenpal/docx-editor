@@ -91,7 +91,7 @@ describe('a control in any story is addressable by paraId', () => {
 });
 
 describe('setSelection across two notes of one kind', () => {
-  test('selects across them as in Word, and never half-applies an edit', () => {
+  test('selects across them in one note story, and never half-applies an edit', () => {
     const host = document.createElement('div');
     document.body.append(host);
     const editor = createDocxEditor({ document: twoFootnoteDocx(), author: 'Parity' });
@@ -114,8 +114,8 @@ describe('setSelection across two notes of one kind', () => {
         throw new Error(`no laid-out paragraph for ${scopeId}`);
       };
 
-      // `StoryScope` answers `notesPart/footnote` for EVERY footnote. Word's notes part is one
-      // story (issue #2010), so the range is accepted and the head's note opens. What the old
+      // `StoryScope` answers `notesPart/footnote` for EVERY footnote. The footnotes part is one
+      // story (ECMA-376 Part 1 §17.11, issue #2010), so the range is accepted and the head's note opens. What the old
       // refusal protected against — typing that deleted neither endpoint and landed in the
       // wrong note — is refused at the write instead, with both notes left whole.
       const result = editor.exec({

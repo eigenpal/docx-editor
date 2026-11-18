@@ -3018,7 +3018,7 @@ export function mountPaginatedSurface(
     const crossNote = checkSelection
       ? crossNoteWriteRefusal(editingLayout(), noteScopeId(), selection, ops)
       : null;
-    if (crossNote) return crossNote; // Word refuses typing or deletion across notes.
+    if (crossNote) return crossNote; // Typing or deletion across notes would merge them.
     // Without an author, refuse every suggested edit instead of writing untracked changes.
     if (editingMode === 'suggest' && !author?.trim() && edits) return AUTHOR_WRITE_REFUSAL;
     if (editingMode === 'suggest') return suggestingRefusalIn(session, author, ops);

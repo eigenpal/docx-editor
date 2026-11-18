@@ -789,7 +789,7 @@ function enterStoryForSelection(
     selection.anchor.paragraphId === selection.head.paragraphId
       ? scopeId
       : noteScopeHolding(mounted, selection.anchor.paragraphId);
-  // Notes of one kind are one story, as in Word: a range from footnote 1 into footnote 3 opens
+  // Notes of one kind are one story (ECMA-376 Part 1 §17.11): a range from footnote 1 into footnote 3 opens
   // the head's note, the way a drag across them leaves it. Edits over it are refused later.
   if (!anchorScopeId || !sameNoteStory(anchorScopeId, scopeId)) {
     return { ok: false, code: 'unsupported', reason: 'a selection cannot span two stories' };

@@ -1,8 +1,7 @@
 // Space compression adapted from PR #707's paragraph-justify.ts (2ce89f6e7).
 // Publish spacing in Core so PDF, browser paint, and caret measurement agree.
-// The format's producers use a 75% space floor and prefer expansion near natural spacing.
-// An open reference implementation of the same rule:
-// https://github.com/LibreOffice/core/commit/529755f0919217a84a12daad0fddfddd1124f0e9
+// Justified lines (`w:jc`, ECMA-376 Part 1 §17.3.1.13 and §17.18.44): the format's producers
+// use a 75% space floor and prefer expansion near natural spacing.
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { fitTextGroupOf } from './fit-text-groups.ts';
