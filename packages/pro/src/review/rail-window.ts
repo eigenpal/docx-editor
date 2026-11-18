@@ -53,6 +53,23 @@ export function steppedRailWindow(scrollTop: number, clientHeight: number): Rail
   };
 }
 
+/**
+ * Whether the rail needs the unstepped band. The compact rail floats one card for the active
+ * item, and an active item without a placement takes the top of the visible band, so that
+ * card follows each scroll frame. Every other rail takes the stepped band.
+ */
+export function railWindowFollowsScroll(
+  compact: boolean,
+  roots: readonly { readonly key: string; readonly anchorY: number | null }[],
+  activeKey: string | null
+): boolean {
+  return (
+    compact &&
+    activeKey !== null &&
+    roots.some((entry) => entry.key === activeKey && entry.anchorY === null)
+  );
+}
+
 /** Options for {@link observeRailWindow}. */
 export interface ObserveRailWindowOptions {
   /**

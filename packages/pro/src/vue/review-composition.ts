@@ -7,10 +7,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import {
   cloneVNode,
   computed,
+  effectScope,
   Fragment,
   getCurrentInstance,
   isVNode,
+  onUnmounted,
   type ComputedRef,
+  type EffectScope,
   type Slot,
   type VNode,
 } from 'vue';
@@ -107,6 +110,10 @@ export function useSlotMemo<T>(names: readonly string[], build: () => T): () => 
   const instance = getCurrentInstance();
   let seen: readonly unknown[] | null = null;
   let memo: ComputedRef<T> | null = null;
+  // Each build has a scope of its own, stopped when another build replaces it and when the
+  // component unmounts. A replaced build then drops its subscriptions to the state it read.
+  let scope: EffectScope | null = null;
+  onUnmounted(() => scope?.stop());
   return () => {
     const children: unknown = instance?.vnode.children;
     const passed =
@@ -115,7 +122,9 @@ export function useSlotMemo<T>(names: readonly string[], build: () => T): () => 
         : [children];
     if (memo === null || seen === null || !sameElements(seen, passed)) {
       seen = passed;
-      memo = computed(build);
+      scope?.stop();
+      scope = effectScope(true);
+      memo = scope.run(() => computed(build))!;
     }
     return memo.value;
   };

@@ -78,6 +78,7 @@ import {
   selectRevisionsIn,
 } from './review-shared.ts';
 import { useRailWindow } from './use-rail-window.ts';
+import { railWindowFollowsScroll } from '../review/rail-window.ts';
 import {
   ReviewCardRailKey,
   ReviewContextKey,
@@ -426,12 +427,8 @@ const ReviewRoot = defineComponent({
     const roots = computed(() => reviewRootsOf(items.value));
     // The compact card of an active item without a placement sits at the top of the visible
     // band, so that one case follows each scroll frame. Every other rail takes the stepped band.
-    const exactBand = computed(
-      () =>
-        compact.value &&
-        roots.value.some(
-          (entry) => entry.key === reviewHook.activeKey.value && entry.anchorY === null
-        )
+    const exactBand = computed(() =>
+      railWindowFollowsScroll(compact.value, roots.value, reviewHook.activeKey.value)
     );
     const scrollWindow = useRailWindow(
       editorRef,
@@ -581,27 +578,18 @@ const ReviewRoot = defineComponent({
     const keepCardRail = keeper<ReviewCardRailValue>(sameFields);
     const cardRail = computed((): ReviewCardRailValue => {
       const draftAuthor = configuredAuthor.value;
+      const {
+        items: _items,
+        activeKey: _activeKey,
+        activatedKey: _activatedKey,
+        selectionAnchorY: _selectionAnchorY,
+        ...cardActions
+      } = reviewActions.value;
       return keepCardRail({
         t: props.t,
         cardClassName: props.card?.className,
         readOnly: readOnly.value,
-        review: keepCardReview({
-          setActive: reviewHook.setActive,
-          accept: reviewHook.accept,
-          reject: reviewHook.reject,
-          adopt: reviewHook.adopt,
-          resolve: reviewHook.resolve,
-          reopen: reviewHook.reopen,
-          commentResolutionDisabledReason: reviewHook.commentResolutionDisabledReason.value,
-          remove: reviewHook.remove,
-          reply: reviewHook.reply,
-          edit: reviewHook.edit,
-          comment: reviewHook.comment,
-          lastRefusal: reviewHook.lastRefusal.value,
-          paneOpen: reviewHook.paneOpen.value,
-          setPaneOpen: reviewHook.setPaneOpen,
-          ready: reviewHook.ready.value,
-        }),
+        review: keepCardReview(cardActions),
         authorSlots: authorSlots.value,
         authorInfo: authorInfo.value,
         draftAuthor,

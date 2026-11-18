@@ -93,6 +93,9 @@ export interface ReviewListProps {
   /**
    * A render prop takes over the card entirely, keeping the rail's subscription, anchoring
    * and stacking. Nodes are treated as part overrides for the packaged card.
+   *
+   * The rail calls the render prop for an item when the item changes or when you pass another
+   * function. Pass a new function when the state it reads changes, as an inline function does.
    */
   children?: ReactNode | ((item: ReviewItemView) => ReactNode);
   className?: string;

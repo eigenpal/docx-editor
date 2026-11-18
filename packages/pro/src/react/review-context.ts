@@ -161,6 +161,10 @@ export function useCardRail(): ReviewCardRailValue {
 /**
  * `next`, or the value this hook returned before when `same` says the two are equal. Keeps
  * the identity of a derived value whose content did not change, so memos that depend on it hold.
+ *
+ * It writes a ref while rendering, which is safe for this one use: the kept value is replaced
+ * only by a value with other content, so each render answers content equal to `next`, also
+ * when React drops a render it started.
  */
 export function useKept<T>(next: T, same: (a: T, b: T) => boolean): T {
   const kept = useRef(next);

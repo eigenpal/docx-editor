@@ -17,7 +17,7 @@ import { flush, mountEditorTree } from '../../../vue/test/helpers/mount.ts';
 import { reviewModule } from '../index.ts';
 import { DocxEditorReview, type ReviewItemView } from '../vue/index.ts';
 import { RAIL_BAND_STEP } from '../review/rail-window.ts';
-import { installRailGeometry } from './review-rail-metrics-harness.ts';
+import { insertBanner, installRailGeometry } from './review-rail-metrics-harness.ts';
 import {
   INSIDE_INSERTION,
   PAGES,
@@ -95,7 +95,8 @@ async function mountRail(review: () => VNode, configure?: (app: App) => void) {
     pagedTrackedDocument(),
     () => [review()],
     [reviewModule()],
-    {},
+    // The author of the document's changes, so a reply adds no author and can be edited.
+    { author: 'Ada Lovelace' },
     undefined,
     configure
   );
@@ -201,6 +202,86 @@ describe('review rail render work (Vue)', () => {
     );
     expect(templates.keys()).toEqual([mounted[0]!]);
     expect(cards.keys()).toEqual([mounted[0]!]);
+  });
+
+  test('a card that moves keeps its content without a render', async () => {
+    const { container, templates, cards, reset } = await mountCountingRail();
+    const slots = () =>
+      [...container.querySelectorAll<HTMLElement>('.docx-review__slot')].map(
+        (slot) => slot.style.top
+      );
+    const before = slots();
+    expect(before.length).toBeGreaterThan(1);
+
+    // Content above the pages moves the rail's offset, so each mounted card takes a new
+    // position while no item changes.
+    reset();
+    insertBanner(scrollerOf(container));
+    await waitFor(() => slots().some((top) => !before.includes(top)));
+    const after = slots();
+    expect(after.some((top) => !before.includes(top))).toBe(true);
+    expect(templates.total()).toBe(0);
+    expect(cards.total()).toBe(0);
+  });
+
+  test('a reply renders the card it belongs to, and no other', async () => {
+    const { container, editor, cards, reset } = await mountCountingRail();
+    const [first] = mountedCards(container);
+    const card = () => container.querySelector(`[data-card-key="${first!}"]`)!;
+
+    // From an author the rail already lists: a new author changes every card's colour slots.
+    reset();
+    expect(editor.replyToReviewItem(first!, 'first answer', 'Ada Lovelace').ok).toBe(true);
+    await settle();
+    expect(card().querySelector('[data-testid="review-reply"]')?.textContent).toContain(
+      'first answer'
+    );
+    expect(cards.keys()).toEqual([first!]);
+
+    // An edit of the reply reaches the card through the card's own replies.
+    const reply = editor.getReviewItems().find((entry) => entry.text === 'first answer')!;
+    reset();
+    expect(editor.setCommentText(reply.key, 'second answer').ok).toBe(true);
+    await settle();
+    expect(card().querySelector('[data-testid="review-reply"]')?.textContent).toContain(
+      'second answer'
+    );
+    expect(cards.keys()).toEqual([first!]);
+  });
+
+  test('a card template renders its parts only for the item that changed', async () => {
+    let labels: string[] = [];
+    const t = ((key: string): string | undefined => {
+      if (key !== 'review.ariaLabel') labels.push(key);
+      return undefined;
+    }) as (key: string) => string;
+    const { container, editor } = await mountRail(() =>
+      h(DocxEditorReview, { t }, () =>
+        h(DocxEditorReview.List, null, () =>
+          h(DocxEditorReview.Card, { className: 'host-card' }, () => [
+            h(DocxEditorReview.Reply, { hidden: true }),
+            h('span', { 'data-testid': 'host-extra' }),
+          ])
+        )
+      )
+    );
+    const mounted = container.querySelectorAll('.host-card').length;
+    expect(mounted).toBeGreaterThan(1);
+    expect(container.querySelectorAll('[data-testid="host-extra"]')).toHaveLength(mounted);
+
+    labels = [];
+    typeIn(editor, 0);
+    await settle();
+    scrollTo(scrollerOf(container), 40);
+    await settle();
+    expect(labels).toEqual([]);
+
+    // One card changes: each label is asked for once per render of that card, not per card.
+    typeIn(editor, 1, INSIDE_INSERTION);
+    await settle();
+    const accepts = labels.filter((key) => key === 'review.accept').length;
+    expect(accepts).toBeGreaterThan(0);
+    expect(accepts).toBeLessThan(mounted);
   });
 
   test('the packaged card renders no part for a keystroke that changes no item', async () => {

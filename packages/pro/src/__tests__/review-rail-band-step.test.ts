@@ -14,6 +14,7 @@ import {
   RAIL_BAND_STEP,
   RAIL_OVERSCAN,
   observeRailWindow,
+  railWindowFollowsScroll,
   steppedRailWindow,
   type RailWindow,
 } from '../review/rail-window.ts';
@@ -73,6 +74,21 @@ describe('the stepped rail band', () => {
       [0, 10, 40].map((top) => ({ top: top - RAIL_OVERSCAN, bottom: top + VIEW + RAIL_OVERSCAN }))
     );
     stop();
+  });
+});
+
+describe('the rail that needs the exact band', () => {
+  const placed = { key: 'placed', anchorY: 120 };
+  const unplaced = { key: 'unplaced', anchorY: null };
+
+  test('is the compact rail whose active card has no placement', () => {
+    expect(railWindowFollowsScroll(true, [placed, unplaced], 'unplaced')).toBe(true);
+    // A placed card stands at its anchor, and the full column draws no floating card.
+    expect(railWindowFollowsScroll(true, [placed, unplaced], 'placed')).toBe(false);
+    expect(railWindowFollowsScroll(false, [placed, unplaced], 'unplaced')).toBe(false);
+    expect(railWindowFollowsScroll(true, [placed, unplaced], null)).toBe(false);
+    // A reply is not a root, so it floats no card of its own.
+    expect(railWindowFollowsScroll(true, [placed], 'unplaced')).toBe(false);
   });
 });
 

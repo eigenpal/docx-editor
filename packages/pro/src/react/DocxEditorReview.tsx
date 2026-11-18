@@ -80,6 +80,7 @@ import {
   type ReviewRailValue,
 } from './review-context.ts';
 import { reviewRootsOf, sameEntries, sameFields } from '../review/review-roots.ts';
+import { railWindowFollowsScroll } from '../review/rail-window.ts';
 import { ReviewRailMetricsContext } from './useReviewRailMetrics.ts';
 import { isCompactReviewColumn } from '../review/rail-metrics.ts';
 import {
@@ -321,10 +322,8 @@ function ReviewRoot({
   // parent's card, and letting it into the run advanced the cursor once per reply, spacing
   // every card below a commented conversation by gaps nothing on screen accounted for.
   const roots = reviewRootsOf(items);
-  // The compact card of an active item without a placement sits at the top of the visible
-  // band, so that one case follows each scroll frame. Every other rail takes the stepped band.
-  const exactBand =
-    compact && roots.some((entry) => entry.key === review.activeKey && entry.anchorY === null);
+  // The stepped band, except where the compact card stands on the band's own edge.
+  const exactBand = railWindowFollowsScroll(compact, roots, review.activeKey);
   const window_ = useRailWindow(editor, railRef, !documentAbsent && !hidden, exactBand);
   // What `useReviewRailMetrics()` reads inside the rail: the geometry plus the presentation.
   const railMetrics = useMemo(() => ({ ...metrics, compact }), [metrics, compact]);
