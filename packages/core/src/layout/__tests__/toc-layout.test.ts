@@ -65,6 +65,36 @@ describe('TOC field chrome layout', () => {
     ).toBeUndefined();
   });
 
+  test('a bare populated TOC keeps the height of its separate closing paragraph before a table', () => {
+    const end = '<w:fldChar w:fldCharType="end"/>';
+    const closing = TOC_FIELD.replace(
+      `<w:p><w:r>${end}</w:r></w:p>`,
+      `<w:p><w:pPr><w:spacing w:line="360" w:lineRule="exact"/></w:pPr><w:r>${end}</w:r></w:p>`
+    );
+    const inline = TOC_FIELD.replace(
+      `</w:p><w:p><w:r>${end}</w:r></w:p>`,
+      `<w:r>${end}</w:r></w:p>`
+    );
+    const table =
+      '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>' +
+      '<w:tr><w:tc><w:p><w:r><w:t>Following table</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+    const render = (field: string) => {
+      const part = load(field + table);
+      const layout = layoutSemanticDocument(part, 1, { measurer: createFixedMeasurer(6, 14) });
+      const firstPage = layout.pages[0]!;
+      const ending = paragraphFragmentsOf(firstPage).find(
+        (fragment) => fragment.paragraphId === detectBodyTocs(part)[0]!.endParagraphId
+      );
+      return {
+        closingHeight: ending?.box.height,
+        tableTop: firstPage.fragments.find((fragment) => fragment.kind === 'table')!.box.y,
+      };
+    };
+    const authored = render(closing);
+    expect(authored.closingHeight).toBe(18);
+    expect(authored.tableTop - render(inline).tableTop).toBe(18);
+  });
+
   test('an opening holding only field chrome contributes no row', () => {
     const part = load(
       `<w:sdt><w:sdtPr/><w:sdtContent>${CHROME_ONLY_OPENING}</w:sdtContent></w:sdt>`
