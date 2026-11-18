@@ -17,6 +17,7 @@ import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
 import { cellTabReplayScope, tabClosesLine, tabDestinationForFlow } from './paragraph-tab-flow.ts';
 import { growRunBorderLineMetrics } from './run-border-strokes.ts';
 import { lineSpacingBand } from './equation-line-spacing.ts';
+import { setInlineDrawingHighlightHeight } from './inline-drawing-highlight.ts';
 import {
   clipLineDrawingsAtTop,
   growPendingLineDrawingExtent,
@@ -877,21 +878,7 @@ export function breakParagraph(
       line.drawings.length === 0 && lineSpacing.rule !== 'exact'
         ? Math.max(0, Math.min(spaced.trailing ?? Infinity, spacedExtent - naturalHeight))
         : drawingLineTrailing;
-    if (
-      line.drawings.length > 0 &&
-      lineSpacing.rule !== 'atLeast' &&
-      line.spans.some((span) => span.style.highlight && span.style.highlight !== 'none')
-    ) {
-      // The picture raises the baseline for adjacent text, but the highlight starts
-      // at the line top. A snapped grid contributes the leading above the natural
-      // content; the trailing half remains clear. Exact spacing uses the authored box.
-      const gridLeading =
-        lineSpacing.gridPitch === undefined ? 0 : Math.max(0, (line.height - naturalHeight) / 2);
-      line.inlineDrawingHighlightHeight =
-        lineSpacing.rule === 'exact'
-          ? line.height
-          : Math.min(line.height, naturalHeight + gridLeading);
-    }
+    setInlineDrawingHighlightHeight(line, lineSpacing, naturalHeight);
     finalizeTopAndBottomClearance();
     commitBreakClearance();
     if (empty && (wrapAnchorStarts.size > 0 || topAndBottomAnchorStarts.size > 0))

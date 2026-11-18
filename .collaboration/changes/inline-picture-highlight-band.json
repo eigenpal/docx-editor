@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Inline pictures could raise the line baseline and leave authored highlights low on the adjacent glyph boxes.",
+  "after": "The painter uses a shared highlight band on an inline picture line.",
+  "reason": "This changes layout and paint metrics only. OOXML, editor operations, snapshot fields and journals stay the same.",
+  "tests": [
+    "packages/core/src/output/__tests__/inline-drawing-line-origin.test.ts",
+    "packages/pro/src/collaboration/__tests__/inline-drawing-highlight-editors.test.ts"
+  ],
+  "changeset": "inline-picture-highlight-band",
+  "migration": null
+}
