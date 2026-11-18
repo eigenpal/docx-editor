@@ -172,3 +172,34 @@ export function tableFloatOriginX(
   const pageRight = frames.page.left + frames.page.width;
   return Math.max(frames.page.left, Math.min(x, pageRight));
 }
+
+/**
+ * How far a centered top-level AutoFit table with an absolute width may reach past the text
+ * column, both sides together, before compatibility mode 15: its outer content insets. Its
+ * stated width still decides while its columns fit; columns that need more than the text
+ * column fill it with their content edges on the text edges, and the table stays centered.
+ *
+ * Measured with 5.4pt cell margins in a 468pt column: a 450pt table whose columns need 531pt
+ * spans 479pt, from 5.5pt before the column to 5.5pt past it, in modes 11 to 14. Mode 15 keeps
+ * the 468pt column. Right-to-left, spaced, fixed, floating and text-box tables reach nothing,
+ * for want of evidence.
+ */
+export function centeredLegacyReachPt(
+  structure: SemanticTableStructure,
+  compatibilityMode: number | undefined,
+  depth: number
+): number {
+  if (
+    !hasCompatibilityRule(compatibilityMode, 'fixedTableContentEdgeOrigin') ||
+    depth !== 0 ||
+    structure.alignment !== 'center' ||
+    structure.tableWidth.type !== 'dxa' ||
+    structure.layoutFixed ||
+    structure.float ||
+    structure.textBox ||
+    structure.bidiVisual ||
+    structure.cellSpacingPt !== 0
+  )
+    return 0;
+  return legacyLeadingInsetPt(structure) + legacyTrailingInsetPt(structure);
+}
