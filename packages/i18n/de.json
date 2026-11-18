@@ -1073,7 +1073,12 @@
     "noGoToView": "Gehe zu ist hier nicht verfügbar",
     "noBookmarkDialog": "Textmarken können hier nicht hinzugefügt werden",
     "groupMemberMove": "Eine Form in einer Gruppe lässt sich nicht einzeln verschieben, skalieren oder löschen. Drücken Sie Esc, um die Gruppe auszuwählen.",
-    "groupMemberProperties": "Eine Form in einer Gruppe übernimmt Umbruch, Alternativtext und Eigenschaften von der Gruppe. Drücken Sie Esc, um die Gruppe auszuwählen."
+    "groupMemberProperties": "Eine Form in einer Gruppe übernimmt Umbruch, Alternativtext und Eigenschaften von der Gruppe. Drücken Sie Esc, um die Gruppe auszuwählen.",
+    "drawingClipboardParts": "Diese Zeichnung verwendet Teile, die nicht kopiert werden können.",
+    "drawingClipboardStory": "Zeichnungen können nur im Hauptdokument kopiert, ausgeschnitten oder eingefügt werden.",
+    "groupMemberClipboard": "Eine Form in einer Gruppe wird mit ihrer Gruppe kopiert oder ausgeschnitten. Drücken Sie Escape, um die Gruppe auszuwählen.",
+    "drawingClipboardSize": "Diese Zeichnung ist zu groß zum Kopieren.",
+    "drawingPasteCells": "Setzen Sie den Cursor in den Text, um eine Zeichnung einzufügen."
   },
   "equationPopup": {
     "apply": "Übernehmen",

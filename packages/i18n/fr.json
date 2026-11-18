@@ -1073,7 +1073,12 @@
     "noGoToView": "Atteindre n’est pas disponible ici",
     "noBookmarkDialog": "Impossible d’ajouter des signets ici",
     "groupMemberMove": "Une forme dans un groupe ne se déplace pas, ne se redimensionne pas et ne se supprime pas seule. Appuyez sur Échap pour sélectionner le groupe.",
-    "groupMemberProperties": "Une forme dans un groupe prend l'habillage, le texte de remplacement et les propriétés du groupe. Appuyez sur Échap pour sélectionner le groupe."
+    "groupMemberProperties": "Une forme dans un groupe prend l'habillage, le texte de remplacement et les propriétés du groupe. Appuyez sur Échap pour sélectionner le groupe.",
+    "drawingClipboardParts": "Ce dessin utilise des parties qui ne peuvent pas être copiées.",
+    "drawingClipboardStory": "Les dessins ne peuvent être copiés, coupés ou collés que dans le document principal.",
+    "groupMemberClipboard": "Une forme dans un groupe est copiée ou coupée avec son groupe. Appuyez sur Échap pour sélectionner le groupe.",
+    "drawingClipboardSize": "Ce dessin est trop volumineux pour être copié.",
+    "drawingPasteCells": "Placez le curseur dans le texte pour coller un dessin."
   },
   "equationPopup": {
     "apply": "Appliquer",

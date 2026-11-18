@@ -80,7 +80,12 @@
     "outermostLevel": "La selezione è già al livello più esterno",
     "cannotIndentFurther": "La selezione non può essere rientrata oltre",
     "noGoToView": "Vai a non è disponibile qui",
-    "noBookmarkDialog": "I segnalibri non si possono aggiungere qui"
+    "noBookmarkDialog": "I segnalibri non si possono aggiungere qui",
+    "drawingClipboardParts": "Questo disegno usa parti che non possono essere copiate.",
+    "drawingClipboardStory": "I disegni possono essere copiati, tagliati o incollati solo nel documento principale.",
+    "groupMemberClipboard": "Una forma all'interno di un gruppo viene copiata o tagliata con il suo gruppo. Premi Esc per selezionare il gruppo.",
+    "drawingClipboardSize": "Questo disegno è troppo grande per essere copiato.",
+    "drawingPasteCells": "Posiziona il cursore nel testo per incollare un disegno."
   },
   "toolbar": {
     "ariaLabel": "Barra degli strumenti di formattazione",

@@ -2,6 +2,10 @@ import { insertTextbox } from './textbox-commands.ts';
 import { execChartCommand } from './chart-commands.ts';
 import { execSetWatermark } from './docx-editor-watermark.ts';
 import { execBookmarkCommand } from './docx-editor-bookmarks.ts';
+import {
+  DRAWING_CLIPBOARD_STORY_REASON,
+  DRAWING_PASTE_CELLS_REASON,
+} from './surface-drawing-clipboard.ts';
 import { CHART_CLIPBOARD_REASON, fragmentRefusalOf } from './clipboard-object-selection.ts';
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
@@ -560,7 +564,7 @@ export function execEditorCommand(
       // Selection is not document state: nothing to save changed.
       return { ok: true, changed: false };
     case 'copy': {
-      // The gate already refused a collapsed selection that holds no chart.
+      // The gate already refused a collapsed selection that holds no drawing.
       const flavours = mounted.copyFlavours();
       if (flavours.reason) return clipboardRefusal(flavours.reason);
       writeClipboardRich(flavours.text, flavours.html, clipboardWindow(options?.editor));
@@ -572,14 +576,14 @@ export function execEditorCommand(
       const flavours = mounted.copyFlavours();
       if (flavours.reason) return clipboardRefusal(flavours.reason);
       writeClipboardRich(flavours.text, flavours.html, clipboardWindow(options?.editor));
-      // One selected chart: the cut deletes that chart, as Delete does.
-      if (flavours.chartDrawingNodeId) {
-        const removed = mounted.deleteImage(flavours.chartDrawingNodeId);
+      // One selected drawing: the cut deletes that drawing, as Delete does.
+      if (flavours.drawingNodeId) {
+        const removed = mounted.deleteImage(flavours.drawingNodeId);
         if (!removed.ok)
           return {
             ok: false,
             code: 'unsupported',
-            reason: removed.detail ?? removed.reason ?? 'the chart was not deleted',
+            reason: removed.detail ?? removed.reason ?? 'the drawing was not deleted',
           };
       } else mounted.deleteSelection();
       break;
@@ -592,8 +596,14 @@ export function execEditorCommand(
       if (refusal) {
         return clipboardRefusal(refusal === 'chart' ? 'chart-content' : 'unsupported-content');
       }
+      const before = mounted.state();
       const result = mounted.pasteRich(command.text, command.html ?? null);
       if (!result) {
+        // A copied drawing refuses where it cannot land; this paste published that refusal.
+        const after = mounted.state();
+        const refused = after !== before ? after.lastRejection : null;
+        if (refused === DRAWING_CLIPBOARD_STORY_REASON || refused === DRAWING_PASTE_CELLS_REASON)
+          return { ok: false, code: 'unsupported', reason: refused };
         return { ok: true, changed: false };
       }
       break;

@@ -80,7 +80,12 @@
     "noGoToView": "Ir a no está disponible aquí",
     "noBookmarkDialog": "No se pueden agregar marcadores aquí",
     "groupMemberMove": "Una forma dentro de un grupo no se mueve, cambia de tamaño ni se elimina por sí sola. Presione Esc para seleccionar el grupo.",
-    "groupMemberProperties": "Una forma dentro de un grupo toma el ajuste, el texto alternativo y las propiedades del grupo. Presione Esc para seleccionar el grupo."
+    "groupMemberProperties": "Una forma dentro de un grupo toma el ajuste, el texto alternativo y las propiedades del grupo. Presione Esc para seleccionar el grupo.",
+    "drawingClipboardParts": "Este dibujo usa partes que no se pueden copiar.",
+    "drawingClipboardStory": "Los dibujos solo se pueden copiar, cortar o pegar en el documento principal.",
+    "groupMemberClipboard": "Una forma dentro de un grupo se copia o se corta con su grupo. Presiona Escape para seleccionar el grupo.",
+    "drawingClipboardSize": "Este dibujo es demasiado grande para copiarlo.",
+    "drawingPasteCells": "Coloca el cursor en el texto para pegar un dibujo."
   },
   "toolbar": {
     "ariaLabel": "Barra de formato",

@@ -1073,7 +1073,12 @@
     "noGoToView": "Buka tidak tersedia di sini",
     "noBookmarkDialog": "Penanda tidak dapat ditambahkan di sini",
     "groupMemberMove": "Bentuk di dalam grup tidak dapat dipindahkan, diubah ukurannya, atau dihapus sendiri. Tekan Escape untuk memilih grup.",
-    "groupMemberProperties": "Bentuk di dalam grup mengambil pembungkusan, teks alternatif, dan propertinya dari grup. Tekan Escape untuk memilih grup."
+    "groupMemberProperties": "Bentuk di dalam grup mengambil pembungkusan, teks alternatif, dan propertinya dari grup. Tekan Escape untuk memilih grup.",
+    "drawingClipboardParts": "Gambar ini menggunakan bagian yang tidak dapat disalin.",
+    "drawingClipboardStory": "Gambar hanya dapat disalin, dipotong, atau ditempel di dokumen utama.",
+    "groupMemberClipboard": "Bentuk di dalam grup disalin atau dipotong bersama grupnya. Tekan Escape untuk memilih grup.",
+    "drawingClipboardSize": "Gambar ini terlalu besar untuk disalin.",
+    "drawingPasteCells": "Letakkan kursor di teks untuk menempelkan gambar."
   },
   "equationPopup": {
     "apply": "Terapkan",

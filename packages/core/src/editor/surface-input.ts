@@ -476,14 +476,14 @@ export function createClipboardHandlers(surface: PaginatedSurface): {
       event.preventDefault();
       return false;
     }
-    // A chart's name can be empty; its HTML flavour still carries the copy.
-    if ((!flavours.text && !flavours.chartDrawingNodeId) || !event.clipboardData) return false;
+    // A selected drawing copies no text; its HTML flavour carries the copy.
+    if ((!flavours.text && !flavours.drawingNodeId) || !event.clipboardData) return false;
     event.clipboardData?.setData('text/plain', flavours.text);
     if (flavours.html) event.clipboardData?.setData('text/html', flavours.html);
-    chartCut = flavours.chartDrawingNodeId ?? null;
+    drawingCut = flavours.drawingNodeId ?? null;
     return true;
   };
-  let chartCut: string | null = null;
+  let drawingCut: string | null = null;
 
   const onCopy = (event: ClipboardEvent): void => {
     if (!writeFlavours(event)) return;
@@ -503,8 +503,8 @@ export function createClipboardHandlers(surface: PaginatedSurface): {
       return;
     }
     if (!writeFlavours(event)) return;
-    // A cut of one selected chart deletes that chart; there is no text range to delete.
-    if (chartCut) surface.deleteImage(chartCut);
+    // A cut of one selected drawing deletes that drawing; there is no text range to delete.
+    if (drawingCut) surface.deleteImage(drawingCut);
     else surface.deleteSelection();
     event.preventDefault();
   };

@@ -1073,7 +1073,12 @@
     "noGoToView": "Git burada kullanılamıyor",
     "noBookmarkDialog": "Buraya yer işareti eklenemez",
     "groupMemberMove": "Grup içindeki bir şekil tek başına taşınamaz, yeniden boyutlandırılamaz veya silinemez. Grubu seçmek için Esc tuşuna basın.",
-    "groupMemberProperties": "Grup içindeki bir şekil kaydırma, alternatif metin ve özelliklerini gruptan alır. Grubu seçmek için Esc tuşuna basın."
+    "groupMemberProperties": "Grup içindeki bir şekil kaydırma, alternatif metin ve özelliklerini gruptan alır. Grubu seçmek için Esc tuşuna basın.",
+    "drawingClipboardParts": "Bu çizim kopyalanamayan parçalar kullanıyor.",
+    "drawingClipboardStory": "Çizimler yalnızca ana belgede kopyalanabilir, kesilebilir veya yapıştırılabilir.",
+    "groupMemberClipboard": "Bir grup içindeki şekil, grubuyla birlikte kopyalanır veya kesilir. Grubu seçmek için Escape tuşuna basın.",
+    "drawingClipboardSize": "Bu çizim kopyalanamayacak kadar büyük.",
+    "drawingPasteCells": "Çizim yapıştırmak için imleci metne yerleştirin."
   },
   "equationPopup": {
     "apply": "Uygula",
