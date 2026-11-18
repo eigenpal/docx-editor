@@ -170,7 +170,7 @@ import { createPageContentInsets, registerOverflowPageShell } from './page-furni
 import { convergenceTailShiftAllowed } from './page-reuse-guards.ts';
 import { commonKeyPrefix, commonKeySuffix } from './flow-key-diff.ts';
 import { createPreviousPassZones } from './previous-pass-zones.ts';
-import { lineBandSkip, tableBandSpaceAfter } from './table-band-space-after.ts';
+import { lineBandSkip, ownTableKeepsTop, tableBandSpaceAfter } from './table-band-space-after.ts';
 import { hostSheetGeometry } from './continued-sheet-geometry.ts';
 import { TextTableCarry } from './table-text-carry.ts';
 import { documentOpeningCellParagraph } from './table-cell-terminator.ts';
@@ -1619,7 +1619,8 @@ function* layoutBlocksPass(
     pendingLine: PendingLine,
     appliedSkipByLineIndex: ReadonlyMap<number, number>,
     spaceBefore: number,
-    bandAfter: number
+    bandAfter: number,
+    ownBefore: number
   ): number => {
     if (anchorLineSkipsExclusion(entry.paragraph, options.inlineDrawingLayout, pendingLine))
       return 0;
@@ -1636,7 +1637,10 @@ function* layoutBlocksPass(
     const above = lineIndex === fragmentFirstLine ? spaceBefore : 0;
     const live =
       zones.length > 0
-        ? lineBandSkip(cursorY, pendingLine.height, zones, above, bandAfter, entry.paragraph.id)
+        ? lineBandSkip(cursorY, pendingLine.height, zones, above, bandAfter, {
+            id: entry.paragraph.id,
+            spaceAbove: lineIndex === fragmentFirstLine ? ownBefore : 0,
+          })
         : 0;
     const breakSkip = pendingLine.exclusionSkipBefore ?? 0;
     return Math.max(live, breakSkip);
@@ -2223,14 +2227,17 @@ function* layoutBlocksPass(
       }
     }
 
-    const atTopOfPage = cursorY === 0 && !regionHasFragments();
+    // In legacy layout, an anchor that its own floating table covers there does not open it.
+    const atTopOfPage =
+      cursorY === 0 &&
+      !regionHasFragments() &&
+      !ownTableKeepsTop(options.compatibilityMode, pageExclusionZones(), paragraphId);
     // Lines holding only a leading page break take no space before and draw no rule. Both
     // open the text after the breaks, on its own sheet.
     let breakLinesOnly = !frame && leadingBreak();
     // Collapsed with the space after above, in every mode: the text keeps what it would get.
-    const textBefore = breakLinesOnly
-      ? collapsedSpaceBefore(spacing.before, previousSpaceAfter)
-      : 0;
+    const collapsedBefore = collapsedSpaceBefore(spacing.before, previousSpaceAfter);
+    const textBefore = breakLinesOnly ? collapsedBefore : 0;
     const appliedBefore = breakLinesOnly
       ? 0
       : appliedSpaceBefore(
@@ -2240,6 +2247,8 @@ function* layoutBlocksPass(
           frame ? false : keepsBeforeAtPageStart(index, entry)
         );
     if (appliedBefore > 0) cursorY += appliedBefore;
+    // Below its own floating table the anchor no longer opens the page: it keeps that space.
+    const ownTableBefore = breakLinesOnly ? 0 : collapsedBefore;
     // The top rule and its gap are flow height above the first line, exactly as the bottom
     // rule is flow height below the last — pagination has to see both or a boxed paragraph
     // overhangs the bottom margin by the height of its own frame.
@@ -2521,7 +2530,8 @@ function* layoutBlocksPass(
             pendingLine,
             appliedSkipByLineIndex,
             fragmentBefore,
-            bandAfter
+            bandAfter,
+            fragmentIndex === 0 ? ownTableBefore : 0
           );
       // Auto spacing below the glyph band may cross the bottom text margin, not a footnote
       // area. The painted line keeps its full box; only the pagination budget drops it.

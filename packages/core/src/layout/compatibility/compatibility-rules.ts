@@ -259,6 +259,10 @@ export const MODE_RULES = {
     'A wrapping object positioned from its paragraph never starts above the top margin',
     'ECMA-376 Part 1 §20.4.2.11 positionV'
   ),
+  ownTableKeepsPageTopSpaceBefore: legacy(
+    'A paragraph at the top of a page keeps its space before when a floating table it anchors covers the top of the text area',
+    'ECMA-376 Part 1 §17.4.57 tblpPr'
+  ),
 } as const satisfies Record<string, ModeRule>;
 
 /** Rules that read compatibility options, so they need the parsed settings. */
