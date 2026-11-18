@@ -204,9 +204,9 @@ export function breakPreparedParagraphLazily(
   const reused = reuse?.();
   if (reused) return reused;
   const lines = breakPreparedParagraph({ ...prepare(), cache: undefined, cacheKey: null });
-  // Preserve the breaker's snapshot ownership and single lookup on a cache miss.
-  storePendingLines(cache, cacheKey, lines);
-  return lines;
+  // Preserve the breaker's snapshot ownership and single lookup on a cache miss. The caller
+  // takes the snapshot the cache holds, which is what every later pass reads back.
+  return storePendingLines(cache, cacheKey, lines);
 }
 
 /**
