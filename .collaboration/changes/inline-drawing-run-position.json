@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Inline drawings ignored their run position. Drawing lines could also ignore the section grid alignment.",
+  "after": "The layout uses the run position and fits the full drawing line on the section grid.",
+  "reason": "The change only affects derived layout. It makes no changes to document or collaboration formats.",
+  "tests": [
+    "packages/core/src/layout/__tests__/legacy-vml-layout.test.ts",
+    "packages/pro/src/collaboration/__tests__/positioned-preview-editors.test.ts"
+  ],
+  "changeset": "inline-drawing-run-position",
+  "migration": null
+}

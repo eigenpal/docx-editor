@@ -763,17 +763,21 @@ export function breakParagraph(
   let pictureRunBand: { height: number; baseline: number } | undefined;
   const growLineMetricsForDrawing = (
     style: ResolvedRunStyle,
-    measure: ReturnType<typeof measureInlineDrawing>
+    measure: ReturnType<typeof measureInlineDrawing>,
+    runPositionPt: number
   ): { extentTopY: number } => {
     const textMetrics = measurer.lineMetrics(style);
     pictureRunBand ??= { height: 0, baseline: 0 };
     growLineMetrics(pictureRunBand, textMetrics);
     const layout = inlineDrawingVerticalLayout(
       textMetrics.baseline,
-      line.height || textMetrics.height,
-      measure
+      runPositionPt ? textMetrics.height : line.height || textMetrics.height,
+      measure,
+      runPositionPt
     );
-    if (line.height === 0) {
+    if (runPositionPt) {
+      growLineMetrics(line, { height: layout.lineHeight, baseline: layout.baseline });
+    } else if (line.height === 0) {
       line.height = layout.lineHeight;
       line.baseline = layout.baseline;
     } else if (layout.lineHeight > line.height) {
@@ -825,12 +829,15 @@ export function breakParagraph(
     const hasUnscaledInlineExtent =
       line.drawings.length > 0 ||
       line.spans.some((span) => span.equation !== undefined || span.unsupported !== undefined);
-    const scalesTextBandOnly = lineSpacing.rule === 'auto' && hasUnscaledInlineExtent;
+    // A snapping picture line occupies grid pitches sized for the entire line. Its drawing
+    // moves with the text into the grid band, just as it moves under exact or minimum spacing.
+    const gridFitsDrawing = lineSpacing.gridPitch !== undefined && line.drawings.length > 0;
+    const scalesTextBandOnly =
+      lineSpacing.rule === 'auto' && hasUnscaledInlineExtent && !gridFitsDrawing;
     const holdsUnscaledPicture =
       scalesTextBandOnly &&
       line.drawings.length > 0 &&
-      !line.spans.some((span) => span.equation !== undefined) &&
-      lineSpacing.gridPitch === undefined;
+      !line.spans.some((span) => span.equation !== undefined);
     const addsTextBandExtra = holdsUnscaledPicture && lineSpacing.value > 240;
     // Below single spacing the multiple takes its missing text band off the line's top: the
     // line is the picture less that band, never less than the scaled text band.
@@ -1059,7 +1066,8 @@ export function breakParagraph(
         applyInlineObjectSkipIfNeeded(atomWidth, measure.lineContribution);
         if (!ensurePlacementWidth(atomWidth)) continue;
       }
-      const { extentTopY } = growLineMetricsForDrawing(piece.style, measure);
+      const runPositionPt = rule ? 0 : piece.style.baselineShiftPt;
+      const { extentTopY } = growLineMetricsForDrawing(piece.style, measure, runPositionPt);
       const slotX = lineOrigin() + line.width;
       line.drawings.push(
         buildInlineDrawingRecord({
@@ -1069,6 +1077,7 @@ export function breakParagraph(
           slotX,
           y: extentTopY,
           baseline: line.baseline,
+          runPositionPt,
           contentLeft: contentOriginX,
           contentRight: contentOriginX + rightEdge,
           ...(flow?.deferInlineDrawingHorizontalClip ? { deferHorizontalClip: true } : {}),

@@ -15,8 +15,14 @@ export function syncPendingDrawingBaselines(line: PendingLine, pageBreaksIgnored
   if (!line.drawings.length) return;
   if (line.spans.every((span) => pageBreaksIgnored && span.text === PAGE_BREAK_CHAR))
     for (const drawing of line.drawings)
-      line.baseline = Math.max(line.baseline, drawing.y + drawing.height);
+      line.baseline = Math.max(
+        line.baseline,
+        drawing.y + drawing.height + (drawing.runPositionPt ?? 0)
+      );
   repositionPendingDrawings(line);
   for (const drawing of line.drawings)
-    line.baseline = Math.max(line.baseline, drawing.y + drawing.height);
+    line.baseline = Math.max(
+      line.baseline,
+      drawing.y + drawing.height + (drawing.runPositionPt ?? 0)
+    );
 }
