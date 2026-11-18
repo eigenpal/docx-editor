@@ -134,6 +134,8 @@ describe('the shaped-width cache keys every input of the advance', () => {
       style({ fontSizePt: 12 }),
       style({ kerningMinPt: 1 }),
       style({ bold: true }),
+      style({ bold: true, kerningMinPt: 1 }),
+      style({ smallCaps: true }),
       style({
         ligatures: { standard: true, contextual: false, historical: false, discretionary: false },
       }),
@@ -144,10 +146,12 @@ describe('the shaped-width cache keys every input of the advance', () => {
       style({ shaping: { ...shaping, context: { before: '', after: 'a' } } }),
     ];
     const widths = variants.map((variant) => m.measure('word', variant));
-    expect(counts.shaped).toBe(variants.length);
+    // One shaped run for each variant, and one more for the small caps probe of the face.
+    const shapedOnce = counts.shaped;
+    expect(shapedOnce).toBe(variants.length + 1);
     // Every variant answers again from its own entry.
     expect(variants.map((variant) => m.measure('word', variant))).toEqual(widths);
-    expect(counts.shaped).toBe(variants.length);
+    expect(counts.shaped).toBe(shapedOnce);
   });
 
   test('text that spells a context key cannot read a context entry', () => {

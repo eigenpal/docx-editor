@@ -38,9 +38,11 @@ function drawsAsNamedFace(font: ResolvedFont, style: ResolvedRunStyle): boolean 
  * with. A style object and a face never change, so the pair always selects the same cache
  * entry: a later call with the slot reads the answer directly and skips the family
  * comparison that builds the entry key. Line breaking asks for each word of a run. The
- * caller owns the slot, one for each style object, and must pass a slot with that style only.
+ * caller owns the slot, one for each style object. The slot records the style it answered
+ * for, so a slot passed with another style is not read: it is filled again for that style.
  */
 export interface LineMetricsSlot {
+  lineStyle?: ResolvedRunStyle;
   lineFont?: ResolvedFont;
   lineBase?: { height: number; baseline: number };
 }
@@ -65,7 +67,9 @@ export function createShapedLineMetrics(
     factor === 1 ? base : { height: base.height * factor, baseline: base.baseline * factor };
   return (font, style, slot) => {
     const factor = glyphSizeFactorOf(style);
-    if (slot?.lineBase && slot.lineFont === font) return scaled(slot.lineBase, factor);
+    if (slot?.lineBase && slot.lineFont === font && slot.lineStyle === style) {
+      return scaled(slot.lineBase, factor);
+    }
     let bySize = linesByFont.get(font);
     if (!bySize) {
       bySize = new Map();
@@ -81,6 +85,7 @@ export function createShapedLineMetrics(
     const cached = bySize.get(key);
     if (cached) {
       if (slot) {
+        slot.lineStyle = style;
         slot.lineFont = font;
         slot.lineBase = cached;
       }
@@ -164,6 +169,7 @@ export function createShapedLineMetrics(
     if (!scalable) return metrics;
     bySize.set(key, metrics);
     if (slot) {
+      slot.lineStyle = style;
       slot.lineFont = font;
       slot.lineBase = metrics;
     }

@@ -89,9 +89,10 @@ export interface NoteRefNumberingSource {
 }
 
 /**
- * Memoized per source object: the notes input is session-stable and the section enumeration
- * is cached per blocks array, so an unchanged pass reuses the wrapper BY IDENTITY — which is
- * what keeps the REF context memo (validated on this identity) serving its no-change hit.
+ * Memoized per source object, for the callers that pass the SAME notes input again: the
+ * section enumeration is cached per blocks array, so such a pass reuses the wrapper by
+ * identity. A pass that builds a new notes input misses here and is answered by
+ * `numberingInputsBySections` below.
  */
 const numberingInputMemos = new WeakMap<
   NoteRefNumberingSource,

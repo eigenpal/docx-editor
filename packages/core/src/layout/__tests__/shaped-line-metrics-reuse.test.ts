@@ -18,6 +18,8 @@ import {
   type ResolvedFont,
   type ResolvedRunStyle,
 } from '../index.ts';
+import { createShapedLineMetrics, type LineMetricsSlot } from '../shaped-line-metrics.ts';
+import type { LayoutShapingEnvironment } from '../layout-run-shape.ts';
 
 await initializeHarfBuzz();
 
@@ -121,4 +123,36 @@ test('an answer from the fallback measurer is asked for again on every call', ()
   // A fallback answer is at the drawn size and is not kept, so each call asks again.
   expect(failing.lineMetrics(one, 'word')).toEqual(first);
   expect(fallbackCalls).toBe(callsForOne * 2);
+});
+
+const ENVIRONMENT: LayoutShapingEnvironment = {
+  shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+  unicodeDataVersion: '15.1',
+  script: 'Latn',
+  fixedPointScale: 1000,
+  normalization: 'none',
+  features: {},
+  roundingMode: 'halfToEven',
+  language: 'en',
+  variationAxes: {},
+};
+
+test('a slot passed with another style is filled again, not read', () => {
+  const lineMetricsOf = createShapedLineMetrics(
+    createHarfBuzzTextShaper(),
+    ENVIRONMENT,
+    fallback,
+    4,
+    0.5
+  );
+  const slot: LineMetricsSlot = {};
+  const small = style({ fontFamily: 'DejaVu Sans' });
+  const large = style({ fontFamily: 'DejaVu Sans', fontSizePt: 22 });
+  const first = lineMetricsOf(font, small, slot);
+  expect(slot.lineStyle).toBe(small);
+  // The same face and another size: the kept answer belongs to the first style only.
+  const second = lineMetricsOf(font, large, slot);
+  expect(second.height).toBeCloseTo(first.height * 2, 2);
+  expect(slot.lineStyle).toBe(large);
+  expect(lineMetricsOf(font, small, slot)).toEqual(first);
 });
