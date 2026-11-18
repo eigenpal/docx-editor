@@ -171,7 +171,6 @@ import {
   withNumberingStyleLinks,
   type CellSelection,
   type ContentControlBoundaryRecord,
-  type KeyedRange,
   type LayoutScope,
   type NavigationCommand,
   type ReviewItem,
@@ -343,7 +342,7 @@ import {
   noteScopeIdInLayout,
 } from './surface-scope.ts';
 import { drawingSelectionIntentKey, memberIntent } from './group-member-selection.ts';
-import { RANGE_SUFFIX, createBandItemLookup, reviewBands } from './surface-review-band-class.ts';
+import { bandRanges, createBandItemLookup, reviewBands } from './surface-review-band-class.ts';
 import { createCaretViewFollower, type CaretFollowMode } from './surface-caret-follow.ts';
 import { createInPlaceReplacement } from './surface-replace-in-place.ts';
 import {
@@ -3674,34 +3673,7 @@ export function mountPaginatedSurface(
     // pages 1–5 the moment page 1 scrolled away. `keyedRangeRects` clips to the visible pages
     // anyway; this is only a pre-filter, and a false keep costs one range's measurement.
     const onScreen = pages ? rangesOnPages(currentLayout, pages) : () => true;
-    const ranges: KeyedRange[] = [];
-    for (const item of visibleReviewItems()) {
-      if (item.kind === 'comment') {
-        if (item.range === null) continue;
-        if (!onScreen(item.range.start.paragraphId, item.range.end.paragraphId)) continue;
-        ranges.push({
-          key: reviewItemKey(item),
-          from: { paragraphId: item.range.start.paragraphId, offset: item.range.start.offset },
-          to: { paragraphId: item.range.end.paragraphId, offset: item.range.end.offset },
-        });
-        continue;
-      }
-      // Revisions are measured in the SAME pass and drawn only when active: tracked text
-      // already carries an underline, a strike and a margin bar, so banding all of it would
-      // repeat what the decoration says and leave a page of edits as one solid wash.
-      // Custom-node cards take the same treatment — the chip tint already marks the node
-      // persistently, so its band appears only while its card is open.
-      const key = reviewItemKey(item);
-      const itemRanges = item.kind === 'revision' ? item.ranges : item.range ? [item.range] : [];
-      for (const [index, range] of itemRanges.entries()) {
-        if (!onScreen(range.start.paragraphId, range.end.paragraphId)) continue;
-        ranges.push({
-          key: itemRanges.length === 1 ? key : `${key}${RANGE_SUFFIX}${index}`,
-          from: { paragraphId: range.start.paragraphId, offset: range.start.offset },
-          to: { paragraphId: range.end.paragraphId, offset: range.end.offset },
-        });
-      }
-    }
+    const ranges = bandRanges(visibleReviewItems(), onScreen);
     const byKey = keyedRangeRectsWithTextboxes(currentLayout, ranges, pages, measurer);
     const rects: (OverlayRect & { key: string })[] = [];
     for (const [key, found] of byKey) for (const rect of found) rects.push({ ...rect, key });

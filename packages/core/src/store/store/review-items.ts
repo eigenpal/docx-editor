@@ -516,6 +516,9 @@ const REVIEW_KIND_RANK: Readonly<Record<ReviewItem['kind'], number>> = {
  * Returning the whole stack rather than one winner is what lets a surface offer cycling, a
  * stacked card, or a "1 of 3" affordance. A comment wrapping a revision used to be unreachable
  * because only the tightest range was ever returned.
+ *
+ * `order` gives each paragraph its own position. A paragraph it does not list holds nothing
+ * and is held by nothing.
  */
 export function reviewItemsAt(
   items: readonly ReviewItem[],

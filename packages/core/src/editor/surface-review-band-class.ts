@@ -1,8 +1,14 @@
-// The class a review band paints in: comment, custom node, or revision, faint until its card
-// is the active one. Pure, so the surface and its tests share one rule.
+// The review bands the surface paints over commented and changed text: which ranges are
+// measured, which item each measured band belongs to, and the class it paints in (comment,
+// custom node, or revision, faint until its card is the active one). Pure, so the surface and
+// its tests share one rule.
+//
+// The queue of a long document holds thousands of items while the visible pages show a few.
+// Nothing here builds a key for an item that has no range on those pages.
 
 import {
   reviewItemKey,
+  type KeyedRange,
   type ReviewItem,
   type ReviewRevisionKind,
 } from '@docx-editor.dev/core/layout';
@@ -61,6 +67,41 @@ export function bandClassFor(
   return `docx-revision-band docx-revision-band--${kind}${isActive ? ' docx-revision-band--active' : ''}`;
 }
 
+/**
+ * The ranges to measure for bands: every range of every item that can show on the pages.
+ *
+ * `onScreen` answers for a range's two paragraphs. It is only a filter in front of measuring,
+ * so a false keep costs one measurement. A revision is measured in the same pass as a comment
+ * and painted only while it is active: tracked text already carries its own decoration. A
+ * custom node takes the same treatment.
+ *
+ * A decision that covers several sites gets one key for each range, the item key followed by
+ * the range index. The key is built for the first range that passes the filter, and not at
+ * all for an item with none.
+ */
+export function bandRanges(
+  items: readonly ReviewItem[],
+  onScreen: (fromParagraphId: string, toParagraphId: string) => boolean
+): KeyedRange[] {
+  const ranges: KeyedRange[] = [];
+  for (const item of items) {
+    const itemRanges = item.kind === 'revision' ? item.ranges : item.range ? [item.range] : [];
+    // A comment has one range and its key is never suffixed.
+    const suffixed = item.kind !== 'comment' && itemRanges.length !== 1;
+    let key: string | undefined;
+    for (const [index, range] of itemRanges.entries()) {
+      if (!onScreen(range.start.paragraphId, range.end.paragraphId)) continue;
+      key ??= reviewItemKey(item);
+      ranges.push({
+        key: suffixed ? `${key}${RANGE_SUFFIX}${index}` : key,
+        from: { paragraphId: range.start.paragraphId, offset: range.start.offset },
+        to: { paragraphId: range.end.paragraphId, offset: range.end.offset },
+      });
+    }
+  }
+  return ranges;
+}
+
 /** A measured band and the key of the range it draws. */
 export type KeyedBandRect = OverlayRect & { readonly key: string };
 
@@ -73,8 +114,8 @@ function decisionOf(key: string): string {
 /**
  * The items the measured bands belong to, by key.
  *
- * A band needs its item for its class and its author. Keying the whole queue for that built
- * one string for every item on every edit, while the bands name only the few items on the
+ * A band needs its item for its class and its author. A map over the whole queue would build
+ * one key for every item on every edit, while the bands name only the few items on the
  * visible pages. This reads the queue once, compares ids, and builds keys for the matches
  * alone. A key the queue lists more than once resolves to its last item, as a map over the
  * whole queue would.

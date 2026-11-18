@@ -8,6 +8,7 @@ import { describe, expect, test } from 'bun:test';
 import { reviewItemKey, type ReviewItem } from '@docx-editor.dev/core/layout';
 import {
   RANGE_SUFFIX,
+  bandRanges,
   createBandItemLookup,
   reviewBands,
   type KeyedBandRect,
@@ -19,6 +20,15 @@ const at = (paragraphId: string, start: number, end: number) => ({
   start: { paragraphId, offset: start },
   end: { paragraphId, offset: end },
 });
+
+/** A revision over the given paragraphs, one range in each; one range in `p1` by default. */
+function revisionIn(id: string, ...paragraphIds: string[]): ReviewItem {
+  return { ...revision(id), ranges: paragraphIds.map((paragraphId) => at(paragraphId, 0, 1)) };
+}
+
+function commentIn(id: string, paragraphId: string | null): ReviewItem {
+  return { ...comment(id), range: paragraphId === null ? null : at(paragraphId, 2, 5) };
+}
 
 function revision(id: string, author = 'A', revisionKind = 'insert'): ReviewItem {
   return {
@@ -64,6 +74,58 @@ function wholeQueue(items: readonly ReviewItem[]): Map<string, ReviewItem> {
   for (const item of items) byKey.set(reviewItemKey(item), item);
   return byKey;
 }
+
+describe('the ranges measured for the review bands', () => {
+  const visible = new Set(['p1', 'p2']);
+  const onScreen = (from: string, to: string) => visible.has(from) || visible.has(to);
+
+  test('each range on the pages is measured under the key of its decision', () => {
+    const custom = { kind: 'custom', id: 'n1', range: at('p2', 1, 4), carded: true } as ReviewItem;
+    const ranges = bandRanges(
+      [
+        commentIn('c1', 'p1'),
+        commentIn('orphan', null),
+        commentIn('away', 'p9'),
+        revisionIn('one', 'p2'),
+        revisionIn('two', 'p1', 'p9', 'p2'),
+        revisionIn('gone', 'p8', 'p9'),
+        revisionIn('none'),
+        custom,
+      ],
+      onScreen
+    );
+    expect(ranges.map((entry) => [entry.key, entry.from.paragraphId, entry.from.offset])).toEqual([
+      ['comment-c1', 'p1', 2],
+      ['revision-one', 'p2', 0],
+      // A decision over several sites keeps the index of each range, on the pages or not.
+      [`revision-two${RANGE_SUFFIX}0`, 'p1', 0],
+      [`revision-two${RANGE_SUFFIX}2`, 'p2', 0],
+      ['custom-n1', 'p2', 1],
+    ]);
+    expect(ranges[0]!.to).toEqual({ paragraphId: 'p1', offset: 5 });
+  });
+
+  test('it builds a key only for an item with a range on the pages', () => {
+    let idReads = 0;
+    const counted = (item: ReviewItem): ReviewItem =>
+      new Proxy(item, {
+        get(target, property, receiver) {
+          if (property === 'id') idReads += 1;
+          return Reflect.get(target, property, receiver);
+        },
+      });
+    const items: ReviewItem[] = [];
+    for (let index = 0; index < 2_000; index += 1) {
+      items.push(counted(revisionIn(`r${index}`, `q${index}`, `q${index + 1}`)));
+      items.push(counted(commentIn(`c${index}`, `q${index}`)));
+    }
+    items.push(counted(revisionIn('here', 'p1', 'p2')));
+    const ranges = bandRanges(items, onScreen);
+    expect(ranges).toHaveLength(2);
+    // One key for the one item on the pages, shared by its two ranges.
+    expect(idReads).toBe(1);
+  });
+});
 
 describe('the items behind the review bands', () => {
   test('each band key resolves to the item a whole-queue map gives', () => {
