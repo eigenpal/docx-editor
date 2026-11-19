@@ -341,6 +341,8 @@ function finiteInk(cell: Cell): cell is Cell & { ink: { left: number; right: num
   );
 }
 
+const opaqueText = (cell: Cell | undefined): string =>
+  cell?.ordinaryOpaque ? withoutTrailingSpaces(cell.span.text) : '';
 const blankSided = (cell: Cell): boolean =>
   cell.qualifiedCurly !== undefined ||
   OPENING.test(cell.span.text) ||
@@ -522,9 +524,9 @@ function fitCjkOptically(
         ? hangAdvance
         : last.span.box.width;
   const hangsLast = hung > 0;
-  // Mode 14 limits how much the line can borrow for one ordinary ideograph.
-  // WPS allows half an em after an East Asian glyph, a quarter plus half
-  // the automatic gap after a Western word, and a sixth after ASCII ).
+  // Mode 14 limits borrowing for one ordinary ideograph in a plain Han line
+  // or directly after a Western word. Earlier mixed text can change the
+  // line's composition, so keep its existing expansion test.
   if (
     context.mode14IdeographFit &&
     !kana &&
@@ -532,12 +534,23 @@ function fitCjkOptically(
     first === last &&
     /^\p{Unified_Ideograph}$/u.test(first.span.text)
   ) {
-    const previous = beforeLast?.ordinaryOpaque ? withoutTrailingSpaces(beforeLast.span.text) : '';
-    let limit = first.natural / 2;
-    if (/\)$/u.test(previous)) limit = first.natural / 6;
-    else if (/[A-Za-z0-9]$/u.test(previous))
-      limit = Math.min(limit, first.natural / 4 + context.candidateAutomaticGap / 2);
-    if (deficit > limit + TOLERANCE) return undefined;
+    let limit: number | undefined;
+    if (context.mode14IdeographFit) {
+      const previous = opaqueText(beforeLast);
+      if (/\)$/u.test(previous)) limit = first.natural / 6;
+      else if (/[A-Za-z0-9]$/u.test(previous))
+        limit = Math.min(first.natural / 2, first.natural / 4 + context.candidateAutomaticGap / 2);
+      else if (
+        (beforeLast &&
+          CLOSING.test(beforeLast.span.text) &&
+          /[A-Za-z0-9]$/u.test(opaqueText(cells.at(-3)))) ||
+        !cells.some(
+          (cell) => cell.sourceIndex < sourceCount && /[A-Za-z0-9]/u.test(opaqueText(cell))
+        )
+      )
+        limit = first.natural / 2;
+    }
+    if (limit !== undefined && deficit > limit + TOLERANCE) return undefined;
   }
   const fullDeficit = deficit;
   deficit -= hung;
