@@ -38,6 +38,7 @@ export interface PendingLine {
    * bottom, while paint keeps the full box and padding.
    */
   trailingSpacing: number;
+  highlightClipsAtLineEnd?: true;
   /** When true, layout must start a new page after this line is placed. */
   pageBreakAfter?: boolean;
   /** When true, layout must advance to the next authored section column. */
@@ -490,6 +491,7 @@ export function frozenLine(line: PendingLine): PendingLine {
       baseline: line.baseline,
       leading: line.leading,
       trailingSpacing: line.trailingSpacing,
+      ...(line.highlightClipsAtLineEnd ? { highlightClipsAtLineEnd: true } : {}),
       ...(line.pageBreakAfter ? { pageBreakAfter: true } : {}),
       ...(line.columnBreakAfter ? { columnBreakAfter: true } : {}),
       ...(line.manualBreakAfter ? { manualBreakAfter: true } : {}),

@@ -382,6 +382,8 @@ export interface LineRecord {
    * Absent on lines published before this was measured; treat as zero.
    */
   readonly trailingSpacing?: number;
+  /** The authored highlight ends at the line measure when punctuation hangs. @internal */
+  readonly highlightClipsAtLineEnd?: true;
   /**
    * Model ranges on this line covering DELETED content, absent when there is none.
    *
