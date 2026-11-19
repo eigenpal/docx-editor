@@ -81,7 +81,28 @@ export function protectedSeamAfter(
   );
 }
 
-/** Select the East Asian analysis, rather than the ordinary run-spanning word cuts. */
+// WPS in legacy modes with punctuation compression treats an ASCII hyphen between
+// letters or digits as part of the word, regardless of the surrounding script.
+function keepsLegacyAsciiHyphenWords(policy: CjkParagraphTypography): boolean {
+  return (
+    !policy.characterWrap &&
+    policy.settings?.legacyLineEndPunctuation === true &&
+    policy.settings.compression !== 'doNotCompress'
+  );
+}
+
+/** Whether a legacy hyphen may straddle runs and needs paragraph-wide analysis. */
+export function hasLegacyAsciiHyphenText(
+  pieces: readonly FieldAwarePiece[],
+  policy: CjkParagraphTypography
+): boolean {
+  return (
+    keepsLegacyAsciiHyphenWords(policy) &&
+    pieces.some((piece) => isText(piece) && piece.text.includes('-'))
+  );
+}
+
+/** Select paragraph-wide analysis for East Asian text and legacy hyphen words. */
 export function usesEastAsianParagraphBreaks(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography
@@ -100,7 +121,7 @@ export function cjkParagraphBreaks(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography
 ): CjkParagraphBreaks | null {
-  if (!usesEastAsianParagraphBreaks(pieces, policy)) {
+  if (!usesEastAsianParagraphBreaks(pieces, policy) && !hasLegacyAsciiHyphenText(pieces, policy)) {
     // A run that opens with a dash needs the text before it; any other paragraph without
     // East Asian text has no paragraph-wide analysis.
     const cuts = paragraphWordCuts(pieces);
@@ -114,7 +135,18 @@ export function cjkParagraphBreaks(
     [0, 'opens'],
     [text.length, 'opens'],
   ]);
-  const latinCuts = new Set(wordBoundaries(text, false));
+  const wordCuts = wordBoundaries(text, false);
+  const asciiAlphanumeric = /^[A-Za-z0-9]$/;
+  const latinCuts = new Set(
+    keepsLegacyAsciiHyphenWords(policy)
+      ? wordCuts.filter(
+          (offset) =>
+            text[offset - 1] !== '-' ||
+            !asciiAlphanumeric.test(text[offset - 2] ?? '') ||
+            !asciiAlphanumeric.test(text[offset] ?? '')
+        )
+      : wordCuts
+  );
   // Numeric expressions and full-width alphabetic words are units, even when
   // runs split a decimal separator or currency sign from its digits.
   const numeric = new Set<number>();
