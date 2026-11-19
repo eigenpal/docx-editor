@@ -12,8 +12,9 @@ import {
   DRAWING_CLIPBOARD_STORY_REASON,
   DRAWING_PASTE_CELLS_REASON,
   drawingCopyFlavours,
-  drawingEndingAt,
+  floatingDrawingEndingAt,
   isDrawingCopyHtml,
+  DRAWING_PASTE_VIEWING_REASON,
 } from './surface-drawing-clipboard.ts';
 import { partOfNodeId } from './surface-scope.ts';
 // Copy, cut and paste for the paginated surface (paginated-surface seam).
@@ -465,14 +466,14 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
         return collapsedAt(end ?? target);
       }
     );
-    // A paste that landed exactly one drawing selects it, so the copy is ready to move.
+    // A paste that landed exactly one floating drawing selects it, so the copy is ready to move.
     if (
       landed &&
       end &&
       end.paragraphId === target.paragraphId &&
       end.offset === target.offset + 1
     ) {
-      const drawingNodeId = drawingEndingAt(session.part(), end.paragraphId, end.offset);
+      const drawingNodeId = floatingDrawingEndingAt(session.part(), end.paragraphId, end.offset);
       if (drawingNodeId) deps.selectPastedDrawing?.(drawingNodeId, end.paragraphId);
     }
     return unsupported ? 'unsupported-content' : landed;
@@ -490,8 +491,13 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     // A copied drawing lands only at a caret in the main story. Elsewhere it refuses, rather than
     // pasting a text box's text alone or nothing at all. Cmd+Shift+V still pastes the text.
     const cells = deps.cellSelection() !== null;
-    if (!forcePlain && isDrawingCopyHtml(html) && (!storyOpen || cells)) {
-      const reason = storyOpen ? DRAWING_PASTE_CELLS_REASON : DRAWING_CLIPBOARD_STORY_REASON;
+    const viewing = deps.editingMode() === 'view';
+    if (!forcePlain && isDrawingCopyHtml(html) && (!storyOpen || cells || viewing)) {
+      const reason = viewing
+        ? DRAWING_PASTE_VIEWING_REASON
+        : storyOpen
+          ? DRAWING_PASTE_CELLS_REASON
+          : DRAWING_CLIPBOARD_STORY_REASON;
       deps.commit(
         () => ({ committed: false, rejected: true, opCount: 0, reason }) as TreeApplyResult
       );

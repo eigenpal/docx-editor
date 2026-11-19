@@ -1295,7 +1295,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Rich paste restores supported formatting, tables, images, notes, equations, fields, and tracked changes from compatible clipboard content. A selected picture, shape, line, or text box in the body copies whole. Sections, headers, footers, and comments do not transfer, and paste outside the body uses plain text.',
+      'Rich paste restores supported formatting, tables, images, notes, equations, fields, and tracked changes from compatible clipboard content. A selected picture, shape, line, text box, or group in the body copies whole. Sections, headers, footers, and comments do not transfer, and paste outside the body uses plain text.',
   },
   {
     id: 'collab.undo-redo',

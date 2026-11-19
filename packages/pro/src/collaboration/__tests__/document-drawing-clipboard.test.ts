@@ -34,9 +34,9 @@ function mounted(peer: Awaited<ReturnType<typeof harness.pair>>['alice']): Edito
   return editor;
 }
 
-async function pair() {
+async function pair(first = '<w:r><w:t>First</w:t></w:r>') {
   const peers = await harness.pair(
-    zipDocument('<w:p><w:r><w:t>First</w:t></w:r></w:p><w:p><w:r><w:t>Second</w:t></w:r></w:p>')
+    zipDocument(`<w:p>${first}</w:p><w:p><w:r><w:t>Second</w:t></w:r></w:p>`)
   );
   const alice = mounted(peers.alice);
   const bob = mounted(peers.bob);
@@ -192,4 +192,30 @@ test('a cut while the other participant types in the box converges and undoes', 
   converged();
   for (const editor of [alice, bob]) expect(editor.findMatches('Typed Cut box')).toHaveLength(1);
   expect(bob.findMatches('Cut box')).toHaveLength(1);
+});
+
+test('concurrent pastes of a legacy VML shape keep distinct shape numbers', async () => {
+  const vml =
+    '<w:r><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" ' +
+    'xmlns:o="urn:schemas-microsoft-com:office:office" id="Legacy" o:spid="_x0000_s1026" ' +
+    'style="position:absolute;margin-left:10pt;margin-top:10pt;width:100pt;height:40pt;z-index:1">' +
+    '<v:textbox><w:txbxContent><w:p><w:r><w:t>VML box</w:t></w:r></w:p></w:txbxContent>' +
+    '</v:textbox></v:shape></w:pict></w:r><w:r><w:t>First</w:t></w:r>';
+  const { alice, bob, sync, converged, pause, resume } = await pair(vml);
+  const copies = [alice, bob].map((editor) => {
+    const shape = editor.surface!.layout().pages[0]!.anchoredDrawings![0]!;
+    expect(editor.surface!.selectDrawing(shape.drawingNodeId, shape.anchorParagraphId)).toBe(true);
+    return editor.surface!.copyFlavours();
+  });
+  pause();
+  pasteAt(alice, 1, copies[0]!);
+  pasteAt(bob, 1, copies[1]!);
+  sync();
+  resume();
+  converged();
+  for (const editor of [alice, bob]) expect(editor.findMatches('VML box')).toHaveLength(3);
+  const xml = strFromU8(unzipSync(new Uint8Array(await alice.save()))['word/document.xml']!);
+  const spids = [...xml.matchAll(/o:spid="(_x0000_s\d+)"/g)].map((match) => match[1]);
+  expect(spids).toHaveLength(3);
+  expect(new Set(spids).size).toBe(3);
 });

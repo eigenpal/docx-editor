@@ -85,11 +85,12 @@ test.each([
 });
 
 test.each([
-  ['a drawing can be copied, cut, or pasted only in the main document', 'drawingClipboardStory'],
+  ['a drawing can be copied, cut, or pasted only in the body text', 'drawingClipboardStory'],
   [
     'a shape inside a group is copied or cut with its group; press Escape to select the group',
     'groupMemberClipboard',
   ],
+  ['a linked text box cannot be copied', 'linkedTextBoxClipboard'],
   ['this drawing uses parts that cannot be copied', 'drawingClipboardParts'],
   ['this drawing is too large to copy', 'drawingClipboardSize'],
   ['place the caret in the text to paste a drawing', 'drawingPasteCells'],

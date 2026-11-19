@@ -10,12 +10,14 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { forwardClipboardEvents } from '../chrome-clipboard.ts';
+import { createClipboardHandlers } from '../surface-input.ts';
 import { buildCopyFlavours } from '../clipboard-copy-payload.ts';
 import {
   DRAWING_CLIPBOARD_PARTS_REASON,
   DRAWING_CLIPBOARD_STORY_REASON,
   DRAWING_PASTE_CELLS_REASON,
   GROUP_MEMBER_CLIPBOARD_REASON,
+  LINKED_TEXT_BOX_CLIPBOARD_REASON,
   drawingCopyRefusal,
 } from '../surface-drawing-clipboard.ts';
 import {
@@ -191,7 +193,7 @@ test('the cut and paste events carry a shape through the clipboard', async () =>
   expect(copy.defaultPrevented).toBe(false);
 });
 
-test('a copied picture carries its image part', async () => {
+test('a copied inline picture carries its image part and keeps the caret after it', async () => {
   const PNG = Uint8Array.from(
     atob(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
@@ -244,6 +246,11 @@ test('a copied picture carries its image part', async () => {
     head: { paragraphId: second!, offset: 6 },
   });
   expect(surface.pasteRich(flavours.text, flavours.html)).toBe(true);
+  // An inline copy is not selected: the caret stays after it, so typing continues the line.
+  expect(editor.snapshot().image).toBeNull();
+  expect(surface.state().selection.head).toEqual({ paragraphId: second!, offset: 7 });
+  expect(editor.exec({ type: 'insertText', text: 'After' }).ok).toBe(true);
+  expect(paragraphTextOf(surface.session.part(), second!).endsWith('After')).toBe(true);
   const out = unzipSync(new Uint8Array(await editor.save()));
   const xml = strFromU8(out['word/document.xml']!);
   expect(named(xml, 'Photo')).toBe(2);
@@ -307,10 +314,130 @@ test('a drawing outside the main document, inside a group, or with other parts r
 });
 
 const VML_BOX =
-  '<w:r><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" id="Box" ' +
+  '<w:r><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" ' +
+  'xmlns:o="urn:schemas-microsoft-com:office:office" id="Box" o:spid="_x0000_s1026" ' +
   'style="position:absolute;margin-left:10pt;margin-top:10pt;width:100pt;height:40pt;z-index:1">' +
   '<v:textbox><w:txbxContent><w:p><w:r><w:t>Legacy box</w:t></w:r></w:p></w:txbxContent>' +
   '</v:textbox></v:shape></w:pict></w:r>';
+
+test('an overlay inside the pages pastes once, and a refused cut writes no clipboard', async () => {
+  const { editor, container } = await mounted();
+  const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+  const overlay = document.createElement('div');
+  overlay.tabIndex = 0;
+  pages.append(overlay);
+  const stop = forwardClipboardEvents(overlay, editor);
+  select(editor, drawingNamed(editor, 2));
+  const data = new Map<string, string>();
+  overlay.dispatchEvent(clipboardEvent('copy', data));
+  caretAtEndOf(editor, 5);
+  overlay.dispatchEvent(clipboardEvent('paste', data));
+  // The pages do not run the overlay's paste a second time.
+  expect(named(await saved(editor), 'Rule')).toBe(2);
+  stop();
+
+  // A cut whose delete refuses leaves the clipboard as it was: a cut is never a copy.
+  select(editor, drawingNamed(editor, 2));
+  const surface = editor.surface!;
+  const refusing = Object.create(surface) as typeof surface;
+  refusing.deleteImage = () => ({ ok: false, reason: 'locked' }) as never;
+  const written = new Map<string, string>();
+  const cut = clipboardEvent('cut', written);
+  createClipboardHandlers(refusing).onCut(cut as ClipboardEvent);
+  expect(written.size).toBe(0);
+  expect(named(await saved(editor), 'Rule')).toBe(2);
+});
+
+const VML_CHAIN = (id: number, next: string) =>
+  `<w:r><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" ` +
+  `xmlns:o="urn:schemas-microsoft-com:office:office" id="_x0000_s${id}" o:spid="_x0000_s${id}" ` +
+  `style="position:absolute;margin-left:10pt;margin-top:${id - 1000}pt;width:100pt;height:40pt">` +
+  `<v:textbox${next}><w:txbxContent><w:p><w:r><w:t>Chain ${id}</w:t></w:r></w:p>` +
+  '</w:txbxContent></v:textbox></v:shape></w:pict></w:r>';
+
+test('a pasted legacy text box chain links its own renumbered boxes', async () => {
+  const { editor } = await mounted(
+    p(
+      VML_CHAIN(1026, ' style="mso-next-textbox:#_x0000_s1027"') +
+        VML_CHAIN(1027, '') +
+        text('Chain')
+    ) + p(text('Target'))
+  );
+  const surface = editor.surface!;
+  const [first] = surface.session.paragraphIds();
+  const end = paragraphTextOf(surface.session.part(), first!).length + 2;
+  surface.setSelection({
+    anchor: { paragraphId: first!, offset: 0 },
+    head: { paragraphId: first!, offset: end },
+  });
+  const flavours = surface.copyFlavours();
+  caretAtEndOf(editor, 1);
+  expect(surface.pasteRich(flavours.text, flavours.html)).toBe(true);
+  const xml = await saved(editor);
+  const spids = [...xml.matchAll(/o:spid="_x0000_s(\d+)"/g)].map((match) => match[1]!);
+  expect(spids).toHaveLength(4);
+  expect(new Set(spids).size).toBe(4);
+  const links = [...xml.matchAll(/mso-next-textbox:#_x0000_s(\d+)/g)].map((match) => match[1]);
+  // The source links 1026 to 1027; the copy links its first box to its own second box.
+  expect(links).toEqual(['1027', spids[3]]);
+});
+
+test('a text box with a compatibility fallback gives other applications its text once', async () => {
+  const box = anchor({
+    id: 6,
+    name: 'Wrapped',
+    x: 0,
+    y: 0,
+    cx: 100 * EMU,
+    cy: 40 * EMU,
+    graphic: wsp(100 * EMU, 40 * EMU, 'rect', SOLID('FFE699')).replace(
+      '<wps:bodyPr/>',
+      '<wps:txbx><w:txbxContent><w:p><w:r><w:t>Hello box</w:t></w:r></w:p></w:txbxContent>' +
+        '</wps:txbx><wps:bodyPr/>'
+    ),
+    uri: SHAPE_URI,
+  })
+    .replace('<w:r><w:drawing>', '<w:r><mc:AlternateContent><mc:Choice Requires="wps"><w:drawing>')
+    .replace(
+      '</w:drawing></w:r>',
+      `</w:drawing></mc:Choice><mc:Fallback>${VML_BOX.replace('Legacy box', 'Hello box').slice(5, -6)}` +
+        '</mc:Fallback></mc:AlternateContent></w:r>'
+    );
+  const { editor } = await mounted(p(box + text('Body')) + p(text('Target')));
+  select(editor, editor.surface!.layout().pages[0]!.anchoredDrawings![0]!);
+  const flavours = editor.surface!.copyFlavours();
+  expect(flavours.text).toBe('Hello box');
+  expect(flavours.html).toContain('<p>Hello box</p>');
+  expect(flavours.html!.split('<p>Hello box</p>')).toHaveLength(2);
+});
+
+test('a copied drawing pasted while viewing refuses with the viewing reason', async () => {
+  const { editor } = await mounted();
+  select(editor, drawingNamed(editor, 2));
+  const flavours = editor.surface!.copyFlavours();
+  caretAtEndOf(editor, 5);
+  editor.surface!.setEditingMode('view');
+  expect(editor.surface!.pasteRich(flavours.text, flavours.html)).toBe(false);
+  expect(editor.surface!.state().lastRejection).toBe('the document is open for viewing');
+  expect(named(await saved(editor), 'Rule')).toBe(1);
+});
+
+test('paste without formatting arms from the overlay', async () => {
+  const { editor } = await mounted();
+  const overlay = document.createElement('div');
+  document.body.append(overlay);
+  const stop = forwardClipboardEvents(overlay, editor);
+  select(editor, drawingNamed(editor, 2));
+  const data = new Map<string, string>();
+  overlay.dispatchEvent(clipboardEvent('copy', data));
+  caretAtEndOf(editor, 5);
+  const shortcut = { key: 'V', shiftKey: true, ctrlKey: true, bubbles: true };
+  overlay.dispatchEvent(new KeyboardEvent('keydown', shortcut));
+  overlay.dispatchEvent(clipboardEvent('paste', data));
+  // The forced plain paste lands the line's text, which is nothing: no second line.
+  expect(named(await saved(editor), 'Rule')).toBe(1);
+  stop();
+});
 
 test('a legacy VML text box copies, cuts and pastes with its text', async () => {
   const { editor } = await mounted(p(VML_BOX + text('Anchor')) + p(text('Target')));
@@ -322,12 +449,50 @@ test('a legacy VML text box copies, cuts and pastes with its text', async () => 
   expect(flavours.html).toContain('<p>Legacy box</p>');
   caretAtEndOf(editor, 1);
   expect(editor.surface!.pasteRich(flavours.text, flavours.html)).toBe(true);
-  expect((await saved(editor)).split('<w:pict>').length - 1).toBe(2);
+  const xml = await saved(editor);
+  expect(xml.split('<w:pict>').length - 1).toBe(2);
+  // The copy gets its own shape number, so it does not name the same shape as its source.
+  const spids = [...xml.matchAll(/o:spid="(_x0000_s\d+)"/g)].map((match) => match[1]);
+  expect(spids).toHaveLength(2);
+  expect(new Set(spids).size).toBe(2);
+  expect(spids).toContain('_x0000_s1026');
   expect(editor.findMatches('Legacy box')).toHaveLength(2);
   expect(editor.snapshot().image).not.toBeNull();
   // The pasted copy is selected, so a cut takes it straight back out.
   expect(editor.exec({ type: 'cut' })).toMatchObject({ ok: true });
   expect(editor.findMatches('Legacy box')).toHaveLength(1);
+});
+
+test('a text box linked to another refuses to copy with its reason', async () => {
+  const box = (link: string) =>
+    anchor({
+      id: 5,
+      name: 'Chained',
+      x: 0,
+      y: 0,
+      cx: 100 * EMU,
+      cy: 40 * EMU,
+      graphic: wsp(100 * EMU, 40 * EMU, 'rect', SOLID('FFE699')).replace(
+        '<wps:bodyPr/>',
+        `${link}<wps:bodyPr/>`
+      ),
+      uri: SHAPE_URI,
+    });
+  const vml = VML_BOX.replace('<v:textbox>', '<v:textbox style="mso-next-textbox:#Next">');
+  for (const drawing of [
+    box('<wps:linkedTxbx id="1" seq="1"/>'),
+    box('<wps:txbx id="1"><w:txbxContent><w:p/></w:txbxContent></wps:txbx>'),
+    vml,
+  ]) {
+    const { editor } = await mounted(p(drawing + text('Body')));
+    select(editor, editor.surface!.layout().pages[0]!.anchoredDrawings![0]!);
+    const refused = { ok: false, code: 'unsupported', reason: LINKED_TEXT_BOX_CLIPBOARD_REASON };
+    expect(editor.can({ type: 'copy' })).toMatchObject(refused);
+    expect(editor.exec({ type: 'copy' })).toMatchObject(refused);
+    expect(editor.exec({ type: 'cut' })).toMatchObject(refused);
+    expect(editor.surface!.copyFlavours()).toMatchObject({ html: null });
+    expect(editor.surface!.state().lastRejection).toBe(LINKED_TEXT_BOX_CLIPBOARD_REASON);
+  }
 });
 
 test('other applications read a text box as its text and a line as nothing', async () => {

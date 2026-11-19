@@ -6,12 +6,13 @@
 // copy. This lane copies the drawing's one offset unit as an ordinary clipboard fragment
 // instead. The paste then takes the ordinary fragment lane: it lands at the caret, gets a fresh
 // `wp:docPr` id, keeps its size, formatting and position offsets, and replicates like every
-// other rich paste. A paste that lands exactly one drawing selects it, so the copy is ready to
-// move.
+// other rich paste. A paste that lands exactly one floating drawing selects it, so the copy is
+// ready to move. An inline drawing keeps the caret after it, so typing continues the line.
 //
 // The copy refuses rather than copying something else: a drawing outside the main story, a
-// shape selected inside a group, a drawing whose parts cannot travel (a diagram or an embedded
-// object, for example) and a picture too large for the clipboard each name a reason.
+// shape selected inside a group, a linked text box, a drawing whose parts cannot travel (a
+// diagram or an embedded object, for example) and a picture too large for the clipboard each
+// name a reason.
 //
 // Other applications read the interop HTML and the plain text: a text box gives its text, and a
 // shape with nothing to show gives nothing rather than an empty paragraph.
@@ -26,6 +27,9 @@ import type {
 import { findNode, parentNodeOf } from '../store/package/ooxml-edit.ts';
 import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
 import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tree.ts';
+import { WP_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
+import { WPS_NAMESPACE_URI } from '../store/package/ooxml-drawing-rules.ts';
+import { VML, attribute } from '../store/package/legacy-vml-values.ts';
 import { isClipboardObject } from '../store/store/clipboard-object-policy.ts';
 import { resolveInternalTarget } from '../store/package/opc-names.ts';
 import { relationshipsOf, resolveContentTypeOf } from '../store/package/package-edit.ts';
@@ -45,11 +49,14 @@ import { selectedGroupMember } from './group-member-selection.ts';
  * must stay the same.
  */
 export const DRAWING_CLIPBOARD_STORY_REASON =
-  'a drawing can be copied, cut, or pasted only in the main document';
+  'a drawing can be copied, cut, or pasted only in the body text';
 
 /** Why a copy or cut refuses while a shape inside a group is selected. Translated the same way. */
 export const GROUP_MEMBER_CLIPBOARD_REASON =
   'a shape inside a group is copied or cut with its group; press Escape to select the group';
+
+/** Why a copy or cut refuses a text box linked to another. Translated the same way. */
+export const LINKED_TEXT_BOX_CLIPBOARD_REASON = 'a linked text box cannot be copied';
 
 /** Why a copy or cut refuses a drawing whose parts cannot travel. Translated the same way. */
 export const DRAWING_CLIPBOARD_PARTS_REASON = 'this drawing uses parts that cannot be copied';
@@ -59,6 +66,23 @@ export const DRAWING_CLIPBOARD_SIZE_REASON = 'this drawing is too large to copy'
 
 /** Why a copied drawing refuses to paste over a cell selection. Translated the same way. */
 export const DRAWING_PASTE_CELLS_REASON = 'place the caret in the text to paste a drawing';
+
+/** Why a copied drawing refuses to paste while the document is open for viewing. Shared. */
+export const DRAWING_PASTE_VIEWING_REASON = 'the document is open for viewing';
+
+/** Every sentence the drawing clipboard refuses with, which `exec` gives back as its reason. */
+export const DRAWING_CLIPBOARD_REASONS: ReadonlySet<string> = new Set([
+  DRAWING_CLIPBOARD_STORY_REASON,
+  GROUP_MEMBER_CLIPBOARD_REASON,
+  LINKED_TEXT_BOX_CLIPBOARD_REASON,
+  DRAWING_CLIPBOARD_PARTS_REASON,
+  DRAWING_CLIPBOARD_SIZE_REASON,
+  DRAWING_PASTE_CELLS_REASON,
+  DRAWING_PASTE_VIEWING_REASON,
+]);
+
+/** Markup compatibility, whose `mc:Fallback` repeats the `mc:Choice` content. */
+const MC_NAMESPACE_URI = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 
 /** The attribute that marks the HTML flavour of one copied drawing. */
 const DRAWING_COPY_ATTRIBUTE = 'data-docx-editor-drawing';
@@ -91,6 +115,54 @@ export function drawingUnitIn(
       : null;
   }
   return null;
+}
+
+/**
+ * Whether the drawing holds a text box that is part of a chain. A chain names its boxes by id, so
+ * a copy would make a second box with the same place in the chain.
+ */
+function holdsLinkedTextBox(drawing: OoxmlNode): boolean {
+  const pending: OoxmlNode[] = [drawing];
+  while (pending.length) {
+    const node = pending.pop()!;
+    if (node.kind === 'textValue') continue;
+    const element = node as OoxmlElement;
+    if (element.namespaceUri === WPS_NAMESPACE_URI) {
+      if (element.localName === 'linkedTxbx') return true;
+      if (element.localName === 'txbx' && attribute(element, 'id') !== undefined) return true;
+    }
+    if (
+      element.namespaceUri === VML &&
+      element.localName === 'textbox' &&
+      /mso-next-textbox/i.test(attribute(element, 'style') ?? '')
+    )
+      return true;
+    for (const child of node.children) pending.push(child);
+  }
+  return false;
+}
+
+/**
+ * Whether the drawing floats: a DrawingML anchor, or a VML shape positioned on its own. A pasted
+ * floating drawing is selected; an inline one keeps the caret after it.
+ */
+export function isFloatingDrawing(drawing: OoxmlNode): boolean {
+  const pending: OoxmlNode[] = [drawing];
+  while (pending.length) {
+    const node = pending.pop()!;
+    if (node.kind === 'textValue') continue;
+    const element = node as OoxmlElement;
+    // A text box story holds its own drawings; they say nothing about this one.
+    if (element.namespaceUri === WML_NAMESPACE_URI && element.localName === 'txbxContent') continue;
+    if (element.namespaceUri === WP_NAMESPACE_URI && element.localName === 'anchor') return true;
+    if (
+      element.namespaceUri === VML &&
+      /position\s*:\s*absolute/i.test(attribute(element, 'style') ?? '')
+    )
+      return true;
+    for (const child of node.children) pending.push(child);
+  }
+  return false;
 }
 
 /**
@@ -156,6 +228,7 @@ export function drawingCopyRefusal(
   const node = findNode(part, drawing.drawingNodeId);
   // An embedded object's parts never travel; a chart that its own lane did not take is one too.
   if (!node || isClipboardObject(node)) return DRAWING_CLIPBOARD_PARTS_REASON;
+  if (holdsLinkedTextBox(node)) return LINKED_TEXT_BOX_CLIPBOARD_REASON;
   if (!drawingUnitIn(part, drawing.drawingNodeId)) return DRAWING_CLIPBOARD_STORY_REASON;
   if (!drawingPartsTravel(session.currentPackage(), part, drawing.drawingNodeId))
     return DRAWING_CLIPBOARD_PARTS_REASON;
@@ -219,8 +292,8 @@ export function drawingCopyFlavours(deps: SurfaceClipboardDeps): CopyFlavours | 
   return { text: flavours.text, html, drawingNodeId: drawing.drawingNodeId };
 }
 
-/** The drawing that fills the one offset unit ending at `offset`, or null. */
-export function drawingEndingAt(
+/** The floating drawing that fills the one offset unit ending at `offset`, or null. */
+export function floatingDrawingEndingAt(
   part: OoxmlPart,
   paragraphId: string,
   offset: number
@@ -235,7 +308,9 @@ export function drawingEndingAt(
     const span = index.spanOf(node);
     if (!span || span.end < offset || span.start >= offset) continue;
     if (isDrawingAtom(node))
-      return span.start === offset - 1 && span.end === offset ? node.id : null;
+      return span.start === offset - 1 && span.end === offset && isFloatingDrawing(node)
+        ? node.id
+        : null;
     for (const child of node.children) pending.push(child);
   }
   return null;
@@ -250,6 +325,8 @@ function textBoxTextOf(drawing: OoxmlNode): string {
   const visit = (node: OoxmlNode, inBox: boolean): void => {
     if (node.kind === 'textValue') return;
     const element = node as OoxmlElement;
+    // A compatibility wrapper holds the same box twice; its fallback is not more text.
+    if (element.namespaceUri === MC_NAMESPACE_URI && element.localName === 'Fallback') return;
     const box =
       inBox || (element.namespaceUri === WML_NAMESPACE_URI && element.localName === 'txbxContent');
     if (box && node.kind === 'paragraph') {

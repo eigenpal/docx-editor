@@ -1075,7 +1075,8 @@
     "groupMemberMove": "Grup içindeki bir şekil tek başına taşınamaz, yeniden boyutlandırılamaz veya silinemez. Grubu seçmek için Esc tuşuna basın.",
     "groupMemberProperties": "Grup içindeki bir şekil kaydırma, alternatif metin ve özelliklerini gruptan alır. Grubu seçmek için Esc tuşuna basın.",
     "drawingClipboardParts": "Bu çizim kopyalanamayan parçalar kullanıyor.",
-    "drawingClipboardStory": "Çizimler yalnızca ana belgede kopyalanabilir, kesilebilir veya yapıştırılabilir.",
+    "linkedTextBoxClipboard": "Bağlantılı bir metin kutusu kopyalanamaz.",
+    "drawingClipboardStory": "Çizimler yalnızca belge gövdesinde kopyalanabilir, kesilebilir veya yapıştırılabilir; üst bilgi, alt bilgi, not veya metin kutusunda yapılamaz.",
     "groupMemberClipboard": "Bir grup içindeki şekil, grubuyla birlikte kopyalanır veya kesilir. Grubu seçmek için Escape tuşuna basın.",
     "drawingClipboardSize": "Bu çizim kopyalanamayacak kadar büyük.",
     "drawingPasteCells": "Çizim yapıştırmak için imleci metne yerleştirin."

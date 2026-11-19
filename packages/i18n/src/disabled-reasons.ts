@@ -127,10 +127,11 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   // Keyed on the `DRAWING_CLIPBOARD_*_REASON`, `DRAWING_PASTE_CELLS_REASON` and
   // `GROUP_MEMBER_CLIPBOARD_REASON` sentences in the engine's drawing clipboard
   // (`surface-drawing-clipboard.ts`).
-  'a drawing can be copied, cut, or pasted only in the main document':
+  'a drawing can be copied, cut, or pasted only in the body text':
     'disabledReason.drawingClipboardStory',
   'a shape inside a group is copied or cut with its group; press Escape to select the group':
     'disabledReason.groupMemberClipboard',
+  'a linked text box cannot be copied': 'disabledReason.linkedTextBoxClipboard',
   'this drawing uses parts that cannot be copied': 'disabledReason.drawingClipboardParts',
   'this drawing is too large to copy': 'disabledReason.drawingClipboardSize',
   'place the caret in the text to paste a drawing': 'disabledReason.drawingPasteCells',
