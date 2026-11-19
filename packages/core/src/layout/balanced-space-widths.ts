@@ -164,7 +164,9 @@ function eastAsianNeighbour(
   const cp = character?.codePointAt(0);
   if (!piece || cp === undefined || !isCjk(cp)) return false;
   if (!measurer.faceCovers) return true;
-  return measurer.faceCovers(character!, styleForFontSlot(piece.style, piece.fontSlot)) !== false;
+  // A literal TOC result can reach this pass before its font slots have been split.
+  const slot = piece.fontSlot ?? (piece.fieldAtom?.authoredTextResult ? 'eastAsia' : undefined);
+  return measurer.faceCovers(character!, styleForFontSlot(piece.style, slot)) !== false;
 }
 
 /**

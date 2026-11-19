@@ -103,7 +103,10 @@ test('the first TOC entry beside the field opening keeps balanced text spacing',
     );
     const original = serializeOoxmlPart(doc);
     const result = layoutSemanticDocument(doc, 0, {
-      measurer,
+      measurer: {
+        ...measurer,
+        faceCovers: (text, style) => !/\p{Script=Han}/u.test(text) || style.fontFamily === 'SimSun',
+      },
       styleCascade: buildStyleCascadeTable(styles.root, undefined, settings.root),
     });
     const spans = linesOf(result)[0]!.spans;
