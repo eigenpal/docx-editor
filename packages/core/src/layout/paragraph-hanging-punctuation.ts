@@ -60,7 +60,8 @@ export function rememberHangingPunctuation(
   measurer: TextMeasurer,
   hangs: boolean,
   available: number,
-  flow: Pick<ParagraphFlowOptions, 'koreanHangingLineFills'> | undefined
+  flow: Pick<ParagraphFlowOptions, 'koreanHangingLineFills'> | undefined,
+  typography: CjkParagraphTypography
 ): void {
   // `hangs` already admitted the mark, so a Korean mark that hangs closes its paragraph.
   let advance =
@@ -73,6 +74,11 @@ export function rememberHangingPunctuation(
     /^ko(?:-|$)/.test(eastAsianLanguage(piece.props) ?? '')
   )
     advance = undefined;
-  if (advance !== undefined || !span.lineEndWhitespace)
+  if (advance !== undefined || !span.lineEndWhitespace) {
     setLineHangingPunctuationAdvance(line, advance);
+    line.highlightClipsAtLineEnd =
+      advance !== undefined && typography.settings?.compression === 'compressPunctuation'
+        ? true
+        : undefined;
+  }
 }

@@ -25,6 +25,7 @@ export interface FixtureOptions {
   tracking?: number;
   bold?: boolean;
   italic?: boolean;
+  highlight?: boolean;
   underlineElsewhere?: boolean;
   language?: string;
   secondLanguage?: string;
@@ -64,6 +65,7 @@ export function loadFixture(options: FixtureOptions = {}) {
       (options.tracking === undefined ? '' : `<w:spacing w:val="${options.tracking}"/>`) +
       (options.bold ? '<w:b/>' : '') +
       (options.italic ? '<w:i/>' : '') +
+      (options.highlight ? '<w:highlight w:val="yellow"/>' : '') +
       (language ? `<w:lang w:eastAsia="${escape(language)}"/>` : '') +
       `</w:rPr><w:t xml:space="preserve">${escape(content)}</w:t></w:r>`
     );
