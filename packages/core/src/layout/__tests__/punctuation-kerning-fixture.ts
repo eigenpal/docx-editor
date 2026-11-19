@@ -17,6 +17,7 @@ export interface FixtureOptions {
   balanceWidths?: boolean;
   /** Writes `w:useWord97LineBreakRules` in `w:compat`. */
   word97LineBreaks?: boolean;
+  alternateKinsoku?: boolean;
   compatibility?: 14 | 15;
   defaultFace?: string | null;
   face?: string;
@@ -99,7 +100,7 @@ export function loadFixture(options: FixtureOptions = {}) {
       (options.lineStartRule
         ? `<w:noLineBreaksBefore w:lang="${escape(options.lineStartRule.language)}" w:val="${escape(options.lineStartRule.characters)}"/>`
         : '') +
-      `<w:compat>${options.balanceWidths ? '<w:balanceSingleByteDoubleByteWidth/>' : ''}${options.word97LineBreaks ? '<w:useWord97LineBreakRules/>' : ''}<w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${options.compatibility ?? 15}"/></w:compat>` +
+      `<w:compat>${options.balanceWidths ? '<w:balanceSingleByteDoubleByteWidth/>' : ''}${options.word97LineBreaks ? '<w:useWord97LineBreakRules/>' : ''}${options.alternateKinsoku ? '<w:useAltKinsokuLineBreakRules/>' : ''}<w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${options.compatibility ?? 15}"/></w:compat>` +
       '</w:settings>'
   );
   if (options.fontTableEntry) {

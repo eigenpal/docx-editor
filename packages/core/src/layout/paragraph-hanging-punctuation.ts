@@ -1,5 +1,5 @@
 import { setLineHangingPunctuationAdvance } from './line-hanging-punctuation.ts';
-import { hangingCjkPunctuationAdvance } from './cjk-spacing.ts';
+import { hangingCjkPunctuationAdvance, isPlainHanPunctuation } from './cjk-spacing.ts';
 import { eastAsianLanguage, type CjkParagraphTypography } from './cjk-typography.ts';
 import type { FieldAwarePiece } from './field-projection.ts';
 import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
@@ -60,17 +60,33 @@ export function rememberHangingPunctuation(
   measurer: TextMeasurer,
   hangs: boolean,
   available: number,
-  flow: Pick<ParagraphFlowOptions, 'koreanHangingLineFills'> | undefined
+  flow: Pick<ParagraphFlowOptions, 'koreanHangingLineFills'> | undefined,
+  typography: CjkParagraphTypography
 ): void {
   // `hangs` already admitted the mark, so a Korean mark that hangs closes its paragraph.
+  const overflow = line.width + span.box.width - available;
+  const language = eastAsianLanguage(piece.props);
+  const alternateChineseLine =
+    typography.settings?.alternateChineseHangingInMode14 === true &&
+    typography.settings.compression === 'compressPunctuation' &&
+    language === 'zh-cn' &&
+    /[，。；]$/u.test(span.text) &&
+    isPlainHanPunctuation(span.text) &&
+    line.drawings.length === 0 &&
+    line.spans.every((part) => isPlainHanPunctuation(part.text));
   let advance =
-    hangs && line.width + span.box.width > available + 0.001
-      ? hangingCjkPunctuationAdvance(span.text, piece, measurer, { paragraphFinal: true })
+    hangs && overflow > 0.001
+      ? hangingCjkPunctuationAdvance(span.text, piece, measurer, {
+          paragraphFinal: true,
+          policy: alternateChineseLine ? typography : undefined,
+          plainChinesePrefix: alternateChineseLine,
+        })
       : undefined;
+  if (advance !== undefined && alternateChineseLine) advance = Math.min(advance, overflow);
   if (
     advance !== undefined &&
     flow?.koreanHangingLineFills !== true &&
-    /^ko(?:-|$)/.test(eastAsianLanguage(piece.props) ?? '')
+    /^ko(?:-|$)/.test(language ?? '')
   )
     advance = undefined;
   if (advance !== undefined || !span.lineEndWhitespace)

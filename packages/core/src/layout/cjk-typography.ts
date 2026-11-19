@@ -13,6 +13,8 @@ import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 export interface CjkTypographySettings {
   /** Apply the strict Japanese small-kana and prolonged-sound-mark restrictions. */
   readonly strict: boolean;
+  /** Enable measured mode 14 behavior for alternate Simplified Chinese hanging marks. */
+  readonly alternateChineseHangingInMode14?: true;
   /** Disable adjacent full-width punctuation compression when false. */
   readonly punctuationKerning?: boolean;
   /** The document defaults explicitly select an East Asian face as the East Asian font. */
@@ -52,7 +54,9 @@ export interface CjkTypographySettings {
   readonly word97LineBreaks?: true;
   /** Whitespace compression selected by `w:characterSpacingControl`. */
   readonly compression:
-    'doNotCompress' | 'compressPunctuation' | 'compressPunctuationAndJapaneseKana';
+    | 'doNotCompress'
+    | 'compressPunctuation'
+    | 'compressPunctuationAndJapaneseKana';
   /** Custom no-line-start characters, keyed by normalized language tag. */
   readonly before: Readonly<Record<string, string>>;
   /** Custom no-line-end characters, keyed by normalized language tag. */
@@ -118,11 +122,15 @@ const JUSTIFIED = new Set([
   'highKashida',
   'thaiDistribute',
 ]);
-export function cjkTypographyFromSettings(root: OoxmlElement | null): CjkTypographySettings {
+export function cjkTypographyFromSettings(
+  root: OoxmlElement | null,
+  compatibilityMode?: number
+): CjkTypographySettings {
   let strict = false;
   let punctuationKerning = true;
   let compression: CjkTypographySettings['compression'] = 'doNotCompress';
   let balancedWidths = false;
+  let alternateChineseHangingInMode14 = false;
   let word97LineBreaks = false;
   const before: Record<string, string> = Object.create(null);
   const after: Record<string, string> = Object.create(null);
@@ -137,6 +145,8 @@ export function cjkTypographyFromSettings(root: OoxmlElement | null): CjkTypogra
     if (child.localName === 'compat') {
       balancedWidths = compatFlag(child, 'balanceSingleByteDoubleByteWidth');
       word97LineBreaks = compatFlag(child, 'useWord97LineBreakRules');
+      alternateChineseHangingInMode14 =
+        compatibilityMode === 14 && compatFlag(child, 'useAltKinsokuLineBreakRules');
     }
     if (child.localName === 'noPunctuationKerning') punctuationKerning = !on(value);
     if (
@@ -162,6 +172,7 @@ export function cjkTypographyFromSettings(root: OoxmlElement | null): CjkTypogra
   }
   return Object.freeze({
     strict,
+    ...(alternateChineseHangingInMode14 ? { alternateChineseHangingInMode14: true as const } : {}),
     punctuationKerning,
     compression,
     ...(balancedWidths ? { balancedWidths: true as const } : {}),
