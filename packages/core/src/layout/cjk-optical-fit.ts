@@ -183,6 +183,7 @@ function cellsOf(
 ): Cell[] | undefined {
   const cells: Cell[] = [];
   let length = 0;
+  let trackedEastAsianLine: boolean | undefined;
   for (const [sourceIndex, span] of spans.entries()) {
     length += span.text.length;
     if (length > 4096 || !allowed(span)) return undefined;
@@ -191,8 +192,17 @@ function cellsOf(
     // Keep authored tracking/scaling, complex lanes, and unqualified faces intact.
     if (requireLocalQualification) {
       const authored = layoutDerivedSpacingStyleForEditing(face);
+      const allowsTracking =
+        authored.characterSpacingPt < 0 &&
+        (trackedEastAsianLine ??= spans.every(
+          (entry) =>
+            entry.fontSlot === 'eastAsia' &&
+            fittingClusters(entry.text).every(
+              (cluster) => isCjk(cluster.text.codePointAt(0)!) || PUNCTUATION.test(cluster.text)
+            )
+        ));
       if (
-        authored.characterSpacingPt !== 0 ||
+        (authored.characterSpacingPt !== 0 && !allowsTracking) ||
         authored.horizontalScalePercent !== 100 ||
         authored.shaping !== undefined ||
         measurer.hasResolvedFont?.(face) !== true
@@ -626,6 +636,18 @@ function fitCjkOptically(
   const extra = kanaCapacity + deferredFinal;
   if (deficit > capacity + extra + TOLERANCE) return undefined;
   if (gate && !gate.admits(capacity + relief + extra)) return undefined;
+  if (hangsLast && context.requireLocalQualification) {
+    let authoredWidth = 0;
+    let tracked = false;
+    for (const cell of cells.slice(0, -1)) {
+      const authored = layoutDerivedSpacingStyleForEditing(cell.span.style).characterSpacingPt;
+      tracked ||= authored < 0;
+      authoredWidth += cell.natural + authored * cell.span.text.length;
+    }
+    // The original tracked advance must qualify before the compositor lays the final mark
+    // outside the measure. The displayed contraction is not extra bearing capacity.
+    if (tracked && authoredWidth - available > last.natural / 2 + TOLERANCE) return undefined;
+  }
   // The shrink goes in equal shares to every blank side; a side that runs out passes the rest on.
   let active = seams;
   while (deficit > TOLERANCE && active.length) {
