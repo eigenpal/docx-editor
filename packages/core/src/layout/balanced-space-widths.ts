@@ -141,10 +141,11 @@ export function unwidenedStyle(style: ResolvedRunStyle): ResolvedRunStyle {
 
 function plainText(piece: FieldAwarePiece): boolean {
   return (
-    piece.end - piece.start === piece.text.length &&
-    !piece.projected &&
+    (piece.projected
+      ? piece.fieldAtom?.authoredTextResult === true
+      : piece.end - piece.start === piece.text.length) &&
     piece.measureText === undefined &&
-    !piece.fieldAtom &&
+    (!piece.fieldAtom || piece.fieldAtom.authoredTextResult === true) &&
     !piece.equation &&
     !piece.inlineDrawing &&
     !piece.positionalTab &&
@@ -163,7 +164,9 @@ function eastAsianNeighbour(
   const cp = character?.codePointAt(0);
   if (!piece || cp === undefined || !isCjk(cp)) return false;
   if (!measurer.faceCovers) return true;
-  return measurer.faceCovers(character!, styleForFontSlot(piece.style, piece.fontSlot)) !== false;
+  // A literal TOC result can reach this pass before its font slots have been split.
+  const slot = piece.fontSlot ?? (piece.fieldAtom?.authoredTextResult ? 'eastAsia' : undefined);
+  return measurer.faceCovers(character!, styleForFontSlot(piece.style, slot)) !== false;
 }
 
 /**
@@ -201,8 +204,8 @@ export function widenBalancedSpaces(
           ...piece,
           style,
           text: piece.text.slice(from, to),
-          start: piece.start + from,
-          end: piece.start + to,
+          start: piece.projected ? piece.start : piece.start + from,
+          end: piece.projected ? piece.end : piece.start + to,
         });
       from = to;
     };
@@ -229,7 +232,10 @@ function collectSpaceRuns(
   while (
     end < pieces.length &&
     plainText(pieces[end]!) &&
-    pieces[end]!.start === pieces[end - 1]!.end
+    (pieces[end]!.start === pieces[end - 1]!.end ||
+      (pieces[end]!.projected &&
+        pieces[end]!.start === pieces[end - 1]!.start &&
+        pieces[end]!.fieldAtom === pieces[end - 1]!.fieldAtom))
   )
     end += 1;
   const before = pieces[first - 1];

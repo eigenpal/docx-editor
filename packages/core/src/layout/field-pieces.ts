@@ -67,6 +67,8 @@ export interface PositionalTab {
  * view decision made downstream, so this states the fact and nothing about the appearance.
  */
 export interface FieldAtomMarker {
+  /** Authored text from a hyperlink or TOC result, with its existing model range. */
+  readonly authoredTextResult?: true;
   /**
    * A plain REF cross-reference with no nested field (not PAGEREF or NOTEREF): its result,
    * the target's text or number, never changes with pagination, so a justified line may treat

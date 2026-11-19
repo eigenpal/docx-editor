@@ -5,7 +5,7 @@ import type { TextMeasurer } from './text-measurer.ts';
 // autoSpaceDN/DE inherit through the ordinary paragraph cascade and default to true.
 import type { CjkParagraphTypography } from './cjk-typography.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
-import type { FieldAwarePiece } from './field-pieces.ts';
+import type { FieldAtomMarker, FieldAwarePiece } from './field-pieces.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
@@ -16,7 +16,7 @@ interface TextBoundary {
   readonly style: ResolvedRunStyle;
   readonly projected?: boolean;
   readonly equation?: unknown;
-  readonly fieldAtom?: unknown;
+  readonly fieldAtom?: FieldAtomMarker;
   readonly positionalTab?: unknown;
   readonly inlineDrawing?: unknown;
   readonly measureText?: string;
@@ -52,9 +52,9 @@ export function automaticTextSpacingBefore(value: {
 function ordinaryText(item: TextBoundary): boolean {
   const style = item.style;
   return (
-    !item.projected &&
+    (!item.projected || item.fieldAtom?.authoredTextResult === true) &&
     !item.equation &&
-    !item.fieldAtom &&
+    (!item.fieldAtom || item.fieldAtom.authoredTextResult === true) &&
     !item.positionalTab &&
     !item.inlineDrawing &&
     item.measureText === undefined &&
@@ -202,8 +202,8 @@ export function splitAtAutomaticSpacing(
       out.push({
         ...piece,
         text: piece.text.slice(from, to),
-        start: piece.start + from,
-        end: piece.start + to,
+        start: piece.projected ? piece.start : piece.start + from,
+        end: piece.projected ? piece.end : piece.start + to,
       });
       from = to;
     }
@@ -218,7 +218,7 @@ function automaticSpacingCuts(
 ): number[] {
   const literal = piece.end - piece.start === piece.text.length;
   if (
-    !literal ||
+    (!literal && !(piece.projected && piece.fieldAtom?.authoredTextResult)) ||
     piece.text.length < 2 ||
     !EAST_ASIAN_TEXT.test(piece.text) ||
     !LATIN_OR_DIGIT_TEXT.test(piece.text) ||
@@ -261,10 +261,17 @@ export function automaticLineTextGap(
   measurer?: TextMeasurer
 ): number {
   const previous = line.spans.at(-1);
+  const sameHyperlinkResult =
+    previous?.projected &&
+    piece.projected &&
+    previous.fieldAtom?.authoredTextResult &&
+    piece.fieldAtom === previous.fieldAtom &&
+    previous.range.start === start &&
+    previous.range.end === piece.end;
   if (
     !previous ||
     previous.range.paragraphId !== paragraphId ||
-    previous.range.end !== start ||
+    (previous.range.end !== start && !sameHyperlinkResult) ||
     Math.abs(lineOrigin() + line.width - previous.box.x - previous.box.width) > 0.001 ||
     !boundaryMayBeEastAsian(previous.text, text)
   )
