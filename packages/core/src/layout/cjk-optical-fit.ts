@@ -256,7 +256,9 @@ function cellsOf(
           cluster.text !== ' ' &&
           !isCjk(cluster.text.codePointAt(0)!) &&
           !PUNCTUATION.test(cluster.text) &&
-          !(curlyAllowed && curlyRole(cluster.text))
+          // These East Asian symbols keep their measured advances. A grouped
+          // temperature symbol must not veto fitting neighbouring punctuation.
+          !(curlyAllowed && (curlyRole(cluster.text) || /^[℃℉]$/u.test(cluster.text)))
       )
     )
       return undefined;
