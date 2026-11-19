@@ -444,6 +444,8 @@ interface LastBlocks {
   /** Both weakly: a kept list must not keep a closed or reloaded document's tree alive. */
   readonly children: WeakRefOf<readonly OoxmlNode[]>;
   readonly blocks: WeakRefOf<OoxmlElement[]>;
+  /** The records the list was projected without; see `carriedBlocks`. */
+  readonly unlisted: object | undefined;
   positions?: Map<string, number>;
 }
 const lastBlocks = new Map<string, LastBlocks>();
@@ -453,12 +455,14 @@ function rememberBlocks(
   key: string,
   children: readonly OoxmlNode[],
   blocks: OoxmlElement[],
+  unlisted: object | undefined,
   positions?: Map<string, number>
 ): void {
   lastBlocks.delete(key);
   lastBlocks.set(key, {
     children: weakRefOf(children),
     blocks: weakRefOf(blocks),
+    unlisted,
     ...(positions ? { positions } : {}),
   });
   if (lastBlocks.size > MAX_LAST_BLOCKS) lastBlocks.delete(lastBlocks.keys().next().value!);
@@ -518,17 +522,24 @@ const MAX_CARRIED_CHANGES = 8;
  * else builds the list again. Tables are merge boundaries; replacing one visible table
  * with another under the same id cannot change its neighbours. The isolated projection
  * checks below still reject a table whose visibility changes.
+ *
+ * A paragraph projects without the records the review queue leaves out (`unlisted`), and one
+ * record can sit in several paragraphs: an edit to one of them can list it or leave it out in
+ * a paragraph that did not change. The filter's cache key does not name those records, so a
+ * list projected without another set of them is built again.
  */
 function carriedBlocks(
   key: string,
   children: readonly OoxmlNode[],
   flow: (children: readonly OoxmlNode[]) => OoxmlElement[],
-  reachesFields: (before: OoxmlElement, after: OoxmlElement) => boolean
+  reachesFields: (before: OoxmlElement, after: OoxmlElement) => boolean,
+  unlisted: object | undefined
 ): OoxmlElement[] | undefined {
   const last = lastBlocks.get(key);
   const previous = last?.children.deref();
   const lastList = last?.blocks.deref();
   if (!last || !previous || !lastList || previous.length !== children.length) return undefined;
+  if (last.unlisted !== unlisted) return undefined;
   const changed: number[] = [];
   for (let index = 0; index < children.length; index += 1) {
     if (children[index] === previous[index]) continue;
@@ -570,7 +581,7 @@ function carriedBlocks(
   }
   carryNumberingFlow(lastList, blocks, replaced);
   // The ids stand at the same places, so the positions carry over.
-  rememberBlocks(key, children, blocks, positions);
+  rememberBlocks(key, children, blocks, unlisted, positions);
   return blocks;
 }
 
@@ -615,9 +626,10 @@ export function storyBlocks(
       holdsFieldBoundary(before) ||
       holdsFieldBoundary(after) ||
       (root.kind === 'body' && inBodyToc(part, after.id));
-    const carried = carriedBlocks(lastKey, root.children, flow, reachesFields);
+    const unlisted = authorFilter?.unlisted;
+    const carried = carriedBlocks(lastKey, root.children, flow, reachesFields, unlisted);
     blocks = carried ?? flow(root.children);
-    if (!carried) rememberBlocks(lastKey, root.children, blocks);
+    if (!carried) rememberBlocks(lastKey, root.children, blocks, unlisted);
   }
   if (perMode) cacheProjection(perMode, key, blocks);
   else storyBlocksCache.set(part, new Map([[key, blocks]]));
