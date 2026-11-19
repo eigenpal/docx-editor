@@ -32,6 +32,7 @@ import {
   noteShiftedRowRefusal,
 } from './table-row-geometry-reuse.ts';
 import { finalizedWithHeadroom } from './table-budget-proof.ts';
+import { placedRowFieldsHold } from './table-row-record-fields.ts';
 import type { LayoutRowBoundedResult, TableFlowDeps } from './semantic-table-layout.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
 import type { SectionPrepass } from './section-prepass-types.ts';
@@ -178,6 +179,9 @@ export function placementFromPrevious(
   const compact = 'compact' in candidate ? candidate.compact : undefined;
   const previous = previousRowRecord(candidate);
   if (compact && compact.source !== row) return null;
+  // A structure edit can change what the row record carries while its lines stay the same.
+  if (!placedRowFieldsHold(row, previous))
+    return previous.box.y === top ? null : noteShiftedRowRefusal('fields');
   const key = keyOf(previous);
   const known = placementAt(key, previous.box.y);
   if (

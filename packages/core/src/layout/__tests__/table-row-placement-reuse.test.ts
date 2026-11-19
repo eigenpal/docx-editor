@@ -92,14 +92,14 @@ test('a text edit that grows a row reuses unmoved rows in the full pagination, e
   expect(grown).toBeGreaterThan(0);
 });
 
-test('a cell property edit offers no previous rows and still lays out exactly', () => {
+test('a cell property edit places only the edited row again, exactly', () => {
   let part = load();
   const structure = readTableStructure(tableNode(part), 468, 0)!;
   const session = createLayoutSession();
   const cache = createParagraphLayoutCache();
   lay(part, { session, cache });
   const before = recorder.moved;
-  // A moved row keeps its old cell fill; this edit must lay the table out afresh.
+  // A moved row keeps its old cell fill, so the edited row must be placed again.
   const edit = applyTreeOp(part, {
     op: 'setTableCellFill',
     tableId: tableNode(part).id,
@@ -110,5 +110,6 @@ test('a cell property edit offers no previous rows and still lays out exactly', 
   part = edit.part;
   const updated = lay(part, { session, cache });
   expect(JSON.stringify(updated.pages)).toBe(JSON.stringify(lay(part).pages));
-  expect(recorder.moved - before).toBe(0);
+  // Every other row keeps its place and is reused there; the filled one is not.
+  expect(recorder.moved - before).toBe(ROWS - 1);
 });

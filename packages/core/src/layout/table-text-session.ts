@@ -15,8 +15,6 @@ import { registerTableWidthReuseScope } from './table-width-reuse-scope.ts';
 import type { TablePageBand } from './table-width-update.ts';
 import { carryPageTableContributions, carryTableCaretContexts } from './table-caret-context.ts';
 import { offerPreviousRows, offerUnchangedTableRows } from './table-row-placement-reuse.ts';
-import { tableTextStructureUnchanged } from './table-text-change.ts';
-import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
 
 type Result = Omit<BlockLayoutResult, 'overflowShellAt'>;
 function resultOf(session: LayoutSession): Result {
@@ -112,13 +110,10 @@ export function tryUpdateTableSession(input: {
     input.pageBand
   );
   if (!update) {
-    // The full pagination that follows can still reuse every row that keeps its place. A
-    // moved row keeps its old cell and row properties, so only a text-only edit offers rows.
-    if (
-      drawingInputsUnchangedByTextEdit(oldEntry.table, entry.table) ||
-      tableTextStructureUnchanged(oldEntry.table, entry.table)
-    )
-      offerPreviousRows(entry.table, session.previous.pages);
+    // The full pagination that follows can still reuse every unchanged row, in place or moved
+    // by a row inserted, deleted or grown above it. A moved row keeps its old row and cell
+    // fields, so reuse proves them against the new structure (`placedRowFieldsHold`).
+    offerPreviousRows(entry.table, session.previous.pages);
     return null;
   }
   const reusedPages = update.pages.reduce(
