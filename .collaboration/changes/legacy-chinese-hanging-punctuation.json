@@ -6,6 +6,7 @@
   "reason": "Only derived layout changes. Source characters, model offsets, and collaborative state stay the same.",
   "tests": [
     "packages/core/src/layout/__tests__/hanging-punctuation-alignment.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-alternate-chinese-hanging.test.ts",
     "packages/pro/src/collaboration/__tests__/collaboration-diagnostics.test.ts",
     "packages/pro/src/collaboration/__tests__/document-concurrent-format-merge.test.ts"
   ],
