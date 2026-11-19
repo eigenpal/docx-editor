@@ -20,6 +20,7 @@ import {
   captureImageMutationPreconditions,
   computeMovedImagePosition,
   hostWindowOf,
+  forwardClipboardEvents,
   historyShortcutOf,
   IMAGE_OVERLAY_NUDGE_PT,
   IMAGE_OVERLAY_NUDGE_SHIFT_PT,
@@ -132,6 +133,17 @@ export function ImageSelectionOverlay({
   const pointerStartRef = useRef<{ readonly x: number; readonly y: number } | null>(null);
   const captureTargetRef = useRef<HTMLElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  // State as well as a ref, so the clipboard binding follows the element as it mounts.
+  const [overlayElement, setOverlayElement] = useState<HTMLDivElement | null>(null);
+  const bindOverlay = useCallback((element: HTMLDivElement | null) => {
+    overlayRef.current = element;
+    setOverlayElement(element);
+  }, []);
+  // Focus sits on the overlay, so copy, cut and paste reach the editor from here.
+  useEffect(
+    () => (editor && overlayElement ? forwardClipboardEvents(overlayElement, editor) : undefined),
+    [editor, overlayElement]
+  );
   const focusRequestedForDrawingRef = useRef<string | null>(null);
   const scrollPortRef = useRef<ImageOverlayScrollPort | null>(null);
 
@@ -611,7 +623,7 @@ export function ImageSelectionOverlay({
     const frameLabel = frameReason ? t(frameReason) : undefined;
     return (
       <div
-        ref={overlayRef}
+        ref={bindOverlay}
         className="docx-image-selection-overlay"
         data-drawing-node-id={active.id}
         tabIndex={0}
@@ -702,7 +714,17 @@ export function ImageSelectionOverlay({
           : null}
       </div>
     );
-  }, [active, beginSession, editor, onOverlayKeyDown, origin.left, origin.top, t, target]);
+  }, [
+    active,
+    beginSession,
+    bindOverlay,
+    editor,
+    onOverlayKeyDown,
+    origin.left,
+    origin.top,
+    t,
+    target,
+  ]);
 
   if (!rendered || !portalRef.current) return null;
   return createPortal(rendered, portalRef.current);

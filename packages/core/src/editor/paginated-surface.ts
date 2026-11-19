@@ -146,7 +146,7 @@ import {
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
-import { selectPastedDrawing } from './surface-chart-clipboard.ts';
+import { clipboardSelectedDrawing, selectPastedDrawing } from './surface-drawing-clipboard.ts';
 import { createHiddenMarkEditing, type RevisionView } from './hidden-mark-joins.ts';
 import { drawingSelectionPosition } from './surface-drawing-selection.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
@@ -4353,7 +4353,7 @@ export function mountPaginatedSurface(
       trackedChangeLanded: () => runtimeOptions.onTrackedChange?.(),
       revisionDisplayMode,
       commit,
-      selectedDrawing: () => resolveSelectedDrawingRecord(surface),
+      selectedDrawing: () => clipboardSelectedDrawing(surface),
       selectPastedDrawing: (id, paragraphId) => selectPastedDrawing(surface, id, paragraphId),
     });
 
