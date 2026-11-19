@@ -438,6 +438,8 @@ interface FitContext {
   readonly measurer: TextMeasurer;
   readonly baselinePieces: readonly FieldAwarePiece[];
   readonly requireLocalQualification: boolean;
+  readonly mode14IdeographFit?: true;
+  readonly candidateAutomaticGap: number;
   readonly memo: ClusterMemo;
   /**
    * The cells of the current group's line, kept between its attempts: an attempt that fails
@@ -520,6 +522,23 @@ function fitCjkOptically(
         ? hangAdvance
         : last.span.box.width;
   const hangsLast = hung > 0;
+  // Mode 14 limits how much the line can borrow for one ordinary ideograph.
+  // WPS allows half an em after an East Asian glyph, a quarter plus half
+  // the automatic gap after a Western word, and a sixth after ASCII ).
+  if (
+    context.mode14IdeographFit &&
+    !kana &&
+    !hangsLast &&
+    first === last &&
+    /^\p{Unified_Ideograph}$/u.test(first.span.text)
+  ) {
+    const previous = beforeLast?.ordinaryOpaque ? withoutTrailingSpaces(beforeLast.span.text) : '';
+    let limit = first.natural / 2;
+    if (/\)$/u.test(previous)) limit = first.natural / 6;
+    else if (/[A-Za-z0-9]$/u.test(previous))
+      limit = Math.min(limit, first.natural / 4 + context.candidateAutomaticGap / 2);
+    if (deficit > limit + TOLERANCE) return undefined;
+  }
   const fullDeficit = deficit;
   deficit -= hung;
   // A final qualified closing quote drops its trailing blank after any glyph, a word included.
@@ -838,7 +857,8 @@ export function createCjkOpticalFitter(
     width: number,
     origin: number,
     available: number,
-    allowNewFit: boolean
+    allowNewFit: boolean,
+    candidateAutomaticGap = 0
   ): CjkOpticalFit | undefined => {
     const pending = queued.get(range.start);
     if (pending) {
@@ -936,6 +956,8 @@ export function createCjkOpticalFitter(
       measurer,
       baselinePieces: pieces,
       requireLocalQualification,
+      candidateAutomaticGap,
+      ...(policy?.settings?.mode14IdeographFit ? { mode14IdeographFit: true as const } : {}),
       memo,
       cells: {},
     };

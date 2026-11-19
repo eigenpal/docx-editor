@@ -30,6 +30,8 @@ export interface CjkTypographySettings {
    * @internal
    */
   readonly legacyLineEndPunctuation?: true;
+  /** Mode 14 has separate optical limits for admitting an ordinary ideograph. */
+  readonly mode14IdeographFit?: true;
   /**
    * The compatibility setting `w:balanceSingleByteDoubleByteWidth`: a space beside East Asian
    * text, and each space of a run of spaces, takes the balanced width (`balanced-space-widths.ts`).

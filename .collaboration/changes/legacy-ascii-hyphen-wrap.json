@@ -2,10 +2,11 @@
   "impact": "no-impact",
   "fields": [],
   "before": "A line could open after an ASCII hyphen in a legacy compressed word.",
-  "after": "Keep the word together unless it exceeds the available line width.",
+  "after": "Keep the word together and limit optical fitting for a following ideograph in mode 14.",
   "reason": "Only derived line breaks and table widths change. Model offsets and collaboration state stay the same.",
   "tests": [
     "packages/core/src/layout/__tests__/legacy-ascii-hyphen-wrap.test.ts",
+    "packages/core/src/layout/__tests__/cjk-optical-automatic-spacing.test.ts",
     "packages/pro/src/collaboration/__tests__/collaboration-diagnostics.test.ts",
     "packages/pro/src/collaboration/__tests__/document-concurrent-format-merge.test.ts"
   ],
