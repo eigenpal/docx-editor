@@ -1330,6 +1330,7 @@ export function breakParagraph(
       const applyOpticalFit =
         opticalCompression && sameParagraphAnchorStarts.length === 0
           ? () => {
+              const gap = automaticGap();
               const fit = fitCjkOptically(
                 line,
                 pieceIndex,
@@ -1338,9 +1339,10 @@ export function breakParagraph(
                 width,
                 lineOrigin() + line.width,
                 // Reserve the source-owned advance before any optical line mutation.
-                lineAvailable() - automaticGap(),
+                lineAvailable() - gap,
                 !lineEndSpaces.isCollapsibleLineEndWhitespace(candidate) ||
-                  (opensWord && placeableSuffixes[pieceIndex]![boundary] === 1)
+                  (opensWord && placeableSuffixes[pieceIndex]![boundary] === 1),
+                gap
               );
               if (fit) {
                 width = fit.width;

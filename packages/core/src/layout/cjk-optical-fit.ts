@@ -341,6 +341,8 @@ function finiteInk(cell: Cell): cell is Cell & { ink: { left: number; right: num
   );
 }
 
+const opaqueText = (cell: Cell | undefined): string =>
+  cell?.ordinaryOpaque ? withoutTrailingSpaces(cell.span.text) : '';
 const blankSided = (cell: Cell): boolean =>
   cell.qualifiedCurly !== undefined ||
   OPENING.test(cell.span.text) ||
@@ -438,6 +440,8 @@ interface FitContext {
   readonly measurer: TextMeasurer;
   readonly baselinePieces: readonly FieldAwarePiece[];
   readonly requireLocalQualification: boolean;
+  readonly mode14IdeographFit?: true;
+  readonly candidateAutomaticGap: number;
   readonly memo: ClusterMemo;
   /**
    * The cells of the current group's line, kept between its attempts: an attempt that fails
@@ -520,6 +524,35 @@ function fitCjkOptically(
         ? hangAdvance
         : last.span.box.width;
   const hangsLast = hung > 0;
+  // Mode 14 limits borrowing for one ordinary ideograph in a plain Han line
+  // or directly after a Western word. Earlier mixed text can change the
+  // line's composition, so keep its existing expansion test.
+  if (
+    context.mode14IdeographFit &&
+    !kana &&
+    !hangsLast &&
+    first === last &&
+    /^\p{Unified_Ideograph}$/u.test(first.span.text)
+  ) {
+    let limit: number | undefined;
+    if (context.mode14IdeographFit) {
+      const previous = opaqueText(beforeLast);
+      if (/\)$/u.test(previous)) limit = first.natural / 6;
+      else if (/[A-Za-z0-9]$/u.test(previous))
+        limit = Math.min(first.natural / 2, first.natural / 4 + context.candidateAutomaticGap / 2);
+      else if (
+        (beforeLast &&
+          CLOSING.test(beforeLast.span.text) &&
+          /[A-Za-z0-9]$/u.test(opaqueText(cells.at(-3)))) ||
+        !cells.some(
+          (cell) => cell.sourceIndex < sourceCount && /[A-Za-z0-9]/u.test(opaqueText(cell))
+        )
+      )
+        limit = first.natural / 2;
+    }
+    // The line measure is in twips; ignore sub-twip glyph rounding at the limit.
+    if (limit !== undefined && Math.round((deficit - limit) * 20) > 0) return undefined;
+  }
   const fullDeficit = deficit;
   deficit -= hung;
   // A final qualified closing quote drops its trailing blank after any glyph, a word included.
@@ -838,7 +871,8 @@ export function createCjkOpticalFitter(
     width: number,
     origin: number,
     available: number,
-    allowNewFit: boolean
+    allowNewFit: boolean,
+    candidateAutomaticGap = 0
   ): CjkOpticalFit | undefined => {
     const pending = queued.get(range.start);
     if (pending) {
@@ -936,6 +970,8 @@ export function createCjkOpticalFitter(
       measurer,
       baselinePieces: pieces,
       requireLocalQualification,
+      candidateAutomaticGap,
+      ...(policy?.settings?.mode14IdeographFit ? { mode14IdeographFit: true as const } : {}),
       memo,
       cells: {},
     };
