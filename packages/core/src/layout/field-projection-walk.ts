@@ -275,6 +275,7 @@ export function unmergedPiecesOfParagraphForDisplay(
         ...(carriedLink ? { linkOverride: carriedLink } : {}),
         fieldAtom: {
           formField,
+          ...(linkSpec && !formField ? { authoredHyperlinkResult: true as const } : {}),
           ...(formControl ? { formControl } : {}),
           ...(pending?.refSpec && !pending.hasNestedField && plainRefSpec(pending.refSpec)
             ? { fixedResult: true as const }
@@ -312,7 +313,7 @@ export function unmergedPiecesOfParagraphForDisplay(
     openAtomicBeginId = null;
   };
 
-  const abandonPending = (): void => {
+  const abandonPending = (closed = false): void => {
     if (!pending) return;
     const fieldLink =
       !pending.resultLink && pending.linkSpec
@@ -349,7 +350,15 @@ export function unmergedPiecesOfParagraphForDisplay(
       }
     } else {
       const first = pieces.length;
-      for (const piece of pending.buffered) pieces.push(linked(piece));
+      const authoredHyperlinkResult = closed && !!pending.linkSpec;
+      for (const piece of pending.buffered) {
+        const result = linked(piece);
+        pieces.push(
+          authoredHyperlinkResult && result.fieldAtom && !result.projected
+            ? { ...result, fieldAtom: { ...result.fieldAtom, authoredHyperlinkResult: true } }
+            : result
+        );
+      }
       if (pending.savedResult) {
         markSavedResultPieces(pieces, first, pending.atomStart, pending.bufferOffset);
       }
@@ -604,7 +613,7 @@ export function unmergedPiecesOfParagraphForDisplay(
         onFldCharEnd(field);
         if (outermostEnd) {
           if (pending?.atomic) commitAtomicField();
-          else abandonPending();
+          else abandonPending(true);
         }
         continue;
       }

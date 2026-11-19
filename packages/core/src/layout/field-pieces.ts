@@ -67,6 +67,8 @@ export interface PositionalTab {
  * view decision made downstream, so this states the fact and nothing about the appearance.
  */
 export interface FieldAtomMarker {
+  /** Authored text of a complete HYPERLINK field, with its existing model range. */
+  readonly authoredHyperlinkResult?: true;
   /**
    * A plain REF cross-reference with no nested field (not PAGEREF or NOTEREF): its result,
    * the target's text or number, never changes with pagination, so a justified line may treat
