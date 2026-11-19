@@ -72,7 +72,6 @@ test('a malformed paired range keeps both move decisions read-only', () => {
   ).toEqual([true, true]);
 });
 
-// Independent native Word single-revision results, saved and inspected 2026-09-18.
 for (const reference of references) {
   test(`Word ordinary move: ${reference.name} ${reference.action} ${reference.kind}`, () => {
     const fixture = reviewTableGroupingCases.find((entry) => entry.name === reference.name)!;
