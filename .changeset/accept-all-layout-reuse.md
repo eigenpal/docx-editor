@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-After all changes in a large document are accepted, layout measures only the paragraphs that held a change.
+Accepting all changes in a document that holds formatting changes with no effect lays out only the paragraphs that changed.
