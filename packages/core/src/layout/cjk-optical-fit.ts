@@ -550,7 +550,8 @@ function fitCjkOptically(
       )
         limit = first.natural / 2;
     }
-    if (limit !== undefined && deficit > limit + TOLERANCE) return undefined;
+    // The line measure is in twips; ignore sub-twip glyph rounding at the limit.
+    if (limit !== undefined && Math.round((deficit - limit) * 20) > 0) return undefined;
   }
   const fullDeficit = deficit;
   deficit -= hung;

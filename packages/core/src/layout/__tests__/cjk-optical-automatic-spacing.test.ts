@@ -215,6 +215,8 @@ test.each([
     const natural = last.box.x + last.box.width - first.spans[0]!.box.x;
     const wrapsAt = (width: number) => textOf(probe(body + '然后再测试', width, options))[0];
     expect(wrapsAt(natural - cap + 0.35)).toBe(body + '然');
+    expect(wrapsAt(natural - cap - 0.01)).toBe(body + '然');
+    expect(wrapsAt(natural - cap - 0.04)).toBe(body);
     expect(wrapsAt(natural - cap - 0.35)).toBe(body);
   }
 );
