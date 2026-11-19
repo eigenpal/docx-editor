@@ -46,6 +46,8 @@ describe('withHiddenRevisionSites', () => {
     // The same object for the same pair, so what is cached by the filter stays cached.
     expect(withHiddenRevisionSitesKey(base, '1:2')).toBe(without);
     expect(withHiddenRevisionSitesKey(base, '3:2').cacheKey).not.toBe(without.cacheKey);
+    // Two editors on one page share a base and keep different keys: neither replaces the other.
+    expect(withHiddenRevisionSitesKey(base, '1:2')).toBe(without);
     expect(withHiddenRevisionSitesKey(undefined, '1:2').cacheKey).toBe(
       withHiddenRevisionSites(undefined, unlisted(['a']))!.cacheKey
     );

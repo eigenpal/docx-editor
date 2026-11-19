@@ -4,7 +4,8 @@
 // gets no change bar and its text no format mark either. The filter carries the records as data:
 // only the paragraphs that hold one project without it, and every other block keeps the
 // unfiltered fast path, because a selecting filter projects the whole story. The cache key
-// names the records, so a block cached with them left out is never served as the canonical one.
+// keeps blocks laid out under such a filter apart from the canonical ones; see
+// `withHiddenRevisionSites` for what it names in each view.
 
 import {
   WML_NAMESPACE_URI,
@@ -71,10 +72,10 @@ export function withHiddenRevisionSites(
   return filter;
 }
 
-const emptied = new WeakMap<
-  object,
-  { readonly key: string; readonly filter: RevisionAuthorFilter }
->();
+/** Kept-key filters by base, then by key. Editors on one page share a base, each with a key. */
+const emptied = new WeakMap<object, Map<string, RevisionAuthorFilter>>();
+/** A base rarely sees more keys than it has live editors; past this the oldest one goes. */
+const MAX_KEPT_KEYS_PER_BASE = 8;
 
 /**
  * `base` under the cache key an All Markup queue has when it leaves records out against `key`,
@@ -91,13 +92,21 @@ export function withHiddenRevisionSitesKey(
   base: RevisionAuthorFilter | undefined,
   key: string
 ): RevisionAuthorFilter {
-  const known = emptied.get(base ?? NO_FILTER);
-  if (known && known.key === key) return known.filter;
+  const byKey = emptied.get(base ?? NO_FILTER) ?? new Map<string, RevisionAuthorFilter>();
+  emptied.set(base ?? NO_FILTER, byKey);
+  const known = byKey.get(key);
+  if (known) return known;
   const filter = Object.freeze({
     ...(base ?? { hiddenAuthors: EMPTY_REVISION_AUTHOR_SET }),
     cacheKey: `${base?.cacheKey ?? ''}|unlisted:${key}`,
   });
-  emptied.set(base ?? NO_FILTER, { key, filter });
+  if (byKey.size >= MAX_KEPT_KEYS_PER_BASE) {
+    for (const oldest of byKey.keys()) {
+      byKey.delete(oldest);
+      break;
+    }
+  }
+  byKey.set(key, filter);
   return filter;
 }
 
