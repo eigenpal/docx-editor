@@ -13,7 +13,6 @@ import {
   watch,
 } from 'vue';
 import {
-  clipboardPasteLandsContent,
   editorDropHandled,
   isHTMLElementNode,
   openChartPaneAt,
@@ -22,6 +21,7 @@ import type { DocxEditorChildren } from '../docx-editor-children';
 import { useDocxEditor, useEditorContentElement } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
 import { ImageSelectionOverlay } from './images/ImageSelectionOverlay';
+import { useImageFilePaste } from './images/useImageFilePaste';
 import { mergeHostClass } from '../lib/mergeHostClass';
 import { useChromeDir } from '../i18n';
 
@@ -80,19 +80,8 @@ export const DocxEditorContent = defineComponent({
     onActivated(attach);
     onUnmounted(detach);
 
-    const onPaste = (event: ClipboardEvent) => {
-      const insert = imageInsert;
-      if (!insert?.isEnabled) return;
-      const items = event.clipboardData;
-      if (!items) return;
-      if (!hasImageFile(items)) return;
-      // STAND DOWN whenever the ENGINE will land content from the payload — see the
-      // predicate's contract in core. Word on macOS ships a rendered PNG beside copied
-      // text. Mirrors the React adapter exactly.
-      if (clipboardPasteLandsContent(items)) return;
-      event.preventDefault();
-      void insert.insertFromDataTransfer(items);
-    };
+    // The selection overlay runs the same image-file lane for pastes while a drawing is selected.
+    const onPaste = useImageFilePaste();
 
     const onDrop = (event: DragEvent) => {
       // Keep unsupported file drops on the mount from navigating away from the editor.

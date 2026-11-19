@@ -66,7 +66,12 @@ export {
   submenuKeys,
 } from './submenu-placement.ts';
 export { hostDirectionOf, observeHostDirection } from './host-direction.ts';
-export { clipboardDropLandsText, clipboardPasteLandsContent } from './clipboard-file-lane.ts';
+export {
+  clipboardDropLandsText,
+  clipboardPasteLandsContent,
+  imageFilePastePlan,
+  type ImageFilePastePlan,
+} from './clipboard-file-lane.ts';
 export {
   copyEditorStyles,
   openEditorWindow,

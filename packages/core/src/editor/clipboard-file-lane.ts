@@ -12,10 +12,18 @@
 // everything else, so an html flavour the projection refuses (a webp `data:` image, an
 // oversized payload, a malformed fragment attribute) correctly keeps the file lane and an
 // html flavour it lands correctly stands it down.
+//
+// `imageFilePastePlan` adds the target: the caret in text, or, while a drawing is selected,
+// the point `drawingPasteTarget` gives for a picture. The pages and the drawing selection
+// overlay both run it.
 
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { probeExternalHtml } from './clipboard-html-read.ts';
 import { hasVisibleChar, htmlHasVisibleText } from './clipboard-plain-text.ts';
+import { drawingPasteTarget } from './drawing-paste-target.ts';
+import { capturePointPosition } from './editor-point-target.ts';
+import type { EditorPointPosition } from '../contracts/editor-drop.ts';
+import type { DocxEditorInstance } from './docx-editor-types.ts';
 
 /** One flavour, defensively: a stand-in transfer without `getData` reads as absent. */
 function flavourOf(transfer: DataTransfer, type: string): string {
@@ -60,6 +68,75 @@ export function clipboardPasteLandsContent(transfer: DataTransfer | null | undef
   // empty paragraphs as blocks, and standing down for those would trade a real image file
   // for content nobody can see.
   return probeExternalHtml(html).imageCount > 0;
+}
+
+/** Never executed: the dry run only asks whether a well-formed insert may land. */
+const IMAGE_PASTE_PROBE_BYTES = new Uint8Array([0x89]);
+
+function carriesImageFile(transfer: DataTransfer): boolean {
+  const items = transfer.items as DataTransferItemList | undefined;
+  if (!items) return false;
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    if (item?.kind === 'file' && item.type.startsWith('image/')) return true;
+  }
+  return false;
+}
+
+/**
+ * What a host's image-FILE paste lane does with one paste event.
+ *
+ * @internal
+ */
+export interface ImageFilePastePlan {
+  /**
+   * The `insertImage.at` point. A point is the drawing paste target while a drawing is
+   * selected. Undefined inserts as `insertImage` does with no point: at the caret, or, when
+   * the editor refuses a picture beside the selected drawing, with that refusal reported.
+   */
+  readonly at: EditorPointPosition | undefined;
+}
+
+/**
+ * Whether a host's image-FILE lane takes this paste, and where the picture goes. Null means
+ * stand down: no image file, content the engine lands itself (see
+ * {@link clipboardPasteLandsContent}), no drawing selected and an insert at the caret the
+ * editor refuses, or a document open for viewing.
+ *
+ * With the caret in text, the picture lands at the caret. With a drawing selected, it lands
+ * where every pasted drawing lands, `drawingPasteTarget(surface, 'drawing')`: before the
+ * selected drawing's anchor run. That target is captured as a point, which stays valid only
+ * while the document keeps the same revision, so a slow file read cannot insert into changed
+ * content. When the editor refuses the picture there, for example in suggesting mode, the lane
+ * still takes the paste, and the insert reports the reason.
+ *
+ * @internal
+ */
+export function imageFilePastePlan(
+  editor: Pick<DocxEditorInstance, 'surface' | 'canExecuteImageCommand'>,
+  transfer: DataTransfer | null | undefined
+): ImageFilePastePlan | null {
+  if (!transfer || !carriesImageFile(transfer)) return null;
+  if (clipboardPasteLandsContent(transfer)) return null;
+  const surface = editor.surface;
+  if (!surface) return null;
+  // The probe the toolbar's picture insert runs, with no point, so the editor applies its own
+  // rules for a picture inserted while a drawing is selected.
+  const judged = editor.canExecuteImageCommand({
+    type: 'insertImage',
+    data: IMAGE_PASTE_PROBE_BYTES,
+    mime: 'image/png',
+    widthPoints: 72,
+    heightPoints: 72,
+  });
+  const target = drawingPasteTarget(surface, 'drawing');
+  if (!target) return judged.ok ? { at: undefined } : null;
+  if (!judged.ok || target.kind !== 'anchor') return { at: undefined };
+  const at = capturePointPosition(surface, {
+    paragraphId: target.paragraphId,
+    offset: target.offset,
+  });
+  return { at };
 }
 
 /**

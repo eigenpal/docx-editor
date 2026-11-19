@@ -971,7 +971,7 @@
       "oversize": "图像超过允许的最大大小。",
       "refused": "无法插入图像。",
       "unsupportedFormat": "不支持插入此图像格式。",
-      "staleTarget": "文档或放置位置已更改。请重新拖放图片。"
+      "staleTarget": "插入图片前文档已更改。请重新插入图片。"
     }
   },
   "imageProperties": {

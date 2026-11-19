@@ -3047,6 +3047,14 @@ export interface ImageDecodePort {
     }>>;
 }
 
+// @internal
+export interface ImageFilePastePlan {
+    readonly at: EditorPointPosition | undefined;
+}
+
+// @internal
+export function imageFilePastePlan(editor: Pick<DocxEditorInstance, 'surface' | 'canExecuteImageCommand'>, transfer: DataTransfer | null | undefined): ImageFilePastePlan | null;
+
 // @public
 export interface ImageInteractionSession {
     // (undocumented)
