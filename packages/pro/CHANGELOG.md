@@ -1,5 +1,13 @@
 # @docx-editor.dev/pro
 
+## 2.40.0
+
+### Patch Changes
+
+- 9457ed7: Vue review cards show the `Card` children that you pass after the first render, and their labels follow a locale change.
+- 9457ed7: The review rail renders a card only when its own content or position changes, so scrolling and typing beside many comments and tracked changes stay responsive. A card template (a React `List` render prop, or a Vue `#item` or default slot) runs again only when its item, its function, or the reactive state it reads changes.
+- Updated dependencies: @docx-editor.dev/core@2.40.0, @docx-editor.dev/react@2.40.0, @docx-editor.dev/vue@2.40.0
+
 ## 2.39.0
 
 ### Minor Changes
