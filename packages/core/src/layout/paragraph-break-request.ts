@@ -17,7 +17,7 @@ import {
   type ParagraphLayoutInputs,
   type StyleCascadeTable,
 } from './style-cascade.ts';
-import { resolveCjkTypography } from './cjk-typography.ts';
+import { eastAsianLanguage, resolveCjkTypography } from './cjk-typography.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { holdsOnlyColumnBreak } from './body-flow-helpers.ts';
 import { resolveSpaceShrinkRule } from './space-shrink-rule.ts';
@@ -251,6 +251,8 @@ export function breakPreparedParagraph(request: ParagraphBreakRequest): readonly
 
 function breakPreparedParagraphLines(request: ParagraphBreakRequest): readonly PendingLine[] {
   const { formatting, styleCascade } = request;
+  const alignment = paragraphAlignment(formatting.props);
+  const paragraphRtl = paragraphIsRtl(formatting.props);
   return breakParagraph(
     request.paragraph,
     request.paragraphId,
@@ -267,7 +269,7 @@ function breakPreparedParagraphLines(request: ParagraphBreakRequest): readonly P
       : undefined,
     {
       ...request.flow,
-      paragraphRtl: paragraphIsRtl(formatting.props),
+      paragraphRtl,
       spaceShrink: resolveSpaceShrinkRule(
         request.compatibilityMode,
         formatting.props,
@@ -283,7 +285,12 @@ function breakPreparedParagraphLines(request: ParagraphBreakRequest): readonly P
         request.compatibilityMode,
         'koreanHangingLineFills'
       ),
-      cjkPunctuationFit: paragraphAlignment(formatting.props) === 'both',
+      cjkPunctuationFit: alignment === 'both',
+      legacyLeftCjkPunctuationFit:
+        alignment === 'left' &&
+        !paragraphRtl &&
+        styleCascade?.typography.legacyLineEndPunctuation === true &&
+        eastAsianLanguage(formatting.markRunProperties) === 'zh-cn',
       lineSpacing:
         formatting.lineSpacing.rule === 'auto' &&
         formatting.lineSpacing.value > 240 &&

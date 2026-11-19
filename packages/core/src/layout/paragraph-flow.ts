@@ -278,7 +278,7 @@ export function breakParagraph(
     typography,
     !!flow?.pageExclusionZones?.length,
     preserveColonAdvances,
-    flow?.cjkPunctuationFit === true
+    flow?.cjkPunctuationFit === true || flow?.legacyLeftCjkPunctuationFit === true
   );
   const layoutEquation = createEquationLayouter(measurer, flow?.equationCacheToken);
   const equationLayoutOf = (piece: FieldAwarePiece) =>

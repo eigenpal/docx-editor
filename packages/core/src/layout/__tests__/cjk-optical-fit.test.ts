@@ -50,7 +50,11 @@ function layout(
   measure = measurer,
   runProps = '',
   // Optical fitting needs an East Asian face in the document defaults; every probe names one.
-  sourcePolicy: { readonly eastAsianDefaults?: boolean; readonly kern?: number } = {
+  sourcePolicy: {
+    readonly eastAsianDefaults?: boolean;
+    readonly kern?: number;
+    readonly simplifiedChineseMode?: 14 | 15;
+  } = {
     eastAsianDefaults: true,
   },
   jc = 'both'
@@ -66,12 +70,16 @@ function layout(
       styleCascade: buildStyleCascadeTable(
         sourcePolicy?.eastAsianDefaults
           ? part(
-              `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="Test CJK"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
+              `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="Test CJK"/>${sourcePolicy.simplifiedChineseMode ? '<w:lang w:eastAsia="zh-CN"/>' : ''}</w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
             ).root
           : null,
         // The font table gives the probe face an East Asian charset.
         { ...NO_THEME_FONTS, eastAsianFontTableFaces: ['test cjk'] },
-        settings.root
+        sourcePolicy?.simplifiedChineseMode
+          ? part(
+              `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${sourcePolicy.simplifiedChineseMode}"/></w:compat></w:settings>`
+            ).root
+          : settings.root
       ),
       geometry: {
         width: width + 20,
@@ -466,4 +474,23 @@ test('a document whose defaults name no East Asian face compresses no punctuatio
     );
   expect(text(true)).toEqual(['甲乙（丙丁）戊己']);
   expect(text(false)).toEqual(['甲乙（丙丁）戊', '己']);
+});
+
+test('legacy Simplified Chinese left alignment fits an extra ideograph using punctuation bearings', () => {
+  const body = '甲乙丙、丁戊己、庚辛壬癸子丑寅卯辰巳、午未申酉戌亥春夏秋冬东';
+  const content = body + '然后继续测试';
+  for (const mode of [14, 15] as const) {
+    const first = layout(
+      content,
+      356,
+      content.length,
+      measurer,
+      '',
+      { eastAsianDefaults: true, kern: 2, simplifiedChineseMode: mode },
+      'left'
+    )[0]!;
+    expect(first.spans.map((span) => span.text).join('')).toBe(
+      mode === 14 ? body : body.slice(0, -1)
+    );
+  }
 });
