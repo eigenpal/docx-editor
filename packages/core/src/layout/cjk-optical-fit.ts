@@ -104,14 +104,11 @@ export interface CjkOpticalFit {
 }
 function allowedStyle(span: Pick<StyleSpanRecord, 'style' | 'props' | 'revisions'>): boolean {
   const style = span.style;
+  // Underline, strike and backgrounds paint over the fitted advances. An outline changes
+  // the ink at the seam, so the undecorated bearing cannot safely be used for it.
   return (
     !span.revisions?.length &&
     !style.textOutline &&
-    !style.underline &&
-    !style.strike &&
-    !style.doubleStrike &&
-    !style.highlight &&
-    !style.shading &&
     style.shaping?.direction !== 'rtl' &&
     !formatRevisionOf(span.props)
   );

@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Inline text decoration could prevent punctuation compression and cause an earlier line break.",
+  "after": "East Asian punctuation can fit the line while the text keeps its decorations.",
+  "reason": "The layout change preserves the document format, source offsets, editor operations, and collaboration journal.",
+  "tests": [
+    "packages/core/src/layout/__tests__/cjk-optical-fit.test.ts",
+    "packages/core/src/layout/__tests__/cjk-optical-local-boundaries.test.ts"
+  ],
+  "changeset": "fit-decorated-east-asian-punctuation",
+  "migration": null
+}
