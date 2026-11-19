@@ -1,5 +1,11 @@
 # @docx-editor.dev/docx-to-markdown
 
+## 2.40.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.40.0, @docx-editor.dev/fonts@2.40.0
+
 ## 2.39.0
 
 ### Patch Changes

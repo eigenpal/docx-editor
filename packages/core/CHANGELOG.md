@@ -1,5 +1,19 @@
 # @docx-editor.dev/core
 
+## 2.40.0
+
+### Minor Changes
+
+- 8621cd0: Support copy, cut, and paste of a selected picture, shape, line, text box, or group. Fixes #2058
+
+### Patch Changes
+
+- 35a29d6: Accepting all changes in a document that holds formatting changes with no effect lays out only the paragraphs that changed. A formatting change that has no review card no longer keeps a change bar after an edit in another paragraph.
+- b89bc8d: Large documents open faster because layout no longer repeats work for unchanged paragraphs on each pass.
+- 2b88531: Tab between table cells and typing in long documents with many tracked changes respond faster.
+- eb1ed9f: A full layout pass over unchanged content does less work in long documents, so the editor stays more responsive after a large document opens.
+- Updated dependencies: @docx-editor.dev/i18n@2.40.0
+
 ## 2.39.0
 
 ### Minor Changes
