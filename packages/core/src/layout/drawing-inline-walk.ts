@@ -31,6 +31,15 @@ export function walkDrawingRunContent(
 
 const paragraphsWithoutDrawingAtoms = new WeakSet<OoxmlNode>();
 
+/**
+ * Whether an earlier walk of this immutable paragraph found no drawing atom. The answer
+ * depends on the node alone, so a loop over every block of a story can skip such a paragraph
+ * without a walk.
+ */
+export function knownWithoutDrawingAtoms(paragraph: OoxmlNode): boolean {
+  return paragraphsWithoutDrawingAtoms.has(paragraph);
+}
+
 /** Visit addressable drawing atoms with their transparent-container ancestry. */
 export function walkDrawingAtoms(
   paragraph: Exclude<OoxmlNode, { kind: 'textValue' }>,
