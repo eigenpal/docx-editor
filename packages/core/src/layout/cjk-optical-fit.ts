@@ -728,12 +728,11 @@ export function createParagraphCjkOpticalFitter(
   typography: CjkParagraphTypography,
   hasPageExclusions: boolean,
   preserveColonAdvances: boolean,
-  justified: boolean
+  alignmentAllowsFit: boolean
 ) {
-  // Compression fits a line only when the paragraph is justified and the document defaults
-  // name an East Asian face. A document without one compresses no punctuation to fit.
+  // The alignment must allow fitting and the document defaults must name an East Asian face.
   const opticalPolicy =
-    justified &&
+    alignmentAllowsFit &&
     typography.settings?.sourceEastAsianFont === true &&
     typography.settings.compression !== undefined &&
     typography.settings.compression !== 'doNotCompress' &&

@@ -37,6 +37,8 @@ export interface ParagraphFlowOptions {
   readonly pageBreakMarkOnNextPage?: boolean;
   /** Justified paragraphs may compress East Asian punctuation to fit a line; others keep natural widths. */
   readonly cjkPunctuationFit?: boolean;
+  /** Legacy Simplified Chinese left-aligned lines can also fit punctuation bearings. */
+  readonly legacyLeftCjkPunctuationFit?: boolean;
   readonly typography?: CjkParagraphTypography;
   readonly lineSpacing?: ParagraphLineSpacing;
   /** First-line offset from the paragraph indent: `w:firstLine` right, `w:hanging` left. */
