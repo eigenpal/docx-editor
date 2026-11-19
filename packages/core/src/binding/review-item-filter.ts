@@ -92,7 +92,7 @@ export function hiddenReviewSitesOf(items: readonly ReviewItem[]): HiddenReviewS
 }
 
 /** Whether a filter could leave `item` out: only property changes are ever left out. */
-export function couldHide(item: ReviewItem): boolean {
+function couldHide(item: ReviewItem): boolean {
   return (
     item.kind === 'revision' &&
     item.revisionKind === 'format' &&

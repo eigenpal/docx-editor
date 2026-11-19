@@ -1,10 +1,6 @@
 // The surface's revision filter with the records the review queue leaves out.
 
-import {
-  couldHide,
-  hiddenReviewSitesOf,
-  type HiddenReviewSites,
-} from '../binding/review-item-filter.ts';
+import { hiddenReviewSitesOf, type HiddenReviewSites } from '../binding/review-item-filter.ts';
 import type { ReviewDisplayMode } from '../contracts/editor.ts';
 import {
   withHiddenRevisionSites,
@@ -13,50 +9,49 @@ import {
 import type { RevisionAuthorFilter } from '../layout/revision-projection.ts';
 import type { ReviewItem } from '../store/store/review-items.ts';
 
-/** The key of a session's last All Markup queue that left records out. */
-interface LeftOutBefore {
-  readonly key: string;
-  /** The queue last checked, and whether it holds no property change at all. */
-  checked: readonly ReviewItem[] | null;
-  clear: boolean;
-}
-
-const leftOutBefore = new WeakMap<object, LeftOutBefore>();
+/**
+ * For each session, the styles and numbering key of its last All Markup queue that left
+ * records out.
+ *
+ * Only All Markup records it, because only its filter key can outlive the records. The Simple
+ * Markup key also names the records each paragraph holds, so it changes with every change of
+ * them, and that view shares no cached block with All Markup. Its filter can go back to the
+ * plain one at no risk.
+ */
+const leftOutKeys = new WeakMap<object, string>();
 
 /**
  * The All Markup filter for a queue that leaves `hidden` out.
  *
- * A queue that leaves records out keys its filter by what they were decided against. When its
- * last record goes, as when every change is accepted, the filter keeps that key while the queue
- * is still decided against the same styles and numbering. The layout caches then keep every
- * block that held no change, where a new key would lay the whole document out again.
+ * A queue that leaves records out keys its filter by the styles and numbering they were
+ * decided against. The filter keeps that key after the last record goes, as when every change
+ * is accepted, for as long as the styles and numbering stay the same. The layout caches then
+ * keep every block that did not change, where a new key would lay the whole document out
+ * again.
  *
- * The key is kept only while the queue holds no property change, the one kind of change a
- * queue can leave out. Then no record that a block was cached without is back with a card,
- * and no block cached under the kept key holds a record that a later queue could leave out.
- * A queue with a property change and nothing left out takes the plain filter again, as it
- * always did.
+ * This is safe because, in this view, a left-out record changes one thing: its paragraph
+ * projects to another block object, without the record. Each layout cache under the key holds
+ * a block by that object or by its content, and a story's list of blocks is built again when
+ * the left-out records change. So an entry for the paragraph itself always shows the record,
+ * and an entry for the block without it never does. A record can get a card or lose it under
+ * one key, and no entry is wrong.
+ *
+ * A change of the styles or the numbering ends the kept key, and the plain filter lays the
+ * document out once. A styles change lays every paragraph out under any key, so nothing is
+ * lost there. A numbering change alone lays out only the list paragraphs under the plain key,
+ * so the first one after a kept key costs the full layout that the accept did not.
  */
 function allMarkupFilter(
   base: RevisionAuthorFilter | undefined,
   hidden: HiddenReviewSites,
-  session: { reviewItems(): readonly ReviewItem[] }
+  session: object
 ): RevisionAuthorFilter | undefined {
-  const before = leftOutBefore.get(session);
   if (hidden.sites.size > 0) {
-    if (before?.key !== hidden.key)
-      leftOutBefore.set(session, { key: hidden.key, checked: null, clear: false });
+    leftOutKeys.set(session, hidden.key);
     return withHiddenRevisionSites(base, hidden);
   }
-  if (!before) return base;
-  const items = session.reviewItems();
-  if (before.checked !== items) {
-    before.checked = items;
-    before.clear = !items.some(couldHide);
-  }
-  if (before.key === hidden.key && before.clear)
-    return withHiddenRevisionSitesKey(base, before.key);
-  leftOutBefore.delete(session);
+  if (leftOutKeys.get(session) === hidden.key) return withHiddenRevisionSitesKey(base, hidden.key);
+  leftOutKeys.delete(session);
   return base;
 }
 

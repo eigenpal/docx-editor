@@ -84,8 +84,8 @@ const emptied = new WeakMap<
  * That key says what the records were decided against, not which records they were, so it
  * also fits the queue once its last record is gone. A caller that keeps it there keeps every
  * block cached while records were left out: accepting them all then lays out only the blocks
- * that held a change. The caller keeps it only while the queue holds no record it could leave
- * out, so no block cached under the key is served with a record in another state.
+ * that held a change. No block cached under the key is served in the wrong state, because a
+ * paragraph with a record left out is another block object than the paragraph itself.
  */
 export function withHiddenRevisionSitesKey(
   base: RevisionAuthorFilter | undefined,
