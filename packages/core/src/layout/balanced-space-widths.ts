@@ -142,10 +142,10 @@ export function unwidenedStyle(style: ResolvedRunStyle): ResolvedRunStyle {
 function plainText(piece: FieldAwarePiece): boolean {
   return (
     (piece.projected
-      ? piece.fieldAtom?.authoredHyperlinkResult === true
+      ? piece.fieldAtom?.authoredTextResult === true
       : piece.end - piece.start === piece.text.length) &&
     piece.measureText === undefined &&
-    (!piece.fieldAtom || piece.fieldAtom.authoredHyperlinkResult === true) &&
+    (!piece.fieldAtom || piece.fieldAtom.authoredTextResult === true) &&
     !piece.equation &&
     !piece.inlineDrawing &&
     !piece.positionalTab &&

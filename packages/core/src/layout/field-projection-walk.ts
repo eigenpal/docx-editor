@@ -275,7 +275,7 @@ export function unmergedPiecesOfParagraphForDisplay(
         ...(carriedLink ? { linkOverride: carriedLink } : {}),
         fieldAtom: {
           formField,
-          ...(linkSpec && !formField ? { authoredHyperlinkResult: true as const } : {}),
+          ...(linkSpec && !formField ? { authoredTextResult: true as const } : {}),
           ...(formControl ? { formControl } : {}),
           ...(pending?.refSpec && !pending.hasNestedField && plainRefSpec(pending.refSpec)
             ? { fixedResult: true as const }
@@ -350,12 +350,12 @@ export function unmergedPiecesOfParagraphForDisplay(
       }
     } else {
       const first = pieces.length;
-      const authoredHyperlinkResult = closed && !!pending.linkSpec;
+      const authoredTextResult = closed && !!pending.linkSpec;
       for (const piece of pending.buffered) {
         const result = linked(piece);
         pieces.push(
-          authoredHyperlinkResult && result.fieldAtom && !result.projected
-            ? { ...result, fieldAtom: { ...result.fieldAtom, authoredHyperlinkResult: true } }
+          authoredTextResult && result.fieldAtom && !result.projected
+            ? { ...result, fieldAtom: { ...result.fieldAtom, authoredTextResult: true } }
             : result
         );
       }
@@ -801,9 +801,17 @@ export function unmergedPiecesOfParagraphForDisplay(
           ...(hyphen?.measureText === undefined ? {} : { projected: true, measureText: '' }),
           ...attribution,
           ...tags(),
-          // EVERY buffered result piece is a field's displayed result — a demoted
-          // (unterminated) field's cache shades exactly like a FORMTEXT's editable one.
-          fieldAtom: { formField: pending.formField },
+          // The opening TOC paragraph can contain a title before the field closes on a
+          // later paragraph. Its literal display text still uses ordinary spacing.
+          fieldAtom: {
+            formField: pending.formField,
+            ...(!pending.formField &&
+            tocLinkStyleRanges?.some(
+              (range) => offset >= range.start && offset + modelWidth <= range.end
+            )
+              ? { authoredTextResult: true as const }
+              : {}),
+          },
         });
         offset += modelWidth;
         pending.bufferOffset = offset;

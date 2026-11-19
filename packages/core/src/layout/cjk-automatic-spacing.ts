@@ -52,9 +52,9 @@ export function automaticTextSpacingBefore(value: {
 function ordinaryText(item: TextBoundary): boolean {
   const style = item.style;
   return (
-    (!item.projected || item.fieldAtom?.authoredHyperlinkResult === true) &&
+    (!item.projected || item.fieldAtom?.authoredTextResult === true) &&
     !item.equation &&
-    (!item.fieldAtom || item.fieldAtom.authoredHyperlinkResult === true) &&
+    (!item.fieldAtom || item.fieldAtom.authoredTextResult === true) &&
     !item.positionalTab &&
     !item.inlineDrawing &&
     item.measureText === undefined &&
@@ -218,7 +218,7 @@ function automaticSpacingCuts(
 ): number[] {
   const literal = piece.end - piece.start === piece.text.length;
   if (
-    (!literal && !(piece.projected && piece.fieldAtom?.authoredHyperlinkResult)) ||
+    (!literal && !(piece.projected && piece.fieldAtom?.authoredTextResult)) ||
     piece.text.length < 2 ||
     !EAST_ASIAN_TEXT.test(piece.text) ||
     !LATIN_OR_DIGIT_TEXT.test(piece.text) ||
@@ -264,7 +264,7 @@ export function automaticLineTextGap(
   const sameHyperlinkResult =
     previous?.projected &&
     piece.projected &&
-    previous.fieldAtom?.authoredHyperlinkResult &&
+    previous.fieldAtom?.authoredTextResult &&
     piece.fieldAtom === previous.fieldAtom &&
     previous.range.start === start &&
     previous.range.end === piece.end;

@@ -84,3 +84,32 @@ for (const balanced of [false, true]) {
     });
   }
 }
+
+test('the first TOC entry beside the field opening keeps balanced text spacing', () => {
+  const openToc =
+    '<w:r><w:fldChar w:fldCharType="begin"/><w:instrText> TOC \\o "1-2" \\h </w:instrText>' +
+    '<w:fldChar w:fldCharType="separate"/></w:r>';
+  const settings = read(
+    'settings',
+    `<w:settings xmlns:w="${W}"><w:compat><w:balanceSingleByteDoubleByteWidth/></w:compat></w:settings>`
+  );
+  const content = run('1 甲乙');
+  const literal = `<w:p>${content}</w:p>`;
+  const toc = `<w:p>${openToc}${begin}${content}${end}</w:p><w:p>${end}</w:p>`;
+  const compare = (body: string) => {
+    const doc = read(
+      'document',
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    );
+    const original = serializeOoxmlPart(doc);
+    const result = layoutSemanticDocument(doc, 0, {
+      measurer,
+      styleCascade: buildStyleCascadeTable(styles.root, undefined, settings.root),
+    });
+    const spans = linesOf(result)[0]!.spans;
+    expect(serializeOoxmlPart(doc)).toEqual(original);
+    expect(spans.map((span) => span.text).join('')).toBe('1 甲乙');
+    return spans.find((span) => span.text.startsWith('甲'))!.box.x;
+  };
+  expect(compare(toc)).toBeCloseTo(compare(literal), 6);
+});

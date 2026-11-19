@@ -2,11 +2,12 @@
   "impact": "no-impact",
   "fields": [],
   "before": "A hyperlink field could lose East Asian spacing in its displayed result.",
-  "after": "Authored text in a hyperlink field receives the regular East Asian spacing.",
+  "after": "Authored text in a hyperlink field or the first TOC entry receives regular East Asian spacing.",
   "reason": "Derived visual pieces share the existing field range. The package and collaboration messages stay the same.",
   "tests": [
     "packages/core/src/layout/__tests__/hyperlink-result-spacing.test.ts",
-    "packages/pro/src/collaboration/__tests__/document-hyperlink-field-spacing.test.ts"
+    "packages/pro/src/collaboration/__tests__/document-hyperlink-field-spacing.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-toc.test.ts"
   ],
   "changeset": "hyperlink-field-cjk-spacing",
   "migration": null
