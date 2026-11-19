@@ -9,6 +9,6 @@
     "packages/core/src/layout/__tests__/body-line-placement.test.ts",
     "packages/pro/src/collaboration/__tests__/document-accept-all-revisions.test.ts"
   ],
-  "changeset": "warm-layout-passes",
+  "changeset": "accept-all-layout-reuse",
   "migration": null
 }
