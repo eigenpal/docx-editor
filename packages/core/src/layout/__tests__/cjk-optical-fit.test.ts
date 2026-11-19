@@ -53,12 +53,13 @@ function layout(
   sourcePolicy: { readonly eastAsianDefaults?: boolean; readonly kern?: number } = {
     eastAsianDefaults: true,
   },
-  jc = 'both'
+  jc = 'both',
+  overflowPunctuation = false
 ) {
   const run = (value: string) =>
     `<w:r><w:rPr><w:sz w:val="24"/>${sourcePolicy?.kern === undefined ? '' : `<w:kern w:val="${sourcePolicy.kern}"/>`}${runProps}</w:rPr><w:t xml:space="preserve">${value}</w:t></w:r>`;
   const source = part(
-    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:jc w:val="${jc}"/><w:overflowPunct w:val="0"/></w:pPr>${split === -1 ? [...text].map(run).join('') : run(text.slice(0, split)) + run(text.slice(split))}</w:p></w:body></w:document>`
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:jc w:val="${jc}"/><w:overflowPunct w:val="${overflowPunctuation ? 1 : 0}"/></w:pPr>${split === -1 ? [...text].map(run).join('') : run(text.slice(0, split)) + run(text.slice(split))}</w:p></w:body></w:document>`
   );
   return linesOf(
     layoutSemanticDocument(source, 0, {
@@ -466,4 +467,44 @@ test('a document whose defaults name no East Asian face compresses no punctuatio
     );
   expect(text(true)).toEqual(['甲乙（丙丁）戊己']);
   expect(text(false)).toEqual(['甲乙（丙丁）戊', '己']);
+});
+
+const trackedProps =
+  '<w:rFonts w:ascii="Test Latin" w:hAnsi="Test Latin" w:eastAsia="Test CJK" w:hint="eastAsia"/>' +
+  '<w:lang w:eastAsia="zh-CN"/><w:spacing w:val="-4"/>';
+const tracked: TextMeasurer = {
+  ...measurer,
+  hasResolvedFont: () => true,
+  inkBounds(value, style) {
+    return value === '，'
+      ? { left: 0.08 * style.fontSizePt, right: 0.34 * style.fontSizePt }
+      : measurer.inkBounds?.(value, style);
+  },
+};
+
+// Word and WPS fit the first 32 characters after tightening the source spacing.
+// A Latin suffix belongs to the next line and cannot veto the first line's CJK seams.
+test('a later Latin suffix preserves punctuation fitting in negatively tracked CJK text', () => {
+  const text = '甲乙丙丁戊己庚辛壬癸子丑寅，卯辰巳午未申酉戌亥春夏秋冬风雨雷电晴雪朝暮A1';
+  const lines = layout(text, 375, undefined, tracked, trackedProps);
+  expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
+    text.slice(0, 32),
+    text.slice(32),
+  ]);
+  const comma = lines[0]!.spans.find((span) => span.text === '，');
+  expect(comma?.box.width).toBeLessThan(11.8);
+  expect(
+    lines.flatMap((line) => line.spans).find((span) => span.text.includes('A1'))?.style
+      .characterSpacingPt
+  ).toBe(-0.2);
+});
+
+test('a hanging comma respects the authored tracked advance of the fitted line', () => {
+  const text = '甲乙丙丁戊己，庚辛壬癸子丑寅卯辰巳午未申酉，戌亥春夏秋冬风雨雷电，晴雪朝暮A1';
+  const wrap = (width: number) =>
+    layout(text, width, undefined, tracked, trackedProps, undefined, 'both', true).map((line) =>
+      line.spans.map((span) => span.text).join('')
+    );
+  expect(wrap(371)).toEqual([text.slice(0, 31), text.slice(31)]);
+  expect(wrap(372)).toEqual([text.slice(0, 33), text.slice(33)]);
 });
