@@ -1074,7 +1074,7 @@
     "noBookmarkDialog": "Buraya yer işareti eklenemez",
     "groupMemberMove": "Grup içindeki bir şekil tek başına taşınamaz, yeniden boyutlandırılamaz veya silinemez. Grubu seçmek için Esc tuşuna basın.",
     "groupMemberProperties": "Grup içindeki bir şekil kaydırma, alternatif metin ve özelliklerini gruptan alır. Grubu seçmek için Esc tuşuna basın.",
-    "drawingClipboardParts": "Bu çizim kopyalanamayan parçalar kullanıyor.",
+    "drawingClipboardParts": "Bu çizim, diyagram veya katıştırılmış nesne gibi kopyalanamayan verilere bağlı.",
     "linkedTextBoxClipboard": "Bağlantılı bir metin kutusu kopyalanamaz.",
     "drawingClipboardStory": "Çizimler yalnızca belge gövdesinde kopyalanabilir, kesilebilir veya yapıştırılabilir; üst bilgi, alt bilgi, not veya metin kutusunda yapılamaz.",
     "groupMemberClipboard": "Bir grup içindeki şekil, grubuyla birlikte kopyalanır veya kesilir. Grubu seçmek için Escape tuşuna basın.",

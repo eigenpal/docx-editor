@@ -433,6 +433,8 @@ test('paste without formatting arms from the overlay', async () => {
   caretAtEndOf(editor, 5);
   const shortcut = { key: 'V', shiftKey: true, ctrlKey: true, bubbles: true };
   overlay.dispatchEvent(new KeyboardEvent('keydown', shortcut));
+  // Browsers run this paste only in editable content, so the pages take the keyboard.
+  expect(document.activeElement?.classList.contains('docx-pages')).toBe(true);
   overlay.dispatchEvent(clipboardEvent('paste', data));
   // The forced plain paste lands the line's text, which is nothing: no second line.
   expect(named(await saved(editor), 'Rule')).toBe(1);

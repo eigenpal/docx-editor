@@ -81,7 +81,7 @@
     "cannotIndentFurther": "La selezione non può essere rientrata oltre",
     "noGoToView": "Vai a non è disponibile qui",
     "noBookmarkDialog": "I segnalibri non si possono aggiungere qui",
-    "drawingClipboardParts": "Questo disegno usa parti che non possono essere copiate.",
+    "drawingClipboardParts": "Questo disegno è collegato a dati che non possono essere copiati, come un diagramma o un oggetto incorporato.",
     "linkedTextBoxClipboard": "Una casella di testo collegata non può essere copiata.",
     "drawingClipboardStory": "I disegni possono essere copiati, tagliati o incollati solo nel corpo del documento, non in un'intestazione, un piè di pagina, una nota o una casella di testo.",
     "groupMemberClipboard": "Una forma all'interno di un gruppo viene copiata o tagliata con il suo gruppo. Premi Esc per selezionare il gruppo.",

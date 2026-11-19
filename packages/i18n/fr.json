@@ -1074,7 +1074,7 @@
     "noBookmarkDialog": "Impossible d’ajouter des signets ici",
     "groupMemberMove": "Une forme dans un groupe ne se déplace pas, ne se redimensionne pas et ne se supprime pas seule. Appuyez sur Échap pour sélectionner le groupe.",
     "groupMemberProperties": "Une forme dans un groupe prend l'habillage, le texte de remplacement et les propriétés du groupe. Appuyez sur Échap pour sélectionner le groupe.",
-    "drawingClipboardParts": "Ce dessin utilise des parties qui ne peuvent pas être copiées.",
+    "drawingClipboardParts": "Ce dessin est lié à des données qui ne peuvent pas être copiées, comme un diagramme ou un objet incorporé.",
     "linkedTextBoxClipboard": "Une zone de texte liée ne peut pas être copiée.",
     "drawingClipboardStory": "Les dessins ne peuvent être copiés, coupés ou collés que dans le corps du document, pas dans un en-tête, un pied de page, une note ou une zone de texte.",
     "groupMemberClipboard": "Une forme dans un groupe est copiée ou coupée avec son groupe. Appuyez sur Échap pour sélectionner le groupe.",

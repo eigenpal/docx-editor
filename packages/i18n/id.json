@@ -1074,7 +1074,7 @@
     "noBookmarkDialog": "Penanda tidak dapat ditambahkan di sini",
     "groupMemberMove": "Bentuk di dalam grup tidak dapat dipindahkan, diubah ukurannya, atau dihapus sendiri. Tekan Escape untuk memilih grup.",
     "groupMemberProperties": "Bentuk di dalam grup mengambil pembungkusan, teks alternatif, dan propertinya dari grup. Tekan Escape untuk memilih grup.",
-    "drawingClipboardParts": "Gambar ini menggunakan bagian yang tidak dapat disalin.",
+    "drawingClipboardParts": "Gambar ini tertaut ke data yang tidak dapat disalin, seperti diagram atau objek tersemat.",
     "linkedTextBoxClipboard": "Kotak teks yang tertaut tidak dapat disalin.",
     "drawingClipboardStory": "Gambar hanya dapat disalin, dipotong, atau ditempel di isi dokumen, bukan di header, footer, catatan, atau kotak teks.",
     "groupMemberClipboard": "Bentuk di dalam grup disalin atau dipotong bersama grupnya. Tekan Escape untuk memilih grup.",

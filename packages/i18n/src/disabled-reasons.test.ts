@@ -91,7 +91,10 @@ test.each([
     'groupMemberClipboard',
   ],
   ['a linked text box cannot be copied', 'linkedTextBoxClipboard'],
-  ['this drawing uses parts that cannot be copied', 'drawingClipboardParts'],
+  [
+    'this drawing links to data that cannot be copied, such as a diagram or an embedded object',
+    'drawingClipboardParts',
+  ],
   ['this drawing is too large to copy', 'drawingClipboardSize'],
   ['place the caret in the text to paste a drawing', 'drawingPasteCells'],
 ] as const)('the drawing clipboard refusal %s is translatable', (reason, key) => {

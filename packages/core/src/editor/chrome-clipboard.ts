@@ -57,9 +57,13 @@ export function forwardClipboardEvents(
   const enable = (event: Event): void => event.preventDefault();
   // Paste without formatting arms on its key chord, because only the paste event holds the
   // clipboard. The pages arm it from their own keymap, which the focused element bypasses.
+  // Browsers run this paste only in editable content, so the pages take the keyboard first,
+  // and the paste lands at the caret there, as a plain paste does.
   const onKeyDown = (event: KeyboardEvent): void => {
-    if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'v')
-      editor.surface?.armForcePlainPaste();
+    if (!(event.ctrlKey || event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== 'v')
+      return;
+    editor.surface?.armForcePlainPaste();
+    editor.focus();
   };
   for (const type of CLIPBOARD_EVENTS) element.addEventListener(type, onClipboard);
   for (const type of ENABLING_EVENTS) element.addEventListener(type, enable);

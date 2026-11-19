@@ -59,7 +59,8 @@ export const GROUP_MEMBER_CLIPBOARD_REASON =
 export const LINKED_TEXT_BOX_CLIPBOARD_REASON = 'a linked text box cannot be copied';
 
 /** Why a copy or cut refuses a drawing whose parts cannot travel. Translated the same way. */
-export const DRAWING_CLIPBOARD_PARTS_REASON = 'this drawing uses parts that cannot be copied';
+export const DRAWING_CLIPBOARD_PARTS_REASON =
+  'this drawing links to data that cannot be copied, such as a diagram or an embedded object';
 
 /** Why a copy or cut refuses a picture too large for the clipboard. Translated the same way. */
 export const DRAWING_CLIPBOARD_SIZE_REASON = 'this drawing is too large to copy';

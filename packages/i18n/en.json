@@ -65,7 +65,7 @@
     "chartClipboardStale": "The copied chart is no longer available. Copy the chart again.",
     "drawingClipboardStory": "Drawings can be copied, cut, or pasted only in the body text, not in a header, footer, note, or text box.",
     "groupMemberClipboard": "A shape inside a group is copied or cut with its group. Press Escape to select the group.",
-    "drawingClipboardParts": "This drawing uses parts that can't be copied.",
+    "drawingClipboardParts": "This drawing links to data that can't be copied, such as a diagram or an embedded object.",
     "linkedTextBoxClipboard": "A linked text box can't be copied.",
     "drawingClipboardSize": "This drawing is too large to copy.",
     "drawingPasteCells": "Place the caret in the text to paste a drawing.",
