@@ -1619,7 +1619,16 @@ export function breakParagraph(
           layoutOwned && !piece.positionalTab,
           lineEndWhitespace
         );
-        rememberHangingPunctuation(line, span, piece, measurer, hangs, lineAvailable(), flow);
+        rememberHangingPunctuation(
+          line,
+          span,
+          piece,
+          measurer,
+          hangs,
+          lineAvailable(),
+          flow,
+          typography
+        );
         if (opticalFit) appendOpticalCjkCandidate(line.spans, span, opticalFit);
         else lineEndSpaces.appendWordEnd(line.spans, span, clippedWordEnd);
         line.width += remainingWidth;

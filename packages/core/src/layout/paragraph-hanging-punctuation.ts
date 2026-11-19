@@ -60,19 +60,36 @@ export function rememberHangingPunctuation(
   measurer: TextMeasurer,
   hangs: boolean,
   available: number,
-  flow: Pick<ParagraphFlowOptions, 'koreanHangingLineFills'> | undefined
+  flow: Pick<ParagraphFlowOptions, 'koreanHangingLineFills'> | undefined,
+  typography: CjkParagraphTypography
 ): void {
   // `hangs` already admitted the mark, so a Korean mark that hangs closes its paragraph.
+  const overflow = line.width + span.box.width - available;
   let advance =
-    hangs && line.width + span.box.width > available + 0.001
+    hangs && overflow > 0.001
       ? hangingCjkPunctuationAdvance(span.text, piece, measurer, { paragraphFinal: true })
       : undefined;
+  const language = eastAsianLanguage(piece.props);
   if (
     advance !== undefined &&
     flow?.koreanHangingLineFills !== true &&
-    /^ko(?:-|$)/.test(eastAsianLanguage(piece.props) ?? '')
+    /^ko(?:-|$)/.test(language ?? '')
   )
     advance = undefined;
+  // A legacy Simplified Chinese line of ideographs lets a closing mark use any remaining
+  // measure. Only the actual overflow hangs; expanding the preceding glyphs moves the mark.
+  if (
+    advance !== undefined &&
+    language === 'zh-cn' &&
+    typography.settings?.legacyLineEndPunctuation &&
+    typography.settings.compression === 'compressPunctuation' &&
+    /[，。；]$/.test(span.text) &&
+    line.drawings.length === 0 &&
+    /^[\p{Script=Han}，。；、]+$/u.test(span.text) &&
+    line.spans.every((part) => /^[\p{Script=Han}，。；、]+$/u.test(part.text))
+  ) {
+    advance = Math.min(advance, overflow);
+  }
   if (advance !== undefined || !span.lineEndWhitespace)
     setLineHangingPunctuationAdvance(line, advance);
 }

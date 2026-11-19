@@ -167,3 +167,23 @@ describe('distributed paragraphs hang without East Asian document defaults', () 
     });
   }
 });
+
+describe('legacy Simplified Chinese lines with punctuation compression', () => {
+  for (const mark of [...'，。；']) {
+    test(`a hanging ${mark} retains the natural ideograph positions`, () => {
+      const result = loadFixture({
+        text: H + mark + '余',
+        available: 468,
+        face: 'SimSun',
+        defaultFace: 'SimSun',
+        language: 'zh-CN',
+        compatibility: 14,
+        compression: 'compressPunctuation',
+        paragraphProperties: '<w:jc w:val="both"/>',
+      });
+      expect(texts(result)).toEqual([H + mark, '余']);
+      expect(caretX(result, 0)).toBeCloseTo(0, 6);
+      expect(caretX(result, 19)).toBeCloseTo(456, 6);
+    });
+  }
+});
