@@ -86,7 +86,10 @@
     "drawingClipboardStory": "لا يمكن نسخ الرسوم أو قصها أو لصقها إلا في نص المستند، وليس في رأس الصفحة أو تذييلها أو حاشية أو مربع نص.",
     "groupMemberClipboard": "يُنسخ الشكل الموجود داخل مجموعة أو يُقص مع مجموعته. اضغط على Escape لتحديد المجموعة.",
     "drawingClipboardSize": "هذا الرسم أكبر من أن يُنسخ.",
-    "drawingPasteCells": "ضع المؤشر في النص للصق رسم."
+    "drawingPasteCells": "ضع المؤشر في النص للصق رسم.",
+    "groupMemberPaste": null,
+    "shapePasteText": null,
+    "textBoxPaste": null
   },
   "toolbar": {
     "ariaLabel": "شريط أدوات التنسيق",

@@ -47,7 +47,10 @@ async function clickIntoText(page) {
   await lines.nth(Math.floor(Math.random() * Math.min(count, 40))).click();
 }
 
-/** Select a picture and insert another one: the editor refuses it with `edit.picture-selected`. */
+/**
+ * Select a picture and insert another one. In suggesting mode the editor refuses it with
+ * `edit.picture-selected`; while editing, the new picture goes in before the selected one.
+ */
 async function refusedPictureInsert(page) {
   const box = await page.evaluate(async () => {
     const scroller = [...document.querySelectorAll('*')].find(

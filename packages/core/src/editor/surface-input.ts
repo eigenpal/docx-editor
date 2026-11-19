@@ -646,7 +646,10 @@ export function createBeforeInputHandler(
       // the paste router carries rich payloads, and it does so through the bounded parse
       // lanes. A drop's `text/html` is read for its visible text and nothing else.
       const dropped = dataTransferText(event);
-      if (dropped) hooks.insertPlainText(dropped);
+      // A quoted paste is a paste: with a drawing selected it goes where every paste goes.
+      if (dropped && event.inputType === 'insertFromPasteAsQuotation')
+        surface.pasteRich(dropped, null);
+      else if (dropped) hooks.insertPlainText(dropped);
       return;
     }
     if (event.inputType === 'insertParagraph') {

@@ -609,9 +609,14 @@ export function execEditorCommand(
       }
       break;
     }
-    case 'pasteWithoutFormatting':
-      mounted.insertPlainText(command.text);
+    case 'pasteWithoutFormatting': {
+      const before = mounted.state();
+      // The paste lane with no HTML, so a selected drawing places or refuses the text.
+      mounted.pasteRich(command.text, null);
+      const refused = drawingRefusalSince(mounted, before);
+      if (refused) return { ok: false, code: 'unsupported', reason: refused };
       break;
+    }
     case 'setSelection': {
       // Every successful branch REVEALS its head. This command is host/automation-facing
       // — "select this paragraph" means "show it to me" — and the caret-follow scroll

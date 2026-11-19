@@ -136,6 +136,13 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
     'disabledReason.drawingClipboardParts',
   'this drawing is too large to copy': 'disabledReason.drawingClipboardSize',
   'place the caret in the text to paste a drawing': 'disabledReason.drawingPasteCells',
+  // Keyed on the paste-target reasons in the engine's drawing clipboard lane.
+  'this shape has no text to paste into; place the caret in the text to paste':
+    'disabledReason.shapePasteText',
+  'the text in this text box cannot be edited; place the caret in the text to paste':
+    'disabledReason.textBoxPaste',
+  'text cannot be pasted into a shape inside a group; press Escape to select the group':
+    'disabledReason.groupMemberPaste',
   'invalid table chrome value': 'disabledReason.invalidValue',
   'invalid value for toolbar command': 'disabledReason.invalidValue',
   'unsupported table command': 'disabledReason.unavailable',

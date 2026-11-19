@@ -1079,7 +1079,10 @@
     "drawingClipboardStory": "Desenhos só podem ser copiados, recortados ou colados no corpo do documento, não em um cabeçalho, rodapé, nota ou caixa de texto.",
     "groupMemberClipboard": "Uma forma dentro de um grupo é copiada ou recortada com o grupo. Pressione Esc para selecionar o grupo.",
     "drawingClipboardSize": "Este desenho é grande demais para ser copiado.",
-    "drawingPasteCells": "Coloque o cursor no texto para colar um desenho."
+    "drawingPasteCells": "Coloque o cursor no texto para colar um desenho.",
+    "groupMemberPaste": null,
+    "shapePasteText": null,
+    "textBoxPaste": null
   },
   "equationPopup": {
     "apply": "Aplicar",

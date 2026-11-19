@@ -86,7 +86,10 @@
     "drawingClipboardStory": "I disegni possono essere copiati, tagliati o incollati solo nel corpo del documento, non in un'intestazione, un piè di pagina, una nota o una casella di testo.",
     "groupMemberClipboard": "Una forma all'interno di un gruppo viene copiata o tagliata con il suo gruppo. Premi Esc per selezionare il gruppo.",
     "drawingClipboardSize": "Questo disegno è troppo grande per essere copiato.",
-    "drawingPasteCells": "Posiziona il cursore nel testo per incollare un disegno."
+    "drawingPasteCells": "Posiziona il cursore nel testo per incollare un disegno.",
+    "groupMemberPaste": null,
+    "shapePasteText": null,
+    "textBoxPaste": null
   },
   "toolbar": {
     "ariaLabel": "Barra degli strumenti di formattazione",

@@ -1079,7 +1079,10 @@
     "drawingClipboardStory": "只能在正文中复制、剪切或粘贴绘图，不能在页眉、页脚、注释或文本框中进行。",
     "groupMemberClipboard": "组内的形状会随其组一起复制或剪切。按 Esc 键选择该组。",
     "drawingClipboardSize": "此绘图太大，无法复制。",
-    "drawingPasteCells": "请将光标放在文本中以粘贴绘图。"
+    "drawingPasteCells": "请将光标放在文本中以粘贴绘图。",
+    "groupMemberPaste": null,
+    "shapePasteText": null,
+    "textBoxPaste": null
   },
   "equationPopup": {
     "apply": "应用",

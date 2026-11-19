@@ -1079,7 +1079,10 @@
     "drawingClipboardStory": "Çizimler yalnızca belge gövdesinde kopyalanabilir, kesilebilir veya yapıştırılabilir; üst bilgi, alt bilgi, not veya metin kutusunda yapılamaz.",
     "groupMemberClipboard": "Bir grup içindeki şekil, grubuyla birlikte kopyalanır veya kesilir. Grubu seçmek için Escape tuşuna basın.",
     "drawingClipboardSize": "Bu çizim kopyalanamayacak kadar büyük.",
-    "drawingPasteCells": "Çizim yapıştırmak için imleci metne yerleştirin."
+    "drawingPasteCells": "Çizim yapıştırmak için imleci metne yerleştirin.",
+    "groupMemberPaste": null,
+    "shapePasteText": null,
+    "textBoxPaste": null
   },
   "equationPopup": {
     "apply": "Uygula",

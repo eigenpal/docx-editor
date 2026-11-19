@@ -1079,7 +1079,10 @@
     "drawingClipboardStory": "Rysunki można kopiować, wycinać i wklejać tylko w treści dokumentu, a nie w nagłówku, stopce, przypisie ani polu tekstowym.",
     "groupMemberClipboard": "Kształt w grupie jest kopiowany lub wycinany razem z grupą. Naciśnij Escape, aby zaznaczyć grupę.",
     "drawingClipboardSize": "Ten rysunek jest za duży, aby go skopiować.",
-    "drawingPasteCells": "Umieść kursor w tekście, aby wkleić rysunek."
+    "drawingPasteCells": "Umieść kursor w tekście, aby wkleić rysunek.",
+    "groupMemberPaste": null,
+    "shapePasteText": null,
+    "textBoxPaste": null
   },
   "equationPopup": {
     "apply": "Zastosuj",

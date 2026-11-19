@@ -15,8 +15,14 @@ import {
   floatingDrawingEndingAt,
   isDrawingCopyHtml,
   DRAWING_PASTE_VIEWING_REASON,
+  TEXT_BOX_PASTE_REASON,
 } from './surface-drawing-clipboard.ts';
 import { partOfNodeId } from './surface-scope.ts';
+import {
+  pasteContentOf,
+  type DrawingPasteContent,
+  type DrawingPasteTarget,
+} from './drawing-paste-target.ts';
 // Copy, cut and paste for the paginated surface (paginated-surface seam).
 //
 // Thin glue, on purpose. The flavour payload lives in `clipboard-copy-payload.ts`, the
@@ -154,6 +160,10 @@ export interface SurfaceClipboardDeps {
   } | null;
   /** Select a pasted drawing and bring it into view. */
   selectPastedDrawing?(drawingNodeId: string, paragraphId: string): void;
+  /** Where a paste of `content` goes while a drawing is selected (`drawingPasteTarget`). */
+  drawingPasteTarget?(content: DrawingPasteContent): DrawingPasteTarget | null;
+  /** Enter the selected drawing's text box and select its text; false when it cannot. */
+  selectTextBoxForPaste?(drawingNodeId: string): boolean;
 }
 
 export interface SurfaceClipboardOps {
@@ -178,6 +188,29 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
    * downgrade a LATER ordinary Cmd+V.
    */
   let forcePlainPasteArmedAt: number | null = null;
+
+  const refuse = (reason: string): void =>
+    deps.commit(
+      () => ({ committed: false, rejected: true, opCount: 0, reason }) as TreeApplyResult
+    );
+
+  /**
+   * Move the selection to where a paste goes while a drawing is selected: before its anchor
+   * run, which is where the selection already is, or over the text of its text box. False when
+   * the paste refuses; the reason is published. True, changing nothing, with no drawing selected.
+   */
+  function placeDrawingPaste(content: DrawingPasteContent): boolean {
+    const target = deps.drawingPasteTarget?.(content) ?? null;
+    if (!target || target.kind === 'anchor') return true;
+    const reason =
+      target.kind === 'refused'
+        ? target.reason
+        : deps.selectTextBoxForPaste?.(target.drawingNodeId)
+          ? null
+          : TEXT_BOX_PASTE_REASON;
+    if (reason !== null) refuse(reason);
+    return reason === null;
+  }
 
   /** Insert text, turning newlines into real paragraph splits rather than literal characters. */
   function insertPlainText(text: string): void {
@@ -492,21 +525,24 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     // pasting a text box's text alone or nothing at all. Cmd+Shift+V still pastes the text.
     const cells = deps.cellSelection() !== null;
     const viewing = deps.editingMode() === 'view';
-    if (!forcePlain && isDrawingCopyHtml(html) && (!storyOpen || cells || viewing)) {
+    const drawingCopy = !forcePlain && isDrawingCopyHtml(html);
+    if (drawingCopy && (!storyOpen || cells || viewing)) {
       const reason = viewing
         ? DRAWING_PASTE_VIEWING_REASON
         : storyOpen
           ? DRAWING_PASTE_CELLS_REASON
           : DRAWING_CLIPBOARD_STORY_REASON;
-      deps.commit(
-        () => ({ committed: false, rejected: true, opCount: 0, reason }) as TreeApplyResult
-      );
+      refuse(reason);
       return false;
     }
+    // While a drawing is selected the paste goes before its anchor run or into its text box.
+    if (!placeDrawingPaste(pasteContentOf(text, drawingCopy))) return false;
+    // Read again: a paste into a text box takes the text box's plain lane.
+    const richStory = (deps.richPasteAllowed?.() ?? true) && deps.storyScope().kind === 'body';
     const lane = routePaste(
       {
         richLaneOpen:
-          storyOpen &&
+          richStory &&
           (deps.editingMode() === 'edit' ||
             (deps.editingMode() === 'suggest' && deps.suggestion?.() !== undefined)) &&
           !cells,

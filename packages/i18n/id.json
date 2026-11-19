@@ -1079,7 +1079,10 @@
     "drawingClipboardStory": "Gambar hanya dapat disalin, dipotong, atau ditempel di isi dokumen, bukan di header, footer, catatan, atau kotak teks.",
     "groupMemberClipboard": "Bentuk di dalam grup disalin atau dipotong bersama grupnya. Tekan Escape untuk memilih grup.",
     "drawingClipboardSize": "Gambar ini terlalu besar untuk disalin.",
-    "drawingPasteCells": "Letakkan kursor di teks untuk menempelkan gambar."
+    "drawingPasteCells": "Letakkan kursor di teks untuk menempelkan gambar.",
+    "groupMemberPaste": null,
+    "shapePasteText": null,
+    "textBoxPaste": null
   },
   "equationPopup": {
     "apply": "Terapkan",

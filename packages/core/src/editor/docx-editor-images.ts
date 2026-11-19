@@ -1,3 +1,4 @@
+import { drawingPasteTarget } from './drawing-paste-target.ts';
 import { fitInsertExtent } from './image-insert-extent.ts';
 import { pointTargetRefusal } from './editor-point-target.ts';
 import { SUGGESTING_IMAGE_REPLACE_REASON } from './opening-editing-mode.ts';
@@ -591,8 +592,8 @@ function isStaleImageMutation(
 }
 
 /**
- * Inserting a picture while one is selected has no place to land: the selection sits on the
- * picture, and the store refuses an insert there. Refused up front, so the toolbar can say why.
+ * A picture inserted while a drawing is selected goes before its anchor run, where
+ * `drawingPasteTarget` sends it. The store refuses a tracked drawing there: suggesting refuses.
  */
 export const PICTURE_SELECTED_INSERT_REASON =
   'a picture is selected; place the caret in text to insert a picture';
@@ -613,7 +614,8 @@ export function gateImageCommand(
       const stale = pointTargetRefusal(surface, command.at);
       if (stale) return stale;
     }
-    if (!command.at && resolveSelectedDrawingRecord(surface)) {
+    const suggesting = surface.editingMode() === 'suggest';
+    if (!command.at && suggesting && drawingPasteTarget(surface, 'drawing')) {
       return { ok: false, code: 'invalidArgs', reason: PICTURE_SELECTED_INSERT_REASON };
     }
     if (!(command.data instanceof Uint8Array) || command.data.byteLength === 0) {
@@ -995,7 +997,9 @@ async function runImageCommand(
   const pre = captureImageMutationPreconditions(editor);
   if (!pre) return { ok: false, code: 'notFound', reason: 'no document is loaded' };
   if (command.type === 'insertImage') {
-    const anchor = command.at ?? surface.state().selection.anchor;
+    const pasted = command.at ? null : drawingPasteTarget(surface, 'drawing');
+    const anchor =
+      command.at ?? (pasted?.kind === 'anchor' ? pasted : surface.state().selection.anchor);
     const current = () =>
       command.at
         ? editor.surface === surface &&

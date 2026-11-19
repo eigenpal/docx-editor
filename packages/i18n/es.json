@@ -86,7 +86,10 @@
     "drawingClipboardStory": "Los dibujos solo se pueden copiar, cortar o pegar en el cuerpo del documento, no en un encabezado, pie de página, nota o cuadro de texto.",
     "groupMemberClipboard": "Una forma dentro de un grupo se copia o se corta con su grupo. Presiona Escape para seleccionar el grupo.",
     "drawingClipboardSize": "Este dibujo es demasiado grande para copiarlo.",
-    "drawingPasteCells": "Coloca el cursor en el texto para pegar un dibujo."
+    "drawingPasteCells": "Coloca el cursor en el texto para pegar un dibujo.",
+    "groupMemberPaste": null,
+    "shapePasteText": null,
+    "textBoxPaste": null
   },
   "toolbar": {
     "ariaLabel": "Barra de formato",

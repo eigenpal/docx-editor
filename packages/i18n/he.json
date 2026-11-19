@@ -1080,7 +1080,10 @@
     "drawingClipboardStory": "ניתן להעתיק, לגזור או להדביק ציורים רק בגוף המסמך, לא בכותרת עליונה, בכותרת תחתונה, בהערה או בתיבת טקסט.",
     "groupMemberClipboard": "צורה בתוך קבוצה מועתקת או נגזרת יחד עם הקבוצה. הקש Escape כדי לבחור את הקבוצה.",
     "drawingClipboardSize": "ציור זה גדול מדי להעתקה.",
-    "drawingPasteCells": "מקם את הסמן בטקסט כדי להדביק ציור."
+    "drawingPasteCells": "מקם את הסמן בטקסט כדי להדביק ציור.",
+    "groupMemberPaste": null,
+    "shapePasteText": null,
+    "textBoxPaste": null
   },
   "equationPopup": {
     "apply": "החלה",

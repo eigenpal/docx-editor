@@ -1079,7 +1079,10 @@
     "drawingClipboardStory": "ड्रॉइंग को केवल दस्तावेज़ के मुख्य पाठ में कॉपी, कट या पेस्ट किया जा सकता है, हेडर, फ़ुटर, नोट या टेक्स्ट बॉक्स में नहीं।",
     "groupMemberClipboard": "समूह के अंदर की आकृति उसके समूह के साथ कॉपी या कट होती है। समूह चुनने के लिए Escape दबाएँ।",
     "drawingClipboardSize": "यह ड्रॉइंग कॉपी करने के लिए बहुत बड़ी है।",
-    "drawingPasteCells": "ड्रॉइंग पेस्ट करने के लिए कैरेट को टेक्स्ट में रखें।"
+    "drawingPasteCells": "ड्रॉइंग पेस्ट करने के लिए कैरेट को टेक्स्ट में रखें।",
+    "groupMemberPaste": null,
+    "shapePasteText": null,
+    "textBoxPaste": null
   },
   "equationPopup": {
     "apply": "लागू करें",
