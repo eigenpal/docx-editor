@@ -7,6 +7,7 @@
   "tests": [
     "packages/core/src/layout/__tests__/cjk-optical-fit.test.ts",
     "packages/core/src/layout/__tests__/cjk-optical-capacity.test.ts",
+    "packages/pro/src/collaboration/__tests__/cjk-optical-editors.test.ts",
     "packages/pro/src/collaboration/__tests__/collaboration-diagnostics.test.ts",
     "packages/pro/src/collaboration/__tests__/document-concurrent-format-merge.test.ts"
   ],
