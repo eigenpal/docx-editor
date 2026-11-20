@@ -16,7 +16,7 @@ import {
   commentMenuKey,
   observeCommentMenu,
 } from '../review/comment-actions-menu.ts';
-import { useRail, useReviewLabel } from './review-context.ts';
+import { useCardRail, useReviewLabel } from './review-context.ts';
 import { useReviewStableId } from './stable-id.ts';
 import type { ReviewItemView } from './useReview.ts';
 
@@ -27,7 +27,7 @@ export const ReviewCommentActions = defineComponent({
     hideDelete: Boolean,
   },
   setup(props) {
-    const rail = useRail();
+    const rail = useCardRail();
     const t = useReviewLabel();
     const editor = useDocxEditor();
     const open = ref(false);

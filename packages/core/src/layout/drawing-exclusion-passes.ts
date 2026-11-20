@@ -2,6 +2,7 @@ import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import { anchoredDrawingAtomsInParagraph } from './drawing-atom-walk.ts';
+import { knownWithoutDrawingAtoms } from './drawing-inline-walk.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import {
   exclusionLayoutToken,
@@ -44,12 +45,14 @@ export function createDrawingExclusionPasses(
   let seedForwardOnly = false;
   if (drawings && hasCompatibilityRule(compatibilityMode, 'anchorOnlyParagraphSeeding'))
     for (const block of blocks) {
-      const atoms =
-        block.kind === 'paragraph' ? anchoredDrawingAtomsInParagraph(block, drawings) : [];
-      const anchorsOnly =
-        block.kind === 'paragraph' &&
-        atoms.length > 0 &&
-        paragraphOffsetIndex(block).length === atoms.length;
+      // A table, or a paragraph an earlier walk found no drawing atom in, holds no anchor.
+      // This loop runs for every section on every layout pass; such a block costs one read.
+      if (block.kind !== 'paragraph' || knownWithoutDrawingAtoms(block)) {
+        previousAnchorsOnly = false;
+        continue;
+      }
+      const atoms = anchoredDrawingAtomsInParagraph(block, drawings);
+      const anchorsOnly = atoms.length > 0 && paragraphOffsetIndex(block).length === atoms.length;
       if (previousAnchorsOnly && anchorsOnly) {
         seedForwardOnly = true;
         break;

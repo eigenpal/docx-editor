@@ -26,7 +26,16 @@
 //
 // Everything here fails soft. A range selection, an unfocused surface, an active IME
 // composition, a position layout does not place, or a page that is not materialized all
-// leave the native caret alone rather than leaving the user with no caret at all.
+// leave the native caret alone rather than leaving the user with no caret at all. The one
+// state that keeps the suppression without a painted caret is a range the browser itself
+// shows as a range: it draws no caret there, and lifting the suppression would restyle
+// every painted page for nothing.
+//
+//   state                                         painted caret   native caret
+//   collapsed, focused, placed by layout          shown           suppressed
+//   range the browser shows with text             none            suppressed (it draws none)
+//   range the browser shows as a caret            none            handed back
+//   unfocused, composing, suppressed, unplaced    none            handed back
 
 import {
   caretAt,
@@ -93,6 +102,14 @@ export interface SurfaceCaretInput {
 export interface SurfaceCaret {
   /** Repaint from the current layout and selection. Safe to call on every render. */
   update(): void;
+  /**
+   * Repaint for the selection that `write` is about to put in the browser, then run `write`.
+   *
+   * Whether a range hands the native caret back depends on what the browser shows AFTER the
+   * write, so that decision waits for it, and it is made even when `write` throws. `write`
+   * runs once, after the repaint; a repaint that throws leaves it unrun.
+   */
+  updateAround(write: () => void): void;
   /** The insertion point at the selection head in client pixels, or null when unplaced. */
   clientRect(): HighlightRect | null;
   destroy(): void;
@@ -101,6 +118,25 @@ export interface SurfaceCaret {
 /** Appearance — width, colour, blink — lives in the stylesheet under these names. */
 const CARET_CLASS = 'docx-editor-one-surface__caret';
 const STEADY_CLASS = 'docx-editor-one-surface__caret--steady';
+
+/** `Node.TEXT_NODE`, as a number: a node from another window is no instance of this one's. */
+const TEXT_NODE = 3;
+
+/**
+ * Whether a selection end sits in painted run text with a character on the range's side.
+ *
+ * Both ends in ONE text node of a selection that is not collapsed hold the characters between
+ * them. An end in another node than the other end can be the range's start or its end, so one
+ * character beside it is not proof; a character on BOTH sides of it in its own text node is.
+ * Anything else answers false and leaves the question to the selection's text.
+ */
+function endsInRunText(node: Node | null, offset: number, other: Node | null): boolean {
+  if (!node || node.nodeType !== TEXT_NODE) return false;
+  if (!node.parentElement?.closest('[data-paragraph-id][data-start]')) return false;
+  const length = (node as Text).length;
+  if (node === other) return length > 0;
+  return offset > 0 && offset < length;
+}
 
 /**
  * How long a moved caret stays solid before it resumes blinking.
@@ -163,8 +199,17 @@ export function createSurfaceCaret(
     );
   }
 
-  /** Stop painting and give the native caret back. */
-  function hide(): void {
+  /**
+   * Whether a range took the insertion point down while the native caret is still to settle.
+   *
+   * The mirror repaints the caret BEFORE it writes the browser's selection, so at that
+   * moment the browser still shows the caret it is about to replace with the range. Only
+   * {@link updateAround} leaves this set, and only for the length of its write.
+   */
+  let nativeCaretOwed = false;
+
+  /** Stop painting the insertion point. The native caret's suppression is a separate step. */
+  function takeDown(): void {
     placed = null;
     if (steadyTimer !== null) {
       timers.clearTimeout(steadyTimer);
@@ -172,9 +217,53 @@ export function createSurfaceCaret(
     }
     element.classList.remove(STEADY_CLASS);
     element.remove();
+  }
+
+  /** Stop painting and give the native caret back. */
+  function hide(): void {
+    takeDown();
+    nativeCaretOwed = false;
     pagesLayer.style.removeProperty('caret-color');
     suppressedHost?.style.removeProperty('caret-color');
     suppressedHost = null;
+  }
+
+  /**
+   * Whether the browser's own selection is a range, which draws a highlight and no caret.
+   *
+   * `caret-color` is inherited, so writing it on the pages layer restyles every painted
+   * page. While the browser shows a range there is no native caret for it to colour, so the
+   * suppression can stay as it is and a caret-to-range move costs no restyle. A collapsed or
+   * absent browser selection still gets the native caret back.
+   *
+   * Two cases answer false although the selection is not collapsed. A range that holds no
+   * text, such as the two sides of hidden text, can be drawn as a caret. A text control in
+   * the pages that has focus draws its own caret and inherits the same property.
+   */
+  function browserShowsRange(): boolean {
+    const document = pagesLayer.ownerDocument;
+    const selection = document.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return false;
+    const active = document.activeElement;
+    if (active && active !== pagesLayer && /^(?:INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) {
+      return false;
+    }
+    // A selection end inside painted run text settles it without reading the selected text,
+    // whose length a held range would otherwise pay for on every repaint.
+    if (
+      endsInRunText(selection.anchorNode, selection.anchorOffset, selection.focusNode) ||
+      endsInRunText(selection.focusNode, selection.focusOffset, selection.anchorNode)
+    ) {
+      return true;
+    }
+    return selection.toString() !== '';
+  }
+
+  /** Decide the native caret for a range, once the browser's selection is the one to show. */
+  function settle(): void {
+    if (!nativeCaretOwed) return;
+    if (browserShowsRange()) nativeCaretOwed = false;
+    else hide();
   }
 
   /** Hold the caret solid while it is moving, then let the blink resume. */
@@ -280,13 +369,33 @@ export function createSurfaceCaret(
   }
 
   function update(): void {
+    repaint(false);
+  }
+
+  function updateAround(write: () => void): void {
+    repaint(true);
+    try {
+      write();
+    } finally {
+      settle();
+    }
+  }
+
+  function repaint(selectionWriteFollows: boolean): void {
     const input = read();
-    // A range selection shows the browser's highlight; an insertion point inside it would
-    // claim a position the selection does not have.
-    if (composing || !hasFocus() || input.suppress || !isCollapsed(input.selection)) {
+    if (composing || !hasFocus() || input.suppress) {
       hide();
       return;
     }
+    // A range selection shows the browser's highlight; an insertion point inside it would
+    // claim a position the selection does not have.
+    if (!isCollapsed(input.selection)) {
+      takeDown();
+      nativeCaretOwed = true;
+      if (!selectionWriteFollows) settle();
+      return;
+    }
+    nativeCaretOwed = false;
     const at = placement(input, true);
     if (!at) {
       hide();
@@ -302,7 +411,7 @@ export function createSurfaceCaret(
     if (element.parentNode !== host) host.append(element);
     // Suppress the native caret only while ours is up, and inline so it beats the
     // `[contenteditable='true']` rule in the stylesheet — pages layer AND scoped story.
-    pagesLayer.style.caretColor = 'transparent';
+    if (pagesLayer.style.caretColor !== 'transparent') pagesLayer.style.caretColor = 'transparent';
     if (suppressedHost && suppressedHost !== scopedHost) {
       suppressedHost.style.removeProperty('caret-color');
     }
@@ -364,6 +473,7 @@ export function createSurfaceCaret(
 
   return {
     update,
+    updateAround,
     clientRect,
     destroy() {
       pagesLayer.removeEventListener('compositionstart', onCompositionStart);

@@ -1073,7 +1073,13 @@
     "noGoToView": "Ir para não está disponível aqui",
     "noBookmarkDialog": "Não é possível adicionar indicadores aqui",
     "groupMemberMove": "Uma forma dentro de um grupo não se move, não muda de tamanho nem é excluída sozinha. Pressione Esc para selecionar o grupo.",
-    "groupMemberProperties": "Uma forma dentro de um grupo usa a quebra, o texto alternativo e as propriedades do grupo. Pressione Esc para selecionar o grupo."
+    "groupMemberProperties": "Uma forma dentro de um grupo usa a quebra, o texto alternativo e as propriedades do grupo. Pressione Esc para selecionar o grupo.",
+    "drawingClipboardParts": "Este desenho está vinculado a dados que não podem ser copiados, como um diagrama ou um objeto inserido.",
+    "linkedTextBoxClipboard": "Não é possível copiar uma caixa de texto vinculada.",
+    "drawingClipboardStory": "Desenhos só podem ser copiados, recortados ou colados no corpo do documento, não em um cabeçalho, rodapé, nota ou caixa de texto.",
+    "groupMemberClipboard": "Uma forma dentro de um grupo é copiada ou recortada com o grupo. Pressione Esc para selecionar o grupo.",
+    "drawingClipboardSize": "Este desenho é grande demais para ser copiado.",
+    "drawingPasteCells": "Coloque o cursor no texto para colar um desenho."
   },
   "equationPopup": {
     "apply": "Aplicar",
