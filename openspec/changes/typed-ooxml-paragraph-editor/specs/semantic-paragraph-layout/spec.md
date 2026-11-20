@@ -606,7 +606,7 @@ The layout engine SHALL fit a line by compressing East Asian punctuation against
 
 ### Requirement: East Asian punctuation fitting in legacy compatibility modes
 
-In a legacy compatibility mode (no declared mode, 11, 12, or 14), punctuation fitting SHALL apply at every alignment and in every East Asian language except Korean, by language tag or Hangul script. A candidate group of East Asian characters and punctuation SHALL join a line only when the compression it needs, less what its own marks can still give, is at most half its natural advance. Groups with other text, kana fits, and hanging final marks keep the general capacity rules.
+In a legacy compatibility mode (no declared mode, 11, 12, or 14), punctuation fitting SHALL apply at every alignment and in every East Asian language except Korean, by language tag or Hangul script. A candidate group of East Asian characters and punctuation SHALL join a line only when the compression it needs, less what its own marks can still give, is at most half its natural advance. The limit SHALL also count Latin words and numbers in a group that ends in a closing mark.
 
 #### Scenario: A legacy mode fits lines at every alignment
 
@@ -614,6 +614,12 @@ In a legacy compatibility mode (no declared mode, 11, 12, or 14), punctuation fi
 - **WHEN** a left-aligned, centered, right-aligned, or justified line fits one more ideograph only when its punctuation compresses
 - **THEN** the line fits it, in Simplified Chinese, Traditional Chinese, Japanese, or no declared language
 - **AND** Korean text wraps instead
+
+#### Scenario: A legacy group of a Latin word and a final mark admits at most half its advance
+
+- **GIVEN** a legacy-mode line of ideographs and four commas followed by the group `ab。`
+- **WHEN** the group needs more than half its natural advance after its mark drops its trailing half
+- **THEN** the group wraps at every alignment, while compatibility mode 15 still fits the justified line
 
 #### Scenario: A legacy line admits at most half an ideograph of compression
 

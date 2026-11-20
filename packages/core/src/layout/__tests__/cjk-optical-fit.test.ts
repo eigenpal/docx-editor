@@ -582,3 +582,25 @@ test('spaces before a word that wraps do not compress the line', () => {
     });
   }
 });
+
+test('a legacy group of a Latin word and a final mark admits at most half its advance', () => {
+  // `ab。` is 36 pt and its final mark drops 6 pt; four marks before it could give 24 pt more.
+  const resolved: TextMeasurer = { ...measurer, hasResolvedFont: () => true };
+  const first = (mode: number, jc: string, width: number) =>
+    layout(
+      '甲、乙、丙、丁、戊ab。己',
+      width,
+      9,
+      resolved,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode },
+      jc
+    )[0]!
+      .spans.map((span) => span.text)
+      .join('');
+  for (const jc of ['left', 'both']) {
+    expect(first(14, jc, 123)).toBe('甲、乙、丙、丁、戊ab。');
+    expect(first(14, jc, 122)).toBe('甲、乙、丙、丁、戊');
+  }
+  expect(first(15, 'both', 117)).toBe('甲、乙、丙、丁、戊ab。');
+});

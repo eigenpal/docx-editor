@@ -317,17 +317,19 @@ const blankSided = (cell: Cell): boolean =>
   CLOSING.test(cell.span.text) ||
   cell.span.text === '：';
 /**
- * In a legacy compatibility mode, a candidate group of East Asian characters and punctuation
- * joins a line only when the compression it needs, less what its own marks can still give, is at
- * most half its natural advance. A longer shortfall wraps the group.
+ * In a legacy compatibility mode, a group of East Asian characters and punctuation, with Latin
+ * words or numbers when it ends in a closing mark, joins a line only when the compression it
+ * needs, less what its own marks can still give, is at most half its natural advance.
  */
 function exceedsLegacyAdmission(cells: readonly Cell[], sourceCount: number, deficit: number) {
   let ideograph = false;
   let half = 0;
+  const closes = CLOSING.test(cells.at(-1)!.span.text);
   for (const cell of cells) {
     if (cell.sourceIndex < sourceCount) continue;
     const mark = PUNCTUATION.test(cell.span.text) || cell.qualifiedCurly !== undefined;
-    if (!mark && !isCjk(cell.span.text.codePointAt(0)!)) return false;
+    const opaque = closes && cell.ordinaryOpaque === true;
+    if (!mark && !opaque && !isCjk(cell.span.text.codePointAt(0)!)) return false;
     ideograph ||= !mark;
     half += cell.natural / 2;
     if (blankSided(cell))
