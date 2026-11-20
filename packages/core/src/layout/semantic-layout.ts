@@ -46,11 +46,8 @@ import { ParagraphFrameFlow } from './paragraph-frame-flow.ts';
 
 import type { OoxmlElement, OoxmlPart } from '@docx-editor.dev/core/store';
 import { WML_MAIN_DOCUMENT_PART } from '../store/package/opc-names.ts';
-import {
-  finalizePageFieldProjection,
-  summarizeFlushedPage,
-  withPageFieldSources,
-} from './field-projection.ts';
+import { summarizeFlushedPage } from './field-projection.ts';
+import { publishSingleSectionLayout } from './single-section-publish.ts';
 import {
   aggregateParagraphTokensForTableBlock,
   framedTokenJoin,
@@ -123,8 +120,12 @@ import {
   paragraphDocumentOrderOf,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
-import { paginateTableInFlowSteps, type TableFlowCursor } from './table-flow-pagination.ts';
-import { registerRestartedTableKeys, tablePageRestart } from './table-page-restart.ts';
+import {
+  paginateTableInFlowSteps,
+  type TableFlowCursor,
+  type TableFlowPlacementResult,
+} from './table-flow-pagination.ts';
+import { planTableRestartPass } from './table-restart-pass.ts';
 import { tableKeepFlow } from './table-row-keeps.ts';
 import * as terminalTables from './terminal-table-anchor.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
@@ -162,7 +163,7 @@ import {
 import { furnitureLayoutContext, remapPage } from './hf-layout.ts';
 import type { BodyPageFieldContext } from './field-page-furniture.ts';
 import { createSectionPageFurniture } from './section-page-furniture.ts';
-import { createPageContentInsets, registerOverflowPageShell } from './page-furniture-insets.ts';
+import { createPageContentInsets } from './page-furniture-insets.ts';
 import { convergenceTailShiftAllowed } from './page-reuse-guards.ts';
 import { commonKeyPrefix, commonKeySuffix } from './flow-key-diff.ts';
 import { createPreviousPassZones } from './previous-pass-zones.ts';
@@ -171,10 +172,7 @@ import { hostSheetGeometry } from './continued-sheet-geometry.ts';
 import { TextTableCarry } from './table-text-carry.ts';
 import { documentOpeningCellParagraph } from './table-cell-terminator.ts';
 import { layoutPassContextKey } from './layout-pass-context-key.ts';
-import {
-  contentControlContextToken,
-  withContentControlMetadata,
-} from './content-control-boundary-layout.ts';
+import { contentControlContextToken } from './content-control-boundary-layout.ts';
 import {
   DEFAULT_SECTION_PROPERTIES,
   enumerateDocumentSectionsFromBlocks,
@@ -382,34 +380,7 @@ function* layoutInModeSteps(
       }),
       { ...interim, measurer: options.measurer }
     );
-    const numbering = sectionNumbering;
-    // Carry boundary metadata through field annotation so a no-change resume still early-exits
-    // in `attachContentControlBoundaries` instead of allocating a fresh `pages` array.
-    const annotated: SemanticLayout = withContentControlMetadata(
-      {
-        revision: laid.layout.revision,
-        pages: withPageFieldSources(
-          laid.pages,
-          numbering?.start ?? 1,
-          laid.pages.length,
-          numbering?.fmt
-        ),
-      },
-      laid.layout
-    );
-    const finalized = finalizePageFieldProjection(annotated, {
-      provisional: opts.bodyBlockLimit !== undefined || opts.noteRoundBlockLimit !== undefined,
-    });
-    carryLayoutReadCaches(laid.layout, finalized);
-    // The notes pass mints overflow sheets from this layout; publish what index they land at.
-    registerOverflowPageShell(finalized, (_sectionAnchorIndex, documentPageIndex, box, shift) =>
-      laid.overflowShellAt(documentPageIndex, box, shift)
-    );
-    if (opts.session) {
-      opts.session.multi = null;
-      opts.session.previous = finalized;
-    }
-    return finalized;
+    return publishSingleSectionLayout(laid, sectionNumbering, opts);
   }
   const finish = (layout: SemanticLayout): SemanticLayout => {
     let projected = layout;
@@ -1439,18 +1410,21 @@ function* layoutBlocksPass(
   // A changed table restarts at a page its edit left standing (`table-page-restart.ts`).
   const restart =
     tablePagesKept && positionedTables.length === 0
-      ? tablePageRestart(prepared, firstChanged, session.checkpoints, previous!.pages, {
+      ? planTableRestartPass({
+          prepared,
+          index: firstChanged,
+          checkpoints: session.checkpoints,
+          pages: previous!.pages,
           width: columnWidth(),
           deps: tableDeps,
           previous: prepassMemo?.prepared[firstChanged],
+          keys: collectingCellBreakKeys,
+          resumeFrom,
+          columnCount: columns.count,
+          placed: () => ([previousSpaceAfter, firstParagraphOfSection] = [0, false]),
         })
       : null;
-  if (restart) {
-    resumeFrom(restart.checkpoint);
-    startIndex = firstChanged;
-  }
-  let tableResume = restart?.resume;
-  let restartRefused = false;
+  if (restart) startIndex = firstChanged;
 
   type PreparedParagraph = Extract<PreparedBlock, { kind: 'paragraph' }>;
 
@@ -1715,7 +1689,7 @@ function* layoutBlocksPass(
   ): boolean =>
     drainLayoutSteps(
       layoutTableInFlowSteps(table, anchorY, positionTextTable, next, positionShiftX, stackTop)
-    );
+    ).outOfFlow;
   /** {@link layoutTableInFlow}, pausing between table rows. */
   function* layoutTableInFlowSteps(
     table: OoxmlElement,
@@ -1724,10 +1698,9 @@ function* layoutBlocksPass(
     next?: number,
     positionShiftX = 0,
     stackTop?: number
-  ): LayoutSteps<boolean> {
+  ): LayoutSteps<TableFlowPlacementResult> {
     const savedCursorY = cursorY;
-    const [resume, keyBase] = [tableResume, tableResume ? restart!.breakKeys : 0];
-    tableResume = undefined;
+    const { resume, keyBase } = restart?.takeResume() ?? { keyBase: 0 };
     const positioned = positionedByTable.get(table.id);
     // Text beside a broken text-anchored table's first fragment (`table-text-carry.ts`).
     const carry = textCarry.open(positionTextTable ? undefined : positioned, anchorY);
@@ -1788,28 +1761,8 @@ function* layoutBlocksPass(
       }),
     };
     const result = yield* paginateTableInFlowSteps(table, flow);
-    restartRefused = result.restartRefused === true;
     cursorY = result.outOfFlow ? savedCursorY : (carry.close() ?? flow.cursorY);
-    return result.outOfFlow;
-  }
-
-  /** Paginate the restarted table from its kept page; false when it took the whole table. */
-  function* restartTable(table: OoxmlElement, index: number): LayoutSteps<boolean> {
-    collectingCellBreakKeys.begin();
-    try {
-      yield* layoutTableInFlowSteps(table, cursorY, false, index + 1);
-      if (restartRefused) {
-        restart!.restoreBudgets();
-        resumeFrom(session!.checkpoints[index]!);
-      } else {
-        [previousSpaceAfter, firstParagraphOfSection] = [0, false];
-        const keys = collectingCellBreakKeys.keys();
-        registerRestartedTableKeys(table, prepassMemo?.prepared[index], restart!, keys);
-      }
-      return !restartRefused;
-    } finally {
-      collectingCellBreakKeys.end();
-    }
+    return result;
   }
 
   publishPositionedTablesForPage = (): void =>
@@ -1920,8 +1873,7 @@ function* layoutBlocksPass(
     const entry = prepareBlock(bodies[index]!, columnWidth());
 
     // The flow as it stands BEFORE this block: what a later pass resumes from.
-    checkpoints[index] =
-      restart && index === firstChanged ? session!.checkpoints[index]! : checkpointNow();
+    checkpoints[index] = restart?.checkpointAt(index, checkpointNow) ?? checkpointNow();
 
     // CONVERGENCE. Once inside the unchanged tail, if the IN-PAGE flow returns to exactly
     // the state the previous pass was in at this same paragraph — cursor, pending fragments
@@ -1982,7 +1934,9 @@ function* layoutBlocksPass(
     placed += 1;
 
     if (entry.kind === 'table') {
-      if (restart && index === firstChanged && (yield* restartTable(entry.table, index))) continue;
+      const { table } = entry;
+      const paginate = () => layoutTableInFlowSteps(table, cursorY, false, index + 1);
+      if (restart && (yield* restart.run(table, index, paginate))) continue;
       if (terminalTextTableIds.has(entry.table.id)) continue;
       if (
         terminalTextTables?.start === index &&
@@ -2077,7 +2031,7 @@ function* layoutBlocksPass(
       const top = stacks.anchor(entry.table.id);
       collectingCellBreakKeys.begin();
       try {
-        const outOfFlow = yield* layoutTableInFlowSteps(entry.table, top, false, index + 1);
+        const { outOfFlow } = yield* layoutTableInFlowSteps(entry.table, top, false, index + 1);
         if (!outOfFlow) previousSpaceAfter = 0;
         firstParagraphOfSection = false;
         registerTableCellBreakKeys(entry.table, collectingCellBreakKeys.keys());
