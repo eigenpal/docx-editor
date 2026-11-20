@@ -23,7 +23,8 @@ import { runLigaturesValue } from './run-ligatures.ts';
 /** Optional per-run merge of inherited + direct `rPr` (character styles, defaults). */
 export type RunPropertyCascader = (
   inherited: readonly OoxmlProperty[],
-  direct: readonly OoxmlProperty[]
+  direct: readonly OoxmlProperty[],
+  suppressHyperlinkStyle?: boolean
 ) => readonly OoxmlProperty[];
 
 /** Model text contributed by one typed run child (same vocabulary as `paragraphTextOf`). */

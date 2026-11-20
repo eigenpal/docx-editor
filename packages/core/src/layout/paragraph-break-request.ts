@@ -12,11 +12,8 @@ import {
   type ResolvedTabStops,
 } from './paragraph-tabs.ts';
 import type { TextMeasurer } from './semantic-records.ts';
-import {
-  cascadeRunProperties,
-  type ParagraphLayoutInputs,
-  type StyleCascadeTable,
-} from './style-cascade.ts';
+import type { ParagraphLayoutInputs, StyleCascadeTable } from './style-cascade.ts';
+import { tocAwareRunCascader } from './toc-link-formatting.ts';
 import { resolveCjkTypography } from './cjk-typography.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { holdsOnlyColumnBreak } from './body-flow-helpers.ts';
@@ -262,9 +259,7 @@ function breakPreparedParagraphLines(request: ParagraphBreakRequest): readonly P
     formatting.inheritedRunProperties,
     request.tabStops,
     request.pageContext,
-    styleCascade
-      ? (inherited, direct) => cascadeRunProperties(inherited, direct, styleCascade)
-      : undefined,
+    tocAwareRunCascader(styleCascade),
     {
       ...request.flow,
       paragraphRtl: paragraphIsRtl(formatting.props),

@@ -8,6 +8,7 @@ import {
 } from '@docx-editor.dev/core/store';
 import {
   createFixedMeasurer,
+  buildStyleCascadeTable,
   emptyTocPlaceholderParagraphIds,
   layoutSemanticDocument,
   paragraphFragmentsOf,
@@ -45,6 +46,59 @@ const CHROME_ONLY_OPENING =
 const EMPTY_TOC_FIELD =
   '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> TOC \\o "1-5" \\h </w:instrText><w:fldChar w:fldCharType="separate"/></w:r></w:p>' +
   '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+
+test('TOC result formatting ignores the Hyperlink style with a numeric style ID', () => {
+  const styles = readOoxmlPart(
+    '<w:styles xmlns:w="' +
+      W +
+      '"><w:style w:styleId="37" w:type="character"><w:name w:val="Hyperlink"/>' +
+      '<w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr></w:style>' +
+      '<w:style w:styleId="Custom" w:type="character"><w:name w:val="Custom link"/>' +
+      '<w:rPr><w:color w:val="008033"/><w:u w:val="single"/></w:rPr></w:style></w:styles>',
+    { name: '/word/styles.xml', contentType: 'application/xml' }
+  );
+  if (!styles.ok) throw new Error(styles.reason);
+  const run = (text: string, id = '37', direct = '') =>
+    '<w:r><w:rPr><w:rStyle w:val="' + id + '"/>' + direct + '</w:rPr><w:t>' + text + '</w:t></w:r>';
+  const row =
+    '<w:p><w:pPr><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="4800"/></w:tabs></w:pPr>' +
+    '<w:r><w:fldChar w:fldCharType="begin"/><w:instrText> HYPERLINK \\l "_TocAlpha" </w:instrText>' +
+    '<w:fldChar w:fldCharType="separate"/></w:r>' +
+    run('Entry') +
+    '<w:r><w:tab/><w:t>2</w:t><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+  const toc = CHROME_ONLY_OPENING.replace(
+    '<w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr><w:r><w:t>Introduction</w:t></w:r></w:p>',
+    row +
+      '<w:p>' +
+      run('Authored', '37', '<w:color w:val="A02030"/><w:u w:val="double"/>') +
+      run('Custom', 'Custom') +
+      '</w:p>'
+  );
+  const layout = layoutSemanticDocument(load(toc + '<w:p>' + run('Outside') + '</w:p>'), 1, {
+    measurer: createFixedMeasurer(6, 14),
+    styleCascade: buildStyleCascadeTable(styles.part.root),
+  });
+  const spans = layout.pages
+    .flatMap((page) => paragraphFragmentsOf(page))
+    .flatMap((fragment) => fragment.lines)
+    .flatMap((line) => line.spans);
+  const entry = spans.find((span) => span.text === 'Entry')!;
+  const leader = spans.find((span) => span.tabLeader === 'dot')!;
+  expect(entry.style).toMatchObject({ color: null, underline: null });
+  expect(leader.style.underline).toBeNull();
+  expect(spans.find((span) => span.text === 'Authored')!.style).toMatchObject({
+    color: 'A02030',
+    underline: { variant: 'double' },
+  });
+  expect(spans.find((span) => span.text === 'Custom')!.style).toMatchObject({
+    color: '008033',
+    underline: { variant: 'single' },
+  });
+  expect(spans.find((span) => span.text === 'Outside')!.style).toMatchObject({
+    color: '0563C1',
+    underline: { variant: 'single' },
+  });
+});
 
 describe('TOC field chrome layout', () => {
   test('an opening that carries the first entry keeps its row while ending chrome stays suppressed', () => {
