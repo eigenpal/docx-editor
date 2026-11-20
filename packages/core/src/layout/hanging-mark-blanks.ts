@@ -2,6 +2,8 @@
 // punctuation. Derived line geometry only; the document is unchanged.
 import {
   eastAsianLanguage,
+  isKorean,
+  isTraditionalChinese,
   lineEndMarksMayHang,
   type CjkParagraphTypography,
 } from './cjk-typography.ts';
@@ -24,7 +26,7 @@ const CENTERED_BLANKS: MarkBlanks = Object.freeze({ leading: 0.25, trailing: 0.2
  */
 function lineEndMarkBlanks(mark: string, language: string | undefined): MarkBlanks | undefined {
   if (CLOSING_BRACKET.test(mark)) return CLOSING_BLANKS;
-  const traditional = /^zh-(tw|hk|mo|hant)(-|$)/.test(language ?? '');
+  const traditional = isTraditionalChinese(language);
   // Simplified Chinese, and text without an East Asian language, set these marks in the left
   // half of the cell; Traditional Chinese centers them. Japanese `；：！` never hang.
   if ('、。，．；：'.includes(mark)) return traditional ? CENTERED_BLANKS : CLOSING_BLANKS;
@@ -50,7 +52,7 @@ export function blankSideHangingAdvance(
   const compression = typography?.settings?.compression;
   if (compression === undefined || compression === 'doNotCompress') return advance;
   const language = eastAsianLanguage(piece.props);
-  if (/^ko(?:-|$)/.test(language ?? '')) return advance;
+  if (isKorean(language)) return advance;
   const blanks = lineEndMarkBlanks(text.at(-1) ?? '', language);
   if (!blanks) return advance;
   // Character spacing follows the glyph cell, so it belongs to the trailing side.

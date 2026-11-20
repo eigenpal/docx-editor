@@ -206,6 +206,7 @@ describe('a hanging mark with punctuation compression hangs its blank side first
   test('a mark without a blank side hangs whole', () => {
     expect(markX('？', 6)).toBeCloseTo(474, 6);
     expect(markX('！', 6, { language: 'zh-TW' })).toBeCloseTo(474, 6);
+    expect(markX('”', 6)).toBeCloseTo(474, 6);
   });
 
   test('a distributed line and a Japanese run hang the blank half', () => {

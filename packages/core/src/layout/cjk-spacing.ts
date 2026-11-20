@@ -8,6 +8,7 @@ import { styleForFontSlot } from './script-itemization.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import {
   eastAsianLanguage,
+  isTraditionalChinese,
   kinsokuCharacters,
   koreanFinalMarkHangs,
   type CjkParagraphTypography,
@@ -393,8 +394,7 @@ export function hangingCjkPunctuationAdvance(
   if (language?.startsWith('ja') && JAPANESE_NON_HANGING.includes(tail)) return undefined;
   // Simplified Chinese keeps a full-width full stop inside the measure; Traditional hangs it.
   if (/^zh-cn$/i.test(language ?? '') && tail === '．') return undefined;
-  if (/^zh-(tw|hk|mo|hant)(-|$)/.test(language ?? '') && TRADITIONAL_CHINESE_NON_HANGING === tail)
-    return undefined;
+  if (isTraditionalChinese(language) && TRADITIONAL_CHINESE_NON_HANGING === tail) return undefined;
   if (policy && !lineStartForbids(tail, language, policy)) return undefined;
   if (!FULLWIDTH_PUNCTUATION.test(tail) && !language) return undefined;
   const last = segmentGraphemes(text).at(-1)?.text;

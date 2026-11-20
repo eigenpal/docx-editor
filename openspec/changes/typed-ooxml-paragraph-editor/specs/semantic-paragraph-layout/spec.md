@@ -676,7 +676,7 @@ With document punctuation compression, in every compatibility mode, a hanging li
 #### Scenario: A closing mark hangs its blank half
 
 - **GIVEN** a justified line of nineteen 24 pt ideographs and a 24 pt `，`, with document punctuation compression
-- **WHEN** the mark overflows the measure by 6 pt, in compatibility mode 14 or 15
+- **WHEN** the mark overflows the measure by 6 pt, in any compatibility mode
 - **THEN** the mark starts 12 pt before the margin, so that only its blank half hangs
 - **AND** the ideographs before it spread to meet it
 - **AND** an 18 pt overflow hangs the whole mark, which starts at the margin
