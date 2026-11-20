@@ -895,8 +895,9 @@ export function createCjkOpticalFitter(
     }
     // A group that fits needs no fit, and no fit can change a line it does not overflow.
     if (line.width + x - origin - available <= TOLERANCE) return undefined;
-    // A legacy mode compresses no Korean text to fit a line.
-    if (legacy && /^ko(?:-|$)/.test(languageOf(pieces[currentIndex]!))) return undefined;
+    // A legacy mode compresses no group with Korean text to fit a line.
+    for (let index = pieceIndex; legacy && index <= currentIndex; index++)
+      if (/^ko(?:-|$)/.test(languageOf(pieces[index]!))) return undefined;
     // Match clipWordEnd across run seams: a fitting word does not compress only
     // to retain its trailing separator inside the margin.
     let trailingWidth = 0;

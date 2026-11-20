@@ -589,7 +589,7 @@ The layout engine SHALL move text that kinsoku keeps together to the next line a
 
 ### Requirement: East Asian punctuation fitting by alignment and compatibility mode
 
-The layout engine SHALL fit a line by compressing East Asian punctuation against measured glyph bounds only when the document defaults (`w:rPrDefault`) name an East Asian face. In compatibility mode 15 and later, it SHALL fit only justified paragraphs (`w:jc` `both`, `distribute`, `thaiDistribute`, or a kashida value); other paragraphs SHALL wrap instead. A legacy compatibility mode SHALL fit lines at every alignment. Adjacent full-width punctuation pairs compress at every alignment.
+The layout engine SHALL fit a line by compressing East Asian punctuation against measured glyph bounds only when the document defaults (`w:rPrDefault`) name an East Asian face. In compatibility mode 15 and later, it SHALL fit only justified paragraphs (`w:jc` `both`, `distribute`, `thaiDistribute`, or a kashida value); other paragraphs SHALL wrap instead. A legacy compatibility mode SHALL fit lines at every alignment. Spaces SHALL join a fit only before a character that may not start a line.
 
 #### Scenario: A modern-mode left-aligned paragraph wraps instead of compressing
 
@@ -598,9 +598,15 @@ The layout engine SHALL fit a line by compressing East Asian punctuation against
 - **THEN** the line wraps instead of fitting
 - **AND** the same paragraph fits the line when it is justified
 
+#### Scenario: A space before a wrapping word does not compress the line
+
+- **GIVEN** a line in any compatibility mode whose last ideograph is followed by a space and a Latin word that wraps
+- **WHEN** the space alone overflows the measure
+- **THEN** the line keeps its natural punctuation advances and the space trails it
+
 ### Requirement: East Asian punctuation fitting in legacy compatibility modes
 
-In a legacy compatibility mode (no declared mode, 11, 12, or 14), punctuation fitting SHALL apply at every alignment and in every East Asian language except Korean. A candidate group SHALL join a line only when the compression it needs, less what its own marks can still give, is at most half its natural advance. Spaces SHALL join a fit only before a character that may not start a line.
+In a legacy compatibility mode (no declared mode, 11, 12, or 14), punctuation fitting SHALL apply at every alignment and in every East Asian language except Korean. A candidate group of East Asian characters and punctuation SHALL join a line only when the compression it needs, less what its own marks can still give, is at most half its natural advance. Groups with other text, kana fits, and hanging final marks keep the general capacity rules.
 
 #### Scenario: A legacy mode fits lines at every alignment
 
@@ -615,12 +621,6 @@ In a legacy compatibility mode (no declared mode, 11, 12, or 14), punctuation fi
 - **WHEN** the measure is 54 pt, 6 pt short of the natural width
 - **THEN** `丙` joins the line at every alignment
 - **AND** at 53.9 pt it wraps, while compatibility mode 15 still fits the justified line
-
-#### Scenario: A space before a wrapping word does not compress the line
-
-- **GIVEN** a legacy-mode line whose last ideograph is followed by a space and a Latin word that wraps
-- **WHEN** the space alone overflows the measure
-- **THEN** the line keeps its natural punctuation advances and the space trails it
 
 ### Requirement: East Asian punctuation fitting capacity
 

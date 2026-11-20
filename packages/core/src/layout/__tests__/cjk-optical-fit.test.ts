@@ -57,15 +57,19 @@ function layout(
     readonly mode?: number;
     /** East Asian language of the document defaults. */
     readonly lang?: string;
+    /** Extra paragraph properties. */
+    readonly pPr?: string;
+    /** Extra run properties of the first run only. */
+    readonly firstRunProps?: string;
   } = {
     eastAsianDefaults: true,
   },
   jc = 'both'
 ) {
-  const run = (value: string) =>
-    `<w:r><w:rPr><w:sz w:val="24"/>${sourcePolicy?.kern === undefined ? '' : `<w:kern w:val="${sourcePolicy.kern}"/>`}${runProps}</w:rPr><w:t xml:space="preserve">${value}</w:t></w:r>`;
+  const run = (value: string, extra = '') =>
+    `<w:r><w:rPr><w:sz w:val="24"/>${sourcePolicy?.kern === undefined ? '' : `<w:kern w:val="${sourcePolicy.kern}"/>`}${runProps}${extra}</w:rPr><w:t xml:space="preserve">${value}</w:t></w:r>`;
   const source = part(
-    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:jc w:val="${jc}"/><w:overflowPunct w:val="0"/></w:pPr>${split === -1 ? [...text].map(run).join('') : run(text.slice(0, split)) + run(text.slice(split))}</w:p></w:body></w:document>`
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr>${sourcePolicy?.pPr ?? ''}<w:jc w:val="${jc}"/><w:overflowPunct w:val="0"/></w:pPr>${split === -1 ? [...text].map((value) => run(value)).join('') : run(text.slice(0, split), sourcePolicy?.firstRunProps) + run(text.slice(split))}</w:p></w:body></w:document>`
   );
   return linesOf(
     layoutSemanticDocument(source, 0, {
@@ -493,6 +497,32 @@ test('a legacy mode compresses punctuation to fit lines at every alignment', () 
 test('a legacy mode compresses no Korean text to fit a line', () => {
   for (const jc of ['both', 'left'])
     expect(linesAt(jc, 14, 'ko-KR')).toEqual(['甲乙（丙丁）戊', '己']);
+  // A Korean run anywhere in the candidate group `丁）` refuses the fit, not only its last run.
+  const korean = '<w:lang w:eastAsia="ko-KR"/>';
+  const first = (firstRunProps: string) =>
+    layout(
+      '甲。乙，丁）戊己',
+      59,
+      5,
+      measurer,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode: 14, firstRunProps },
+      'left'
+    )[0]!
+      .spans.map((span) => span.text)
+      .join('');
+  expect(first('')).toBe('甲。乙，丁）');
+  expect(first(korean)).toBe('甲。乙，');
+});
+
+test('a legacy mode fits right-to-left paragraphs at both edges', () => {
+  const policy = { eastAsianDefaults: true, kern: 2, pPr: '<w:bidi/>' };
+  for (const jc of ['left', 'right'])
+    expect(
+      layout('甲乙（丙丁）戊己', 90, 8, measurer, '', policy, jc).map((line) =>
+        line.spans.map((span) => span.text).join('')
+      )
+    ).toEqual(['甲乙（丙丁）戊己']);
 });
 
 test('a document whose defaults name no East Asian face compresses no punctuation to fit', () => {
@@ -518,27 +548,34 @@ test('a legacy mode admits an ideograph only within half its advance at every al
 test('spaces before a word that wraps do not compress the line', () => {
   // Mixed-script lines qualify each face locally.
   const resolved: TextMeasurer = { ...measurer, hasResolvedFont: () => true };
-  const lines = layout(
-    '甲乙丙、丁 word',
-    62,
-    5,
-    resolved,
-    '',
-    {
-      eastAsianDefaults: true,
-      kern: 2,
-      mode: 14,
-    },
-    'left'
-  );
-  expect(
-    lines.map((line) =>
-      line.spans
-        .map((span) => span.text)
-        .join('')
-        .trimEnd()
-    )
-  ).toEqual(['甲乙丙、丁', 'word']);
-  const first = lines[0]!.spans.filter((span) => span.text.trim());
-  expect(first.reduce((sum, span) => sum + span.box.width, 0)).toBe(60);
+  for (const [mode, jc] of [
+    [14, 'left'],
+    [14, 'center'],
+    [15, 'both'],
+  ] as const) {
+    const lines = layout(
+      '甲乙丙、丁 word',
+      62,
+      5,
+      resolved,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode },
+      jc
+    );
+    expect(
+      lines.map((line) =>
+        line.spans
+          .map((span) => span.text)
+          .join('')
+          .trimEnd()
+      )
+    ).toEqual(['甲乙丙、丁', 'word']);
+    // Every glyph keeps its natural advance; the space trails the line.
+    const glyphs = lines[0]!.spans.filter((span) => span.text.trim());
+    expect({ mode, jc, width: glyphs.reduce((sum, span) => sum + span.box.width, 0) }).toEqual({
+      mode,
+      jc,
+      width: 60,
+    });
+  }
 });
