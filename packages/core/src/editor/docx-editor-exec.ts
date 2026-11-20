@@ -602,8 +602,9 @@ export function execEditorCommand(
       const before = mounted.state();
       const result = mounted.pasteRich(command.text, command.html ?? null);
       if (!result) {
-        // A copied drawing refuses where it cannot land; this paste published that refusal.
-        const refused = drawingRefusalSince(mounted, before);
+        // A copied drawing refuses where it cannot land, and a paste into a text box that the
+        // store refuses lands nothing: this paste published that refusal.
+        const refused = pasteRefusalSince(mounted, before);
         if (refused) return { ok: false, code: 'unsupported', reason: refused };
         return { ok: true, changed: false };
       }
@@ -612,9 +613,10 @@ export function execEditorCommand(
     case 'pasteWithoutFormatting': {
       const before = mounted.state();
       // The paste lane with no HTML, so a selected drawing places or refuses the text.
-      mounted.pasteRich(command.text, null);
-      const refused = drawingRefusalSince(mounted, before);
-      if (refused) return { ok: false, code: 'unsupported', reason: refused };
+      if (!mounted.pasteRich(command.text, null)) {
+        const refused = pasteRefusalSince(mounted, before);
+        if (refused) return { ok: false, code: 'unsupported', reason: refused };
+      }
       break;
     }
     case 'setSelection': {
@@ -700,6 +702,19 @@ function clipboardRefusal(
     code: 'unsupported',
     reason: drawing ?? (reason === 'chart-content' ? CHART_CLIPBOARD_REASON : reason),
   };
+}
+
+/**
+ * Why a paste that landed nothing refused: the drawing clipboard's reason, or the store's
+ * refusal of the write it tried. Every commit sets or clears `lastRejection`, so a rejection
+ * read after a paste that changed the state is that paste's.
+ */
+function pasteRefusalSince(
+  mounted: PaginatedSurface,
+  before: ReturnType<PaginatedSurface['state']>
+): string | null {
+  const after = mounted.state();
+  return drawingRefusalSince(mounted, before) ?? (after !== before ? after.lastRejection : null);
 }
 
 /** The drawing clipboard's refusal, when one was published after `before`. */

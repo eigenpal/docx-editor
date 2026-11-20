@@ -554,8 +554,12 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       placed && !forcePlain && html && text.trim() === '' ? plainTextFromHtml(html) || text : text;
     const landed = routeRichPaste(typed, html, forcePlain, cells);
     // A paste into a text box that lands nothing leaves the box, so the next key does not
-    // replace the text the paste selected.
-    if (placed && deps.session.packageRevision() === revision) placed();
+    // replace the text the paste selected, and reports that it landed nothing: the store's
+    // refusal, such as a locked content control, stays the published reason.
+    if (placed && deps.session.packageRevision() === revision) {
+      placed();
+      return false;
+    }
     return landed;
   }
 

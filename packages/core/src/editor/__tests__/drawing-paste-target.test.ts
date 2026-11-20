@@ -862,3 +862,47 @@ describe('a picture file while an inline picture is selected', () => {
     expect(bodyText(editor)[0]).toBe(`Alpha head${OBJ}Alpha tail.`);
   });
 });
+
+describe('a paste the store refuses, and a copied chart', () => {
+  test('a text box whose text is a locked content control returns the store refusal', async () => {
+    const locked = floating(
+      'Locked',
+      boxShape(
+        '<wps:txbx><w:txbxContent><w:p><w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr>' +
+          '<w:sdtContent><w:r><w:t>Locked words</w:t></w:r></w:sdtContent></w:sdt></w:p>' +
+          '</w:txbxContent></wps:txbx>'
+      )
+    );
+    const { editor, surface } = await open(body(locked));
+    const box = selectFirstDrawing(editor);
+    const before = await saved(editor);
+    const result = editor.exec({ type: 'paste', text: 'ZULU' });
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ code: 'unsupported', reason: surface.state().lastRejection });
+    expect(surface.state().lastRejection).toBeString();
+    expect(await saved(editor)).toBe(before);
+    // The box is left, and its drawing is selected again.
+    expect(editor.snapshot().image?.id).toBe(box);
+  });
+
+  test('a copied chart pastes before the selected drawing anchor through exec', async () => {
+    const { editor, surface } = await open(body(SHAPE));
+    const last = surface.session.paragraphIds().at(-1)!;
+    surface.setSelection({
+      anchor: { paragraphId: last, offset: 0 },
+      head: { paragraphId: last, offset: 0 },
+    });
+    expect(editor.exec({ type: 'insertChart', chartType: 'columnClustered' }).ok).toBe(true);
+    const copied = surface.copyFlavours();
+    expect(copied.html).toContain('data-docx-editor-chart=');
+    selectFirstDrawing(editor);
+    const command = { type: 'paste', text: copied.text, html: copied.html! } as const;
+    expect(editor.can(command)).toEqual({ ok: true });
+    expect(editor.exec(command)).toMatchObject({ ok: true, changed: true });
+    const anchorParagraph = (await saved(editor)).split('</w:p>')[0]!;
+    expect(anchorParagraph).toContain('c:chart');
+    expect(anchorParagraph.indexOf('c:chart')).toBeLessThan(
+      anchorParagraph.indexOf('name="Plain"')
+    );
+  });
+});
