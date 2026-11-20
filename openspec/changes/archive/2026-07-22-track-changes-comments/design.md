@@ -113,7 +113,7 @@ Current layout: pages centered in a flex container at 816px width (US Letter), w
 
 **[Comment positioning accuracy]** → Comments anchored to text ranges may drift if text is edited between the range boundaries. **Mitigation**: Use PM's mark-based tracking which automatically adjusts positions as the document changes. Marks move with their text content.
 
-**[DOCX round-trip fidelity]** → Complex comment threading and tracked change nesting may not perfectly round-trip through all Word versions. **Mitigation**: Test with Word 365 and LibreOffice. Start with simple cases (single-level replies, non-overlapping changes).
+**[DOCX round-trip fidelity]** → Complex comment threading and tracked change nesting may not perfectly round-trip through all DOCX applications. **Mitigation**: Follow ECMA-376 Part 1 §17.13 (Annotations) and test with other DOCX applications. Start with simple cases (single-level replies, non-overlapping changes).
 
 ## Open Questions
 

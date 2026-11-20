@@ -1,6 +1,7 @@
 // A selection that starts in a footnote extends into the next footnote (issue #2010).
 //
-// Word keeps all footnotes in one story, and all endnotes in another. Drag, Shift+click and
+// All footnotes are one story in the footnotes part, and all endnotes are one story in the
+// endnotes part (ECMA-376 Part 1 §17.11). Drag, Shift+click and
 // Shift+arrow cross from one note to the next; copy and formatting work over the range, and
 // typing, deletion, paste and cut over it are refused rather than merging the notes.
 

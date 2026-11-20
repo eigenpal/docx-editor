@@ -25,7 +25,7 @@ export type ToolbarReviewersProps = {
   icon?: DocxEditorChildren;
 };
 
-/** Word for Mac's reviewer visibility menu. It changes view state only. @public */
+/** The reviewer visibility menu. It changes view state only. @public */
 export const ToolbarReviewers = Object.assign(
   defineComponent({
     name: 'ToolbarReviewers',

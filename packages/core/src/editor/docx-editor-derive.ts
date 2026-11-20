@@ -36,6 +36,7 @@ import { gateImageCommand, resolveSelectedDrawingRecord } from './docx-editor-im
 import { gateShapeFormatCommand } from './shape-format-commands.ts';
 import { chartTargetIn } from '../store/store/tree-package-charts.ts';
 import { chartCommandContentRefusal } from './chart-commands.ts';
+import { clipboardSelectedDrawing, drawingCopyRefusal } from './surface-drawing-clipboard.ts';
 
 /** Whether a command may run, and the engine's own refusal when it may not. */
 export type CommandGate =
@@ -405,11 +406,18 @@ export function gateCommand(
     const refusal = gateImageCommand({ type: 'deleteImage' }, surface);
     return refusal && !refusal.ok ? { ok: false, refusal } : { ok: true };
   }
-  // One selected chart copies whole; a cut also deletes it, so it asks the delete's gate.
-  if ((command.type === 'copy' || command.type === 'cut') && selectedChartOf(surface)) {
-    if (command.type === 'copy') return { ok: true };
-    const refusal = gateImageCommand({ type: 'deleteImage' }, surface);
-    return refusal && !refusal.ok ? { ok: false, refusal } : { ok: true };
+  // One selected drawing copies whole; a cut also deletes it, so it asks the delete's gate.
+  if (command.type === 'copy' || command.type === 'cut') {
+    const drawing = selectedChartOf(surface) ? null : clipboardSelectedDrawing(surface);
+    const reason = drawing
+      ? drawingCopyRefusal(surface.session, surface.storyScope(), drawing)
+      : null;
+    if (reason) return { ok: false, refusal: { ok: false, code: 'unsupported', reason } };
+    if (drawing || selectedChartOf(surface)) {
+      if (command.type === 'copy') return { ok: true };
+      const refusal = gateImageCommand({ type: 'deleteImage' }, surface);
+      return refusal && !refusal.ok ? { ok: false, refusal } : { ok: true };
+    }
   }
   if (command.type === 'copy' || command.type === 'cut' || command.type === 'deleteText') {
     const { anchor, head } = surface.state().selection;
@@ -420,7 +428,7 @@ export function gateCommand(
       };
     }
   }
-  // Over a selection across notes, a command that replaces it would merge them; Word refuses.
+  // Over a selection across notes, a command that replaces it would merge them, so it is refused.
   // Copy and formatting still run there.
   const crossNote = replacesSelection(command.type) ? surfaceCrossNoteRefusal(surface) : null;
   if (crossNote)

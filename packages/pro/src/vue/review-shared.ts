@@ -6,7 +6,6 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { Fragment, isVNode, type VNode } from 'vue';
 import type { EditorSnapshot, ReviewItemQuery } from '@docx-editor.dev/core/contracts/editor';
-import type { ReviewItemView } from './useReview.ts';
 
 export const selectDocumentAbsent = (snapshot: EditorSnapshot) =>
   snapshot.isLoading || snapshot.parseError !== null || snapshot.pageSetup == null;
@@ -39,16 +38,7 @@ export const PAIRED_REVIEW_QUERY = Object.freeze({
   pairReplacements: true,
 }) satisfies ReviewItemQuery;
 
-export function isThreadedReply(entry: ReviewItemView, present: ReadonlySet<string>): boolean {
-  if (entry.kind !== 'comment') return false;
-  if (entry.parentId !== undefined) return present.has(entry.parentId);
-  if (entry.parentRevisionId !== undefined) return present.has(entry.parentRevisionId);
-  return false;
-}
-
-export function idsOf(items: readonly ReviewItemView[]): ReadonlySet<string> {
-  return new Set(items.map((entry) => entry.id));
-}
+export { idsOf, isThreadedReply } from '../review/review-roots.ts';
 
 export function guardMousedown(event: MouseEvent): void {
   const tag = (event.target as HTMLElement | null)?.tagName;
