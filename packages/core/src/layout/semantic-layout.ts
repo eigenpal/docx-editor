@@ -58,7 +58,7 @@ import {
   paragraphLayoutKey,
   registerTableCellBreakKeys,
   createTableCellBreakKeyCollector,
-  retainLiveBreakKeys,
+  retainPassBreakKeys,
   withDrawingContext,
 } from './layout-cache.ts';
 import { pendingLineFlowExtentAtPlacement, type PendingLine } from './paragraph-flow.ts';
@@ -124,6 +124,7 @@ import {
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
 import { paginateTableInFlowSteps, type TableFlowCursor } from './table-flow-pagination.ts';
+import { registerRestartedTableKeys, tablePageRestart } from './table-page-restart.ts';
 import { tableKeepFlow } from './table-row-keeps.ts';
 import * as terminalTables from './terminal-table-anchor.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
@@ -1075,19 +1076,10 @@ function* layoutBlocksPass(
   const flowKeys = markJoinFlowKeys(prepass.flowKeys, options.markJoinsBreakSheet === true);
   const { positionedTables, positionedTablePolicy } = prepass.positioned;
   /** Retain the whole document's live keys — block keys plus recorded table-cell keys. */
-  const publishRetainedKeys = (): void => {
-    // `false`: the orchestrator skips this pass's sweep; a standalone pass asks its own stride.
-    if (options.retainKeys === false) return;
-    if (options.retainKeys === undefined && cache && !(cache.retentionPassDue?.() ?? true)) {
-      return;
-    }
-    retainLiveBreakKeys(
-      cache,
-      options.retainKeys,
-      keys,
+  const publishRetainedKeys = (): void =>
+    retainPassBreakKeys(cache, options.retainKeys, keys, () =>
       prepared.flatMap((entry) => (entry.kind === 'table' ? [entry.table] : []))
     );
-  };
   const previous = previousBodyLayout(session?.previous ?? null);
   // A geometry or producer change invalidates every checkpoint, because it moves every
   // break; resuming from one would place new content against a stale flow. A parity flip
@@ -1205,8 +1197,8 @@ function* layoutBlocksPass(
   // document still agrees with, so the pages completed by then are carried over by
   // REFERENCE — unchanged pages keep their identity, which is what lets a consumer skip
   // repainting them.
-  if (resumable && firstChanged > 0 && firstChanged < session.checkpoints.length) {
-    const checkpoint = session.checkpoints[firstChanged]!;
+  const resumeFrom = (checkpoint: FlowCheckpoint): void => {
+    pages.length = 0;
     pages.push(...previous!.pages.slice(0, checkpoint.pageCount));
     ({
       pageFragments,
@@ -1218,9 +1210,12 @@ function* layoutBlocksPass(
       previousSpaceAfter,
     } = checkpointOwner.restore(checkpoint));
     columnIndex = flowColumnIndex;
-    startIndex = firstChanged;
     firstParagraphOfSection = false;
     reusedPages = pages.length;
+  };
+  if (resumable && firstChanged > 0 && firstChanged < session.checkpoints.length) {
+    resumeFrom(session.checkpoints[firstChanged]!);
+    startIndex = firstChanged;
     checkpoints.push(...session.checkpoints.slice(0, firstChanged));
   }
 
@@ -1416,19 +1411,20 @@ function* layoutBlocksPass(
     ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
   };
 
+  // Returns the other pages as they were, so never when a page's reserve moved.
+  const tablePagesKept =
+    resumable &&
+    reserveResume.moved === undefined &&
+    !furnitureHasWrap &&
+    // Live zones too: a pass that finds any collects them, and the next pass is not eligible.
+    !options.drawingExclusionZonesByPage?.size;
   const tableUpdate = tryUpdateTableSession({
     session,
     previous: prepassMemo,
     prepass,
     inputsEqual: prepassInputsValid,
     rowInputsEqual: autofitInputsEqual,
-    // Returns the other pages as they were, so never when a page's reserve moved.
-    eligible:
-      resumable &&
-      reserveResume.moved === undefined &&
-      !furnitureHasWrap &&
-      // Live zones too: a pass that finds any collects them, and the next pass is not eligible.
-      !options.drawingExclusionZonesByPage?.size,
+    eligible: tablePagesKept,
     firstChanged,
     commonSuffix,
     deps: tableDeps,
@@ -1440,6 +1436,20 @@ function* layoutBlocksPass(
     publishRetainedKeys();
     return { ...tableUpdate, overflowShellAt };
   }
+  // A changed table restarts at a page its edit left standing (`table-page-restart.ts`).
+  const restart =
+    tablePagesKept && positionedTables.length === 0
+      ? tablePageRestart(prepared, firstChanged, session.checkpoints, previous!.pages, {
+          width: columnWidth(),
+          deps: tableDeps,
+        })
+      : null;
+  if (restart) {
+    resumeFrom(restart.checkpoint);
+    startIndex = firstChanged;
+  }
+  let tableResume = restart?.resume;
+  let restartRefused = false;
 
   type PreparedParagraph = Extract<PreparedBlock, { kind: 'paragraph' }>;
 
@@ -1715,6 +1725,8 @@ function* layoutBlocksPass(
     stackTop?: number
   ): LayoutSteps<boolean> {
     const savedCursorY = cursorY;
+    const [resume, keyBase] = [tableResume, tableResume ? restart!.breakKeys : 0];
+    tableResume = undefined;
     const positioned = positionedByTable.get(table.id);
     // Text beside a broken text-anchored table's first fragment (`table-text-carry.ts`).
     const carry = textCarry.open(positionTextTable ? undefined : positioned, anchorY);
@@ -1768,10 +1780,35 @@ function* layoutBlocksPass(
         ),
       followingKeepOpening: (room) =>
         next === undefined ? undefined : keepChains.opening(next, room),
+      ...(resume ? { resume } : {}),
+      pageStartState: () => ({
+        lineCounter,
+        breakKeys: keyBase + collectingCellBreakKeys.keys().length,
+      }),
     };
     const result = yield* paginateTableInFlowSteps(table, flow);
+    restartRefused = result.restartRefused === true;
     cursorY = result.outOfFlow ? savedCursorY : (carry.close() ?? flow.cursorY);
     return result.outOfFlow;
+  }
+
+  /** Paginate the restarted table from its kept page; false when it took the whole table. */
+  function* restartTable(table: OoxmlElement, index: number): LayoutSteps<boolean> {
+    collectingCellBreakKeys.begin();
+    try {
+      yield* layoutTableInFlowSteps(table, cursorY, false, index + 1);
+      if (restartRefused) {
+        restart!.restoreBudgets();
+        resumeFrom(session!.checkpoints[index]!);
+      } else {
+        [previousSpaceAfter, firstParagraphOfSection] = [0, false];
+        const keys = collectingCellBreakKeys.keys();
+        registerRestartedTableKeys(table, prepassMemo?.prepared[index], restart!, keys);
+      }
+      return !restartRefused;
+    } finally {
+      collectingCellBreakKeys.end();
+    }
   }
 
   publishPositionedTablesForPage = (): void =>
@@ -1882,7 +1919,8 @@ function* layoutBlocksPass(
     const entry = prepareBlock(bodies[index]!, columnWidth());
 
     // The flow as it stands BEFORE this block: what a later pass resumes from.
-    checkpoints[index] = checkpointNow();
+    checkpoints[index] =
+      restart && index === firstChanged ? session!.checkpoints[index]! : checkpointNow();
 
     // CONVERGENCE. Once inside the unchanged tail, if the IN-PAGE flow returns to exactly
     // the state the previous pass was in at this same paragraph — cursor, pending fragments
@@ -1943,6 +1981,7 @@ function* layoutBlocksPass(
     placed += 1;
 
     if (entry.kind === 'table') {
+      if (restart && index === firstChanged && (yield* restartTable(entry.table, index))) continue;
       if (terminalTextTableIds.has(entry.table.id)) continue;
       if (
         terminalTextTables?.start === index &&

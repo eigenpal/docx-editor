@@ -6,6 +6,7 @@ import { createLayoutSession } from '../layout-session.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { readTableStructure } from '../semantic-table.ts';
 import { movedRowsTestRecorder } from '../table-row-geometry-reuse.ts';
+import { tablePageRestartTestRecorder } from '../table-page-restart.ts';
 import type { SemanticLayout } from '../semantic-records.ts';
 
 // A 468pt column, four AutoFit columns of unbreakable tokens, and one note cell that grows.
@@ -108,8 +109,20 @@ test('a cell property edit places only the edited row again, exactly', () => {
   });
   if (!edit.ok) throw Error(edit.reason);
   part = edit.part;
+  const restarts = tablePageRestartTestRecorder();
   const updated = lay(part, { session, cache });
+  restarts.dispose();
   expect(JSON.stringify(updated.pages)).toBe(JSON.stringify(lay(part).pages));
-  // Every other row keeps its place and is reused there; the filled one is not.
-  expect(recorder.moved - before).toBe(ROWS - 1);
+  // The pages above the edited row stay. Every other row from the restart page on keeps its
+  // place and is reused there; the filled one is not.
+  expect(restarts.restarts).toBe(1);
+  const placed = updated.pages
+    .slice(restarts.keptPages)
+    .flatMap((page) => page.fragments)
+    .flatMap((fragment) => (fragment.kind === 'table' ? fragment.rows : []));
+  const body = placed.filter((row) => !row.isHeaderRepeat).length;
+  expect(body).toBeLessThan(ROWS);
+  // Header repeats may be reused too, so the count lies between the body rows and every row.
+  expect(recorder.moved - before).toBeGreaterThanOrEqual(body - 1);
+  expect(recorder.moved - before).toBeLessThan(placed.length);
 });

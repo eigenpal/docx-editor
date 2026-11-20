@@ -76,6 +76,27 @@ export function registerEditedTableCellBreakKeys(
   registry.set(after, chunks);
 }
 
+/**
+ * Record `after`'s cell keys after a table pagination restarted part way: the first `count`
+ * keys `before` recorded, then `added`. Chunks wholly inside that prefix are shared.
+ */
+export function registerResumedTableCellBreakKeys(
+  after: object,
+  before: object | undefined,
+  count: number,
+  added: readonly string[]
+): void {
+  const chunks: (readonly string[])[] = [];
+  let left = count;
+  for (const chunk of (before && registry.get(before)) || []) {
+    if (left <= 0) break;
+    pushChunk(chunks, chunk.length <= left ? chunk : chunk.slice(0, left));
+    left -= chunk.length;
+  }
+  pushKeys(chunks, added);
+  registry.set(after, chunks);
+}
+
 /** `table`'s recorded cell keys as one flat list, or undefined when none were recorded. */
 export function tableCellBreakKeysOf(table: object): readonly string[] | undefined {
   const chunks = registry.get(table);

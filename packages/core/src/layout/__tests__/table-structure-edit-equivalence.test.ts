@@ -8,8 +8,9 @@ import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 import type { SemanticLayout } from '../semantic-records.ts';
-import { movedRowsTestRecorder, shiftedRowsTestRecorder } from '../table-row-geometry-reuse.ts';
+import { shiftedRowsTestRecorder } from '../table-row-geometry-reuse.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
+import { tablePageRestartTestRecorder } from '../table-page-restart.ts';
 import { load, read, W } from './table-row-keep-fixtures.ts';
 
 // Structure edits (rows, columns, merges, cell properties, header rows, a break above the
@@ -95,6 +96,18 @@ const SHAPES: Record<string, string> = {
       'w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/>' +
       BORDERS
   ),
+  kept: table([
+    HEADER,
+    ...Array.from({ length: 40 }, (_, r) =>
+      r % 6 === 1 || r % 6 === 2
+        ? tr(
+            tc(`<w:p><w:pPr><w:keepNext/></w:pPr><w:r><w:t>K${r}a</w:t></w:r></w:p>`) +
+              tc(`<w:p><w:pPr><w:keepNext/></w:pPr><w:r><w:t>K${r}b</w:t></w:r></w:p>`) +
+              tc(`<w:p><w:pPr><w:keepNext/></w:pPr><w:r><w:t>K${r}c</w:t></w:r></w:p>`)
+          )
+        : plainRow(r)
+    ),
+  ]),
   mixed: table([
     HEADER,
     ...Array.from({ length: 36 }, (_, r) =>
@@ -290,11 +303,15 @@ function session(shape: string) {
     get layout() {
       return layout;
     },
-    /** Apply `op`; false when the store refuses it, which leaves everything as it was. */
-    apply(op: TreeDocOp, label: string): boolean {
-      const edit = applyTreeOp(part, op);
-      if (!edit.ok) return false;
-      part = edit.part;
+    /** Apply `ops` in one pass; false when the store refuses one, which leaves everything as it was. */
+    apply(ops: TreeDocOp | readonly TreeDocOp[], label: string): boolean {
+      let next = part;
+      for (const op of Array.isArray(ops) ? ops : [ops]) {
+        const edit = applyTreeOp(next, op as TreeDocOp);
+        if (!edit.ok) return false;
+        next = edit.part;
+      }
+      part = next;
       layout = lay(part, { session: retained, cache });
       expect([label, JSON.stringify(layout.pages)]).toEqual([
         label,
@@ -313,6 +330,7 @@ for (const shape of Object.keys(SHAPES)) {
   test(`random structure edits keep the ${shape} table equal to a fresh layout and paint`, () => {
     const run = session(shape);
     expect(run.layout.pages.length).toBeGreaterThan(2);
+    const restarts = tablePageRestartTestRecorder();
     const pick = random(0x1797 + shape.length * 977);
     const names = Object.keys(EDITS);
     let applied = 0;
@@ -321,7 +339,10 @@ for (const shape of Object.keys(SHAPES)) {
       const op = EDITS[name]!(run.part, pick);
       if (op && run.apply(op, `${shape} step ${step}: ${name}`)) applied += 1;
     }
+    restarts.dispose();
     expect(applied).toBeGreaterThan(24);
+    // Some edits restart the pagination at a kept page, so the checks above cover restarts.
+    expect(restarts.restarts).toBeGreaterThan(0);
   }, 60_000);
 }
 
@@ -363,11 +384,12 @@ test('targeted row edits at the start, middle, end and page breaks stay exact', 
   }
 }, 60_000);
 
-test('a row insert above page breaks moves the rows below without placing them again', () => {
+test('a row insert keeps the pages above it and moves the rows below without placing them again', () => {
   const run = session('plain');
-  const middle = rowsOf(run.part)[10]!.id;
+  const before = run.layout.pages;
+  const middle = rowsOf(run.part)[25]!.id;
   const shifted = shiftedRowsTestRecorder();
-  const inPlace = movedRowsTestRecorder();
+  const restarts = tablePageRestartTestRecorder();
   expect(
     run.apply(
       { op: 'insertTableRow', tableId: tableOf(run.part).id, rowId: middle, where: 'below' },
@@ -375,11 +397,56 @@ test('a row insert above page breaks moves the rows below without placing them a
     )
   ).toBe(true);
   shifted.dispose();
-  inPlace.dispose();
-  // Rows above the insert stay in place and rows below it move; both reuse their placement.
-  expect(inPlace.moved).toBeGreaterThan(5);
-  expect(shifted.moved).toBeGreaterThan(20);
+  restarts.dispose();
+  // The pagination restarts at a page above the insert, and the pages before it stay.
+  expect(restarts.restarts).toBe(1);
+  expect(restarts.keptPages).toBeGreaterThan(0);
+  for (let page = 0; page < restarts.keptPages; page += 1)
+    expect(run.layout.pages[page]).toBe(before[page]!);
+  // Rows below the insert move and reuse their placement.
+  expect(shifted.moved).toBeGreaterThan(5);
   expect(shifted.refused.fields).toBe(0);
+});
+
+test('a row insert in the pass that undoes typing above it paginates the whole table', () => {
+  const run = session('plain');
+  const typed = firstParagraph(cellsOf(rowsOf(run.part)[3]!)[0]!)!.id;
+  // The typing updates its page in place, so that page no longer records its rows.
+  expect(run.apply({ op: 'insertText', paragraphId: typed, offset: 0, text: 'x' }, 'type')).toBe(
+    true
+  );
+  const restarts = tablePageRestartTestRecorder();
+  expect(
+    run.apply(
+      [
+        { op: 'deleteText', paragraphId: typed, start: 0, end: 1 },
+        {
+          op: 'insertTableRow',
+          tableId: tableOf(run.part).id,
+          rowId: rowsOf(run.part)[30]!.id,
+          where: 'below',
+        },
+      ],
+      'undo and insert'
+    )
+  ).toBe(true);
+  restarts.dispose();
+  expect(restarts.restarts).toBe(0);
+  // Once paginated whole, the next insert restarts again.
+  const again = tablePageRestartTestRecorder();
+  expect(
+    run.apply(
+      {
+        op: 'insertTableRow',
+        tableId: tableOf(run.part).id,
+        rowId: rowsOf(run.part)[30]!.id,
+        where: 'below',
+      },
+      'insert again'
+    )
+  ).toBe(true);
+  again.dispose();
+  expect(again.restarts).toBe(1);
 });
 
 test('a banded style renumbered by a row insert places the restriped rows again', () => {
