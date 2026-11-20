@@ -15,19 +15,19 @@ interface MarkBlanks {
   readonly trailing: number;
 }
 const CLOSING_BLANKS: MarkBlanks = Object.freeze({ leading: 0, trailing: 0.5 });
-const CENTRED_BLANKS: MarkBlanks = Object.freeze({ leading: 0.25, trailing: 0.25 });
+const CENTERED_BLANKS: MarkBlanks = Object.freeze({ leading: 0.25, trailing: 0.25 });
 
 /**
  * The blank sides of a full-width line-end mark, as fractions of its advance, by the mark's
- * own run language. A closing mark leaves its right half blank. A centred mark leaves a
+ * own run language. A closing mark leaves its right half blank. A centered mark leaves a
  * quarter on each side. Other marks, such as `？`, fill their cell and return undefined.
  */
 function lineEndMarkBlanks(mark: string, language: string | undefined): MarkBlanks | undefined {
   if (CLOSING_BRACKET.test(mark)) return CLOSING_BLANKS;
   const traditional = /^zh-(tw|hk|mo|hant)(-|$)/.test(language ?? '');
   // Simplified Chinese, and text without an East Asian language, set these marks in the left
-  // half of the cell; Traditional Chinese centres them. Japanese `；：！` never hang.
-  if ('、。，．；：'.includes(mark)) return traditional ? CENTRED_BLANKS : CLOSING_BLANKS;
+  // half of the cell; Traditional Chinese centers them. Japanese `；：！` never hang.
+  if ('、。，．；：'.includes(mark)) return traditional ? CENTERED_BLANKS : CLOSING_BLANKS;
   if (mark === '！' && !traditional) return CLOSING_BLANKS;
   return undefined;
 }

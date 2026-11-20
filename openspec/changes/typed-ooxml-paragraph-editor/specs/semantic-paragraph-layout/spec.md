@@ -681,7 +681,7 @@ With document punctuation compression, in every compatibility mode, a hanging li
 - **AND** the ideographs before it spread to meet it
 - **AND** an 18 pt overflow hangs the whole mark, which starts at the margin
 
-#### Scenario: Character spacing widens the trailing blank
+#### Scenario: Character spacing changes the trailing blank
 
 - **GIVEN** the same line where every character has -4 pt character spacing
 - **WHEN** the 20 pt `，` overflows the measure by 6 pt
@@ -696,9 +696,9 @@ With document punctuation compression, in every compatibility mode, a hanging li
 
 ### Requirement: Blank sides of a line-end mark by language
 
-The mark's run language SHALL select its blank sides. A closing bracket, and `、。，．；：！` in Simplified Chinese or without an East Asian language, SHALL leave the right half blank. Traditional Chinese `、。，．；：` SHALL be centred, with a quarter blank on each side. Other marks, such as `？` and `”`, SHALL have no blank side. Past a centred mark's trailing quarter, the text before it SHALL keep its advances and the overflow SHALL hang.
+The mark's run language SHALL select its blank sides. A closing bracket, `、。，．` in Japanese, and `、。，．；：！` in Simplified Chinese or without an East Asian language, SHALL leave the right half blank. Traditional Chinese `、。，．；：` SHALL be centered, with a quarter blank on each side. Other marks, such as `？` and `”`, SHALL have no blank side. Past a centered mark's trailing quarter, the text before it SHALL keep its advances and the overflow SHALL hang.
 
-#### Scenario: A centred mark hangs its trailing quarter
+#### Scenario: A centered mark hangs its trailing quarter
 
 - **GIVEN** a justified line of nineteen 24 pt ideographs and a Traditional Chinese 24 pt `，`, with document punctuation compression
 - **WHEN** the mark overflows the measure by 4 pt

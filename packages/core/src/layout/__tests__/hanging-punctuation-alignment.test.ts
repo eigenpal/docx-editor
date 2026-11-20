@@ -214,7 +214,7 @@ describe('a hanging mark with punctuation compression hangs its blank side first
     expect(markX('、', 6, { language: 'ja-JP' })).toBeCloseTo(474 - 12, 6);
   });
 
-  test('character spacing widens the trailing blank', () => {
+  test('character spacing changes the trailing blank', () => {
     // -4 pt spacing: 20 pt cells; the mark's trailing blank is 12 - 4 = 8 pt.
     const tracked = (overflow: number) => {
       const result = loadFixture({
@@ -250,7 +250,7 @@ describe('a hanging mark with punctuation compression hangs its blank side first
     expect(markX('，', 6, { compression: 'doNotCompress' })).toBeCloseTo(474, 6);
   });
 
-  test('kana compression hangs the blank half too', () => {
+  test('kana compression hangs the blank half too (kana-line-fit.test.ts covers the fit skip)', () => {
     const compression = 'compressPunctuationAndJapaneseKana';
     expect(markX('，', 6, { compression })).toBeCloseTo(474 - 12, 6);
   });
@@ -261,7 +261,7 @@ describe('a hanging mark with punctuation compression hangs its blank side first
   });
 
   for (const language of ['zh-TW', 'zh-HK']) {
-    test(`${language}: a centred mark hangs its trailing quarter`, () => {
+    test(`${language}: a centered mark hangs its trailing quarter`, () => {
       expect(markX('，', 4, { language })).toBeCloseTo(476 - 18, 6);
       // Past the trailing quarter the text keeps its advances and the overflow hangs.
       expect(markX('，', 9, { language })).toBeCloseTo(456, 6);

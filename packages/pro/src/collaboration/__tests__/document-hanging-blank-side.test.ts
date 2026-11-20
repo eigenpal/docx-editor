@@ -29,8 +29,9 @@ const paragraph = (text: string, pPr = '') =>
   `<w:p><w:pPr>${pPr}<w:jc w:val="both"/></w:pPr>` +
   '<w:r><w:rPr><w:sz w:val="22"/><w:lang w:eastAsia="zh-CN"/></w:rPr>' +
   `<w:t>${text}</w:t></w:r></w:p>`;
-// 19 ideographs of 6 pt and a 6 pt mark take 120 pt of a 118 pt measure. The first mark
-// overflows by 2 pt, within its 3 pt blank half; the second, 2 pt further in, by 4 pt.
+// The test measurer gives each character 6 pt, so 19 ideographs and a mark take 120 pt of a
+// 118 pt measure. The first mark overflows by 2 pt, within its 3 pt blank half. The second,
+// 2 pt further in, overflows by 4 pt.
 const H = '国'.repeat(19);
 const BODY =
   paragraph(H + '，国') +
@@ -101,10 +102,10 @@ test('blank-side hanging converges through edits, history, reconnect, and save',
   );
   expect(peers.bob.room.session.remoteSelections()[0]!.head.offset).toBe(19);
   peers.pause();
-  // Offline, Alice deletes an ideograph before the second mark while Bob types after the first.
+  // Offline, Alice deletes an ideograph before the second mark while Bob types after it.
   select(alice, 1, 18, 19);
   expect(alice.exec({ type: 'deleteText' }).ok).toBe(true);
-  select(bob, 0, 21);
+  select(bob, 1, 21);
   expect(bob.exec({ type: 'insertText', text: '国' }).ok).toBe(true);
   peers.alice.room.session.flushPendingJournals();
   peers.bob.room.session.flushPendingJournals();
