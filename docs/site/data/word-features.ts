@@ -306,7 +306,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Document settings control spacing between scripts, balanced space widths, punctuation compression, and line-end punctuation. Behavior depends on document fonts, language, and compatibility settings. The editor has no typography controls or vertical Japanese composition.',
+      'Document settings control spacing between scripts, balanced space widths, punctuation compression, and line-end punctuation. Behavior depends on document fonts, language, and compatibility settings. In legacy Simplified Chinese lines of ideographs, closing punctuation uses the remaining line width before it hangs. The editor has no typography controls or vertical Japanese composition.',
     docsLink: '/docs/2.x/guides/cjk',
   },
   {
