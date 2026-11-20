@@ -1,6 +1,12 @@
 // How much of a hanging full-width mark passes the margin when the paragraph compresses
 // punctuation. Derived line geometry only; the document is unchanged.
-import { eastAsianLanguage, type CjkParagraphTypography } from './cjk-typography.ts';
+import {
+  eastAsianLanguage,
+  lineEndMarksMayHang,
+  type CjkParagraphTypography,
+} from './cjk-typography.ts';
+import type { PendingLine } from './pending-line.ts';
+import type { TextMeasurer } from './semantic-records.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 
 const CLOSING_BRACKET = /^[〉》」』】〕〗〙〛）］｝]$/u;
@@ -19,52 +25,63 @@ const CENTRED_BLANKS: MarkBlanks = Object.freeze({ leading: 0.25, trailing: 0.25
 function lineEndMarkBlanks(mark: string, language: string | undefined): MarkBlanks | undefined {
   if (CLOSING_BRACKET.test(mark)) return CLOSING_BLANKS;
   const traditional = /^zh-(tw|hk|mo|hant)(-|$)/.test(language ?? '');
-  const japanese = /^ja(-|$)/.test(language ?? '');
   // Simplified Chinese, and text without an East Asian language, set these marks in the left
-  // half of the cell. Traditional Chinese centres them; Japanese centres `；` and `：`.
-  if ('、。，．'.includes(mark)) return traditional ? CENTRED_BLANKS : CLOSING_BLANKS;
-  if (mark === '；' || mark === '：')
-    return traditional || japanese ? CENTRED_BLANKS : CLOSING_BLANKS;
-  if (mark === '！' && !traditional && !japanese) return CLOSING_BLANKS;
+  // half of the cell; Traditional Chinese centres them. Japanese `；：！` never hang.
+  if ('、。，．；：'.includes(mark)) return traditional ? CENTRED_BLANKS : CLOSING_BLANKS;
+  if (mark === '！' && !traditional) return CLOSING_BLANKS;
   return undefined;
 }
 
 /**
- * The advance that a mark ending `text` keeps past the margin, given its whole `advance` and
+ * The advance that the mark ending `text` keeps past the margin, given its whole `advance` and
  * the line's `overflow`. With punctuation compression, an overflow no larger than the mark's
  * blank sides hangs only the trailing blank, or the overflow when that is larger, and the text
  * before the mark fills the rest of the measure. A larger overflow, a mark without blank
- * sides, no compression, and Korean text hang the whole advance. `language` is the East Asian
- * language of the mark's run.
+ * sides, no compression, and Korean text hang the whole advance. `piece` holds the mark: its
+ * run language selects the blank sides, and its character spacing widens the trailing one.
  */
 export function blankSideHangingAdvance(
   text: string,
-  language: string | undefined,
+  piece: FieldAwarePiece,
   advance: number,
   overflow: number,
   typography: CjkParagraphTypography | undefined
 ): number {
   const compression = typography?.settings?.compression;
   if (compression === undefined || compression === 'doNotCompress') return advance;
+  const language = eastAsianLanguage(piece.props);
   if (/^ko(?:-|$)/.test(language ?? '')) return advance;
   const blanks = lineEndMarkBlanks(text.at(-1) ?? '', language);
-  if (!blanks || overflow > advance * (blanks.leading + blanks.trailing) + 0.001) return advance;
-  return Math.max(advance * blanks.trailing, overflow);
+  if (!blanks) return advance;
+  // Character spacing follows the glyph cell, so it belongs to the trailing side.
+  const spacing = piece.style.characterSpacingPt;
+  const cell = advance - spacing;
+  const trailing = Math.max(0, cell * blanks.trailing + spacing);
+  if (overflow > cell * blanks.leading + trailing + 0.001) return advance;
+  return Math.min(advance, Math.max(trailing, overflow));
+}
+
+/** What a fitter knows about a line whose final mark may hang. */
+export interface BlankHangLine {
+  readonly line: PendingLine;
+  readonly measurer: TextMeasurer;
+  readonly overflow: number;
+  readonly advance: number | undefined;
 }
 
 /**
- * Whether the mark that ends the last of `candidates` hangs only part of its `advance` when
- * the group overflows the line by `overflow`. `piece` holds that mark.
+ * Whether the mark that ends the last of `candidates` hangs only part of its advance: the
+ * line lets its final mark hang, and the group overflows by no more than the mark's blank
+ * sides. `piece` holds that mark.
  */
 export function hangsInBlankSides(
   candidates: readonly { readonly text: string }[],
   piece: FieldAwarePiece,
-  advance: number | undefined,
-  overflow: number,
+  { line, measurer, overflow, advance }: BlankHangLine,
   typography: CjkParagraphTypography | undefined
 ): boolean {
-  if (advance === undefined) return false;
+  if (advance === undefined || !typography) return false;
+  if (!lineEndMarksMayHang(typography, line.spans, measurer)) return false;
   const text = candidates.at(-1)?.text ?? '';
-  const language = eastAsianLanguage(piece.props);
-  return blankSideHangingAdvance(text, language, advance, overflow, typography) < advance;
+  return blankSideHangingAdvance(text, piece, advance, overflow, typography) < advance;
 }

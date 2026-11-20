@@ -897,8 +897,7 @@ export function createCjkOpticalFitter(
       );
     }
     // A group that fits needs no fit, and no fit can change a line it does not overflow.
-    const overflow = line.width + x - origin - available;
-    if (overflow <= TOLERANCE) return undefined;
+    if (line.width + x - origin - available <= TOLERANCE) return undefined;
     // Match clipWordEnd across run seams: a fitting word does not compress only
     // to retain its trailing separator inside the margin.
     let trailingWidth = 0;
@@ -941,10 +940,11 @@ export function createCjkOpticalFitter(
       memo,
       cells: {},
     };
-    const finalPiece = pieces[currentIndex]!;
-    const kanaRules = hangsInBlankSides(candidates, finalPiece, hangAdvance, overflow, policy)
+    const overflow = line.width + x - origin - available;
+    const blank = { line, measurer, overflow, advance: hangAdvance };
+    const kanaRules = hangsInBlankSides(candidates, pieces[currentIndex]!, blank, policy)
       ? undefined
-      : kanaRulesFor(candidates, finalPiece);
+      : kanaRulesFor(candidates, pieces[currentIndex]!);
     let fitted = kanaRules
       ? fitCjkOptically(line, candidates, available, context, { kana: kanaRules })
       : undefined;

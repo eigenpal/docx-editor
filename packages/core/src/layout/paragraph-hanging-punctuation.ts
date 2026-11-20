@@ -80,7 +80,7 @@ export function rememberHangingPunctuation(
   // With punctuation compression, a mark that overflows by no more than its blank sides hangs
   // only its trailing blank, and the text before it fills the rest of the measure.
   if (advance !== undefined)
-    advance = blankSideHangingAdvance(span.text, language, advance, overflow, typography);
+    advance = blankSideHangingAdvance(span.text, piece, advance, overflow, typography);
   if (advance !== undefined || !span.lineEndWhitespace)
     setLineHangingPunctuationAdvance(line, advance);
 }

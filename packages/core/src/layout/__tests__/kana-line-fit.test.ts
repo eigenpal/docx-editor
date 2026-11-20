@@ -104,6 +104,26 @@ describe('kana compress to fit a line-start-prohibited character', () => {
     });
   }
 
+  test('a line that opens with widened spaces still fits kana when its mark cannot hang', () => {
+    // Balanced widths widen the opening space, and that line hangs no mark: kana fit instead.
+    const narrowSpaces: TextMeasurer = {
+      ...measurer,
+      measure: (text, style) =>
+        [...text].reduce(
+          (width, c) => width + (c === ' ' ? style.fontSizePt / 4 : style.fontSizePt),
+          0
+        ) +
+        [...text].length * style.characterSpacingPt,
+    };
+    const line = lay(' ' + 'あ'.repeat(38) + '。あいう', {
+      available: MEASURE + EM / 4,
+      compatibility: 14,
+      balanceWidths: true,
+      measurer: narrowSpaces,
+    });
+    expect(line.texts).toEqual([' ' + 'あ'.repeat(38) + '。', 'あいう']);
+  });
+
   test('without punctuation overflow the final half goes before the kana', () => {
     const line = lay('あ'.repeat(39) + '。あいう', {
       paragraphProperties: '<w:jc w:val="both"/><w:overflowPunct w:val="0"/>',

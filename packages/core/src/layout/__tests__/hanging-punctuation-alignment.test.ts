@@ -126,7 +126,7 @@ describe('Korean paragraph-final marks in legacy modes', () => {
 });
 
 describe('distributed paragraphs hang without East Asian document defaults', () => {
-  for (const compatibility of [14, 15] as const) {
+  for (const compatibility of [11, 12, 14, 15] as const) {
     for (const mark of [...'。、）']) {
       test(`mode ${compatibility}: a distributed paragraph hangs ${mark}`, () => {
         const result = loadFixture({
@@ -189,7 +189,7 @@ describe('a hanging mark with punctuation compression hangs its blank side first
     return caretX(result, 19);
   };
 
-  for (const compatibility of [14, 15] as const) {
+  for (const compatibility of [11, 12, 14, 15] as const) {
     for (const mark of [...'，。；：！、）」》』']) {
       test(`mode ${compatibility}: ${mark} within its blank half hangs only that half`, () => {
         // The ink half ends at the margin; the ideographs before it spread to meet it.
@@ -205,6 +205,45 @@ describe('a hanging mark with punctuation compression hangs its blank side first
 
   test('a mark without a blank side hangs whole', () => {
     expect(markX('？', 6)).toBeCloseTo(474, 6);
+    expect(markX('！', 6, { language: 'zh-TW' })).toBeCloseTo(474, 6);
+  });
+
+  test('a distributed line and a Japanese run hang the blank half', () => {
+    const paragraphProperties = '<w:jc w:val="distribute"/>';
+    expect(markX('，', 6, { paragraphProperties })).toBeCloseTo(474 - 12, 6);
+    expect(markX('、', 6, { language: 'ja-JP' })).toBeCloseTo(474 - 12, 6);
+  });
+
+  test('character spacing widens the trailing blank', () => {
+    // -4 pt spacing: 20 pt cells; the mark's trailing blank is 12 - 4 = 8 pt.
+    const tracked = (overflow: number) => {
+      const result = loadFixture({
+        text: H + '，余',
+        available: 400 - overflow,
+        language: 'zh-CN',
+        compatibility: 14,
+        compression: 'compressPunctuation',
+        tracking: -80,
+        paragraphProperties: '<w:jc w:val="both"/>',
+      });
+      expect(texts(result)).toEqual([H + '，', '余']);
+      return caretX(result, 19);
+    };
+    expect(tracked(6)).toBeCloseTo(394 - 12, 6);
+    expect(tracked(9)).toBeCloseTo(391, 6);
+  });
+
+  test('a Korean paragraph-final mark hangs whole', () => {
+    const result = loadFixture({
+      text: '가'.repeat(19) + '，',
+      available: 474,
+      language: 'ko-KR',
+      compatibility: 15,
+      compression: 'compressPunctuation',
+      paragraphProperties: '<w:jc w:val="both"/>',
+    });
+    expect(texts(result)).toEqual(['가'.repeat(19) + '，']);
+    expect(caretX(result, 19)).toBeCloseTo(474, 6);
   });
 
   test('without compression the whole mark hangs', () => {
