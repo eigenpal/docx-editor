@@ -124,9 +124,9 @@ export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
         if (op.op === 'joinParagraphs' && op.firstId === r.paragraphId && r.endsHere && r.end === 0)
           return false;
         if (target.removes || target.structural) return true;
-        // A standalone marker has no authored text, but its paragraph mark can
-        // be selected now that the line is shown. Keep it protected while still
-        // allowing paragraph formatting when the boundary shares a heading.
+        // Protect a paragraph that holds generated text, or only field characters (such
+        // as a shown closing line). A boundary that also holds a heading keeps accepting
+        // paragraph formatting.
         return r.end > r.start || r.length === 0;
       })
     );
