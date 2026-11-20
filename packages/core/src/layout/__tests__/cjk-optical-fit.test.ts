@@ -513,6 +513,9 @@ test('a legacy mode compresses no Korean text to fit a line', () => {
       .join('');
   expect(first('')).toBe('甲。乙，丁）');
   expect(first(korean)).toBe('甲。乙，');
+  // Hangul does not fit in a legacy mode, whatever its language tag.
+  for (const lang of [undefined, 'zh-CN'])
+    expect(linesAt('left', 14, lang, '가나（다라）마바')).toEqual(['가나（다라）', '마바']);
 });
 
 test('a legacy mode fits right-to-left paragraphs at both edges', () => {

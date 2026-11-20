@@ -606,7 +606,7 @@ The layout engine SHALL fit a line by compressing East Asian punctuation against
 
 ### Requirement: East Asian punctuation fitting in legacy compatibility modes
 
-In a legacy compatibility mode (no declared mode, 11, 12, or 14), punctuation fitting SHALL apply at every alignment and in every East Asian language except Korean. A candidate group of East Asian characters and punctuation SHALL join a line only when the compression it needs, less what its own marks can still give, is at most half its natural advance. Groups with other text, kana fits, and hanging final marks keep the general capacity rules.
+In a legacy compatibility mode (no declared mode, 11, 12, or 14), punctuation fitting SHALL apply at every alignment and in every East Asian language except Korean, by language tag or Hangul script. A candidate group of East Asian characters and punctuation SHALL join a line only when the compression it needs, less what its own marks can still give, is at most half its natural advance. Groups with other text, kana fits, and hanging final marks keep the general capacity rules.
 
 #### Scenario: A legacy mode fits lines at every alignment
 
@@ -624,7 +624,7 @@ In a legacy compatibility mode (no declared mode, 11, 12, or 14), punctuation fi
 
 ### Requirement: East Asian punctuation fitting capacity
 
-Justified East Asian lines SHALL distribute punctuation compression across available blank sides. The layout SHALL compare required compression against available expansion before admitting the next ordinary glyph.
+Lines that fit East Asian punctuation SHALL distribute compression across available blank sides. The layout SHALL compare required compression against available expansion before admitting the next ordinary glyph.
 
 #### Scenario: Punctuation compression allocation and admission
 
