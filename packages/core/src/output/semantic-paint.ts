@@ -25,7 +25,6 @@ import { paintRunBorders } from './semantic-paint-run-borders.ts';
 import { isRunKerningEnabled, kernsText } from '../layout/run-kerning.ts';
 import { automaticGapFillAfter, paintAutomaticGapFill } from './semantic-paint-automatic-gap.ts';
 import { HIGHLIGHT_COLOR_HEX } from './semantic-paint-highlight-colors.ts';
-export { HIGHLIGHT_COLOR_HEX };
 import { paintLegacyDropdown } from './semantic-paint-legacy-dropdown.ts';
 import { paintLegacyCheckbox } from './semantic-paint-legacy-checkbox.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
