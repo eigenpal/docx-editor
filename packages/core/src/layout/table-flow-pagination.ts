@@ -66,6 +66,7 @@ import {
   type TablePageStart,
 } from './table-page-restart.ts';
 import type { TableRowFragmentRecord } from './semantic-records.ts';
+import { createReadHorizon } from './table-read-horizon.ts';
 import { TABLE_ROWS_PER_STEP, type LayoutSteps } from './layout-steps.ts';
 
 import type { TableFlowCursor, TableFlowPlacementResult } from './table-flow-cursor.ts';
@@ -394,6 +395,8 @@ export function* paginateTableInFlowSteps(
 
   /** Whole band of a fresh page: a note reserve yields to a kept row. */
   const pageBand = () => Math.max(contentHeight(), flow.unreservedContentHeight?.() ?? 0);
+  // The rows read so far, recorded at each page start (`table-read-horizon.ts`).
+  const horizon = createReadHorizon(structure, resume?.readThrough);
   /** Kept-row pricing over `candidates` (`table-row-keeps.ts`); `first` overrides one row's height. */
   const keptSource = (
     candidates: readonly SemanticTableRow[],
@@ -409,6 +412,7 @@ export function* paginateTableInFlowSteps(
       fullPageHeight: pageBand(),
       heightOf: cachedRowHeights(candidates, terminal.withRule(rowHeightOf, tableDeps), first),
       following: (room) => flow.followingKeepOpening?.(room),
+      horizon,
     });
   const start =
     resume?.start ??
@@ -504,6 +508,7 @@ export function* paginateTableInFlowSteps(
     headerGroupHeight,
     headerMerged,
     deps: tableDeps,
+    horizon,
   });
   for (
     let bodyRowIndex = resume?.bodyRowIndex ?? 0;
@@ -511,6 +516,8 @@ export function* paginateTableInFlowSteps(
     bodyRowIndex++
   ) {
     const authoredRow = bodyRows[bodyRowIndex]!;
+    const rowIndex = structure.rows.length - bodyRows.length + bodyRowIndex;
+    horizon.row(rowIndex);
     // The restart row opens its page as the break that moved it there did.
     const resumed = bodyRowIndex === resume?.bodyRowIndex;
     if (bodyRowIndex > 0 && bodyRowIndex % TABLE_ROWS_PER_STEP === 0) yield;
@@ -584,10 +591,9 @@ export function* paginateTableInFlowSteps(
     const { admitsRepeatedHeaders } = rules;
 
     if (clearance) {
-      const from = structure.rows.length - bodyRows.length + bodyRowIndex;
       const continued = () => isContinuation;
       clearance.pending = clearance.fragment(
-        from,
+        rowIndex,
         (top) => admitsRepeatedHeaders(top, true),
         undefined,
         continued
@@ -627,12 +633,7 @@ export function* paginateTableInFlowSteps(
       !resumed &&
       breaksPages &&
       row !== structure.rows[0] &&
-      rowStartsPage(
-        structure,
-        structure.rows.length - bodyRows.length + bodyRowIndex,
-        styleCascade,
-        flow.compatibilityMode
-      ) &&
+      rowStartsPage(structure, rowIndex, styleCascade, flow.compatibilityMode) &&
       (rows.some((placed) => !placed.isHeaderRepeat) || flow.pageHoldsContent(fragmentTop));
     // Only authored legacy headers stay behind; repeated headers already placed the group.
     const keptMoves =
@@ -689,7 +690,7 @@ export function* paginateTableInFlowSteps(
           row === authoredRow,
         top: fragmentTop,
         rows,
-        rowIndex: structure.rows.length - bodyRows.length + bodyRowIndex,
+        rowIndex,
         bodyRowIndex,
         fragmentIndex,
         repeat,

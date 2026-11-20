@@ -13,12 +13,16 @@
 //   is equal, and so are the table-wide facts pagination reads from all rows: whether any
 //   row continues a vertical merge (`hasTableMerge`) and whether a fixed table holds a
 //   nested table (`holdsNestedTable`). Equal resolved rows also cover what a row resolves
-//   against its neighbors, its index, and the table's last row.
-// - Nothing an earlier row decided reads past the restart row. A row reads the next row for
-//   its closing rule. A kept group reads the rows it keeps with and the row after them, so
-//   the restart row may not keep with the next row: the break above a kept group it opens
-//   was priced from the rows after it. A vertical merge is planned from its head row, so the
-//   restart row may not head or continue one.
+//   against its neighbors and its index. Each kept structure is compared once, from the first
+//   row up to the first row that differs.
+// - Every row a decision for the kept pages read resolves as before. Those decisions read past
+//   the rows they place: the restart row moved to its page because of the row after it (its
+//   closing rule), a kept group reads the rows after it, and a merge reads all of its rows. The
+//   paginator records at each page start the furthest row read so far
+//   (`table-read-horizon.ts`), and the rows through it must be equal. A page start after a
+//   read of the content past the table is never recorded. The restart row may not head or
+//   continue a vertical merge, or open a kept group, because the paginator does not carry
+//   the state those open.
 // - The paginator state at the page top is carried: the fragment number, the header group
 //   decisions, the row ordinals of the earlier pages, the pass budgets, the cell break keys,
 //   and the line counter. A page start is recorded only where nothing else is open: no split
@@ -60,6 +64,7 @@ import {
 import { rowKeepsWithNext } from './table-row-keeps.ts';
 import { hasTableMerge } from './table-border-probe.ts';
 import { holdsNestedTable } from './table-flow-structure.ts';
+import type { ReadHorizon } from './table-read-horizon.ts';
 
 /** The body flow at a page start: its line counter and the table's cell break keys so far. */
 export interface TableFlowPageState {
@@ -89,6 +94,8 @@ export interface TableResume {
   readonly fragmentsForRow: number;
   /** Row ordinals of the rows placed on the kept pages; the paginator adds to it. */
   readonly ordinals: Map<string, number>;
+  /** The furthest row any decision for the kept pages read (`table-read-horizon.ts`). */
+  readonly readThrough: number;
 }
 
 /** A continuation page the paginator opened with a whole body row, with nothing else open. */
@@ -221,31 +228,24 @@ function sameValue(a: unknown, b: unknown, depth = 0): boolean {
 }
 
 /**
- * Whether `after` paginates rows `[0, through]` exactly as each of `sources` does. Rows are
- * compared from `through` down, every source at each row, because an edit changes the rows
- * nearest the restart row first.
+ * The index of the first row that `after` paginates differently from `before`: -1 when the
+ * table-level structure or a table-wide fact differs, `Infinity` when nothing does. A missing
+ * row differs from a present one, so a row added or removed at the end counts too.
  */
-function samePrefix(
-  sources: ReadonlySet<SemanticTableStructure>,
-  after: SemanticTableStructure,
-  through: number
-): boolean {
+function firstChangedRow(before: SemanticTableStructure, after: SemanticTableStructure): number {
+  if (before === after) return Number.POSITIVE_INFINITY;
+  if (
+    hasTableMerge(before) !== hasTableMerge(after) ||
+    holdsNestedTable(before) !== holdsNestedTable(after)
+  )
+    return -1;
+  const { rows: beforeRows, ...beforeFrame } = before;
   const { rows: afterRows, ...afterFrame } = after;
-  const others: SemanticTableStructure[] = [];
-  for (const before of sources) {
-    if (before === after) continue;
-    if (
-      hasTableMerge(before) !== hasTableMerge(after) ||
-      holdsNestedTable(before) !== holdsNestedTable(after)
-    )
-      return false;
-    const { rows: _rows, ...beforeFrame } = before;
-    if (!sameValue(beforeFrame, afterFrame)) return false;
-    others.push(before);
-  }
-  for (let index = through; index >= 0; index -= 1)
-    for (const before of others) if (!sameValue(before.rows[index], afterRows[index])) return false;
-  return true;
+  if (!sameValue(beforeFrame, afterFrame)) return -1;
+  const count = Math.max(beforeRows.length, afterRows.length);
+  for (let index = 0; index < count; index += 1)
+    if (!sameValue(beforeRows[index], afterRows[index])) return index;
+  return Number.POSITIVE_INFINITY;
 }
 
 /** Whether the flow before the table holds only what a restart at a page top re-creates. */
@@ -340,6 +340,17 @@ export function tablePageRestart(
     fragments.push(fragment);
   }
   let structure: SemanticTableStructure | null | undefined;
+  // Each kept structure is compared with the new rows once, from the first row up.
+  const changedAt = new Map<SemanticTableStructure, number>();
+  const firstChange = (sources: ReadonlySet<SemanticTableStructure>): number => {
+    let first = Number.POSITIVE_INFINITY;
+    for (const source of sources) {
+      let at = changedAt.get(source);
+      if (at === undefined) changedAt.set(source, (at = firstChangedRow(source, structure!)));
+      first = Math.min(first, at);
+    }
+    return first;
+  };
   for (let offset = fragments.length - 1; offset > 0; offset -= 1) {
     const pageIndex = first + offset;
     const fragment = fragments[offset]!;
@@ -360,14 +371,15 @@ export function tablePageRestart(
       autofitContextOf(deps)
     );
     if (!structure || structure.float) return null;
-    const at = start.rowIndex;
-    const row = structure.rows[at];
-    // A kept group the restart row opens decided the break above it from the rows after it.
+    const row = structure.rows[start.rowIndex];
+    // Every row a decision for the kept pages read must resolve as before, the restart row
+    // and the rows read past it included (`table-read-horizon.ts`).
+    const through = Math.max(start.rowIndex, start.readThrough);
     if (
       !row ||
       rowHoldsMerge(row) ||
       rowKeepsWithNext(row, deps.styleCascade) ||
-      !samePrefix(sources, structure, at)
+      !(through < firstChange(sources))
     )
       continue;
     // The ordinals a full pass holds at this page: every row the kept pages placed.
@@ -430,7 +442,7 @@ export function registerRestartedTableKeys(
 /** The page-start state of one table's pagination that can change between page starts. */
 export interface TablePageStartAt extends Omit<
   TableResume,
-  'ordinals' | 'start' | 'headerGroupHeight' | 'headerMerged'
+  'ordinals' | 'start' | 'headerGroupHeight' | 'headerMerged' | 'readThrough'
 > {
   /** The opening row continues nothing: no split, merge carry, closing-rule plan, or force. */
   readonly open: boolean;
@@ -449,6 +461,7 @@ export function tablePageStarts(input: {
   readonly headerGroupHeight: number;
   readonly headerMerged: boolean;
   readonly deps: TableFlowDeps;
+  readonly horizon: ReadHorizon;
 }): {
   at(flow: TableFlowPageState | undefined, state: TablePageStartAt): TablePageStart | undefined;
 } {
@@ -457,8 +470,10 @@ export function tablePageStarts(input: {
   return {
     at(flow, state) {
       const row = structure.rows[state.rowIndex];
+      const readThrough = input.horizon.through;
       if (
         !flow ||
+        !Number.isFinite(readThrough) ||
         !plain ||
         !state.open ||
         !row ||
@@ -474,6 +489,7 @@ export function tablePageStarts(input: {
         start: input.start,
         headerGroupHeight: input.headerGroupHeight,
         headerMerged: input.headerMerged,
+        readThrough,
         flow,
         budgets: {
           intervals: deps.borderOwnershipBudget?.intervalsRemaining,
