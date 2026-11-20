@@ -32,9 +32,8 @@ const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
 const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
 const PUNCTUATION = /^[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]$/u;
 const HAS_PUNCTUATION = /[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]/u;
-// Latin-face text kept whole on a qualified line: Latin script, digits, symbols, punctuation
-// other than East Asian punctuation.
-// Other scripts still refuse: automatic East Asian spacing covers only Latin text.
+// Text kept opaque on a qualified line: Latin script, digits, symbols, and punctuation. Other
+// scripts and controls still refuse: automatic East Asian spacing covers only Latin text.
 const OPAQUE_TEXT = /^[ \p{Script=Latin}\p{N}\p{S}\p{P}\p{M}]+$/u;
 const TOLERANCE = 0.001;
 // The fit gate weighs expansion in units of 1/64 of an advance (see `expansionGate`).
@@ -226,15 +225,15 @@ function cellsOf(
     // Only the qualified local path reaches here with a curly quote; the paragraph gate refuses it.
     const curlyAllowed = requireLocalQualification && span.fontSlot === 'eastAsia';
     const clusters = fittingClusters(span.text);
-    // The paragraph path holds only CJK text and punctuation. On the local path, any other
-    // cluster becomes an opaque glyph below: it keeps its advance and does not veto the line.
+    // The paragraph path holds only CJK text and punctuation. On the local path, a Latin
+    // letter, digit, or symbol becomes an opaque glyph below: it keeps its advance.
     if (
-      !requireLocalQualification &&
       clusters.some(
         (cluster) =>
           cluster.text !== ' ' &&
           !isCjk(cluster.text.codePointAt(0)!) &&
-          !PUNCTUATION.test(cluster.text)
+          !PUNCTUATION.test(cluster.text) &&
+          !(requireLocalQualification && OPAQUE_TEXT.test(cluster.text))
       )
     )
       return undefined;

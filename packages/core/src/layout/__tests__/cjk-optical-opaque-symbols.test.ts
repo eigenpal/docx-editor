@@ -173,3 +173,11 @@ test('Latin-face text in other scripts and East Asian marks in a Latin face stil
     expect(line.width).toBe(natural);
   }
 });
+
+test('a letter of another script in the East Asian face still refuses the line', () => {
+  for (const letter of ['Ж', 'α']) {
+    const { result, line, natural } = attempt(['甲', letter + '、', '乙'], '丙', 9);
+    expect(result).toBeUndefined();
+    expect(line.width).toBe(natural);
+  }
+});
