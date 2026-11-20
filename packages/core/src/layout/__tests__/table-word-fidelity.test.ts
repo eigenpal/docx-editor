@@ -80,7 +80,7 @@ const shadingGrid = (structure: ReturnType<typeof structureOf>) =>
   structure.rows.map((row) => row.cells.map((c) => c.shading));
 
 describe('B3 — conditional formats apply in Word’s precedence, not bit order', () => {
-  // 17.7.6: a table style's conditional formats are layered whole table < row bands <
+  // ECMA-376 Part 1 §17.7.6: a table style's conditional formats are layered whole table < row bands <
   // column bands < first/last column < first/last row < corners.
   const ALL_ON =
     '<w:tblLook w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" ' +
@@ -118,7 +118,7 @@ describe('B3 — conditional formats apply in Word’s precedence, not bit order
 });
 
 describe('B13 — a missing w:tblLook is the same statement as an empty one', () => {
-  // 17.4.56: with neither the named attributes nor `w:val`, the look is 04A0 — header row,
+  // ECMA-376 Part 1 §17.4.55: with neither the named attributes nor `w:val`, the look is 04A0 — header row,
   // first column and row banding. `noHBand`/`noVBand` are negative flags.
   const rows = (count: number) =>
     Array.from({ length: count }, () => `<w:tr>${cell()}</w:tr>`).join('');
@@ -313,7 +313,7 @@ describe('B11 — an explicit w:val="nil" clears only its own side of an interio
 });
 
 describe('B8 — border conflict uses Word weighted widths, then style precedence', () => {
-  // Word-matching, not conformance: §17.4.39 / §17.4.66 specify no conflict algorithm.
+  // Not a conformance rule: ECMA-376 Part 1 §17.4.39 and §17.4.66 specify no conflict algorithm.
   const edge = (
     style: 'single' | 'dashed' | 'dotted' | 'double',
     widthPt: number,

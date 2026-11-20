@@ -246,6 +246,89 @@ describe('withResolvedListItems memo', () => {
     expect(markers(warm.listItems)[300]).toBe('301.');
   });
 
+  test('repeated passes over an unchanged story compare no numbered paragraph', () => {
+    const numberingIndex = loadNumbering(DECIMAL);
+    const item = (text: string) =>
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>' +
+      `<w:r><w:t>${text}</w:t></w:r></w:p>`;
+    const items: string[] = [];
+    for (let index = 0; index < 300; index += 1) items.push(item(`Item ${index}`));
+    const read = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body>${items.join('')}</w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!read.ok) throw new Error(read.reason);
+    const session = createLayoutSession();
+    const blocks = storyBlocks(read.part);
+    const first = withResolvedListItemsForSession({ numberingIndex }, blocks, session);
+    const recorder = listResolveBlockVisitTestRecorder();
+    recorder.reset();
+    // A progressive open resolves the same story once for each layout pass.
+    for (let pass = 0; pass < 8; pass += 1) {
+      const again = withResolvedListItemsForSession({ numberingIndex }, blocks, session);
+      expect(again.listItems).toBe(first.listItems!);
+    }
+    expect(recorder.blockScans).toBe(0);
+    expect(recorder.paragraphCompares).toBe(0);
+
+    // An edit to one item compares that item only, and the result stays correct.
+    const edited = applyTreeOp(read.part, {
+      op: 'insertText',
+      paragraphId: blocks[150]!.id,
+      offset: 0,
+      text: 'X',
+    });
+    if (!edited.ok) throw new Error(String(edited.issues));
+    const blocksB = storyBlocks(edited.part);
+    recorder.reset();
+    const warm = withResolvedListItemsForSession({ numberingIndex }, blocksB, session);
+    expect(recorder.paragraphCompares).toBe(1);
+    const cold = withResolvedListItemsForSession(
+      { numberingIndex },
+      blocksB,
+      createLayoutSession()
+    );
+    const markers = (map: typeof warm.listItems) =>
+      blocksB.map((block) => map?.get(block.id)?.markerText ?? '');
+    expect(markers(warm.listItems)).toEqual(markers(cold.listItems));
+  });
+
+  test('an edit in a table compares only the cell paragraph it changed', () => {
+    const numberingIndex = loadNumbering(DECIMAL);
+    const cell = (text: string) =>
+      '<w:tc><w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>' +
+      `<w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const rows: string[] = [];
+    for (let row = 0; row < 40; row += 1) rows.push(`<w:tr>${cell(`Row ${row}`)}</w:tr>`);
+    const read = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body><w:tbl>${rows.join('')}</w:tbl></w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!read.ok) throw new Error(read.reason);
+    const session = createLayoutSession();
+    const blocks = storyBlocks(read.part);
+    const first = withResolvedListItemsForSession({ numberingIndex }, blocks, session);
+    const cellParagraphIds = [...first.listItems!.keys()];
+    expect(cellParagraphIds).toHaveLength(40);
+    const edited = applyTreeOp(read.part, {
+      op: 'insertText',
+      paragraphId: cellParagraphIds[20]!,
+      offset: 0,
+      text: 'X',
+    });
+    if (!edited.ok) throw new Error(String(edited.issues));
+    const blocksB = storyBlocks(edited.part);
+    // The edit replaced the table node, so its numbered paragraphs are read again.
+    expect(blocksB[0]).not.toBe(blocks[0]);
+    const recorder = listResolveBlockVisitTestRecorder();
+    recorder.reset();
+    const warm = withResolvedListItemsForSession({ numberingIndex }, blocksB, session);
+    expect(recorder.blockScans).toBe(1);
+    // The other 39 cell paragraphs kept their nodes: only the edited one is compared.
+    expect(recorder.paragraphCompares).toBe(1);
+    expect(warm.listItems).toBe(first.listItems!);
+  });
+
   test('independent layout sessions do not share list item maps', () => {
     const numberingIndex = loadNumbering(DECIMAL);
     const blocks = storyBlocks(loadBodyPart());

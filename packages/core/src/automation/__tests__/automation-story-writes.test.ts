@@ -730,7 +730,7 @@ describe('deleting a paragraph', () => {
     const body = bodyOf(host);
     const list = paragraphsOf(host, body);
     const response = host.execute({ operations: [{ op: 'deleteParagraph', paragraph: list[0]! }] });
-    expect(refusal(response)).toBe('transaction-refused');
+    expect(refusal(response)).toBe('unsupported-capability');
     expect(paragraphTexts(host, body)).toEqual(['One', '']);
   });
 

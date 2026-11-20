@@ -130,6 +130,8 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
     'The document has no styles part, so it defines no styles and no style name applies. Leave the style as it is, or start from a document whose styles part defines the style you need.',
   'edit.section-mark':
     'The edit would remove a section break that holds page layout settings. Remove the section break on its own.',
+  'edit.content-required':
+    'The edit would remove the last paragraph of a body, note, comment, text box, or table cell, or the last row or column of a table. Each of them must keep that content. Clear the text instead, or delete the whole table.',
   'edit.table-structure-unsupported':
     'The table edit is not supported for this table shape, for example a legacy horizontal merge, a row that starts or ends with an authored gap, or cells that do not fit the column grid. Edit that row or table directly.',
   'edit.table-merge-not-rectangle':

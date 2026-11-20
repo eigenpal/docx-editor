@@ -516,7 +516,7 @@ export async function paint(
   // Not for a line with right-to-left text. MuPDF and Poppler lay ActualText characters out
   // over the glyphs as if they were visual and reverse them, so a logical Arabic or Hebrew
   // line extracted scrambled or backwards. Without it they read each glyph's own ToUnicode
-  // in visual order and reorder the line themselves, as they do for LibreOffice's PDFs.
+  // in visual order and reorder the line themselves (ISO 32000-1 §9.10.3, §14.9.4).
   const pageGroups = new Map<number, Map<object, SemanticSpanVisit[]>>();
   for (const visit of spans) {
     let lines = pageGroups.get(visit.page.index);

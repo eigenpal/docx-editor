@@ -449,7 +449,10 @@ function parseNum(node: OoxmlElement): NumDefinition | null {
  * counts, indent magnitudes and style-link hop depth are all capped, and nothing from the file
  * becomes a loop bound or an allocation size.
  */
-export function buildNumberingIndex(root: OoxmlElement | null | undefined): NumberingIndex {
+export function buildNumberingIndex(
+  root: OoxmlElement | null | undefined,
+  pictureBulletPixelHeight?: (relationshipId: string) => number | undefined
+): NumberingIndex {
   const abstractNums = new Map<string, AbstractNumDefinition>();
   const nums = new Map<string, NumDefinition>();
   if (!root) {
@@ -476,7 +479,7 @@ export function buildNumberingIndex(root: OoxmlElement | null | undefined): Numb
     }
   }
 
-  const pictureBullets = readNumberingPictureBullets(root);
+  const pictureBullets = readNumberingPictureBullets(root, pictureBulletPixelHeight);
   return pictureBullets.size > 0 ? { abstractNums, nums, pictureBullets } : { abstractNums, nums };
 }
 

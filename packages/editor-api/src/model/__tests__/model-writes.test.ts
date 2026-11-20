@@ -366,7 +366,8 @@ describe('writing into one paragraph', () => {
         await context.sync();
       })
     );
-    expect(code).toBe('GeneralException');
+    // `NotSupported` with `edit.content-required`: the paragraph exists, and the cell keeps it.
+    expect(code).toBe('NotSupported');
     expect(await paragraphTexts(runtime)).toEqual(['before', 'in cell', 'other cell', 'after']);
   });
 
@@ -650,7 +651,7 @@ describe('a batch of writes', () => {
         await context.sync();
       })
     );
-    expect(code).toBe('GeneralException');
+    expect(code).toBe('NotSupported');
     expect(await paragraphTexts(runtime)).toEqual(['before', 'in cell', 'other cell', 'after']);
   });
 

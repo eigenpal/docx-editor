@@ -34,17 +34,37 @@ function isDirectlyHiddenRun(node: OoxmlNode): boolean {
   return hidden;
 }
 
-/** Run-level drawing / MC atoms carrying anchored projections in one paragraph. */
-export function anchoredDrawingAtomsInParagraph(
-  paragraph: OoxmlNode,
-  context: InlineDrawingLayoutContext
-): readonly {
+interface AnchoredDrawingAtom {
   readonly atomId: string;
   readonly projection: DrawingProjection;
   /** Enclosing revision wrappers, outermost first — the stack spans carry (see #479). */
   readonly revisions: readonly RevisionAttribution[];
-}[] {
-  if (paragraph.kind !== 'paragraph') return [];
+}
+
+let anchoredAtomQueries = 0;
+
+/** @internal Counts anchored drawing queries, to pin the per-pass work of their callers. */
+export function anchoredDrawingQueryTestRecorder(): { readonly queries: number; reset(): void } {
+  return {
+    get queries() {
+      return anchoredAtomQueries;
+    },
+    reset() {
+      anchoredAtomQueries = 0;
+    },
+  };
+}
+
+/** The answer of every paragraph without an anchored drawing atom: one shared empty list. */
+const NO_ANCHORED_ATOMS: readonly AnchoredDrawingAtom[] = Object.freeze([]);
+
+/** Run-level drawing / MC atoms carrying anchored projections in one paragraph. */
+export function anchoredDrawingAtomsInParagraph(
+  paragraph: OoxmlNode,
+  context: InlineDrawingLayoutContext
+): readonly AnchoredDrawingAtom[] {
+  anchoredAtomQueries += 1;
+  if (paragraph.kind !== 'paragraph') return NO_ANCHORED_ATOMS;
   const atoms: {
     atomId: string;
     projection: DrawingProjection;
@@ -70,7 +90,7 @@ export function anchoredDrawingAtomsInParagraph(
       if (projection?.kind === 'anchored') atoms.push({ atomId: node.id, projection, revisions });
     }
   });
-  return Object.freeze(atoms);
+  return atoms.length === 0 ? NO_ANCHORED_ATOMS : Object.freeze(atoms);
 }
 
 const drawingOffsetMemos = new WeakMap<OoxmlNode, ReadonlyMap<string, number>>();

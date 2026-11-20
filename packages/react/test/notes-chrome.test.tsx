@@ -397,10 +397,11 @@ describe('DocxEditor.NotesChrome', () => {
   test('context menu entries surface engine disabled reasons', async () => {
     const { view, editor, container } = mountChrome(footnoteDoc());
     await enterFootnote(editor());
-    const noteEl = container.querySelector('[data-docx-note-scope="footnote:1"]') as HTMLElement;
+    // The reference mark in the body opens the note menu, even while the note is edited.
+    const refEl = container.querySelector('[data-docx-note-ref]') as HTMLElement;
 
     await act(async () => {
-      fireEvent.contextMenu(noteEl);
+      fireEvent.contextMenu(refEl);
     });
     const deleteBtn = view.getByTestId('docx-notes-menu-delete') as HTMLButtonElement;
     const gate = editor().can({ type: 'deleteNote', noteKind: 'footnote', noteId: 1 });

@@ -11,6 +11,7 @@ import {
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { DocumentLinkProjectors } from './document-link-projector.ts';
 import { layoutHeaderFooterStory } from './hf-layout.ts';
+import { limitFurnitureStory } from './furniture-story-limit.ts';
 import { type HeaderFooterVariantName, type PageFurniture } from './page-furniture-insets.ts';
 import { verticalMarginInsets } from './page-body-margins.ts';
 import {
@@ -241,7 +242,7 @@ export function createDocumentFurnitureSource(
       return cached.story;
     }
 
-    const baseline = layoutHeaderFooterStory(
+    const unlimited = layoutHeaderFooterStory(
       part,
       width,
       measurer,
@@ -283,6 +284,7 @@ export function createDocumentFurnitureSource(
         ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
       }
     );
+    const baseline = limitFurnitureStory(unlimited, geometry.height);
     const entry: StoryMemoEntry = {
       width,
       pageHeight: geometry.height,

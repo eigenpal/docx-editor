@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Some code comments described behavior without a specification section.",
+  "after": "The same comments cite the ECMA-376 section for the behavior. One test title changes. Runtime behavior does not change.",
+  "reason": "Only comments and one test title change. Shared nodes, operations, awareness, and package bytes keep their formats.",
+  "tests": [
+    "packages/core/src/editor/__tests__/note-story-selection.test.ts",
+    "packages/core/src/editor/__tests__/story-parity-facade-targets.test.ts"
+  ],
+  "changeset": "spec-citations-in-comments",
+  "migration": null
+}

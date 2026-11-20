@@ -5061,6 +5061,19 @@ a.docx-hyperlink:focus-visible {
   background: var(--doc-border);
 }
 
+/* The note context menu opens at the pointer; its position is set inline. */
+.docx-notes-menu {
+  position: fixed;
+  min-width: 220px;
+  max-width: calc(100vw - 16px);
+  padding: 6px 0;
+  overflow-y: auto;
+  background: var(--doc-popover-bg);
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px var(--doc-shadow);
+}
+
 .docx-hf-chrome__unit {
   font-size: 11px;
   color: var(--doc-text-muted);
@@ -7259,7 +7272,7 @@ p.docx-review__refused {
   color: var(--doc-accent, #1a73e8);
 }
 
-/* Word for Mac's reviewer submenu: All, then one checked row per document author. */
+/* Reviewer submenu: All, then one checked row per document author. */
 .docx-toolbar__reviewers {
   position: relative;
   display: inline-flex;
@@ -9845,7 +9858,7 @@ p.docx-review__refused {
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  background: var(--doc-popover-bg, var(--doc-surface));
+  background: var(--doc-popover-bg);
   border: 1px solid var(--doc-border);
   border-radius: 10px;
   box-shadow: var(--doc-card-shadow-strong, 0 8px 24px var(--doc-shadow));

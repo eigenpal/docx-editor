@@ -184,7 +184,7 @@ describe('scopedDocumentOrder HF / note bounds', () => {
   });
 
   test('note scope spans every note of its kind and no note of the other kind', () => {
-    // Word's notes part is one story: a selection from footnote 1 extends into footnote 2,
+    // The footnotes part is one story (ECMA-376 Part 1 §17.11): a selection from footnote 1 extends into footnote 2,
     // but never into an endnote, which is the other story.
     const layout = scopedLayout();
     const page = layout.pages[0]!;

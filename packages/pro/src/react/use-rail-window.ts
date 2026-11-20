@@ -26,13 +26,17 @@ const useBeforePaintEffect =
  * build, measure and drop all of them in one task. The first measure runs in a layout effect,
  * before the rail is painted.
  *
+ * The band is stepped, so it changes only when the scroll position crosses a step line.
+ * `exact` asks for the unstepped band, which follows each scroll frame.
+ *
  * `mounted` for the same reason as `useRailMetrics`: no rail element exists while the
  * document is absent or the rail is hidden, and the binding must re-run once one does.
  */
 export function useRailWindow(
   editor: unknown,
   railRef: React.RefObject<HTMLElement | null>,
-  mounted: boolean
+  mounted: boolean,
+  exact = false
 ): RailWindow | null {
   const [band, setBand] = useState<RailWindow | null>(UNMEASURED_RAIL_WINDOW);
   useBeforePaintEffect(() => {
@@ -49,11 +53,15 @@ export function useRailWindow(
       return undefined;
     }
     // A re-bound observer reports its first band again: keep the same one, so it renders nothing.
-    return observeRailWindow(rail, scroller, (next) =>
-      setBand((previous) =>
-        previous && previous.top === next.top && previous.bottom === next.bottom ? previous : next
-      )
+    return observeRailWindow(
+      rail,
+      scroller,
+      (next) =>
+        setBand((previous) =>
+          previous && previous.top === next.top && previous.bottom === next.bottom ? previous : next
+        ),
+      { exact }
     );
-  }, [editor, railRef, mounted]);
+  }, [editor, railRef, mounted, exact]);
   return band;
 }

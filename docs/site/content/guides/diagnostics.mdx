@@ -199,6 +199,7 @@ Limits marked **server** accept a higher value for a trusted file through the `l
 | <a id="edit-style-not-defined" />`edit.style-not-defined` | The style is undefined, or is the wrong type. | Assign a `nameLocal` from `document.getStyles()` of the right type. |
 | <a id="edit-no-styles-defined" />`edit.no-styles-defined` | The document has no styles part. | Leave the style, or use a document that defines it. |
 | <a id="edit-section-mark" />`edit.section-mark` | The edit removes a section break with page settings. | Remove the section break on its own. |
+| <a id="edit-content-required" />`edit.content-required` | The edit removes the last paragraph of a body, note, comment, text box, or table cell, or the last row or column of a table. | Clear the text instead, or delete the whole table. |
 | <a id="edit-table-structure-unsupported" />`edit.table-structure-unsupported` | The table shape is unsupported, such as a legacy horizontal merge or cells off the grid. | Edit that row or table directly. |
 | <a id="edit-table-merge-not-rectangle" />`edit.table-merge-not-rectangle` | The cells do not form a rectangle of two or more cells. | Name the top-left and bottom-right cells of a clean rectangle. |
 | <a id="edit-table-split-unsupported" />`edit.table-split-unsupported` | The cell cannot split into these counts. | Use row counts that divide merged rows, and keep the minimum column width. Without a column grid, use a column count that divides the cell's column span. |
