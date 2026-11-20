@@ -4811,7 +4811,7 @@ export function mountPaginatedSurface(
         // One iteration per line the region occupies, plus slack for the landing line. The
         // loop breaks the moment it is outside, so an over-generous bound costs nothing.
         const limit = tocRegionLineCount(tocIds) + 4;
-        // The last editable closing line crossed: the fallback when the region has no exit.
+        // The nearest editable closing line crossed: the fallback when the region has no exit.
         let closingLine = tocAtPosition(session.part(), moved.position) ? undefined : moved;
         for (let step = 0; step < limit; step += 1) {
           const next = navigateInActiveScope(
@@ -4835,7 +4835,7 @@ export function mountPaginatedSurface(
           }
           moved = next;
           if (!tocSkippedByCaretMotion(session.part(), moved.position, selection.head)) break;
-          if (!tocAtPosition(session.part(), moved.position)) closingLine = moved;
+          if (!closingLine && !tocAtPosition(session.part(), moved.position)) closingLine = moved;
         }
         if (tocAtPosition(session.part(), moved.position)) {
           if (!closingLine) return;

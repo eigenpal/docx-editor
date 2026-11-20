@@ -277,3 +277,13 @@ test('arrows reach a closing line when the TOC starts the document', () => {
     expect(surface.state().selection.head).toEqual({ paragraphId: closing!, offset: 0 });
   }
 });
+test('arrows stop on the nearest closing line of adjacent TOCs at the document start', () => {
+  const toc = `<w:p>${begin}${run('Entry')}</w:p><w:p>${end}</w:p>`;
+  const { surface } = mount(`${toc}${toc}<w:p>${run('After')}</w:p>`);
+  select(surface, 4, 0);
+  surface.navigate('up');
+  expect(surface.state().selection.head).toEqual({
+    paragraphId: surface.session.paragraphIds()[3]!,
+    offset: 0,
+  });
+});
