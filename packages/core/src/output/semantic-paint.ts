@@ -23,6 +23,7 @@ import { paintListMarkerPicture } from './semantic-paint-list-marker-picture.ts'
 import { paintNoteSeparatorSpan } from './semantic-paint-note-rule.ts';
 import { paintRunBorders } from './semantic-paint-run-borders.ts';
 import { isRunKerningEnabled, kernsText } from '../layout/run-kerning.ts';
+import { automaticTextSpacingBefore } from '../layout/cjk-automatic-spacing.ts';
 import { paintLegacyDropdown } from './semantic-paint-legacy-dropdown.ts';
 import { paintLegacyCheckbox } from './semantic-paint-legacy-checkbox.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
@@ -1290,6 +1291,27 @@ function paintLine(
     else if (owner === 'letterSpacing')
       painted.style.letterSpacing = letterGapSpacing(painted, span, gapAfter, scale);
     pendingGap = gapAfter;
+    // A highlighted run owns its following automatic inter-script spacing. Paint the
+    // part outside the span without enlarging its text hitbox or changing the next run.
+    const highlightAdvance =
+      painted.dataset.highlight && !owner && next && gapAfter > 0
+        ? Math.min(gapAfter, automaticTextSpacingBefore(next))
+        : 0;
+    if (highlightAdvance > 0.001 && !span.equation && span.box.width > 0) {
+      const backing = document.createElement('span');
+      backing.dataset.docxHighlightAdvance = '';
+      backing.setAttribute('aria-hidden', 'true');
+      backing.setAttribute('contenteditable', 'false');
+      backing.style.position = 'absolute';
+      backing.style.left = '100%';
+      backing.style.top = '0';
+      backing.style.width = `${highlightAdvance * scale}px`;
+      backing.style.height = '100%';
+      backing.style.backgroundColor = 'inherit';
+      backing.style.pointerEvents = 'none';
+      if (!painted.style.position) painted.style.position = 'relative';
+      painted.append(backing);
+    }
     const link = span.link;
     if (!link) {
       anchor = null;

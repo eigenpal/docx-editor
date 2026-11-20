@@ -376,3 +376,31 @@ test('line layout draws the advance inside a group that cannot break', () => {
     }
   }
 });
+
+test('an automatic gap takes the highlight of the text before it', () => {
+  const yellow = '<w:highlight w:val="yellow"/>';
+  const green = '<w:highlight w:val="green"/>';
+  const value = layout(run('甲乙', yellow) + run('A9', green) + run('丙'));
+  const measured = line(value).spans;
+  expect(measured.map((s) => s.text).join('')).toBe('甲乙A9丙');
+  const host = document.createElement('div');
+  paintSemanticLayout(host, value, { scale: 1 });
+  const runs = [...host.querySelectorAll<HTMLElement>('.layout-run')];
+  const gaps = [...host.querySelectorAll<HTMLElement>('[data-docx-highlight-advance]')];
+  expect(gaps).toHaveLength(2);
+  expect(gaps.map((mark) => mark.parentElement?.dataset.highlight)).toEqual(['yellow', 'green']);
+  for (let i = 0; i < gaps.length; i++) {
+    const advance = measured[i + 1]!.box.x - measured[i]!.box.x - measured[i]!.box.width;
+    expect(Number.parseFloat(gaps[i]!.style.width)).toBeCloseTo(advance, 8);
+    expect(gaps[i]!.getAttribute('aria-hidden')).toBe('true');
+    expect(gaps[i]!.style.pointerEvents).toBe('none');
+  }
+  expect(runs.map((s) => s.textContent).join('')).toBe('甲乙A9丙');
+
+  paintSemanticLayout(host, layout(run('A') + run('甲', yellow)), { scale: 1 });
+  expect(host.querySelector('[data-docx-highlight-advance]')).toBeNull();
+  paintSemanticLayout(host, layout(run('A', yellow) + run('甲'), '<w:autoSpaceDE w:val="0"/>'), {
+    scale: 1,
+  });
+  expect(host.querySelector('[data-docx-highlight-advance]')).toBeNull();
+});
