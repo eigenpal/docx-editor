@@ -382,10 +382,13 @@ export interface LineRecord {
    * Absent on lines published before this was measured; treat as zero.
    */
   readonly trailingSpacing?: number;
-  /** @internal Exact spacing paints authored run highlights over the full line box. */
-  readonly highlightUsesFullLine?: true;
-  /** @internal Height of the shared text highlight band on a line with an inline drawing. */
-  readonly inlineDrawingHighlightHeight?: number;
+  /**
+   * @internal
+   * The band that character highlight and shading fill when the line's runs share one, in
+   * points from the line box top: the whole box under exact spacing, and the natural content
+   * band beside an inline drawing. Absent when each run fills its own box.
+   */
+  readonly characterFillBand?: { readonly top: number; readonly height: number };
   /**
    * Model ranges on this line covering DELETED content, absent when there is none.
    *

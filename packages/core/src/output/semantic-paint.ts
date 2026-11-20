@@ -90,6 +90,7 @@ import {
   type ChangeBarsMode,
 } from './semantic-paint-change-bars.ts';
 import { applyHeaderFooterPaintChrome } from './semantic-paint-hf-chrome.ts';
+import { characterFillLayer } from './semantic-paint-character-fill.ts';
 import {
   paintHeaderFooterLayer,
   type HeaderFooterLayerPainter,
@@ -1248,10 +1249,7 @@ function paintLine(
   // painted exactly once — as a stretch or as a margin, never both, never neither.
   let pendingGap = 0;
   let previousSpanAbsorbedGap = false;
-  const highlightHeight = line.highlightUsesFullLine
-    ? line.box.height
-    : line.inlineDrawingHighlightHeight;
-  const highlightLayer = highlightHeight ? document.createElement('span') : null;
+  const fills = characterFillLayer(document, line, scale);
   for (const [spanIndex, span] of line.spans.entries()) {
     const flushed = nextInlineDrawing;
     appendDrawingAdvancesBefore(span.range.paragraphId, span.range.start);
@@ -1294,19 +1292,7 @@ function paintLine(
     else if (owner === 'letterSpacing')
       painted.style.letterSpacing = letterGapSpacing(painted, span, gapAfter, scale);
     pendingGap = gapAfter;
-    const highlight = painted.dataset.highlight;
-    if (highlightLayer && highlightHeight && highlight && !span.equation && span.box.width > 0) {
-      const backing = document.createElement('span');
-      backing.dataset.highlight = highlight;
-      backing.style.position = 'absolute';
-      backing.style.top = '0';
-      backing.style.left = `${(span.box.x - line.contentX) * scale}px`;
-      backing.style.width = `${(span.box.width + (owner ? gapAfter : 0)) * scale}px`;
-      backing.style.height = `${highlightHeight * scale}px`;
-      backing.style.backgroundColor = painted.style.backgroundColor;
-      painted.style.backgroundColor = '';
-      highlightLayer.append(backing);
-    }
+    fills?.add(painted, span, owner ? gapAfter : 0);
     const link = span.link;
     if (!link) {
       anchor = null;
@@ -1359,21 +1345,7 @@ function paintLine(
     width: line.box.width,
     height: line.box.height,
   });
-  if (highlightLayer?.childElementCount) {
-    highlightLayer.className =
-      line.inlineDrawingHighlightHeight === undefined
-        ? 'docx-exact-line-highlight'
-        : 'docx-inline-drawing-highlight';
-    highlightLayer.dataset.docxMarker = '';
-    highlightLayer.setAttribute('aria-hidden', 'true');
-    highlightLayer.setAttribute('contenteditable', 'false');
-    highlightLayer.style.position = 'absolute';
-    highlightLayer.style.inset = '0';
-    highlightLayer.style.pointerEvents = 'none';
-    highlightLayer.style.zIndex = '-1';
-    element.style.isolation = 'isolate';
-    element.prepend(highlightLayer);
-  }
+  fills?.mount(element);
   paintRunBorders(document, element, line, scale);
   if (ctx.showParagraphMarks && line.manualBreakAfter)
     paintManualLineBreak(document, line, element, scale, ctx.revisionStyles, paragraphRtl);

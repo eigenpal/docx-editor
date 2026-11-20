@@ -2,6 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Paint text highlights beside inline pictures from the line top. Keep picture advances and text positions intact.
-
-Fill authored text highlights across the full height of lines that use exact spacing.
+Fill text highlight and character shading over the full content band of lines that hold an inline picture, and over the full line box of lines with exact spacing, in the editor and in PDF export.

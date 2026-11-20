@@ -36,7 +36,7 @@ async function until(check: () => boolean) {
 
 function verifyHighlight(container: HTMLElement) {
   const line = container.querySelector<HTMLElement>('.docx-line');
-  const layer = line?.querySelector('.docx-exact-line-highlight');
+  const layer = line?.querySelector('.docx-character-fill-band');
   const bands = layer?.querySelectorAll<HTMLElement>('[data-highlight="yellow"]');
   expect(bands).toHaveLength(1);
   expect(bands![0]!.style.height).toBe(line!.style.height);

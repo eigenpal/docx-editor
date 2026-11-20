@@ -199,11 +199,12 @@ describe('a line that opens with an inline picture', () => {
         '<w:spacing w:line="624" w:lineRule="exact"/>'
       )
     );
-    expect(line.inlineDrawingHighlightHeight).toBeCloseTo(31.2, 5);
+    expect(line.characterFillBand).toEqual({ top: 0, height: line.box.height });
+    expect(line.box.height).toBeCloseTo(31.2, 5);
     const host = document.createElement('div');
     paintSemanticLayout(host, layout, { scale: SCALE });
     const row = host.querySelector<HTMLElement>(`[data-line-id="${line.id}"]`)!;
-    const layer = row.querySelector<HTMLElement>('.docx-inline-drawing-highlight')!;
+    const layer = row.querySelector<HTMLElement>('.docx-character-fill-band')!;
     expect(layer.getAttribute('aria-hidden')).toBe('true');
     expect(layer.querySelectorAll('[data-highlight="yellow"]')).toHaveLength(2);
     for (const [index, block] of [...layer.children].entries()) {

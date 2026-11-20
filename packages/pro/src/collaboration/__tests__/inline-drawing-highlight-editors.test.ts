@@ -63,7 +63,7 @@ test('two editors paint the same picture-line highlight after concurrent edits a
     return view;
   };
   const hasHighlight = ({ container }: (typeof views)[number]) =>
-    container.querySelector('.docx-inline-drawing-highlight [data-highlight="yellow"]') !== null;
+    container.querySelector('.docx-character-fill-band [data-highlight="yellow"]') !== null;
   try {
     const pair = await harness.pair(source);
     const left = mount(pair.alice);

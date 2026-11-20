@@ -1,13 +1,13 @@
 {
   "impact": "no-impact",
   "fields": [],
-  "before": "Authored highlights could leave gaps on exact-height lines and fall below the top beside inline pictures.",
-  "after": "The painter fills the box on exact-height lines and uses a shared band beside inline pictures.",
-  "reason": "This changes layout and paint metrics only. OOXML, editor operations, snapshot fields and journals stay the same.",
+  "before": "Text highlight and character shading filled only each run's own box, so they started below the top of a line that an inline picture raised and left gaps on exact-height lines.",
+  "after": "Layout publishes one fill band per affected line, and the editor and PDF export fill highlight and shading over it.",
+  "reason": "This changes layout and paint metrics only. OOXML, editor operations, snapshot fields, and journals stay the same.",
   "tests": [
+    "packages/core/src/output/__tests__/character-fill-band.test.ts",
     "packages/core/src/output/__tests__/inline-drawing-line-origin.test.ts",
     "packages/pro/src/collaboration/__tests__/inline-drawing-highlight-editors.test.ts",
-    "packages/core/src/output/__tests__/exact-line-highlight.test.ts",
     "packages/pro/src/collaboration/__tests__/exact-highlight-line-editors.test.ts"
   ],
   "changeset": "inline-picture-highlight-band",

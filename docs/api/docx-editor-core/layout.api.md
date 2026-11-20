@@ -2107,13 +2107,16 @@ export interface LineRecord {
     readonly box: LayoutBox;
     readonly breakAfter?: 'page' | 'column';
     readonly changeSites?: readonly RevisionAttribution[];
+    // @internal
+    readonly characterFillBand?: {
+        readonly height: number;
+        readonly top: number;
+    };
     readonly contentX: number;
     readonly deletedRanges?: readonly ModelRange[];
     readonly drawings?: readonly InlineDrawingRecord[];
     // (undocumented)
     readonly id: string;
-    // @internal
-    readonly inlineDrawingHighlightHeight?: number;
     readonly leading: number;
     readonly manualBreakAfter?: true;
     // (undocumented)

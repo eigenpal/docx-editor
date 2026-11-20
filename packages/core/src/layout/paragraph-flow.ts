@@ -17,7 +17,7 @@ import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
 import { cellTabReplayScope, tabClosesLine, tabDestinationForFlow } from './paragraph-tab-flow.ts';
 import { growRunBorderLineMetrics } from './run-border-strokes.ts';
 import { lineSpacingBand } from './equation-line-spacing.ts';
-import { setInlineDrawingHighlightHeight } from './inline-drawing-highlight.ts';
+import { setCharacterFillBand } from './character-fill-band.ts';
 import {
   clipLineDrawingsAtTop,
   growPendingLineDrawingExtent,
@@ -819,6 +819,7 @@ export function breakParagraph(
     growPendingLineDrawingExtent(line);
     // Apply paragraph line spacing once to the finished box.
     const naturalHeight = line.height;
+    const naturalBaseline = line.baseline;
     // `auto` scales the TEXT band, not a tall inline drawing or equation (ECMA-376
     // 17.3.1.33). A drawing line above single spacing keeps the drawing's box and adds the
     // multiple's extra text band below it. An equation line keeps the equation's extent and
@@ -878,14 +879,10 @@ export function breakParagraph(
       line.drawings.length === 0 && lineSpacing.rule !== 'exact'
         ? Math.max(0, Math.min(spaced.trailing ?? Infinity, spacedExtent - naturalHeight))
         : drawingLineTrailing;
-    if (
-      lineSpacing.rule === 'exact' &&
-      line.spans.some((span) => span.style.highlight && span.style.highlight !== 'none')
-    ) {
-      // Exact spacing sets the highlight's vertical extent independently of the font band.
-      line.highlightUsesFullLine = true;
-    }
-    setInlineDrawingHighlightHeight(line, lineSpacing, naturalHeight);
+    setCharacterFillBand(line, lineSpacing.rule === 'exact', {
+      height: naturalHeight,
+      baseline: naturalBaseline,
+    });
     finalizeTopAndBottomClearance();
     commitBreakClearance();
     if (empty && (wrapAnchorStarts.size > 0 || topAndBottomAnchorStarts.size > 0))
