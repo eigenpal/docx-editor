@@ -65,7 +65,7 @@ type LineSpans = readonly { readonly spans: readonly StyleSpanRecord[] }[];
 export interface LineLocalAdvances {
   /** Every centred colon keeps its natural advance. */
   readonly preserveColonAdvances: boolean;
-  /** Source offsets of closing punctuation whose right bearing stays. */
+  /** Source offsets of punctuation whose right bearing stays. */
   readonly keepRightBearings?: ReadonlySet<number>;
 }
 const SHARED_BEARINGS: LineLocalAdvances = Object.freeze({ preserveColonAdvances: false });
