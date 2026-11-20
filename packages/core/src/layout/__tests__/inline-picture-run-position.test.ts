@@ -183,6 +183,15 @@ describe('a picture line on a section line grid', () => {
     expect(unsnapped.baseline).toBeCloseTo(natural.baseline, 6);
   });
 
+  test('a minimum-height picture line on the grid lets its centring hang as well', () => {
+    const atLeast = '<w:spacing w:line="240" w:lineRule="atLeast"/>';
+    const natural = firstLine(documentWith({}));
+    const snapped = firstLine(documentWith({ grid: true, paragraphProperties: atLeast }));
+    const height = Math.ceil(natural.box.height / PITCH_PT) * PITCH_PT;
+    expect(snapped.box.height).toBeCloseTo(height, 6);
+    expect(snapped.trailingSpacing ?? 0).toBeCloseTo((height - natural.box.height) / 2, 6);
+  });
+
   test('an exact picture line keeps its height on the grid', () => {
     const exact = '<w:spacing w:line="480" w:lineRule="exact"/>';
     const line = firstLine(documentWith({ grid: true, paragraphProperties: exact }));
@@ -232,5 +241,9 @@ describe('a positioned picture beside a float', () => {
   test('a raised picture that reaches the float moves its line below it', () => {
     expect(lineAboveFloat('').box.y).toBeCloseTo(0, 6);
     expect(lineAboveFloat('<w:position w:val="12"/>').box.y).toBeGreaterThanOrEqual(74);
+  });
+
+  test('a lowered picture whose line stays clear of the float keeps its place', () => {
+    expect(lineAboveFloat('<w:position w:val="-12"/>').box.y).toBeCloseTo(0, 6);
   });
 });
