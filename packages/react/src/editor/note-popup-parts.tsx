@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef, useState } from 'react';
+import { focusMenuItemForKey, hostWindowOf, placeContextMenu } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../i18n';
 import { Z_INDEX } from '../styles/zIndex';
 import { guardToolbarMousedown } from './toolbar/ToolbarButton';
@@ -85,30 +87,56 @@ export function DocxEditorNotesContextMenu({
   className,
 }: DocxEditorNotesContextMenuProps) {
   const { t } = useTranslation();
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [placement, setPlacement] = useState<ReturnType<typeof placeContextMenu> | null>(null);
+
+  // Keep the menu inside the window: below the pointer, above it, or moved up.
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const { width, height } = panel.getBoundingClientRect();
+    const view = hostWindowOf(panel);
+    const rtl = view.getComputedStyle(panel).direction === 'rtl';
+    setPlacement(
+      placeContextMenu(
+        { x, y },
+        { width, height },
+        { width: view.innerWidth, height: view.innerHeight },
+        rtl
+      )
+    );
+  }, [x, y]);
+
+  // Focus the first row once the menu is placed, so the arrow keys and Escape work at once.
+  useLayoutEffect(() => {
+    if (placement) focusMenuItemForKey(panelRef.current, 'Home');
+  }, [placement]);
+
   return (
     <div
+      ref={panelRef}
       role="menu"
-      className={className}
+      aria-label={t('notes.menuAriaLabel')}
+      className={`docx-notes-menu${className ? ` ${className}` : ''}`}
       onKeyDown={(event) => {
         if (event.key === 'Escape') onClose();
+        else if (focusMenuItemForKey(panelRef.current, event.key)) event.preventDefault();
       }}
       data-testid="docx-notes-menu"
       style={{
-        position: 'fixed',
-        left: x,
-        top: y,
+        left: placement?.left ?? x,
+        top: placement?.top ?? y,
+        maxHeight: placement?.maxHeight,
+        // Hidden until measured, so the menu is never seen at a position it then leaves.
+        visibility: placement ? undefined : 'hidden',
         zIndex: Z_INDEX.popover,
-        minWidth: 160,
-        background: 'var(--doc-popover-bg)',
-        border: '1px solid var(--doc-border)',
-        boxShadow: '0 4px 16px var(--doc-shadow)',
-        padding: 4,
       }}
       onMouseDown={guardToolbarMousedown}
     >
       <button
         type="button"
         role="menuitem"
+        className="docx-hf-chrome__menu-item"
         data-testid="docx-notes-menu-delete"
         disabled={!deleteEnabled}
         title={deleteDisabledReason}
@@ -119,6 +147,7 @@ export function DocxEditorNotesContextMenu({
       <button
         type="button"
         role="menuitem"
+        className="docx-hf-chrome__menu-item"
         data-testid="docx-notes-menu-convert"
         disabled={!convertEnabled}
         title={convertDisabledReason}
@@ -129,6 +158,7 @@ export function DocxEditorNotesContextMenu({
       <button
         type="button"
         role="menuitem"
+        className="docx-hf-chrome__menu-item"
         data-testid="docx-notes-menu-convert-all"
         disabled={!convertAllEnabled}
         title={convertAllDisabledReason}
@@ -136,7 +166,14 @@ export function DocxEditorNotesContextMenu({
       >
         {noteKind === 'footnote' ? t('notes.convertAllFootnotes') : t('notes.convertAllEndnotes')}
       </button>
-      <button type="button" role="menuitem" onClick={onOpenProperties}>
+      <div className="docx-hf-chrome__menu-separator" role="separator" />
+      <button
+        type="button"
+        role="menuitem"
+        className="docx-hf-chrome__menu-item"
+        data-testid="docx-notes-menu-properties"
+        onClick={onOpenProperties}
+      >
         {t('dialogs.footnoteProperties.title')}
       </button>
     </div>

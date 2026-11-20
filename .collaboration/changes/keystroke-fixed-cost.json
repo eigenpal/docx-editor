@@ -1,0 +1,18 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A caret that became a range selection, and back, restyled every painted page. Each edit keyed the whole review queue for the comment bands and rebuilt a paragraph order index for the document. A mode switch rewrote unchanged editable attributes on the pages.",
+  "after": "A range the browser shows with text keeps the native caret suppression. Comment bands build keys only for the review items on the visible pages, caret lookups read the paragraph order once for the caret and once for each range in one paragraph, a text edit keeps the paragraph order index, and unchanged editable attributes are not rewritten.",
+  "reason": "Only local painting, caret chrome, and private read caches change. Selections, operations, node identities, snapshots, awareness payloads, and serialized content stay unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-table-tab.test.ts",
+    "packages/core/src/editor/__tests__/surface-caret.test.ts",
+    "packages/core/src/editor/__tests__/table-cell-tab.test.ts",
+    "packages/core/src/editor/__tests__/surface-view-mode.test.ts",
+    "packages/core/src/editor/__tests__/surface-review-band-items.test.ts",
+    "packages/core/src/store/__tests__/review-items-at-selection.test.ts",
+    "packages/core/src/editor/__tests__/textbox-editing.test.ts"
+  ],
+  "changeset": "keystroke-fixed-cost",
+  "migration": null
+}

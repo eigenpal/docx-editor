@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A right-click on a note opened the note menu and the document menu together, and the note menu stayed open.",
+  "after": "A right-click opens one menu, and the note menu closes when the user moves on.",
+  "reason": "The change is local menu chrome. It reads the active view scope and dispatches the existing note commands. Shared state, operations, and serialization stay unchanged.",
+  "tests": [
+    "packages/react/test/notes-context-menu.test.tsx",
+    "packages/vue/test/notes-context-menu.test.ts"
+  ],
+  "changeset": "note-context-menu",
+  "migration": null
+}

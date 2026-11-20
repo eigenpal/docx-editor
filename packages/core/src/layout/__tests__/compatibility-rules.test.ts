@@ -58,6 +58,7 @@ const MODE_MATRIX = {
   wrappedAnchorsEndOnSheet: 'legacy',
   wrappedAnchorsStayBelowTopMargin: 'modern',
   lineAnchorsBeforeBandPush: 'legacy',
+  ownTableKeepsPageTopSpaceBefore: 'legacy',
   columnAlignmentFollowsIndents: 'legacy',
 } as const satisfies Record<ModeRuleName, 'legacy' | 'modern'>;
 

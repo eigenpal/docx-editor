@@ -40,6 +40,17 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
    * legacy shorthand for a List render callback, but cannot be combined with root siblings;
    * prefer an explicit `<Review.List>{item => ...}</Review.List>` in new code.
    *
+   * The rail calls a render callback for a card when the item of the card changes, or when
+   * you pass another function. A function that keeps its identity, such as a `useCallback`
+   * result or a module function, can show an old value when it reads a value that React does
+   * not track: a ref or a module variable. If the callback reads such a value, pass a new
+   * function when the value changes, as an inline function does, or read the value with a
+   * hook inside the card.
+   *
+   * The callback runs as the render of a component that belongs to the card, so it can call
+   * hooks. Call the same hooks on each run, as in a component. To switch between callbacks
+   * that call different hooks, set a different `key` on the rail for each one.
+   *
    * ```tsx
    * <DocxEditor.Review>
    *   <DocxEditor.Review.List>{(item) => <MyCard item={item} />}</DocxEditor.Review.List>

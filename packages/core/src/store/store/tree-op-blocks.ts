@@ -12,9 +12,11 @@
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { findNode, parentNodeOf } from '../package/ooxml-edit.ts';
 import { flattenContentControls } from '../package/content-control-nodes.ts';
-import { removalEndsStoryWithTable } from '../package/ooxml-story-end-repair.ts';
+import { isWmlNamed, removalEndsStoryWithTable } from '../package/ooxml-story-end-repair.ts';
+import { noteKindOf } from '../package/note-nodes.ts';
 import { namedChild, paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
 import { planVerticalMergeHeadRepairs } from './tree-op-table-vmerge-removal.ts';
+import { paragraphOffsetIndex } from './tree-op-segments.ts';
 import type { TreeOpRejection } from './tree-op-validate.ts';
 
 /** The block kinds a removal may name — exactly the ones the canonical tree types. */
@@ -32,15 +34,20 @@ export function paragraphIdsWithin(node: OoxmlNode): string[] {
   return ids;
 }
 
-/** Story-order paragraph ids for caret recovery after a block removal. */
-export function paragraphIdsInDocumentOrder(part: OoxmlPart): string[] {
+/** Nesting of block `w:customXml` wrappers a story walk follows, as deep as the read keeps them. */
+const MAX_CUSTOM_XML_NESTING = 32;
+
+/**
+ * Story-order paragraph ids of one story's block sequence: tables, content controls, and block
+ * custom XML elements included.
+ */
+function paragraphIdsInStoryOrder(story: OoxmlNode): string[] {
   const ids: string[] = [];
-  const walkBlocks = (children: readonly OoxmlNode[]): void => {
+  const walkBlocks = (children: readonly OoxmlNode[], wrappers = 0): void => {
     // A block content control is not a block of its own — the paragraphs it wraps are the
     // story's, and the caret sits in them like any other. Without flattening, this walk and
-    // `paragraphSurvivesRemoval` disagree about where the paragraphs are: the validator sees
-    // one inside a `w:sdt` and allows the removal, then the applier finds no caret to recover
-    // to and refuses the same edit as `block-required`.
+    // the removal check would disagree about where the paragraphs are: the validator would
+    // see one inside a `w:sdt` and allow the removal, then the applier would find no caret.
     for (const child of flattenContentControls(children)) {
       if (child.kind === 'paragraph') {
         ids.push(child.id);
@@ -52,61 +59,83 @@ export function paragraphIdsInDocumentOrder(part: OoxmlPart): string[] {
             walkBlocks(cell.children);
           }
         }
+      } else if (isWmlNamed(child, 'customXml') && wrappers < MAX_CUSTOM_XML_NESTING) {
+        // A block custom XML element is transparent in the same way: its paragraphs are the
+        // story's own, and a removal beside them must find them.
+        walkBlocks(child.children, wrappers + 1);
       }
     }
   };
-  // WHICHEVER STORY THIS PART IS. A header, a footer and a notes part are roots in their own
-  // right (`w:hdr`, `w:ftr`, `w:footnotes`), and looking only for a `w:body` handed back an
-  // empty order for every one of them — so no surviving caret could be found and EVERY block
-  // removal in furniture was refused as `block-required`. Word letterheads are built on
-  // layout tables, so that was most of them: select the table, press Delete, nothing happens,
-  // and the text half of the same deletion is vetoed with it.
+  if (story.kind !== 'textValue') walkBlocks(story.children);
+  return ids;
+}
+
+/** Story-order paragraph ids of a part's main story: its body, or the root of a header or footer. */
+export function paragraphIdsInDocumentOrder(part: OoxmlPart): string[] {
   const storyRoot =
     part.root.kind === 'body'
       ? part.root
       : (part.root.children.find((child) => child.kind === 'body') ?? part.root);
-  if (storyRoot.kind === 'textValue') return ids;
-  walkBlocks(storyRoot.children);
-  return ids;
+  return paragraphIdsInStoryOrder(storyRoot);
 }
 
 /**
- * Nearest surviving paragraph once `blockId` is removed — prefers the last paragraph
- * before the block in document order, otherwise the first after.
+ * Whether `node` holds a story of its own: a block sequence the caret stays inside, and one
+ * that keeps at least one paragraph.
+ *
+ * A notes part holds one story per `w:footnote` or `w:endnote`, and a comments part one per
+ * `w:comment`; a text box holds one in `w:txbxContent`. The part root is the story of a header
+ * or footer, and the fallback for anything else.
  */
-export function survivingCaretAfterBlockRemoval(part: OoxmlPart, blockId: string): string | null {
+function isStoryContainer(node: OoxmlNode): boolean {
+  if (node.kind === 'textValue') return false;
+  if (node.kind === 'body' || node.kind === 'comment') return true;
+  // Typed or generic `w:footnote` / `w:endnote`.
+  if (noteKindOf(node) !== null) return true;
+  return isWmlNamed(node, 'txbxContent') || isWmlNamed(node, 'comment');
+}
+
+/** The nearest story that holds `blockId`, or the part root when no ancestor is one. */
+function storyContainerOf(part: OoxmlPart, blockId: string): OoxmlNode {
+  for (let node = parentNodeOf(part, blockId); node; node = parentNodeOf(part, node.id)) {
+    if (isStoryContainer(node)) return node;
+  }
+  return part.root;
+}
+
+/**
+ * Where the caret goes once `blockId` is removed: the start of the first paragraph after the
+ * block in story order, otherwise the end of the last paragraph before it.
+ *
+ * Either way the caret lands next to the removed block. The search stays inside the story that
+ * holds the block: removing a paragraph from a footnote leaves the caret in that footnote, not
+ * in the next note or in the document body. A story with no other paragraph has no surviving
+ * caret at all, so validation and application refuse the removal together.
+ */
+export function caretAfterBlockRemoval(
+  part: OoxmlPart,
+  blockId: string
+): { readonly paragraphId: string; readonly offset: number } | null {
   const block = findNode(part, blockId);
   if (!block) return null;
   const deleted = new Set(paragraphIdsWithin(block));
-  const order = paragraphIdsInDocumentOrder(part);
-  const firstDeletedIndex = order.findIndex((id) => deleted.has(id));
-  if (firstDeletedIndex === -1) {
-    return order.find((id) => !deleted.has(id)) ?? null;
+  const order = paragraphIdsInStoryOrder(storyContainerOf(part, blockId));
+  const firstDeletedIndex = Math.max(
+    order.findIndex((id) => deleted.has(id)),
+    0
+  );
+  for (let i = firstDeletedIndex; i < order.length; i += 1) {
+    const id = order[i]!;
+    if (!deleted.has(id)) return { paragraphId: id, offset: 0 };
   }
   for (let i = firstDeletedIndex - 1; i >= 0; i -= 1) {
     const id = order[i]!;
-    if (!deleted.has(id)) return id;
-  }
-  for (let i = firstDeletedIndex; i < order.length; i += 1) {
-    const id = order[i]!;
-    if (!deleted.has(id)) return id;
+    if (deleted.has(id)) continue;
+    const before = findNode(part, id);
+    const offset = before?.kind === 'paragraph' ? paragraphOffsetIndex(before).length : 0;
+    return { paragraphId: id, offset };
   }
   return null;
-}
-
-/** Whether any paragraph would remain in the part once `blockId`'s subtree is gone. */
-function paragraphSurvivesRemoval(part: OoxmlPart, blockId: string): boolean {
-  let found = false;
-  const walk = (node: OoxmlNode): void => {
-    if (found || node.kind === 'textValue' || node.id === blockId) return;
-    if (node.kind === 'paragraph') {
-      found = true;
-      return;
-    }
-    for (const child of node.children) walk(child);
-  };
-  walk(part.root);
-  return found;
 }
 
 /** How many children of a kind a container would keep once `blockId` leaves it. */
@@ -166,14 +195,15 @@ export function validateDeleteBlock(part: OoxmlPart, blockId: string): TreeOpRej
     parent.kind === 'tableCell' &&
     remainingChildrenOfKind(parent, 'paragraph', blockId) === 0
   ) {
-    if (!paragraphSurvivesRemoval(part, blockId)) return 'block-required';
+    if (!caretAfterBlockRemoval(part, blockId)) return 'block-required';
     return null;
   }
 
-  // Whatever the kind: the part must keep somewhere to put the caret. A document with no
-  // paragraph at any depth has no editable position at all, and every consumer that clamps
-  // a selection to the first paragraph would have nothing to clamp to.
-  if (!paragraphSurvivesRemoval(part, blockId)) return 'block-required';
+  // Whatever the kind: the story must keep somewhere to put the caret. A body, note, comment
+  // or text box with no paragraph has no editable position at all, and every consumer that
+  // clamps a selection to the story's first paragraph would have nothing to clamp to. The
+  // check is the applier's own caret search, so the two cannot disagree.
+  if (!caretAfterBlockRemoval(part, blockId)) return 'block-required';
 
   return null;
 }

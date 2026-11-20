@@ -89,14 +89,63 @@ export interface NoteRefNumberingSource {
 }
 
 /**
- * Memoized per source object: the notes input is session-stable and the section enumeration
- * is cached per blocks array, so an unchanged pass reuses the wrapper BY IDENTITY — which is
- * what keeps the REF context memo (validated on this identity) serving its no-change hit.
+ * Memoized per source object, for the callers that pass the SAME notes input again: the
+ * section enumeration is cached per blocks array, so such a pass reuses the wrapper by
+ * identity. A pass that builds a new notes input misses here and is answered by
+ * `numberingInputsBySections` below.
  */
 const numberingInputMemos = new WeakMap<
   NoteRefNumberingSource,
   { sections: readonly NoteRefSectionRange[]; input: NoteRefNumberingInput }
 >();
+
+/**
+ * The last numbering input per section list. Each layout pass builds a new notes input, with
+ * new property records that hold the same values while the document does not change. Without
+ * this memo each pass got a new numbering input, and the REF context (validated on the input
+ * identity) scanned the whole story again on every pass of a progressive open.
+ */
+const numberingInputsBySections = new WeakMap<
+  readonly NoteRefSectionRange[],
+  NoteRefNumberingInput
+>();
+
+type NoteProps = ResolvedFootnoteProperties | ResolvedEndnoteProperties;
+
+/** Every field of the resolved records. The type makes a new field a compile error here. */
+const NOTE_PROP_FIELDS = Object.keys({
+  pos: true,
+  numFmt: true,
+  numStart: true,
+  numRestart: true,
+} satisfies Record<
+  keyof ResolvedFootnoteProperties | keyof ResolvedEndnoteProperties,
+  true
+>) as readonly (keyof NoteProps)[];
+
+function sameNoteProps(a: NoteProps, b: NoteProps): boolean {
+  if (a === b) return true;
+  for (const field of NOTE_PROP_FIELDS) if (a[field] !== b[field]) return false;
+  return true;
+}
+
+function sameNotePropsList(a: readonly NoteProps[], b: readonly NoteProps[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1)
+    if (!sameNoteProps(a[index]!, b[index]!)) return false;
+  return true;
+}
+
+/** Whether `input` holds exactly the values `notes` would give a new input. */
+function numbersAlike(input: NoteRefNumberingInput, notes: NoteRefNumberingSource): boolean {
+  return (
+    sameNotePropsList(input.footnotePropsBySection, notes.footnotePropsBySection) &&
+    sameNotePropsList(input.endnotePropsBySection, notes.endnotePropsBySection) &&
+    sameNoteProps(input.documentFootnoteProps, notes.documentFootnoteProps) &&
+    sameNoteProps(input.documentEndnoteProps, notes.documentEndnoteProps)
+  );
+}
 
 /** The layout pass's numbering input, from its notes input and its own section bounds. */
 export function noteRefNumberingFromNotes(
@@ -105,14 +154,21 @@ export function noteRefNumberingFromNotes(
 ): NoteRefNumberingInput {
   const memo = numberingInputMemos.get(notes);
   if (memo && memo.sections === sections) return memo.input;
-  const input: NoteRefNumberingInput = {
-    sections,
-    footnotePropsBySection: notes.footnotePropsBySection,
-    endnotePropsBySection: notes.endnotePropsBySection,
-    documentFootnoteProps: notes.documentFootnoteProps,
-    documentEndnoteProps: notes.documentEndnoteProps,
-  };
+  // The same sections and equal property values number every note alike, so the previous
+  // input answers: consumers read its values and compare its identity, nothing else.
+  const previous = numberingInputsBySections.get(sections);
+  const input: NoteRefNumberingInput =
+    previous && numbersAlike(previous, notes)
+      ? previous
+      : {
+          sections,
+          footnotePropsBySection: notes.footnotePropsBySection,
+          endnotePropsBySection: notes.endnotePropsBySection,
+          documentFootnoteProps: notes.documentFootnoteProps,
+          documentEndnoteProps: notes.documentEndnoteProps,
+        };
   numberingInputMemos.set(notes, { sections, input });
+  numberingInputsBySections.set(sections, input);
   return input;
 }
 

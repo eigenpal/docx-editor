@@ -1,0 +1,91 @@
+name: Shipped dependency advisories (daily)
+
+# ci.yml and release.yml run `check:shipped-advisories` only when something
+# changes: a pull request, a push to main, or a release. An advisory published
+# against a lockfile that has not changed stays invisible until the next one of
+# those. GitHub's Dependabot alerts do not fill that gap, because GitHub cannot
+# parse bun.lock and so sees no transitive dependency at all (see the header of
+# scripts/check-shipped-advisories.mjs).
+#
+# This runs the same check every day against main. It needs no install: the
+# script reads bun.lock and the package manifests, then asks the npm advisory
+# API. A finding posts to the channel behind DOCX_EDITOR_SLACK_WEBHOOK_URL, the
+# same one the Dependabot reminders use, and uploads SARIF to code scanning.
+# A clean day posts nothing, so a message always means somebody has to act.
+
+on:
+  schedule:
+    - cron: '30 6 * * *' # daily, before the 07:00 Dependabot reminder
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shipped-advisories-daily
+  cancel-in-progress: false
+
+jobs:
+  advisories:
+    name: Shipped dependency advisories
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Check shipped dependencies
+        id: advisories
+        # Exit 1 is a finding or an expired ignore. Exit 2 is the script failing
+        # (bad lockfile, npm API down), which Slack must not report as a CVE.
+        run: |
+          set +e
+          node scripts/check-shipped-advisories.mjs --sarif=shipped-advisories.sarif
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          exit $code
+
+      - name: Upload SARIF
+        if: ${{ !cancelled() && (steps.advisories.outcome == 'success' || steps.advisories.outcome == 'failure') }}
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: shipped-advisories.sarif
+          category: shipped-advisories
+
+      # `always() && job.status != 'success'`, not `failure()`: the timeout
+      # cancels the job, and a cancelled job skips `failure()` steps. A silent
+      # channel means "nothing to act on", so a crash must say so too.
+      - name: Notify Slack
+        if: ${{ always() && job.status != 'success' }}
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.DOCX_EDITOR_SLACK_WEBHOOK_URL }}
+          OUTCOME: ${{ steps.advisories.outcome }}
+          EXIT_CODE: ${{ steps.advisories.outputs.code }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SLACK_WEBHOOK_URL:-}" ]; then
+            echo '::error::DOCX_EDITOR_SLACK_WEBHOOK_URL is not set; the advisory report was not delivered.'
+            exit 1
+          fi
+          if [ "${EXIT_CODE:-}" = "1" ]; then
+            text=":rotating_light: A shipped dependency of docx-editor has a new advisory, or an ignore in scripts/shipped-advisories-ignore.json expired. Published packages are affected until a fixed version ships. <${RUN_URL}|Daily advisory run>"
+          else
+            text=":warning: The daily shipped-advisory check did not finish (outcome: ${OUTCOME:-not started}, exit code: ${EXIT_CODE:-none}), so today's result is unknown. <${RUN_URL}|Daily advisory run>"
+          fi
+          jq -n --arg text "$text" '{text: $text}' \
+            | curl -sSf --connect-timeout 10 --max-time 30 \
+                --retry 3 --retry-delay 2 --retry-all-errors \
+                -X POST -H 'Content-Type: application/json' -d @- "$SLACK_WEBHOOK_URL" >/dev/null

@@ -5,6 +5,7 @@ import { rowForWidenedMeasurement } from './legacy-table-side-rules.ts';
 import { autofitReuseScope } from './autofit-context-reuse.ts';
 import { withDefaultTabInterval } from './paragraph-tabs.ts';
 import { MAX_TABLE_GROWTH_PT } from './table-widths.ts';
+import { unwrappedCellHold } from './table-cell-hide-mark.ts';
 import * as columnFit from './table-column-fit.ts';
 import {
   cellSpacingGapPt,
@@ -70,7 +71,7 @@ import {
   type StyleCascadeTable,
 } from './style-cascade.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
-import { contentAlignedReachPt, leadingIndentPt } from './table-origin.ts';
+import { centeredLegacyReachPt, contentAlignedReachPt, leadingIndentPt } from './table-origin.ts';
 import {
   fixedNestedWidths,
   percentShareWidths,
@@ -782,9 +783,9 @@ export function autofitColumnMinimumsPt(
         });
         continue;
       }
-      // An unwrapped cell holds its column at the width it asks for, though its text wraps.
-      const held =
-        cell.noWrap && cell.preferredWidth.type === 'dxa' ? cell.preferredWidth.value : 0;
+      // An unwrapped cell holds its column (`unwrappedCellHold`).
+      const unwrapped = most + measured.left + measured.right;
+      const held = cell.noWrap ? unwrappedCellHold(cell.preferredWidth, unwrapped) : 0;
       const needed = Math.max(held, least + measured.left + measured.right);
       if (needed > minimums[cell.gridColumn]!) minimums[cell.gridColumn] = needed;
       const neededWide = Math.max(held, (widenedKeepsFirstLine ? leastWidened : least) + around);
@@ -941,7 +942,9 @@ export function autofitColumnWidthsPt(
   // table also owns the room its own width already spans.
   const totalPt = structure.columnWidthsPt.reduce((sum, width) => sum + width, 0);
   const legacy = structure.legacyContentAlignment === true;
-  const reachPt = contentAlignedReachPt(structure);
+  const reachPt =
+    contentAlignedReachPt(structure) ||
+    centeredLegacyReachPt(structure, context.compatibilityMode, view.depth ?? 0);
   const availablePt = legacy
     ? Math.max(totalPt, availableFor(contentWidthPt) + reachPt)
     : availableFor(roomWidthPt) + reachPt;

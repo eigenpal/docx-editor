@@ -1,4 +1,10 @@
-import { defineComponent, type PropType } from 'vue';
+import { defineComponent, onMounted, ref, watch, type PropType } from 'vue';
+import {
+  focusMenuItemForKey,
+  hostWindowOf,
+  isHTMLElementNode,
+  placeContextMenu,
+} from '@docx-editor.dev/core/editor';
 import { Z_INDEX } from '../styles/zIndex';
 import { formatPx } from '../lib/units';
 import { useTranslation } from '../i18n';
@@ -95,30 +101,61 @@ export const DocxEditorNotesContextMenu = defineComponent({
   },
   setup(props) {
     const { t } = useTranslation();
+    const panelRef = ref<HTMLElement | null>(null);
+    const placement = ref<ReturnType<typeof placeContextMenu> | null>(null);
+
+    // Keep the menu inside the window: below the pointer, above it, or moved up.
+    const place = () => {
+      const panel = panelRef.value;
+      if (!panel) return;
+      const { width, height } = panel.getBoundingClientRect();
+      const view = hostWindowOf(panel);
+      const rtl = view.getComputedStyle(panel).direction === 'rtl';
+      placement.value = placeContextMenu(
+        { x: props.x, y: props.y },
+        { width, height },
+        { width: view.innerWidth, height: view.innerHeight },
+        rtl
+      );
+    };
+    onMounted(place);
+    watch(() => [props.x, props.y], place, { flush: 'post' });
+    // Focus the first row once the menu is placed, so the arrow keys and Escape work at once.
+    watch(
+      placement,
+      (current) => {
+        if (current) focusMenuItemForKey(panelRef.value, 'Home');
+      },
+      { flush: 'post' }
+    );
+
     return () => (
       <div
+        ref={(element: unknown) => {
+          panelRef.value = isHTMLElementNode(element) ? element : null;
+        }}
         role="menu"
-        class={props.className}
+        aria-label={t('notes.menuAriaLabel')}
+        class={`docx-notes-menu${props.className ? ` ${props.className}` : ''}`}
         data-testid="docx-notes-menu"
         style={{
-          position: 'fixed',
-          left: formatPx(props.x),
-          top: formatPx(props.y),
+          left: formatPx(placement.value?.left ?? props.x),
+          top: formatPx(placement.value?.top ?? props.y),
+          maxHeight: placement.value ? formatPx(placement.value.maxHeight) : undefined,
+          // Hidden until measured, so the menu is never seen at a position it then leaves.
+          visibility: placement.value ? undefined : 'hidden',
           zIndex: Z_INDEX.popover,
-          minWidth: '160px',
-          background: 'var(--doc-popover-bg)',
-          border: '1px solid var(--doc-border)',
-          boxShadow: '0 4px 16px var(--doc-shadow)',
-          padding: '4px',
         }}
         onMousedown={guardToolbarMousedown}
         onKeydown={(event) => {
           if (event.key === 'Escape') props.onClose();
+          else if (focusMenuItemForKey(panelRef.value, event.key)) event.preventDefault();
         }}
       >
         <button
           type="button"
           role="menuitem"
+          class="docx-hf-chrome__menu-item"
           data-testid="docx-notes-menu-delete"
           disabled={!props.deleteEnabled}
           title={props.deleteDisabledReason}
@@ -129,6 +166,7 @@ export const DocxEditorNotesContextMenu = defineComponent({
         <button
           type="button"
           role="menuitem"
+          class="docx-hf-chrome__menu-item"
           data-testid="docx-notes-menu-convert"
           disabled={!props.convertEnabled}
           title={props.convertDisabledReason}
@@ -141,6 +179,7 @@ export const DocxEditorNotesContextMenu = defineComponent({
         <button
           type="button"
           role="menuitem"
+          class="docx-hf-chrome__menu-item"
           data-testid="docx-notes-menu-convert-all"
           disabled={!props.convertAllEnabled}
           title={props.convertAllDisabledReason}
@@ -150,7 +189,14 @@ export const DocxEditorNotesContextMenu = defineComponent({
             ? t('notes.convertAllFootnotes')
             : t('notes.convertAllEndnotes')}
         </button>
-        <button type="button" role="menuitem" onClick={props.onOpenProperties}>
+        <div class="docx-hf-chrome__menu-separator" role="separator" />
+        <button
+          type="button"
+          role="menuitem"
+          class="docx-hf-chrome__menu-item"
+          data-testid="docx-notes-menu-properties"
+          onClick={props.onOpenProperties}
+        >
           {t('dialogs.footnoteProperties.title')}
         </button>
       </div>

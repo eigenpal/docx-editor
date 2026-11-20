@@ -118,7 +118,7 @@ describe('w:tblLook decides which conditional formats are live', () => {
     structure!.rows.map((row) => row.cells.map((cell) => cell.shading));
 
   test('firstRow shading applies only when the look enables it', () => {
-    // `w:val` alone is the legacy bitmask (17.4.56): 0000 turns the header row off.
+    // `w:val` alone is the legacy bitmask (ECMA-376 Part 1 §17.4.55): 0000 turns the header row off.
     const off = readTableStructure(
       table('<w:tblStyle w:val="TableGrid"/><w:tblLook w:val="0000"/>'),
       468,

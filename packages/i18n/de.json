@@ -900,7 +900,8 @@
     "endnoteKind": "Endnote",
     "convertAllFootnotes": "Alle Fußnoten in Endnoten umwandeln",
     "convertAllEndnotes": "Alle Endnoten in Fußnoten umwandeln",
-    "inheritedValue": "(geerbt)"
+    "inheritedValue": "(geerbt)",
+    "menuAriaLabel": "Fußnotenaktionen"
   },
   "review": {
     "accept": "Annehmen",
@@ -1072,7 +1073,13 @@
     "noGoToView": "Gehe zu ist hier nicht verfügbar",
     "noBookmarkDialog": "Textmarken können hier nicht hinzugefügt werden",
     "groupMemberMove": "Eine Form in einer Gruppe lässt sich nicht einzeln verschieben, skalieren oder löschen. Drücken Sie Esc, um die Gruppe auszuwählen.",
-    "groupMemberProperties": "Eine Form in einer Gruppe übernimmt Umbruch, Alternativtext und Eigenschaften von der Gruppe. Drücken Sie Esc, um die Gruppe auszuwählen."
+    "groupMemberProperties": "Eine Form in einer Gruppe übernimmt Umbruch, Alternativtext und Eigenschaften von der Gruppe. Drücken Sie Esc, um die Gruppe auszuwählen.",
+    "drawingClipboardParts": "Diese Zeichnung ist mit Daten verknüpft, die nicht kopiert werden können, etwa einem Diagramm oder einem eingebetteten Objekt.",
+    "linkedTextBoxClipboard": "Ein verknüpftes Textfeld kann nicht kopiert werden.",
+    "drawingClipboardStory": "Zeichnungen können nur im Textkörper kopiert, ausgeschnitten oder eingefügt werden, nicht in einer Kopfzeile, Fußzeile, Notiz oder einem Textfeld.",
+    "groupMemberClipboard": "Eine Form in einer Gruppe wird mit ihrer Gruppe kopiert oder ausgeschnitten. Drücken Sie Escape, um die Gruppe auszuwählen.",
+    "drawingClipboardSize": "Diese Zeichnung ist zu groß zum Kopieren.",
+    "drawingPasteCells": "Setzen Sie den Cursor in den Text, um eine Zeichnung einzufügen."
   },
   "equationPopup": {
     "apply": "Übernehmen",

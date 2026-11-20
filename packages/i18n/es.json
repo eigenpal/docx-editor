@@ -80,7 +80,13 @@
     "noGoToView": "Ir a no está disponible aquí",
     "noBookmarkDialog": "No se pueden agregar marcadores aquí",
     "groupMemberMove": "Una forma dentro de un grupo no se mueve, cambia de tamaño ni se elimina por sí sola. Presione Esc para seleccionar el grupo.",
-    "groupMemberProperties": "Una forma dentro de un grupo toma el ajuste, el texto alternativo y las propiedades del grupo. Presione Esc para seleccionar el grupo."
+    "groupMemberProperties": "Una forma dentro de un grupo toma el ajuste, el texto alternativo y las propiedades del grupo. Presione Esc para seleccionar el grupo.",
+    "drawingClipboardParts": "Este dibujo está vinculado a datos que no se pueden copiar, como un diagrama o un objeto incrustado.",
+    "linkedTextBoxClipboard": "No se puede copiar un cuadro de texto vinculado.",
+    "drawingClipboardStory": "Los dibujos solo se pueden copiar, cortar o pegar en el cuerpo del documento, no en un encabezado, pie de página, nota o cuadro de texto.",
+    "groupMemberClipboard": "Una forma dentro de un grupo se copia o se corta con su grupo. Presiona Escape para seleccionar el grupo.",
+    "drawingClipboardSize": "Este dibujo es demasiado grande para copiarlo.",
+    "drawingPasteCells": "Coloca el cursor en el texto para pegar un dibujo."
   },
   "toolbar": {
     "ariaLabel": "Barra de formato",
@@ -1018,7 +1024,8 @@
     "endnoteKind": "Nota al final",
     "convertAllFootnotes": "Convertir todas las notas al pie en notas al final",
     "convertAllEndnotes": "Convertir todas las notas al final en notas al pie",
-    "inheritedValue": "(heredado)"
+    "inheritedValue": "(heredado)",
+    "menuAriaLabel": "Acciones de nota"
   },
   "reviewers": {
     "label": "Revisores",

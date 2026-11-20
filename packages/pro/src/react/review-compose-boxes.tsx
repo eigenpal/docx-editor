@@ -39,6 +39,18 @@ interface ComposePartDeps {
     readonly draftAuthorInfo: ReviewAuthorInfo | undefined;
     readonly draftAuthorSlot: number;
   };
+  /** The rail as a part inside a card reads it: nothing in it follows the item list. */
+  readonly useCardRail: () => {
+    readonly review: {
+      readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
+      readonly setActive: (key: string | null) => boolean;
+      readonly lastRefusal: ReviewWriteRefusal | null;
+    };
+    readonly readOnly: boolean;
+    readonly draftAuthor: string | null;
+    readonly draftAuthorInfo: ReviewAuthorInfo | undefined;
+    readonly draftAuthorSlot: number;
+  };
   readonly useItem: () => ReviewItemView | null;
   readonly useLabel: () => (key: TranslationKey) => string;
   readonly guardMousedown: (event: ReactMouseEvent) => void;
@@ -229,7 +241,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
 
   /** Draft state and submission for one reply line, held by whichever part owns it. */
   function useReplyDraft(entry: ReviewItemView | null) {
-    const { review, readOnly } = deps.useRail();
+    const { review, readOnly } = deps.useCardRail();
     const [draft, setDraft] = useState('');
     const [refused, setRefused] = useState(false);
     // Taken when the reply is refused, so the sentence holds still while it shows.
@@ -267,7 +279,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
     readonly className?: string;
     readonly onCancel?: () => void;
   }) {
-    const { readOnly, draftAuthor, draftAuthorInfo, draftAuthorSlot } = deps.useRail();
+    const { readOnly, draftAuthor, draftAuthorInfo, draftAuthorSlot } = deps.useCardRail();
     const t = deps.useLabel();
     const fieldId = useId();
     const { draft, setDraft, refused, setRefused, submit } = state;
@@ -380,7 +392,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
 
   /** The reply box on the active card. @public */
   function ReviewReply({ className, hidden, children }: ReviewPartProps) {
-    const { review } = deps.useRail();
+    const { review } = deps.useCardRail();
     const entry = deps.useItem();
     // Held here, not in the line: the draft survives the card closing and reopening.
     const state = useReplyDraft(entry);

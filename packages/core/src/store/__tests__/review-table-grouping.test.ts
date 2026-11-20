@@ -1,4 +1,4 @@
-import wordBulkReferences from './fixtures/word-bulk-content-reference.json';
+import bulkRevisionReferences from './fixtures/bulk-revision-reference.json';
 import { expect, test } from 'bun:test';
 import {
   applyTreeOp,
@@ -344,8 +344,8 @@ for (const entry of reviewTableGroupingCases.filter((candidate) =>
       let part = fixture(entry.name);
       const plan = planRevisionBatch(part, action);
       const remaining =
-        wordBulkReferences.find((r) => r.name === entry.name && r.action === action)?.remaining ??
-        0;
+        bulkRevisionReferences.find((r) => r.name === entry.name && r.action === action)
+          ?.remaining ?? 0;
       expect(plan.result.skipped).toHaveLength(remaining);
       for (const op of plan.ops) {
         const result = applyTreeOp(part, op);

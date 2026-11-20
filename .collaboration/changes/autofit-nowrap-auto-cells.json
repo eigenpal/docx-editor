@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A w:noWrap cell with an auto width wrapped its text inside the grid column width.",
+  "after": "The column holds the cell's unwrapped text with its margins. Other columns give way, or the table grows past w:tblW when they hold their own widths. Shared document state and operations are unchanged.",
+  "reason": "The change is confined to layout. Replicas compute the same layout from the same tree, and saved documents keep the same XML.",
+  "tests": ["packages/core/src/layout/__tests__/table-nowrap-auto-cell.test.ts"],
+  "changeset": "autofit-nowrap-auto-cells",
+  "migration": null
+}

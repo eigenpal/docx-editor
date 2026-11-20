@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "An anchor paragraph that its own floating table covered at the top of a page lost its space before and started directly below the table.",
+  "after": "The anchor paragraph keeps its space before below the table. Shared document state and operations are unchanged.",
+  "reason": "The change is confined to layout. Replicas compute the same layout from the same tree, and saved documents keep the same XML.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-float-anchor-top.test.ts",
+    "packages/core/src/layout/__tests__/table-float-anchor-top.test.ts"
+  ],
+  "changeset": "float-anchor-keeps-space-before",
+  "migration": null
+}

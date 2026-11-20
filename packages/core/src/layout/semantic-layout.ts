@@ -61,12 +61,8 @@ import {
   retainLiveBreakKeys,
   withDrawingContext,
 } from './layout-cache.ts';
-import {
-  lineAlignmentMeasure,
-  pendingLineFlowExtentAtPlacement,
-  type PendingLine,
-} from './paragraph-flow.ts';
-import { alignBodyLineSpans, lineAlignOffset } from './paragraph-alignment.ts';
+import { pendingLineFlowExtentAtPlacement, type PendingLine } from './paragraph-flow.ts';
+import { placeBodyLine } from './body-line-placement.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   markRevisionFields,
@@ -95,9 +91,8 @@ import { paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphBoxOutdent } from './paragraph-indent.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { paragraphFragmentBorders } from './paragraph-fragment-borders.ts';
-import { holdsOnlyPageBreak, lineBreakAfterFields, lineContentX } from './pending-line.ts';
+import { holdsOnlyPageBreak } from './pending-line.ts';
 import { interimSectionAligner, publishLayoutPass } from './layout-pass-publish.ts';
-import { alignLineWithPictures } from './line-picture-alignment.ts';
 import { createLeadingBreakGroups } from './leading-break-border-group.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
 import * as tableFloat from './table-float-position.ts';
@@ -141,8 +136,8 @@ import {
   anchoredDrawingAtomsInParagraph,
   pageClipRegion,
   shiftAnchoredDrawingRecords,
-  shiftInlineDrawingRecord,
   type AnchoredDrawingRecord,
+  type InlineDrawingRecord,
 } from './drawing-layout.ts';
 import {
   DrawingExclusionConvergenceError,
@@ -170,7 +165,7 @@ import { createPageContentInsets, registerOverflowPageShell } from './page-furni
 import { convergenceTailShiftAllowed } from './page-reuse-guards.ts';
 import { commonKeyPrefix, commonKeySuffix } from './flow-key-diff.ts';
 import { createPreviousPassZones } from './previous-pass-zones.ts';
-import { lineBandSkip, tableBandSpaceAfter } from './table-band-space-after.ts';
+import { lineBandSkip, ownTableKeepsTop, tableBandSpaceAfter } from './table-band-space-after.ts';
 import { hostSheetGeometry } from './continued-sheet-geometry.ts';
 import { TextTableCarry } from './table-text-carry.ts';
 import { documentOpeningCellParagraph } from './table-cell-terminator.ts';
@@ -1609,6 +1604,13 @@ function* layoutBlocksPass(
     frameBase: anchorFrameBase,
   });
 
+  const clipLineDrawing = (drawing: InlineDrawingRecord): InlineDrawingRecord =>
+    clipInlineDrawingToBodyBand(
+      drawing,
+      columnPaperClip(pageContentClip(), columns, columnIndex),
+      contentHeight()
+    );
+
   const placementSkipBefore = (
     entry: PreparedParagraph,
     entryIndex: number,
@@ -1619,7 +1621,8 @@ function* layoutBlocksPass(
     pendingLine: PendingLine,
     appliedSkipByLineIndex: ReadonlyMap<number, number>,
     spaceBefore: number,
-    bandAfter: number
+    bandAfter: number,
+    ownBefore: number
   ): number => {
     if (anchorLineSkipsExclusion(entry.paragraph, options.inlineDrawingLayout, pendingLine))
       return 0;
@@ -1636,7 +1639,10 @@ function* layoutBlocksPass(
     const above = lineIndex === fragmentFirstLine ? spaceBefore : 0;
     const live =
       zones.length > 0
-        ? lineBandSkip(cursorY, pendingLine.height, zones, above, bandAfter, entry.paragraph.id)
+        ? lineBandSkip(cursorY, pendingLine.height, zones, above, bandAfter, {
+            id: entry.paragraph.id,
+            spaceAbove: lineIndex === fragmentFirstLine ? ownBefore : 0,
+          })
         : 0;
     const breakSkip = pendingLine.exclusionSkipBefore ?? 0;
     return Math.max(live, breakSkip);
@@ -2223,14 +2229,17 @@ function* layoutBlocksPass(
       }
     }
 
-    const atTopOfPage = cursorY === 0 && !regionHasFragments();
+    // In legacy layout, an anchor that its own floating table covers there does not open it.
+    const atTopOfPage =
+      cursorY === 0 &&
+      !regionHasFragments() &&
+      !ownTableKeepsTop(options.compatibilityMode, pageExclusionZones(), paragraphId);
     // Lines holding only a leading page break take no space before and draw no rule. Both
     // open the text after the breaks, on its own sheet.
     let breakLinesOnly = !frame && leadingBreak();
     // Collapsed with the space after above, in every mode: the text keeps what it would get.
-    const textBefore = breakLinesOnly
-      ? collapsedSpaceBefore(spacing.before, previousSpaceAfter)
-      : 0;
+    const collapsedBefore = collapsedSpaceBefore(spacing.before, previousSpaceAfter);
+    const textBefore = breakLinesOnly ? collapsedBefore : 0;
     const appliedBefore = breakLinesOnly
       ? 0
       : appliedSpaceBefore(
@@ -2240,6 +2249,8 @@ function* layoutBlocksPass(
           frame ? false : keepsBeforeAtPageStart(index, entry)
         );
     if (appliedBefore > 0) cursorY += appliedBefore;
+    // Below its own floating table the anchor no longer opens the page: it keeps that space.
+    const ownTableBefore = breakLinesOnly ? 0 : collapsedBefore;
     // The top rule and its gap are flow height above the first line, exactly as the bottom
     // rule is flow height below the last — pagination has to see both or a boxed paragraph
     // overhangs the bottom margin by the height of its own frame.
@@ -2521,7 +2532,8 @@ function* layoutBlocksPass(
             pendingLine,
             appliedSkipByLineIndex,
             fragmentBefore,
-            bandAfter
+            bandAfter,
+            fragmentIndex === 0 ? ownTableBefore : 0
           );
       // Auto spacing below the glyph band may cross the bottom text margin, not a footnote
       // area. The painted line keeps its full box; only the pagination budget drops it.
@@ -2651,75 +2663,29 @@ function* layoutBlocksPass(
         keptBreakY = cursorY;
         cursorY = Math.min(cursorY, Math.max(0, contentHeight() - pendingLine.height));
       }
-      const firstLineOffset = pendingLine.firstLineOffset ?? 0;
-      const lineIndent = columnX + indent.left + (rtl ? 0 : firstLineOffset);
-      const lineAvailableWidth = Math.max(1, available - firstLineOffset);
-      // Spans and inline drawings come from one pen, so they share one origin.
-      const penX = columnX - (rtl ? firstLineOffset : 0);
-      const placedSpans = pendingLine.spans.map((span) => ({
-        ...span,
-        // The broken range already names this paragraph unless a shared break was reused.
-        range: span.range.paragraphId === paragraphId ? span.range : { ...span.range, paragraphId },
-        box: { ...span.box, x: span.box.x + penX, y: cursorY },
-      }));
-      // Word aligns inside the passage a float leaves the line, not the page margins.
-      const measure = lineAlignmentMeasure(pendingLine, penX, lineIndent, lineAvailableWidth);
-      const placedDrawings = pendingLine.drawings.map((drawing) =>
-        Object.freeze({ ...shiftInlineDrawingRecord(drawing, penX, cursorY), paragraphId })
-      );
-      const content = alignLineWithPictures(
-        placedSpans,
-        placedDrawings,
+      const { record, alignOffset } = placeBodyLine({
+        pendingLine,
+        paragraphId,
+        lineIndex,
+        isLastLine,
+        y: cursorY,
+        columnX,
+        indentLeft: indent.left,
+        available,
         rtl,
-        (spans) =>
-          alignBodyLineSpans(
-            spans,
-            measurer,
-            measure,
-            alignment,
-            entry.props,
-            pendingLine,
-            isLastLine,
-            styleCascade,
-            rtl
-          ),
-        (aligned) =>
-          lineAlignOffset(placedSpans, aligned, alignment, measure.available, measure.used)
-      );
-      const { spans: alignedSpans, offset: alignOffset } = content;
-      // Clip where alignment put each picture: paper or mid-gap sideways, the body band vertically.
-      let alignedDrawings = content.drawings;
-      if (alignedDrawings.length > 0) {
-        const paperClip = columnPaperClip(pageContentClip(), columns, columnIndex);
-        alignedDrawings = alignedDrawings.map((drawing) =>
-          clipInlineDrawingToBodyBand(drawing, paperClip, contentHeight())
-        );
-      }
-      const record: LineRecord = {
-        id: bodyLineId(paragraph.id, pendingLine.start, lineIndex),
-        range: { paragraphId, start: pendingLine.start, end: pendingLine.end },
-        spans: alignedSpans,
-        box: {
-          x: columnLeft() + indent.left,
-          y: cursorY,
-          width: available,
-          height: pendingLine.height,
-        },
-        contentX: lineContentX(alignedSpans, alignedDrawings, lineIndent + alignOffset),
-        baseline: pendingLine.baseline,
-        leading: pendingLine.leading,
-        trailingSpacing: pendingLine.trailingSpacing,
-        ...(pendingLine.manualBreakAfter ? { manualBreakAfter: true } : {}),
-        ...lineBreakAfterFields(pendingLine),
-        ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
-        ...(alignedDrawings.length > 0 ? { drawings: alignedDrawings } : {}),
-        ...(pendingLine.anchorRevisions ? { anchorRevisions: pendingLine.anchorRevisions } : {}),
-        ...(pendingLine.changeSites ? { changeSites: pendingLine.changeSites } : {}),
-      };
+        alignment,
+        props: entry.props,
+        styleCascade,
+        measurer,
+        clipDrawing: clipLineDrawing,
+      });
       lineCounter += 1;
       if (pending.length === 0) {
         fragmentFirstLineSkip = skipBefore;
-        fragmentFirstAlignOffset = listMarkerLineOffset(alignOffset, lineAvailableWidth);
+        fragmentFirstAlignOffset = listMarkerLineOffset(
+          alignOffset,
+          Math.max(1, available - (pendingLine.firstLineOffset ?? 0))
+        );
       }
       pending.push(record);
       cursorY += pendingLine.height;

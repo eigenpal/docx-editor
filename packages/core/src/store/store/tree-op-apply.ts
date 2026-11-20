@@ -130,7 +130,7 @@ import {
   runPropertiesNodeOf,
   sdtPrChild,
 } from './tree-op-nodes.ts';
-import { paragraphIdsWithin, survivingCaretAfterBlockRemoval } from './tree-op-blocks.ts';
+import { caretAfterBlockRemoval, paragraphIdsWithin } from './tree-op-blocks.ts';
 import { tableAncestorOf } from './tree-op-table-shared.ts';
 import {
   planVerticalMergeHeadRepairs,
@@ -3042,8 +3042,8 @@ function emptyCellParagraph(
 function applyDeleteBlock(part: OoxmlPart, blockId: string, options?: EditOptions): TreeOpResult {
   const block = findNode(part, blockId);
   if (!block) return { ok: false, reason: 'unknown-block' };
-  const caretParagraphId = survivingCaretAfterBlockRemoval(part, blockId);
-  if (!caretParagraphId) return { ok: false, reason: 'block-required' };
+  const caret = caretAfterBlockRemoval(part, blockId);
+  if (!caret) return { ok: false, reason: 'block-required' };
   const parent = parentOf(part, blockId);
   const cellNeedsParagraph =
     block.kind === 'table' &&
@@ -3057,7 +3057,7 @@ function applyDeleteBlock(part: OoxmlPart, blockId: string, options?: EditOption
     deleted: [blockId, ...paragraphs.filter((id) => id !== blockId)],
     dependencyKeys: TEXT_DEPS,
     impact: 'flow-structural',
-    caret: { paragraphId: caretParagraphId },
+    caret,
   };
   const repairs = block.kind === 'tableRow' ? planVerticalMergeHeadRepairs(part, blockId) : null;
   if (repairs && !repairs.ok) return { ok: false, reason: repairs.reason };

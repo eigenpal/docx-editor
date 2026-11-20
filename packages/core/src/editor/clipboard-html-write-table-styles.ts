@@ -93,7 +93,7 @@ export function tableConditionalFormats(
       });
     }
   }
-  // The same reading of `w:tblLook` (17.4.56) the painter uses.
+  // The same reading of `w:tblLook` (ECMA-376 Part 1 §17.4.55) the painter uses.
   const look = tableLookOf(tblLook);
   return {
     byType,
