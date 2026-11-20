@@ -365,7 +365,7 @@ export function createKeyDownHandler(
       event.preventDefault();
       return;
     }
-    if (accel && event.shiftKey && event.key.toLowerCase() === 'v') {
+    if (accel && event.shiftKey && chordLetter(event) === 'v') {
       // Paste without formatting. The keydown handler cannot reach the clipboard — the
       // payload only exists on the `paste` event, and some engines deliver plain-only
       // payloads for this chord anyway — so the chord ARMS a force-plain flag the paste

@@ -10,6 +10,7 @@ import { textboxPaintsPastFrame, textboxPressReaches } from '../layout/vector-sh
 /** A painted box thinner than this, in points, has no area a press can land on. */
 const THIN_LINE_PT = 1;
 import { isElementNode, isInputEvent, isKeyboardEvent, isPointerEvent } from './host-realm.ts';
+import { chordLetter } from './chord-letter.ts';
 import { MULTI_CLICK_MS, MULTI_CLICK_SLOP_PX } from './surface-multi-click.ts';
 import { pressSelectsGroupMember, selectedGroupMember } from './group-member-selection.ts';
 
@@ -21,8 +22,10 @@ function isClipboardChord(event: KeyboardEvent): boolean {
   if (event.altKey) return false;
   const key = event.key.toLowerCase();
   const command = event.ctrlKey || event.metaKey;
-  if (command && !event.shiftKey && (key === 'c' || key === 'x')) return true;
-  if (command && key === 'v') return true;
+  // The letter the chord names, on any layout: Ctrl+V types `м` on a Russian one.
+  const letter = command ? chordLetter(event) : '';
+  if (!event.shiftKey && (letter === 'c' || letter === 'x')) return true;
+  if (letter === 'v') return true;
   if (key === 'insert') return event.ctrlKey !== event.shiftKey;
   return event.shiftKey && !event.ctrlKey && key === 'delete';
 }

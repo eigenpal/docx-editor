@@ -379,6 +379,7 @@ If a drawing is selected when you paste, the paste goes where the drawing's anch
 - A text box takes only text. If the pasted content holds a picture and text, the editor refuses it. Use **Paste without formatting** to paste the text alone. Content that holds only a picture goes in before the anchor.
 - The editor refuses to paste text into a shape that has no text body, a linked text box, a text box whose text it cannot edit in place, or a shape selected inside a group. The editor does not add a text body to a shape that has none. Each refusal reports a translated reason, and the document does not change.
 - The **Paste** context menu item stays available while a drawing is selected, because a copied drawing can still go in before the anchor. The paste refuses after the clipboard read if its content has no place.
+- Your host reads a paste refusal from `editor.snapshot().lastRejection`. The shipped React and Vue adapters do not show paste refusals.
 - Text pasted on a drawing in a header, a footer, or a table cell follows these rules. A copied drawing pastes only at a caret in the body text, so the editor refuses it in a header or footer.
 - In suggesting mode, each paste becomes a tracked change. A new picture cannot be proposed directly before another drawing, so the editor refuses to insert one there and reports the reason.
 

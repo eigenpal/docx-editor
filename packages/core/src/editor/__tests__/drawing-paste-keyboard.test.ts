@@ -10,6 +10,7 @@ import { paragraphTextOf } from '@docx-editor.dev/core/store';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { textboxStoriesInPart } from '../../store/package/textbox-stories.ts';
 import { SHAPE_PASTE_TEXT_REASON } from '../surface-drawing-clipboard.ts';
+import { forwardClipboardEvents } from '../chrome-clipboard.ts';
 import {
   EMU,
   SHAPE_URI,
@@ -90,6 +91,20 @@ function pasteEvent(value: string): Event {
   return event;
 }
 
+/** A paste event with bold HTML and its plain text. */
+function richPasteEvent(): Event {
+  const event = new Event('paste', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'clipboardData', {
+    value: {
+      getData: (type: string) =>
+        type === 'text/html' ? '<p><b>Bold</b></p>' : type === 'text/plain' ? 'Bold' : '',
+      types: ['text/plain', 'text/html'],
+      items: [],
+    },
+  });
+  return event;
+}
+
 const key = (init: KeyboardEventInit) =>
   new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
 
@@ -111,6 +126,9 @@ describe('a keyboard paste on the pages with a drawing selected', () => {
     ['Command+V', { key: 'v', metaKey: true }],
     ['Ctrl+Shift+V', { key: 'V', ctrlKey: true, shiftKey: true }],
     ['Shift+Insert', { key: 'Insert', shiftKey: true }],
+    // A Russian layout types `м` on the V key: the chord is still the paste chord.
+    ['Ctrl+V on a Russian layout', { key: 'м', code: 'KeyV', ctrlKey: true }],
+    ['Ctrl+Shift+V on a Hebrew layout', { key: 'ה', code: 'KeyV', ctrlKey: true, shiftKey: true }],
   ] as const) {
     test(`${name} then the paste replaces a selected text box's text`, async () => {
       const { editor, surface, pages, select } = await open(TEXT_BOX);
@@ -154,6 +172,51 @@ describe('a keyboard paste on the pages with a drawing selected', () => {
     pages.dispatchEvent(key({ key: 'v', ctrlKey: true }));
     pages.dispatchEvent(pasteEvent('ZULU'));
     expect(boxText(editor)).toEqual(['ZULU']);
+  });
+
+  test('copy and cut chords on a Russian layout keep the drawing selected', async () => {
+    const { surface, pages, select } = await open(TEXT_BOX);
+    for (const chord of [
+      { key: 'с', code: 'KeyC', ctrlKey: true },
+      { key: 'ч', code: 'KeyX', metaKey: true },
+    ]) {
+      select();
+      pages.dispatchEvent(key(chord));
+      expect(surface.drawingSelectionIntent().kind).toBe('pointer');
+    }
+  });
+
+  test('Ctrl+Shift+V on a Russian layout pastes without formatting at a body caret', async () => {
+    const { editor, surface, pages } = await open(TEXT_BOX);
+    const last = surface.session.paragraphIds().at(-1)!;
+    surface.setSelection({
+      anchor: { paragraphId: last, offset: 5 },
+      head: { paragraphId: last, offset: 5 },
+    });
+    pages.dispatchEvent(key({ key: 'М', code: 'KeyV', ctrlKey: true, shiftKey: true }));
+    pages.dispatchEvent(richPasteEvent());
+    const xml = await saved(editor);
+    expect(xml).toContain('Bold');
+    expect(xml).not.toContain('<w:b/>');
+  });
+
+  test('Ctrl+Shift+V on a Russian layout from a focused overlay pastes without formatting', async () => {
+    const { editor, surface } = await open(TEXT_BOX);
+    const overlay = document.createElement('div');
+    overlay.tabIndex = 0;
+    document.body.append(overlay);
+    const stop = forwardClipboardEvents(overlay, editor);
+    const last = surface.session.paragraphIds().at(-1)!;
+    surface.setSelection({
+      anchor: { paragraphId: last, offset: 5 },
+      head: { paragraphId: last, offset: 5 },
+    });
+    overlay.dispatchEvent(key({ key: 'М', code: 'KeyV', ctrlKey: true, shiftKey: true }));
+    overlay.dispatchEvent(richPasteEvent());
+    const xml = await saved(editor);
+    expect(xml).toContain('Bold');
+    expect(xml).not.toContain('<w:b/>');
+    stop();
   });
 
   test('another key still ends the drawing selection', async () => {

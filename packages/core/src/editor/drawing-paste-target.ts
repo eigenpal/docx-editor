@@ -135,6 +135,30 @@ function drawingTextKind(drawing: OoxmlNode): DrawingTextKind {
 }
 
 /**
+ * The selected drawing and the point immediately before its anchor run, or null when none is
+ * selected or the document is open for viewing. The point comes from the drawing, not the
+ * caret: a press on the right half of an inline drawing leaves the caret after it.
+ */
+function selectedDrawingAt(surface: PaginatedSurface) {
+  if (surface.editingMode() === 'view') return null;
+  const record = resolveSelectedDrawingRecord(surface);
+  if (!record) return null;
+  const paragraphId = 'anchorParagraphId' in record ? record.anchorParagraphId : record.paragraphId;
+  return { record, point: { paragraphId, offset: record.start } } as const;
+}
+
+/**
+ * Where a pasted drawing or picture goes while a drawing is selected: immediately before the
+ * selected drawing's anchor run. Null when no drawing is selected or the document is open for
+ * viewing. The same point `drawingPasteTarget` gives for drawing content.
+ */
+export function drawingPastePoint(
+  surface: PaginatedSurface
+): { readonly paragraphId: string; readonly offset: number } | null {
+  return selectedDrawingAt(surface)?.point ?? null;
+}
+
+/**
  * Where a paste of `content` goes while a drawing is selected, or null when no drawing is
  * selected or the document is open for viewing. Every paste lane asks this before it lands.
  */
@@ -142,15 +166,10 @@ export function drawingPasteTarget(
   surface: PaginatedSurface,
   content: DrawingPasteContent
 ): DrawingPasteTarget | null {
-  if (surface.editingMode() === 'view') return null;
-  const record = resolveSelectedDrawingRecord(surface);
-  if (!record) return null;
-  const { anchor } = surface.state().selection;
-  const atAnchor: DrawingPasteTarget = {
-    kind: 'anchor',
-    paragraphId: anchor.paragraphId,
-    offset: anchor.offset,
-  };
+  const selected = selectedDrawingAt(surface);
+  if (!selected) return null;
+  const { record } = selected;
+  const atAnchor: DrawingPasteTarget = { kind: 'anchor', ...selected.point };
   if (content === 'drawing') return atAnchor;
   const part = surface.session.partFor(surface.storyScope()) ?? surface.session.part();
   const drawing = findNode(part, record.drawingNodeId);
@@ -256,6 +275,8 @@ export function pasteTargetOf(
   html: string | null,
   drawingCopy: boolean
 ): DrawingPasteTarget | null {
+  // No drawing selected: no payload work at all.
+  if (!selectedDrawingAt(surface)) return null;
   const target = drawingPasteTarget(surface, pasteContentOf(text, html, drawingCopy));
   return target?.kind === 'textBox' && pasteHtmlHoldsDrawing(html)
     ? { kind: 'refused', reason: TEXT_BOX_PICTURE_PASTE_REASON }
@@ -304,6 +325,7 @@ export function drawingClipboardDeps(
   | 'drawingPasteTarget'
   | 'selectTextBoxForPaste'
   | 'leaveTextBoxForPaste'
+  | 'placeCaretForPaste'
 > {
   const surface = () => mount().surface;
   return {
@@ -312,6 +334,10 @@ export function drawingClipboardDeps(
     drawingPasteTarget: (text, html, drawingCopy) =>
       pasteTargetOf(surface(), text, html, drawingCopy),
     selectTextBoxForPaste: (id) => selectTextBoxForPaste(surface(), mount().textbox, id),
+    placeCaretForPaste: (paragraphId, offset) => {
+      const at = { paragraphId, offset };
+      surface().setSelection({ anchor: at, head: at });
+    },
     leaveTextBoxForPaste: (id, paragraphId) => {
       mount().textbox?.exit();
       surface().selectDrawing(id, paragraphId);

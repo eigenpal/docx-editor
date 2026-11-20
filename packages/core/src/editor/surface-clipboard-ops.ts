@@ -166,6 +166,8 @@ export interface SurfaceClipboardDeps {
   selectTextBoxForPaste?(drawingNodeId: string): boolean;
   /** Leave the text box a paste entered, and select its drawing again. */
   leaveTextBoxForPaste?(drawingNodeId: string, paragraphId: string): void;
+  /** Put a collapsed caret at the point a paste beside a selected drawing goes. */
+  placeCaretForPaste?(paragraphId: string, offset: number): void;
 }
 
 export interface SurfaceClipboardOps {
@@ -209,7 +211,15 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     drawingCopy: boolean
   ): false | (() => void) | null {
     const target = deps.drawingPasteTarget?.(text, html, drawingCopy) ?? null;
-    if (!target || target.kind === 'anchor') return null;
+    if (!target) return null;
+    if (target.kind === 'anchor') {
+      // The point before the drawing's anchor run, which the caret need not be at: a press on
+      // the right half of an inline drawing leaves the caret after it.
+      const { from } = deps.orderedRange();
+      if (from.paragraphId !== target.paragraphId || from.offset !== target.offset)
+        deps.placeCaretForPaste?.(target.paragraphId, target.offset);
+      return null;
+    }
     if (target.kind === 'refused') {
       refuse(target.reason);
       return false;

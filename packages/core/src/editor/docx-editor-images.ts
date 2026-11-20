@@ -1,4 +1,4 @@
-import { drawingPasteTarget } from './drawing-paste-target.ts';
+import { drawingPastePoint } from './drawing-paste-target.ts';
 import { fitInsertExtent } from './image-insert-extent.ts';
 import { pointTargetRefusal } from './editor-point-target.ts';
 import { SUGGESTING_IMAGE_REPLACE_REASON } from './opening-editing-mode.ts';
@@ -493,7 +493,7 @@ function isStaleImageMutation(
 
 /**
  * A picture inserted while a drawing is selected goes before its anchor run, where
- * `drawingPasteTarget` sends it. In suggesting mode the tracked `insertDrawing` operation
+ * `drawingPastePoint` sends it. In suggesting mode the tracked `insertDrawing` operation
  * refuses a point at another drawing's start, so the insert refuses up front with a reason.
  * Lifting that store rule would let a newer peer send operations an older peer refuses. A
  * copied drawing takes the fragment paste lane instead, which proposes it there.
@@ -518,7 +518,7 @@ export function gateImageCommand(
       if (stale) return stale;
     }
     const suggesting = surface.editingMode() === 'suggest';
-    if (!command.at && suggesting && drawingPasteTarget(surface, 'drawing')) {
+    if (!command.at && suggesting && drawingPastePoint(surface)) {
       return { ok: false, code: 'invalidArgs', reason: PICTURE_SELECTED_INSERT_REASON };
     }
     if (!(command.data instanceof Uint8Array) || command.data.byteLength === 0) {
@@ -900,8 +900,9 @@ async function runImageCommand(
   const pre = captureImageMutationPreconditions(editor);
   if (!pre) return { ok: false, code: 'notFound', reason: 'no document is loaded' };
   if (command.type === 'insertImage') {
-    // With a drawing selected, the selection anchor is its paste target, before the anchor run.
-    const anchor = command.at ?? surface.state().selection.anchor;
+    // With a drawing selected, the picture goes before the drawing's anchor run, wherever the
+    // caret is on the drawing.
+    const anchor = command.at ?? drawingPastePoint(surface) ?? surface.state().selection.anchor;
     const current = () =>
       command.at
         ? editor.surface === surface &&

@@ -906,3 +906,48 @@ describe('a paste the store refuses, and a copied chart', () => {
     );
   });
 });
+
+describe('a selected inline picture with the caret after it', () => {
+  /** Select the inline picture with the caret at `start + 1`, as a right-half press leaves it. */
+  async function caretAfterPicture() {
+    const opened = await open(body(INLINE_PICTURE));
+    const paragraphId = opened.surface.session.paragraphIds()[0]!;
+    const after = { paragraphId, offset: 'Alpha head'.length + 1 };
+    opened.surface.setSelection({ anchor: after, head: after });
+    expect(opened.editor.snapshot().image).not.toBeNull();
+    return opened;
+  }
+
+  test('text and a copied drawing go in before the picture, not after it', async () => {
+    const { editor, surface } = await caretAfterPicture();
+    expect(drawingPasteTarget(surface, 'text')).toMatchObject({ offset: 'Alpha head'.length });
+    expect(editor.exec({ type: 'paste', text: 'ZULU' })).toMatchObject({ ok: true });
+    expect(bodyText(editor)[0]).toBe(`Alpha headZULU${OBJ}Alpha tail.`);
+
+    const again = await caretAfterPicture();
+    // Copy the selected picture, which stays selected with the caret after it.
+    const copied = again.surface.copyFlavours();
+    expect(again.surface.pasteRich(copied.text, copied.html)).toBe(true);
+    const names = drawingNames(await saved(again.editor));
+    expect(names).toHaveLength(2);
+    expect(bodyText(again.editor)[0]).toBe(`Alpha head${OBJ}${OBJ}Alpha tail.`);
+  });
+
+  test('an inserted picture goes in before the picture', async () => {
+    const { editor } = await caretAfterPicture();
+    const result = await editor.executeImageCommand({
+      type: 'insertImage',
+      data: PNG,
+      mime: 'image/png',
+      widthPoints: 10,
+      heightPoints: 10,
+    });
+    expect(result).toMatchObject({ ok: true, changed: true });
+    const xml = await saved(editor);
+    const first = xml.slice(xml.indexOf('<w:body'), xml.indexOf('</w:p>'));
+    // The new picture comes first; the selected picture, named Photo, follows it.
+    expect(drawingNames(first)).toHaveLength(2);
+    expect(drawingNames(first)[1]).toBe('Photo');
+    expect(first.indexOf('Alpha head')).toBeLessThan(first.indexOf('<w:drawing'));
+  });
+});
