@@ -531,6 +531,10 @@ test('highlighted fitting keeps every glyph ink inside its own box', () => {
       expect(inside(lines, measure).every(Boolean)).toBe(true);
     }
   }
+  // The bound still lets the colon give its blank right side.
+  const colon = layout('甲乙丙：丁戊己庚', 91, undefined, centered, highlight);
+  expect(colon).toHaveLength(1);
+  expect(colon[0]!.spans.find((span) => span.text === '：')?.box.width).toBeCloseTo(7, 3);
   const lines = layout('甲乙（丙丁）戊己', 90, undefined, measurer, highlight);
   expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
     '甲乙（丙丁）戊己',

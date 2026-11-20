@@ -598,7 +598,8 @@ function fitCjkOptically(
       previousBoundary.ink.right;
     // A later run's highlight or shading covers ink past its own box: keep banded seams inside.
     const band = [previous, current].some(({ span }) => span.style.highlight || span.style.shading);
-    const leftBlank = Math.max(0, (current.span.glyphOffsetPt ?? 0) + currentBoundary.ink.left);
+    const leftBlank = (current.span.glyphOffsetPt ?? 0) + currentBoundary.ink.left;
+    const rightBlank = previous.span.box.width - (previous.span.glyphOffsetPt ?? 0);
     // Both sides of one seam give at most half of the smaller glyph each.
     const pairHalf = right && left ? Math.min(previous.natural, current.natural) / 2 : Infinity;
     if (right) {
@@ -607,7 +608,7 @@ function fitCjkOptically(
         Math.min(
           Math.min(previous.natural / 2, pairHalf) - previous.alreadyReduced,
           previous.span.box.width - previous.reduction,
-          band ? gap - leftBlank : gap
+          band ? Math.min(gap, rightBlank - previousBoundary.ink.right) : gap
         )
       );
       gap -= capacity;
