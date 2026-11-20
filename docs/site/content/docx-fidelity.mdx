@@ -326,7 +326,8 @@ East Asian spacing and punctuation rules depend on `w:rPrDefault` in the styles 
 - Without East Asian defaults, only distributed paragraphs hang marks.
 - A single-spaced line in a CJK face is 1.3 times the face's ascent plus descent.
 - Localized family names, such as `メイリオ`, resolve to the face of the English name.
-- In legacy compatibility mode, fitting punctuation after an inline picture keeps the picture and preceding text fixed. An ordinary ideograph on a supported mixed line or after the picture fits only when the additional compression needed is at most half its natural advance.
+- Punctuation compression fits lines that hold inline pictures. Each picture keeps its width.
+- In legacy compatibility modes, an East Asian group joins a full line only when it needs at most half its width in compression.
 - Table AutoFit uses compressed punctuation pairs for the minimum width.
 - Vertical Japanese layout is not supported.
 

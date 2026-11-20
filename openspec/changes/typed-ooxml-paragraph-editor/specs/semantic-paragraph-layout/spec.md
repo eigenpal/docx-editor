@@ -627,6 +627,35 @@ Justified East Asian lines SHALL distribute punctuation compression across avail
 - **WHEN** the line needs compression to fit
 - **THEN** both blank sides at that seam compress
 
+### Requirement: East Asian punctuation fitting around inline objects
+
+A justified line that holds inline pictures or other inline drawings SHALL fit by compressing East Asian punctuation on both sides of each object, in every compatibility mode. Each object SHALL keep its advance and move with the text before it. A line beside a float, or one that holds a right-to-left object, SHALL wrap instead of fitting.
+
+#### Scenario: Punctuation before a picture compresses
+
+- **GIVEN** a justified line with punctuation seams, then an inline picture, then ideographs, and document punctuation compression
+- **WHEN** the next ideograph fits only when the seams compress
+- **THEN** the seams compress and the picture moves left by the same amount
+- **AND** the picture keeps its width
+
+### Requirement: Legacy admission of East Asian groups
+
+With no compatibility mode, or in mode 11, 12, or 14, a group of East Asian characters and punctuation SHALL join a justified line by compression only when the compression it needs, less what the group's own marks can still give, is at most half the group's natural advance. Groups of other text SHALL keep the ordinary admission test. Mode 15 and later SHALL use only the ordinary test.
+
+#### Scenario: A legacy mode wraps an ideograph that needs more than half its advance
+
+- **GIVEN** a justified 12 pt line with enough punctuation capacity, and a final ideograph that overflows it
+- **WHEN** the document declares compatibility mode 14 and the ideograph needs 6.5 pt of compression
+- **THEN** the ideograph wraps
+- **AND** it fits with 6 pt, and in mode 15 it fits with 6.5 pt
+
+#### Scenario: A closing mark in the group gives its own half first
+
+- **GIVEN** the same legacy line, and a final group of an ideograph and a comma
+- **WHEN** the group needs 17.5 pt of compression
+- **THEN** the comma gives its 6 pt trailing half, and the group fits with the remaining 11.5 pt
+- **AND** with 18.5 pt the group wraps
+
 ### Requirement: Hanging punctuation by alignment
 
 With `w:overflowPunct` on, in compatibility mode 15 and later, the layout engine SHALL let line-end punctuation hang past the margin only when the paragraph alignment is justified or distributed. This SHALL apply to full-width punctuation and to Latin punctuation in a run with an East Asian language. Left-aligned, centered, and right-aligned lines SHALL keep line-end punctuation inside the margin there.

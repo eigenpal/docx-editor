@@ -21,6 +21,7 @@ import { isDefaultGraphemeBoundary, segmentGraphemes, type GraphemeSegment } fro
 import { isCjk, type CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
 import { hangingCjkPunctuationAdvance, hangsWithin } from './cjk-spacing.ts';
 import { formatRevisionOf } from './revision-projection.ts';
+import { createObjectPlacer, lineObjectsInFlow } from './cjk-optical-objects.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 import { memoized, type ClusterMemo } from './cjk-optical-memo.ts';
 import {
@@ -347,6 +348,25 @@ function expansionGate(
   };
 }
 /**
+ * In a legacy compatibility mode, a candidate group of East Asian characters and punctuation
+ * joins a line only when the compression it needs, less what its own marks can still give, is at
+ * most half its natural advance. A longer shortfall wraps the group.
+ */
+function exceedsLegacyAdmission(cells: readonly Cell[], sourceCount: number, deficit: number) {
+  const group = cells.filter((cell) => cell.sourceIndex >= sourceCount);
+  let ideograph = false;
+  let half = 0;
+  for (const cell of group) {
+    const punctuation = PUNCTUATION.test(cell.span.text);
+    if (!punctuation && !isCjk(cell.span.text.codePointAt(0)!)) return false;
+    ideograph ||= !punctuation;
+    half += cell.natural / 2;
+    if (blankSided(cell))
+      deficit -= Math.max(0, cell.natural / 2 - cell.alreadyReduced - cell.reduction);
+  }
+  return ideograph && deficit > half + TOLERANCE;
+}
+/**
  * How a kana fit (`compressPunctuationAndJapaneseKana`) spends its capacity. Punctuation blank
  * sides on the line go first, then kana, each by at most a sixteenth of its em, in equal
  * shares. A final closing mark gives its trailing half first when that half alone fits the
@@ -408,8 +428,8 @@ interface FitContext {
   readonly measurer: TextMeasurer;
   readonly baselinePieces: readonly FieldAwarePiece[];
   readonly requireLocalQualification: boolean;
-  readonly legacyPunctuationFit: boolean;
-  readonly afterInlineObject?: true;
+  /** A legacy compatibility mode limits what a candidate group may take from the line. */
+  readonly legacyAdmission: boolean;
   readonly memo: ClusterMemo;
   /**
    * The cells of the current group's line, kept between its attempts: an attempt that fails
@@ -451,40 +471,6 @@ function fitCjkOptically(
   const width = candidates.reduce((sum, candidate) => sum + candidate.box.width, 0);
   let deficit = line.width + width - available;
   if (deficit <= TOLERANCE || !measurer.inkBounds) return undefined;
-  if (line.drawings.length) {
-    // Keep each placed inline object and its preceding text fixed. Only the
-    // uninterrupted text after the last object may supply a bearing.
-    if (kana || !context.legacyPunctuationFit || line.wrapSegment || line.wrapPassages)
-      return undefined;
-    const drawing = line.drawings.at(-1)!;
-    if (drawing.bidiLevel || drawing.placeholderGraphicKind !== null) return undefined;
-    const boundary = line.spans.findIndex(
-      (span) => span.range.start > drawing.start && span.box.x >= drawing.advanceEnd - TOLERANCE
-    );
-    if (boundary < 0) return undefined;
-    const trailing = { ...line, spans: line.spans.slice(boundary), drawings: [] };
-    const fit = fitCjkOptically(
-      trailing,
-      candidates,
-      available,
-      { ...context, afterInlineObject: true, cells: {} },
-      { hangAdvance, kana }
-    );
-    if (!fit) return undefined;
-    line.spans.splice(boundary, line.spans.length - boundary, ...trailing.spans);
-    line.width = trailing.width;
-    return {
-      ...fit,
-      ...(fit.spanStarts
-        ? {
-            spanStarts: [
-              ...Array.from({ length: boundary }, (_, i) => i),
-              ...fit.spanStarts.map((i) => boundary + i),
-            ],
-          }
-        : {}),
-    };
-  }
   if (
     !kana &&
     !candidates.some((span) => HAS_PUNCTUATION.test(span.text)) &&
@@ -499,18 +485,8 @@ function fitCjkOptically(
       deficit > kanaFitBound(line, candidates))
   )
     return undefined;
-  // Do not redistribute spacing across separate float passages.
-  for (let index = 1; index < line.spans.length; index++) {
-    const previous = line.spans[index - 1]!;
-    const current = line.spans[index]!;
-    const gap = automaticTextSpacingBefore(current);
-    if (
-      !Number.isFinite(gap) ||
-      gap < 0 ||
-      Math.abs(previous.box.x + previous.box.width + gap - current.box.x) > TOLERANCE
-    )
-      return undefined;
-  }
+  const objects = lineObjectsInFlow(line, candidates);
+  if (!objects) return undefined;
   const sourceCount = line.spans.length;
   const cells = lineCells(context, line, candidates);
   if (!cells) return undefined;
@@ -526,19 +502,6 @@ function fitCjkOptically(
         ? hangAdvance
         : last.span.box.width;
   const hangsLast = hung > 0;
-  // Legacy mixed-script composition may expand the current line instead of taking
-  // one more ideograph. Keep a separate lane for a protected group or a hanging mark.
-  if (
-    context.legacyPunctuationFit &&
-    !kana &&
-    !hangsLast &&
-    first === last &&
-    /^\p{Unified_Ideograph}$/u.test(first.span.text) &&
-    (context.afterInlineObject ||
-      line.spans.some((span) => automaticTextSpacingBefore(span) > 0)) &&
-    deficit > first.natural / 2 + TOLERANCE
-  )
-    return undefined;
   const fullDeficit = deficit;
   deficit -= hung;
   // A final qualified closing quote drops its trailing blank after any glyph, a word included.
@@ -559,6 +522,13 @@ function fitCjkOptically(
       deficit -= last.reduction;
     }
   }
+  if (
+    context.legacyAdmission &&
+    !kana &&
+    !hangsLast &&
+    exceedsLegacyAdmission(cells, sourceCount, deficit)
+  )
+    return undefined;
   const kanaCells = kana ? kanaFitCells(cells, isFullWidthKana) : [];
   const kanaCapacity = kanaCells.reduce(
     (sum, cell) => sum + kanaCapacityOf(cell, kanaShare(cell)),
@@ -679,8 +649,10 @@ function fitCjkOptically(
   // that are kana with the same equal share: their letter spacing paints the same geometry,
   // and later stages measure one span instead of one per character.
   let previous: { span: StyleSpanRecord; cell: Cell } | undefined;
+  const placer = createObjectPlacer(objects);
   for (const cell of cells) {
     const source = cell.span;
+    x = placer.before(source.range.start, x);
     // Preserve witnessed inter-script advances; they are not compression capacity.
     if (cell.sourceIndex > 0 && cell.sourceIndex < sourceCount)
       x += automaticTextSpacingBefore(source);
@@ -727,6 +699,7 @@ function fitCjkOptically(
     }
   }
   spanStarts[sourceCount] = spans.length;
+  placer.commit(line);
   line.spans.length = 0;
   for (const span of spans) line.spans.push(span);
   line.width = available + hung - candidateWidth;
@@ -955,7 +928,7 @@ export function createCjkOpticalFitter(
       measurer,
       baselinePieces: pieces,
       requireLocalQualification,
-      legacyPunctuationFit: legacy,
+      legacyAdmission: legacy,
       memo,
       cells: {},
     };

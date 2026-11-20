@@ -136,6 +136,7 @@ type FitOptions = {
   unsafe?: string;
   automaticGap?: number;
   inlinePictureAfter?: number;
+  drawing?: { bidiLevel?: number; advanceStart?: number };
 };
 function fit(o: FitOptions = {}) {
   const word = o.word ?? 'AV',
@@ -180,12 +181,19 @@ function fit(o: FitOptions = {}) {
   const drawings: InlineDrawingRecord[] = [];
   for (const [index, text] of [...texts, ...tail].entries()) {
     if (index === o.inlinePictureAfter) {
+      const box = { x, y: 0, width: 12, height: 12 };
       drawings.push({
         start,
-        advanceStart: x,
+        x,
+        y: 0,
+        advanceStart: x + (o.drawing?.advanceStart ?? 0),
         advanceEnd: x + 12,
+        paintBounds: box,
+        hitBounds: box,
+        geometry: { contentBounds: box, paintBounds: box, hitBounds: box, transformedCorners: [] },
         placeholderGraphicKind: null,
-      } as InlineDrawingRecord);
+        ...(o.drawing?.bidiLevel ? { bidiLevel: o.drawing.bidiLevel } : {}),
+      } as unknown as InlineDrawingRecord);
       start += 1;
       x += 12;
     }
@@ -412,53 +420,48 @@ test('punctuation pair compression still obeys the source font kern threshold', 
   expect(enabled.some((piece) => piece.style.characterSpacingPt < 0)).toBe(true);
 });
 
-test('legacy mixed lines keep the half-ideograph threshold for an ordinary character', () => {
-  const legacy: CjkParagraphTypography = {
-    ...policy,
-    settings: { ...policy.settings!, legacyLineEndPunctuation: true },
-  };
-  const candidate = ['丁'];
-  const automaticGap = 3.5;
-  const admitted = fit({ policy: legacy, automaticGap, candidate, deficit: 7 });
-  const wrapped = fit({ policy: legacy, automaticGap, candidate, deficit: 8.5 });
-  expect(admitted.result).toBeDefined();
-  expect(wrapped.result).toBeUndefined();
-  expect(fit({ policy, automaticGap, candidate, deficit: 8.5 }).result).toBeDefined();
-  expect(fit({ policy: legacy, candidate, deficit: 8.5 }).result).toBeDefined();
+const legacy: CjkParagraphTypography = {
+  ...policy,
+  settings: { ...policy.settings!, legacyLineEndPunctuation: true },
+};
 
-  const protectedGroup = fit({
-    policy: legacy,
-    automaticGap,
-    candidate: ['丁，'],
-    deficit: 13,
-  });
-  expect(protectedGroup.result).toBeDefined();
+test('a legacy mode wraps a group that needs more than half its natural advance', () => {
+  const candidate = ['丁'];
+  for (const automaticGap of [0, 3.5]) {
+    expect(fit({ policy: legacy, automaticGap, candidate, deficit: 7 }).result).toBeDefined();
+    expect(fit({ policy: legacy, automaticGap, candidate, deficit: 8.5 }).result).toBeUndefined();
+    expect(fit({ policy, automaticGap, candidate, deficit: 8.5 }).result).toBeDefined();
+  }
+  // The group's own comma gives its trailing half first; the rest is within half of 28 pt.
+  const group = ['丁，'];
+  expect(fit({ policy: legacy, candidate: group, deficit: 20.5 }).result).toBeDefined();
+  reject({ policy: legacy, candidate: group, deficit: 21.5 });
+  expect(fit({ policy, candidate: group, deficit: 21.5 }).result).toBeDefined();
+  // Text that is not East Asian keeps the ordinary gate.
+  expect(fit({ policy: legacy, candidate: ['12', '。'], deficit: 8.5 }).result).toBeDefined();
 });
 
-test('legacy text following a fixed inline picture can fit punctuation up to its admission threshold', () => {
-  const legacy: CjkParagraphTypography = {
-    ...policy,
-    settings: { ...policy.settings!, legacyLineEndPunctuation: true },
-  };
-  const inlinePictureAfter = 1;
+test('an inline picture keeps its advance and moves with the compressed text before it', () => {
+  for (const p of [policy, legacy]) {
+    const x = fit({ policy: p, inlinePictureAfter: 6, candidate: ['丁'], deficit: 5 });
+    expect(x.result).toBeDefined();
+    const [picture] = x.line.drawings,
+      [placed] = x.before.drawings;
+    expect(picture!.advanceEnd - picture!.advanceStart).toBe(12);
+    expect(picture!.advanceStart).toBeLessThan(placed!.advanceStart);
+    const after = x.line.spans.find((span) => span.range.start > picture!.start)!;
+    expect(after.box.x).toBeCloseTo(picture!.advanceEnd, 5);
+    expect(x.line.width + x.result!.width).toBeCloseTo(x.available, 5);
+  }
+});
+
+test('an inline picture refuses the fit when it does not run on from the text', () => {
   const candidate = ['丁'];
-  const admitted = fit({ policy: legacy, inlinePictureAfter, candidate, deficit: 5 });
-  expect(admitted.result).toBeDefined();
-  expect(admitted.line.drawings).toEqual(admitted.before.drawings);
-  expect(admitted.line.spans[0]).toEqual(admitted.before.spans[0]);
-  expect(admitted.line.spans[1]?.box.x).toBe(admitted.before.spans[1]?.box.x);
-  expect(admitted.result?.spanStarts?.[0]).toBe(0);
-  expect(admitted.line.width + admitted.result!.width).toBeCloseTo(admitted.available, 5);
-
-  reject({ policy: legacy, inlinePictureAfter, candidate, deficit: 8.5 });
-  reject({ policy, inlinePictureAfter, candidate, deficit: 5 });
-
-  const protectedGroup = fit({
-    policy: legacy,
-    inlinePictureAfter,
-    candidate: ['丁，'],
-    deficit: 13,
-  });
-  expect(protectedGroup.result).toBeDefined();
-  expect(protectedGroup.line.drawings).toEqual(protectedGroup.before.drawings);
+  const shifted = fit({ inlinePictureAfter: 6, candidate, deficit: 5 });
+  expect(shifted.result).toBeDefined();
+  for (const change of [{ bidiLevel: 1 }, { advanceStart: -1 }]) {
+    const x = fit({ inlinePictureAfter: 6, candidate, deficit: 5, drawing: change });
+    expect(x.result).toBeUndefined();
+    expect(x.line).toEqual(x.before);
+  }
 });
