@@ -713,7 +713,7 @@ The mark's run language SHALL select its blank sides. A closing bracket, `、。
 
 ### Requirement: Alternate line-break rules
 
-With `w:useAltKinsokuLineBreakRules` and no compatibility mode, or mode 11, 12, or 14, a line-end mark outside the hanging set of its run language SHALL NOT hang. Only Japanese `、。，．` SHALL stay in that set. With punctuation compression, a mark that leaves its right half blank SHALL pass the margin only by the overflow, up to that half, and the text before it SHALL keep its advances. Otherwise the mark SHALL wrap. Mode 15 and later SHALL ignore the setting.
+With `w:useAltKinsokuLineBreakRules` before mode 15, a line-end mark from U+2000 up outside the hanging set of its run language SHALL NOT hang. Only Japanese `、。，．` SHALL stay in that set. With punctuation compression, a mark with a blank right half SHALL pass the margin only by the overflow, up to that half, and the text SHALL keep its advances. A larger overflow SHALL wrap the mark unless interior blank sides give up the rest. Other marks SHALL wrap.
 
 #### Scenario: Only the overflow passes the margin
 

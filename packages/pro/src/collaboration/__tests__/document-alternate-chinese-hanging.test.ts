@@ -16,7 +16,7 @@ const partNames = ['styles', 'settings'];
 const source = zipDocument(
   '<w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:rPr>' +
     '<w:sz w:val="24"/><w:lang w:eastAsia="zh-CN"/></w:rPr><w:t>甲乙丙丁，余</w:t></w:r></w:p>' +
-    '<w:sectPr><w:pgSz w:w="1440" w:h="6000"/>' +
+    '<w:sectPr><w:pgSz w:w="1520" w:h="6000"/>' +
     '<w:pgMar w:top="200" w:bottom="200" w:left="200" w:right="200"/></w:sectPr>',
   {
     overrides: partNames
@@ -79,7 +79,8 @@ test('alternate Chinese line breaks converge after concurrent edits, undo and re
       expect(geometry(left)).toEqual(geometry(right));
       expect(geometry(left).map((line) => line.text)).toEqual(expected);
     };
-    converged(['甲乙丙', '丁，余']);
+    // 56 pt of measure: the 60 pt line passes the margin by 4 pt, within the mark's blank half.
+    converged(['甲乙丙丁，', '余']);
     peers.pause();
     select(left, 0, 1);
     left.deleteForward();
@@ -88,7 +89,7 @@ test('alternate Chinese line breaks converge after concurrent edits, undo and re
     peers.resume();
     converged(['乙丙丁，', '余新']);
     left.undo();
-    converged(['甲乙丙', '丁，余新']);
+    converged(['甲乙丙丁，', '余新']);
     left.redo();
     converged(['乙丙丁，', '余新']);
     expect(geometry(open(left.save()))).toEqual(geometry(right));

@@ -909,11 +909,9 @@ export function createCjkOpticalFitter(
       baselinePieces: pieces,
       requireLocalQualification,
       memo,
-      finalKeepsBlank: alternateLineEndWraps(
-        groupText.at(-1) ?? '',
-        eastAsianLanguage(finalPiece.props),
-        policy
-      ),
+      finalKeepsBlank:
+        hangingPunctuation &&
+        alternateLineEndWraps(groupText.at(-1) ?? '', eastAsianLanguage(finalPiece.props), policy),
       cells: {},
     };
     const overflow = line.width + x - origin - available;

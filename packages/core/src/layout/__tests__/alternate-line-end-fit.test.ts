@@ -70,6 +70,17 @@ describe('alternate line-break rules in legacy modes', () => {
     expect(texts(layout('）', 13, { language: 'ja-JP' }))).toEqual(wraps('）'));
   });
 
+  test('half-width Latin marks keep their usual hanging, and curly quotes wrap', () => {
+    for (const mark of [...'.,)!']) {
+      expect(texts(layout(mark, 13))).toEqual([H + mark, '余']);
+      expect(texts(layout(mark, 13))).toEqual(texts(layout(mark, 13, { alternateKinsoku: false })));
+    }
+    expect(texts(layout('”', 13, { text: H + '”余', available: 456 + 6 }))).toEqual([
+      H.slice(1),
+      '国”余',
+    ]);
+  });
+
   test('no punctuation compression or Korean text wraps the mark', () => {
     expect(texts(layout('，', 1, { compression: 'doNotCompress' }))).toEqual(wraps('，'));
     // Korean text may break before the mark, so the mark wraps alone.
