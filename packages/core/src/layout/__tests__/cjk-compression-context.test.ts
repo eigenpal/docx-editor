@@ -4,6 +4,7 @@ import { DEFAULT_CJK_TYPOGRAPHY } from '../cjk-typography.ts';
 import { DEFAULT_RUN_STYLE } from '../run-style.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
 import type { FieldAwarePiece } from '../field-pieces.ts';
+import type { TextMeasurer } from '../semantic-records.ts';
 
 const measurer = createFixedMeasurer(12, 14);
 const policy = {
@@ -17,7 +18,14 @@ const policy = {
   },
 };
 type Languages = string | readonly [string | undefined, string | undefined] | undefined;
-function compress(text: string, split = text.length, language: Languages = 'zh-CN', kern = 1) {
+function compress(
+  text: string,
+  split = text.length,
+  language: Languages = 'zh-CN',
+  kern = 1,
+  using: TextMeasurer = measurer,
+  highlight?: string
+) {
   const languages = typeof language === 'string' || !language ? [language, language] : language;
   const pieces: FieldAwarePiece[] = [text.slice(0, split), text.slice(split)]
     .filter(Boolean)
@@ -25,12 +33,12 @@ function compress(text: string, split = text.length, language: Languages = 'zh-C
       text,
       start: index === 0 ? 0 : split,
       end: index === 0 ? split : split + text.length,
-      style: { ...DEFAULT_RUN_STYLE, kerningMinPt: kern, fontSizePt: 11 },
+      style: { ...DEFAULT_RUN_STYLE, kerningMinPt: kern, fontSizePt: 11, highlight },
       props: languages[index]
         ? [{ localName: 'lang', attributes: { eastAsia: languages[index] } }]
         : [],
     }));
-  return compressCjkPieces(pieces, policy, measurer);
+  return compressCjkPieces(pieces, policy, using);
 }
 function advances(pieces: readonly FieldAwarePiece[]) {
   return pieces.flatMap((piece) => [...piece.text].map(() => 12 + piece.style.characterSpacingPt));
@@ -180,6 +188,24 @@ test('each mark of a pair takes its class from its own run language', () => {
   expect(seam('；）', ['ja-JP', 'zh-CN'])).toBe(0);
   expect(seam('、；', ['zh-TW', 'zh-CN'])).toBe(0);
   expect(seam('）；', ['zh-TW', 'zh-CN'])).toBe(6);
+});
+
+test('a colon follows its language class and keeps its ink guards', () => {
+  // Colon dots in the middle of the cell, clear of the neighbouring marks' ink.
+  const inked: TextMeasurer = { ...measurer, inkBounds: () => ({ left: 4.5, right: 7.5 }) };
+  const colon = (text: string, language: string, highlight?: string) =>
+    advances(compress(text, 2, language, 1, inked, highlight));
+  for (const language of ['zh-CN', 'ja-JP', 'zh-TW']) {
+    expect(colon('甲：（乙', language)).toEqual([12, 6, 12, 12]);
+    expect(colon('甲：？乙', language)).toEqual([12, 12, 12, 12]);
+  }
+  expect(colon('甲：）乙', 'zh-CN')).toEqual([12, 6, 12, 12]);
+  expect(colon('甲：；乙', 'zh-CN')).toEqual([12, 6, 12, 12]);
+  expect(colon('甲：）乙', 'ja-JP')).toEqual([12, 12, 12, 12]);
+  expect(colon('甲：。乙', 'zh-TW')).toEqual([12, 12, 12, 12]);
+  // Highlighted colons keep their cell, before either class.
+  expect(colon('甲：）乙', 'zh-CN', 'yellow')).toEqual([12, 12, 12, 12]);
+  expect(colon('甲：（乙', 'ja-JP', 'yellow')).toEqual([12, 12, 12, 12]);
 });
 
 test('the first mark of a pair gives up its right bearing, unless kerning is off', () => {

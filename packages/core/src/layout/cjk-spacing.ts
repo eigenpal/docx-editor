@@ -204,14 +204,17 @@ function compressionSlices(
       previous !== undefined &&
       OPENING.test(previous) &&
       pairEnabled(clusters[clusterIndex - 1]!.utf16From, cluster.utf16From);
-    const leftClass = punctuationSeamClass(cluster.text, eastAsianLanguage(base.props));
-    const rightClass =
-      next === undefined
-        ? undefined
-        : punctuationSeamClass(
-            next,
-            eastAsianLanguage(ownerAt(clusters[clusterIndex + 1]!.utf16From)!.props)
-          );
+    // Only a mark with a right bearing can start a shared seam; skip ordinary text early.
+    const leftClass =
+      next !== undefined && RIGHT_BEARING.test(cluster.text)
+        ? punctuationSeamClass(cluster.text, eastAsianLanguage(base.props))
+        : undefined;
+    const rightClass = leftClass
+      ? punctuationSeamClass(
+          next!,
+          eastAsianLanguage(ownerAt(clusters[clusterIndex + 1]!.utf16From)!.props)
+        )
+      : undefined;
     const trimRight =
       rightClass !== undefined &&
       (leftClass === 'closing' || (leftClass === 'centred' && rightClass === 'opening')) &&
@@ -250,9 +253,9 @@ function compressionSlices(
         );
         bearing = Math.min(bearing, Math.max(0, nextAdvance / 2));
       } else {
-        // Word halves the complete colon cell before closing punctuation, including
-        // authored spacing. Word permits overlapping horizontal bounds here:
-        // centered colon dots and low closing ink occupy different vertical bands.
+        // A colon of the closing class halves its complete cell before a closing or
+        // centred mark, including authored spacing. Overlapping horizontal bounds are
+        // allowed: colon dots and low closing ink occupy different vertical bands.
         // Keep native ink within the pair; the natural-width wrap guard prevents
         // a colon from losing this following cell across a line or float passage.
         const ink = measurer.inkBounds?.(cluster.text, face);
