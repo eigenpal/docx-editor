@@ -16,6 +16,7 @@ import {
   type InlineDrawingLayoutContext,
 } from './drawing-layout.ts';
 import { anchoredOutOfCell, type CellAnchorScope } from './cell-anchor-layout.ts';
+import { followsParagraphTop } from './following-anchor-tops.ts';
 import { drawingGeometryFromProjection } from './drawing-geometry.ts';
 import { paintLayerOf, sortDrawingsForPaint, type DrawingPaintLayer } from './drawing-overlap.ts';
 import { paragraphBandTop, topAndBottomBandAnchorY } from './top-and-bottom-clearance.ts';
@@ -151,6 +152,8 @@ export interface ExclusionZone {
   readonly columnIndex: number;
   /** Resolved top edge in page-content coordinates after overlap displacement. */
   readonly y: number;
+  /** The paragraph top the picture follows one for one (`followsParagraphTop`), if any. */
+  readonly paragraphTop?: number;
   readonly verticalBand: LayoutBox;
   readonly input: WrapExclusionInput;
 }
@@ -314,6 +317,9 @@ export function exclusionZoneFromAnchoredDrawing(options: {
     allowOverlap: options.drawing.allowOverlap,
     columnIndex: options.columnIndex ?? 0,
     y,
+    ...(followsParagraphTop(options.drawing, options.projection)
+      ? { paragraphTop: options.drawing.verticalFrameOrigin }
+      : {}),
     verticalBand: verticalBandOfExclusion(input),
     input,
   });
@@ -454,6 +460,7 @@ export function localizeExclusionZones(
       return Object.freeze({
         ...zone,
         y: zone.y - originY,
+        ...(zone.paragraphTop !== undefined ? { paragraphTop: zone.paragraphTop - originY } : {}),
         verticalBand: Object.freeze({
           ...band,
           x: band.x - originX,

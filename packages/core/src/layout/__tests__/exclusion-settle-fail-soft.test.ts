@@ -1,15 +1,17 @@
 // A wrap reflow that runs out of passes must still lay the document out. Before, it threw
 // `DrawingExclusionConvergenceError`, nothing caught it for body text, and the document did not
 // open. A chain of pictures that each wrap the text before the next one settles about one link
-// per pass, so a long enough chain reaches the ceiling (#1803).
+// per pass while the zones of following pictures stay where the previous pass put them, so a
+// long enough chain reaches the ceiling (#1803). These tests keep them there.
 
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
   WML_NAMESPACE_URI,
   type OoxmlNode,
   type OoxmlPart,
 } from '../../store/package/ooxml-tree.ts';
 import { limitExclusionPassesForTest } from '../exclusion-layout-steps.ts';
+import { disableFollowingZoneMovesForTest } from '../following-anchor-tops.ts';
 import { refusalRetriesWithoutHiddenFurniture } from '../furniture-drawing-exclusion.ts';
 import { layoutBlocksWithColumnBalance, type BlockLayoutResult } from '../column-balance-layout.ts';
 import type { BlockLayoutOptions } from '../semantic-layout.ts';
@@ -112,6 +114,12 @@ function withPassLimits<T>(run: () => T): T {
 }
 
 describe('a wrap reflow that runs out of passes', () => {
+  let restoreMoves: () => void;
+  beforeAll(() => {
+    restoreMoves = disableFollowingZoneMovesForTest();
+  });
+  afterAll(() => restoreMoves());
+
   test('needs more passes than the lowered limits allow', () => {
     // The chain settles, given enough passes: the limits below must cut it short.
     const settled = countPasses(() => layout(part));
@@ -196,4 +204,53 @@ describe('a wrap reflow that runs out of passes', () => {
     // During the retry, a reflow that does not settle must publish: a refusal there escapes.
     expect(refusalRetriesWithoutHiddenFurniture({ yieldHiddenFurnitureZones: true })).toBe(false);
   });
+});
+
+describe('a wrap reflow that moves zones under lowered limits', () => {
+  // A chain whose pictures overlap the lines above them settles a link per ordinary pass, and
+  // passes 5 and 6 may move zones. Limits of 6 and 8: the budget ends with the moved passes
+  // and the pass after them. Limits of 4 and 5: it ends before a pass may move a zone, and the
+  // reflow runs out as an ordinary one does.
+  test('publishes, the same way every time, within the passes ordinary passes take', () => {
+    for (const [reflow, settling] of [
+      [6, 8],
+      [4, 5],
+    ] as const) {
+      const limited = <T>(run: () => T): T => {
+        const restore = limitExclusionPassesForTest(reflow, settling);
+        try {
+          return run();
+        } finally {
+          restore();
+        }
+      };
+      const moved = limited(() => countPasses(() => layout(part, 1, createLayoutSession())));
+      const again = limited(() => layout(part));
+      const restore = disableFollowingZoneMovesForTest();
+      const ordinary = limited(() => countPasses(() => layout(part)));
+      restore();
+      const drawings = moved.result.pages.flatMap((page) => page.anchoredDrawings ?? []);
+      expect(new Set(drawings.map((drawing) => drawing.drawingNodeId)).size).toBe(24);
+      expect(again.pages).toEqual(moved.result.pages);
+      expect(moved.passes).toBeLessThanOrEqual(ordinary.passes);
+      if (reflow === 4) expect(moved.result.pages).toEqual(ordinary.result.pages);
+    }
+  }, 60_000);
+
+  test('lays an edit out as a fresh layout of the edited document', () => {
+    const session = createLayoutSession();
+    const limited = <T>(run: () => T): T => {
+      const restore = limitExclusionPassesForTest(6, 8);
+      try {
+        return run();
+      } finally {
+        restore();
+      }
+    };
+    limited(() => layout(part, 1, session));
+    const edited = withLongerText(part, 20);
+    const edit = limited(() => countPasses(() => layout(edited, 2, session)));
+    const fresh = limited(() => countPasses(() => layout(edited, 2)));
+    expect(edit.result.pages).toEqual(fresh.result.pages);
+  }, 60_000);
 });
