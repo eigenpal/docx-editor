@@ -16,7 +16,9 @@ const policy = {
     after: {},
   },
 };
-function compress(text: string, split = text.length, language = 'zh-CN', kern = 1) {
+type Languages = string | readonly [string | undefined, string | undefined] | undefined;
+function compress(text: string, split = text.length, language: Languages = 'zh-CN', kern = 1) {
+  const languages = typeof language === 'string' || !language ? [language, language] : language;
   const pieces: FieldAwarePiece[] = [text.slice(0, split), text.slice(split)]
     .filter(Boolean)
     .map((text, index) => ({
@@ -24,7 +26,9 @@ function compress(text: string, split = text.length, language = 'zh-CN', kern = 
       start: index === 0 ? 0 : split,
       end: index === 0 ? split : split + text.length,
       style: { ...DEFAULT_RUN_STYLE, kerningMinPt: kern, fontSizePt: 11 },
-      props: [{ localName: 'lang', attributes: { eastAsia: language } }],
+      props: languages[index]
+        ? [{ localName: 'lang', attributes: { eastAsia: languages[index] } }]
+        : [],
     }));
   return compressCjkPieces(pieces, policy, measurer);
 }
@@ -148,27 +152,61 @@ test('decorated, linked-style, and tracked punctuation retains native ink and se
   expect(result.some((piece) => piece.glyphOffsetPt !== undefined)).toBe(true);
 });
 
-test('fullwidth semicolon shares a bearing across runs without changing ordinary widths', () => {
-  for (const language of ['zh-CN', 'ja-JP']) {
-    expect(advances(compress('甲）；乙', 2, language))).toEqual([12, 6, 12, 12]);
-    expect(advances(compress('甲；（乙', 2, language))).toEqual([12, 6, 12, 12]);
-    expect(advances(compress('甲；乙', 2, language))).toEqual([12, 12, 12]);
-    expect(advances(compress('甲）；乙', 2, language, 50))).toEqual([12, 12, 12, 12]);
-  }
-  expect(advances(compress('甲；）乙', 2, 'zh-CN'))).toEqual([12, 6, 12, 12]);
-  expect(advances(compress('甲；）乙', 2, 'ja-JP'))).toEqual([12, 12, 12, 12]);
-  expect(advances(compress('甲）；乙', 2, 'ko-KR'))).toEqual([12, 12, 12, 12]);
+/** The bearing removed at the seam of `甲AB乙`, where A and B are in separate runs. */
+function seam(pair: string, language: Languages) {
+  return 48 - advances(compress(`甲${pair}乙`, 2, language)).reduce((sum, width) => sum + width, 0);
+}
+
+test.each([
+  // Language, pairs that share one half-em bearing, pairs that keep both bearings.
+  ['zh-CN', '）； ；； ；） ；（ ！。 、！ 。（ ：（', '）？ ？（ ；・ （； ・（'],
+  ['zh-SG', '；） ！（', '？（'],
+  ['no language', '；） ！（ 、、', '？（'],
+  ['zh-TW', '）； ；（ 、（ ）、 ：（', '；） ；； 、、 、； ！（ ）！'],
+  ['zh-HK', '；（ ）、', '；） 、、'],
+  ['ja-JP', '）； ；（ ・（ ）・ 、・ 、、', '；） ；； ！（ ）！ ・・ ・）'],
+  ['ko-KR', '', '）（ ）；'],
+])('%s punctuation pairs share a bearing by their class', (label, shared, kept) => {
+  const language = label === 'no language' ? undefined : label;
+  for (const pair of shared.split(' ').filter(Boolean))
+    expect([pair, seam(pair, language)]).toEqual([pair, 6]);
+  for (const pair of kept.split(' ')) expect([pair, seam(pair, language)]).toEqual([pair, 0]);
 });
 
-test('a compressed semicolon restores its bearing when the next mark is on another line', () => {
-  const piece = compress('甲；（乙', 2).find((piece) => piece.text === '；')!;
-  const span = {
-    text: piece.text,
-    glyphOffsetPt: piece.glyphOffsetPt,
-    range: { start: piece.start, end: piece.end },
-  } as import('../semantic-records.ts').StyleSpanRecord;
-  const retry = lineLocalBearingRetry([{ spans: [span] }, { spans: [] }], {
-    preserveColonAdvances: false,
-  });
-  expect(retry?.keepRightBearings).toEqual(new Set([1]));
+test('each mark of a pair takes its class from its own run language', () => {
+  expect(seam('；！', ['zh-CN', 'ja-JP'])).toBe(0);
+  expect(seam('）・', ['zh-CN', 'ja-JP'])).toBe(6);
+  expect(seam('；（', ['ja-JP', 'zh-CN'])).toBe(6);
+  expect(seam('；）', ['ja-JP', 'zh-CN'])).toBe(0);
+  expect(seam('、；', ['zh-TW', 'zh-CN'])).toBe(0);
+  expect(seam('）；', ['zh-TW', 'zh-CN'])).toBe(6);
 });
+
+test('the first mark of a pair gives up its right bearing, unless kerning is off', () => {
+  expect(advances(compress('甲）；乙', 2))).toEqual([12, 6, 12, 12]);
+  expect(advances(compress('甲；（乙', 2, 'ja-JP'))).toEqual([12, 6, 12, 12]);
+  expect(advances(compress('甲；乙', 2))).toEqual([12, 12, 12]);
+  expect(advances(compress('甲）；乙', 2, 'zh-CN', 50))).toEqual([12, 12, 12, 12]);
+});
+
+test.each([
+  ['；（', 'zh-CN'],
+  ['！（', 'zh-CN'],
+  ['、（', 'zh-TW'],
+  ['・（', 'ja-JP'],
+])(
+  'a compressed %s restores its bearing when the next mark is on another line',
+  (pair, language) => {
+    const piece = compress(`甲${pair}乙`, 2, language).find((piece) => piece.text === pair[0])!;
+    expect(piece.glyphOffsetPt).toBe(0);
+    const span = {
+      text: piece.text,
+      glyphOffsetPt: piece.glyphOffsetPt,
+      range: { start: piece.start, end: piece.end },
+    } as import('../semantic-records.ts').StyleSpanRecord;
+    const retry = lineLocalBearingRetry([{ spans: [span] }, { spans: [] }], {
+      preserveColonAdvances: false,
+    });
+    expect(retry?.keepRightBearings).toEqual(new Set([1]));
+  }
+);

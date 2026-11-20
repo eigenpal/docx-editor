@@ -17,10 +17,35 @@ import { isRunKerningEnabled } from './run-kerning.ts';
 
 const FULLWIDTH_PUNCTUATION =
   /^[、。〈〉《》「」『』【】〔〕〖〗〘〙〚〛！（），．：；？［］｛｝]$/u;
-// Opening/closing classes have a half-em side bearing. A colon needs a separate
-// seam rule because its ink can be centred, depending on the face and locale.
+// Opening brackets have a half-em left bearing in every language. Closing brackets have a
+// half-em right bearing.
 const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
-const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
+const CLOSING_BRACKET = /^[〉》」』】〕〗〙〛）］｝]$/u;
+/** Marks that can give up their right bearing at a seam, in some language. */
+const RIGHT_BEARING = /^[、。〉》」』】〕〗〙〛），．］｝；：！・]$/u;
+
+/**
+ * How a mark shares a bearing at a seam with the next mark, by its own run language. A
+ * `closing` mark gives half its advance before a closing, centred, or opening mark. A
+ * `centred` mark gives it only before an opening mark. Two opening marks share the second
+ * mark's left bearing. Other marks, such as `？`, never share a bearing.
+ */
+export function punctuationSeamClass(
+  mark: string,
+  language: string | undefined
+): 'opening' | 'closing' | 'centred' | undefined {
+  if (OPENING.test(mark)) return 'opening';
+  if (CLOSING_BRACKET.test(mark)) return 'closing';
+  const traditional = /^zh-(tw|hk|mo|hant)(-|$)/i.test(language ?? '');
+  const japanese = /^ja(-|$)/i.test(language ?? '');
+  // Simplified Chinese, and text without an East Asian language, sets these marks in the
+  // left half of the cell. Traditional Chinese centres them; Japanese centres `；` and `：`.
+  if ('、。，．'.includes(mark)) return traditional ? 'centred' : 'closing';
+  if (mark === '；' || mark === '：') return traditional || japanese ? 'centred' : 'closing';
+  if (mark === '！') return traditional || japanese ? undefined : 'closing';
+  if (mark === '・') return japanese ? 'centred' : undefined;
+  return undefined;
+}
 
 /** A colon cannot borrow an opening bearing across a line or exclusion passage. */
 export function colonLostOpeningBearing(lines: LineSpans): boolean {
@@ -64,7 +89,7 @@ export function lineLocalBearingRetry(
     const span = line.spans.at(-1);
     if (span?.glyphOffsetPt !== 0 || span.text.endsWith('：')) continue;
     const last = segmentGraphemes(span.text).at(-1)!;
-    if (CLOSING.test(last.text) || last.text === '；') keep.add(span.range.end - last.text.length);
+    if (RIGHT_BEARING.test(last.text)) keep.add(span.range.end - last.text.length);
   }
   if (keep.size === (advances.keepRightBearings?.size ?? 0)) return null;
   return { ...advances, keepRightBearings: keep };
@@ -179,25 +204,23 @@ function compressionSlices(
       previous !== undefined &&
       OPENING.test(previous) &&
       pairEnabled(clusters[clusterIndex - 1]!.utf16From, cluster.utf16From);
+    const leftClass = punctuationSeamClass(cluster.text, eastAsianLanguage(base.props));
+    const rightClass =
+      next === undefined
+        ? undefined
+        : punctuationSeamClass(
+            next,
+            eastAsianLanguage(ownerAt(clusters[clusterIndex + 1]!.utf16From)!.props)
+          );
     const trimRight =
-      next !== undefined &&
+      rightClass !== undefined &&
+      (leftClass === 'closing' || (leftClass === 'centred' && rightClass === 'opening')) &&
       !keepRightBearings?.has(base.start + cluster.utf16From - starts[pieceIndex]!) &&
       pairEnabled(cluster.utf16From, clusters[clusterIndex + 1]!.utf16From) &&
-      ((CLOSING.test(cluster.text) &&
-        (OPENING.test(next) || CLOSING.test(next) || next === '：' || next === '；')) ||
-        // Word lets a Japanese semicolon share the bearing with an opening mark.
-        // Chinese semicolons also share it with a closing mark or another semicolon.
-        (cluster.text === '；' &&
-          (OPENING.test(next) ||
-            ((CLOSING.test(next) || next === '；') &&
-              !/^ja(?:-|$)/i.test(eastAsianLanguage(base.props) ?? '')))) ||
-        // Retain the following opening's left bearing. It receives a centred
-        // colon's overhang without moving or clipping the colon's native ink.
-        (cluster.text === '：' &&
-          (OPENING.test(next) || CLOSING.test(next)) &&
-          !preserveColonAdvances &&
-          !base.style.highlight &&
-          !base.style.shading));
+      // Retain the following opening's left bearing. It receives a centred
+      // colon's overhang without moving or clipping the colon's native ink.
+      (cluster.text !== '：' ||
+        (!preserveColonAdvances && !base.style.highlight && !base.style.shading));
     const fraction = trimLeft || trimRight ? 0.5 : 0;
     if (!fraction) continue;
     // Measure the complete cluster with its base character's font. Apply the
