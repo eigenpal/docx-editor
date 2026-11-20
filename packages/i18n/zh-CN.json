@@ -1059,7 +1059,7 @@
     "nothingToPaint": "请选择要应用格式的文本",
     "noReviewAuthors": "此文档没有审阅作者",
     "suggestingNeedsAuthor": "建议模式需要作者。请在编辑器配置中设置作者。",
-    "pictureSelected": "已选中一张图片。请将光标放在文本中以插入图片。",
+    "pictureSelected": "在建议模式下，选中绘图时无法插入图片。请将光标放在文本中以插入图片。",
     "chartDrawing": "这是一个图表。可以删除它，但不能像图片一样编辑它。",
     "chartFrame": "这是一个图表。可以更改其大小、位置、文字环绕和替代文字。",
     "diagramFrame": "这是一个关系图。可以更改其大小、位置、文字环绕和替代文字。",

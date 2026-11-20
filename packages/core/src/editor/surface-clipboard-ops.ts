@@ -164,6 +164,8 @@ export interface SurfaceClipboardDeps {
   drawingPasteTarget?(content: DrawingPasteContent): DrawingPasteTarget | null;
   /** Enter the selected drawing's text box and select its text; false when it cannot. */
   selectTextBoxForPaste?(drawingNodeId: string): boolean;
+  /** Leave the text box a paste entered, and select its drawing again. */
+  leaveTextBoxForPaste?(drawingNodeId: string, paragraphId: string): void;
 }
 
 export interface SurfaceClipboardOps {
@@ -197,19 +199,23 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
   /**
    * Move the selection to where a paste goes while a drawing is selected: before its anchor
    * run, which is where the selection already is, or over the text of its text box. False when
-   * the paste refuses; the reason is published. True, changing nothing, with no drawing selected.
+   * the paste refuses; the reason is published. After a move into the text box, a function that
+   * leaves the box and selects the drawing again. Null when the selection did not move, which
+   * includes no drawing selected.
    */
-  function placeDrawingPaste(content: DrawingPasteContent): boolean {
+  function placeDrawingPaste(content: DrawingPasteContent): false | (() => void) | null {
     const target = deps.drawingPasteTarget?.(content) ?? null;
-    if (!target || target.kind === 'anchor') return true;
-    const reason =
-      target.kind === 'refused'
-        ? target.reason
-        : deps.selectTextBoxForPaste?.(target.drawingNodeId)
-          ? null
-          : TEXT_BOX_PASTE_REASON;
-    if (reason !== null) refuse(reason);
-    return reason === null;
+    if (!target || target.kind === 'anchor') return null;
+    if (target.kind === 'refused') {
+      refuse(target.reason);
+      return false;
+    }
+    const anchorParagraphId = deps.orderedRange().from.paragraphId;
+    if (!deps.selectTextBoxForPaste?.(target.drawingNodeId)) {
+      refuse(TEXT_BOX_PASTE_REASON);
+      return false;
+    }
+    return () => deps.leaveTextBoxForPaste?.(target.drawingNodeId, anchorParagraphId);
   }
 
   /** Insert text, turning newlines into real paragraph splits rather than literal characters. */
@@ -536,7 +542,22 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       return false;
     }
     // While a drawing is selected the paste goes before its anchor run or into its text box.
-    if (!placeDrawingPaste(pasteContentOf(text, drawingCopy))) return false;
+    const placed = placeDrawingPaste(pasteContentOf(text, drawingCopy));
+    if (placed === false) return false;
+    const revision = deps.session.packageRevision();
+    const landed = routeRichPaste(text, html, forcePlain, cells);
+    // A paste into a text box that lands nothing leaves the box, so the next key does not
+    // replace the text the paste selected.
+    if (placed && deps.session.packageRevision() === revision) placed();
+    return landed;
+  }
+
+  function routeRichPaste(
+    text: string,
+    html: string | null,
+    forcePlain: boolean,
+    cells: boolean
+  ): boolean {
     // Read again: a paste into a text box takes the text box's plain lane.
     const richStory = (deps.richPasteAllowed?.() ?? true) && deps.storyScope().kind === 'body';
     const lane = routePaste(

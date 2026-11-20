@@ -373,9 +373,11 @@ The editor refuses to copy a drawing in a header, footer, or note. It also refus
 
 If a drawing is selected when you paste, the paste goes where the drawing's anchor is in the text:
 
-- Text, formatted content, and a copied drawing go in before the selected drawing's anchor, in the same paragraph. The selected drawing stays, and the caret shows after pasted text.
+- A copied drawing goes in before the selected drawing's anchor, in the same paragraph. The selected drawing stays.
+- If the selected drawing is a picture, chart, line, group, or drawing canvas, text and formatted content also go in before its anchor. The caret shows after the pasted text.
 - If the selected drawing is a text box or a shape with text, pasted text replaces the text inside it. The caret stays in the text box after the pasted text. Formatted content pastes as plain text there.
 - The editor refuses to paste text into a shape that has no text, a text box whose text it cannot edit in place, or a shape selected inside a group. Each refusal reports a translated reason, and the document does not change.
+- In suggesting mode, each paste becomes a tracked change.
 
 If you build your own selection overlay and it takes focus, pass its `copy`, `cut`, and `paste` events to the editor:
 

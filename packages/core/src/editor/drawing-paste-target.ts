@@ -3,8 +3,8 @@
 //
 // A selected drawing is a collapsed caret at the start of its anchor run. Content goes there,
 // immediately before the anchor run, in the anchor paragraph: a copied drawing or a picture
-// always, and text while a picture, a chart, a line or a whole group is selected. The selected
-// drawing stays where it is.
+// always, and text while a picture, a chart, a line, a whole group or a drawing canvas is
+// selected. The selected drawing stays where it is.
 //
 // Text pasted while a shape that can hold text is selected goes into the shape instead, and
 // replaces the text it holds. The editor writes it into the shape's text box story. A shape
@@ -18,6 +18,7 @@ import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tre
 import { DRAWINGML_MAIN_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { WPS_NAMESPACE_URI } from '../store/package/ooxml-drawing-rules.ts';
 import { WPG_NAMESPACE_URI } from '../store/package/drawing-group-frame.ts';
+import { WPC_NAMESPACE_URI } from '../store/package/drawing-canvas-projection.ts';
 import { VML, attribute } from '../store/package/legacy-vml-values.ts';
 import { textboxStoriesInPart } from '../store/package/textbox-stories.ts';
 import { paragraphLength } from '../store/store/tree-op-segments.ts';
@@ -104,6 +105,8 @@ function drawingTextKind(drawing: OoxmlNode): DrawingTextKind {
     if (element.namespaceUri === MC_NAMESPACE_URI && element.localName === 'Fallback') continue;
     if (element.namespaceUri === WML_NAMESPACE_URI && element.localName === 'txbxContent') continue;
     if (element.namespaceUri === WPG_NAMESPACE_URI && element.localName === 'wgp') return 'group';
+    // A drawing canvas holds its shapes as a group does: text goes beside it, not into one.
+    if (element.namespaceUri === WPC_NAMESPACE_URI && element.localName === 'wpc') return 'group';
     if (element.namespaceUri === WPS_NAMESPACE_URI && element.localName === 'wsp')
       return shapeKind(element);
     if (element.namespaceUri === VML) {
@@ -194,7 +197,11 @@ export function drawingClipboardDeps(
   }
 ): Pick<
   SurfaceClipboardDeps,
-  'selectedDrawing' | 'selectPastedDrawing' | 'drawingPasteTarget' | 'selectTextBoxForPaste'
+  | 'selectedDrawing'
+  | 'selectPastedDrawing'
+  | 'drawingPasteTarget'
+  | 'selectTextBoxForPaste'
+  | 'leaveTextBoxForPaste'
 > {
   const surface = () => mount().surface;
   return {
@@ -202,5 +209,9 @@ export function drawingClipboardDeps(
     selectPastedDrawing: (id, paragraphId) => selectPastedDrawing(surface(), id, paragraphId),
     drawingPasteTarget: (content) => drawingPasteTarget(surface(), content),
     selectTextBoxForPaste: (id) => selectTextBoxForPaste(surface(), mount().textbox, id),
+    leaveTextBoxForPaste: (id, paragraphId) => {
+      mount().textbox?.exit();
+      surface().selectDrawing(id, paragraphId);
+    },
   };
 }

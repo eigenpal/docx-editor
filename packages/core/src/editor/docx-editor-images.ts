@@ -596,7 +596,7 @@ function isStaleImageMutation(
  * `drawingPasteTarget` sends it. The store refuses a tracked drawing there: suggesting refuses.
  */
 export const PICTURE_SELECTED_INSERT_REASON =
-  'a picture is selected; place the caret in text to insert a picture';
+  'in suggesting mode, a picture cannot be inserted while a drawing is selected; place the caret in text to insert a picture';
 
 export function gateImageCommand(
   command: EditorCommand,
@@ -997,9 +997,8 @@ async function runImageCommand(
   const pre = captureImageMutationPreconditions(editor);
   if (!pre) return { ok: false, code: 'notFound', reason: 'no document is loaded' };
   if (command.type === 'insertImage') {
-    const pasted = command.at ? null : drawingPasteTarget(surface, 'drawing');
-    const anchor =
-      command.at ?? (pasted?.kind === 'anchor' ? pasted : surface.state().selection.anchor);
+    // With a drawing selected, the selection anchor is its paste target, before the anchor run.
+    const anchor = command.at ?? surface.state().selection.anchor;
     const current = () =>
       command.at
         ? editor.surface === surface &&

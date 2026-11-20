@@ -66,7 +66,7 @@
     "lockedContentBreak": "Un control de contenido bloquea este texto, así que no puedes insertar aquí un salto de sección.",
     "nothingToCopyFormatting": "Selecciona texto para copiar su formato",
     "nothingToPaint": "Selecciona texto para aplicar el formato",
-    "pictureSelected": "Hay una imagen seleccionada. Coloque el cursor en el texto para insertar una imagen.",
+    "pictureSelected": "En modo de sugerencias, no se puede insertar una imagen mientras hay un dibujo seleccionado. Coloque el cursor en el texto para insertar una imagen.",
     "chartDrawing": "Esto es un gráfico. Puede eliminarlo, pero no editarlo como una imagen.",
     "chartFrame": "Esto es un gráfico. Puede cambiar su tamaño, posición, ajuste del texto y texto alternativo.",
     "diagramFrame": "Esto es un diagrama. Puede cambiar su tamaño, posición, ajuste del texto y texto alternativo.",

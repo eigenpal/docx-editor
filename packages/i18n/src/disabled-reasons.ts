@@ -99,7 +99,7 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'in suggesting mode, remove the whole equation block rather than one equation':
     'disabledReason.equationSuggestingDisplay',
   // Keyed on `PICTURE_SELECTED_INSERT_REASON` in the engine's image lane.
-  'a picture is selected; place the caret in text to insert a picture':
+  'in suggesting mode, a picture cannot be inserted while a drawing is selected; place the caret in text to insert a picture':
     'disabledReason.pictureSelected',
   'the drop target is stale; drop the image again': 'imageInsert.errors.staleTarget',
   'the drop target story is no longer active': 'imageInsert.errors.staleTarget',

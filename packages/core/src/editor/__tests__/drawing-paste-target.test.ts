@@ -13,6 +13,7 @@ import { forwardClipboardEvents } from '../chrome-clipboard.ts';
 import { findNode } from '../../store/package/ooxml-edit.ts';
 import { textboxStoriesInPart } from '../../store/package/textbox-stories.ts';
 import { drawingPasteTarget } from '../drawing-paste-target.ts';
+import { wrapInteropHtml } from '../clipboard-fragment-codec.ts';
 import {
   GROUP_MEMBER_PASTE_REASON,
   SHAPE_PASTE_TEXT_REASON,
@@ -246,6 +247,23 @@ describe('a picture, line or group selected', () => {
     expect(editor.snapshot().image?.id).not.toBe(picture);
   });
 
+  test('suggesting mode proposes a copied drawing before the selected drawing', async () => {
+    const { editor, surface } = await open(body(PICTURE) + p(LINE + text('Rule here')));
+    const line = surface.layout().pages[0]!.anchoredDrawings!.find((d) => d.relativeHeight === 2)!;
+    expect(surface.selectDrawing(line.drawingNodeId, line.anchorParagraphId)).toBe(true);
+    const copied = surface.copyFlavours();
+    surface.setEditingMode('suggest');
+    selectFirstDrawing(editor);
+    expect(surface.pasteRich(copied.text, copied.html)).toBe(true);
+    const anchorParagraph = (await saved(editor)).split('</w:p>')[0]!;
+    // The copy is a tracked insertion before the selected drawing, which stays untracked.
+    expect(anchorParagraph).toMatch(/<w:ins [^>]*>(?:(?!<\/w:ins>).)*name="Rule"/s);
+    expect(anchorParagraph.indexOf('name="Rule"')).toBeLessThan(
+      anchorParagraph.indexOf('name="Photo"')
+    );
+    expect(anchorParagraph).not.toMatch(/<w:ins [^>]*>(?:(?!<\/w:ins>).)*name="Photo"/s);
+  });
+
   test('a line and a whole group take text before the anchor run too', async () => {
     for (const drawing of [LINE, GROUP]) {
       const { editor } = await open(body(drawing));
@@ -253,6 +271,22 @@ describe('a picture, line or group selected', () => {
       expect(editor.exec({ type: 'paste', text: 'ZULU' })).toMatchObject({ ok: true });
       expect(bodyText(editor)[0]).toBe(`Alpha headZULU${OBJ}Alpha tail.`);
     }
+  });
+
+  test('a drawing canvas takes text before the anchor run, not into one of its boxes', async () => {
+    const canvas = floating(
+      'Canvas',
+      '<wpc:wpc xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas">' +
+        boxShape(BOX_TEXT) +
+        boxShape(BOX_TEXT.replaceAll('Box', 'Other')) +
+        '</wpc:wpc>',
+      'http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas'
+    );
+    const { editor, surface } = await open(body(canvas));
+    selectFirstDrawing(editor);
+    expect(drawingPasteTarget(surface, 'text')).toMatchObject({ kind: 'anchor' });
+    expect(editor.exec({ type: 'paste', text: 'ZULU' })).toMatchObject({ ok: true });
+    expect(bodyText(editor)[0]).toBe(`Alpha headZULU${OBJ}Alpha tail.`);
   });
 
   test('an inline picture stays, and the text goes in before it', async () => {
@@ -414,6 +448,29 @@ describe('a text box selected', () => {
     expect(editor.exec({ type: 'pasteWithoutFormatting', text: 'ZULU' })).toEqual(refused);
     expect(surface.state().lastRejection).toBe(TEXT_BOX_PASTE_REASON);
     expect(await saved(editor)).toBe(before);
+  });
+
+  test('a paste the text box refuses leaves the box, and the drawing stays selected', async () => {
+    const { editor, surface } = await open(body(TEXT_BOX));
+    // A fragment that holds an embedded object has no form the text box can take.
+    const object =
+      '<w:object xmlns:v="urn:schemas-microsoft-com:vml" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<v:shape type="#_x0000_t75" style="width:10pt;height:12pt"><v:imagedata r:id="preview"/></v:shape></w:object>';
+    const html = wrapInteropHtml('<p>AZ</p>', {
+      bytes: documentBytes(p(`<w:r><w:t>A</w:t>${object}<w:t>Z</w:t></w:r>`)),
+      lastMarkCovered: true,
+    });
+    const box = selectFirstDrawing(editor);
+    const before = await saved(editor);
+    expect(surface.pasteRich('AZ', html)).toBe(false);
+    expect(surface.state().lastRejection).toBe('unsupported-content');
+    expect(await saved(editor)).toBe(before);
+    // The box's text is not left selected, so the next key cannot replace it.
+    const { anchor: at, head } = surface.state().selection;
+    expect(at).toEqual(head);
+    expect(at.paragraphId).toBe(surface.session.paragraphIds()[0]!);
+    expect(editor.snapshot().image?.id).toBe(box);
+    expect(boxText(editor)).toEqual(['Box one.', 'Box two.']);
   });
 });
 

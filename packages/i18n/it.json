@@ -56,7 +56,7 @@
     "equationNoLinearForm": "Questa equazione non ha una forma lineare, quindi non può essere sostituita dal testo",
     "equationSuggesting": "La modifica di un’equazione non è disponibile in modalità suggerimenti",
     "equationSuggestingDisplay": "In modalità suggerimenti, rimuovi l’intero blocco equazione invece di una sola equazione",
-    "pictureSelected": "È selezionata un’immagine. Posiziona il cursore nel testo per inserire un’immagine.",
+    "pictureSelected": "In modalità suggerimenti non è possibile inserire un’immagine mentre è selezionato un disegno. Posiziona il cursore nel testo per inserire un’immagine.",
     "chartDrawing": "Questo è un grafico. Puoi eliminarlo, ma non puoi modificarlo come immagine.",
     "chartFrame": "Questo è un grafico. Puoi cambiarne dimensione, posizione, disposizione del testo e testo alternativo.",
     "diagramFrame": "Questo è un diagramma. Puoi cambiarne dimensione, posizione, disposizione del testo e testo alternativo.",

@@ -111,7 +111,8 @@ test.each([
 });
 
 test('the picture-selected insert refusal is translatable', () => {
-  const reason = 'a picture is selected; place the caret in text to insert a picture';
+  const reason =
+    'in suggesting mode, a picture cannot be inserted while a drawing is selected; place the caret in text to insert a picture';
   expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
 });
 
