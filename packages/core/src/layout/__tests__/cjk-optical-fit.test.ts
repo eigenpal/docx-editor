@@ -507,7 +507,14 @@ for (const spacing of [-4, 4]) {
         const pure = wrap('中文', width);
         expect(lineTexts(mixed)[0]).toBe(lineTexts(pure)[0]);
         const comma = mixed[0]!.spans.find((span) => span.text === '，' && span.box.width < 11.9);
-        if (comma) fitted += 1;
+        if (comma) {
+          fitted += 1;
+          // Ideographs keep their authored spacing; only the punctuation gives up blank sides.
+          for (const span of mixed[0]!.spans.filter((entry) =>
+            /^[\u4e00-\u9fff]+$/u.test(entry.text)
+          ))
+            expect(span.style.characterSpacingPt).toBe(spacing / 20);
+        }
       }
       expect(fitted).toBeGreaterThan(0);
       const latin = wrap('A1', 371)
@@ -518,11 +525,36 @@ for (const spacing of [-4, 4]) {
   }
 }
 
-test('a tracked line that holds a Latin word keeps natural punctuation advances', () => {
-  const text = '甲乙丙丁戊己庚辛壬癸子丑寅，AV戌亥春夏秋冬风雨雷电晴雪朝暮甲乙丙丁戊己';
-  for (let width = 330; width <= 400; width += 1) {
-    const lines = layout(text, width, undefined, tracked, trackedProps(-4));
-    for (const span of lines[0]!.spans.filter((entry) => entry.text === '，'))
-      expect(span.box.width).toBeCloseTo(12 - 0.2, 6);
+// A word, a mathematical run, or a curly quote on a tracked line keeps every bracket at its
+// tracked advance, before or after the tracked text; the untracked line compresses the pair.
+test('a tracked line that holds a word, a mathematical run, or a curly quote keeps its brackets', () => {
+  const props = (spacing: number) =>
+    spacing ? trackedProps(spacing) : trackedProps(0).replace(/<w:spacing[^>]*\/>/u, '');
+  for (const [prefix, foreign] of [
+    ['', 'AV'],
+    ['AV', '甲'],
+    ['', '≥'],
+    ['', '“乙”'],
+  ] as const) {
+    const text = `${prefix}甲乙丙丁戊己）（庚辛壬癸${foreign}子丑寅卯辰巳午未申酉戌亥春夏秋冬风雨雷电晴雪朝暮`;
+    const brackets = (spacing: number, width: number) => {
+      const first = layout(text, width, undefined, tracked, props(spacing))[0]!.spans;
+      // Only a first line that holds the foreign text must keep its brackets.
+      return first.some((span) => /[A-Z≥“]/u.test(span.text))
+        ? first.filter((span) => /^[（）]$/u.test(span.text))
+        : [];
+    };
+    let compressed = 0;
+    let held = 0;
+    for (let width = 330; width <= 400; width += 1) {
+      if (brackets(0, width).some((span) => span.box.width < 11.9)) compressed += 1;
+      for (const spacing of [-4, 4])
+        for (const span of brackets(spacing, width)) {
+          held += 1;
+          expect(span.box.width).toBeCloseTo(12 + spacing / 20, 6);
+        }
+    }
+    expect(held).toBeGreaterThan(0);
+    expect(compressed).toBeGreaterThan(0);
   }
 });

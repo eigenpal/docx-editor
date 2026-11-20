@@ -166,6 +166,7 @@ function cellsOf(
     if (requireLocalQualification) {
       const authored = layoutDerivedSpacingStyleForEditing(face);
       tracked ||= authored.characterSpacingPt !== 0;
+      // A refused line stops before it measures the rest of its spans.
       if (
         (tracked && foreign) ||
         authored.horizontalScalePercent !== 100 ||
@@ -177,7 +178,7 @@ function cellsOf(
       // immutable, and neither adjacent boundary can supply compression capacity.
       if (/^\p{Sm}+$/u.test(span.text) && /[^\x00-\x7f]/u.test(span.text)) {
         foreign = true;
-        if (tracked || !Number.isFinite(span.box.width) || span.box.width <= 0) return undefined;
+        if (!Number.isFinite(span.box.width) || span.box.width <= 0) return undefined;
         cells.push({
           sourceIndex,
           alreadyReduced: 0,
@@ -211,7 +212,6 @@ function cellsOf(
           /^[A-Za-z0-9‘’“”]+$/u.test(span.text) ||
           numberMarker;
         foreign ||= ordinaryOpaque;
-        if (tracked && foreign) return undefined;
         cells.push({
           sourceIndex,
           alreadyReduced: 0,
@@ -239,7 +239,6 @@ function cellsOf(
     )
       return undefined;
     foreign ||= curlyAllowed && clusters.some((cluster) => curlyRole(cluster.text));
-    if (tracked && foreign) return undefined;
     // One prefix-width list per span text keeps the memo linear in the text length.
     const ends = memoized(memo, span, 'prefixEnds', span.text, () =>
       clusters.map((cluster) =>
@@ -299,6 +298,7 @@ function cellsOf(
       previous = end;
     }
   }
+  if (tracked && foreign) return undefined;
   return cells;
 }
 // A glyph a blank side can face: an ideograph, punctuation, a qualified quote, or a word. A space
