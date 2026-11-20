@@ -8,6 +8,8 @@ import { linesOf, type TextMeasurer } from '../semantic-records.ts';
 import { fittingClusters } from '../cjk-optical-fit.ts';
 import { segmentGraphemes } from '../grapheme.ts';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const outline =
+  '<w14:textOutline xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" w14:w="12700"><w14:solidFill><w14:srgbClr w14:val="FF0000"/></w14:solidFill></w14:textOutline>';
 const bounds: Record<string, [number, number]> = {
   '（': [0.662, 0.899],
   '）': [0.135, 0.372],
@@ -201,15 +203,8 @@ test('unknown and non-finite bounds retain natural line fitting', () => {
   }
 });
 
-test('optical fitting retains decorated and revised glyph geometry', () => {
-  for (const props of [
-    '<w:u w:val="single"/>',
-    '<w:strike/>',
-    '<w:dstrike/>',
-    '<w:highlight w:val="yellow"/>',
-    '<w:shd w:fill="000000"/>',
-    '<w:rPrChange w:id="1"><w:rPr><w:b/></w:rPr></w:rPrChange>',
-  ]) {
+test('optical fitting retains outlined and revised glyph geometry', () => {
+  for (const props of [outline, '<w:rPrChange w:id="1"><w:rPr><w:b/></w:rPr></w:rPrChange>']) {
     const lines = layout('甲乙（丙丁）戊己', 90, undefined, measurer, props);
     expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
       '甲乙（丙丁）戊',
@@ -386,13 +381,9 @@ test('colon/closing pairs retain natural advances without safe measured pair bou
     ]);
 });
 
-test('ineligible decorated paragraphs retain the advance-only whitespace path', () => {
+test('outlined and revised paragraphs retain the advance-only whitespace path', () => {
   const text = '甲丙、乙、戊）：丁）丙。 。';
-  for (const props of [
-    '<w:u w:val="single"/>',
-    '<w:highlight w:val="yellow"/>',
-    '<w:rPrChange w:id="1"><w:rPr><w:b/></w:rPr></w:rPrChange>',
-  ]) {
+  for (const props of [outline, '<w:rPrChange w:id="1"><w:rPr><w:b/></w:rPr></w:rPrChange>']) {
     for (const split of [-1, text.length])
       expect(geometry(layout(text, 75, split, measurer, props))).toEqual(
         geometry(layout(text, 75, split, { ...measurer, inkBounds: undefined }, props))
@@ -466,4 +457,49 @@ test('a document whose defaults name no East Asian face compresses no punctuatio
     );
   expect(text(true)).toEqual(['甲乙（丙丁）戊己']);
   expect(text(false)).toEqual(['甲乙（丙丁）戊', '己']);
+});
+
+// The synthetic 14 pt DOCX exported by both WPS and Word fits 32 characters
+// in 443.4 pt, including the comma whose trailing blank must shrink.
+test('inline text decorations keep the fitted width of a full-width comma', () => {
+  const text = '甲乙丙丁戊己庚辛壬癸子丑寅，卯辰巳午未申酉戌亥春夏秋冬风雨雷电晴雪朝暮';
+  const width = 443.4 * (12 / 14);
+  const expected = [text.slice(0, 32), text.slice(32)];
+  const measure: TextMeasurer = {
+    ...measurer,
+    hasResolvedFont: () => true,
+    inkBounds(value, style) {
+      return value === '，'
+        ? { left: 0.08 * style.fontSizePt, right: 0.34 * style.fontSizePt }
+        : measurer.inkBounds?.(value, style);
+    },
+  };
+  const lineTexts = (lines: ReturnType<typeof layout>) =>
+    lines.map((line) => line.spans.map((span) => span.text).join(''));
+  expect(lineTexts(layout(text, width, undefined, measure))).toEqual(expected);
+  for (const props of [
+    '<w:highlight w:val="yellow"/>',
+    '<w:u w:val="single"/>',
+    '<w:shd w:fill="FFFF00"/>',
+    '<w:strike/>',
+    '<w:dstrike/>',
+  ]) {
+    for (const split of [13, text.length]) {
+      const fitted = layout(text, width, split, measure, props);
+      expect(lineTexts(fitted)).toEqual(expected);
+      const comma = fitted[0]!.spans.find((span) => span.text === '，');
+      expect(comma?.box.width).toBeLessThan(12);
+      expect(comma?.glyphOffsetPt ?? 0).toBe(0);
+      const style = comma?.style;
+      expect(
+        Boolean(
+          style?.highlight ||
+          style?.underline ||
+          style?.shading ||
+          style?.strike ||
+          style?.doubleStrike
+        )
+      ).toBe(true);
+    }
+  }
 });

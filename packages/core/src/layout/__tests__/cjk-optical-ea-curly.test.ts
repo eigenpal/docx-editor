@@ -211,8 +211,8 @@ test('EA curly fitting requires resolved, untracked, unscaled, simple shaping', 
   unchanged(attempt({ measurer: { ...measure, inkBounds: () => undefined } }));
 });
 
-test('decorated, projected and noncontiguous spans retain their original geometry', () => {
-  unchanged(attempt({ style: { ...style, underline: { variant: 'single', color: null } } }));
+test('outlined, projected and noncontiguous spans retain their original geometry', () => {
+  unchanged(attempt({ style: { ...style, textOutline: { widthPt: 1, color: 'FF0000' } } }));
   unchanged(attempt({ spanFlags: { projected: true } }));
   unchanged(attempt({ spanFlags: { range: { paragraphId: 'generic', start: 0, end: 3 } } }));
 });
