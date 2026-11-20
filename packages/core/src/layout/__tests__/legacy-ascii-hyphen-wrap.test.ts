@@ -24,17 +24,27 @@ function pieces(...texts: string[]): FieldAwarePiece[] {
   });
 }
 
-test.each(['甲AB123-2048乙', 'well-known', 'かなAB123-2048', '甲2026-2048'])(
-  'legacy punctuation compression keeps an ASCII hyphen word whole in %s',
-  (text) => {
-    const runs = pieces(text);
-    const cut = text.indexOf('-') + 1;
-    const breaks = cjkParagraphBreaks(runs, policy);
-    expect(breaks?.boundaries(runs[0]!)).not.toContain(cut);
-    expect(breaks?.decision(runs[0]!, cut, '', '')).toBe('continues');
-    expect(breaks?.cutAllowed(runs[0]!, 0, cut)).toBe(true);
-  }
-);
+test.each([
+  '甲AB123-2048乙',
+  'well-known',
+  'かなAB123-2048',
+  '甲2026-2048',
+  '甲乙-ABCD',
+  '甲）-ABCD',
+  'ＡＢ-ABCD',
+  'ABCD-éfgh',
+  'ABCD-Жабв',
+  'ABCD-(abc)',
+  'ABCD-$123',
+  "ABCD-'abc",
+])('legacy punctuation compression keeps a hyphen with the text after it in %s', (text) => {
+  const runs = pieces(text);
+  const cut = text.indexOf('-') + 1;
+  const breaks = cjkParagraphBreaks(runs, policy);
+  expect(breaks?.boundaries(runs[0]!)).not.toContain(cut);
+  expect(breaks?.decision(runs[0]!, cut, '', '')).toBe('continues');
+  expect(breaks?.cutAllowed(runs[0]!, 0, cut)).toBe(true);
+});
 
 test('formatting seams in a legacy hyphen word do not create break opportunities', () => {
   const runs = pieces('甲AB123', '-', '2048乙');
@@ -47,7 +57,17 @@ test('formatting seams in a legacy hyphen word do not create break opportunities
   expect(widths?.opens(runs[2]!)).toBe(false);
 });
 
-test('legacy ASCII hyphen grouping preserves other dash breaks and explicit character wrapping', () => {
+test.each(['ABCD-甲乙', 'ABCD-ＡＢ', 'ABCD- efgh', '甲乙-丙丁'])(
+  'a legacy hyphen still breaks before East Asian text or a space in %s',
+  (text) => {
+    const runs = pieces(text);
+    const cut = text.indexOf('-') + 1;
+    const breaks = cjkParagraphBreaks(runs, policy);
+    expect(breaks?.decision(runs[0]!, cut + (text[cut] === ' ' ? 1 : 0), '', '')).toBe('opens');
+  }
+);
+
+test('legacy hyphen grouping preserves other dash breaks and explicit character wrapping', () => {
   const runs = pieces('甲AB123-2048 AB123–2048 AB123- 2048');
   const text = runs[0]!.text;
   const hyphen = text.indexOf('-') + 1;

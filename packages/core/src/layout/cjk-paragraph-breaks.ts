@@ -81,9 +81,11 @@ export function protectedSeamAfter(
   );
 }
 
-// WPS in legacy modes with punctuation compression treats an ASCII hyphen between
-// letters or digits as part of the word, regardless of the surrounding script.
-function keepsLegacyAsciiHyphenWords(policy: CjkParagraphTypography): boolean {
+// In a legacy mode with punctuation compression, a hyphen-minus is no line-break opportunity
+// before a following letter, digit, or symbol, whatever precedes it: `well-known`, `AB-12`,
+// and the `-ABC` of `甲-ABC` stay together. A line may still open after it before East Asian
+// text or a space. Modern modes and `doNotCompress` break after the hyphen.
+function gluesLegacyHyphen(policy: CjkParagraphTypography): boolean {
   return (
     !policy.characterWrap &&
     policy.settings?.legacyLineEndPunctuation === true &&
@@ -92,13 +94,12 @@ function keepsLegacyAsciiHyphenWords(policy: CjkParagraphTypography): boolean {
 }
 
 /** Whether a legacy hyphen may straddle runs and needs paragraph-wide analysis. */
-export function hasLegacyAsciiHyphenText(
+export function hasLegacyHyphenText(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography
 ): boolean {
   return (
-    keepsLegacyAsciiHyphenWords(policy) &&
-    pieces.some((piece) => isText(piece) && piece.text.includes('-'))
+    gluesLegacyHyphen(policy) && pieces.some((piece) => isText(piece) && piece.text.includes('-'))
   );
 }
 
@@ -121,7 +122,7 @@ export function cjkParagraphBreaks(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography
 ): CjkParagraphBreaks | null {
-  if (!usesEastAsianParagraphBreaks(pieces, policy) && !hasLegacyAsciiHyphenText(pieces, policy)) {
+  if (!usesEastAsianParagraphBreaks(pieces, policy) && !hasLegacyHyphenText(pieces, policy)) {
     // A run that opens with a dash needs the text before it; any other paragraph without
     // East Asian text has no paragraph-wide analysis.
     const cuts = paragraphWordCuts(pieces);
@@ -135,18 +136,8 @@ export function cjkParagraphBreaks(
     [0, 'opens'],
     [text.length, 'opens'],
   ]);
-  const wordCuts = wordBoundaries(text, false);
-  const asciiAlphanumeric = /^[A-Za-z0-9]$/;
-  const latinCuts = new Set(
-    keepsLegacyAsciiHyphenWords(policy)
-      ? wordCuts.filter(
-          (offset) =>
-            text[offset - 1] !== '-' ||
-            !asciiAlphanumeric.test(text[offset - 2] ?? '') ||
-            !asciiAlphanumeric.test(text[offset] ?? '')
-        )
-      : wordCuts
-  );
+  const latinCuts = new Set(wordBoundaries(text, false));
+  const glueHyphens = gluesLegacyHyphen(policy);
   // Numeric expressions and full-width alphabetic words are units, even when
   // runs split a decimal separator or currency sign from its digits.
   const numeric = new Set<number>();
@@ -284,6 +275,10 @@ export function cjkParagraphBreaks(
     }
     if (forbidden) {
       decisions.set(at, 'kinsoku');
+      continue;
+    }
+    if (glueHyphens && left.text === '-' && !/^\s/u.test(right.text) && !isCjk(after)) {
+      decisions.set(at, 'continues');
       continue;
     }
     // Figure/letter groups move as words. Like an oversized Latin word, an

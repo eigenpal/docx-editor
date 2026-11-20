@@ -1,11 +1,7 @@
 // Minimum cuts can differ from the contextual segments used for unwrapped text.
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { wordBoundaries } from './cjk-line-break.ts';
-import {
-  cjkParagraphBreaks,
-  hasCjkText,
-  hasLegacyAsciiHyphenText,
-} from './cjk-paragraph-breaks.ts';
+import { cjkParagraphBreaks, hasCjkText, hasLegacyHyphenText } from './cjk-paragraph-breaks.ts';
 import {
   eastAsianLanguage,
   resolveCjkTypography,
@@ -38,7 +34,7 @@ export function cjkAutofitBreaks(
   const visible = pieces.filter((piece) => !piece.style.hidden);
   if (
     !policy.characterWrap &&
-    !hasLegacyAsciiHyphenText(visible, policy) &&
+    !hasLegacyHyphenText(visible, policy) &&
     !visible.some((piece) => hasCjkText(piece.text) || eastAsianLanguage(piece.props))
   )
     return null;
