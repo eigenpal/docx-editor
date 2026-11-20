@@ -514,3 +514,31 @@ test('a legacy mode admits an ideograph only within half its advance at every al
   // Compatibility mode 15 admits it by the expansion gate alone.
   expect(linesAt('both', 15, undefined, text, 53.9)[0]).toBe('甲。乙，丙');
 });
+
+test('spaces before a word that wraps do not compress the line', () => {
+  // Mixed-script lines qualify each face locally.
+  const resolved: TextMeasurer = { ...measurer, hasResolvedFont: () => true };
+  const lines = layout(
+    '甲乙丙、丁 word',
+    62,
+    5,
+    resolved,
+    '',
+    {
+      eastAsianDefaults: true,
+      kern: 2,
+      mode: 14,
+    },
+    'left'
+  );
+  expect(
+    lines.map((line) =>
+      line.spans
+        .map((span) => span.text)
+        .join('')
+        .trimEnd()
+    )
+  ).toEqual(['甲乙丙、丁', 'word']);
+  const first = lines[0]!.spans.filter((span) => span.text.trim());
+  expect(first.reduce((sum, span) => sum + span.box.width, 0)).toBe(60);
+});

@@ -81,6 +81,30 @@ export function protectedSeamAfter(
   );
 }
 
+/**
+ * Whether the spaces that end at `boundary` belong to a protected group: the first visible
+ * character after them may not start a line. Spaces before a word that may wrap trail the line.
+ */
+export function spacesJoinProtectedGroup(
+  breaks: CjkParagraphBreaks | null,
+  pieces: readonly FieldAwarePiece[],
+  pieceIndex: number,
+  boundary: number
+): boolean {
+  let index = pieceIndex;
+  let offset = boundary;
+  // Bounded: a long run of spaces is not a group to fit.
+  for (let steps = 0; steps < 256 && index < pieces.length; steps++) {
+    const piece = pieces[index]!;
+    if (offset >= piece.text.length) {
+      index++;
+      offset = 0;
+    } else if (piece.text[offset] === ' ') offset++;
+    else return protectsSeam(breaks?.decision(piece, offset, ' ', piece.text.slice(offset)));
+  }
+  return false;
+}
+
 /** Select the East Asian analysis, rather than the ordinary run-spanning word cuts. */
 export function usesEastAsianParagraphBreaks(
   pieces: readonly FieldAwarePiece[],
