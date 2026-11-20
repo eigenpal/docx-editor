@@ -17,7 +17,7 @@ export interface FixtureOptions {
   balanceWidths?: boolean;
   /** Writes `w:useWord97LineBreakRules` in `w:compat`. */
   word97LineBreaks?: boolean;
-  compatibility?: 14 | 15;
+  compatibility?: 11 | 12 | 14 | 15;
   defaultFace?: string | null;
   face?: string;
   secondFace?: string;

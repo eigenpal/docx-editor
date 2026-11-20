@@ -20,6 +20,7 @@ import { styleForFontSlot } from './script-itemization.ts';
 import { isDefaultGraphemeBoundary, segmentGraphemes, type GraphemeSegment } from './grapheme.ts';
 import { isCjk, type CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
 import { hangingCjkPunctuationAdvance, hangsWithin } from './cjk-spacing.ts';
+import { hangsInBlankSides } from './hanging-mark-blanks.ts';
 import { formatRevisionOf } from './revision-projection.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 import {
@@ -930,8 +931,8 @@ export function createCjkOpticalFitter(
         )
       : undefined;
     // Kana compress to pull a line-start-prohibited character onto the line before it may
-    // hang. A group that hangs at its natural width needs no other fit; one that does not may
-    // still hang its final mark once the rest of the line compresses.
+    // hang, unless its overflow fits in its blank sides. A group that hangs at its natural width
+    // needs no other fit; one that does not may still hang once the rest of the line compresses.
     const context: FitContext = {
       measurer,
       baselinePieces: pieces,
@@ -939,7 +940,11 @@ export function createCjkOpticalFitter(
       memo,
       cells: {},
     };
-    const kanaRules = kanaRulesFor(candidates, pieces[currentIndex]!);
+    const overflow = line.width + x - origin - available;
+    const blank = { line, measurer, overflow, advance: hangAdvance };
+    const kanaRules = hangsInBlankSides(candidates, pieces[currentIndex]!, blank, policy)
+      ? undefined
+      : kanaRulesFor(candidates, pieces[currentIndex]!);
     let fitted = kanaRules
       ? fitCjkOptically(line, candidates, available, context, { kana: kanaRules })
       : undefined;

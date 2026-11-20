@@ -669,6 +669,48 @@ With no compatibility mode, or in mode 11, 12, or 14, line-end punctuation SHALL
 - **WHEN** a line fits only when its punctuation compresses or hangs
 - **THEN** the line wraps instead
 
+### Requirement: Hanging the blank side of a mark
+
+With document punctuation compression, in every compatibility mode, a hanging line-end mark SHALL hang only its trailing blank side when it overflows by no more than its blank sides. The text before it SHALL fill the rest of the measure. A larger overflow, no compression, or a Korean run SHALL hang the whole mark. Kana compression SHALL NOT compress kana for a mark that hangs within its blank sides.
+
+#### Scenario: A closing mark hangs its blank half
+
+- **GIVEN** a justified line of nineteen 24 pt ideographs and a 24 pt `，`, with document punctuation compression
+- **WHEN** the mark overflows the measure by 6 pt, in any compatibility mode
+- **THEN** the mark starts 12 pt before the margin, so that only its blank half hangs
+- **AND** the ideographs before it spread to meet it
+- **AND** an 18 pt overflow hangs the whole mark, which starts at the margin
+
+#### Scenario: Character spacing changes the trailing blank
+
+- **GIVEN** the same line where every character has -4 pt character spacing
+- **WHEN** the 20 pt `，` overflows the measure by 6 pt
+- **THEN** its trailing blank of 8 pt hangs
+- **AND** a 9 pt overflow hangs the whole mark
+
+#### Scenario: Without compression the whole mark hangs
+
+- **GIVEN** the same line without punctuation compression
+- **WHEN** the mark overflows the measure by 6 pt
+- **THEN** the mark starts at the margin
+
+### Requirement: Blank sides of a line-end mark by language
+
+The mark's run language SHALL select its blank sides. A closing bracket, `、。，．` in Japanese, and `、。，．；：！` in Simplified Chinese or without an East Asian language, SHALL leave the right half blank. Traditional Chinese `、。，．；：` SHALL be centered, with a quarter blank on each side. Other marks, such as `？` and `”`, SHALL have no blank side. Past a centered mark's trailing quarter, the text before it SHALL keep its advances and the overflow SHALL hang.
+
+#### Scenario: A centered mark hangs its trailing quarter
+
+- **GIVEN** a justified line of nineteen 24 pt ideographs and a Traditional Chinese 24 pt `，`, with document punctuation compression
+- **WHEN** the mark overflows the measure by 4 pt
+- **THEN** the mark starts 18 pt before the margin
+- **AND** a 9 pt overflow keeps the ideographs at their advances
+
+#### Scenario: A mark without a blank side hangs whole
+
+- **GIVEN** the same line with a Simplified Chinese `？`
+- **WHEN** the mark overflows the measure by 6 pt
+- **THEN** the mark starts at the margin
+
 ### Requirement: Space shrinking before hanging punctuation
 
 In compatibility mode 15 and later, a justified or distributed line SHALL shrink its inter-word spaces before a half-width line-end mark hangs. The mark SHALL stay inside the margin when the space-shrink rule admits the word with the mark inside the measure, also for a paragraph-final word. Full-width marks and legacy modes SHALL keep their hanging behavior.
