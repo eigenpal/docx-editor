@@ -1,4 +1,4 @@
-// Word for Mac's Review > Markup Options > Reviewers hierarchy.
+// The reviewers menu hierarchy.
 
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { toolbarCommandState } from '@docx-editor.dev/core/editor';

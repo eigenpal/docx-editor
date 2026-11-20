@@ -4,7 +4,8 @@
 //
 // Layout asks the measurer about every run it lays out, so wrapping the measurer sees exactly
 // the faces on the laid-out pages, also the ones an edit adds. One style object stands for many
-// runs, and its face is recorded once, so the wrapper adds one `WeakSet` lookup to a measurement.
+// runs, and its face is recorded once. The wrapper adds one identity comparison to a measurement
+// of the style it saw last, and one `WeakSet` lookup when the style changes.
 
 import type { ResolvedRunStyle, TextMeasurer } from '../layout/index.ts';
 import { forwardAuthoredCjkGapMetric } from '../layout/cjk-auto-spacing-metric-port.ts';
@@ -27,13 +28,33 @@ export interface FontFaceUsage {
   faces(): readonly UsedFontFace[];
 }
 
+let styleLookups = 0;
+
+/** @internal Counts the styles looked up in a usage record, to pin the work of each measure. */
+export function fontFaceUsageTestRecorder(): { readonly styleLookups: number; reset(): void } {
+  return {
+    get styleLookups() {
+      return styleLookups;
+    },
+    reset() {
+      styleLookups = 0;
+    },
+  };
+}
+
 /** @internal */
 export function createFontFaceUsage(): FontFaceUsage {
   const seen = new WeakSet<ResolvedRunStyle>();
   const faces = new Map<string, UsedFontFace>();
   let list: readonly UsedFontFace[] = [];
   const wrapped = new WeakMap<TextMeasurer, TextMeasurer>();
+  // Line breaking measures each word of a run with the same style object in turn, so the
+  // style of the previous call answers most calls without a lookup.
+  let latest: ResolvedRunStyle | undefined;
   const note = (style: ResolvedRunStyle): void => {
+    if (style === latest) return;
+    latest = style;
+    styleLookups += 1;
     if (seen.has(style)) return;
     seen.add(style);
     if (faces.size >= MAX_USED_FONT_FACES) return;

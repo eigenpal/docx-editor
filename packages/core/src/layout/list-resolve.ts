@@ -62,6 +62,7 @@ interface ListResolveChangeEvidence {
 const listResolveEvidenceBySession = new WeakMap<LayoutSession, ListResolveChangeEvidence>();
 let listResolveBlockVisits = 0;
 let listResolveBlockScans = 0;
+let listResolveParagraphCompares = 0;
 
 /** @internal Read session-scoped list resolve memo for tests. */
 export function listResolveSessionMemoListItemsForTest(
@@ -75,6 +76,8 @@ export function listResolveBlockVisitTestRecorder(): {
   readonly blockVisits: number;
   /** Blocks whose numbered paragraphs were read again rather than reused. */
   readonly blockScans: number;
+  /** Numbered paragraphs read to compare two different nodes. */
+  readonly paragraphCompares: number;
   reset(): void;
 } {
   return {
@@ -84,9 +87,13 @@ export function listResolveBlockVisitTestRecorder(): {
     get blockScans() {
       return listResolveBlockScans;
     },
+    get paragraphCompares() {
+      return listResolveParagraphCompares;
+    },
     reset() {
       listResolveBlockVisits = 0;
       listResolveBlockScans = 0;
+      listResolveParagraphCompares = 0;
     },
   };
 }
@@ -790,6 +797,10 @@ function rememberSessionResolve(
 }
 
 function sameNumberedParagraph(paragraph: OoxmlElement, previous: OoxmlElement | undefined) {
+  // A node is immutable, so it always equals itself. Every pass over an unchanged story
+  // compares each numbered paragraph with itself.
+  if (paragraph === previous) return true;
+  listResolveParagraphCompares += 1;
   if (!previous || paragraph.id !== previous.id) return false;
   if (listNumSignatureOf(paragraph) !== listNumSignatureOf(previous)) return false;
   const properties = paragraph.children.find((child) => child.kind === 'paragraphProperties');
@@ -800,6 +811,8 @@ function sameNumberedParagraph(paragraph: OoxmlElement, previous: OoxmlElement |
 }
 
 function sameNumberingSequence(a: readonly OoxmlElement[], b: readonly OoxmlElement[]): boolean {
+  // An unchanged block hands back the list it had in the previous resolve.
+  if (a === b) return true;
   return (
     a.length === b.length &&
     a.every((paragraph, index) => sameNumberedParagraph(paragraph, b[index]))

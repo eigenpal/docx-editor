@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A selected picture, shape, line, text box, or group copied nothing.",
+  "after": "A selected drawing copies as a one-drawing clipboard fragment, and the paste uses the existing fragment-paste operation.",
+  "reason": "The paste writes through the released fragment-paste path, which already freshens drawing ids per actor. Shared nodes, offsets, operations, and the collaboration format stay unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-drawing-clipboard.test.ts",
+    "packages/core/src/editor/__tests__/drawing-clipboard.test.ts"
+  ],
+  "changeset": "drawing-clipboard",
+  "migration": null
+}

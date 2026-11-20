@@ -1,5 +1,11 @@
 # @docx-editor.dev/i18n
 
+## 2.39.0
+
+### Patch Changes
+
+- 615f6e2: The note actions menu label is translated into every shipped language.
+
 ## 2.38.0
 
 ### Minor Changes

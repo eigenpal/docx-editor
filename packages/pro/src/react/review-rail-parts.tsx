@@ -20,18 +20,14 @@ import type { ReviewItemView } from './useReview.ts';
 import type { ReviewBalloonProps, ReviewMarkersProps, ReviewPartProps } from './review-types.ts';
 import {
   ReviewItemContext,
+  ReviewThreadContext,
   useRail,
   useReviewLabel,
   type ReviewLabelParams,
 } from './review-context.ts';
-import {
-  MARKER_STEP,
-  reviewDateFormat,
-  guardMousedown,
-  idsOf,
-  initialsOf,
-  isThreadedReply,
-} from './review-shared.ts';
+import { MARKER_STEP, reviewDateFormat, guardMousedown, initialsOf } from './review-shared.ts';
+import { repliesOf, reviewRootsOf } from '../review/review-roots.ts';
+import { ReviewListSlot } from './review-list-slot.tsx';
 import { cloneReviewCard, partitionReviewChildren } from './review-composition.tsx';
 import { authorAccent, authorCardStyle, authorSlot } from './review-author-styles.ts';
 import {
@@ -90,13 +86,25 @@ export interface ReviewListProps {
    * Null, or leaving it out, mounts every card. That is correct but costs one card per pending
    * change on each render. Inside the packaged review rail the band arrives on its own, including
    * for a `List` override. A list mounted elsewhere measures its own scroller and passes the
-   * part of it in view, widened by a margin above and below (the rail uses 600 px) so cards
-   * mount before they scroll into view.
+   * part of it in view, widened by a margin above and below so cards mount before they scroll
+   * into view. The rail uses at least 600 px, and moves each edge outwards to a 300 px grid so
+   * the band changes only when the scroll position crosses a grid line.
    */
   window?: { top: number; bottom: number } | null;
   /**
    * A render prop takes over the card entirely, keeping the rail's subscription, anchoring
    * and stacking. Nodes are treated as part overrides for the packaged card.
+   *
+   * The rail calls the render prop for a card when the item of the card changes, or when you
+   * pass another function. A function that keeps its identity, such as a `useCallback` result
+   * or a module function, can show an old value when it reads a value that React does not
+   * track: a ref or a module variable. If the render prop reads such a value, pass a new
+   * function when the value changes, as an inline function does, or read the value with a hook
+   * inside the card.
+   *
+   * The render prop runs as the render of a component that belongs to the card, so it can
+   * call hooks. Call the same hooks on each run, as in a component. To switch between render
+   * props that call different hooks, set a different `key` on the rail for each one.
    */
   children?: ReactNode | ((item: ReviewItemView) => ReactNode);
   className?: string;
@@ -122,16 +130,30 @@ export function ReviewList({
   className,
   hidden,
 }: ReviewListProps) {
-  const { review, slotRef, cardClassName } = useRail();
+  const { review, byId, slotRef, cardClassName } = useRail();
+  const render = typeof children === 'function' ? children : null;
+  const listChildren = useMemo(
+    () => (typeof children === 'function' ? null : partitionReviewChildren(children, 'list')),
+    [children]
+  );
+  // One card element for every slot: each slot gives it its own item through context.
+  const card = useMemo(() => {
+    if (!listChildren) return null;
+    const template = listChildren.parts.Card;
+    return template && isValidElement<{ className?: string }>(template) ? (
+      cloneReviewCard(template, cardClassName)
+    ) : (
+      <ReviewCard {...(cardClassName ? { className: cardClassName } : {})}>
+        {listChildren.rest}
+      </ReviewCard>
+    );
+  }, [listChildren, cardClassName]);
   if (hidden) return null;
 
-  const listChildren =
-    typeof children === 'function' ? null : partitionReviewChildren(children, 'list');
-  const present = idsOf(review.items);
-  const roots = review.items.filter((entry) => !isThreadedReply(entry, present));
+  const roots = reviewRootsOf(review.items);
 
   if (roots.length === 0) {
-    if (typeof children === 'function') return null;
+    if (render) return null;
     return listChildren?.parts.Empty ?? <ReviewEmpty />;
   }
 
@@ -143,30 +165,17 @@ export function ReviewList({
         // Outside the window: not rendered at all. A card the reader cannot see costs a
         // subtree, a measurement and a transition, and two hundred of them cost a frame.
         if (top !== null && visible && (top < visible.top || top > visible.bottom)) return null;
-        const style: CSSProperties = top === null ? {} : { position: 'absolute', top };
         return (
-          <ReviewItemContext.Provider key={entry.key} value={entry}>
-            <div
-              className="docx-review__slot"
-              style={style}
-              // Header-only, because the card sits far from the text it annotates and a
-              // full summary there reads as annotating the wrong text. Clicking it makes
-              // the item active, and the active card always renders in full.
-              {...(collapsed?.has(entry.key) ? { 'data-collapsed': '' } : {})}
-              ref={slotRef(entry.key)}
-            >
-              {typeof children === 'function' ? (
-                children(entry)
-              ) : listChildren?.parts.Card &&
-                isValidElement<{ className?: string }>(listChildren.parts.Card) ? (
-                cloneReviewCard(listChildren.parts.Card, cardClassName)
-              ) : (
-                <ReviewCard {...(cardClassName ? { className: cardClassName } : {})}>
-                  {listChildren?.rest}
-                </ReviewCard>
-              )}
-            </div>
-          </ReviewItemContext.Provider>
+          <ReviewListSlot
+            key={entry.key}
+            entry={entry}
+            top={top}
+            collapsed={collapsed?.has(entry.key) ?? false}
+            replies={repliesOf(entry, byId)}
+            slotRef={slotRef}
+            render={render}
+            card={card}
+          />
         );
       })}
     </div>
@@ -192,8 +201,7 @@ export function ReviewMarkers({
   const resolvedDisclosure = useResolvedDisclosure();
   const t = useReviewLabel();
   const { roots, stackedTops } = useMemo(() => {
-    const present = idsOf(review.items);
-    const entries = review.items.filter((entry) => !isThreadedReply(entry, present));
+    const entries = reviewRootsOf(review.items);
     const tops = new Map<string, number>();
     let cursor = Number.NEGATIVE_INFINITY;
     for (const entry of entries) {
@@ -347,7 +355,7 @@ export function ReviewBalloon({ className, hidden }: ReviewBalloonProps) {
   const editor = useDocxEditor();
   const editorRef = useRef(editor);
   editorRef.current = editor;
-  const { review, allItems, authorSlots, authorInfo, revisionsIn } = useRail();
+  const { review, allItems, byId, authorSlots, authorInfo, revisionsIn } = useRail();
   const t = useReviewLabel();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [anchor, setAnchor] = useState<BalloonAnchor | null>(null);
@@ -661,67 +669,69 @@ export function ReviewBalloon({ className, hidden }: ReviewBalloonProps) {
         >
           {shownEntry ? (
             <ReviewItemContext.Provider value={shownEntry}>
-              <div
-                className="docx-review__card"
-                data-testid="review-balloon-card"
-                data-kind={shownEntry.revisionKind ?? 'revision'}
-                // Gated, as the card and the fallback balloon are: an anonymous change would
-                // otherwise carry `data-review-author=""` and match a host's `[data-review-author]`.
-                {...(shownEntry.author
-                  ? {
-                      'data-review-author': shownEntry.author,
-                      'data-review-author-slot': authorSlot(
-                        authorInfo.get(shownEntry.author),
-                        authorSlots.get(shownEntry.author) ?? 0
-                      ),
-                    }
-                  : {})}
-                {...(changeBalloon
-                  ? {
-                      ref: dialogRef,
-                      role: 'dialog',
-                      tabIndex: -1,
-                      'aria-label': t('review.trackedChange'),
-                    }
-                  : {})}
-                style={authorCardStyle(
-                  shownEntry.author,
-                  authorInfo.get(shownEntry.author),
-                  authorSlots.get(shownEntry.author) ?? 0
-                )}
-                // A change balloon is already open on its change; activating it again would
-                // move the caret out from under the reply line the reader is typing into.
-                onClick={
-                  changeBalloon || orphaned ? undefined : () => review.setActive(shownEntry.key)
-                }
-              >
-                <div className="docx-review__head">
-                  <ReviewAvatar />
-                  <div className="docx-review__meta">
-                    <ReviewAuthor />
-                    <ReviewTime />
-                  </div>
-                  {shownEntry.kind === 'revision' && !shownEntry.readOnly && !orphaned ? (
-                    <div className="docx-review__actions">
-                      <ReviewAccept />
-                      <ReviewReject />
+              <ReviewThreadContext.Provider value={byId}>
+                <div
+                  className="docx-review__card"
+                  data-testid="review-balloon-card"
+                  data-kind={shownEntry.revisionKind ?? 'revision'}
+                  // Gated, as the card and the fallback balloon are: an anonymous change would
+                  // otherwise carry `data-review-author=""` and match a host's `[data-review-author]`.
+                  {...(shownEntry.author
+                    ? {
+                        'data-review-author': shownEntry.author,
+                        'data-review-author-slot': authorSlot(
+                          authorInfo.get(shownEntry.author),
+                          authorSlots.get(shownEntry.author) ?? 0
+                        ),
+                      }
+                    : {})}
+                  {...(changeBalloon
+                    ? {
+                        ref: dialogRef,
+                        role: 'dialog',
+                        tabIndex: -1,
+                        'aria-label': t('review.trackedChange'),
+                      }
+                    : {})}
+                  style={authorCardStyle(
+                    shownEntry.author,
+                    authorInfo.get(shownEntry.author),
+                    authorSlots.get(shownEntry.author) ?? 0
+                  )}
+                  // A change balloon is already open on its change; activating it again would
+                  // move the caret out from under the reply line the reader is typing into.
+                  onClick={
+                    changeBalloon || orphaned ? undefined : () => review.setActive(shownEntry.key)
+                  }
+                >
+                  <div className="docx-review__head">
+                    <ReviewAvatar />
+                    <div className="docx-review__meta">
+                      <ReviewAuthor />
+                      <ReviewTime />
                     </div>
+                    {shownEntry.kind === 'revision' && !shownEntry.readOnly && !orphaned ? (
+                      <div className="docx-review__actions">
+                        <ReviewAccept />
+                        <ReviewReject />
+                      </div>
+                    ) : null}
+                  </div>
+                  {changeBalloon ? <BalloonChangeSummary entry={shownEntry} /> : <ReviewSummary />}
+                  <ReviewRefusal />
+                  {changeBalloon ? (
+                    <>
+                      <ReviewReplies />
+                      <ReviewBalloonReply
+                        key={shownEntry.key}
+                        entry={shownEntry}
+                        orphaned={orphaned}
+                        onDraft={onReplyDraft}
+                      />
+                    </>
                   ) : null}
                 </div>
-                {changeBalloon ? <BalloonChangeSummary entry={shownEntry} /> : <ReviewSummary />}
-                <ReviewRefusal />
-                {changeBalloon ? (
-                  <>
-                    <ReviewReplies />
-                    <ReviewBalloonReply
-                      key={shownEntry.key}
-                      entry={shownEntry}
-                      orphaned={orphaned}
-                      onDraft={onReplyDraft}
-                    />
-                  </>
-                ) : null}
-              </div>
+              </ReviewThreadContext.Provider>
             </ReviewItemContext.Provider>
           ) : (
             <div
