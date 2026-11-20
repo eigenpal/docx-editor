@@ -51,7 +51,12 @@ export function closingRowDeps(
   row: SemanticTableRow,
   deps: TableFlowDeps
 ): TableFlowDeps {
-  if (deps.tableNestingOffset || deps.textBoxStory || deps.exactTerminalBorder?.row === row)
+  if (
+    deps.tableNestingOffset ||
+    deps.textBoxStory ||
+    deps.exactTerminalBorder?.row === row ||
+    !exactShape(structure, row)
+  )
     return deps;
   let known = closingBudgets.get(structure);
   if (!known) closingBudgets.set(structure, (known = new Map()));
