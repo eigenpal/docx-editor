@@ -598,7 +598,7 @@ test('a legacy group of a Latin word and a final mark admits at most half its ad
     )[0]!
       .spans.map((span) => span.text)
       .join('');
-  for (const jc of ['left', 'both']) {
+  for (const jc of ['left', 'center', 'right', 'both']) {
     expect(first(14, jc, 123)).toBe('甲、乙、丙、丁、戊ab。');
     expect(first(14, jc, 122)).toBe('甲、乙、丙、丁、戊');
   }
