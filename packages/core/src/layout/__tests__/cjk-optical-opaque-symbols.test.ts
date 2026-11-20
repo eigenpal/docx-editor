@@ -3,6 +3,7 @@ import { createCjkOpticalFitter } from '../cjk-optical-fit.ts';
 import { cjkParagraphBreaks } from '../cjk-paragraph-breaks.ts';
 import { DEFAULT_CJK_TYPOGRAPHY, type CjkParagraphTypography } from '../cjk-typography.ts';
 import type { FieldAwarePiece } from '../field-pieces.ts';
+import { loadFixture } from './punctuation-kerning-fixture.ts';
 import type { PendingLine } from '../pending-line.ts';
 import { DEFAULT_RUN_STYLE } from '../run-style.ts';
 import type { StyleSpanRecord, TextMeasurer } from '../semantic-records.ts';
@@ -203,4 +204,52 @@ test('the paragraph path still refuses a symbol outside CJK text and punctuation
   const { result, line, natural } = attempt(['甲', '℃、', '乙'], '丙', 9, '', false);
   expect(result).toBeUndefined();
   expect(line.width).toBe(natural);
+});
+
+// 24 pt text where every character is one em: 39 characters fill a 936 pt measure.
+const EM = 24;
+const emMeasurer: TextMeasurer = {
+  measure: (text, style) => [...text].length * (style.fontSizePt + style.characterSpacingPt),
+  lineMetrics: (style) => ({ height: style.fontSizePt * 1.2, baseline: style.fontSizePt }),
+  inkBounds: (text, style) => {
+    const em = style.fontSizePt;
+    return /^[，。]$/u.test(text)
+      ? { left: em * 0.1, right: em * 0.4 }
+      : { left: 1, right: em - 1 };
+  },
+  hasResolvedFont: () => true,
+};
+function firstLine(text: string, language: string, compression: string) {
+  const first = loadFixture({
+    text,
+    available: 39 * EM,
+    language,
+    compression,
+    measurer: emMeasurer,
+    paragraphProperties: '<w:jc w:val="both"/>',
+  } as Parameters<typeof loadFixture>[0]).lines[0]!;
+  return {
+    text: first.spans.map((span) => span.text).join(''),
+    width: (character: string) => first.spans.find((span) => span.text === character)?.box.width,
+    end: Math.max(...first.spans.map((span) => span.box.x + span.box.width)) - first.box.x,
+  };
+}
+
+test('kana compress to pull a line-start-prohibited symbol onto a full line at its advance', () => {
+  const line = firstLine(
+    'あ'.repeat(39) + '℃あいう',
+    'ja-JP',
+    'compressPunctuationAndJapaneseKana'
+  );
+  expect(line.text).toBe('あ'.repeat(39) + '℃');
+  expect(line.width('℃')).toBe(EM);
+  expect(line.end).toBeCloseTo(39 * EM, 6);
+});
+
+test('a hanging symbol keeps its whole advance past the margin', () => {
+  const text = '漢'.repeat(19) + '，' + '漢'.repeat(19) + '‰漢漢';
+  const line = firstLine(text, 'zh-CN', 'compressPunctuation');
+  expect(line.text).toBe(text.slice(0, 40));
+  expect(line.width('‰')).toBe(EM);
+  expect(line.end).toBeCloseTo(40 * EM, 6);
 });
