@@ -153,7 +153,7 @@ export const wordFeatures: WordFeature[] = [
     id: 'text.sub-superscript',
     name: 'Subscript & superscript',
     notes:
-      'Raised and lowered text increases automatic and minimum line heights to fit. Exact line spacing keeps its specified height.',
+      'Raised and lowered text and inline pictures increase automatic and minimum line heights to fit. Exact line spacing keeps its specified height.',
     category: 'text',
     editing: 'full',
     rendering: 'full',

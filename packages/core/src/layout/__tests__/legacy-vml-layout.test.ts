@@ -407,7 +407,7 @@ test('an embedded object reserves its cached preview height, as the same w:pict 
   expect(linked.tops[2]! - linked.tops[1]!).toBe(linked.tops[1]! - linked.tops[0]!);
 });
 
-test('inline old equation previews keep each run position relative to the text baseline', () => {
+test('inline object previews keep each run position relative to the text baseline', () => {
   const placedObject = (position: number) =>
     `<w:r><w:rPr><w:position w:val="${position}"/></w:rPr><w:object>` +
     '<v:shape type="#_x0000_t75" style="width:14pt;height:18.6pt"><v:imagedata r:id="preview"/></v:shape>' +
@@ -429,7 +429,7 @@ test('inline old equation previews keep each run position relative to the text b
     const line = linesOf(layout)[0]!;
     const drawings = line.drawings!;
     expect(drawings).toHaveLength(3);
-    // WPS keeps an image bottom at the text baseline minus the authored half-point offset.
+    // Each preview bottom sits at the text baseline less its signed half-point offset.
     for (const [index, delta] of [
       [0, 6],
       [1, 0],
