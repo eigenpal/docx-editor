@@ -168,22 +168,71 @@ describe('distributed paragraphs hang without East Asian document defaults', () 
   }
 });
 
-describe('legacy Simplified Chinese lines with punctuation compression', () => {
-  for (const mark of [...'，。；']) {
-    test(`a hanging ${mark} retains the natural ideograph positions`, () => {
-      const result = loadFixture({
-        text: H + mark + '余',
-        available: 468,
-        face: 'SimSun',
-        defaultFace: 'SimSun',
-        language: 'zh-CN',
-        compatibility: 14,
-        compression: 'compressPunctuation',
-        paragraphProperties: '<w:jc w:val="both"/>',
+describe('a hanging mark with punctuation compression hangs its blank side first', () => {
+  // 19 ideographs and a 24 pt mark take 480 pt. A measure of 480 - overflow pt leaves the mark
+  // over the margin by that overflow. The mark's x shows how much of it hangs.
+  const markX = (
+    mark: string,
+    overflow: number,
+    options: Parameters<typeof loadFixture>[0] = {}
+  ) => {
+    const result = loadFixture({
+      text: H + mark + '余',
+      available: 480 - overflow,
+      language: 'zh-CN',
+      compatibility: 14,
+      compression: 'compressPunctuation',
+      paragraphProperties: '<w:jc w:val="both"/>',
+      ...options,
+    });
+    expect(texts(result)).toEqual([H + mark, '余']);
+    return caretX(result, 19);
+  };
+
+  for (const compatibility of [14, 15] as const) {
+    for (const mark of [...'，。；：！、）」》』']) {
+      test(`mode ${compatibility}: ${mark} within its blank half hangs only that half`, () => {
+        // The ink half ends at the margin; the ideographs before it spread to meet it.
+        expect(markX(mark, 6, { compatibility })).toBeCloseTo(474 - 12, 6);
+        expect(markX(mark, 12, { compatibility })).toBeCloseTo(468 - 12, 6);
       });
-      expect(texts(result)).toEqual([H + mark, '余']);
-      expect(caretX(result, 0)).toBeCloseTo(0, 6);
-      expect(caretX(result, 19)).toBeCloseTo(456, 6);
+    }
+  }
+
+  test('an overflow past the blank half hangs the whole mark', () => {
+    expect(markX('，', 18)).toBeCloseTo(462, 6);
+  });
+
+  test('a mark without a blank side hangs whole', () => {
+    expect(markX('？', 6)).toBeCloseTo(474, 6);
+  });
+
+  test('without compression the whole mark hangs', () => {
+    expect(markX('，', 6, { compression: 'doNotCompress' })).toBeCloseTo(474, 6);
+  });
+
+  test('kana compression hangs the blank half too', () => {
+    const compression = 'compressPunctuationAndJapaneseKana';
+    expect(markX('，', 6, { compression })).toBeCloseTo(474 - 12, 6);
+  });
+
+  test('a legacy left-aligned line hangs the blank half', () => {
+    const paragraphProperties = '<w:jc w:val="left"/>';
+    expect(markX('。', 6, { paragraphProperties })).toBeCloseTo(474 - 12, 6);
+  });
+
+  for (const language of ['zh-TW', 'zh-HK']) {
+    test(`${language}: a centred mark hangs its trailing quarter`, () => {
+      expect(markX('，', 4, { language })).toBeCloseTo(476 - 18, 6);
+      // Past the trailing quarter the text keeps its advances and the overflow hangs.
+      expect(markX('，', 9, { language })).toBeCloseTo(456, 6);
+      expect(markX('，', 13, { language })).toBeCloseTo(467, 6);
+      expect(markX('）', 6, { language })).toBeCloseTo(474 - 12, 6);
     });
   }
+
+  test("the mark's own run language decides its blank sides", () => {
+    const options = { split: 19, language: 'zh-CN', secondLanguage: 'zh-TW' };
+    expect(markX('，', 4, options)).toBeCloseTo(476 - 18, 6);
+  });
 });

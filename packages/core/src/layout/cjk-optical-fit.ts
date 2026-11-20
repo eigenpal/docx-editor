@@ -20,6 +20,7 @@ import { styleForFontSlot } from './script-itemization.ts';
 import { isDefaultGraphemeBoundary, segmentGraphemes, type GraphemeSegment } from './grapheme.ts';
 import { isCjk, type CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
 import { hangingCjkPunctuationAdvance, hangsWithin } from './cjk-spacing.ts';
+import { hangsInBlankSides } from './hanging-mark-blanks.ts';
 import { formatRevisionOf } from './revision-projection.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 import {
@@ -896,7 +897,8 @@ export function createCjkOpticalFitter(
       );
     }
     // A group that fits needs no fit, and no fit can change a line it does not overflow.
-    if (line.width + x - origin - available <= TOLERANCE) return undefined;
+    const overflow = line.width + x - origin - available;
+    if (overflow <= TOLERANCE) return undefined;
     // Match clipWordEnd across run seams: a fitting word does not compress only
     // to retain its trailing separator inside the margin.
     let trailingWidth = 0;
@@ -930,8 +932,8 @@ export function createCjkOpticalFitter(
         )
       : undefined;
     // Kana compress to pull a line-start-prohibited character onto the line before it may
-    // hang. A group that hangs at its natural width needs no other fit; one that does not may
-    // still hang its final mark once the rest of the line compresses.
+    // hang, unless its overflow fits in its blank sides. A group that hangs at its natural width
+    // needs no other fit; one that does not may still hang once the rest of the line compresses.
     const context: FitContext = {
       measurer,
       baselinePieces: pieces,
@@ -939,7 +941,10 @@ export function createCjkOpticalFitter(
       memo,
       cells: {},
     };
-    const kanaRules = kanaRulesFor(candidates, pieces[currentIndex]!);
+    const finalPiece = pieces[currentIndex]!;
+    const kanaRules = hangsInBlankSides(candidates, finalPiece, hangAdvance, overflow, policy)
+      ? undefined
+      : kanaRulesFor(candidates, finalPiece);
     let fitted = kanaRules
       ? fitCjkOptically(line, candidates, available, context, { kana: kanaRules })
       : undefined;

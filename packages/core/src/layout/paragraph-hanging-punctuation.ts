@@ -1,5 +1,6 @@
 import { setLineHangingPunctuationAdvance } from './line-hanging-punctuation.ts';
 import { hangingCjkPunctuationAdvance } from './cjk-spacing.ts';
+import { blankSideHangingAdvance } from './hanging-mark-blanks.ts';
 import { eastAsianLanguage, type CjkParagraphTypography } from './cjk-typography.ts';
 import type { FieldAwarePiece } from './field-projection.ts';
 import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
@@ -76,20 +77,10 @@ export function rememberHangingPunctuation(
     /^ko(?:-|$)/.test(language ?? '')
   )
     advance = undefined;
-  // A legacy Simplified Chinese line of ideographs lets a closing mark use any remaining
-  // measure. Only the actual overflow hangs; expanding the preceding glyphs moves the mark.
-  if (
-    advance !== undefined &&
-    language === 'zh-cn' &&
-    typography.settings?.legacyLineEndPunctuation &&
-    typography.settings.compression === 'compressPunctuation' &&
-    /[，。；]$/.test(span.text) &&
-    line.drawings.length === 0 &&
-    /^[\p{Script=Han}，。；、]+$/u.test(span.text) &&
-    line.spans.every((part) => /^[\p{Script=Han}，。；、]+$/u.test(part.text))
-  ) {
-    advance = Math.min(advance, overflow);
-  }
+  // With punctuation compression, a mark that overflows by no more than its blank sides hangs
+  // only its trailing blank, and the text before it fills the rest of the measure.
+  if (advance !== undefined)
+    advance = blankSideHangingAdvance(span.text, language, advance, overflow, typography);
   if (advance !== undefined || !span.lineEndWhitespace)
     setLineHangingPunctuationAdvance(line, advance);
 }
