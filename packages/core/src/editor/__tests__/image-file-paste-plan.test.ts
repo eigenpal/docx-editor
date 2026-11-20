@@ -251,3 +251,18 @@ describe('running the paste lane', () => {
     expect(event.defaultPrevented).toBe(false);
   });
 });
+
+test('with the caret after the selected drawing, lands before it all the same', async () => {
+  const editor = await mounted();
+  selectFixtureDrawing(editor, 'picture');
+  const surface = editor.surface!;
+  const at = surface.state().selection.anchor;
+  const after = { paragraphId: at.paragraphId, offset: at.offset + 1 };
+  surface.setSelection({ anchor: after, head: after });
+  expect(editor.snapshot().image).not.toBeNull();
+  const plan = imageFilePastePlan(editor, transfer({ file: true }));
+  expect(plan?.at).toMatchObject({ paragraphId: at.paragraphId, offset: at.offset });
+  expect((await insertAt(editor, plan)).ok).toBe(true);
+  const host = bodyParagraphs(await savedDocumentXml(editor))[0]!;
+  expect(host.indexOf('<wp:inline')).toBeLessThan(host.indexOf('<wp:anchor'));
+});
