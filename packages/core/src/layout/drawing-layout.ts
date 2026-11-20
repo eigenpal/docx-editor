@@ -513,7 +513,15 @@ export interface ResolvedAnchoredPosition {
 
 export interface AnchoredDrawingRecord extends Omit<
   InlineDrawingRecord,
-  'kind' | 'baselineOffset' | 'advanceStart' | 'advanceEnd' | 'distL' | 'distR' | 'distT' | 'distB'
+  | 'kind'
+  | 'baselineOffset'
+  | 'runPositionPt'
+  | 'advanceStart'
+  | 'advanceEnd'
+  | 'distL'
+  | 'distR'
+  | 'distT'
+  | 'distB'
 > {
   readonly kind: 'anchoredDrawing';
   readonly anchorParagraphId: string;
