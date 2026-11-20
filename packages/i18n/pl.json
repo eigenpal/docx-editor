@@ -1081,6 +1081,8 @@
     "drawingClipboardSize": "Ten rysunek jest za duży, aby go skopiować.",
     "drawingPasteCells": "Umieść kursor w tekście, aby wkleić rysunek.",
     "groupMemberPaste": "Nie można wkleić tekstu do kształtu w grupie. Naciśnij Escape, aby zaznaczyć grupę.",
+    "linkedTextBoxPaste": "Nie można wkleić tekstu do połączonego pola tekstowego. Umieść kursor w tekście, aby wkleić.",
+    "textBoxPicturePaste": "Pole tekstowe przyjmuje tylko tekst. Wklej bez formatowania, aby wkleić sam tekst.",
     "shapePasteText": "Ten kształt nie zawiera tekstu, do którego można wkleić. Umieść kursor w tekście, aby wkleić.",
     "textBoxPaste": "Tekstu w tym polu tekstowym nie można edytować. Umieść kursor w tekście, aby wkleić."
   },

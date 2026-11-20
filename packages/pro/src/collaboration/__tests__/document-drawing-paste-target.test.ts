@@ -4,9 +4,10 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // A paste while a drawing is selected, between collaborating editors. Text pasted while a text
-// box is selected replaces its text; text pasted while a line is selected goes in before its
-// anchor run. Both replicate, converge, undo, redo, survive save and reopen, and converge when
-// the other participant deletes the drawing or its paragraph, or types in the box, meanwhile.
+// box is selected replaces its text, as a tracked replacement in suggesting mode; text and a
+// copied drawing pasted while a line is selected go in before its anchor run. Each replicates,
+// converges, undoes, redoes, survives save and reopen, and converges when the other participant
+// deletes the drawing or its paragraph, or types in the box, meanwhile.
 import { afterEach, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { strFromU8, unzipSync } from 'fflate';
@@ -41,11 +42,12 @@ const LINE =
   '</a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom></wps:spPr><wps:bodyPr/></wps:wsp>' +
   '</a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>';
 
-function mounted(peer: Awaited<ReturnType<typeof harness.pair>>['alice']): Editor {
+function mounted(peer: Awaited<ReturnType<typeof harness.pair>>['alice'], author: string): Editor {
   peer.detach();
   const editor = createDocxEditor({
     container: document.createElement('div'),
     document: peer.room.document,
+    author,
     imageDecodePort: {
       decode: async () => ({ pixelWidth: 1, pixelHeight: 1, dpiX: 96, dpiY: 96 }),
     },
@@ -59,8 +61,8 @@ async function pair(first = '<w:r><w:t>First</w:t></w:r>') {
   const peers = await harness.pair(
     zipDocument(`<w:p>${first}</w:p><w:p><w:r><w:t>Second</w:t></w:r></w:p>`)
   );
-  const alice = mounted(peers.alice);
-  const bob = mounted(peers.bob);
+  const alice = mounted(peers.alice, 'Alice');
+  const bob = mounted(peers.bob, 'Bob');
   function sync() {
     peers.alice.room.session.flushPendingJournals();
     peers.bob.room.session.flushPendingJournals();
@@ -98,6 +100,11 @@ function selectBox(editor: Editor, text: string): void {
 function selectLine(editor: Editor): void {
   const line = editor.surface!.layout().pages[0]!.anchoredDrawings![0]!;
   expect(editor.surface!.selectDrawing(line.drawingNodeId, line.anchorParagraphId)).toBe(true);
+}
+
+/** The saved main document part. */
+async function documentXml(editor: Editor): Promise<string> {
+  return strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
 }
 
 /** How many times `text` occurs after a save and a reopen. */
@@ -163,7 +170,15 @@ test('a paste into a text box that the other participant deletes converges', asy
   sync();
   resume();
   converged();
-  for (const editor of [alice, bob]) expect(editor.findMatches('Doomed box')).toHaveLength(0);
+  // The paste went into the deleted box's story, so it goes with the box: it never moves to the
+  // body text, and the anchor paragraph keeps its text.
+  for (const editor of [alice, bob]) {
+    expect(editor.findMatches('Doomed box')).toHaveLength(0);
+    expect(editor.findMatches('Late paste')).toHaveLength(0);
+    expect(editor.findMatches('First')).toHaveLength(1);
+    expect(await documentXml(editor)).not.toContain('<w:drawing');
+  }
+  expect(await reopened(alice, 'Late paste')).toBe(0);
 });
 
 test('a paste into a text box while the other participant types in it converges', async () => {
@@ -235,4 +250,53 @@ test('a picture inserted while a line is selected lands before the line everywhe
   converged();
   const xml = strFromU8(unzipSync(new Uint8Array(await bob.save()))['word/document.xml']!);
   expect(xml).not.toContain('<pic:pic');
+});
+
+test('a suggesting-mode paste into a text box replicates as a tracked replacement', async () => {
+  const { alice, bob, converged } = await pair();
+  insertBox(alice, 'Old box text');
+  converged();
+  alice.surface!.setEditingMode('suggest');
+  selectBox(alice, 'Old box text');
+  expect(alice.exec({ type: 'paste', text: 'Proposed text' })).toMatchObject({ ok: true });
+  converged();
+  for (const editor of [alice, bob]) {
+    const xml = await documentXml(editor);
+    const box = xml.slice(xml.indexOf('<w:txbxContent'), xml.indexOf('</w:txbxContent>'));
+    expect(box).toMatch(/<w:ins [^>]*w:author="Alice"[^>]*>(?:(?!<\/w:ins>).)*Proposed text/s);
+    expect(box).toMatch(/<w:del [^>]*w:author="Alice"[^>]*>(?:(?!<\/w:del>).)*Old box text/s);
+  }
+  expect(await reopened(bob, 'Proposed text')).toBe(1);
+  expect(alice.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
+  converged();
+  const xml = await documentXml(bob);
+  expect(xml).not.toContain('Proposed text');
+  expect(xml).not.toContain('<w:del ');
+  expect(bob.findMatches('Old box text')).toHaveLength(1);
+});
+
+test('a copied drawing pasted on a selected line lands before the line everywhere', async () => {
+  const { alice, bob, converged } = await pair(
+    `<w:r><w:t xml:space="preserve">Head </w:t></w:r>${LINE}<w:r><w:t>Tail</w:t></w:r>`
+  );
+  converged();
+  selectLine(alice);
+  const copied = alice.surface!.copyFlavours();
+  selectLine(alice);
+  expect(alice.surface!.pasteRich(copied.text, copied.html)).toBe(true);
+  converged();
+  for (const editor of [alice, bob]) {
+    const xml = await documentXml(editor);
+    const first = xml.slice(0, xml.indexOf('</w:p>'));
+    // Head, the copy, the selected line, Tail: both drawings stay in the anchor paragraph.
+    expect(first.match(/<w:drawing[\s>]/g)).toHaveLength(2);
+    expect(first.indexOf('Head')).toBeLessThan(first.indexOf('<w:drawing'));
+    expect(first.lastIndexOf('</w:drawing>')).toBeLessThan(first.indexOf('Tail'));
+    const ids = [...first.matchAll(/<wp:docPr [^>]*id="(\d+)"/g)].map((match) => match[1]);
+    expect(new Set(ids).size).toBe(2);
+  }
+  expect(alice.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
+  converged();
+  const xml = await documentXml(bob);
+  expect(xml.slice(0, xml.indexOf('</w:p>')).match(/<w:drawing[\s>]/g)).toHaveLength(1);
 });

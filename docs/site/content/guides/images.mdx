@@ -375,8 +375,10 @@ If a drawing is selected when you paste, the paste goes where the drawing's anch
 
 - A copied drawing goes in before the selected drawing's anchor, in the same paragraph. The selected drawing stays.
 - If the selected drawing is a picture, chart, line, group, or drawing canvas, text and formatted content also go in before its anchor. The caret shows after the pasted text.
-- If the selected drawing is a text box or a shape with text, pasted text replaces the text inside it. The caret stays in the text box after the pasted text. Formatted content pastes as plain text there.
-- The editor refuses to paste text into a shape that has no text, a text box whose text it cannot edit in place, or a shape selected inside a group. Each refusal reports a translated reason, and the document does not change.
+- If the selected drawing is a text box or a shape with text, pasted text replaces the text inside it. A line break or a tab alone also replaces it. The caret stays in the text box after the pasted text. Formatted content pastes as plain text there.
+- A text box takes only text. If the pasted content holds a picture and text, the editor refuses it. Use **Paste without formatting** to paste the text alone. Content that holds only a picture goes in before the anchor.
+- The editor refuses to paste text into a shape that has no text body, a linked text box, a text box whose text it cannot edit in place, or a shape selected inside a group. The editor does not add a text body to a shape that has none. Each refusal reports a translated reason, the document does not change, and the **Paste** context menu item shows the reason while the drawing is selected.
+- These rules also apply to a drawing in a header, a footer, or a table cell.
 - In suggesting mode, each paste becomes a tracked change. A new picture cannot be proposed directly before another drawing, so the editor refuses to insert one there and reports the reason.
 
 If you build your own selection overlay and it takes focus, pass its `copy`, `cut`, and `paste` events to the editor:

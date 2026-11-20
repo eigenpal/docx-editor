@@ -8,11 +8,22 @@
 //
 // Text pasted while a shape that can hold text is selected goes into the shape instead, and
 // replaces the text it holds. The editor writes it into the shape's text box story. A shape
-// with no text box story, a text box whose text cannot take a caret, and a shape selected
-// inside a group refuse with a reason, so the text never lands somewhere the reader did not
-// choose.
+// with no text box story, a text box whose text cannot take a caret, a linked text box, and a
+// shape selected inside a group refuse with a reason, so the text never lands somewhere the
+// reader did not choose. Pasted content that holds a picture refuses on a text box, which
+// takes only text, instead of dropping the picture.
+//
+// A shape with no text box story refuses, and gets no new text body: no released tree
+// operation adds a `wps:txbx` or a `v:textbox` to an existing shape. Deleting the shape and
+// inserting a copy with a text body would change its identity under a collaborator's edits,
+// and a tracked drawing deletion is refused. The automation API refuses the same write
+// (`empty-text-frame.ts`).
 
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
+import type { CanResult, EditorCommand } from '../contracts/editor.ts';
+import { readOoxmlPackage } from '../store/package/ooxml-package.ts';
+import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
+import { projectExternalHtml } from './clipboard-html-read.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
@@ -23,16 +34,19 @@ import { VML, attribute } from '../store/package/legacy-vml-values.ts';
 import { textboxStoriesInPart } from '../store/package/textbox-stories.ts';
 import { paragraphLength } from '../store/store/tree-op-segments.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
-import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
+import { resolveSelectedDrawingRecord } from './selected-drawing-record.ts';
 import { selectedGroupMember } from './group-member-selection.ts';
 import { textboxTakesCaret } from './textbox-caret-rules.ts';
 import type { createTextboxEditing } from './surface-textbox-editing.ts';
 import type { SurfaceClipboardDeps } from './surface-clipboard-ops.ts';
 import {
   GROUP_MEMBER_PASTE_REASON,
+  LINKED_TEXT_BOX_PASTE_REASON,
   SHAPE_PASTE_TEXT_REASON,
   TEXT_BOX_PASTE_REASON,
+  TEXT_BOX_PICTURE_PASTE_REASON,
   clipboardSelectedDrawing,
+  isDrawingCopyHtml,
   selectPastedDrawing,
 } from './surface-drawing-clipboard.ts';
 
@@ -141,7 +155,7 @@ export function drawingPasteTarget(
   const kind = drawing ? drawingTextKind(drawing) : 'other';
   if (kind === 'group' && selectedGroupMember(surface, record.drawingNodeId) !== null)
     return { kind: 'refused', reason: GROUP_MEMBER_PASTE_REASON };
-  if (kind === 'linked') return { kind: 'refused', reason: TEXT_BOX_PASTE_REASON };
+  if (kind === 'linked') return { kind: 'refused', reason: LINKED_TEXT_BOX_PASTE_REASON };
   if (kind !== 'shape') return atAnchor;
   const story = textboxStoriesInPart(part).find(
     (candidate) => candidate.drawingNodeId === record.drawingNodeId
@@ -179,11 +193,82 @@ export function selectTextBoxForPaste(
 }
 
 /**
- * The kind of content a paste carries: a copied drawing, or a payload with no text to type, such
- * as a picture in HTML, places as a drawing. It never empties a text box it does not fill.
+ * The kind of content a paste carries. A copied drawing places as a drawing, and so does HTML
+ * with no text but a picture, which never empties a text box it does not fill. Any other text,
+ * a lone line break or tab included, is text: it replaces the text of a selected text box.
  */
-export function pasteContentOf(text: string, drawingCopy: boolean): DrawingPasteContent {
-  return drawingCopy || text.trim() === '' ? 'drawing' : 'text';
+export function pasteContentOf(
+  text: string,
+  html: string | null,
+  drawingCopy: boolean
+): DrawingPasteContent {
+  if (drawingCopy || text === '') return 'drawing';
+  return text.trim() === '' && pasteHtmlHoldsDrawing(html) ? 'drawing' : 'text';
+}
+
+/** A run-level drawing in a fragment: DrawingML, or a legacy VML picture or shape. */
+function isDrawingNode(node: OoxmlNode): boolean {
+  if (node.kind === 'drawing') return true;
+  const element = node as OoxmlElement;
+  return element.namespaceUri === WML_NAMESPACE_URI && element.localName === 'pict';
+}
+
+/**
+ * Whether pasted HTML carries a picture or a drawing: an editor fragment that holds one, or
+ * external HTML whose projection keeps an image. A text box takes only text, so such a paste
+ * refuses there rather than drop the picture. An embedded object (`w:object`) is not counted:
+ * the paste router refuses it on every lane already.
+ */
+export function pasteHtmlHoldsDrawing(html: string | null): boolean {
+  if (!html) return false;
+  const embedded = fragmentFromHtml(html);
+  if (!embedded) {
+    const projected = projectExternalHtml(html);
+    return projected.ok && projected.imageCount > 0;
+  }
+  const read = readOoxmlPackage(embedded.bytes);
+  if (!read.ok) return false;
+  const pending: OoxmlNode[] = [...read.package.parts.values()].map((part) => part.root);
+  while (pending.length) {
+    const node = pending.pop()!;
+    if (node.kind === 'textValue') continue;
+    if (isDrawingNode(node)) return true;
+    pending.push(...node.children);
+  }
+  return false;
+}
+
+/**
+ * Where one paste payload goes while a drawing is selected, or null when none is selected.
+ * `html` is null for a plain paste. A text box refuses HTML that holds a picture.
+ */
+export function pasteTargetOf(
+  surface: PaginatedSurface,
+  text: string,
+  html: string | null,
+  drawingCopy: boolean
+): DrawingPasteTarget | null {
+  const target = drawingPasteTarget(surface, pasteContentOf(text, html, drawingCopy));
+  return target?.kind === 'textBox' && pasteHtmlHoldsDrawing(html)
+    ? { kind: 'refused', reason: TEXT_BOX_PICTURE_PASTE_REASON }
+    : target;
+}
+
+/**
+ * Why a paste command cannot land while a drawing is selected, or null when it can. `can` asks
+ * it, so a Paste control disables with the reason instead of refusing after the click. The
+ * paste itself asks `drawingPasteTarget` again and publishes the same reason.
+ */
+export function drawingPasteRefusal(
+  surface: PaginatedSurface,
+  command: EditorCommand
+): CanResult | null {
+  if (command.type !== 'paste' && command.type !== 'pasteWithoutFormatting') return null;
+  const html = command.type === 'paste' ? (command.html ?? null) : null;
+  const target = pasteTargetOf(surface, command.text, html, isDrawingCopyHtml(html));
+  return target?.kind === 'refused'
+    ? { ok: false, code: 'unsupported', reason: target.reason }
+    : null;
 }
 
 /**
@@ -207,7 +292,8 @@ export function drawingClipboardDeps(
   return {
     selectedDrawing: () => clipboardSelectedDrawing(surface()),
     selectPastedDrawing: (id, paragraphId) => selectPastedDrawing(surface(), id, paragraphId),
-    drawingPasteTarget: (content) => drawingPasteTarget(surface(), content),
+    drawingPasteTarget: (text, html, drawingCopy) =>
+      pasteTargetOf(surface(), text, html, drawingCopy),
     selectTextBoxForPaste: (id) => selectTextBoxForPaste(surface(), mount().textbox, id),
     leaveTextBoxForPaste: (id, paragraphId) => {
       mount().textbox?.exit();

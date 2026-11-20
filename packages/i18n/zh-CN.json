@@ -1081,6 +1081,8 @@
     "drawingClipboardSize": "此绘图太大，无法复制。",
     "drawingPasteCells": "请将光标放在文本中以粘贴绘图。",
     "groupMemberPaste": "无法将文本粘贴到组内的形状中。按 Esc 键选择该组。",
+    "linkedTextBoxPaste": "无法将文本粘贴到链接的文本框中。请将光标放在文本中以粘贴。",
+    "textBoxPicturePaste": "文本框只能包含文本。请使用无格式粘贴以仅粘贴文本。",
     "shapePasteText": "此形状没有可粘贴到的文本。请将光标放在文本中以粘贴。",
     "textBoxPaste": "无法编辑此文本框中的文本。请将光标放在文本中以粘贴。"
   },

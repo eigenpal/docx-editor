@@ -39,7 +39,7 @@ import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import { buildCopyFlavours, escapeHtml, type CopyFlavours } from './clipboard-copy-payload.ts';
 import type { SurfaceClipboardDeps } from './surface-clipboard-ops.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
-import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
+import { resolveSelectedDrawingRecord } from './selected-drawing-record.ts';
 import { selectedGroupMember } from './group-member-selection.ts';
 
 /**
@@ -79,6 +79,14 @@ export const SHAPE_PASTE_TEXT_REASON =
 export const TEXT_BOX_PASTE_REASON =
   'the text in this text box cannot be edited; place the caret in the text to paste';
 
+/** Why text refuses to paste into a text box that continues another box's text. Translated the same way. */
+export const LINKED_TEXT_BOX_PASTE_REASON =
+  'text cannot be pasted into a linked text box; place the caret in the text to paste';
+
+/** Why content that holds a picture or a drawing refuses to paste into a selected text box. */
+export const TEXT_BOX_PICTURE_PASTE_REASON =
+  'a text box takes only text; paste without formatting to paste the text alone';
+
 /** Why text refuses to paste while a shape inside a group is selected. Translated the same way. */
 export const GROUP_MEMBER_PASTE_REASON =
   'text cannot be pasted into a shape inside a group; press Escape to select the group';
@@ -95,6 +103,8 @@ export const DRAWING_CLIPBOARD_REASONS: ReadonlySet<string> = new Set([
   SHAPE_PASTE_TEXT_REASON,
   TEXT_BOX_PASTE_REASON,
   GROUP_MEMBER_PASTE_REASON,
+  LINKED_TEXT_BOX_PASTE_REASON,
+  TEXT_BOX_PICTURE_PASTE_REASON,
 ]);
 
 /** Markup compatibility, whose `mc:Fallback` repeats the `mc:Choice` content. */

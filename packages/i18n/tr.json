@@ -1081,6 +1081,8 @@
     "drawingClipboardSize": "Bu çizim kopyalanamayacak kadar büyük.",
     "drawingPasteCells": "Çizim yapıştırmak için imleci metne yerleştirin.",
     "groupMemberPaste": "Grup içindeki bir şekle metin yapıştırılamaz. Grubu seçmek için Escape tuşuna basın.",
+    "linkedTextBoxPaste": "Bağlantılı bir metin kutusuna metin yapıştırılamaz. Yapıştırmak için imleci metne yerleştirin.",
+    "textBoxPicturePaste": "Metin kutusu yalnızca metin alır. Yalnızca metni yapıştırmak için biçimlendirmeden yapıştırın.",
     "shapePasteText": "Bu şeklin yapıştırılacak metni yok. Yapıştırmak için imleci metne yerleştirin.",
     "textBoxPaste": "Bu metin kutusundaki metin düzenlenemez. Yapıştırmak için imleci metne yerleştirin."
   },

@@ -1081,6 +1081,8 @@
     "drawingClipboardSize": "Diese Zeichnung ist zu groß zum Kopieren.",
     "drawingPasteCells": "Setzen Sie den Cursor in den Text, um eine Zeichnung einzufügen.",
     "groupMemberPaste": "Text kann nicht in eine Form innerhalb einer Gruppe eingefügt werden. Drücken Sie Escape, um die Gruppe auszuwählen.",
+    "linkedTextBoxPaste": "Text kann nicht in ein verknüpftes Textfeld eingefügt werden. Setzen Sie den Cursor in den Text, um einzufügen.",
+    "textBoxPicturePaste": "Ein Textfeld nimmt nur Text auf. Fügen Sie ohne Formatierung ein, um nur den Text einzufügen.",
     "shapePasteText": "Diese Form enthält keinen Text zum Einfügen. Setzen Sie den Cursor in den Text, um einzufügen.",
     "textBoxPaste": "Der Text in diesem Textfeld kann nicht bearbeitet werden. Setzen Sie den Cursor in den Text, um einzufügen."
   },

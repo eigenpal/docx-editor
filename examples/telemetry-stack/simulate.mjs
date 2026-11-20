@@ -48,10 +48,11 @@ async function clickIntoText(page) {
 }
 
 /**
- * Select a picture and insert another one. In suggesting mode the editor refuses it with
- * `edit.picture-selected`; while editing, the new picture goes in before the selected one.
+ * In suggesting mode, select a picture and insert another one: the editor refuses it with
+ * `edit.picture-selected`. While editing, the new picture goes in before the selected one, so
+ * only suggesting participants run this.
  */
-async function insertPictureWithPictureSelected(page) {
+async function refusedPictureInsert(page) {
   const box = await page.evaluate(async () => {
     const scroller = [...document.querySelectorAll('*')].find(
       (element) =>
@@ -100,8 +101,8 @@ async function person(browser, url, id, deadline, suggesting) {
       await page.reload();
       await page.waitForSelector('.docx-editor [contenteditable="true"]', { timeout: 60_000 });
       if (suggesting) await suggest(page).catch(() => {});
-    } else if (roll < 0.08) {
-      await insertPictureWithPictureSelected(page).catch(() => {});
+    } else if (roll < 0.08 && suggesting) {
+      await refusedPictureInsert(page).catch(() => {});
     } else if (roll < 0.12) {
       await page.keyboard.press('Control+s');
     } else {

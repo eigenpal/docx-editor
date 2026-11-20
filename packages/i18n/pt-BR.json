@@ -1081,6 +1081,8 @@
     "drawingClipboardSize": "Este desenho é grande demais para ser copiado.",
     "drawingPasteCells": "Coloque o cursor no texto para colar um desenho.",
     "groupMemberPaste": "Não é possível colar texto em uma forma dentro de um grupo. Pressione Escape para selecionar o grupo.",
+    "linkedTextBoxPaste": "Não é possível colar texto em uma caixa de texto vinculada. Coloque o cursor no texto para colar.",
+    "textBoxPicturePaste": "Uma caixa de texto aceita apenas texto. Cole sem formatação para colar apenas o texto.",
     "shapePasteText": "Esta forma não tem texto para colar. Coloque o cursor no texto para colar.",
     "textBoxPaste": "O texto desta caixa de texto não pode ser editado. Coloque o cursor no texto para colar."
   },

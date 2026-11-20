@@ -16,8 +16,10 @@ import { drawingPasteTarget } from '../drawing-paste-target.ts';
 import { wrapInteropHtml } from '../clipboard-fragment-codec.ts';
 import {
   GROUP_MEMBER_PASTE_REASON,
+  LINKED_TEXT_BOX_PASTE_REASON,
   SHAPE_PASTE_TEXT_REASON,
   TEXT_BOX_PASTE_REASON,
+  TEXT_BOX_PICTURE_PASTE_REASON,
 } from '../surface-drawing-clipboard.ts';
 import { PICTURE_SELECTED_INSERT_REASON } from '../docx-editor-images.ts';
 import { validateRasterHeader, type ImageDecodePort } from '../../store/package/image-resources.ts';
@@ -86,8 +88,8 @@ const body = (drawing: string) =>
   p(text('Alpha head ') + drawing + text('Alpha tail.')) + p(text('Bravo')) + p(text('Charlie'));
 
 /** The document, with the picture's image part when a picture refers to one. */
-function bytesOf(markup: string): Uint8Array {
-  const files = unzipSync(documentBytes(markup));
+function bytesOf(markup: string, header?: string): Uint8Array {
+  const files = unzipSync(documentBytes(markup, header));
   if (markup.includes('rIdP')) {
     files['word/_rels/document.xml.rels'] = strToU8(
       strFromU8(files['word/_rels/document.xml.rels']!).replace(
@@ -120,12 +122,12 @@ const testDecodePort: ImageDecodePort = Object.freeze({
   },
 });
 
-async function open(markup: string, mode: 'edit' | 'suggest' = 'edit') {
+async function open(markup: string, mode: 'edit' | 'suggest' = 'edit', header?: string) {
   const container = document.createElement('div');
   document.body.append(container);
   const editor = createDocxEditor({
     container,
-    document: bytesOf(markup),
+    document: bytesOf(markup, header),
     author: 'Reviewer',
     modules: [stubReviewModule()],
     imageDecodePort: testDecodePort,
@@ -525,5 +527,247 @@ describe('a shape with no text selected', () => {
       reason: GROUP_MEMBER_PASTE_REASON,
     });
     expect(await saved(editor)).toBe(before);
+  });
+});
+
+/** A picture data URL for pasted HTML. */
+const PNG_SRC = `data:image/png;base64,${btoa(String.fromCharCode(...PNG))}`;
+
+describe('what a paste carries', () => {
+  test('a line break or a tab alone replaces the text of a selected text box', async () => {
+    for (const pasted of ['\n', '\t']) {
+      const { editor, surface } = await open(body(TEXT_BOX));
+      selectFirstDrawing(editor);
+      const bodyBefore = bodyText(editor);
+      expect(drawingPasteTarget(surface, 'text')).toMatchObject({ kind: 'textBox' });
+      expect(editor.exec({ type: 'paste', text: pasted })).toMatchObject({ ok: true });
+      expect(boxText(editor)).toEqual(pasted === '\n' ? ['', ''] : ['\t']);
+      expect(bodyText(editor)).toEqual(bodyBefore);
+    }
+  });
+
+  test('a space on a shape with no text refuses, as other text does', async () => {
+    const { editor } = await open(body(SHAPE));
+    selectFirstDrawing(editor);
+    const before = await saved(editor);
+    expect(editor.exec({ type: 'paste', text: ' ' })).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason: SHAPE_PASTE_TEXT_REASON,
+    });
+    expect(await saved(editor)).toBe(before);
+  });
+
+  test('HTML with a picture and only a line break of text goes before the anchor', async () => {
+    const { editor } = await open(body(TEXT_BOX));
+    selectFirstDrawing(editor);
+    const html = `<p><img src="${PNG_SRC}" width="10" height="10"></p>`;
+    expect(editor.exec({ type: 'paste', text: '\n', html })).toMatchObject({ ok: true });
+    expect(boxText(editor)).toEqual(['Box one.', 'Box two.']);
+    expect(bodyText(editor)[0]).toBe(`Alpha head${OBJ}${OBJ}Alpha tail.`);
+  });
+
+  test('HTML with text and a picture refuses on a text box, and the box keeps its text', async () => {
+    const { editor, surface } = await open(body(TEXT_BOX));
+    const box = selectFirstDrawing(editor);
+    const before = await saved(editor);
+    const html = `<p>ZULU <img src="${PNG_SRC}" width="10" height="10"></p>`;
+    const refused = { ok: false, code: 'unsupported', reason: TEXT_BOX_PICTURE_PASTE_REASON };
+    expect(editor.can({ type: 'paste', text: 'ZULU', html })).toEqual(refused);
+    expect(editor.exec({ type: 'paste', text: 'ZULU', html })).toEqual(refused);
+    expect(await saved(editor)).toBe(before);
+    expect(editor.snapshot().image?.id).toBe(box);
+    // Paste without formatting takes the text alone.
+    expect(editor.exec({ type: 'pasteWithoutFormatting', text: 'ZULU' })).toMatchObject({
+      ok: true,
+    });
+    expect(boxText(editor)).toEqual(['ZULU']);
+    expect(surface.activeScope().kind).toBe('frame');
+  });
+
+  test('an editor fragment that holds a picture refuses on a text box too', async () => {
+    const { surface } = await open(body(PICTURE));
+    // Copy the picture's anchor with the text after it, "Alpha".
+    const [first] = surface.session.paragraphIds();
+    surface.setSelection({
+      anchor: { paragraphId: first!, offset: 'Alpha head'.length },
+      head: { paragraphId: first!, offset: 'Alpha head'.length + 6 },
+    });
+    const copied = surface.copyFlavours();
+    expect(copied.html).toContain('data-docx-fragment=');
+    const other = await open(body(TEXT_BOX));
+    selectFirstDrawing(other.editor);
+    expect(other.surface.pasteRich(copied.text, copied.html)).toBe(false);
+    expect(other.surface.state().lastRejection).toBe(TEXT_BOX_PICTURE_PASTE_REASON);
+    expect(boxText(other.editor)).toEqual(['Box one.', 'Box two.']);
+  });
+});
+
+describe('the Paste control while a drawing is selected', () => {
+  test('disables with the reason where text refuses, and stays live elsewhere', async () => {
+    const probe = { type: 'paste', text: ' ' } as const;
+    const shape = await open(body(SHAPE));
+    selectFirstDrawing(shape.editor);
+    expect(shape.editor.can(probe)).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason: SHAPE_PASTE_TEXT_REASON,
+    });
+    for (const drawing of [TEXT_BOX, PICTURE]) {
+      const { editor } = await open(body(drawing));
+      selectFirstDrawing(editor);
+      expect(editor.can(probe)).toEqual({ ok: true });
+    }
+  });
+});
+
+describe('a linked text box selected', () => {
+  test('text refuses with the linked text box reason', async () => {
+    const linked = floating('Linked', boxShape('<wps:linkedTxbx id="1" seq="1"/>'), SHAPE_URI, 11);
+    const { editor, surface } = await open(body(linked));
+    selectFirstDrawing(editor);
+    expect(drawingPasteTarget(surface, 'text')).toEqual({
+      kind: 'refused',
+      reason: LINKED_TEXT_BOX_PASTE_REASON,
+    });
+    const before = await saved(editor);
+    expect(editor.exec({ type: 'paste', text: 'ZULU' })).toMatchObject({
+      ok: false,
+      reason: LINKED_TEXT_BOX_PASTE_REASON,
+    });
+    expect(await saved(editor)).toBe(before);
+  });
+});
+
+describe('a drawing outside the body text', () => {
+  /** The header part's XML after a save. */
+  const headerXml = async (editor: DocxEditorInstance) =>
+    strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/header1.xml']!);
+
+  test('text pasted on a header text box replaces its text, and undo restores it', async () => {
+    const { editor, surface } = await open(
+      p(text('Body')),
+      'edit',
+      p(text('Header line ') + TEXT_BOX)
+    );
+    const scope = editor.findMatches('Box one.')[0]!.scope!;
+    if (scope.kind !== 'frame') throw new Error('the header box has no frame scope');
+    expect(surface.setActiveScope(scope)).toBe(true);
+    expect(surface.selectDrawing(scope.drawingNodeId, scope.hostParagraphId)).toBe(true);
+    const before = await headerXml(editor);
+    expect(editor.exec({ type: 'paste', text: 'ZULU' })).toMatchObject({ ok: true });
+    const after = await headerXml(editor);
+    expect(after).toContain('ZULU');
+    expect(after).not.toContain('Box one.');
+    expect(after).toContain('Header line');
+    expect(surface.activeScope().kind).toBe('frame');
+    expect(editor.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
+    expect(await headerXml(editor)).toBe(before);
+  });
+
+  test('a drawing anchored in a table cell takes text in that cell', async () => {
+    const cell = (content: string) =>
+      `<w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>${content}</w:tc>`;
+    const table = (drawing: string) =>
+      '<w:tbl><w:tblPr><w:tblW w:w="8000" w:type="dxa"/></w:tblPr><w:tblGrid>' +
+      '<w:gridCol w:w="4000"/><w:gridCol w:w="4000"/></w:tblGrid><w:tr>' +
+      cell(p(text('Cell head ') + drawing + text('Cell tail'))) +
+      cell(p(text('Next cell'))) +
+      '</w:tr></w:tbl>' +
+      p(text('After'));
+    const pictureDoc = await open(table(INLINE_PICTURE));
+    // A table fragment has no lines of its own: select the inline picture by its node.
+    const cellSurface = pictureDoc.surface;
+    const cellParagraph = cellSurface.session.paragraphIds()[0]!;
+    const drawingIds: string[] = [];
+    const collect = (node: OoxmlNode) => {
+      if (node.kind === 'textValue') return;
+      if (node.kind === 'drawing') drawingIds.push(node.id);
+      node.children.forEach(collect);
+    };
+    collect(findNode(cellSurface.session.part(), cellParagraph)!);
+    expect(cellSurface.selectDrawing(drawingIds[0]!, cellParagraph)).toBe(true);
+    expect(pictureDoc.editor.snapshot().image?.id).toBe(drawingIds[0]);
+    expect(pictureDoc.editor.exec({ type: 'paste', text: 'ZULU' })).toMatchObject({ ok: true });
+    expect(bodyText(pictureDoc.editor)).toEqual([
+      `Cell headZULU${OBJ}Cell tail`,
+      'Next cell',
+      'After',
+    ]);
+
+    const boxDoc = await open(table(TEXT_BOX));
+    selectFirstDrawing(boxDoc.editor);
+    expect(boxDoc.editor.exec({ type: 'paste', text: 'ZULU' })).toMatchObject({ ok: true });
+    expect(boxText(boxDoc.editor)).toEqual(['ZULU']);
+    expect(bodyText(boxDoc.editor)[0]).toBe(`Cell head${OBJ}Cell tail`);
+    expect(boxDoc.editor.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
+    expect(boxText(boxDoc.editor)).toEqual(['Box one.', 'Box two.']);
+  });
+});
+
+describe('a drawing in a note', () => {
+  test('cannot be selected, so a paste in the note lands at its caret', async () => {
+    const W_URI = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const files = unzipSync(
+      documentBytes(p(text('Body') + '<w:r><w:footnoteReference w:id="1"/></w:r>'))
+    );
+    files['word/footnotes.xml'] = strToU8(
+      `<w:footnotes xmlns:w="${W_URI}" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ` +
+        'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+        `xmlns:wps="${SHAPE_URI}"><w:footnote w:id="1"><w:p><w:r><w:t>Note head</w:t></w:r>` +
+        INLINE_PICTURE +
+        '<w:r><w:t>tail</w:t></w:r></w:p></w:footnote></w:footnotes>'
+    );
+    files['word/_rels/document.xml.rels'] = strToU8(
+      strFromU8(files['word/_rels/document.xml.rels']!).replace(
+        '</Relationships>',
+        '<Relationship Id="rIdN" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes" Target="footnotes.xml"/></Relationships>'
+      )
+    );
+    files['[Content_Types].xml'] = strToU8(
+      strFromU8(files['[Content_Types].xml']!).replace(
+        '</Types>',
+        '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/></Types>'
+      )
+    );
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container, document: zipSync(files) });
+    editors.push(editor);
+    const surface = editor.surface!;
+    expect(surface.setActiveScope(editor.findMatches('Note head')[0]!.scope!)).toBe(true);
+    const part = surface.session.partFor(surface.storyScope())!;
+    const drawings: { id: string; paragraphId: string }[] = [];
+    const walk = (node: OoxmlNode, paragraphId: string) => {
+      if (node.kind === 'textValue') return;
+      if (node.kind === 'drawing') drawings.push({ id: node.id, paragraphId });
+      for (const child of node.children)
+        walk(child, node.kind === 'paragraph' ? node.id : paragraphId);
+    };
+    walk(part.root, '');
+    expect(surface.selectDrawing(drawings[0]!.id, drawings[0]!.paragraphId)).toBe(false);
+    expect(drawingPasteTarget(surface, 'text')).toBeNull();
+  });
+});
+
+describe('a picture file while an inline picture is selected', () => {
+  test('goes in before the inline picture while editing, which stays', async () => {
+    const { editor, surface } = await open(body(INLINE_PICTURE));
+    const picture = selectFirstDrawing(editor);
+    const result = await editor.executeImageCommand({
+      type: 'insertImage',
+      data: PNG,
+      mime: 'image/png',
+      widthPoints: 10,
+      heightPoints: 10,
+    });
+    expect(result).toMatchObject({ ok: true, changed: true });
+    expect(bodyText(editor)[0]).toBe(`Alpha head${OBJ}${OBJ}Alpha tail.`);
+    const names = drawingNames(await saved(editor));
+    expect(names).toHaveLength(2);
+    expect(names[1]).toBe('Photo');
+    expect(findNode(surface.session.part(), picture)).not.toBeNull();
+    expect(editor.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
+    expect(bodyText(editor)[0]).toBe(`Alpha head${OBJ}Alpha tail.`);
   });
 });

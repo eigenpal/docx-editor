@@ -88,6 +88,8 @@
     "drawingClipboardSize": "Este dibujo es demasiado grande para copiarlo.",
     "drawingPasteCells": "Coloca el cursor en el texto para pegar un dibujo.",
     "groupMemberPaste": "No se puede pegar texto en una forma dentro de un grupo. Presiona Escape para seleccionar el grupo.",
+    "linkedTextBoxPaste": "No se puede pegar texto en un cuadro de texto vinculado. Coloca el cursor en el texto para pegar.",
+    "textBoxPicturePaste": "Un cuadro de texto solo admite texto. Pega sin formato para pegar solo el texto.",
     "shapePasteText": "Esta forma no tiene texto en el que pegar. Coloca el cursor en el texto para pegar.",
     "textBoxPaste": "El texto de este cuadro de texto no se puede editar. Coloca el cursor en el texto para pegar."
   },

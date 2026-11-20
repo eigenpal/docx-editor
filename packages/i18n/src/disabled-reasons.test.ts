@@ -106,6 +106,14 @@ test.each([
     'text cannot be pasted into a shape inside a group; press Escape to select the group',
     'groupMemberPaste',
   ],
+  [
+    'text cannot be pasted into a linked text box; place the caret in the text to paste',
+    'linkedTextBoxPaste',
+  ],
+  [
+    'a text box takes only text; paste without formatting to paste the text alone',
+    'textBoxPicturePaste',
+  ],
 ] as const)('the drawing clipboard refusal %s is translatable', (reason, key) => {
   expect(localizeDisabledReason(reason, createT(en))).toBe(en.disabledReason[key]);
 });

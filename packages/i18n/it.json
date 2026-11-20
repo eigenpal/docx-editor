@@ -88,6 +88,8 @@
     "drawingClipboardSize": "Questo disegno è troppo grande per essere copiato.",
     "drawingPasteCells": "Posiziona il cursore nel testo per incollare un disegno.",
     "groupMemberPaste": "Non è possibile incollare testo in una forma all’interno di un gruppo. Premi Esc per selezionare il gruppo.",
+    "linkedTextBoxPaste": "Non è possibile incollare testo in una casella di testo collegata. Posiziona il cursore nel testo per incollare.",
+    "textBoxPicturePaste": "Una casella di testo accetta solo testo. Incolla senza formattazione per incollare solo il testo.",
     "shapePasteText": "Questa forma non contiene testo in cui incollare. Posiziona il cursore nel testo per incollare.",
     "textBoxPaste": "Il testo di questa casella di testo non può essere modificato. Posiziona il cursore nel testo per incollare."
   },

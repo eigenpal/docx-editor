@@ -18,11 +18,7 @@ import {
   TEXT_BOX_PASTE_REASON,
 } from './surface-drawing-clipboard.ts';
 import { partOfNodeId } from './surface-scope.ts';
-import {
-  pasteContentOf,
-  type DrawingPasteContent,
-  type DrawingPasteTarget,
-} from './drawing-paste-target.ts';
+import type { DrawingPasteTarget } from './drawing-paste-target.ts';
 // Copy, cut and paste for the paginated surface (paginated-surface seam).
 //
 // Thin glue, on purpose. The flavour payload lives in `clipboard-copy-payload.ts`, the
@@ -160,8 +156,12 @@ export interface SurfaceClipboardDeps {
   } | null;
   /** Select a pasted drawing and bring it into view. */
   selectPastedDrawing?(drawingNodeId: string, paragraphId: string): void;
-  /** Where a paste of `content` goes while a drawing is selected (`drawingPasteTarget`). */
-  drawingPasteTarget?(content: DrawingPasteContent): DrawingPasteTarget | null;
+  /** Where a paste payload goes while a drawing is selected (`pasteTargetOf`); html null for plain. */
+  drawingPasteTarget?(
+    text: string,
+    html: string | null,
+    drawingCopy: boolean
+  ): DrawingPasteTarget | null;
   /** Enter the selected drawing's text box and select its text; false when it cannot. */
   selectTextBoxForPaste?(drawingNodeId: string): boolean;
   /** Leave the text box a paste entered, and select its drawing again. */
@@ -203,8 +203,12 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
    * leaves the box and selects the drawing again. Null when the selection did not move, which
    * includes no drawing selected.
    */
-  function placeDrawingPaste(content: DrawingPasteContent): false | (() => void) | null {
-    const target = deps.drawingPasteTarget?.(content) ?? null;
+  function placeDrawingPaste(
+    text: string,
+    html: string | null,
+    drawingCopy: boolean
+  ): false | (() => void) | null {
+    const target = deps.drawingPasteTarget?.(text, html, drawingCopy) ?? null;
     if (!target || target.kind === 'anchor') return null;
     if (target.kind === 'refused') {
       refuse(target.reason);
@@ -542,7 +546,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       return false;
     }
     // While a drawing is selected the paste goes before its anchor run or into its text box.
-    const placed = placeDrawingPaste(pasteContentOf(text, drawingCopy));
+    const placed = placeDrawingPaste(text, forcePlain ? null : html, drawingCopy);
     if (placed === false) return false;
     const revision = deps.session.packageRevision();
     const landed = routeRichPaste(text, html, forcePlain, cells);

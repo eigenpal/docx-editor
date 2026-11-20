@@ -143,6 +143,10 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
     'disabledReason.textBoxPaste',
   'text cannot be pasted into a shape inside a group; press Escape to select the group':
     'disabledReason.groupMemberPaste',
+  'text cannot be pasted into a linked text box; place the caret in the text to paste':
+    'disabledReason.linkedTextBoxPaste',
+  'a text box takes only text; paste without formatting to paste the text alone':
+    'disabledReason.textBoxPicturePaste',
   'invalid table chrome value': 'disabledReason.invalidValue',
   'invalid value for toolbar command': 'disabledReason.invalidValue',
   'unsupported table command': 'disabledReason.unavailable',
