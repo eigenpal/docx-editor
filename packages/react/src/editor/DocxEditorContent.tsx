@@ -17,7 +17,7 @@ import { editorDropHandled, openChartPaneAt } from '@docx-editor.dev/core/editor
 import { useDocxEditor } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
 import { ImageSelectionOverlay } from './images/ImageSelectionOverlay.tsx';
-import { useImageFilePaste } from './images/useImageFilePaste';
+import { reportImageInsertFailure, useImageFilePaste } from './images/useImageFilePaste';
 
 import type { DocxEditorChildren } from '../docx-editor-children';
 
@@ -91,7 +91,9 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
       const selected = editor!.exec({ type: 'setSelection', range: { anchor: at, head: at } });
       if (!selected.ok) return;
       editor!.focus();
-      void imageInsert.insertFromDataTransfer(event.dataTransfer, at);
+      void imageInsert
+        .insertFromDataTransfer(event.dataTransfer, at)
+        .catch(reportImageInsertFailure);
     },
     [editor, imageInsert]
   );

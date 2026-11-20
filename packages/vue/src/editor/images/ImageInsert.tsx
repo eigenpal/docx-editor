@@ -24,12 +24,12 @@ const ACCEPT = 'image/png,image/jpeg,image/gif';
 /** @public */
 export interface ImageInsertContextValue {
   readonly openFilePicker: () => void;
-  /** Pass the exact point result to retain a drop target during the file read. */
+  /** Pass the exact point result to retain a drop or paste target during the file read. */
   readonly insertFromFileList: (
     files: FileList | File[] | null | undefined,
     at?: EditorPointPosition
   ) => Promise<void>;
-  /** Pass the exact point result to retain a drop target during the file read. */
+  /** Pass the exact point result to retain a drop or paste target during the file read. */
   readonly insertFromDataTransfer: (
     data: DataTransfer | null,
     at?: EditorPointPosition

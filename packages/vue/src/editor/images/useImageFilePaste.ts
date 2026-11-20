@@ -9,8 +9,36 @@ import { imageFilePastePlan } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useImageInsertOptional } from './ImageInsert';
 
+/** The selection overlay, which an insert beside its drawing ends. */
+const OVERLAY_SELECTOR = '.docx-image-selection-overlay';
+
+/** The paste handler `useImageFilePaste` returns. */
+export interface UseImageFilePasteReturn {
+  (event: ClipboardEvent): void;
+}
+
+/**
+ * Whether the keyboard should return to the text after a picture lands at a drawing: focus is
+ * nowhere, on a removed element, or still on the drawing's selection overlay. Focus that the
+ * reader moved somewhere else during the file read stays there.
+ */
+export function focusReturnsToText(ownerDocument: Document): boolean {
+  const active = ownerDocument.activeElement;
+  return (
+    !active ||
+    active === ownerDocument.body ||
+    !active.isConnected ||
+    active.closest(OVERLAY_SELECTOR) !== null
+  );
+}
+
+/** Report an insert that threw instead of returning a refusal, so it is not an unhandled rejection. */
+export function reportImageInsertFailure(error: unknown): void {
+  console.error('[docx-editor] The image could not be inserted.', error);
+}
+
 /** Returns the paste handler that inserts a pasted image file. Call it during `setup`. */
-export function useImageFilePaste(): (event: ClipboardEvent) => void {
+export function useImageFilePaste(): UseImageFilePasteReturn {
   const editorRef = useDocxEditor();
   const imageInsert = useImageInsertOptional();
   return (event: ClipboardEvent) => {
@@ -22,12 +50,13 @@ export function useImageFilePaste(): (event: ClipboardEvent) => void {
     event.preventDefault();
     const ownerDocument = (event.target as Node | null)?.ownerDocument ?? null;
     // The file is read before the first await, while the clipboard is still readable.
-    void imageInsert.insertFromDataTransfer(transfer, plan.at).then(() => {
-      // An insert at a drawing ends its selection, and the focused overlay unmounts with it.
-      // The text then takes the keyboard, as after a paste of a copied drawing. Focus that
-      // moved somewhere else during the file read stays there.
-      const active = ownerDocument?.activeElement;
-      if (plan.at && ownerDocument && (!active || active === ownerDocument.body)) editor.focus();
-    });
+    void imageInsert
+      .insertFromDataTransfer(transfer, plan.at)
+      .catch(reportImageInsertFailure)
+      .then(() => {
+        // An insert at a drawing ends its selection, and the focused overlay unmounts with it.
+        // The text then takes the keyboard, as after a paste of a copied drawing.
+        if (plan.at && ownerDocument && focusReturnsToText(ownerDocument)) editor.focus();
+      });
   };
 }

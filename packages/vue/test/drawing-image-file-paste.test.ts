@@ -9,6 +9,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { createApp, h, nextTick } from 'vue';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import { en } from '@docx-editor.dev/i18n';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
@@ -23,6 +24,10 @@ import {
   selectFixtureDrawing,
   type DrawingKind,
 } from '../../core/src/editor/__tests__/drawing-image-paste-fixture.ts';
+import { stubReviewModule } from '../../core/src/editor/__tests__/review-test-module.ts';
+
+/** Any refusal dialog the editor shows. */
+const DIALOG = '[role="dialog"], [role="alertdialog"]';
 
 const unmounts: (() => void)[] = [];
 afterEach(() => {
@@ -40,6 +45,8 @@ async function mount() {
         DocxEditorRoot,
         {
           document: drawingDocument(),
+          author: 'Reviewer',
+          modules: [stubReviewModule()],
           imageDecodePort: decodePort,
           onReady: (editor: Editor) => {
             ready.push(editor as DocxEditorInstance);
@@ -117,8 +124,26 @@ describe('an image file pasted while a drawing is selected', () => {
       expect(overlayOf(container)).toBeNull();
       const pages = container.querySelector('.docx-pages')!;
       expect(pages.contains(document.activeElement)).toBe(true);
+      expect(document.querySelector(DIALOG)).toBeNull();
     });
   }
+
+  test('reports the suggesting-mode refusal in a dialog, and inserts nothing', async () => {
+    const { container, editor } = await mount();
+    expect(editor.exec({ type: 'setEditingMode', mode: 'suggesting' }).ok).toBe(true);
+    await flush();
+    const { overlay } = await select(container, editor, 'picture');
+    const event = pasteEvent({ file: true });
+    overlay.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    let dialog: Element | null = null;
+    for (let attempt = 0; attempt < 100 && !dialog; attempt++) {
+      await tick();
+      dialog = document.querySelector(DIALOG);
+    }
+    expect(dialog?.textContent).toContain(en.disabledReason.pictureSelected);
+    expect(await pictures(editor)).toEqual([1, 0, 0, 0]);
+  });
 
   test('inserts one picture at the caret when the caret is in text', async () => {
     const { container, editor } = await mount();
@@ -128,6 +153,7 @@ describe('an image file pasted while a drawing is selected', () => {
     const pages = container.querySelector<HTMLElement>('.docx-pages')!;
     pages.dispatchEvent(pasteEvent({ file: true }));
     expect(await picturesOnceSettled(editor, 2)).toEqual([1, 0, 0, 1]);
+    expect(document.querySelector(DIALOG)).toBeNull();
   });
 
   test('pastes text, not the file, when the clipboard holds visible text beside it', async () => {
@@ -213,5 +239,26 @@ describe('the overlay clipboard binding', () => {
     const afterUnmount = copyEvent();
     second.dispatchEvent(afterUnmount.event);
     expect(afterUnmount.written).toEqual([]);
+  });
+
+  test('removes the image-file paste listener with the overlay', async () => {
+    const { container, editor } = await mount();
+    const first = (await select(container, editor, 'picture')).overlay;
+    caretAtEndOf(editor, 3);
+    await flush();
+    expect(overlayOf(container)).toBeNull();
+    // The removed overlay no longer takes an image file.
+    const stale = pasteEvent({ file: true });
+    first.dispatchEvent(stale);
+    expect(stale.defaultPrevented).toBe(false);
+    expect(await picturesOnceSettled(editor, 2)).toEqual([1, 0, 0, 0]);
+    // The next overlay takes it once: one listener, not one per overlay so far.
+    const { overlay: second, paragraph } = await select(container, editor, 'shape');
+    const live = pasteEvent({ file: true });
+    second.dispatchEvent(live);
+    expect(live.defaultPrevented).toBe(true);
+    const expected = [1, 0, 0, 0];
+    expected[paragraph]! += 1;
+    expect(await picturesOnceSettled(editor, 2)).toEqual(expected);
   });
 });

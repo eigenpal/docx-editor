@@ -8,6 +8,8 @@ import { PNG_1X1, drawingPasteFixture } from './drawing-image-paste-fixture.ts';
 
 const PICTURES = '.docx-pages .docx-drawing-image';
 const OVERLAY = '.docx-image-selection-overlay';
+// Visible only: the demo page keeps its own hidden dialogs in the document.
+const DIALOG = '[role="dialog"]:visible, [role="alertdialog"]:visible';
 
 async function open(page: Page, port: number): Promise<void> {
   await page.goto(`http://localhost:${port}/`, { waitUntil: 'domcontentloaded' });
@@ -72,6 +74,10 @@ for (const adapter of adapters) {
       expect(await page.evaluate(() => !!document.activeElement?.closest('.docx-pages'))).toBe(
         true
       );
+      // No refusal dialog, and no second insert arrives late.
+      await expect(page.locator(DIALOG)).toHaveCount(0);
+      await page.waitForTimeout(500);
+      await expect(page.locator(PICTURES)).toHaveCount(2);
     }
 
     for (const [index, kind] of ['picture', 'shape', 'text box'].entries()) {
@@ -103,6 +109,7 @@ for (const adapter of adapters) {
       await expect(page.locator(OVERLAY)).toHaveCount(0);
       expect(await pasteImageFile(page)).toBe(true);
       await expect(page.locator(PICTURES)).toHaveCount(2);
+      await expect(page.locator(DIALOG)).toHaveCount(0);
       // No second insert arrives late.
       await page.waitForTimeout(500);
       await expect(page.locator(PICTURES)).toHaveCount(2);

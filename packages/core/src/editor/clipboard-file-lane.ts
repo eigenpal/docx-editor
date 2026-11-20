@@ -14,14 +14,16 @@
 // html flavour it lands correctly stands it down.
 //
 // `imageFilePastePlan` adds the target: the caret in text, or, while a drawing is selected,
-// the point `drawingPasteTarget` gives for a picture. The pages and the drawing selection
+// the point `drawingPastePoint` gives for a picture. The pages and the drawing selection
 // overlay both run it.
 
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { probeExternalHtml } from './clipboard-html-read.ts';
 import { hasVisibleChar, htmlHasVisibleText } from './clipboard-plain-text.ts';
-import { drawingPasteTarget } from './drawing-paste-target.ts';
+import { drawingPastePoint } from './drawing-paste-target.ts';
 import { capturePointPosition } from './editor-point-target.ts';
+import { PICTURE_SELECTED_INSERT_REASON } from './docx-editor-images.ts';
+import { IMAGE_INSERT_PROBE_BYTES } from './toolbar-commands.ts';
 import type { EditorPointPosition } from '../contracts/editor-drop.ts';
 import type { DocxEditorInstance } from './docx-editor-types.ts';
 
@@ -70,9 +72,6 @@ export function clipboardPasteLandsContent(transfer: DataTransfer | null | undef
   return probeExternalHtml(html).imageCount > 0;
 }
 
-/** Never executed: the dry run only asks whether a well-formed insert may land. */
-const IMAGE_PASTE_PROBE_BYTES = new Uint8Array([0x89]);
-
 function carriesImageFile(transfer: DataTransfer): boolean {
   const items = transfer.items as DataTransferItemList | undefined;
   if (!items) return false;
@@ -90,9 +89,10 @@ function carriesImageFile(transfer: DataTransfer): boolean {
  */
 export interface ImageFilePastePlan {
   /**
-   * The `insertImage.at` point. A point is the drawing paste target while a drawing is
+   * The `insertImage.at` point. A point is the drawing paste point while a drawing is
    * selected. Undefined inserts as `insertImage` does with no point: at the caret, or, when
-   * the editor refuses a picture beside the selected drawing, with that refusal reported.
+   * the editor refuses a picture beside the selected drawing in suggesting mode, with that
+   * refusal reported.
    */
   readonly at: EditorPointPosition | undefined;
 }
@@ -100,15 +100,17 @@ export interface ImageFilePastePlan {
 /**
  * Whether a host's image-FILE lane takes this paste, and where the picture goes. Null means
  * stand down: no image file, content the engine lands itself (see
- * {@link clipboardPasteLandsContent}), no drawing selected and an insert at the caret the
- * editor refuses, or a document open for viewing.
+ * {@link clipboardPasteLandsContent}), an insert the editor refuses for any reason other than
+ * the one below, or a document open for viewing. A paste the lane stands down from stays
+ * silent, as a refused paste in text does.
  *
  * With the caret in text, the picture lands at the caret. With a drawing selected, it lands
- * where every pasted drawing lands, `drawingPasteTarget(surface, 'drawing')`: before the
- * selected drawing's anchor run. That target is captured as a point, which stays valid only
- * while the document keeps the same revision, so a slow file read cannot insert into changed
- * content. When the editor refuses the picture there, for example in suggesting mode, the lane
- * still takes the paste, and the insert reports the reason.
+ * where every pasted drawing lands, `drawingPastePoint(surface)`: before the selected
+ * drawing's anchor run. That point is captured, and stays valid only while the document keeps
+ * the same revision, so a slow file read cannot insert into changed content; an insert into
+ * changed content reports its stale-target reason. In suggesting mode the editor refuses a
+ * picture beside a selected drawing (`PICTURE_SELECTED_INSERT_REASON`). The lane still takes
+ * that paste, so the insert reports the reason the reader needs.
  *
  * @internal
  */
@@ -124,19 +126,16 @@ export function imageFilePastePlan(
   // rules for a picture inserted while a drawing is selected.
   const judged = editor.canExecuteImageCommand({
     type: 'insertImage',
-    data: IMAGE_PASTE_PROBE_BYTES,
+    data: IMAGE_INSERT_PROBE_BYTES,
     mime: 'image/png',
     widthPoints: 72,
     heightPoints: 72,
   });
-  const target = drawingPasteTarget(surface, 'drawing');
-  if (!target) return judged.ok ? { at: undefined } : null;
-  if (!judged.ok || target.kind !== 'anchor') return { at: undefined };
-  const at = capturePointPosition(surface, {
-    paragraphId: target.paragraphId,
-    offset: target.offset,
-  });
-  return { at };
+  const point = drawingPastePoint(surface);
+  if (!judged.ok) {
+    return point && judged.reason === PICTURE_SELECTED_INSERT_REASON ? { at: undefined } : null;
+  }
+  return { at: point ? capturePointPosition(surface, point) : undefined };
 }
 
 /**

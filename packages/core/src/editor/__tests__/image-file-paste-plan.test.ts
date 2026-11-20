@@ -133,3 +133,23 @@ test('with a drawing selected while suggesting, takes the paste and reports the 
   caretAtEndOf(editor, 3);
   expect(imageFilePastePlan(editor, transfer({ file: true }))).toEqual({ at: undefined });
 });
+
+test('with a drawing selected, stands down for any other refusal, as a paste in text does', async () => {
+  const editor = await mounted();
+  selectFixtureDrawing(editor, 'picture');
+  const refusing = {
+    surface: editor.surface,
+    canExecuteImageCommand: () =>
+      ({ ok: false, code: 'locked', reason: 'the document is protected' }) as const,
+  };
+  expect(imageFilePastePlan(refusing, transfer({ file: true }))).toBeNull();
+  const pictureSelected = {
+    surface: editor.surface,
+    canExecuteImageCommand: () =>
+      ({ ok: false, code: 'invalidArgs', reason: PICTURE_SELECTED_INSERT_REASON }) as const,
+  };
+  expect(imageFilePastePlan(pictureSelected, transfer({ file: true }))).toEqual({ at: undefined });
+  // With the caret in text, the picture-selected refusal cannot apply, so the lane stands down.
+  caretAtEndOf(editor, 3);
+  expect(imageFilePastePlan(pictureSelected, transfer({ file: true }))).toBeNull();
+});

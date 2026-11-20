@@ -149,7 +149,8 @@ export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null {
   return CHROME_PROBES[slotId] ?? null;
 }
 
-const IMAGE_INSERT_PROBE_BYTES = Uint8Array.from(
+/** A 1x1 PNG for picture-insert probes. Never inserted: probes only ask whether one could land. */
+export const IMAGE_INSERT_PROBE_BYTES = Uint8Array.from(
   atob(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
   ),

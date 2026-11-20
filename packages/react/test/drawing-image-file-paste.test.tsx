@@ -11,6 +11,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { StrictMode, type ReactNode } from 'react';
 import { act, cleanup, render } from '@testing-library/react';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import { en } from '@docx-editor.dev/i18n';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
@@ -24,8 +25,12 @@ import {
   selectFixtureDrawing,
   type DrawingKind,
 } from '../../core/src/editor/__tests__/drawing-image-paste-fixture.ts';
+import { stubReviewModule } from '../../core/src/editor/__tests__/review-test-module.ts';
 
 afterEach(cleanup);
+
+/** Any refusal dialog the editor shows. */
+const DIALOG = '[role="dialog"], [role="alertdialog"]';
 
 async function settle(): Promise<void> {
   await act(async () => {
@@ -38,6 +43,8 @@ async function mount(options: { strict?: boolean } = {}) {
   const tree: ReactNode = (
     <DocxEditorRoot
       document={drawingDocument()}
+      author="Reviewer"
+      modules={[stubReviewModule()]}
       imageDecodePort={decodePort}
       onReady={(editor) => {
         instance = editor as DocxEditorInstance;
@@ -112,8 +119,30 @@ describe('an image file pasted while a drawing is selected', () => {
       expect(overlayOf(view.container)).toBeNull();
       const pages = view.container.querySelector('.docx-pages')!;
       expect(pages.contains(document.activeElement)).toBe(true);
+      expect(document.querySelector(DIALOG)).toBeNull();
     });
   }
+
+  test('reports the suggesting-mode refusal in a dialog, and inserts nothing', async () => {
+    const { view, editor } = await mount();
+    act(() => {
+      expect(editor.exec({ type: 'setEditingMode', mode: 'suggesting' }).ok).toBe(true);
+    });
+    await settle();
+    const { overlay } = await select(view.container, editor, 'picture');
+    const event = pasteEvent({ file: true });
+    act(() => {
+      overlay.dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(true);
+    let dialog: Element | null = null;
+    for (let attempt = 0; attempt < 100 && !dialog; attempt++) {
+      await settle();
+      dialog = document.querySelector(DIALOG);
+    }
+    expect(dialog?.textContent).toContain(en.disabledReason.pictureSelected);
+    expect(await pictures(editor)).toEqual([1, 0, 0, 0]);
+  });
 
   test('inserts one picture at the caret when the caret is in text', async () => {
     const { view, editor } = await mount();
@@ -125,6 +154,7 @@ describe('an image file pasted while a drawing is selected', () => {
       pages.dispatchEvent(pasteEvent({ file: true }));
     });
     expect(await picturesOnceSettled(editor, 2)).toEqual([1, 0, 0, 1]);
+    expect(document.querySelector(DIALOG)).toBeNull();
   });
 
   test('pastes text, not the file, when the clipboard holds visible text beside it', async () => {
@@ -171,7 +201,7 @@ describe('an image file pasted while a drawing is selected', () => {
     });
     expect(await picturesOnceSettled(editor, 2)).toEqual([1, 0, 0, 0]);
     // No refusal dialog: a paste the editor cannot take stays silent, as it does in text.
-    expect(document.querySelector('[role="alertdialog"], [role="dialog"]')).toBeNull();
+    expect(document.querySelector(DIALOG)).toBeNull();
   });
 });
 

@@ -941,7 +941,7 @@ async function runImageCommand(
         ? {
             ok: false as const,
             code: 'notFound' as const,
-            reason: 'the drop target is no longer attached',
+            reason: 'the insert target is no longer attached',
           }
         : null
       : isStaleImageMutation(editor, pre);

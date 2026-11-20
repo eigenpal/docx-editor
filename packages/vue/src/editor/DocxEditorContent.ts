@@ -21,7 +21,7 @@ import type { DocxEditorChildren } from '../docx-editor-children';
 import { useDocxEditor, useEditorContentElement } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
 import { ImageSelectionOverlay } from './images/ImageSelectionOverlay';
-import { useImageFilePaste } from './images/useImageFilePaste';
+import { reportImageInsertFailure, useImageFilePaste } from './images/useImageFilePaste';
 import { mergeHostClass } from '../lib/mergeHostClass';
 import { useChromeDir } from '../i18n';
 
@@ -97,7 +97,7 @@ export const DocxEditorContent = defineComponent({
       });
       if (!selected.ok) return;
       editorRef.value!.focus();
-      void imageInsert.insertFromDataTransfer(transfer, at);
+      void imageInsert.insertFromDataTransfer(transfer, at).catch(reportImageInsertFailure);
     };
 
     // A double press on a chart opens the Chart pane, as Edit chart does.
