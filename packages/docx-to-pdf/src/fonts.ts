@@ -155,8 +155,8 @@ export class EmbeddedFace {
    * An Arabic face draws BEH, TEH, NOON and YEH on one dotless base glyph and adds the dots
    * as separate glyphs, so one glyph extracts as several letters. Codes already differ per
    * letter, but MuPDF resolves `ToUnicode` per CID, so one shared CID read every such letter
-   * as the last one mapped. The subset takes the glyph again under a new CID, the way
-   * LibreOffice's writer does. Both fontkit subsets write one entry per listed glyph: a
+   * as the last one mapped. The subset takes the glyph again under a new CID, so each
+   * CID has one `ToUnicode` entry (ISO 32000-1 §9.10.3). Both fontkit subsets write one entry per listed glyph: a
    * TrueType subset one `glyf` record, a CFF subset one charstring under a single charset
    * range, so the CID is the subset index either way.
    *

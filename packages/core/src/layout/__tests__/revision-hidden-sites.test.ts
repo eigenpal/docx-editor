@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlElement } from '../../store/index.ts';
-import { withHiddenRevisionSites, withoutUnlistedChanges } from '../revision-hidden-sites.ts';
+import {
+  withHiddenRevisionSites,
+  withHiddenRevisionSitesKey,
+  withoutUnlistedChanges,
+} from '../revision-hidden-sites.ts';
 import { revisionAuthorFilter } from '../revision-projection.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -29,6 +33,24 @@ describe('withHiddenRevisionSites', () => {
     expect(other?.cacheKey).not.toBe(one?.cacheKey);
     // Never the canonical key, so a block cached with records left out is never served as it.
     expect(one?.cacheKey).not.toBe('');
+  });
+
+  test('a queue that leaves nothing out can keep the key of one that left records out', () => {
+    const base = revisionAuthorFilter(['Grace']);
+    const withRecords = withHiddenRevisionSites(base, unlisted(['a']));
+    const without = withHiddenRevisionSitesKey(base, '1:2');
+    expect(without.cacheKey).toBe(withRecords!.cacheKey);
+    // It leaves nothing out and hides the same authors.
+    expect(without.unlisted).toBeUndefined();
+    expect(without.hiddenAuthors).toBe(base.hiddenAuthors);
+    // The same object for the same pair, so what is cached by the filter stays cached.
+    expect(withHiddenRevisionSitesKey(base, '1:2')).toBe(without);
+    expect(withHiddenRevisionSitesKey(base, '3:2').cacheKey).not.toBe(without.cacheKey);
+    // Two editors on one page share a base and keep different keys: neither replaces the other.
+    expect(withHiddenRevisionSitesKey(base, '1:2')).toBe(without);
+    expect(withHiddenRevisionSitesKey(undefined, '1:2').cacheKey).toBe(
+      withHiddenRevisionSites(undefined, unlisted(['a']))!.cacheKey
+    );
   });
 
   test('a resolved view also keys on which records each paragraph holds', () => {

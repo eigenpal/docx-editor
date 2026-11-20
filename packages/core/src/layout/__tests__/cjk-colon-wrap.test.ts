@@ -112,8 +112,7 @@ test('a centered colon retains the complete band for highlight and shading', () 
   }
 });
 
-// Native Word PDF, Hiragino Mincho ProN W3, 12 pt, 54 pt measure.
-// The origins come from Word's PDF content, independently of this measurer.
+// Hiragino Mincho ProN W3, 12 pt, 54 pt measure.
 test('Word narrow-line origins survive every source-run split', () => {
   const text = '甲甲甲甲：【乙丙丁';
   const run = (value: string) =>

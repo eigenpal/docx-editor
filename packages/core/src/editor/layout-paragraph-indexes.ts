@@ -1,7 +1,8 @@
 // Per-layout paragraph indexes the editor facade reads, memoized by layout identity.
 // Split out of `docx-editor.ts`, which is at its line cap.
 
-import { documentOrder, paragraphFragmentsOfBlocks, type SemanticLayout } from '../layout/index.ts';
+import { paragraphFragmentsOfBlocks, type SemanticLayout } from '../layout/index.ts';
+import { documentOrderIndex } from '../layout/document-order.ts';
 import { fragmentParagraphs } from '../layout/line-segments.ts';
 
 /**
@@ -17,15 +18,14 @@ export function noteScopeIndexOf(layout: SemanticLayout): Map<string, string> {
   return noteScopeIndexCache.get(layout) ?? buildNoteIndexes(layout).scopes;
 }
 
-/** Paragraph id to document position, memoized per layout. */
-const paragraphOrderCache = new WeakMap<SemanticLayout, Map<string, number>>();
-export function paragraphOrderOf(layout: SemanticLayout): Map<string, number> {
-  const cached = paragraphOrderCache.get(layout);
-  if (cached) return cached;
-  const index = new Map<string, number>();
-  for (const [position, id] of documentOrder(layout).entries()) index.set(id, position);
-  paragraphOrderCache.set(layout, index);
-  return index;
+/**
+ * Paragraph id to document position, for reads only.
+ *
+ * This is the layout's own index. A layout keeps it from the layout before it while its
+ * pages list the same paragraphs, so a text edit does not index the document again.
+ */
+export function paragraphOrderOf(layout: SemanticLayout): ReadonlyMap<string, number> {
+  return documentOrderIndex(layout);
 }
 
 /**

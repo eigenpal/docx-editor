@@ -230,17 +230,141 @@ describe('the painted caret', () => {
     expect(host.lastElementChild).toBe(painted);
   });
 
-  test('it suppresses the native caret only while it is up', () => {
+  test('it suppresses the native caret while it is up', () => {
     const { surface, container, pages } = mount(paragraph('hello world'));
     putCaret(surface, 3);
+    expect(caretElement(container)).not.toBeNull();
     expect(pages.style.caretColor).toBe('transparent');
+    surface.destroy();
+    container.remove();
+  });
 
-    surface.setSelection({
-      anchor: { paragraphId: surface.session.paragraphIds()[0]!, offset: 1 },
-      head: { paragraphId: surface.session.paragraphIds()[0]!, offset: 4 },
-    });
+  test('a range the browser shows as a range keeps the suppression it already has', () => {
+    const { surface, container, pages } = mount(paragraph('hello world'));
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    putCaret(surface, 3);
+    // `caret-color` is inherited, so each change of it on the pages layer restyles every
+    // painted page. A caret that becomes a range and a caret again must not change it.
+    const removed: string[] = [];
+    const removeProperty = pages.style.removeProperty;
+    pages.style.removeProperty = (name: string) => {
+      removed.push(name);
+      return removeProperty.call(pages.style, name);
+    };
+    try {
+      surface.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 4 },
+      });
+      expect(document.getSelection()!.isCollapsed).toBe(false);
+      // No insertion point is painted, and the native one stays suppressed: a range draws none.
+      expect(caretElement(container)).toBeNull();
+      expect(pages.style.caretColor).toBe('transparent');
+
+      putCaret(surface, 4);
+      expect(caretElement(container)).not.toBeNull();
+      expect(pages.style.caretColor).toBe('transparent');
+      expect(removed).not.toContain('caret-color');
+    } finally {
+      pages.style.removeProperty = removeProperty;
+      surface.destroy();
+      container.remove();
+    }
+  });
+
+  test('a model range the browser shows collapsed gets the native caret back', () => {
+    const { surface, container, pages } = mount(paragraph('hello world'));
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    putCaret(surface, 3);
+    const browser = document.getSelection()!;
+    const mirror = browser.setBaseAndExtent.bind(browser);
+    const text = pages.querySelector('[data-paragraph-id]')!.firstChild!;
+    // A browser selection that stays collapsed still draws a caret, so it must be visible.
+    browser.setBaseAndExtent = () => mirror(text, 1, text, 1);
+    try {
+      surface.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 4 },
+      });
+    } finally {
+      browser.setBaseAndExtent = mirror;
+    }
+    expect(browser.isCollapsed).toBe(true);
     expect(caretElement(container)).toBeNull();
     expect(pages.style.caretColor).toBe('');
+    surface.destroy();
+    container.remove();
+  });
+
+  test('a range that holds no text gets the native caret back', () => {
+    // The two sides of hidden text are different places in the document and one place on
+    // screen: a browser can draw such a range as a caret, and it must stay visible.
+    const { surface, container, pages } = mount(
+      '<w:p><w:r><w:t>hello</w:t></w:r>' +
+        '<w:r><w:rPr><w:vanish/></w:rPr><w:t>XXX</w:t></w:r>' +
+        '<w:r><w:t>world</w:t></w:r></w:p>'
+    );
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    putCaret(surface, 2);
+    expect(pages.style.caretColor).toBe('transparent');
+    surface.setSelection({
+      anchor: { paragraphId, offset: 5 },
+      head: { paragraphId, offset: 8 },
+    });
+    const browser = document.getSelection()!;
+    expect(browser.toString()).toBe('');
+    expect(caretElement(container)).toBeNull();
+    expect(pages.style.caretColor).toBe('');
+    surface.destroy();
+    container.remove();
+  });
+
+  test('a range that ends inside run text keeps the suppression without reading its text', () => {
+    const { surface, container, pages } = mount(paragraph('hello world'));
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    putCaret(surface, 3);
+    const browser = document.getSelection()!;
+    const text = browser.toString;
+    let reads = 0;
+    browser.toString = () => {
+      reads += 1;
+      return text.call(browser);
+    };
+    try {
+      surface.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 4 },
+      });
+    } finally {
+      browser.toString = text;
+    }
+    expect(browser.isCollapsed).toBe(false);
+    expect(reads).toBe(0);
+    expect(pages.style.caretColor).toBe('transparent');
+    surface.destroy();
+    container.remove();
+  });
+
+  test('a focused text control in the pages gets the native caret back over a range', () => {
+    const { surface, container, pages } = mount(paragraph('hello world'));
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId, offset: 1 },
+      head: { paragraphId, offset: 4 },
+    });
+    expect(document.getSelection()!.isCollapsed).toBe(false);
+    expect(pages.style.caretColor).toBe('transparent');
+    // The control draws its own caret and inherits the property from the pages.
+    const control = document.createElement('input');
+    pages.append(control);
+    control.focus();
+    expect(document.activeElement).toBe(control);
+    expect(document.getSelection()!.isCollapsed).toBe(false);
+    expect(caretElement(container)).toBeNull();
+    expect(pages.style.caretColor).toBe('');
+    control.remove();
+    surface.destroy();
+    container.remove();
   });
 
   test('a geometry read inside a commit paints once, with the post-edit caret', () => {

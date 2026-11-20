@@ -10,13 +10,14 @@ import { defineComponent, h, type ComputedRef, type PropType, type VNode } from 
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { useEditorState } from '@docx-editor.dev/vue';
 import { ACCEPT_ICON, REOPEN_ICON, icon } from './review-icons.tsx';
-import type { ReviewRailValue } from './review-context.ts';
+import type { ReviewCardRailValue } from './review-context.ts';
 import type { ReviewItemView } from './useReview.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
 import { guardMousedown, markPart, selectDocumentReadOnly } from './review-shared.ts';
 
 interface ResolutionPartDeps {
-  readonly useRail: () => ComputedRef<ReviewRailValue>;
+  /** The rail as a part inside a card reads it. */
+  readonly useRail: () => ComputedRef<ReviewCardRailValue>;
   readonly useItem: () => ComputedRef<ReviewItemView | null>;
   readonly useLabel: () => (key: TranslationKey) => string;
 }

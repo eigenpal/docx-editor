@@ -122,6 +122,35 @@ A React `List` render prop or a Vue `#item` slot takes over the card. Wrap it in
 
 Inside the card, `useReviewItem()` reads the item and `useReviewAuthor(item.author)` returns its color and avatar. A template also replaces the compact resolved-comment view.
 
+### When the rail runs the template again
+
+To keep scrolling and typing responsive, the rail runs the template for a card only when one of these values changes:
+
+- The item of the card.
+- In React, the function that you pass as the render prop.
+- In React, state from a hook that the render prop calls.
+- In Vue, reactive state that the slot reads.
+- In a Vue render function, the function that you pass as the `#item` slot or the default slot.
+
+A template that reads any other value can show an old value. In React, such a value is a ref or a module variable that a function with a stable identity reads, for example a `useCallback` result. In Vue, such a value is a variable that is not reactive.
+
+If the template reads a value that changes, use one of these options:
+
+- In React, pass a new function when the value changes, as an inline render prop does, or read the value with a hook inside your card component.
+- In Vue, keep the value in a `ref` or another reactive source, or read the value inside your card component.
+
+A function that you create on each render is a new function each time. Examples are an inline React render prop and a slot function in a Vue render function. Each mounted card then runs the template once for each render of your component. The cards stay mounted and keep their state.
+
+In a Vue template, the rail does not compare slot functions, so a render of your component runs no card template. The rail compares slot functions again in these cases: `v-if` or `v-for` selects the slot, or the slot reads a `v-for` or `v-slot` variable around it. Then each mounted card runs the template once for each render of your component.
+
+The Vue rail needs Vue 3.4 or later to skip these renders.
+
+### Call hooks in a React render prop
+
+A React render prop runs as the render of a component that belongs to the card, so it can call hooks. Call the same hooks in the same order on each run, as in any component.
+
+An inline render prop calls the same hooks on each render, so its cards stay mounted and keep their state. If you switch between two render props that call different hooks, set a different `key` on `DocxEditorReview` for each one. The rail then mounts again, and each card starts from new state.
+
 ## Configure cards and markers
 
 | `DocxEditorReview` prop | Default and use                                       |

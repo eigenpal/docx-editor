@@ -202,7 +202,7 @@ export function viewScopeOf(
 
 /**
  * Paragraph fragments addressable under the active scope (body / HF / note). An open note
- * addresses every note of its kind, because Word's notes part is one story for selection.
+ * addresses every note of its kind, because the notes part is one story for selection (§17.11).
  */
 export function scopedParagraphFragments(
   page: SemanticLayout['pages'][number],

@@ -67,9 +67,9 @@ function onOff(node: OoxmlElement, name: string): boolean | undefined {
 
 /**
  * `w:tblLook` is read from the TABLE's own `w:tblPr` only, never cascaded from the style it
- * names. The schema admits `w:tblLook` inside a table style's `w:tblPr`, but the look is
- * Word's per-table "Table Style Options" checkbox set — a property of this table's use of
- * the style, not of the style — and Word writes one on every table it creates.
+ * names. The schema admits `w:tblLook` inside a table style's `w:tblPr`, but the look
+ * (ECMA-376 Part 1 §17.4.55) selects which conditional formats this table uses. It is a
+ * property of this table's use of the style, not of the style itself.
  */
 export function readTableLook(tblPr: OoxmlElement | undefined): TableLook {
   return tableLookOf(tblPr && childNamed(tblPr, 'tblLook'));
@@ -107,7 +107,7 @@ export function tableLookOf(look: OoxmlElement | null | undefined): TableLook {
 }
 
 /**
- * Word layers a table style's conditional formats weakest first (17.7.6): the whole table,
+ * ECMA-376 Part 1 §17.7.6 layers a table style's conditional formats weakest first: the whole table,
  * then the row bands, then the column bands, then first/last column, then first/last row,
  * then the four corners. A column band paints over a row band where the two cross.
  */

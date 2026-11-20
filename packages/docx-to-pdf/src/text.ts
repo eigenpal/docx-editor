@@ -452,8 +452,8 @@ export class TextWriter {
         );
         // A space on a line of right-to-left text draws nothing and is not written. MuPDF
         // reorders such a line per word when it meets a written space, and emitted the words
-        // in visual order; from the gap it infers the space and reorders the whole line, as
-        // it does for LibreOffice's PDFs. pdf.js and Poppler also infer the space from the
+        // in visual order; from the gap it infers the space and reorders the whole line
+        // (ISO 32000-1 §14.8.2.5). pdf.js and Poppler also infer the space from the
         // gap. A line that also holds left-to-right text keeps its spaces: MuPDF keeps its
         // runs in visual order there either way, and without the spaces it merged the words.
         if (rightToLeft && /^ +$/.test(text) && rightToLeftOnly(line)) continue;

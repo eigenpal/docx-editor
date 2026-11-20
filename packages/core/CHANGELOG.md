@@ -1,5 +1,51 @@
 # @docx-editor.dev/core
 
+## 2.39.0
+
+### Minor Changes
+
+- 64f1990: Deleting a paragraph or table inside a footnote, endnote, comment, or text box now works when that story keeps another paragraph, and the caret stays in it. Deleting the last paragraph of a story or table cell, or the last row or column of a table, now fails with `NotSupported` and the new `edit.content-required` diagnostic instead of `GeneralException` and `edit.stale-target`. Fixes #2039
+- 768aefd: Picture bullets now draw at their correct size relative to the image's pixel height, so a bullet from a large image no longer fills the page.
+- 1d092ab: A rich paste leaves the caret at the end of the pasted content, so the next character you type follows it. Fixes #1990
+- 9d4be8f: Table borders now display compound, three-dimensional, dash-dot-stroked, and dashed line styles the same on screen and in PDF output. Wide outer table borders now sit at the table indent, and negative cell margins no longer shift the table.
+
+### Patch Changes
+
+- c6566d9: A centered AutoFit table with a fixed width in a document before compatibility mode 15 now fills the text column correctly when its columns need more room than the column has.
+- 6de128b: An AutoFit table cell with `w:noWrap` and no preferred width now keeps its text on one line and widens its column, instead of wrapping the text.
+- 66f6efd: Tables now stand beside floating tables and text frames that leave room for them, and floating tables follow their saved alignment, vertical position, and keep-whole settings more closely.
+- aa9a33b: Floating objects laid out in a table cell are positioned against the cell text area inside the cell margins, and legacy-mode column alignment keeps the paragraph indents.
+- e080a79: Paragraphs with contextual spacing at the edge of a table cell now drop their space when the neighboring cell, the row end, or the paragraph before the table has the same style.
+- eea8480: Numbered lists with automatic paragraph spacing in table cells keep the space before their first item and after their last.
+- 38861ed: Raised floating tables in multi-column sections now keep their position, and the earlier text they cover moves below them or wraps beside them in each column they cross.
+- 0127b12: Text composed with an input method editor (IME) over a selected word that sits between words in another script, such as a Latin code between Hangul words, now replaces the selection instead of disappearing.
+- e6bd742: PDF export loads the fonts that empty paragraphs and empty table cells are measured with, so their lines have the correct height when no text uses those fonts.
+- 708f28b: Equations with complex-script bold (`w:bCs`) or a complex-script size (`w:szCs`) that differs from `w:sz` now draw as math instead of plain text when their text has no complex-script characters.
+- c49fad8: A paragraph at the top of a page now keeps its space before when a floating table it anchors covers it, or, in older compatibility modes, covers the top of the text area beside it.
+- 0339cfc: A table positioned against the text now counts its offset from the top of its anchor paragraph, and the spacing around it no longer collapses across the table.
+- 344b056: A page- or margin-positioned table on the first page of a continuous section now breaks at the bottom margin of that page.
+- 7cfd7a9: Floating tables that share an anchor paragraph and rise above it are now placed in source order, and before compatibility mode 15 a paragraph's space after keeps it clear of a floating table.
+- 5d64f9f: With the setting that allows text after a floating table break, the text after a split floating table now starts beside its first part, and every part wraps text on its page.
+- e54cebf: A text-anchored floating table whose top distance or negative offset reaches above its anchor now keeps its place, and the earlier lines it meets wrap beside it.
+- ece2438: Headers and footers taller than the page push the body by their full height and show only the lines that fit, and top and bottom margins taller than the page stay as authored. Pictures that a table cell anchors against the page take their vertical offset from their row and no longer wrap header or footer text.
+- 1fbb476: A header or footer now takes at most half the page height, so a very tall picture in it no longer pushes the body text onto hundreds of pages.
+- 9017bbf: Rows whose cells hide their end-of-cell mark and hold only an empty paragraph no longer reserve a line of height.
+- 9728828: A floating table inside a table cell is positioned within its cell, and the cell text wraps around it.
+- 42c6580: A right-click on a note now opens one menu: the document menu inside the note you are editing, and the note menu on another note or a reference mark. The note menu now has styled rows, keyboard navigation, and closes on an outside press, Escape, or a scroll.
+- f6c3687: A selection that starts in a footnote or endnote now extends into the next notes of the same kind. Copy and formatting work across notes; typing, deletion, paste, and cut over such a selection are refused. Fixes #2010
+- 4efad2c: The body starts at the authored top or bottom page margin, and a tall header or footer pushes it by its full height instead of stopping at two fifths of the page.
+- 2ddc239: Tables follow row-level alignment and indent exceptions, and right-aligned rows in legacy compatibility modes end past the text edge by their first cell's left margin.
+- fcb045f: Table rows apply their row-level cell margin exceptions, so a row with a minimum height is no longer padded by margins it does not have.
+- 2cae153: Update code comments to cite the ECMA-376 specification.
+- 7ca77a4: A table that opens the document now keeps one line in its first row when its cells hide their end marks.
+- 764bd09: Table rows with an exact height now place the cell bottom margin below the row content, so the row keeps its full content height.
+- 4658f94: Table header rows that do not fit below earlier content now break across pages correctly for the document's compatibility mode. AutoFit and fixed percentage-width tables size their columns more accurately around side rules and cell margins.
+- 7daf054: Move the caret between cells of a large table without a pause while the toolbar checks its table controls.
+- f4fcb4c: Column breaks in table cells, list markers in centered or styled cells, table style font sizes by compatibility mode, math runs with a kerning threshold, and pie chart legends with several series now lay out correctly.
+- e00740b: Type faster in a large table when the edited row grows and pushes the rows below it to later pages.
+- ed1f3a1: A heading that starts with a page break is placed on the page where its text appears in tables of contents, page references, links, the navigation pane, PDF links, and Markdown pages. Fixes #1997
+- Updated dependencies: @docx-editor.dev/i18n@2.39.0
+
 ## 2.38.0
 
 ### Minor Changes

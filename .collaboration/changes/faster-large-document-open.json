@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Each layout pass of an opening document repeats per-paragraph list, drawing, and measurement lookups for unchanged paragraphs.",
+  "after": "Unchanged paragraphs and run styles reuse those lookups by object identity, with the same layout result.",
+  "reason": "Only layout and measurement caches change. Source ranges, canonical OOXML, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/open-prefix-pass-work.test.ts",
+    "packages/core/src/layout/__tests__/shaped-width-cache-keys.test.ts",
+    "packages/core/src/editor/__tests__/font-face-usage.test.ts"
+  ],
+  "changeset": "faster-large-document-open",
+  "migration": null
+}

@@ -27,6 +27,13 @@ export interface CopyFlavourInput {
   readonly pkg: OoxmlPackage | null;
   /** Test hook: overrides {@link MAX_COPY_FRAGMENT_BYTES}. */
   readonly maxFragmentBytes?: number;
+  /**
+   * Answer no HTML at all, with `oversized`, rather than a fragment without its media or no
+   * fragment. One copied drawing is nothing without its image.
+   */
+  readonly requireFullFragment?: boolean;
+  /** Replace the rendered interop HTML, which other applications read. */
+  readonly interopHtml?: (rendered: string) => string;
 }
 
 export interface CopyFlavours {
@@ -36,9 +43,16 @@ export interface CopyFlavours {
   readonly html: string | null;
   /** The chart drawing these flavours copy, when the selection is one chart. A cut deletes it. */
   readonly chartDrawingNodeId?: string;
+  /**
+   * The drawing these flavours copy whole, when the selection is one drawing of any kind, a
+   * chart included. A cut deletes it.
+   */
+  readonly drawingNodeId?: string;
+  /** True when the fragment was over budget and `requireFullFragment` dropped the HTML. */
+  readonly oversized?: boolean;
 }
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -76,6 +90,8 @@ export function buildCopyFlavours(input: CopyFlavourInput): CopyFlavours {
 
   const budget = input.maxFragmentBytes ?? MAX_COPY_FRAGMENT_BYTES;
   let fragmentBytes: Uint8Array | null = full.bytes;
+  if (full.bytes.byteLength > budget && input.requireFullFragment)
+    return { text: input.text, html: null, oversized: true };
   if (full.bytes.byteLength > budget) {
     // Tier 1: media stays home. Tier 2: no fragment at all; the interop HTML still ships.
     const lean = extractFragmentPackage(input.pkg, input.coverage, { omitMedia: true });
@@ -96,7 +112,7 @@ export function buildCopyFlavours(input: CopyFlavourInput): CopyFlavours {
     inner = '';
   }
   const html = wrapInteropHtml(
-    inner,
+    input.interopHtml ? input.interopHtml(inner) : inner,
     fragmentBytes ? { bytes: fragmentBytes, lastMarkCovered: full.lastMarkCovered } : null
   );
   return { text: input.text, html };

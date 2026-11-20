@@ -1,5 +1,16 @@
 # @docx-editor.dev/pro
 
+## 2.39.0
+
+### Minor Changes
+
+- 274a917: Breaking collaboration upgrade (format `docx-collaboration:1.5.5.1`): set the text wrap of text boxes, shapes, lines, and groups, such as Behind Text or In Front of Text, and resize the height of a text box that fits its text; export saved rooms with your current release and reseed them, see [Upgrade rooms to format 1.5.5.1](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1551). Fixes #2000
+
+### Patch Changes
+
+- ba1cc64: Table style header rows, banding, and first and last column formats now follow the table's `w:tblLook` settings and repeated header rows.
+- Updated dependencies: @docx-editor.dev/core@2.39.0, @docx-editor.dev/react@2.39.0, @docx-editor.dev/vue@2.39.0
+
 ## 2.38.0
 
 ### Minor Changes
