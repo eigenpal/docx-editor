@@ -13,19 +13,10 @@
 // oversized payload, a malformed fragment attribute) correctly keeps the file lane and an
 // html flavour it lands correctly stands it down.
 //
-// `imageFilePastePlan` adds the target: the caret in text, or, while a drawing is selected,
-// the point `drawingPastePoint` gives for a picture. The pages and the drawing selection
-// overlay both run it.
 
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { probeExternalHtml } from './clipboard-html-read.ts';
 import { hasVisibleChar, htmlHasVisibleText } from './clipboard-plain-text.ts';
-import { drawingPastePoint } from './drawing-paste-target.ts';
-import { capturePointPosition } from './editor-point-target.ts';
-import { PICTURE_SELECTED_INSERT_REASON } from './docx-editor-images.ts';
-import { IMAGE_INSERT_PROBE } from './toolbar-commands.ts';
-import type { EditorPointPosition } from '../contracts/editor-drop.ts';
-import type { DocxEditorInstance } from './docx-editor-types.ts';
 
 /** One flavour, defensively: a stand-in transfer without `getData` reads as absent. */
 function flavourOf(transfer: DataTransfer, type: string): string {
@@ -70,125 +61,6 @@ export function clipboardPasteLandsContent(transfer: DataTransfer | null | undef
   // empty paragraphs as blocks, and standing down for those would trade a real image file
   // for content nobody can see.
   return probeExternalHtml(html).imageCount > 0;
-}
-
-function carriesImageFile(transfer: DataTransfer): boolean {
-  const items = transfer.items as DataTransferItemList | undefined;
-  if (!items) return false;
-  for (let index = 0; index < items.length; index++) {
-    const item = items[index];
-    if (item?.kind === 'file' && item.type.startsWith('image/')) return true;
-  }
-  return false;
-}
-
-/**
- * What a host's image-FILE paste lane does with one paste event.
- *
- * @internal
- */
-export interface ImageFilePastePlan {
-  /**
-   * The `insertImage.at` point. A point is the drawing paste point while a drawing is
-   * selected. Undefined inserts as `insertImage` does with no point: at the caret, or, when
-   * the editor refuses a picture beside the selected drawing in suggesting mode, with that
-   * refusal reported.
-   */
-  readonly at: EditorPointPosition | undefined;
-}
-
-/**
- * Whether a host's image-FILE lane takes this paste, and where the picture goes. Null means
- * stand down: no image file, content the engine lands itself (see
- * {@link clipboardPasteLandsContent}), an insert the editor refuses for any reason other than
- * the one below, or a document open for viewing. A paste the lane stands down from stays
- * silent, as a refused paste in text does.
- *
- * With the caret in text, the picture lands at the caret. With a drawing selected, it lands
- * where every pasted drawing lands, `drawingPastePoint(surface)`: before the selected
- * drawing's anchor run. That point is captured, and stays valid only while the document keeps
- * the same revision, so a slow file read cannot insert into changed content; an insert into
- * changed content reports its stale-target reason. In suggesting mode the editor refuses a
- * picture beside a selected drawing (`PICTURE_SELECTED_INSERT_REASON`). The lane still takes
- * that paste, so the insert reports the reason the reader needs.
- *
- * @internal
- */
-export function imageFilePastePlan(
-  editor: Pick<DocxEditorInstance, 'surface' | 'canExecuteImageCommand'>,
-  transfer: DataTransfer | null | undefined
-): ImageFilePastePlan | null {
-  if (!transfer || !carriesImageFile(transfer)) return null;
-  if (clipboardPasteLandsContent(transfer)) return null;
-  const surface = editor.surface;
-  if (!surface) return null;
-  // The probe the toolbar's picture insert runs, with no point, so the editor applies its own
-  // rules for a picture inserted while a drawing is selected.
-  const judged = editor.canExecuteImageCommand(IMAGE_INSERT_PROBE);
-  const point = drawingPastePoint(surface);
-  if (!judged.ok) {
-    return point && judged.reason === PICTURE_SELECTED_INSERT_REASON ? { at: undefined } : null;
-  }
-  return { at: point ? capturePointPosition(surface, point) : undefined };
-}
-
-/** The selection overlay, which an insert beside its drawing ends. */
-const OVERLAY_SELECTOR = '.docx-image-selection-overlay';
-
-/**
- * Whether the keyboard returns to the text after a picture lands at a drawing: focus is
- * nowhere, on a removed element, or still on the drawing's selection overlay. Focus that the
- * reader moved somewhere else during the file read stays there.
- */
-function focusReturnsToText(ownerDocument: Document): boolean {
-  const active = ownerDocument.activeElement;
-  return (
-    !active ||
-    active === ownerDocument.body ||
-    !active.isConnected ||
-    active.closest(OVERLAY_SELECTOR) !== null
-  );
-}
-
-/**
- * Report a picture insert that threw instead of returning a refusal, so a paste or a drop
- * handler never leaves an unhandled rejection. A refusal is not a failure: the insert shows it.
- *
- * @internal
- */
-export function reportImageInsertFailure(error: unknown): void {
-  console.error('[docx-editor] The image could not be inserted.', error);
-}
-
-/**
- * Run a host's image-FILE paste lane for one paste event, from the pages or from the drawing
- * selection overlay. Null when the lane stands down ({@link imageFilePastePlan}); the event is
- * then left to the engine. Otherwise the event's default is prevented, `insert` reads the file
- * and inserts it, and the returned promise settles after it. `insert` must read the transfer
- * before its first await, while the clipboard is still readable.
- *
- * After a picture lands at a selected drawing, the selection ends and the focused overlay
- * unmounts with it, so the text takes the keyboard, as after a paste of a copied drawing. A
- * refused or failed insert leaves focus where it is. A throw is reported, never rethrown.
- *
- * @internal
- */
-export function runImageFilePaste(
-  editor: Pick<DocxEditorInstance, 'surface' | 'canExecuteImageCommand' | 'focus'>,
-  event: ClipboardEvent,
-  insert: (transfer: DataTransfer, at: EditorPointPosition | undefined) => Promise<unknown>
-): Promise<void> | null {
-  const transfer = event.clipboardData;
-  const plan = transfer ? imageFilePastePlan(editor, transfer) : null;
-  if (!transfer || !plan) return null;
-  event.preventDefault();
-  const ownerDocument = (event.target as Node | null)?.ownerDocument ?? null;
-  const revision = editor.surface?.session.packageRevision();
-  return insert(transfer, plan.at).then(() => {
-    // A refusal leaves the document as it was; only a landed picture moves the keyboard.
-    const landed = editor.surface?.session.packageRevision() !== revision;
-    if (plan.at && landed && ownerDocument && focusReturnsToText(ownerDocument)) editor.focus();
-  }, reportImageInsertFailure);
 }
 
 /**

@@ -161,11 +161,18 @@ describe('an image file pasted while a drawing is selected', () => {
   });
 
   test('pastes text, not the file, when the clipboard holds visible text beside it', async () => {
+    let reads = 0;
     const { container, editor } = await mount();
     const { overlay } = await select(container, editor, 'picture');
-    overlay.dispatchEvent(pasteEvent({ file: true, flavours: { 'text/plain': 'Pasted' } }));
+    overlay.dispatchEvent(pasteEvent({
+          file: true,
+          flavours: { 'text/plain': 'Pasted' },
+          onFileRead: () => (reads += 1),
+        }));
     await flush();
     expect(editor.findMatches('Pasted')).toHaveLength(1);
+    // The engine pasted the text; the image-file lane never read the file.
+    expect(reads).toBe(0);
     expect(await picturesOnceSettled(editor, 2)).toEqual([1, 0, 0, 0]);
   });
 

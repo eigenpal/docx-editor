@@ -13,6 +13,7 @@ import {
   createDocxEditor,
   executeImageCommand,
   imageFilePastePlan,
+  runImageFilePaste,
   type DocxEditorInstance,
 } from '@docx-editor.dev/core/editor';
 import { collaborationModule } from '../collaboration-module.ts';
@@ -153,4 +154,55 @@ test('a remote edit during the file read leaves the target stale, and the paste 
   converged();
   for (const editor of [alice, bob])
     expect(picturesPerParagraph(await savedDocumentXml(editor))).toEqual([0, 0, 0, 0]);
+});
+
+test('a refused paste keeps focus where it is, even after a collaborator edits meanwhile', async () => {
+  const { alice, bob, converged } = await pair();
+  selectFixtureDrawing(alice, 'shape');
+  let focused = 0;
+  const host = {
+    surface: alice.surface,
+    canExecuteImageCommand: alice.canExecuteImageCommand.bind(alice),
+    focus: () => {
+      focused += 1;
+      return alice.focus();
+    },
+  };
+  let run: Promise<void> | null = null;
+  document.body.addEventListener(
+    'paste',
+    (event) => {
+      run = runImageFilePaste(host, event as ClipboardEvent, async (_transfer, at) => {
+        // Bob types in another paragraph during the file read: the revision moves, the
+        // captured target goes stale, and Alice's insert refuses.
+        const surface = bob.surface!;
+        const paragraphId = surface.session.paragraphIds().at(-1)!;
+        surface.setSelection({
+          anchor: { paragraphId, offset: 0 },
+          head: { paragraphId, offset: 0 },
+        });
+        expect(bob.exec({ type: 'insertText', text: 'Peer ' }).ok).toBe(true);
+        converged();
+        const result = await executeImageCommand(alice, {
+          type: 'insertImage',
+          data: PNG_1X1,
+          mime: 'image/png',
+          widthPoints: 12,
+          heightPoints: 12,
+          ...(at ? { at } : {}),
+        });
+        expect(result).toMatchObject({ ok: false, code: 'notFound' });
+      });
+    },
+    { once: true }
+  );
+  document.body.dispatchEvent(pasteEvent({ file: true }));
+  expect(run).not.toBeNull();
+  await run;
+  expect(focused).toBe(0);
+  expect(alice.snapshot().image).not.toBeNull();
+  for (const editor of [alice, bob]) {
+    expect(picturesPerParagraph(await savedDocumentXml(editor))).toEqual([0, 0, 0, 0]);
+    expect(editor.findMatches('Peer Delta')).toHaveLength(1);
+  }
 });

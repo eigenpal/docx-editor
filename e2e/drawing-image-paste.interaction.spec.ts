@@ -103,6 +103,30 @@ for (const adapter of adapters) {
       await expectOnePastedPicture(page);
     });
 
+    test('a real Ctrl+V with focus on the pages replaces the selected text box text', async ({
+      page,
+      context,
+    }, testInfo) => {
+      await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+      await open(page, adapter.port(testInfo.config.metadata));
+      // Into the box's text, then Escape: the box is selected and focus stays on the pages.
+      await page.locator('.docx-pages .layout-run', { hasText: 'Boxed' }).click();
+      await page.keyboard.press('Escape');
+      await expect(page.locator(OVERLAY)).toHaveCount(1);
+      expect(await page.evaluate(() => !!document.activeElement?.closest('.docx-pages'))).toBe(
+        true
+      );
+      await page.evaluate(() => navigator.clipboard.writeText('Keyboard paste'));
+      await page.keyboard.press('ControlOrMeta+v');
+      const pagesText = () =>
+        page.evaluate(() => document.querySelector('.docx-pages')?.textContent ?? '');
+      // The box's text is replaced; the body paragraphs keep theirs.
+      await expect.poll(pagesText).toContain('Keyboard paste');
+      expect(await pagesText()).not.toContain('Boxed');
+      expect(await pagesText()).toContain('AlphaBravoCharlieDelta');
+      await expect(page.locator(DIALOG)).toHaveCount(0);
+    });
+
     test('inserts one picture at the caret in text', async ({ page }, testInfo) => {
       await open(page, adapter.port(testInfo.config.metadata));
       await page.locator('.docx-pages .layout-run', { hasText: 'Delta' }).click();

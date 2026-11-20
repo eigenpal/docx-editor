@@ -6,7 +6,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
-import { imageFilePastePlan, runImageFilePaste } from '../clipboard-file-lane.ts';
+import { imageFilePastePlan, runImageFilePaste } from '../image-file-paste.ts';
 import { PICTURE_SELECTED_INSERT_REASON, executeImageCommand } from '../docx-editor-images.ts';
 import { stubReviewModule } from './review-test-module.ts';
 import {
@@ -199,6 +199,7 @@ describe('running the paste lane', () => {
         canExecuteImageCommand: editor.canExecuteImageCommand.bind(editor),
         focus: () => {
           focused += 1;
+          return editor.focus();
         },
       },
       focused: () => focused,
