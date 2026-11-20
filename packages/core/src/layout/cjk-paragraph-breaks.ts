@@ -154,8 +154,9 @@ export function cjkParagraphBreaks(
   let pieceIndex = 0;
   let leftPieceIndex = 0;
   const hasKorean = clusters.some((cluster) => isHangul(cluster.text.codePointAt(0)!));
-  // Korean runs beside East Asian text wrap Latin words by character in these modes, which
-  // this analysis does not model, so they keep their ordinary hyphen breaks.
+  // Hyphen glue (`gluesLegacyHyphen`) skips a Korean run in a paragraph with East Asian text:
+  // such runs wrap Latin words by character in these modes, which this analysis does not
+  // model, so their ordinary hyphen breaks stay closer to that layout.
   const glueHyphens = gluesLegacyHyphen(policy);
   const eastAsianText = clusters.some((cluster) => isCjk(cluster.text.codePointAt(0)!));
   const detectedLanguage = hasKorean
