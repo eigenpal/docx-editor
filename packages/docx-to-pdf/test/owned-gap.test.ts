@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { layoutSemanticDocument, linesOf, createFixedMeasurer } from '@docx-editor.dev/core/layout';
-import { ownedGapAfter } from '../src/owned-gap.ts';
+import { ownedFillGapAfter, ownedGapAfter } from '../src/owned-gap.ts';
 
 function line() {
   const opened = readOoxmlPart(
@@ -259,3 +259,67 @@ for (const kind of ['ins', 'del'] as const) {
     }
   });
 }
+
+function automaticLine(body: string, pPr = '') {
+  const opened = readOoxmlPart(
+    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr>${pPr}</w:pPr>${body}</w:p><w:sectPr><w:pgSz w:w="6000" w:h="6000"/><w:pgMar w:left="500" w:right="500" w:top="500" w:bottom="500"/></w:sectPr></w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!opened.ok) throw new Error(opened.reason);
+  return linesOf(
+    layoutSemanticDocument(opened.part, 1, { measurer: createFixedMeasurer(6, 14) })
+  )[0]!;
+}
+const textRun = (text: string, props = '') =>
+  `<w:r><w:rPr>${props}</w:rPr><w:t xml:space="preserve">${text}</w:t></w:r>`;
+
+test('a fill covers the automatic East Asian advance after its run, and marks do not', () => {
+  const record = automaticLine(textRun('甲乙') + textRun('A9') + textRun('丙'));
+  const [first, second] = record.spans;
+  const gap = second!.box.x - first!.box.x - first!.box.width;
+  expect(gap).toBeGreaterThan(1);
+  expect(ownedFillGapAfter({ line: record, span: first! })).toBeCloseTo(gap, 6);
+  // Underline, strike, and revision marks keep to the gaps alignment opens.
+  expect(ownedGapAfter({ line: record, span: first! })).toBe(0);
+  // Turned off, there is no advance to fill.
+  const off = automaticLine(
+    textRun('甲乙') + textRun('A9'),
+    '<w:autoSpaceDE w:val="0"/><w:autoSpaceDN w:val="0"/>'
+  );
+  expect(ownedFillGapAfter({ line: off, span: off.spans[0]! })).toBe(0);
+});
+
+test('exported PDF fills each automatic advance with the run before it', async () => {
+  const { exportPdf } = await import('../src/index.ts');
+  const { docx } = await import('./fixture.ts');
+  const { PDFDocument, PDFRawStream, decodePDFRawStream } = await import('pdf-lib');
+  const rectsOf = async (pPr: string) => {
+    const result = await exportPdf(
+      docx(
+        `<w:p><w:pPr>${pPr}</w:pPr>${textRun('甲乙', '<w:highlight w:val="yellow"/>')}${textRun('A9', '<w:shd w:val="clear" w:color="auto" w:fill="00FFFF"/>')}${textRun('丙', '<w:highlight w:val="yellow"/>')}</w:p><w:sectPr><w:pgSz w:w="6000" w:h="6000"/><w:pgMar w:left="500" w:right="500" w:top="500" w:bottom="500"/></w:sectPr>`
+      ),
+      { useSystemFonts: false }
+    );
+    const pdf = await PDFDocument.load(result.bytes);
+    const commands = pdf.context
+      .enumerateIndirectObjects()
+      .flatMap(([, obj]) =>
+        obj instanceof PDFRawStream
+          ? [new TextDecoder().decode(decodePDFRawStream(obj).decode())]
+          : []
+      )
+      .join('\n');
+    return [...commands.matchAll(/(1 1 0|0 1 1) rg ([\d.-]+) [\d.-]+ ([\d.-]+) [\d.-]+ re f/g)].map(
+      (m) => ({ colour: m[1], left: Number(m[2]), right: Number(m[2]) + Number(m[3]) })
+    );
+  };
+  const filled = await rectsOf('');
+  expect(filled.map((rect) => rect.colour)).toEqual(['1 1 0', '0 1 1', '1 1 0']);
+  // Each fill ends where the next run's fill starts: no blank strip at either boundary.
+  expect(filled[0]!.right).toBeCloseTo(filled[1]!.left, 3);
+  expect(filled[1]!.right).toBeCloseTo(filled[2]!.left, 3);
+  // Without automatic spacing the fills abut at the same text, which is narrower.
+  const off = await rectsOf('<w:autoSpaceDE w:val="0"/><w:autoSpaceDN w:val="0"/>');
+  expect(off[0]!.right).toBeCloseTo(off[1]!.left, 3);
+  expect(off[2]!.left - off[0]!.left).toBeLessThan(filled[2]!.left - filled[0]!.left - 1);
+});

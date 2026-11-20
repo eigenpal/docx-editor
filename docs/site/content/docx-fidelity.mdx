@@ -313,7 +313,7 @@ East Asian spacing and punctuation rules depend on `w:rPrDefault` in the styles 
 
 | Setting | Behavior |
 | --- | --- |
-| `w:autoSpaceDE`, `w:autoSpaceDN` | Add space between East Asian text and Latin letters or digits. An authored false turns it off. The preceding text highlight covers its automatic gap. |
+| `w:autoSpaceDE`, `w:autoSpaceDN` | Add space between East Asian text and Latin letters or digits; an authored false turns it off. The highlight or shading of the text before the space fills it. Underline and strikethrough stop at the space. |
 | `w:kinsoku`, `w:noLineBreaksBefore` | Keep prohibited characters off line starts. Kept units move to the next line together. |
 | `w:overflowPunct` | Lets a line-end mark hang past the margin. See [Compatibility mode differences](#compatibility-mode-differences). |
 | `w:characterSpacingControl` | `compressPunctuationAndJapaneseKana` lets kana compress by up to 1/16 em to fit a prohibited character on a full line. |

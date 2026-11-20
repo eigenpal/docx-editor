@@ -377,7 +377,7 @@ test('line layout draws the advance inside a group that cannot break', () => {
   }
 });
 
-test('an automatic gap takes the highlight of the text before it', () => {
+test('an automatic gap takes the fill of the text before it', () => {
   const yellow = '<w:highlight w:val="yellow"/>';
   const green = '<w:highlight w:val="green"/>';
   const value = layout(run('甲乙', yellow) + run('A9', green) + run('丙'));
@@ -386,7 +386,7 @@ test('an automatic gap takes the highlight of the text before it', () => {
   const host = document.createElement('div');
   paintSemanticLayout(host, value, { scale: 1 });
   const runs = [...host.querySelectorAll<HTMLElement>('.layout-run')];
-  const gaps = [...host.querySelectorAll<HTMLElement>('[data-docx-highlight-advance]')];
+  const gaps = [...host.querySelectorAll<HTMLElement>('.docx-automatic-gap-fill')];
   expect(gaps).toHaveLength(2);
   expect(gaps.map((mark) => mark.parentElement?.dataset.highlight)).toEqual(['yellow', 'green']);
   for (let i = 0; i < gaps.length; i++) {
@@ -398,9 +398,35 @@ test('an automatic gap takes the highlight of the text before it', () => {
   expect(runs.map((s) => s.textContent).join('')).toBe('甲乙A9丙');
 
   paintSemanticLayout(host, layout(run('A') + run('甲', yellow)), { scale: 1 });
-  expect(host.querySelector('[data-docx-highlight-advance]')).toBeNull();
+  expect(host.querySelector('.docx-automatic-gap-fill')).toBeNull();
   paintSemanticLayout(host, layout(run('A', yellow) + run('甲'), '<w:autoSpaceDE w:val="0"/>'), {
     scale: 1,
   });
-  expect(host.querySelector('[data-docx-highlight-advance]')).toBeNull();
+  expect(host.querySelector('.docx-automatic-gap-fill')).toBeNull();
+});
+
+test('character shading fills the automatic gap like a highlight', () => {
+  const host = document.createElement('div');
+  const yellow = '<w:shd w:val="clear" w:color="auto" w:fill="FFFF00"/>';
+  const cyan = '<w:shd w:val="clear" w:color="auto" w:fill="00FFFF"/>';
+  const value = layout(run('甲乙', yellow) + run('A9', cyan) + run('丙'));
+  const measured = line(value).spans;
+  paintSemanticLayout(host, value, { scale: 2 });
+  const fills = [...host.querySelectorAll<HTMLElement>('.docx-automatic-gap-fill')];
+  // Each gap takes the fill of the run it belongs to, also where the next fill differs.
+  expect(fills.map((fill) => fill.style.backgroundColor.toUpperCase())).toEqual([
+    '#FFFF00',
+    '#00FFFF',
+  ]);
+  expect(fills.map((fill) => fill.parentElement?.textContent)).toEqual(['甲乙', 'A9']);
+  for (let i = 0; i < fills.length; i++) {
+    const advance = measured[i + 1]!.box.x - measured[i]!.box.x - measured[i]!.box.width;
+    expect(Number.parseFloat(fills[i]!.style.width)).toBeCloseTo(advance * 2, 8);
+  }
+  // The text, its order, and the following run's margin do not change.
+  const runs = [...host.querySelectorAll<HTMLElement>('.layout-run')];
+  expect(runs.map((s) => s.textContent).join('')).toBe('甲乙A9丙');
+  // A run without a fill of its own paints nothing across its gap.
+  paintSemanticLayout(host, layout(run('甲乙') + run('A9', cyan)), { scale: 1 });
+  expect(host.querySelector('.docx-automatic-gap-fill')).toBeNull();
 });

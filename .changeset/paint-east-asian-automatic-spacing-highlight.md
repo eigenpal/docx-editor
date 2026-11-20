@@ -1,5 +1,5 @@
 ---
-"@docx-editor.dev/core": patch
+'@docx-editor.dev/core': patch
 ---
 
-Extend a run highlight across its following East Asian automatic spacing while preserving text placement and selection.
+Fill the automatic space between East Asian text and Latin letters or digits with the highlight or shading of the text before it, on screen and in PDF export.

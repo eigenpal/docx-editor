@@ -1,9 +1,9 @@
 {
   "impact": "no-impact",
   "fields": [],
-  "before": "A highlighted run left automatic inter-script spacing blank when it was painted as an external margin.",
-  "after": "The run highlight covers its following automatic spacing without changing text advance or selection ranges.",
-  "reason": "This changes local DOM paint only. Document content, model ranges, operations, and serialized collaboration state are unchanged.",
+  "before": "A highlighted or shaded run left the automatic space between East Asian text and Latin letters or digits unfilled.",
+  "after": "The run before the automatic space fills it with its highlight or shading on screen and in PDF export. Text advances and selection ranges do not change.",
+  "reason": "This changes screen and PDF paint only. Document content, model ranges, operations, and serialized collaboration state are unchanged.",
   "tests": [
     "packages/core/src/layout/__tests__/cjk-automatic-spacing.test.ts",
     "packages/core/src/editor/__tests__/collaboration-review-writes.test.ts"
