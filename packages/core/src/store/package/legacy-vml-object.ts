@@ -35,7 +35,10 @@ function inertLockedField(node: OoxmlElement): boolean {
   if (!named(node, OFFICE, 'LockedField') || node.attributes.length || node.children.length > 1)
     return false;
   const text = node.children[0];
-  return !text || (!element(text) && /^(?:t|f|true|false)?$/i.test(text.value));
+  if (!text) return true;
+  return (
+    !element(text) && text.value.length <= 64 && /^(?:t|f|true|false)?$/i.test(text.value.trim())
+  );
 }
 
 function inertOleMetadata(ole: OoxmlElement): boolean {

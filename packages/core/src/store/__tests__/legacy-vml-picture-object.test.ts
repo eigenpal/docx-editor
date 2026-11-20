@@ -197,6 +197,7 @@ describe('a picture with an embedded object beside it', () => {
       '<o:LockedField>false</o:LockedField>',
       '<o:LockedField>True</o:LockedField><o:FieldCodes>\\s</o:FieldCodes>',
       '<o:LockedField/>',
+      '<o:LockedField> false </o:LockedField>',
       '<o:FieldCodes>\\* MERGEFORMAT</o:FieldCodes>',
     ]) {
       const part = parse(withMetadata(metadata));
@@ -208,6 +209,7 @@ describe('a picture with an embedded object beside it', () => {
     }
     for (const metadata of [
       '<o:LockedField>maybe</o:LockedField>',
+      `<o:LockedField>${' '.repeat(64)}f</o:LockedField>`,
       '<o:FieldCodes>\\s</o:FieldCodes><o:LockedField>false</o:LockedField>',
       `<o:FieldCodes>${'x'.repeat(1025)}</o:FieldCodes>`,
     ]) {

@@ -106,6 +106,22 @@ for (const [form, preview] of Object.entries(previews))
       await until(() => !!reopened.surface);
       expect(reopened.surface!.session.bodyText()).toContain('AL\uFFFCRZ');
       for (const editor of [left, right, reopened]) expect(drawingSize(editor)).toEqual([20, 10]);
+      // One participant deletes the preview while the other types beside it; undo restores it.
+      const bodies = () => [left, right].map((editor) => editor.surface!.session.bodyText());
+      pair.pause();
+      const range = { anchor: { paragraphId, offset: 2 }, head: { paragraphId, offset: 3 } };
+      expect(left.exec({ type: 'setSelection', range }).ok).toBe(true);
+      expect(left.exec({ type: 'deleteText' }).ok).toBe(true);
+      insert(right, 3, 'B');
+      pair.alice.room.session.flushPendingJournals();
+      pair.bob.room.session.flushPendingJournals();
+      pair.resume();
+      await until(() => bodies().every((text) => text.includes('ALBRZ')));
+      expect(bodies().every((text) => !text.includes('￼'))).toBe(true);
+      expect(left.exec({ type: 'undo' }).ok).toBe(true);
+      await until(() => bodies().every((text) => text.split('￼').length === 2));
+      expect(bodies()[0]).toBe(bodies()[1]);
+      for (const editor of [left, right]) expect(drawingSize(editor)).toEqual([20, 10]);
     } finally {
       for (const { editor, container } of views) {
         editor.destroy();
