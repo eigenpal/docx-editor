@@ -1,14 +1,14 @@
 // The compressed trailing blank of a hanging line-end mark.
 //
 // With punctuation compression, a full-width mark that hangs past the margin gives up its
-// trailing blank: its highlight, shading, underline, strike, and revision marks stop before
-// that blank, while the glyph, the span box, and caret edges keep their places. Screen paint
-// clips the marks and the PDF writer shortens them, so both outputs read one rule,
-// {@link hangingMarkBlankAt}.
+// trailing blank: its highlight, shading, underline, strike, and tracked-change formatting
+// stops before that blank, while the glyph, the span box, and caret edges keep their places.
+// Screen paint clips the formatting and the PDF writer shortens it, so both outputs read one
+// rule, {@link hangingMarkBlankAt}.
 import type { LineRecord, StyleSpanRecord } from '../layout/semantic-records.ts';
 
 /**
- * The width, in points, at the end of `span` that its character marks leave unpainted: the
+ * The width, in points, at the end of `span` that its formatting leaves unpainted: the
  * compressed trailing blank of the hanging mark that ends `line` (`LineRecord.hangingMarkBlank`).
  * Zero for every other span and on lines in a right-to-left paragraph.
  *
@@ -22,14 +22,15 @@ export function hangingMarkBlankAt(
   if (!blank || line.spans.some((each) => each.style.shaping?.baseLevel === 1)) return 0;
   for (let index = line.spans.length - 1; index >= 0; index -= 1) {
     const each = line.spans[index]!;
-    if (each.lineEndWhitespace) continue;
+    // Clipped authored spaces and zero-width spans, such as a manual break, follow the mark.
+    if (each.lineEndWhitespace || each.box.width <= 0.001) continue;
     return each === span ? Math.min(blank, span.box.width) : 0;
   }
   return 0;
 }
 
 /**
- * Clip a painted span's marks to the part before its compressed trailing `blank`. The clip is
+ * Clip a painted span's formatting to the part before its compressed trailing `blank`. The clip is
  * measured from the span's left edge, so the browser's own advance cannot move it. Layout keeps
  * the blank clear of the glyph's ink, and the vertical and left insets stay open for glyph
  * overhang and underlines.

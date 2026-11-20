@@ -101,6 +101,27 @@ describe('a hanging mark gives up its compressed trailing blank', () => {
     expect(mark.style.clipPath).toBe('inset(-1em calc(100% - 24px) -1em -1em)');
   });
 
+  test('a manual break after the mark keeps the clip on the mark', () => {
+    const fixture = loadFixture({
+      text: H + '。',
+      available: 474,
+      language: 'ja-JP',
+      compatibility: 15,
+      compression: 'compressPunctuation',
+      highlight: true,
+      paragraphProperties: '<w:jc w:val="both"/><w:overflowPunct/>',
+      wrapParagraph: (paragraph) =>
+        paragraph.replace(
+          '</w:p>',
+          '<w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:br/><w:t>余</w:t></w:r></w:p>'
+        ),
+    });
+    expect(fixture.lines[0]!.hangingMarkBlank).toBeCloseTo(12, 6);
+    const runs = paintedRuns(fixture);
+    const mark = runs.find((run) => run.textContent?.endsWith('。'))!;
+    expect(mark.style.clipPath).toBe('inset(-1em calc(100% - 24px) -1em -1em)');
+  });
+
   test('a Traditional Chinese mark gives up its trailing quarter', () => {
     for (const overflow of [3, 18]) {
       const line = hanging(overflow, { language: 'zh-TW' }, '、').lines[0]!;
