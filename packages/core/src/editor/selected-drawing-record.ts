@@ -92,7 +92,7 @@ export function resolveSelectedDrawingRecord(
   surface: PaginatedSurface | null
 ): SelectedDrawingRecord | null {
   if (!surface) return null;
-  // Word's rule: a caret at a drawing's anchor offset is a TEXT caret unless something
+  // The rule: a caret at a drawing's anchor offset is a TEXT caret unless something
   // selected the object — a pointer press on the painted drawing, or an explicit host
   // selection write. The mount-time caret routinely coincides with a drawing anchored at
   // offset zero, and typing lands the caret at anchor+1; neither means "selected".
