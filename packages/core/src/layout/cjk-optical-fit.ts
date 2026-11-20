@@ -23,6 +23,7 @@ import { hangingCjkPunctuationAdvance, hangsWithin } from './cjk-spacing.ts';
 import { hangsInBlankSides } from './hanging-mark-blanks.ts';
 import { formatRevisionOf } from './revision-projection.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
+import { memoized, type ClusterMemo } from './cjk-optical-memo.ts';
 import {
   layoutDerivedSpacingStyleForEditing,
   withLayoutDerivedSpacing,
@@ -53,37 +54,6 @@ export function fittingClusters(text: string): readonly GraphemeSegment[] {
   for (let index = 0; index < text.length; index += 1)
     clusters.push({ index, text: text[index]!, utf16From: index, utf16To: index + 1 });
   return clusters;
-}
-/**
- * One fitter's cluster measurements by span style and font slot. Every attempt re-reads the
- * whole line with fresh span records, so ink and widths would otherwise be measured again.
- * Sound because a resolved run style is never mutated: a changed style is a new object, and
- * measurement reads only the style, the slot, the text, and the fitter's one measurer.
- */
-type MemoKind = 'prefixEnds' | 'natural' | 'ink' | 'authored';
-type ClusterMemo = Map<
-  StyleSpanRecord['style'],
-  Map<StyleSpanRecord['fontSlot'], Map<MemoKind, Map<string, unknown>>>
->;
-/** The measurement of `kind` for `text` in the span's style and slot, measured once. */
-function memoized<T>(
-  memo: ClusterMemo,
-  span: StyleSpanRecord,
-  kind: MemoKind,
-  text: string,
-  measure: () => T
-): T {
-  let bySlot = memo.get(span.style);
-  if (!bySlot) memo.set(span.style, (bySlot = new Map()));
-  let byKind = bySlot.get(span.fontSlot);
-  if (!byKind) bySlot.set(span.fontSlot, (byKind = new Map()));
-  let byText = byKind.get(kind);
-  if (!byText) byKind.set(kind, (byText = new Map()));
-  const cached = byText.get(text);
-  if (cached !== undefined || byText.has(text)) return cached as T;
-  const value = measure();
-  byText.set(text, value);
-  return value;
 }
 interface Cell {
   span: StyleSpanRecord;
