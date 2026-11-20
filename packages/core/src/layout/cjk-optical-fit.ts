@@ -153,26 +153,21 @@ function cellsOf(
 ): Cell[] | undefined {
   const cells: Cell[] = [];
   let length = 0;
-  let trackedEastAsianLine: boolean | undefined;
+  // Authored tracking qualifies a line only while it holds East Asian text, punctuation, and
+  // spaces alone: such a line fits as it would in a paragraph without Latin text.
+  let tracked = false;
+  let foreign = false;
   for (const [sourceIndex, span] of spans.entries()) {
     length += span.text.length;
     if (length > 4096 || !allowed(span)) return undefined;
     const face = styleForFontSlot(span.style, span.fontSlot);
     // This narrower path applies only when the old paragraph-wide gate failed.
-    // Keep authored tracking/scaling, complex lanes, and unqualified faces intact.
+    // Keep authored scaling, complex lanes, and unqualified faces intact.
     if (requireLocalQualification) {
       const authored = layoutDerivedSpacingStyleForEditing(face);
-      const allowsTracking =
-        authored.characterSpacingPt < 0 &&
-        (trackedEastAsianLine ??= spans.every(
-          (entry) =>
-            entry.fontSlot === 'eastAsia' &&
-            fittingClusters(entry.text).every(
-              (cluster) => isCjk(cluster.text.codePointAt(0)!) || PUNCTUATION.test(cluster.text)
-            )
-        ));
+      tracked ||= authored.characterSpacingPt !== 0;
       if (
-        (authored.characterSpacingPt !== 0 && !allowsTracking) ||
+        (tracked && foreign) ||
         authored.horizontalScalePercent !== 100 ||
         authored.shaping !== undefined ||
         measurer.hasResolvedFont?.(face) !== true
@@ -181,7 +176,8 @@ function cellsOf(
       // Keep a qualified mathematical run opaque. Its existing shaped advance is
       // immutable, and neither adjacent boundary can supply compression capacity.
       if (/^\p{Sm}+$/u.test(span.text) && /[^\x00-\x7f]/u.test(span.text)) {
-        if (!Number.isFinite(span.box.width) || span.box.width <= 0) return undefined;
+        foreign = true;
+        if (tracked || !Number.isFinite(span.box.width) || span.box.width <= 0) return undefined;
         cells.push({
           sourceIndex,
           alreadyReduced: 0,
@@ -214,6 +210,8 @@ function cellsOf(
           (printableAscii && /[^ ]/u.test(span.text)) ||
           /^[A-Za-z0-9‘’“”]+$/u.test(span.text) ||
           numberMarker;
+        foreign ||= ordinaryOpaque;
+        if (tracked && foreign) return undefined;
         cells.push({
           sourceIndex,
           alreadyReduced: 0,
@@ -240,6 +238,8 @@ function cellsOf(
       )
     )
       return undefined;
+    foreign ||= curlyAllowed && clusters.some((cluster) => curlyRole(cluster.text));
+    if (tracked && foreign) return undefined;
     // One prefix-width list per span text keeps the memo linear in the text length.
     const ends = memoized(memo, span, 'prefixEnds', span.text, () =>
       clusters.map((cluster) =>
@@ -606,18 +606,6 @@ function fitCjkOptically(
   const extra = kanaCapacity + deferredFinal;
   if (deficit > capacity + extra + TOLERANCE) return undefined;
   if (gate && !gate.admits(capacity + relief + extra)) return undefined;
-  if (hangsLast && context.requireLocalQualification) {
-    let authoredWidth = 0;
-    let tracked = false;
-    for (const cell of cells.slice(0, -1)) {
-      const authored = layoutDerivedSpacingStyleForEditing(cell.span.style).characterSpacingPt;
-      tracked ||= authored < 0;
-      authoredWidth += cell.natural + authored * cell.span.text.length;
-    }
-    // The original tracked advance must qualify before the compositor lays the final mark
-    // outside the measure. The displayed contraction is not extra bearing capacity.
-    if (tracked && authoredWidth - available > last.natural / 2 + TOLERANCE) return undefined;
-  }
   // The shrink goes in equal shares to every blank side; a side that runs out passes the rest on.
   let active = seams;
   while (deficit > TOLERANCE && active.length) {
@@ -763,7 +751,10 @@ export function createParagraphCjkOpticalFitter(
 export interface CjkOpticalFitterOptions {
   /** A final mark that may hang past the margin needs no fit for itself. */
   readonly hangingPunctuation: boolean;
-  /** Fit only text in qualified faces without authored tracking or scaling. */
+  /**
+   * Fit only text in qualified faces without authored scaling. Authored tracking qualifies only
+   * on a line of East Asian text, punctuation, and spaces.
+   */
   readonly requireLocalQualification?: boolean;
   /** The paragraph typography, for the line-start rules of hanging and kana fits. */
   readonly policy?: CjkParagraphTypography;

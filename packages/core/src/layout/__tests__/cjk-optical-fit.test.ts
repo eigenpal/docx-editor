@@ -469,9 +469,9 @@ test('a document whose defaults name no East Asian face compresses no punctuatio
   expect(text(false)).toEqual(['甲乙（丙丁）戊', '己']);
 });
 
-const trackedProps =
+const trackedProps = (spacing: number) =>
   '<w:rFonts w:ascii="Test Latin" w:hAnsi="Test Latin" w:eastAsia="Test CJK" w:hint="eastAsia"/>' +
-  '<w:lang w:eastAsia="zh-CN"/><w:spacing w:val="-4"/>';
+  `<w:lang w:eastAsia="zh-CN"/><w:spacing w:val="${spacing}"/>`;
 const tracked: TextMeasurer = {
   ...measurer,
   hasResolvedFont: () => true,
@@ -481,30 +481,48 @@ const tracked: TextMeasurer = {
       : measurer.inkBounds?.(value, style);
   },
 };
+const lineTexts = (lines: ReturnType<typeof layout>) =>
+  lines.map((line) => line.spans.map((span) => span.text).join(''));
 
-// Word and WPS fit the first 32 characters after tightening the source spacing.
-// A Latin suffix belongs to the next line and cannot veto the first line's CJK seams.
-test('a later Latin suffix preserves punctuation fitting in negatively tracked CJK text', () => {
-  const text = '甲乙丙丁戊己庚辛壬癸子丑寅，卯辰巳午未申酉戌亥春夏秋冬风雨雷电晴雪朝暮A1';
-  const lines = layout(text, 375, undefined, tracked, trackedProps);
-  expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
-    text.slice(0, 32),
-    text.slice(32),
-  ]);
-  const comma = lines[0]!.spans.find((span) => span.text === '，');
-  expect(comma?.box.width).toBeLessThan(11.8);
-  expect(
-    lines.flatMap((line) => line.spans).find((span) => span.text.includes('A1'))?.style
-      .characterSpacingPt
-  ).toBe(-0.2);
-});
+// A Latin run on a later line makes the paragraph mixed. It cannot veto the seams of a tracked
+// first line that holds no Latin group: that line breaks as it does without the Latin run.
+for (const spacing of [-4, 4]) {
+  for (const hanging of [false, true]) {
+    test(`a tracked East Asian line fits in a mixed paragraph (${spacing} twips, hanging ${hanging})`, () => {
+      const base = '甲乙丙丁戊己，庚辛壬癸子丑寅卯辰巳午未申酉，戌亥春夏秋冬风雨雷电，晴雪朝暮';
+      const wrap = (suffix: string, width: number) =>
+        layout(
+          base + suffix,
+          width,
+          undefined,
+          tracked,
+          trackedProps(spacing),
+          undefined,
+          'both',
+          hanging
+        );
+      let fitted = 0;
+      for (let width = 330; width <= 400; width += 1) {
+        const mixed = wrap('A1', width);
+        const pure = wrap('中文', width);
+        expect(lineTexts(mixed)[0]).toBe(lineTexts(pure)[0]);
+        const comma = mixed[0]!.spans.find((span) => span.text === '，' && span.box.width < 11.9);
+        if (comma) fitted += 1;
+      }
+      expect(fitted).toBeGreaterThan(0);
+      const latin = wrap('A1', 371)
+        .flatMap((line) => line.spans)
+        .find((span) => span.text.includes('A1'));
+      expect(latin?.style.characterSpacingPt).toBe(spacing / 20);
+    });
+  }
+}
 
-test('a hanging comma respects the authored tracked advance of the fitted line', () => {
-  const text = '甲乙丙丁戊己，庚辛壬癸子丑寅卯辰巳午未申酉，戌亥春夏秋冬风雨雷电，晴雪朝暮A1';
-  const wrap = (width: number) =>
-    layout(text, width, undefined, tracked, trackedProps, undefined, 'both', true).map((line) =>
-      line.spans.map((span) => span.text).join('')
-    );
-  expect(wrap(371)).toEqual([text.slice(0, 31), text.slice(31)]);
-  expect(wrap(372)).toEqual([text.slice(0, 33), text.slice(33)]);
+test('a tracked line that holds a Latin word keeps natural punctuation advances', () => {
+  const text = '甲乙丙丁戊己庚辛壬癸子丑寅，AV戌亥春夏秋冬风雨雷电晴雪朝暮甲乙丙丁戊己';
+  for (let width = 330; width <= 400; width += 1) {
+    const lines = layout(text, width, undefined, tracked, trackedProps(-4));
+    for (const span of lines[0]!.spans.filter((entry) => entry.text === '，'))
+      expect(span.box.width).toBeCloseTo(12 - 0.2, 6);
+  }
 });
