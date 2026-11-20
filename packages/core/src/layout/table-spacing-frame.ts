@@ -71,7 +71,7 @@ export function withSpacingFrame(
   const shared = new Map<string, TableSpacingFrame>();
   const end = rows.length - 1;
   return rows.map((row, index) => {
-    const exception = rowException(row);
+    const exception = rowException(row, borders);
     const key = `${index === 0 ? 'f' : ''}${index === end ? 'l' : ''}`;
     let spacingFrame = exception ? undefined : shared.get(key);
     if (!spacingFrame) {
@@ -88,11 +88,31 @@ export function withSpacingFrame(
   });
 }
 
-/** A row's `w:tblPrEx` side borders, when it states any. */
-function rowException(row: SemanticTableRow): Pick<TableBorderBox, 'left' | 'right'> | undefined {
+/**
+ * A row's `w:tblPrEx` side borders, when one differs from the table's own. Sides that repeat
+ * the table's borders leave the frame as it is.
+ */
+function rowException(
+  row: SemanticTableRow,
+  table: TableBorderBox
+): Pick<TableBorderBox, 'left' | 'right'> | undefined {
   const own = row.cells[0]?.rowTableBorders;
-  if (!own || (own.left.state !== 'edge' && own.right.state !== 'edge')) return undefined;
+  if (!own) return undefined;
+  const differs = (side: 'left' | 'right') =>
+    own[side].state === 'edge' && !sameBorderSide(own[side], table[side]);
+  if (!differs('left') && !differs('right')) return undefined;
   return { left: own.left, right: own.right };
+}
+
+function sameBorderSide(a: TableBorderSide, b: TableBorderSide): boolean {
+  if (a.state !== 'edge' || b.state !== 'edge') return a.state === b.state;
+  return (
+    a.style === b.style &&
+    a.color === b.color &&
+    a.widthPt === b.widthPt &&
+    a.sizePt === b.sizePt &&
+    a.line === b.line
+  );
 }
 
 /**
