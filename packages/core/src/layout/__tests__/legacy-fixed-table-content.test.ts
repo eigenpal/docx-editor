@@ -265,6 +265,22 @@ describe('legacy fixed table content edges', () => {
     );
     expect(structure(part(thicker)).outerRuleOffsetPt).toBeUndefined();
   });
+  test('a tracked row property change keeps the origin of its current properties', () => {
+    // 17.13.5.36 `w:trPrChange`: the earlier grid offset no longer places the row.
+    const xml = serializeOoxmlPart(document('<w:bidiVisual/>'));
+    const record = (trPr: string) =>
+      `<w:trPrChange w:id="1" w:author="A"><w:trPr>${trPr}</w:trPr></w:trPrChange>`;
+    const earlier = xml.replace(
+      '<w:tr>',
+      `<w:tr><w:trPr>${record('<w:gridBefore w:val="1"/>')}</w:trPr>`
+    );
+    expect(structure(part(earlier)).outerRuleOffsetPt).toBe(5.4);
+    const current = xml.replace(
+      '<w:tr>',
+      `<w:tr><w:trPr><w:gridBefore w:val="1"/>${record('')}</w:trPr>`
+    );
+    expect(structure(part(current)).outerRuleOffsetPt).toBeUndefined();
+  });
   test('a row margin exception on top and bottom only keeps the legacy origin', () => {
     // 17.4.60 `w:tblPrEx`, 17.4.42 `w:tblCellMar`: no leading margin changes, so the
     // content edge stays where the table's own margin places it.

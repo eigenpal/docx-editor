@@ -89,8 +89,9 @@ export function withSpacingFrame(
 }
 
 /**
- * A row's `w:tblPrEx` side borders, when one differs from the table's own. Sides that repeat
- * the table's borders leave the frame as it is.
+ * A row's `w:tblPrEx` side borders that differ from the table's own, when any does. A side
+ * that repeats the table's border, or that the exception leaves to the table, leaves the
+ * frame as it is on that side.
  */
 function rowException(
   row: SemanticTableRow,
@@ -101,8 +102,13 @@ function rowException(
   const differs = (side: 'left' | 'right') =>
     own[side].state === 'edge' && !sameBorderSide(own[side], table[side]);
   if (!differs('left') && !differs('right')) return undefined;
-  return { left: own.left, right: own.right };
+  return {
+    left: differs('left') ? own.left : OMITTED,
+    right: differs('right') ? own.right : OMITTED,
+  };
 }
+
+const OMITTED: TableBorderSide = { state: 'omitted' };
 
 function sameBorderSide(a: TableBorderSide, b: TableBorderSide): boolean {
   if (a.state !== 'edge' || b.state !== 'edge') return a.state === b.state;
