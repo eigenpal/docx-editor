@@ -117,11 +117,13 @@ for (const [form, preview] of Object.entries(previews))
       pair.bob.room.session.flushPendingJournals();
       pair.resume();
       await until(() => bodies().every((text) => text.includes('ALBRZ')));
-      expect(bodies().every((text) => !text.includes('￼'))).toBe(true);
+      expect(bodies().every((text) => !text.includes('\uFFFC'))).toBe(true);
       expect(left.exec({ type: 'undo' }).ok).toBe(true);
-      await until(() => bodies().every((text) => text.split('￼').length === 2));
-      expect(bodies()[0]).toBe(bodies()[1]);
+      await until(() => bodies().every((text) => text.includes('AL\uFFFCBRZ')));
       for (const editor of [left, right]) expect(drawingSize(editor)).toEqual([20, 10]);
+      expect(left.exec({ type: 'redo' }).ok).toBe(true);
+      await until(() => bodies().every((text) => text.includes('ALBRZ')));
+      expect(bodies().every((text) => !text.includes('\uFFFC'))).toBe(true);
     } finally {
       for (const { editor, container } of views) {
         editor.destroy();
