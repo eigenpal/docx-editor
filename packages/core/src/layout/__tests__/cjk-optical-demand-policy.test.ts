@@ -137,6 +137,7 @@ type FitOptions = {
   automaticGap?: number;
   inlinePictureAfter?: number;
   drawing?: { bidiLevel?: number; advanceStart?: number };
+  passages?: boolean;
 };
 function fit(o: FitOptions = {}) {
   const word = o.word ?? 'AV',
@@ -240,6 +241,7 @@ function fit(o: FitOptions = {}) {
     baseline: 14.13,
     leading: 0,
     trailingSpacing: 0,
+    ...(o.passages ? { wrapPassages: [{ start: 0, end: x }] } : {}),
   };
   const before = structuredClone(line),
     p = o.policy ?? policy,
@@ -459,6 +461,7 @@ test('an inline picture refuses the fit when it does not run on from the text', 
   const candidate = ['丁'];
   const shifted = fit({ inlinePictureAfter: 6, candidate, deficit: 5 });
   expect(shifted.result).toBeDefined();
+  reject({ inlinePictureAfter: 6, candidate, deficit: 5, passages: true });
   for (const change of [{ bidiLevel: 1 }, { advanceStart: -1 }]) {
     const x = fit({ inlinePictureAfter: 6, candidate, deficit: 5, drawing: change });
     expect(x.result).toBeUndefined();

@@ -353,13 +353,13 @@ function expansionGate(
  * most half its natural advance. A longer shortfall wraps the group.
  */
 function exceedsLegacyAdmission(cells: readonly Cell[], sourceCount: number, deficit: number) {
-  const group = cells.filter((cell) => cell.sourceIndex >= sourceCount);
   let ideograph = false;
   let half = 0;
-  for (const cell of group) {
-    const punctuation = PUNCTUATION.test(cell.span.text);
-    if (!punctuation && !isCjk(cell.span.text.codePointAt(0)!)) return false;
-    ideograph ||= !punctuation;
+  for (const cell of cells) {
+    if (cell.sourceIndex < sourceCount) continue;
+    const mark = PUNCTUATION.test(cell.span.text) || cell.qualifiedCurly !== undefined;
+    if (!mark && !isCjk(cell.span.text.codePointAt(0)!)) return false;
+    ideograph ||= !mark;
     half += cell.natural / 2;
     if (blankSided(cell))
       deficit -= Math.max(0, cell.natural / 2 - cell.alreadyReduced - cell.reduction);

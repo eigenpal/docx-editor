@@ -55,17 +55,17 @@ const styles = part(
 const run = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
 
 /** The first line of 12pt `甲。乙，`, a 12pt picture, and ideographs, at a text measure of `width`. */
-function firstLine(width: number, mode?: 15) {
+function firstLine(width: number, mode?: 15, body?: string, extraSettings = '') {
   const compat = mode
     ? `<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${mode}"/></w:compat>`
     : '';
   const settings = part(
     '/word/settings.xml',
-    `<w:settings ${NS}><w:characterSpacingControl w:val="compressPunctuation"/>${compat}</w:settings>`
+    `<w:settings ${NS}><w:characterSpacingControl w:val="compressPunctuation"/>${extraSettings}${compat}</w:settings>`
   );
   const doc = part(
     '/word/document.xml',
-    `<w:document ${NS}><w:body><w:p><w:pPr><w:jc w:val="both"/></w:pPr>${run('甲。乙，')}${picture}${run('丙丁戊己庚辛壬癸')}</w:p></w:body></w:document>`
+    `<w:document ${NS}><w:body><w:p><w:pPr><w:jc w:val="both"/></w:pPr>${body ?? run('甲。乙，') + picture + run('丙丁戊己庚辛壬癸')}</w:p></w:body></w:document>`
   );
   const projections = indexInlineDrawingProjectionsInPart(doc);
   const inlineDrawingLayout: InlineDrawingLayoutContext = {
@@ -112,4 +112,48 @@ test('without a declared mode the picture line takes an ideograph within half it
   expect(firstLine(64).text).toBe('甲。乙，');
   expect(firstLine(66).text).toBe('甲。乙，丙');
   expect(firstLine(65.9).text).toBe('甲。乙，');
+});
+
+/** Each picture's advance, and the x where the text after it starts. */
+function placed(line: ReturnType<typeof firstLine>['line']) {
+  return line.drawings!.map((drawing) => {
+    const before = line.spans.filter((span) => span.range.end <= drawing.start).at(-1);
+    const after = line.spans.find((span) => span.range.start > drawing.start);
+    return {
+      width: drawing.advanceEnd - drawing.advanceStart,
+      start:
+        drawing.advanceStart - (before ? before.box.x + before.box.width : drawing.advanceStart),
+      end: (after?.box.x ?? drawing.advanceEnd) - drawing.advanceEnd,
+    };
+  });
+}
+
+test('pictures between the text and the next glyph, or between seams, keep their advances', () => {
+  const tail = run('丁戊己庚辛壬癸');
+  // A picture just before the glyph that joins the line.
+  const last = firstLine(76, 15, run('甲。乙，丙') + picture + tail);
+  expect(last.text).toBe('甲。乙，丙丁');
+  expect(placed(last.line)).toEqual([{ width: 12, start: 0, end: 0 }]);
+  // Two pictures, each after a compressed mark.
+  const two = firstLine(76, 15, run('甲。') + picture + run('乙，') + picture + run('丙') + tail);
+  expect(two.text).toBe('甲。乙，丙');
+  expect(placed(two.line)).toEqual([
+    { width: 12, start: 0, end: 0 },
+    { width: 12, start: 0, end: 0 },
+  ]);
+  for (const { line } of [last, two]) {
+    const end = line.spans.at(-1)!;
+    expect(end.box.x + end.box.width).toBeCloseTo(76, 8);
+  }
+});
+
+test('a picture before the first text keeps its place while the text fits', () => {
+  const { text, line } = firstLine(64, 15, picture + run('甲。乙，丙丁戊己庚辛壬癸'));
+  expect(text).toBe('甲。乙，丙');
+  expect(line.drawings![0]!.advanceStart).toBe(0);
+  expect(line.spans[0]!.box.x).toBeCloseTo(12, 8);
+});
+
+test('a picture paragraph follows the mixed-line rules, so punctuation kerning off wraps it', () => {
+  expect(firstLine(64, 15, undefined, '<w:noPunctuationKerning/>').text).toBe('甲。乙，');
 });

@@ -4,7 +4,8 @@ import { shiftInlineDrawingRecord, type InlineDrawingRecord } from './drawing-la
 import type { PendingLine } from './pending-line.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
 
-const TOLERANCE = 0.01;
+const TOLERANCE = 0.001;
+const NONE: readonly InlineDrawingRecord[] = Object.freeze([]);
 
 /**
  * The inline objects of a line in source order, from the first one after the line's first text.
@@ -30,9 +31,11 @@ export function lineObjectsInFlow(
   )
     return undefined;
   const firstStart = line.spans[0]?.range.start ?? candidates[0]?.range.start ?? 0;
-  const objects = line.drawings
-    .filter((drawing) => drawing.start >= firstStart)
-    .sort((left, right) => left.start - right.start);
+  const objects = line.drawings.length
+    ? line.drawings
+        .filter((drawing) => drawing.start >= firstStart)
+        .sort((left, right) => left.start - right.start)
+    : NONE;
   let next = 0;
   for (let index = 1; index <= line.spans.length; index++) {
     const previous = line.spans[index - 1]!;
