@@ -19,7 +19,6 @@ import { CHART_SUGGESTING_REFUSAL, CHART_VIEWING_REFUSAL } from './surface-chart
 import type { CopyFlavours } from './clipboard-copy-payload.ts';
 import { collapsedAt, type RangeDeletionPlan } from './surface-selection-ops.ts';
 import type { SurfaceClipboardDeps } from './surface-clipboard-ops.ts';
-import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 const refusal = (reason: string): TreeApplyResult =>
   ({ committed: false, rejected: true, opCount: 0, reason }) as TreeApplyResult;
@@ -37,7 +36,11 @@ export function chartCopyFlavours(deps: SurfaceClipboardDeps): CopyFlavours | nu
     drawing.drawingNodeId
   );
   if (!source) return null;
-  return { ...chartClipboardFlavours(source), chartDrawingNodeId: drawing.drawingNodeId };
+  return {
+    ...chartClipboardFlavours(source),
+    chartDrawingNodeId: drawing.drawingNodeId,
+    drawingNodeId: drawing.drawingNodeId,
+  };
 }
 
 /**
@@ -93,14 +96,4 @@ export function pasteCopiedChart(deps: SurfaceClipboardDeps, html: string | null
   if (drawingNodeId === null) return false;
   deps.selectPastedDrawing?.(drawingNodeId, target.paragraphId);
   return true;
-}
-
-/** Select a pasted drawing and bring the whole of it into view, as a chart insert does. */
-export function selectPastedDrawing(
-  surface: PaginatedSurface,
-  drawingNodeId: string,
-  paragraphId: string
-): void {
-  if (surface.selectDrawing(drawingNodeId, paragraphId))
-    surface.revealPosition(surface.state().selection.head, { block: 'nearest' });
 }

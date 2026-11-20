@@ -46,6 +46,14 @@ export function vmlShapeNumber(shape: OoxmlElement): number | null {
   const value = Number(digits);
   return value <= 0xffffffff ? value : null;
 }
+/**
+ * `raw`, a VML shape id such as `_x0000_s1025`, with its number replaced by `number`. Null when
+ * `raw` is not a numbered shape id, such as an author's own `id="Box"`. @internal
+ */
+export function withVmlShapeNumber(raw: string, number: string): string | null {
+  const match = raw.trim().match(/^(_x0000_[a-z])\d{1,10}$/i);
+  return match ? `${match[1]}${number}` : null;
+}
 /** Whether a VML boolean is false (`f`, `false`, `0`). @internal */
 export const off = (value: string | undefined) => /^(f|false|0)$/i.test(value ?? '');
 export const escapeXml = (value: string) =>

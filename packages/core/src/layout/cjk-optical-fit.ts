@@ -1,4 +1,4 @@
-// Demand-only line fitting, verified against native Word PDF glyph positions.
+// Demand-only line fitting.
 import type { FieldAwarePiece } from './field-pieces.ts';
 import type { PendingLine } from './pending-line.ts';
 import {

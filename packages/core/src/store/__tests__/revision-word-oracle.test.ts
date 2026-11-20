@@ -7,7 +7,6 @@ import {
 } from './fixtures/structural-word-cases.ts';
 import oracle from './fixtures/structural-word-oracle.json';
 
-// Recorded from clean native Word AcceptAllChangesInDoc / RejectAllChangesInDoc output.
 // Compare content/topology, ignoring run splitting, generated IDs and explicit defaults.
 // Column widths are not compared here: Word autofits nested-table inputs on opening.
 // Empty SDT placeholder spaces normalize to an empty paragraph.

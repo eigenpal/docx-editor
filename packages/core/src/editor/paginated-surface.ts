@@ -81,7 +81,7 @@ import { createDeferredLayout } from './surface-deferred-layout.ts';
 import { createCanonicalLayout } from './surface-canonical-layout.ts';
 import { drainLayoutSteps, type LayoutSteps } from '../layout/layout-steps.ts';
 import { createReviewOrderIndex } from './surface-review-order.ts';
-import { litReviewKeys, reviewItemsByKey } from './review-replacement-pairs.ts';
+import { litReviewKeys } from './review-replacement-pairs.ts';
 import { bodyBlockCountOf, bodyBlockLimitAfter, bodyBlocksOf } from '../layout/body-block-limit.ts';
 import { snapshotLayoutSession } from '../layout/layout-session-snapshot.ts';
 import { furnitureLaterSteps } from './surface-furniture-later.ts';
@@ -146,7 +146,7 @@ import {
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
-import { selectPastedDrawing } from './surface-chart-clipboard.ts';
+import { clipboardSelectedDrawing, selectPastedDrawing } from './surface-drawing-clipboard.ts';
 import { createHiddenMarkEditing, type RevisionView } from './hidden-mark-joins.ts';
 import { drawingSelectionPosition } from './surface-drawing-selection.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
@@ -171,7 +171,6 @@ import {
   withNumberingStyleLinks,
   type CellSelection,
   type ContentControlBoundaryRecord,
-  type KeyedRange,
   type LayoutScope,
   type NavigationCommand,
   type ReviewItem,
@@ -215,7 +214,7 @@ import {
   createStableReviewAuthorSlots,
   type ReviewAuthorInfo,
 } from '../output/revision-presentation.ts';
-import { createSurfaceReviewAuthors, reviewItemAuthor } from './surface-review-authors.ts';
+import { createSurfaceReviewAuthors } from './surface-review-authors.ts';
 import { createPresenceColors } from './surface-presence-color.ts';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
@@ -343,7 +342,7 @@ import {
   noteScopeIdInLayout,
 } from './surface-scope.ts';
 import { drawingSelectionIntentKey, memberIntent } from './group-member-selection.ts';
-import { RANGE_SUFFIX, bandClassFor } from './surface-review-band-class.ts';
+import { bandRanges, createBandItemLookup, reviewBands } from './surface-review-band-class.ts';
 import { createCaretViewFollower, type CaretFollowMode } from './surface-caret-follow.ts';
 import { createInPlaceReplacement } from './surface-replace-in-place.ts';
 import {
@@ -3476,10 +3475,11 @@ export function mountPaginatedSurface(
     render: () => render(),
     flushLayout: () => flushLayout(),
     flushToPaint: () => flushToPaint(),
-    updateCaret: () => {
-      caret.update();
-      syncActiveFieldShading(pagesLayer, collapsedCaretPosition());
-    },
+    repaintCaretAround: (writeSelection) =>
+      caret.updateAround(() => {
+        syncActiveFieldShading(pagesLayer, collapsedCaretPosition());
+        writeSelection();
+      }),
     textOf: (paragraphId) => textOf(paragraphId),
     pendingFormatOps: (paragraphId, offset, length, replacing) =>
       consumePendingFormatOps(paragraphId, offset, length, replacing),
@@ -3673,34 +3673,7 @@ export function mountPaginatedSurface(
     // pages 1–5 the moment page 1 scrolled away. `keyedRangeRects` clips to the visible pages
     // anyway; this is only a pre-filter, and a false keep costs one range's measurement.
     const onScreen = pages ? rangesOnPages(currentLayout, pages) : () => true;
-    const ranges: KeyedRange[] = [];
-    for (const item of visibleReviewItems()) {
-      if (item.kind === 'comment') {
-        if (item.range === null) continue;
-        if (!onScreen(item.range.start.paragraphId, item.range.end.paragraphId)) continue;
-        ranges.push({
-          key: reviewItemKey(item),
-          from: { paragraphId: item.range.start.paragraphId, offset: item.range.start.offset },
-          to: { paragraphId: item.range.end.paragraphId, offset: item.range.end.offset },
-        });
-        continue;
-      }
-      // Revisions are measured in the SAME pass and drawn only when active: tracked text
-      // already carries an underline, a strike and a margin bar, so banding all of it would
-      // repeat what the decoration says and leave a page of edits as one solid wash.
-      // Custom-node cards take the same treatment — the chip tint already marks the node
-      // persistently, so its band appears only while its card is open.
-      const key = reviewItemKey(item);
-      const itemRanges = item.kind === 'revision' ? item.ranges : item.range ? [item.range] : [];
-      for (const [index, range] of itemRanges.entries()) {
-        if (!onScreen(range.start.paragraphId, range.end.paragraphId)) continue;
-        ranges.push({
-          key: itemRanges.length === 1 ? key : `${key}${RANGE_SUFFIX}${index}`,
-          from: { paragraphId: range.start.paragraphId, offset: range.start.offset },
-          to: { paragraphId: range.end.paragraphId, offset: range.end.offset },
-        });
-      }
-    }
+    const ranges = bandRanges(visibleReviewItems(), onScreen);
     const byKey = keyedRangeRectsWithTextboxes(currentLayout, ranges, pages, measurer);
     const rects: (OverlayRect & { key: string })[] = [];
     for (const [key, found] of byKey) for (const rect of found) rects.push({ ...rect, key });
@@ -3870,6 +3843,7 @@ export function mountPaginatedSurface(
   let commentHighlightLayout: SemanticLayout | null = null;
   let commentHighlightActiveKey: string | undefined;
   let commentHighlightAuthors: ReadonlyMap<string, ReviewAuthorInfo> | null = null;
+  const bandItems = createBandItemLookup();
 
   function renderCommentHighlights(force = false): void {
     const active = activeReviewAtCaret();
@@ -3890,33 +3864,10 @@ export function mountPaginatedSurface(
     ) {
       return;
     }
-    // Once per paint, not once per rect: a decision spanning many lines asked the same
-    // question for every one of them.
-    const byKey = reviewItemsByKey(visibleReviewItems());
-    const bands: OverlayRect[] = [];
-    for (const rect of commentRects()) {
-      const className = bandClassFor(rect.key, activeKeys, byKey);
-      if (!className) continue;
-      // WHOSE band, for CSS to key on. The rect's key is suffixed per range for a revision
-      // covering several sites, so the author comes from the decision, as the class does.
-      const decision = rect.key.split(RANGE_SUFFIX)[0]!;
-      const item = byKey.get(decision);
-      const name = item ? reviewItemAuthor(item) : null;
-      const reviewAuthor = name === null || name === '' ? undefined : roster.resolved.get(name);
-      // The author's own active background, on the OPEN revision's band only. The active
-      // test repeats the class's — the decision, not the site — so a multi-range decision
-      // tints every range it covers, and a comment band never takes a revision field.
-      const activeBackground =
-        item?.kind === 'revision' && activeKeys.has(decision)
-          ? reviewAuthor?.style?.activeBackground
-          : undefined;
-      bands.push({
-        ...rect,
-        className,
-        ...(reviewAuthor ? { reviewAuthor } : {}),
-        ...(activeBackground !== undefined ? { activeBackground } : {}),
-      });
-    }
+    // The items behind the measured bands only: see `createBandItemLookup`.
+    const rects = commentRects();
+    const byKey = bandItems(visibleReviewItems(), rects);
+    const bands = reviewBands(rects, activeKeys, byKey, roster.resolved);
     paintSelectionOverlay(commentLayer, currentLayout, bands, {
       scale,
       ...(materializedExtent ? { pageOffsetX: materializedExtent.pageOffsetX } : {}),
@@ -4402,7 +4353,7 @@ export function mountPaginatedSurface(
       trackedChangeLanded: () => runtimeOptions.onTrackedChange?.(),
       revisionDisplayMode,
       commit,
-      selectedDrawing: () => resolveSelectedDrawingRecord(surface),
+      selectedDrawing: () => clipboardSelectedDrawing(surface),
       selectPastedDrawing: (id, paragraphId) => selectPastedDrawing(surface, id, paragraphId),
     });
 
