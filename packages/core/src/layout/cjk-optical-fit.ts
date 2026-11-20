@@ -87,7 +87,11 @@ function allowedStyle(span: Pick<StyleSpanRecord, 'style' | 'props' | 'revisions
     !formatRevisionOf(span.props)
   );
 }
-/** Unsupported paragraphs retain their existing wrapping and whitespace path. */
+/**
+ * Unsupported paragraphs retain their existing wrapping and whitespace path. A paragraph with an
+ * inline drawing is not pure here: it fits through the mixed-line path, whose per-line fitter
+ * keeps each object's advance (`lineObjectsInFlow` in `cjk-optical-objects.ts`).
+ */
 export function canFitCjkOptically(pieces: readonly FieldAwarePiece[]): boolean {
   return pieces.every(
     (piece) =>
