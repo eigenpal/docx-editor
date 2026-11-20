@@ -18,6 +18,7 @@ import type { InlineDrawingLayoutContext } from '../drawing-layout.ts';
 import { caretBoxOnLine } from '../semantic-hit-test.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
+import { squareWrapZone } from './float-over-table-harness.ts';
 import { paragraphFragmentsOf } from '../semantic-records.ts';
 
 const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
@@ -169,6 +170,8 @@ describe('a picture line on a section line grid', () => {
     expect(snapped.box.height).toBeCloseTo(height, 6);
     expect(snapped.baseline).toBeCloseTo(natural.baseline + above, 6);
     expect(pictureDrop(snapped)).toBeCloseTo(0, 6);
+    // Like a snapped text line, the centring below the content may hang past the page foot.
+    expect(snapped.trailingSpacing ?? 0).toBeCloseTo(above, 6);
   });
 
   test('a paragraph that turns snapping off keeps the natural picture line', () => {
@@ -193,5 +196,41 @@ describe('a picture line on a section line grid', () => {
     const height = Math.ceil(natural.box.height / PITCH_PT) * PITCH_PT;
     expect(snapped.box.height).toBeCloseTo(height, 6);
     expect(pictureDrop(snapped)).toBeCloseTo(5, 6);
+  });
+});
+
+describe('a positioned picture beside a float', () => {
+  /** The first line with a full-width square-wrapped float 34pt below the paragraph top. */
+  function lineAboveFloat(runProperties: string) {
+    const part = documentWith({ runProperties });
+    const paragraph = part.root.children
+      .flatMap((node) => node.children)
+      .find((node) => node.kind === 'paragraph')!;
+    const layout = layoutSemanticDocument(part, 0, {
+      measurer,
+      inlineDrawingLayout: layoutContext(part),
+      drawingExclusionPass: 0,
+      drawingExclusionZonesByPage: new Map([
+        [
+          0,
+          [
+            squareWrapZone({
+              anchorParagraphId: paragraph.id,
+              top: 34,
+              height: 40,
+              left: 0,
+              width: 468,
+              contentWidth: 468,
+            }),
+          ],
+        ],
+      ]),
+    });
+    return paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!;
+  }
+
+  test('a raised picture that reaches the float moves its line below it', () => {
+    expect(lineAboveFloat('').box.y).toBeCloseTo(0, 6);
+    expect(lineAboveFloat('<w:position w:val="12"/>').box.y).toBeGreaterThanOrEqual(74);
   });
 });

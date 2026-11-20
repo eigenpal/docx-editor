@@ -26,3 +26,18 @@ export function syncPendingDrawingBaselines(line: PendingLine, pageBreaksIgnored
       drawing.y + drawing.height + (drawing.runPositionPt ?? 0)
     );
 }
+
+/**
+ * The band an inline drawing of `contribution` height occupies once its run position moves it.
+ *
+ * A raised drawing reaches `runPositionPt` higher above the baseline; a lowered one reaches as
+ * far below it. Float clearance measures this band, so it matches the placed drawing.
+ */
+export function positionedDrawingExtent(
+  contribution: number,
+  runPositionPt: number
+): { readonly height: number; readonly baseline: number } {
+  if (!runPositionPt) return { height: contribution, baseline: contribution };
+  const above = Math.max(0, contribution + runPositionPt);
+  return { height: above + Math.max(0, -runPositionPt), baseline: above };
+}
