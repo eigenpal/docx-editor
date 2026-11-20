@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A fullwidth semicolon could leave extra space inside an otherwise eligible East Asian punctuation pair.",
+  "after": "Eligible pairs share the trailing bearing and restore it if they part across a line.",
+  "reason": "Only derived layout widths change. Model text, offsets, operations and serialized collaboration state stay the same.",
+  "tests": [
+    "packages/core/src/layout/__tests__/cjk-compression-context.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-concurrent-format-merge.test.ts"
+  ],
+  "changeset": "share-east-asian-semicolon-bearing",
+  "migration": null
+}

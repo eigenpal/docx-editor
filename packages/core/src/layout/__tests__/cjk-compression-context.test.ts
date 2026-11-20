@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { compressCjkPieces } from '../cjk-spacing.ts';
+import { compressCjkPieces, lineLocalBearingRetry } from '../cjk-spacing.ts';
 import { DEFAULT_CJK_TYPOGRAPHY } from '../cjk-typography.ts';
 import { DEFAULT_RUN_STYLE } from '../run-style.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
@@ -16,15 +16,15 @@ const policy = {
     after: {},
   },
 };
-function compress(text: string, split = text.length) {
+function compress(text: string, split = text.length, language = 'zh-CN', kern = 1) {
   const pieces: FieldAwarePiece[] = [text.slice(0, split), text.slice(split)]
     .filter(Boolean)
     .map((text, index) => ({
       text,
       start: index === 0 ? 0 : split,
       end: index === 0 ? split : split + text.length,
-      style: { ...DEFAULT_RUN_STYLE, kerningMinPt: 1, fontSizePt: 11 },
-      props: [],
+      style: { ...DEFAULT_RUN_STYLE, kerningMinPt: kern, fontSizePt: 11 },
+      props: [{ localName: 'lang', attributes: { eastAsia: language } }],
     }));
   return compressCjkPieces(pieces, policy, measurer);
 }
@@ -146,4 +146,29 @@ test('decorated, linked-style, and tracked punctuation retains native ink and se
   const result = compressCjkPieces([decorated[0]!, plain], policy, measurer);
   expect(result[0]).toEqual(decorated[0]);
   expect(result.some((piece) => piece.glyphOffsetPt !== undefined)).toBe(true);
+});
+
+test('fullwidth semicolon shares a bearing across runs without changing ordinary widths', () => {
+  for (const language of ['zh-CN', 'ja-JP']) {
+    expect(advances(compress('甲）；乙', 2, language))).toEqual([12, 6, 12, 12]);
+    expect(advances(compress('甲；（乙', 2, language))).toEqual([12, 6, 12, 12]);
+    expect(advances(compress('甲；乙', 2, language))).toEqual([12, 12, 12]);
+    expect(advances(compress('甲）；乙', 2, language, 50))).toEqual([12, 12, 12, 12]);
+  }
+  expect(advances(compress('甲；）乙', 2, 'zh-CN'))).toEqual([12, 6, 12, 12]);
+  expect(advances(compress('甲；）乙', 2, 'ja-JP'))).toEqual([12, 12, 12, 12]);
+  expect(advances(compress('甲）；乙', 2, 'ko-KR'))).toEqual([12, 12, 12, 12]);
+});
+
+test('a compressed semicolon restores its bearing when the next mark is on another line', () => {
+  const piece = compress('甲；（乙', 2).find((piece) => piece.text === '；')!;
+  const span = {
+    text: piece.text,
+    glyphOffsetPt: piece.glyphOffsetPt,
+    range: { start: piece.start, end: piece.end },
+  } as import('../semantic-records.ts').StyleSpanRecord;
+  const retry = lineLocalBearingRetry([{ spans: [span] }, { spans: [] }], {
+    preserveColonAdvances: false,
+  });
+  expect(retry?.keepRightBearings).toEqual(new Set([1]));
 });

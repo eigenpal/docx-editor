@@ -64,7 +64,7 @@ export function lineLocalBearingRetry(
     const span = line.spans.at(-1);
     if (span?.glyphOffsetPt !== 0 || span.text.endsWith('：')) continue;
     const last = segmentGraphemes(span.text).at(-1)!;
-    if (CLOSING.test(last.text)) keep.add(span.range.end - last.text.length);
+    if (CLOSING.test(last.text) || last.text === '；') keep.add(span.range.end - last.text.length);
   }
   if (keep.size === (advances.keepRightBearings?.size ?? 0)) return null;
   return { ...advances, keepRightBearings: keep };
@@ -184,7 +184,13 @@ function compressionSlices(
       !keepRightBearings?.has(base.start + cluster.utf16From - starts[pieceIndex]!) &&
       pairEnabled(cluster.utf16From, clusters[clusterIndex + 1]!.utf16From) &&
       ((CLOSING.test(cluster.text) &&
-        (OPENING.test(next) || CLOSING.test(next) || next === '：')) ||
+        (OPENING.test(next) || CLOSING.test(next) || next === '：' || next === '；')) ||
+        // Word lets a Japanese semicolon share the bearing with an opening mark.
+        // Chinese semicolons also share it with a closing mark or another semicolon.
+        (cluster.text === '；' &&
+          (OPENING.test(next) ||
+            ((CLOSING.test(next) || next === '；') &&
+              !/^ja(?:-|$)/i.test(eastAsianLanguage(base.props) ?? '')))) ||
         // Retain the following opening's left bearing. It receives a centred
         // colon's overhang without moving or clipping the colon's native ink.
         (cluster.text === '：' &&
