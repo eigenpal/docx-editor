@@ -237,6 +237,12 @@ test('a standalone closing line is crossed by arrows, keeps its mark, and joins 
   select(surface, 2, 0);
   surface.navigate('down');
   expect(surface.state().selection.head).toEqual({ paragraphId: following!, offset: 0 });
+  // A caret placed on the closing line stays there for Home and End.
+  for (const command of ['lineStart', 'lineEnd'] as const) {
+    select(surface, 2, 0);
+    surface.navigate(command);
+    expect(surface.state().selection.head).toEqual({ paragraphId: closing!, offset: 0 });
+  }
   // Its paragraph mark stays protected, and formatting reports the read-only refusal.
   select(surface, 2, 0);
   const before = serializeOoxmlPart(surface.session.part());

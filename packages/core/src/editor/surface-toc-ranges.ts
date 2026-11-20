@@ -77,18 +77,21 @@ export function tocAtPosition(
   )?.toc;
 }
 /**
- * The TOC that caret motion skips at `position`: its read-only region and a closing
- * paragraph that holds only the end mark. A caret placed on that closing line directly
- * stays editable, so the reader can retype a deleted heading there.
+ * The TOC that caret motion from `origin` skips at `position`: its read-only region, and a
+ * closing paragraph that holds only the end mark when the motion arrives from another
+ * paragraph. A caret placed on that closing line stays there for Home and End, and the
+ * line stays editable, so the reader can retype a deleted heading there.
  */
 export function tocSkippedByCaretMotion(
   part: OoxmlPart,
-  position: SemanticPosition
+  position: SemanticPosition,
+  origin: SemanticPosition
 ): DetectedToc | undefined {
   return tocParagraphRanges(part).find(
     (r) =>
       r.paragraphId === position.paragraphId &&
-      (contains(r, position.offset) || (r.endsHere && !r.startsHere && r.length === 0))
+      (contains(r, position.offset) ||
+        (r.endsHere && !r.startsHere && r.length === 0 && origin.paragraphId !== r.paragraphId))
   )?.toc;
 }
 export function selectionTouchesTocRange(part: OoxmlPart, selection: SemanticSelection): boolean {

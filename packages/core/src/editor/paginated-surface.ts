@@ -4800,7 +4800,7 @@ export function mountPaginatedSurface(
         const crossed = leaveAtomicControl(layout, selection.head, moved.position);
         if (crossed !== moved.position) moved = { ...moved, position: crossed, caret: undefined };
       }
-      if (tocSkippedByCaretMotion(session.part(), moved.position)) {
+      if (tocSkippedByCaretMotion(session.part(), moved.position, selection.head)) {
         if (extend) return;
         // The escape steps by LINE, never by character. A character step inside a row that
         // has any text at all lands in the same paragraph, and the loop's own "we did not
@@ -4831,9 +4831,9 @@ export function mountPaginatedSurface(
             return;
           }
           moved = next;
-          if (!tocSkippedByCaretMotion(session.part(), moved.position)) break;
+          if (!tocSkippedByCaretMotion(session.part(), moved.position, selection.head)) break;
         }
-        if (tocSkippedByCaretMotion(session.part(), moved.position)) return;
+        if (tocSkippedByCaretMotion(session.part(), moved.position, selection.head)) return;
       }
       desiredX = moved.desiredX;
       // Note continuations share one EditorScope across pages: retarget the visual
