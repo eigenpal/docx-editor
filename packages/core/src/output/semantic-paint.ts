@@ -1290,7 +1290,7 @@ function paintLine(
       painted.style.wordSpacing = `${(gapAfter - syntheticBoldSpacingPt(span)) * scale}px`;
     else if (owner === 'letterSpacing')
       painted.style.letterSpacing = letterGapSpacing(painted, span, gapAfter, scale);
-    const blank = bidi ? 0 : hangingMarkBlankAt(line, span);
+    const blank = hangingMarkBlankAt(line, span);
     if (blank > 0) clipHangingMarkBlank(painted, span, blank, scale);
     pendingGap = gapAfter;
     const link = span.link;

@@ -67,6 +67,32 @@ describe('a hanging mark gives up its compressed trailing blank', () => {
     );
   });
 
+  test('a Traditional Chinese mark gives up its trailing quarter', () => {
+    for (const overflow of [3, 18]) {
+      const line = hanging(overflow, { language: 'zh-TW' }, '、').lines[0]!;
+      expect(line.hangingMarkBlank).toBeCloseTo(6, 6);
+    }
+  });
+
+  test('a left-to-right line with a right-to-left word clips the mark too', () => {
+    const fixture = loadFixture({
+      text: 'א' + H.slice(1) + '。余',
+      available: 462,
+      language: 'ja-JP',
+      compatibility: 15,
+      compression: 'compressPunctuation',
+      highlight: true,
+      paragraphProperties: '<w:jc w:val="both"/><w:overflowPunct/>',
+    });
+    const line = fixture.lines[0]!;
+    expect(line.spans.some((span) => span.style.shaping !== undefined)).toBe(true);
+    expect(line.hangingMarkBlank).toBeCloseTo(12, 6);
+    const kept = (line.spans.at(-1)!.box.width - 12) * 2;
+    expect(paintedRuns(fixture).at(-1)!.style.clipPath).toBe(
+      `inset(-1em calc(100% - ${kept}px) -1em -1em)`
+    );
+  });
+
   test('character spacing widens the trailing blank', () => {
     // 2 pt spacing: 26 pt cells, 520 pt in all; the mark's trailing blank is 12 + 2 pt.
     const line = hanging(0, { tracking: 40, available: 500 }).lines[0]!;

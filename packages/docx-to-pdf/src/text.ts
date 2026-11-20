@@ -688,8 +688,12 @@ export class TextWriter {
           for (const cluster of shaped.run.clusters) {
             if (/^\s+$/.test(shaped.run.text.slice(cluster.textStart, cluster.textEnd))) continue;
             const glyph = shaped.run.glyphs[cluster.glyphStart]!;
+            const left = x + glyph.originX * scale * horizontal;
+            // A word rule also stops where the span's marks end, before a compressed blank.
+            const width = Math.min(cluster.advance * scale * horizontal, x + markWidth - left);
+            if (width <= 0) continue;
             out.push(
-              `${color(c)} rg ${n(x + glyph.originX * scale * horizontal)} ${n(position - thickness / 2)} ${n(cluster.advance * scale * horizontal)} ${n(thickness)} re f`
+              `${color(c)} rg ${n(left)} ${n(position - thickness / 2)} ${n(width)} ${n(thickness)} re f`
             );
           }
         } else {
