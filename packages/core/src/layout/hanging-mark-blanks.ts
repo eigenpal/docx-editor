@@ -70,8 +70,8 @@ const JAPANESE_HANGING = '、。，．､｡';
 /**
  * Whether the alternate line-break rules decide the line-end `mark` (`alternateLineEndFit`):
  * the rules apply, and the mark is outside the hanging set of its run `language`. Only
- * Japanese keeps a hanging set: `、。，．` and half-width `､｡`. Half-width Latin marks (below U+2000) keep their
- * usual hanging.
+ * Japanese keeps a hanging set: `、。，．` and half-width `､｡`. Half-width Latin marks (below
+ * U+2000) keep their usual hanging.
  */
 export function alternateLineEndDecides(
   mark: string,
