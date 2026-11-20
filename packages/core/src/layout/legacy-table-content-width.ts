@@ -191,7 +191,14 @@ export function legacyTableContentWidth(input: {
   const last = rows[0]?.cells.at(-1);
   if (!first || !last) return undefined;
   if (!hasSupportedLegacyTableMargins(table, input.propertyNodes)) return undefined;
-  if (hasUnsupportedRowGeometry(table, true)) return undefined;
+  // A row can repeat the table's own borders and margins without changing its geometry.
+  if (
+    hasUnsupportedRowGeometry(table, {
+      allowGridSkips: true,
+      repeatedSideProperties: properties,
+    })
+  )
+    return undefined;
   // A fallback margin alone is no evidence for moving the table into the margin.
   if (!statesOuterMargins([properties, ...input.propertyNodes])) return undefined;
   const left = first.margins.left;
@@ -224,7 +231,10 @@ export function legacyTableContentWidth(input: {
   }
   if (!reachesBoth) return undefined;
 
-  return { widthPt: target, gridConfirmed: gridConfirms(table, columnCount, target, input) };
+  return {
+    widthPt: target,
+    gridConfirmed: gridConfirms(table, columnCount, target, input),
+  };
 }
 
 /** Whether a table-level margin box states both outer side margins. */

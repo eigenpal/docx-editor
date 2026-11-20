@@ -1,4 +1,5 @@
 import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
+import { sameOoxmlProperty } from '../store/package/ooxml-property-content.ts';
 import type { SemanticTableCell, SemanticTableRow } from './semantic-table.ts';
 import type { TableBorderBox } from './table-borders.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
@@ -23,6 +24,18 @@ const PLACED_EXCEPTIONS: ReadonlySet<string> = new Set([
   'tblCellMar',
 ]);
 
+function repeatsTableSideProperty(property: OoxmlElement, tableProperties?: OoxmlElement): boolean {
+  if (property.localName !== 'tblBorders' && property.localName !== 'tblCellMar') return false;
+  const matches = tableProperties?.children.filter(
+    (child) => child.kind !== 'textValue' && child.localName === property.localName
+  );
+  return (
+    matches?.length === 1 &&
+    property.namespaceUri === WML_NAMESPACE_URI &&
+    sameOoxmlProperty(matches[0]!, property)
+  );
+}
+
 /**
  * Row exceptions or grid offsets whose geometry the structure reader does not resolve.
  * `placedRows`: the table places its rows one by one (`legacy-row-placement.ts`), which
@@ -32,8 +45,15 @@ const PLACED_EXCEPTIONS: ReadonlySet<string> = new Set([
  */
 export function hasUnsupportedRowGeometry(
   table: OoxmlElement,
-  allowGridSkips = false,
-  placedRows = false
+  {
+    allowGridSkips = false,
+    placedRows = false,
+    repeatedSideProperties,
+  }: {
+    allowGridSkips?: boolean;
+    placedRows?: boolean;
+    repeatedSideProperties?: OoxmlElement;
+  } = {}
 ): boolean {
   const pending = [...table.children];
   let visited = 0;
@@ -50,6 +70,7 @@ export function hasUnsupportedRowGeometry(
         (child) =>
           child.kind !== 'textValue' &&
           !(placedRows && PLACED_EXCEPTIONS.has(child.localName)) &&
+          !repeatsTableSideProperty(child, repeatedSideProperties) &&
           (['tblW', 'jc', 'tblCellSpacing', 'tblInd', 'tblBorders', 'tblLayout'].includes(
             child.localName
           ) ||
@@ -121,7 +142,10 @@ export function legacyFixedTableContentOffset(
     // outer edge on the trailing text edge.
     (shape.textBox && shape.alignment !== 'left') ||
     !hasSupportedLegacyTableMargins(table, propertyNodes) ||
-    hasUnsupportedRowGeometry(table, !shape.bidiVisual, placed)
+    hasUnsupportedRowGeometry(table, {
+      allowGridSkips: !shape.bidiVisual,
+      placedRows: placed,
+    })
   )
     return undefined;
   const leadingAlignment = shape.alignment === 'left';
