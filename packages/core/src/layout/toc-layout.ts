@@ -81,14 +81,10 @@ export function tocFieldChromeParagraphIds(part: OoxmlPart): ReadonlySet<string>
       begin.kind === 'paragraph' &&
       paragraphHasVisibleText(begin);
     if (!beginCarriesResult) ids.add(toc.beginParagraphId);
-    // A populated bare field can end in a separate, authored paragraph. Word lays out its
-    // mark even when the only run carries the end field character. Keep that line in the
-    // normal block flow so following content observes its spacing and pagination.
-    if (
-      toc.contentControlId ||
-      toc.beginParagraphId === toc.endParagraphId ||
-      !tocHasVisibleResultContent(part, toc)
-    ) {
+    // A populated field can end in a separate paragraph whose only run holds the end field
+    // character. That paragraph mark still occupies a line, with or without a wrapping
+    // content control, so following content observes its spacing and pagination.
+    if (toc.beginParagraphId === toc.endParagraphId || !tocHasVisibleResultContent(part, toc)) {
       ids.add(toc.endParagraphId);
     }
   }

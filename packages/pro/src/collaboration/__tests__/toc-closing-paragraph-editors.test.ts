@@ -13,10 +13,11 @@ import { createPeerHarness, zipDocument, type Peer } from './document-peer-suppo
 const closing =
   '<w:p><w:pPr><w:spacing w:line="360" w:lineRule="exact"/></w:pPr>' +
   '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
-const documentBody =
+const field =
   '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText xml:space="preserve"> TOC </w:instrText>' +
   '<w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Cached entry</w:t></w:r></w:p>' +
-  closing +
+  closing;
+const following =
   '<w:p><w:r><w:t>ABCD</w:t></w:r></w:p>' +
   '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>' +
   '<w:tr><w:tc><w:p><w:r><w:t>Following table</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
@@ -41,8 +42,8 @@ function geometry(editor: DocxEditorInstance) {
   return { closing: close?.box.height, tableTop: table?.box.y };
 }
 
-test('two editors keep a separate TOC end mark during concurrent changes and after a cold save', async () => {
-  const harness = createPeerHarness('standalone-toc-closing-paragraph');
+async function closingLineScenario(documentBody: string, room: string) {
+  const harness = createPeerHarness(room);
   const views: { editor: DocxEditorInstance; container: HTMLElement }[] = [];
   const mount = (peer?: Peer, bytes?: Uint8Array) => {
     peer?.detach();
@@ -132,4 +133,20 @@ test('two editors keep a separate TOC end mark during concurrent changes and aft
     }
     harness.cleanup();
   }
-}, 10000);
+}
+
+test(
+  'two editors keep a separate TOC end mark during concurrent changes and after a cold save',
+  () => closingLineScenario(field + following, 'standalone-toc-closing-paragraph'),
+  10000
+);
+
+test(
+  'two editors keep the end mark line of a TOC inside a content control',
+  () =>
+    closingLineScenario(
+      `<w:sdt><w:sdtPr/><w:sdtContent>${field}</w:sdtContent></w:sdt>${following}`,
+      'content-control-toc-closing-paragraph'
+    ),
+  10000
+);

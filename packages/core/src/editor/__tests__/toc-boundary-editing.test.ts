@@ -225,3 +225,28 @@ for (const wrapped of [false, true]) {
     expect(texts).toEqual(['Entry', '', '', 'Hea', 'ding']);
   });
 }
+test('a standalone closing line is crossed by arrows, keeps its mark, and joins the next paragraph', () => {
+  const { editor, surface } = mount(
+    `<w:p>${begin}${run('Entry 1')}</w:p><w:p>${run('Entry 2')}</w:p><w:p>${end}</w:p><w:p>${run('Following')}</w:p>`
+  );
+  const [, , closing, following] = surface.session.paragraphIds();
+  // The closing line occupies layout, but caret motion crosses it with the cached rows.
+  select(surface, 3, 2);
+  surface.navigate('up');
+  expect(surface.state().selection.head.paragraphId).not.toBe(closing);
+  select(surface, 2, 0);
+  surface.navigate('down');
+  expect(surface.state().selection.head).toEqual({ paragraphId: following!, offset: 0 });
+  // Its paragraph mark stays protected, and formatting reports the read-only refusal.
+  select(surface, 2, 0);
+  const before = serializeOoxmlPart(surface.session.part());
+  editor.exec({ type: 'setAlignment', align: 'center' });
+  expect(surface.state().lastRejection).toBe('the table of contents is generated and read-only');
+  expect(serializeOoxmlPart(surface.session.part())).toBe(before);
+  // Backspace at the start of the next paragraph removes the blank line and keeps the field.
+  select(surface, 3, 0);
+  surface.deleteBackward();
+  expect(surface.state().lastRejection).toBeNull();
+  expect(detectBodyTocs(surface.session.part())[0]!.endParagraphId).toBe(closing!);
+  expect(paragraphTextOf(surface.session.part(), closing!)).toBe('Following');
+});

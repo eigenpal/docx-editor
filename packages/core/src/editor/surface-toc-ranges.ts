@@ -70,18 +70,26 @@ function contains(range: TocParagraphRange, offset: number): boolean {
 }
 export function tocAtPosition(
   part: OoxmlPart,
-  position: SemanticPosition,
-  crossingRegion = false
+  position: SemanticPosition
 ): DetectedToc | undefined {
-  return tocParagraphRanges(part).find((r) => {
-    if (r.paragraphId !== position.paragraphId) return false;
-    // A line motion crosses the visible end mark. A caret already on the
-    // empty suffix remains editable so the reader can retype a deleted heading.
-    return (
-      contains(r, position.offset) ||
-      (crossingRegion && r.endsHere && !r.startsHere && r.length === 0)
-    );
-  })?.toc;
+  return tocParagraphRanges(part).find(
+    (r) => r.paragraphId === position.paragraphId && contains(r, position.offset)
+  )?.toc;
+}
+/**
+ * The TOC that caret motion skips at `position`: its read-only region and a closing
+ * paragraph that holds only the end mark. A caret placed on that closing line directly
+ * stays editable, so the reader can retype a deleted heading there.
+ */
+export function tocSkippedByCaretMotion(
+  part: OoxmlPart,
+  position: SemanticPosition
+): DetectedToc | undefined {
+  return tocParagraphRanges(part).find(
+    (r) =>
+      r.paragraphId === position.paragraphId &&
+      (contains(r, position.offset) || (r.endsHere && !r.startsHere && r.length === 0))
+  )?.toc;
 }
 export function selectionTouchesTocRange(part: OoxmlPart, selection: SemanticSelection): boolean {
   const { anchor, head } = selection;

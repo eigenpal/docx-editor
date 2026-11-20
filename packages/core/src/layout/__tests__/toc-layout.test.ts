@@ -47,7 +47,7 @@ const EMPTY_TOC_FIELD =
   '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
 
 describe('TOC field chrome layout', () => {
-  test('an opening that carries the first entry keeps its row while ending chrome stays suppressed', () => {
+  test('an opening that carries the first entry keeps its row above the closing line', () => {
     const part = load(`<w:sdt><w:sdtPr/><w:sdtContent>${TOC_FIELD}</w:sdtContent></w:sdt>`);
     const toc = detectBodyTocs(part)[0]!;
     const layout = layoutSemanticDocument(part, 1, { measurer: createFixedMeasurer(6, 14) });
@@ -60,9 +60,10 @@ describe('TOC field chrome layout', () => {
     expect(
       opening!.lines.flatMap((line) => line.spans.map((span) => span.text)).join('')
     ).toContain('Introduction');
-    expect(
-      fragments.find((fragment) => fragment.paragraphId === toc.endParagraphId)
-    ).toBeUndefined();
+    // The separate closing paragraph holds only the end field character, but its mark
+    // still occupies the line below the entry, also inside a content control.
+    const closing = fragments.find((fragment) => fragment.paragraphId === toc.endParagraphId);
+    expect(closing?.box.y).toBe(opening!.box.y + opening!.box.height);
   });
 
   test('a bare populated TOC keeps the height of its separate closing paragraph before a table', () => {

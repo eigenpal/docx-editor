@@ -50,6 +50,7 @@ import {
   tocForElement,
   tocEscapePosition,
   tocAtPosition,
+  tocSkippedByCaretMotion,
   selectionTouchesTocRange,
   opTouchesTocRange,
   paragraphInBodyToc,
@@ -4788,11 +4789,8 @@ export function mountPaginatedSurface(
       );
       if (!moved) return;
       const tocIds = tocParagraphIds();
-      const outside = tocEscapePosition(
-        session.part(),
-        moved.position,
-        ['left', 'wordLeft', 'lineStart', 'up', 'pageUp'].includes(command)
-      );
+      const backwardMotion = ['left', 'wordLeft', 'lineStart', 'up', 'pageUp'].includes(command);
+      const outside = tocEscapePosition(session.part(), moved.position, backwardMotion);
       // The escape lands elsewhere, so the motion's caret (and its page) no longer applies.
       if (outside) moved = { ...moved, position: outside, caret: undefined };
       // Atomic navigation: a caret that landed INSIDE a locked inline control crosses it (or
@@ -4802,23 +4800,14 @@ export function mountPaginatedSurface(
         const crossed = leaveAtomicControl(layout, selection.head, moved.position);
         if (crossed !== moved.position) moved = { ...moved, position: crossed, caret: undefined };
       }
-      const crossesToc = (position: SemanticPosition) =>
-        tocAtPosition(session.part(), position, true);
-      if (crossesToc(moved.position)) {
+      if (tocSkippedByCaretMotion(session.part(), moved.position)) {
         if (extend) return;
-        const backwards = new Set<NavigationCommand>([
-          'left',
-          'wordLeft',
-          'lineStart',
-          'up',
-          'pageUp',
-        ]);
         // The escape steps by LINE, never by character. A character step inside a row that
         // has any text at all lands in the same paragraph, and the loop's own "we did not
         // change paragraph" bail then fired on the first iteration: the caret could neither
         // enter the region nor cross it, so everything past a table of contents was
         // unreachable from the keyboard. A line step always leaves the row it starts on.
-        const escape: NavigationCommand = backwards.has(command) ? 'up' : 'down';
+        const escape: NavigationCommand = backwardMotion ? 'up' : 'down';
         // One iteration per line the region occupies, plus slack for the landing line. The
         // loop breaks the moment it is outside, so an over-generous bound costs nothing.
         const limit = tocRegionLineCount(tocIds) + 4;
@@ -4842,9 +4831,9 @@ export function mountPaginatedSurface(
             return;
           }
           moved = next;
-          if (!crossesToc(moved.position)) break;
+          if (!tocSkippedByCaretMotion(session.part(), moved.position)) break;
         }
-        if (crossesToc(moved.position)) return;
+        if (tocSkippedByCaretMotion(session.part(), moved.position)) return;
       }
       desiredX = moved.desiredX;
       // Note continuations share one EditorScope across pages: retarget the visual

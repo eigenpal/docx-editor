@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Keep the line height of a populated standalone table of contents field's separate closing paragraph, so following content starts at its authored position.
+Keep the line of a populated table of contents field's separate closing paragraph, with or without a wrapping content control, so following content starts at its authored position.
