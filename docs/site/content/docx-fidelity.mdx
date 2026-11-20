@@ -168,7 +168,6 @@ The compatibility mode in `w:compat` changes clipping, page counts, table placem
 | Row that does not fit below repeated headers | The repeat is omitted. The row starts the page. | Headers stay. The row stays whole below them and runs past the bottom margin. |
 | Unsplittable row taller than a page | Splits on a fresh page. Header rows repeat on the page after it. | Stays whole on a fresh page, past the bottom margin. Lines past the page edge do not show. Header rows repeat above it. |
 | Line-end punctuation overflow | Hangs in justified and distributed paragraphs. | Hangs at every alignment, whatever the kinsoku switch. |
-| Simplified Chinese full-width closing marks with punctuation compression | Justification can spread the glyphs before a hanging mark. | On an ideographic line, the closing mark uses the remaining line width before it hangs. |
 | Korean paragraph-final mark with punctuation compression | Marks other than `。` and `、` can hang. | Starts the next line. |
 | Space shrink before a hanging mark | Justified and distributed lines shrink spaces first. | With punctuation compression and an East Asian default face, lines at any alignment shrink spaces to keep one more word. |
 | Kana fitting in Traditional Chinese runs | Off. | On. |
