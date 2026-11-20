@@ -1,4 +1,4 @@
-// Word for Mac's Review > Markup Options > Reviewers menu.
+// The reviewers toolbar menu.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DocxEditorChildren } from '../../docx-editor-children';

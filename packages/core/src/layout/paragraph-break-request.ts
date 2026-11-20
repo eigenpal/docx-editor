@@ -192,6 +192,26 @@ export interface ParagraphBreakRequest {
   >;
 }
 
+let measuredParagraphs: string[] | null = null;
+
+/**
+ * @internal The id of each paragraph a body or cell flow broke into lines because no cached
+ * break served it, in order, for tests that must see which paragraphs a pass measured again.
+ */
+export function measuredParagraphTestRecorder(): {
+  readonly paragraphIds: readonly string[];
+  dispose(): void;
+} {
+  const paragraphIds: string[] = [];
+  measuredParagraphs = paragraphIds;
+  return {
+    paragraphIds,
+    dispose() {
+      if (measuredParagraphs === paragraphIds) measuredParagraphs = null;
+    },
+  };
+}
+
 /** Build placement-dependent flow options only when the measured break is absent. */
 export function breakPreparedParagraphLazily(
   cache: ParagraphLayoutCache<readonly PendingLine[]> | undefined,
@@ -203,10 +223,12 @@ export function breakPreparedParagraphLazily(
   if (cached) return cached;
   const reused = reuse?.();
   if (reused) return reused;
-  const lines = breakPreparedParagraph({ ...prepare(), cache: undefined, cacheKey: null });
-  // Preserve the breaker's snapshot ownership and single lookup on a cache miss.
-  storePendingLines(cache, cacheKey, lines);
-  return lines;
+  const request = prepare();
+  if (measuredParagraphs) measuredParagraphs.push(request.paragraphId);
+  const lines = breakPreparedParagraph({ ...request, cache: undefined, cacheKey: null });
+  // Preserve the breaker's snapshot ownership and single lookup on a cache miss. The caller
+  // takes the snapshot the cache holds, which is what every later pass reads back.
+  return storePendingLines(cache, cacheKey, lines);
 }
 
 /**

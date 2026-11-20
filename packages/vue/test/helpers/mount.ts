@@ -37,7 +37,9 @@ export function mountEditorTree(
   modules?: readonly import('@docx-editor.dev/core/editor').EditorModule[],
   rootProps: Record<string, unknown> = {},
   /** Wraps the root, for example in a `LocaleProvider` from this package's source. */
-  wrap: (root: VNode) => VNode = (root) => root
+  wrap: (root: VNode) => VNode = (root) => root,
+  /** Runs on the app before it mounts, for example to add a mixin that counts renders. */
+  configure: (app: App) => void = () => {}
 ): MountedEditor {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -76,6 +78,7 @@ export function mountEditorTree(
       };
     },
   });
+  configure(app);
   app.mount(container);
   return {
     container,

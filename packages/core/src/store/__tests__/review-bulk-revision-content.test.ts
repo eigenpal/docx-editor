@@ -2,13 +2,13 @@ import { expect, test } from 'bun:test';
 import { applyTreeOp, planRevisionBatch, readOoxmlPart, revisionItemsOf } from '../index.ts';
 import { WML_NAMESPACE_URI, type OoxmlNode } from '../package/ooxml-tree.ts';
 import { textUnder } from '../store/review-text.ts';
-import references from './fixtures/word-bulk-content-reference.json';
+import references from './fixtures/bulk-revision-reference.json';
 import {
   reviewTableGroupingCases,
   reviewTableGroupingParts,
 } from './fixtures/review-table-grouping-cases.ts';
 
-// Independent Word-saved results, captured on 2026-09-18. This projection tests
+// Independent reference results, captured on 2026-09-18. This projection tests
 // content, nested topology, bold/italic, row height and cell shading. It does not
 // establish width/grid, individual-group membership or native UI action parity.
 function contentProjection(root: OoxmlNode) {
@@ -69,7 +69,7 @@ function contentProjection(root: OoxmlNode) {
 }
 
 for (const reference of references) {
-  const title = `Word bulk content: ${reference.action} ${reference.name}`;
+  const title = `Bulk revision content: ${reference.action} ${reference.name}`;
   test(title, () => {
     const fixture = reviewTableGroupingCases.find((entry) => entry.name === reference.name)!;
     const parsed = readOoxmlPart(reviewTableGroupingParts(fixture)['word/document.xml']!, {

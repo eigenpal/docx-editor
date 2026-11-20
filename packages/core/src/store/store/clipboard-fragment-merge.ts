@@ -36,6 +36,7 @@ import { ensureNotesPart } from '../package/note-lifecycle.ts';
 import { resolveNotesPart } from '../package/note-references.ts';
 import { resolveInternalTarget } from '../package/opc-names.ts';
 import { readOoxmlPart } from '../package/ooxml-tree.ts';
+import { vmlShapeNumber } from '../package/legacy-vml-values.ts';
 import {
   carryIndexToRebuiltRoot,
   createNodeIdAllocator,
@@ -672,7 +673,7 @@ export function mergeFragmentIntoPackage(
       fragmentHasRevision = true;
       return;
     }
-    if (node.kind === 'drawingDocPr') {
+    if (node.kind === 'drawingDocPr' || vmlShapeNumber(node) !== null) {
       fragmentHasDocPr = true;
       return;
     }
@@ -784,6 +785,7 @@ export function mergeFragmentIntoPackage(
         sdtIds: sdtIdMap,
         revisionIds: revisionIdMap,
         docPrIds: docPrIdMap,
+        vmlShapeIds: uniqueIds.vmlShapeIds,
       })
     );
     const appendedPkg = appendToPart(pkg, pkg.parts.get(targetNotes.name)!, bodies);
@@ -886,6 +888,7 @@ export function mergeFragmentIntoPackage(
       sdtIds: sdtIdMap,
       revisionIds: revisionIdMap,
       docPrIds: docPrIdMap,
+      vmlShapeIds: uniqueIds.vmlShapeIds,
     })
   );
 

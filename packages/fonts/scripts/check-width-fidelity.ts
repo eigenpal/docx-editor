@@ -1,8 +1,8 @@
-// Word font-metric regression gate over privacy-safe synthetic strings.
+// Font-metric regression gate over privacy-safe synthetic strings.
 //
-// PROVENANCE. Every expected number here is a WORD reading, taken from the font subsets
-// Word embeds in its own PDF export of two reference documents. Those documents and their
-// text stay outside the repository; the strings below were authored for this gate.
+// PROVENANCE. Every expected number here is a reading from the font subsets embedded in the
+// PDF export of two reference documents. Those documents and their text stay outside the
+// repository; the strings below were authored for this gate.
 //
 //   - Widths come from the subset's `/Widths` array, summed and scaled by the run size.
 //     A subset's array spans FirstChar..LastChar but carries 0 for every code the source
@@ -10,14 +10,14 @@
 //     entry — an unused code would read as zero-width and silently under-measure.
 //   - Century Gothic's line box comes from its subsets' `hhea` over 2048 upem: regular
 //     1989/-451/0, bold 2032/-451/0. The gate takes the value it FEEDS the snapshot from
-//     the shipped `FAMILY_PLANS` and compares against those Word numbers. Restating the
+//     the shipped `FAMILY_PLANS` and compares against those reference numbers. Restating the
 //     plan's literal on both sides made the assertion a tautology: a wrong `lineMetrics`
 //     still passed.
 //   - Segoe UI's line box comes from its subsets' `hhea`, 2210/-514/0 over 2048 upem. Its
 //     widths come from the same subsets; Selawik carries them unchanged.
 //   - Montserrat's line box comes from its subsets' `hhea`, 968/-251/0 over 1000 upem.
-//     The catalogued face carries the same values, so the engine's own fallback and Word
-//     agree here; the case pins that they keep agreeing.
+//     The catalogued face carries the same values, so the engine's own fallback and the
+//     reference agree here; the case pins that they keep agreeing.
 //
 // TOLERANCE is relative, with a floor. The engine measures on a 1/20 pt fixed-point grid,
 // so a 0.05 pt step is inherent; the floor covers it. The ratio is what the package's

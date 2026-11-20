@@ -4,7 +4,7 @@ import {
   type ResolvedRunStyle,
   type TextMeasurer,
 } from '../../layout/index.ts';
-import { createFontFaceUsage } from '../font-face-usage.ts';
+import { createFontFaceUsage, fontFaceUsageTestRecorder } from '../font-face-usage.ts';
 import {
   authoredCjkGapMetric,
   withAuthoredCjkGapMetric,
@@ -56,4 +56,26 @@ test('the wrapper keeps the authored CJK gap metric of the measurer', () => {
   const inner = withAuthoredCjkGapMetric(createFixedMeasurer(), () => 3);
   const measurer = createFontFaceUsage().wrap(inner);
   expect(authoredCjkGapMetric(measurer, style('X'))).toBe(3);
+});
+
+test('measuring each word of a run looks its style up once', () => {
+  const usage = createFontFaceUsage();
+  const measurer = usage.wrap(createFixedMeasurer());
+  const body = style('Arial');
+  const heading = style('Georgia', true);
+  const recorder = fontFaceUsageTestRecorder();
+  recorder.reset();
+  for (let word = 0; word < 200; word += 1) {
+    measurer.measure('word', body);
+    measurer.lineMetrics(body, 'word');
+  }
+  expect(recorder.styleLookups).toBe(1);
+  // A change of style is one more lookup, and both faces are recorded.
+  for (let word = 0; word < 200; word += 1) measurer.measure('word', heading);
+  measurer.measure('word', body);
+  expect(recorder.styleLookups).toBe(3);
+  expect(usage.faces()).toEqual([
+    { family: 'Arial', weight: 400, style: 'normal' },
+    { family: 'Georgia', weight: 700, style: 'normal' },
+  ]);
 });

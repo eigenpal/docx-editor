@@ -5,6 +5,7 @@ import type {
   HeadlessDocumentView,
   OoxmlNode,
 } from '@docx-editor.dev/core/store';
+import { isFldChar, isFldSimple } from '../store/package/field-nodes.ts';
 import { sha256FontBytes } from '../store/package/sha256.ts';
 import type { DocumentPropertyKey } from './field-doc-property.ts';
 import { piecesOfParagraph } from './field-projection.ts';
@@ -63,6 +64,22 @@ interface ParagraphProjectionDescriptor {
 }
 
 const paragraphDescriptors = new WeakMap<OoxmlNode, ParagraphProjectionDescriptor>();
+let fieldProjections = 0;
+
+/** @internal Counts the paragraphs projected to find their document-property fields. */
+export function projectionDescriptorTestRecorder(): {
+  readonly fieldProjections: number;
+  reset(): void;
+} {
+  return {
+    get fieldProjections() {
+      return fieldProjections;
+    },
+    reset() {
+      fieldProjections = 0;
+    },
+  };
+}
 
 function descriptorOf(paragraph: OoxmlNode): ParagraphProjectionDescriptor {
   const cached = paragraphDescriptors.get(paragraph);
@@ -71,11 +88,16 @@ function descriptorOf(paragraph: OoxmlNode): ParagraphProjectionDescriptor {
   const links: OoxmlNode[] = [];
   const paragraphs: OoxmlNode[] = [paragraph];
   const stack: OoxmlNode[] = [paragraph];
+  // A property value paints only through a field: a `w:fldSimple`, or a complex field that
+  // begins in the paragraph the projection reads. A subtree with neither has no dependency,
+  // and that is most paragraphs of a document.
+  let holdsField = false;
   while (stack.length > 0) {
     const node = stack.pop()!;
     if (node !== paragraph && node.kind === 'paragraph') paragraphs.push(node);
     if (node.kind === 'hyperlink') links.push(node);
     if (node.kind === 'textValue') continue;
+    if (!holdsField && (isFldSimple(node) || isFldChar(node, 'begin'))) holdsField = true;
     for (let index = node.children.length - 1; index >= 0; index -= 1) {
       stack.push(node.children[index]!);
     }
@@ -85,7 +107,8 @@ function descriptorOf(paragraph: OoxmlNode): ParagraphProjectionDescriptor {
   // machine here. Sentinel values reveal exactly which live document-property fields can
   // project from out-of-tree metadata; cached-result fields correctly reveal no dependency.
   const propertyKeys = new Set<DocumentPropertyKey>();
-  for (const candidate of paragraphs) {
+  for (const candidate of holdsField ? paragraphs : []) {
+    fieldProjections += 1;
     const sentinelPieces = piecesOfParagraph(
       candidate,
       [],

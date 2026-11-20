@@ -21,7 +21,7 @@ import {
 import { resolveNotesPart } from '../../store/package/note-references.ts';
 import { locateFieldResults } from '../../store/store/tree-op-field-results.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
-import type { NoteRefNumberingInput } from '../field-noteref.ts';
+import { noteRefNumberingFromNotes, type NoteRefNumberingInput } from '../field-noteref.ts';
 import { parseRefInstruction, resolveStoryRefFieldsWithNoteNumbers } from '../field-ref.ts';
 import { planRefFieldResultRefresh } from '../field-ref-refresh.ts';
 import { isFldChar } from '../field-instruction.ts';
@@ -394,5 +394,73 @@ describe('NOTEREF results ride the save refresh plan', () => {
     // Sanity: the locator sees the field this asserts about.
     const located = blocksOf(part).flatMap((block) => locateFieldResults(block));
     expect(located.some((field) => field.instruction.includes('NOTEREF'))).toBe(true);
+  });
+});
+
+describe('the numbering input is stable across layout passes', () => {
+  const sections = [{ blockStart: 0, blockEndExclusive: 3 }];
+  /** What one layout pass builds: new records and lists that hold the given values. */
+  const source = (numFmt = 'decimal') => ({
+    footnotePropsBySection: [{ ...DEFAULT_FOOTNOTE_PROPERTIES, numFmt }],
+    endnotePropsBySection: [{ ...DEFAULT_ENDNOTE_PROPERTIES }],
+    documentFootnoteProps: { ...DEFAULT_FOOTNOTE_PROPERTIES },
+    documentEndnoteProps: { ...DEFAULT_ENDNOTE_PROPERTIES },
+  });
+
+  test('equal property values over the same sections give the same input object', () => {
+    const first = noteRefNumberingFromNotes(source(), sections);
+    for (let pass = 0; pass < 8; pass += 1)
+      expect(noteRefNumberingFromNotes(source(), sections)).toBe(first);
+  });
+
+  test('a changed value, a changed count, or other sections give a new input', () => {
+    const first = noteRefNumberingFromNotes(source(), sections);
+    const changed = noteRefNumberingFromNotes(source('upperRoman'), sections);
+    expect(changed).not.toBe(first);
+    expect(changed.footnotePropsBySection[0]!.numFmt).toBe('upperRoman');
+    const twoSections = {
+      ...source(),
+      footnotePropsBySection: [
+        { ...DEFAULT_FOOTNOTE_PROPERTIES },
+        { ...DEFAULT_FOOTNOTE_PROPERTIES },
+      ],
+    };
+    expect(noteRefNumberingFromNotes(twoSections, sections).footnotePropsBySection).toHaveLength(2);
+    for (const field of ['pos', 'numStart', 'numRestart'] as const) {
+      const base = noteRefNumberingFromNotes(source(), sections);
+      const other = {
+        ...source(),
+        documentEndnoteProps: {
+          ...DEFAULT_ENDNOTE_PROPERTIES,
+          [field]: field === 'numStart' ? 7 : field === 'pos' ? 'sectEnd' : 'eachSect',
+        },
+      };
+      expect(noteRefNumberingFromNotes(other, sections)).not.toBe(base);
+    }
+    const otherSections = [{ blockStart: 0, blockEndExclusive: 3 }];
+    const moved = noteRefNumberingFromNotes(source(), otherSections);
+    expect(moved.sections).toBe(otherSections);
+  });
+
+  test('the REF context is built once for passes that each bring a new notes input', () => {
+    const part = document(
+      `<w:p>${cite(11)}</w:p>` +
+        `<w:p><w:r><w:t xml:space="preserve">lead </w:t></w:r>${bookmarkedCite('nb', cite(12))}</w:p>` +
+        `<w:p>${refField(' NOTEREF nb \\h ')}</w:p>`
+    );
+    const blocks = blocksOf(part);
+    const passSections = [{ blockStart: 0, blockEndExclusive: blocks.length }];
+    const contextOf = () =>
+      resolveStoryRefFieldsWithNoteNumbers(
+        blocks,
+        undefined,
+        undefined,
+        noteRefNumberingFromNotes(source(), passSections)
+      );
+    const first = contextOf();
+    expect(first).not.toBeNull();
+    for (let pass = 0; pass < 8; pass += 1) expect(contextOf()).toBe(first);
+    const anchorId = refAnchorIds(part)[0]!;
+    expect(first!.liveValueOf(anchorId, parseRefInstruction(' NOTEREF nb \\h ')!)).toBe('2');
   });
 });
