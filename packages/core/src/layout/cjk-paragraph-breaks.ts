@@ -93,17 +93,21 @@ function gluesLegacyHyphen(policy: CjkParagraphTypography): boolean {
   );
 }
 
-/** Whether a legacy hyphen may straddle runs and needs paragraph-wide analysis. */
+/**
+ * Whether hyphens glue and the paragraph has a hyphen that is not before a space: the glue
+ * can cross run seams, so such a paragraph needs paragraph-wide analysis.
+ */
 export function hasLegacyHyphenText(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography
 ): boolean {
   return (
-    gluesLegacyHyphen(policy) && pieces.some((piece) => isText(piece) && piece.text.includes('-'))
+    gluesLegacyHyphen(policy) &&
+    pieces.some((piece) => isText(piece) && /-(?!\s)/u.test(piece.text))
   );
 }
 
-/** Select paragraph-wide analysis for East Asian text and legacy hyphen words. */
+/** Select the East Asian analysis, rather than the ordinary run-spanning word cuts. */
 export function usesEastAsianParagraphBreaks(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography

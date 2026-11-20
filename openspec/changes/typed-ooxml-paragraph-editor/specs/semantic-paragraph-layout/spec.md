@@ -796,6 +796,7 @@ In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingCo
 - **THEN** the hyphen and the text after it move to the next line together, in Chinese, Japanese, or Latin-only paragraphs
 - **AND** `ABC-甲` and `ABC- def` can still break after the hyphen
 - **AND** mode 15, `doNotCompress`, or no `w:characterSpacingControl` breaks after the hyphen
+- **AND** a hyphen in a Korean run (`w:lang/@w:eastAsia` Korean) of a paragraph with East Asian text keeps its ordinary breaks
 
 ### Requirement: Legacy space shrinking before a final mark
 
