@@ -26,6 +26,8 @@ export interface FixtureOptions {
   bold?: boolean;
   italic?: boolean;
   highlight?: boolean;
+  /** Further run properties, written after the ones above. */
+  runProperties?: string;
   underlineElsewhere?: boolean;
   language?: string;
   secondLanguage?: string;
@@ -66,6 +68,7 @@ export function loadFixture(options: FixtureOptions = {}) {
       (options.bold ? '<w:b/>' : '') +
       (options.italic ? '<w:i/>' : '') +
       (options.highlight ? '<w:highlight w:val="yellow"/>' : '') +
+      (options.runProperties ?? '') +
       (language ? `<w:lang w:eastAsia="${escape(language)}"/>` : '') +
       `</w:rPr><w:t xml:space="preserve">${escape(content)}</w:t></w:r>`
     );

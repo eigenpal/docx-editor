@@ -55,15 +55,31 @@ describe('a hanging mark gives up its compressed trailing blank', () => {
   });
 
   test('the clip is measured from the left edge of a longer final span', () => {
-    // A legacy left-aligned line hangs its mark too, and keeps the text in one span.
-    const fixture = hanging(18, {
+    // A legacy left-aligned line keeps its text in one span; the 6 pt trailing quarter hangs.
+    const fixture = hanging(9, {
+      language: 'zh-TW',
       compatibility: 14,
       paragraphProperties: '<w:jc w:val="left"/><w:overflowPunct/>',
     });
     const mark = fixture.lines[0]!.spans.at(-1)!;
-    const kept = (mark.box.width - 12) * 2;
+    expect(mark.text).toBe(H + '。');
+    expect(fixture.lines[0]!.hangingMarkBlank).toBeCloseTo(6, 6);
     expect(paintedRuns(fixture).at(-1)!.style.clipPath).toBe(
-      `inset(-1em calc(100% - ${kept}px) -1em -1em)`
+      `inset(-1em calc(100% - ${(mark.box.width - 6) * 2}px) -1em -1em)`
+    );
+  });
+
+  test('a horizontally scaled mark clips in its unscaled coordinates', () => {
+    const fixture = hanging(18, { runProperties: '<w:w w:val="50"/>' });
+    const line = fixture.lines[0]!;
+    const mark = line.spans.at(-1)!;
+    expect(mark.text).toBe('。');
+    const blank = line.hangingMarkBlank!;
+    expect(blank).toBeGreaterThan(0);
+    const run = paintedRuns(fixture).at(-1)!;
+    expect(run.style.transform).toBe('scaleX(0.5)');
+    expect(run.style.clipPath).toBe(
+      `inset(-1em calc(100% - ${((mark.box.width - blank) * 2) / 0.5}px) -1em -1em)`
     );
   });
 

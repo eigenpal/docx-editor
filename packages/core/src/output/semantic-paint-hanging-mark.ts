@@ -33,6 +33,9 @@ export function hangingMarkBlankAt(
  * measured from the span's left edge, so the browser's own advance cannot move it. Layout keeps
  * the blank clear of the glyph's ink, and the vertical and left insets stay open for glyph
  * overhang and underlines.
+ *
+ * The clip also ends the native selection band and pointer hits on the run before the blank.
+ * The caret and hit-testing read layout geometry, so a click there still lands after the mark.
  */
 export function clipHangingMarkBlank(
   painted: HTMLElement,
