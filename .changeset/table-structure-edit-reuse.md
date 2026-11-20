@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Inserting, deleting, or growing rows in a long table lays out and repaints less of it: the pages above the edited row stay as they are, and rows that only move keep their layout and their painted content, also when they move to another page.
+Row edits in a long table now cost time in proportion to the rows below the edit: the pages above it stay as they are, unchanged rows are not read or laid out again, and rows that only move keep their painted content. Fixes #1797

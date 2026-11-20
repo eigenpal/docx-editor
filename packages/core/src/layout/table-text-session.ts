@@ -11,6 +11,7 @@ import { autofitContextMatches } from './autofit-context-reuse.ts';
 import { valueDigest } from './autofit-value-token.ts';
 import { autofitContextOf, carryTableAutofitScope } from './table-autofit-widths.ts';
 import { updateTableText } from './table-text-update.ts';
+import { carryTableTextUpdate } from './table-page-restart.ts';
 import { registerTableWidthReuseScope } from './table-width-reuse-scope.ts';
 import type { TablePageBand } from './table-width-update.ts';
 import { carryPageTableContributions, carryTableCaretContexts } from './table-caret-context.ts';
@@ -116,6 +117,13 @@ export function tryUpdateTableSession(input: {
     offerPreviousRows(entry.table, session.previous.pages);
     return null;
   }
+  carryTableTextUpdate(
+    session.previous.pages,
+    entry.table.id,
+    update.replacements,
+    update.textStructure,
+    update.lineDelta
+  );
   const reusedPages = update.pages.reduce(
     (count, page, index) => count + Number(page === session.previous!.pages[index]),
     0

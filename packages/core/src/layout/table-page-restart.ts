@@ -30,9 +30,11 @@
 //
 // Every fragment the paginator closes records the structure it was laid out from. A restart
 // compares the new rows with the structure of every fragment it keeps, so kept pages from
-// earlier restarts stay valid. A fragment that another path made, such as the in-place text
-// update, records nothing, and the next structure edit paginates the whole table again. The
-// records are set once on new fragments and never change, so a dropped pass leaves none stale.
+// earlier restarts stay valid. A text edit that updates the pages in place records the same on
+// the fragments it replaces, and that every other fragment now lays out as its structure does
+// (`carryTableTextUpdate`). A fragment that another path made records nothing, and the next
+// structure edit paginates the whole table again. The records are set once on new fragments
+// and never change, so a dropped pass leaves none stale.
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import {
@@ -106,22 +108,74 @@ export function noteTableFragment(
   if (start) pageStarts.set(fragment, start);
 }
 
+/**
+ * A text edit that updated a table's pages in place (`table-text-update.ts`): every fragment
+ * of the table then laid out as `to` lays it out, whatever structure it came from.
+ */
+interface TextUpdate {
+  readonly order: number;
+  readonly from: ReadonlySet<SemanticTableStructure>;
+  readonly to: SemanticTableStructure;
+}
+const textUpdates = new WeakMap<TableFragmentRecord, TextUpdate>();
+let textUpdateOrder = 0;
+
+/**
+ * Keep the restart records of a table whose pages a text edit updated in place. Each replaced
+ * fragment takes the page start of the fragment it replaces and comes from `structure`. It
+ * also records that every other fragment of the table now lays out as `structure` does, so
+ * a later restart compares those with `structure` too. With a changed line count the line
+ * counter of later page starts moves, so the records are not kept.
+ */
+export function carryTableTextUpdate(
+  pages: readonly PageRecord[],
+  tableId: string,
+  replacements: ReadonlyMap<object, object>,
+  structure: SemanticTableStructure | undefined,
+  lineDelta: number
+): void {
+  if (!structure || lineDelta !== 0) return;
+  const from = new Set<SemanticTableStructure>();
+  for (const page of pages)
+    for (const fragment of page.fragments)
+      if (fragment.kind === 'table' && fragment.tableId === tableId) {
+        const source = fragmentSources.get(fragment);
+        if (source) from.add(source);
+      }
+  const update: TextUpdate = { order: (textUpdateOrder += 1), from, to: structure };
+  for (const [before, after] of replacements) {
+    const fragment = before as TableFragmentRecord;
+    const replacement = after as TableFragmentRecord;
+    if (fragment.kind !== 'table' || replacement === fragment) continue;
+    const start = pageStarts.get(fragment);
+    if (start) pageStarts.set(replacement, start);
+    fragmentSources.set(replacement, structure);
+    textUpdates.set(replacement, update);
+  }
+}
+
 /** Kept fragments may come from this many structures; more paginate the table whole. */
 const MAX_KEPT_SOURCES = 4;
 
 /**
- * The structures the fragments `[0, through]` were laid out from, or null when one has none or
- * there are more than `MAX_KEPT_SOURCES`.
+ * The structures the fragments `[0, through]` lay out as, or null when one has none or there
+ * are more than `MAX_KEPT_SOURCES`. The latest text update among them stands for every
+ * structure it updated in place.
  */
 function keptSources(
   fragments: readonly TableFragmentRecord[],
   through: number
 ): Set<SemanticTableStructure> | null {
+  let latest: TextUpdate | undefined;
+  for (let at = 0; at <= through; at += 1) {
+    const update = textUpdates.get(fragments[at]!);
+    if (update && (!latest || update.order > latest.order)) latest = update;
+  }
   const sources = new Set<SemanticTableStructure>();
   for (let at = 0; at <= through; at += 1) {
     const source = fragmentSources.get(fragments[at]!);
     if (!source) return null;
-    sources.add(source);
+    sources.add(latest?.from.has(source) ? latest.to : source);
     if (sources.size > MAX_KEPT_SOURCES) return null;
   }
   return sources;

@@ -11,6 +11,8 @@ import type { SemanticLayout } from '../semantic-records.ts';
 import { shiftedRowsTestRecorder } from '../table-row-geometry-reuse.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
 import { tablePageRestartTestRecorder } from '../table-page-restart.ts';
+import { readTableStructure, readTableStructureFresh } from '../semantic-table.ts';
+import { tableRowReuseTestRecorder } from '../table-structure-rows.ts';
 import { load, read, W } from './table-row-keep-fixtures.ts';
 
 // Structure edits (rows, columns, merges, cell properties, header rows, a break above the
@@ -313,6 +315,17 @@ function session(shape: string) {
       }
       part = next;
       layout = lay(part, { session: retained, cache });
+      // A read that reuses the rows of earlier reads equals a read from nothing.
+      for (const width of [300, 260])
+        expect([
+          label,
+          width,
+          readTableStructure(tableOf(part), width, 0, styleCascade, 'all-markup', undefined, 15),
+        ]).toStrictEqual([
+          label,
+          width,
+          readTableStructureFresh(tableOf(part), width, styleCascade, 15),
+        ]);
       expect([label, JSON.stringify(layout.pages)]).toEqual([
         label,
         JSON.stringify(lay(part).pages),
@@ -331,6 +344,7 @@ for (const shape of Object.keys(SHAPES)) {
     const run = session(shape);
     expect(run.layout.pages.length).toBeGreaterThan(2);
     const restarts = tablePageRestartTestRecorder();
+    const reuse = tableRowReuseTestRecorder();
     const pick = random(0x1797 + shape.length * 977);
     const names = Object.keys(EDITS);
     let applied = 0;
@@ -340,7 +354,11 @@ for (const shape of Object.keys(SHAPES)) {
       if (op && run.apply(op, `${shape} step ${step}: ${name}`)) applied += 1;
     }
     restarts.dispose();
+    reuse.dispose();
     expect(applied).toBeGreaterThan(24);
+    // Reads reuse rows and run the border pass over a window, so the checks cover both.
+    expect(reuse.reusedRows).toBeGreaterThan(0);
+    expect(reuse.windows).toBeGreaterThan(0);
     // Some edits restart the pagination at a kept page, so the checks above cover restarts.
     expect(restarts.restarts).toBeGreaterThan(0);
   }, 60_000);
@@ -408,45 +426,36 @@ test('a row insert keeps the pages above it and moves the rows below without pla
   expect(shifted.refused.fields).toBe(0);
 });
 
-test('a row insert in the pass that undoes typing above it paginates the whole table', () => {
+test('typing keeps the restart, and undoing it in the pass of a row insert does not', () => {
   const run = session('plain');
   const typed = firstParagraph(cellsOf(rowsOf(run.part)[3]!)[0]!)!.id;
-  // The typing updates its page in place, so that page no longer records its rows.
-  expect(run.apply({ op: 'insertText', paragraphId: typed, offset: 0, text: 'x' }, 'type')).toBe(
-    true
-  );
-  const restarts = tablePageRestartTestRecorder();
+  const insertBelow = (at: number): TreeDocOp => ({
+    op: 'insertTableRow',
+    tableId: tableOf(run.part).id,
+    rowId: rowsOf(run.part)[at]!.id,
+    where: 'below',
+  });
+  const restartsOf = (ops: TreeDocOp | TreeDocOp[], label: string): number => {
+    const restarts = tablePageRestartTestRecorder();
+    expect(run.apply(ops, label)).toBe(true);
+    restarts.dispose();
+    return restarts.restarts;
+  };
+  // Typing updates its page in place and keeps the records of every page.
+  const before = run.layout.pages;
+  const typing: TreeDocOp = { op: 'insertText', paragraphId: typed, offset: 0, text: 'x' };
+  expect(restartsOf(typing, 'type')).toBe(0);
+  expect(run.layout.pages[0]).not.toBe(before[0]!);
+  expect(run.layout.pages.slice(1).every((page, index) => page === before[index + 1])).toBe(true);
+  expect(restartsOf(insertBelow(30), 'insert after typing')).toBe(1);
+  // Undoing the typing in the pass of an insert leaves the typed page unlike the new rows.
   expect(
-    run.apply(
-      [
-        { op: 'deleteText', paragraphId: typed, start: 0, end: 1 },
-        {
-          op: 'insertTableRow',
-          tableId: tableOf(run.part).id,
-          rowId: rowsOf(run.part)[30]!.id,
-          where: 'below',
-        },
-      ],
+    restartsOf(
+      [{ op: 'deleteText', paragraphId: typed, start: 0, end: 1 }, insertBelow(30)],
       'undo and insert'
     )
-  ).toBe(true);
-  restarts.dispose();
-  expect(restarts.restarts).toBe(0);
-  // Once paginated whole, the next insert restarts again.
-  const again = tablePageRestartTestRecorder();
-  expect(
-    run.apply(
-      {
-        op: 'insertTableRow',
-        tableId: tableOf(run.part).id,
-        rowId: rowsOf(run.part)[30]!.id,
-        where: 'below',
-      },
-      'insert again'
-    )
-  ).toBe(true);
-  again.dispose();
-  expect(again.restarts).toBe(1);
+  ).toBe(0);
+  expect(restartsOf(insertBelow(30), 'insert again')).toBe(1);
 });
 
 test('a banded style renumbered by a row insert places the restriped rows again', () => {

@@ -9,7 +9,7 @@ import {
 import { bodyLineId } from './body-line-id.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
-import { readTableStructure } from './semantic-table.ts';
+import { readTableStructure, type SemanticTableStructure } from './semantic-table.ts';
 import { autofitContextOf } from './table-autofit-widths.ts';
 import {
   initialCellCursors,
@@ -37,6 +37,8 @@ export function updateTableText(
   lineDelta: number;
   replacements: ReadonlyMap<BlockFragmentRecord, BlockFragmentRecord>;
   paragraphPagesUnchanged?: true;
+  /** The structure the updated pages now come from, when only one row's text changed. */
+  textStructure?: SemanticTableStructure;
 } | null {
   if (!tableTextStructureUnchanged(before, after)) return null;
   const structureOf = (table: OoxmlElement) =>
@@ -253,6 +255,7 @@ export function updateTableText(
   registerEditedTableCellBreakKeys(after, before, oldKeys, newKeys);
   return {
     lineDelta,
+    textStructure: structure,
     pages: pages.map((p) =>
       p.fragments.some((f) => replacements.has(f))
         ? { ...p, fragments: p.fragments.map((f) => replacements.get(f) ?? f) }
