@@ -9,6 +9,7 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { caretAt } from '../semantic-interaction.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
+import { paintAutomaticGapFill } from '../../output/semantic-paint-automatic-gap.ts';
 import { automaticTextGap } from '../cjk-automatic-spacing.ts';
 import { DEFAULT_RUN_STYLE } from '../run-style.ts';
 import { resolveCjkTypography } from '../cjk-typography.ts';
@@ -467,4 +468,42 @@ test('a gap wider than its run is tiled with no hole', () => {
   for (let i = 1; i < covered.length; i++)
     expect(covered[i]! - covered[i - 1]!).toBeLessThanOrEqual(first!.box.width + 1e-6);
   expect(Math.max(...covered)).toBeCloseTo(advance, 6);
+});
+
+test('a gap fill runs on only under an opaque next fill', () => {
+  const run = (background: string) => {
+    const element = document.createElement('span');
+    element.style.backgroundColor = background;
+    return element;
+  };
+  const write = (next: HTMLElement) => {
+    const painted = run('#ffff00');
+    paintAutomaticGapFill(painted, 3, 20, 1)!(next);
+    return Number.parseFloat(painted.style.boxShadow);
+  };
+  expect(write(run('#00ff00'))).toBeCloseTo(3.5, 6);
+  expect(write(run('rgb(0, 255, 0)'))).toBeCloseTo(3.5, 6);
+  // Beside unfilled text or a translucent revision wash the fill ends at the gap.
+  expect(write(run(''))).toBeCloseTo(3, 6);
+  expect(write(run('rgba(0, 128, 0, 0.2)'))).toBeCloseTo(3, 6);
+  expect(paintAutomaticGapFill(run(''), 3, 20, 1)).toBeNull();
+});
+
+test('a line with right-to-left text keeps the automatic advance inside the run box', () => {
+  const value = layout(
+    run('甲乙', '<w:highlight w:val="yellow"/>') + run('AB') + run('שלום', '<w:rtl/>')
+  );
+  const [first, second] = line(value).spans;
+  expect(first!.style.shaping).toBeDefined();
+  // The advance belongs to the run before it, inside its box, so its own fill covers it.
+  expect(first!.box.x + first!.box.width).toBeCloseTo(second!.box.x, 6);
+  const plain = line(layout(run('甲乙') + run('AB'))).spans[0]!;
+  expect(first!.box.width).toBeGreaterThan(plain.box.width + 1);
+  const host = document.createElement('div');
+  paintSemanticLayout(host, value, { scale: 1 });
+  const painted = [...host.querySelectorAll<HTMLElement>('.layout-run')].find(
+    (r) => r.textContent === '甲乙'
+  )!;
+  expect(Number.parseFloat(painted.style.width)).toBeCloseTo(first!.box.width, 6);
+  expect(painted.style.boxShadow).toBe('');
 });
