@@ -80,6 +80,34 @@ export function alternateLineEndDecides(
   return !(language?.startsWith('ja') === true && JAPANESE_HANGING.includes(mark));
 }
 
+// Under the alternate line-break rules, whether the mark may give up a blank right half: the
+// paragraph compresses punctuation, the text is not Korean, and the mark's language class
+// leaves its right half blank.
+function alternateBlankHalf(
+  mark: string,
+  language: string | undefined,
+  typography: CjkParagraphTypography | undefined
+): boolean {
+  const compression = typography?.settings?.compression;
+  if (compression === undefined || compression === 'doNotCompress') return false;
+  return !isKorean(language) && lineEndMarkBlanks(mark, language) === CLOSING_BLANKS;
+}
+
+/**
+ * Whether the alternate line-break rules wrap the line-end `mark` rather than let any of it
+ * pass the margin: they decide the mark, and it may not give up a blank right half.
+ */
+export function alternateLineEndWraps(
+  mark: string,
+  language: string | undefined,
+  typography: CjkParagraphTypography | undefined
+): boolean {
+  return (
+    alternateLineEndDecides(mark, language, typography) &&
+    !alternateBlankHalf(mark, language, typography)
+  );
+}
+
 /**
  * Under the alternate line-break rules, the most of a line-end mark that may pass the margin:
  * its blank right half, widened by its character spacing. The text keeps its natural width,
@@ -92,10 +120,7 @@ export function alternateLineEndAdvance(
   advance: number,
   typography: CjkParagraphTypography | undefined
 ): number | undefined {
-  const compression = typography?.settings?.compression;
-  if (compression === undefined || compression === 'doNotCompress') return undefined;
-  const language = eastAsianLanguage(piece.props);
-  if (isKorean(language) || lineEndMarkBlanks(mark, language) !== CLOSING_BLANKS) return undefined;
+  if (!alternateBlankHalf(mark, eastAsianLanguage(piece.props), typography)) return undefined;
   const spacing = piece.style.characterSpacingPt;
   return Math.max(0, (advance - spacing) * CLOSING_BLANKS.trailing + spacing);
 }

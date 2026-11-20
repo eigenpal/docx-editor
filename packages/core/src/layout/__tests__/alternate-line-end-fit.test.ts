@@ -87,7 +87,7 @@ describe('an interior semicolon gives up its blank half', () => {
   const inkMeasurer = {
     ...measurer,
     inkBounds: (text: string) =>
-      /[，；]/u.test(text) ? { left: 2, right: 8 } : { left: 1, right: 23 },
+      /[，；》]/u.test(text) ? { left: 2, right: 8 } : { left: 1, right: 23 },
   };
   for (const alternateKinsoku of [true, false])
     test(`alternate rules ${alternateKinsoku ? 'on' : 'off'}: an ideograph fits after ；`, () => {
@@ -105,6 +105,28 @@ describe('an interior semicolon gives up its blank half', () => {
       });
       expect(texts(result)).toEqual([prefix + '国', '余']);
     });
+
+  test('a final semicolon keeps its blank half', () => {
+    for (const alternateKinsoku of [true, false]) {
+      const options = { language: 'ja-JP', measurer: inkMeasurer, alternateKinsoku };
+      expect(texts(layout('；', 1, options))).toEqual(wraps('；'));
+    }
+  });
+
+  test('a final mark outside the hanging set may still give up its blank half', () => {
+    // Japanese never hangs `》`, but its blank right half compresses to fit the line.
+    const options = { language: 'ja-JP', measurer: inkMeasurer };
+    expect(texts(layout('》', 6, options))).toEqual([H + '》', '余']);
+  });
+
+  test('optical fitting does not compress a final mark that the rules wrap', () => {
+    const options = { measurer: inkMeasurer };
+    expect(texts(layout('，', 1, { ...options, language: 'zh-TW' }))).toEqual(wraps('，'));
+    expect(texts(layout('，', 1, { ...options, language: 'ko-KR' }))).toEqual([H, '，余']);
+    expect(texts(layout('，', 1, { ...options, compression: 'doNotCompress' }))).toEqual(
+      wraps('，')
+    );
+  });
 
   test('an interior semicolon lets an alternate final mark fit a larger overflow', () => {
     const prefix = H.slice(0, 8) + '；' + H.slice(9);
