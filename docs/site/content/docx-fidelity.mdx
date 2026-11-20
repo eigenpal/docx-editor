@@ -323,7 +323,7 @@ East Asian spacing and punctuation rules depend on `w:rPrDefault` in the styles 
 | Font hints (`w:hint="eastAsia"`) | Select the East Asian face for punctuation, symbols, Greek, and Cyrillic. Missing glyphs keep the Latin face. |
 
 - Kana otherwise keep their natural advances and authored spacing. Korean runs never fit kana.
-- The run language sets a hanging mark's blank sides. Traditional Chinese centers `、。，．；：`, and the editor does not compress their leading quarter. Korean marks always hang whole.
+- The run language sets a hanging mark's blank sides. Traditional Chinese centers `、。，．；：`, and the editor does not compress their leading quarter. A Korean mark that hangs keeps its whole advance past the margin.
 - Without East Asian defaults, only distributed paragraphs hang marks.
 - A single-spaced line in a CJK face is 1.3 times the face's ascent plus descent.
 - Localized family names, such as `メイリオ`, resolve to the face of the English name.

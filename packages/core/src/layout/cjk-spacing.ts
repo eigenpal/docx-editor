@@ -8,6 +8,7 @@ import { styleForFontSlot } from './script-itemization.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import {
   eastAsianLanguage,
+  isKorean,
   isTraditionalChinese,
   kinsokuCharacters,
   koreanFinalMarkHangs,
@@ -159,7 +160,7 @@ function compressionSlices(
       [a, b].every(
         (piece) =>
           isRunKerningEnabled(styleForFontSlot(piece.style, piece.fontSlot)) &&
-          !/^ko(?:-|$)/i.test(eastAsianLanguage(piece.props) ?? '')
+          !isKorean(eastAsianLanguage(piece.props))
       )
     );
   };
@@ -387,7 +388,7 @@ export function hangingCjkPunctuationAdvance(
   if (!tail || !HANGING_CLASS.test(tail)) return undefined;
   const language = eastAsianLanguage(piece.props);
   if (
-    language?.startsWith('ko') &&
+    isKorean(language) &&
     (!paragraphFinal || '。、'.includes(tail) || !koreanFinalMarkHangs(policy?.settings))
   )
     return undefined;
