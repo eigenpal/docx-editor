@@ -502,19 +502,40 @@ test('highlight and shading keep the fitted width of a full-width comma', () => 
   }
 });
 
-test('a highlighted opening bracket fits with shifted ink inside its highlighted box', () => {
-  const lines = layout(
-    '甲乙（丙丁）戊己',
-    90,
-    undefined,
-    measurer,
-    '<w:highlight w:val="yellow"/>'
-  );
+test('highlighted fitting keeps every glyph ink inside its own box', () => {
+  // A centered colon's ink passes half its advance; a later highlight would cover it.
+  const centered: TextMeasurer = {
+    ...measurer,
+    inkBounds: (value, style) =>
+      value === '：'
+        ? { left: 0.42 * style.fontSizePt, right: 0.58 * style.fontSizePt }
+        : measurer.inkBounds?.(value, style),
+  };
+  const highlight = '<w:highlight w:val="yellow"/>';
+  const inside = (lines: ReturnType<typeof layout>, measure: TextMeasurer) =>
+    lines.flatMap((line) =>
+      line.spans.flatMap((span) => {
+        const ink = measure.inkBounds?.(span.text, span.style);
+        const offset = span.glyphOffsetPt ?? 0;
+        return ink && span.text.length === 1
+          ? [ink.left + offset >= -0.001 && ink.right + offset <= span.box.width + 0.001]
+          : [];
+      })
+    );
+  for (const [text, measure] of [
+    ['甲乙丙：丁戊己庚', centered],
+    ['甲乙（丙丁）戊己', measurer],
+  ] as const) {
+    for (const width of [90.5, 91, 92]) {
+      const lines = layout(text, width, undefined, measure, highlight);
+      expect(inside(lines, measure).every(Boolean)).toBe(true);
+    }
+  }
+  const lines = layout('甲乙（丙丁）戊己', 90, undefined, measurer, highlight);
   expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
     '甲乙（丙丁）戊己',
   ]);
   const opening = lines[0]!.spans.find((span) => span.text === '（')!;
   expect(opening.glyphOffsetPt).toBeLessThan(0);
-  expect(opening.box.width).toBeLessThan(12);
   expect(opening.style.highlight).toBe('yellow');
 });
