@@ -6,76 +6,31 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { paragraphTextOf } from '@docx-editor.dev/core/store';
-import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
-import { textboxStoriesInPart } from '../../store/package/textbox-stories.ts';
 import { SHAPE_PASTE_TEXT_REASON } from '../surface-drawing-clipboard.ts';
 import { forwardClipboardEvents } from '../chrome-clipboard.ts';
+import { saved } from './shape-selection-fixture.ts';
 import {
-  EMU,
-  SHAPE_URI,
-  SOLID,
-  anchor,
-  documentBytes,
-  p,
-  saved,
-  text,
-  wsp,
-} from './shape-selection-fixture.ts';
+  OBJ,
+  SHAPE,
+  TEXT_BOX,
+  body,
+  bodyText,
+  boxText,
+  editors,
+  open as openDocument,
+  selectFirstDrawing,
+} from './drawing-paste-fixture.ts';
 
-const editors: DocxEditorInstance[] = [];
 afterEach(() => {
   for (const editor of editors.splice(0)) editor.destroy();
   document.body.replaceChildren();
 });
 
-const boxShape = (body: string) =>
-  wsp(100 * EMU, 60 * EMU, 'rect', SOLID('FFE699')).replace(
-    '<wps:bodyPr/>',
-    `${body}<wps:bodyPr/>`
-  );
-const floating = (name: string, graphic: string) =>
-  anchor({
-    id: 9,
-    name,
-    x: 250 * EMU,
-    y: 150 * EMU,
-    cx: 100 * EMU,
-    cy: 60 * EMU,
-    graphic,
-    uri: SHAPE_URI,
-  });
-const TEXT_BOX = floating(
-  'Box',
-  boxShape(
-    '<wps:txbx><w:txbxContent><w:p><w:r><w:t>Box text</w:t></w:r></w:p></w:txbxContent></wps:txbx>'
-  )
-);
-const SHAPE = floating('Plain', boxShape(''));
-
+/** The probe body with `drawing`, its pages, and a function that selects the drawing. */
 async function open(drawing: string) {
-  const container = document.createElement('div');
-  document.body.append(container);
-  const editor = createDocxEditor({
-    container,
-    document: documentBytes(p(text('Alpha') + drawing + text('tail')) + p(text('Bravo'))),
-  });
-  editors.push(editor);
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    editor.surface?.layout();
-  }
-  const surface = editor.surface!;
-  const pages = container.querySelector<HTMLElement>('.docx-pages')!;
-  const select = () => {
-    const first = surface.session.paragraphIds()[0];
-    const drawing = surface
-      .layout()
-      .pages[0]!.anchoredDrawings!.find((record) => record.anchorParagraphId === first)!;
-    expect(surface.selectDrawing(drawing.drawingNodeId, drawing.anchorParagraphId)).toBe(true);
-    return drawing;
-  };
-  return { editor, surface, pages, select };
+  const opened = await openDocument(body(drawing));
+  const pages = opened.container.querySelector<HTMLElement>('.docx-pages')!;
+  return { ...opened, pages, select: () => selectFirstDrawing(opened.editor) };
 }
 
 /** A paste event that carries `value` as plain text. */
@@ -108,17 +63,7 @@ function richPasteEvent(): Event {
 const key = (init: KeyboardEventInit) =>
   new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
 
-/** The text box story's paragraphs. */
-const boxText = (editor: DocxEditorInstance) => {
-  const part = editor.surface!.session.part();
-  const story = textboxStoriesInPart(part)[0]!;
-  return story.root.children
-    .filter((child) => child.kind === 'paragraph')
-    .map((paragraph) => paragraphTextOf(part, paragraph.id));
-};
-
-const firstParagraph = (editor: DocxEditorInstance) =>
-  paragraphTextOf(editor.surface!.session.part(), editor.surface!.session.paragraphIds()[0]!);
+const firstParagraph = (editor: Parameters<typeof bodyText>[0]) => bodyText(editor)[0];
 
 describe('a keyboard paste on the pages with a drawing selected', () => {
   for (const [name, chord] of [
@@ -129,6 +74,11 @@ describe('a keyboard paste on the pages with a drawing selected', () => {
     // A Russian layout types `м` on the V key: the chord is still the paste chord.
     ['Ctrl+V on a Russian layout', { key: 'м', code: 'KeyV', ctrlKey: true }],
     ['Ctrl+Shift+V on a Hebrew layout', { key: 'ה', code: 'KeyV', ctrlKey: true, shiftKey: true }],
+    // Paste and match style on Apple platforms: Option composes `◊` on the V key.
+    [
+      'Command+Option+Shift+V',
+      { key: '◊', code: 'KeyV', metaKey: true, altKey: true, shiftKey: true },
+    ],
   ] as const) {
     test(`${name} then the paste replaces a selected text box's text`, async () => {
       const { editor, surface, pages, select } = await open(TEXT_BOX);
@@ -137,7 +87,7 @@ describe('a keyboard paste on the pages with a drawing selected', () => {
       expect(surface.drawingSelectionIntent().kind).toBe('pointer');
       pages.dispatchEvent(pasteEvent('ZULU'));
       expect(boxText(editor)).toEqual(['ZULU']);
-      expect(firstParagraph(editor)).toBe('Alpha￼tail');
+      expect(firstParagraph(editor)).toBe(`Alpha head${OBJ}Alpha tail.`);
     });
   }
 
@@ -160,12 +110,12 @@ describe('a keyboard paste on the pages with a drawing selected', () => {
     pages.dispatchEvent(pasteEvent('ZULU'));
     expect(await saved(editor)).toBe(before);
     expect(surface.state().lastRejection).toBe(SHAPE_PASTE_TEXT_REASON);
-    expect(editor.snapshot().image?.id).toBe(drawing.drawingNodeId);
+    expect(editor.snapshot().image?.id).toBe(drawing);
   });
 
   test('Escape out of a text box, then Ctrl+V, replaces the box text', async () => {
     const { editor, surface, pages } = await open(TEXT_BOX);
-    expect(surface.setActiveScope(editor.findMatches('Box text')[0]!.scope!)).toBe(true);
+    expect(surface.setActiveScope(editor.findMatches('Box one.')[0]!.scope!)).toBe(true);
     pages.dispatchEvent(key({ key: 'Escape' }));
     expect(surface.activeScope().kind).toBe('body');
     expect(editor.snapshot().image).not.toBeNull();
@@ -186,37 +136,54 @@ describe('a keyboard paste on the pages with a drawing selected', () => {
     }
   });
 
-  test('Ctrl+Shift+V on a Russian layout pastes without formatting at a body caret', async () => {
-    const { editor, surface, pages } = await open(TEXT_BOX);
-    const last = surface.session.paragraphIds().at(-1)!;
-    surface.setSelection({
-      anchor: { paragraphId: last, offset: 5 },
-      head: { paragraphId: last, offset: 5 },
+  for (const [name, chord] of [
+    ['Ctrl+Shift+V on a Russian layout', { key: 'М', code: 'KeyV', ctrlKey: true, shiftKey: true }],
+    [
+      'Command+Option+Shift+V',
+      { key: '◊', code: 'KeyV', metaKey: true, altKey: true, shiftKey: true },
+    ],
+  ] as const) {
+    test(`${name} pastes without formatting at a body caret`, async () => {
+      const { editor, surface, pages } = await open(TEXT_BOX);
+      const last = surface.session.paragraphIds().at(-1)!;
+      surface.setSelection({
+        anchor: { paragraphId: last, offset: 5 },
+        head: { paragraphId: last, offset: 5 },
+      });
+      pages.dispatchEvent(key(chord));
+      pages.dispatchEvent(richPasteEvent());
+      const xml = await saved(editor);
+      expect(xml).toContain('Bold');
+      expect(xml).not.toContain('<w:b/>');
     });
-    pages.dispatchEvent(key({ key: 'М', code: 'KeyV', ctrlKey: true, shiftKey: true }));
-    pages.dispatchEvent(richPasteEvent());
-    const xml = await saved(editor);
-    expect(xml).toContain('Bold');
-    expect(xml).not.toContain('<w:b/>');
-  });
 
-  test('Ctrl+Shift+V on a Russian layout from a focused overlay pastes without formatting', async () => {
-    const { editor, surface } = await open(TEXT_BOX);
-    const overlay = document.createElement('div');
-    overlay.tabIndex = 0;
-    document.body.append(overlay);
-    const stop = forwardClipboardEvents(overlay, editor);
-    const last = surface.session.paragraphIds().at(-1)!;
-    surface.setSelection({
-      anchor: { paragraphId: last, offset: 5 },
-      head: { paragraphId: last, offset: 5 },
+    test(`${name} from a focused overlay pastes without formatting`, async () => {
+      const { editor, surface } = await open(TEXT_BOX);
+      const overlay = document.createElement('div');
+      overlay.tabIndex = 0;
+      document.body.append(overlay);
+      const stop = forwardClipboardEvents(overlay, editor);
+      const last = surface.session.paragraphIds().at(-1)!;
+      surface.setSelection({
+        anchor: { paragraphId: last, offset: 5 },
+        head: { paragraphId: last, offset: 5 },
+      });
+      overlay.dispatchEvent(key(chord));
+      overlay.dispatchEvent(richPasteEvent());
+      const xml = await saved(editor);
+      expect(xml).toContain('Bold');
+      expect(xml).not.toContain('<w:b/>');
+      stop();
     });
-    overlay.dispatchEvent(key({ key: 'М', code: 'KeyV', ctrlKey: true, shiftKey: true }));
-    overlay.dispatchEvent(richPasteEvent());
-    const xml = await saved(editor);
-    expect(xml).toContain('Bold');
-    expect(xml).not.toContain('<w:b/>');
-    stop();
+  }
+
+  test('Ctrl+Alt+Shift+V, which AltGr sends, is not a paste chord', async () => {
+    const { surface, pages, select } = await open(TEXT_BOX);
+    select();
+    pages.dispatchEvent(
+      key({ key: 'V', code: 'KeyV', ctrlKey: true, altKey: true, shiftKey: true })
+    );
+    expect(surface.drawingSelectionIntent().kind).toBe('none');
   });
 
   test('another key still ends the drawing selection', async () => {

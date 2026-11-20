@@ -394,6 +394,7 @@ export type {
   SurfaceFormatting,
 } from './paginated-surface-contract.ts';
 import { revisionDateNow } from '../automation/revision-date.ts';
+import { createSurfaceRefusalLog } from './surface-refusal-log.ts';
 
 /**
  * Mount a paginated surface over DOCX bytes.
@@ -619,11 +620,9 @@ export function mountPaginatedSurface(
     options.onChange?.(currentState());
     return false;
   }
+  const refusalLog = createSurfaceRefusalLog((raw) => options.onRejection?.(raw));
   /** Every refusal passes here once, raw, so the host's diagnostics can classify it. */
-  function refuse(reason: string, raw = reason): string {
-    options.onRejection?.(raw);
-    return reason;
-  }
+  const refuse = (reason: string, raw = reason): string => refusalLog.record(reason, raw);
   const reportEdit = (): void => options.onEdit?.(flushingTypeBuffer);
   const commitHistoryGroup = new CommitHistoryGroup();
   const typingHistory = new TypingHistory(() => session.currentPackage());
@@ -5483,6 +5482,7 @@ export function mountPaginatedSurface(
       return copyFlavoursNow();
     },
     pasteRich: (text: string, html: string | null) => pasteRichNow(text, html),
+    ...refusalLog.reads,
     armForcePlainPaste,
 
     deleteSelection() {

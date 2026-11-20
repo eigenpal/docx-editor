@@ -849,6 +849,34 @@ describe('a copied chart, and a refusal after the caret moved', () => {
   });
 });
 
+describe('an earlier paste refusal', () => {
+  for (const payload of [
+    { text: '\u0007' },
+    { text: '', html: '<img src="https://example.invalid/a.png">' },
+    { text: '', html: '<span> </span>' },
+  ]) {
+    test(`is not reported for a later paste that lands nothing: ${JSON.stringify(payload)}`, async () => {
+      const { editor, surface } = await open(
+        body(SHAPE) + p(text('x') + INLINE_PICTURE + text('y'))
+      );
+      selectFirstDrawing(editor);
+      expect(editor.exec({ type: 'paste', text: 'abc' })).toMatchObject({
+        ok: false,
+        reason: SHAPE_PASTE_TEXT_REASON,
+      });
+      // The caret after the inline picture: the paste moves it before the picture.
+      const paragraphId = surface.session.paragraphIds().at(-1)!;
+      surface.setSelection({
+        anchor: { paragraphId, offset: 2 },
+        head: { paragraphId, offset: 2 },
+      });
+      const before = await saved(editor);
+      expect(editor.exec({ type: 'paste', ...payload })).toEqual({ ok: true, changed: false });
+      expect(await saved(editor)).toBe(before);
+    });
+  }
+});
+
 describe('a selected inline picture with the caret after it', () => {
   /** Select the inline picture with the caret at `start + 1`, as a right-half press leaves it. */
   async function caretAfterPicture() {

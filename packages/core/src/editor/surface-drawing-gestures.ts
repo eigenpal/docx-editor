@@ -10,15 +10,17 @@ import { textboxPaintsPastFrame, textboxPressReaches } from '../layout/vector-sh
 /** A painted box thinner than this, in points, has no area a press can land on. */
 const THIN_LINE_PT = 1;
 import { isElementNode, isInputEvent, isKeyboardEvent, isPointerEvent } from './host-realm.ts';
-import { chordLetter } from './chord-letter.ts';
+import { chordLetter, isPlainPasteChord } from './chord-letter.ts';
 import { MULTI_CLICK_MS, MULTI_CLICK_SLOP_PX } from './surface-multi-click.ts';
 import { pressSelectsGroupMember, selectedGroupMember } from './group-member-selection.ts';
 
 /**
- * The clipboard chords: Ctrl or Command with C, X or V (V also with Shift, the plain-text
- * paste), Ctrl with Insert (copy), Shift with Delete (cut), and Shift with Insert (paste).
+ * The clipboard chords: Ctrl or Command with C, X or V, the plain-text paste chords (see
+ * `isPlainPasteChord`), Ctrl with Insert (copy), Shift with Delete (cut), and Shift with
+ * Insert (paste).
  */
 function isClipboardChord(event: KeyboardEvent): boolean {
+  if (isPlainPasteChord(event)) return true;
   if (event.altKey) return false;
   const key = event.key.toLowerCase();
   const command = event.ctrlKey || event.metaKey;

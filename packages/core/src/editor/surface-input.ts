@@ -6,7 +6,7 @@
 // the little state it cannot own — so React, Vue and a plain page get identical behaviour
 // instead of three hand-written keymaps that drift.
 
-import { chordLetter, isGoToChord } from './chord-letter.ts';
+import { chordLetter, isGoToChord, isPlainPasteChord } from './chord-letter.ts';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { NavigationCommand } from '@docx-editor.dev/core/layout';
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
@@ -365,7 +365,7 @@ export function createKeyDownHandler(
       event.preventDefault();
       return;
     }
-    if (accel && event.shiftKey && chordLetter(event) === 'v') {
+    if (isPlainPasteChord(event)) {
       // Paste without formatting. The keydown handler cannot reach the clipboard — the
       // payload only exists on the `paste` event, and some engines deliver plain-only
       // payloads for this chord anyway — so the chord ARMS a force-plain flag the paste

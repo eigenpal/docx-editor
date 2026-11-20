@@ -113,9 +113,10 @@ function vmlKind(element: OoxmlElement): DrawingTextKind | null {
 
 /** What the outermost graphic of a drawing is, as far as pasted text is concerned. */
 function drawingTextKind(drawing: OoxmlNode): DrawingTextKind {
+  // Breadth first, with a read index rather than `shift`, which moves every queued node.
   const pending: OoxmlNode[] = [drawing];
-  while (pending.length) {
-    const node = pending.shift()!;
+  for (let next = 0; next < pending.length; next++) {
+    const node = pending[next]!;
     if (node.kind === 'textValue') continue;
     const element = node as OoxmlElement;
     if (element.namespaceUri === MC_NAMESPACE_URI && element.localName === 'Fallback') continue;
@@ -129,7 +130,7 @@ function drawingTextKind(drawing: OoxmlNode): DrawingTextKind {
       const kind = vmlKind(element);
       if (kind) return kind;
     }
-    pending.push(...node.children);
+    for (const child of node.children) pending.push(child);
   }
   return 'other';
 }
