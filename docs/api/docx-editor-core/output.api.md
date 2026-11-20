@@ -86,6 +86,9 @@ export interface GapSpan {
     readonly wrapAdvanceBefore?: number;
 }
 
+// @internal
+export function hangingMarkBlankAt(line: Pick<LineRecord, 'spans' | 'hangingMarkBlank'>, span: StyleSpanRecord): number;
+
 // @public
 export interface LumTransfer {
     // (undocumented)
