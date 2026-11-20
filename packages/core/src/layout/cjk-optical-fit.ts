@@ -317,6 +317,25 @@ const blankSided = (cell: Cell): boolean =>
   CLOSING.test(cell.span.text) ||
   cell.span.text === '：';
 /**
+ * In a legacy compatibility mode, a candidate group of East Asian characters and punctuation
+ * joins a line only when the compression it needs, less what its own marks can still give, is at
+ * most half its natural advance. A longer shortfall wraps the group.
+ */
+function exceedsLegacyAdmission(cells: readonly Cell[], sourceCount: number, deficit: number) {
+  let ideograph = false;
+  let half = 0;
+  for (const cell of cells) {
+    if (cell.sourceIndex < sourceCount) continue;
+    const mark = PUNCTUATION.test(cell.span.text) || cell.qualifiedCurly !== undefined;
+    if (!mark && !isCjk(cell.span.text.codePointAt(0)!)) return false;
+    ideograph ||= !mark;
+    half += cell.natural / 2;
+    if (blankSided(cell))
+      deficit -= Math.max(0, cell.natural / 2 - cell.alreadyReduced - cell.reduction);
+  }
+  return ideograph && deficit > half + TOLERANCE;
+}
+/**
  * A justified line takes another ordinary glyph by compression only when the share of the
  * compression capacity it spends is at most the expansion that leaving the glyph off would
  * need. Expansion counts in 1/64 of each advance before the line's last glyph: the advances
@@ -408,6 +427,8 @@ interface FitContext {
   readonly measurer: TextMeasurer;
   readonly baselinePieces: readonly FieldAwarePiece[];
   readonly requireLocalQualification: boolean;
+  /** A legacy compatibility mode limits what a candidate group may take from the line. */
+  readonly legacyAdmission: boolean;
   readonly memo: ClusterMemo;
   /**
    * The cells of the current group's line, kept between its attempts: an attempt that fails
@@ -510,6 +531,13 @@ function fitCjkOptically(
       deficit -= last.reduction;
     }
   }
+  if (
+    context.legacyAdmission &&
+    !kana &&
+    !hangsLast &&
+    exceedsLegacyAdmission(cells, sourceCount, deficit)
+  )
+    return undefined;
   const kanaCells = kana ? kanaFitCells(cells, isFullWidthKana) : [];
   const kanaCapacity = kanaCells.reduce(
     (sum, cell) => sum + kanaCapacityOf(cell, kanaShare(cell)),
@@ -698,11 +726,12 @@ export function createParagraphCjkOpticalFitter(
   typography: CjkParagraphTypography,
   hasPageExclusions: boolean,
   preserveColonAdvances: boolean,
-  alignmentAllowsFit: boolean
+  justified: boolean
 ) {
-  // The alignment must allow fitting and the document defaults must name an East Asian face.
+  // Compression fits a line only when the document defaults name an East Asian face, and the
+  // paragraph is justified or a legacy compatibility mode fits lines at every alignment.
   const opticalPolicy =
-    alignmentAllowsFit &&
+    (justified || typography.settings?.legacyLineEndPunctuation === true) &&
     typography.settings?.sourceEastAsianFont === true &&
     typography.settings.compression !== undefined &&
     typography.settings.compression !== 'doNotCompress' &&
@@ -866,6 +895,8 @@ export function createCjkOpticalFitter(
     }
     // A group that fits needs no fit, and no fit can change a line it does not overflow.
     if (line.width + x - origin - available <= TOLERANCE) return undefined;
+    // A legacy mode compresses no Korean text to fit a line.
+    if (legacy && /^ko(?:-|$)/.test(languageOf(pieces[currentIndex]!))) return undefined;
     // Match clipWordEnd across run seams: a fitting word does not compress only
     // to retain its trailing separator inside the margin.
     let trailingWidth = 0;
@@ -905,6 +936,7 @@ export function createCjkOpticalFitter(
       measurer,
       baselinePieces: pieces,
       requireLocalQualification,
+      legacyAdmission: legacy,
       memo,
       cells: {},
     };

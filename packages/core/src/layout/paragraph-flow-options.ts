@@ -35,10 +35,11 @@ export interface ParagraphFlowOptions {
   readonly columnBreaksEndColumns?: boolean;
   /** The paragraph mark after a closing page break takes a line on the next page. */
   readonly pageBreakMarkOnNextPage?: boolean;
-  /** Justified paragraphs may compress East Asian punctuation to fit a line; others keep natural widths. */
+  /**
+   * Justified paragraphs may compress East Asian punctuation to fit a line. In compatibility
+   * mode 15 and later, others keep natural widths; a legacy mode fits lines at every alignment.
+   */
   readonly cjkPunctuationFit?: boolean;
-  /** Legacy Simplified Chinese left-aligned lines can also fit punctuation bearings. */
-  readonly legacyLeftCjkPunctuationFit?: boolean;
   readonly typography?: CjkParagraphTypography;
   readonly lineSpacing?: ParagraphLineSpacing;
   /** First-line offset from the paragraph indent: `w:firstLine` right, `w:hanging` left. */

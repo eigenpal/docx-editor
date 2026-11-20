@@ -53,7 +53,10 @@ function layout(
   sourcePolicy: {
     readonly eastAsianDefaults?: boolean;
     readonly kern?: number;
-    readonly simplifiedChineseMode?: 14 | 15;
+    /** `w:compatibilityMode`; absent declares none, a legacy mode. */
+    readonly mode?: number;
+    /** East Asian language of the document defaults. */
+    readonly lang?: string;
   } = {
     eastAsianDefaults: true,
   },
@@ -70,14 +73,14 @@ function layout(
       styleCascade: buildStyleCascadeTable(
         sourcePolicy?.eastAsianDefaults
           ? part(
-              `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="Test CJK"/>${sourcePolicy.simplifiedChineseMode ? '<w:lang w:eastAsia="zh-CN"/>' : ''}</w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
+              `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="Test CJK"/>${sourcePolicy.lang ? `<w:lang w:eastAsia="${sourcePolicy.lang}"/>` : ''}</w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
             ).root
           : null,
         // The font table gives the probe face an East Asian charset.
         { ...NO_THEME_FONTS, eastAsianFontTableFaces: ['test cjk'] },
-        sourcePolicy?.simplifiedChineseMode
+        sourcePolicy?.mode
           ? part(
-              `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${sourcePolicy.simplifiedChineseMode}"/></w:compat></w:settings>`
+              `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${sourcePolicy.mode}"/></w:compat></w:settings>`
             ).root
           : settings.root
       ),
@@ -457,14 +460,39 @@ test('the single-unit cluster fast path agrees with grapheme segmentation', () =
   expect(fast).toBeGreaterThan(20_000);
 });
 
-test('only a justified paragraph compresses punctuation to fit a line', () => {
-  const text = (jc: string) =>
-    qualifiedLayout('甲乙（丙丁）戊己', 90, undefined, undefined, '', jc).map((line) =>
-      line.spans.map((span) => span.text).join('')
-    );
-  expect(text('both')).toEqual(['甲乙（丙丁）戊己']);
-  expect(text('distribute')).toEqual(['甲乙（丙丁）戊己']);
-  for (const jc of ['left', 'center', 'right']) expect(text(jc)).toEqual(['甲乙（丙丁）戊', '己']);
+const linesAt = (jc: string, mode?: number, lang?: string, text = '甲乙（丙丁）戊己', width = 90) =>
+  layout(
+    text,
+    width,
+    text.length,
+    measurer,
+    '',
+    { eastAsianDefaults: true, kern: 2, mode, lang },
+    jc
+  ).map((line) => line.spans.map((span) => span.text).join(''));
+
+test('compatibility mode 15 compresses punctuation to fit only justified lines', () => {
+  expect(linesAt('both', 15)).toEqual(['甲乙（丙丁）戊己']);
+  expect(linesAt('distribute', 15)).toEqual(['甲乙（丙丁）戊己']);
+  for (const jc of ['left', 'center', 'right', 'start', 'end'])
+    expect(linesAt(jc, 15)).toEqual(['甲乙（丙丁）戊', '己']);
+});
+
+test('a legacy mode compresses punctuation to fit lines at every alignment', () => {
+  for (const mode of [undefined, 11, 12, 14])
+    for (const jc of ['both', 'left', 'center', 'right', 'start', 'end'])
+      for (const lang of [undefined, 'zh-CN', 'zh-TW', 'ja-JP'])
+        expect({ mode, jc, lang, lines: linesAt(jc, mode, lang) }).toEqual({
+          mode,
+          jc,
+          lang,
+          lines: ['甲乙（丙丁）戊己'],
+        });
+});
+
+test('a legacy mode compresses no Korean text to fit a line', () => {
+  for (const jc of ['both', 'left'])
+    expect(linesAt(jc, 14, 'ko-KR')).toEqual(['甲乙（丙丁）戊', '己']);
 });
 
 test('a document whose defaults name no East Asian face compresses no punctuation to fit', () => {
@@ -476,21 +504,13 @@ test('a document whose defaults name no East Asian face compresses no punctuatio
   expect(text(false)).toEqual(['甲乙（丙丁）戊', '己']);
 });
 
-test('legacy Simplified Chinese left alignment fits an extra ideograph using punctuation bearings', () => {
-  const body = '甲乙丙、丁戊己、庚辛壬癸子丑寅卯辰巳、午未申酉戌亥春夏秋冬东';
-  const content = body + '然后继续测试';
-  for (const mode of [14, 15] as const) {
-    const first = layout(
-      content,
-      356,
-      content.length,
-      measurer,
-      '',
-      { eastAsianDefaults: true, kern: 2, simplifiedChineseMode: mode },
-      'left'
-    )[0]!;
-    expect(first.spans.map((span) => span.text).join('')).toBe(
-      mode === 14 ? body : body.slice(0, -1)
-    );
+test('a legacy mode admits an ideograph only within half its advance at every alignment', () => {
+  // Two blank sides could give 丙 more than its 6 pt half; a legacy line takes no more.
+  const text = '甲。乙，丙丁戊';
+  for (const jc of ['left', 'center', 'right', 'both']) {
+    expect(linesAt(jc, 14, undefined, text, 54)[0]).toBe('甲。乙，丙');
+    expect(linesAt(jc, 14, undefined, text, 53.9)[0]).toBe('甲。乙，');
   }
+  // Compatibility mode 15 admits it by the expansion gate alone.
+  expect(linesAt('both', 15, undefined, text, 53.9)[0]).toBe('甲。乙，丙');
 });
