@@ -1088,9 +1088,26 @@ The layout engine SHALL allow curly quotes in runs with the East Asian font hint
 
 #### Scenario: Unsupported curly context keeps existing behavior
 
-- **GIVEN** a curly-only punctuation window, unhinted Latin quotes, a curly quote's inner side, unresolved face, authored tracking, horizontal scaling, complex shaping, decorated text, or source punctuation-kerning refusal
+- **GIVEN** a curly-only punctuation window, unhinted Latin quotes, a curly quote's inner side, unresolved face, authored tracking, horizontal scaling, complex shaping, underlined, struck-through, or outlined text, or source punctuation-kerning refusal
 - **WHEN** layout considers optical fitting
 - **THEN** the new East Asian curly path leaves the unsupported geometry unchanged
+
+### Requirement: Optical punctuation fitting in highlighted and shaded text
+
+Optical punctuation fitting SHALL treat run highlight (`w:highlight`) and run shading (`w:shd`) as fit-neutral. Fitting SHALL keep each glyph's ink inside its fitted box, and the highlight or shading SHALL fill the fitted box. Underlined (`w:u`), struck-through (`w:strike`, `w:dstrike`), and outlined text SHALL keep natural fitting, because shifted glyph paint cannot carry those decorations.
+
+#### Scenario: Highlighted punctuation fits like plain punctuation
+
+- **GIVEN** a justified East Asian line with highlighted or shaded punctuation that fits only by compression
+- **WHEN** layout fits the line
+- **THEN** the line breaks at the same place as the same text without highlight or shading
+- **AND** each highlight or shading band follows the compressed advance
+
+#### Scenario: Underlined and struck-through punctuation keeps natural fitting
+
+- **GIVEN** the same line with underlined, double-struck, or struck-through punctuation
+- **WHEN** layout fits the line
+- **THEN** optical fitting leaves its geometry unchanged
 
 ### Requirement: Natural kana advances
 

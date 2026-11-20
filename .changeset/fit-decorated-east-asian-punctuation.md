@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Fit East Asian punctuation in text with highlighting, shading, underline, or strikethrough.
+Compress East Asian punctuation to fit justified lines in highlighted or shaded text.

@@ -306,7 +306,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Document settings control inter-script spacing, balanced space widths, punctuation compression, and line-end punctuation. Punctuation can compress in highlighted, shaded, underlined, or struck-through text, depending on fonts, language, and compatibility settings. The editor has no typography controls or vertical Japanese composition.',
+      'Document settings control spacing between scripts, balanced space widths, punctuation compression, and line-end punctuation. Behavior depends on document fonts, language, and compatibility settings. The editor has no typography controls or vertical Japanese composition.',
     docsLink: '/docs/2.x/guides/cjk',
   },
   {
@@ -1295,7 +1295,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Rich paste restores supported formatting, tables, images, notes, equations, fields, and tracked changes from compatible clipboard content. Sections, headers, footers, and comments do not transfer. Paste outside the body uses plain text.',
+      'Rich paste restores supported formatting, tables, images, notes, equations, fields, and tracked changes from compatible clipboard content. A selected picture, shape, line, text box, or group in the body copies whole. Sections, headers, footers, and comments do not transfer, and paste outside the body uses plain text.',
   },
   {
     id: 'collab.undo-redo',
