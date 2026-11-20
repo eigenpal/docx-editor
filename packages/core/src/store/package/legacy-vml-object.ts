@@ -35,7 +35,7 @@ function inertLockedField(node: OoxmlElement): boolean {
   if (!named(node, OFFICE, 'LockedField') || node.attributes.length || node.children.length > 1)
     return false;
   const text = node.children[0];
-  return !text || (!element(text) && /^(?:t|f|true|false)?$/.test(text.value));
+  return !text || (!element(text) && /^(?:t|f|true|false)?$/i.test(text.value));
 }
 
 function inertOleMetadata(ole: OoxmlElement): boolean {
@@ -121,8 +121,8 @@ function previewPicture(shape: OoxmlElement): boolean {
 
 /**
  * Whether `ole` is an inert `o:OLEObject` for the preview `shape`: an embedded, never linked,
- * object with known attributes and inert refresh-lock metadata and field codes. Only its attributes are read; its
- * relationship is never resolved. `requireShapeId` demands a `ShapeID` that names the shape.
+ * object with known attributes and at most inert refresh-lock metadata and field codes. Only its
+ * attributes are read; its relationship is never resolved. `requireShapeId` demands a `ShapeID` that names the shape.
  */
 function inertOleObject(ole: OoxmlElement, shape: OoxmlElement, requireShapeId: boolean): boolean {
   const image = children(shape).find((n) => named(n, VML, 'imagedata'));

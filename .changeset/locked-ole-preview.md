@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Display cached previews for legacy embedded objects that carry refresh-lock metadata and an inactive picture stroke with a standard join style.
+Display the cached preview of an embedded object that carries refresh-lock metadata, and of a legacy picture whose disabled outline names a join style.
