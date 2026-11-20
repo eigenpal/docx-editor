@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A tracked line could wrap an ASCII word after a compressed punctuation pair.",
+  "after": "A qualified tracked line can fit the word by reducing punctuation space.",
+  "reason": "The change preserves the document format, editor operations, source offsets, and collaboration journal.",
+  "tests": [
+    "packages/core/src/layout/__tests__/cjk-optical-tracked-pair.test.ts",
+    "packages/core/src/layout/__tests__/cjk-optical-local-boundaries.test.ts"
+  ],
+  "changeset": "tracked-punctuation-fit",
+  "migration": null
+}
