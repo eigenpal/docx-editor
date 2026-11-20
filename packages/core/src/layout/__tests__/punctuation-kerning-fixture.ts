@@ -28,6 +28,8 @@ export interface FixtureOptions {
   highlight?: boolean;
   /** Further run properties, written after the ones above. */
   runProperties?: string;
+  /** Wraps the paragraph's XML, for example in a table cell. */
+  wrapParagraph?: (paragraph: string) => string;
   underlineElsewhere?: boolean;
   language?: string;
   secondLanguage?: string;
@@ -78,13 +80,17 @@ export function loadFixture(options: FixtureOptions = {}) {
       ? run(text)
       : run(text.slice(0, options.split)) + run(text.slice(options.split), true);
   entries['word/document.xml'] = strToU8(
-    `<w:document xmlns:w="${W}"><w:body><w:p>` +
-      `<w:pPr>${options.paragraphProperties ?? '<w:jc w:val="left"/><w:overflowPunct w:val="0"/>'}</w:pPr>` +
-      runs +
-      (options.underlineElsewhere
-        ? '<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>字</w:t></w:r>'
-        : '') +
-      '</w:p></w:body></w:document>'
+    `<w:document xmlns:w="${W}"><w:body>` +
+      (options.wrapParagraph ?? ((paragraph: string) => paragraph))(
+        '<w:p>' +
+          `<w:pPr>${options.paragraphProperties ?? '<w:jc w:val="left"/><w:overflowPunct w:val="0"/>'}</w:pPr>` +
+          runs +
+          (options.underlineElsewhere
+            ? '<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>字</w:t></w:r>'
+            : '') +
+          '</w:p>'
+      ) +
+      '</w:body></w:document>'
   );
   const face = options.defaultFace === undefined ? 'Yu Mincho' : options.defaultFace;
   entries['word/styles.xml'] = strToU8(

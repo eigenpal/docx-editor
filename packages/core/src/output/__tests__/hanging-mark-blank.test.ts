@@ -83,6 +83,24 @@ describe('a hanging mark gives up its compressed trailing blank', () => {
     );
   });
 
+  test('a table cell keeps the blank on its line', () => {
+    // A 474 pt cell without cell margins: the mark overflows it by 6 pt and hangs its blank half.
+    const wrapParagraph = (paragraph: string) =>
+      '<w:tbl><w:tblPr><w:tblW w:w="9480" w:type="dxa"/><w:tblLayout w:type="fixed"/>' +
+      '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>' +
+      '</w:tblPr><w:tblGrid><w:gridCol w:w="9480"/></w:tblGrid><w:tr><w:tc><w:tcPr>' +
+      `<w:tcW w:w="9480" w:type="dxa"/></w:tcPr>${paragraph}</w:tc></w:tr></w:tbl><w:p/>`;
+    const fixture = hanging(0, { wrapParagraph, available: 480 });
+    const line = fixture.lines.find((each) => each.spans.at(-1)?.text === '。')!;
+    expect(line.hangingMarkBlank).toBeCloseTo(12, 6);
+    const container = document.createElement('div');
+    paintSemanticLayout(container, fixture.layout, { scale: 2 });
+    const mark = [...container.querySelectorAll<HTMLElement>('.layout-run-text')].find((run) =>
+      run.textContent?.endsWith('。')
+    )!;
+    expect(mark.style.clipPath).toBe('inset(-1em calc(100% - 24px) -1em -1em)');
+  });
+
   test('a Traditional Chinese mark gives up its trailing quarter', () => {
     for (const overflow of [3, 18]) {
       const line = hanging(overflow, { language: 'zh-TW' }, '、').lines[0]!;

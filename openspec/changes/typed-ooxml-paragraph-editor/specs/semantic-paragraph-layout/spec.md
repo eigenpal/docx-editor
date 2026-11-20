@@ -711,6 +711,29 @@ The mark's run language SHALL select its blank sides. A closing bracket, `、。
 - **WHEN** the mark overflows the measure by 6 pt
 - **THEN** the mark starts at the margin
 
+### Requirement: Formatting of a hanging mark ends before its compressed blank
+
+With document punctuation compression, the highlight, character shading, underline, strike, and tracked-change formatting of a hanging line-end mark with a trailing blank side SHALL end before that blank, clear of the glyph's ink. The glyph, its box, line breaks, and caret positions SHALL NOT change, and screen paint and PDF export SHALL agree. A mark that moves to the next line SHALL take its hang with it.
+
+#### Scenario: A highlighted closing mark ends its highlight at the start of its blank half
+
+- **GIVEN** a justified, highlighted line of nineteen 24 pt ideographs and a 24 pt `。`, with document punctuation compression
+- **WHEN** the mark overflows the measure by 6 pt
+- **THEN** the highlight and underline end at the margin
+- **AND** with an 18 pt overflow they end 12 pt past the margin, at the start of the mark's blank half
+
+#### Scenario: Without compression the formatting covers the whole mark
+
+- **GIVEN** the same line without punctuation compression, with a Korean run, with `？`, or in a right-to-left paragraph
+- **WHEN** the mark overflows the measure by 6 pt
+- **THEN** the highlight and underline cover the whole mark
+
+#### Scenario: A carried mark leaves no hang behind
+
+- **GIVEN** the same line where `」` in the next run follows the `。`
+- **WHEN** `」` cannot start a line, so the last ideograph and `。` move to the next line
+- **THEN** the first line ends at its margin, and its formatting covers its last ideograph
+
 ### Requirement: Space shrinking before hanging punctuation
 
 In compatibility mode 15 and later, a justified or distributed line SHALL shrink its inter-word spaces before a half-width line-end mark hangs. The mark SHALL stay inside the margin when the space-shrink rule admits the word with the mark inside the measure, also for a paragraph-final word. Full-width marks and legacy modes SHALL keep their hanging behavior.

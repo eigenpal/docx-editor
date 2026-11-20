@@ -14,10 +14,10 @@ const CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
 
 // 19 ideographs and a 12 pt mark take 240 pt on a 236 pt measure: only the mark's 6 pt blank
 // half hangs. A 5 pt right indent leaves a 231 pt measure, and the whole mark hangs.
-function hangingDocument(compression: string): Uint8Array {
+function hangingDocument(compression: string, underline: string): Uint8Array {
   const paragraph = (rightIndent: number) =>
     `<w:p><w:pPr><w:overflowPunct/><w:ind w:right="${rightIndent}"/><w:jc w:val="both"/></w:pPr>` +
-    '<w:r><w:rPr><w:highlight w:val="yellow"/><w:u w:val="single" w:color="FF0000"/></w:rPr>' +
+    `<w:r><w:rPr><w:highlight w:val="yellow"/><w:u w:val="${underline}" w:color="FF0000"/></w:rPr>` +
     `<w:t>${'国'.repeat(19)}。余</w:t></w:r></w:p>`;
   return docx(
     paragraph(0) +
@@ -48,8 +48,11 @@ function hangingDocument(compression: string): Uint8Array {
 }
 
 /** The right edge, in points from the page's left edge, of each line's highlight and underline. */
-async function lineEnds(compression: string): Promise<{ fill: number[]; rule: number[] }> {
-  const result = await exportPdf(hangingDocument(compression));
+async function lineEnds(
+  compression: string,
+  underline = 'single'
+): Promise<{ fill: number[]; rule: number[] }> {
+  const result = await exportPdf(hangingDocument(compression, underline));
   const parsed = await PDFDocument.load(result.bytes);
   const commands = parsed.context
     .enumerateIndirectObjects()
@@ -81,6 +84,12 @@ test("a hanging mark's highlight and underline end before its compressed blank",
     expect(ends[0]).toBeCloseTo(308, 0);
     expect(ends[2]).toBeCloseTo(309, 0);
   }
+});
+
+test('a word underline ends before the compressed blank too', async () => {
+  const { rule } = await lineEnds('compressPunctuation', 'words');
+  expect(rule[0]).toBeCloseTo(308, 0);
+  expect(rule[2]).toBeCloseTo(309, 0);
 });
 
 test('without compression the marks cover the whole hanging mark', async () => {
