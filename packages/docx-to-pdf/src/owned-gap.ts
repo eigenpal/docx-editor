@@ -46,13 +46,6 @@ export function ownedFillGapAfter(visit: Pick<SemanticSpanVisit, 'line' | 'span'
   if (owned !== 0) return owned;
   const { line, span } = visit;
   const next = line.spans[line.spans.indexOf(span) + 1];
-  if (!next) return 0;
-  // A picture laid between the two spans takes the gap.
-  const pictureBetween = line.drawings?.some(
-    (drawing) =>
-      drawing.paragraphId === span.range.paragraphId &&
-      drawing.start >= span.range.end &&
-      drawing.start < next.range.start
-  );
-  return pictureBetween ? 0 : automaticGapFillAfter(span, next, paintedGapBetween(span, next));
+  // Layout places an automatic advance only between adjacent text, never across a picture.
+  return next ? automaticGapFillAfter(span, next, paintedGapBetween(span, next)) : 0;
 }

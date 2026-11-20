@@ -6,7 +6,7 @@
   "reason": "This changes screen and PDF paint only. Document content, model ranges, operations, and serialized collaboration state are unchanged.",
   "tests": [
     "packages/core/src/layout/__tests__/cjk-automatic-spacing.test.ts",
-    "packages/core/src/editor/__tests__/collaboration-review-writes.test.ts"
+    "packages/docx-to-pdf/test/owned-gap.test.ts"
   ],
   "changeset": "paint-east-asian-automatic-spacing-highlight",
   "migration": null

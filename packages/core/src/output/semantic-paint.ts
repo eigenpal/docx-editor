@@ -1294,7 +1294,8 @@ function paintLine(
     // The run before an automatic East Asian/Latin advance fills it; the advance stays a margin.
     if (!owner && next && !span.equation && span.box.width > 0) {
       const gap = bidi ? interSpanGapBefore(line, spanIndex + 1, rankOf) : gapAfter;
-      paintAutomaticGapFill(document, painted, automaticGapFillAfter(span, next, gap), scale);
+      const width = automaticGapFillAfter(span, next, gap);
+      paintAutomaticGapFill(painted, next, width, span.box.width, scale);
     }
     const link = span.link;
     if (!link) {
