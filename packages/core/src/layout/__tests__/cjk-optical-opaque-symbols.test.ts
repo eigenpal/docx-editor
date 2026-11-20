@@ -151,8 +151,18 @@ test('Latin-face text with symbols or accents stays whole and lets other punctua
     expect(result).toBeDefined();
     expect(width(latin)).toBe(advance(latin));
     expect(width('、')).toBe(9);
-    // Only ASCII words face a blank side, so this text is never shaped for its ink.
+    // No blank side faces the text, so it is never shaped for its ink.
     expect(outlines).not.toContain(latin);
+  }
+});
+
+test('an opening mark gives its leading blank side next to Latin-face text with symbols', () => {
+  for (const latin of ['Café', '25℃']) {
+    const { result, width } = attempt(['甲', latin, '（', '乙'], '丙', 7, latin);
+    expect(result).toBeDefined();
+    expect(width(latin)).toBe(advance(latin));
+    expect(width('（')).toBe(7);
+    expect(outlines).toContain(latin);
   }
 });
 

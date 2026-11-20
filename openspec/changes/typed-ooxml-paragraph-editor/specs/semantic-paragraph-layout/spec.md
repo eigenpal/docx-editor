@@ -910,7 +910,7 @@ When document punctuation compression is on and the document defaults name an Ea
 
 #### Scenario: Blank sides beside symbols and the line-end check
 
-- **WHEN** an opening mark follows an ASCII word or an East Asian face symbol
+- **WHEN** an opening mark follows Latin-face text or an East Asian face symbol
 - **THEN** the opening mark can give its leading blank side
 - **AND** an East Asian face symbol that joins the line end passes the same expansion check as an ideograph
 

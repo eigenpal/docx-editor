@@ -35,7 +35,7 @@ const HAS_PUNCTUATION = /[〈《「『【〔〖〘〚（［｛、。〉》」』
 // Latin-face text kept whole on a qualified line: Latin script, digits, symbols, punctuation
 // other than East Asian punctuation.
 // Other scripts still refuse: automatic East Asian spacing covers only Latin text.
-const OPAQUE_TEXT = /^[\p{Script=Latin}\p{N}\p{S}\p{P}\p{M}\p{Zs}]+$/u;
+const OPAQUE_TEXT = /^[ \p{Script=Latin}\p{N}\p{S}\p{P}\p{M}]+$/u;
 const TOLERANCE = 0.001;
 // The fit gate weighs expansion in units of 1/64 of an advance (see `expansionGate`).
 const EXPANSION_UNITS = 64;
@@ -192,8 +192,8 @@ function cellsOf(
       if (span.fontSlot !== 'eastAsia' && !sameFaceImplicitEastAsian(span)) {
         // Ordinary base text may coexist with qualified EA punctuation. Keep its
         // complete measured span: splitting AV/fi would discard kerning/ligatures.
-        // Only a complete ASCII word can guard an adjacent EA-owned seam; other
-        // Latin-face text (`Café`, `25℃`) keeps its advance but faces no blank side.
+        // Latin-face text (`AV`, `Café`, `25℃`) stays whole and can guard an adjacent
+        // EA-owned seam.
         // The whole shaped outline supplies its external ink; inkBounds answers
         // one grapheme and cannot qualify AV/fi or a numeric group as a whole.
         // The opaque cell itself can never lose advance or be split.
@@ -207,12 +207,9 @@ function cellsOf(
           span.box.width <= 0
         )
           return undefined;
-        // An all-space group has no ink: it blocks adjacent seams without vetoing others. A word
-        // or a Latin-face curly quote is a glyph that an adjacent blank side can face.
-        const ordinaryOpaque =
-          (printableAscii && /[^ ]/u.test(span.text)) ||
-          /^[A-Za-z0-9‘’“”]+$/u.test(span.text) ||
-          numberMarker;
+        // An all-space group has no ink: it blocks adjacent seams without vetoing others. A word,
+        // a symbol, or a Latin-face curly quote is a glyph that an adjacent blank side can face.
+        const ordinaryOpaque = numberMarker || /[^\p{White_Space}\p{Cf}\p{M}]/u.test(span.text);
         cells.push({
           sourceIndex,
           alreadyReduced: 0,
@@ -310,7 +307,7 @@ function cellsOf(
   return cells;
 }
 // A glyph a blank side can face: an ideograph, punctuation, a qualified quote, an East Asian
-// face symbol, or an ASCII word. A space is not one.
+// face symbol, or Latin-face text. A space is not one.
 function fitNeighbour(cell: Cell): boolean {
   const text = cell.span.text;
   return (
