@@ -76,6 +76,39 @@ describe('explicit legacy full-width content alignment', () => {
     expect(distinct.legacyContentAlignment).toBeUndefined();
   });
 
+  test('row exceptions that repeat any table-level property keep the alignment', () => {
+    const automatic =
+      properties.replace('type="pct" w:w="5000"', 'type="auto" w:w="0"') + '<w:jc w:val="left"/>';
+    const rows = row + row;
+    const repeat = (kids: string) =>
+      rows.replaceAll('<w:tr>', `<w:tr><w:tblPrEx>${kids}</w:tblPrEx>`);
+    for (const kids of [
+      '<w:tblW w:type="auto" w:w="0"/><w:tblInd w:type="dxa" w:w="0"/>',
+      '<w:tblLayout w:type="autofit"/><w:jc w:val="left"/>',
+      traditionalMargins,
+    ])
+      expect(read(fixture(automatic, grid, repeat(kids)), 14).legacyContentAlignment).toBe(true);
+    for (const kids of ['<w:tblInd w:type="dxa" w:w="144"/>', '<w:jc w:val="center"/>'])
+      expect(
+        read(fixture(automatic, grid, repeat(kids)), 14).legacyContentAlignment
+      ).toBeUndefined();
+  });
+
+  test('a tracked row exception lays out its current properties, not the earlier ones', () => {
+    const automatic = properties.replace('type="pct" w:w="5000"', 'type="auto" w:w="0"');
+    const wide = traditionalMargins.replaceAll('w:w="108"', 'w:w="216"');
+    const tracked = (current: string, earlier: string) =>
+      (row + row).replaceAll(
+        '<w:tr>',
+        `<w:tr><w:tblPrEx>${current}<w:tblPrExChange w:id="1" w:author="A">` +
+          `<w:tblPrEx>${earlier}</w:tblPrEx></w:tblPrExChange></w:tblPrEx>`
+      );
+    const repeated = read(fixture(automatic, grid, tracked(traditionalMargins, wide)), 14);
+    expect(repeated.legacyContentAlignment).toBe(true);
+    const changed = read(fixture(automatic, grid, tracked(wide, traditionalMargins)), 14);
+    expect(changed.legacyContentAlignment).toBeUndefined();
+  });
+
   for (const mode of [11, 12, 14]) {
     test(`mode ${mode} uses the grid-confirmed outer margins without rewriting preferences`, () => {
       const { part, table } = open();

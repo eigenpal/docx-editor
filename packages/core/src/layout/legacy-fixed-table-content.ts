@@ -1,4 +1,4 @@
-import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
+import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '@docx-editor.dev/core/store';
 import { sameOoxmlProperty } from '../store/package/ooxml-property-content.ts';
 import type { SemanticTableCell, SemanticTableRow } from './semantic-table.ts';
 import type { TableBorderBox } from './table-borders.ts';
@@ -24,20 +24,35 @@ const PLACED_EXCEPTIONS: ReadonlySet<string> = new Set([
   'tblCellMar',
 ]);
 
-function repeatsTableSideProperty(property: OoxmlElement, tableProperties?: OoxmlElement): boolean {
-  if (property.localName !== 'tblBorders' && property.localName !== 'tblCellMar') return false;
-  const matches = tableProperties?.children.filter(
-    (child) => child.kind !== 'textValue' && child.localName === property.localName
+/** Property revision records: they keep an earlier state, which the table no longer lays out. */
+const REVISION_RECORDS: ReadonlySet<string> = new Set([
+  'tblPrChange',
+  'tblPrExChange',
+  'trPrChange',
+  'tcPrChange',
+]);
+
+/** Whether a row exception states the same markup as the table's own property of that name. */
+function repeatsTableProperty(property: OoxmlElement, tableProperties?: OoxmlNode): boolean {
+  if (
+    property.namespaceUri !== WML_NAMESPACE_URI ||
+    !tableProperties ||
+    tableProperties.kind === 'textValue'
+  )
+    return false;
+  const own = tableProperties.children.filter(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === property.localName
   );
-  return (
-    matches?.length === 1 &&
-    property.namespaceUri === WML_NAMESPACE_URI &&
-    sameOoxmlProperty(matches[0]!, property)
-  );
+  return own.length === 1 && sameOoxmlProperty(own[0]!, property);
 }
 
 /**
  * Row exceptions or grid offsets whose geometry the structure reader does not resolve.
+ * An exception that repeats the table's own property changes nothing, and a property
+ * revision record keeps only an earlier state, so neither counts.
  * `placedRows`: the table places its rows one by one (`legacy-row-placement.ts`), which
  * resolves a row's own alignment and margins. Width and layout exceptions leave the rows where
  * they are, the first row's indent is the table's (`tableIndentNode`) and a later row's is
@@ -48,19 +63,21 @@ export function hasUnsupportedRowGeometry(
   {
     allowGridSkips = false,
     placedRows = false,
-    repeatedSideProperties,
-  }: {
-    allowGridSkips?: boolean;
-    placedRows?: boolean;
-    repeatedSideProperties?: OoxmlElement;
-  } = {}
+  }: { allowGridSkips?: boolean; placedRows?: boolean } = {}
 ): boolean {
+  const tableProperties = table.children.find(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === 'tblPr'
+  );
   const pending = [...table.children];
   let visited = 0;
   while (pending.length > 0) {
     if (++visited > 100_000) return true;
     const node = pending.pop()!;
     if (node.kind === 'textValue' || node.kind === 'paragraph' || node.kind === 'table') continue;
+    if (node.namespaceUri === WML_NAMESPACE_URI && REVISION_RECORDS.has(node.localName)) continue;
     // Row exceptions are preserved, but the structure reader does not resolve their geometry.
     // A margin exception is resolved per cell; one stating only top and bottom sides leaves
     // the leading edge, and so this placement, unchanged.
@@ -70,7 +87,7 @@ export function hasUnsupportedRowGeometry(
         (child) =>
           child.kind !== 'textValue' &&
           !(placedRows && PLACED_EXCEPTIONS.has(child.localName)) &&
-          !repeatsTableSideProperty(child, repeatedSideProperties) &&
+          !repeatsTableProperty(child, tableProperties) &&
           (['tblW', 'jc', 'tblCellSpacing', 'tblInd', 'tblBorders', 'tblLayout'].includes(
             child.localName
           ) ||

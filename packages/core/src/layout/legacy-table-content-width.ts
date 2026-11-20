@@ -191,14 +191,7 @@ export function legacyTableContentWidth(input: {
   const last = rows[0]?.cells.at(-1);
   if (!first || !last) return undefined;
   if (!hasSupportedLegacyTableMargins(table, input.propertyNodes)) return undefined;
-  // A row can repeat the table's own borders and margins without changing its geometry.
-  if (
-    hasUnsupportedRowGeometry(table, {
-      allowGridSkips: true,
-      repeatedSideProperties: properties,
-    })
-  )
-    return undefined;
+  if (hasUnsupportedRowGeometry(table, { allowGridSkips: true })) return undefined;
   // A fallback margin alone is no evidence for moving the table into the margin.
   if (!statesOuterMargins([properties, ...input.propertyNodes])) return undefined;
   const left = first.margins.left;

@@ -250,6 +250,21 @@ describe('legacy fixed table content edges', () => {
       expect(tableOriginX(s, 300)).toBeCloseTo(0, 8);
     }
   });
+  test('a right-to-left table keeps its origin when rows repeat its borders', () => {
+    // 17.4.61 `w:tblPrEx`: an exception that repeats the table's own property changes nothing.
+    const base = structure(document('<w:bidiVisual/>'));
+    const xml = serializeOoxmlPart(document('<w:bidiVisual/>'));
+    const borders = xml.match(/<w:tblBorders>[\s\S]*?<\/w:tblBorders>/)![0];
+    const repeated = xml.replaceAll('<w:tr>', `<w:tr><w:tblPrEx>${borders}</w:tblPrEx>`);
+    const s = structure(part(repeated));
+    expect(base.outerRuleOffsetPt).toBe(5.4);
+    expect(s.outerRuleOffsetPt).toBe(base.outerRuleOffsetPt);
+    const thicker = xml.replaceAll(
+      '<w:tr>',
+      `<w:tr><w:tblPrEx>${borders.replaceAll('w:sz="4"', 'w:sz="12"')}</w:tblPrEx>`
+    );
+    expect(structure(part(thicker)).outerRuleOffsetPt).toBeUndefined();
+  });
   test('a row margin exception on top and bottom only keeps the legacy origin', () => {
     // 17.4.60 `w:tblPrEx`, 17.4.42 `w:tblCellMar`: no leading margin changes, so the
     // content edge stays where the table's own margin places it.
