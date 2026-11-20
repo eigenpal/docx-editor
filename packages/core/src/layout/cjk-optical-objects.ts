@@ -10,7 +10,7 @@ const TOLERANCE = 0.01;
  * The inline objects of a line in source order, from the first one after the line's first text.
  * An object keeps its advance; the text around it compresses, and the object moves with the
  * text before it. Returns undefined when the line cannot fit: a passage beside a float, a
- * right-to-left object, or text that does not run on from the previous text or object.
+ * right-to-left or unplaced object, or text that does not run on from the previous text or object.
  */
 export function lineObjectsInFlow(
   line: PendingLine,
@@ -18,7 +18,15 @@ export function lineObjectsInFlow(
 ): readonly InlineDrawingRecord[] | undefined {
   if (
     line.drawings.length &&
-    (line.wrapSegment || line.wrapPassages || line.drawings.some((drawing) => drawing.bidiLevel))
+    (line.wrapSegment ||
+      line.wrapPassages ||
+      line.drawings.some(
+        (drawing) =>
+          drawing.bidiLevel ||
+          !Number.isFinite(drawing.start) ||
+          !Number.isFinite(drawing.advanceStart) ||
+          !Number.isFinite(drawing.advanceEnd)
+      ))
   )
     return undefined;
   const firstStart = line.spans[0]?.range.start ?? candidates[0]?.range.start ?? 0;

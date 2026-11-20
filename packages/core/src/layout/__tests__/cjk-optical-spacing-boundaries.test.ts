@@ -157,7 +157,7 @@ test('unwitnessed gaps and a stale or mismatched automatic witness remain disjoi
   rejected({ witness: -2 });
   rejected({ witness: Number.NaN });
 });
-test('a float wrap advance or inline drawing remains ineligible even with an automatic witness', () => {
+test('a float wrap advance or unplaced inline drawing remains ineligible even with an automatic witness', () => {
   rejected({ witness: 2, wrap: 2 });
   rejected({ witness: 2, drawing: true });
   rejected({ witness: 2, gap: 5 });

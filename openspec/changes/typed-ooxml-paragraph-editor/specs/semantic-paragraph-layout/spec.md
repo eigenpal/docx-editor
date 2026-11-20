@@ -609,7 +609,7 @@ Justified East Asian lines SHALL distribute punctuation compression across avail
 
 #### Scenario: Two blank sides fit more than half a glyph
 
-- **GIVEN** a justified 12 pt line `甲。乙，丙` followed by more ideographs, with document punctuation compression
+- **GIVEN** a justified 12 pt line `甲。乙，丙` followed by more ideographs, with document punctuation compression, in compatibility mode 15
 - **WHEN** the measure is 48.6 pt, 11.4 pt short of the natural width
 - **THEN** the whole line fits by compressing both blank sides
 - **AND** at 48.5 pt the last ideograph wraps
@@ -645,7 +645,7 @@ With no compatibility mode, or in mode 11, 12, or 14, a group of East Asian char
 #### Scenario: A legacy mode wraps an ideograph that needs more than half its advance
 
 - **GIVEN** a justified 12 pt line with enough punctuation capacity, and a final ideograph that overflows it
-- **WHEN** the document declares compatibility mode 14 and the ideograph needs 6.5 pt of compression
+- **WHEN** the document declares no compatibility mode or mode 14, and the ideograph needs 6.5 pt of compression
 - **THEN** the ideograph wraps
 - **AND** it fits with 6 pt, and in mode 15 it fits with 6.5 pt
 
