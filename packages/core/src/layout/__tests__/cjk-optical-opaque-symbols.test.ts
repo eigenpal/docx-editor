@@ -50,7 +50,13 @@ const style = {
  * One fitter call on a line of `texts` (eastAsia slot unless `latin` names the text), with
  * `candidate` as the next group and `room` points left on the line.
  */
-function attempt(texts: readonly string[], candidate: string, room: number, latin = '') {
+function attempt(
+  texts: readonly string[],
+  candidate: string,
+  room: number,
+  latin = '',
+  requireLocalQualification = true
+) {
   let start = 0;
   let x = 0;
   const pieces: FieldAwarePiece[] = [...texts, candidate].map((text) => {
@@ -93,7 +99,7 @@ function attempt(texts: readonly string[], candidate: string, room: number, lati
   outlines.length = 0;
   const result = createCjkOpticalFitter(pieces, cjkParagraphBreaks(pieces, policy), measurer, {
     hangingPunctuation: false,
-    requireLocalQualification: true,
+    requireLocalQualification,
   })(
     line,
     pieces.length - 1,
@@ -180,4 +186,21 @@ test('a letter of another script in the East Asian face still refuses the line',
     expect(result).toBeUndefined();
     expect(line.width).toBe(natural);
   }
+});
+
+test('a symbol cluster with marks stays one opaque glyph, and a joined sequence refuses', () => {
+  for (const symbol of ['★\ufe0f', '1\ufe0f\u20e3']) {
+    const { result, line, width } = attempt(['甲', symbol + '、', '乙'], '丙', 9);
+    expect(result).toBeDefined();
+    expect(line.spans.filter((span) => span.text === symbol)).toHaveLength(1);
+    expect(width('、')).toBe(9);
+  }
+  const joined = attempt(['甲', '★\u200d★、', '乙'], '丙', 9);
+  expect(joined.result).toBeUndefined();
+});
+
+test('the paragraph path still refuses a symbol outside CJK text and punctuation', () => {
+  const { result, line, natural } = attempt(['甲', '℃、', '乙'], '丙', 9, '', false);
+  expect(result).toBeUndefined();
+  expect(line.width).toBe(natural);
 });

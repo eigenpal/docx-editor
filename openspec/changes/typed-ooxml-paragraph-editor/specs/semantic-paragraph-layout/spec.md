@@ -916,7 +916,12 @@ When document punctuation compression is on and the document defaults name an Ea
 
 #### Scenario: An unqualified run keeps conservative fitting
 
-- **WHEN** a run on a line that holds Latin groups has authored character spacing, horizontal scaling, complex shaping, or an unresolved face, or a Latin-face run holds text in another script or East Asian punctuation
+- **WHEN** a run on a line that holds Latin groups has authored character spacing, horizontal scaling, complex shaping, or an unresolved face
+- **THEN** that line does not use measured-ink fitting
+
+#### Scenario: Letters and controls that cannot stay opaque keep conservative fitting
+
+- **WHEN** a line holds a letter in the East Asian face, a letter of a script other than Latin, a control character, or compressible East Asian punctuation in a Latin face
 - **THEN** that line does not use measured-ink fitting
 
 ### Requirement: Host font resource replacement
