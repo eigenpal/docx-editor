@@ -438,6 +438,8 @@ interface FitContext {
   readonly measurer: TextMeasurer;
   readonly baselinePieces: readonly FieldAwarePiece[];
   readonly requireLocalQualification: boolean;
+  readonly legacyPunctuationFit: boolean;
+  readonly afterInlineObject?: true;
   readonly memo: ClusterMemo;
   /**
    * The cells of the current group's line, kept between its attempts: an attempt that fails
@@ -478,7 +480,41 @@ function fitCjkOptically(
   const { measurer } = context;
   const width = candidates.reduce((sum, candidate) => sum + candidate.box.width, 0);
   let deficit = line.width + width - available;
-  if (deficit <= TOLERANCE || !measurer.inkBounds || line.drawings.length) return undefined;
+  if (deficit <= TOLERANCE || !measurer.inkBounds) return undefined;
+  if (line.drawings.length) {
+    // Keep each placed inline object and its preceding text fixed. Only the
+    // uninterrupted text after the last object may supply a bearing.
+    if (kana || !context.legacyPunctuationFit || line.wrapSegment || line.wrapPassages)
+      return undefined;
+    const drawing = line.drawings.at(-1)!;
+    if (drawing.bidiLevel || drawing.placeholderGraphicKind !== null) return undefined;
+    const boundary = line.spans.findIndex(
+      (span) => span.range.start > drawing.start && span.box.x >= drawing.advanceEnd - TOLERANCE
+    );
+    if (boundary < 0) return undefined;
+    const trailing = { ...line, spans: line.spans.slice(boundary), drawings: [] };
+    const fit = fitCjkOptically(
+      trailing,
+      candidates,
+      available,
+      { ...context, afterInlineObject: true, cells: {} },
+      { hangAdvance, kana }
+    );
+    if (!fit) return undefined;
+    line.spans.splice(boundary, line.spans.length - boundary, ...trailing.spans);
+    line.width = trailing.width;
+    return {
+      ...fit,
+      ...(fit.spanStarts
+        ? {
+            spanStarts: [
+              ...Array.from({ length: boundary }, (_, i) => i),
+              ...fit.spanStarts.map((i) => boundary + i),
+            ],
+          }
+        : {}),
+    };
+  }
   if (
     !kana &&
     !candidates.some((span) => HAS_PUNCTUATION.test(span.text)) &&
@@ -520,6 +556,19 @@ function fitCjkOptically(
         ? hangAdvance
         : last.span.box.width;
   const hangsLast = hung > 0;
+  // Legacy mixed-script composition may expand the current line instead of taking
+  // one more ideograph. Keep a separate lane for a protected group or a hanging mark.
+  if (
+    context.legacyPunctuationFit &&
+    !kana &&
+    !hangsLast &&
+    first === last &&
+    /^\p{Unified_Ideograph}$/u.test(first.span.text) &&
+    (context.afterInlineObject ||
+      line.spans.some((span) => automaticTextSpacingBefore(span) > 0)) &&
+    deficit > first.natural / 2 + TOLERANCE
+  )
+    return undefined;
   const fullDeficit = deficit;
   deficit -= hung;
   // A final qualified closing quote drops its trailing blank after any glyph, a word included.
@@ -936,6 +985,7 @@ export function createCjkOpticalFitter(
       measurer,
       baselinePieces: pieces,
       requireLocalQualification,
+      legacyPunctuationFit: legacy,
       memo,
       cells: {},
     };

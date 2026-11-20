@@ -1,3 +1,5 @@
+import type { InlineDrawingRecord } from '../drawing-layout.ts';
+import { withAutomaticTextSpacing } from '../cjk-automatic-spacing.ts';
 import { expect, test } from 'bun:test';
 import { DEFAULT_RUN_STYLE, type ResolvedRunStyle } from '../run-style.ts';
 import { createParagraphCjkOpticalFitter } from '../cjk-optical-fit.ts';
@@ -132,6 +134,8 @@ type FitOptions = {
   candidate?: string[];
   remaining?: number;
   unsafe?: string;
+  automaticGap?: number;
+  inlinePictureAfter?: number;
 };
 function fit(o: FitOptions = {}) {
   const word = o.word ?? 'AV',
@@ -173,21 +177,39 @@ function fit(o: FitOptions = {}) {
     spans: import('../semantic-records.ts').StyleSpanRecord[] = [];
   let start = 0,
     x = 0;
+  const drawings: InlineDrawingRecord[] = [];
   for (const [index, text] of [...texts, ...tail].entries()) {
+    if (index === o.inlinePictureAfter) {
+      drawings.push({
+        start,
+        advanceStart: x,
+        advanceEnd: x + 12,
+        placeholderGraphicKind: null,
+      } as InlineDrawingRecord);
+      start += 1;
+      x += 12;
+    }
     const from = start;
     start += text.length;
     const slot = /^[A-Za-z0-9.]+$/u.test(text) ? {} : { fontSlot: 'eastAsia' as const };
     pieces.push({ text, start: from, end: start, style, props: [], ...slot });
     if (index >= texts.length) continue;
     const width = m.measure(text, style);
-    spans.push({
-      text,
-      range: { paragraphId: 'synthetic-demand-kerning', start: from, end: start },
-      style,
-      props: [],
-      ...slot,
-      box: { x, y: 0, width, height: 18.2 },
-    });
+    const gap = index === 2 ? (o.automaticGap ?? 0) : 0;
+    x += gap;
+    spans.push(
+      withAutomaticTextSpacing(
+        {
+          text,
+          range: { paragraphId: 'synthetic-demand-kerning', start: from, end: start },
+          style,
+          props: [],
+          ...slot,
+          box: { x, y: 0, width, height: 18.2 },
+        },
+        gap
+      )
+    );
     x += width;
   }
   if (o.unsafe) {
@@ -202,7 +224,7 @@ function fit(o: FitOptions = {}) {
   }
   const line: PendingLine = {
     spans,
-    drawings: [],
+    drawings,
     start: 0,
     end: pieces[texts.length]!.start,
     width: x,
@@ -388,4 +410,55 @@ test('punctuation pair compression still obeys the source font kern threshold', 
   expect(compressCjkPieces(off, policy, x.m)).toEqual(off);
   const enabled = compressCjkPieces(pair({ ...low, kerningMinPt: 1 }), policy, x.m);
   expect(enabled.some((piece) => piece.style.characterSpacingPt < 0)).toBe(true);
+});
+
+test('legacy mixed lines keep the half-ideograph threshold for an ordinary character', () => {
+  const legacy: CjkParagraphTypography = {
+    ...policy,
+    settings: { ...policy.settings!, legacyLineEndPunctuation: true },
+  };
+  const candidate = ['丁'];
+  const automaticGap = 3.5;
+  const admitted = fit({ policy: legacy, automaticGap, candidate, deficit: 7 });
+  const wrapped = fit({ policy: legacy, automaticGap, candidate, deficit: 8.5 });
+  expect(admitted.result).toBeDefined();
+  expect(wrapped.result).toBeUndefined();
+  expect(fit({ policy, automaticGap, candidate, deficit: 8.5 }).result).toBeDefined();
+  expect(fit({ policy: legacy, candidate, deficit: 8.5 }).result).toBeDefined();
+
+  const protectedGroup = fit({
+    policy: legacy,
+    automaticGap,
+    candidate: ['丁，'],
+    deficit: 13,
+  });
+  expect(protectedGroup.result).toBeDefined();
+});
+
+test('legacy text following a fixed inline picture can fit punctuation up to its admission threshold', () => {
+  const legacy: CjkParagraphTypography = {
+    ...policy,
+    settings: { ...policy.settings!, legacyLineEndPunctuation: true },
+  };
+  const inlinePictureAfter = 1;
+  const candidate = ['丁'];
+  const admitted = fit({ policy: legacy, inlinePictureAfter, candidate, deficit: 5 });
+  expect(admitted.result).toBeDefined();
+  expect(admitted.line.drawings).toEqual(admitted.before.drawings);
+  expect(admitted.line.spans[0]).toEqual(admitted.before.spans[0]);
+  expect(admitted.line.spans[1]?.box.x).toBe(admitted.before.spans[1]?.box.x);
+  expect(admitted.result?.spanStarts?.[0]).toBe(0);
+  expect(admitted.line.width + admitted.result!.width).toBeCloseTo(admitted.available, 5);
+
+  reject({ policy: legacy, inlinePictureAfter, candidate, deficit: 8.5 });
+  reject({ policy, inlinePictureAfter, candidate, deficit: 5 });
+
+  const protectedGroup = fit({
+    policy: legacy,
+    inlinePictureAfter,
+    candidate: ['丁，'],
+    deficit: 13,
+  });
+  expect(protectedGroup.result).toBeDefined();
+  expect(protectedGroup.line.drawings).toEqual(protectedGroup.before.drawings);
 });
