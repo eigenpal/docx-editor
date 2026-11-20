@@ -30,7 +30,10 @@ function inertFieldCodes(node: OoxmlElement): boolean {
   return length <= 1024;
 }
 
-/** Refresh-lock metadata: a short Boolean or blank value, in any case. No value affects the picture. */
+/**
+ * Refresh-lock metadata: a short Boolean or blank value, in any letter case. No value affects
+ * the cached picture.
+ */
 function inertLockedField(node: OoxmlElement): boolean {
   if (!named(node, OFFICE, 'LockedField') || node.attributes.length || node.children.length > 1)
     return false;
