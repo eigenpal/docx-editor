@@ -458,7 +458,8 @@ export function readTableStructureFresh(
   table: OoxmlNode,
   contentWidthPt: number,
   styleCascade?: StyleCascadeTable,
-  compatibilityMode?: number
+  compatibilityMode?: number,
+  displayMode: RevisionDisplayMode = 'all-markup'
 ): SemanticTableStructure | null {
   return withoutTableRowReuse(() =>
     readTableStructureUncached(
@@ -466,7 +467,7 @@ export function readTableStructureFresh(
       contentWidthPt,
       0,
       styleCascade,
-      'all-markup',
+      displayMode,
       undefined,
       compatibilityMode
     )

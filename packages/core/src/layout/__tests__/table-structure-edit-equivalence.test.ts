@@ -8,6 +8,7 @@ import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 import type { SemanticLayout } from '../semantic-records.ts';
+import type { RevisionDisplayMode } from '../revision-projection.ts';
 import { shiftedRowsTestRecorder } from '../table-row-geometry-reuse.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
 import { tablePageRestartTestRecorder } from '../table-page-restart.ts';
@@ -61,8 +62,34 @@ const tr = (cells: string, trPr = '') =>
 const table = (rows: readonly string[], tblPr = BORDERS) =>
   `<w:tbl><w:tblPr><w:tblW w:w="6000" w:type="dxa"/><w:tblLayout w:type="fixed"/>${tblPr}</w:tblPr>` +
   `<w:tblGrid>${'<w:gridCol w:w="2000"/>'.repeat(3)}</w:tblGrid>${rows.join('')}</w:tbl>`;
+const rule = (edge: string, style = 'single', size = 4) =>
+  `<w:${edge} w:val="${style}" w:sz="${size}" w:space="0" w:color="000000"/>`;
+// A thick compound bottom rule: a row that ends a page fits only when the next row follows it.
+const compoundBorders = (insideH: string) =>
+  `<w:tblBorders>${['top', 'left', 'right', 'insideV'].map((edge) => rule(edge)).join('')}` +
+  `${rule('bottom', 'thickThinLargeGap', 96)}${insideH}</w:tblBorders>`;
+const tracked = (kind: 'ins' | 'del', id: number) =>
+  `<w:${kind} w:id="${id}" w:author="Reviewer" w:date="2026-01-01T00:00:00Z"/>`;
 const HEADER = tr(tc(p('Head A')) + tc(p('Head B')) + tc(p('Head C')), '<w:tblHeader/>');
 const plainRow = (r: number) => tr(tc(p(`R${r}a`)) + tc(p(`R${r}b`)) + tc(p(`R${r}c`)));
+/** Exact-height, `w:cantSplit`, and plain rows under a compound bottom rule. */
+const compoundTable = (insideH: string) =>
+  table(
+    [
+      HEADER,
+      ...Array.from({ length: 40 }, (_, r) =>
+        r % 5 === 0
+          ? tr(
+              tc(p(`E${r}a`)) + tc(p(`E${r}b`)) + tc(p(`E${r}c`)),
+              `<w:trHeight w:val="${600 + 200 * (r % 4)}" w:hRule="exact"/>`
+            )
+          : r % 5 === 2
+            ? tr(tc(lines(`K${r}`, 3)) + tc(p(`K${r}b`)) + tc(p(`K${r}c`)), '<w:cantSplit/>')
+            : plainRow(r)
+      ),
+    ],
+    compoundBorders(insideH)
+  );
 
 /** The document shapes: each opens with a preamble paragraph a break can be typed into. */
 const SHAPES: Record<string, string> = {
@@ -108,6 +135,18 @@ const SHAPES: Record<string, string> = {
               tc(`<w:p><w:pPr><w:keepNext/></w:pPr><w:r><w:t>K${r}c</w:t></w:r></w:p>`)
           )
         : plainRow(r)
+    ),
+  ]),
+  compound: compoundTable(rule('insideH')),
+  compoundInside: compoundTable(rule('insideH', 'thinThickSmallGap', 48)),
+  tracked: table([
+    HEADER,
+    ...Array.from({ length: 40 }, (_, r) =>
+      r % 7 === 3
+        ? tr(tc(p(`I${r}a`)) + tc(p(`I${r}b`)) + tc(p(`I${r}c`)), tracked('ins', 100 + r))
+        : r % 7 === 5
+          ? tr(tc(lines(`D${r}`, 2)) + tc(p(`D${r}b`)) + tc(p(`D${r}c`)), tracked('del', 100 + r))
+          : plainRow(r)
     ),
   ]),
   mixed: table([
@@ -296,11 +335,12 @@ afterEach(() => {
 });
 
 /** An editing session whose every pass is checked against a fresh layout and a cold paint. */
-function session(shape: string) {
+function session(shape: string, displayMode: RevisionDisplayMode = 'all-markup') {
   let part = load(p('Preamble') + SHAPES[shape]!);
   const retained = createLayoutSession();
   const cache = createParagraphLayoutCache();
-  let layout = lay(part, { session: retained, cache });
+  const view = { displayMode };
+  let layout = lay(part, { session: retained, cache, ...view });
   const container = document.createElement('div');
   document.body.append(container);
   mounted.push(container);
@@ -321,21 +361,21 @@ function session(shape: string) {
         next = edit.part;
       }
       part = next;
-      layout = lay(part, { session: retained, cache });
+      layout = lay(part, { session: retained, cache, ...view });
       // A read that reuses the rows of earlier reads equals a read from nothing.
       for (const width of [300, 260])
         expect([
           label,
           width,
-          readTableStructure(tableOf(part), width, 0, styleCascade, 'all-markup', undefined, 15),
+          readTableStructure(tableOf(part), width, 0, styleCascade, displayMode, undefined, 15),
         ]).toStrictEqual([
           label,
           width,
-          readTableStructureFresh(tableOf(part), width, styleCascade, 15),
+          readTableStructureFresh(tableOf(part), width, styleCascade, 15, displayMode),
         ]);
       expect([label, JSON.stringify(layout.pages)]).toEqual([
         label,
-        JSON.stringify(lay(part).pages),
+        JSON.stringify(lay(part, view).pages),
       ]);
       paintSemanticLayout(container, layout, { scale: 1 });
       const cold = document.createElement('div');
@@ -382,7 +422,7 @@ function rowStartingPage(run: ReturnType<typeof session>, page: number): string 
 }
 
 test('targeted row edits at the start, middle, end and page breaks stay exact', () => {
-  for (const shape of ['plain', 'merged', 'split', 'banded']) {
+  for (const shape of ['plain', 'merged', 'split', 'banded', 'compound']) {
     const run = session(shape);
     const tableId = () => tableOf(run.part).id;
     const ids = () => rowsOf(run.part).map((row) => row.id);
@@ -583,5 +623,90 @@ test('rows added at the end keep one header repeat per page as new pages open', 
     expect(run.layout.pages.length).toBeGreaterThan(pages + 1);
   } finally {
     delete SHAPES.short;
+  }
+}, 60_000);
+
+/** The rows next to the row that opens page `page` of the table: the one before and after. */
+function rowsAroundPageStart(run: ReturnType<typeof session>, page: number): [string, string] {
+  const ids = rowsOf(run.part).map((row) => row.id);
+  const at = ids.indexOf(rowStartingPage(run, page));
+  return [ids[at - 1]!, ids[at + 1]!];
+}
+
+test('edits beside a page-opening row of a compound-ruled table stay exact', () => {
+  for (const shape of ['compound', 'compoundInside', 'split']) {
+    const run = session(shape);
+    const tableId = () => tableOf(run.part).id;
+    const pages = () =>
+      run.layout.pages.filter((page) => page.fragments.some((f) => f.kind === 'table')).length;
+    let step = 0;
+    for (let page = 1; page < Math.min(pages(), 5); page += 1)
+      for (const side of [1, 0] as const) {
+        const label = () => `${shape} page ${page} side ${side} step ${(step += 1)}`;
+        const rowId = () => rowsAroundPageStart(run, page)[side];
+        for (const heightTwips of [200, 1400])
+          expect(
+            run.apply(
+              { op: 'setTableRowHeight', tableId: tableId(), rowId: rowId(), heightTwips },
+              label()
+            )
+          ).toBe(true);
+        expect(
+          run.apply(
+            { op: 'insertTableRow', tableId: tableId(), rowId: rowId(), where: 'below' },
+            label()
+          )
+        ).toBe(true);
+        expect(
+          run.apply({ op: 'deleteTableRow', tableId: tableId(), rowId: rowId() }, label())
+        ).toBe(true);
+      }
+  }
+}, 60_000);
+
+test('row edits between tracked row insertions and deletions stay exact in each view', () => {
+  for (const mode of ['original', 'proposed', 'all-markup'] as const) {
+    const run = session('tracked', mode);
+    const restarts = tablePageRestartTestRecorder();
+    const pick = random(0x1797 + mode.length);
+    const names = ['insertRow', 'deleteRow', 'height', 'enter', 'grow', 'borders'];
+    for (let step = 0; step < 24; step += 1) {
+      const name = names[pick(names.length)]!;
+      const op = EDITS[name]!(run.part, pick);
+      if (op) run.apply(op, `${mode} step ${step}: ${name}`);
+    }
+    // Edits next to the rows each view drops or keeps.
+    for (const at of [3, 5, 10, 12]) {
+      const rowId = rowsOf(run.part)[at]!.id;
+      const tableId = tableOf(run.part).id;
+      expect(
+        run.apply({ op: 'insertTableRow', tableId, rowId, where: 'above' }, `${mode} beside ${at}`)
+      ).toBe(true);
+    }
+    restarts.dispose();
+    expect(restarts.restarts).toBeGreaterThan(0);
+  }
+}, 60_000);
+
+test('row edits in a table between sections of other page sizes stay exact', () => {
+  const section = (width: number, height: number) =>
+    `<w:p><w:pPr><w:sectPr><w:pgSz w:w="${width}" w:h="${height}"/><w:pgMar w:top="400" ` +
+    `w:bottom="400" w:left="400" w:right="400" w:header="0" w:footer="0" w:gutter="0"/>` +
+    `</w:sectPr></w:pPr></w:p>`;
+  SHAPES.sections =
+    p('Small page') + section(6000, 3600) + SHAPES.split! + section(8000, 5200) + p('Large page');
+  try {
+    const run = session('sections');
+    const pick = random(0x1797);
+    const names = ['insertRow', 'deleteRow', 'height', 'enter', 'grow', 'breakAbove'];
+    let applied = 0;
+    for (let step = 0; step < 24; step += 1) {
+      const name = names[pick(names.length)]!;
+      const op = EDITS[name]!(run.part, pick);
+      if (op && run.apply(op, `sections step ${step}: ${name}`)) applied += 1;
+    }
+    expect(applied).toBeGreaterThan(16);
+  } finally {
+    delete SHAPES.sections;
   }
 }, 60_000);
