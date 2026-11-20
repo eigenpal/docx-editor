@@ -381,7 +381,7 @@ If a drawing is selected when you paste, the paste goes where the drawing's anch
 - The **Paste** context menu item stays available while a drawing is selected, because a copied drawing can still go in before the anchor. The paste refuses after the clipboard read if its content has no place.
 - Your host reads a paste refusal from `editor.snapshot().lastRejection`. The shipped React and Vue adapters do not show paste refusals.
 - Text pasted on a drawing in a header, a footer, or a table cell follows these rules. A copied drawing pastes only at a caret in the body text, so the editor refuses it in a header or footer.
-- In suggesting mode, each paste becomes a tracked change. A new picture cannot be proposed directly before another drawing, so the editor refuses to insert one there and reports the reason.
+- In suggesting mode, each paste becomes a tracked change. This includes pasted content that holds a picture. The picture insert command refuses while a drawing is selected and reports the reason. The toolbar picture insert uses that command.
 
 If you build your own selection overlay and it takes focus, pass its `copy`, `cut`, and `paste` events to the editor:
 

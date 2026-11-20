@@ -8,6 +8,7 @@ import {
 } from './clipboard-object-selection.ts';
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { chartCopyFlavours, pasteCopiedChart } from './surface-chart-clipboard.ts';
+import { chartClipboardToken } from './chart-clipboard.ts';
 import {
   DRAWING_CLIPBOARD_STORY_REASON,
   DRAWING_PASTE_CELLS_REASON,
@@ -166,8 +167,11 @@ export interface SurfaceClipboardDeps {
   selectTextBoxForPaste?(drawingNodeId: string): boolean;
   /** Leave the text box a paste entered, and select its drawing again. */
   leaveTextBoxForPaste?(drawingNodeId: string, paragraphId: string): void;
-  /** Put a collapsed caret at the point a paste beside a selected drawing goes. */
-  placeCaretForPaste?(paragraphId: string, offset: number): void;
+  /**
+   * Put a collapsed caret at the point a paste beside a selected drawing goes. Returns a
+   * function that selects that drawing again, for a paste that then lands nothing.
+   */
+  placeCaretForPaste?(paragraphId: string, offset: number): (() => void) | null;
 }
 
 export interface SurfaceClipboardOps {
@@ -200,10 +204,10 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
 
   /**
    * Move the selection to where a paste goes while a drawing is selected: before its anchor
-   * run, which is where the selection already is, or over the text of its text box. False when
-   * the paste refuses; the reason is published. After a move into the text box, a function that
-   * leaves the box and selects the drawing again. Null when the selection did not move, which
-   * includes no drawing selected.
+   * run, or over the text of its text box. False when the paste refuses; the reason is
+   * published. After a move, a function that undoes it for a paste that lands nothing: it
+   * leaves the text box, and selects the drawing again. Null when the selection did not move,
+   * which includes no drawing selected.
    */
   function placeDrawingPaste(
     text: string,
@@ -216,9 +220,8 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       // The point before the drawing's anchor run, which the caret need not be at: a press on
       // the right half of an inline drawing leaves the caret after it.
       const { from } = deps.orderedRange();
-      if (from.paragraphId !== target.paragraphId || from.offset !== target.offset)
-        deps.placeCaretForPaste?.(target.paragraphId, target.offset);
-      return null;
+      if (from.paragraphId === target.paragraphId && from.offset === target.offset) return null;
+      return deps.placeCaretForPaste?.(target.paragraphId, target.offset) ?? null;
     }
     if (target.kind === 'refused') {
       refuse(target.reason);
@@ -538,8 +541,17 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       forcePlainPasteArmedAt !== null &&
       deps.now() - forcePlainPasteArmedAt < FORCE_PLAIN_PASTE_WINDOW_MS;
     forcePlainPasteArmedAt = null;
+    // A copied chart pastes where a copied drawing does: before a selected drawing's anchor.
+    const chartPlaced =
+      !forcePlain && chartClipboardToken(html) !== null
+        ? placeDrawingPaste(text, html, true)
+        : null;
+    if (chartPlaced === false) return false;
     const chart = forcePlain ? null : pasteCopiedChart(deps, html);
-    if (chart !== null) return chart;
+    if (chart !== null) {
+      if (chart === false && chartPlaced) chartPlaced();
+      return chart;
+    }
     const storyOpen = (deps.richPasteAllowed?.() ?? true) && deps.storyScope().kind === 'body';
     // A copied drawing lands only at a caret in the main story. Elsewhere it refuses, rather than
     // pasting a text box's text alone or nothing at all. Cmd+Shift+V still pastes the text.

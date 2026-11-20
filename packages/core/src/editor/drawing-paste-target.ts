@@ -335,8 +335,10 @@ export function drawingClipboardDeps(
       pasteTargetOf(surface(), text, html, drawingCopy),
     selectTextBoxForPaste: (id) => selectTextBoxForPaste(surface(), mount().textbox, id),
     placeCaretForPaste: (paragraphId, offset) => {
+      const record = resolveSelectedDrawingRecord(surface());
       const at = { paragraphId, offset };
       surface().setSelection({ anchor: at, head: at });
+      return record ? () => surface().selectDrawing(record.drawingNodeId, paragraphId) : null;
     },
     leaveTextBoxForPaste: (id, paragraphId) => {
       mount().textbox?.exit();
