@@ -256,3 +256,16 @@ test('a standalone closing line is crossed by arrows, keeps its mark, and joins 
   expect(detectBodyTocs(surface.session.part())[0]!.endParagraphId).toBe(closing!);
   expect(paragraphTextOf(surface.session.part(), closing!)).toBe('Following');
 });
+test('arrows reach a closing line that ends the document', () => {
+  const { surface } = mount(
+    `<w:p>${run('Before')}</w:p><w:p>${begin}${run('Entry')}</w:p><w:p>${end}</w:p>`
+  );
+  const [, , closing] = surface.session.paragraphIds();
+  for (const command of ['down', 'right', 'documentEnd'] as const) {
+    select(surface, 0, 6);
+    surface.navigate(command);
+    expect(surface.state().selection.head).toEqual({ paragraphId: closing!, offset: 0 });
+  }
+  surface.navigate('up');
+  expect(surface.state().selection.head.paragraphId).toBe(surface.session.paragraphIds()[0]!);
+});

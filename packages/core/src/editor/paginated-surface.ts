@@ -4822,18 +4822,19 @@ export function mountPaginatedSurface(
             measurer
           );
           // Only a position that does not move at all is a dead end. Comparing paragraph ids
-          // alone treats ordinary movement within a row as one.
+          // alone treats ordinary movement within a row as one. A closing line with nothing
+          // past it is still editable, so the caret can stop there.
           if (
             !next ||
             (next.position.paragraphId === moved.position.paragraphId &&
               next.position.offset === moved.position.offset)
           ) {
-            return;
+            break;
           }
           moved = next;
           if (!tocSkippedByCaretMotion(session.part(), moved.position, selection.head)) break;
         }
-        if (tocSkippedByCaretMotion(session.part(), moved.position, selection.head)) return;
+        if (tocAtPosition(session.part(), moved.position)) return;
       }
       desiredX = moved.desiredX;
       // Note continuations share one EditorScope across pages: retarget the visual

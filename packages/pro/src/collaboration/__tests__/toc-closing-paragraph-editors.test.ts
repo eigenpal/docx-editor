@@ -7,6 +7,7 @@ import { expect, test } from 'bun:test';
 import { strFromU8, unzipSync } from 'fflate';
 import { applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness';
 import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import { detectBodyTocs } from '@docx-editor.dev/core/store';
 import { collaborationModule } from '../collaboration-module.ts';
 import { createPeerHarness, zipDocument, type Peer } from './document-peer-support.ts';
 
@@ -150,3 +151,76 @@ test(
     ),
   10000
 );
+
+test('two editors type on the closing line and join the next paragraph into it', async () => {
+  const harness = createPeerHarness('toc-closing-line-edits');
+  const editors: DocxEditorInstance[] = [];
+  try {
+    const pair = await harness.pair(zipDocument(field + following));
+    const [left, right] = [pair.alice, pair.bob].map((peer) => {
+      peer.detach();
+      const container = document.createElement('div');
+      document.body.append(container);
+      const editor = createDocxEditor({
+        container,
+        document: peer.room.document,
+        modules: [collaborationModule({ session: peer.room.session })],
+      });
+      editors.push(editor);
+      return editor;
+    }) as [DocxEditorInstance, DocxEditorInstance];
+    await until(() => !!left.surface && !!right.surface);
+    const closingId = harness.paragraphIdAt(pair.alice, 1);
+    const nextId = harness.paragraphIdAt(pair.alice, 2);
+    const caret = (editor: DocxEditorInstance, paragraphId: string, offset: number) =>
+      editor.surface!.setSelection({
+        anchor: { paragraphId, offset },
+        head: { paragraphId, offset },
+      });
+    const converge = async (text: string) => {
+      pair.alice.room.session.flushPendingJournals();
+      pair.bob.room.session.flushPendingJournals();
+      await until(() => [left, right].every((e) => e.surface!.session.bodyText().includes(text)));
+      for (const editor of [left, right]) {
+        expect(detectBodyTocs(editor.surface!.session.part())[0]?.endParagraphId).toBe(closingId);
+      }
+      expect(left.surface!.session.bodyText()).toBe(right.surface!.session.bodyText());
+      expect(geometry(left)).toEqual(geometry(right));
+    };
+
+    // Concurrent typing after the end mark and in the next paragraph.
+    pair.pause();
+    caret(left, closingId, 0);
+    caret(right, nextId, 0);
+    expect(left.exec({ type: 'insertText', text: 'Z' }).ok).toBe(true);
+    expect(right.exec({ type: 'insertText', text: 'Q' }).ok).toBe(true);
+    pair.resume();
+    await converge('QABCD');
+    expect(left.surface!.session.bodyText()).toContain('Z');
+    expect(left.exec({ type: 'undo' }).ok).toBe(true);
+    await converge('QABCD');
+    expect(right.surface!.session.bodyText()).not.toContain('Z');
+    expect(geometry(right).closing ?? 0).toBeGreaterThan(0);
+
+    // Backspace joins the next paragraph into the closing line while the other peer types in it.
+    pair.pause();
+    caret(right, nextId, 0);
+    right.surface!.deleteBackward();
+    expect(right.surface!.state().lastRejection).toBeNull();
+    caret(left, nextId, 5);
+    expect(left.exec({ type: 'insertText', text: 'X' }).ok).toBe(true);
+    pair.resume();
+    await converge('QABCDX');
+    expect(harness.paragraphIdAt(pair.bob, 1)).toBe(closingId);
+    const reopened = createDocxEditor({
+      container: document.createElement('div'),
+      document: await left.save(),
+    });
+    editors.push(reopened);
+    expect(reopened.surface!.session.bodyText()).toBe(left.surface!.session.bodyText());
+    expect(detectBodyTocs(reopened.surface!.session.part())).toHaveLength(1);
+  } finally {
+    for (const editor of editors) editor.destroy();
+    harness.cleanup();
+  }
+}, 10000);
