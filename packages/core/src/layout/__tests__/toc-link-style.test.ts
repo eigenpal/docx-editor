@@ -28,17 +28,21 @@ const styles = read(
 
 const run = (text: string, style = '37') =>
   `<w:r><w:rPr><w:rStyle w:val="${style}"/></w:rPr><w:t>${text}</w:t></w:r>`;
-const fieldLink = (inner: string) =>
+const linkStart =
   '<w:r><w:fldChar w:fldCharType="begin"/><w:instrText> HYPERLINK \\l "_TocA" </w:instrText>' +
-  `<w:fldChar w:fldCharType="separate"/></w:r>${inner}<w:r><w:fldChar w:fldCharType="end"/></w:r>`;
+  '<w:fldChar w:fldCharType="separate"/></w:r>';
+const linkEnd = '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
 
 const ROWS = [
   `<w:hyperlink w:anchor="_TocA">${run('Element')}</w:hyperlink>`,
-  fieldLink(run('Field')),
+  linkStart + run('Field') + linkEnd,
   `<w:fldSimple w:instr=" HYPERLINK \\l &quot;_TocA&quot; ">${run('Simple')}</w:fldSimple>`,
   run('Plain'),
   `<w:hyperlink w:anchor="_TocA">${run('Named', 'Hyperlink')}</w:hyperlink>`,
   `${run('Before')}<w:hyperlink w:anchor="_TocA">${run('Inside')}</w:hyperlink>${run('After')}`,
+  // A link field that crosses a paragraph mark.
+  linkStart + run('Crossing'),
+  run('Continued') + linkEnd + run('Trailing'),
 ];
 
 function spansOf(switches: string, fieldResults?: FieldResultsMode) {
@@ -75,19 +79,11 @@ for (const fieldResults of ['atomic', 'editable'] as const) {
   for (const switches of [' \\h', '']) {
     test(`TOC links drop the Hyperlink style by name: mode=${fieldResults}, switches="${switches}"`, () => {
       const style = spansOf(switches, fieldResults);
-      // An atomic `w:fldSimple` reads its style one offset past its unit, so only the editable
-      // mode covers it here.
-      const linked = [
-        'Element',
-        'Field',
-        'Inside',
-        ...(fieldResults === 'editable' ? ['Simple'] : []),
-      ];
-      for (const text of linked) {
+      for (const text of ['Element', 'Field', 'Simple', 'Inside', 'Crossing', 'Continued']) {
         expect({ text, ...style(text) }).toMatchObject({ text, ...DROPPED });
       }
       // Text outside a link, a differently named style, and links outside the TOC keep it.
-      for (const text of ['Plain', 'Named', 'Before', 'After', 'Outside']) {
+      for (const text of ['Plain', 'Named', 'Before', 'After', 'Trailing', 'Outside']) {
         expect(style(text)).toMatchObject(KEPT);
       }
     });

@@ -135,8 +135,10 @@ export function unmergedPiecesOfParagraphForDisplay(
 
   const pieces: FieldAwarePiece[] = [];
   let offset = 0;
+  /** A `w:fldSimple` unit's offset while its result projects, after `offset` has moved past it. */
+  let simpleUnitStart: number | null = null;
   cascadeRuns = tocLinkCascader(cascadeRuns, showFieldCodes ? undefined : tocLinkStyleRanges, () =>
-    pending?.atomic ? pending.atomStart : offset
+    pending?.atomic ? pending.atomStart : (simpleUnitStart ?? offset)
   );
   /** The link the walk is currently inside, so every piece it emits is tagged with it. */
   let currentLink: SpanLinkRecord | undefined;
@@ -801,12 +803,6 @@ export function unmergedPiecesOfParagraphForDisplay(
         continue;
       }
 
-      // Covered by a closed atomic field we already committed — should not reach here
-      // because those nodes are skipped via the begin→end control flow. Still guard.
-      if (coveredIds.has(grand.id) && openAtomicBeginId === null && atomBeginIds.size > 0) {
-        // Node belongs to a later/earlier atom; if we're between fields, skip chrome only.
-      }
-
       pushRunContent(grand, props, style);
     }
   };
@@ -857,6 +853,7 @@ export function unmergedPiecesOfParagraphForDisplay(
     // content is. It keeps its model unit and paints nothing; the outer saved result shows.
     if (pending?.atomic && isInsideOpenFieldInstruction(field)) return;
 
+    simpleUnitStart = start;
     const projected = projectSimpleFieldResult({
       simple,
       depth,
@@ -874,6 +871,7 @@ export function unmergedPiecesOfParagraphForDisplay(
       bodyPageFields,
       ...(refFields ? { refFields } : {}),
     });
+    simpleUnitStart = null;
     if (!projected) return;
     // `w:ffData` is a `w:fldChar` payload, so a simple field is never a legacy form field. A body
     // page field carries its kind so document finalize substitutes the page's value.

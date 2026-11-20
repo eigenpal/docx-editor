@@ -28,8 +28,13 @@ export type TocLinkRanges = ReadonlyMap<string, readonly TocLinkRange[]>;
 /** Offsets differ between field-result modes, so each mode keeps its own entry. */
 const cache = new FieldResultsModeMemo<OoxmlPart, TocLinkRanges>();
 
+interface ParagraphLinks {
+  readonly spans: readonly TocLinkRange[];
+  /** A `HYPERLINK` field is still open at the paragraph end, so it continues in the next one. */
+  readonly openAtEnd: boolean;
+}
 /** Paragraphs are immutable, so an unchanged TOC row keeps its link spans across edits. */
-const linkSpanCache = new FieldResultsModeMemo<OoxmlNode, readonly TocLinkRange[]>();
+const linkSpanCache = new FieldResultsModeMemo<OoxmlNode, ParagraphLinks>();
 /** Enough of an instruction to read its field type; the rest is never needed here. */
 const LINK_INSTRUCTION_PREFIX = 32;
 
@@ -40,16 +45,23 @@ function isHyperlinkInstruction(instruction: string): boolean {
 /**
  * Where a paragraph holds link content: `w:hyperlink` elements, `HYPERLINK` simple fields, and
  * complex `HYPERLINK` fields from `begin` to `end`. The spans come from the paragraph offset
- * index, so an atomic field contributes its single unit.
+ * index, so an atomic field contributes its single unit. A complex link that crosses a
+ * paragraph mark covers the rest of its first paragraph and the start of the next.
  */
-function linkSpansOf(paragraph: OoxmlNode, offsets: ParagraphOffsetIndex): readonly TocLinkRange[] {
-  const held = linkSpanCache.get(paragraph);
+function linkSpansOf(
+  paragraph: OoxmlNode,
+  offsets: ParagraphOffsetIndex,
+  openAtStart: boolean
+): ParagraphLinks {
+  const held = openAtStart ? undefined : linkSpanCache.get(paragraph);
   if (held) return held;
   const spans: TocLinkRange[] = [];
   const add = (start: number | undefined, end: number | undefined) => {
     if (start !== undefined && end !== undefined && end > start) spans.push({ start, end });
   };
-  const fields: { instruction: string; start?: number }[] = [];
+  const fields: { instruction: string; start?: number }[] = openAtStart
+    ? [{ instruction: 'HYPERLINK', start: 0 }]
+    : [];
   const visit = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return;
     if (node.kind === 'hyperlink') {
@@ -79,8 +91,11 @@ function linkSpansOf(paragraph: OoxmlNode, offsets: ParagraphOffsetIndex): reado
     for (const child of node.children) visit(child, depth + 1);
   };
   visit(paragraph, 0);
-  linkSpanCache.set(paragraph, spans);
-  return spans;
+  const open = fields.filter((field) => isHyperlinkInstruction(field.instruction));
+  if (open.length > 0) add(open[0]!.start ?? 0, offsets.length);
+  const links = { spans, openAtEnd: open.length > 0 };
+  if (!openAtStart) linkSpanCache.set(paragraph, links);
+  return links;
 }
 
 /**
@@ -94,6 +109,7 @@ export function tocLinkRanges(part: OoxmlPart): TocLinkRanges {
   for (const toc of detectBodyTocs(part)) {
     const field = tocFieldRange(toc);
     if (!field) continue;
+    let linkOpen = false;
     for (const id of new Set([
       field.separateParagraphId,
       ...toc.resultParagraphIds,
@@ -102,6 +118,8 @@ export function tocLinkRanges(part: OoxmlPart): TocLinkRanges {
       const paragraph = findNode(part, id);
       if (paragraph?.kind !== 'paragraph') continue;
       const offsets = paragraphOffsetIndex(paragraph);
+      const links = linkSpansOf(paragraph, offsets, linkOpen);
+      linkOpen = links.openAtEnd;
       const atom =
         toc.beginParagraphId === toc.endParagraphId ? offsets.spanOf(toc.beginNodeId) : undefined;
       const start =
@@ -114,7 +132,7 @@ export function tocLinkRanges(part: OoxmlPart): TocLinkRanges {
       // A one-paragraph TOC is a single atomic unit, so the whole unit takes one answer.
       const linked = atom
         ? [{ start, end }]
-        : linkSpansOf(paragraph, offsets).flatMap((link) =>
+        : links.spans.flatMap((link) =>
             link.end > start && link.start < end
               ? [{ start: Math.max(start, link.start), end: Math.min(end, link.end) }]
               : []
