@@ -686,6 +686,7 @@ export function* paginateTableInFlowSteps(
           !isContinuation &&
           !terminalDeps &&
           !deferred &&
+          // Set only by this row's own placement; a break forced from above was consumed.
           !forceNextFragment &&
           vMerge === undefined &&
           row === authoredRow,

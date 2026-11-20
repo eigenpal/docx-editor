@@ -52,14 +52,19 @@
 //
 // Refuses the page start (`open` and `at` below, `planTableRestartPass`):
 // - a row split across the break (`isContinuation`), a closing-rule plan (`terminalDeps`),
-//   merged text carried past a head row (`deferred`), a forced break (`forceNextFragment`),
-//   merge options (`vMerge`), or a row other than the authored one (`fragmentCarry`);
+//   merged text carried past a head row (`deferred`), a break the opening row's own placement
+//   forces after it (`forceNextFragment` set while that row is placed), merge options
+//   (`vMerge`), or a row other than the authored one (`fragmentCarry`);
 // - an opening row that heads or continues a vertical merge, or keeps with the next row;
 // - a fragment that holds rows other than its header repeat above the opening row, or opens
 //   below the page top;
 // - page wrap zones, cell spacing, a positioned table, out-of-cell floats, or more than one
 //   column;
 // - a decision that read the content after the table (`readThrough` unbounded).
+//
+// A page that a forced break opened is recorded: the row loop consumes `forceNextFragment`
+// (as `forceBreak`) before it takes up the opening row. The row above forced the break because
+// it fit only without the opening row below it, and the read horizon covers that read.
 //
 // The body flow at the page top: the kept pages, the header and footer variant and the note
 // reserve of each page index (a moved reserve refuses), and the flow checkpoint.

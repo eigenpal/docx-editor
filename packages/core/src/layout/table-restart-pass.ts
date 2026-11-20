@@ -69,6 +69,27 @@ export interface TableRestartInput {
 }
 
 let failAfterResumeForTests: 'throw' | 'refuse' | undefined;
+let warned = false;
+
+/**
+ * Says once per process that a table restart failed and the whole table was paginated, as other
+ * layout fallbacks do (`unsettled-exclusion-layout.ts`). The layout is right either way, so this
+ * reports an engine defect to fix. It names only the error's class and code, never document
+ * content or node ids.
+ */
+function warnRestartFallbackOnce(error: unknown): void {
+  if (warned) return;
+  warned = true;
+  const name = error instanceof Error ? error.name : typeof error;
+  const code =
+    error !== null && typeof error === 'object' && 'code' in error
+      ? ` (${String(error.code)})`
+      : '';
+  console.warn(
+    `[docx-editor] A table edit could not restart its pagination at a kept page and paginated ` +
+      `the whole table instead: ${name}${code}. The layout is correct; please report this.`
+  );
+}
 
 /**
  * @internal Make every restart fail after it paginated: it throws, or the paginator refuses the
@@ -76,6 +97,7 @@ let failAfterResumeForTests: 'throw' | 'refuse' | undefined;
  */
 export function failTableRestartsForTests(how: 'throw' | 'refuse'): () => void {
   failAfterResumeForTests = how;
+  warned = false;
   return () => {
     failAfterResumeForTests = undefined;
   };
@@ -111,11 +133,12 @@ export function planTableRestartPass(input: TableRestartInput): TableRestartPass
           refused = (yield* paginate()).restartRefused === true;
           if (failAfterResumeForTests === 'throw') throw new Error('restart failure for tests');
           refused ||= failAfterResumeForTests === 'refuse';
-        } catch {
+        } catch (error) {
           // A last safety net: a restart that fails where the whole table may not paginates
           // the whole table again. The flow before the table is restored below.
           refused = true;
           noteRestartFallback();
+          warnRestartFallbackOnce(error);
         }
         if (refused) {
           plan.restoreBudgets();

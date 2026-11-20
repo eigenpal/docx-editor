@@ -124,3 +124,27 @@ test('the cell break key list stays bounded across restarts after a text update'
   expect(lengths.at(-1)!).toBeLessThan(fresh.length * 1.5);
   expect(lengths.at(-1)! - lengths[0]!).toBeLessThan(40 * 10);
 });
+
+test('a restart that throws says so once on the console, without document content', () => {
+  let part = load(p('Before') + table(80) + p('After'));
+  const session = createLayoutSession();
+  const cache = createParagraphLayoutCache();
+  lay(part, { session, cache });
+  restore = failTableRestartsForTests('throw');
+  const warnings: string[] = [];
+  const warn = console.warn;
+  console.warn = (...args: unknown[]) => void warnings.push(args.map(String).join(' '));
+  try {
+    for (const at of [60, 40]) {
+      const applied = applyTreeOp(part, insertBelow(part, at));
+      if (!applied.ok) throw new Error('refused');
+      part = applied.part;
+      lay(part, { session, cache });
+    }
+  } finally {
+    console.warn = warn;
+  }
+  expect(warnings).toHaveLength(1);
+  expect(warnings[0]).toContain('paginated the whole table instead: Error.');
+  expect(warnings[0]).not.toContain('document.xml');
+});
