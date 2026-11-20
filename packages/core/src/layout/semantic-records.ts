@@ -382,8 +382,14 @@ export interface LineRecord {
    * Absent on lines published before this was measured; treat as zero.
    */
   readonly trailingSpacing?: number;
-  /** The authored highlight ends at the line measure when punctuation hangs. @internal */
-  readonly highlightClipsAtLineEnd?: true;
+  /**
+   * @internal
+   * The trailing blank, in points, that punctuation compression takes from the full-width mark
+   * that ends this line and hangs past its margin. That span's highlight, shading, underline,
+   * strike, and revision marks stop this far before its box end; its glyph, box, and caret
+   * edges do not move. Absent when no such mark hangs.
+   */
+  readonly hangingMarkBlank?: number;
   /**
    * Model ranges on this line covering DELETED content, absent when there is none.
    *

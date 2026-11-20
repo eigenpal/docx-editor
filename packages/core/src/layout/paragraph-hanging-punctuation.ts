@@ -1,6 +1,6 @@
 import { setLineHangingPunctuationAdvance } from './line-hanging-punctuation.ts';
 import { hangingCjkPunctuationAdvance } from './cjk-spacing.ts';
-import { blankSideHangingAdvance } from './hanging-mark-blanks.ts';
+import { blankSideHangingAdvance, compressedTrailingBlank } from './hanging-mark-blanks.ts';
 import { eastAsianLanguage, isKorean, type CjkParagraphTypography } from './cjk-typography.ts';
 import type { FieldAwarePiece } from './field-projection.ts';
 import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
@@ -75,13 +75,13 @@ export function rememberHangingPunctuation(
     advance = undefined;
   // With punctuation compression, a mark that overflows by no more than its blank sides hangs
   // only its trailing blank, and the text before it fills the rest of the measure.
+  const whole = advance;
   if (advance !== undefined)
     advance = blankSideHangingAdvance(span.text, piece, advance, overflow, typography);
   if (advance !== undefined || !span.lineEndWhitespace) {
     setLineHangingPunctuationAdvance(line, advance);
-    line.highlightClipsAtLineEnd =
-      advance !== undefined && typography.settings?.compression === 'compressPunctuation'
-        ? true
-        : undefined;
+    const blank =
+      whole === undefined ? 0 : compressedTrailingBlank(span.text, piece, whole, typography);
+    line.hangingMarkBlank = blank > 0.001 ? blank : undefined;
   }
 }

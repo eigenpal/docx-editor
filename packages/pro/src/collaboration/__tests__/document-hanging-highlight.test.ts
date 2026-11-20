@@ -46,12 +46,12 @@ const source = zipDocument(
 function paintedLines(surface: PaginatedSurface, container: HTMLElement) {
   return linesOf(surface.layout()).map((line, index) => ({
     text: line.spans.map((span) => span.text).join(''),
-    clipped: line.highlightClipsAtLineEnd === true,
-    backgrounds: [
+    blank: line.hangingMarkBlank,
+    marks: [
       ...container
         .querySelectorAll('.docx-line')
         [index]!.querySelectorAll<HTMLElement>('[data-highlight]'),
-    ].map((run) => [run.style.backgroundColor, run.style.backgroundSize]),
+    ].map((run) => [run.style.backgroundColor, run.style.clipPath]),
   }));
 }
 
@@ -84,11 +84,14 @@ test('compressed hanging highlights agree after concurrent edits, history and re
     const peers = await harness.pair(source);
     const alice = open(peers.alice.room.document, peers.alice);
     const bob = open(peers.bob.room.document, peers.bob);
+    // The 12 pt mark hangs past the 52 pt measure and gives up its 6 pt blank half.
     const converged = (clipped: boolean) => {
       peers.alice.room.session.flushPendingJournals();
       peers.bob.room.session.flushPendingJournals();
       expect(alice.paint()).toEqual(bob.paint());
-      expect(alice.paint()[0]?.clipped).toBe(clipped);
+      const [line] = alice.paint();
+      expect(line?.blank).toBe(clipped ? 6 : undefined);
+      expect(line?.marks.at(-1)?.[1]).toBe(clipped ? 'inset(-1em calc(100% - 6px) -1em -1em)' : '');
     };
     converged(true);
     peers.pause();

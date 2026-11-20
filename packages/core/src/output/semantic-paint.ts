@@ -59,6 +59,7 @@ import { fallbackStackForFamily } from '../layout/canvas-measurer.ts';
 import { isolatePageFromHost } from './page-host-isolation.ts';
 import { styleForFontSlot } from '../layout/script-itemization.ts';
 import { automaticTextColor } from '../layout/ooxml-shading.ts';
+import { clipHangingMarkBlank, hangingMarkBlankAt } from './semantic-paint-hanging-mark.ts';
 import {
   reviewAuthorSlotColor,
   revisionStyleContextKey,
@@ -1289,28 +1290,8 @@ function paintLine(
       painted.style.wordSpacing = `${(gapAfter - syntheticBoldSpacingPt(span)) * scale}px`;
     else if (owner === 'letterSpacing')
       painted.style.letterSpacing = letterGapSpacing(painted, span, gapAfter, scale);
-    if (
-      line.highlightClipsAtLineEnd &&
-      painted.dataset.highlight &&
-      !painted.dataset.revisionKind &&
-      !span.equation
-    ) {
-      const room = Math.max(0, line.box.x + line.box.width - span.box.x);
-      const width = span.box.width + (owner ? gapAfter : 0);
-      if (width - room > 0.001) {
-        const color = painted.style.backgroundColor;
-        painted.style.backgroundColor = '';
-        if (room > 0.001) {
-          // Size the fill without clipping the glyphs or changing the text range.
-          const horizontalScale = painted.style.transform
-            ? span.style.horizontalScalePercent / 100
-            : 1;
-          painted.style.backgroundImage = `linear-gradient(${color}, ${color})`;
-          painted.style.backgroundRepeat = 'no-repeat';
-          painted.style.backgroundSize = `${(room * scale) / horizontalScale}px 100%`;
-        }
-      }
-    }
+    const blank = bidi ? 0 : hangingMarkBlankAt(line, span);
+    if (blank > 0) clipHangingMarkBlank(painted, span, blank, scale);
     pendingGap = gapAfter;
     const link = span.link;
     if (!link) {

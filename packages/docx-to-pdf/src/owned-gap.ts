@@ -4,7 +4,11 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import type { SemanticSpanVisit } from '@docx-editor.dev/core/layout';
-import { followingGapPaint, paintedGapBetween } from '@docx-editor.dev/core/output';
+import {
+  followingGapPaint,
+  hangingMarkBlankAt,
+  paintedGapBetween,
+} from '@docx-editor.dev/core/output';
 
 /**
  * The gap after a span that the span owns, in points: the stretch after an inter-word space,
@@ -15,11 +19,16 @@ import { followingGapPaint, paintedGapBetween } from '@docx-editor.dev/core/outp
  * After a space that a line shrank the gap is negative, and the marks end where the next span
  * starts.
  *
+ * A hanging line-end mark whose trailing blank punctuation compression takes gets that blank
+ * as a negative gap, so its marks stop before the blank, as screen paint clips them.
+ *
  * Zero when the span owns no gap: the next span starts a new anchor or sits past a float
  * advance, a drawing is laid in the line, or the line is right to left.
  */
 export function ownedGapAfter(visit: Pick<SemanticSpanVisit, 'line' | 'span'>): number {
   const { line, span } = visit;
+  const blank = hangingMarkBlankAt(line, span);
+  if (blank > 0) return -blank;
   const index = line.spans.indexOf(span);
   if (index < 0 || (line.drawings?.length ?? 0) > 0) return 0;
   const next = line.spans[index + 1];

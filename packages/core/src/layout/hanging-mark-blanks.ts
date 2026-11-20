@@ -34,6 +34,28 @@ function lineEndMarkBlanks(mark: string, language: string | undefined): MarkBlan
   return undefined;
 }
 
+/** The blank sides, in points, of the mark ending `text`, or undefined when it has none. */
+function markBlankSides(
+  text: string,
+  piece: FieldAwarePiece,
+  advance: number,
+  typography: CjkParagraphTypography | undefined
+): MarkBlanks | undefined {
+  const compression = typography?.settings?.compression;
+  if (compression === undefined || compression === 'doNotCompress') return undefined;
+  const language = eastAsianLanguage(piece.props);
+  if (isKorean(language)) return undefined;
+  const blanks = lineEndMarkBlanks(text.at(-1) ?? '', language);
+  if (!blanks) return undefined;
+  // Character spacing follows the glyph cell, so it belongs to the trailing side.
+  const spacing = piece.style.characterSpacingPt;
+  const cell = advance - spacing;
+  return {
+    leading: cell * blanks.leading,
+    trailing: Math.max(0, cell * blanks.trailing + spacing),
+  };
+}
+
 /**
  * The advance that the mark ending `text` keeps past the margin, given its whole `advance` and
  * the line's `overflow`. With punctuation compression, an overflow no larger than the mark's
@@ -49,18 +71,24 @@ export function blankSideHangingAdvance(
   overflow: number,
   typography: CjkParagraphTypography | undefined
 ): number {
-  const compression = typography?.settings?.compression;
-  if (compression === undefined || compression === 'doNotCompress') return advance;
-  const language = eastAsianLanguage(piece.props);
-  if (isKorean(language)) return advance;
-  const blanks = lineEndMarkBlanks(text.at(-1) ?? '', language);
-  if (!blanks) return advance;
-  // Character spacing follows the glyph cell, so it belongs to the trailing side.
-  const spacing = piece.style.characterSpacingPt;
-  const cell = advance - spacing;
-  const trailing = Math.max(0, cell * blanks.trailing + spacing);
-  if (overflow > cell * blanks.leading + trailing + 0.001) return advance;
-  return Math.min(advance, Math.max(trailing, overflow));
+  const sides = markBlankSides(text, piece, advance, typography);
+  if (!sides || overflow > sides.leading + sides.trailing + 0.001) return advance;
+  return Math.min(advance, Math.max(sides.trailing, overflow));
+}
+
+/**
+ * The trailing blank, in points, that punctuation compression takes from a hanging mark with
+ * whole advance `advance`, or 0. Its highlight, shading, underline, strike, and revision marks
+ * end before that blank, whether the whole mark hangs or only the blank does. Without
+ * compression, and for a mark without blank sides or a Korean run, the marks cover the mark.
+ */
+export function compressedTrailingBlank(
+  text: string,
+  piece: FieldAwarePiece,
+  advance: number,
+  typography: CjkParagraphTypography | undefined
+): number {
+  return markBlankSides(text, piece, advance, typography)?.trailing ?? 0;
 }
 
 /** What a fitter knows about a line whose final mark may hang. */

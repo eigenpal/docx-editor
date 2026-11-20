@@ -259,3 +259,21 @@ for (const kind of ['ins', 'del'] as const) {
     }
   });
 }
+
+test("a hanging mark's compressed trailing blank shortens only the final span's marks", () => {
+  const record = line();
+  const hanging = { ...record, hangingMarkBlank: 3 };
+  // The final span with text holds the mark; clipped authored spaces may follow it.
+  const last = record.spans.filter((span) => !span.lineEndWhitespace).at(-1)!;
+  const first = record.spans[0]!;
+  expect(ownedGapAfter({ line: hanging, span: last })).toBeCloseTo(-3, 6);
+  expect(ownedGapAfter({ line: hanging, span: first })).toBeCloseTo(
+    ownedGapAfter({ line: record, span: first }),
+    6
+  );
+  // A line in a right-to-left paragraph keeps the mark's marks whole.
+  const shaping = { baseLevel: 1 } as NonNullable<typeof last.style.shaping>;
+  const rtl = { ...last, style: { ...last.style, shaping } };
+  const spans = record.spans.map((span) => (span === last ? rtl : span));
+  expect(ownedGapAfter({ line: { ...hanging, spans }, span: rtl })).toBe(0);
+});

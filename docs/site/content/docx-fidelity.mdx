@@ -302,9 +302,6 @@ Compact equation replacement is disabled when it cannot keep the source. The equ
 
 ### East Asian text
 
-With `compressPunctuation`, authored text highlight ends at the line margin when punctuation hangs.
-The punctuation glyph can extend past the margin.
-
 East Asian spacing and punctuation rules depend on `w:rPrDefault` in the styles part:
 
 | `w:rPrDefault` | East Asian rules |
@@ -327,6 +324,7 @@ East Asian spacing and punctuation rules depend on `w:rPrDefault` in the styles 
 
 - Kana otherwise keep their natural advances and authored spacing. Korean runs never fit kana.
 - The run language sets a hanging mark's blank sides. Traditional Chinese centers `、。，．；：`, and such a mark that overflows past its trailing quarter hangs the overflow. A Korean mark that hangs keeps its whole advance past the margin.
+- With punctuation compression, a hanging mark's highlight, shading, underline, strike, and revision marks end before its trailing blank.
 - Without East Asian defaults, only distributed paragraphs hang marks.
 - A single-spaced line in a CJK face is 1.3 times the face's ascent plus descent.
 - Localized family names, such as `メイリオ`, resolve to the face of the English name.

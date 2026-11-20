@@ -1,0 +1,100 @@
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { describe, expect, test } from 'bun:test';
+import {
+  loadFixture,
+  type FixtureOptions,
+} from '../../layout/__tests__/punctuation-kerning-fixture.ts';
+import { paintSemanticLayout } from '../semantic-paint.ts';
+
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+
+// 19 ideographs and a 24 pt mark take 480 pt. A measure of 480 - overflow pt puts the mark over
+// the margin by that overflow: 6 pt hangs only its 12 pt blank half, 18 pt hangs it whole.
+const H = '国'.repeat(19);
+const hanging = (overflow: number, options: FixtureOptions = {}, mark = '。') =>
+  loadFixture({
+    text: H + mark + '余',
+    available: 480 - overflow,
+    language: 'ja-JP',
+    compatibility: 15,
+    compression: 'compressPunctuation',
+    highlight: true,
+    paragraphProperties: '<w:jc w:val="both"/><w:overflowPunct/>',
+    ...options,
+  });
+
+function paintedRuns(fixture: ReturnType<typeof loadFixture>): HTMLElement[] {
+  const container = document.createElement('div');
+  paintSemanticLayout(container, fixture.layout, { scale: 2 });
+  const line = container.querySelector<HTMLElement>('.docx-line')!;
+  return [...line.querySelectorAll<HTMLElement>('.layout-run-text')];
+}
+
+describe('a hanging mark gives up its compressed trailing blank', () => {
+  for (const overflow of [6, 18]) {
+    for (const compression of ['compressPunctuation', 'compressPunctuationAndJapaneseKana']) {
+      test(`${compression}, overflow ${overflow}: the line records the blank half`, () => {
+        const line = hanging(overflow, { compression }).lines[0]!;
+        expect(line.spans.map((span) => span.text).join('')).toBe(H + '。');
+        expect(line.hangingMarkBlank).toBeCloseTo(12, 6);
+        const mark = line.spans.at(-1)!;
+        // The glyph and its box keep their places: the whole mark or only its blank half hangs.
+        const right = line.box.x + line.box.width;
+        expect(mark.box.x + mark.box.width - right).toBeCloseTo(overflow > 12 ? 24 : 12, 6);
+      });
+    }
+  }
+
+  test('paint clips the marks of the final span to the part before the blank', () => {
+    for (const overflow of [6, 18]) {
+      const runs = paintedRuns(hanging(overflow));
+      // 24 pt mark, 12 pt blank, scale 2: the marks keep 24 px of the mark's box.
+      expect(runs.at(-1)!.style.clipPath).toBe('inset(-1em calc(100% - 24px) -1em -1em)');
+      for (const run of runs.slice(0, -1)) expect(run.style.clipPath).toBe('');
+    }
+  });
+
+  test('the clip is measured from the left edge of a longer final span', () => {
+    // A legacy left-aligned line hangs its mark too, and keeps the text in one span.
+    const fixture = hanging(18, {
+      compatibility: 14,
+      paragraphProperties: '<w:jc w:val="left"/><w:overflowPunct/>',
+    });
+    const mark = fixture.lines[0]!.spans.at(-1)!;
+    const kept = (mark.box.width - 12) * 2;
+    expect(paintedRuns(fixture).at(-1)!.style.clipPath).toBe(
+      `inset(-1em calc(100% - ${kept}px) -1em -1em)`
+    );
+  });
+
+  test('character spacing widens the trailing blank', () => {
+    // 2 pt spacing: 26 pt cells, 520 pt in all; the mark's trailing blank is 12 + 2 pt.
+    const line = hanging(0, { tracking: 40, available: 500 }).lines[0]!;
+    expect(line.spans.map((span) => span.text).join('')).toBe(H + '。');
+    expect(line.hangingMarkBlank).toBeCloseTo(14, 6);
+  });
+});
+
+describe('a hanging mark keeps its whole marks', () => {
+  const cases: [string, number, FixtureOptions, string?][] = [
+    ['without compression', 6, { compression: 'doNotCompress' }],
+    ['for a mark without a blank side', 6, { language: 'zh-CN' }, '？'],
+    ['for a half-width mark', 6, {}, '.'],
+    ['in a Korean run', 6, { language: 'ko-KR' }],
+    ['when the mark fits', 0, {}],
+  ];
+  for (const [name, overflow, options, mark] of cases) {
+    test(name, () => {
+      const fixture = hanging(overflow, options, mark);
+      expect(fixture.lines[0]!.hangingMarkBlank).toBeUndefined();
+      for (const run of paintedRuns(fixture)) expect(run.style.clipPath).toBe('');
+    });
+  }
+
+  test('in a right-to-left paragraph', () => {
+    const fixture = hanging(6, {
+      paragraphProperties: '<w:bidi/><w:jc w:val="both"/><w:overflowPunct/>',
+    });
+    for (const run of paintedRuns(fixture)) expect(run.style.clipPath).toBe('');
+  });
+});
