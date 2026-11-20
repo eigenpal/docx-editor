@@ -30,8 +30,9 @@ export function hangingMarkBlankAt(
 
 /**
  * Clip a painted span's marks to the part before its compressed trailing `blank`. The clip is
- * measured from the span's left edge, so the browser's own advance cannot move it. The blank
- * holds no ink, and the vertical and left insets stay open for glyph overhang and underlines.
+ * measured from the span's left edge, so the browser's own advance cannot move it. Layout keeps
+ * the blank clear of the glyph's ink, and the vertical and left insets stay open for glyph
+ * overhang and underlines.
  */
 export function clipHangingMarkBlank(
   painted: HTMLElement,

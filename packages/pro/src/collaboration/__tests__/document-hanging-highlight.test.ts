@@ -106,6 +106,18 @@ test('compressed hanging highlights agree after concurrent edits, history and re
     alice.surface.redo();
     converged(false);
     alice.surface.undo();
+    converged(true);
+    // Alice deletes the hanging mark while Bob types before it: no mark hangs on either side.
+    peers.pause();
+    select(alice.surface, 4, 5);
+    alice.surface.deleteForward();
+    select(bob.surface, 0);
+    bob.surface.type('文');
+    peers.resume();
+    converged(false);
+    // The restored mark now follows a full line of text, so it no longer ends that line.
+    alice.surface.undo();
+    converged(false);
     expect(open(alice.surface.save()).paint()).toEqual(bob.paint());
   } finally {
     for (const surface of surfaces) surface.destroy();

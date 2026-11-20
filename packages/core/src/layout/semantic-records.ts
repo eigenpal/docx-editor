@@ -385,9 +385,9 @@ export interface LineRecord {
   /**
    * @internal
    * The trailing blank, in points, that punctuation compression takes from the full-width mark
-   * that ends this line and hangs past its margin. That span's highlight, shading, underline,
-   * strike, and revision marks stop this far before its box end; its glyph, box, and caret
-   * edges do not move. Absent when no such mark hangs.
+   * that ends this line and hangs past its margin, kept clear of the glyph's ink. That span's
+   * highlight, shading, underline, strike, and revision marks stop this far before its box end;
+   * its glyph, box, and caret edges do not move. Absent when no such mark hangs.
    */
   readonly hangingMarkBlank?: number;
   /**

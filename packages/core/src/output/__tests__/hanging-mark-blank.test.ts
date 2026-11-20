@@ -93,6 +93,21 @@ describe('a hanging mark gives up its compressed trailing blank', () => {
     );
   });
 
+  test('a face that inks into the blank keeps the marks over the glyph', () => {
+    // The face centers `。` in its 24 pt cell: ink from 8 to 16 pt leaves an 8 pt blank.
+    const measurer = {
+      measure: (text: string, style: { fontSizePt: number; characterSpacingPt: number }) =>
+        [...text].length * (style.fontSizePt + style.characterSpacingPt),
+      lineMetrics: (style: { fontSizePt: number }) => ({
+        height: style.fontSizePt * 1.2,
+        baseline: style.fontSizePt,
+      }),
+      inkBounds: (text: string) => (text === '。' ? { left: 8, right: 16 } : undefined),
+    };
+    const line = hanging(18, { measurer }).lines[0]!;
+    expect(line.hangingMarkBlank).toBeCloseTo(8, 6);
+  });
+
   test('character spacing widens the trailing blank', () => {
     // 2 pt spacing: 26 pt cells, 520 pt in all; the mark's trailing blank is 12 + 2 pt.
     const line = hanging(0, { tracking: 40, available: 500 }).lines[0]!;
@@ -116,6 +131,31 @@ describe('a hanging mark keeps its whole marks', () => {
       for (const run of paintedRuns(fixture)) expect(run.style.clipPath).toBe('');
     });
   }
+
+  test('after a closing mark in the next run carries the hanging mark away', () => {
+    // `」` cannot start a line, so `国。` moves to the next line with it.
+    for (const compression of ['compressPunctuation', 'doNotCompress']) {
+      for (const overflow of [6, 18]) {
+        const fixture = loadFixture({
+          text: H + '。」余',
+          split: 20,
+          available: 480 - overflow,
+          language: 'ja-JP',
+          compatibility: 15,
+          compression,
+          highlight: true,
+          paragraphProperties: '<w:jc w:val="both"/><w:overflowPunct/>',
+        });
+        const [first, second] = fixture.lines;
+        expect(second!.spans.map((span) => span.text).join('')).toBe('国。」余');
+        expect(first!.hangingMarkBlank).toBeUndefined();
+        // The justified line ends at its margin: no hang remains to stretch it past.
+        const last = first!.spans.at(-1)!;
+        expect(last.box.x + last.box.width).toBeCloseTo(first!.box.x + first!.box.width, 6);
+        for (const run of paintedRuns(fixture)) expect(run.style.clipPath).toBe('');
+      }
+    }
+  });
 
   test('in a right-to-left paragraph', () => {
     const fixture = hanging(6, {
