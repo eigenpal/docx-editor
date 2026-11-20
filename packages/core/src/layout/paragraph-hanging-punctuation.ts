@@ -1,6 +1,7 @@
 import { setLineHangingPunctuationAdvance } from './line-hanging-punctuation.ts';
 import { hangingCjkPunctuationAdvance, isPlainHanPunctuation } from './cjk-spacing.ts';
-import { eastAsianLanguage, type CjkParagraphTypography } from './cjk-typography.ts';
+import { blankSideHangingAdvance } from './hanging-mark-blanks.ts';
+import { eastAsianLanguage, isKorean, type CjkParagraphTypography } from './cjk-typography.ts';
 import type { FieldAwarePiece } from './field-projection.ts';
 import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
 import type { PendingLine } from './pending-line.ts';
@@ -83,12 +84,12 @@ export function rememberHangingPunctuation(
         })
       : undefined;
   if (advance !== undefined && alternateChineseLine) advance = Math.min(advance, overflow);
-  if (
-    advance !== undefined &&
-    flow?.koreanHangingLineFills !== true &&
-    /^ko(?:-|$)/.test(language ?? '')
-  )
+  if (advance !== undefined && flow?.koreanHangingLineFills !== true && isKorean(language))
     advance = undefined;
+  // With punctuation compression, a mark that overflows by no more than its blank sides hangs
+  // only its trailing blank, and the text before it fills the rest of the measure.
+  if (advance !== undefined && !alternateChineseLine)
+    advance = blankSideHangingAdvance(span.text, piece, advance, overflow, typography);
   if (advance !== undefined || !span.lineEndWhitespace)
     setLineHangingPunctuationAdvance(line, advance);
 }
