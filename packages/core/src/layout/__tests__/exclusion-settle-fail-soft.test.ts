@@ -31,9 +31,10 @@ const EMU_PER_PT = 12700;
 
 /**
  * `count` paragraphs, each a square-wrapped picture at its top and text a little taller than
- * the picture, so each paragraph's last lines wrap the next paragraph's picture.
+ * the picture. `distT`, in points, reaches each picture's zone up past the bottom of the line
+ * above it, so each paragraph's last lines wrap the next paragraph's picture.
  */
-function pictureChain(count: number): string {
+function pictureChain(count: number, distT = 0): string {
   const paragraphs: string[] = [];
   const size = 90 * EMU_PER_PT;
   const step = 150;
@@ -42,7 +43,7 @@ function pictureChain(count: number): string {
     const id = index + 1;
     paragraphs.push(
       '<w:p><w:r><w:drawing>' +
-        `<wp:anchor distT="0" distB="0" distL="114300" distR="114300" simplePos="0" behindDoc="0" locked="0" allowOverlap="1" layoutInCell="1" relativeHeight="${id}">` +
+        `<wp:anchor distT="${distT * EMU_PER_PT}" distB="0" distL="114300" distR="114300" simplePos="0" behindDoc="0" locked="0" allowOverlap="1" layoutInCell="1" relativeHeight="${id}">` +
         '<wp:simplePos x="0" y="0"/>' +
         `<wp:positionH relativeFrom="column"><wp:posOffset>${(index % 3) * step * EMU_PER_PT}</wp:posOffset></wp:positionH>` +
         '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
@@ -62,7 +63,7 @@ function pictureChain(count: number): string {
   );
 }
 
-const part = load(pictureChain(24));
+const part = load(pictureChain(24, 3));
 const layout = (
   source: OoxmlPart,
   revision = 1,

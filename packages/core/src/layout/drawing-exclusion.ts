@@ -319,6 +319,12 @@ export function exclusionZoneFromAnchoredDrawing(options: {
   });
 }
 
+/**
+ * How far, in points, a line may reach into a band's top or bottom edge and stay clear of it.
+ * Edges that meet differ by float noise, so without a margin rounding chose the wrap.
+ */
+export const WRAP_EDGE_TOUCH_PT = 0.01;
+
 export function mergeAvailableIntervalsAtY(
   y: number,
   zones: readonly ExclusionZone[],
@@ -330,10 +336,12 @@ export function mergeAvailableIntervalsAtY(
   let wrapsTable = false;
   for (const zone of zones) {
     const band = zone.verticalBand;
-    // Rectangular wrapping excludes the whole glyph band, including objects whose top
-    // lies below the line's top scanline. Polygon wrapping retains its contour probe.
+    // Square wrap excludes the whole glyph band; polygon wrap keeps its contour probe.
     const rectangular = zone.input.mode === 'square' && lineHeight > 0;
-    if (y >= band.y + band.height || (rectangular ? y + lineHeight <= band.y + 0.001 : y < band.y))
+    if (
+      y > band.y + band.height - WRAP_EDGE_TOUCH_PT ||
+      (rectangular ? y + lineHeight <= band.y + WRAP_EDGE_TOUCH_PT : y < band.y)
+    )
       continue;
     const probeY = rectangular ? Math.max(y, band.y) : y;
     const atY = availableTextIntervalsOnScanline(probeY, zone.input);
