@@ -13,12 +13,12 @@
 // The inline `w:customXml` ELEMENT is a different thing and is not what this writes: Word for
 // the web refuses a document containing one outright. The data PART is what survives.
 //
-// The evidence is two fixtures. `sdt-custom-tag-word-roundtrip.docx` is Word's own output for
-// a document carrying a store: parts, relationships and payload all came back intact, so Word
-// emits and accepts this wiring. It carries no binding.
+// The evidence is two fixtures. `sdt-custom-tag-word-roundtrip.docx` is a round trip of a
+// document carrying a store: parts, relationships and payload all came back intact. It
+// carries no binding.
 //
-// `sdt-custom-node-databinding-word-roundtrip.docx` is what Word returned for a document that
-// DOES carry one, and it settles the rest:
+// `sdt-custom-node-databinding-word-roundtrip.docx` is a round trip of a document that DOES
+// carry one, and it settles the rest:
 //
 //   - `w:dataBinding` survives, with its `prefixMappings`, `storeItemID` and `xpath` intact;
 //   - the payload in the store survives unchanged;

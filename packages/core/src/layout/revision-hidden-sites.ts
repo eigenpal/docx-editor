@@ -4,7 +4,8 @@
 // gets no change bar and its text no format mark either. The filter carries the records as data:
 // only the paragraphs that hold one project without it, and every other block keeps the
 // unfiltered fast path, because a selecting filter projects the whole story. The cache key
-// names the records, so a block cached with them left out is never served as the canonical one.
+// keeps blocks laid out under such a filter apart from the canonical ones; see
+// `withHiddenRevisionSites` for what it names in each view.
 
 import {
   WML_NAMESPACE_URI,
@@ -68,6 +69,44 @@ export function withHiddenRevisionSites(
     });
     views[slot] = filter;
   }
+  return filter;
+}
+
+/** Kept-key filters by base, then by key. Editors on one page share a base, each with a key. */
+const emptied = new WeakMap<object, Map<string, RevisionAuthorFilter>>();
+/** A base rarely sees more keys than it has live editors; past this the oldest one goes. */
+const MAX_KEPT_KEYS_PER_BASE = 8;
+
+/**
+ * `base` under the cache key an All Markup queue has when it leaves records out against `key`,
+ * for a queue decided against the same `key` that leaves none out. The same object for the
+ * same pair.
+ *
+ * That key says what the records were decided against, not which records they were, so it
+ * also fits the queue once its last record is gone. A caller that keeps it there keeps every
+ * block cached while records were left out: accepting them all then lays out only the blocks
+ * that held a change. No block cached under the key is served in the wrong state, because a
+ * paragraph with a record left out is another block object than the paragraph itself.
+ */
+export function withHiddenRevisionSitesKey(
+  base: RevisionAuthorFilter | undefined,
+  key: string
+): RevisionAuthorFilter {
+  const byKey = emptied.get(base ?? NO_FILTER) ?? new Map<string, RevisionAuthorFilter>();
+  emptied.set(base ?? NO_FILTER, byKey);
+  const known = byKey.get(key);
+  if (known) return known;
+  const filter = Object.freeze({
+    ...(base ?? { hiddenAuthors: EMPTY_REVISION_AUTHOR_SET }),
+    cacheKey: `${base?.cacheKey ?? ''}|unlisted:${key}`,
+  });
+  if (byKey.size >= MAX_KEPT_KEYS_PER_BASE) {
+    for (const oldest of byKey.keys()) {
+      byKey.delete(oldest);
+      break;
+    }
+  }
+  byKey.set(key, filter);
   return filter;
 }
 

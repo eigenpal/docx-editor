@@ -5,8 +5,7 @@ import { DEFAULT_RUN_STYLE } from '../run-style.ts';
 import type { FieldAwarePiece } from '../field-pieces.ts';
 import type { TextMeasurer } from '../semantic-records.ts';
 
-// Word for Mac PDF, Songti SC Regular at 12 pt. Origins are relative to the 72 pt margin.
-// These values come from the PDF's glyph positions, independently of editor layout.
+// Songti SC Regular at 12 pt. Origins are relative to the 72 pt margin.
 const wordLines = [
   {
     text: '甲方（出租方）：【    】',

@@ -1,5 +1,5 @@
 import { wordCreatedTableAlignment } from './word-created-table-alignment.ts';
-/** Synthetic inputs for native Word revision-grouping comparisons. */
+/** Synthetic inputs for revision-grouping comparisons. */
 import { structuralWordXmlParts } from './structural-word-cases.ts';
 import { wordCreatedNestedRow, wordCreatedNestedRowDeletion } from './word-created-nested-row.ts';
 import { wordCreatedTableWidth } from './word-created-table-width.ts';

@@ -10,6 +10,7 @@ import { paragraphTextOf, serializeOoxmlPart } from '@docx-editor.dev/core/store
 import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { createKeyDownHandler } from '../surface-input.ts';
+import { paragraphOrderOf } from '../layout-paragraph-indexes.ts';
 import { mount as mountFixture, selectCellRectangle } from './paginated-surface-fixtures.ts';
 
 const mounted: PaginatedSurface[] = [];
@@ -330,5 +331,68 @@ describe('tab characters and other stories', () => {
       surface.session.currentPackage().parts.get('/word/header1.xml')!
     );
     expect(headerXml.match(/<w:tr[ >]/g)).toHaveLength(2);
+  });
+});
+
+describe('the work Tab does after typing in a cell', () => {
+  /** A focused surface in the document, so the painted caret and its suppression are live. */
+  function mountFocused(): { surface: PaginatedSurface; pages: HTMLElement } {
+    const { surface, container } = mountFixture(TABLE);
+    mounted.push(surface);
+    document.body.append(container);
+    surface.focus();
+    return { surface, pages: container.querySelector<HTMLElement>('.docx-pages')! };
+  }
+
+  test('typing and Tab never lift the native caret suppression from the pages', () => {
+    const { surface, pages } = mountFocused();
+    try {
+      caretAt(surface, 1, 2);
+      expect(pages.style.caretColor).toBe('transparent');
+      // The property is inherited: lifting it and setting it again restyles every painted
+      // page, twice for each cell filled.
+      const removed: string[] = [];
+      const removeProperty = pages.style.removeProperty;
+      pages.style.removeProperty = (name: string) => {
+        removed.push(name);
+        return removeProperty.call(pages.style, name);
+      };
+      try {
+        surface.type('x');
+        tab(surface);
+        expect(selectionOf(surface)).toBe('B1@0..B1@2');
+        surface.type('y');
+        tab(surface, { shift: true });
+        expect(selectionOf(surface)).toBe('A1x@0..A1x@3');
+        surface.type('z');
+        tab(surface);
+      } finally {
+        pages.style.removeProperty = removeProperty;
+      }
+      expect(textOf(surface)).toEqual(['Top', 'z', 'y', 'A2', 'B2', 'End']);
+      expect(removed).not.toContain('caret-color');
+      expect(pages.style.caretColor).toBe('transparent');
+    } finally {
+      pages.parentElement?.remove();
+    }
+  });
+
+  test('a text edit keeps the paragraph order index of the layout before it', () => {
+    const { surface, pages } = mountFocused();
+    try {
+      caretAt(surface, 1, 2);
+      const before = paragraphOrderOf(surface.publishedLayout()!);
+      surface.type('x');
+      tab(surface);
+      const layout = surface.publishedLayout()!;
+      // Tab selects a range, and the first read of a range orders its ends. That read must
+      // not index every paragraph of the document again after each typed character. The
+      // index is kept per layout chain by `documentOrderIndex`; a read of another surface's
+      // layout between these two reads would replace it and fail this identity check.
+      expect(paragraphOrderOf(layout)).toBe(before);
+      expect([...paragraphOrderOf(layout).keys()]).toEqual(ids(surface));
+    } finally {
+      pages.parentElement?.remove();
+    }
   });
 });

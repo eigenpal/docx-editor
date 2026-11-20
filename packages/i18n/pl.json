@@ -1073,7 +1073,13 @@
     "noGoToView": "Przejdź do jest tutaj niedostępne",
     "noBookmarkDialog": "Nie można tutaj dodawać zakładek",
     "groupMemberMove": "Kształtu w grupie nie można osobno przenieść, zmienić jego rozmiaru ani usunąć. Naciśnij Esc, aby zaznaczyć grupę.",
-    "groupMemberProperties": "Kształt w grupie przejmuje zawijanie, tekst alternatywny i właściwości od grupy. Naciśnij Esc, aby zaznaczyć grupę."
+    "groupMemberProperties": "Kształt w grupie przejmuje zawijanie, tekst alternatywny i właściwości od grupy. Naciśnij Esc, aby zaznaczyć grupę.",
+    "drawingClipboardParts": "Ten rysunek jest połączony z danymi, których nie można skopiować, takimi jak diagram lub obiekt osadzony.",
+    "linkedTextBoxClipboard": "Nie można skopiować połączonego pola tekstowego.",
+    "drawingClipboardStory": "Rysunki można kopiować, wycinać i wklejać tylko w treści dokumentu, a nie w nagłówku, stopce, przypisie ani polu tekstowym.",
+    "groupMemberClipboard": "Kształt w grupie jest kopiowany lub wycinany razem z grupą. Naciśnij Escape, aby zaznaczyć grupę.",
+    "drawingClipboardSize": "Ten rysunek jest za duży, aby go skopiować.",
+    "drawingPasteCells": "Umieść kursor w tekście, aby wkleić rysunek."
   },
   "equationPopup": {
     "apply": "Zastosuj",

@@ -1,0 +1,18 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The review rail renders each mounted card on each scroll frame and on each key.",
+  "after": "The review rail renders a card only when its item, its replies, its position, or the rail settings change.",
+  "reason": "Only component rendering changes. The review items come from the same editor reads, and no shared node, operation, or synchronization path changes.",
+  "tests": [
+    "packages/pro/src/__tests__/review-rail-render-work.test.tsx",
+    "packages/pro/src/__tests__/review-rail-render-work-vue.test.ts",
+    "packages/pro/src/__tests__/review-rail-band-step.test.ts",
+    "packages/pro/src/__tests__/review-rail-card-updates.test.tsx",
+    "packages/pro/src/__tests__/review-rail-card-updates-vue.test.ts",
+    "packages/pro/src/collaboration/__tests__/review-rail-remote-update.test.tsx",
+    "packages/pro/src/collaboration/__tests__/review-rail-remote-update-vue.test.ts"
+  ],
+  "changeset": "review-rail-render-work",
+  "migration": null
+}

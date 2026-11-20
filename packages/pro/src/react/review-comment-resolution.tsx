@@ -29,7 +29,10 @@ import { ReviewActionSlot } from './review-action-slot.tsx';
 import { hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
 
 interface ResolutionPartDeps {
-  readonly useReview: () => UseReviewReturn;
+  readonly useReview: () => Pick<
+    UseReviewReturn,
+    'resolve' | 'reopen' | 'setActive' | 'commentResolutionDisabledReason'
+  >;
   readonly useItem: () => ReviewItemView | null;
   readonly useLabel: () => (key: TranslationKey) => string;
   readonly guardMousedown: (event: ReactMouseEvent) => void;
