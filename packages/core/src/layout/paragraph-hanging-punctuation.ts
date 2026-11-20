@@ -82,12 +82,10 @@ export function rememberHangingPunctuation(
   // more than its blank sides hangs only its trailing blank, and the text before it fills the
   // rest of the measure.
   const mark = span.text.at(-1) ?? '';
-  if (advance !== undefined && alternateLineEndDecides(mark, language, typography))
-    advance = Math.min(
-      alternateLineEndAdvance(mark, piece, advance, typography) ?? advance,
-      overflow
-    );
-  else if (advance !== undefined)
+  if (advance !== undefined && alternateLineEndDecides(mark, language, typography)) {
+    const limit = alternateLineEndAdvance(mark, piece, advance, typography);
+    advance = limit === undefined ? undefined : Math.min(limit, overflow);
+  } else if (advance !== undefined)
     advance = blankSideHangingAdvance(span.text, piece, advance, overflow, typography);
   if (advance !== undefined || !span.lineEndWhitespace)
     setLineHangingPunctuationAdvance(line, advance);

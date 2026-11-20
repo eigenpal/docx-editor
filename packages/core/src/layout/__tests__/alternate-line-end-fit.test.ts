@@ -62,6 +62,15 @@ describe('alternate line-break rules in legacy modes', () => {
     expect(caretX(layout('）', 6, { language: 'zh-TW' }), 19)).toBeCloseTo(456, 6);
   });
 
+  test('Japanese half-width marks keep their usual hanging', () => {
+    for (const mark of [...'｡､']) {
+      const options = { language: 'ja-JP' };
+      expect(texts(layout(mark, 6, options))).toEqual(
+        texts(layout(mark, 6, { ...options, alternateKinsoku: false }))
+      );
+    }
+  });
+
   test('Japanese keeps its hanging set and limits brackets', () => {
     // `、。，` keep the blank-side rule: the trailing blank hangs and the text spreads.
     expect(caretX(layout('，', 6, { language: 'ja-JP' }), 19)).toBeCloseTo(462, 6);
@@ -137,6 +146,17 @@ describe('an interior semicolon gives up its blank half', () => {
     expect(texts(layout('，', 1, { ...options, compression: 'doNotCompress' }))).toEqual(
       wraps('，')
     );
+  });
+
+  test('without hanging punctuation the final mark keeps its usual optical fit', () => {
+    const options = {
+      language: 'zh-TW',
+      measurer: inkMeasurer,
+      paragraphProperties: '<w:overflowPunct w:val="0"/><w:jc w:val="both"/>',
+    };
+    const withRules = texts(layout('，', 1, options));
+    expect(withRules).toEqual([H + '，', '余']);
+    expect(withRules).toEqual(texts(layout('，', 1, { ...options, alternateKinsoku: false })));
   });
 
   test('an interior semicolon lets an alternate final mark fit a larger overflow', () => {

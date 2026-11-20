@@ -63,13 +63,14 @@ export function blankSideHangingAdvance(
   return Math.min(advance, Math.max(trailing, overflow));
 }
 
-// Japanese keeps these marks in its hanging set under the alternate line-break rules.
-const JAPANESE_HANGING = '、。，．';
+// Japanese keeps these marks, full and half width, in its hanging set under the alternate
+// line-break rules.
+const JAPANESE_HANGING = '、。，．､｡';
 
 /**
  * Whether the alternate line-break rules decide the line-end `mark` (`alternateLineEndFit`):
  * the rules apply, and the mark is outside the hanging set of its run `language`. Only
- * Japanese keeps a hanging set: `、。，．`. Half-width Latin marks (below U+2000) keep their
+ * Japanese keeps a hanging set: `、。，．` and half-width `､｡`. Half-width Latin marks (below U+2000) keep their
  * usual hanging.
  */
 export function alternateLineEndDecides(
