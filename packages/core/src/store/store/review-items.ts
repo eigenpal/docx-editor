@@ -451,12 +451,15 @@ const GRIP_TOUCHING = 2;
 function rangeGrip(
   range: ReviewRange,
   position: ReviewPosition,
+  /** The position's own place in `order`, which is the same for every range asked. */
+  target: number,
   order: ReadonlyMap<string, number>
 ): number | null {
-  const target = order.get(position.paragraphId);
   const start = order.get(range.start.paragraphId);
-  const end = order.get(range.end.paragraphId);
-  if (target === undefined || start === undefined || end === undefined) return null;
+  // Most ranges sit inside one paragraph, and one lookup then answers for both ends.
+  const end =
+    range.end.paragraphId === range.start.paragraphId ? start : order.get(range.end.paragraphId);
+  if (start === undefined || end === undefined) return null;
   if (target < start || target > end) return null;
   if (target === start && position.offset < range.start.offset) return null;
   if (target === end && position.offset > range.end.offset) return null;
@@ -480,11 +483,12 @@ function rangeGrip(
 function coveringGrip(
   item: ReviewItem,
   position: ReviewPosition,
+  target: number,
   order: ReadonlyMap<string, number>
 ): { readonly grip: number; readonly width: number } | null {
   let best: { readonly grip: number; readonly width: number } | null = null;
   for (const range of reviewItemRanges(item)) {
-    const grip = rangeGrip(range, position, order);
+    const grip = rangeGrip(range, position, target, order);
     if (grip === null) continue;
     const width = rangeWidth(range, order);
     if (best === null || grip < best.grip || (grip === best.grip && width < best.width)) {
@@ -513,9 +517,13 @@ export function reviewItemsAt(
   position: ReviewPosition,
   order: ReadonlyMap<string, number>
 ): ReviewItem[] {
+  // Asked once, not once for each range of each item. A position the order cannot place is
+  // held by nothing.
+  const target = order.get(position.paragraphId);
+  if (target === undefined) return [];
   const covering: { item: ReviewItem; grip: number; width: number }[] = [];
   for (const item of items) {
-    const held = coveringGrip(item, position, order);
+    const held = coveringGrip(item, position, target, order);
     if (held !== null) covering.push({ item, grip: held.grip, width: held.width });
   }
   return covering

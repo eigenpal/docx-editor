@@ -357,6 +357,27 @@ The editor never uploads documents or calls a rendering service. On a server, us
 - `inspectDrawingSupport()` covers body, header, footer, footnote, and endnote drawings. If `report.complete` is `false`, the inventory is incomplete. It skips chart data, diagram data, inherited theme effects, and image bytes, so an empty issue list does not prove full support.
 - Pass an inspection entry with the same package object to `createDrawingPreviewPackage()`. Node IDs do not persist in saved XML.
 
+## Copy and paste a drawing
+
+To copy a picture, shape, line, text box, or group, select it and press Ctrl+C (Command+C on macOS). You can also use **Copy** or **Cut** in the context menu. Paste places the copy at the caret. A floating copy is selected, so you can move it immediately. After an inline copy, the caret stays after it, so you can continue typing.
+
+- The copy keeps its size, formatting, text, and position settings. A copy positioned relative to the page lands on top of the original.
+- If a drawing is selected when you paste, the copy joins the drawing's paragraph and the selected drawing stays.
+- Each copy gets its own drawing ID and legacy shape ID. Copies made by several collaborators stay distinct.
+- Undo reverts a paste or a cut. In a collaboration session, undo also reverts your edits made in the same few seconds. In suggesting mode, the paste and the cut become tracked changes.
+- Other applications receive the text of a text box, or the picture.
+
+The editor refuses to copy a drawing in a header, footer, or note. It also refuses a shape that is selected inside a group, a text box linked to another, a drawing that names a part other than an image, and a picture too large for the clipboard. A copied drawing pastes only at a caret in the body text. Each refusal reports a translated reason. A selected chart copies through its own clipboard. For more information, see [Charts](/docs/2.x/guides/charts).
+
+If you build your own selection overlay and it takes focus, pass its `copy`, `cut`, and `paste` events to the editor:
+
+```ts
+import { forwardClipboardEvents } from '@docx-editor.dev/core/editor';
+
+// Call the returned function when the overlay unmounts.
+const stopForwarding = forwardClipboardEvents(overlay, editor);
+```
+
 ## Limits
 
 - External images never load automatically. Open, layout, paint, and save make no network request. Only an explicit user action embeds an external target.
@@ -365,7 +386,7 @@ The editor never uploads documents or calls a rendering service. On a server, us
 - With tracking on, image insertion and deletion record tracked changes. Property edits (size, position, wrap, crop, alt text, and links) apply directly, because they have no tracked form. Replacing a picture is refused.
 - PDF export does not apply brightness, contrast, grayscale, or black-and-white adjustments.
 - Picture commands do not address members of a shape group.
-- Copy and cut refuse selections that contain a chart or an embedded object.
+- Copy and cut refuse a text selection that contains a chart or an embedded object.
 - Charts, DrawingML diagrams without a saved drawing, and drawing effects need the drawing module. Core renders saved diagram drawings. For the module, see [Advanced drawing rendering](/docs/2.x/pro/drawing).
 - Wrap geometry, VML previews, shape groups, and alternative content follow the rules in [DOCX feature support](/docs/2.x/docx-fidelity).
 

@@ -2,6 +2,7 @@ import { insertTextbox } from './textbox-commands.ts';
 import { execChartCommand } from './chart-commands.ts';
 import { execSetWatermark } from './docx-editor-watermark.ts';
 import { execBookmarkCommand } from './docx-editor-bookmarks.ts';
+import { DRAWING_CLIPBOARD_REASONS } from './surface-drawing-clipboard.ts';
 import { CHART_CLIPBOARD_REASON, fragmentRefusalOf } from './clipboard-object-selection.ts';
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
@@ -560,28 +561,34 @@ export function execEditorCommand(
       // Selection is not document state: nothing to save changed.
       return { ok: true, changed: false };
     case 'copy': {
-      // The gate already refused a collapsed selection that holds no chart.
+      // The gate already refused a collapsed selection that holds no drawing.
+      const before = mounted.state();
       const flavours = mounted.copyFlavours();
-      if (flavours.reason) return clipboardRefusal(flavours.reason);
+      if (flavours.reason) return clipboardRefusal(flavours.reason, mounted, before);
       writeClipboardRich(flavours.text, flavours.html, clipboardWindow(options?.editor));
       return { ok: true, changed: false };
     }
     case 'cut': {
       // Read BEFORE the delete: `copyFlavours` answers from the selection, and the delete
       // is what removes it.
+      const before = mounted.state();
       const flavours = mounted.copyFlavours();
-      if (flavours.reason) return clipboardRefusal(flavours.reason);
-      writeClipboardRich(flavours.text, flavours.html, clipboardWindow(options?.editor));
-      // One selected chart: the cut deletes that chart, as Delete does.
-      if (flavours.chartDrawingNodeId) {
-        const removed = mounted.deleteImage(flavours.chartDrawingNodeId);
+      if (flavours.reason) return clipboardRefusal(flavours.reason, mounted, before);
+      // One selected drawing: the cut deletes that drawing, as Delete does. The clipboard is
+      // written only when the delete lands, so a refused cut is not a copy.
+      if (flavours.drawingNodeId) {
+        const removed = mounted.deleteImage(flavours.drawingNodeId);
         if (!removed.ok)
           return {
             ok: false,
             code: 'unsupported',
-            reason: removed.detail ?? removed.reason ?? 'the chart was not deleted',
+            reason: removed.detail ?? removed.reason ?? 'the drawing was not deleted',
           };
-      } else mounted.deleteSelection();
+        writeClipboardRich(flavours.text, flavours.html, clipboardWindow(options?.editor));
+      } else {
+        writeClipboardRich(flavours.text, flavours.html, clipboardWindow(options?.editor));
+        mounted.deleteSelection();
+      }
       break;
     }
     case 'paste': {
@@ -592,8 +599,12 @@ export function execEditorCommand(
       if (refusal) {
         return clipboardRefusal(refusal === 'chart' ? 'chart-content' : 'unsupported-content');
       }
+      const before = mounted.state();
       const result = mounted.pasteRich(command.text, command.html ?? null);
       if (!result) {
+        // A copied drawing refuses where it cannot land; this paste published that refusal.
+        const refused = drawingRefusalSince(mounted, before);
+        if (refused) return { ok: false, code: 'unsupported', reason: refused };
         return { ok: true, changed: false };
       }
       break;
@@ -669,13 +680,31 @@ export function execEditorCommand(
 
 /** The scope id of the note whose painted fragments hold `paragraphId`, or null. */
 /** The window whose clipboard a copy writes to: the editor's, a pop-out's when it is there. */
-/** A refused copy, cut or paste. A chart refuses with its own reason, which adapters translate. */
-function clipboardRefusal(reason: 'unsupported-content' | 'chart-content'): ExecResult {
+/**
+ * A refused copy, cut or paste. A chart, or a drawing that published its sentence since
+ * `before`, refuses with its own reason, which adapters translate.
+ */
+function clipboardRefusal(
+  reason: 'unsupported-content' | 'chart-content',
+  mounted?: PaginatedSurface,
+  before?: ReturnType<PaginatedSurface['state']>
+): ExecResult {
+  const drawing = mounted && before ? drawingRefusalSince(mounted, before) : null;
   return {
     ok: false,
     code: 'unsupported',
-    reason: reason === 'chart-content' ? CHART_CLIPBOARD_REASON : reason,
+    reason: drawing ?? (reason === 'chart-content' ? CHART_CLIPBOARD_REASON : reason),
   };
+}
+
+/** The drawing clipboard's refusal, when one was published after `before`. */
+function drawingRefusalSince(
+  mounted: PaginatedSurface,
+  before: ReturnType<PaginatedSurface['state']>
+): string | null {
+  const after = mounted.state();
+  const refused = after !== before ? after.lastRejection : null;
+  return refused && DRAWING_CLIPBOARD_REASONS.has(refused) ? refused : null;
 }
 
 function clipboardWindow(editor: object | undefined): Window | undefined {

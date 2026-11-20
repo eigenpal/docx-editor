@@ -2759,6 +2759,9 @@ export interface FormattingBarOptions {
 }
 
 // @public
+export function forwardClipboardEvents(element: HTMLElement, editor: DocxEditorInstance): () => void;
+
+// @public
 export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick[];
 
 // @public
@@ -3582,6 +3585,7 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     convertNote(fromKind: 'footnote' | 'endnote', noteId: number): boolean;
     copyFlavours(): {
         readonly chartDrawingNodeId?: string;
+        readonly drawingNodeId?: string;
         readonly html: string | null;
         readonly reason?: 'unsupported-content' | 'chart-content';
         readonly text: string;

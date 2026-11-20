@@ -1,5 +1,5 @@
 // The document-unique id namespaces ONE clipboard paste has to freshen: bookmark `@w:id`,
-// revision `@w:id`, and `wp:docPr/@id`.
+// revision `@w:id`, and `wp:docPr/@id` with the legacy VML shape numbers that share its range.
 //
 // Split out of `clipboard-fragment-merge.ts` (max-lines cap) when the three counters stopped
 // being `++` walks. Each one seeded from "one past the highest in the target" and then counted
@@ -29,6 +29,7 @@ import {
 } from '../package/drawing-package-edit.ts';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import { vmlShapeNumber } from '../package/legacy-vml-values.ts';
 import { attributeValueOf } from './tree-op-nodes.ts';
 import { walkAll } from './clipboard-fragment-defaults.ts';
 import { carriesRevisionId } from './tree-op-revision-ids.ts';
@@ -54,6 +55,7 @@ export interface FragmentUniqueIdRequest {
   /** Fragment-side bookmark ids in first-appearance order; empty when it carries none. */
   readonly fragmentBookmarkIds: readonly string[];
   readonly hasRevision: boolean;
+  /** Whether the fragment carries a `wp:docPr` or a numbered legacy VML shape. */
   readonly hasDocPr: boolean;
 }
 
@@ -62,6 +64,8 @@ export interface FragmentUniqueIdMaps {
   readonly bookmarkIds: Map<string, string>;
   readonly revisionIds: Map<string, string>;
   readonly docPrIds: Map<string, string>;
+  /** Legacy VML shape number → fresh number, for `o:spid` and a numbered shape `id`. */
+  readonly vmlShapeIds: Map<string, string>;
 }
 
 /**
@@ -81,9 +85,9 @@ export function mintFragmentUniqueIds(
   const actor = resolveAllocationActor();
   const bookmarkIds = mintBookmarkIds(request, actor);
   const revisionIds = mintRevisionIds(request, actor);
-  const docPrIds = mintDocPrIds(request, actor);
-  if (!bookmarkIds || !revisionIds || !docPrIds) return null;
-  return { bookmarkIds, revisionIds, docPrIds };
+  const drawingIds = mintDocPrIds(request, actor);
+  if (!bookmarkIds || !revisionIds || !drawingIds) return null;
+  return { bookmarkIds, revisionIds, ...drawingIds };
 }
 
 /**
@@ -212,7 +216,9 @@ function mintRevisionIds(
 }
 
 /**
- * `wp:docPr/@id`, package-wide because Word treats these ids as document-global.
+ * `wp:docPr/@id`, package-wide because Word treats these ids as document-global, and the legacy
+ * VML shape numbers in `o:spid`, which share that range. A pasted VML shape that kept its
+ * number would name the same shape as its source, so shape automation could not tell them apart.
  *
  * `0` IS reserved: it is a legal `xsd:unsignedInt` that `parseValidDocPrId` refuses, so
  * `drawingPropertyIdOccupancy` seeds it as used and a stripe-0 actor skips past it. That
@@ -223,9 +229,10 @@ function mintRevisionIds(
 function mintDocPrIds(
   request: FragmentUniqueIdRequest,
   actor: string | undefined
-): Map<string, string> | null {
-  const map = new Map<string, string>();
-  if (!request.hasDocPr) return map;
+): { docPrIds: Map<string, string>; vmlShapeIds: Map<string, string> } | null {
+  const docPrIds = new Map<string, string>();
+  const vmlShapeIds = new Map<string, string>();
+  if (!request.hasDocPr) return { docPrIds, vmlShapeIds };
   const { used } = drawingPropertyIdOccupancy(request.pkg);
   // Asked only for the dense walk. Under an actor the seed is never read, and
   // `allocateDrawingPropertyId` would answer with the stripe cursor's own first value.
@@ -236,15 +243,25 @@ function mintDocPrIds(
   }
   const next = idSequence(actor, used, seed, MAX_UNSIGNED_INT);
   let exhausted = false;
-  walkAll(request.travelling, (node) => {
-    if (exhausted || node.kind === 'textValue' || node.kind !== 'drawingDocPr') return;
-    const value = node.attributes.find(
-      (attribute) => attribute.localName === 'id' && attribute.namespaceUri === ''
-    )?.value;
+  const mint = (map: Map<string, string>, value: string | undefined): void => {
     if (value === undefined || map.has(value)) return;
     const minted = next();
     if (minted === null) exhausted = true;
     else map.set(value, minted);
+  };
+  walkAll(request.travelling, (node) => {
+    if (exhausted || node.kind === 'textValue') return;
+    if (node.kind === 'drawingDocPr') {
+      mint(
+        docPrIds,
+        node.attributes.find(
+          (attribute) => attribute.localName === 'id' && attribute.namespaceUri === ''
+        )?.value
+      );
+      return;
+    }
+    const shapeNumber = vmlShapeNumber(node);
+    if (shapeNumber !== null) mint(vmlShapeIds, String(shapeNumber));
   });
-  return exhausted ? null : map;
+  return exhausted ? null : { docPrIds, vmlShapeIds };
 }
