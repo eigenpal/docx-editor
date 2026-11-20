@@ -635,7 +635,8 @@ function readTableRows(
     },
     plans,
     (rowIndex) => rowConditionsFor(rowIndex, headerRows),
-    styleFormattingFor
+    styleFormattingFor,
+    tblPr
   );
 
   const style = readStyleTableProperties(tableStyle.tablePropertyNodes, {

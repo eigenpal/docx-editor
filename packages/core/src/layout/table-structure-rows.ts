@@ -304,8 +304,15 @@ export interface TableRowContext {
 /** Condition sets resolve to one formatting object each (`semantic-table.ts`). */
 export type StyleFormattingFor = (conditions: readonly string[]) => TableCellStyleFormatting;
 
-// Per table style, so a context holds nothing past the document that made it.
-const contexts = new WeakMap<object, TableRowContext[]>();
+// Per table, under its stable properties node, so tables never evict each other's context.
+// A table without one (each row edit gives it a new node) finds its context by table style.
+// Both hold nothing past the document that made them.
+const tableContexts = new WeakMap<object, TableRowContext[]>();
+const styleContexts = new WeakMap<object, TableRowContext[]>();
+/** Contexts kept per table: a view switch (display mode, reviewer filter) and back. */
+const CONTEXTS_PER_TABLE = 2;
+/** Contexts kept per table style for tables without a properties node. */
+const CONTEXTS_PER_STYLE = 16;
 
 function sameContext(a: TableRowContext, b: TableRowContext): boolean {
   return (
@@ -320,14 +327,29 @@ function sameContext(a: TableRowContext, b: TableRowContext): boolean {
   );
 }
 
-/** `context`, or an equal one an earlier read made, so rows can key on its identity. */
-function sharedContext(context: TableRowContext): TableRowContext {
+/** `context`, or an equal one in `memo` under `key`, kept most recent first. */
+function sharedIn(
+  memo: WeakMap<object, TableRowContext[]>,
+  key: object,
+  context: TableRowContext,
+  limit: number
+): TableRowContext {
+  const known = memo.get(key) ?? [];
+  const at = known.findIndex((entry) => sameContext(entry, context));
+  const shared = at < 0 ? context : known[at]!;
+  if (at !== 0) memo.set(key, [shared, ...known.filter((_, i) => i !== at)].slice(0, limit));
+  return shared;
+}
+
+/**
+ * `context`, or an equal one an earlier read of the table made, so rows can key on its
+ * identity. `owner` is the table's properties node, when it has one.
+ */
+function sharedContext(context: TableRowContext, owner: object | undefined): TableRowContext {
   if (!reuse) return context;
-  const known = contexts.get(context.tableStyle) ?? [];
-  const same = known.find((entry) => sameContext(entry, context));
-  if (same) return same;
-  contexts.set(context.tableStyle, [context, ...known.slice(0, 3)]);
-  return context;
+  return owner
+    ? sharedIn(tableContexts, owner, context, CONTEXTS_PER_TABLE)
+    : sharedIn(styleContexts, context.tableStyle, context, CONTEXTS_PER_STYLE);
 }
 
 interface ResolvedRow {
@@ -365,9 +387,10 @@ export function resolveTableRows(
   input: TableRowContext,
   rowPlans: readonly TableRowPlan[],
   rowConditionsFor: (rowIndex: number) => readonly string[],
-  styleFormattingFor: StyleFormattingFor
+  styleFormattingFor: StyleFormattingFor,
+  owner?: object
 ): SemanticTableRow[] {
-  const context = sharedContext(input);
+  const context = sharedContext(input, owner);
   const resolved: ResolvedRow[] = [];
   let mergedAbove: readonly number[] = [];
   for (let rowIndex = 0; rowIndex < rowPlans.length; rowIndex += 1) {
