@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // A long table's row edits restart its pagination at a kept page, and its rows are reused
 // across structure reads. Between two participants, each keeps a layout session over its own
 // store: remote row inserts and deletes arrive between local layout passes, concurrent with
-// local row edits and with typing in a row the other peer deletes. After each step both
+// local row edits, with typing in a row the other peer deletes, and with undo and redo. After each step both
 // peers' layouts equal a fresh layout of the same document, and the documents converge.
 
 import { afterEach, expect, test } from 'bun:test';
@@ -180,6 +180,26 @@ test('remote row edits between local layout passes keep both peers equal to a fr
     // A row near the end and the first row.
     harness.apply(bob, [insertRow(bob, rows(bob).length - 1, 'below'), deleteRow(bob, 0)]);
     checkBoth('end and start');
+
+    // Undo and redo of row edits, each laid out by both peers between the steps.
+    harness.apply(alice, [insertRow(alice, 50, 'below')]);
+    checkBoth('insert before undo');
+    expect(alice.room.session.undo()).toBe(true);
+    checkBoth('undo of an insert');
+    expect(alice.room.session.redo()).toBe(true);
+    checkBoth('redo of an insert');
+    harness.apply(bob, [deleteRow(bob, 45)]);
+    checkBoth('delete before undo');
+    expect(bob.room.session.undo()).toBe(true);
+    checkBoth('undo of a delete');
+    // One peer undoes while the other deletes rows near the restored row.
+    pair.pause();
+    expect(alice.room.session.undo()).toBe(true);
+    harness.apply(bob, [deleteRow(bob, 52), deleteRow(bob, 48)]);
+    views.alice.check('alice undo before merge');
+    views.bob.check('bob delete before merge');
+    pair.resume();
+    checkBoth('undo concurrent with deletes');
   } finally {
     restarts.dispose();
   }
