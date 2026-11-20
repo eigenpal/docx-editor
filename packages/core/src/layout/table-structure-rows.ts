@@ -121,6 +121,26 @@ export function tableRowReuseEnabled(): boolean {
   return reuse;
 }
 
+/**
+ * Tables with fewer rows read whole each time. Reading 100 rows takes about 2 ms, and keeping
+ * their rows would hold a second copy of every short table in a long document.
+ */
+let reusedTableRows = 100;
+
+/** @internal Reuse the rows of tables from `rows` rows up, for tests of short tables. */
+export function reuseTableRowsFromForTests(rows: number): () => void {
+  const before = reusedTableRows;
+  reusedTableRows = rows;
+  return () => {
+    reusedTableRows = before;
+  };
+}
+
+/** Run `read` with rows reused and kept only when the table has `rows` rows or more. */
+export function withTableRowReuseFor<T>(rows: number, read: () => T): T {
+  return rows >= reusedTableRows ? read() : withoutTableRowReuse(read);
+}
+
 /** One authored row's place in the grid, read before any conditional format applies. */
 export interface TableRowPlan {
   readonly node: OoxmlElement;
@@ -157,7 +177,7 @@ export function planTableRow(
   if (known && known.displayMode === displayMode && known.authorFilter === authorFilter)
     return known.plan;
   const plan = readRowPlan(rowNode, displayMode, authorFilter);
-  plans.set(rowNode, { displayMode, authorFilter, plan });
+  if (reuse) plans.set(rowNode, { displayMode, authorFilter, plan });
   return plan;
 }
 
@@ -284,7 +304,8 @@ export interface TableRowContext {
 /** Condition sets resolve to one formatting object each (`semantic-table.ts`). */
 export type StyleFormattingFor = (conditions: readonly string[]) => TableCellStyleFormatting;
 
-const contexts: TableRowContext[] = [];
+// Per table style, so a context holds nothing past the document that made it.
+const contexts = new WeakMap<object, TableRowContext[]>();
 
 function sameContext(a: TableRowContext, b: TableRowContext): boolean {
   return (
@@ -301,10 +322,11 @@ function sameContext(a: TableRowContext, b: TableRowContext): boolean {
 
 /** `context`, or an equal one an earlier read made, so rows can key on its identity. */
 function sharedContext(context: TableRowContext): TableRowContext {
-  const known = contexts.find((entry) => sameContext(entry, context));
-  if (known) return known;
-  contexts.unshift(context);
-  if (contexts.length > 8) contexts.pop();
+  if (!reuse) return context;
+  const known = contexts.get(context.tableStyle) ?? [];
+  const same = known.find((entry) => sameContext(entry, context));
+  if (same) return same;
+  contexts.set(context.tableStyle, [context, ...known.slice(0, 3)]);
   return context;
 }
 
@@ -366,8 +388,10 @@ export function resolveTableRows(
         mergedAbove,
         styleFormattingFor
       );
-      const memo: RowMemo = { ...row, context, place, mergedAbove: aboveKey };
-      resolvedRows.set(plan.node, [memo, ...(memos ?? []).slice(0, 3)]);
+      if (reuse) {
+        const memo: RowMemo = { ...row, context, place, mergedAbove: aboveKey };
+        resolvedRows.set(plan.node, [memo, ...(memos ?? []).slice(0, 3)]);
+      }
     }
     resolved.push(row);
     mergedAbove = row.merged;
@@ -400,7 +424,7 @@ function withMergeHeads(row: SemanticTableRow, columns: readonly number[]): Sema
     cells[at] = { ...head, headsVerticalMerge: true };
   }
   const result = cells ? { ...row, cells } : row;
-  headed.set(row, { key, row: result });
+  if (reuse) headed.set(row, { key, row: result });
   return result;
 }
 

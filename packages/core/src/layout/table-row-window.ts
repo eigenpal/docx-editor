@@ -27,9 +27,11 @@ export interface RowWindowPass {
   /**
    * `compute(start, end)` resolves rows `[start, end)` of `inputs` as a table of those rows
    * alone. Every array in `inputs` has one entry per row; `params` names everything else the
-   * pass reads.
+   * pass reads. Earlier runs are kept under `owner`, the table's stable properties node, so
+   * they go when the document goes.
    */
   run(
+    owner: object,
     inputs: readonly (readonly SemanticTableRow[])[],
     params: string,
     compute: (start: number, end: number) => readonly SemanticTableRow[]
@@ -39,15 +41,16 @@ export interface RowWindowPass {
 const continuesMerge = (row: SemanticTableRow | undefined): boolean =>
   row !== undefined && row.cells.some((cell) => cell.vMergeContinue);
 
-/** A pass that keeps its last few runs, for the tables read most recently. */
+/** A pass that keeps its last run per table. */
 export function rowWindowPass(): RowWindowPass {
-  const passes: Pass[] = [];
-  const remember = (pass: Pass): void => {
-    passes.unshift(pass);
-    if (passes.length > 4) passes.pop();
-  };
+  const runs = new WeakMap<object, Pass[]>();
   return {
-    run(inputs, params, compute) {
+    run(owner, inputs, params, compute) {
+      const passes = runs.get(owner) ?? [];
+      // One run per table: a row edit compares with the read before it.
+      const remember = (pass: Pass): void => {
+        if (tableRowReuseEnabled()) runs.set(owner, [pass]);
+      };
       const rows = inputs[0]!;
       const count = rows.length;
       let best: { pass: Pass; prefix: number; suffix: number } | undefined;

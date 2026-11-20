@@ -15,9 +15,10 @@
 //   nested table (`holdsNestedTable`). Equal resolved rows also cover what a row resolves
 //   against its neighbors, its index, and the table's last row.
 // - Nothing an earlier row decided reads past the restart row. A row reads the next row for
-//   its closing rule, and a `w:keepNext` row reads the rows it keeps with, so the restart row
-//   and the row above it may not both keep with the next row. A vertical merge is planned
-//   from its head row, so the restart row may not head or continue one.
+//   its closing rule. A kept group reads the rows it keeps with and the row after them, so
+//   the restart row may not keep with the next row: the break above a kept group it opens
+//   was priced from the rows after it. A vertical merge is planned from its head row, so the
+//   restart row may not head or continue one.
 // - The paginator state at the page top is carried: the fragment number, the header group
 //   decisions, the row ordinals of the earlier pages, the pass budgets, the cell break keys,
 //   and the line counter. A page start is recorded only where nothing else is open: no split
@@ -52,7 +53,10 @@ import type { FlowCheckpoint } from './layout-session.ts';
 import type { HeaderGroupStart } from './table-header-group-start.ts';
 import type { PreparedBlock } from './section-prepass-types.ts';
 import { autofitContextOf } from './table-autofit-widths.ts';
-import { registerResumedTableCellBreakKeys } from './table-cell-break-keys.ts';
+import {
+  registerResumedTableCellBreakKeys,
+  tableCellBreakKeyCount,
+} from './table-cell-break-keys.ts';
 import { rowKeepsWithNext } from './table-row-keeps.ts';
 import { hasTableMerge } from './table-border-probe.ts';
 import { holdsNestedTable } from './table-flow-structure.ts';
@@ -146,7 +150,9 @@ export function carryTableTextUpdate(
   for (const [before, after] of replacements) {
     const fragment = before as TableFragmentRecord;
     const replacement = after as TableFragmentRecord;
-    if (fragment.kind !== 'table' || replacement === fragment) continue;
+    // A fragment another path made has no source, and its replacement gets none either.
+    if (fragment.kind !== 'table' || replacement === fragment || !fragmentSources.has(fragment))
+      continue;
     const start = pageStarts.get(fragment);
     if (start) pageStarts.set(replacement, start);
     fragmentSources.set(replacement, structure);
@@ -165,7 +171,7 @@ const MAX_KEPT_SOURCES = 4;
 function keptSources(
   fragments: readonly TableFragmentRecord[],
   through: number
-): Set<SemanticTableStructure> | null {
+): { readonly sources: Set<SemanticTableStructure>; readonly textUpdated: boolean } | null {
   let latest: TextUpdate | undefined;
   for (let at = 0; at <= through; at += 1) {
     const update = textUpdates.get(fragments[at]!);
@@ -178,7 +184,7 @@ function keptSources(
     sources.add(latest?.from.has(source) ? latest.to : source);
     if (sources.size > MAX_KEPT_SOURCES) return null;
   }
-  return sources;
+  return { sources, textUpdated: latest !== undefined };
 }
 
 /** Whether `row` heads or continues a vertical merge. */
@@ -309,7 +315,12 @@ export function tablePageRestart(
   index: number,
   checkpoints: readonly FlowCheckpoint[],
   pages: readonly PageRecord[],
-  read: { readonly width: number; readonly deps: TableFlowDeps }
+  read: {
+    readonly width: number;
+    readonly deps: TableFlowDeps;
+    /** The block the previous pass laid out at `index`, whose cell keys the kept pages hold. */
+    readonly previous?: PreparedBlock | undefined;
+  }
 ): TableRestartPlan | null {
   const entry = prepared[index];
   const before = checkpoints[index];
@@ -335,8 +346,9 @@ export function tablePageRestart(
     const start = pageStarts.get(fragment);
     if (!start || pages[pageIndex]!.fragments[0] !== fragment) continue;
     // The kept pages and the restart page's own record must all read as the new rows do.
-    const sources = keptSources(fragments, offset);
-    if (!sources) continue;
+    const kept = keptSources(fragments, offset);
+    if (!kept) continue;
+    const { sources } = kept;
     structure ??= readTableStructure(
       table,
       read.width,
@@ -350,13 +362,11 @@ export function tablePageRestart(
     if (!structure || structure.float) return null;
     const at = start.rowIndex;
     const row = structure.rows[at];
-    const above = structure.rows[at - 1];
+    // A kept group the restart row opens decided the break above it from the rows after it.
     if (
       !row ||
       rowHoldsMerge(row) ||
-      (above &&
-        rowKeepsWithNext(above, deps.styleCascade) &&
-        rowKeepsWithNext(row, deps.styleCascade)) ||
+      rowKeepsWithNext(row, deps.styleCascade) ||
       !samePrefix(sources, structure, at)
     )
       continue;
@@ -387,7 +397,13 @@ export function tablePageRestart(
         lineCounter: flow.lineCounter,
       },
       resume: { ...resume, ordinals },
-      breakKeys: flow.breakKeys,
+      // A text update on a kept page moved its row's keys to the end of the table's list
+      // (`registerEditedTableCellBreakKeys`), so the kept pages' keys are no longer its
+      // first ones. Keep the whole list then, until the table is paginated whole again.
+      breakKeys:
+        kept.textUpdated && read.previous?.kind === 'table'
+          ? tableCellBreakKeyCount(read.previous.table)
+          : flow.breakKeys,
     };
   }
   return null;

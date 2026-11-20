@@ -104,6 +104,13 @@ export function tableCellBreakKeysOf(table: object): readonly string[] | undefin
   return chunks.length === 1 ? chunks[0]! : chunks.flat();
 }
 
+/** How many cell keys `table` recorded. */
+export function tableCellBreakKeyCount(table: object): number {
+  let count = 0;
+  for (const chunk of registry.get(table) ?? []) count += chunk.length;
+  return count;
+}
+
 /** `table`'s recorded cell keys as their immutable chunks, in order; for retention. */
 export function tableCellBreakKeyChunksOf(table: object): KeyChunks | undefined {
   return registry.get(table);

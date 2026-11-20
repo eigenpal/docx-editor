@@ -2,6 +2,7 @@ import { cachedTableStructure } from './table-structure-cache.ts';
 import {
   planTableRow,
   resolveTableRows,
+  withTableRowReuseFor,
   withoutTableRowReuse,
   type TableRowPlan,
 } from './table-structure-rows.ts';
@@ -482,6 +483,34 @@ function readTableStructureUncached(
   compatibilityMode?: number,
   textBox = false
 ): SemanticTableStructure | null {
+  if (source.kind !== 'table') return null;
+  let rows = 0;
+  for (const node of flattenContentControls(source.children))
+    if (node.kind === 'tableRow') rows += 1;
+  return withTableRowReuseFor(rows, () =>
+    readTableRows(
+      source,
+      contentWidthPt,
+      depth,
+      styleCascade,
+      displayMode,
+      authorFilter,
+      compatibilityMode,
+      textBox
+    )
+  );
+}
+
+function readTableRows(
+  source: OoxmlNode,
+  contentWidthPt: number,
+  depth: number,
+  styleCascade: StyleCascadeTable | undefined,
+  displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter,
+  compatibilityMode?: number,
+  textBox = false
+): SemanticTableStructure | null {
   if (depth >= MAX_TABLE_NESTING) return null;
   if (source.kind !== 'table') return null;
   const table = healedTableView(source); // Repeated row/cell containers show as a save merges them.
@@ -673,7 +702,13 @@ function readTableStructureUncached(
     ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
     : tableBorders;
   const collapsed = cellSpacingPt === 0;
-  let contentRows = windowedContentRows(visualRows, visualBorders, columnCount, collapsed);
+  let contentRows = windowedContentRows(
+    tblPr ?? source,
+    visualRows,
+    visualBorders,
+    columnCount,
+    collapsed
+  );
   const statedOut: { widths?: readonly number[] } = {};
   const resolveColumns = (width: PreferredWidth): readonly number[] =>
     resolveColumnWidthsPt({

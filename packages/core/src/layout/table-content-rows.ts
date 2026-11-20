@@ -16,17 +16,18 @@ const rowMinimums = rowWindowPass();
 
 /** The visual rows with their content borders, and row minimums where the table pairs them. */
 export function windowedContentRows(
+  owner: object,
   visualRows: readonly SemanticTableRow[],
   tableBorders: TableBorderBox,
   columns: number,
   collapsed: boolean
 ): readonly SemanticTableRow[] {
   const params = JSON.stringify([tableBorders, columns, collapsed]);
-  const contentRows = contentBorders.run([visualRows], params, (start, end) =>
+  const contentRows = contentBorders.run(owner, [visualRows], params, (start, end) =>
     withTableContentBorders(visualRows.slice(start, end), tableBorders, columns, collapsed)
   );
   if (!rowMinimumContentInsetsApply(visualRows)) return contentRows;
-  return rowMinimums.run([contentRows, visualRows], params, (start, end) =>
+  return rowMinimums.run(owner, [contentRows, visualRows], params, (start, end) =>
     stampRowMinimumContentInsets(
       contentRows.slice(start, end),
       visualRows.slice(start, end),
@@ -47,6 +48,6 @@ export function withLegacyContentAlignment(row: SemanticTableRow): SemanticTable
     ...row,
     cells: row.cells.map((cell) => ({ ...cell, legacyContentAlignment: true as const })),
   };
-  aligned.set(row, result);
+  if (tableRowReuseEnabled()) aligned.set(row, result);
   return result;
 }

@@ -1442,6 +1442,7 @@ function* layoutBlocksPass(
       ? tablePageRestart(prepared, firstChanged, session.checkpoints, previous!.pages, {
           width: columnWidth(),
           deps: tableDeps,
+          previous: prepassMemo?.prepared[firstChanged],
         })
       : null;
   if (restart) {

@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test';
 import { applyTreeOp } from '../../store/store/tree-ops.ts';
 import { wmlChildNamed } from '../../store/store/tree-op-table-shared.ts';
 import type { TreeDocOp } from '../../store/store/tree-op-types.ts';
@@ -12,7 +12,7 @@ import { shiftedRowsTestRecorder } from '../table-row-geometry-reuse.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
 import { tablePageRestartTestRecorder } from '../table-page-restart.ts';
 import { readTableStructure, readTableStructureFresh } from '../semantic-table.ts';
-import { tableRowReuseTestRecorder } from '../table-structure-rows.ts';
+import { reuseTableRowsFromForTests, tableRowReuseTestRecorder } from '../table-structure-rows.ts';
 import { load, read, W } from './table-row-keep-fixtures.ts';
 
 // Structure edits (rows, columns, merges, cell properties, header rows, a break above the
@@ -283,6 +283,13 @@ const EDITS: Record<string, Edit> = {
   },
 };
 
+// The shapes are short, so reuse their rows as a long table's are.
+let restoreReuse: () => void = () => {};
+beforeAll(() => {
+  restoreReuse = reuseTableRowsFromForTests(1);
+});
+afterAll(() => restoreReuse());
+
 const mounted: HTMLElement[] = [];
 afterEach(() => {
   for (const container of mounted.splice(0)) container.remove();
@@ -456,6 +463,49 @@ test('typing keeps the restart, and undoing it in the pass of a row insert does 
     )
   ).toBe(0);
   expect(restartsOf(insertBelow(30), 'insert again')).toBe(1);
+});
+
+test('a page that opens a kept group paginates again when a row after the group changes', () => {
+  const keptRow = (r: number) =>
+    tr(
+      ['a', 'b', 'c']
+        .map((c) => tc(`<w:p><w:pPr><w:keepNext/></w:pPr><w:r><w:t>K${r}${c}</w:t></w:r></w:p>`))
+        .join('')
+    );
+  SHAPES.keptLong = table([
+    HEADER,
+    ...Array.from({ length: 60 }, (_, r) =>
+      r % 6 === 1 || r % 6 === 2 ? keptRow(r) : plainRow(r)
+    ),
+  ]);
+  try {
+    const run = session('keptLong');
+    const table = (at: number) => `/word/document.xml#0.0.1${at < 0 ? '' : `.${at}`}`;
+    // Found by random edits: after these, a page opens with a row that keeps with the next, and
+    // deleting the row after its group lets the group move up onto the page above.
+    const ops: TreeDocOp[] = [
+      {
+        op: 'setTableCellBorders',
+        tableId: table(-1),
+        cellIds: [`${table(40)}.2`],
+        scope: 'all',
+        spec: { style: 'double', size: 12, color: { kind: 'hex', value: '000000' } },
+      },
+      {
+        op: 'setTableColumnWidths',
+        tableId: table(-1),
+        leftGridColumnId: `${table(1)}.1`,
+        rightGridColumnId: `${table(1)}.2`,
+        leftWidthTwips: 1200,
+        rightWidthTwips: 2800,
+      },
+      { op: 'splitParagraph', paragraphId: `${table(56)}.2.1`, offset: 1 },
+      { op: 'deleteTableRow', tableId: table(-1), rowId: table(17) },
+    ];
+    for (const [step, op] of ops.entries()) expect(run.apply(op, `kept group ${step}`)).toBe(true);
+  } finally {
+    delete SHAPES.keptLong;
+  }
 });
 
 test('a banded style renumbered by a row insert places the restriped rows again', () => {
