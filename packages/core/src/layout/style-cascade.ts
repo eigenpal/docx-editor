@@ -481,9 +481,11 @@ export function buildStyleCascadeTable(
 ): StyleCascadeTable {
   // One read of the compatibility profile; the cache token folds every rule it turns on.
   const compatibility = compatibilityProfileFromSettings(settingsRoot);
-  let typography = cjkTypographyFromSettings(settingsRoot, compatibility.modeValue);
+  let typography = cjkTypographyFromSettings(settingsRoot);
   if (compatibility.has('lineEndPunctuationAtEveryAlignment'))
     typography = Object.freeze({ ...typography, legacyLineEndPunctuation: true as const });
+  if (compatibility.has('alternateLineEndFit'))
+    typography = Object.freeze({ ...typography, alternateLineEndFit: true as const });
   if (typography.balancedWidths && compatibility.has('balancedSpaceShrink'))
     typography = Object.freeze({ ...typography, balancedSpaceShrink: true as const });
   const ligaturesEnabled = compatibility.has('optionalLigatures');

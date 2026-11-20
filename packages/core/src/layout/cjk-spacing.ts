@@ -5,6 +5,7 @@ import { formatRevisionOf } from './revision-projection.ts';
 import { segmentGraphemes } from './grapheme.ts';
 import { measureDisplayText, type ResolvedRunStyle } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
+import { alternateLineEndAdvance, alternateLineEndDecides } from './hanging-mark-blanks.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import {
   eastAsianLanguage,
@@ -360,9 +361,6 @@ function lineStartForbids(
   );
 }
 
-export const isPlainHanPunctuation = (text: string): boolean =>
-  /^[\p{Script=Han}，。；、]+$/u.test(text);
-
 /** How {@link hangingCjkPunctuationAdvance} decides a line-end mark. */
 export interface HangingMarkOptions {
   /**
@@ -372,28 +370,10 @@ export interface HangingMarkOptions {
   readonly paragraphFinal?: boolean;
   /**
    * The paragraph typography. With it, a mark hangs only when the line-start rules forbid it
-   * at a line start; otherwise it starts the next line.
+   * at a line start; otherwise it starts the next line. Under the alternate line-break rules
+   * it also limits the advance (see `alternateLineEndAdvance`).
    */
   readonly policy?: CjkParagraphTypography;
-  /** All earlier text on this line is Han or Simplified Chinese punctuation. */
-  readonly plainChinesePrefix?: boolean;
-}
-
-/** Does the current Simplified Chinese line keep the ink-bearing half inside its margin? */
-export function usesPartialChineseHang(
-  text: string,
-  language: string | undefined,
-  policy: CjkParagraphTypography | undefined,
-  plainChinesePrefix: boolean | undefined
-): boolean {
-  return (
-    language === 'zh-cn' &&
-    policy?.settings?.alternateChineseHangingInMode14 === true &&
-    policy.settings.compression === 'compressPunctuation' &&
-    plainChinesePrefix === true &&
-    /[，。；]$/u.test(text) &&
-    isPlainHanPunctuation(text)
-  );
 }
 
 /** The advance of the final mark that may hang past the margin, or undefined when none may. */
@@ -401,7 +381,7 @@ export function hangingCjkPunctuationAdvance(
   text: string,
   piece: FieldAwarePiece,
   measurer: TextMeasurer,
-  { paragraphFinal = false, policy, plainChinesePrefix }: HangingMarkOptions = {}
+  { paragraphFinal = false, policy }: HangingMarkOptions = {}
 ): number | undefined {
   if (piece.projected || piece.measureText !== undefined) return undefined;
   // Callers check the paragraph's hanging policy first. Ordinary Latin words/spaces must not
@@ -423,9 +403,9 @@ export function hangingCjkPunctuationAdvance(
   const last = segmentGraphemes(text).at(-1)?.text;
   if (!last || !HANGING_CLASS.test(last)) return undefined;
   const advance = measureDisplayText(last, styleForFontSlot(piece.style, piece.fontSlot), measurer);
-  // Alternate Simplified Chinese rules let the trailing blank hang. The
-  // ink-bearing half still occupies the line, including during optical fitting.
-  return usesPartialChineseHang(text, language, policy, plainChinesePrefix) ? advance / 2 : advance;
+  return alternateLineEndDecides(last, language, policy)
+    ? alternateLineEndAdvance(last, piece, advance, policy)
+    : advance;
 }
 
 /** Whether the text fits the remaining measure once its final mark hangs past the margin. */

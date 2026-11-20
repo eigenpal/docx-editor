@@ -63,6 +63,43 @@ export function blankSideHangingAdvance(
   return Math.min(advance, Math.max(trailing, overflow));
 }
 
+// Japanese keeps these marks in its hanging set under the alternate line-break rules.
+const JAPANESE_HANGING = '、。，．';
+
+/**
+ * Whether the alternate line-break rules decide the line-end `mark` (`alternateLineEndFit`):
+ * the rules apply, and the mark is outside the hanging set of its run `language`. Only
+ * Japanese keeps a hanging set: `、。，．`.
+ */
+export function alternateLineEndDecides(
+  mark: string,
+  language: string | undefined,
+  typography: CjkParagraphTypography | undefined
+): boolean {
+  if (typography?.settings?.alternateLineEndFit !== true) return false;
+  return !(language?.startsWith('ja') === true && JAPANESE_HANGING.includes(mark));
+}
+
+/**
+ * Under the alternate line-break rules, the most of a line-end mark that may pass the margin:
+ * its blank right half, widened by its character spacing. The text keeps its natural width,
+ * and only the overflow passes the margin. A mark without a blank right half, a paragraph
+ * without punctuation compression, and Korean text return undefined: the mark wraps.
+ */
+export function alternateLineEndAdvance(
+  mark: string,
+  piece: FieldAwarePiece,
+  advance: number,
+  typography: CjkParagraphTypography | undefined
+): number | undefined {
+  const compression = typography?.settings?.compression;
+  if (compression === undefined || compression === 'doNotCompress') return undefined;
+  const language = eastAsianLanguage(piece.props);
+  if (isKorean(language) || lineEndMarkBlanks(mark, language) !== CLOSING_BLANKS) return undefined;
+  const spacing = piece.style.characterSpacingPt;
+  return Math.max(0, (advance - spacing) * CLOSING_BLANKS.trailing + spacing);
+}
+
 /** What a fitter knows about a line whose final mark may hang. */
 export interface BlankHangLine {
   readonly line: PendingLine;
@@ -74,7 +111,8 @@ export interface BlankHangLine {
 /**
  * Whether the mark that ends the last of `candidates` hangs only part of its advance: the
  * line lets its final mark hang, and the group overflows by no more than the mark's blank
- * sides. `piece` holds that mark.
+ * sides. Under the alternate line-break rules, `advance` is already that blank half. `piece`
+ * holds that mark.
  */
 export function hangsInBlankSides(
   candidates: readonly { readonly text: string }[],
@@ -85,5 +123,7 @@ export function hangsInBlankSides(
   if (advance === undefined || !typography) return false;
   if (!lineEndMarksMayHang(typography, line.spans, measurer)) return false;
   const text = candidates.at(-1)?.text ?? '';
+  if (alternateLineEndDecides(text.at(-1) ?? '', eastAsianLanguage(piece.props), typography))
+    return overflow <= advance + 0.001;
   return blankSideHangingAdvance(text, piece, advance, overflow, typography) < advance;
 }

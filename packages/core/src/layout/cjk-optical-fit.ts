@@ -29,9 +29,9 @@ import {
 } from './layout-derived-spacing.ts';
 
 const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
-const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
-const PUNCTUATION = /^[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]$/u;
-const HAS_PUNCTUATION = /[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]/u;
+const CLOSING = /^[、。〉》」』】〕〗〙〛），．；］｝]$/u;
+const PUNCTUATION = /^[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．；］｝：]$/u;
+const HAS_PUNCTUATION = /[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．；］｝：]/u;
 const TOLERANCE = 0.001;
 // The fit gate weighs expansion in units of 1/64 of an advance (see `expansionGate`).
 const EXPANSION_UNITS = 64;
@@ -512,14 +512,14 @@ function fitCjkOptically(
   const first = cells.find((cell) => cell.sourceIndex === sourceCount)!;
   const last = cells.at(-1)!;
   const beforeLast = cells.at(-2);
-  // A hanging line-end mark keeps its whole advance past the margin, so the rest of the line
+  // A hanging line-end mark keeps its hang advance past the margin, so the rest of the line
   // compresses only for the glyphs before it. A word keeps its final mark in its own cell.
   const hung =
     hangAdvance === undefined || last.sourceIndex < sourceCount
       ? 0
       : last.ordinaryOpaque
         ? hangAdvance
-        : last.span.box.width;
+        : Math.min(hangAdvance, last.span.box.width);
   const hangsLast = hung > 0;
   const fullDeficit = deficit;
   deficit -= hung;

@@ -1,6 +1,10 @@
 import { setLineHangingPunctuationAdvance } from './line-hanging-punctuation.ts';
-import { hangingCjkPunctuationAdvance, isPlainHanPunctuation } from './cjk-spacing.ts';
-import { blankSideHangingAdvance } from './hanging-mark-blanks.ts';
+import { hangingCjkPunctuationAdvance } from './cjk-spacing.ts';
+import {
+  alternateLineEndAdvance,
+  alternateLineEndDecides,
+  blankSideHangingAdvance,
+} from './hanging-mark-blanks.ts';
 import { eastAsianLanguage, isKorean, type CjkParagraphTypography } from './cjk-typography.ts';
 import type { FieldAwarePiece } from './field-projection.ts';
 import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
@@ -66,29 +70,24 @@ export function rememberHangingPunctuation(
 ): void {
   // `hangs` already admitted the mark, so a Korean mark that hangs closes its paragraph.
   const overflow = line.width + span.box.width - available;
-  const language = eastAsianLanguage(piece.props);
-  const alternateChineseLine =
-    typography.settings?.alternateChineseHangingInMode14 === true &&
-    typography.settings.compression === 'compressPunctuation' &&
-    language === 'zh-cn' &&
-    /[，。；]$/u.test(span.text) &&
-    isPlainHanPunctuation(span.text) &&
-    line.drawings.length === 0 &&
-    line.spans.every((part) => isPlainHanPunctuation(part.text));
   let advance =
     hangs && overflow > 0.001
-      ? hangingCjkPunctuationAdvance(span.text, piece, measurer, {
-          paragraphFinal: true,
-          policy: alternateChineseLine ? typography : undefined,
-          plainChinesePrefix: alternateChineseLine,
-        })
+      ? hangingCjkPunctuationAdvance(span.text, piece, measurer, { paragraphFinal: true })
       : undefined;
-  if (advance !== undefined && alternateChineseLine) advance = Math.min(advance, overflow);
+  const language = eastAsianLanguage(piece.props);
   if (advance !== undefined && flow?.koreanHangingLineFills !== true && isKorean(language))
     advance = undefined;
-  // With punctuation compression, a mark that overflows by no more than its blank sides hangs
-  // only its trailing blank, and the text before it fills the rest of the measure.
-  if (advance !== undefined && !alternateChineseLine)
+  // Under the alternate line-break rules only the overflow passes the margin, within the
+  // mark's blank half. Otherwise, with punctuation compression, a mark that overflows by no
+  // more than its blank sides hangs only its trailing blank, and the text before it fills the
+  // rest of the measure.
+  const mark = span.text.at(-1) ?? '';
+  if (advance !== undefined && alternateLineEndDecides(mark, language, typography))
+    advance = Math.min(
+      alternateLineEndAdvance(mark, piece, advance, typography) ?? advance,
+      overflow
+    );
+  else if (advance !== undefined)
     advance = blankSideHangingAdvance(span.text, piece, advance, overflow, typography);
   if (advance !== undefined || !span.lineEndWhitespace)
     setLineHangingPunctuationAdvance(line, advance);
