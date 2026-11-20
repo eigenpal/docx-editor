@@ -87,9 +87,9 @@
     "groupMemberClipboard": "يُنسخ الشكل الموجود داخل مجموعة أو يُقص مع مجموعته. اضغط على Escape لتحديد المجموعة.",
     "drawingClipboardSize": "هذا الرسم أكبر من أن يُنسخ.",
     "drawingPasteCells": "ضع المؤشر في النص للصق رسم.",
-    "groupMemberPaste": null,
-    "shapePasteText": null,
-    "textBoxPaste": null
+    "groupMemberPaste": "لا يمكن لصق نص في شكل داخل مجموعة. اضغط Escape لتحديد المجموعة.",
+    "shapePasteText": "لا يحتوي هذا الشكل على نص للصق فيه. ضع المؤشر في النص للصق.",
+    "textBoxPaste": "لا يمكن تحرير النص في مربع النص هذا. ضع المؤشر في النص للصق."
   },
   "toolbar": {
     "ariaLabel": "شريط أدوات التنسيق",

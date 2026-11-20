@@ -87,9 +87,9 @@
     "groupMemberClipboard": "Una forma all'interno di un gruppo viene copiata o tagliata con il suo gruppo. Premi Esc per selezionare il gruppo.",
     "drawingClipboardSize": "Questo disegno è troppo grande per essere copiato.",
     "drawingPasteCells": "Posiziona il cursore nel testo per incollare un disegno.",
-    "groupMemberPaste": null,
-    "shapePasteText": null,
-    "textBoxPaste": null
+    "groupMemberPaste": "Non è possibile incollare testo in una forma all’interno di un gruppo. Premi Esc per selezionare il gruppo.",
+    "shapePasteText": "Questa forma non contiene testo in cui incollare. Posiziona il cursore nel testo per incollare.",
+    "textBoxPaste": "Il testo di questa casella di testo non può essere modificato. Posiziona il cursore nel testo per incollare."
   },
   "toolbar": {
     "ariaLabel": "Barra degli strumenti di formattazione",

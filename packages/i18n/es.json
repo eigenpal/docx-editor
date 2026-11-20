@@ -87,9 +87,9 @@
     "groupMemberClipboard": "Una forma dentro de un grupo se copia o se corta con su grupo. Presiona Escape para seleccionar el grupo.",
     "drawingClipboardSize": "Este dibujo es demasiado grande para copiarlo.",
     "drawingPasteCells": "Coloca el cursor en el texto para pegar un dibujo.",
-    "groupMemberPaste": null,
-    "shapePasteText": null,
-    "textBoxPaste": null
+    "groupMemberPaste": "No se puede pegar texto en una forma dentro de un grupo. Presiona Escape para seleccionar el grupo.",
+    "shapePasteText": "Esta forma no tiene texto en el que pegar. Coloca el cursor en el texto para pegar.",
+    "textBoxPaste": "El texto de este cuadro de texto no se puede editar. Coloca el cursor en el texto para pegar."
   },
   "toolbar": {
     "ariaLabel": "Barra de formato",

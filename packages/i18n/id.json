@@ -1080,9 +1080,9 @@
     "groupMemberClipboard": "Bentuk di dalam grup disalin atau dipotong bersama grupnya. Tekan Escape untuk memilih grup.",
     "drawingClipboardSize": "Gambar ini terlalu besar untuk disalin.",
     "drawingPasteCells": "Letakkan kursor di teks untuk menempelkan gambar.",
-    "groupMemberPaste": null,
-    "shapePasteText": null,
-    "textBoxPaste": null
+    "groupMemberPaste": "Teks tidak dapat ditempelkan ke bentuk di dalam grup. Tekan Escape untuk memilih grup.",
+    "shapePasteText": "Bentuk ini tidak memiliki teks untuk ditempeli. Letakkan kursor di teks untuk menempel.",
+    "textBoxPaste": "Teks di kotak teks ini tidak dapat diedit. Letakkan kursor di teks untuk menempel."
   },
   "equationPopup": {
     "apply": "Terapkan",

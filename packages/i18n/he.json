@@ -1081,9 +1081,9 @@
     "groupMemberClipboard": "צורה בתוך קבוצה מועתקת או נגזרת יחד עם הקבוצה. הקש Escape כדי לבחור את הקבוצה.",
     "drawingClipboardSize": "ציור זה גדול מדי להעתקה.",
     "drawingPasteCells": "מקם את הסמן בטקסט כדי להדביק ציור.",
-    "groupMemberPaste": null,
-    "shapePasteText": null,
-    "textBoxPaste": null
+    "groupMemberPaste": "לא ניתן להדביק טקסט בצורה שבתוך קבוצה. הקישו Escape כדי לבחור את הקבוצה.",
+    "shapePasteText": "בצורה זו אין טקסט להדבקה. מקמו את הסמן בטקסט כדי להדביק.",
+    "textBoxPaste": "לא ניתן לערוך את הטקסט בתיבת טקסט זו. מקמו את הסמן בטקסט כדי להדביק."
   },
   "equationPopup": {
     "apply": "החלה",

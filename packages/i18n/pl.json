@@ -1080,9 +1080,9 @@
     "groupMemberClipboard": "Kształt w grupie jest kopiowany lub wycinany razem z grupą. Naciśnij Escape, aby zaznaczyć grupę.",
     "drawingClipboardSize": "Ten rysunek jest za duży, aby go skopiować.",
     "drawingPasteCells": "Umieść kursor w tekście, aby wkleić rysunek.",
-    "groupMemberPaste": null,
-    "shapePasteText": null,
-    "textBoxPaste": null
+    "groupMemberPaste": "Nie można wkleić tekstu do kształtu w grupie. Naciśnij Escape, aby zaznaczyć grupę.",
+    "shapePasteText": "Ten kształt nie zawiera tekstu, do którego można wkleić. Umieść kursor w tekście, aby wkleić.",
+    "textBoxPaste": "Tekstu w tym polu tekstowym nie można edytować. Umieść kursor w tekście, aby wkleić."
   },
   "equationPopup": {
     "apply": "Zastosuj",

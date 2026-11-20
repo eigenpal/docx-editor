@@ -87,9 +87,9 @@
     "groupMemberClipboard": "グループ内の図形はグループと一緒にコピーまたは切り取られます。Esc キーを押してグループを選択してください。",
     "drawingClipboardSize": "この描画は大きすぎてコピーできません。",
     "drawingPasteCells": "描画を貼り付けるには、テキスト内にカーソルを置いてください。",
-    "groupMemberPaste": null,
-    "shapePasteText": null,
-    "textBoxPaste": null
+    "groupMemberPaste": "グループ内の図形にはテキストを貼り付けられません。グループを選択するには Esc キーを押してください。",
+    "shapePasteText": "この図形には貼り付け先のテキストがありません。貼り付けるには、テキスト内にカーソルを置いてください。",
+    "textBoxPaste": "このテキスト ボックスのテキストは編集できません。貼り付けるには、テキスト内にカーソルを置いてください。"
   },
   "toolbar": {
     "ariaLabel": "書式設定ツールバー",

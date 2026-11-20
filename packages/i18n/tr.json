@@ -1080,9 +1080,9 @@
     "groupMemberClipboard": "Bir grup içindeki şekil, grubuyla birlikte kopyalanır veya kesilir. Grubu seçmek için Escape tuşuna basın.",
     "drawingClipboardSize": "Bu çizim kopyalanamayacak kadar büyük.",
     "drawingPasteCells": "Çizim yapıştırmak için imleci metne yerleştirin.",
-    "groupMemberPaste": null,
-    "shapePasteText": null,
-    "textBoxPaste": null
+    "groupMemberPaste": "Grup içindeki bir şekle metin yapıştırılamaz. Grubu seçmek için Escape tuşuna basın.",
+    "shapePasteText": "Bu şeklin yapıştırılacak metni yok. Yapıştırmak için imleci metne yerleştirin.",
+    "textBoxPaste": "Bu metin kutusundaki metin düzenlenemez. Yapıştırmak için imleci metne yerleştirin."
   },
   "equationPopup": {
     "apply": "Uygula",

@@ -1080,9 +1080,9 @@
     "groupMemberClipboard": "Une forme dans un groupe est copiée ou coupée avec son groupe. Appuyez sur Échap pour sélectionner le groupe.",
     "drawingClipboardSize": "Ce dessin est trop volumineux pour être copié.",
     "drawingPasteCells": "Placez le curseur dans le texte pour coller un dessin.",
-    "groupMemberPaste": null,
-    "shapePasteText": null,
-    "textBoxPaste": null
+    "groupMemberPaste": "Impossible de coller du texte dans une forme d’un groupe. Appuyez sur Échap pour sélectionner le groupe.",
+    "shapePasteText": "Cette forme ne contient pas de texte où coller. Placez le curseur dans le texte pour coller.",
+    "textBoxPaste": "Le texte de cette zone de texte ne peut pas être modifié. Placez le curseur dans le texte pour coller."
   },
   "equationPopup": {
     "apply": "Appliquer",
