@@ -147,6 +147,10 @@ export function tocLinkRanges(part: OoxmlPart): TocLinkRanges {
   return ranges;
 }
 
+/**
+ * Wrap a cascader so it receives `suppressHyperlinkStyle` inside the given ranges. The wrapped
+ * cascader must come from {@link tocAwareRunCascader}; another one ignores the flag.
+ */
 export function tocLinkCascader(
   cascade: RunPropertyCascader | undefined,
   ranges: readonly TocLinkRange[] | undefined,

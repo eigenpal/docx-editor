@@ -20,7 +20,12 @@ import {
 } from '../store/package/hyphen-text.ts';
 import { runLigaturesValue } from './run-ligatures.ts';
 
-/** Optional per-run merge of inherited + direct `rPr` (character styles, defaults). */
+/**
+ * Optional per-run merge of inherited + direct `rPr` (character styles, defaults).
+ *
+ * `suppressHyperlinkStyle` is true for link content in a TOC result. A cascader that a walk
+ * with TOC ranges receives must honor it: build it with `tocAwareRunCascader`.
+ */
 export type RunPropertyCascader = (
   inherited: readonly OoxmlProperty[],
   direct: readonly OoxmlProperty[],
