@@ -23,11 +23,15 @@ export type { RailWindow };
  * renders before the band is known: a rail that mounts with thousands of items would otherwise
  * build, measure and drop all of them in one flush. The first measure runs after the patch
  * that mounts the rail, in the same flush, before the rail is painted.
+ *
+ * The band is stepped, so it changes only when the scroll position crosses a step line.
+ * `exact` asks for the unstepped band, which follows each scroll frame.
  */
 export function useRailWindow(
   editor: Readonly<Ref<unknown>>,
   railRef: Readonly<Ref<HTMLElement | null>>,
-  active: () => boolean
+  active: () => boolean,
+  exact: () => boolean = () => false
 ): Readonly<Ref<RailWindow | null>> {
   const band = shallowRef<RailWindow | null>(UNMEASURED_RAIL_WINDOW);
   let stop: (() => void) | undefined;
@@ -40,7 +44,7 @@ export function useRailWindow(
     });
   };
   watch(
-    [editor, active, railRef],
+    [editor, active, railRef, exact],
     () => {
       stop?.();
       stop = undefined;
@@ -59,11 +63,16 @@ export function useRailWindow(
         return;
       }
       // A re-bound observer reports its first band again: keep the same one, so it renders nothing.
-      stop = observeRailWindow(rail, scroller, (next) => {
-        const previous = band.value;
-        if (previous && previous.top === next.top && previous.bottom === next.bottom) return;
-        band.value = next;
-      });
+      stop = observeRailWindow(
+        rail,
+        scroller,
+        (next) => {
+          const previous = band.value;
+          if (previous && previous.top === next.top && previous.bottom === next.bottom) return;
+          band.value = next;
+        },
+        { exact: exact() }
+      );
     },
     { flush: 'post' }
   );

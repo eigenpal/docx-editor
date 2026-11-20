@@ -15,7 +15,7 @@ import {
   commentMenuKey,
   observeCommentMenu,
 } from '../review/comment-actions-menu.ts';
-import { useRail, useReviewLabel } from './review-context.ts';
+import { useCardRail, useReviewLabel } from './review-context.ts';
 import type { ReviewItemView } from './useReview.ts';
 
 export function ReviewCommentActions({
@@ -25,7 +25,7 @@ export function ReviewCommentActions({
   readonly entry: ReviewItemView;
   readonly hideDelete?: boolean;
 }) {
-  const rail = useRail();
+  const rail = useCardRail();
   const t = useReviewLabel();
   const editor = useDocxEditor();
   const [open, setOpen] = useState(false);

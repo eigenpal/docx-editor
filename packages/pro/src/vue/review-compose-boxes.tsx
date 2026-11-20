@@ -20,10 +20,13 @@ import {
 import { isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '@docx-editor.dev/vue';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import type { ReviewRailValue } from './review-context.ts';
+import {
+  useReviewThread,
+  type ReviewCardRailValue,
+  type ReviewRailValue,
+} from './review-context.ts';
 import type { ReviewItemView } from './useReview.ts';
 import { useReviewStableId } from './stable-id.ts';
-import { useEditorRenderRevision } from './useEditorRenderRevision.ts';
 import {
   COMPACT_CARD_WIDTH,
   COMPOSE_KEY,
@@ -38,6 +41,8 @@ import type { ReviewWriteRefusal } from '../review/review-refusal.ts';
 
 interface ComposePartDeps {
   readonly useRail: () => ComputedRef<ReviewRailValue>;
+  /** The rail as a part inside a card reads it: nothing in it follows the item list. */
+  readonly useCardRail: () => ComputedRef<ReviewCardRailValue>;
   readonly useItem: () => ComputedRef<ReviewItemView | null>;
   readonly useLabel: () => (key: TranslationKey) => string;
 }
@@ -250,7 +255,10 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
 
   /** Draft state and submission for one reply line, held by whichever part owns it. */
   function useReplyDraft(entryRef: () => ReviewItemView | null) {
-    const rail = deps.useRail();
+    const rail = deps.useCardRail();
+    // A card in the list holds only its replies here, so its own entry stands; the balloon and
+    // the compact card hold every item, and the rail's view of the entry wins there.
+    const thread = useReviewThread();
     const editorRef = useDocxEditor();
     const draft = ref('');
     const refused = ref(false);
@@ -258,10 +266,10 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
     const refusedCode = ref<ReviewWriteRefusal['code'] | undefined>(undefined);
     const submit = (root: ParentNode | null) => {
       const entry = entryRef();
-      const { review, readOnly, byId } = rail.value;
+      const { review, readOnly } = rail.value;
       const input = root?.querySelector<HTMLInputElement>('[data-testid="review-reply-input"]');
       const text = (input?.value ?? draft.value).trim();
-      const live = entry ? (byId.get(entry.id) ?? entry) : null;
+      const live = entry ? (thread.value.get(entry.id) ?? entry) : null;
       if (!live || readOnly || text.length === 0) return;
       const editor = editorRef.value;
       const result = editor?.replyToReviewItem(live.key, text);
@@ -294,7 +302,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
    */
   function renderReplyLine(
     state: ReturnType<typeof useReplyDraft>,
-    rail: ComputedRef<ReviewRailValue>,
+    rail: ComputedRef<ReviewCardRailValue>,
     t: (key: TranslationKey) => string,
     fieldId: string,
     options: { readonly className?: string; readonly onCancel?: () => void } = {}
@@ -422,16 +430,14 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
         hidden: Boolean,
       },
       setup(props, { slots }) {
-        const rail = deps.useRail();
+        const rail = deps.useCardRail();
         const entryRef = deps.useItem();
         const t = deps.useLabel();
         const fieldId = useReviewStableId('reply');
-        const editorRevision = useEditorRenderRevision();
         // Held here, not in the line: the draft survives the card closing and reopening.
         const state = useReplyDraft(() => entryRef.value);
 
         return () => {
-          void editorRevision.value;
           const entry = entryRef.value;
           if (
             props.hidden ||
@@ -468,7 +474,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
       onDraft: { type: Function as PropType<(hasText: boolean) => void>, default: undefined },
     },
     setup(props) {
-      const rail = deps.useRail();
+      const rail = deps.useCardRail();
       const t = deps.useLabel();
       const fieldId = useReviewStableId('balloon-reply');
       const state = useReplyDraft(() => (props.orphaned ? null : props.entry));
