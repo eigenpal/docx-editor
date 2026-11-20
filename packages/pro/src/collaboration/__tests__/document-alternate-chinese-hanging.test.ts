@@ -73,7 +73,7 @@ test('alternate Chinese line breaks converge after concurrent edits, undo and re
     const peers = await harness.pair(source);
     const left = open(peers.alice.room.document, peers.alice);
     const right = open(peers.bob.room.document, peers.bob);
-    const converged = (expected: readonly string[]) => {
+    const converged = (expected: string[]) => {
       peers.alice.room.session.flushPendingJournals();
       peers.bob.room.session.flushPendingJournals();
       expect(geometry(left)).toEqual(geometry(right));

@@ -68,7 +68,6 @@ import { createParagraphCjkOpticalFitter, appendOpticalCjkCandidate } from './cj
 import {
   compressCjkPieces,
   canHangCjkPunctuation,
-  isPlainHanPunctuation,
   lineLocalBearingRetry,
   cjkSeamNaturalWidths,
   type LineLocalAdvances,
@@ -1326,10 +1325,6 @@ export function breakParagraph(
         canHangCjkPunctuation(text, piece, lineAvailable() - line.width, textWidth, measurer, {
           paragraphFinal: ends,
           policy: typography,
-          plainChinesePrefix:
-            typography.settings?.alternateChineseHangingInMode14 === true &&
-            line.drawings.length === 0 &&
-            line.spans.every((span) => isPlainHanPunctuation(span.text)),
         });
       let hangs = hangsAtLineEnd();
       const applyOpticalFit =

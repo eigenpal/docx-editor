@@ -19,12 +19,7 @@ import {
 import { styleForFontSlot } from './script-itemization.ts';
 import { isDefaultGraphemeBoundary, segmentGraphemes, type GraphemeSegment } from './grapheme.ts';
 import { isCjk, type CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
-import {
-  hangingCjkPunctuationAdvance,
-  hangsWithin,
-  isPlainHanPunctuation,
-  usesPartialChineseHang,
-} from './cjk-spacing.ts';
+import { hangingCjkPunctuationAdvance, hangsWithin } from './cjk-spacing.ts';
 import { hangsInBlankSides } from './hanging-mark-blanks.ts';
 import { formatRevisionOf } from './revision-projection.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
@@ -37,8 +32,6 @@ const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
 const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
 const PUNCTUATION = /^[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]$/u;
 const HAS_PUNCTUATION = /[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]/u;
-const closingPunctuation = (text: string, allowSemicolon: boolean): boolean =>
-  CLOSING.test(text) || (allowSemicolon && text === '；');
 const TOLERANCE = 0.001;
 // The fit gate weighs expansion in units of 1/64 of an advance (see `expansionGate`).
 const EXPANSION_UNITS = 64;
@@ -167,7 +160,7 @@ function opaqueCjkNumberMarker(span: StyleSpanRecord): boolean {
   );
 }
 // A missing slot needs no face substitution when both declared families are identical.
-function sameFaceImplicitEastAsian(span: StyleSpanRecord, allowSemicolon: boolean): boolean {
+function sameFaceImplicitEastAsian(span: StyleSpanRecord): boolean {
   const family = span.style.fontFamilyEastAsia;
   return (
     span.fontSlot === undefined &&
@@ -178,8 +171,7 @@ function sameFaceImplicitEastAsian(span: StyleSpanRecord, allowSemicolon: boolea
       (cluster) =>
         cluster.text === ' ' ||
         isCjk(cluster.text.codePointAt(0)!) ||
-        PUNCTUATION.test(cluster.text) ||
-        (allowSemicolon && cluster.text === '；')
+        PUNCTUATION.test(cluster.text)
     )
   );
 }
@@ -188,8 +180,7 @@ function cellsOf(
   measurer: TextMeasurer,
   baselinePieces: readonly FieldAwarePiece[],
   requireLocalQualification: boolean,
-  memo: ClusterMemo,
-  allowSemicolon: boolean
+  memo: ClusterMemo
 ): Cell[] | undefined {
   const cells: Cell[] = [];
   let length = 0;
@@ -223,7 +214,7 @@ function cellsOf(
         });
         continue;
       }
-      if (span.fontSlot !== 'eastAsia' && !sameFaceImplicitEastAsian(span, allowSemicolon)) {
+      if (span.fontSlot !== 'eastAsia' && !sameFaceImplicitEastAsian(span)) {
         // Ordinary base text may coexist with qualified EA punctuation. Keep its
         // complete measured span: splitting AV/fi would discard kerning/ligatures.
         // Only a complete ASCII word can guard an adjacent EA-owned seam.
@@ -266,7 +257,6 @@ function cellsOf(
           cluster.text !== ' ' &&
           !isCjk(cluster.text.codePointAt(0)!) &&
           !PUNCTUATION.test(cluster.text) &&
-          !(allowSemicolon && cluster.text === '；') &&
           !(curlyAllowed && curlyRole(cluster.text))
       )
     )
@@ -334,13 +324,12 @@ function cellsOf(
 }
 // A glyph a blank side can face: an ideograph, punctuation, a qualified quote, or a word. A space
 // is not one.
-function fitNeighbour(cell: Cell, allowSemicolon: boolean): boolean {
+function fitNeighbour(cell: Cell): boolean {
   const text = cell.span.text;
   return (
     cell.ordinaryOpaque === true ||
     cell.qualifiedCurly !== undefined ||
     PUNCTUATION.test(text) ||
-    (allowSemicolon && text === '；') ||
     isCjk(text.codePointAt(0)!)
   );
 }
@@ -353,10 +342,10 @@ function finiteInk(cell: Cell): cell is Cell & { ink: { left: number; right: num
   );
 }
 
-const blankSided = (cell: Cell, allowSemicolon: boolean): boolean =>
+const blankSided = (cell: Cell): boolean =>
   cell.qualifiedCurly !== undefined ||
   OPENING.test(cell.span.text) ||
-  closingPunctuation(cell.span.text, allowSemicolon) ||
+  CLOSING.test(cell.span.text) ||
   cell.span.text === '：';
 /**
  * A justified line takes another ordinary glyph by compression only when the share of the
@@ -370,14 +359,13 @@ function expansionGate(
   cells: readonly Cell[],
   sourceCount: number,
   room: number,
-  deficit: number,
-  allowSemicolon: boolean
+  deficit: number
 ): { readonly capacityBound: number; admits(capacity: number): boolean } {
   let spread = 0;
   let capacityBound = 0;
   let lastLineCell: Cell | undefined;
   for (const cell of cells) {
-    if (blankSided(cell, allowSemicolon)) capacityBound += cell.natural / 2;
+    if (blankSided(cell)) capacityBound += cell.natural / 2;
     if (cell.sourceIndex >= sourceCount) continue;
     spread += cell.natural;
     lastLineCell = cell;
@@ -451,7 +439,6 @@ interface FitContext {
   readonly measurer: TextMeasurer;
   readonly baselinePieces: readonly FieldAwarePiece[];
   readonly requireLocalQualification: boolean;
-  readonly allowSemicolon: boolean;
   readonly memo: ClusterMemo;
   /**
    * The cells of the current group's line, kept between its attempts: an attempt that fails
@@ -477,8 +464,7 @@ function lineCells(
     context.measurer,
     context.baselinePieces,
     context.requireLocalQualification,
-    context.memo,
-    context.allowSemicolon
+    context.memo
   );
   context.cells.value = cells ?? null;
   return cells;
@@ -490,13 +476,15 @@ function fitCjkOptically(
   context: FitContext,
   { hangAdvance, kana }: FitAttempt
 ): CjkOpticalFit | undefined {
-  const { measurer, allowSemicolon } = context;
+  const { measurer } = context;
   const width = candidates.reduce((sum, candidate) => sum + candidate.box.width, 0);
   let deficit = line.width + width - available;
   if (deficit <= TOLERANCE || !measurer.inkBounds || line.drawings.length) return undefined;
-  const hasPunctuation = (span: StyleSpanRecord) =>
-    HAS_PUNCTUATION.test(span.text) || (allowSemicolon && span.text.includes('；'));
-  if (!kana && !candidates.some(hasPunctuation) && !line.spans.some(hasPunctuation))
+  if (
+    !kana &&
+    !candidates.some((span) => HAS_PUNCTUATION.test(span.text)) &&
+    !line.spans.some((span) => HAS_PUNCTUATION.test(span.text))
+  )
     return undefined;
   // A kana fit is gated, and the gate needs room left on the line. Check that and an upper
   // bound on the capacity before the line is split into cells and measured for ink.
@@ -524,22 +512,20 @@ function fitCjkOptically(
   const first = cells.find((cell) => cell.sourceIndex === sourceCount)!;
   const last = cells.at(-1)!;
   const beforeLast = cells.at(-2);
-  // Reserve the part of the final mark that stays inside the margin. An opaque word
-  // supplies the advance of its final mark separately.
+  // A hanging line-end mark keeps its whole advance past the margin, so the rest of the line
+  // compresses only for the glyphs before it. A word keeps its final mark in its own cell.
   const hung =
     hangAdvance === undefined || last.sourceIndex < sourceCount
       ? 0
       : last.ordinaryOpaque
         ? hangAdvance
-        : Math.min(hangAdvance, last.span.box.width);
+        : last.span.box.width;
   const hangsLast = hung > 0;
   const fullDeficit = deficit;
   deficit -= hung;
   // A final qualified closing quote drops its trailing blank after any glyph, a word included.
   const curlyFinal =
-    last.qualifiedCurly === 'closing' &&
-    beforeLast !== undefined &&
-    fitNeighbour(beforeLast, allowSemicolon);
+    last.qualifiedCurly === 'closing' && beforeLast !== undefined && fitNeighbour(beforeLast);
   // Otherwise the final closing bearing is removed first. A bracket's measured ink must stay
   // inside; a quote gives its whole trailing half even where its ink reaches past the middle.
   let deferredFinal = 0;
@@ -568,7 +554,7 @@ function fitCjkOptically(
     (kana !== undefined && !kana.ungated) ||
     (isCjk(first.span.text.codePointAt(0)!) && !PUNCTUATION.test(first.span.text)) ||
     OPENING.test(first.span.text)
-      ? expansionGate(cells, sourceCount, available - line.width, fullDeficit, allowSemicolon)
+      ? expansionGate(cells, sourceCount, available - line.width, fullDeficit)
       : undefined;
   if (gate && !gate.admits(gate.capacityBound + relief + kanaCapacity + deferredFinal))
     return undefined;
@@ -590,9 +576,9 @@ function fitCjkOptically(
   for (let index = 1; index < cells.length; index++) {
     const previous = cells[index - 1]!;
     const current = cells[index]!;
-    if (!fitNeighbour(previous, allowSemicolon) || !fitNeighbour(current, allowSemicolon)) continue;
+    if (!fitNeighbour(previous) || !fitNeighbour(current)) continue;
     const right =
-      closingPunctuation(previous.span.text, allowSemicolon) ||
+      CLOSING.test(previous.span.text) ||
       previous.span.text === '：' ||
       previous.qualifiedCurly === 'closing';
     const left = OPENING.test(current.span.text) || current.qualifiedCurly === 'opening';
@@ -936,22 +922,14 @@ export function createCjkOpticalFitter(
       x - origin - trailingWidth <= available - line.width + TOLERANCE
     )
       return undefined;
-    const hangText = hangingPunctuation
-      ? candidates.map((candidate) => candidate.text).join('')
-      : '';
-    const plainChinesePrefix =
-      hangingPunctuation &&
-      policy?.settings?.alternateChineseHangingInMode14 === true &&
-      line.drawings.length === 0 &&
-      line.spans.every((span) => isPlainHanPunctuation(span.text));
-    const finalPiece = pieces[currentIndex]!;
     const hangAdvance = hangingPunctuation
-      ? hangingCjkPunctuationAdvance(hangText, finalPiece, measurer, { policy, plainChinesePrefix })
+      ? hangingCjkPunctuationAdvance(
+          candidates.map((candidate) => candidate.text).join(''),
+          pieces[currentIndex]!,
+          measurer,
+          { policy }
+        )
       : undefined;
-    // A semicolon supplies a bearing on this same line when the end mark uses a half-cell.
-    const allowSemicolon =
-      hangAdvance !== undefined &&
-      usesPartialChineseHang(hangText, languageOf(finalPiece), policy, plainChinesePrefix);
     // Kana compress to pull a line-start-prohibited character onto the line before it may
     // hang, unless its overflow fits in its blank sides. A group that hangs at its natural width
     // needs no other fit; one that does not may still hang once the rest of the line compresses.
@@ -959,7 +937,6 @@ export function createCjkOpticalFitter(
       measurer,
       baselinePieces: pieces,
       requireLocalQualification,
-      allowSemicolon,
       memo,
       cells: {},
     };

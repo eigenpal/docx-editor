@@ -18,7 +18,7 @@ import { pageBreakYieldsToLineBreak } from './page-break-before-line-break.ts';
 import type { FieldAwarePiece } from './field-projection.ts';
 import { wordBoundaries } from './cjk-line-break.ts';
 import type { CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
-import { canHangCjkPunctuation, isPlainHanPunctuation } from './cjk-spacing.ts';
+import { canHangCjkPunctuation } from './cjk-spacing.ts';
 import { paragraphFinalAt } from './paragraph-hanging-punctuation.ts';
 import type { CjkParagraphTypography } from './cjk-typography.ts';
 import { measureInlineDrawing } from './drawing-layout.ts';
@@ -51,8 +51,6 @@ export function anchorLineStartsByModelOffset(input: {
   let probeLineStart = pieces[0]?.start ?? 0;
   const lineStarts = [probeLineStart];
   let probeWidth = 0;
-  let nonChineseEnd = probeLineStart;
-  const checkChinesePrefix = input.typography?.settings?.alternateChineseHangingInMode14 === true;
   let probeLineIndex = 0;
   // Mirrors the placement loop's word state — the same open decision (`lineOpenDecisionAt`)
   // and the same mid-word carry — so the probe's predicted line starts cannot diverge
@@ -74,7 +72,6 @@ export function anchorLineStartsByModelOffset(input: {
   };
   for (const [pieceIndex, piece] of pieces.entries()) {
     if (piece.unsupported) {
-      nonChineseEnd = piece.end;
       const width = piece.unsupported.width;
       if (probeWidth > 0 && probeWidth + width > probeLineAvail()) closeProbeLine(piece.start);
       probeWidth += width;
@@ -82,7 +79,6 @@ export function anchorLineStartsByModelOffset(input: {
     }
     const equation = equationLayoutOf(piece);
     if (equation) {
-      nonChineseEnd = piece.end;
       const width = equation.geometry.box.width;
       if (probeWidth > 0 && probeWidth + width > probeLineAvail()) closeProbeLine(piece.start);
       probeWidth += width;
@@ -92,7 +88,6 @@ export function anchorLineStartsByModelOffset(input: {
       continue;
     }
     if (piece.inlineDrawing) {
-      nonChineseEnd = piece.end;
       const width = measureInlineDrawing(piece.inlineDrawing.projection).totalWidth;
       if (probeWidth > 0 && probeWidth + width > probeLineAvail()) closeProbeLine(piece.start);
       probeWidth += width;
@@ -155,7 +150,6 @@ export function anchorLineStartsByModelOffset(input: {
         canHangCjkPunctuation(candidate, piece, probeLineAvail() - probeWidth, width, measurer, {
           paragraphFinal: paragraphFinal(pieceIndex, boundary),
           policy: input.typography,
-          plainChinesePrefix: checkChinesePrefix && nonChineseEnd <= probeLineStart,
         });
       const fitWidth = (input.seamNaturalWidths?.get(piece) ?? width) + gap();
       if (!hangs && probeWidth > 0 && probeWidth + fitWidth > probeLineAvail()) {
@@ -175,8 +169,6 @@ export function anchorLineStartsByModelOffset(input: {
         }
         probeWordStartWidth = 0;
       }
-      if (checkChinesePrefix && !isPlainHanPunctuation(candidate))
-        nonChineseEnd = piece.start + boundary;
       probeWidth += gap() + width;
       previousText = { ...piece, text: candidate, style, modelEnd: piece.start + boundary };
       probeLastEmitted = candidate;
