@@ -893,7 +893,7 @@ When line-end punctuation hangs, the preceding text SHALL fill the measure, incl
 
 ### Requirement: East Asian punctuation fitting on mixed lines
 
-When document punctuation compression is on and the document defaults name an East Asian face, a line that also holds complete Latin words, digit groups, or ASCII symbol groups SHALL be able to fit by compressing adjacent East Asian punctuation against measured glyph ink. The Latin groups SHALL keep their natural advances and source ranges. A line of such a paragraph that holds no Latin group SHALL fit as it fits in a paragraph without Latin text, with authored character spacing of either sign.
+When document punctuation compression is on and the document defaults name an East Asian face, a line that also holds complete Latin words, digit groups, or ASCII symbol groups SHALL be able to fit by compressing adjacent East Asian punctuation against measured glyph ink. The Latin groups SHALL keep their natural advances and source ranges. A tracked line of only East Asian text, punctuation, and spaces SHALL fit as in a paragraph without Latin text.
 
 #### Scenario: A mixed line fits by compressing punctuation
 
@@ -909,7 +909,7 @@ When document punctuation compression is on and the document defaults name an Ea
 #### Scenario: A tracked line without Latin groups fits in a mixed paragraph
 
 - **GIVEN** a paragraph whose Latin groups lie only on other lines
-- **WHEN** a line without Latin groups or curly quotes has authored character spacing of either sign and overflows by less than the punctuation's measured spare ink
+- **WHEN** a line of only East Asian text, punctuation, and spaces has authored character spacing of either sign and overflows by less than the punctuation's measured spare ink
 - **THEN** the line breaks as it does in a paragraph without Latin text, with or without a hanging final mark
 - **AND** every glyph keeps its authored character spacing
 

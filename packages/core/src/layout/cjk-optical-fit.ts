@@ -9,6 +9,7 @@ import {
 import type { SourceRange, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { measureDisplayText } from './run-style.ts';
 import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
+import { memoized, type ClusterMemo } from './cjk-optical-memo.ts';
 import {
   kanaFitCells,
   kanaCapacityOf,
@@ -22,7 +23,6 @@ import { isCjk, type CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
 import { hangingCjkPunctuationAdvance, hangsWithin } from './cjk-spacing.ts';
 import { formatRevisionOf } from './revision-projection.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
-import { memoized, type ClusterMemo } from './cjk-optical-memo.ts';
 import {
   layoutDerivedSpacingStyleForEditing,
   withLayoutDerivedSpacing,
