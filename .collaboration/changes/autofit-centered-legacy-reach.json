@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A centered legacy AutoFit table with a dxa width whose columns overflowed the text column was scaled into the column's width.",
+  "after": "The table fills the text column with its outer cell content on the text edges, so it reaches past each edge by its outer cell margin and stays centered. Shared document state and operations are unchanged.",
+  "reason": "The change is confined to layout. Replicas compute the same layout from the same tree, and saved documents keep the same XML.",
+  "tests": ["packages/core/src/layout/__tests__/table-centered-legacy-reach.test.ts"],
+  "changeset": "autofit-centered-legacy-reach",
+  "migration": null
+}

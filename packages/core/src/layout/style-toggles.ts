@@ -29,20 +29,18 @@
 // before changing either.
 //
 //   `on`, and the document defaults' short circuit, are SPEC-LITERAL. Both sentences quoted
-//   above are followed exactly. LibreOffice does NOT implement the short circuit — it renders
-//   `docDefaults <w:b/>` + a character style `<w:b/>` as regular, where this resolves bold —
-//   and the behaviour has not been checked against Word. Those two cases follow the spec and
-//   nothing else.
+//   above (ECMA-376 Part 1 §17.7.3) are followed exactly. `docDefaults <w:b/>` + a character
+//   style `<w:b/>` resolves bold here. Those two cases follow the spec and nothing else.
 //
 //   `off` has NO spec support. §17.7.3 introduces the per-level algorithm with the aside
 //   "(if no value is encountered, the property takes on its default value)" — false, per
 //   §17.3.2.1 — and `false XOR x` is `x`, so read literally an explicit `w:val="0"` at a
 //   level is a no-op. It is not treated as one here,
-//   because every implementation says otherwise: LibreOffice renders `docDefaults <w:b/>` +
-//   character `<w:b w:val="0"/>` as regular, this engine did the same before the cascade
-//   existed, and Word's own authoring corroborates the split — a "Not Bold" character style
-//   over a bold paragraph style is spelled `<w:b/>`, because the toggle is how you cancel,
-//   which leaves `w:val="0"` for an explicit off.
+//   because `docDefaults <w:b/>` + character `<w:b w:val="0"/>` resolves regular in DOCX
+//   applications, and this engine did the same before the cascade existed. Authored files
+//   corroborate the split: a "not bold" character style over a bold paragraph style is
+//   spelled `<w:b/>` (§17.3.2.1), because the toggle is how you cancel, which leaves
+//   `w:val="0"` for an explicit off.
 //
 // Direct formatting is absolute: "If a toggle property is explicitly set in direct formatting
 // applied to a given piece of content, then its value in the direct formatting shall be
@@ -142,9 +140,8 @@ interface ToggleState {
    * true." That outranks the parity of the `on` levels, so it has to survive them; an
    * explicit `off` at a level is a value the level STATES, and it clears the short circuit.
    *
-   * SPEC-DERIVED AND UNVERIFIED against either implementation. LibreOffice does not apply the
-   * short circuit at all, and Word has not been measured on it, so this field is the one part
-   * of the model with no rendering oracle behind it. The clearing half is the hybrid seam:
+   * SPEC-DERIVED AND UNVERIFIED (ECMA-376 Part 1 §17.7.3). This field is the one part of the
+   * model with no rendering oracle behind it. The clearing half is the hybrid seam:
    * the spec does not license it and every implementation does.
    */
   readonly forced: boolean;
@@ -227,7 +224,7 @@ export function combineStyleToggles(levels: readonly StyleToggleLevel[]): readon
         resolved.set(localName, { value: on, forced: false });
       } else if (!on) {
         // An explicit off IS this level's value: it sets the state and outranks a true
-        // document default, the way LibreOffice and the base branch both resolve it.
+        // document default, the way the base branch resolved it (ECMA-376 Part 1 §17.7.3).
         resolved.set(localName, { value: false, forced: false });
       } else if (level.role === 'defaults') {
         resolved.set(localName, { value: true, forced: true });

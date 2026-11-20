@@ -16,14 +16,14 @@ import {
 import { useDocxEditor } from '@docx-editor.dev/vue';
 import { commentEditDrafts, type CommentEditDraft } from '../review/comment-edit-drafts.ts';
 import type { ReviewItemView } from './useReview.ts';
-import { useRail, useReviewLabel } from './review-context.ts';
+import { useCardRail, useReviewLabel } from './review-context.ts';
 import { useReviewStableId } from './stable-id.ts';
 
 export const ReviewCommentText = defineComponent({
   name: 'ReviewCommentText',
   props: { entry: { type: Object as PropType<ReviewItemView>, required: true } },
   setup(props) {
-    const rail = useRail();
+    const rail = useCardRail();
     const t = useReviewLabel();
     const id = useReviewStableId('comment-edit');
     const field = ref<HTMLTextAreaElement | null>(null);

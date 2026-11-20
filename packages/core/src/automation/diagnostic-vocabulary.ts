@@ -65,6 +65,7 @@ export type EditDiagnosticCode =
   | 'edit.style-not-defined'
   | 'edit.no-styles-defined'
   | 'edit.section-mark'
+  | 'edit.content-required'
   | 'edit.table-structure-unsupported'
   | 'edit.table-merge-not-rectangle'
   | 'edit.table-split-unsupported'

@@ -84,6 +84,23 @@ test.each([
   );
 });
 
+test.each([
+  ['a drawing can be copied, cut, or pasted only in the body text', 'drawingClipboardStory'],
+  [
+    'a shape inside a group is copied or cut with its group; press Escape to select the group',
+    'groupMemberClipboard',
+  ],
+  ['a linked text box cannot be copied', 'linkedTextBoxClipboard'],
+  [
+    'this drawing links to data that cannot be copied, such as a diagram or an embedded object',
+    'drawingClipboardParts',
+  ],
+  ['this drawing is too large to copy', 'drawingClipboardSize'],
+  ['place the caret in the text to paste a drawing', 'drawingPasteCells'],
+] as const)('the drawing clipboard refusal %s is translatable', (reason, key) => {
+  expect(localizeDisabledReason(reason, createT(en))).toBe(en.disabledReason[key]);
+});
+
 test('the picture-selected insert refusal is translatable', () => {
   const reason = 'a picture is selected; place the caret in text to insert a picture';
   expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);

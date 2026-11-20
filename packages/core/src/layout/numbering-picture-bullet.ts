@@ -48,6 +48,8 @@ export interface NumberingPictureBullet {
   readonly width: number;
   /** Authored `v:shape` height in points. */
   readonly height: number;
+  /** Pixel height of the image, when its header could be read. */
+  readonly pixelHeight?: number;
 }
 
 /**
@@ -70,7 +72,8 @@ export interface ResolvedPictureBullet {
 }
 
 /**
- * How much bigger than its authored extent a picture bullet is drawn, at one marker size.
+ * How much bigger than its authored extent a picture bullet is drawn, at one marker size, for an
+ * image 12 pixels tall. {@link pictureBulletScale} generalizes it to any pixel height.
  *
  * Established by capture, exact on six controls that varied the authored extent (4.5pt, 9pt,
  * 18pt) and the marker font size (12pt, 18pt, 24pt) independently: the scale is LINEAR in the
@@ -84,6 +87,18 @@ export interface ResolvedPictureBullet {
  */
 export function pictureBulletFontScale(markerFontSizePt: number): number {
   return (markerFontSizePt - 2) / 6;
+}
+
+/**
+ * The scale of an authored bullet extent at one marker size. Each authored point is measured
+ * against an image pixel: an image `pixelHeight` pixels tall draws `2 × (size − 2)` points tall
+ * when its shape is as tall as the image (`picture-bullet-pixels.ts`). Without a pixel height,
+ * the 12-pixel scale of {@link pictureBulletFontScale} stays.
+ */
+export function pictureBulletScale(markerFontSizePt: number, pixelHeight?: number): number {
+  return pixelHeight !== undefined && pixelHeight > 0
+    ? (2 * (markerFontSizePt - 2)) / pixelHeight
+    : pictureBulletFontScale(markerFontSizePt);
 }
 
 /**
@@ -105,7 +120,7 @@ export function resolvePictureBullet(
   markerFontSizePt: number
 ): ResolvedPictureBullet | null {
   if (!Number.isFinite(markerFontSizePt)) return null;
-  const scale = pictureBulletFontScale(markerFontSizePt);
+  const scale = pictureBulletScale(markerFontSizePt, authored.pixelHeight);
   if (!Number.isFinite(scale) || scale <= 0) return null;
   const width = authored.width * scale;
   const height = authored.height * scale;
@@ -177,7 +192,8 @@ function pictureBulletShape(
  * so the level that names it falls back to its `w:lvlText`.
  */
 export function readNumberingPictureBullets(
-  root: OoxmlElement | null | undefined
+  root: OoxmlElement | null | undefined,
+  pixelHeightOf?: (relationshipId: string) => number | undefined
 ): ReadonlyMap<string, NumberingPictureBullet> {
   const bullets = new Map<string, NumberingPictureBullet>();
   if (!root) return bullets;
@@ -192,7 +208,12 @@ export function readNumberingPictureBullets(
     if (bullets.has(picBulletId)) continue;
     const shape = pictureBulletShape(child);
     if (!shape) continue;
-    bullets.set(picBulletId, { picBulletId, ...shape });
+    const pixelHeight = pixelHeightOf?.(shape.relationshipId);
+    bullets.set(picBulletId, {
+      picBulletId,
+      ...shape,
+      ...(pixelHeight !== undefined ? { pixelHeight } : {}),
+    });
   }
   return bullets;
 }

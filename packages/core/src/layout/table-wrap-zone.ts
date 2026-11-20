@@ -122,6 +122,7 @@ export function floatingTableZone(
     // wraps or moves the earlier lines it covers on its page.
     ...(pageFramed ? { pageFramedBand: true } : reaches ? { reachesEarlierLines: true } : {}),
     ...(!pageFramed && !spans && column.wrapsWhenRising ? { wrapsEarlierLines: true } : {}),
+    ...(block.fragmentIndex > 0 ? { continuedTablePart: true } : {}),
     y: box.y,
     verticalBand: {
       x: box.x - distances.left,

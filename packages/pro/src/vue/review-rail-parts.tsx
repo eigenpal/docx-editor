@@ -32,18 +32,17 @@ import {
   useEditorState,
   useTranslation,
 } from '@docx-editor.dev/vue';
-import { cloneReviewCard, partitionReviewChildren } from './review-composition.ts';
+import { partitionReviewChildren, useSlotMemo } from './review-composition.ts';
 import {
   MARKER_STEP,
   reviewDateFormat,
   guardMousedown,
-  idsOf,
   initialsOf,
-  isThreadedReply,
   markPart,
 } from './review-shared.ts';
+import { repliesOf, reviewRootsOf, sameElements } from '../review/review-roots.ts';
+import { ReviewListSlot, type ReviewListTemplate } from './review-list-slot.tsx';
 import {
-  ReviewItemScope,
   ReviewReplyScope,
   useRail,
   useReviewLabel,
@@ -55,7 +54,6 @@ import {
   ReviewAuthor,
   ReviewAvatar,
   ReviewBalloonReply,
-  ReviewCard,
   ReviewEmpty,
   ReviewReject,
   ReviewRefusal,
@@ -86,7 +84,22 @@ import {
   type BalloonAnchor,
 } from './review-balloon-anchor.ts';
 
-/** @public */
+/**
+ * The cards, each positioned at its anchor.
+ *
+ * The `#item` slot takes over the card, with the item as its `item` prop. The default slot
+ * holds a `Card` part, or part overrides for the packaged card.
+ *
+ * The rail calls a slot for a card when the item of the card changes, when reactive state
+ * that the slot reads changes, or when a render function passes another slot function. A
+ * template passes a new function on each render, so there the function does not count,
+ * unless `v-if` or `v-for` chooses the slot or the slot reads a `v-for` or `v-slot` variable. A slot that
+ * reads a variable that is not reactive can show an old value, because a change of that
+ * variable does not tell the rail to call the slot. If the slot reads a value that changes,
+ * keep the value in a `ref` or another reactive source, or read it inside the card component.
+ *
+ * @public
+ */
 export const ReviewList = markPart(
   defineComponent({
     name: 'ReviewList',
@@ -105,60 +118,65 @@ export const ReviewList = markPart(
     },
     setup(props, { slots }) {
       const rail = useRail();
+      // One template for every slot, kept while the list's slots and what they read hold.
+      const templateOf = useSlotMemo(['default', 'item'], (): ReviewListTemplate => {
+        if (slots.item) {
+          return {
+            item: (entry) => slots.item?.({ item: entry }) ?? [],
+            card: undefined,
+            empty: undefined,
+            rest: [],
+          };
+        }
+        const { parts, rest } = partitionReviewChildren(slots.default?.() ?? [], 'list');
+        return { item: null, card: parts.Card, empty: parts.Empty, rest };
+      });
+      // The replies each mounted card drew last, so a card whose replies hold gets one array.
+      let drawnReplies = new Map<string, readonly ReviewItemView[]>();
       return () => {
         if (props.hidden) return null;
-        const { review, cardClassName } = rail.value;
+        const { review, byId } = rail.value;
 
-        const defaultNodes = slots.default?.() ?? [];
-        const itemSlot = slots.item;
-        const listChildren = itemSlot ? null : partitionReviewChildren(defaultNodes, 'list');
-        const present = idsOf(review.items);
-        const roots = review.items.filter((entry) => !isThreadedReply(entry, present));
+        const template = templateOf();
+        const roots = reviewRootsOf(review.items);
 
         if (roots.length === 0) {
-          if (itemSlot) return null;
-          return listChildren?.parts.Empty ?? <ReviewEmpty />;
+          if (template.item) return null;
+          return template.empty ?? <ReviewEmpty />;
         }
 
+        const replies = new Map<string, readonly ReviewItemView[]>();
+        const cards = roots.map((entry) => {
+          const anchor = props.stack
+            ? (props.positions?.get(entry.key) ?? entry.anchorY)
+            : entry.anchorY;
+          const top =
+            anchor === null || anchor === undefined ? null : props.offset + anchor * props.scale;
+          if (
+            top !== null &&
+            props.window &&
+            (top < props.window.top || top > props.window.bottom)
+          ) {
+            return null;
+          }
+          const next = repliesOf(byId.get(entry.id) ?? entry, byId);
+          const drawn = drawnReplies.get(entry.key);
+          const kept = drawn && sameElements(drawn, next) ? drawn : next;
+          replies.set(entry.key, kept);
+          return h(ReviewListSlot, {
+            key: entry.key,
+            entry,
+            top,
+            collapsed: props.collapsed?.has(entry.key) ?? false,
+            replies: kept,
+            template,
+          });
+        });
+        drawnReplies = replies;
         return h(
           'div',
           { class: `docx-review__list${props.className ? ` ${props.className}` : ''}` },
-          roots.map((entry) => {
-            const anchor = props.stack
-              ? (props.positions?.get(entry.key) ?? entry.anchorY)
-              : entry.anchorY;
-            const top =
-              anchor === null || anchor === undefined ? null : props.offset + anchor * props.scale;
-            if (
-              top !== null &&
-              props.window &&
-              (top < props.window.top || top > props.window.bottom)
-            ) {
-              return null;
-            }
-            const style: CSSProperties =
-              top === null ? {} : { position: 'absolute', top: `${top}px` };
-            return h(
-              ReviewItemScope,
-              {
-                key: entry.key,
-                entry,
-                measureKey: entry.key,
-                collapsed: props.collapsed?.has(entry.key),
-                style,
-              },
-              () =>
-                itemSlot
-                  ? itemSlot({ item: entry })
-                  : listChildren?.parts.Card
-                    ? cloneReviewCard(listChildren.parts.Card, cardClassName)
-                    : h(
-                        ReviewCard,
-                        cardClassName ? { className: cardClassName } : {},
-                        () => listChildren?.rest
-                      )
-            );
-          })
+          cards
         );
       };
     },
@@ -190,9 +208,7 @@ export const ReviewMarkers = markPart(
       const rail = useRail();
       const t = useReviewLabel();
       const stacked = computed(() => {
-        const { review } = rail.value;
-        const present = idsOf(review.items);
-        const entries = review.items.filter((entry) => !isThreadedReply(entry, present));
+        const entries = reviewRootsOf(rail.value.review.items);
         const tops = new Map<string, number>();
         let cursor = Number.NEGATIVE_INFINITY;
         for (const entry of entries) {
@@ -742,7 +758,7 @@ export const ReviewBalloon = markPart(
                   onMousedown: guardMousedown,
                 },
                 matched
-                  ? h(ReviewReplyScope, { entry: matched }, () =>
+                  ? h(ReviewReplyScope, { entry: matched, wholeThread: true }, () =>
                       h(
                         'div',
                         {

@@ -171,7 +171,7 @@ export function boundedFallbackWordSegments(text: string): readonly WordSegment[
 export const boundedStructuralFontValidator: FontByteValidator;
 
 // @public
-export function buildNumberingIndex(root: OoxmlElement | null | undefined): NumberingIndex;
+export function buildNumberingIndex(root: OoxmlElement | null | undefined, pictureBulletPixelHeight?: (relationshipId: string) => number | undefined): NumberingIndex;
 
 // @public
 export function buildPageRefIndex(allRefs: readonly PageRefHit[]): PageRefIndex;
@@ -2570,6 +2570,7 @@ export interface NumberingLevelIndent {
 export interface NumberingPictureBullet {
     readonly height: number;
     readonly picBulletId: string;
+    readonly pixelHeight?: number;
     readonly relationshipId: string;
     readonly width: number;
 }

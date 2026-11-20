@@ -25,12 +25,15 @@ import {
 const FIXTURE = 'table-editing-nested.docx';
 const DEMO_URL = `http://localhost:5273/?e2e=1&fixture=${FIXTURE}`;
 const SCROLLER = '.docx-editor__scroll-container';
+const PAGES = '.docx-pages';
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCREENSHOTS = path.join(REPO_ROOT, 'screenshots');
 
 declare global {
   interface Window {
     __DOCX_EDITOR_E2E__?: import('../examples/vite/src/test-harness/table-editing-e2e-hook.ts').DocxEditorE2EHook;
+    /** Every inline `caret-color` the pages layer held after a `style` write. */
+    __DOCX_CARET_COLOR_WRITES__?: string[];
   }
 }
 
@@ -816,5 +819,148 @@ test.describe('table move handle', () => {
       'MERGED-ONLY',
       'Continuation-page nested host',
     ]);
+  });
+});
+
+/** What the page shows for the insertion point, read two animation frames after a step. */
+interface CaretReadback {
+  readonly collapsed: boolean;
+  readonly selectedText: string;
+  readonly focusInPages: boolean;
+  /** The engine's painted insertion point is attached inside the pages layer. */
+  readonly engineCaret: boolean;
+  /** The pages layer's computed `caret-color` hides the browser's own insertion point. */
+  readonly nativeCaretSuppressed: boolean;
+  readonly computedCaretColor: string;
+  readonly inlineCaretColor: string;
+  /** Inline `caret-color` values after each `style` write since the previous readback. */
+  readonly inlineWrites: readonly string[];
+}
+
+/** Record every inline `caret-color` the pages layer holds after a `style` write. */
+async function watchInlineCaretColor(page: Page) {
+  await page.evaluate((pagesSelector) => {
+    const pages = document.querySelector<HTMLElement>(pagesSelector)!;
+    const writes: string[] = [];
+    window.__DOCX_CARET_COLOR_WRITES__ = writes;
+    new MutationObserver(() => writes.push(pages.style.caretColor)).observe(pages, {
+      attributes: true,
+      attributeFilter: ['style'],
+    });
+  }, PAGES);
+}
+
+async function readCaret(page: Page): Promise<CaretReadback> {
+  return page.evaluate(async (pagesSelector) => {
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    );
+    const pages = document.querySelector<HTMLElement>(pagesSelector)!;
+    const selection = document.getSelection();
+    const active = document.activeElement;
+    const computedCaretColor = getComputedStyle(pages).caretColor;
+    const caret = pages.querySelector('[data-docx-caret]');
+    const writes = window.__DOCX_CARET_COLOR_WRITES__ ?? [];
+    return {
+      collapsed: !selection || selection.rangeCount === 0 || selection.isCollapsed,
+      selectedText: selection?.toString() ?? '',
+      focusInPages: active === pages || (!!active && pages.contains(active)),
+      engineCaret: !!caret && caret.isConnected,
+      nativeCaretSuppressed:
+        computedCaretColor === 'transparent' || /^rgba\(.*,\s*0\)$/.test(computedCaretColor),
+      computedCaretColor,
+      inlineCaretColor: pages.style.caretColor,
+      inlineWrites: writes.splice(0),
+    };
+  }, PAGES);
+}
+
+test.describe('caret visibility', () => {
+  test('shows exactly one caret across caret and range selection changes', async ({ page }) => {
+    await waitForHook(page);
+    const steps: string[] = [];
+
+    // Exactly one insertion point: the engine's with the browser's suppressed, or the
+    // browser's with the engine's absent. A range shows a highlight and no engine caret.
+    const check = async (step: string, expected?: 'caret' | 'range') => {
+      const state = await readCaret(page);
+      const detail = `${step}: ${JSON.stringify(state)}`;
+      steps.push(detail);
+      if (expected === 'caret') expect(state.collapsed, detail).toBe(true);
+      if (expected === 'range') expect(state.selectedText, detail).not.toBe('');
+      if (expected) expect(state.focusInPages, detail).toBe(true);
+      if (state.collapsed && state.focusInPages) {
+        expect(state.engineCaret, detail).toBe(state.nativeCaretSuppressed);
+      }
+      if (!state.collapsed && state.selectedText !== '') {
+        expect(state.engineCaret, detail).toBe(false);
+      }
+      return state;
+    };
+    // The inline suppression stays written: removing it restyles every painted page.
+    const checkSuppressionKept = async (step: string, expected: 'caret' | 'range') => {
+      const state = await check(step, expected);
+      const detail = `${step}: ${JSON.stringify(state)}`;
+      expect(state.inlineCaretColor, detail).toBe('transparent');
+      expect(
+        state.inlineWrites.filter((value) => value !== 'transparent'),
+        detail
+      ).toEqual([]);
+      return state;
+    };
+    const textOf = (needle: string) =>
+      page
+        .locator('.docx-paragraph-fragment')
+        .filter({ hasText: needle })
+        .first()
+        .locator('[data-start]')
+        .first();
+
+    await focusInnerCell(page);
+    const first = await check('click in a table cell', 'caret');
+    expect(first.engineCaret, steps.at(-1)).toBe(true);
+    await watchInlineCaretColor(page);
+
+    await page.keyboard.press('Tab');
+    const tabbed = await checkSuppressionKept('Tab selects the next cell content', 'range');
+    const cellText = tabbed.selectedText.trim();
+
+    await textOf(cellText).click({ position: { x: 3, y: 6 } });
+    await checkSuppressionKept('click inside the selected cell', 'caret');
+
+    await page.keyboard.press('Shift+ArrowRight');
+    await checkSuppressionKept('Shift+ArrowRight extends a range', 'range');
+
+    await page.keyboard.press('ArrowRight');
+    await checkSuppressionKept('ArrowRight collapses the range', 'caret');
+
+    await textOf(cellText).dblclick({ position: { x: 3, y: 6 } });
+    await checkSuppressionKept('double-click selects a word', 'range');
+
+    await page.keyboard.type('x');
+    await checkSuppressionKept('typing replaces the selected word', 'caret');
+
+    await page.keyboard.press('Shift+Tab');
+    await checkSuppressionKept('Shift+Tab selects the previous cell content', 'range');
+
+    // An emptied cell paints no text, and its caret still comes from the engine or the browser.
+    await page.keyboard.press('Delete');
+    await check('Delete empties the selected cell', 'caret');
+
+    await page.keyboard.press('Tab');
+    await check('Tab leaves the empty cell', 'range');
+
+    await page.keyboard.press('Shift+Tab');
+    await check('Shift+Tab enters the empty cell', 'caret');
+
+    await page.keyboard.press('Escape');
+    await check('Escape');
+
+    await page
+      .locator('.docx-paragraph-fragment')
+      .filter({ hasText: 'Continuation-page nested host' })
+      .first()
+      .click();
+    await check('click in a paragraph outside the table', 'caret');
   });
 });

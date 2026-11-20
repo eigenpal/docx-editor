@@ -84,6 +84,12 @@ function storeTransactionError(reason: string): AutomationError {
       'a body, note or text box keeps the paragraph after a table that ends it',
       reason
     );
+  if (reason === 'block-required')
+    return automationError(
+      'unsupported-capability',
+      'a body, note, comment, text box, or table cell keeps its last paragraph, and a table its last row and column',
+      reason
+    );
   // The refusal a plan-time cell write gives, for a cell an earlier edit in the batch reshaped.
   if (reason === 'unsupported-cell-content')
     return automationError('unsupported-content', 'that cell is not one plain paragraph', reason);

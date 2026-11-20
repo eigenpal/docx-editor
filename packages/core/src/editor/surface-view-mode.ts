@@ -13,10 +13,24 @@
  * contenteditable element is focusable on its own and a plain one is not: Chromium dropped
  * focus from pages that stopped being editable, so Shift with the caret keys, Ctrl/Cmd+A and
  * Ctrl/Cmd+C never reached them.
+ *
+ * Each attribute is written only when it differs. A write of `contenteditable` makes the
+ * browser resolve pending style at once, even with the value the element already has. A mode
+ * switch that follows a paint then ran that style pass in the middle of its own work, and a
+ * switch between two editable modes changes none of these attributes.
  */
 export function applyPagesEditableChrome(pagesLayer: HTMLElement, editable: boolean): void {
-  pagesLayer.contentEditable = editable ? 'true' : 'false';
-  pagesLayer.setAttribute('aria-readonly', editable ? 'false' : 'true');
-  if (editable) pagesLayer.removeAttribute('tabindex');
-  else pagesLayer.tabIndex = 0;
+  const contentEditable = editable ? 'true' : 'false';
+  if (pagesLayer.getAttribute('contenteditable') !== contentEditable) {
+    pagesLayer.contentEditable = contentEditable;
+  }
+  const readOnly = editable ? 'false' : 'true';
+  if (pagesLayer.getAttribute('aria-readonly') !== readOnly) {
+    pagesLayer.setAttribute('aria-readonly', readOnly);
+  }
+  if (editable) {
+    if (pagesLayer.hasAttribute('tabindex')) pagesLayer.removeAttribute('tabindex');
+  } else if (pagesLayer.getAttribute('tabindex') !== '0') {
+    pagesLayer.tabIndex = 0;
+  }
 }

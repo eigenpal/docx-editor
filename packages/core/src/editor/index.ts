@@ -381,6 +381,7 @@ export {
 } from './docx-editor-images.ts';
 export { selectedDrawingOverlayTargetOf } from './drawing-overlay-target.ts';
 export { historyShortcutOf, type HistoryShortcutKeys } from './history-shortcut.ts';
+export { forwardClipboardEvents } from './chrome-clipboard.ts';
 export { surfaceExtent, type SurfaceExtent } from './surface-pages.ts';
 // The fit's vocabulary — only the part an adapter actually needs, so the published surface
 // stays something we can keep. The two canonical modes, because a zoom control has to render
@@ -408,6 +409,12 @@ export {
   type PopupEscapeOptions,
   type PopupFocusLeaveOptions,
 } from './popup-escape.ts';
+export {
+  focusMenuItemForKey,
+  listenForMenuDismiss,
+  noteMenuScopeOf,
+  type MenuDismissOptions,
+} from './note-context-menu.ts';
 export {
   computeImageResizeResult,
   createImageOverlayScrollPort,

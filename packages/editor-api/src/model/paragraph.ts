@@ -592,6 +592,11 @@ export class Paragraph extends ModelObject implements PromisedItem {
    * that paragraph without tracking refuses with `NotSupported` (`edit.operation-unsupported`).
    * Clear it instead.
    *
+   * A body, note, comment, text box, or table cell keeps at least one paragraph. Deleting its last
+   * paragraph without tracking refuses with `NotSupported` (`edit.content-required`). Clear it
+   * instead. The first paragraph of a footnote or endnote holds its reference number, and deleting
+   * that paragraph removes the number too.
+   *
    * A tracked deletion refuses with `NotSupported` for the last paragraph of a story, table
    * cell, or content control; a paragraph directly before a table or block content control; a
    * paragraph whose mark ends a section; a paragraph with an inline content control; a

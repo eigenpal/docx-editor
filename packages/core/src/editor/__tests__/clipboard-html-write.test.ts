@@ -801,7 +801,7 @@ describe('interopHtmlFromFragment', () => {
   });
 
   test('copied table shading reads w:tblLook the way the page paints it', () => {
-    // 17.4.56: no w:tblLook is 04A0 (header row, first column, row bands); a column band
+    // ECMA-376 Part 1 §17.4.55: no w:tblLook is 04A0 (header row, first column, row bands); a column band
     // paints over a row band.
     const cell = (text: string) => `<w:tc><w:tcPr/><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
     const condition = (type: string, fill: string) =>
