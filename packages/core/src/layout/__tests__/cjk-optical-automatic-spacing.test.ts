@@ -41,7 +41,7 @@ function part(xml: string) {
 function probe(
   text: string,
   width: number,
-  options: { automatic?: boolean; split?: number; compression?: boolean; legacy?: boolean } = {}
+  options: { automatic?: boolean; split?: number; compression?: boolean } = {}
 ) {
   const run = (value: string) =>
     `<w:r><w:rPr><w:rFonts w:ascii="Test Latin" w:hAnsi="Test Latin" w:eastAsia="Test CJK"/><w:sz w:val="24"/><w:kern w:val="2"/></w:rPr><w:t>${value}</w:t></w:r>`;
@@ -54,7 +54,7 @@ function probe(
     `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="Test CJK"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
   );
   const settings = part(
-    `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="${options.compression === false ? 'doNotCompress' : 'compressPunctuation'}"/>${options.legacy ? '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="14"/></w:compat>' : ''}</w:settings>`
+    `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="${options.compression === false ? 'doNotCompress' : 'compressPunctuation'}"/></w:settings>`
   );
   const document = layoutSemanticDocument(source, 0, {
     measurer,
@@ -197,26 +197,3 @@ test('the first automatic gap is budgeted before fitting and a moved candidate l
     ).toEqual([...text].map((_, index) => index));
   }
 });
-
-test.each([
-  ['AB123-2048', true, 4.2],
-  ['AB123X2048', true, 4.2],
-  ['2026-2048', false, 3],
-  ['(AB123-2048)', true, 2],
-  ['（AB123-2048）', true, 6],
-  ['甲乙丙丁戊', true, 6],
-] as const)(
-  'legacy ordinary ideograph admission after %s with automatic spacing %s',
-  (tail, automatic, cap) => {
-    const body = '甲乙（丙丁）戊己（庚辛）壬癸子丑寅卯辰巳午未申酉戌亥' + tail;
-    const options = { automatic, legacy: true };
-    const first = probe(body + '然', 1000, options).lines[0]!;
-    const last = first.spans.at(-1)!;
-    const natural = last.box.x + last.box.width - first.spans[0]!.box.x;
-    const wrapsAt = (width: number) => textOf(probe(body + '然后再测试', width, options))[0];
-    expect(wrapsAt(natural - cap + 0.35)).toBe(body + '然');
-    expect(wrapsAt(natural - cap - 0.01)).toBe(body + '然');
-    expect(wrapsAt(natural - cap - 0.04)).toBe(body);
-    expect(wrapsAt(natural - cap - 0.35)).toBe(body);
-  }
-);
