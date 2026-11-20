@@ -377,7 +377,7 @@ If a drawing is selected when you paste, the paste goes where the drawing's anch
 - If the selected drawing is a picture, chart, line, group, or drawing canvas, text and formatted content also go in before its anchor. The caret shows after the pasted text.
 - If the selected drawing is a text box or a shape with text, pasted text replaces the text inside it. The caret stays in the text box after the pasted text. Formatted content pastes as plain text there.
 - The editor refuses to paste text into a shape that has no text, a text box whose text it cannot edit in place, or a shape selected inside a group. Each refusal reports a translated reason, and the document does not change.
-- In suggesting mode, each paste becomes a tracked change.
+- In suggesting mode, each paste becomes a tracked change. A new picture cannot be proposed directly before another drawing, so the editor refuses to insert one there and reports the reason.
 
 If you build your own selection overlay and it takes focus, pass its `copy`, `cut`, and `paste` events to the editor:
 

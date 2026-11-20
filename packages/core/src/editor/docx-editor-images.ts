@@ -593,7 +593,10 @@ function isStaleImageMutation(
 
 /**
  * A picture inserted while a drawing is selected goes before its anchor run, where
- * `drawingPasteTarget` sends it. The store refuses a tracked drawing there: suggesting refuses.
+ * `drawingPasteTarget` sends it. In suggesting mode the tracked `insertDrawing` operation
+ * refuses a point at another drawing's start, so the insert refuses up front with a reason.
+ * Lifting that store rule would let a newer peer send operations an older peer refuses. A
+ * copied drawing takes the fragment paste lane instead, which proposes it there.
  */
 export const PICTURE_SELECTED_INSERT_REASON =
   'in suggesting mode, a picture cannot be inserted while a drawing is selected; place the caret in text to insert a picture';
