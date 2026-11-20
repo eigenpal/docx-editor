@@ -1,5 +1,5 @@
 ---
-"@docx-editor.dev/core": patch
+'@docx-editor.dev/core': patch
 ---
 
-Share the trailing bearing in eligible East Asian punctuation pairs containing a fullwidth semicolon.
+Adjacent East Asian punctuation pairs share a half-cell bearing according to each mark's run language. This covers semicolons, colons, exclamation marks, and the katakana middle dot in Chinese and Japanese text.

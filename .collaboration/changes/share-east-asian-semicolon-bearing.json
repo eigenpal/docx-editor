@@ -1,8 +1,8 @@
 {
   "impact": "no-impact",
   "fields": [],
-  "before": "A fullwidth semicolon could leave extra space inside an otherwise eligible East Asian punctuation pair.",
-  "after": "Eligible pairs share the trailing bearing and restore it if they part across a line.",
+  "before": "Adjacent punctuation pairs used one class table for every language, so semicolons, exclamation marks, and the katakana middle dot kept both bearings, and Traditional Chinese and Japanese centred marks shared bearings they keep.",
+  "after": "Each mark takes its pair class from its own run language. Eligible pairs share one half-cell bearing and restore it when they part across a line.",
   "reason": "Only derived layout widths change. Model text, offsets, operations and serialized collaboration state stay the same.",
   "tests": [
     "packages/core/src/layout/__tests__/cjk-compression-context.test.ts",

@@ -326,7 +326,7 @@ East Asian spacing and punctuation rules depend on `w:rPrDefault` in the styles 
 - Without East Asian defaults, only distributed paragraphs hang marks.
 - A single-spaced line in a CJK face is 1.3 times the face's ascent plus descent.
 - Localized family names, such as `メイリオ`, resolve to the face of the English name.
-- Fullwidth semicolons participate in supported adjacent punctuation pairs. The language and kerning settings govern which bearings are shared.
+- Each mark's run language sets its pair class. Simplified Chinese sets `；`, `：`, and `！` like closing marks; Traditional Chinese centers `、。，．；：`. Japanese centers `；`, `：`, and `・`, and a centered mark shares a bearing only before an opening bracket.
 - Table AutoFit uses compressed punctuation pairs for the minimum width.
 - Vertical Japanese layout is not supported.
 
