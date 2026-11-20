@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Keep the ink-bearing half of a closing mark inside a Simplified Chinese line in mode 14 when alternate line-breaking rules and punctuation compression apply.
+Support the alternate East Asian line-break compatibility setting: a line-end mark outside its language's hanging set no longer hangs, and only its blank half may pass the margin. An interior full-width semicolon now gives up its blank half when a justified line needs room.

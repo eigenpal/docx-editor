@@ -1,14 +1,12 @@
 {
   "impact": "no-impact",
   "fields": [],
-  "before": "A closing mark could take its full width beyond the line end.",
-  "after": "A qualifying Simplified Chinese line keeps half of the mark inside the measure.",
-  "reason": "Only derived layout changes. Source characters, model offsets, and collaborative state stay the same.",
+  "before": "With the alternate line-break setting, a line-end mark could hang its whole advance past the margin.",
+  "after": "A mark outside its language's hanging set passes the margin only by the overflow, within its blank half, or wraps.",
+  "reason": "Only derived line breaks and positions change. Source characters, model offsets, and shared state stay the same.",
   "tests": [
-    "packages/core/src/layout/__tests__/hanging-punctuation-alignment.test.ts",
-    "packages/pro/src/collaboration/__tests__/document-alternate-chinese-hanging.test.ts",
-    "packages/pro/src/collaboration/__tests__/collaboration-diagnostics.test.ts",
-    "packages/pro/src/collaboration/__tests__/document-concurrent-format-merge.test.ts"
+    "packages/core/src/layout/__tests__/alternate-line-end-fit.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-alternate-chinese-hanging.test.ts"
   ],
   "changeset": "legacy-chinese-hanging-punctuation",
   "migration": null

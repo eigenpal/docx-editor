@@ -711,6 +711,39 @@ The mark's run language SHALL select its blank sides. A closing bracket, `、。
 - **WHEN** the mark overflows the measure by 6 pt
 - **THEN** the mark starts at the margin
 
+### Requirement: Alternate line-break rules
+
+With `w:useAltKinsokuLineBreakRules` and no compatibility mode, or mode 11, 12, or 14, a line-end mark outside the hanging set of its run language SHALL NOT hang. Only Japanese `、。，．` SHALL stay in that set. With punctuation compression, a mark that leaves its right half blank SHALL pass the margin only by the overflow, up to that half, and the text before it SHALL keep its advances. Otherwise the mark SHALL wrap. Mode 15 and later SHALL ignore the setting.
+
+#### Scenario: Only the overflow passes the margin
+
+- **GIVEN** a justified line of nineteen 24 pt ideographs and a Simplified Chinese 24 pt `，`, with document punctuation compression, the setting, and mode 14
+- **WHEN** the mark overflows the measure by 6 pt
+- **THEN** the mark starts 24 pt before the margin, and the ideographs keep their advances
+- **AND** a 13 pt overflow wraps the mark with the ideograph before it
+
+#### Scenario: A mark without a blank right half wraps
+
+- **GIVEN** the same line with a Traditional Chinese `，` or a Simplified Chinese `？`
+- **WHEN** the mark overflows the measure by 1 pt
+- **THEN** the mark wraps with the ideograph before it, and optical fitting does not compress it
+
+#### Scenario: Mode 15 ignores the setting
+
+- **GIVEN** the same line in mode 15
+- **WHEN** the mark overflows the measure by 6 pt
+- **THEN** only its blank half hangs, and the ideographs spread to meet it
+
+### Requirement: Semicolon bearings in optical fitting
+
+In optical fitting, an interior `；` SHALL give up its blank half in every compatibility mode. A final `；` SHALL keep it.
+
+#### Scenario: An ideograph fits after an interior semicolon
+
+- **GIVEN** a justified line of eighteen 24 pt ideographs and an interior 24 pt `；`, with document punctuation compression
+- **WHEN** one more ideograph overflows the measure by 6 pt
+- **THEN** the semicolon gives up 6 pt and the ideograph stays on the line
+
 ### Requirement: Space shrinking before hanging punctuation
 
 In compatibility mode 15 and later, a justified or distributed line SHALL shrink its inter-word spaces before a half-width line-end mark hangs. The mark SHALL stay inside the margin when the space-shrink rule admits the word with the mark inside the measure, also for a paragraph-final word. Full-width marks and legacy modes SHALL keep their hanging behavior.
