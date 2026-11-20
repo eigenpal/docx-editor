@@ -70,11 +70,18 @@ function contains(range: TocParagraphRange, offset: number): boolean {
 }
 export function tocAtPosition(
   part: OoxmlPart,
-  position: SemanticPosition
+  position: SemanticPosition,
+  crossingRegion = false
 ): DetectedToc | undefined {
-  return tocParagraphRanges(part).find(
-    (r) => r.paragraphId === position.paragraphId && contains(r, position.offset)
-  )?.toc;
+  return tocParagraphRanges(part).find((r) => {
+    if (r.paragraphId !== position.paragraphId) return false;
+    // A line motion crosses the visible end mark. A caret already on the
+    // empty suffix remains editable so the reader can retype a deleted heading.
+    return (
+      contains(r, position.offset) ||
+      (crossingRegion && r.endsHere && !r.startsHere && r.length === 0)
+    );
+  })?.toc;
 }
 export function selectionTouchesTocRange(part: OoxmlPart, selection: SemanticSelection): boolean {
   const { anchor, head } = selection;
@@ -106,8 +113,10 @@ export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
         if (op.op === 'joinParagraphs' && op.firstId === r.paragraphId && r.endsHere && r.end === 0)
           return false;
         if (target.removes || target.structural) return true;
-        // A marker-only boundary must not prevent styling the ordinary heading after it.
-        return r.end > r.start || (r.length === 0 && !r.endsHere);
+        // A standalone marker has no authored text, but its paragraph mark can
+        // be selected now that the line is shown. Keep it protected while still
+        // allowing paragraph formatting when the boundary shares a heading.
+        return r.end > r.start || r.length === 0;
       })
     );
   }

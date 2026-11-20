@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The layout of a populated bare TOC suppressed its standalone closing paragraph.",
+  "after": "The authored closing line of a populated bare TOC stays in layout, including its spacing before following content.",
+  "reason": "The change retains the authored closing line in layout and protects its paragraph mark during selection formatting. Canonical nodes, operations, snapshots and serialization retain their existing shapes.",
+  "tests": [
+    "packages/core/src/layout/__tests__/toc-layout.test.ts",
+    "packages/pro/src/collaboration/__tests__/toc-closing-paragraph-editors.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-toc-selection-formatting.test.ts",
+    "packages/core/src/editor/__tests__/toc-refresh.test.ts"
+  ],
+  "changeset": "standalone-toc-end-paragraph",
+  "migration": null
+}

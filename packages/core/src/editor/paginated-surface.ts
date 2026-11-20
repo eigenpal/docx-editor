@@ -4802,7 +4802,9 @@ export function mountPaginatedSurface(
         const crossed = leaveAtomicControl(layout, selection.head, moved.position);
         if (crossed !== moved.position) moved = { ...moved, position: crossed, caret: undefined };
       }
-      if (tocAtPosition(session.part(), moved.position)) {
+      const crossesToc = (position: SemanticPosition) =>
+        tocAtPosition(session.part(), position, true);
+      if (crossesToc(moved.position)) {
         if (extend) return;
         const backwards = new Set<NavigationCommand>([
           'left',
@@ -4840,9 +4842,9 @@ export function mountPaginatedSurface(
             return;
           }
           moved = next;
-          if (!tocAtPosition(session.part(), moved.position)) break;
+          if (!crossesToc(moved.position)) break;
         }
-        if (tocAtPosition(session.part(), moved.position)) return;
+        if (crossesToc(moved.position)) return;
       }
       desiredX = moved.desiredX;
       // Note continuations share one EditorScope across pages: retarget the visual
