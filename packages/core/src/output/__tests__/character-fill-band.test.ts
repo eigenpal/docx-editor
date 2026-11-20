@@ -106,6 +106,16 @@ describe('the band a line publishes', () => {
     expect(line.characterFillBand).toEqual({ top: 0, height: line.box.height });
   });
 
+  test('a picture inside the text band raises nothing and publishes none', () => {
+    const icon = picture.replaceAll('508000', '63500');
+    const body =
+      `<w:p>${run('small', `<w:sz w:val="16"/>${HIGHLIGHT}`)}${icon}` +
+      `${run('large', `<w:sz w:val="40"/>${HIGHLIGHT}`)}</w:p>`;
+    const { line } = firstLine(body);
+    expect(line.drawings?.length).toBe(1);
+    expect(line.characterFillBand).toBeUndefined();
+  });
+
   test('lines without a fill, or with auto spacing and no picture, publish none', () => {
     expect(firstLine(pictureParagraph('', '')).line.characterFillBand).toBeUndefined();
     expect(
