@@ -32,6 +32,10 @@ const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
 const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
 const PUNCTUATION = /^[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]$/u;
 const HAS_PUNCTUATION = /[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]/u;
+// Latin-face text kept whole on a qualified line: Latin script, digits, symbols, punctuation
+// other than East Asian punctuation.
+// Other scripts still refuse: automatic East Asian spacing covers only Latin text.
+const OPAQUE_TEXT = /^[\p{Script=Latin}\p{N}\p{S}\p{P}\p{M}\p{Zs}]+$/u;
 const TOLERANCE = 0.001;
 // The fit gate weighs expansion in units of 1/64 of an advance (see `expansionGate`).
 const EXPANSION_UNITS = 64;
@@ -59,6 +63,8 @@ interface Cell {
   readonly sourceIndex: number;
   readonly ordinaryOpaque?: true;
   readonly qualifiedCurly?: 'opening' | 'closing';
+  /** An East Asian face symbol that is not punctuation, such as `℃` or `①`: never compressed. */
+  readonly opaqueGlyph?: true;
   readonly natural: number;
   readonly alreadyReduced: number;
   readonly ink: { left: number; right: number } | undefined;
@@ -186,14 +192,17 @@ function cellsOf(
       if (span.fontSlot !== 'eastAsia' && !sameFaceImplicitEastAsian(span)) {
         // Ordinary base text may coexist with qualified EA punctuation. Keep its
         // complete measured span: splitting AV/fi would discard kerning/ligatures.
-        // Only a complete ASCII word can guard an adjacent EA-owned seam.
+        // Only a complete ASCII word can guard an adjacent EA-owned seam; other
+        // Latin-face text (`Café`, `25℃`) keeps its advance but faces no blank side.
         // The whole shaped outline supplies its external ink; inkBounds answers
         // one grapheme and cannot qualify AV/fi or a numeric group as a whole.
         // The opaque cell itself can never lose advance or be split.
         const numberMarker = opaqueCjkNumberMarker(span);
         const printableAscii = /^[\x20-\x7e]+$/u.test(span.text);
         if (
-          (!printableAscii && !/^[A-Za-z0-9‘’“”]+$/u.test(span.text) && !numberMarker) ||
+          (!printableAscii &&
+            !(OPAQUE_TEXT.test(span.text) && !HAS_PUNCTUATION.test(span.text)) &&
+            !numberMarker) ||
           !Number.isFinite(span.box.width) ||
           span.box.width <= 0
         )
@@ -220,15 +229,15 @@ function cellsOf(
     // Only the qualified local path reaches here with a curly quote; the paragraph gate refuses it.
     const curlyAllowed = requireLocalQualification && span.fontSlot === 'eastAsia';
     const clusters = fittingClusters(span.text);
+    // The paragraph path holds only CJK text and punctuation. On the local path, any other
+    // cluster becomes an opaque glyph below: it keeps its advance and does not veto the line.
     if (
+      !requireLocalQualification &&
       clusters.some(
         (cluster) =>
           cluster.text !== ' ' &&
           !isCjk(cluster.text.codePointAt(0)!) &&
-          !PUNCTUATION.test(cluster.text) &&
-          // These East Asian symbols keep their measured advances. A grouped
-          // temperature symbol must not veto fitting neighbouring punctuation.
-          !(curlyAllowed && (curlyRole(cluster.text) || /^[℃℉]$/u.test(cluster.text)))
+          !PUNCTUATION.test(cluster.text)
       )
     )
       return undefined;
@@ -263,9 +272,16 @@ function cellsOf(
       }
       const baseline = baselinePieces[low]!;
       const qualifiedCurly = curlyAllowed ? curlyRole(cluster.text) : undefined;
+      const opaqueGlyph =
+        requireLocalQualification &&
+        !qualifiedCurly &&
+        !isCjk(cluster.text.codePointAt(0)!) &&
+        !PUNCTUATION.test(cluster.text) &&
+        /[^\p{White_Space}\p{Cf}]/u.test(cluster.text);
       cells.push({
         sourceIndex,
         ...(qualifiedCurly ? { qualifiedCurly } : {}),
+        ...(opaqueGlyph ? { opaqueGlyph: true as const } : {}),
         alreadyReduced: Math.max(
           0,
           (baseline.style.characterSpacingPt - span.style.characterSpacingPt) * cluster.text.length,
@@ -293,12 +309,13 @@ function cellsOf(
   }
   return cells;
 }
-// A glyph a blank side can face: an ideograph, punctuation, a qualified quote, or a word. A space
-// is not one.
+// A glyph a blank side can face: an ideograph, punctuation, a qualified quote, an East Asian
+// face symbol, or an ASCII word. A space is not one.
 function fitNeighbour(cell: Cell): boolean {
   const text = cell.span.text;
   return (
     cell.ordinaryOpaque === true ||
+    cell.opaqueGlyph === true ||
     cell.qualifiedCurly !== undefined ||
     PUNCTUATION.test(text) ||
     isCjk(text.codePointAt(0)!)
@@ -520,10 +537,12 @@ function fitCjkOptically(
   // Check the expansion gate against an upper bound before any word is shaped for its ink.
   // The final mark's relief (its hang or its dropped trailing half) counts as capacity.
   const relief = fullDeficit - deficit;
-  // A kana fit gates every group, a word that opens it included.
+  // A kana fit gates every group, a word that opens it included. An East Asian face symbol
+  // joins like an ideograph.
   const gate =
     (kana !== undefined && !kana.ungated) ||
     (isCjk(first.span.text.codePointAt(0)!) && !PUNCTUATION.test(first.span.text)) ||
+    first.opaqueGlyph === true ||
     OPENING.test(first.span.text)
       ? expansionGate(cells, sourceCount, available - line.width, fullDeficit)
       : undefined;
