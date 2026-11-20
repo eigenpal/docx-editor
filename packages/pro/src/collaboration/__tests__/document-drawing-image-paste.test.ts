@@ -172,27 +172,32 @@ test('a refused paste keeps focus where it is, even after a collaborator edits m
   document.body.addEventListener(
     'paste',
     (event) => {
-      run = runImageFilePaste(host, event as ClipboardEvent, async (_transfer, at) => {
-        // Bob types in another paragraph during the file read: the revision moves, the
-        // captured target goes stale, and Alice's insert refuses.
-        const surface = bob.surface!;
-        const paragraphId = surface.session.paragraphIds().at(-1)!;
-        surface.setSelection({
-          anchor: { paragraphId, offset: 0 },
-          head: { paragraphId, offset: 0 },
-        });
-        expect(bob.exec({ type: 'insertText', text: 'Peer ' }).ok).toBe(true);
-        converged();
-        const result = await executeImageCommand(alice, {
-          type: 'insertImage',
-          data: PNG_1X1,
-          mime: 'image/png',
-          widthPoints: 12,
-          heightPoints: 12,
-          ...(at ? { at } : {}),
-        });
-        expect(result).toMatchObject({ ok: false, code: 'notFound' });
-      });
+      run = runImageFilePaste(
+        host,
+        event as ClipboardEvent,
+        async (_transfer, at) => {
+          // Bob types in another paragraph during the file read: the revision moves, the
+          // captured target goes stale, and Alice's insert refuses.
+          const surface = bob.surface!;
+          const paragraphId = surface.session.paragraphIds().at(-1)!;
+          surface.setSelection({
+            anchor: { paragraphId, offset: 0 },
+            head: { paragraphId, offset: 0 },
+          });
+          expect(bob.exec({ type: 'insertText', text: 'Peer ' }).ok).toBe(true);
+          converged();
+          const result = await executeImageCommand(alice, {
+            type: 'insertImage',
+            data: PNG_1X1,
+            mime: 'image/png',
+            widthPoints: 12,
+            heightPoints: 12,
+            ...(at ? { at } : {}),
+          });
+          expect(result).toMatchObject({ ok: false, code: 'notFound' });
+        },
+        () => undefined
+      );
     },
     { once: true }
   );

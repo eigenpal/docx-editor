@@ -3050,6 +3050,7 @@ export interface ImageDecodePort {
 // @internal
 export interface ImageFilePastePlan {
     readonly at: EditorPointPosition | undefined;
+    readonly refusal?: string;
 }
 
 // @internal
@@ -4822,7 +4823,7 @@ export function runChromeExport(editor: Pick<Editor, 'save'> & Partial<Pick<Docx
 export function runChromePrint(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>, handlers?: ChromeExportHandlers, container?: Document | Element, settings?: ChromePrintSettings): Promise<ChromePrintJob>;
 
 // @internal
-export function runImageFilePaste(editor: Pick<DocxEditorInstance, 'surface' | 'canExecuteImageCommand' | 'focus'>, event: ClipboardEvent, insert: (transfer: DataTransfer, at: EditorPointPosition | undefined) => Promise<unknown>): Promise<void> | null;
+export function runImageFilePaste(editor: Pick<DocxEditorInstance, 'surface' | 'canExecuteImageCommand' | 'focus'>, event: ClipboardEvent, insert: (transfer: DataTransfer, at: EditorPointPosition | undefined) => Promise<unknown>, refuse: (reason: string) => void): Promise<void> | null;
 
 // @public
 export function runSave(editor: Editor | null): Promise<ArrayBuffer>;

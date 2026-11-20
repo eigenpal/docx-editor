@@ -12,7 +12,6 @@
 // everything else, so an html flavour the projection refuses (a webp `data:` image, an
 // oversized payload, a malformed fragment attribute) correctly keeps the file lane and an
 // html flavour it lands correctly stands it down.
-//
 
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { probeExternalHtml } from './clipboard-html-read.ts';

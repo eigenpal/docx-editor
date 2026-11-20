@@ -137,8 +137,9 @@ describe('an image file pasted while a drawing is selected', () => {
     act(() => {
       overlay.dispatchEvent(event);
     });
-    // The image-file lane read the file once: the engine alone would not.
-    expect(reads).toBe(1);
+    // The image-file lane takes the paste and reports the refusal without a file read.
+    expect(event.defaultPrevented).toBe(true);
+    expect(reads).toBe(0);
     let dialog: Element | null = null;
     for (let attempt = 0; attempt < 100 && !dialog; attempt++) {
       await settle();
@@ -166,11 +167,13 @@ describe('an image file pasted while a drawing is selected', () => {
     const { view, editor } = await mount();
     const { overlay } = await select(view.container, editor, 'picture');
     act(() => {
-      overlay.dispatchEvent(pasteEvent({
+      overlay.dispatchEvent(
+        pasteEvent({
           file: true,
           flavours: { 'text/plain': 'Pasted' },
           onFileRead: () => (reads += 1),
-        }));
+        })
+      );
     });
     await settle();
     expect(editor.findMatches('Pasted')).toHaveLength(1);

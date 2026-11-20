@@ -12,6 +12,7 @@ import { capturePointPosition } from './editor-point-target.ts';
 import { PICTURE_SELECTED_INSERT_REASON } from './docx-editor-images.ts';
 import { resolveSelectedDrawingRecord } from './selected-drawing-record.ts';
 import { IMAGE_INSERT_PROBE } from './toolbar-commands.ts';
+import { reportCommandResult } from './command-reporting.ts';
 import type { EditorPointPosition } from '../contracts/editor-drop.ts';
 import type { DocxEditorInstance } from './docx-editor-types.ts';
 
@@ -33,11 +34,15 @@ function carriesImageFile(transfer: DataTransfer): boolean {
 export interface ImageFilePastePlan {
   /**
    * The `insertImage.at` point. A point is the drawing paste point while a drawing is
-   * selected. Undefined inserts as `insertImage` does with no point: at the caret, or, when
-   * the editor refuses a picture beside the selected drawing in suggesting mode, with that
-   * refusal reported.
+   * selected. Undefined inserts at the caret, as `insertImage` does with no point.
    */
   readonly at: EditorPointPosition | undefined;
+  /**
+   * The reason the editor refuses the picture, when the lane takes the paste only to report
+   * it: a picture beside a selected drawing in suggesting mode. The lane then reads no file,
+   * so a selection change during a read cannot turn the refusal into an insert.
+   */
+  readonly refusal?: string;
 }
 
 /**
@@ -53,7 +58,7 @@ export interface ImageFilePastePlan {
  * the same revision, so a slow file read cannot insert into changed content; an insert into
  * changed content reports its stale-target reason. In suggesting mode the editor refuses a
  * picture beside a selected drawing (`PICTURE_SELECTED_INSERT_REASON`). The lane still takes
- * that paste, so the insert reports the reason the reader needs.
+ * that paste, and the plan carries the refusal, so the lane reports it without a file read.
  *
  * @internal
  */
@@ -70,7 +75,9 @@ export function imageFilePastePlan(
   const judged = editor.canExecuteImageCommand(IMAGE_INSERT_PROBE);
   const point = drawingPastePoint(surface);
   if (!judged.ok) {
-    return point && judged.reason === PICTURE_SELECTED_INSERT_REASON ? { at: undefined } : null;
+    return point && judged.reason === PICTURE_SELECTED_INSERT_REASON
+      ? { at: undefined, refusal: judged.reason }
+      : null;
   }
   return { at: point ? capturePointPosition(surface, point) : undefined };
 }
@@ -116,7 +123,9 @@ export function reportImageInsertFailure(error: unknown): void {
  * selection overlay. Null when the lane stands down ({@link imageFilePastePlan}); the event is
  * then left to the engine. Otherwise the event's default is prevented, `insert` reads the file
  * and inserts it, and the returned promise settles after it. `insert` must read the transfer
- * before its first await, while the clipboard is still readable.
+ * before its first await, while the clipboard is still readable. For a plan that carries a
+ * refusal, the lane reads no file: it reports the refusal to the editor's diagnostics and
+ * passes the reason to `refuse`, for the host to show.
  *
  * After a picture lands at a selected drawing, the selection ends and the focused overlay
  * unmounts with it, so the text takes the keyboard, as after a paste of a copied drawing. A
@@ -127,12 +136,19 @@ export function reportImageInsertFailure(error: unknown): void {
 export function runImageFilePaste(
   editor: Pick<DocxEditorInstance, 'surface' | 'canExecuteImageCommand' | 'focus'>,
   event: ClipboardEvent,
-  insert: (transfer: DataTransfer, at: EditorPointPosition | undefined) => Promise<unknown>
+  insert: (transfer: DataTransfer, at: EditorPointPosition | undefined) => Promise<unknown>,
+  refuse: (reason: string) => void
 ): Promise<void> | null {
   const transfer = event.clipboardData;
   const plan = transfer ? imageFilePastePlan(editor, transfer) : null;
   if (!transfer || !plan) return null;
   event.preventDefault();
+  if (plan.refusal !== undefined) {
+    const reason = plan.refusal;
+    reportCommandResult(editor, IMAGE_INSERT_PROBE, { ok: false, code: 'invalidArgs', reason });
+    refuse(reason);
+    return Promise.resolve();
+  }
   const ownerDocument = (event.target as Node | null)?.ownerDocument ?? null;
   const selected = selectedDrawingId(editor);
   return insert(transfer, plan.at).then(() => {

@@ -17,7 +17,12 @@ export function useImageFilePaste(): (event: ClipboardEvent) => void {
   return useCallback(
     (event: ClipboardEvent) => {
       if (!editor || !imageInsert) return;
-      void runImageFilePaste(editor, event, imageInsert.insertFromDataTransfer);
+      void runImageFilePaste(
+        editor,
+        event,
+        imageInsert.insertFromDataTransfer,
+        imageInsert.showRefusal
+      );
     },
     [editor, imageInsert]
   );

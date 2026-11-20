@@ -34,6 +34,8 @@ export interface ImageInsertContextValue {
     data: DataTransfer | null,
     at?: EditorPointPosition
   ) => Promise<void>;
+  /** Show a refusal the editor reported before any file was read, in the insert dialog. */
+  readonly showRefusal: (reason: string) => void;
   readonly isEnabled: boolean;
   readonly disabledReason: string | null;
   readonly inputRef: { readonly value: HTMLInputElement | null };
@@ -119,6 +121,12 @@ export const ImageInsertProvider = defineComponent({
       }
     };
 
+    const showRefusal = (reason: string) => {
+      refusal.value =
+        localizeDisabledReason(readableReason(reason) ?? null, t) ??
+        t('imageInsert.errors.refused');
+    };
+
     const insertFromFileList = async (
       files: FileList | File[] | null | undefined,
       at?: EditorPointPosition
@@ -192,6 +200,7 @@ export const ImageInsertProvider = defineComponent({
       openFilePicker,
       insertFromFileList,
       insertFromDataTransfer,
+      showRefusal,
       get isEnabled() {
         return insertState.value.enabled;
       },

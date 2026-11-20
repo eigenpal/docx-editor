@@ -118,17 +118,12 @@ test('with a drawing selected, stands down while viewing and refuses a stale tar
   expect(imageFilePastePlan(editor, transfer({ file: true }))).toBeNull();
 });
 
-test('with a drawing selected while suggesting, takes the paste and reports the refusal', async () => {
+test('with a drawing selected while suggesting, takes the paste and carries the refusal', async () => {
   const editor = await mounted(true);
   editor.surface!.setEditingMode('suggest');
   selectFixtureDrawing(editor, 'picture');
   const plan = imageFilePastePlan(editor, transfer({ file: true }));
-  expect(plan).toEqual({ at: undefined });
-  // The insert the adapters then run refuses with the reason they show.
-  expect(await insertAt(editor, plan)).toMatchObject({
-    ok: false,
-    reason: PICTURE_SELECTED_INSERT_REASON,
-  });
+  expect(plan).toEqual({ at: undefined, refusal: PICTURE_SELECTED_INSERT_REASON });
   expect(picturesPerParagraph(await savedDocumentXml(editor))).toEqual([1, 0, 0, 0]);
   // The caret in text still takes the file while suggesting.
   caretAtEndOf(editor, 3);
@@ -149,7 +144,10 @@ test('with a drawing selected, stands down for any other refusal, as a paste in 
     canExecuteImageCommand: () =>
       ({ ok: false, code: 'invalidArgs', reason: PICTURE_SELECTED_INSERT_REASON }) as const,
   };
-  expect(imageFilePastePlan(pictureSelected, transfer({ file: true }))).toEqual({ at: undefined });
+  expect(imageFilePastePlan(pictureSelected, transfer({ file: true }))).toEqual({
+    at: undefined,
+    refusal: PICTURE_SELECTED_INSERT_REASON,
+  });
   // With the caret in text, the picture-selected refusal cannot apply, so the lane stands down.
   caretAtEndOf(editor, 3);
   expect(imageFilePastePlan(pictureSelected, transfer({ file: true }))).toBeNull();
@@ -176,13 +174,14 @@ describe('running the paste lane', () => {
   /** Dispatch a file paste on the body and run the lane from its listener, as hosts do. */
   function pasteOnBody(
     host: Parameters<typeof runImageFilePaste>[0],
-    insert: Parameters<typeof runImageFilePaste>[2]
+    insert: Parameters<typeof runImageFilePaste>[2],
+    refuse: Parameters<typeof runImageFilePaste>[3] = () => undefined
   ): Promise<void> | null {
     let run: Promise<void> | null = null;
     document.body.addEventListener(
       'paste',
       (event) => {
-        run = runImageFilePaste(host, event as ClipboardEvent, insert);
+        run = runImageFilePaste(host, event as ClipboardEvent, insert, refuse);
       },
       { once: true }
     );
@@ -226,6 +225,30 @@ describe('running the paste lane', () => {
     expect(focused()).toBe(0);
   });
 
+  test('reports a suggesting-mode refusal without a file read, whatever happens next', async () => {
+    const editor = await mounted(true);
+    editor.surface!.setEditingMode('suggest');
+    selectFixtureDrawing(editor, 'picture');
+    const { host, focused } = focusCounted(editor);
+    const refused: string[] = [];
+    let reads = 0;
+    const run = pasteOnBody(
+      host,
+      async () => {
+        reads += 1;
+      },
+      (reason) => refused.push(reason)
+    );
+    expect(run).not.toBeNull();
+    // The reader clicks into text at once: the refusal is already reported, and no file is read.
+    caretAtEndOf(editor, 3);
+    await run;
+    expect(reads).toBe(0);
+    expect(refused).toEqual([PICTURE_SELECTED_INSERT_REASON]);
+    expect(focused()).toBe(0);
+    expect(picturesPerParagraph(await savedDocumentXml(editor))).toEqual([1, 0, 0, 0]);
+  });
+
   test('reports an insert that throws, without a rejection or a focus move', async () => {
     const editor = await mounted();
     selectFixtureDrawing(editor, 'picture');
@@ -247,7 +270,13 @@ describe('running the paste lane', () => {
     const editor = await mounted();
     caretAtEndOf(editor, 3);
     const event = pasteEvent({ flavours: { 'text/plain': 'x' } });
-    expect(runImageFilePaste(focusCounted(editor).host, event, async () => undefined)).toBeNull();
+    const lane = runImageFilePaste(
+      focusCounted(editor).host,
+      event,
+      async () => undefined,
+      () => undefined
+    );
+    expect(lane).toBeNull();
     expect(event.defaultPrevented).toBe(false);
   });
 });

@@ -21,6 +21,11 @@ export function useImageFilePaste(): UseImageFilePasteReturn {
   return (event: ClipboardEvent) => {
     const editor = editorRef.value;
     if (!editor || !imageInsert) return;
-    void runImageFilePaste(editor, event, imageInsert.insertFromDataTransfer);
+    void runImageFilePaste(
+      editor,
+      event,
+      imageInsert.insertFromDataTransfer,
+      imageInsert.showRefusal
+    );
   };
 }
