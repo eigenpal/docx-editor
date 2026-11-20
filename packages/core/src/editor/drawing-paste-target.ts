@@ -24,6 +24,8 @@ import type { CanResult, EditorCommand } from '../contracts/editor.ts';
 import { readOoxmlPackage } from '../store/package/ooxml-package.ts';
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { projectExternalHtml } from './clipboard-html-read.ts';
+import { htmlHasVisibleText } from './clipboard-plain-text.ts';
+import { chartClipboardToken } from './chart-clipboard.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
@@ -175,6 +177,7 @@ export function selectTextBoxForPaste(
   textbox: ReturnType<typeof createTextboxEditing> | null,
   drawingNodeId: string
 ): boolean {
+  const anchorParagraphId = surface.state().selection.anchor.paragraphId;
   if (!textbox?.enterDrawing(drawingNodeId)) return false;
   const ids = textbox.paragraphIds();
   const first = ids[0];
@@ -182,7 +185,9 @@ export function selectTextBoxForPaste(
   const part = surface.session.partFor(surface.storyScope()) ?? surface.session.part();
   const paragraph = last === undefined ? null : findNode(part, last);
   if (first === undefined || last === undefined || paragraph?.kind !== 'paragraph') {
+    // Leave the box and select the drawing again, so the refusal shows what refused.
     textbox.exit();
+    surface.selectDrawing(drawingNodeId, anchorParagraphId);
     return false;
   }
   surface.setSelection({
@@ -193,17 +198,20 @@ export function selectTextBoxForPaste(
 }
 
 /**
- * The kind of content a paste carries. A copied drawing places as a drawing, and so does HTML
- * with no text but a picture, which never empties a text box it does not fill. Any other text,
- * a lone line break or tab included, is text: it replaces the text of a selected text box.
+ * The kind of content a paste carries. A copied drawing places as a drawing, and so does a
+ * payload with no visible text in either flavour but a picture, which never empties a text
+ * box it does not fill. Visible text in the plain or the HTML flavour is text, and so is a
+ * lone line break or tab: it replaces the text of a selected text box.
  */
 export function pasteContentOf(
   text: string,
   html: string | null,
   drawingCopy: boolean
 ): DrawingPasteContent {
-  if (drawingCopy || text === '') return 'drawing';
-  return text.trim() === '' && pasteHtmlHoldsDrawing(html) ? 'drawing' : 'text';
+  if (drawingCopy) return 'drawing';
+  if (text.trim() !== '' || (html !== null && htmlHasVisibleText(html))) return 'text';
+  if (text === '') return 'drawing';
+  return pasteHtmlHoldsDrawing(html) ? 'drawing' : 'text';
 }
 
 /** A run-level drawing in a fragment: DrawingML, or a legacy VML picture or shape. */
@@ -256,8 +264,14 @@ export function pasteTargetOf(
 
 /**
  * Why a paste command cannot land while a drawing is selected, or null when it can. `can` asks
- * it, so a Paste control disables with the reason instead of refusing after the click. The
- * paste itself asks `drawingPasteTarget` again and publishes the same reason.
+ * it when the command names its payload, so a host that knows what it pastes learns the
+ * reason before it runs the paste. The paste itself asks `pasteTargetOf` again and publishes
+ * the same reason.
+ *
+ * A probe with no payload, whitespace text and no HTML, never refuses here: where it goes
+ * depends on what the clipboard holds. A copied drawing still lands before the anchor of a
+ * shape that refuses text. The Paste controls probe with a single space for this reason, and
+ * the paste refuses after the clipboard read when its payload has no place.
  */
 export function drawingPasteRefusal(
   surface: PaginatedSurface,
@@ -265,7 +279,10 @@ export function drawingPasteRefusal(
 ): CanResult | null {
   if (command.type !== 'paste' && command.type !== 'pasteWithoutFormatting') return null;
   const html = command.type === 'paste' ? (command.html ?? null) : null;
-  const target = pasteTargetOf(surface, command.text, html, isDrawingCopyHtml(html));
+  if (!html && command.text.trim() === '') return null;
+  // A copied chart carries its name as text, but it pastes where a drawing does.
+  const drawingCopy = isDrawingCopyHtml(html) || chartClipboardToken(html) !== null;
+  const target = pasteTargetOf(surface, command.text, html, drawingCopy);
   return target?.kind === 'refused'
     ? { ok: false, code: 'unsupported', reason: target.reason }
     : null;

@@ -49,7 +49,7 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { buildCopyFlavours, type CopyFlavours } from './clipboard-copy-payload.ts';
 import { routePaste } from './clipboard-paste-router.ts';
-import { insertableText } from './clipboard-plain-text.ts';
+import { insertableText, plainTextFromHtml } from './clipboard-plain-text.ts';
 import {
   paragraphTextMarkingOptionalHyphens,
   withoutOptionalHyphens,
@@ -549,7 +549,10 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     const placed = placeDrawingPaste(text, forcePlain ? null : html, drawingCopy);
     if (placed === false) return false;
     const revision = deps.session.packageRevision();
-    const landed = routeRichPaste(text, html, forcePlain, cells);
+    // A text box takes the plain lane: an HTML-only payload brings its visible text there.
+    const typed =
+      placed && !forcePlain && html && text.trim() === '' ? plainTextFromHtml(html) || text : text;
+    const landed = routeRichPaste(typed, html, forcePlain, cells);
     // A paste into a text box that lands nothing leaves the box, so the next key does not
     // replace the text the paste selected.
     if (placed && deps.session.packageRevision() === revision) placed();

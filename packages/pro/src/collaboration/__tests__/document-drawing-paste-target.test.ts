@@ -193,7 +193,15 @@ test('a paste into a text box while the other participant types in it converges'
   sync();
   resume();
   converged();
-  for (const editor of [alice, bob]) expect(editor.findMatches('Replaced')).toHaveLength(1);
+  // Bob's typing survives in the same box as Alice's replacement; the old text is gone.
+  for (const editor of [alice, bob]) {
+    const [replaced] = editor.findMatches('Replaced');
+    const typed = editor.findMatches('Typed ');
+    expect(replaced?.scope?.kind).toBe('frame');
+    expect(typed).toHaveLength(1);
+    expect(typed[0]!.scope).toEqual(replaced!.scope);
+    expect(editor.findMatches('Shared box')).toHaveLength(0);
+  }
 });
 
 test('a paste at an anchor whose paragraph the other participant deletes converges', async () => {
@@ -215,7 +223,16 @@ test('a paste at an anchor whose paragraph the other participant deletes converg
   sync();
   resume();
   converged();
-  expect(alice.findMatches('Second')).toHaveLength(1);
+  // The pasted text is a concurrent insertion, so it survives the deletion of the text around
+  // it and joins the paragraph that remains, the same way on both peers.
+  for (const editor of [alice, bob]) {
+    const paragraphs = editor
+      .surface!.session.paragraphIds()
+      .map((id) => editor.getParagraphText(id)?.text);
+    expect(paragraphs).toEqual(['SecondZULU']);
+    expect(editor.findMatches('Head')).toHaveLength(0);
+  }
+  expect(await reopened(bob, 'ZULU')).toBe(1);
 });
 
 test('a picture inserted while a line is selected lands before the line everywhere', async () => {

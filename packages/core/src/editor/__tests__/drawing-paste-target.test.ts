@@ -12,7 +12,7 @@ import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { forwardClipboardEvents } from '../chrome-clipboard.ts';
 import { findNode } from '../../store/package/ooxml-edit.ts';
 import { textboxStoriesInPart } from '../../store/package/textbox-stories.ts';
-import { drawingPasteTarget } from '../drawing-paste-target.ts';
+import { drawingPasteTarget, selectTextBoxForPaste } from '../drawing-paste-target.ts';
 import { wrapInteropHtml } from '../clipboard-fragment-codec.ts';
 import {
   GROUP_MEMBER_PASTE_REASON,
@@ -604,20 +604,111 @@ describe('what a paste carries', () => {
 });
 
 describe('the Paste control while a drawing is selected', () => {
-  test('disables with the reason where text refuses, and stays live elsewhere', async () => {
+  const linked = () =>
+    floating('Linked', boxShape('<wps:linkedTxbx id="1" seq="1"/>'), SHAPE_URI, 11);
+
+  test('a probe with no payload stays live: a copied drawing could still land', async () => {
     const probe = { type: 'paste', text: ' ' } as const;
-    const shape = await open(body(SHAPE));
-    selectFirstDrawing(shape.editor);
-    expect(shape.editor.can(probe)).toEqual({
+    for (const drawing of [SHAPE, linked(), TEXT_BOX, PICTURE]) {
+      const { editor } = await open(body(drawing));
+      selectFirstDrawing(editor);
+      expect(editor.can(probe)).toEqual({ ok: true });
+      expect(editor.can({ type: 'pasteWithoutFormatting', text: ' ' })).toEqual({ ok: true });
+    }
+    // A shape selected inside a group: the probe stays live there too.
+    const { editor, surface } = await open(body(GROUP));
+    const group = selectFirstDrawing(editor);
+    const member = (findNode(surface.session.part(), group) as OoxmlNode & {
+      children: OoxmlNode[];
+    })!;
+    const shapes: string[] = [];
+    const visit = (node: OoxmlNode) => {
+      if (node.kind === 'textValue') return;
+      if ((node as { localName?: string }).localName === 'wsp') shapes.push(node.id);
+      node.children.forEach(visit);
+    };
+    visit(member);
+    expect(surface.selectDrawingMember(shapes[0]!)).toBe(true);
+    expect(editor.can(probe)).toEqual({ ok: true });
+  });
+
+  test('a known payload refuses in can with the reason the paste gives', async () => {
+    const { editor, surface } = await open(body(SHAPE));
+    selectFirstDrawing(editor);
+    const refused = { ok: false, code: 'unsupported', reason: SHAPE_PASTE_TEXT_REASON };
+    expect(editor.can({ type: 'paste', text: 'ZULU' })).toEqual(refused);
+    expect(editor.can({ type: 'pasteWithoutFormatting', text: 'ZULU' })).toEqual(refused);
+    // A copied drawing is a known payload that lands, so it stays live.
+    const copied = surface.copyFlavours();
+    expect(editor.can({ type: 'paste', text: copied.text, html: copied.html! })).toEqual({
+      ok: true,
+    });
+    // A copied chart carries its name as text, but it pastes where a drawing does.
+    const chart = `<p data-docx-editor-chart="${'a'.repeat(32)}">Chart 1</p>`;
+    expect(editor.can({ type: 'paste', text: 'Chart 1', html: chart })).toEqual({ ok: true });
+  });
+});
+
+describe('the paste payload flavours', () => {
+  test('HTML with visible text and no plain text replaces a text box text', async () => {
+    const { editor, surface } = await open(body(TEXT_BOX));
+    selectFirstDrawing(editor);
+    expect(editor.exec({ type: 'paste', text: '', html: '<p>Hello there</p>' })).toMatchObject({
+      ok: true,
+    });
+    expect(boxText(editor)).toEqual(['Hello there']);
+    expect(surface.activeScope().kind).toBe('frame');
+  });
+
+  test('HTML with visible text and no plain text refuses on a shape with no text', async () => {
+    const { editor } = await open(body(SHAPE));
+    selectFirstDrawing(editor);
+    const before = await saved(editor);
+    expect(editor.exec({ type: 'paste', text: '', html: '<p>Hello</p>' })).toEqual({
       ok: false,
       code: 'unsupported',
       reason: SHAPE_PASTE_TEXT_REASON,
     });
-    for (const drawing of [TEXT_BOX, PICTURE]) {
-      const { editor } = await open(body(drawing));
-      selectFirstDrawing(editor);
-      expect(editor.can(probe)).toEqual({ ok: true });
-    }
+    expect(await saved(editor)).toBe(before);
+  });
+
+  test('paste without formatting with empty text refuses and keeps the selection text', async () => {
+    const { editor, surface } = await open(body(PICTURE));
+    const [, second] = surface.session.paragraphIds();
+    surface.setSelection({
+      anchor: { paragraphId: second!, offset: 0 },
+      head: { paragraphId: second!, offset: 3 },
+    });
+    expect(editor.exec({ type: 'pasteWithoutFormatting', text: '' })).toMatchObject({
+      ok: false,
+      code: 'invalidArgs',
+    });
+    expect(bodyText(editor)[1]).toBe('Bravo');
+  });
+});
+
+describe('a text box that cannot be entered for the paste', () => {
+  test('selects the drawing again after the box was entered', async () => {
+    const { editor, surface } = await open(body(TEXT_BOX));
+    const box = selectFirstDrawing(editor);
+    const anchorParagraph = surface.state().selection.anchor.paragraphId;
+    let exited = 0;
+    const textbox = {
+      enterDrawing: () => {
+        surface.setSelection({
+          anchor: { paragraphId: anchorParagraph, offset: 0 },
+          head: { paragraphId: anchorParagraph, offset: 0 },
+        });
+        return true;
+      },
+      paragraphIds: () => [],
+      exit: () => {
+        exited += 1;
+      },
+    } as unknown as Parameters<typeof selectTextBoxForPaste>[1];
+    expect(selectTextBoxForPaste(surface, textbox, box)).toBe(false);
+    expect(exited).toBe(1);
+    expect(editor.snapshot().image?.id).toBe(box);
   });
 });
 
