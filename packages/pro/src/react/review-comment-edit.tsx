@@ -8,11 +8,11 @@ import { useCallback, useEffect, useId, useRef, useSyncExternalStore } from 'rea
 import { useDocxEditor } from '@docx-editor.dev/react';
 import { commentEditDrafts } from '../review/comment-edit-drafts.ts';
 import type { ReviewItemView } from './useReview.ts';
-import { useRail, useReviewLabel } from './review-context.ts';
+import { useCardRail, useReviewLabel } from './review-context.ts';
 
 /** The default summary keeps the edit beside the text, including replies and resolved threads. */
 export function ReviewCommentText({ entry }: { readonly entry: ReviewItemView }) {
-  const rail = useRail();
+  const rail = useCardRail();
   const t = useReviewLabel();
   const id = useId();
   const field = useRef<HTMLTextAreaElement>(null);

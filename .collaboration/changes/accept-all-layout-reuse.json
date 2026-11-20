@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "After the last record that the review queue leaves out was resolved, the layout cache key of the review filter changed, and every paragraph was measured again.",
+  "after": "The review filter keeps its layout cache key while the styles and numbering stay the same, so only the blocks that changed are measured again, and a story's block list is built again when the left-out records change.",
+  "reason": "Only local layout cache keys and the local list of projected story blocks change. Shared nodes, operations, review items, and package serialization remain unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-accept-all-layout-reuse.test.ts",
+    "packages/core/src/editor/__tests__/accept-all-layout-reuse.test.ts",
+    "packages/core/src/editor/__tests__/accept-all-fresh-layout.test.ts"
+  ],
+  "changeset": "accept-all-layout-reuse",
+  "migration": null
+}

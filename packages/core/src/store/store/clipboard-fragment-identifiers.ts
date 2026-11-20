@@ -16,6 +16,7 @@ import { attributeValueOf } from './tree-op-nodes.ts';
 import { carriesRevisionId } from './tree-op-revision-ids.ts';
 import { isWml } from './clipboard-fragment-defaults.ts';
 import { canonicalNoteId } from './clipboard-fragment-closure.ts';
+import { OFFICE, VML, vmlShapeNumber, withVmlShapeNumber } from '../package/legacy-vml-values.ts';
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
@@ -68,6 +69,8 @@ export interface RewriteMaps {
   readonly sdtIds?: ReadonlyMap<string, string>;
   readonly revisionIds?: ReadonlyMap<string, string>;
   readonly docPrIds?: ReadonlyMap<string, string>;
+  /** Legacy VML shape number → fresh number. */
+  readonly vmlShapeIds?: ReadonlyMap<string, string>;
 }
 
 const EMPTY_MAP: ReadonlyMap<string, string> = new Map();
@@ -82,6 +85,7 @@ export function rewriteIdentifiers(node: OoxmlNode, maps: RewriteMaps): OoxmlNod
   const sdtIds = maps.sdtIds ?? EMPTY_MAP;
   const revisionIds = maps.revisionIds ?? EMPTY_MAP;
   const docPrIds = maps.docPrIds ?? EMPTY_MAP;
+  const vmlShapeIds = maps.vmlShapeIds ?? EMPTY_MAP;
 
   const walk = (current: OoxmlNode, parentLocal: string): OoxmlNode => {
     if (current.kind === 'textValue') return current;
@@ -135,6 +139,36 @@ export function rewriteIdentifiers(node: OoxmlNode, maps: RewriteMaps): OoxmlNod
       )?.value;
       const mapped = value !== undefined ? docPrIds.get(value) : undefined;
       if (mapped !== undefined) next = withRewrittenAttribute(next, '', 'id', mapped);
+    }
+    // A legacy VML shape's number, in `o:spid` and in an `id` that spells it. An author's own
+    // `id`, such as `Box`, stays.
+    const shapeNumber = vmlShapeIds.size > 0 ? vmlShapeNumber(current) : null;
+    const freshNumber = shapeNumber === null ? undefined : vmlShapeIds.get(String(shapeNumber));
+    if (freshNumber !== undefined) {
+      for (const [namespaceUri, localName] of [
+        [OFFICE, 'spid'],
+        ['', 'id'],
+      ] as const) {
+        const raw = next.attributes.find(
+          (attribute) =>
+            attribute.localName === localName && (attribute.namespaceUri ?? '') === namespaceUri
+        )?.value;
+        const fresh = raw === undefined ? null : withVmlShapeNumber(raw, freshNumber);
+        if (fresh !== null) next = withRewrittenAttribute(next, namespaceUri, localName, fresh);
+      }
+    }
+    // A legacy text box chain names its next box by shape id; a renumbered box keeps its link.
+    if (vmlShapeIds.size > 0 && current.namespaceUri === VML && current.localName === 'textbox') {
+      const style = attributeValueOf(current, 'style', '');
+      const relinked = style?.replace(
+        /(mso-next-textbox\s*:\s*#_x0000_[a-z])(\d{1,10})/gi,
+        (whole, prefix: string, digits: string) => {
+          const fresh = vmlShapeIds.get(String(Number(digits)));
+          return fresh === undefined ? whole : `${prefix}${fresh}`;
+        }
+      );
+      if (style !== undefined && relinked !== style)
+        next = withRewrittenAttribute(next, '', 'style', relinked!);
     }
     // Relationship references (r:id, r:embed, r:link).
     for (const attribute of next.attributes) {

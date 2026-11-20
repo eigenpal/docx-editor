@@ -90,9 +90,9 @@ const qualifiedLayout = (
   runProps = '',
   jc = 'both'
 ) => layout(text, width, split, measure, runProps, { eastAsianDefaults: true, kern: 2 }, jc);
-// Native Word PDFs from three independent width/group experiments, Songti SC 12 pt. The source
-// alignment was not recorded. Fitting vectors run justified; the 88 pt vector runs left-aligned
-// to keep its natural origins on a wrapped line.
+// Three independent width/group experiments, Songti SC 12 pt. The source alignment was not
+// recorded. Fitting vectors run justified; the 88 pt vector runs left-aligned to keep its
+// natural origins on a wrapped line.
 const word: { text: string; width: number; lines: string[]; origins: number[]; jc?: string }[] = [
   {
     text: '甲乙（丙丁）戊己',
@@ -312,7 +312,7 @@ test('protected and trailing spaces preserve source-run-independent optical geom
 });
 
 test('Word colon/closing compression includes authored tracking at wide and narrow measures', () => {
-  // Native Word controls: Songti SC12pt, w:spacing=0/30, measures37/200pt.
+  // Controls: Songti SC12pt, w:spacing=0/30, measures37/200pt.
   const text = '甲：、 ';
   for (const width of [37, 200])
     for (const spacing of [0, 30])

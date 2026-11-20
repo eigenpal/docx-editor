@@ -7272,7 +7272,7 @@ p.docx-review__refused {
   color: var(--doc-accent, #1a73e8);
 }
 
-/* Word for Mac's reviewer submenu: All, then one checked row per document author. */
+/* Reviewer submenu: All, then one checked row per document author. */
 .docx-toolbar__reviewers {
   position: relative;
   display: inline-flex;

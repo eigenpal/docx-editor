@@ -19,6 +19,7 @@ import {
   canMoveInlineImage,
   captureImageMutationPreconditions,
   computeMovedImagePosition,
+  forwardClipboardEvents,
   historyShortcutOf,
   IMAGE_OVERLAY_NUDGE_PT,
   IMAGE_OVERLAY_NUDGE_SHIFT_PT,
@@ -150,6 +151,10 @@ export const ImageSelectionOverlay = defineComponent({
     const pointerStartRef = shallowRef<{ readonly x: number; readonly y: number } | null>(null);
     const captureTargetRef = shallowRef<HTMLElement | null>(null);
     const overlayRef = shallowRef<HTMLDivElement | null>(null);
+    // Focus sits on the overlay, so copy, cut and paste reach the editor from here.
+    watch([overlayRef, editorRef], ([element, editor], _previous, onCleanup) => {
+      if (element && editor) onCleanup(forwardClipboardEvents(element, editor));
+    });
     const focusRequestedForDrawingRef = shallowRef<string | null>(null);
     const scrollPortRef = shallowRef<ImageOverlayScrollPort | null>(null);
 
