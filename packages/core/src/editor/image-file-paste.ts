@@ -9,11 +9,12 @@
 import { clipboardPasteLandsContent } from './clipboard-file-lane.ts';
 import { drawingPastePoint } from './drawing-paste-target.ts';
 import { capturePointPosition } from './editor-point-target.ts';
-import { PICTURE_SELECTED_INSERT_REASON } from './docx-editor-images.ts';
+import { refusesPictureBesideDrawing } from './docx-editor-images.ts';
 import { resolveSelectedDrawingRecord } from './selected-drawing-record.ts';
 import { IMAGE_INSERT_PROBE } from './toolbar-commands.ts';
 import { reportCommandResult } from './command-reporting.ts';
 import type { EditorPointPosition } from '../contracts/editor-drop.ts';
+import type { CanResult } from '../contracts/editor.ts';
 import type { DocxEditorInstance } from './docx-editor-types.ts';
 
 function carriesImageFile(transfer: DataTransfer): boolean {
@@ -38,18 +39,18 @@ export interface ImageFilePastePlan {
    */
   readonly at: EditorPointPosition | undefined;
   /**
-   * The reason the editor refuses the picture, when the lane takes the paste only to report
-   * it: a picture beside a selected drawing in suggesting mode. The lane then reads no file,
-   * so a selection change during a read cannot turn the refusal into an insert.
+   * The editor's refusal of the picture, when the lane takes the paste only to report it:
+   * in suggesting mode while a drawing is selected. The lane then reads no file, so a
+   * selection change during a read cannot turn the refusal into an insert.
    */
-  readonly refusal?: string;
+  readonly refusal?: Extract<CanResult, { ok: false }>;
 }
 
 /**
  * Whether a host's image-FILE lane takes this paste, and where the picture goes. Null means
  * stand down: no image file, content the engine lands itself (see
- * {@link clipboardPasteLandsContent}), an insert the editor refuses for any reason other than
- * the one below, or a document open for viewing. A paste the lane stands down from stays
+ * {@link clipboardPasteLandsContent}), an insert the editor refuses outside the case below,
+ * or a document open for viewing. A paste the lane stands down from stays
  * silent, as a refused paste in text does.
  *
  * With the caret in text, the picture lands at the caret. With a drawing selected, it lands
@@ -57,8 +58,9 @@ export interface ImageFilePastePlan {
  * drawing's anchor run. That point is captured, and stays valid only while the document keeps
  * the same revision, so a slow file read cannot insert into changed content; an insert into
  * changed content reports its stale-target reason. In suggesting mode the editor refuses a
- * picture beside a selected drawing (`PICTURE_SELECTED_INSERT_REASON`). The lane still takes
- * that paste, and the plan carries the refusal, so the lane reports it without a file read.
+ * picture while a drawing is selected (`PICTURE_SELECTED_INSERT_REASON`). The lane still takes
+ * that paste, and the plan carries the editor's refusal unchanged, so the lane reports it
+ * without a file read.
  *
  * @internal
  */
@@ -75,9 +77,7 @@ export function imageFilePastePlan(
   const judged = editor.canExecuteImageCommand(IMAGE_INSERT_PROBE);
   const point = drawingPastePoint(surface);
   if (!judged.ok) {
-    return point && judged.reason === PICTURE_SELECTED_INSERT_REASON
-      ? { at: undefined, refusal: judged.reason }
-      : null;
+    return refusesPictureBesideDrawing(surface) ? { at: undefined, refusal: judged } : null;
   }
   return { at: point ? capturePointPosition(surface, point) : undefined };
 }
@@ -128,8 +128,9 @@ export function reportImageInsertFailure(error: unknown): void {
  * passes the reason to `refuse`, for the host to show.
  *
  * After a picture lands at a selected drawing, the selection ends and the focused overlay
- * unmounts with it, so the text takes the keyboard, as after a paste of a copied drawing. A
- * refused or failed insert leaves focus where it is. A throw is reported, never rethrown.
+ * unmounts with it, so the text takes the keyboard, as after a paste of a copied drawing. So
+ * does a collaborator's removal of the drawing during the read. Any other refused insert, or a
+ * failed one, leaves focus where it is. A throw is reported, never rethrown.
  *
  * @internal
  */
@@ -144,18 +145,20 @@ export function runImageFilePaste(
   if (!transfer || !plan) return null;
   event.preventDefault();
   if (plan.refusal !== undefined) {
-    const reason = plan.refusal;
-    reportCommandResult(editor, IMAGE_INSERT_PROBE, { ok: false, code: 'invalidArgs', reason });
-    refuse(reason);
+    reportCommandResult(editor, IMAGE_INSERT_PROBE, plan.refusal);
+    refuse(plan.refusal.reason);
     return Promise.resolve();
   }
   const ownerDocument = (event.target as Node | null)?.ownerDocument ?? null;
   const selected = selectedDrawingId(editor);
   return insert(transfer, plan.at).then(() => {
-    // A landed picture ends the drawing selection, or selects the new picture. A refusal
-    // leaves the same drawing selected, whatever a collaborator changed meanwhile, so the
-    // keyboard stays where it is.
-    const landed = selectedDrawingId(editor) !== selected;
-    if (plan.at && landed && ownerDocument && focusReturnsToText(ownerDocument)) editor.focus();
+    // The selected drawing changes when the picture lands. The selection also ends when a
+    // collaborator removes the drawing during the read, which refuses the insert. Either way
+    // the overlay unmounts, so the text takes the keyboard. Any other refusal keeps the same
+    // drawing selected, and focus stays where it is.
+    const selectionEnded = selectedDrawingId(editor) !== selected;
+    if (plan.at && selectionEnded && ownerDocument && focusReturnsToText(ownerDocument)) {
+      editor.focus();
+    }
   }, reportImageInsertFailure);
 }

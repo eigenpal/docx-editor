@@ -211,3 +211,59 @@ test('a refused paste keeps focus where it is, even after a collaborator edits m
     expect(editor.findMatches('Peer Delta')).toHaveLength(1);
   }
 });
+
+test('a collaborator deletes the selected drawing during the file read: the paste refuses', async () => {
+  const { alice, bob, converged } = await pair();
+  selectFixtureDrawing(alice, 'shape');
+  const shapes = (xml: string) => xml.split('<wps:wsp').length - 1;
+  const shapesBefore = shapes(await savedDocumentXml(alice));
+  let focused = 0;
+  const host = {
+    surface: alice.surface,
+    canExecuteImageCommand: alice.canExecuteImageCommand.bind(alice),
+    focus: () => {
+      focused += 1;
+      return alice.focus();
+    },
+  };
+  let result: unknown = null;
+  let run: Promise<void> | null = null;
+  document.body.addEventListener(
+    'paste',
+    (event) => {
+      run = runImageFilePaste(
+        host,
+        event as ClipboardEvent,
+        async (_transfer, at) => {
+          // Bob deletes the drawing Alice selected while her file is read.
+          selectFixtureDrawing(bob, 'shape');
+          expect(bob.exec({ type: 'deleteImage' })).toMatchObject({ ok: true, changed: true });
+          converged();
+          result = await executeImageCommand(alice, {
+            type: 'insertImage',
+            data: PNG_1X1,
+            mime: 'image/png',
+            widthPoints: 12,
+            heightPoints: 12,
+            ...(at ? { at } : {}),
+          });
+        },
+        () => undefined
+      );
+    },
+    { once: true }
+  );
+  document.body.dispatchEvent(pasteEvent({ file: true }));
+  expect(run).not.toBeNull();
+  await run;
+  expect(result).toMatchObject({ ok: false, code: 'notFound' });
+  // The drawing selection ended with the drawing, so the text takes the keyboard.
+  expect(alice.snapshot().image).toBeNull();
+  expect(focused).toBe(1);
+  converged();
+  for (const editor of [alice, bob]) {
+    const xml = await savedDocumentXml(editor);
+    expect(picturesPerParagraph(xml)).toEqual([0, 0, 0, 0]);
+    expect(shapes(xml)).toBe(shapesBefore - 1);
+  }
+});

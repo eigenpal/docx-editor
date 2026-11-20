@@ -3050,7 +3050,9 @@ export interface ImageDecodePort {
 // @internal
 export interface ImageFilePastePlan {
     readonly at: EditorPointPosition | undefined;
-    readonly refusal?: string;
+    readonly refusal?: Extract<CanResult, {
+        ok: false;
+    }>;
 }
 
 // @internal

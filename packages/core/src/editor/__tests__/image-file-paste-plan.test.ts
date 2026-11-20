@@ -123,34 +123,31 @@ test('with a drawing selected while suggesting, takes the paste and carries the 
   editor.surface!.setEditingMode('suggest');
   selectFixtureDrawing(editor, 'picture');
   const plan = imageFilePastePlan(editor, transfer({ file: true }));
-  expect(plan).toEqual({ at: undefined, refusal: PICTURE_SELECTED_INSERT_REASON });
+  expect(plan).toEqual({
+    at: undefined,
+    refusal: { ok: false, code: 'invalidArgs', reason: PICTURE_SELECTED_INSERT_REASON },
+  });
   expect(picturesPerParagraph(await savedDocumentXml(editor))).toEqual([1, 0, 0, 0]);
   // The caret in text still takes the file while suggesting.
   caretAtEndOf(editor, 3);
   expect(imageFilePastePlan(editor, transfer({ file: true }))).toEqual({ at: undefined });
 });
 
-test('with a drawing selected, stands down for any other refusal, as a paste in text does', async () => {
+test('with a drawing selected, stands down for a refusal outside suggesting mode', async () => {
   const editor = await mounted();
   selectFixtureDrawing(editor, 'picture');
-  const refusing = {
-    surface: editor.surface,
-    canExecuteImageCommand: () =>
-      ({ ok: false, code: 'locked', reason: 'the document is protected' }) as const,
-  };
+  const locked = { ok: false, code: 'locked', reason: 'the document is protected' } as const;
+  const refusing = { surface: editor.surface, canExecuteImageCommand: () => locked };
   expect(imageFilePastePlan(refusing, transfer({ file: true }))).toBeNull();
-  const pictureSelected = {
-    surface: editor.surface,
-    canExecuteImageCommand: () =>
-      ({ ok: false, code: 'invalidArgs', reason: PICTURE_SELECTED_INSERT_REASON }) as const,
-  };
-  expect(imageFilePastePlan(pictureSelected, transfer({ file: true }))).toEqual({
+  // While suggesting, the lane reports whatever the editor refuses, unchanged.
+  editor.surface!.setEditingMode('suggest');
+  expect(imageFilePastePlan(refusing, transfer({ file: true }))).toEqual({
     at: undefined,
-    refusal: PICTURE_SELECTED_INSERT_REASON,
+    refusal: locked,
   });
-  // With the caret in text, the picture-selected refusal cannot apply, so the lane stands down.
+  // With the caret in text, the lane stands down as a refused paste in text does.
   caretAtEndOf(editor, 3);
-  expect(imageFilePastePlan(pictureSelected, transfer({ file: true }))).toBeNull();
+  expect(imageFilePastePlan(refusing, transfer({ file: true }))).toBeNull();
 });
 
 test('with a picture anchored in a table cell selected, lands before it in that cell', async () => {
