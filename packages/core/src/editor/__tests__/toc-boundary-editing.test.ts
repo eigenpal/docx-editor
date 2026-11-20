@@ -230,10 +230,7 @@ test('a standalone closing line is crossed by arrows, keeps its mark, and joins 
     `<w:p>${begin}${run('Entry 1')}</w:p><w:p>${run('Entry 2')}</w:p><w:p>${end}</w:p><w:p>${run('Following')}</w:p>`
   );
   const [, , closing, following] = surface.session.paragraphIds();
-  // The closing line occupies layout, but caret motion crosses it with the cached rows.
-  select(surface, 3, 2);
-  surface.navigate('up');
-  expect(surface.state().selection.head.paragraphId).not.toBe(closing);
+  // The closing line occupies layout, but downward motion crosses it with the cached rows.
   select(surface, 2, 0);
   surface.navigate('down');
   expect(surface.state().selection.head).toEqual({ paragraphId: following!, offset: 0 });
@@ -268,4 +265,15 @@ test('arrows reach a closing line that ends the document', () => {
   }
   surface.navigate('up');
   expect(surface.state().selection.head.paragraphId).toBe(surface.session.paragraphIds()[0]!);
+});
+test('arrows reach a closing line when the TOC starts the document', () => {
+  const { surface } = mount(
+    `<w:p>${begin}${run('Entry')}</w:p><w:p>${end}</w:p><w:p>${run('After')}</w:p>`
+  );
+  const [, closing] = surface.session.paragraphIds();
+  for (const command of ['up', 'left'] as const) {
+    select(surface, 2, 0);
+    surface.navigate(command);
+    expect(surface.state().selection.head).toEqual({ paragraphId: closing!, offset: 0 });
+  }
 });
