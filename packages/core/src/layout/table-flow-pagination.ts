@@ -29,7 +29,6 @@ import {
   type TerminalRowAt,
 } from './table-terminal-border-plan.ts';
 import { fragmentRowContentDeps } from './table-fragment-content-insets.ts';
-import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { tableRowRules } from './table-flow-row-rules.ts';
 import {
   headerGroupMoves,
@@ -570,6 +569,7 @@ export function* paginateTableInFlowSteps(
       top: () => flow.cursorY,
       bottom: contentHeight,
       freshBand: () => pageBand() - bandTop,
+      bandTop: () => bandTop,
       naturalHeight: () => naturalHeight,
       baselineBodyHeight: () => baselineBodyHeight,
       vMerge: () => vMerge,
@@ -578,7 +578,7 @@ export function* paginateTableInFlowSteps(
       laterLayout,
       rowDeps,
     });
-    const { pageHoldsRow, keepsWholeAt, overflowsBelowRepeat, startMissesBelowRepeat } = rules;
+    const { pageHoldsRow, overflowsBelowRepeat, startMissesBelowRepeat } = rules;
     prepareRepeat = rules.prepareRepeat;
 
     // A row an accepted span covers below its head, a nested head row included, does not
@@ -687,6 +687,7 @@ export function* paginateTableInFlowSteps(
           !terminalDeps &&
           !deferred &&
           !forceNextFragment &&
+          vMerge === undefined &&
           row === authoredRow,
         top: fragmentTop,
         rows,
@@ -697,6 +698,8 @@ export function* paginateTableInFlowSteps(
         repeatsEnabled,
         headerGroupDegraded: initialHeaderGroupDegraded,
         fragmentsForRow,
+        naturalHeight,
+        baselineBodyHeight,
       });
     if (!resumed && !forceBreak && !startsPage && !keptMoves) tryTerminalFit();
 
@@ -706,6 +709,8 @@ export function* paginateTableInFlowSteps(
     // A breaking positioned table moves such a row too, minimum height included. A text-anchored
     // table's opening already holds its first authored body row (`table-text-float-break.ts`).
     if (resumed) {
+      // The page opening reads the heights measured where the row stood before it moved.
+      ({ naturalHeight, baselineBodyHeight } = resume);
       openContinuation(admitsRepeatedHeaders, resume.repeat);
       movedToFreshPage = true;
       admitSpans(bodyRowIndex, row);
@@ -728,26 +733,7 @@ export function* paginateTableInFlowSteps(
             fragmentTop <= bandTop + 0.001 &&
             rows.every((placed) => placed.isHeaderRepeat),
         })) ||
-      (!heldByOpenSpan &&
-        naturalHeight <= contentHeight() + 0.001 &&
-        flow.cursorY + naturalHeight + closingEdge + terminal.ruleRoomPt(row, tableDeps, rowDeps) >
-          contentHeight() + 0.001 &&
-        flow.cursorY > bandTop &&
-        (keepsWholeAt(flow.cursorY) ||
-          row.height.rule === 'exact' ||
-          !probeRowFragmentProgress(
-            row,
-            structure.columnWidthsPt,
-            tableLeft,
-            flow.cursorY,
-            contentHeight() - closingEdge,
-            false,
-            0,
-            rowDeps(),
-            cursors,
-            structure.cellSpacingPt,
-            { requireEveryCell: true }
-          )))
+      (!heldByOpenSpan && rules.movesWhole(closingEdge))
     ) {
       breakForContinuation(admitsRepeatedHeaders, startsPage);
       movedToFreshPage = true;

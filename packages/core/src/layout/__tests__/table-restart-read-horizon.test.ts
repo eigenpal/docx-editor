@@ -127,3 +127,48 @@ test('an edit to the row after a page-opening row lays out as the whole table ag
   expect(cases).toBeGreaterThan(100);
   expect(restarts).toBeGreaterThan(cases / 2);
 }, 60_000);
+
+test('a restart opens its page with the heights the row had where it stood before', () => {
+  // The repeat admission at a page opening reads the opening row's height as measured on the
+  // page above, below the thick top rule's narrower inside rule. Measured again at the new
+  // page top, the tall `w:cantSplit` row no longer fits below the repeat.
+  const lines = (count: number) =>
+    `<w:p><w:r>${Array.from({ length: count }, (_, i) => `<w:t>T-${i}</w:t>`).join('<w:br/>')}</w:r></w:p>`;
+  const cell = (content: string) =>
+    `<w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr>${content}</w:tc>`;
+  const plain = (r: number) =>
+    `<w:tr>${cell(p(`R${r}a`))}${cell(p(`R${r}b`))}${cell(p(`R${r}c`))}</w:tr>`;
+  const borders =
+    `<w:tblBorders><w:top w:val="thickThinLargeGap" w:sz="96" w:space="0" w:color="000000"/>` +
+    `${['left', 'right', 'insideV', 'insideH', 'bottom'].map(rule).join('')}</w:tblBorders>`;
+  const rowsXml = [
+    `<w:tr><w:trPr><w:tblHeader/></w:trPr>${cell(p('Head A'))}${cell(p('Head B'))}${cell(p('Head C'))}</w:tr>`,
+    ...Array.from({ length: 7 }, (_, r) => plain(r)),
+    `<w:tr><w:trPr><w:cantSplit/></w:trPr>${cell(lines(9))}${cell(p('t'))}${cell(p('u'))}</w:tr>`,
+    plain(20),
+    plain(21),
+    plain(22),
+  ];
+  const base = load(
+    p('Pre') +
+      `<w:tbl><w:tblPr><w:tblW w:w="6000" w:type="dxa"/><w:tblLayout w:type="fixed"/>${borders}</w:tblPr>` +
+      `<w:tblGrid>${'<w:gridCol w:w="2000"/>'.repeat(3)}</w:tblGrid>${rowsXml.join('')}</w:tbl>`
+  );
+  const session = createLayoutSession();
+  const cache = createParagraphLayoutCache();
+  lay(base, { session, cache });
+  const table = elements(elements(base.root, 'body')[0]!, 'table')[0]!;
+  const applied = applyTreeOp(base, {
+    op: 'insertTableRow',
+    tableId: table.id,
+    rowId: elements(table, 'tableRow').at(-1)!.id,
+    where: 'below',
+  });
+  if (!applied.ok) throw new Error(applied.reason);
+  const recorder = tablePageRestartTestRecorder();
+  const incremental = lay(applied.part, { session, cache });
+  recorder.dispose();
+  expect(recorder.restarts).toBe(1);
+  expect(recorder.fallbacks).toBe(0);
+  expect(JSON.stringify(incremental.pages)).toBe(JSON.stringify(lay(applied.part).pages));
+});

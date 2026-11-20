@@ -13,6 +13,7 @@ import type { TableFlowDeps } from './semantic-table-layout.ts';
 import type { PageRecord } from './semantic-records.ts';
 import type { TableFlowPlacementResult } from './table-flow-cursor.ts';
 import {
+  noteRestartFallback,
   registerRestartedTableKeys,
   tablePageRestart,
   type TableRestartPlan,
@@ -67,6 +68,19 @@ export interface TableRestartInput {
   readonly placed: () => void;
 }
 
+let failAfterResumeForTests: 'throw' | 'refuse' | undefined;
+
+/**
+ * @internal Make every restart fail after it paginated: it throws, or the paginator refuses the
+ * resume. Tests prove the fallback to a whole pagination with it. Returns the restore.
+ */
+export function failTableRestartsForTests(how: 'throw' | 'refuse'): () => void {
+  failAfterResumeForTests = how;
+  return () => {
+    failAfterResumeForTests = undefined;
+  };
+}
+
 /** A restart of the first changed block of the pass, or null when it paginates as usual. */
 export function planTableRestartPass(input: TableRestartInput): TableRestartPass | null {
   if (input.columnCount !== 1) return null;
@@ -92,7 +106,17 @@ export function planTableRestartPass(input: TableRestartInput): TableRestartPass
       if (index !== input.index || !pending) return false;
       input.keys.begin();
       try {
-        const refused = (yield* paginate()).restartRefused === true;
+        let refused: boolean;
+        try {
+          refused = (yield* paginate()).restartRefused === true;
+          if (failAfterResumeForTests === 'throw') throw new Error('restart failure for tests');
+          refused ||= failAfterResumeForTests === 'refuse';
+        } catch {
+          // A last safety net: a restart that fails where the whole table may not paginates
+          // the whole table again. The flow before the table is restored below.
+          refused = true;
+          noteRestartFallback();
+        }
         if (refused) {
           plan.restoreBudgets();
           input.resumeFrom(input.checkpoints[index]!);

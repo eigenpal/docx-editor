@@ -6,7 +6,8 @@
 
 import { bottomToTopTextKeepsRowWhole } from './table-cell-text-direction.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
-import { probeBodyRowStart } from './table-row-progress-probe.ts';
+import { probeBodyRowStart, probeRowFragmentProgress } from './table-row-progress-probe.ts';
+import { ruleRoomPt } from './table-exact-terminal-border.ts';
 import { rowMinimumFits } from './table-row-minimum-fit.ts';
 import {
   prepareRepeatedHeaderBorderPlan,
@@ -31,6 +32,8 @@ export interface TableRowRuleInput {
   readonly bottom: () => number;
   /** The whole band of a fresh page below any band the fragment opened under. */
   readonly freshBand: () => number;
+  /** The top of the band the fragment opened under, or 0. */
+  readonly bandTop: () => number;
   readonly naturalHeight: () => number;
   readonly baselineBodyHeight: () => number;
   readonly vMerge: () => RowVMergeLayoutOptions | undefined;
@@ -57,6 +60,11 @@ export interface TableRowRules {
   prepareRepeat(): RepeatedHeaderBorderPlan | null | undefined;
   /** Repeated header rows may open a page whose body starts at `bodyTop`. */
   admitsRepeatedHeaders(bodyTop: number, clearingFloat?: boolean): boolean;
+  /**
+   * The row fits a page whole but not below `top` with `closingEdge` under it, and it may not
+   * split here: it keeps whole, has an exact height, or cannot start every cell.
+   */
+  movesWhole(closingEdge: number): boolean;
 }
 
 export function tableRowRules(input: TableRowRuleInput): TableRowRules {
@@ -161,7 +169,33 @@ export function tableRowRules(input: TableRowRuleInput): TableRowRules {
     // below it. If not, omit the repeat and offer the full page.
     return progressesAt(bodyTop) || (!clearingFloat && startMissesBelowRepeat(bodyTop));
   };
+  const movesWhole = (closingEdge: number): boolean => {
+    const top = input.top();
+    const bottom = input.bottom();
+    const height = input.naturalHeight();
+    return (
+      height <= bottom + 0.001 &&
+      top + height + closingEdge + ruleRoomPt(row, deps, input.rowDeps) > bottom + 0.001 &&
+      top > input.bandTop() &&
+      (keepsWholeAt(top) ||
+        row.height.rule === 'exact' ||
+        !probeRowFragmentProgress(
+          row,
+          structure.columnWidthsPt,
+          input.left(),
+          top,
+          bottom - closingEdge,
+          false,
+          0,
+          input.rowDeps(),
+          input.cursors(),
+          structure.cellSpacingPt,
+          { requireEveryCell: true }
+        ))
+    );
+  };
   return {
+    movesWhole,
     admitsRepeatedHeaders,
     pageHoldsRow,
     keepsWholeAt,

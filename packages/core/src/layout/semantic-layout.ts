@@ -1181,7 +1181,9 @@ function* layoutBlocksPass(
       previousSpaceAfter,
     } = checkpointOwner.restore(checkpoint));
     columnIndex = flowColumnIndex;
-    firstParagraphOfSection = false;
+    // One column: the region opens at the flow start on the first page and at the top after.
+    [columnRegionTop, regionFragmentStart] = [checkpoint.pageCount === 0 ? flowStartY : 0, 0];
+    firstParagraphOfSection = checkpoint === session!.checkpoints[0] && flowStartY === 0;
     reusedPages = pages.length;
   };
   if (resumable && firstChanged > 0 && firstChanged < session.checkpoints.length) {

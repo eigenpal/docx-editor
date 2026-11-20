@@ -23,10 +23,46 @@
 //   read of the content past the table is never recorded. The restart row may not head or
 //   continue a vertical merge, or open a kept group, because the paginator does not carry
 //   the state those open.
-// - The paginator state at the page top is carried: the fragment number, the header group
-//   decisions, the row ordinals of the earlier pages, the pass budgets, the cell break keys,
-//   and the line counter. A page start is recorded only where nothing else is open: no split
-//   row, no merge, no closing-rule plan, no wrap zones, no cell spacing, no floats.
+// - The paginator state at the page top is carried or is a cause to refuse. See the inventory
+//   below.
+//
+// Inventory: every paginator variable (`table-flow-pagination.ts`) that the opening of a
+// continuation page, or a later row, reads. Each is carried in `TablePageStart`, is the same
+// in a full pass because nothing set it yet at that point, or refuses the page start.
+//
+// Carried:
+// - `fragmentIndex`, `repeatsEnabled`, `initialHeaderGroupDegraded`, the header group `start`,
+//   `headerGroupHeight`, and `headerMerged`: decisions taken on earlier pages.
+// - The repeat flag the break passed to the opening (`repeat`).
+// - `rowOrdinals`: rebuilt from the kept fragments.
+// - `fragmentsForRow` of the opening row (`MAX_TABLE_ROW_FRAGMENTS`).
+// - `naturalHeight` and `baselineBodyHeight` of the opening row as measured where it stood
+//   before it moved. The repeat admission (`admitsRepeatedHeaders`) and the repeat border plan
+//   (`prepareRepeat`) read them at the opening. They are measured from the kept page.
+// - The pass budgets (border ownership intervals, merge cells) and, from the body flow, the
+//   line counter and the count of cell break keys.
+// - `readThrough`: how far into the table the kept decisions read (`table-read-horizon.ts`).
+//
+// The same as in a full pass at the opening, because the break that closed the previous
+// fragment reset them: `rows`, `sourceRows`, `occurrenceInsets`, `repeatedPlan`, `bandTop`,
+// `firstFragmentBottom`, `isContinuation`, the opening row's cell cursors, `movedToFreshPage`
+// (set after the opening), and `rowDeps`, which reads only those. The clearance pending
+// fragment is rebuilt from the row index before the opening. `closingEdge` is read only
+// before the break. Header plans and row probes are caches that answer as fresh reads do.
+//
+// Refuses the page start (`open` and `at` below, `planTableRestartPass`):
+// - a row split across the break (`isContinuation`), a closing-rule plan (`terminalDeps`),
+//   merged text carried past a head row (`deferred`), a forced break (`forceNextFragment`),
+//   merge options (`vMerge`), or a row other than the authored one (`fragmentCarry`);
+// - an opening row that heads or continues a vertical merge, or keeps with the next row;
+// - a fragment that holds rows other than its header repeat above the opening row, or opens
+//   below the page top;
+// - page wrap zones, cell spacing, a positioned table, out-of-cell floats, or more than one
+//   column;
+// - a decision that read the content after the table (`readThrough` unbounded).
+//
+// The body flow at the page top: the kept pages, the header and footer variant and the note
+// reserve of each page index (a moved reserve refuses), and the flow checkpoint.
 //
 // The body flow carries the rest (`semantic-layout.ts`): the pages are kept, the header and
 // footer variants and note reserves come with each page index, and a restart is refused when
@@ -58,8 +94,9 @@ import type { HeaderGroupStart } from './table-header-group-start.ts';
 import type { PreparedBlock } from './section-prepass-types.ts';
 import { autofitContextOf } from './table-autofit-widths.ts';
 import {
+  registerMergedTableCellBreakKeys,
   registerResumedTableCellBreakKeys,
-  tableCellBreakKeyCount,
+  tableCellBreakKeysUnordered,
 } from './table-cell-break-keys.ts';
 import { rowKeepsWithNext } from './table-row-keeps.ts';
 import { hasTableMerge } from './table-border-probe.ts';
@@ -92,6 +129,12 @@ export interface TableResume {
   readonly headerMerged: boolean;
   /** Page fragments the opening row had already counted (`MAX_TABLE_ROW_FRAGMENTS`). */
   readonly fragmentsForRow: number;
+  /**
+   * The opening row's heights as measured where it stood on the page before, which the
+   * repeat admission and the repeat border plan at the page opening read.
+   */
+  readonly naturalHeight: number;
+  readonly baselineBodyHeight: number;
   /** Row ordinals of the rows placed on the kept pages; the paginator adds to it. */
   readonly ordinals: Map<string, number>;
   /** The furthest row any decision for the kept pages read (`table-read-horizon.ts`). */
@@ -248,6 +291,11 @@ function firstChangedRow(before: SemanticTableStructure, after: SemanticTableStr
   return Number.POSITIVE_INFINITY;
 }
 
+/** Whether a restart keeps the previous table node's whole key list, not a prefix of it. */
+function wholeKeyList(textUpdated: boolean, previous: PreparedBlock | undefined): boolean {
+  return previous?.kind === 'table' && (textUpdated || tableCellBreakKeysUnordered(previous.table));
+}
+
 /** Whether the flow before the table holds only what a restart at a page top re-creates. */
 function plainFlowBefore(checkpoint: FlowCheckpoint): boolean {
   return (
@@ -262,15 +310,24 @@ function plainFlowBefore(checkpoint: FlowCheckpoint): boolean {
   );
 }
 
-let observer: { restarts: number; keptPages: number } | null = null;
+let observer: { restarts: number; keptPages: number; fallbacks: number } | null = null;
 
-/** @internal Counts the restarts planned and the pages they keep, for tests that need one. */
+/** Count a restart that failed and paginated the whole table instead. */
+export function noteRestartFallback(): void {
+  if (observer) observer.fallbacks += 1;
+}
+
+/**
+ * @internal Counts the restarts planned, the pages they keep, and the restarts that failed and
+ * paginated the whole table, for tests that need one.
+ */
 export function tablePageRestartTestRecorder(): {
   readonly restarts: number;
   readonly keptPages: number;
+  readonly fallbacks: number;
   dispose(): void;
 } {
-  const counts = { restarts: 0, keptPages: 0 };
+  const counts = { restarts: 0, keptPages: 0, fallbacks: 0 };
   observer = counts;
   return {
     get restarts() {
@@ -278,6 +335,9 @@ export function tablePageRestartTestRecorder(): {
     },
     get keptPages() {
       return counts.keptPages;
+    },
+    get fallbacks() {
+      return counts.fallbacks;
     },
     dispose() {
       if (observer === counts) observer = null;
@@ -293,6 +353,8 @@ export interface TableRestartPlan {
   readonly resume: TableResume;
   /** Cell break keys of the previous table node that the kept pages reported. */
   readonly breakKeys: number;
+  /** The kept pages' keys are not a prefix of the list: keep it whole, each key once. */
+  readonly mergeKeys: boolean;
   /** Give `deps` back the pass budgets it held before the plan, when the paginator refuses. */
   restoreBudgets(): void;
 }
@@ -411,11 +473,11 @@ export function tablePageRestart(
       resume: { ...resume, ordinals },
       // A text update on a kept page moved its row's keys to the end of the table's list
       // (`registerEditedTableCellBreakKeys`), so the kept pages' keys are no longer its
-      // first ones. Keep the whole list then, until the table is paginated whole again.
-      breakKeys:
-        kept.textUpdated && read.previous?.kind === 'table'
-          ? tableCellBreakKeyCount(read.previous.table)
-          : flow.breakKeys,
+      // first ones. Keep the whole list then, each key once, until the table is paginated
+      // whole again (`registerMergedTableCellBreakKeys`).
+      ...(wholeKeyList(kept.textUpdated, read.previous)
+        ? { breakKeys: 0, mergeKeys: true }
+        : { breakKeys: flow.breakKeys, mergeKeys: false }),
     };
   }
   return null;
@@ -431,6 +493,14 @@ export function registerRestartedTableKeys(
   plan: TableRestartPlan,
   keys: readonly string[]
 ): void {
+  if (plan.mergeKeys) {
+    registerMergedTableCellBreakKeys(
+      table,
+      previous?.kind === 'table' ? previous.table : undefined,
+      keys
+    );
+    return;
+  }
   registerResumedTableCellBreakKeys(
     table,
     previous?.kind === 'table' ? previous.table : undefined,
