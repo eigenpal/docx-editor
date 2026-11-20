@@ -112,9 +112,11 @@ describe('an image file pasted while a drawing is selected', () => {
       const before = await pictures(editor);
       expect(before).toEqual([1, 0, 0, 0]);
       const { overlay, paragraph } = await select(container, editor, kind);
-      const event = pasteEvent({ file: true });
+      let reads = 0;
+      const event = pasteEvent({ file: true, onFileRead: () => (reads += 1) });
       overlay.dispatchEvent(event);
-      expect(event.defaultPrevented).toBe(true);
+      // The image-file lane read the file once: the engine alone would not.
+      expect(reads).toBe(1);
       const after = await picturesOnceSettled(editor, 2);
       const expected = [...before];
       expected[paragraph]! += 1;
@@ -133,9 +135,11 @@ describe('an image file pasted while a drawing is selected', () => {
     expect(editor.exec({ type: 'setEditingMode', mode: 'suggesting' }).ok).toBe(true);
     await flush();
     const { overlay } = await select(container, editor, 'picture');
-    const event = pasteEvent({ file: true });
+    let reads = 0;
+    const event = pasteEvent({ file: true, onFileRead: () => (reads += 1) });
     overlay.dispatchEvent(event);
-    expect(event.defaultPrevented).toBe(true);
+    // The image-file lane read the file once: the engine alone would not.
+    expect(reads).toBe(1);
     let dialog: Element | null = null;
     for (let attempt = 0; attempt < 100 && !dialog; attempt++) {
       await tick();
@@ -248,15 +252,18 @@ describe('the overlay clipboard binding', () => {
     await flush();
     expect(overlayOf(container)).toBeNull();
     // The removed overlay no longer takes an image file.
-    const stale = pasteEvent({ file: true });
+    let staleReads = 0;
+    const stale = pasteEvent({ file: true, onFileRead: () => (staleReads += 1) });
     first.dispatchEvent(stale);
     expect(stale.defaultPrevented).toBe(false);
+    expect(staleReads).toBe(0);
     expect(await picturesOnceSettled(editor, 2)).toEqual([1, 0, 0, 0]);
     // The next overlay takes it once: one listener, not one per overlay so far.
     const { overlay: second, paragraph } = await select(container, editor, 'shape');
-    const live = pasteEvent({ file: true });
+    let liveReads = 0;
+    const live = pasteEvent({ file: true, onFileRead: () => (liveReads += 1) });
     second.dispatchEvent(live);
-    expect(live.defaultPrevented).toBe(true);
+    expect(liveReads).toBe(1);
     const expected = [1, 0, 0, 0];
     expected[paragraph]! += 1;
     expect(await picturesOnceSettled(editor, 2)).toEqual(expected);

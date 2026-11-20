@@ -70,6 +70,8 @@ export {
   clipboardDropLandsText,
   clipboardPasteLandsContent,
   imageFilePastePlan,
+  reportImageInsertFailure,
+  runImageFilePaste,
   type ImageFilePastePlan,
 } from './clipboard-file-lane.ts';
 export {

@@ -13,11 +13,15 @@ import { DialogMount } from './dialog-host';
 // A paste reaches it through `useImageFilePaste`, which the selection overlay runs as well.
 
 import { useCallback, useContext, useLayoutEffect, useRef } from 'react';
-import { editorDropHandled, openChartPaneAt } from '@docx-editor.dev/core/editor';
+import {
+  editorDropHandled,
+  openChartPaneAt,
+  reportImageInsertFailure,
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
 import { ImageSelectionOverlay } from './images/ImageSelectionOverlay.tsx';
-import { reportImageInsertFailure, useImageFilePaste } from './images/useImageFilePaste';
+import { useImageFilePaste } from './images/useImageFilePaste';
 
 import type { DocxEditorChildren } from '../docx-editor-children';
 

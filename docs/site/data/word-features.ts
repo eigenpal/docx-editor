@@ -592,7 +592,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Both adapters insert and paste inline PNG, JPEG, and GIF images, also beside a selected drawing, and move and resize them. Drops show a destination caret, explain blocked positions, and scroll near viewport edges. Custom drop handlers can supply image bytes; movement stays within the active editing region.',
+      'Both adapters insert, paste, move, and resize inline PNG, JPEG, and GIF images. A pasted image file goes before a selected drawing\'s anchor. Drops show a destination caret and explain blocked positions; movement stays within the active editing region.',
   },
   {
     id: 'images.anchored',

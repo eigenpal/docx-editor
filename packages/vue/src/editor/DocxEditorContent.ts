@@ -16,12 +16,13 @@ import {
   editorDropHandled,
   isHTMLElementNode,
   openChartPaneAt,
+  reportImageInsertFailure,
 } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useDocxEditor, useEditorContentElement } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
 import { ImageSelectionOverlay } from './images/ImageSelectionOverlay';
-import { reportImageInsertFailure, useImageFilePaste } from './images/useImageFilePaste';
+import { useImageFilePaste } from './images/useImageFilePaste';
 import { mergeHostClass } from '../lib/mergeHostClass';
 import { useChromeDir } from '../i18n';
 

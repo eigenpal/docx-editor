@@ -129,14 +129,24 @@ export function caretAtEndOf(editor: DocxEditorInstance, index: number): void {
 
 /**
  * A bubbling paste event over an in-memory transfer. `file` adds an image file; `flavours`
- * adds string flavours such as `text/plain` and `text/html`.
+ * adds string flavours such as `text/plain` and `text/html`. `onFileRead` runs each time the
+ * image-file lane reads the file's bytes: the spy on the insert path. The engine prevents the
+ * default of every paste it sees, so `defaultPrevented` cannot tell whether the lane ran.
  */
 export function pasteEvent(options: {
   readonly file?: boolean;
   readonly flavours?: Readonly<Record<string, string>>;
+  readonly onFileRead?: () => void;
 }): ClipboardEvent {
   const event = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent;
   const files = options.file ? [new File([PNG_1X1], 'pasted.png', { type: 'image/png' })] : [];
+  for (const file of files) {
+    const read = file.arrayBuffer.bind(file);
+    file.arrayBuffer = () => {
+      options.onFileRead?.();
+      return read();
+    };
+  }
   const flavours = options.flavours ?? {};
   Object.defineProperty(event, 'clipboardData', {
     value: {
