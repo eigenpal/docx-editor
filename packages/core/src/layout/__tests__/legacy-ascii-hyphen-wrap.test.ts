@@ -83,3 +83,11 @@ test('legacy hyphen grouping preserves other dash breaks and explicit character 
     hyphen
   );
 });
+
+test('Korean runs beside East Asian text keep their hyphen breaks; Latin-only Korean runs glue', () => {
+  const korean = [{ localName: 'lang', attributes: { eastAsia: 'ko-KR' } }];
+  const mixed = pieces('甲乙AB123-2048').map((piece) => ({ ...piece, props: korean }));
+  const latin = pieces('well-known words').map((piece) => ({ ...piece, props: korean }));
+  expect(cjkParagraphBreaks(mixed, policy)?.boundaries(mixed[0]!)).toContain(8);
+  expect(cjkParagraphBreaks(latin, policy)?.decision(latin[0]!, 5, '', '')).toBe('continues');
+});

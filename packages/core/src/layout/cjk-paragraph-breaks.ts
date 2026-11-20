@@ -137,7 +137,6 @@ export function cjkParagraphBreaks(
     [text.length, 'opens'],
   ]);
   const latinCuts = new Set(wordBoundaries(text, false));
-  const glueHyphens = gluesLegacyHyphen(policy);
   // Numeric expressions and full-width alphabetic words are units, even when
   // runs split a decimal separator or currency sign from its digits.
   const numeric = new Set<number>();
@@ -151,6 +150,10 @@ export function cjkParagraphBreaks(
   let pieceIndex = 0;
   let leftPieceIndex = 0;
   const hasKorean = clusters.some((cluster) => isHangul(cluster.text.codePointAt(0)!));
+  // Korean runs beside East Asian text wrap Latin words by character in these modes, which
+  // this analysis does not model, so they keep their ordinary hyphen breaks.
+  const glueHyphens = gluesLegacyHyphen(policy);
+  const eastAsianText = clusters.some((cluster) => isCjk(cluster.text.codePointAt(0)!));
   const detectedLanguage = hasKorean
     ? 'ko-kr'
     : /[\u3040-\u30ff\uff66-\uff9f]/u.test(text)
@@ -277,7 +280,13 @@ export function cjkParagraphBreaks(
       decisions.set(at, 'kinsoku');
       continue;
     }
-    if (glueHyphens && left.text === '-' && !/^\s/u.test(right.text) && !isCjk(after)) {
+    if (
+      glueHyphens &&
+      left.text === '-' &&
+      !/^\s/u.test(right.text) &&
+      !isCjk(after) &&
+      !(eastAsianText && eastAsiaIsKorean(pieces[leftPieceIndex]!.props))
+    ) {
       decisions.set(at, 'continues');
       continue;
     }
