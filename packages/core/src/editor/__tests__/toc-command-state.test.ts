@@ -46,6 +46,14 @@ const CENTER: EditorCommand = { type: 'setAlignment', align: 'center' };
 const TYPE: EditorCommand = { type: 'insertText', text: 'X' };
 const BULLETS: EditorCommand = { type: 'toggleList', kind: 'bullet' };
 const CLEAR: EditorCommand = { type: 'clearFormatting' };
+const FORMAT = { type: 'applyFormatting', marks: { bold: true } } as EditorCommand;
+const REPLACE = { type: 'replaceText', text: 'Q' } as EditorCommand;
+const MERGE = { type: 'mergeParagraphs' } as EditorCommand;
+const TABLE = { type: 'insertTable', rows: 2, cols: 2 } as EditorCommand;
+const TEXT_BOX: EditorCommand = { type: 'insertTextBox' };
+const NOTE: EditorCommand = { type: 'insertNote', noteKind: 'footnote' };
+const BOOKMARK: EditorCommand = { type: 'insertBookmark', name: 'mark' };
+const CONTROL = { type: 'insertContentControl', subtype: 'plainText' } as EditorCommand;
 
 // [label, body, selection, command, refused]
 const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])[] = [
@@ -71,6 +79,21 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
   ['cached page number: Bold', INLINE, [1, 0, 1, 1], BOLD, true],
   ['boundary with cached text: alignment', INLINE, [1, 6, 1, 6], CENTER, true],
   ['only the mark of a boundary paragraph: Bold', INLINE, [1, 9, 2, 0], BOLD, true],
+  ['range in a row: automation format', BODY, [1, 1, 1, 4], FORMAT, true],
+  ['after the TOC: automation format', BODY, [4, 0, 4, 3], FORMAT, false],
+  ['range in a row: replace text', BODY, [1, 1, 1, 4], REPLACE, true],
+  ['caret before the TOC: merge into the first row', BODY, [0, 6, 0, 6], MERGE, true],
+  ['closing line: merge the next paragraph into it', BODY, [3, 0, 3, 0], MERGE, false],
+  ['caret in a row: table', BODY, [1, 2, 1, 2], TABLE, true],
+  ['closing line: table splits a TOC paragraph', BODY, [3, 0, 3, 0], TABLE, true],
+  ['after the TOC: table', BODY, [4, 1, 4, 1], TABLE, false],
+  ['caret in a row: text box', BODY, [1, 2, 1, 2], TEXT_BOX, true],
+  ['closing line: text box anchors after the end mark', BODY, [3, 0, 3, 0], TEXT_BOX, false],
+  ['caret in a row: footnote', BODY, [1, 2, 1, 2], NOTE, true],
+  ['closing line: footnote', BODY, [3, 0, 3, 0], NOTE, false],
+  ['caret in a row: bookmark', BODY, [1, 2, 1, 2], BOOKMARK, true],
+  ['range in a row: content control', BODY, [1, 1, 1, 4], CONTROL, true],
+  ['after the TOC: content control', BODY, [4, 1, 4, 3], CONTROL, false],
 ];
 
 for (const [label, body, place, command, refused] of CASES) {
@@ -91,7 +114,13 @@ for (const [label, body, place, command, refused] of CASES) {
 }
 
 test('toolbar controls are disabled inside the TOC and on its closing line', () => {
-  const slots: ChromeSlotId[] = ['text.bold', 'text.italic', 'alignment.center', 'list.bullet'];
+  const slots: ChromeSlotId[] = [
+    'text.bold',
+    'text.italic',
+    'alignment.center',
+    'list.bullet',
+    'table.insert',
+  ];
   for (const place of [
     [1, 2, 1, 2],
     [3, 0, 3, 0],

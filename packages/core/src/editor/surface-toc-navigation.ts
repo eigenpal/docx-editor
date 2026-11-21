@@ -31,6 +31,14 @@ const BACKWARD_MOTIONS: ReadonlySet<NavigationCommand> = new Set([
   'documentStart',
 ]);
 
+/** Motions that step through text rather than by line. */
+const TEXT_MOTIONS: ReadonlySet<NavigationCommand> = new Set([
+  'left',
+  'right',
+  'wordLeft',
+  'wordRight',
+]);
+
 /** Whether a motion moves toward the start of the document. */
 export function isBackwardMotion(command: NavigationCommand): boolean {
   return BACKWARD_MOTIONS.has(command);
@@ -43,9 +51,10 @@ const samePosition = (a: SemanticPosition, b: SemanticPosition) =>
  * Where a motion from `origin` that landed at `moved` settles, or null when the caret
  * stays. A position outside every TOC is returned unchanged.
  *
- * The escape steps by LINE, never by character: a character step inside a row that holds
- * text lands in the same row, so a bounded loop could neither enter nor cross the region.
- * `lineLimit` bounds the steps by the lines the TOC regions occupy.
+ * A text motion (Left, Right, and the word steps) continues at the editable text next to
+ * the TOC. A line motion steps by LINE and keeps its column: a character step inside a
+ * row that holds text lands in the same row, so a bounded loop could neither enter nor
+ * cross the region. `lineLimit` bounds the steps by the lines the TOC regions occupy.
  */
 export function settleTocMotion<M extends CaretMove>(
   part: OoxmlPart,
@@ -58,6 +67,12 @@ export function settleTocMotion<M extends CaretMove>(
   let moved = landed;
   if (!tocSkippedByCaretMotion(part, moved.position, origin)) return moved;
   const backward = isBackwardMotion(command);
+  if (TEXT_MOTIONS.has(command)) {
+    const position = crossByText(part, origin, moved.position, backward, (from, motion) =>
+      step({ ...moved, position: from, desiredX: null }, motion)
+    );
+    return position ? { ...moved, position, desiredX: null, caret: undefined } : null;
+  }
   // The nearest editable closing line crossed: the stop when the region has no exit.
   let closingLine = tocAtPosition(part, moved.position) ? undefined : moved;
   for (let index = 0; index < lineLimit; index += 1) {
@@ -79,6 +94,38 @@ export function settleTocMotion<M extends CaretMove>(
     step({ ...moved, position: from, desiredX: null }, command)
   );
   return position ? { ...moved, position, desiredX: null, caret: undefined } : null;
+}
+
+/**
+ * Where a text motion that landed in a TOC continues: the editable text beside the region.
+ * A closing line that the motion arrives at from another paragraph is crossed too, and is
+ * the stop when nothing editable lies past it.
+ */
+function crossByText<M extends CaretMove>(
+  part: OoxmlPart,
+  origin: SemanticPosition,
+  landed: SemanticPosition,
+  backward: boolean,
+  step: (from: SemanticPosition, command: NavigationCommand) => M | null
+): SemanticPosition | null {
+  let position = landed;
+  let closingLine: SemanticPosition | null = null;
+  // Each pass crosses one TOC or one closing line, so the range count bounds the walk.
+  for (let pass = 0; pass <= tocParagraphRanges(part).length; pass += 1) {
+    const toc = tocSkippedByCaretMotion(part, position, origin);
+    if (!toc) return position;
+    let next: SemanticPosition | null;
+    if (tocAtPosition(part, position)) {
+      next = editableBeside(part, toc, backward ? 'before' : 'after', step);
+    } else {
+      closingLine = position;
+      const stepped = step(position, backward ? 'left' : 'right')?.position;
+      next = stepped && !samePosition(stepped, position) ? stepped : null;
+    }
+    if (!next) return closingLine;
+    position = next;
+  }
+  return closingLine;
 }
 
 /** The nearest editable position before or after a TOC, crossing adjacent TOCs. */

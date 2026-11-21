@@ -115,3 +115,25 @@ test('a document that holds only a TOC keeps the caret on its closing line', () 
     expect(from(1, 0, command).head).toEqual(at(1, 0));
   }
 });
+
+test('Left, Right, and word steps across a TOC continue at the text beside it', () => {
+  const { at, from } = mount(
+    `<w:p>${run('Before text')}</w:p>${bare}<w:p>${run('After text')}</w:p>`
+  );
+  for (const command of ['left', 'wordLeft'] as const) {
+    expect(from(3, 0, command).head).toEqual(at(0, 11));
+    expect(from(3, 0, command, true)).toEqual({ anchor: at(3, 0), head: at(0, 11) });
+    // From the closing line, too.
+    expect(from(2, 0, command).head).toEqual(at(0, 11));
+  }
+  for (const command of ['right', 'wordRight'] as const) {
+    expect(from(0, 11, command).head).toEqual(at(3, 0));
+    expect(from(0, 11, command, true)).toEqual({ anchor: at(0, 11), head: at(3, 0) });
+  }
+});
+
+test('Left after a TOC that starts the document stops on its closing line', () => {
+  const { at, from } = mount(`${bare}<w:p>${run('After')}</w:p>`);
+  expect(from(2, 0, 'left').head).toEqual(at(1, 0));
+  expect(from(1, 0, 'left').head).toEqual(at(1, 0));
+});

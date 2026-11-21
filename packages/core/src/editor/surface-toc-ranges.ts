@@ -78,7 +78,8 @@ function rangeTouches(range: TocParagraphRange, start: number, end: number): boo
 /**
  * Whether a paragraph-level write (its properties or its mark) reaches generated content:
  * the paragraph holds generated text, or only field characters (such as a shown closing
- * line). A boundary that also holds a heading keeps accepting paragraph formatting.
+ * line). An end paragraph whose end mark comes first, before a heading, holds no generated
+ * text, so it keeps accepting paragraph formatting.
  */
 function paragraphWriteTouches(range: TocParagraphRange): boolean {
   return range.end > range.start || range.length === 0;
@@ -153,10 +154,22 @@ export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
 }
 
 /**
+ * Whether the TOC guard refuses a join of `paragraphIds` into the first one: every one
+ * of them is removed or restructured, except a first paragraph that holds only the end
+ * mark (the guard lets the next paragraph join it).
+ */
+export function tocRefusesJoin(part: OoxmlPart, paragraphIds: readonly string[]): boolean {
+  const ranges = tocParagraphRanges(part);
+  return paragraphIds.some((id, index) =>
+    ranges.some(
+      (r) => r.paragraphId === id && !(index === 0 && r.endsHere && !r.startsHere && r.end === 0)
+    )
+  );
+}
+/**
  * Whether the TOC guard refuses text written over the selection. Inside one paragraph it
  * asks {@link selectionTouchesTocRange}. A range across paragraphs also removes the ones
- * between its ends and joins its ends, so it is refused when it reaches any TOC paragraph,
- * except a first paragraph that holds only the end mark (the guard lets it join).
+ * between its ends and joins its ends, so it asks {@link tocRefusesJoin} too.
  */
 export function tocRefusesTextWrite(
   part: OoxmlPart,
@@ -165,11 +178,12 @@ export function tocRefusesTextWrite(
 ): boolean {
   if (selectionTouchesTocRange(part, selection)) return true;
   if (selection.anchor.paragraphId === selection.head.paragraphId) return false;
-  const ranges = tocParagraphRanges(part);
-  return paragraphIds.some((id, index) =>
-    ranges.some(
-      (r) => r.paragraphId === id && !(index === 0 && r.endsHere && !r.startsHere && r.end === 0)
-    )
+  return tocRefusesJoin(part, paragraphIds);
+}
+/** Whether the end of a paragraph, where an anchored object is inserted, is generated. */
+export function tocAtParagraphEnd(part: OoxmlPart, paragraphId: string): boolean {
+  return tocParagraphRanges(part).some(
+    (r) => r.paragraphId === paragraphId && contains(r, r.length)
   );
 }
 /** One paragraph's selected span, `[start, end)` in its own offsets. */
