@@ -631,7 +631,15 @@ export function legacyShapeFragment(
         if (named(n, VML, 'stroke')) {
           return (
             !off(a(n, 'on') ?? a(node, 'stroked')) ||
-            n.attributes.some((attr) => attr.namespaceUri || attr.localName !== 'on')
+            n.attributes.some(
+              (attr) =>
+                attr.namespaceUri ||
+                (attr.localName !== 'on' &&
+                  !(
+                    attr.localName === 'joinstyle' &&
+                    ['round', 'bevel', 'miter'].includes(attr.value)
+                  ))
+            )
           );
         }
         return false;

@@ -971,7 +971,7 @@
       "oversize": "Gambar melebihi ukuran maksimum yang diizinkan.",
       "refused": "Gambar tidak dapat disisipkan.",
       "unsupportedFormat": "Format gambar ini tidak didukung untuk penyisipan.",
-      "staleTarget": "Dokumen atau posisi pelepasan berubah. Lepaskan gambar lagi."
+      "staleTarget": "Dokumen berubah sebelum gambar disisipkan. Sisipkan gambar lagi."
     }
   },
   "imageProperties": {
@@ -1059,7 +1059,7 @@
     "nothingToPaint": "Pilih teks yang akan diberi pemformatan",
     "noReviewAuthors": "Dokumen ini tidak memiliki penulis tinjauan",
     "suggestingNeedsAuthor": "Mode saran memerlukan penulis. Tetapkan penulis dalam konfigurasi editor.",
-    "pictureSelected": "Sebuah gambar dipilih. Letakkan kursor di teks untuk menyisipkan gambar.",
+    "pictureSelected": "Dalam mode saran, gambar tidak dapat disisipkan saat sebuah objek gambar dipilih. Letakkan kursor di teks untuk menyisipkan gambar.",
     "chartDrawing": "Ini adalah bagan. Anda dapat menghapusnya, tetapi tidak dapat mengeditnya sebagai gambar.",
     "chartFrame": "Ini adalah bagan. Anda dapat mengubah ukuran, posisi, pembungkusan teks, dan teks alternatifnya.",
     "diagramFrame": "Ini adalah diagram. Anda dapat mengubah ukuran, posisi, pembungkusan teks, dan teks alternatifnya.",
@@ -1079,7 +1079,12 @@
     "drawingClipboardStory": "Gambar hanya dapat disalin, dipotong, atau ditempel di isi dokumen, bukan di header, footer, catatan, atau kotak teks.",
     "groupMemberClipboard": "Bentuk di dalam grup disalin atau dipotong bersama grupnya. Tekan Escape untuk memilih grup.",
     "drawingClipboardSize": "Gambar ini terlalu besar untuk disalin.",
-    "drawingPasteCells": "Letakkan kursor di teks untuk menempelkan gambar."
+    "drawingPasteCells": "Letakkan kursor di teks untuk menempelkan gambar.",
+    "groupMemberPaste": "Teks tidak dapat ditempelkan ke bentuk di dalam grup. Tekan Escape untuk memilih grup.",
+    "linkedTextBoxPaste": "Teks tidak dapat ditempelkan ke kotak teks yang ditautkan. Letakkan kursor di teks untuk menempel.",
+    "textBoxPicturePaste": "Kotak teks hanya menerima teks. Tempel tanpa format untuk menempelkan teksnya saja.",
+    "shapePasteText": "Bentuk ini tidak memiliki teks untuk ditempeli. Letakkan kursor di teks untuk menempel.",
+    "textBoxPaste": "Teks di kotak teks ini tidak dapat diedit. Letakkan kursor di teks untuk menempel."
   },
   "equationPopup": {
     "apply": "Terapkan",

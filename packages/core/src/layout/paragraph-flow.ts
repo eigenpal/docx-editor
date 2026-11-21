@@ -1,4 +1,8 @@
-import { syncPendingDrawingBaselines, repositionPendingDrawings } from './pending-line-drawings.ts';
+import {
+  positionedDrawingExtent,
+  syncPendingDrawingBaselines,
+  repositionPendingDrawings,
+} from './pending-line-drawings.ts';
 import { numericWidthTrace } from './numeric-width-proof.ts';
 import { storePendingLines } from './paragraph-break-cache-store.ts';
 import {
@@ -16,7 +20,7 @@ import { continuationPiecesWithRules } from './paragraph-continuation-pieces.ts'
 import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
 import { cellTabReplayScope, tabClosesLine, tabDestinationForFlow } from './paragraph-tab-flow.ts';
 import { growRunBorderLineMetrics } from './run-border-strokes.ts';
-import { lineSpacingBand } from './equation-line-spacing.ts';
+import { inlineExtentSpacing, lineSpacingBand } from './equation-line-spacing.ts';
 import { setCharacterFillBand } from './character-fill-band.ts';
 import {
   clipLineDrawingsAtTop,
@@ -764,17 +768,21 @@ export function breakParagraph(
   let pictureRunBand: { height: number; baseline: number } | undefined;
   const growLineMetricsForDrawing = (
     style: ResolvedRunStyle,
-    measure: ReturnType<typeof measureInlineDrawing>
+    measure: ReturnType<typeof measureInlineDrawing>,
+    runPositionPt: number
   ): { extentTopY: number } => {
     const textMetrics = measurer.lineMetrics(style);
     pictureRunBand ??= { height: 0, baseline: 0 };
     growLineMetrics(pictureRunBand, textMetrics);
     const layout = inlineDrawingVerticalLayout(
       textMetrics.baseline,
-      line.height || textMetrics.height,
-      measure
+      runPositionPt ? textMetrics.height : line.height || textMetrics.height,
+      measure,
+      runPositionPt
     );
-    if (line.height === 0) {
+    if (runPositionPt) {
+      growLineMetrics(line, { height: layout.lineHeight, baseline: layout.baseline });
+    } else if (line.height === 0) {
       line.height = layout.lineHeight;
       line.baseline = layout.baseline;
     } else if (layout.lineHeight > line.height) {
@@ -820,23 +828,9 @@ export function breakParagraph(
     // Apply paragraph line spacing once to the finished box.
     const naturalHeight = line.height;
     const naturalBaseline = line.baseline;
-    // `auto` scales the TEXT band, not a tall inline drawing or equation (ECMA-376
-    // 17.3.1.33). A drawing line above single spacing keeps the drawing's box and adds the
-    // multiple's extra text band below it. An equation line keeps the equation's extent and
-    // adds or loses the multiple's share of its band (`lineSpacingBand`).
-    const hasUnscaledInlineExtent =
-      line.drawings.length > 0 ||
-      line.spans.some((span) => span.equation !== undefined || span.unsupported !== undefined);
-    const scalesTextBandOnly = lineSpacing.rule === 'auto' && hasUnscaledInlineExtent;
-    const holdsUnscaledPicture =
-      scalesTextBandOnly &&
-      line.drawings.length > 0 &&
-      !line.spans.some((span) => span.equation !== undefined) &&
-      lineSpacing.gridPitch === undefined;
-    const addsTextBandExtra = holdsUnscaledPicture && lineSpacing.value > 240;
-    // Below single spacing the multiple takes its missing text band off the line's top: the
-    // line is the picture less that band, never less than the scaled text band.
-    const removesTextBand = holdsUnscaledPicture && lineSpacing.value < 240;
+    // `auto` scales the text band only beside an inline drawing or equation (ECMA-376 17.3.1.33).
+    const { gridFitsDrawing, scalesTextBandOnly, addsTextBandExtra, removesTextBand } =
+      inlineExtentSpacing(line, lineSpacing);
     const fallbackBand = pictureRunBand?.height ?? metrics.height;
     const band = scalesTextBandOnly
       ? lineSpacingBand(line, lineSpacing, measurer, fallbackBand, pageBreaksIgnored)
@@ -875,8 +869,9 @@ export function breakParagraph(
     // A picture taller than a shortened line paints only below the line's top.
     if (removesTextBand) clipLineDrawingsAtTop(line);
     if (lineSpacing.rule !== 'exact') growPendingLineDrawingExtent(line);
+    // A grid line's centring below its content may hang past the page foot, picture or not.
     line.trailingSpacing =
-      line.drawings.length === 0 && lineSpacing.rule !== 'exact'
+      (line.drawings.length === 0 || gridFitsDrawing) && lineSpacing.rule !== 'exact'
         ? Math.max(0, Math.min(spaced.trailing ?? Infinity, spacedExtent - naturalHeight))
         : drawingLineTrailing;
     setCharacterFillBand(line, lineSpacing.rule === 'exact', {
@@ -1049,23 +1044,22 @@ export function breakParagraph(
         line.width = settledWidth;
         if (!jumps) closeLine();
       }
-      exclusionProbe.setMetrics(
-        { height: measure.lineContribution, baseline: measure.lineContribution },
-        atomWidth,
-        true
-      );
-      const jumpedLine = line;
       // A horizontal rule spans the line wherever it sits, so floats beside it do not move it.
       const rule = !!piece.inlineDrawing.projection.horizontalRule;
+      const runPositionPt = rule ? 0 : piece.style.baselineShiftPt;
+      // Floats clear the picture at its run's `w:position` offset, not at its unmoved place.
+      const extent = positionedDrawingExtent(measure.lineContribution, runPositionPt);
+      exclusionProbe.setMetrics(extent, atomWidth, true);
+      const jumpedLine = line;
       const placeWidth = besideFloatWidth(atomWidth, flow, holdsContent(), activeExclusionZones);
-      if (!jumps && !rule) applyInlineObjectSkipIfNeeded(placeWidth, measure.lineContribution);
+      if (!jumps && !rule) applyInlineObjectSkipIfNeeded(placeWidth, extent.height);
       if (!rule && !ensurePlacementWidth(placeWidth)) continue;
       if (jumps && line !== jumpedLine) {
         // Placement refused the jump at the picture's own height and closed the line.
-        applyInlineObjectSkipIfNeeded(atomWidth, measure.lineContribution);
+        applyInlineObjectSkipIfNeeded(atomWidth, extent.height);
         if (!ensurePlacementWidth(atomWidth)) continue;
       }
-      const { extentTopY } = growLineMetricsForDrawing(piece.style, measure);
+      const { extentTopY } = growLineMetricsForDrawing(piece.style, measure, runPositionPt);
       const slotX = lineOrigin() + line.width;
       line.drawings.push(
         buildInlineDrawingRecord({
@@ -1075,6 +1069,7 @@ export function breakParagraph(
           slotX,
           y: extentTopY,
           baseline: line.baseline,
+          runPositionPt,
           contentLeft: contentOriginX,
           contentRight: contentOriginX + rightEdge,
           ...(flow?.deferInlineDrawingHorizontalClip ? { deferHorizontalClip: true } : {}),

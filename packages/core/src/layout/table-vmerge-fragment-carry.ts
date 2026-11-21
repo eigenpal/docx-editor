@@ -140,6 +140,16 @@ export interface VMergeFragmentCarry {
   ): { rows: TableRowFragmentRecord[]; sources: SemanticTableRow[] };
 }
 
+const continuing = new WeakMap<SemanticTableRow, boolean>();
+
+/** Whether a cell of `row` continues a vertical merge. */
+function continuesMerge(row: SemanticTableRow): boolean {
+  let known = continuing.get(row);
+  if (known === undefined)
+    continuing.set(row, (known = row.cells.some((cell) => cell.vMergeContinue)));
+  return known;
+}
+
 /** A protected, text-only merge whose rows can cross a page while its text uses a cursor. */
 export function createVMergeFragmentCarry(
   structure: SemanticTableStructure,
@@ -150,7 +160,8 @@ export function createVMergeFragmentCarry(
   const groups: Group[] = [];
   const atRow = new Map<number, Group>();
   const rowIndex = new Map(rows.map((row, index) => [row.id, index]));
-  const spans = resolveVMergeSpans(rows);
+  // Most tables continue no merge; a structure read keeps its rows, so each row is asked once.
+  const spans = rows.some(continuesMerge) ? resolveVMergeSpans(rows) : new Map<string, number>();
   const grouped = new Map<string, Group>();
   let work = 0;
   for (const [index, row] of rows.entries()) {

@@ -247,6 +247,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     advanceStart: 'represented',
     advanceEnd: 'layout-only',
     baselineOffset: 'layout-only',
+    runPositionPt: 'layout-only',
     paintBounds: 'layout-only',
     hitBounds: 'layout-only',
     geometry: 'layout-only',

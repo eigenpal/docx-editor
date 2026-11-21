@@ -562,7 +562,7 @@ export function execEditorCommand(
       return { ok: true, changed: false };
     case 'copy': {
       // The gate already refused a collapsed selection that holds no drawing.
-      const before = mounted.state();
+      const before = mounted.refusalCount();
       const flavours = mounted.copyFlavours();
       if (flavours.reason) return clipboardRefusal(flavours.reason, mounted, before);
       writeClipboardRich(flavours.text, flavours.html, clipboardWindow(options?.editor));
@@ -571,7 +571,7 @@ export function execEditorCommand(
     case 'cut': {
       // Read BEFORE the delete: `copyFlavours` answers from the selection, and the delete
       // is what removes it.
-      const before = mounted.state();
+      const before = mounted.refusalCount();
       const flavours = mounted.copyFlavours();
       if (flavours.reason) return clipboardRefusal(flavours.reason, mounted, before);
       // One selected drawing: the cut deletes that drawing, as Delete does. The clipboard is
@@ -599,19 +599,26 @@ export function execEditorCommand(
       if (refusal) {
         return clipboardRefusal(refusal === 'chart' ? 'chart-content' : 'unsupported-content');
       }
-      const before = mounted.state();
+      const before = mounted.refusalCount();
       const result = mounted.pasteRich(command.text, command.html ?? null);
       if (!result) {
-        // A copied drawing refuses where it cannot land; this paste published that refusal.
-        const refused = drawingRefusalSince(mounted, before);
+        // A copied drawing refuses where it cannot land, and a paste into a text box that the
+        // store refuses lands nothing: this paste published that refusal.
+        const refused = pasteRefusalSince(mounted, before);
         if (refused) return { ok: false, code: 'unsupported', reason: refused };
         return { ok: true, changed: false };
       }
       break;
     }
-    case 'pasteWithoutFormatting':
-      mounted.insertPlainText(command.text);
+    case 'pasteWithoutFormatting': {
+      const before = mounted.refusalCount();
+      // The paste lane with no HTML, so a selected drawing places or refuses the text.
+      if (!mounted.pasteRich(command.text, null)) {
+        const refused = pasteRefusalSince(mounted, before);
+        if (refused) return { ok: false, code: 'unsupported', reason: refused };
+      }
       break;
+    }
     case 'setSelection': {
       // Every successful branch REVEALS its head. This command is host/automation-facing
       // — "select this paragraph" means "show it to me" — and the caret-follow scroll
@@ -681,15 +688,15 @@ export function execEditorCommand(
 /** The scope id of the note whose painted fragments hold `paragraphId`, or null. */
 /** The window whose clipboard a copy writes to: the editor's, a pop-out's when it is there. */
 /**
- * A refused copy, cut or paste. A chart, or a drawing that published its sentence since
- * `before`, refuses with its own reason, which adapters translate.
+ * A refused copy, cut or paste. A chart, or a drawing that published its sentence after
+ * `before` refusals, refuses with its own reason, which adapters translate.
  */
 function clipboardRefusal(
   reason: 'unsupported-content' | 'chart-content',
   mounted?: PaginatedSurface,
-  before?: ReturnType<PaginatedSurface['state']>
+  before?: number
 ): ExecResult {
-  const drawing = mounted && before ? drawingRefusalSince(mounted, before) : null;
+  const drawing = mounted && before !== undefined ? drawingRefusalSince(mounted, before) : null;
   return {
     ok: false,
     code: 'unsupported',
@@ -697,13 +704,18 @@ function clipboardRefusal(
   };
 }
 
-/** The drawing clipboard's refusal, when one was published after `before`. */
-function drawingRefusalSince(
-  mounted: PaginatedSurface,
-  before: ReturnType<PaginatedSurface['state']>
-): string | null {
-  const after = mounted.state();
-  const refused = after !== before ? after.lastRejection : null;
+/**
+ * Why a paste that landed nothing refused: the drawing clipboard's reason, or the store's
+ * refusal of the write it tried. Counted, not read from the state: a paste can move the
+ * selection without a refusal, and an earlier paste's rejection is still in the state then.
+ */
+function pasteRefusalSince(mounted: PaginatedSurface, before: number): string | null {
+  return mounted.refusalSince(before);
+}
+
+/** The drawing clipboard's refusal, when one was published after `before` refusals. */
+function drawingRefusalSince(mounted: PaginatedSurface, before: number): string | null {
+  const refused = mounted.refusalSince(before);
   return refused && DRAWING_CLIPBOARD_REASONS.has(refused) ? refused : null;
 }
 
