@@ -152,19 +152,20 @@ export interface InlineDrawingVerticalLayout {
 export function inlineDrawingVerticalLayout(
   textBaseline: number,
   textLineHeight: number,
-  measure: InlineDrawingMeasure
+  measure: InlineDrawingMeasure,
+  runPositionPt = 0
 ): InlineDrawingVerticalLayout {
-  const extentTopY = Math.max(measure.distT + measure.effectT, textBaseline - measure.height);
-  const lineHeight = Math.max(
-    textLineHeight,
-    extentTopY - measure.effectT + measure.height + measure.effectB + measure.distB
+  const extentTopY = Math.max(
+    measure.distT + measure.effectT,
+    textBaseline - measure.height - runPositionPt
   );
   const drawingBottom = extentTopY + measure.height + measure.effectB;
-  return Object.freeze({
-    extentTopY,
-    lineHeight,
-    baseline: Math.max(textBaseline, drawingBottom),
-  });
+  const baseline = Math.max(textBaseline, drawingBottom + runPositionPt);
+  // A drawing raised by its run's `w:position` can move the baseline.
+  // Its line still holds the text descent.
+  const textBottom = runPositionPt ? textLineHeight + baseline - textBaseline : textLineHeight;
+  const lineHeight = Math.max(textBottom, drawingBottom - measure.effectT + measure.distB);
+  return Object.freeze({ extentTopY, lineHeight, baseline });
 }
 
 /** @deprecated Prefer {@link inlineDrawingVerticalLayout}. */
@@ -211,7 +212,7 @@ export function repositionInlineDrawingsForBaseline(
   if (drawings.length === 0) return drawings;
   return drawings.map((drawing) => {
     const effectB = drawing.geometry.effectInsets.bottom;
-    const extentTopY = baseline - drawing.height - effectB;
+    const extentTopY = baseline - drawing.height - effectB - (drawing.runPositionPt ?? 0);
     const dy = extentTopY - drawing.y;
     if (Math.abs(dy) < 0.000_1 && drawing.baselineOffset === baseline) return drawing;
     return Object.freeze({
@@ -245,6 +246,8 @@ export interface InlineDrawingRecord {
   /** Caret/hit advance end (slot + totalWidth). */
   readonly advanceEnd: number;
   readonly baselineOffset: number;
+  /** The signed w:position rise relative to the text baseline. @internal */
+  readonly runPositionPt?: number;
   readonly paintBounds: LayoutBox;
   readonly hitBounds: LayoutBox;
   readonly geometry: DrawingGeometry;
@@ -511,7 +514,15 @@ export interface ResolvedAnchoredPosition {
 
 export interface AnchoredDrawingRecord extends Omit<
   InlineDrawingRecord,
-  'kind' | 'baselineOffset' | 'advanceStart' | 'advanceEnd' | 'distL' | 'distR' | 'distT' | 'distB'
+  | 'kind'
+  | 'baselineOffset'
+  | 'runPositionPt'
+  | 'advanceStart'
+  | 'advanceEnd'
+  | 'distL'
+  | 'distR'
+  | 'distT'
+  | 'distB'
 > {
   readonly kind: 'anchoredDrawing';
   readonly anchorParagraphId: string;
@@ -1236,6 +1247,7 @@ export function buildInlineDrawingRecord(options: {
   readonly slotX: number;
   readonly y: number;
   readonly baseline: number;
+  readonly runPositionPt?: number;
   readonly contentLeft: number;
   readonly contentRight: number;
   readonly contentTop?: number;
@@ -1315,6 +1327,7 @@ export function buildInlineDrawingRecord(options: {
     advanceStart: options.slotX,
     advanceEnd: options.slotX + measure.totalWidth,
     baselineOffset: options.baseline,
+    ...(options.runPositionPt ? { runPositionPt: options.runPositionPt } : {}),
     paintBounds,
     hitBounds,
     // The line and column clip is no region a shape stays cut at: a shape that paints past its

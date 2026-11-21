@@ -68,6 +68,12 @@ export {
 export { hostDirectionOf, observeHostDirection } from './host-direction.ts';
 export { clipboardDropLandsText, clipboardPasteLandsContent } from './clipboard-file-lane.ts';
 export {
+  imageFilePastePlan,
+  reportImageInsertFailure,
+  runImageFilePaste,
+  type ImageFilePastePlan,
+} from './image-file-paste.ts';
+export {
   copyEditorStyles,
   openEditorWindow,
   type EditorWindow,

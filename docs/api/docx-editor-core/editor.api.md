@@ -3047,6 +3047,17 @@ export interface ImageDecodePort {
     }>>;
 }
 
+// @internal
+export interface ImageFilePastePlan {
+    readonly at: EditorPointPosition | undefined;
+    readonly refusal?: Extract<CanResult, {
+        ok: false;
+    }>;
+}
+
+// @internal
+export function imageFilePastePlan(editor: Pick<DocxEditorInstance, 'surface' | 'canExecuteImageCommand'>, transfer: DataTransfer | null | undefined): ImageFilePastePlan | null;
+
 // @public
 export interface ImageInteractionSession {
     // (undocumented)
@@ -3692,6 +3703,8 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     refreshTableInteractionLabels(): void;
     // (undocumented)
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
+    refusalCount(): number;
+    refusalSince(count: number): string | null;
     releaseSelection(pin: SelectionPin): void;
     remotePresenceColor(name: string): string | undefined;
     remoteSelectionPending(): boolean;
@@ -4481,6 +4494,9 @@ export function reportAutomationRefusal(editor: object, code: EditDiagnosticCode
 // @public
 export function reportAutomationReviewSkip(editor: object, code: ReviewDiagnosticCode, operation?: ReviewOperation, cause?: string): void;
 
+// @internal
+export function reportImageInsertFailure(error: unknown): void;
+
 // @public
 export function requestPane(editor: Editor, pane: EditorPaneId, options?: PaneRequestOptions): boolean;
 
@@ -4807,6 +4823,9 @@ export function runChromeExport(editor: Pick<Editor, 'save'> & Partial<Pick<Docx
 
 // @public
 export function runChromePrint(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>, handlers?: ChromeExportHandlers, container?: Document | Element, settings?: ChromePrintSettings): Promise<ChromePrintJob>;
+
+// @internal
+export function runImageFilePaste(editor: Pick<DocxEditorInstance, 'surface' | 'canExecuteImageCommand' | 'focus'>, event: ClipboardEvent, insert: (transfer: DataTransfer, at: EditorPointPosition | undefined) => Promise<unknown>, refuse: (reason: string) => void): Promise<void> | null;
 
 // @public
 export function runSave(editor: Editor | null): Promise<ArrayBuffer>;

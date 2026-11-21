@@ -76,11 +76,76 @@ export function registerEditedTableCellBreakKeys(
   registry.set(after, chunks);
 }
 
+/**
+ * Record `after`'s cell keys after a table pagination restarted part way: the first `count`
+ * keys `before` recorded, then `added`. Chunks wholly inside that prefix are shared.
+ */
+export function registerResumedTableCellBreakKeys(
+  after: object,
+  before: object | undefined,
+  count: number,
+  added: readonly string[]
+): void {
+  const chunks: (readonly string[])[] = [];
+  let left = count;
+  for (const chunk of (before && registry.get(before)) || []) {
+    if (left <= 0) break;
+    pushChunk(chunks, chunk.length <= left ? chunk : chunk.slice(0, left));
+    left -= chunk.length;
+  }
+  pushKeys(chunks, added);
+  registry.set(after, chunks);
+}
+
+/**
+ * Tables whose list is a set of live keys, not the keys of their pages in page order: a restart
+ * after a text update on a kept page keeps the whole list. A later restart keeps the whole list
+ * of such a table too, since no prefix of it belongs to the kept pages.
+ */
+const unordered = new WeakSet<object>();
+
+/** Whether `table`'s list is not in page order, so no prefix of it is the kept pages' keys. */
+export function tableCellBreakKeysUnordered(table: object): boolean {
+  return unordered.has(table);
+}
+
+/**
+ * Record `after`'s cell keys as every key `before` recorded and every key in `added`, each
+ * once. The list then stays as long as the distinct keys, however many restarts build it.
+ */
+export function registerMergedTableCellBreakKeys(
+  after: object,
+  before: object | undefined,
+  added: readonly string[]
+): void {
+  const fresh = new Set(added);
+  const chunks: (readonly string[])[] = [];
+  for (const chunk of (before && registry.get(before)) || []) {
+    let kept: string[] | undefined;
+    for (let index = 0; index < chunk.length; index += 1) {
+      const key = chunk[index]!;
+      if (fresh.has(key)) kept ??= chunk.slice(0, index);
+      else kept?.push(key);
+    }
+    pushChunk(chunks, kept ?? chunk);
+  }
+  pushKeys(chunks, Array.from(fresh));
+  registry.set(after, chunks);
+  unordered.add(after);
+}
+
 /** `table`'s recorded cell keys as one flat list, or undefined when none were recorded. */
 export function tableCellBreakKeysOf(table: object): readonly string[] | undefined {
   const chunks = registry.get(table);
   if (!chunks) return undefined;
   return chunks.length === 1 ? chunks[0]! : chunks.flat();
+}
+
+/** How many cell keys `table` recorded. */
+export function tableCellBreakKeyCount(table: object): number {
+  let count = 0;
+  for (const chunk of registry.get(table) ?? []) count += chunk.length;
+  return count;
 }
 
 /** `table`'s recorded cell keys as their immutable chunks, in order; for retention. */

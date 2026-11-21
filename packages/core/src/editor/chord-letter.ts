@@ -36,6 +36,20 @@ export function chordLetter(event: KeyboardEvent): string {
 }
 
 /**
+ * The paste-without-formatting chord: Ctrl+Shift+V or Command+Shift+V, and Command+Option+
+ * Shift+V, the Apple paste-and-match-style chord. Ctrl with Alt is refused: AltGr sets both,
+ * so it types a character.
+ *
+ * @internal
+ */
+export function isPlainPasteChord(event: KeyboardEvent): boolean {
+  if (!(event.ctrlKey || event.metaKey) || !event.shiftKey || chordLetter(event) !== 'v') {
+    return false;
+  }
+  return !event.altKey || (event.metaKey && !event.ctrlKey);
+}
+
+/**
  * The Go To chord: Ctrl+G, or Cmd+Option+G on Apple platforms. F5 is not used: browsers
  * reload on it. Cmd+G alone is left to the browser's find-next on macOS.
  *

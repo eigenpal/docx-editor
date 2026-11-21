@@ -9,6 +9,7 @@ import {
 import type { SourceRange, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { measureDisplayText } from './run-style.ts';
 import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
+import { memoized, type ClusterMemo } from './cjk-optical-memo.ts';
 import {
   kanaFitCells,
   kanaCapacityOf,
@@ -53,37 +54,6 @@ export function fittingClusters(text: string): readonly GraphemeSegment[] {
   for (let index = 0; index < text.length; index += 1)
     clusters.push({ index, text: text[index]!, utf16From: index, utf16To: index + 1 });
   return clusters;
-}
-/**
- * One fitter's cluster measurements by span style and font slot. Every attempt re-reads the
- * whole line with fresh span records, so ink and widths would otherwise be measured again.
- * Sound because a resolved run style is never mutated: a changed style is a new object, and
- * measurement reads only the style, the slot, the text, and the fitter's one measurer.
- */
-type MemoKind = 'prefixEnds' | 'natural' | 'ink' | 'authored';
-type ClusterMemo = Map<
-  StyleSpanRecord['style'],
-  Map<StyleSpanRecord['fontSlot'], Map<MemoKind, Map<string, unknown>>>
->;
-/** The measurement of `kind` for `text` in the span's style and slot, measured once. */
-function memoized<T>(
-  memo: ClusterMemo,
-  span: StyleSpanRecord,
-  kind: MemoKind,
-  text: string,
-  measure: () => T
-): T {
-  let bySlot = memo.get(span.style);
-  if (!bySlot) memo.set(span.style, (bySlot = new Map()));
-  let byKind = bySlot.get(span.fontSlot);
-  if (!byKind) bySlot.set(span.fontSlot, (byKind = new Map()));
-  let byText = byKind.get(kind);
-  if (!byText) byKind.set(kind, (byText = new Map()));
-  const cached = byText.get(text);
-  if (cached !== undefined || byText.has(text)) return cached as T;
-  const value = measure();
-  byText.set(text, value);
-  return value;
 }
 interface Cell {
   span: StyleSpanRecord;
@@ -184,16 +154,23 @@ function cellsOf(
 ): Cell[] | undefined {
   const cells: Cell[] = [];
   let length = 0;
+  // Authored run tracking (`w:rPr/w:spacing`) qualifies a line only while it holds East Asian
+  // text, punctuation, and spaces alone: such a line fits as it would in a paragraph without
+  // Latin text.
+  let tracked = false;
+  let foreign = false;
   for (const [sourceIndex, span] of spans.entries()) {
     length += span.text.length;
     if (length > 4096 || !allowed(span)) return undefined;
     const face = styleForFontSlot(span.style, span.fontSlot);
     // This narrower path applies only when the old paragraph-wide gate failed.
-    // Keep authored tracking/scaling, complex lanes, and unqualified faces intact.
+    // Keep authored scaling, complex lanes, and unqualified faces intact.
     if (requireLocalQualification) {
       const authored = layoutDerivedSpacingStyleForEditing(face);
+      tracked ||= authored.characterSpacingPt !== 0;
+      // A refused line stops before it measures the rest of its spans.
       if (
-        authored.characterSpacingPt !== 0 ||
+        (tracked && foreign) ||
         authored.horizontalScalePercent !== 100 ||
         authored.shaping !== undefined ||
         measurer.hasResolvedFont?.(face) !== true
@@ -202,6 +179,7 @@ function cellsOf(
       // Keep a qualified mathematical run opaque. Its existing shaped advance is
       // immutable, and neither adjacent boundary can supply compression capacity.
       if (/^\p{Sm}+$/u.test(span.text) && /[^\x00-\x7f]/u.test(span.text)) {
+        foreign = true;
         if (!Number.isFinite(span.box.width) || span.box.width <= 0) return undefined;
         cells.push({
           sourceIndex,
@@ -235,6 +213,7 @@ function cellsOf(
           (printableAscii && /[^ ]/u.test(span.text)) ||
           /^[A-Za-z0-9‘’“”]+$/u.test(span.text) ||
           numberMarker;
+        foreign ||= ordinaryOpaque;
         cells.push({
           sourceIndex,
           alreadyReduced: 0,
@@ -261,6 +240,7 @@ function cellsOf(
       )
     )
       return undefined;
+    foreign ||= curlyAllowed && clusters.some((cluster) => curlyRole(cluster.text));
     // One prefix-width list per span text keeps the memo linear in the text length.
     const ends = memoized(memo, span, 'prefixEnds', span.text, () =>
       clusters.map((cluster) =>
@@ -320,6 +300,7 @@ function cellsOf(
       previous = end;
     }
   }
+  if (tracked && foreign) return undefined;
   return cells;
 }
 // A glyph a blank side can face: an ideograph, punctuation, a qualified quote, or a word. A space
@@ -772,7 +753,10 @@ export function createParagraphCjkOpticalFitter(
 export interface CjkOpticalFitterOptions {
   /** A final mark that may hang past the margin needs no fit for itself. */
   readonly hangingPunctuation: boolean;
-  /** Fit only text in qualified faces without authored tracking or scaling. */
+  /**
+   * Fit only text in qualified faces without authored scaling (`w:w`). Authored tracking
+   * (`w:rPr/w:spacing`) qualifies only on a line of East Asian text, punctuation, and spaces.
+   */
   readonly requireLocalQualification?: boolean;
   /** The paragraph typography, for the line-start rules of hanging and kana fits. */
   readonly policy?: CjkParagraphTypography;

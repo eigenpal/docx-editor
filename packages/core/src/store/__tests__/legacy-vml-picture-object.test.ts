@@ -190,6 +190,38 @@ describe('a picture with an embedded object beside it', () => {
     expect(object[0]).toBeGreaterThanOrEqual(60);
   });
 
+  test('inert refresh-lock metadata and field codes keep the preview', () => {
+    const withMetadata = (metadata: string) =>
+      picture({ ole: OLE.replace('/>', `>${metadata}</o:OLEObject>`) });
+    for (const metadata of [
+      '<o:LockedField>false</o:LockedField>',
+      '<o:LockedField>True</o:LockedField><o:FieldCodes>\\s</o:FieldCodes>',
+      '<o:LockedField/>',
+      '<o:LockedField> false </o:LockedField>',
+      '<o:FieldCodes>\\* MERGEFORMAT</o:FieldCodes>',
+    ]) {
+      const part = parse(withMetadata(metadata));
+      const before = serializeOoxmlPart(part);
+      const [projection] = projectDrawingsInPart(part);
+      expect(projection?.legacyGraphic?.soleImageRelationshipId).toBe('rPreview');
+      expect(JSON.stringify(projection)).not.toContain('rOle');
+      expect(serializeOoxmlPart(part)).toBe(before);
+    }
+    for (const metadata of [
+      '<o:LockedField>maybe</o:LockedField>',
+      `<o:LockedField>${' '.repeat(64)}f</o:LockedField>`,
+      '<o:FieldCodes>\\s</o:FieldCodes><o:LockedField>false</o:LockedField>',
+      `<o:FieldCodes>${'x'.repeat(1025)}</o:FieldCodes>`,
+    ]) {
+      const part = parse(withMetadata(metadata));
+      expect(isLegacyVmlAtom(find(part.root, 'pict')!)).toBe(false);
+      expectRefused(projectDrawingsInPart(part));
+    }
+    // Text outside the validated object metadata still keeps the drawing opaque.
+    const stray = picture({ wrap: '<w10:wrap type="topAndBottom"/>stray' });
+    expectRefused(projectDrawingsInPart(parse(stray)));
+  });
+
   test('an inline preview stays inline', () => {
     const part = parse(picture({ style: 'width:150pt;height:80pt', wrap: '' }));
     expect(projectDrawingsInPart(part)[0]).toMatchObject({ kind: 'inline', wrap: 'inline' });
