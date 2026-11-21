@@ -58,6 +58,7 @@ The matrix reports editing, rendering, and round-trip support separately. A feat
 <FeatureMatrix category="text" />
 
 - Raised and lowered text, including inherited `w:position` with subscript or superscript, adds to automatic and minimum line heights. Exact line spacing keeps its height.
+- An inline picture sits at its run's `w:position` offset from the text baseline.
 - For equation limits, see [Equations](#equations).
 
 ### Paragraphs and styles
@@ -170,6 +171,7 @@ The compatibility mode in `w:compat` changes clipping, page counts, table placem
 | Line-end punctuation overflow | Hangs in justified and distributed paragraphs. | Hangs at every alignment, whatever the kinsoku switch. |
 | Korean paragraph-final mark with punctuation compression | Marks other than `。` and `、` can hang. | Starts the next line. |
 | Space shrink before a hanging mark | Justified and distributed lines shrink spaces first. | With punctuation compression and an East Asian default face, lines at any alignment shrink spaces to keep one more word. |
+| Hyphen-minus before a letter, digit, or symbol, with punctuation compression | A line can break after the hyphen. | The hyphen stays with the text after it. A word wider than the line still splits. |
 | Kana fitting in Traditional Chinese runs | Off. | On. |
 | Distributed text with pair kerning | Kerned runs keep their letters together. | Kerned runs spread too. |
 | Left-to-right justified text beside floating objects | Each passage compresses its own spaces. | No per-passage rule. |
@@ -271,7 +273,7 @@ Compact equation replacement is disabled when it cannot keep the source. The equ
 | Odd-page and even-page sections | Can insert an empty sheet. `NUMPAGES` counts it; `SECTIONPAGES` does not. |
 | Empty paragraph that ends a section | Ignores its own page break before and adds no blank page. Text, a tab, hidden text, or a field turns this off. |
 | Table at the end of a story | A body, note, or text box gets an empty paragraph after the table. It takes a line and can start a page. Headers and footers add none. |
-| Line grids | Automatic body lines snap to whole grid steps. Table cells snap only with `w:adjustLineHeightInTable`. Headers, footers, and text boxes do not snap. |
+| Line grids | Automatic body lines, including inline picture lines, snap to whole grid steps. Table cells snap only with `w:adjustLineHeightInTable`. Headers, footers, and text boxes do not snap. |
 | Paragraph spacing | Adjacent spacing uses the larger value. `w:doNotUseHTMLParagraphAutoSpacing` adds the values and turns off automatic spacing. |
 | Empty paragraph marks | A named character style sets their font. Direct mark properties override it. |
 
@@ -313,7 +315,7 @@ East Asian spacing and punctuation rules depend on `w:rPrDefault` in the styles 
 
 | Setting | Behavior |
 | --- | --- |
-| `w:autoSpaceDE`, `w:autoSpaceDN` | Add space between East Asian text and Latin letters or digits. An authored false turns it off. |
+| `w:autoSpaceDE`, `w:autoSpaceDN` | Add space between East Asian text and Latin letters or digits, also in field results. An authored false turns it off. The highlight or shading of the preceding text fills the space; on left-to-right lines, underline and strikethrough stop there. |
 | `w:kinsoku`, `w:noLineBreaksBefore` | Keep prohibited characters off line starts. Kept units move to the next line together. |
 | `w:overflowPunct` | Lets a line-end mark hang past the margin. With punctuation compression, a mark that overflows by no more than its blank sides hangs only its trailing blank. See [Compatibility mode differences](#compatibility-mode-differences). |
 | `w:characterSpacingControl` | `compressPunctuationAndJapaneseKana` lets kana compress by up to 1/16 em to fit a prohibited character on a full line. Kana do not compress for a mark that hangs within its blank sides. |
@@ -328,7 +330,10 @@ East Asian spacing and punctuation rules depend on `w:rPrDefault` in the styles 
 - Without East Asian defaults, only distributed paragraphs hang marks.
 - A single-spaced line in a CJK face is 1.3 times the face's ascent plus descent.
 - Localized family names, such as `メイリオ`, resolve to the face of the English name.
+- Each mark's run language sets its pair class. Simplified Chinese sets `；`, `：`, and `！` like closing marks; Traditional Chinese centers `、。，．；：`. Japanese centers `；`, `：`, and `・`, and a centered mark shares a bearing only before an opening bracket.
+- Punctuation fitting keeps authored character spacing (`w:spacing` in `w:rPr`). A tracked line that holds Latin text, numbers, symbols, or curly quotes keeps its natural punctuation.
 - Table AutoFit uses compressed punctuation pairs for the minimum width.
+- Highlighted and shaded punctuation compresses to fit a line. Underlined and struck-through punctuation keeps its full advance.
 - Vertical Japanese layout is not supported.
 
 ## Round-trip contract

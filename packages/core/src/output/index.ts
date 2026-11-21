@@ -30,6 +30,7 @@ export {
 } from './semantic-paint-letter-gap.ts';
 // The PDF writer shortens a hanging mark's marks by the same compressed blank.
 export { hangingMarkBlankAt } from './semantic-paint-hanging-mark.ts';
+export { automaticGapFillAfter, type AutomaticGapSpan } from './semantic-paint-automatic-gap.ts';
 // TYPES ONLY. The derivations behind them (`authorSlotsOf`, `reviewAuthorsOf`, the ramp
 // constant) are engine internals reached through `getReviewAuthors` on the editor; a
 // `@public` symbol is a breaking change to withdraw, so they stay off the barrel and the

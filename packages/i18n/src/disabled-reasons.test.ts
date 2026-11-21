@@ -3,10 +3,10 @@ import { createT, en, localizeDisabledReason } from './index';
 
 describe('localizeDisabledReason', () => {
   test.each([
-    'the drop target is stale; drop the image again',
-    'the drop target story is no longer active',
-    'the drop target is no longer attached',
-  ])('localizes the drop refusal: %s', (reason) => {
+    'the insert target is stale; insert the image again',
+    'the insert target story is no longer active',
+    'the insert target is no longer attached',
+  ])('localizes the stale insert-target refusal: %s', (reason) => {
     expect(localizeDisabledReason(reason, createT(en))).toBe(en.imageInsert.errors.staleTarget);
   });
   test('translates known chrome refusals', () => {
@@ -97,12 +97,30 @@ test.each([
   ],
   ['this drawing is too large to copy', 'drawingClipboardSize'],
   ['place the caret in the text to paste a drawing', 'drawingPasteCells'],
+  ['this shape has no text to paste into; place the caret in the text to paste', 'shapePasteText'],
+  [
+    'the text in this text box cannot be edited; place the caret in the text to paste',
+    'textBoxPaste',
+  ],
+  [
+    'text cannot be pasted into a shape inside a group; press Escape to select the group',
+    'groupMemberPaste',
+  ],
+  [
+    'text cannot be pasted into a linked text box; place the caret in the text to paste',
+    'linkedTextBoxPaste',
+  ],
+  [
+    'a text box takes only text; paste without formatting to paste the text alone',
+    'textBoxPicturePaste',
+  ],
 ] as const)('the drawing clipboard refusal %s is translatable', (reason, key) => {
   expect(localizeDisabledReason(reason, createT(en))).toBe(en.disabledReason[key]);
 });
 
 test('the picture-selected insert refusal is translatable', () => {
-  const reason = 'a picture is selected; place the caret in text to insert a picture';
+  const reason =
+    'in suggesting mode, a picture cannot be inserted while a drawing is selected; place the caret in text to insert a picture';
   expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
 });
 

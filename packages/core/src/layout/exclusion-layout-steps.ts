@@ -18,6 +18,12 @@ import {
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { noteExclusionLayoutPass } from './exclusion-pass-observer.ts';
+import {
+  createFollowingAnchorTops,
+  driftSettles,
+  followingDrift,
+  type FollowingDrift,
+} from './following-anchor-tops.ts';
 import { refusalRetriesWithoutHiddenFurniture } from './furniture-drawing-exclusion.ts';
 import { createLayoutSession, replaceLayoutSession, type LayoutSession } from './layout-session.ts';
 import type { LayoutSteps } from './layout-steps.ts';
@@ -60,6 +66,24 @@ export function limitExclusionPassesForTest(reflow: number, settling: number): (
   };
 }
 
+/**
+ * The first pass of a settle that may move the zones of following pictures
+ * (`following-anchor-tops.ts`). The passes before it are ordinary passes: they move nothing, and
+ * the drift between their maps decides whether passes may move zones (`driftSettles`). A
+ * document that settles or cycles within them settles as before.
+ */
+const FIRST_MOVING_PASS = 5;
+
+/**
+ * The passes a window of moves spans. One move settles a chain on each page, because every break
+ * of that pass predicts from paragraph tops the same pass placed. A line that the move pushes
+ * over a page bottom needs one more. A pass that moved a zone never publishes: the ordinary
+ * passes after it check the result, and two of them that again show a chain settling grant one
+ * more window, up to `MAX_MOVING_WINDOWS`.
+ */
+const MOVING_WINDOW_PASSES = 2;
+const MAX_MOVING_WINDOWS = 3;
+
 /** Passes a settling reflow may run without a new low of changed zones. */
 const SETTLING_PASSES_WITHOUT_PROGRESS = 4;
 
@@ -93,9 +117,15 @@ export function convergeExclusionLayout(
  * passes, settles again from scratch: where a reflow enters a cycle decides which of its maps
  * it publishes under, and an edit must lay out like a fresh layout. An edit that enters a
  * cycle pays for that settle (measured on `page-framed-cycle.test.ts`: 7 passes, against 4 for
- * a fresh layout); later edits that leave the cycle alone keep the one seeded pass. A seeded
- * reflow that runs out of passes costs at most one seeded pass plus twice
- * `MAX_DRAWING_EXCLUSION_SETTLING_PASSES` before the fresh settle publishes its last zones.
+ * a fresh layout); later edits that leave the cycle alone keep the one seeded pass.
+ *
+ * With `moveFollowingZones`, in a single-column flow, windows of passes from `FIRST_MOVING_PASS` on
+ * may move the zones of the pictures that a paragraph's last lines wrap to
+ * where that pass places them (`following-anchor-tops.ts`). They do so only when the ordinary
+ * passes before them show one chain settling a link at a time (`driftSettles`). A pass that moved a zone
+ * never publishes and leaves no map in the cycle history: the ordinary passes after it check the
+ * result. Where ordinary passes have more than one fixed point, a move may reach another of
+ * them; each is a layout whose wrap matches where its pictures sit.
  */
 function* settleExclusionLayout(
   bodies: readonly OoxmlElement[],
@@ -106,10 +136,12 @@ function* settleExclusionLayout(
   layout: OnePass,
   {
     seedFromPrevious,
+    moveFollowingZones = true,
     // Read once per layout, so a fresh settle after a seeded one uses the same limits.
     limits = { reflow: reflowPassLimit, settling: settlingPassLimit },
   }: {
     readonly seedFromPrevious: boolean;
+    readonly moveFollowingZones?: boolean;
     readonly limits?: { readonly reflow: number; readonly settling: number };
   }
 ): LayoutSteps<BlockLayoutResult | null> {
@@ -166,13 +198,38 @@ function* settleExclusionLayout(
   );
   let passCount = 0;
   let lastCandidateSession: LayoutSession | undefined;
+  // Where each pass placed the pictures that the paragraph before them wraps. Single-column
+  // flow only: a prediction names a page, not a column, and each trial of a balance search is a
+  // settle of its own, where a failed move would cost every trial.
+  const followingTops =
+    moveFollowingZones && columns.count === 1 && !options.columnBalanceTrial
+      ? createFollowingAnchorTops()
+      : undefined;
+  /** Whether the pass just laid out moved a zone. */
+  let movedThisPass = false;
+  /** The drift the pass before showed, and whether two passes showed one chain settling. */
+  let lastDrift: FollowingDrift | undefined;
+  /** Passes left that may move zones, and the windows of such passes granted so far. */
+  let movingPassesLeft = 0;
+  let movingWindows = 0;
+  /** One pass; `predicts` on the seeded pass and the reflow loop's, whose moves it checks. */
   function* layoutExclusionCandidate(
-    candidateOptions: BlockLayoutOptions
+    candidateOptions: BlockLayoutOptions,
+    predicts = false
   ): LayoutSteps<BlockLayoutResult> {
     noteExclusionLayoutPass();
     passCount += 1;
     lastCandidateSession = candidateOptions.session;
-    return yield* layout(bodies, revision, candidateOptions);
+    const tops = predicts ? followingTops : undefined;
+    const mayMove = tops !== undefined && movingPassesLeft > 0;
+    if (mayMove) movingPassesLeft -= 1;
+    tops?.beginPass(candidateOptions.drawingExclusionZonesByPage, mayMove);
+    const candidate = yield* layout(bodies, revision, {
+      ...candidateOptions,
+      followingAnchorTops: tops,
+    });
+    movedThisPass = tops?.moved ?? false;
+    return candidate;
   }
   function* fallbackUnplaceableFrames(
     candidate: BlockLayoutResult
@@ -207,15 +264,15 @@ function* settleExclusionLayout(
   const settleFresh = (): LayoutSteps<BlockLayoutResult | null> =>
     settleExclusionLayout(bodies, revision, options, columns, contentWidthForReflow, layout, {
       seedFromPrevious: false,
+      moveFollowingZones,
       limits,
     });
   if (previousPages) {
     zonesByPage = collectZones(previousPages, true);
-    result = yield* layoutExclusionCandidate({
-      ...options,
-      drawingExclusionPass: 0,
-      drawingExclusionZonesByPage: zonesByPage,
-    });
+    result = yield* layoutExclusionCandidate(
+      { ...options, drawingExclusionPass: 0, drawingExclusionZonesByPage: zonesByPage },
+      true
+    );
     const fallback = yield* fallbackUnplaceableFrames(result);
     if (fallback) return fallback;
     // A pass that hands the previous pages back BY IDENTITY was laid under `zonesByPage`
@@ -232,6 +289,7 @@ function* settleExclusionLayout(
     // An unsettled layout is no fixed point to seed from (`unsettled-exclusion-layout.ts`).
     if (previousUnsettled) return yield* settleFresh();
     const nextZones = collectZones(result.pages, true);
+    // The seeded pass moves no zone: no pass before it in this settle recorded a prediction.
     if (exclusionMapsEqual(zonesByPage, nextZones)) return result;
     // A return to the seeded map is a cycle too.
     exclusionPasses.remember(zonesByPage);
@@ -304,12 +362,21 @@ function* settleExclusionLayout(
   };
   for (let pass = 0; pass < exclusionPasses.maxPasses; pass += 1) {
     const candidateSession = options.session ? createLayoutSession() : undefined;
-    result = yield* layoutExclusionCandidate({
-      ...options,
-      session: candidateSession,
-      drawingExclusionPass: exclusionPasses.passIndex(pass),
-      drawingExclusionZonesByPage: zonesByPage,
-    });
+    result = yield* layoutExclusionCandidate(
+      {
+        ...options,
+        session: candidateSession,
+        drawingExclusionPass: exclusionPasses.passIndex(pass),
+        drawingExclusionZonesByPage: zonesByPage,
+      },
+      true
+    );
+    // A pass that moved a zone never publishes and leaves no map in the reflow's history: the
+    // next pass lays out under the zones it collected, moves none, and goes on as any pass does.
+    if (movedThisPass) {
+      zonesByPage = collectZones(result.pages);
+      continue;
+    }
     const fallback = yield* fallbackUnplaceableFrames(result);
     if (fallback) return fallback;
     const nextZones = collectZones(result.pages);
@@ -319,6 +386,19 @@ function* settleExclusionLayout(
         return publishCandidate(result, candidateSession);
       }
       return yield* publishConverged(nextZones);
+    }
+    if (followingTops && movingPassesLeft === 0 && movingWindows < MAX_MOVING_WINDOWS) {
+      const drift = followingDrift(zonesByPage, nextZones);
+      if (
+        passCount >= FIRST_MOVING_PASS - 1 &&
+        drift !== undefined &&
+        lastDrift !== undefined &&
+        driftSettles(lastDrift, drift)
+      ) {
+        movingPassesLeft = MOVING_WINDOW_PASSES;
+        movingWindows += 1;
+        lastDrift = undefined;
+      } else lastDrift = drift;
     }
     const verdict = applyTransition(nextZones, false);
     if (verdict === 'stable') return publishCandidate(result, candidateSession);

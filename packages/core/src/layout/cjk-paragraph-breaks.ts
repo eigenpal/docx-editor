@@ -81,6 +81,33 @@ export function protectedSeamAfter(
   );
 }
 
+// In a legacy mode (`w:compatSetting` `compatibilityMode` 14 or earlier, or none) with
+// punctuation compression (`w:characterSpacingControl`), a hyphen-minus is no line-break
+// opportunity before a following letter, digit, or symbol, whatever precedes it: `well-known`,
+// `AB-12`, and the `-ABC` of `甲-ABC` stay together. A line may still open after it before
+// East Asian text or a space. Mode 15 and `doNotCompress` break after the hyphen.
+function gluesLegacyHyphen(policy: CjkParagraphTypography): boolean {
+  return (
+    !policy.characterWrap &&
+    policy.settings?.legacyLineEndPunctuation === true &&
+    policy.settings.compression !== 'doNotCompress'
+  );
+}
+
+/**
+ * Whether hyphens glue and the paragraph has a hyphen that is not before a space: the glue
+ * can cross run seams, so such a paragraph needs paragraph-wide analysis.
+ */
+export function hasLegacyHyphenText(
+  pieces: readonly FieldAwarePiece[],
+  policy: CjkParagraphTypography
+): boolean {
+  return (
+    gluesLegacyHyphen(policy) &&
+    pieces.some((piece) => isText(piece) && /-(?!\s)/u.test(piece.text))
+  );
+}
+
 /** Select the East Asian analysis, rather than the ordinary run-spanning word cuts. */
 export function usesEastAsianParagraphBreaks(
   pieces: readonly FieldAwarePiece[],
@@ -100,7 +127,7 @@ export function cjkParagraphBreaks(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography
 ): CjkParagraphBreaks | null {
-  if (!usesEastAsianParagraphBreaks(pieces, policy)) {
+  if (!usesEastAsianParagraphBreaks(pieces, policy) && !hasLegacyHyphenText(pieces, policy)) {
     // A run that opens with a dash needs the text before it; any other paragraph without
     // East Asian text has no paragraph-wide analysis.
     const cuts = paragraphWordCuts(pieces);
@@ -128,6 +155,12 @@ export function cjkParagraphBreaks(
   let pieceIndex = 0;
   let leftPieceIndex = 0;
   const hasKorean = clusters.some((cluster) => isHangul(cluster.text.codePointAt(0)!));
+  // Hyphen glue (`gluesLegacyHyphen`) skips a Korean run (`w:lang` `w:eastAsia` Korean) in a
+  // paragraph with East Asian text: such runs wrap Latin words by character in these modes,
+  // which this analysis does not model, so their ordinary hyphen breaks stay closer to that
+  // layout.
+  const glueHyphens = gluesLegacyHyphen(policy);
+  const eastAsianText = clusters.some((cluster) => isCjk(cluster.text.codePointAt(0)!));
   const detectedLanguage = hasKorean
     ? 'ko-kr'
     : /[\u3040-\u30ff\uff66-\uff9f]/u.test(text)
@@ -252,6 +285,16 @@ export function cjkParagraphBreaks(
     }
     if (forbidden) {
       decisions.set(at, 'kinsoku');
+      continue;
+    }
+    if (
+      glueHyphens &&
+      left.text === '-' &&
+      !/^\s/u.test(right.text) &&
+      !isCjk(after) &&
+      !(eastAsianText && eastAsiaIsKorean(pieces[leftPieceIndex]!.props))
+    ) {
+      decisions.set(at, 'continues');
       continue;
     }
     // Figure/letter groups move as words. Like an oversized Latin word, an

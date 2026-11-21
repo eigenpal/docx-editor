@@ -80,7 +80,11 @@ export function closeTableFragmentRows(input: TableFragmentClose): {
       input.shiftAnchor,
       closeDeps,
       occurrenceInsets,
-      new Set(rows.filter(isSettledPreviousRow))
+      new Set(
+        rows.filter((row, index) =>
+          isSettledPreviousRow(row, index === 0, index === rows.length - 1)
+        )
+      )
     )
   );
   if (fragmentCarry) finalized = fragmentCarry.finish(finalized);

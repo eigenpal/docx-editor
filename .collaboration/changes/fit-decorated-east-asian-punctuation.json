@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Highlighting or shading prevented punctuation compression and caused an earlier line break.",
+  "after": "East Asian punctuation in highlighted or shaded text can compress to fit the line.",
+  "reason": "The layout change preserves the document format, source offsets, editor operations, and collaboration journal.",
+  "tests": [
+    "packages/core/src/layout/__tests__/cjk-optical-fit.test.ts",
+    "packages/core/src/layout/__tests__/cjk-optical-local-boundaries.test.ts",
+    "packages/core/src/layout/__tests__/cjk-optical-ea-curly.test.ts"
+  ],
+  "changeset": "fit-decorated-east-asian-punctuation",
+  "migration": null
+}

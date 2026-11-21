@@ -1,5 +1,6 @@
-// How much of a hanging full-width mark passes the margin when the paragraph compresses
-// punctuation. Derived line geometry only; the document is unchanged.
+// How much of a hanging full-width mark (`w:overflowPunct`) passes the margin when
+// `w:characterSpacingControl` compresses punctuation. Derived line geometry only; the
+// document is unchanged.
 import {
   eastAsianLanguage,
   isKorean,
@@ -21,13 +22,13 @@ const CENTERED_BLANKS: MarkBlanks = Object.freeze({ leading: 0.25, trailing: 0.2
 
 /**
  * The blank sides of a full-width line-end mark, as fractions of its advance, by the mark's
- * own run language. A closing mark leaves its right half blank. A centered mark leaves a
+ * own run language (`w:lang` `w:eastAsia`). A closing mark leaves its right half blank. A centered mark leaves a
  * quarter on each side. Other marks, such as `？`, fill their cell and return undefined.
  */
 function lineEndMarkBlanks(mark: string, language: string | undefined): MarkBlanks | undefined {
   if (CLOSING_BRACKET.test(mark)) return CLOSING_BLANKS;
   const traditional = isTraditionalChinese(language);
-  // Simplified Chinese, and text without an East Asian language, set these marks in the left
+  // Simplified Chinese, and text without a `w:eastAsia` language, set these marks in the left
   // half of the cell; Traditional Chinese centers them. Japanese `；：！` never hang.
   if ('、。，．；：'.includes(mark)) return traditional ? CENTERED_BLANKS : CLOSING_BLANKS;
   if (mark === '！' && !traditional) return CLOSING_BLANKS;
@@ -58,11 +59,13 @@ function markBlankSides(
 
 /**
  * The advance that the mark ending `text` keeps past the margin, given its whole `advance` and
- * the line's `overflow`. With punctuation compression, an overflow no larger than the mark's
- * blank sides hangs only the trailing blank, or the overflow when that is larger, and the text
- * before the mark fills the rest of the measure. A larger overflow, a mark without blank
- * sides, no compression, and Korean text hang the whole advance. `piece` holds the mark: its
- * run language selects the blank sides, and its character spacing widens the trailing one.
+ * the line's `overflow`. When `w:characterSpacingControl` is `compressPunctuation` or
+ * `compressPunctuationAndJapaneseKana`, an overflow no larger than the mark's blank sides
+ * hangs only the trailing blank, or the overflow when that is larger, and the text before
+ * the mark fills the rest of the measure. A larger overflow, a mark without blank
+ * sides, `doNotCompress`, and Korean text hang the whole advance. `piece` holds the mark: its
+ * run language selects the blank sides, and its character spacing (`w:spacing` in `w:rPr`)
+ * widens the trailing one.
  */
 export function blankSideHangingAdvance(
   text: string,

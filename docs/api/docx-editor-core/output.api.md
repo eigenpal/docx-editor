@@ -4,6 +4,23 @@
 
 ```ts
 
+// @internal
+export function automaticGapFillAfter(span: AutomaticGapSpan, next: AutomaticGapSpan, gap: number): number;
+
+// @internal
+export interface AutomaticGapSpan {
+    // (undocumented)
+    readonly range: {
+        readonly start: number;
+    };
+    // (undocumented)
+    readonly style: {
+        readonly shaping?: {
+            readonly baseLevel?: number;
+        } | null;
+    };
+}
+
 // @public
 export interface BreakMarkStrings {
     // (undocumented)

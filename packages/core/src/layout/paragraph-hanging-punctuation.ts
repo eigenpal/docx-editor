@@ -55,7 +55,7 @@ export function spaceShrinkMarkAdvance(
  * hanging Korean mark lets the text before it fill the measure only under
  * `koreanHangingLineFills`; otherwise that line keeps its natural width.
  */
-export function rememberHangingPunctuation(
+export function rememberLineEndHang(
   line: PendingLine,
   span: StyleSpanRecord,
   piece: FieldAwarePiece,
@@ -74,8 +74,9 @@ export function rememberHangingPunctuation(
   const language = eastAsianLanguage(piece.props);
   if (advance !== undefined && flow?.koreanHangingLineFills !== true && isKorean(language))
     advance = undefined;
-  // With punctuation compression, a mark that overflows by no more than its blank sides hangs
-  // only its trailing blank, and the text before it fills the rest of the measure.
+  // When `w:characterSpacingControl` compresses punctuation, a mark that overflows by no more
+  // than its blank sides hangs only its trailing blank, and the text before it fills the rest
+  // of the measure.
   const whole = advance;
   if (advance !== undefined)
     advance = blankSideHangingAdvance(span.text, piece, advance, overflow, typography);
