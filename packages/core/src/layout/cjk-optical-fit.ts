@@ -75,14 +75,15 @@ export interface CjkOpticalFit {
 }
 function allowedStyle(span: Pick<StyleSpanRecord, 'style' | 'props' | 'revisions'>): boolean {
   const style = span.style;
+  // Highlight (`w:highlight`) and shading (`w:shd`) fill the fitted box, and fitting keeps ink
+  // inside it. A shifted glyph paints transparent text, which drops underline (`w:u`) and strike
+  // (`w:strike`, `w:dstrike`), and an outline (`w14:textOutline`) changes the ink.
   return (
     !span.revisions?.length &&
     !style.textOutline &&
     !style.underline &&
     !style.strike &&
     !style.doubleStrike &&
-    !style.highlight &&
-    !style.shading &&
     style.shaping?.direction !== 'rtl' &&
     !formatRevisionOf(span.props)
   );
@@ -578,6 +579,11 @@ function fitCjkOptically(
       currentBoundary.ink.left -
       (previous.span.glyphOffsetPt ?? 0) -
       previousBoundary.ink.right;
+    // A later run's `w:highlight` or `w:shd` band covers ink past its own box: keep banded
+    // seams inside.
+    const band = [previous, current].some(({ span }) => span.style.highlight || span.style.shading);
+    const leftBlank = (current.span.glyphOffsetPt ?? 0) + currentBoundary.ink.left;
+    const rightBlank = previous.span.box.width - (previous.span.glyphOffsetPt ?? 0);
     // Both sides of one seam give at most half of the smaller glyph each.
     const pairHalf = right && left ? Math.min(previous.natural, current.natural) / 2 : Infinity;
     if (right) {
@@ -586,7 +592,7 @@ function fitCjkOptically(
         Math.min(
           Math.min(previous.natural / 2, pairHalf) - previous.alreadyReduced,
           previous.span.box.width - previous.reduction,
-          gap
+          band ? Math.min(gap, rightBlank - previousBoundary.ink.right) : gap
         )
       );
       gap -= capacity;
@@ -598,7 +604,7 @@ function fitCjkOptically(
         Math.min(
           Math.min(current.natural / 2, pairHalf) - current.alreadyReduced,
           current.span.box.width - current.reduction,
-          gap
+          band ? Math.min(gap, leftBlank) : gap
         )
       );
       if (capacity > TOLERANCE) seams.push({ cell: current, capacity, left: true });

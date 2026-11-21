@@ -331,6 +331,7 @@ East Asian spacing and punctuation rules depend on `w:rPrDefault` in the styles 
 - Each mark's run language sets its pair class. Simplified Chinese sets `；`, `：`, and `！` like closing marks; Traditional Chinese centers `、。，．；：`. Japanese centers `；`, `：`, and `・`, and a centered mark shares a bearing only before an opening bracket.
 - Punctuation fitting keeps authored character spacing (`w:spacing` in `w:rPr`). A tracked line that holds Latin text, numbers, symbols, or curly quotes keeps its natural punctuation.
 - Table AutoFit uses compressed punctuation pairs for the minimum width.
+- Highlighted and shaded punctuation compresses to fit a line. Underlined and struck-through punctuation keeps its full advance.
 - Vertical Japanese layout is not supported.
 
 ## Round-trip contract
