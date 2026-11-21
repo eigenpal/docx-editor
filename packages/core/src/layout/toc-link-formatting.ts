@@ -51,8 +51,8 @@ const MAX_HYPERLINK_STYLE_IDS = 4;
  * The ids of the character styles that are the Hyperlink style. The style is known by its name;
  * its id can be localized or numeric. Only a definition without a name falls back to the id. A
  * style with the id `Hyperlink` and another name is an ordinary style here, although link
- * insertion prefers that id when it picks a style to apply. Only the first
- * {@link MAX_HYPERLINK_STYLE_IDS} such styles in document order count.
+ * insertion prefers that id when it picks a style to apply. At most
+ * {@link MAX_HYPERLINK_STYLE_IDS} such styles count: the id `Hyperlink` first, then document order.
  *
  * Known limits: a link style under another name, such as "Internet Link", is not matched. In a
  * file whose `Hyperlink` id has another name, a link inserted in a TOC row keeps that style.
@@ -60,11 +60,17 @@ const MAX_HYPERLINK_STYLE_IDS = 4;
 function hyperlinkStyleIds(styles: StyleCascadeTable): readonly string[] {
   const held = hyperlinkIds.get(styles);
   if (held) return held;
-  const ids: string[] = [];
-  for (const [id, definition] of styles.styles) {
+  const isHyperlink = (id: string) => {
+    const definition = styles.styles.get(id);
+    return (
+      definition?.type === 'character' && (definition.name ?? id).toLowerCase() === 'hyperlink'
+    );
+  };
+  // The usual id comes first, so decoy styles earlier in the file cannot push it out.
+  const ids: string[] = isHyperlink('Hyperlink') ? ['Hyperlink'] : [];
+  for (const id of styles.styles.keys()) {
     if (ids.length >= MAX_HYPERLINK_STYLE_IDS) break;
-    if (definition.type === 'character' && (definition.name ?? id).toLowerCase() === 'hyperlink')
-      ids.push(id);
+    if (id !== 'Hyperlink' && isHyperlink(id)) ids.push(id);
   }
   hyperlinkIds.set(styles, ids);
   return ids;

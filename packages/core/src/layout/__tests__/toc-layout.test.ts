@@ -70,7 +70,7 @@ test('TOC result formatting ignores the Hyperlink style with a numeric style ID'
     '<w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr><w:r><w:t>Introduction</w:t></w:r></w:p>',
     row +
       '<w:p>' +
-      run('Authored', '37', '<w:color w:val="A02030"/><w:u w:val="double"/>') +
+      run('Authored', '37', '<w:color w:val="A02030"/>') +
       run('Custom', 'Custom') +
       '</w:p>'
   );
@@ -86,9 +86,10 @@ test('TOC result formatting ignores the Hyperlink style with a numeric style ID'
   const leader = spans.find((span) => span.tabLeader === 'dot')!;
   expect(entry.style).toMatchObject({ color: null, underline: null });
   expect(leader.style.underline).toBeNull();
+  // Outside a link the style stays: direct color wins, and the style still adds its underline.
   expect(spans.find((span) => span.text === 'Authored')!.style).toMatchObject({
     color: 'A02030',
-    underline: { variant: 'double' },
+    underline: { variant: 'single' },
   });
   expect(spans.find((span) => span.text === 'Custom')!.style).toMatchObject({
     color: '008033',

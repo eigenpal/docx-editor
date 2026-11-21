@@ -8,7 +8,7 @@ import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { ownBandKeyInputs } from './drawing-placement-exclusion.ts';
 import { bodyParagraphBreakKey } from './paragraph-break-request.ts';
 import type { ExclusionZone } from './drawing-exclusion.ts';
-import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
+import type { ParagraphFlowOptions, TocParagraphFlowOptions } from './paragraph-flow-options.ts';
 import type { SemanticLayoutOptions } from './semantic-layout-options.ts';
 import { styleSeparatorRanges } from './style-separator-group.ts';
 import { tocLinkRangesOf } from './toc-link-formatting.ts';
@@ -17,9 +17,7 @@ import { tocLinkRangesOf } from './toc-link-formatting.ts';
 export function bodyParagraphOptionFlow(
   paragraph: OoxmlElement,
   options: SemanticLayoutOptions
-): Partial<ParagraphFlowOptions> & {
-  readonly tocLinkStyleRanges: ParagraphFlowOptions['tocLinkStyleRanges'];
-} {
+): Partial<ParagraphFlowOptions> & Pick<TocParagraphFlowOptions, 'tocLinkStyleRanges'> {
   return {
     columnBreaksEndColumns: true,
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),

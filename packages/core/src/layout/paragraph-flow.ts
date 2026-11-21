@@ -181,7 +181,7 @@ export function breakParagraph(
   tabStops: ResolvedTabStops = EMPTY_TAB_STOPS,
   pageContext: FieldPageContext | undefined,
   cascadeRuns: RunPropertyCascader | undefined,
-  flow: TocParagraphFlowOptions | undefined,
+  flow: TocParagraphFlowOptions,
   advances: LineLocalAdvances = { preserveColonAdvances: false }
 ): readonly PendingLine[] {
   const cached = cacheKey !== null && cache ? cache.get(cacheKey) : undefined;

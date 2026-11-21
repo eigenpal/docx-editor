@@ -192,6 +192,30 @@ test('a renamed Hyperlink style relays out the TOC links with a warm cache', () 
   expect(lay(styles.root, 3)('Row')).toMatchObject(DROPPED);
 });
 
+test('the Hyperlink id counts first, so earlier decoy styles cannot hide it', () => {
+  const decoys = Array.from(
+    { length: 6 },
+    (_, index) =>
+      `<w:style w:type="character" w:styleId="D${index}"><w:name w:val="Hyperlink"/>${LINK_RPR}</w:style>`
+  ).join('');
+  const table = read(
+    `<w:styles xmlns:w="${W}">${decoys}` +
+      `<w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/>${LINK_RPR}</w:style>` +
+      '</w:styles>',
+    '/word/styles.xml'
+  );
+  const part = documentOf(
+    `<w:p>${tocBegin()}</w:p><w:p><w:hyperlink w:anchor="_TocA">${run('Real', 'Hyperlink')}</w:hyperlink></w:p><w:p>${tocEnd}</w:p>`
+  );
+  const style = styleLookup(
+    layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      styleCascade: buildStyleCascadeTable(table.root),
+    })
+  );
+  expect(style('Real')).toMatchObject(DROPPED);
+});
+
 test('many styles named Hyperlink stay bounded to the first few', () => {
   const many = read(
     `<w:styles xmlns:w="${W}">` +
