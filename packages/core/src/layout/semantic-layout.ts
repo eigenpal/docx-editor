@@ -20,7 +20,7 @@ import {
   anchorsSpacingDependentBand,
   createLinePlacementZones,
 } from './drawing-placement-exclusion.ts';
-import { createParagraphDrawingWrap } from './paragraph-drawing-wrap.ts';
+import { createParagraphDrawingWrap, type ParagraphBreakAt } from './paragraph-drawing-wrap.ts';
 import { continuedPageZones, continuedWrapFlags } from './continued-page-zones.ts';
 import { retainedFurnitureWrap } from './furniture-drawing-exclusion.ts';
 import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
@@ -1452,6 +1452,9 @@ function* layoutBlocksPass(
     displayMode,
     revisionAuthorFilter: authorFilter,
     seedForwardOnly: (options.drawingExclusionPass ?? 0) < 0,
+    // A keepNext lookahead breaks paragraphs where they do not stay, so one keepNext paragraph
+    // turns off zone moves for the whole flow.
+    followingTops: keepsNext.some(Boolean) ? undefined : options.followingAnchorTops,
     drawingLayout: options.inlineDrawingLayout,
     ...(hostedStory ? { layoutTextboxStory: hostedStory.layoutTextboxStoryFor } : {}),
     paragraphAt: (index) => {
@@ -1475,13 +1478,8 @@ function* layoutBlocksPass(
   );
 
   // Placement and keep-with-next lookahead share cached line breaks.
-  const breakBlock = (
-    entry: PreparedParagraph,
-    entryIndex: number,
-    startOffset = 0,
-    placedParagraphStartY?: number,
-    omittedAnchor?: string
-  ) => {
+  const breakBlock = (entry: PreparedParagraph, entryIndex: number, at: ParagraphBreakAt = {}) => {
+    const { startOffset = 0, placedParagraphStartY, omittedAnchor, placesLines = false } = at;
     const paragraphId = entry.paragraph.id;
     const keepEmptyTocPlaceholder = emptyTocPlaceholderIds?.has(paragraphId) ?? false;
     const suppressChrome =
@@ -1527,13 +1525,21 @@ function* layoutBlocksPass(
       columnX + columnWidth(),
       startOffset,
       paragraphSpaceBefore,
-      omittedAnchor
+      omittedAnchor,
+      placesLines
+        ? {
+            pageIndex: pages.length,
+            regionBottom: contentHeight(),
+            breakWithout: (id) =>
+              breakBlock(entry, entryIndex, { ...at, omittedAnchor: id, placesLines: false }),
+          }
+        : undefined
     );
     const exclusionToken = exclusionLayoutToken(localPageZones, contentHeight());
     const anchorParagraphStartY =
       paragraphStartY - paragraphDrawingWrap.displacement(pages.length, paragraphId);
     const cacheKey =
-      cache && !suppressChrome
+      cache && !suppressChrome && !paragraphDrawingWrap.skipsBreakCache()
         ? bodyParagraphCacheKey(entry, options.inlineDrawingLayout, {
             exclusionToken,
             paragraphStartY,
@@ -2093,10 +2099,14 @@ function* layoutBlocksPass(
       previousSpaceAfter = 0;
     }
 
-    let lines = breakBlock(entry, index);
+    let lines = breakBlock(entry, index, { placesLines: true });
     const measureBackwardWrap = (startOffset = 0, paragraphStartY?: number): void => {
       paragraphDrawingWrap.measure(pages.length, index, pageExclusionZones(), lines, (anchorId) =>
-        breakBlock(entry, index, startOffset, paragraphStartY, anchorId)
+        breakBlock(entry, index, {
+          startOffset,
+          placedParagraphStartY: paragraphStartY,
+          omittedAnchor: anchorId,
+        })
       );
     };
     measureBackwardWrap();
@@ -2151,7 +2161,9 @@ function* layoutBlocksPass(
       // memo policy. Otherwise a long paragraph keeps a full pending-line tree for
       // every page it crosses, even after those lines have been published.
       releasePlacedBreaks(paragraphId);
-      lines = [...breakBlock(next, index, startOffset, placedParagraphStartY)];
+      lines = [
+        ...breakBlock(next, index, { startOffset, placedParagraphStartY, placesLines: true }),
+      ];
       keepTailAt = -1;
       measureBackwardWrap(startOffset, placedParagraphStartY);
     };
