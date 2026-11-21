@@ -393,4 +393,14 @@ test('a comment is refused on cached rows and at the closing line edge, and allo
   }
   const allowed = mountReview([4, 0, 4, 3]);
   expect(allowed.can(comment)).toEqual({ ok: true });
+  // A comment draft pins its range; the pinned range decides, not the caret moved inside it.
+  const pinned = mountReview([3, 0, 4, 3]);
+  pinned.surface!.retainSelection();
+  const after = pinned.surface!.session.paragraphIds()[4]!;
+  pinned.surface!.setSelection({
+    anchor: { paragraphId: after, offset: 1 },
+    head: { paragraphId: after, offset: 1 },
+  });
+  expect(pinned.can(comment)).toEqual({ ok: false, code: 'invalidArgs', reason: READ_ONLY });
+  expect(pinned.exec(comment)).toEqual(pinned.can(comment));
 });

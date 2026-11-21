@@ -176,9 +176,11 @@ export function createDocumentReviewCommands(
             code: 'invalidArgs',
             reason: 'a comment needs both an author and text',
           };
-        if (!deps.commentTargetRange())
+        const range = deps.commentTargetRange();
+        if (!range)
           return { ok: false, code: 'invalidArgs', reason: 'a comment needs a selected range' };
-        return tocCommandRefusal(command, deps.surface()!) ?? { ok: true };
+        const at = { anchor: range.from, head: range.to };
+        return tocCommandRefusal(command, deps.surface()!, at) ?? { ok: true };
       }
       case 'replyComment': {
         const found = commentKey(command.commentId);

@@ -102,7 +102,8 @@ export function createReviewWrites(deps: ReviewWriteDeps) {
     // A comment anchored in generated TOC text loses its anchors on the next refresh.
     const toc = tocCommandRefusal(
       { type: 'addComment', text, author: writer } as EditorCommand,
-      surface
+      surface,
+      { anchor: range.from, head: range.to }
     );
     if (toc) return toc;
     let created: string | null = null;

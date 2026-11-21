@@ -197,16 +197,18 @@ const TOC_POLICIES: Readonly<Record<EditorCommand['type'], TocPolicy>> = {
 
 /**
  * The refusal a command meets because it would write into a generated table of contents,
- * or null. See {@link TocPolicy} for each kind of command.
+ * or null. See {@link TocPolicy} for each kind of command. `at` names the selection the
+ * write uses when it is not the live one, such as a comment draft's pinned range.
  */
 export function tocCommandRefusal(
   command: EditorCommand,
-  surface: PaginatedSurface
+  surface: PaginatedSurface,
+  at?: SemanticSelection
 ): Exclude<ExecResult, { ok: true }> | null {
   const policy = TOC_POLICIES[command.type];
   if (policy.kind === 'none') return null;
   const part = surface.session.part();
-  if (tocParagraphRanges(part).length === 0 || !refusesInToc(command, policy, surface, part)) {
+  if (tocParagraphRanges(part).length === 0 || !refusesInToc(command, policy, surface, part, at)) {
     return null;
   }
   // The caller can fix it by moving the selection, as with the write guard's own refusal.
@@ -217,9 +219,11 @@ function refusesInToc(
   command: EditorCommand,
   policy: TocPolicy,
   surface: PaginatedSurface,
-  part: OoxmlPart
+  part: OoxmlPart,
+  at: SemanticSelection | undefined
 ): boolean {
-  const selection = policy.atTarget ? targetSelection(command, surface) : surface.state().selection;
+  const selection =
+    at ?? (policy.atTarget ? targetSelection(command, surface) : surface.state().selection);
   if (!selection) return false; // An unresolvable target meets its own refusal.
   const head = selection.head.paragraphId;
   if (policy.beforeEndMark && tocAtEndMarkEdge(part, selection)) return true;
