@@ -5296,9 +5296,6 @@ export function shiftMonth(year: number, month: number, delta: 1 | -1): {
 // @internal
 export function showInTopLayer(panel: HTMLElement): boolean;
 
-// @internal
-export function shownClipboardRefusal(reason: string | null | undefined): string | null;
-
 // @public
 export function sidePanelPane(snapshot: Pick<EditorSnapshot, 'chart' | 'image'>, requested: EditorPaneId): EditorPaneId;
 
