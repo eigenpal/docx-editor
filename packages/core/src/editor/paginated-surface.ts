@@ -50,12 +50,12 @@ import {
   tocForElement,
   tocEscapePosition,
   tocAtPosition,
-  tocSkippedByCaretMotion,
   selectionTouchesTocRange,
   opTouchesTocRange,
   paragraphInBodyToc,
 } from './surface-toc-ranges.ts';
 import { tocBoundaryForLayout } from './surface-toc-boundary.ts';
+import { isBackwardMotion, settleTocMotion } from './surface-toc-navigation.ts';
 import { resolveTocSources } from '../store/package/toc-sources.ts';
 import { createTocCommands } from './surface-toc-commands.ts';
 import {
@@ -173,7 +173,6 @@ import {
   type CellSelection,
   type ContentControlBoundaryRecord,
   type LayoutScope,
-  type NavigationCommand,
   type ReviewItem,
   type ReviewRevisionKind,
   type SemanticLayout,
@@ -4788,8 +4787,7 @@ export function mountPaginatedSurface(
         selectionSync.selectionLineId()
       );
       if (!moved) return;
-      const tocIds = tocParagraphIds();
-      const backwardMotion = ['left', 'wordLeft', 'lineStart', 'up', 'pageUp'].includes(command);
+      const backwardMotion = isBackwardMotion(command);
       const outside = tocEscapePosition(session.part(), moved.position, backwardMotion);
       // The escape lands elsewhere, so the motion's caret (and its page) no longer applies.
       if (outside) moved = { ...moved, position: outside, caret: undefined };
@@ -4800,48 +4798,26 @@ export function mountPaginatedSurface(
         const crossed = leaveAtomicControl(layout, selection.head, moved.position);
         if (crossed !== moved.position) moved = { ...moved, position: crossed, caret: undefined };
       }
-      if (tocSkippedByCaretMotion(session.part(), moved.position, selection.head)) {
-        if (extend) return;
-        // The escape steps by LINE, never by character. A character step inside a row that
-        // has any text at all lands in the same paragraph, and the loop's own "we did not
-        // change paragraph" bail then fired on the first iteration: the caret could neither
-        // enter the region nor cross it, so everything past a table of contents was
-        // unreachable from the keyboard. A line step always leaves the row it starts on.
-        const escape: NavigationCommand = backwardMotion ? 'up' : 'down';
-        // One iteration per line the region occupies, plus slack for the landing line. The
-        // loop breaks the moment it is outside, so an over-generous bound costs nothing.
-        const limit = tocRegionLineCount(tocIds) + 4;
-        // The nearest editable closing line crossed: the fallback when the region has no exit.
-        let closingLine = tocAtPosition(session.part(), moved.position) ? undefined : moved;
-        for (let step = 0; step < limit; step += 1) {
-          const next = navigateInActiveScope(
+      // A plain motion and a Shift motion settle the head around a TOC by the same rule.
+      const settled = settleTocMotion(
+        session.part(),
+        selection.head,
+        moved,
+        command,
+        (from, step) =>
+          navigateInActiveScope(
             editingLayout(),
-            moved.position,
-            escape,
-            moved.desiredX,
+            from.position,
+            step,
+            from.desiredX,
             hfScope?.getActive() ?? null,
             noteScopeId(),
             measurer
-          );
-          // Only a position that does not move at all is a dead end. Comparing paragraph ids
-          // alone treats ordinary movement within a row as one. A closing line with nothing
-          // past it is still editable, so the caret can stop there.
-          if (
-            !next ||
-            (next.position.paragraphId === moved.position.paragraphId &&
-              next.position.offset === moved.position.offset)
-          ) {
-            break;
-          }
-          moved = next;
-          if (!tocSkippedByCaretMotion(session.part(), moved.position, selection.head)) break;
-          if (!closingLine && !tocAtPosition(session.part(), moved.position)) closingLine = moved;
-        }
-        if (tocAtPosition(session.part(), moved.position)) {
-          if (!closingLine) return;
-          moved = closingLine;
-        }
-      }
+          ),
+        tocRegionLineCount(tocParagraphIds()) + 4
+      );
+      if (!settled) return;
+      moved = settled;
       desiredX = moved.desiredX;
       // Note continuations share one EditorScope across pages: retarget the visual
       // occurrence before selection/caret paint so the DOM host follows geometry.

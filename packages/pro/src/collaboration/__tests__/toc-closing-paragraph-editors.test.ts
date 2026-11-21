@@ -155,12 +155,14 @@ test(
 test('two editors type on the closing line and join the next paragraph into it', async () => {
   const harness = createPeerHarness('toc-closing-line-edits');
   const editors: DocxEditorInstance[] = [];
+  const containers: HTMLElement[] = [];
   try {
     const pair = await harness.pair(zipDocument(field + following));
     const [left, right] = [pair.alice, pair.bob].map((peer) => {
       peer.detach();
       const container = document.createElement('div');
       document.body.append(container);
+      containers.push(container);
       const editor = createDocxEditor({
         container,
         document: peer.room.document,
@@ -202,6 +204,18 @@ test('two editors type on the closing line and join the next paragraph into it',
     expect(right.surface!.session.bodyText()).not.toContain('Z');
     expect(geometry(right).closing ?? 0).toBeGreaterThan(0);
 
+    // Shift+Up from the next paragraph selects onto the closing line; the other peer paints it.
+    caret(right, nextId, 2);
+    right.surface!.navigate('up', true);
+    expect(right.surface!.state().selection.head).toEqual({ paragraphId: closingId, offset: 0 });
+    expect(right.can({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
+    applyAwarenessUpdate(
+      pair.alice.awareness,
+      encodeAwarenessUpdate(pair.bob.awareness, [pair.bob.awareness.clientID]),
+      'test-provider'
+    );
+    await until(() => !!containers[0]!.querySelector('.docx-remote-selection-rect'));
+
     // Backspace joins the next paragraph into the closing line while the other peer types in it.
     pair.pause();
     caret(right, nextId, 0);
@@ -221,6 +235,7 @@ test('two editors type on the closing line and join the next paragraph into it',
     expect(detectBodyTocs(reopened.surface!.session.part())).toHaveLength(1);
   } finally {
     for (const editor of editors) editor.destroy();
+    for (const container of containers) container.remove();
     harness.cleanup();
   }
 }, 10000);
