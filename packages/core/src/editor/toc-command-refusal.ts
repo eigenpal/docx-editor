@@ -12,6 +12,7 @@ import { selectedSpans } from './content-lock-format-refusal.ts';
 import { selectedParagraphIds } from './paragraph-format-lock-refusal.ts';
 import {
   TOC_READ_ONLY_REFUSAL,
+  TOC_TABLE_REFUSAL,
   selectionTouchesTocRange,
   tocAtEndMarkEdge,
   tocAtParagraphEnd,
@@ -23,6 +24,7 @@ import {
   tocRefusesRunFormatting,
   tocRefusesSectionMark,
   tocRefusesTextWrite,
+  tocTableAnchor,
 } from './surface-toc-ranges.ts';
 
 /**
@@ -68,8 +70,8 @@ const PARAGRAPH_FORMAT: TocPolicy = { kind: 'paragraphFormat' };
 
 /**
  * Every command, so the compiler asks for a decision on each new one. `replaceAllMatches`
- * is `none`: it skips TOC matches like its other skipped matches, and reports a refusal only
- * after its search, which `can` does not run.
+ * is `none`: it skips TOC matches like its other skipped matches, and `can` answers it from
+ * the same plan `exec` makes (`replaceCommandRefusal`).
  */
 const TOC_POLICIES: Readonly<Record<EditorCommand['type'], TocPolicy>> = {
   acceptAllRevisions: NONE,
@@ -208,11 +210,25 @@ export function tocCommandRefusal(
   const policy = TOC_POLICIES[command.type];
   if (policy.kind === 'none') return null;
   const part = surface.session.part();
-  if (tocParagraphRanges(part).length === 0 || !refusesInToc(command, policy, surface, part, at)) {
-    return null;
+  if (tocParagraphRanges(part).length === 0) return null;
+  if (!refusesInToc(command, policy, surface, part, at)) {
+    return policy.kind === 'table' ? tableAnchorRefusal(surface, part) : null;
   }
   // The caller can fix it by moving the selection, as with the write guard's own refusal.
   return { ok: false, code: 'invalidArgs', reason: TOC_READ_ONLY_REFUSAL };
+}
+
+/**
+ * Why a table cannot go at the caret because of a TOC, or null. On a closing line that holds
+ * text the table goes after the line; with no paragraph after it, it has no place there.
+ */
+function tableAnchorRefusal(
+  surface: PaginatedSurface,
+  part: OoxmlPart
+): Exclude<ExecResult, { ok: true }> | null {
+  const head = surface.state().selection.head.paragraphId;
+  if (tocTableAnchor(part, head) !== null) return null;
+  return { ok: false, code: 'invalidArgs', reason: TOC_TABLE_REFUSAL };
 }
 
 function refusesInToc(

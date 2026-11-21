@@ -8,6 +8,9 @@ import type { SemanticPosition, SemanticSelection } from '../layout/semantic-int
 
 /** The refusal of a write into a generated table of contents. */
 export const TOC_READ_ONLY_REFUSAL = 'the table of contents is generated and read-only';
+/** A table on a closing line that holds text goes after it, and nothing follows it. */
+export const TOC_TABLE_REFUSAL =
+  'a table here would land inside the table of contents; add a paragraph after this line first';
 
 export interface TocParagraphRange {
   readonly toc: DetectedToc;

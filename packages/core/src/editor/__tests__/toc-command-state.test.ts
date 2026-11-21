@@ -312,12 +312,19 @@ test('a table inserted on a closing line that holds a heading goes after it', ()
 });
 
 test('a table is unavailable on a closing line with a heading that ends its container', () => {
-  const body = `<w:p>${run('Before')}</w:p><w:sdt><w:sdtPr/><w:sdtContent><w:p>${begin}${run('Entry 1')}</w:p><w:p>${end}${run('Heading')}</w:p></w:sdtContent></w:sdt><w:p>${run('After')}</w:p>`;
-  const { editor, surface } = mountAt(body, [2, 3, 2, 3]);
-  const before = serializeOoxmlPart(surface.session.part());
-  expect(editor.can(TABLE).ok).toBe(false);
-  expect(editor.exec(TABLE)).toEqual(editor.can(TABLE));
-  expect(serializeOoxmlPart(surface.session.part())).toBe(before);
+  const inControl = `<w:p>${run('Before')}</w:p><w:sdt><w:sdtPr/><w:sdtContent><w:p>${begin}${run('Entry 1')}</w:p><w:p>${end}${run('Heading')}</w:p></w:sdtContent></w:sdt><w:p>${run('After')}</w:p>`;
+  const atEnd = `<w:p>${run('Before')}</w:p><w:p>${begin}${run('Entry 1')}</w:p><w:p>${end}${run('Heading')}</w:p>`;
+  for (const [body, offset] of [
+    [inControl, 3],
+    [atEnd, 0],
+  ] as const) {
+    const { editor, surface } = mountAt(body, [2, offset, 2, offset]);
+    const before = serializeOoxmlPart(surface.session.part());
+    expect(editor.can(TABLE)).toMatchObject({ ok: false, code: 'invalidArgs' });
+    expect((editor.can(TABLE) as { reason: string }).reason).toContain('add a paragraph after');
+    expect(editor.exec(TABLE)).toEqual(editor.can(TABLE));
+    expect(serializeOoxmlPart(surface.session.part())).toBe(before);
+  }
 });
 
 test('replacing accepted text is refused in generated text and allowed outside it', () => {
