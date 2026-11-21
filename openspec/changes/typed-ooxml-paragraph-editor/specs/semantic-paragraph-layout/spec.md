@@ -634,6 +634,36 @@ Justified East Asian lines SHALL distribute punctuation compression across avail
 - **WHEN** the line needs compression to fit
 - **THEN** both blank sides at that seam compress
 
+### Requirement: Punctuation pair classes by language
+
+Each mark of an adjacent full-width punctuation pair SHALL take its pair class from its own run's East Asian language (`w:lang` `w:eastAsia`). The class SHALL be opening, closing, centred, or none. Brackets SHALL be opening or closing marks in every language.
+
+#### Scenario: The run language selects the class of a mark
+
+- **GIVEN** a run whose East Asian language is Simplified Chinese, or that has no East Asian language
+- **THEN** `、。，．；：！` are closing marks, and `？` and `・` have no class
+- **AND** in Traditional Chinese (`zh-TW`, `zh-HK`, `zh-MO`, `zh-Hant`), `、。，．；：` are centred, and `！？・` have no class
+- **AND** in Japanese, `、。，．` are closing marks, `；：・` are centred, and `！？` have no class
+
+#### Scenario: Each mark of a pair uses its own run language
+
+- **GIVEN** a Simplified Chinese `；` followed by a Japanese `！`
+- **WHEN** the pair is laid out
+- **THEN** both bearings stay
+- **AND** a Simplified Chinese `）` followed by a Japanese `・` is 6 pt narrower at 12 pt
+
+### Requirement: Punctuation pair seams by class
+
+When pair kerning (`w:kern`) applies to both runs, a closing mark SHALL give half its advance before a closing, centred, or opening mark. A centred mark SHALL give it only before an opening mark. Two opening marks SHALL share the second mark's left bearing. Other pairs and Korean runs SHALL keep both bearings. A colon SHALL share before a non-opening mark only when both marks' measured ink fits the pair. A highlighted or shaded colon SHALL keep its bearing.
+
+#### Scenario: A semicolon pair follows its class
+
+- **GIVEN** a 12 pt pair with pair kerning on
+- **WHEN** `）；` and `；）` are Simplified Chinese
+- **THEN** each pair is 6 pt narrower
+- **AND** in Japanese or Traditional Chinese, `）；` is 6 pt narrower and `；）` keeps both bearings
+- **AND** `；（` is 6 pt narrower in all three languages, and `？（` keeps both bearings
+
 ### Requirement: Hanging punctuation by alignment
 
 With `w:overflowPunct` on, in compatibility mode 15 and later, the layout engine SHALL let line-end punctuation hang past the margin only when the paragraph alignment is justified or distributed. This SHALL apply to full-width punctuation and to Latin punctuation in a run with an East Asian language. Left-aligned, centered, and right-aligned lines SHALL keep line-end punctuation inside the margin there.
@@ -675,6 +705,48 @@ With no compatibility mode, or in mode 11, 12, or 14, line-end punctuation SHALL
 - **GIVEN** document punctuation compression, a justified paragraph, and document defaults that name no East Asian face
 - **WHEN** a line fits only when its punctuation compresses or hangs
 - **THEN** the line wraps instead
+
+### Requirement: Hanging the blank side of a mark
+
+With document punctuation compression (`w:characterSpacingControl`), in every compatibility mode, a line-end mark that hangs (`w:overflowPunct`) SHALL hang only its trailing blank side when it overflows by no more than its blank sides. The text before it SHALL fill the rest of the measure. A larger overflow, no compression, or a Korean run SHALL hang the whole mark. Kana compression SHALL NOT compress kana for a mark that hangs within its blank sides.
+
+#### Scenario: A closing mark hangs its blank half
+
+- **GIVEN** a justified line of nineteen 24 pt ideographs and a 24 pt `，`, with document punctuation compression
+- **WHEN** the mark overflows the measure by 6 pt, in any compatibility mode
+- **THEN** the mark starts 12 pt before the margin, so that only its blank half hangs
+- **AND** the ideographs before it spread to meet it
+- **AND** an 18 pt overflow hangs the whole mark, which starts at the margin
+
+#### Scenario: Character spacing changes the trailing blank
+
+- **GIVEN** the same line where every character has -4 pt character spacing
+- **WHEN** the 20 pt `，` overflows the measure by 6 pt
+- **THEN** its trailing blank of 8 pt hangs
+- **AND** a 9 pt overflow hangs the whole mark
+
+#### Scenario: Without compression the whole mark hangs
+
+- **GIVEN** the same line without punctuation compression
+- **WHEN** the mark overflows the measure by 6 pt
+- **THEN** the mark starts at the margin
+
+### Requirement: Blank sides of a line-end mark by language
+
+The mark's run language (`w:lang` `w:eastAsia`) SHALL select its blank sides. A closing bracket, `、。，．` in Japanese, and `、。，．；：！` in Simplified Chinese or without an East Asian language, SHALL leave the right half blank. Traditional Chinese `、。，．；：` SHALL be centered, with a quarter blank on each side. Other marks, such as `？` and `”`, SHALL have no blank side. Past a centered mark's trailing quarter, the text before it SHALL keep its advances and the overflow SHALL hang.
+
+#### Scenario: A centered mark hangs its trailing quarter
+
+- **GIVEN** a justified line of nineteen 24 pt ideographs and a Traditional Chinese 24 pt `，`, with document punctuation compression
+- **WHEN** the mark overflows the measure by 4 pt
+- **THEN** the mark starts 18 pt before the margin
+- **AND** a 9 pt overflow keeps the ideographs at their advances
+
+#### Scenario: A mark without a blank side hangs whole
+
+- **GIVEN** the same line with a Simplified Chinese `？`
+- **WHEN** the mark overflows the measure by 6 pt
+- **THEN** the mark starts at the margin
 
 ### Requirement: Space shrinking before hanging punctuation
 
@@ -1120,9 +1192,26 @@ The layout engine SHALL allow curly quotes in runs with the East Asian font hint
 
 #### Scenario: Unsupported curly context keeps existing behavior
 
-- **GIVEN** a curly-only punctuation window, unhinted Latin quotes, a curly quote's inner side, unresolved face, authored tracking, horizontal scaling, complex shaping, decorated text, or source punctuation-kerning refusal
+- **GIVEN** a curly-only punctuation window, unhinted Latin quotes, a curly quote's inner side, unresolved face, authored tracking, horizontal scaling, complex shaping, underlined, struck-through, or outlined text, or source punctuation-kerning refusal
 - **WHEN** layout considers optical fitting
 - **THEN** the new East Asian curly path leaves the unsupported geometry unchanged
+
+### Requirement: Optical punctuation fitting in highlighted and shaded text
+
+Optical punctuation fitting SHALL treat run highlight (`w:highlight`) and run shading (`w:shd`) as fit-neutral. A punctuation seam next to highlighted or shaded text SHALL keep each glyph's ink inside its fitted box, and the highlight or shading SHALL fill the fitted box. Underlined (`w:u`), struck-through (`w:strike`, `w:dstrike`), and outlined (`w14:textOutline`) text SHALL keep natural fitting, because shifted glyph paint cannot carry those decorations.
+
+#### Scenario: Highlighted punctuation fits like plain punctuation
+
+- **GIVEN** a justified East Asian line with highlighted or shaded punctuation that fits only by compression
+- **WHEN** layout fits the line
+- **THEN** the line breaks at the same place as the same text without highlight or shading
+- **AND** each highlight or shading band follows the compressed advance
+
+#### Scenario: Underlined and struck-through punctuation keeps natural fitting
+
+- **GIVEN** the same line with underlined, double-struck, or struck-through punctuation
+- **WHEN** layout fits the line
+- **THEN** optical fitting leaves its geometry unchanged
 
 ### Requirement: Natural kana advances
 

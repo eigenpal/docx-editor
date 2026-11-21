@@ -504,7 +504,7 @@ test('word caret positions use each character measured box rather than an entire
   }
 });
 
-test('unsupported fields authored spacing scale decoration and unknown text keep natural geometry', () => {
+test('fields, authored spacing, scaling, underline, outlines and unknown text keep natural geometry', () => {
   const text = '甲）AV（乙末',
     width = advance('甲）AV（乙') - 6;
   for (const options of [
@@ -512,6 +512,11 @@ test('unsupported fields authored spacing scale decoration and unknown text keep
     { runProps: '<w:spacing w:val="4"/>' },
     { runProps: '<w:w w:val="90"/>' },
     { runProps: '<w:u w:val="single"/>' },
+    { runProps: '<w:strike/>' },
+    {
+      runProps:
+        '<w14:textOutline xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" w14:w="12700"><w14:solidFill><w14:srgbClr w14:val="FF0000"/></w14:solidFill></w14:textOutline>',
+    },
     { settings: '<w:noPunctuationKerning/>' },
     { sourceEastAsia: false },
   ]) {

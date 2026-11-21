@@ -8,6 +8,8 @@ import { styleForFontSlot } from './script-itemization.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import {
   eastAsianLanguage,
+  isKorean,
+  isTraditionalChinese,
   kinsokuCharacters,
   koreanFinalMarkHangs,
   type CjkParagraphTypography,
@@ -17,10 +19,38 @@ import { isRunKerningEnabled } from './run-kerning.ts';
 
 const FULLWIDTH_PUNCTUATION =
   /^[、。〈〉《》「」『』【】〔〕〖〗〘〙〚〛！（），．：；？［］｛｝]$/u;
-// Opening/closing classes have a half-em side bearing. A colon needs a separate
-// seam rule because its ink can be centred, depending on the face and locale.
+// Opening brackets have a half-em left bearing in every language. Closing brackets have a
+// half-em right bearing.
 const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
-const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
+const CLOSING_BRACKET = /^[〉》」』】〕〗〙〛）］｝]$/u;
+/** Marks that can give up their right bearing at a seam, in some language. */
+const RIGHT_BEARING = /^[、。〉》」』】〕〗〙〛），．］｝；：！・]$/u;
+
+/**
+ * How a mark shares a bearing at a seam with the next mark, by the East Asian language of
+ * its own run (`w:lang` `w:eastAsia`). The seam applies only when pair kerning (`w:kern`)
+ * is on in both non-Korean runs and `w:noPunctuationKerning` is off, under any
+ * `w:characterSpacingControl` value. A `closing` mark gives half its advance before a
+ * closing, centred, or opening mark. A `centred` mark gives it only before an opening
+ * mark. Two opening marks share the second mark's left bearing. Other marks, such as `？`,
+ * never share a bearing.
+ */
+export function punctuationSeamClass(
+  mark: string,
+  language: string | undefined
+): 'opening' | 'closing' | 'centred' | undefined {
+  if (OPENING.test(mark)) return 'opening';
+  if (CLOSING_BRACKET.test(mark)) return 'closing';
+  const traditional = /^zh-(tw|hk|mo|hant)(-|$)/i.test(language ?? '');
+  const japanese = /^ja(-|$)/i.test(language ?? '');
+  // Simplified Chinese, and text without a `w:eastAsia` language, sets these marks in the
+  // left half of the cell. Traditional Chinese centres them; Japanese centres `；` and `：`.
+  if ('、。，．'.includes(mark)) return traditional ? 'centred' : 'closing';
+  if (mark === '；' || mark === '：') return traditional || japanese ? 'centred' : 'closing';
+  if (mark === '！') return traditional || japanese ? undefined : 'closing';
+  if (mark === '・') return japanese ? 'centred' : undefined;
+  return undefined;
+}
 
 /** A colon cannot borrow an opening bearing across a line or exclusion passage. */
 export function colonLostOpeningBearing(lines: LineSpans): boolean {
@@ -40,7 +70,7 @@ type LineSpans = readonly { readonly spans: readonly StyleSpanRecord[] }[];
 export interface LineLocalAdvances {
   /** Every centred colon keeps its natural advance. */
   readonly preserveColonAdvances: boolean;
-  /** Source offsets of closing punctuation whose right bearing stays. */
+  /** Source offsets of punctuation whose right bearing stays. */
   readonly keepRightBearings?: ReadonlySet<number>;
 }
 const SHARED_BEARINGS: LineLocalAdvances = Object.freeze({ preserveColonAdvances: false });
@@ -64,7 +94,7 @@ export function lineLocalBearingRetry(
     const span = line.spans.at(-1);
     if (span?.glyphOffsetPt !== 0 || span.text.endsWith('：')) continue;
     const last = segmentGraphemes(span.text).at(-1)!;
-    if (CLOSING.test(last.text)) keep.add(span.range.end - last.text.length);
+    if (RIGHT_BEARING.test(last.text)) keep.add(span.range.end - last.text.length);
   }
   if (keep.size === (advances.keepRightBearings?.size ?? 0)) return null;
   return { ...advances, keepRightBearings: keep };
@@ -158,7 +188,7 @@ function compressionSlices(
       [a, b].every(
         (piece) =>
           isRunKerningEnabled(styleForFontSlot(piece.style, piece.fontSlot)) &&
-          !/^ko(?:-|$)/i.test(eastAsianLanguage(piece.props) ?? '')
+          !isKorean(eastAsianLanguage(piece.props))
       )
     );
   };
@@ -179,19 +209,26 @@ function compressionSlices(
       previous !== undefined &&
       OPENING.test(previous) &&
       pairEnabled(clusters[clusterIndex - 1]!.utf16From, cluster.utf16From);
+    // Only a mark with a right bearing can start a shared seam; skip ordinary text early.
+    const leftClass =
+      next !== undefined && RIGHT_BEARING.test(cluster.text)
+        ? punctuationSeamClass(cluster.text, eastAsianLanguage(base.props))
+        : undefined;
+    const rightClass = leftClass
+      ? punctuationSeamClass(
+          next!,
+          eastAsianLanguage(ownerAt(clusters[clusterIndex + 1]!.utf16From)!.props)
+        )
+      : undefined;
     const trimRight =
-      next !== undefined &&
+      rightClass !== undefined &&
+      (leftClass === 'closing' || (leftClass === 'centred' && rightClass === 'opening')) &&
       !keepRightBearings?.has(base.start + cluster.utf16From - starts[pieceIndex]!) &&
       pairEnabled(cluster.utf16From, clusters[clusterIndex + 1]!.utf16From) &&
-      ((CLOSING.test(cluster.text) &&
-        (OPENING.test(next) || CLOSING.test(next) || next === '：')) ||
-        // Retain the following opening's left bearing. It receives a centred
-        // colon's overhang without moving or clipping the colon's native ink.
-        (cluster.text === '：' &&
-          (OPENING.test(next) || CLOSING.test(next)) &&
-          !preserveColonAdvances &&
-          !base.style.highlight &&
-          !base.style.shading));
+      // Retain the following opening's left bearing. It receives a centred
+      // colon's overhang without moving or clipping the colon's native ink.
+      (cluster.text !== '：' ||
+        (!preserveColonAdvances && !base.style.highlight && !base.style.shading));
     const fraction = trimLeft || trimRight ? 0.5 : 0;
     if (!fraction) continue;
     // Measure the complete cluster with its base character's font. Apply the
@@ -221,9 +258,9 @@ function compressionSlices(
         );
         bearing = Math.min(bearing, Math.max(0, nextAdvance / 2));
       } else {
-        // Word halves the complete colon cell before closing punctuation, including
-        // authored spacing. Word permits overlapping horizontal bounds here:
-        // centered colon dots and low closing ink occupy different vertical bands.
+        // A colon of the closing class halves its complete cell before a closing or
+        // centred mark, including authored spacing. Overlapping horizontal bounds are
+        // allowed: colon dots and low closing ink occupy different vertical bands.
         // Keep native ink within the pair; the natural-width wrap guard prevents
         // a colon from losing this following cell across a line or float passage.
         const ink = measurer.inkBounds?.(cluster.text, face);
@@ -386,15 +423,14 @@ export function hangingCjkPunctuationAdvance(
   if (!tail || !HANGING_CLASS.test(tail)) return undefined;
   const language = eastAsianLanguage(piece.props);
   if (
-    language?.startsWith('ko') &&
+    isKorean(language) &&
     (!paragraphFinal || '。、'.includes(tail) || !koreanFinalMarkHangs(policy?.settings))
   )
     return undefined;
   if (language?.startsWith('ja') && JAPANESE_NON_HANGING.includes(tail)) return undefined;
   // Simplified Chinese keeps a full-width full stop inside the measure; Traditional hangs it.
   if (/^zh-cn$/i.test(language ?? '') && tail === '．') return undefined;
-  if (/^zh-(tw|hk|mo|hant)(-|$)/.test(language ?? '') && TRADITIONAL_CHINESE_NON_HANGING === tail)
-    return undefined;
+  if (isTraditionalChinese(language) && TRADITIONAL_CHINESE_NON_HANGING === tail) return undefined;
   if (policy && !lineStartForbids(tail, language, policy)) return undefined;
   if (!FULLWIDTH_PUNCTUATION.test(tail) && !language) return undefined;
   const last = segmentGraphemes(text).at(-1)?.text;
