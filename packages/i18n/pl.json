@@ -971,7 +971,7 @@
       "oversize": "Obraz przekracza maksymalny dozwolony rozmiar.",
       "refused": "Nie można wstawić obrazu.",
       "unsupportedFormat": "Ten format obrazu nie jest obsługiwany przy wstawianiu.",
-      "staleTarget": "Dokument lub miejsce upuszczenia uległo zmianie. Upuść obraz ponownie."
+      "staleTarget": "Dokument zmienił się przed wstawieniem obrazu. Wstaw obraz ponownie."
     }
   },
   "imageProperties": {

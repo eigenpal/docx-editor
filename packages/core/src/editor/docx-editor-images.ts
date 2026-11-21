@@ -501,6 +501,14 @@ function isStaleImageMutation(
 export const PICTURE_SELECTED_INSERT_REASON =
   'in suggesting mode, a picture cannot be inserted while a drawing is selected; place the caret in text to insert a picture';
 
+/**
+ * Whether the editor refuses a picture with no point here: in suggesting mode, while a drawing
+ * is selected (`PICTURE_SELECTED_INSERT_REASON`).
+ */
+export function refusesPictureBesideDrawing(surface: PaginatedSurface): boolean {
+  return surface.editingMode() === 'suggest' && drawingPastePoint(surface) !== null;
+}
+
 export function gateImageCommand(
   command: EditorCommand,
   surface: PaginatedSurface | null
@@ -517,8 +525,7 @@ export function gateImageCommand(
       const stale = pointTargetRefusal(surface, command.at);
       if (stale) return stale;
     }
-    const suggesting = surface.editingMode() === 'suggest';
-    if (!command.at && suggesting && drawingPastePoint(surface)) {
+    if (!command.at && refusesPictureBesideDrawing(surface)) {
       return { ok: false, code: 'invalidArgs', reason: PICTURE_SELECTED_INSERT_REASON };
     }
     if (!(command.data instanceof Uint8Array) || command.data.byteLength === 0) {
@@ -941,7 +948,7 @@ async function runImageCommand(
         ? {
             ok: false as const,
             code: 'notFound' as const,
-            reason: 'the drop target is no longer attached',
+            reason: 'the insert target is no longer attached',
           }
         : null
       : isStaleImageMutation(editor, pre);

@@ -21,6 +21,8 @@ import {
   TEXT_BOX_PICTURE_PASTE_REASON,
 } from '../surface-drawing-clipboard.ts';
 import { PICTURE_SELECTED_INSERT_REASON } from '../docx-editor-images.ts';
+import { imageFilePastePlan } from '../image-file-paste.ts';
+import { pasteEvent } from './drawing-image-paste-fixture.ts';
 import {
   GROUP,
   LINE,
@@ -51,6 +53,9 @@ import {
   OBJ,
   editors,
 } from './drawing-paste-fixture.ts';
+
+/** A clipboard that holds one image file. */
+const imageFileTransfer = () => pasteEvent({ file: true }).clipboardData;
 
 afterEach(() => {
   for (const editor of editors.splice(0)) editor.destroy();
@@ -631,6 +636,36 @@ describe('a drawing outside the body text', () => {
     expect(surface.activeScope().kind).toBe('frame');
     expect(editor.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
     expect(await headerXml(editor)).toBe(before);
+  });
+
+  test('an image file pasted on a header picture goes in before its anchor there', async () => {
+    const { editor, surface } = await open(
+      p(text('Body')),
+      'edit',
+      p(text('Header line ') + PICTURE)
+    );
+    expect(surface.setActiveScope(editor.findMatches('Header line')[0]!.scope!)).toBe(true);
+    const drawing = surface.layout().pages[0]!.header!.anchoredDrawings![0]!;
+    expect(surface.selectDrawing(drawing.drawingNodeId, drawing.anchorParagraphId)).toBe(true);
+    const plan = imageFilePastePlan(editor, imageFileTransfer());
+    expect(plan?.at).toMatchObject({
+      part: '/word/header1.xml',
+      paragraphId: drawing.anchorParagraphId,
+      offset: 'Header line'.length,
+    });
+    const result = await editor.executeImageCommand({
+      type: 'insertImage',
+      data: PNG,
+      mime: 'image/png',
+      widthPoints: 10,
+      heightPoints: 10,
+      at: plan!.at!,
+    });
+    expect(result).toMatchObject({ ok: true, changed: true });
+    const header = await headerXml(editor);
+    expect(header.indexOf('<wp:inline')).toBeGreaterThan(header.indexOf('Header line'));
+    expect(header.indexOf('<wp:inline')).toBeLessThan(header.indexOf('<wp:anchor'));
+    expect(await saved(editor)).not.toContain('<w:drawing');
   });
 
   test('a drawing anchored in a table cell takes text in that cell', async () => {

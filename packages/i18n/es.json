@@ -811,7 +811,7 @@
       "unsupportedFormat": "No se admite insertar este formato de imagen.",
       "oversize": "La imagen supera el tamaño máximo permitido.",
       "refused": "No se pudo insertar la imagen.",
-      "staleTarget": "El documento o la posición de colocación cambió. Suelta la imagen de nuevo."
+      "staleTarget": "El documento cambió antes de insertar la imagen. Vuelva a insertar la imagen."
     }
   },
   "imageProperties": {

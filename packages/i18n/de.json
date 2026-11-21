@@ -971,7 +971,7 @@
       "oversize": "Das Bild überschreitet die maximal zulässige Größe.",
       "refused": "Das Bild konnte nicht eingefügt werden.",
       "unsupportedFormat": "Dieses Bildformat wird beim Einfügen nicht unterstützt.",
-      "staleTarget": "Das Dokument oder die Ablageposition hat sich geändert. Ziehen Sie das Bild erneut an die gewünschte Stelle."
+      "staleTarget": "Das Dokument hat sich geändert, bevor das Bild eingefügt wurde. Fügen Sie das Bild erneut ein."
     }
   },
   "imageProperties": {
