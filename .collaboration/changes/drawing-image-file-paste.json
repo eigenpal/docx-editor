@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "An image file pasted while a picture, shape, or text box was selected inserted nothing.",
+  "after": "The image file inserts before the selected drawing's anchor run, at the drawing paste point, through the existing image insert operation. In suggesting mode the insert refuses with a reason, as the toolbar insert does.",
+  "reason": "The paste writes through the released image insert path with a captured point target. Shared nodes, offsets, operations, and the collaboration format stay unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-drawing-image-paste.test.ts",
+    "packages/core/src/editor/__tests__/image-file-paste-plan.test.ts"
+  ],
+  "changeset": "drawing-image-file-paste",
+  "migration": null
+}

@@ -16,6 +16,7 @@ import {
   type InlineDrawingLayoutContext,
 } from './drawing-layout.ts';
 import { anchoredOutOfCell, type CellAnchorScope } from './cell-anchor-layout.ts';
+import { followsParagraphTop } from './following-anchor-tops.ts';
 import { drawingGeometryFromProjection } from './drawing-geometry.ts';
 import { paintLayerOf, sortDrawingsForPaint, type DrawingPaintLayer } from './drawing-overlap.ts';
 import { paragraphBandTop, topAndBottomBandAnchorY } from './top-and-bottom-clearance.ts';
@@ -151,6 +152,8 @@ export interface ExclusionZone {
   readonly columnIndex: number;
   /** Resolved top edge in page-content coordinates after overlap displacement. */
   readonly y: number;
+  /** The paragraph top the picture follows one for one (`followsParagraphTop`), if any. */
+  readonly paragraphTop?: number;
   readonly verticalBand: LayoutBox;
   readonly input: WrapExclusionInput;
 }
@@ -314,10 +317,19 @@ export function exclusionZoneFromAnchoredDrawing(options: {
     allowOverlap: options.drawing.allowOverlap,
     columnIndex: options.columnIndex ?? 0,
     y,
+    ...(followsParagraphTop(options.drawing, options.projection)
+      ? { paragraphTop: options.drawing.verticalFrameOrigin }
+      : {}),
     verticalBand: verticalBandOfExclusion(input),
     input,
   });
 }
+
+/**
+ * How far, in points, a line may reach into a band's top or bottom edge and stay clear of it.
+ * Edges that meet differ by float noise, so without a margin rounding chose the wrap.
+ */
+export const WRAP_EDGE_TOUCH_PT = 0.01;
 
 export function mergeAvailableIntervalsAtY(
   y: number,
@@ -330,10 +342,12 @@ export function mergeAvailableIntervalsAtY(
   let wrapsTable = false;
   for (const zone of zones) {
     const band = zone.verticalBand;
-    // Rectangular wrapping excludes the whole glyph band, including objects whose top
-    // lies below the line's top scanline. Polygon wrapping retains its contour probe.
+    // Square wrap excludes the whole glyph band; polygon wrap keeps its contour probe.
     const rectangular = zone.input.mode === 'square' && lineHeight > 0;
-    if (y >= band.y + band.height || (rectangular ? y + lineHeight <= band.y + 0.001 : y < band.y))
+    if (
+      y > band.y + band.height - WRAP_EDGE_TOUCH_PT ||
+      (rectangular ? y + lineHeight <= band.y + WRAP_EDGE_TOUCH_PT : y < band.y)
+    )
       continue;
     const probeY = rectangular ? Math.max(y, band.y) : y;
     const atY = availableTextIntervalsOnScanline(probeY, zone.input);
@@ -446,6 +460,7 @@ export function localizeExclusionZones(
       return Object.freeze({
         ...zone,
         y: zone.y - originY,
+        ...(zone.paragraphTop !== undefined ? { paragraphTop: zone.paragraphTop - originY } : {}),
         verticalBand: Object.freeze({
           ...band,
           x: band.x - originX,

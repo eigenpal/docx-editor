@@ -1,6 +1,10 @@
 // Clear blocked rectangular passages and combined table/contour bands.
 // Curved-only exclusions retain their existing scanline placement path.
-import { mergeAvailableIntervalsAtY, type ExclusionZone } from './drawing-exclusion.ts';
+import {
+  mergeAvailableIntervalsAtY,
+  WRAP_EDGE_TOUCH_PT,
+  type ExclusionZone,
+} from './drawing-exclusion.ts';
 import { intersectScanlineIntervals, type ScanlineInterval } from './drawing-wrap.ts';
 import type { DrawingPoint } from './drawing-geometry.ts';
 
@@ -117,7 +121,7 @@ export function narrowRectangularWrapSkip(
     let bottom = position;
     const ordered = [...relevantZones()].sort((a, b) => a.verticalBand.y - b.verticalBand.y);
     for (const zone of ordered) {
-      if (zone.verticalBand.y >= bottom + height - EPSILON) break;
+      if (zone.verticalBand.y >= bottom + height - WRAP_EDGE_TOUCH_PT) break;
       bottom = Math.max(bottom, zone.verticalBand.y + zone.verticalBand.height);
     }
     return bottom - y;
@@ -128,17 +132,18 @@ export function narrowRectangularWrapSkip(
   let besideTable = false;
   let current = y;
   for (let attempt = 0; attempt < MAX_CLEARANCE_STEPS; attempt++) {
+    // A band that only touches the line's top or bottom edge does not block it (`WRAP_EDGE_TOUCH_PT`).
     const active = rectangular.filter(
       (zone) =>
-        zone.verticalBand.y < current + height - EPSILON &&
-        zone.verticalBand.y + zone.verticalBand.height > current + EPSILON
+        zone.verticalBand.y < current + height - WRAP_EDGE_TOUCH_PT &&
+        zone.verticalBand.y + zone.verticalBand.height > current + WRAP_EDGE_TOUCH_PT
     );
     // A contour that the rectangles cannot stand for also blocks the line when it leaves no
     // passage as wide as the glyph. Without this check the glyph was put into a narrower gap.
     const contourActive = contour.some(
       (zone) =>
-        zone.verticalBand.y < current + height - EPSILON &&
-        zone.verticalBand.y + zone.verticalBand.height > current + EPSILON
+        zone.verticalBand.y < current + height - WRAP_EDGE_TOUCH_PT &&
+        zone.verticalBand.y + zone.verticalBand.height > current + WRAP_EDGE_TOUCH_PT
     );
     if (active.length === 0 && !combinedBlocked && !contourActive) return current - y;
     const wrapsTable = active.some(
@@ -151,7 +156,7 @@ export function narrowRectangularWrapSkip(
     // A line can start above the float while its lower glyph band intersects it.
     // Intersect all relevant scanlines instead of probing only the line's top.
     let available: readonly ScanlineInterval[] = [{ start: left, end: right }];
-    const samples = [current + EPSILON, current + height - EPSILON];
+    const samples = [current + EPSILON, current + height - WRAP_EDGE_TOUCH_PT];
     for (const zone of active) samples.push(Math.max(current, zone.verticalBand.y) + EPSILON);
     for (const sample of samples) {
       available = intersectScanlineIntervals(
@@ -170,7 +175,7 @@ export function narrowRectangularWrapSkip(
       if (!events)
         return combinedBlocked || tableCombined ? clearBlockingBands(current) : current - y;
       let combined: readonly ScanlineInterval[] = [{ start: left, end: right }];
-      const probes = [current + EPSILON, current + height - EPSILON];
+      const probes = [current + EPSILON, current + height - WRAP_EDGE_TOUCH_PT];
       for (const event of events) {
         if (event > current && event < current + height) {
           probes.push(Math.max(current + EPSILON, event - EPSILON));

@@ -601,6 +601,21 @@ export function retainLiveBreakKeys<T>(
 }
 
 /**
+ * {@link retainLiveBreakKeys} for one pass, unless the pass skips its sweep: with `retainKeys`
+ * false the orchestrator sweeps, and a standalone pass sweeps only on its own stride.
+ */
+export function retainPassBreakKeys<T>(
+  cache: ParagraphLayoutCache<T> | undefined,
+  retainKeys: Set<string> | false | undefined,
+  blockKeys: readonly string[],
+  tables: () => readonly object[]
+): void {
+  if (retainKeys === false) return;
+  if (retainKeys === undefined && cache && !(cache.retentionPassDue?.() ?? true)) return;
+  retainLiveBreakKeys(cache, retainKeys, blockKeys, tables());
+}
+
+/**
  * Passes between document-wide retention sweeps.
  *
  * Retention only trims memory — the generation TTL tolerates deferral — while the union of
