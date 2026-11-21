@@ -761,6 +761,22 @@ export class TextWriter {
       baselineShiftPtOf(styleForFontSlot(span.style, span.fontSlot));
     return { ...absoluteBox, y: absoluteBox.y + (top - span.box.y) };
   }
+  /**
+   * The band a `w:highlight` or character shading (`w:rPr/w:shd`) fills. A line whose runs share
+   * one band (`LineRecord.characterFillBand`: `w:lineRule="exact"` spacing, or an inline drawing
+   * beside the text) fills it at the span's advance. Any other line fills each span's own
+   * {@link bandBox}.
+   */
+  characterFillBox(visit: SemanticSpanVisit): LayoutBox {
+    const { span, line, absoluteBox } = visit;
+    const band = line.characterFillBand;
+    if (!band || span.equation || !(band.height > 0)) return this.bandBox(visit);
+    return {
+      ...absoluteBox,
+      y: absoluteBox.y + (line.box.y + band.top - span.box.y),
+      height: band.height,
+    };
+  }
   private readonly outlineForms = new Map<
     EmbeddedFace,
     Map<string, { name: string; ref: PDFRef }>

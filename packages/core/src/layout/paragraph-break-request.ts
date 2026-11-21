@@ -238,7 +238,11 @@ export function breakPreparedParagraphLazily(
 function withOpeningColumnBreakCollapsed(lines: readonly PendingLine[]): readonly PendingLine[] {
   const first = lines[0];
   if (!first || first.start !== 0 || !holdsOnlyColumnBreak(first)) return lines;
-  return [{ ...first, height: 0, baseline: 0, leading: 0, trailingSpacing: 0 }, ...lines.slice(1)];
+  const { characterFillBand: _band, ...collapsed } = first;
+  return [
+    { ...collapsed, height: 0, baseline: 0, leading: 0, trailingSpacing: 0 },
+    ...lines.slice(1),
+  ];
 }
 
 export function breakPreparedParagraph(request: ParagraphBreakRequest): readonly PendingLine[] {

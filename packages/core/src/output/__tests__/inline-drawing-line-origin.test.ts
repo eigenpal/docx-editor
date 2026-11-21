@@ -190,6 +190,36 @@ describe('a line that opens with an inline picture', () => {
     expectRunsAtLayout(shaped, shapedLine);
   });
 
+  test('highlight surrounds text beside an inline picture without covering the picture advance', () => {
+    const highlight = '<w:rPr><w:highlight w:val="yellow"/></w:rPr>';
+    const { layout, line } = pictureLine(
+      paragraph(
+        `<w:r>${highlight}<w:t>before</w:t></w:r><w:r>${drawing}</w:r>` +
+          `<w:r>${highlight}<w:t>after</w:t></w:r>`,
+        '<w:spacing w:line="624" w:lineRule="exact"/>'
+      )
+    );
+    expect(line.characterFillBand).toEqual({ top: 0, height: line.box.height });
+    expect(line.box.height).toBeCloseTo(31.2, 5);
+    const host = document.createElement('div');
+    paintSemanticLayout(host, layout, { scale: SCALE });
+    const row = host.querySelector<HTMLElement>(`[data-line-id="${line.id}"]`)!;
+    const layer = row.querySelector<HTMLElement>('.docx-character-fill-band')!;
+    expect(layer.getAttribute('aria-hidden')).toBe('true');
+    expect(layer.querySelectorAll('[data-highlight="yellow"]')).toHaveLength(2);
+    for (const [index, block] of [...layer.children].entries()) {
+      const bounds = (block as HTMLElement).style;
+      const span = line.spans[index]!;
+      expect(parseFloat(bounds.left) / SCALE).toBeCloseTo(span.box.x - line.contentX, 5);
+      expect(parseFloat(bounds.width) / SCALE).toBeCloseTo(span.box.width, 5);
+      expect(parseFloat(bounds.height) / SCALE).toBeCloseTo(31.2, 5);
+    }
+    expect(
+      row.querySelector<HTMLElement>('.layout-run[data-highlight]')?.style.backgroundColor
+    ).toBe('');
+    expectRunsAtLayout(layout, line);
+  });
+
   test('a justified line moves a picture with the words around it', () => {
     // Justification spreads slack after each space. A picture after a space moves with the
     // words, so it neither overlaps the word before it nor leaves the word after it behind.

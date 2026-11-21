@@ -97,6 +97,7 @@ import {
   type ChangeBarsMode,
 } from './semantic-paint-change-bars.ts';
 import { applyHeaderFooterPaintChrome } from './semantic-paint-hf-chrome.ts';
+import { characterFillLayer } from './semantic-paint-character-fill.ts';
 import {
   paintHeaderFooterLayer,
   type HeaderFooterLayerPainter,
@@ -1234,6 +1235,7 @@ function paintLine(
   // painted exactly once — as a stretch or as a margin, never both, never neither.
   let pendingGap = 0;
   let previousSpanAbsorbedGap = false;
+  const fills = characterFillLayer(document, line, scale);
   // The previous run's automatic gap fill, finished once the run after the gap is painted.
   let finishGapFill: ((next: HTMLElement) => void) | null = null;
   for (const [spanIndex, span] of line.spans.entries()) {
@@ -1282,11 +1284,15 @@ function paintLine(
     pendingGap = gapAfter;
     // The run before a `w:autoSpaceDE`/`w:autoSpaceDN` advance fills it with its `w:highlight`
     // or `w:shd`; the advance stays a margin. A shaped line places the advance inside the
-    // run's own box, so its background covers it.
-    if (!owner && next && !span.equation && span.box.width > 0) {
-      const width = automaticGapFillAfter(span, next, gapAfter);
-      finishGapFill = paintAutomaticGapFill(painted, width, span.box.width, scale);
-    }
+    // run's own box, so its background covers it. On a line with a character fill band the
+    // band layer takes the fill (and clears the run background), so it also covers the advance.
+    const automaticGap =
+      !owner && next && !span.equation && span.box.width > 0
+        ? automaticGapFillAfter(span, next, gapAfter)
+        : 0;
+    fills?.add(painted, span, owner ? gapAfter : automaticGap);
+    if (automaticGap > 0)
+      finishGapFill = paintAutomaticGapFill(painted, automaticGap, span.box.width, scale);
     const link = span.link;
     if (!link) {
       anchor = null;
@@ -1339,6 +1345,7 @@ function paintLine(
     width: line.box.width,
     height: line.box.height,
   });
+  fills?.mount(element);
   paintRunBorders(document, element, line, scale);
   if (ctx.showParagraphMarks && line.manualBreakAfter)
     paintManualLineBreak(document, line, element, scale, ctx.revisionStyles, paragraphRtl);

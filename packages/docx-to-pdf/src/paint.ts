@@ -638,13 +638,15 @@ export async function paint(
       layout.displayMode === 'all-markup'
         ? spanMarkup(visit, revisionMarkup, rowRevisions.get(visit.paragraph))
         : null;
-    const fill =
+    const markupFill =
       markup && markup.background !== 'none'
         ? markupBackground(markup.background, authorSlots.get(markup.author) ?? 0)
-        : (HIGHLIGHTS[visit.span.style.highlight ?? ''] ?? visit.span.style.shading);
+        : undefined;
+    const fill =
+      markupFill ?? HIGHLIGHTS[visit.span.style.highlight ?? ''] ?? visit.span.style.shading;
     if (fill) {
       // The band runs on across the gap the span owns, as screen paint draws it.
-      const band = text.bandBox(visit);
+      const band = markupFill ? text.bandBox(visit) : text.characterFillBox(visit);
       const gap = ownedFillGapAfter(visit);
       const owned =
         gap > 0

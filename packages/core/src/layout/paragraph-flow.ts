@@ -20,7 +20,8 @@ import { continuationPiecesWithRules } from './paragraph-continuation-pieces.ts'
 import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
 import { cellTabReplayScope, tabClosesLine, tabDestinationForFlow } from './paragraph-tab-flow.ts';
 import { growRunBorderLineMetrics } from './run-border-strokes.ts';
-import { lineSpacingBand } from './equation-line-spacing.ts';
+import { inlineExtentSpacing, lineSpacingBand } from './equation-line-spacing.ts';
+import { setCharacterFillBand } from './character-fill-band.ts';
 import {
   clipLineDrawingsAtTop,
   growPendingLineDrawingExtent,
@@ -826,27 +827,10 @@ export function breakParagraph(
     growPendingLineDrawingExtent(line);
     // Apply paragraph line spacing once to the finished box.
     const naturalHeight = line.height;
-    // `auto` scales the TEXT band, not a tall inline drawing or equation (ECMA-376
-    // 17.3.1.33). A drawing line above single spacing keeps the drawing's box and adds the
-    // multiple's extra text band below it. An equation line keeps the equation's extent and
-    // adds or loses the multiple's share of its band (`lineSpacingBand`).
-    const hasUnscaledInlineExtent =
-      line.drawings.length > 0 ||
-      line.spans.some((span) => span.equation !== undefined || span.unsupported !== undefined);
-    // A picture line that snaps to the section's `w:docGrid` occupies grid pitches sized for
-    // the entire line. Its drawing moves with the text into the grid band, just as it moves
-    // under exact or minimum spacing.
-    const gridFitsDrawing = lineSpacing.gridPitch !== undefined && line.drawings.length > 0;
-    const scalesTextBandOnly =
-      lineSpacing.rule === 'auto' && hasUnscaledInlineExtent && !gridFitsDrawing;
-    const holdsUnscaledPicture =
-      scalesTextBandOnly &&
-      line.drawings.length > 0 &&
-      !line.spans.some((span) => span.equation !== undefined);
-    const addsTextBandExtra = holdsUnscaledPicture && lineSpacing.value > 240;
-    // Below single spacing the multiple takes its missing text band off the line's top: the
-    // line is the picture less that band, never less than the scaled text band.
-    const removesTextBand = holdsUnscaledPicture && lineSpacing.value < 240;
+    const naturalBaseline = line.baseline;
+    // `auto` scales the text band only beside an inline drawing or equation (ECMA-376 17.3.1.33).
+    const { gridFitsDrawing, scalesTextBandOnly, addsTextBandExtra, removesTextBand } =
+      inlineExtentSpacing(line, lineSpacing);
     const fallbackBand = pictureRunBand?.height ?? metrics.height;
     const band = scalesTextBandOnly
       ? lineSpacingBand(line, lineSpacing, measurer, fallbackBand, pageBreaksIgnored)
@@ -890,6 +874,10 @@ export function breakParagraph(
       (line.drawings.length === 0 || gridFitsDrawing) && lineSpacing.rule !== 'exact'
         ? Math.max(0, Math.min(spaced.trailing ?? Infinity, spacedExtent - naturalHeight))
         : drawingLineTrailing;
+    setCharacterFillBand(line, lineSpacing.rule === 'exact', {
+      height: naturalHeight,
+      baseline: naturalBaseline,
+    });
     finalizeTopAndBottomClearance();
     commitBreakClearance();
     if (empty && (wrapAnchorStarts.size > 0 || topAndBottomAnchorStarts.size > 0))
