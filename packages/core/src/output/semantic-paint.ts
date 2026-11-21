@@ -28,6 +28,8 @@ import { paintListMarkerPicture } from './semantic-paint-list-marker-picture.ts'
 import { paintNoteSeparatorSpan } from './semantic-paint-note-rule.ts';
 import { paintRunBorders } from './semantic-paint-run-borders.ts';
 import { isRunKerningEnabled, kernsText } from '../layout/run-kerning.ts';
+import { automaticGapFillAfter, paintAutomaticGapFill } from './semantic-paint-automatic-gap.ts';
+import { HIGHLIGHT_COLOR_HEX } from './semantic-paint-highlight-colors.ts';
 import { paintLegacyDropdown } from './semantic-paint-legacy-dropdown.ts';
 import { paintLegacyCheckbox } from './semantic-paint-legacy-checkbox.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
@@ -558,27 +560,6 @@ const UNDERLINE_STYLE = new Map<string, string>(
     wave: 'wavy',
     wavyHeavy: 'wavy',
     wavyDouble: 'wavy',
-  })
-);
-
-export const HIGHLIGHT_COLOR_HEX = new Map<string, string>(
-  Object.entries({
-    black: '#000000',
-    blue: '#0000ff',
-    cyan: '#00ffff',
-    darkBlue: '#000080',
-    darkCyan: '#008080',
-    darkGray: '#808080',
-    darkGreen: '#008000',
-    darkMagenta: '#800080',
-    darkRed: '#800000',
-    darkYellow: '#808000',
-    green: '#00ff00',
-    lightGray: '#c0c0c0',
-    magenta: '#ff00ff',
-    red: '#ff0000',
-    yellow: '#ffff00',
-    white: '#ffffff',
   })
 );
 
@@ -1253,6 +1234,8 @@ function paintLine(
   // painted exactly once — as a stretch or as a margin, never both, never neither.
   let pendingGap = 0;
   let previousSpanAbsorbedGap = false;
+  // The previous run's automatic gap fill, finished once the run after the gap is painted.
+  let finishGapFill: ((next: HTMLElement) => void) | null = null;
   for (const [spanIndex, span] of line.spans.entries()) {
     const flushed = nextInlineDrawing;
     appendDrawingAdvancesBefore(span.range.paragraphId, span.range.start);
@@ -1267,6 +1250,8 @@ function paintLine(
     const painted = span.noteSeparator
       ? paintNoteSeparatorSpan(document, span, line, scale)
       : paintSpan(document, span, ctx, band, leading);
+    finishGapFill?.(painted);
+    finishGapFill = null;
     if (bidi) {
       painted.style.position = 'relative';
       painted.style.left = `${(span.box.x - line.contentX - logicalAdvance) * scale}px`;
@@ -1295,6 +1280,13 @@ function paintLine(
     else if (owner === 'letterSpacing')
       painted.style.letterSpacing = letterGapSpacing(painted, span, gapAfter, scale);
     pendingGap = gapAfter;
+    // The run before a `w:autoSpaceDE`/`w:autoSpaceDN` advance fills it with its `w:highlight`
+    // or `w:shd`; the advance stays a margin. A shaped line places the advance inside the
+    // run's own box, so its background covers it.
+    if (!owner && next && !span.equation && span.box.width > 0) {
+      const width = automaticGapFillAfter(span, next, gapAfter);
+      finishGapFill = paintAutomaticGapFill(painted, width, span.box.width, scale);
+    }
     const link = span.link;
     if (!link) {
       anchor = null;
