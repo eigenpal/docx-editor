@@ -12,7 +12,6 @@ import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
 import {
   kanaFitCells,
   kanaCapacityOf,
-  kanaShareLimit,
   lineStartCharacter,
   takeFinalSoundMarkShare,
 } from './kana-sound-mark-fit.ts';
@@ -24,23 +23,30 @@ import { formatRevisionOf } from './revision-projection.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 import { memoized, type ClusterMemo } from './cjk-optical-memo.ts';
 import {
+  CLOSING,
+  curlyRole,
+  finiteInk,
+  fitNeighbour,
+  HAS_PUNCTUATION,
+  OPENING,
+  PUNCTUATION,
+  TOLERANCE,
+  type Cell,
+} from './cjk-optical-cell.ts';
+import {
+  exceedsLegacyAdmission,
+  expansionGate,
+  isFullWidthKana,
+  kanaFitBound,
+  kanaShare,
+  shareAmong,
+  type KanaFitRules,
+} from './cjk-optical-capacity.ts';
+import {
   layoutDerivedSpacingStyleForEditing,
   withLayoutDerivedSpacing,
 } from './layout-derived-spacing.ts';
 
-const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
-const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
-const PUNCTUATION = /^[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]$/u;
-const HAS_PUNCTUATION = /[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]/u;
-const TOLERANCE = 0.001;
-// The fit gate weighs expansion in units of 1/64 of an advance (see `expansionGate`).
-const EXPANSION_UNITS = 64;
-// A curly quote in the East Asian font slot fits like the matching bracket.
-function curlyRole(text: string): 'opening' | 'closing' | undefined {
-  if (text === '‘' || text === '“') return 'opening';
-  if (text === '’' || text === '”') return 'closing';
-  return undefined;
-}
 // Every fit attempt re-reads the whole line, so segmentation dominates its cost. In BMP East
 // Asian, fullwidth, curly-quote, and space text without combining kana or tone marks, each
 // code unit is one grapheme.
@@ -53,17 +59,6 @@ export function fittingClusters(text: string): readonly GraphemeSegment[] {
   for (let index = 0; index < text.length; index += 1)
     clusters.push({ index, text: text[index]!, utf16From: index, utf16To: index + 1 });
   return clusters;
-}
-interface Cell {
-  span: StyleSpanRecord;
-  readonly sourceIndex: number;
-  readonly ordinaryOpaque?: true;
-  readonly qualifiedCurly?: 'opening' | 'closing';
-  readonly natural: number;
-  readonly alreadyReduced: number;
-  readonly ink: { left: number; right: number } | undefined;
-  reduction: number;
-  shift: number;
 }
 export interface CjkOpticalFit {
   readonly candidate: readonly StyleSpanRecord[];
@@ -290,138 +285,6 @@ function cellsOf(
     }
   }
   return cells;
-}
-// A glyph a blank side can face: an ideograph, punctuation, a qualified quote, or a word. A space
-// is not one.
-function fitNeighbour(cell: Cell): boolean {
-  const text = cell.span.text;
-  return (
-    cell.ordinaryOpaque === true ||
-    cell.qualifiedCurly !== undefined ||
-    PUNCTUATION.test(text) ||
-    isCjk(text.codePointAt(0)!)
-  );
-}
-function finiteInk(cell: Cell): cell is Cell & { ink: { left: number; right: number } } {
-  return (
-    cell.ink !== undefined &&
-    Number.isFinite(cell.ink.left) &&
-    Number.isFinite(cell.ink.right) &&
-    cell.ink.right >= cell.ink.left
-  );
-}
-
-const blankSided = (cell: Cell): boolean =>
-  cell.qualifiedCurly !== undefined ||
-  OPENING.test(cell.span.text) ||
-  CLOSING.test(cell.span.text) ||
-  cell.span.text === '：';
-/**
- * In a legacy compatibility mode, a group of East Asian characters and punctuation, with Latin
- * words or numbers when it ends in a closing mark, joins a line only when the compression it
- * needs, less what its own marks can still give, is at most half its natural advance.
- */
-function exceedsLegacyAdmission(cells: readonly Cell[], sourceCount: number, deficit: number) {
-  let ideograph = false;
-  let half = 0;
-  const closes = CLOSING.test(cells.at(-1)!.span.text);
-  for (const cell of cells) {
-    if (cell.sourceIndex < sourceCount) continue;
-    const mark = PUNCTUATION.test(cell.span.text) || cell.qualifiedCurly !== undefined;
-    const opaque = closes && cell.ordinaryOpaque === true;
-    if (!mark && !opaque && !isCjk(cell.span.text.codePointAt(0)!)) return false;
-    ideograph ||= !mark;
-    half += cell.natural / 2;
-    if (blankSided(cell))
-      deficit -= Math.max(0, cell.natural / 2 - cell.alreadyReduced - cell.reduction);
-  }
-  return ideograph && deficit > half + TOLERANCE;
-}
-/**
- * A justified line takes another ordinary glyph by compression only when the share of the
- * compression capacity it spends is at most the expansion that leaving the glyph off would
- * need. Expansion counts in 1/64 of each advance before the line's last glyph: the advances
- * whose gaps the shorter line would spread its room over. A final mark that hangs or drops its
- * trailing half stays in the deficit and counts as capacity, and a candidate that opens with a
- * bracket is gated too.
- */
-function expansionGate(
-  cells: readonly Cell[],
-  sourceCount: number,
-  room: number,
-  deficit: number
-): { readonly capacityBound: number; admits(capacity: number): boolean } {
-  let spread = 0;
-  let capacityBound = 0;
-  let lastLineCell: Cell | undefined;
-  for (const cell of cells) {
-    if (blankSided(cell)) capacityBound += cell.natural / 2;
-    if (cell.sourceIndex >= sourceCount) continue;
-    spread += cell.natural;
-    lastLineCell = cell;
-  }
-  if (lastLineCell) spread -= lastLineCell.natural;
-  return {
-    capacityBound,
-    admits: (capacity) =>
-      room > TOLERANCE && deficit * spread <= room * capacity * EXPANSION_UNITS + TOLERANCE,
-  };
-}
-/**
- * How a kana fit (`compressPunctuationAndJapaneseKana`) spends its capacity. Punctuation blank
- * sides on the line go first, then kana, each by at most a sixteenth of its em, in equal
- * shares. A final closing mark gives its trailing half first when that half alone fits the
- * line, or when `finalHalfFirst` (no punctuation overflow); otherwise only when kana cannot
- * take the rest.
- */
-export interface KanaFitRules {
-  readonly finalHalfFirst: boolean;
-  /** Skip the expansion gate: a legacy mode fits a lone mark after a full line. */
-  readonly ungated?: boolean;
-}
-// Hiragana and katakana, small ones included. The prolonged sound mark and iteration marks
-// keep their advances.
-const FULL_WIDTH_KANA = /^[\u3041-\u3096\u30a1-\u30fa]$/u;
-const isFullWidthKana = (cell: Cell): boolean => FULL_WIDTH_KANA.test(cell.span.text);
-/** What one kana can still give: a sixteenth of its em, within its remaining advance. */
-const kanaShare = (cell: Cell): number =>
-  Math.max(
-    0,
-    Math.min(kanaShareLimit(cell.span) - cell.reduction, cell.span.box.width - cell.reduction)
-  );
-/**
- * An upper bound on what a kana fit can absorb: a sixteenth of an em per kana or sound mark,
- * half an em per punctuation mark or curly quote, from each span's own font size.
- */
-function kanaFitBound(line: PendingLine, candidates: readonly StyleSpanRecord[]): number {
-  let bound = TOLERANCE;
-  for (const spans of [line.spans, candidates])
-    for (const span of spans) {
-      const em = span.style.fontSizePt;
-      const text = span.text;
-      for (let index = 0; index < text.length; index++) {
-        const unit = text.charCodeAt(index);
-        if ((unit >= 0x3041 && unit <= 0x309a) || (unit >= 0x30a1 && unit <= 0x30fa))
-          bound += em / 16;
-        else if (unit >= 0x2018 && (PUNCTUATION.test(text[index]!) || curlyRole(text[index]!)))
-          bound += em / 2;
-      }
-    }
-  return bound;
-}
-/** Give `amount` to `cells` in equal shares within their kana capacity; returns the rest. */
-function shareAmong(cells: readonly Cell[], amount: number): number {
-  let active = cells.filter((cell) => kanaShare(cell) > TOLERANCE);
-  while (amount > TOLERANCE && active.length) {
-    const share = amount / active.length;
-    for (const cell of active) {
-      const given = Math.min(share, kanaShare(cell));
-      cell.reduction += given;
-      amount -= given;
-    }
-    active = active.filter((cell) => kanaShare(cell) > TOLERANCE);
-  }
-  return amount;
 }
 
 /** Try a complete protected group without changing the line when it cannot fit. */
