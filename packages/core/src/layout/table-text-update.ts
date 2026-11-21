@@ -131,16 +131,23 @@ export function updateTableText(
   // Where a row that may split breaks, or whether it starts on a page at all, the paginator
   // decides from the lines of every cell (`rowFollowsBelow`, cell widow control), not from
   // the row's height. A text edit can change that decision, so such a row is laid out again
-  // when it splits, or when it opens a fragment at the top of its column: the row may have
-  // moved there from the page before. A row placed whole below other content on its page
-  // keeps its height, so it still fits whole there. A table that opens the document has no
-  // page before it.
+  // when it splits, when it opens a fragment at the top of its column (it may have moved
+  // there from the page before), or when it ends a fragment the table continues past: there
+  // it must also leave room for its own closing edge (`closingEdgePt`), and when it does not,
+  // the paginator splits it or moves it by the lines of its cells. A row placed whole between
+  // other rows of its page keeps its height, so it still fits whole there. A table that opens
+  // the document has no page before it.
   const splits = !source.cantSplit && source.height.rule !== 'exact';
   const opensDocument =
     deps.documentFirstParagraphId !== undefined &&
     structure.rows[0]?.cells[0]?.blocks[0]?.id === deps.documentFirstParagraphId &&
     occurrences[0]!.page === pages[0];
-  if (splits && (occurrences.length > 1 || (!opensDocument && mayHaveMoved(occurrences[0]!))))
+  if (
+    splits &&
+    (occurrences.length > 1 ||
+      (!opensDocument && mayHaveMoved(occurrences[0]!)) ||
+      endsContinuedFragment(occurrences[0]!, pages, after.id))
+  )
     return null;
   const oldKeys = new Set<string>();
   const newKeys = new Set<string>();
@@ -303,6 +310,21 @@ function samePlacedBlocks(
   );
 }
 
+/** Whether the row at `index` ends `fragment` and the next page goes on with the table. */
+function endsContinuedFragment(
+  at: {
+    readonly page: PageRecord;
+    readonly fragment: Extract<BlockFragmentRecord, { kind: 'table' }>;
+    readonly index: number;
+  },
+  pages: readonly PageRecord[],
+  tableId: string
+): boolean {
+  if (at.index !== at.fragment.rows.length - 1) return false;
+  const next = pages[pages.indexOf(at.page) + 1];
+  return next?.fragments.some((f) => f.kind === 'table' && f.tableId === tableId) === true;
+}
+
 /**
  * Whether the row at `index` of `fragment` opens the fragment at the top of its column, where
  * the paginator may have moved it from an earlier page. The rows above it in the fragment are
@@ -319,6 +341,8 @@ function mayHaveMoved(at: {
     if (!placed.isHeaderRepeat && !placed.isHeaderRow) return false;
   }
   const { x, y, width } = fragment.box;
+  // Multi-column sections never reach this path (`semantic-layout.ts` requires one column), so
+  // the column test is defensive.
   return !page.fragments.some(
     (other) =>
       other !== fragment &&
