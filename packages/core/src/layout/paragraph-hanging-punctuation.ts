@@ -54,7 +54,7 @@ export function spaceShrinkMarkAdvance(
  * hanging Korean mark lets the text before it fill the measure only under
  * `koreanHangingLineFills`; otherwise that line keeps its natural width.
  */
-export function rememberHangingPunctuation(
+export function rememberLineEndHang(
   line: PendingLine,
   span: StyleSpanRecord,
   piece: FieldAwarePiece,
