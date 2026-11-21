@@ -6,7 +6,28 @@
 // `w:del`) formatting stops before that blank, while the glyph, the span box, and caret edges keep their places.
 // Screen paint clips the formatting and the PDF writer shortens it, so both outputs read one
 // rule, {@link hangingMarkBlankAt}.
-import type { LineRecord, StyleSpanRecord } from '../layout/semantic-records.ts';
+import type { StyleSpanRecord } from '../layout/semantic-records.ts';
+
+/**
+ * The span fields {@link hangingMarkBlankAt} reads: a `StyleSpanRecord` satisfies it.
+ *
+ * @internal
+ */
+export interface HangingMarkSpan {
+  readonly box: { readonly width: number };
+  readonly lineEndWhitespace?: true;
+  readonly style: { readonly shaping?: { readonly baseLevel?: number } | null };
+}
+
+/**
+ * The line fields {@link hangingMarkBlankAt} reads: a `LineRecord` satisfies it.
+ *
+ * @internal
+ */
+export interface HangingMarkLine {
+  readonly spans: readonly HangingMarkSpan[];
+  readonly hangingMarkBlank?: number;
+}
 
 /**
  * The width, in points, at the end of `span` that its formatting leaves unpainted: the
@@ -15,10 +36,7 @@ import type { LineRecord, StyleSpanRecord } from '../layout/semantic-records.ts'
  *
  * @internal
  */
-export function hangingMarkBlankAt(
-  line: Pick<LineRecord, 'spans' | 'hangingMarkBlank'>,
-  span: StyleSpanRecord
-): number {
+export function hangingMarkBlankAt(line: HangingMarkLine, span: HangingMarkSpan): number {
   const blank = line.hangingMarkBlank;
   if (!blank || line.spans.some((each) => each.style.shaping?.baseLevel === 1)) return 0;
   for (let index = line.spans.length - 1; index >= 0; index -= 1) {

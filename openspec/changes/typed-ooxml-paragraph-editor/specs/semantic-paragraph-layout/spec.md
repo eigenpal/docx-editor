@@ -750,7 +750,7 @@ The mark's run language (`w:lang` `w:eastAsia`) SHALL select its blank sides. A 
 
 ### Requirement: Formatting of a hanging mark ends before its compressed blank
 
-When `w:characterSpacingControl` compresses punctuation, the highlight (`w:highlight`), character shading (`w:shd`), underline (`w:u`), strike (`w:strike`), and tracked-change formatting (`w:ins`, `w:del`) of a hanging line-end mark (`w:overflowPunct`) with a trailing blank side SHALL end before that blank, clear of the glyph's ink. The glyph, its box, line breaks, and caret positions SHALL NOT change, and screen paint and PDF export SHALL agree. A mark that moves to the next line SHALL take its hang with it.
+When `w:characterSpacingControl` compresses punctuation, the run formatting of a hanging line-end mark (`w:overflowPunct`) with a trailing blank side SHALL end before that blank, clear of the glyph's ink: `w:highlight`, `w:shd`, `w:u`, `w:strike`, `w:ins`, and `w:del`. The glyph, its box, line breaks, and caret positions SHALL NOT change, and screen paint and PDF export SHALL agree. A mark that moves to the next line SHALL take its hang with it.
 
 #### Scenario: A highlighted closing mark ends its highlight at the start of its blank half
 
