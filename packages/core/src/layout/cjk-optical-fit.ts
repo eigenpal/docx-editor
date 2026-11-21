@@ -74,8 +74,9 @@ export interface CjkOpticalFit {
 }
 function allowedStyle(span: Pick<StyleSpanRecord, 'style' | 'props' | 'revisions'>): boolean {
   const style = span.style;
-  // Highlight and shading fill the fitted box, and fitting keeps ink inside it. A shifted glyph
-  // paints transparent text, which drops underline and strike, and an outline changes the ink.
+  // Highlight (`w:highlight`) and shading (`w:shd`) fill the fitted box, and fitting keeps ink
+  // inside it. A shifted glyph paints transparent text, which drops underline (`w:u`) and strike
+  // (`w:strike`, `w:dstrike`), and an outline (`w14:textOutline`) changes the ink.
   return (
     !span.revisions?.length &&
     !style.textOutline &&
@@ -577,7 +578,8 @@ function fitCjkOptically(
       currentBoundary.ink.left -
       (previous.span.glyphOffsetPt ?? 0) -
       previousBoundary.ink.right;
-    // A later run's highlight or shading covers ink past its own box: keep banded seams inside.
+    // A later run's `w:highlight` or `w:shd` band covers ink past its own box: keep banded
+    // seams inside.
     const band = [previous, current].some(({ span }) => span.style.highlight || span.style.shading);
     const leftBlank = (current.span.glyphOffsetPt ?? 0) + currentBoundary.ink.left;
     const rightBlank = previous.span.box.width - (previous.span.glyphOffsetPt ?? 0);

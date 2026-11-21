@@ -1108,7 +1108,7 @@ The layout engine SHALL allow curly quotes in runs with the East Asian font hint
 
 ### Requirement: Optical punctuation fitting in highlighted and shaded text
 
-Optical punctuation fitting SHALL treat run highlight (`w:highlight`) and run shading (`w:shd`) as fit-neutral. A punctuation seam next to highlighted or shaded text SHALL keep each glyph's ink inside its fitted box, and the highlight or shading SHALL fill the fitted box. Underlined (`w:u`), struck-through (`w:strike`, `w:dstrike`), and outlined text SHALL keep natural fitting, because shifted glyph paint cannot carry those decorations.
+Optical punctuation fitting SHALL treat run highlight (`w:highlight`) and run shading (`w:shd`) as fit-neutral. A punctuation seam next to highlighted or shaded text SHALL keep each glyph's ink inside its fitted box, and the highlight or shading SHALL fill the fitted box. Underlined (`w:u`), struck-through (`w:strike`, `w:dstrike`), and outlined (`w14:textOutline`) text SHALL keep natural fitting, because shifted glyph paint cannot carry those decorations.
 
 #### Scenario: Highlighted punctuation fits like plain punctuation
 
