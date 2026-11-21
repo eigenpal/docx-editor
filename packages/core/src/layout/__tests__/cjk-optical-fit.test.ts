@@ -484,8 +484,8 @@ const tracked: TextMeasurer = {
 const lineTexts = (lines: ReturnType<typeof layout>) =>
   lines.map((line) => line.spans.map((span) => span.text).join(''));
 
-// A Latin run on a later line makes the paragraph mixed. It cannot veto the seams of a tracked
-// first line that holds no Latin group: that line breaks as it does without the Latin run.
+// A Latin run on a later line makes the paragraph mixed. It cannot veto the seams of a first
+// line tracked by `w:spacing` that holds no Latin group: that line breaks as it does without the Latin run.
 for (const spacing of [-4, 4]) {
   for (const hanging of [false, true]) {
     test(`a tracked East Asian line fits in a mixed paragraph (${spacing} twips, hanging ${hanging})`, () => {

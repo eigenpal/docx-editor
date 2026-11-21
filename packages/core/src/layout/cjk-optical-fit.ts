@@ -153,8 +153,9 @@ function cellsOf(
 ): Cell[] | undefined {
   const cells: Cell[] = [];
   let length = 0;
-  // Authored tracking qualifies a line only while it holds East Asian text, punctuation, and
-  // spaces alone: such a line fits as it would in a paragraph without Latin text.
+  // Authored run tracking (`w:rPr/w:spacing`) qualifies a line only while it holds East Asian
+  // text, punctuation, and spaces alone: such a line fits as it would in a paragraph without
+  // Latin text.
   let tracked = false;
   let foreign = false;
   for (const [sourceIndex, span] of spans.entries()) {
@@ -752,8 +753,8 @@ export interface CjkOpticalFitterOptions {
   /** A final mark that may hang past the margin needs no fit for itself. */
   readonly hangingPunctuation: boolean;
   /**
-   * Fit only text in qualified faces without authored scaling. Authored tracking qualifies only
-   * on a line of East Asian text, punctuation, and spaces.
+   * Fit only text in qualified faces without authored scaling (`w:w`). Authored tracking
+   * (`w:rPr/w:spacing`) qualifies only on a line of East Asian text, punctuation, and spaces.
    */
   readonly requireLocalQualification?: boolean;
   /** The paragraph typography, for the line-start rules of hanging and kana fits. */
