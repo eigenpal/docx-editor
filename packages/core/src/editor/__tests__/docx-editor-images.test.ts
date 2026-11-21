@@ -639,7 +639,7 @@ describe('docx-editor image commands', () => {
   });
 });
 
-describe('inserting a picture while one is selected', () => {
+describe('inserting a picture while one is selected in suggesting mode', () => {
   for (const wrap of ['inline', 'anchor'] as const)
     test(`is refused with a reason, a public code, and a disabled toolbar button (${wrap})`, async () => {
       const events: EditorDiagnostic[] = [];

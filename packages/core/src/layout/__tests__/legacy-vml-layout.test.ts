@@ -399,12 +399,104 @@ test('an embedded object reserves its cached preview height, as the same w:pict 
   expect(embedded.drawings[0]).toMatchObject({ start: 0, width: 100, height: 28.5 });
   expect(embedded.tops).toEqual(standalone.tops);
   expect(embedded.tops[2]! - embedded.tops[1]!).toBeGreaterThanOrEqual(28.5);
+  // An Equation.3 object can have a cached picture and a refresh-lock flag.
+  const locked = (metadata: string, type = 'Embed', imageId = 'rPreview') =>
+    `<w:object w:dxaOrig="2000" w:dyaOrig="570">${picture.replace('rPreview', imageId)}${ole(type)
+      .replace('ProgID="Package"', 'ProgID="Equation.3"')
+      .replace('/>', `>${metadata}</o:OLEObject>`)}</w:object>`;
+  const flag = '<o:LockedField>false</o:LockedField>';
+  const preview = lineTops(locked(flag));
+  expect(preview.tops).toEqual(standalone.tops);
+  expect(preview.drawings).toHaveLength(1);
+  expect(preview.drawings[0]).toMatchObject({ start: 0, width: 100, height: 28.5 });
+  expect(lineTops(locked('<o:LockedField/>')).drawings).toHaveLength(1);
+  expect(lineTops(locked(flag + '<o:FieldCodes> EMBED </o:FieldCodes>')).drawings).toHaveLength(1);
+  expect(lineTops(locked(flag + flag)).drawings).toHaveLength(0);
+  expect(lineTops(locked('<o:LockedField><o:LinkType/></o:LockedField>')).drawings).toHaveLength(0);
+  expect(lineTops(locked(flag, 'Link')).drawings).toHaveLength(0);
+  expect(lineTops(locked(flag, 'Embed', 'rOle')).drawings).toHaveLength(0);
   // A linked object stays opaque: its paragraph is one empty text line and paints nothing.
   const linked = lineTops(
     `<w:object w:dxaOrig="2000" w:dyaOrig="570">${picture}${ole('Link')}</w:object>`
   );
   expect(linked.drawings).toHaveLength(0);
   expect(linked.tops[2]! - linked.tops[1]!).toBe(linked.tops[1]! - linked.tops[0]!);
+});
+
+test('inline object previews keep each run position relative to the text baseline', () => {
+  const placedObject = (position: number) =>
+    `<w:r><w:rPr><w:position w:val="${position}"/></w:rPr><w:object>` +
+    '<v:shape type="#_x0000_t75" style="width:14pt;height:18.6pt"><v:imagedata r:id="preview"/></v:shape>' +
+    '</w:object></w:r>';
+  const source =
+    `<w:document xmlns:w="${W}" xmlns:v="${V}" xmlns:r="${R}"><w:body><w:p>` +
+    '<w:pPr><w:spacing w:line="360" w:lineRule="auto"/></w:pPr>' +
+    '<w:r><w:t>A</w:t></w:r>' +
+    placedObject(-12) +
+    placedObject(0) +
+    placedObject(6) +
+    '<w:r><w:t>Z</w:t></w:r></w:p></w:body></w:document>';
+  const { reader, bundle } = setup(source);
+  try {
+    const layout = layoutSemanticDocument(reader.part(), 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: withDrawablePreview(bundle.bodyContext),
+    });
+    const line = linesOf(layout)[0]!;
+    const drawings = line.drawings!;
+    expect(drawings).toHaveLength(3);
+    // Each preview bottom sits at the text baseline less its signed half-point offset.
+    for (const [index, delta] of [
+      [0, 6],
+      [1, 0],
+      [2, -3],
+    ] as const) {
+      const drawing = drawings[index]!;
+      expect(
+        drawing.geometry.contentBounds.y + drawing.height - line.box.y - line.baseline
+      ).toBeCloseTo(delta, 8);
+      expect(drawing.width).toBeCloseTo(14, 8);
+    }
+  } finally {
+    bundle.dispose();
+  }
+});
+
+test('a line grid centres the full band of text and the positioned inline preview', () => {
+  const pitch = 15.6;
+  for (const height of [18.6, 32]) {
+    const placedLine = (grid: boolean) => {
+      const source =
+        `<w:document xmlns:w="${W}" xmlns:v="${V}" xmlns:r="${R}"><w:body><w:p>` +
+        `<w:pPr><w:spacing w:line="${grid ? 360 : 240}" w:lineRule="auto"/></w:pPr>` +
+        '<w:r><w:t>A</w:t></w:r><w:r><w:rPr><w:position w:val="-10"/></w:rPr><w:object>' +
+        `<v:shape type="#_x0000_t75" style="width:14pt;height:${height}pt"><v:imagedata r:id="preview"/></v:shape>` +
+        '</w:object></w:r><w:r><w:t>Z</w:t></w:r></w:p>' +
+        (grid ? '<w:sectPr><w:docGrid w:type="lines" w:linePitch="312"/></w:sectPr>' : '') +
+        '</w:body></w:document>';
+      const { reader, bundle } = setup(source);
+      try {
+        return linesOf(
+          layoutSemanticDocument(reader.part(), 1, {
+            measurer: createFixedMeasurer(6, 14),
+            inlineDrawingLayout: withDrawablePreview(bundle.bodyContext),
+          })
+        )[0]!;
+      } finally {
+        bundle.dispose();
+      }
+    };
+    const natural = placedLine(false);
+    const onGrid = placedLine(true);
+    const snappedHeight = Math.max(2, Math.ceil(natural.box.height / pitch)) * pitch;
+    const spaceAbove = (snappedHeight - natural.box.height) / 2;
+    expect(onGrid.box.height).toBeCloseTo(snappedHeight, 8);
+    expect(onGrid.baseline).toBeCloseTo(natural.baseline + spaceAbove, 8);
+    expect(onGrid.drawings![0]!.y - onGrid.box.y).toBeCloseTo(
+      natural.drawings![0]!.y - natural.box.y + spaceAbove,
+      8
+    );
+  }
 });
 
 test('framed object previews keep atom offsets and draw out of the ordinary flow', async () => {

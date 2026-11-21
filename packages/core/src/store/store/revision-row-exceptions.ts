@@ -10,32 +10,13 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
+import { sameOoxmlProperty } from '../package/ooxml-property-content.ts';
 import type { RevisionSite } from './tree-op-revisions.ts';
 
 const isW = (node: OoxmlNode, name?: string): node is OoxmlElement =>
   node.kind !== 'textValue' &&
   node.namespaceUri === WML_NAMESPACE_URI &&
   (name === undefined || node.localName === name);
-
-/** Whether two elements state the same property: name, attributes, and content, not ids. */
-function sameProperty(a: OoxmlNode, b: OoxmlNode): boolean {
-  if (a.kind === 'textValue' || b.kind === 'textValue')
-    return a.kind === 'textValue' && b.kind === 'textValue' && a.value === b.value;
-  if (a.namespaceUri !== b.namespaceUri || a.localName !== b.localName) return false;
-  const attributes = (node: OoxmlElement) =>
-    node.attributes.map((x) => `${x.namespaceUri ?? ''} ${x.localName}=${x.value}`).sort();
-  const left = attributes(a);
-  const right = attributes(b);
-  if (left.length !== right.length || left.some((value, i) => value !== right[i])) return false;
-  const content = (node: OoxmlElement) =>
-    node.children.filter((child) => child.kind !== 'textValue' || child.value.trim() !== '');
-  const leftChildren = content(a);
-  const rightChildren = content(b);
-  return (
-    leftChildren.length === rightChildren.length &&
-    leftChildren.every((child, i) => sameProperty(child, rightChildren[i]!))
-  );
-}
 
 /** The table row that holds a node. */
 function rowOf(part: OoxmlPart, id: string): OoxmlElement | undefined {
@@ -87,7 +68,9 @@ export function trimDecidedExceptions(
     const kept = exception.children.filter(
       (child) =>
         !isW(child) ||
-        !properties.children.some((own) => isW(own, child.localName) && sameProperty(own, child))
+        !properties.children.some(
+          (own) => isW(own, child.localName) && sameOoxmlProperty(own, child)
+        )
     );
     if (kept.length === exception.children.length) continue;
     const result = kept.some((child) => child.kind !== 'textValue')

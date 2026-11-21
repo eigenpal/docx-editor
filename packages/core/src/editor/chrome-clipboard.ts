@@ -5,6 +5,7 @@
 // ran its own copy there. Adapters bind the overlay here, and the same handlers the pages layer
 // uses run its events.
 
+import { isPlainPasteChord } from './chord-letter.ts';
 import type { DocxEditorInstance } from './docx-editor-types.ts';
 import { createClipboardHandlers } from './surface-input.ts';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
@@ -60,8 +61,7 @@ export function forwardClipboardEvents(
   // Browsers run this paste only in editable content, so the pages take the keyboard first,
   // and the paste lands at the caret there, as a plain paste does.
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (!(event.ctrlKey || event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== 'v')
-      return;
+    if (!isPlainPasteChord(event)) return;
     editor.surface?.armForcePlainPaste();
     editor.focus();
   };

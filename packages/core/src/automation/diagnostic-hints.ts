@@ -111,7 +111,7 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
   'edit.tracked-own-pending-change':
     "The tracked edit covers or borders your own pending change and would merge with that decision, so nothing was applied. Read the proposed text with getReviewedText('Current'), then edit a range outside your pending change. To change your proposal itself, reject it and propose again.",
   'edit.picture-selected':
-    'A picture is selected, so the new picture has no place to go and nothing was inserted. Place the caret in text next to the picture, then insert again.',
+    'A drawing is selected in suggesting mode, so the new picture cannot be proposed beside it and nothing was inserted. Place the caret in text, then insert again.',
   'edit.cross-structure-join':
     'The edit would join paragraphs that live in different containers, such as two table cells. Edit each container separately.',
   'edit.indivisible-content':

@@ -169,8 +169,8 @@ describe('image parts as "⋯" panel rows', () => {
       const label = button.querySelector('.docx-toolbar__more-command-label')?.textContent;
       expect(label).toBeTruthy();
     }
-    // Inserting is not offered while an image is selected; the other three are.
-    expect(row('image.insert').disabled).toBe(true);
+    // Every image row is offered while an image is selected: a new picture goes in before it.
+    expect(row('image.insert').disabled).toBe(false);
 
     await act(async () => {
       row('image.wrap').click();

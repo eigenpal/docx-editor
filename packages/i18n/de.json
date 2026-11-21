@@ -971,7 +971,7 @@
       "oversize": "Das Bild überschreitet die maximal zulässige Größe.",
       "refused": "Das Bild konnte nicht eingefügt werden.",
       "unsupportedFormat": "Dieses Bildformat wird beim Einfügen nicht unterstützt.",
-      "staleTarget": "Das Dokument oder die Ablageposition hat sich geändert. Ziehen Sie das Bild erneut an die gewünschte Stelle."
+      "staleTarget": "Das Dokument hat sich geändert, bevor das Bild eingefügt wurde. Fügen Sie das Bild erneut ein."
     }
   },
   "imageProperties": {
@@ -1059,7 +1059,7 @@
     "nothingToPaint": "Wählen Sie Text aus, auf den Sie die Formatierung übertragen möchten",
     "noReviewAuthors": "Dieses Dokument enthält keine Überarbeitungsautoren",
     "suggestingNeedsAuthor": "Vorschläge benötigen einen Autor. Legen Sie den Autor in der Editorkonfiguration fest.",
-    "pictureSelected": "Ein Bild ist ausgewählt. Setzen Sie den Cursor in den Text, um ein Bild einzufügen.",
+    "pictureSelected": "Im Vorschlagsmodus kann kein Bild eingefügt werden, während eine Zeichnung ausgewählt ist. Setzen Sie den Cursor in den Text, um ein Bild einzufügen.",
     "chartDrawing": "Dies ist ein Diagramm. Sie können es löschen, aber nicht wie ein Bild bearbeiten.",
     "chartFrame": "Dies ist ein Diagramm. Sie können Größe, Position, Textumbruch und Alternativtext ändern.",
     "diagramFrame": "Dies ist ein Schaubild. Sie können Größe, Position, Textumbruch und Alternativtext ändern.",
@@ -1079,7 +1079,12 @@
     "drawingClipboardStory": "Zeichnungen können nur im Textkörper kopiert, ausgeschnitten oder eingefügt werden, nicht in einer Kopfzeile, Fußzeile, Notiz oder einem Textfeld.",
     "groupMemberClipboard": "Eine Form in einer Gruppe wird mit ihrer Gruppe kopiert oder ausgeschnitten. Drücken Sie Escape, um die Gruppe auszuwählen.",
     "drawingClipboardSize": "Diese Zeichnung ist zu groß zum Kopieren.",
-    "drawingPasteCells": "Setzen Sie den Cursor in den Text, um eine Zeichnung einzufügen."
+    "drawingPasteCells": "Setzen Sie den Cursor in den Text, um eine Zeichnung einzufügen.",
+    "groupMemberPaste": "Text kann nicht in eine Form innerhalb einer Gruppe eingefügt werden. Drücken Sie Escape, um die Gruppe auszuwählen.",
+    "linkedTextBoxPaste": "Text kann nicht in ein verknüpftes Textfeld eingefügt werden. Setzen Sie den Cursor in den Text, um einzufügen.",
+    "textBoxPicturePaste": "Ein Textfeld nimmt nur Text auf. Fügen Sie ohne Formatierung ein, um nur den Text einzufügen.",
+    "shapePasteText": "Diese Form enthält keinen Text zum Einfügen. Setzen Sie den Cursor in den Text, um einzufügen.",
+    "textBoxPaste": "Der Text in diesem Textfeld kann nicht bearbeitet werden. Setzen Sie den Cursor in den Text, um einzufügen."
   },
   "equationPopup": {
     "apply": "Übernehmen",
