@@ -6,6 +6,7 @@ import {
   layoutSemanticDocument,
   paragraphFragmentsOf,
 } from '../index.ts';
+import { tocAwareRunCascader, tocLinkCascader } from '../toc-link-formatting.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const LINK_RPR = '<w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr>';
@@ -43,6 +44,13 @@ const ROWS = [
   // A link field that crosses a paragraph mark.
   linkStart + run('Crossing'),
   run('Continued') + linkEnd + run('Trailing'),
+  // A crossing link with a nested field that also crosses: each `end` closes its own field.
+  linkStart +
+    run('Nested') +
+    '<w:r><w:fldChar w:fldCharType="begin"/><w:instrText> PAGEREF _TocA </w:instrText>' +
+    '<w:fldChar w:fldCharType="separate"/></w:r>' +
+    run('Page'),
+  run('Number') + linkEnd + run('Tail') + linkEnd + run('Beyond'),
 ];
 
 function spansOf(switches: string, fieldResults?: FieldResultsMode) {
@@ -79,13 +87,34 @@ for (const fieldResults of ['atomic', 'editable'] as const) {
   for (const switches of [' \\h', '']) {
     test(`TOC links drop the Hyperlink style by name: mode=${fieldResults}, switches="${switches}"`, () => {
       const style = spansOf(switches, fieldResults);
-      for (const text of ['Element', 'Field', 'Simple', 'Inside', 'Crossing', 'Continued']) {
+      for (const text of [
+        'Element',
+        'Field',
+        'Simple',
+        'Inside',
+        'Crossing',
+        'Continued',
+        'Nested',
+        'Tail',
+      ]) {
         expect({ text, ...style(text) }).toMatchObject({ text, ...DROPPED });
       }
       // Text outside a link, a differently named style, and links outside the TOC keep it.
-      for (const text of ['Plain', 'Named', 'Before', 'After', 'Trailing', 'Outside']) {
+      for (const text of ['Plain', 'Named', 'Before', 'After', 'Trailing', 'Beyond', 'Outside']) {
         expect(style(text)).toMatchObject(KEPT);
       }
     });
   }
 }
+
+test('TOC link ranges refuse a cascader that cannot resolve the Hyperlink style', () => {
+  const ranges = [{ start: 0, end: 1 }];
+  const plain = (inherited: readonly never[]) => inherited;
+  expect(() => tocLinkCascader(plain, ranges, () => 0)).toThrow(/tocAwareRunCascader/);
+  // Without ranges, any cascader passes through unchanged.
+  expect(tocLinkCascader(plain, [], () => 0)).toBe(plain);
+  const aware = tocAwareRunCascader(buildStyleCascadeTable(styles.root))!;
+  const linked = tocLinkCascader(aware, ranges, () => 0)!;
+  const reference = { localName: 'rStyle', attributes: { val: '37' } };
+  expect(linked([], [reference] as never)).toEqual(aware([], []));
+});
