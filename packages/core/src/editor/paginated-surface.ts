@@ -357,6 +357,7 @@ import { createChartOps } from './surface-chart-ops.ts';
 import {
   createHeaderFooterScopeController,
   isDocumentProtectionBatch,
+  isPackageLifecycleBatch,
 } from './surface-hf-editing.ts';
 import { createNoteOps } from './surface-note-ops.ts';
 import { notePropertiesStateOf, notePreviewTextOf } from './surface-note-state.ts';
@@ -3015,7 +3016,10 @@ export function mountPaginatedSurface(
     if (
       edits &&
       !protectionWrite &&
-      ((checkSelection && !formattingOutsideToc && selectionTouchesToc()) ||
+      ((checkSelection &&
+        !formattingOutsideToc &&
+        !isPackageLifecycleBatch(ops) &&
+        selectionTouchesToc()) ||
         ops.some((op) => opTouchesToc(op)))
     ) {
       return TOC_READ_ONLY_REFUSAL;

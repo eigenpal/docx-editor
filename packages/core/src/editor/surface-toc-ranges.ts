@@ -193,25 +193,31 @@ export interface TocSelectedSpan {
   readonly end: number;
 }
 /**
- * Whether the TOC guard drops every write a run format makes over `spans`, so the format
- * is refused. It asks the predicates `opTouchesTocRange` asks of each op: a span that
- * reaches ordinary text keeps a write, as does a caret where typed text would land. A caret
- * in an empty paragraph formats the paragraph mark, which is a paragraph-level write.
+ * Whether the TOC guard refuses a run format over `spans`. It asks the predicates
+ * `opTouchesTocRange` asks of each op. Most formats drop the writes that reach generated
+ * text and refuse only when none is left: a span that reaches ordinary text keeps a write,
+ * as does a caret where typed text would land. The format painter writes the selection as
+ * one unit, so `whole` refuses it when any write reaches generated text. A caret in an
+ * empty paragraph, or a span past the last character, writes the paragraph mark.
  */
-export function tocDropsRunFormatting(part: OoxmlPart, spans: readonly TocSelectedSpan[]): boolean {
+export function tocRefusesRunFormatting(
+  part: OoxmlPart,
+  spans: readonly TocSelectedSpan[],
+  whole: boolean
+): boolean {
   const ranges = tocParagraphRanges(part);
   if (ranges.length === 0 || spans.length === 0) return false;
-  return spans.every((span) =>
+  const reaches = (span: TocSelectedSpan, inside: boolean) =>
     ranges.some((r) => {
       if (r.paragraphId !== span.paragraphId) return false;
       if (span.start === span.end) return contains(r, span.start) || r.length === 0;
       const end = Math.min(span.end, r.length);
-      // A span past the last character reaches only the paragraph mark.
       if (span.start >= end) return paragraphWriteTouches(r);
-      // Text before `r.start` or after `r.end` is ordinary and takes the format.
-      return rangeTouches(r, span.start, end) && span.start >= r.start && end <= r.end;
-    })
-  );
+      // Text before `r.start` or after `r.end` is ordinary and keeps its write.
+      const touches = rangeTouches(r, span.start, end);
+      return inside ? touches && span.start >= r.start && end <= r.end : touches;
+    });
+  return whole ? spans.some((span) => reaches(span, false)) : spans.every((s) => reaches(s, true));
 }
 /**
  * Whether the TOC guard refuses a paragraph format over `paragraphIds`. Most formats drop

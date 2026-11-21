@@ -396,6 +396,25 @@ export function isDocumentProtectionBatch(ops: readonly { readonly op: string }[
   return ops.length > 0 && ops.every((op) => op.op === 'setDocumentProtection');
 }
 
+const LIFECYCLE_OPS: ReadonlySet<string> = new Set([
+  'createHeaderFooter',
+  'deleteHeaderFooter',
+  'linkToPrevious',
+  'unlinkFromPrevious',
+  'setSectionFurnitureOptions',
+  'setDocumentProtection',
+  'setWatermark',
+]);
+
+/**
+ * Whether every op is a package-level lifecycle write (headers, footers, watermark,
+ * protection). Such a write does not happen at the caret, so the caret's position has
+ * nothing to say about it.
+ */
+export function isPackageLifecycleBatch(ops: readonly { readonly op: string }[]): boolean {
+  return ops.length > 0 && ops.every((op) => LIFECYCLE_OPS.has(op.op));
+}
+
 /** Lifecycle op kinds the surface may commit as package-level undo units. */
 export type SurfaceLifecycleOp = Extract<
   TreeDocOp,

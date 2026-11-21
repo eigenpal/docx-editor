@@ -54,6 +54,11 @@ const TEXT_BOX: EditorCommand = { type: 'insertTextBox' };
 const NOTE: EditorCommand = { type: 'insertNote', noteKind: 'footnote' };
 const BOOKMARK: EditorCommand = { type: 'insertBookmark', name: 'mark' };
 const CONTROL = { type: 'insertContentControl', subtype: 'plainText' } as EditorCommand;
+const LINK = { type: 'insertHyperlink', href: 'https://example.com/' } as EditorCommand;
+const PROPOSE = { type: 'proposeInsertion', text: 'P', author: 'A' } as EditorCommand;
+const PROPOSE_DELETE = { type: 'proposeDeletion', author: 'A' } as EditorCommand;
+const HEADER: EditorCommand = { type: 'editHeaderFooter', position: 'header' };
+const WATERMARK = { type: 'setWatermark', watermark: { text: 'DRAFT' } } as EditorCommand;
 
 // [label, body, selection, command, refused]
 const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])[] = [
@@ -94,6 +99,13 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
   ['caret in a row: bookmark', BODY, [1, 2, 1, 2], BOOKMARK, true],
   ['range in a row: content control', BODY, [1, 1, 1, 4], CONTROL, true],
   ['after the TOC: content control', BODY, [4, 1, 4, 3], CONTROL, false],
+  ['range in a row: link', BODY, [1, 1, 1, 4], LINK, true],
+  ['after the TOC: link', BODY, [4, 1, 4, 4], LINK, false],
+  ['caret in a row: proposed insertion', BODY, [1, 2, 1, 2], PROPOSE, true],
+  ['range across the TOC: proposed insertion lands outside it', BODY, [0, 1, 4, 2], PROPOSE, false],
+  ['range across the TOC: proposed deletion', BODY, [0, 1, 4, 2], PROPOSE_DELETE, true],
+  ['caret in a row: a header is not written at the caret', BODY, [1, 2, 1, 2], HEADER, false],
+  ['caret in a row: a watermark is not written at the caret', BODY, [1, 2, 1, 2], WATERMARK, false],
 ];
 
 for (const [label, body, place, command, refused] of CASES) {
@@ -141,4 +153,19 @@ test('the Bold shortcut at a caret in a row is refused like the toolbar', () => 
   const { editor, surface } = mountAt(BODY, [1, 2, 1, 2]);
   expect(surface.toggleRunProperty('b')).toBe(READ_ONLY);
   expect(editor.isActive(BOLD)).toBe(false);
+});
+
+test('the format painter refuses a selection that reaches the TOC', () => {
+  const { editor, surface } = mountAt(BODY, [4, 1, 4, 3]);
+  expect(editor.exec({ type: 'copyFormatting' } as EditorCommand).ok).toBe(true);
+  const ids = surface.session.paragraphIds();
+  surface.setSelection({
+    anchor: { paragraphId: ids[3]!, offset: 0 },
+    head: { paragraphId: ids[4]!, offset: 2 },
+  });
+  const paste = { type: 'pasteFormatting' } as EditorCommand;
+  const before = serializeOoxmlPart(surface.session.part());
+  expect(editor.can(paste)).toEqual({ ok: false, code: 'invalidArgs', reason: READ_ONLY });
+  expect(editor.exec(paste)).toEqual(editor.can(paste));
+  expect(serializeOoxmlPart(surface.session.part())).toBe(before);
 });
