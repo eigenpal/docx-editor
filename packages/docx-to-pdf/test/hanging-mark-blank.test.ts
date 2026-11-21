@@ -14,11 +14,15 @@ const CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
 
 // 19 ideographs and a 12 pt mark take 240 pt on a 236 pt measure: only the mark's 6 pt blank
 // half hangs. A 5 pt right indent leaves a 231 pt measure, and the whole mark hangs.
-function hangingDocument(compression: string, underline: string): Uint8Array {
+function hangingDocument(compression: string, underline: string, tracked = false): Uint8Array {
+  const run =
+    `<w:r><w:rPr><w:highlight w:val="yellow"/>` +
+    (tracked ? '' : `<w:u w:val="${underline}" w:color="FF0000"/>`) +
+    `</w:rPr><w:t>${'国'.repeat(19)}。余</w:t></w:r>`;
   const paragraph = (rightIndent: number) =>
     `<w:p><w:pPr><w:overflowPunct/><w:ind w:right="${rightIndent}"/><w:jc w:val="both"/></w:pPr>` +
-    `<w:r><w:rPr><w:highlight w:val="yellow"/><w:u w:val="${underline}" w:color="FF0000"/></w:rPr>` +
-    `<w:t>${'国'.repeat(19)}。余</w:t></w:r></w:p>`;
+    (tracked ? `<w:ins w:id="${rightIndent + 1}" w:author="Reviewer">${run}</w:ins>` : run) +
+    '</w:p>';
   return docx(
     paragraph(0) +
       paragraph(100) +
@@ -50,9 +54,13 @@ function hangingDocument(compression: string, underline: string): Uint8Array {
 /** The right edge, in points from the page's left edge, of each line's highlight and underline. */
 async function lineEnds(
   compression: string,
-  underline = 'single'
+  underline = 'single',
+  tracked = false
 ): Promise<{ fill: number[]; rule: number[] }> {
-  const result = await exportPdf(hangingDocument(compression, underline));
+  const result = await exportPdf(
+    hangingDocument(compression, underline, tracked),
+    tracked ? { displayMode: 'all-markup' } : {}
+  );
   const parsed = await PDFDocument.load(result.bytes);
   const commands = parsed.context
     .enumerateIndirectObjects()
@@ -62,18 +70,23 @@ async function lineEnds(
         : []
     )
     .join('\n');
-  const ends = (colour: string) => {
+  const ends = (colour: string, thinOnly = false) => {
     const byLine = new Map<number, number>();
     for (const m of commands.matchAll(
       new RegExp(`${colour} rg ([\\d.-]+) ([\\d.-]+) ([\\d.-]+) ([\\d.-]+) re f`, 'g')
     )) {
+      if (thinOnly && Number(m[4]) > 2) continue;
       const top = Math.round((Number(m[2]) + Number(m[4])) / 6);
       byLine.set(top, Math.max(byLine.get(top) ?? 0, Number(m[1]) + Number(m[3])));
     }
     // Lines top to bottom; the first line of each paragraph holds the hanging mark.
     return [...byLine.entries()].sort((a, b) => b[0] - a[0]).map(([, right]) => right);
   };
-  return { fill: ends('1 1 0'), rule: ends('1 0 0') };
+  // A revision underline takes its author's colour, so any thin rule counts.
+  return {
+    fill: ends('1 1 0'),
+    rule: tracked ? ends('[\\d.]+ [\\d.]+ [\\d.]+', true) : ends('1 0 0'),
+  };
 }
 
 test("a hanging mark's highlight and underline end before its compressed blank", async () => {
@@ -97,5 +110,13 @@ test('without compression the marks cover the whole hanging mark', async () => {
   for (const ends of [fill, rule]) {
     expect(ends[0]).toBeCloseTo(320, 0);
     expect(ends[2]).toBeCloseTo(315, 0);
+  }
+});
+
+test("a tracked insertion's revision underline ends before the compressed blank", async () => {
+  const { fill, rule } = await lineEnds('compressPunctuation', 'single', true);
+  for (const ends of [fill, rule]) {
+    expect(ends[0]).toBeCloseTo(308, 0);
+    expect(ends[2]).toBeCloseTo(309, 0);
   }
 });

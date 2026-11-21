@@ -750,18 +750,18 @@ The mark's run language (`w:lang` `w:eastAsia`) SHALL select its blank sides. A 
 
 ### Requirement: Formatting of a hanging mark ends before its compressed blank
 
-With document punctuation compression, the highlight, character shading, underline, strike, and tracked-change formatting of a hanging line-end mark with a trailing blank side SHALL end before that blank, clear of the glyph's ink. The glyph, its box, line breaks, and caret positions SHALL NOT change, and screen paint and PDF export SHALL agree. A mark that moves to the next line SHALL take its hang with it.
+When `w:characterSpacingControl` compresses punctuation, the highlight (`w:highlight`), character shading (`w:shd`), underline (`w:u`), strike (`w:strike`), and tracked-change formatting (`w:ins`, `w:del`) of a hanging line-end mark (`w:overflowPunct`) with a trailing blank side SHALL end before that blank, clear of the glyph's ink. The glyph, its box, line breaks, and caret positions SHALL NOT change, and screen paint and PDF export SHALL agree. A mark that moves to the next line SHALL take its hang with it.
 
 #### Scenario: A highlighted closing mark ends its highlight at the start of its blank half
 
-- **GIVEN** a justified, highlighted line of nineteen 24 pt ideographs and a 24 pt `。`, with document punctuation compression
+- **GIVEN** a justified, highlighted line of nineteen 24 pt ideographs and a 24 pt `。`, with `w:characterSpacingControl` set to `compressPunctuation`
 - **WHEN** the mark overflows the measure by 6 pt
 - **THEN** the highlight and underline end at the margin
 - **AND** with an 18 pt overflow they end 12 pt past the margin, at the start of the mark's blank half
 
 #### Scenario: Without compression the formatting covers the whole mark
 
-- **GIVEN** the same line without punctuation compression, with a Korean run, with `？`, or in a right-to-left paragraph
+- **GIVEN** the same line with `w:characterSpacingControl` set to `doNotCompress`, in a Korean run (`w:lang` `w:eastAsia="ko-KR"`), with `？`, or in a right-to-left paragraph (`w:bidi`)
 - **WHEN** the mark overflows the measure by 6 pt
 - **THEN** the highlight and underline cover the whole mark
 

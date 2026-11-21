@@ -20,8 +20,8 @@ import {
  * After a space that a line shrank the gap is negative, and the marks end where the next span
  * starts.
  *
- * A hanging line-end mark whose trailing blank punctuation compression takes gets that blank
- * as a negative gap, so its marks stop before the blank, as screen paint clips them.
+ * A hanging line-end mark (`w:overflowPunct`) whose trailing blank punctuation compression
+ * (`w:characterSpacingControl`) takes gets that blank as a negative gap, so its marks stop before the blank, as screen paint clips them.
  *
  * Zero when the span owns no gap: the next span starts a new anchor or sits past a float
  * advance, a drawing is laid in the line, or the line is right to left.

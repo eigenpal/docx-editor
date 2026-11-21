@@ -689,7 +689,7 @@ export class TextWriter {
             if (/^\s+$/.test(shaped.run.text.slice(cluster.textStart, cluster.textEnd))) continue;
             const glyph = shaped.run.glyphs[cluster.glyphStart]!;
             const left = x + glyph.originX * scale * horizontal;
-            // A word rule also stops where the span's marks end, before a compressed blank.
+            // A words underline (`w:u w:val="words"`) also stops before a compressed blank.
             const width = Math.min(cluster.advance * scale * horizontal, x + markWidth - left);
             if (width <= 0) continue;
             out.push(

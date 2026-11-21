@@ -271,6 +271,15 @@ test("a hanging mark's compressed trailing blank shortens only the final span's 
     ownedGapAfter({ line: record, span: first }),
     6
   );
+  // A zero-width span after the mark, such as a manual break (`w:br`), leaves the blank on it.
+  const zeroWidth = {
+    ...last,
+    text: '',
+    box: { ...last.box, x: last.box.x + last.box.width, width: 0 },
+  };
+  const broken = { ...hanging, spans: [...record.spans, zeroWidth] };
+  expect(ownedGapAfter({ line: broken, span: last })).toBeCloseTo(-3, 6);
+  expect(ownedGapAfter({ line: broken, span: zeroWidth })).toBe(0);
   // A line in a right-to-left paragraph keeps the mark's marks whole.
   const shaping = { baseLevel: 1 } as NonNullable<typeof last.style.shaping>;
   const rtl = { ...last, style: { ...last.style, shaping } };

@@ -74,8 +74,10 @@ describe('a hanging mark gives up its compressed trailing blank', () => {
     const line = fixture.lines[0]!;
     const mark = line.spans.at(-1)!;
     expect(mark.text).toBe('。');
+    // The fixture measurer keeps the 24 pt advance under `w:w`, so the blank half is 12 pt.
     const blank = line.hangingMarkBlank!;
-    expect(blank).toBeGreaterThan(0);
+    expect(mark.box.width).toBeCloseTo(24, 6);
+    expect(blank).toBeCloseTo(12, 6);
     const run = paintedRuns(fixture).at(-1)!;
     expect(run.style.transform).toBe('scaleX(0.5)');
     expect(run.style.clipPath).toBe(
@@ -120,6 +122,22 @@ describe('a hanging mark gives up its compressed trailing blank', () => {
     const runs = paintedRuns(fixture);
     const mark = runs.find((run) => run.textContent?.endsWith('。'))!;
     expect(mark.style.clipPath).toBe('inset(-1em calc(100% - 24px) -1em -1em)');
+  });
+
+  test('a tracked insertion clips its revision marks before the blank', () => {
+    const fixture = hanging(6, {
+      wrapParagraph: (paragraph) =>
+        paragraph.replace(
+          /(<w:r>.*<\/w:r>)/,
+          '<w:ins w:id="1" w:author="Reviewer" w:date="2026-01-01T00:00:00Z">$1</w:ins>'
+        ),
+    });
+    const line = fixture.lines[0]!;
+    expect(line.spans.at(-1)!.revisions?.length).toBeGreaterThan(0);
+    expect(line.hangingMarkBlank).toBeCloseTo(12, 6);
+    expect(paintedRuns(fixture).at(-1)!.style.clipPath).toBe(
+      'inset(-1em calc(100% - 24px) -1em -1em)'
+    );
   });
 
   test('a Traditional Chinese mark gives up its trailing quarter', () => {

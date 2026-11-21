@@ -1,8 +1,9 @@
 // The compressed trailing blank of a hanging line-end mark.
 //
-// With punctuation compression, a full-width mark that hangs past the margin gives up its
-// trailing blank: its highlight, shading, underline, strike, and tracked-change formatting
-// stops before that blank, while the glyph, the span box, and caret edges keep their places.
+// With punctuation compression (`w:characterSpacingControl`), a full-width mark that hangs past
+// the margin (`w:overflowPunct`) gives up its trailing blank: its highlight (`w:highlight`),
+// shading (`w:shd`), underline (`w:u`), strike (`w:strike`), and tracked-change (`w:ins`,
+// `w:del`) formatting stops before that blank, while the glyph, the span box, and caret edges keep their places.
 // Screen paint clips the formatting and the PDF writer shortens it, so both outputs read one
 // rule, {@link hangingMarkBlankAt}.
 import type { LineRecord, StyleSpanRecord } from '../layout/semantic-records.ts';
@@ -10,7 +11,7 @@ import type { LineRecord, StyleSpanRecord } from '../layout/semantic-records.ts'
 /**
  * The width, in points, at the end of `span` that its formatting leaves unpainted: the
  * compressed trailing blank of the hanging mark that ends `line` (`LineRecord.hangingMarkBlank`).
- * Zero for every other span and on lines in a right-to-left paragraph.
+ * Zero for every other span and on lines in a right-to-left paragraph (`w:bidi`).
  *
  * @internal
  */

@@ -174,7 +174,8 @@ export function carryPartialWord(
   if (settleOpeningWord(context, start, pendingWidth)) return start;
   let line = context.line();
   const carried = line.spans.splice(start.span);
-  // A mark that hung at the end of the line leaves with the word, and so does its hang.
+  // A mark that hung at the end of the line (`w:overflowPunct`) leaves with the word, and so
+  // does its hang.
   if (carried.length > 0) {
     setLineHangingPunctuationAdvance(line, undefined);
     line.hangingMarkBlank = undefined;

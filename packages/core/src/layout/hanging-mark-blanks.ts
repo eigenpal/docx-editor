@@ -80,10 +80,12 @@ export function blankSideHangingAdvance(
 }
 
 /**
- * The trailing blank, in points, that punctuation compression takes from a hanging mark with
- * whole advance `advance`, or 0. Its highlight, shading, underline, strike, and tracked-change
- * formatting ends before that blank, whether the whole mark hangs or only the blank does.
- * Without compression, and for a mark without blank sides or a Korean run, the formatting
+ * The trailing blank, in points, that punctuation compression (`w:characterSpacingControl`)
+ * takes from a hanging mark with whole advance `advance`, or 0. Its highlight (`w:highlight`),
+ * shading (`w:shd`), underline (`w:u`), strike (`w:strike`), and tracked-change (`w:ins`,
+ * `w:del`) formatting ends before that blank, whether the whole mark hangs or only the blank does.
+ * Without compression, and for a mark without blank sides or a Korean run (`w:lang`
+ * `w:eastAsia`), the formatting
  * covers the whole mark.
  */
 export function compressedTrailingBlank(
