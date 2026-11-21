@@ -53,7 +53,7 @@ import type { BodyPageFieldContext } from './field-page-furniture.ts';
 import type { FieldPageContext } from './field-projection.ts';
 import type { RefFieldContext } from './field-ref.ts';
 import type { NoteMarkContext } from './note-projection.ts';
-import type { TocLinkRanges } from './toc-link-formatting.ts';
+import { tocLinkRangesOf, type TocLinkRanges } from './toc-link-formatting.ts';
 import { cellStyleKey } from './autofit-value-token.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-display.ts';
@@ -320,7 +320,7 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
     view.authorFilter,
     fields?.showFieldCodes,
     fields?.fieldCodeRanges?.get(paragraph.id),
-    fields?.tocLinkStyleRanges?.get(paragraph.id)
+    tocLinkRangesOf(paragraph, fields?.tocLinkStyleRanges)
   );
   const typography = resolveCjkTypography(
     layoutInputs.props,

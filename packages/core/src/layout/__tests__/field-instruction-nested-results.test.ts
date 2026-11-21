@@ -360,7 +360,9 @@ describe('saved results inside a simple field', () => {
       false,
       undefined,
       undefined,
-      true
+      true,
+      undefined,
+      undefined
     ).map((piece) => [piece.text, piece.start, piece.end]);
     expect(codes).toEqual([
       ['A', 0, 1],

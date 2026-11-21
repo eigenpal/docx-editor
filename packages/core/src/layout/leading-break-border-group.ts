@@ -79,7 +79,9 @@ export function createLeadingBreakGroups(
       view.refFields,
       view.revisionAuthorFilter,
       view.showFieldCodes,
-      view.fieldCodeRanges?.get(block.paragraph.id)
+      view.fieldCodeRanges?.get(block.paragraph.id),
+      // The leading-break test reads only break and text positions, never run styles.
+      undefined
     );
     // The same test `opensWithPageBreak` applies to the lines: the first line holds only the
     // break, and a later line holds text, a picture, or another page or column break.

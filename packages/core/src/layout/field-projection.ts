@@ -98,6 +98,9 @@ export function piecesOfParagraph(
     documentProperties,
     bodyPageFields,
     refFields,
-    authorFilter
+    authorFilter,
+    false,
+    undefined,
+    undefined
   );
 }

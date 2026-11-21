@@ -80,7 +80,16 @@ test('text and multiple cached pictures keep their display order within one atom
     undefined,
     'proposed',
     undefined,
-    s.context
+    s.context,
+    undefined,
+    undefined,
+    undefined,
+    false,
+    undefined,
+    undefined,
+    false,
+    undefined,
+    undefined
   );
   expect(pieces.map((p) => p.text)).toEqual([
     'A',

@@ -14,6 +14,7 @@ import { cellContextualSpacing, contextualCellNeighbours } from './contextual-pa
 import { emitNestedTable } from './nested-table-layout.ts';
 import { alignCellContent, createCellFloats, withCellFloatBox } from './cell-float-tables.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
+import { tocLinkRangesOf } from './toc-link-formatting.ts';
 import { paragraphBoxOutdent } from './paragraph-indent.ts';
 import { lineContentX, pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
 import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
@@ -562,7 +563,7 @@ function placeCellParagraph(
           ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
           showFieldCodes: deps.showFieldCodes,
           fieldCodeRanges: deps.fieldCodeRanges?.get(paragraphId),
-          tocLinkStyleRanges: deps.tocLinkStyleRanges?.get(paragraphId),
+          tocLinkStyleRanges: tocLinkRangesOf(paragraph, deps.tocLinkStyleRanges),
           suppressEmptyPlaceholderLine: deps.fieldCodeRanges
             ?.get(paragraphId)
             ?.some((range) => range.suppressParagraph),

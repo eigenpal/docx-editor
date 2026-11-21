@@ -11,6 +11,7 @@ import type { ExclusionZone } from './drawing-exclusion.ts';
 import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
 import type { SemanticLayoutOptions } from './semantic-layout-options.ts';
 import { styleSeparatorRanges } from './style-separator-group.ts';
+import { tocLinkRangesOf } from './toc-link-formatting.ts';
 
 /** The flow options a body paragraph takes straight from the layout options. */
 export function bodyParagraphOptionFlow(
@@ -23,7 +24,7 @@ export function bodyParagraphOptionFlow(
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     showFieldCodes: options.showFieldCodes,
     fieldCodeRanges: styleSeparatorRanges(paragraph, options.fieldCodeRanges),
-    tocLinkStyleRanges: styleSeparatorRanges(paragraph, options.tocLinkStyleRanges),
+    tocLinkStyleRanges: tocLinkRangesOf(paragraph, options.tocLinkStyleRanges),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
   };

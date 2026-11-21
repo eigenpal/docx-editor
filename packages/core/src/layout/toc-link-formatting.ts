@@ -1,7 +1,7 @@
 import { FieldResultsModeMemo } from '../store/package/field-result-mode.ts';
 import { fnv1a64Hex } from '../store/comparators/canonical.ts';
 import { framedTokenJoin } from './layout-cache.ts';
-import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import {
   fldCharType,
@@ -21,6 +21,7 @@ import {
 } from '../store/store/tree-op-segments.ts';
 import type { RunPropertyCascader } from './field-run-text.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
+import { styleSeparatorRanges } from './style-separator-group.ts';
 
 /** Link content in a TOC result, which drops the Hyperlink character style. */
 export interface TocLinkRange {
@@ -252,6 +253,21 @@ export function tocLinkCascader(
       )
     );
   };
+}
+
+/**
+ * One paragraph's TOC link ranges, the accessor that body paint, table-cell paint, and AutoFit
+ * share. A style-separator group reads its members' ranges at their offsets.
+ *
+ * TOC detection does not enter table cells yet, so a cell paragraph gets no ranges today. The
+ * cell paint and AutoFit reads are a guard: when cell TOC detection lands, they apply the rule
+ * without more changes.
+ */
+export function tocLinkRangesOf(
+  paragraph: OoxmlElement,
+  ranges: TocLinkRanges | undefined
+): readonly TocLinkRange[] | undefined {
+  return styleSeparatorRanges(paragraph, ranges);
 }
 
 const tokens = new WeakMap<TocLinkRanges, string>();
