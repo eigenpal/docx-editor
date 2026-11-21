@@ -1,5 +1,5 @@
 ---
-"@docx-editor.dev/core": patch
+'@docx-editor.dev/core': patch
 ---
 
-Apply East Asian spacing to the authored text in a complete HYPERLINK field.
+Field results take automatic East Asian spacing and balanced space widths like other text, for every field type, simple fields, and results that continue into the next paragraph. Table AutoFit counts the same spacing.
