@@ -53,12 +53,20 @@ const ROWS = [
   run('Number') + linkEnd + run('Tail') + linkEnd + run('Beyond'),
 ];
 
+const tocBegin = (switches = ' \\h') =>
+  `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText> TOC \\o "1-3"${switches} </w:instrText>` +
+  '<w:fldChar w:fldCharType="separate"/></w:r>';
+const tocEnd = '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+
 function spansOf(switches: string, fieldResults?: FieldResultsMode) {
   const toc =
-    `<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> TOC \\o "1-3"${switches} </w:instrText>` +
-    '<w:fldChar w:fldCharType="separate"/></w:r></w:p>' +
+    `<w:p>${tocBegin(switches)}</w:p>` +
     ROWS.map((row) => `<w:p>${row}</w:p>`).join('') +
-    '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+    `<w:p>${tocEnd}</w:p>`;
+  return stylesOf(toc, fieldResults);
+}
+
+function stylesOf(toc: string, fieldResults?: FieldResultsMode) {
   const outside = `<w:p><w:hyperlink w:anchor="_TocA">${run('Outside')}</w:hyperlink></w:p>`;
   const part = read(
     `<w:document xmlns:w="${W}"><w:body>${toc}${outside}</w:body></w:document>`,
@@ -106,6 +114,46 @@ for (const fieldResults of ['atomic', 'editable'] as const) {
     });
   }
 }
+
+for (const fieldResults of ['atomic', 'editable'] as const) {
+  test(`TOC boundary paragraphs that hold rows drop the style only on links: mode=${fieldResults}`, () => {
+    // The first row shares the TOC begin paragraph, and the last row shares the TOC end.
+    const toc =
+      `<w:p>${tocBegin()}${run('Lead')}${linkStart}${run('First')}${linkEnd}</w:p>` +
+      `<w:p>${linkStart}${run('Middle')}${linkEnd}</w:p>` +
+      `<w:p>${linkStart}${run('Last')}${linkEnd}${run('Close')}${tocEnd}</w:p>`;
+    const style = stylesOf(toc, fieldResults);
+    for (const text of ['First', 'Middle', 'Last']) {
+      expect({ text, ...style(text) }).toMatchObject({ text, ...DROPPED });
+    }
+    for (const text of ['Lead', 'Close', 'Outside']) {
+      expect({ text, ...style(text) }).toMatchObject({ text, ...KEPT });
+    }
+  });
+}
+
+test('a TOC in one paragraph is one unit, so its plain text drops the style too', () => {
+  const toc = `<w:p>${tocBegin()}${run('Lone')}${linkStart}${run('Link')}${linkEnd}${tocEnd}</w:p>`;
+  const style = stylesOf(toc, 'editable');
+  for (const text of ['Lone', 'Link']) {
+    expect({ text, ...style(text) }).toMatchObject({ text, ...DROPPED });
+  }
+  expect(style('Outside')).toMatchObject(KEPT);
+});
+
+test('deep open fields across TOC rows stay bounded and keep later links', () => {
+  // Many unclosed fields cross every row; only a few levels keep their instruction.
+  const opened = '<w:r><w:fldChar w:fldCharType="begin"/></w:r>'.repeat(200);
+  const closed = linkEnd.repeat(200);
+  const rows = Array.from({ length: 200 }, (_, index) => `<w:p>${run(`Row${index}`)}</w:p>`);
+  const toc =
+    `<w:p>${tocBegin()}</w:p><w:p>${opened}${run('Open')}</w:p>` +
+    rows.join('') +
+    `<w:p>${run('Shut')}${closed}${linkStart}${run('Later')}${linkEnd}</w:p><w:p>${tocEnd}</w:p>`;
+  const style = stylesOf(toc);
+  expect(style('Row150')).toMatchObject(KEPT);
+  expect(style('Later')).toMatchObject(DROPPED);
+});
 
 test('TOC link ranges refuse a cascader that cannot resolve the Hyperlink style', () => {
   const ranges = [{ start: 0, end: 1 }];

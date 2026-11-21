@@ -181,18 +181,18 @@ test('a remote delete and split inside a TOC link row keep the row unstyled for 
   };
   const xmlOf = async (editor: DocxEditorInstance) =>
     strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
-  const converged = async (text: string) => {
-    await until(() =>
-      [left, right].every((editor) => editor.surface!.session.bodyText().includes(text))
-    );
-    expect(await xmlOf(left)).toBe(await xmlOf(right));
-  };
-  const pair = await harness.pair(source);
-  // A headless peer, such as an agent, edits the row: the editor keeps TOC rows read-only.
-  const agent = await harness.join(pair.alice, 'agent');
-  const left = open(pair.alice);
-  const right = open(pair.bob);
   try {
+    const pair = await harness.pair(source);
+    // A headless peer, such as an agent, edits the row: the editor keeps TOC rows read-only.
+    const agent = await harness.join(pair.alice, 'agent');
+    const left = open(pair.alice);
+    const right = open(pair.bob);
+    const converged = async (text: string) => {
+      await until(() =>
+        [left, right].every((editor) => editor.surface!.session.bodyText().includes(text))
+      );
+      expect(await xmlOf(left)).toBe(await xmlOf(right));
+    };
     await until(() => !!left.surface && !!right.surface);
     const row = harness.paragraphIdAt(agent, 2);
     const point = { paragraphId: row, offset: 2 };
