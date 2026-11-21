@@ -77,6 +77,11 @@ export interface SurfaceFormatDeps {
   displayMode(): FormattingDisplayMode;
   /** Reviewer visibility projected into the formatting walk. */
   authorFilter(): FormattingRevisionAuthorFilter | undefined;
+  /**
+   * True when this paragraph's mark must not change, such as a TOC closing line. A format
+   * picked in it empty is armed for the next typed text instead of written to the mark.
+   */
+  paragraphMarkProtected?(paragraphId: string): boolean;
   /** False when this paragraph's pilcrow is absorbed by the active revision projection. */
   paragraphMarkVisible(paragraphId: string): boolean;
   commit(
@@ -410,6 +415,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     from.offset === to.offset &&
     textOf(from.paragraphId).length === 0 &&
     deps.paragraphMarkVisible(from.paragraphId) &&
+    !deps.paragraphMarkProtected?.(from.paragraphId) &&
     !deps.pendingFormats()?.length
       ? from.paragraphId
       : null;

@@ -78,7 +78,7 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
   ['caret in a row: clear formatting', BODY, [1, 2, 1, 2], CLEAR, true],
   ['range in a row: Bold', BODY, [1, 1, 1, 4], BOLD, true],
   ['range over rows: alignment', BODY, [1, 1, 2, 3], CENTER, true],
-  ['closing line: Bold formats its mark', BODY, [3, 0, 3, 0], BOLD, true],
+  ['closing line: clear formatting writes its mark', BODY, [3, 0, 3, 0], CLEAR, true],
   ['closing line: alignment', BODY, [3, 0, 3, 0], CENTER, true],
   ['closing line: typing lands after the end mark', BODY, [3, 0, 3, 0], TYPE, false],
   ['after the TOC: Bold', BODY, [4, 1, 4, 1], BOLD, false],
@@ -100,6 +100,7 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
   ['caret before the TOC: merge into the first row', BODY, [0, 6, 0, 6], MERGE, true],
   ['closing line: merge the next paragraph into it', BODY, [3, 0, 3, 0], MERGE, false],
   ['caret in a row: table', BODY, [1, 2, 1, 2], TABLE, true],
+  ['range from a row into the next paragraph: table', BODY, [1, 2, 4, 1], TABLE, true],
   ['closing line: table splits a TOC paragraph', BODY, [3, 0, 3, 0], TABLE, true],
   ['after the TOC: table', BODY, [4, 1, 4, 1], TABLE, false],
   ['caret in a row: text box', BODY, [1, 2, 1, 2], TEXT_BOX, true],
@@ -178,28 +179,39 @@ for (const [label, body, place, command, refused] of CASES) {
   });
 }
 
-test('toolbar controls are disabled inside the TOC and on its closing line', () => {
-  const slots: ChromeSlotId[] = [
-    'text.bold',
-    'text.italic',
-    'alignment.center',
-    'list.bullet',
-    'table.insert',
-  ];
-  for (const place of [
-    [1, 2, 1, 2],
-    [3, 0, 3, 0],
-  ] as const) {
-    const { editor } = mountAt(BODY, place);
-    for (const slot of slots) {
-      expect(toolbarCommandState(editor, slot)).toMatchObject({
-        enabled: false,
-        disabledReason: READ_ONLY,
-      });
-    }
+test('toolbar controls are disabled inside the TOC, and on the closing line where they write it', () => {
+  const run: ChromeSlotId[] = ['text.bold', 'text.italic'];
+  const paragraph: ChromeSlotId[] = ['alignment.center', 'list.bullet', 'table.insert'];
+  const disabled = { enabled: false, disabledReason: READ_ONLY };
+  const inRow = mountAt(BODY, [1, 2, 1, 2]).editor;
+  for (const slot of [...run, ...paragraph]) {
+    expect(toolbarCommandState(inRow, slot)).toMatchObject(disabled);
   }
-  const { editor } = mountAt(BODY, [4, 1, 4, 1]);
-  for (const slot of slots) expect(toolbarCommandState(editor, slot).enabled).toBe(true);
+  // On the closing line, a run format is armed for the text typed next.
+  const closing = mountAt(BODY, [3, 0, 3, 0]).editor;
+  for (const slot of run) expect(toolbarCommandState(closing, slot).enabled).toBe(true);
+  for (const slot of paragraph) expect(toolbarCommandState(closing, slot)).toMatchObject(disabled);
+  const after = mountAt(BODY, [4, 1, 4, 1]).editor;
+  for (const slot of [...run, ...paragraph]) {
+    expect(toolbarCommandState(after, slot).enabled).toBe(true);
+  }
+});
+
+test('Bold on an empty closing line formats the text typed next, after the end mark', () => {
+  const { editor, surface } = mountAt(BODY, [3, 0, 3, 0]);
+  const before = serializeOoxmlPart(surface.session.part());
+  expect(editor.can(BOLD)).toEqual({ ok: true });
+  expect(editor.exec(BOLD)).toMatchObject({ ok: true, changed: false });
+  // The mark is untouched; the format waits for typed text.
+  expect(serializeOoxmlPart(surface.session.part())).toBe(before);
+  expect(editor.exec(TYPE)).toMatchObject({ ok: true, changed: true });
+  const closing = serializeOoxmlPart(surface.session.part())
+    .split('<w:p')
+    .find((paragraph) => paragraph.includes('fldCharType="end"'))!;
+  const endMark = closing.indexOf('fldCharType="end"');
+  expect(closing.indexOf('<w:b/>')).toBeGreaterThan(endMark);
+  expect(closing.indexOf('>X<')).toBeGreaterThan(endMark);
+  expect(detectBodyTocs(surface.session.part())).toHaveLength(1);
 });
 
 test('the Bold shortcut at a caret in a row is refused like the toolbar', () => {

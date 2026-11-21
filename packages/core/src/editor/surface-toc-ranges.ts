@@ -146,10 +146,11 @@ export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
 }
 
 /**
- * Whether the TOC guard refuses a table that splits a paragraph: one that holds generated
- * text, or only the end mark. A closing line that also holds a heading splits freely.
+ * Whether the TOC guard protects a paragraph from paragraph-level writes (its properties,
+ * its mark, a table split): it holds generated text, or only the end mark. A closing line
+ * that also holds a heading takes them freely.
  */
-export function tocRefusesParagraphSplit(part: OoxmlPart, paragraphId: string): boolean {
+export function tocProtectsParagraph(part: OoxmlPart, paragraphId: string): boolean {
   return tocParagraphRanges(part).some(
     (r) => r.paragraphId === paragraphId && paragraphWriteTouches(r)
   );
@@ -223,20 +224,22 @@ export interface TocSelectedSpan {
  * `opTouchesTocRange` asks of each op. Most formats drop the writes that reach generated
  * text and refuse only when none is left: a span that reaches ordinary text keeps a write,
  * as does a caret where typed text would land. The format painter writes the selection as
- * one unit, so `whole` refuses it when any write reaches generated text. A caret in an
- * empty paragraph, or a span past the last character, writes the paragraph mark.
+ * one unit, so `whole` refuses it when any write reaches generated text. A span past the
+ * last character writes the paragraph mark. At a caret in an empty closing line a format is
+ * armed for the next typed text, unless `writesEmptyMark` (clearing writes the mark).
  */
 export function tocRefusesRunFormatting(
   part: OoxmlPart,
   spans: readonly TocSelectedSpan[],
-  whole: boolean
+  { whole, writesEmptyMark }: { readonly whole: boolean; readonly writesEmptyMark: boolean }
 ): boolean {
   const ranges = tocParagraphRanges(part);
   if (ranges.length === 0 || spans.length === 0) return false;
   const reaches = (span: TocSelectedSpan, inside: boolean) =>
     ranges.some((r) => {
       if (r.paragraphId !== span.paragraphId) return false;
-      if (span.start === span.end) return contains(r, span.start) || r.length === 0;
+      if (span.start === span.end)
+        return contains(r, span.start) || (writesEmptyMark && r.length === 0);
       const end = Math.min(span.end, r.length);
       if (span.start >= end) return paragraphWriteTouches(r);
       // Text before `r.start` or after `r.end` is ordinary and keeps its write.

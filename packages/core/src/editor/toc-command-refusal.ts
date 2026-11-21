@@ -16,10 +16,10 @@ import {
   tocAtEndMarkEdge,
   tocAtParagraphEnd,
   tocParagraphRanges,
+  tocProtectsParagraph,
   tocRefusesInsertBefore,
   tocRefusesJoin,
   tocRefusesParagraphFormatting,
-  tocRefusesParagraphSplit,
   tocRefusesRunFormatting,
   tocRefusesSectionMark,
   tocRefusesTextWrite,
@@ -37,6 +37,8 @@ import {
  * - `runFormat`, `paragraphFormat`: formats drop the writes that reach a TOC and are
  *   refused when none is left; `whole` writers are refused when any write reaches one.
  *
+ * `writesEmptyMark`: at a caret in an empty paragraph the format writes the paragraph mark
+ * instead of arming the next typed text.
  * `beforeEndMark`: the command inserts before the end mark when the selection starts a
  * closing line, inside the field result, where a refresh would drop it. `atTarget`: the
  * command writes at its resolved `target` (or `match`) rather than at the selection.
@@ -53,6 +55,7 @@ interface TocPolicy {
     | 'runFormat'
     | 'paragraphFormat';
   readonly whole?: true;
+  readonly writesEmptyMark?: true;
   readonly beforeEndMark?: true;
   readonly atTarget?: true;
 }
@@ -76,7 +79,7 @@ const TOC_POLICIES: Readonly<Record<EditorCommand['type'], TocPolicy>> = {
   adjustIndent: { kind: 'paragraphFormat', whole: true },
   applyFormatting: RUN_FORMAT,
   applyVariables: NONE,
-  clearFormatting: RUN_FORMAT,
+  clearFormatting: { kind: 'runFormat', writesEmptyMark: true },
   commitTableColumnDividerResize: NONE,
   commitTableRightEdgeResize: NONE,
   compareDocuments: NONE,
@@ -121,7 +124,7 @@ const TOC_POLICIES: Readonly<Record<EditorCommand['type'], TocPolicy>> = {
   openGoTo: NONE,
   openRevisionMarkupDialog: NONE,
   paste: TEXT,
-  pasteFormatting: { kind: 'runFormat', whole: true },
+  pasteFormatting: { kind: 'runFormat', whole: true, writesEmptyMark: true },
   pasteWithoutFormatting: TEXT,
   proposeDeletion: { kind: 'text', atTarget: true },
   proposeInsertion: { kind: 'mark', atTarget: true },
@@ -234,13 +237,16 @@ function refusesInToc(
     case 'join':
       return tocRefusesJoin(part, mergedParagraphIds(surface));
     case 'table':
-      return tocRefusesParagraphSplit(part, head);
+      return selectionTouchesTocRange(part, selection) || tocProtectsParagraph(part, head);
     case 'textBox':
       return tocAtParagraphEnd(part, head);
     case 'toc':
       return selectionTouchesTocRange(part, selection) || tocRefusesInsertBefore(part, head);
     case 'runFormat':
-      return tocRefusesRunFormatting(part, selectedSpans(surface), policy.whole === true);
+      return tocRefusesRunFormatting(part, selectedSpans(surface), {
+        whole: policy.whole === true,
+        writesEmptyMark: policy.writesEmptyMark === true,
+      });
     case 'paragraphFormat':
       return tocRefusesParagraphFormatting(
         part,

@@ -54,6 +54,7 @@ import {
   selectionTouchesTocRange,
   opTouchesTocRange,
   paragraphInBodyToc,
+  tocProtectsParagraph,
 } from './surface-toc-ranges.ts';
 import { tocBoundaryForLayout } from './surface-toc-boundary.ts';
 import { tocCommandRefusal } from './toc-command-refusal.ts';
@@ -1261,6 +1262,7 @@ export function mountPaginatedSurface(
     displayMode: () => revisionDisplayMode(),
     authorFilter: revisionFilter,
     paragraphMarkVisible,
+    paragraphMarkProtected: (paragraphId) => tocProtectsParagraph(session.part(), paragraphId),
     commit: (run, nextSelection, options) => commit(run, nextSelection, options),
     orderedRange: () => hiddenMarks.shownRange(orderedRange()),
     selectionMark: () => selectionMark(),
