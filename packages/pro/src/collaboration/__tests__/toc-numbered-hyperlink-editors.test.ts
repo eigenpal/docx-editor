@@ -28,6 +28,12 @@ const body =
   '<w:r>' +
   style +
   '<w:t>Entry</w:t></w:r><w:r><w:tab/><w:t>1</w:t><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
+  // A second row links through a `w:hyperlink` element, so a peer can edit inside the link.
+  '<w:p><w:hyperlink w:anchor="_TocAlpha"><w:r>' +
+  style +
+  '<w:t>Second</w:t></w:r><w:r>' +
+  style +
+  '<w:tab/><w:t>2</w:t></w:r></w:hyperlink></w:p>' +
   '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
   '<w:p><w:r><w:t>Before</w:t></w:r><w:hyperlink w:anchor="_TocAlpha">' +
   '<w:r>' +
@@ -59,14 +65,36 @@ async function until(check: () => boolean) {
   throw new Error('Collaborative editors did not converge');
 }
 
-function verifyToc(editor: DocxEditorInstance) {
-  const spans = editor
+function spansOf(editor: DocxEditorInstance) {
+  return editor
     .surface!.layout()
     .pages.flatMap((page) =>
       page.fragments.flatMap((fragment) =>
         fragment.kind === 'paragraph' ? fragment.lines.flatMap((line) => line.spans) : []
       )
     );
+}
+
+/** TOC link texts keep the link and paint without the Hyperlink style; the outside link keeps it. */
+function verifyLinkRow(editor: DocxEditorInstance, texts: readonly string[]) {
+  const spans = spansOf(editor);
+  for (const text of texts) {
+    const span = spans.find((candidate) => candidate.text === text);
+    expect({ text, href: span?.link?.href, ...span?.style }).toMatchObject({
+      text,
+      href: '#_TocAlpha',
+      color: null,
+      underline: null,
+    });
+  }
+  expect(spans.find((span) => span.text === 'Outside')!.style).toMatchObject({
+    color: '0563C1',
+    underline: { variant: 'single' },
+  });
+}
+
+function verifyToc(editor: DocxEditorInstance) {
+  const spans = spansOf(editor);
   const entry = spans.find((span) => span.text === 'Entry')!;
   expect(entry.style.underline).toBeNull();
   expect(entry.link?.href).toBe('#_TocAlpha');
@@ -98,7 +126,7 @@ test('two editors keep TOC link formatting and navigation after edits and reopen
     const right = open(pair.bob);
     await until(() => !!left.surface && !!right.surface);
     [left, right].forEach(verifyToc);
-    const paragraphId = harness.paragraphIdAt(pair.alice, 3);
+    const paragraphId = harness.paragraphIdAt(pair.alice, 4);
     pair.pause();
     for (const [editor, offset, text] of [
       [left, 0, 'L'],
@@ -127,6 +155,84 @@ test('two editors keep TOC link formatting and navigation after edits and reopen
     const reopened = open(undefined, saved);
     await until(() => !!reopened.surface);
     [left, right, reopened].forEach(verifyToc);
+  } finally {
+    for (const { editor, container } of opened) {
+      editor.destroy();
+      container.remove();
+    }
+    harness.cleanup();
+  }
+}, 10_000);
+
+test('a remote delete and split inside a TOC link row keep the row unstyled for both editors', async () => {
+  const harness = createPeerHarness('toc-link-row-remote-edit');
+  const opened: { container: HTMLElement; editor: DocxEditorInstance }[] = [];
+  const open = (peer?: Peer, saved?: Uint8Array) => {
+    peer?.detach();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({
+      container,
+      document: peer?.room.document ?? saved!,
+      ...(peer ? { modules: [collaborationModule({ session: peer.room.session })] } : {}),
+    });
+    opened.push({ container, editor });
+    return editor;
+  };
+  const xmlOf = async (editor: DocxEditorInstance) =>
+    strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+  const converged = async (text: string) => {
+    await until(() =>
+      [left, right].every((editor) => editor.surface!.session.bodyText().includes(text))
+    );
+    expect(await xmlOf(left)).toBe(await xmlOf(right));
+  };
+  const pair = await harness.pair(source);
+  // A headless peer, such as an agent, edits the row: the editor keeps TOC rows read-only.
+  const agent = await harness.join(pair.alice, 'agent');
+  const left = open(pair.alice);
+  const right = open(pair.bob);
+  try {
+    await until(() => !!left.surface && !!right.surface);
+    const row = harness.paragraphIdAt(agent, 2);
+    const point = { paragraphId: row, offset: 2 };
+    expect(left.exec({ type: 'setSelection', range: { anchor: point, head: point } }).ok).toBe(
+      true
+    );
+    expect(left.exec({ type: 'splitParagraph' })).toMatchObject({ ok: false });
+    [left, right].forEach((editor) => verifyLinkRow(editor, ['Second']));
+
+    // The agent deletes a letter and splits the link while the right editor types elsewhere.
+    const before = harness.paragraphIdAt(pair.alice, 4);
+    pair.pause();
+    harness.apply(agent, [
+      { op: 'deleteText', paragraphId: row, start: 1, end: 2 },
+      { op: 'splitParagraph', paragraphId: row, offset: 2 },
+    ]);
+    const typed = { paragraphId: before, offset: 0 };
+    expect(right.exec({ type: 'setSelection', range: { anchor: typed, head: typed } }).ok).toBe(
+      true
+    );
+    expect(right.exec({ type: 'insertText', text: 'R' }).ok).toBe(true);
+    pair.bob.room.session.flushPendingJournals();
+    pair.resume();
+    await converged('Sc\nond');
+    expect(right.surface!.session.bodyText()).toContain('RBeforeOutside');
+    [left, right].forEach((editor) => verifyLinkRow(editor, ['Sc', 'ond']));
+
+    // Undo and redo of the agent's step reach both editors.
+    expect(agent.room.session.undo()).toBe(true);
+    await converged('Second');
+    [left, right].forEach((editor) => verifyLinkRow(editor, ['Second']));
+    expect(agent.room.session.redo()).toBe(true);
+    await converged('Sc\nond');
+    [left, right].forEach((editor) => verifyLinkRow(editor, ['Sc', 'ond']));
+
+    const saved = new Uint8Array(await left.save());
+    const reopened = open(undefined, saved);
+    await until(() => !!reopened.surface);
+    verifyLinkRow(reopened, ['Sc', 'ond']);
+    verifyToc(reopened);
   } finally {
     for (const { editor, container } of opened) {
       editor.destroy();
