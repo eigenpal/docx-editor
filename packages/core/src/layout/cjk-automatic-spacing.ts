@@ -6,6 +6,7 @@ import type { TextMeasurer } from './text-measurer.ts';
 import type { CjkParagraphTypography } from './cjk-typography.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { FieldAtomMarker, FieldAwarePiece } from './field-pieces.ts';
+import { fieldResultMayCut, followsInSource, isFieldResultText } from './field-result-text.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
@@ -52,9 +53,8 @@ export function automaticTextSpacingBefore(value: {
 function ordinaryText(item: TextBoundary): boolean {
   const style = item.style;
   return (
-    (!item.projected || item.fieldAtom?.authoredTextResult === true) &&
+    ((!item.projected && !item.fieldAtom) || isFieldResultText(item)) &&
     !item.equation &&
-    (!item.fieldAtom || item.fieldAtom.authoredTextResult === true) &&
     !item.positionalTab &&
     !item.inlineDrawing &&
     item.measureText === undefined &&
@@ -202,6 +202,7 @@ export function splitAtAutomaticSpacing(
       out.push({
         ...piece,
         text: piece.text.slice(from, to),
+        // A slice of an atomic field result keeps the whole atom range.
         start: piece.projected ? piece.start : piece.start + from,
         end: piece.projected ? piece.end : piece.start + to,
       });
@@ -218,7 +219,8 @@ function automaticSpacingCuts(
 ): number[] {
   const literal = piece.end - piece.start === piece.text.length;
   if (
-    (!literal && !(piece.projected && piece.fieldAtom?.authoredTextResult)) ||
+    (!literal && piece.projected !== true) ||
+    !fieldResultMayCut(piece) ||
     piece.text.length < 2 ||
     !EAST_ASIAN_TEXT.test(piece.text) ||
     !LATIN_OR_DIGIT_TEXT.test(piece.text) ||
@@ -261,17 +263,18 @@ export function automaticLineTextGap(
   measurer?: TextMeasurer
 ): number {
   const previous = line.spans.at(-1);
-  const sameHyperlinkResult =
-    previous?.projected &&
-    piece.projected &&
-    previous.fieldAtom?.authoredTextResult &&
-    piece.fieldAtom === previous.fieldAtom &&
-    previous.range.start === start &&
-    previous.range.end === piece.end;
   if (
     !previous ||
     previous.range.paragraphId !== paragraphId ||
-    (previous.range.end !== start && !sameHyperlinkResult) ||
+    !followsInSource(
+      { ...previous.range, projected: previous.projected, fieldAtom: previous.fieldAtom },
+      {
+        start,
+        end: piece.projected ? piece.end : start + text.length,
+        projected: piece.projected,
+        fieldAtom: piece.fieldAtom,
+      }
+    ) ||
     Math.abs(lineOrigin() + line.width - previous.box.x - previous.box.width) > 0.001 ||
     !boundaryMayBeEastAsian(previous.text, text)
   )

@@ -23,6 +23,7 @@ import { isCjk } from './cjk-paragraph-breaks.ts';
 import { fitTextGroupOf } from './fit-text-groups.ts';
 import type { CjkParagraphTypography } from './cjk-typography.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
+import { fieldResultMayCut, followsInSource, isFieldResultText } from './field-result-text.ts';
 import { measureDisplayText, type ResolvedRunStyle } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { TextMeasurer } from './text-measurer.ts';
@@ -141,11 +142,9 @@ export function unwidenedStyle(style: ResolvedRunStyle): ResolvedRunStyle {
 
 function plainText(piece: FieldAwarePiece): boolean {
   return (
-    (piece.projected
-      ? piece.fieldAtom?.authoredTextResult === true
-      : piece.end - piece.start === piece.text.length) &&
+    (piece.fieldAtom ? isFieldResultText(piece) && fieldResultMayCut(piece) : !piece.projected) &&
+    (piece.projected === true || piece.end - piece.start === piece.text.length) &&
     piece.measureText === undefined &&
-    (!piece.fieldAtom || piece.fieldAtom.authoredTextResult === true) &&
     !piece.equation &&
     !piece.inlineDrawing &&
     !piece.positionalTab &&
@@ -164,9 +163,7 @@ function eastAsianNeighbour(
   const cp = character?.codePointAt(0);
   if (!piece || cp === undefined || !isCjk(cp)) return false;
   if (!measurer.faceCovers) return true;
-  // A literal TOC result can reach this pass before its font slots have been split.
-  const slot = piece.fontSlot ?? (piece.fieldAtom?.authoredTextResult ? 'eastAsia' : undefined);
-  return measurer.faceCovers(character!, styleForFontSlot(piece.style, slot)) !== false;
+  return measurer.faceCovers(character!, styleForFontSlot(piece.style, piece.fontSlot)) !== false;
 }
 
 /**
@@ -204,6 +201,7 @@ export function widenBalancedSpaces(
           ...piece,
           style,
           text: piece.text.slice(from, to),
+          // A slice of an atomic field result keeps the whole atom range.
           start: piece.projected ? piece.start : piece.start + from,
           end: piece.projected ? piece.end : piece.start + to,
         });
@@ -232,15 +230,13 @@ function collectSpaceRuns(
   while (
     end < pieces.length &&
     plainText(pieces[end]!) &&
-    (pieces[end]!.start === pieces[end - 1]!.end ||
-      (pieces[end]!.projected &&
-        pieces[end]!.start === pieces[end - 1]!.start &&
-        pieces[end]!.fieldAtom === pieces[end - 1]!.fieldAtom))
+    followsInSource(pieces[end - 1]!, pieces[end]!)
   )
     end += 1;
   const before = pieces[first - 1];
   let previous: { piece: FieldAwarePiece | undefined; character: string | undefined } = {
-    piece: before && plainText(before) && before.end === pieces[first]!.start ? before : undefined,
+    piece:
+      before && plainText(before) && followsInSource(before, pieces[first]!) ? before : undefined,
     character: before ? lastCharacter(before.text) : undefined,
   };
   // The open run: its pieces and cuts, and its length in spaces.
@@ -282,7 +278,7 @@ function collectSpaceRuns(
   const after = pieces[end];
   if (run.length > 0)
     close(
-      after && plainText(after) && after.start === pieces[end - 1]!.end ? after : undefined,
+      after && plainText(after) && followsInSource(pieces[end - 1]!, after) ? after : undefined,
       after?.text === undefined || after.text === ''
         ? undefined
         : String.fromCodePoint(after.text.codePointAt(0)!)
