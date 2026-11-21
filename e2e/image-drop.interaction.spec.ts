@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { strToU8, strFromU8, unzipSync, zipSync } from 'fflate';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -100,6 +100,42 @@ const longPictureSource = zipSync({
   ),
 });
 
+type Box = { x: number; y: number; width: number; height: number };
+
+/**
+ * The box of a painted element once it is on screen and has kept its place for two frames.
+ * A late repaint after load can replace the element, so a box read too early is null or stale.
+ * The locator is resolved again on each read, so it follows the replacement.
+ */
+async function stableBox(page: Page, locator: Locator): Promise<Box> {
+  let box: Box | null = null;
+  await expect
+    .poll(
+      async () => {
+        const before = await locator.boundingBox();
+        if (!before) return false;
+        await page.evaluate(
+          () =>
+            new Promise<void>((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+            )
+        );
+        const after = await locator.boundingBox();
+        const same =
+          !!after &&
+          after.x === before.x &&
+          after.y === before.y &&
+          after.width === before.width &&
+          after.height === before.height;
+        box = same ? after : null;
+        return same;
+      },
+      { message: 'the element did not keep a stable box' }
+    )
+    .toBe(true);
+  return box!;
+}
+
 async function startTextDrag(page: Page, x: number, y: number): Promise<void> {
   await page.evaluate(() => {
     const source = document.createElement('button');
@@ -158,9 +194,9 @@ async function dragToSecondLine(page: Page, custom = false): Promise<string> {
     .filter({ hasText: 'Second insertion line.' })
     .first();
   await first.click();
+  const target = await stableBox(page, second);
   const paragraphId = await second.getAttribute('data-paragraph-id');
-  const target = await second.boundingBox();
-  if (!target || !paragraphId) throw new Error('missing drag geometry');
+  if (!paragraphId) throw new Error('missing drag target');
   const x = target.x + target.width / 2;
   const y = target.y + target.height / 2;
   if (custom) {
@@ -196,10 +232,8 @@ async function refusedFileDrop(page: Page, file: string, reason: string): Promis
     .locator('[data-paragraph-id]')
     .filter({ hasText: 'Second insertion line.' })
     .first();
-  // The page paints after load; read the geometry only once the paragraph is on screen.
-  await expect(target).toBeVisible();
-  const box = await target.boundingBox();
-  if (!box) throw new Error('missing drop target');
+  // The page paints after load, and a late repaint can replace the paragraph element.
+  const box = await stableBox(page, target);
   const session = await page.context().newCDPSession(page);
   const data = { items: [], files: [file], dragOperationsMask: 1 };
   const x = box.x + box.width / 2;
@@ -307,20 +341,15 @@ for (const adapter of ['react', 'vue'] as const) {
 
     test('a missing target shows feedback and an accepted target clears it', async ({ page }) => {
       // A late repaint can replace the page element just after load; wait for stable geometry.
-      let sheet: { x: number; y: number } | null = null;
-      await expect
-        .poll(async () => (sheet = await page.locator('.docx-page').first().boundingBox()))
-        .not.toBeNull();
-      await startTextDrag(page, sheet!.x + 20, sheet!.y + 20);
+      const sheet = await stableBox(page, page.locator('.docx-page').first());
+      await startTextDrag(page, sheet.x + 20, sheet.y + 20);
       await expect(page.locator('[data-docx-drop-rejection]')).toContainText('editable text');
       await page.screenshot({ path: test.info().outputPath('drop-rejection.png') });
       await expect(page.locator('[data-docx-drop-caret]')).toHaveCount(0);
-      const target = await page
-        .locator('[data-paragraph-id]')
-        .filter({ hasText: 'Second insertion line.' })
-        .first()
-        .boundingBox();
-      if (!target) throw new Error('missing target geometry');
+      const target = await stableBox(
+        page,
+        page.locator('[data-paragraph-id]').filter({ hasText: 'Second insertion line.' }).first()
+      );
       await page.mouse.move(target.x + 20, target.y + target.height / 2, { steps: 8 });
       await page.mouse.move(target.x + 21, target.y + target.height / 2);
       await expect(page.locator('[data-docx-drop-rejection]')).toHaveCount(0);
@@ -339,12 +368,11 @@ for (const adapter of ['react', 'vue'] as const) {
       await replaceFixture(page, longSource);
       const scroller = page.locator('.docx-editor__scroll-container').first();
       const scrollBox = await scroller.boundingBox();
-      const textBox = await page
-        .locator('[data-paragraph-id]')
-        .filter({ hasText: 'Second insertion line.' })
-        .first()
-        .boundingBox();
-      if (!scrollBox || !textBox) throw new Error('missing scroll geometry');
+      const textBox = await stableBox(
+        page,
+        page.locator('[data-paragraph-id]').filter({ hasText: 'Second insertion line.' }).first()
+      );
+      if (!scrollBox) throw new Error('missing scroll geometry');
       const viewportHeight = await page.evaluate(() => innerHeight);
       const x = textBox.x + 40;
       const y = Math.min(scrollBox.y + scrollBox.height, viewportHeight) - 8;
@@ -374,10 +402,10 @@ for (const adapter of ['react', 'vue'] as const) {
         .filter({ hasText: 'First insertion line.' })
         .first()
         .getAttribute('data-paragraph-id');
-      const start = await image.boundingBox();
+      const start = await stableBox(page, image);
       const scroller = page.locator('.docx-editor__scroll-container').first();
       const scrollBox = await scroller.boundingBox();
-      if (!start || !scrollBox) throw new Error('missing inline scroll geometry');
+      if (!scrollBox) throw new Error('missing inline scroll geometry');
       const viewportHeight = await page.evaluate(() => innerHeight);
       const x = start.x + start.width / 2;
       const y = Math.min(scrollBox.y + scrollBox.height, viewportHeight) - 8;
@@ -435,11 +463,11 @@ for (const adapter of ['react', 'vue'] as const) {
           .first();
         const secondId = await second.getAttribute('data-paragraph-id');
         if (selected) await image.click();
-        const start = await (
+        const start = await stableBox(
+          page,
           selected ? page.locator('.docx-image-selection-overlay__frame') : image
-        ).boundingBox();
-        const end = await second.boundingBox();
-        if (!start || !end) throw new Error('missing move geometry');
+        );
+        const end = await stableBox(page, second);
         await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
         await page.mouse.down();
         await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2, { steps: 16 });
