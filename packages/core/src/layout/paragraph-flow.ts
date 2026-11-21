@@ -7,7 +7,7 @@ import { numericWidthTrace } from './numeric-width-proof.ts';
 import { storePendingLines } from './paragraph-break-cache-store.ts';
 import {
   paragraphFinalAt,
-  rememberHangingPunctuation,
+  rememberLineEndHang,
   spaceShrinkMarkAdvance,
 } from './paragraph-hanging-punctuation.ts';
 import {
@@ -1632,7 +1632,7 @@ export function breakParagraph(
           layoutOwned && !piece.positionalTab,
           lineEndWhitespace
         );
-        rememberHangingPunctuation(line, span, piece, measurer, hangs, lineAvailable(), flow);
+        rememberLineEndHang(line, span, piece, measurer, hangs, lineAvailable(), flow, typography);
         if (opticalFit) appendOpticalCjkCandidate(line.spans, span, opticalFit);
         else lineEndSpaces.appendWordEnd(line.spans, span, clippedWordEnd);
         line.width += remainingWidth;

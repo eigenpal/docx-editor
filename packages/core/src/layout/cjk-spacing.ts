@@ -8,6 +8,8 @@ import { styleForFontSlot } from './script-itemization.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import {
   eastAsianLanguage,
+  isKorean,
+  isTraditionalChinese,
   kinsokuCharacters,
   koreanFinalMarkHangs,
   type CjkParagraphTypography,
@@ -186,7 +188,7 @@ function compressionSlices(
       [a, b].every(
         (piece) =>
           isRunKerningEnabled(styleForFontSlot(piece.style, piece.fontSlot)) &&
-          !/^ko(?:-|$)/i.test(eastAsianLanguage(piece.props) ?? '')
+          !isKorean(eastAsianLanguage(piece.props))
       )
     );
   };
@@ -421,15 +423,14 @@ export function hangingCjkPunctuationAdvance(
   if (!tail || !HANGING_CLASS.test(tail)) return undefined;
   const language = eastAsianLanguage(piece.props);
   if (
-    language?.startsWith('ko') &&
+    isKorean(language) &&
     (!paragraphFinal || '。、'.includes(tail) || !koreanFinalMarkHangs(policy?.settings))
   )
     return undefined;
   if (language?.startsWith('ja') && JAPANESE_NON_HANGING.includes(tail)) return undefined;
   // Simplified Chinese keeps a full-width full stop inside the measure; Traditional hangs it.
   if (/^zh-cn$/i.test(language ?? '') && tail === '．') return undefined;
-  if (/^zh-(tw|hk|mo|hant)(-|$)/.test(language ?? '') && TRADITIONAL_CHINESE_NON_HANGING === tail)
-    return undefined;
+  if (isTraditionalChinese(language) && TRADITIONAL_CHINESE_NON_HANGING === tail) return undefined;
   if (policy && !lineStartForbids(tail, language, policy)) return undefined;
   if (!FULLWIDTH_PUNCTUATION.test(tail) && !language) return undefined;
   const last = segmentGraphemes(text).at(-1)?.text;
