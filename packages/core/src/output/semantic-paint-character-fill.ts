@@ -7,7 +7,7 @@
 // text, at the run's advance and the band's top and height. The run keeps its geometry, text,
 // and model offsets, so selection and the caret do not change.
 import type { LineRecord, StyleSpanRecord } from '../layout/semantic-records.ts';
-import { HIGHLIGHT_COLOR_HEX } from './semantic-paint.ts';
+import { HIGHLIGHT_COLOR_HEX } from './semantic-paint-highlight-colors.ts';
 
 const HEX = /^[0-9A-Fa-f]{6}$/;
 
