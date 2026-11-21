@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Field results did not take automatic East Asian spacing or balanced space widths.",
+  "after": "Field results take the same automatic East Asian spacing and balanced space widths as literal text.",
+  "reason": "Layout derives the spacing from the existing pieces and keeps each field's model range. The package and collaboration messages stay the same.",
+  "tests": [
+    "packages/core/src/layout/__tests__/field-result-spacing.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-field-result-spacing.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-toc.test.ts"
+  ],
+  "changeset": "hyperlink-field-cjk-spacing",
+  "migration": null
+}

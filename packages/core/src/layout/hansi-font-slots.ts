@@ -9,6 +9,7 @@ import { segmentGraphemes } from './grapheme.ts';
 import { withFontFamily, type ThemeFonts } from './run-style.ts';
 import { isSymbolEncodedFamily } from './symbol-encoding.ts';
 import { RUN_FONT_DEFAULTS } from './application-run-defaults.ts';
+import { isFieldResultText } from './field-result-text.ts';
 
 const LATIN_FACE_ATTRIBUTES = ['ascii', 'asciiTheme', 'hAnsi', 'hAnsiTheme'] as const;
 
@@ -161,9 +162,11 @@ export function applyHAnsiFontSlots(
   for (let index = 0; index < pieces.length; index++) {
     const piece = pieces[index]!,
       ranges = rangesByPiece[index]!;
+    // A field result that continues into a later paragraph keeps its own offsets, so its
+    // slices are literal text.
     const literal =
       !piece.projected &&
-      !piece.fieldAtom &&
+      (!piece.fieldAtom || isFieldResultText(piece)) &&
       !piece.noteNav &&
       piece.measureText === undefined &&
       piece.end - piece.start === piece.text.length;

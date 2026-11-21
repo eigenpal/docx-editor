@@ -43,6 +43,7 @@ import type { ResolvedRunStyle, ThemeFonts } from './run-style.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
 import type { OmmlEquationProjection } from '@docx-editor.dev/core/store';
 import type { EquationLayoutInput } from './equation-layout.ts';
+import { isFieldResultText } from './field-result-text.ts';
 
 /**
  * A `w:ptab` — the ABSOLUTE-position tab (ECMA-376 §17.3.3.16), which is what a table of
@@ -733,9 +734,11 @@ export function applyEastAsiaFontSlots(
       out.push(piece);
       continue;
     }
+    // A field result that continues into a later paragraph keeps its own offsets, so its
+    // slices are literal text.
     const literal =
       !piece.projected &&
-      !piece.fieldAtom &&
+      (!piece.fieldAtom || isFieldResultText(piece)) &&
       !piece.noteNav &&
       piece.measureText === undefined &&
       piece.end - piece.start === piece.text.length;
