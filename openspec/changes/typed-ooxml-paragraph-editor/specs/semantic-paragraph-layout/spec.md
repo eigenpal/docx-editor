@@ -678,7 +678,7 @@ With no compatibility mode, or in mode 11, 12, or 14, line-end punctuation SHALL
 
 ### Requirement: Hanging the blank side of a mark
 
-With document punctuation compression, in every compatibility mode, a hanging line-end mark SHALL hang only its trailing blank side when it overflows by no more than its blank sides. The text before it SHALL fill the rest of the measure. A larger overflow, no compression, or a Korean run SHALL hang the whole mark. Kana compression SHALL NOT compress kana for a mark that hangs within its blank sides.
+With document punctuation compression (`w:characterSpacingControl`), in every compatibility mode, a line-end mark that hangs (`w:overflowPunct`) SHALL hang only its trailing blank side when it overflows by no more than its blank sides. The text before it SHALL fill the rest of the measure. A larger overflow, no compression, or a Korean run SHALL hang the whole mark. Kana compression SHALL NOT compress kana for a mark that hangs within its blank sides.
 
 #### Scenario: A closing mark hangs its blank half
 
@@ -703,7 +703,7 @@ With document punctuation compression, in every compatibility mode, a hanging li
 
 ### Requirement: Blank sides of a line-end mark by language
 
-The mark's run language SHALL select its blank sides. A closing bracket, `、。，．` in Japanese, and `、。，．；：！` in Simplified Chinese or without an East Asian language, SHALL leave the right half blank. Traditional Chinese `、。，．；：` SHALL be centered, with a quarter blank on each side. Other marks, such as `？` and `”`, SHALL have no blank side. Past a centered mark's trailing quarter, the text before it SHALL keep its advances and the overflow SHALL hang.
+The mark's run language (`w:lang` `w:eastAsia`) SHALL select its blank sides. A closing bracket, `、。，．` in Japanese, and `、。，．；：！` in Simplified Chinese or without an East Asian language, SHALL leave the right half blank. Traditional Chinese `、。，．；：` SHALL be centered, with a quarter blank on each side. Other marks, such as `？` and `”`, SHALL have no blank side. Past a centered mark's trailing quarter, the text before it SHALL keep its advances and the overflow SHALL hang.
 
 #### Scenario: A centered mark hangs its trailing quarter
 
