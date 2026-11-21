@@ -974,6 +974,13 @@
       "staleTarget": "Dokument zmienił się przed wstawieniem obrazu. Wstaw obraz ponownie."
     }
   },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "Nie można skopiować",
+      "cutTitle": "Nie można wyciąć",
+      "pasteTitle": "Nie można wkleić"
+    }
+  },
   "imageProperties": {
     "crop": "Przytnij",
     "cropBottom": "Dół (%)",

@@ -974,6 +974,13 @@
       "staleTarget": "Görsel eklenmeden önce belge değişti. Görseli yeniden ekleyin."
     }
   },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "Kopyalanamıyor",
+      "cutTitle": "Kesilemiyor",
+      "pasteTitle": "Yapıştırılamıyor"
+    }
+  },
   "imageProperties": {
     "crop": "Kırp",
     "cropBottom": "Alt (%)",

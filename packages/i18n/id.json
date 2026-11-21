@@ -974,6 +974,13 @@
       "staleTarget": "Dokumen berubah sebelum gambar disisipkan. Sisipkan gambar lagi."
     }
   },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "Tidak dapat menyalin",
+      "cutTitle": "Tidak dapat memotong",
+      "pasteTitle": "Tidak dapat menempelkan"
+    }
+  },
   "imageProperties": {
     "crop": "Pangkas",
     "cropBottom": "Bawah (%)",

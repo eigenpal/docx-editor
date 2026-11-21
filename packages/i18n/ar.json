@@ -814,6 +814,13 @@
       "staleTarget": "تغيّر المستند قبل إدراج الصورة. أدرج الصورة مرة أخرى."
     }
   },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "تتعذر عملية النسخ",
+      "cutTitle": "تتعذر عملية القص",
+      "pasteTitle": "تتعذر عملية اللصق"
+    }
+  },
   "imageProperties": {
     "units": {
       "points": "نقطة"

@@ -1,6 +1,6 @@
 // Pasting an image file while a picture, shape or text box is selected, in a real browser, in
 // both demos. The selection overlay holds focus beside the pages, so the paste reaches the
-// image-file lane through the overlay.
+// image-file lane through the overlay. A text paste the selected shape refuses shows its reason.
 
 import { expect, test, type Page } from '@playwright/test';
 import { PAINTED_PAGE } from './painted-page.ts';
@@ -124,6 +124,35 @@ for (const adapter of adapters) {
       await expect.poll(pagesText).toContain('Keyboard paste');
       expect(await pagesText()).not.toContain('Boxed');
       expect(await pagesText()).toContain('AlphaBravoCharlieDelta');
+      await expect(page.locator(DIALOG)).toHaveCount(0);
+    });
+
+    test('a real Ctrl+V of text on a shape with no text shows the reason once', async ({
+      page,
+      context,
+    }, testInfo) => {
+      await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+      await open(page, adapter.port(testInfo.config.metadata));
+      const pagesText = () =>
+        page.evaluate(() => document.querySelector('.docx-pages')?.textContent ?? '');
+      const before = await pagesText();
+      const overlay = await press(page, 1);
+      await overlay.focus();
+      await page.evaluate(() => navigator.clipboard.writeText('Refused paste'));
+      await page.keyboard.press('ControlOrMeta+v');
+      const dialog = page.getByRole('alertdialog', { name: 'Cannot paste' });
+      await expect(dialog).toBeVisible();
+      await expect(dialog).toContainText('This shape has no text to paste into.');
+      await expect(page.locator(DIALOG)).toHaveCount(1);
+      await dialog.getByRole('button', { name: 'Close' }).click();
+      await expect(page.locator(DIALOG)).toHaveCount(0);
+      // Nothing changed, the shape stays selected, and its overlay has the keyboard again.
+      expect(await pagesText()).toBe(before);
+      await expect(page.locator(OVERLAY)).toBeFocused();
+      // A later paste that lands shows no stale reason.
+      await page.locator('.docx-pages .layout-run', { hasText: 'Delta' }).click();
+      await page.keyboard.press('ControlOrMeta+v');
+      await expect.poll(pagesText).toContain('Refused paste');
       await expect(page.locator(DIALOG)).toHaveCount(0);
     });
 

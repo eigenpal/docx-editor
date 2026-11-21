@@ -814,6 +814,13 @@
       "staleTarget": "Il documento è cambiato prima dell’inserimento dell’immagine. Inserisci di nuovo l’immagine."
     }
   },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "Impossibile copiare",
+      "cutTitle": "Impossibile tagliare",
+      "pasteTitle": "Impossibile incollare"
+    }
+  },
   "imageProperties": {
     "units": {
       "points": "pt"

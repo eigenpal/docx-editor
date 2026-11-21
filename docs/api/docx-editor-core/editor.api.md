@@ -1676,10 +1676,22 @@ export interface ClearAnchorHighlightOptions {
 export type ClearRefreshHighlightsOptions = ClearAnchorHighlightOptions;
 
 // @internal
+export type ClipboardAction = 'copy' | 'cut' | 'paste';
+
+// @internal
+export function clipboardCommandRefusal(command: EditorCommand, result: ExecResult | undefined): ClipboardRefusal | null;
+
+// @internal
 export function clipboardDropLandsText(transfer: DataTransfer | null | undefined): boolean;
 
 // @internal
 export function clipboardPasteLandsContent(transfer: DataTransfer | null | undefined): boolean;
+
+// @internal
+export interface ClipboardRefusal {
+    readonly action: ClipboardAction;
+    readonly reason: string;
+}
 
 // @public
 export interface CollaborationModuleContribution {
@@ -6107,6 +6119,9 @@ export function validateThemeModifier(value: unknown): value is number;
 
 // @public
 export type VectorImageMime = 'image/svg+xml';
+
+// @internal
+export function watchClipboardRefusals(element: HTMLElement, editor: Pick<DocxEditorInstance, 'surface'>, show: (refusal: ClipboardRefusal) => void): () => void;
 
 // @public
 export function watchHighlights(editor: Editor, name: string, source: HighlightSource, options?: WatchHighlightsOptions): HighlightWatch;

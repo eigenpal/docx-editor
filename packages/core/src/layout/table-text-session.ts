@@ -18,6 +18,22 @@ import { carryPageTableContributions, carryTableCaretContexts } from './table-ca
 import { offerPreviousRows, offerUnchangedTableRows } from './table-row-placement-reuse.ts';
 
 type Result = Omit<BlockLayoutResult, 'overflowShellAt'>;
+
+let observer: { updates: number } | null = null;
+/** Counts the passes that update a table's pages in place after a text edit, for tests. */
+export function tableTextUpdateTestRecorder(): { readonly updates: number; dispose(): void } {
+  const counts = { updates: 0 };
+  observer = counts;
+  return {
+    get updates() {
+      return counts.updates;
+    },
+    dispose() {
+      if (observer === counts) observer = null;
+    },
+  };
+}
+
 function resultOf(session: LayoutSession): Result {
   const layout = session.previous!;
   return {
@@ -37,6 +53,9 @@ export function reuseUnchangedLayout(
   const previous = session.previous!;
   session.previous = withContentControlMetadata({ revision, pages: previous.pages }, previous);
   carryLayoutReadCaches(previous, session.previous);
+  // The checkpoints keep line counters from the pass that made them, so they are not moved
+  // when this section's start count moves. That is safe: body line ids are paragraph-local
+  // (`bodyLineId`), and the counter only carries a line total to the next section's start.
   session.endLineCounter = lineCounterStart + session.endLineCounter - session.startLineCounter;
   session.startLineCounter = lineCounterStart;
   session.stats = {
@@ -117,6 +136,7 @@ export function tryUpdateTableSession(input: {
     offerPreviousRows(entry.table, session.previous.pages);
     return null;
   }
+  if (observer) observer.updates += 1;
   carryTableTextUpdate(
     session.previous.pages,
     entry.table.id,
@@ -168,6 +188,7 @@ export function tryUpdateTableSession(input: {
       pageFragments: fragments ?? mark.pageFragments,
     };
   });
+  // Only the section's start count moves the end count here; see `reuseUnchangedLayout`.
   session.endLineCounter =
     lineCounterStart + session.endLineCounter - session.startLineCounter + update.lineDelta;
   session.startLineCounter = lineCounterStart;

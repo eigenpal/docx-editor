@@ -975,6 +975,13 @@
       "staleTarget": "המסמך השתנה לפני שהתמונה הוכנסה. הוסיפו את התמונה שוב."
     }
   },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "לא ניתן להעתיק",
+      "cutTitle": "לא ניתן לגזור",
+      "pasteTitle": "לא ניתן להדביק"
+    }
+  },
   "imageProperties": {
     "crop": "חיתוך",
     "cropBottom": "למטה (%)",

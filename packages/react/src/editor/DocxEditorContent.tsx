@@ -12,11 +12,12 @@ import { DialogMount } from './dialog-host';
 // Paste and drop of supported raster formats route through the shared image-insert path.
 // A paste reaches it through `useImageFilePaste`, which the selection overlay runs as well.
 
-import { useCallback, useContext, useLayoutEffect, useRef } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   editorDropHandled,
   openChartPaneAt,
   reportImageInsertFailure,
+  watchClipboardRefusals,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
@@ -83,6 +84,15 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
       editor.detach();
     };
   }, [editor]);
+
+  // A copy, cut, or paste on the pages or the selection overlay that the editor refuses shows
+  // its reason, in the dialog a refused picture insert uses.
+  const showClipboardRefusal = imageInsert?.showClipboardRefusal;
+  useEffect(() => {
+    const mount = portalRef.current;
+    if (!editor || !mount || !showClipboardRefusal) return undefined;
+    return watchClipboardRefusals(mount, editor, showClipboardRefusal);
+  }, [editor, showClipboardRefusal]);
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
