@@ -516,6 +516,13 @@ Semantic layout SHALL resolve `w:autoSpaceDE` and `w:autoSpaceDN` through the pa
 - **WHEN** supported adjacent text changes between East Asian and Latin letters or ASCII digits across source runs
 - **THEN** layout applies one boundary advance without adding a source character or changing source ranges
 
+#### Scenario: A field result is text
+
+- **WHEN** a boundary falls inside a displayed field result or between a field result and the text around it, for any field type, a `w:fldSimple`, or a result that continues into a later paragraph
+- **THEN** layout applies the same advance and the same balanced space width as for literal text
+- **AND** auto-fit table layout prices the same advances
+- **AND** an atomic field result keeps its one model unit, and form check boxes and drop-down lists keep their existing advances
+
 #### Scenario: A boundary moves to another line
 
 - **WHEN** the additional advance prevents adjacent text from fitting on one line

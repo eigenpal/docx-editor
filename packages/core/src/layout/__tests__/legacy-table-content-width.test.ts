@@ -53,6 +53,62 @@ function read(xml = fixture(), mode: number | undefined = 11, depth = 0, width =
 }
 
 describe('explicit legacy full-width content alignment', () => {
+  test('table-level geometry survives copied row margins and borders in an automatic table', () => {
+    const automatic = properties.replace('type="pct" w:w="5000"', 'type="auto" w:w="0"');
+    const borders = '<w:tblBorders><w:left w:val="single" w:sz="4"/></w:tblBorders>';
+    const exception = `<w:tblPrEx>${borders}${traditionalMargins}</w:tblPrEx>`;
+    const rows = row + row;
+    const plain = read(fixture(automatic + borders, grid, rows), 14);
+    const copied = read(
+      fixture(automatic + borders, grid, rows.replaceAll('<w:tr>', '<w:tr>' + exception)),
+      14
+    );
+    expect(plain.legacyContentAlignment).toBe(true);
+    expect(copied.legacyContentAlignment).toBe(true);
+    expect(copied.columnWidthsPt).toEqual(plain.columnWidthsPt);
+    expect(tableOriginX(copied, 200)).toBe(tableOriginX(plain, 200));
+
+    const changed = exception.replace('w:w="108"', 'w:w="216"');
+    const distinct = read(
+      fixture(automatic + borders, grid, rows.replace('<w:tr>', '<w:tr>' + changed)),
+      14
+    );
+    expect(distinct.legacyContentAlignment).toBeUndefined();
+  });
+
+  test('row exceptions that repeat any table-level property keep the alignment', () => {
+    const automatic =
+      properties.replace('type="pct" w:w="5000"', 'type="auto" w:w="0"') + '<w:jc w:val="left"/>';
+    const rows = row + row;
+    const repeat = (kids: string) =>
+      rows.replaceAll('<w:tr>', `<w:tr><w:tblPrEx>${kids}</w:tblPrEx>`);
+    for (const kids of [
+      '<w:tblW w:type="auto" w:w="0"/><w:tblInd w:type="dxa" w:w="0"/>',
+      '<w:tblLayout w:type="autofit"/><w:jc w:val="left"/>',
+      traditionalMargins,
+    ])
+      expect(read(fixture(automatic, grid, repeat(kids)), 14).legacyContentAlignment).toBe(true);
+    for (const kids of ['<w:tblInd w:type="dxa" w:w="144"/>', '<w:jc w:val="center"/>'])
+      expect(
+        read(fixture(automatic, grid, repeat(kids)), 14).legacyContentAlignment
+      ).toBeUndefined();
+  });
+
+  test('a tracked row exception lays out its current properties, not the earlier ones', () => {
+    const automatic = properties.replace('type="pct" w:w="5000"', 'type="auto" w:w="0"');
+    const wide = traditionalMargins.replaceAll('w:w="108"', 'w:w="216"');
+    const tracked = (current: string, earlier: string) =>
+      (row + row).replaceAll(
+        '<w:tr>',
+        `<w:tr><w:tblPrEx>${current}<w:tblPrExChange w:id="1" w:author="A">` +
+          `<w:tblPrEx>${earlier}</w:tblPrEx></w:tblPrExChange></w:tblPrEx>`
+      );
+    const repeated = read(fixture(automatic, grid, tracked(traditionalMargins, wide)), 14);
+    expect(repeated.legacyContentAlignment).toBe(true);
+    const changed = read(fixture(automatic, grid, tracked(wide, traditionalMargins)), 14);
+    expect(changed.legacyContentAlignment).toBeUndefined();
+  });
+
   for (const mode of [11, 12, 14]) {
     test(`mode ${mode} uses the grid-confirmed outer margins without rewriting preferences`, () => {
       const { part, table } = open();
@@ -72,7 +128,10 @@ describe('explicit legacy full-width content alignment', () => {
       expect(tableOriginX(structure, 200)).toBeCloseTo(-5.4, 8);
       expect(structure.tableWidth).toEqual({ type: 'pct', value: 100 });
       expect(structure.layoutFixed).toBe(false);
-      expect(structure.rows[0]!.cells[0]!.preferredWidth).toEqual({ type: 'pct', value: 20 });
+      expect(structure.rows[0]!.cells[0]!.preferredWidth).toEqual({
+        type: 'pct',
+        value: 20,
+      });
       expect(serializeOoxmlPart(part)).toBe(before);
     });
   }
@@ -195,7 +254,10 @@ describe('explicit legacy full-width content alignment', () => {
     const rows = `<w:tr>${cell(1603, 'x')}${cell(801, 'y')}${cell(2596, 'z')}</w:tr>`;
     const legacy = read(fixture(properties + margins, columns, rows), 11, 0, 300);
     expect(legacy.columnWidthsPt).toEqual([100, 50, 162]);
-    expect(legacy.rows[0]!.cells[0]!.preferredWidth).toEqual({ type: 'pct', value: 32.06 });
+    expect(legacy.rows[0]!.cells[0]!.preferredWidth).toEqual({
+      type: 'pct',
+      value: 32.06,
+    });
     const modern = read(fixture(properties + margins, columns, rows), 15, 0, 300);
     expect(modern.columnWidthsPt.reduce((a, b) => a + b, 0)).toBeCloseTo(300, 8);
     const wider = read(
@@ -236,7 +298,11 @@ describe('explicit legacy full-width content alignment', () => {
     const result = layoutSemanticDocument(part, 0, {
       compatibilityMode: 11,
       measurer: createFixedMeasurer(4.9, 15.6),
-      geometry: { width: 344, height: 120, margin: { left: 72, right: 72, top: 10, bottom: 10 } },
+      geometry: {
+        width: 344,
+        height: 120,
+        margin: { left: 72, right: 72, top: 10, bottom: 10 },
+      },
     });
     expect(result.pages.length).toBeGreaterThan(1);
     let seenRows = 0;

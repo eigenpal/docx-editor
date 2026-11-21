@@ -49,6 +49,7 @@ import type { DrawingPositionInput } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
 import { guardToolbarMousedown } from '../toolbar/ToolbarButton';
+import { useImageFilePaste } from './useImageFilePaste';
 
 const HANDLES: readonly ImageResizeHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 const AUTO_SCROLL_EDGE_PX = 40;
@@ -151,9 +152,18 @@ export const ImageSelectionOverlay = defineComponent({
     const pointerStartRef = shallowRef<{ readonly x: number; readonly y: number } | null>(null);
     const captureTargetRef = shallowRef<HTMLElement | null>(null);
     const overlayRef = shallowRef<HTMLDivElement | null>(null);
-    // Focus sits on the overlay, so copy, cut and paste reach the editor from here.
+    // Focus sits on the overlay, so copy, cut and paste reach the editor from here, and an
+    // image file pastes from here as it does from the pages.
+    const pasteImageFile = useImageFilePaste();
     watch([overlayRef, editorRef], ([element, editor], _previous, onCleanup) => {
-      if (element && editor) onCleanup(forwardClipboardEvents(element, editor));
+      if (!element || !editor) return;
+      const unforward = forwardClipboardEvents(element, editor);
+      // Bound after the engine's listener, so the engine sees a paste first, as in React.
+      element.addEventListener('paste', pasteImageFile);
+      onCleanup(() => {
+        unforward();
+        element.removeEventListener('paste', pasteImageFile);
+      });
     });
     const focusRequestedForDrawingRef = shallowRef<string | null>(null);
     const scrollPortRef = shallowRef<ImageOverlayScrollPort | null>(null);
