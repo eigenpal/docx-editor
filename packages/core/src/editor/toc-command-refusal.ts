@@ -22,6 +22,7 @@ import {
   tocParagraphRanges,
   tocRefusesJoin,
   tocRefusesParagraphFormatting,
+  tocRefusesSectionMark,
   tocRefusesTextWrite,
 } from './surface-toc-ranges.ts';
 
@@ -38,6 +39,8 @@ const TEXT_AT_SELECTION_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set([
   'insertNote',
   'proposeDeletion',
   'proposeReplacement',
+  'insertImage',
+  'insertChart',
 ]);
 
 /** Commands that wrap or mark the selection without replacing it. */
@@ -100,11 +103,16 @@ function refusesInToc(command: EditorCommand, surface: PaginatedSurface, part: O
   if (!selection) return false; // An unresolvable target meets its own refusal.
   const head = selection.head.paragraphId;
   if (TEXT_AT_SELECTION_COMMANDS.has(type)) {
-    return tocRefusesTextWrite(part, selection, paragraphIdsBetween(surface, selection));
+    // A section break also ends a section at the caret's paragraph.
+    const sectionBreak = command.type === 'insertBreak' && command.kind.startsWith('section');
+    return (
+      tocRefusesTextWrite(part, selection, paragraphIdsBetween(surface, selection)) ||
+      (sectionBreak && tocRefusesSectionMark(part, head))
+    );
   }
   if (MARK_SELECTION_COMMANDS.has(type)) return selectionTouchesTocRange(part, selection);
   if (type === 'mergeParagraphs') return tocRefusesJoin(part, mergedParagraphIds(surface));
-  // A table splits the caret's paragraph; a text box anchors at the paragraph's end.
+  // A table splits the caret's paragraph; a text box anchors at its end.
   if (type === 'insertTable') return paragraphInBodyToc(part, head);
   if (type === 'insertTextBox') return tocAtParagraphEnd(part, head);
   if (RUN_FORMATS.has(type)) {

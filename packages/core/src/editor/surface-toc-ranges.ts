@@ -161,6 +161,12 @@ export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
   return inspect(op);
 }
 
+/** Whether the TOC guard refuses a section mark on a paragraph (see `opTouchesTocRange`). */
+export function tocRefusesSectionMark(part: OoxmlPart, paragraphId: string): boolean {
+  return tocParagraphRanges(part).some(
+    (r) => r.paragraphId === paragraphId && !holdsOnlyEndMark(r)
+  );
+}
 /**
  * Whether the TOC guard refuses a join of `paragraphIds` into the first one: every one
  * of them is removed or restructured, except a first paragraph that holds only the end

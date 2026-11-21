@@ -60,6 +60,7 @@ const PROPOSE_DELETE = { type: 'proposeDeletion', author: 'A' } as EditorCommand
 const HEADER: EditorCommand = { type: 'editHeaderFooter', position: 'header' };
 const SECTION = { type: 'insertBreak', kind: 'section' } as EditorCommand;
 const MARGINS = { type: 'setPageSetup', marginTop: 90 } as EditorCommand;
+const CHART = { type: 'insertChart', chartType: 'columnClustered' } as EditorCommand;
 const WATERMARK = { type: 'setWatermark', watermark: { text: 'DRAFT' } } as EditorCommand;
 
 // [label, body, selection, command, refused]
@@ -111,6 +112,11 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
   ['caret in a row: page setup is not written at the caret', BODY, [1, 2, 1, 2], MARGINS, false],
   ['caret in a row: section break', BODY, [1, 2, 1, 2], SECTION, true],
   ['closing line: section break ends a section after the TOC', BODY, [3, 0, 3, 0], SECTION, false],
+  ['text before the field: section break', INLINE, [0, 2, 0, 2], SECTION, true],
+  ['heading after the end mark: section break', INLINE, [1, 5, 1, 5], SECTION, true],
+  ['after the TOC: section break', INLINE, [2, 2, 2, 2], SECTION, false],
+  ['caret in a row: chart', BODY, [1, 2, 1, 2], CHART, true],
+  ['after the TOC: chart', BODY, [4, 1, 4, 1], CHART, false],
 ];
 
 for (const [label, body, place, command, refused] of CASES) {
@@ -182,4 +188,33 @@ test('a section break on the closing line keeps the field and survives save and 
   expect(serializeOoxmlPart(surface.session.part()).match(/<w:sectPr[ >]/g)?.length ?? 0).toBe(1);
   editor.load(await editor.save());
   expect(detectBodyTocs(editor.surface!.session.part())).toHaveLength(1);
+});
+
+test('a picture is not inserted into a cached row', async () => {
+  const png = Uint8Array.from(
+    atob(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+    ),
+    (character) => character.charCodeAt(0)
+  );
+  const picture = {
+    type: 'insertImage',
+    data: png,
+    mime: 'image/png',
+    widthPoints: 10,
+    heightPoints: 10,
+  } as const;
+  const inRow = mountAt(BODY, [1, 2, 1, 2]);
+  const before = serializeOoxmlPart(inRow.surface.session.part());
+  expect(inRow.editor.canExecuteImageCommand(picture)).toMatchObject({
+    ok: false,
+    reason: READ_ONLY,
+  });
+  expect(await inRow.editor.executeImageCommand(picture)).toMatchObject({
+    ok: false,
+    reason: READ_ONLY,
+  });
+  expect(serializeOoxmlPart(inRow.surface.session.part())).toBe(before);
+  const after = mountAt(BODY, [4, 1, 4, 1]);
+  expect(after.editor.canExecuteImageCommand(picture).ok).toBe(true);
 });
