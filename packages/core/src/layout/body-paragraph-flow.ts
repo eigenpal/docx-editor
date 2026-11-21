@@ -17,7 +17,9 @@ import { tocLinkRangesOf } from './toc-link-formatting.ts';
 export function bodyParagraphOptionFlow(
   paragraph: OoxmlElement,
   options: SemanticLayoutOptions
-): Partial<ParagraphFlowOptions> {
+): Partial<ParagraphFlowOptions> & {
+  readonly tocLinkStyleRanges: ParagraphFlowOptions['tocLinkStyleRanges'];
+} {
   return {
     columnBreaksEndColumns: true,
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),

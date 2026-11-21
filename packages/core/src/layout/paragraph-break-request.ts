@@ -188,8 +188,16 @@ export interface ParagraphBreakRequest {
   readonly pageContext?: FieldPageContext;
   readonly flow: Omit<
     ParagraphFlowOptions,
-    'lineSpacing' | 'typography' | 'equationCacheToken' | 'themeFonts' | 'markRunProperties'
-  >;
+    | 'lineSpacing'
+    | 'typography'
+    | 'equationCacheToken'
+    | 'themeFonts'
+    | 'markRunProperties'
+    | 'tocLinkStyleRanges'
+  > & {
+    /** Required, so a new story flow cannot skip the TOC rule. Outside a TOC, pass `undefined`. */
+    readonly tocLinkStyleRanges: ParagraphFlowOptions['tocLinkStyleRanges'];
+  };
 }
 
 let measuredParagraphs: string[] | null = null;

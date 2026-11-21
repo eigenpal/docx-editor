@@ -9,7 +9,7 @@ import {
   paragraphFragmentsOf,
   type SemanticLayout,
 } from '../index.ts';
-import { tocLinkCascader } from '../toc-link-formatting.ts';
+import { tocLinkCascader, tocLinkRanges } from '../toc-link-formatting.ts';
 import { cascadeRunProperties } from '../style-cascade.ts';
 import type { OoxmlProperty } from '../../store/store/tree-op-types.ts';
 
@@ -214,6 +214,26 @@ test('many styles named Hyperlink stay bounded to the first few', () => {
   );
   expect(style('Early')).toMatchObject(DROPPED);
   expect(style('Late')).toMatchObject(KEPT);
+});
+
+test('many links in one TOC row join into one searchable range', () => {
+  const links = Array.from(
+    { length: 20_000 },
+    () => `<w:hyperlink w:anchor="_TocA">${run('x')}</w:hyperlink>`
+  ).join('');
+  const nested = `${linkStart}<w:hyperlink w:anchor="_TocA">${run('Nested')}</w:hyperlink>${linkEnd}`;
+  const part = documentOf(
+    `<w:p>${tocBegin()}</w:p><w:p>${links}${run('Gap')}${nested}</w:p><w:p>${tocEnd}</w:p>`
+  );
+  const ranges = [...tocLinkRanges(part, buildStyleCascadeTable(styles.root)).values()];
+  // Touching links join. "Gap" is plain text; the link nested in a link field overlaps and
+  // joins into the field unit.
+  expect(ranges.map((list) => list.map(({ start, end }) => [start, end]))).toEqual([
+    [
+      [0, 20_000],
+      [20_003, 20_004],
+    ],
+  ]);
 });
 
 test('any run cascader drops the Hyperlink style ids a TOC range carries', () => {

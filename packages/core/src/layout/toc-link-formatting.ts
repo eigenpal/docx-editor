@@ -29,7 +29,7 @@ export interface TocLinkRange {
   readonly end: number;
   /**
    * The ids of the character styles that are the Hyperlink style, resolved from the style table
-   * by definition. Every range of one layout shares the same array.
+   * by definition. At most four ids.
    */
   readonly styleIds: readonly string[];
 }
@@ -227,8 +227,39 @@ export function tocLinkRanges(
       ranges.set(id, list);
     }
   }
+  for (const [id, list] of ranges) ranges.set(id, mergedRanges(list));
   cache.set(part, { styles, ranges });
   return ranges;
+}
+
+/**
+ * Sorted, with overlapping and touching ranges joined: a `w:hyperlink` inside a `HYPERLINK`
+ * field overlaps, and adjacent links touch. The cascader can then search the list.
+ */
+function mergedRanges(list: readonly TocLinkRange[]): TocLinkRange[] {
+  const sorted = [...list].sort((a, b) => a.start - b.start);
+  const merged: TocLinkRange[] = [];
+  for (const range of sorted) {
+    const last = merged.at(-1);
+    if (last && range.start <= last.end) {
+      merged[merged.length - 1] = { ...last, end: Math.max(last.end, range.end) };
+    } else merged.push(range);
+  }
+  return merged;
+}
+
+/** The range that holds `at`, by binary search over sorted, disjoint ranges. */
+function rangeAt(ranges: readonly TocLinkRange[], at: number): TocLinkRange | undefined {
+  let low = 0;
+  let high = ranges.length - 1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    const range = ranges[middle]!;
+    if (at < range.start) high = middle - 1;
+    else if (at >= range.end) low = middle + 1;
+    else return range;
+  }
+  return undefined;
 }
 
 /**
@@ -244,7 +275,7 @@ export function tocLinkCascader(
   if (!cascade || !ranges?.length) return cascade;
   return (inherited, direct) => {
     const at = position();
-    const range = ranges.find((r) => at >= r.start && at < r.end);
+    const range = rangeAt(ranges, at);
     if (!range) return cascade(inherited, direct);
     return cascade(
       inherited,
@@ -279,11 +310,11 @@ export function tocLinkStyleToken(ranges: TocLinkRanges): string {
   // A layout-cache token, never persisted: hash a length-framed join rather than canonicalizing
   // a copy of every range. Length framing stays injective whatever characters an id carries.
   const parts: string[] = [];
+  // Each range's style ids (at most four) are in the token: a renamed style changes them.
   for (const [paragraphId, list] of ranges) {
     parts.push(paragraphId, list.map((range) => `${range.start},${range.end}`).join(';'));
+    for (const range of list) parts.push(String(range.styleIds.length), ...range.styleIds);
   }
-  // Every range shares one style id list; a renamed style changes which references drop.
-  parts.push(...(ranges.values().next().value?.[0]?.styleIds ?? []));
   const token = fnv1a64Hex(framedTokenJoin(parts));
   tokens.set(ranges, token);
   return token;
