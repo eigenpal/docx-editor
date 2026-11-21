@@ -40,6 +40,8 @@ function part(xml: string) {
   if (!result.ok) throw new Error(result.reason);
   return result.part;
 }
+// No declared compatibility mode: a legacy mode, so its admission limit applies to every probe
+// that does not pass `mode`.
 const settings = part(
   `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`
 );
@@ -63,8 +65,6 @@ function layout(
     readonly firstRunProps?: string;
     /** `w:overflowPunct`; off unless set. */
     readonly overflowPunct?: boolean;
-    /** `w:characterSpacingControl` with a declared mode. */
-    readonly compression?: string;
   } = {
     eastAsianDefaults: true,
   },
@@ -88,7 +88,7 @@ function layout(
         { ...NO_THEME_FONTS, eastAsianFontTableFaces: ['test cjk'] },
         sourcePolicy?.mode
           ? part(
-              `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="${sourcePolicy.compression ?? 'compressPunctuation'}"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${sourcePolicy.mode}"/></w:compat></w:settings>`
+              `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${sourcePolicy.mode}"/></w:compat></w:settings>`
             ).root
           : settings.root
       ),
@@ -684,4 +684,23 @@ test('a legacy final mark whose ink passes its middle gives only its blank trail
   expect(first(81.5)).toBe('甲、乙、丙、');
   // With its ink inside the middle, the same group takes 18 pt.
   expect(linesAt('left', 14, undefined, '甲、乙、丙、丁。戊', 78)[0]).toBe('甲、乙、丙、丁。');
+});
+
+test('a legacy hanging fit skips the half-advance limit', () => {
+  // `ab。` hangs its mark; the 23 pt the rest needs passes half of the group's 36 pt.
+  const resolved: TextMeasurer = { ...measurer, hasResolvedFont: () => true };
+  const first = (overflowPunct: boolean) =>
+    layout(
+      '甲、乙、丙、丁、戊、己、庚ab。辛',
+      160,
+      13,
+      resolved,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode: 14, overflowPunct },
+      'left'
+    )[0]!
+      .spans.map((span) => span.text)
+      .join('');
+  expect(first(true)).toBe('甲、乙、丙、丁、戊、己、庚ab。');
+  expect(first(false)).toBe('甲、乙、丙、丁、戊、己、庚');
 });

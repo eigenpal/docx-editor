@@ -35,9 +35,11 @@ export function isHangul(cp: number): boolean {
 }
 export const isCjk = (cp: number): boolean => isIdeographicForLineBreak(cp) || isHangul(cp);
 /** Text in a Korean language, or with Hangul (`isHangul`) whatever its language. */
-export const koreanText = (text: string, language: string): boolean =>
-  /^ko(?:-|$)/.test(language) ||
-  /[\u1100-\u11ff\u3130-\u318f\ua960-\ua97f\uac00-\ud7ff]/u.test(text);
+export function koreanText(text: string, language: string): boolean {
+  if (/^ko(?:-|$)/i.test(language)) return true;
+  for (const character of text) if (isHangul(character.codePointAt(0)!)) return true;
+  return false;
+}
 export const hasCjkText = (text: string): boolean =>
   /[\u1100-\u11ff\u2e80-\u318f\u31c0-\u9fff\ua960-\ua97f\uac00-\ud7ff\uf900-\ufaff\ufe30-\ufe4f\uff01-\uff9f\u{20000}-\u{323af}]/u.test(
     text

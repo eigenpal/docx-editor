@@ -38,7 +38,8 @@ export function legacyKoreanMarks(cells: readonly Cell[]): ReadonlySet<Cell> {
  * words or numbers when it ends in a closing mark, joins a line only when the compression it
  * needs, less what its own marks can still give, is at most half its natural advance. A Latin
  * closing quote that ends the group counts as a closing mark that gave its trailing half. Groups
- * of other text, punctuation-only groups, kana fits, and hanging fits are not limited.
+ * with other text (a space included), punctuation-only groups, kana fits, and hanging fits are
+ * not limited.
  *
  * @param cells - The line's cells, then the candidate group's cells.
  * @param sourceCount - The number of line spans; cells from later spans are the group.
@@ -75,12 +76,12 @@ export function exceedsLegacyAdmission(
   return ideograph && deficit > half + TOLERANCE;
 }
 /**
- * A justified line, or any line in a legacy mode, takes another ordinary glyph by compression only when the share of the
- * compression capacity it spends is at most the expansion that leaving the glyph off would
- * need. Expansion counts in 1/64 of each advance before the line's last glyph: the advances
- * whose gaps the shorter line would spread its room over. A final mark that hangs or drops its
- * trailing half stays in the deficit and counts as capacity, and a candidate that opens with a
- * bracket is gated too.
+ * A justified line, or any line in a legacy mode, takes another ordinary glyph by compression
+ * only when the share of the compression capacity it spends is at most the expansion that
+ * leaving the glyph off would need. Expansion counts in 1/64 of each advance before the line's
+ * last glyph: the advances whose gaps the shorter line would spread its room over. A final mark
+ * that hangs or drops its trailing half stays in the deficit and counts as capacity, and a
+ * candidate that opens with a bracket is gated too.
  */
 export function expansionGate(
   cells: readonly Cell[],
