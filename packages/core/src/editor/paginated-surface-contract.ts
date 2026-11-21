@@ -777,6 +777,14 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
    * landed on no lane at all (nothing to insert).
    */
   pasteRich(text: string, html: string | null): boolean;
+  /**
+   * How many refusals the surface has published. Read it before a call, and pass it to
+   * {@link PaginatedSurface.refusalSince} after: the call's own refusal, whatever else
+   * moved the state meanwhile.
+   */
+  refusalCount(): number;
+  /** The latest refusal published after `count` refusals, or null when none was. */
+  refusalSince(count: number): string | null;
   /** The next paste routes plain, whatever its payload carries (Cmd+Shift+V). */
   armForcePlainPaste(): void;
   /** Remove the selection, if any. Returns whether anything was deleted. */

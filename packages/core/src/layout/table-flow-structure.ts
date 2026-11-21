@@ -77,7 +77,7 @@ export function withParentTableLayout(
 }
 const fixedParentDeps = new WeakMap<TableFlowDeps, TableFlowDeps>();
 const nestingStructures = new WeakMap<SemanticTableStructure, boolean>();
-function holdsNestedTable(structure: SemanticTableStructure): boolean {
+export function holdsNestedTable(structure: SemanticTableStructure): boolean {
   let known = nestingStructures.get(structure);
   if (known === undefined) {
     known = structure.rows.some((row) =>

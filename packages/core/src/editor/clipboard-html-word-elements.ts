@@ -1,7 +1,7 @@
 import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { escapeCssString } from '../store/package/sinks.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
-import { HIGHLIGHT_COLOR_HEX } from '../output/semantic-paint.ts';
+import { HIGHLIGHT_COLOR_HEX } from '../output/semantic-paint-highlight-colors.ts';
 
 /** The painter's full ST_Underline vocabulary (output/semantic-paint.ts
  *  UNDERLINE_STYLE), as canonical emission values. The closed allowlist is what

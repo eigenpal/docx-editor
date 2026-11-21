@@ -53,12 +53,13 @@ function layout(
   sourcePolicy: { readonly eastAsianDefaults?: boolean; readonly kern?: number } = {
     eastAsianDefaults: true,
   },
-  jc = 'both'
+  jc = 'both',
+  overflowPunctuation = false
 ) {
   const run = (value: string) =>
     `<w:r><w:rPr><w:sz w:val="24"/>${sourcePolicy?.kern === undefined ? '' : `<w:kern w:val="${sourcePolicy.kern}"/>`}${runProps}</w:rPr><w:t xml:space="preserve">${value}</w:t></w:r>`;
   const source = part(
-    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:jc w:val="${jc}"/><w:overflowPunct w:val="0"/></w:pPr>${split === -1 ? [...text].map(run).join('') : run(text.slice(0, split)) + run(text.slice(split))}</w:p></w:body></w:document>`
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:jc w:val="${jc}"/><w:overflowPunct w:val="${overflowPunctuation ? 1 : 0}"/></w:pPr>${split === -1 ? [...text].map(run).join('') : run(text.slice(0, split)) + run(text.slice(split))}</w:p></w:body></w:document>`
   );
   return linesOf(
     layoutSemanticDocument(source, 0, {
@@ -466,4 +467,95 @@ test('a document whose defaults name no East Asian face compresses no punctuatio
     );
   expect(text(true)).toEqual(['甲乙（丙丁）戊己']);
   expect(text(false)).toEqual(['甲乙（丙丁）戊', '己']);
+});
+
+const trackedProps = (spacing: number) =>
+  '<w:rFonts w:ascii="Test Latin" w:hAnsi="Test Latin" w:eastAsia="Test CJK" w:hint="eastAsia"/>' +
+  `<w:lang w:eastAsia="zh-CN"/><w:spacing w:val="${spacing}"/>`;
+const tracked: TextMeasurer = {
+  ...measurer,
+  hasResolvedFont: () => true,
+  inkBounds(value, style) {
+    return value === '，'
+      ? { left: 0.08 * style.fontSizePt, right: 0.34 * style.fontSizePt }
+      : measurer.inkBounds?.(value, style);
+  },
+};
+const lineTexts = (lines: ReturnType<typeof layout>) =>
+  lines.map((line) => line.spans.map((span) => span.text).join(''));
+
+// A Latin run on a later line makes the paragraph mixed. It cannot veto the seams of a first
+// line tracked by `w:spacing` that holds no Latin group: that line breaks as it does without the Latin run.
+for (const spacing of [-4, 4]) {
+  for (const hanging of [false, true]) {
+    test(`a tracked East Asian line fits in a mixed paragraph (${spacing} twips, hanging ${hanging})`, () => {
+      const base = '甲乙丙丁戊己，庚辛壬癸子丑寅卯辰巳午未申酉，戌亥春夏秋冬风雨雷电，晴雪朝暮';
+      const wrap = (suffix: string, width: number) =>
+        layout(
+          base + suffix,
+          width,
+          undefined,
+          tracked,
+          trackedProps(spacing),
+          undefined,
+          'both',
+          hanging
+        );
+      let fitted = 0;
+      for (let width = 330; width <= 400; width += 1) {
+        const mixed = wrap('A1', width);
+        const pure = wrap('中文', width);
+        expect(lineTexts(mixed)[0]).toBe(lineTexts(pure)[0]);
+        const comma = mixed[0]!.spans.find((span) => span.text === '，' && span.box.width < 11.9);
+        if (comma) {
+          fitted += 1;
+          // Ideographs keep their authored spacing; only the punctuation gives up blank sides.
+          for (const span of mixed[0]!.spans.filter((entry) =>
+            /^[\u4e00-\u9fff]+$/u.test(entry.text)
+          ))
+            expect(span.style.characterSpacingPt).toBe(spacing / 20);
+        }
+      }
+      expect(fitted).toBeGreaterThan(0);
+      const latin = wrap('A1', 371)
+        .flatMap((line) => line.spans)
+        .find((span) => span.text.includes('A1'));
+      expect(latin?.style.characterSpacingPt).toBe(spacing / 20);
+    });
+  }
+}
+
+// A word, a mathematical run, a symbol, or a curly quote on a tracked line keeps every bracket at
+// its tracked advance, before or after the tracked text; the untracked line compresses the pair.
+test('a tracked line that holds a word, a mathematical run, a symbol, or a curly quote keeps its brackets', () => {
+  const props = (spacing: number) =>
+    spacing ? trackedProps(spacing) : trackedProps(0).replace(/<w:spacing[^>]*\/>/u, '');
+  for (const [prefix, foreign] of [
+    ['', 'AV'],
+    ['AV', '甲'],
+    ['', '≥'],
+    ['', '℃'],
+    ['', '“乙”'],
+  ] as const) {
+    const text = `${prefix}甲乙丙丁戊己）（庚辛壬癸${foreign}子丑寅卯辰巳午未申酉戌亥春夏秋冬风雨雷电晴雪朝暮`;
+    const brackets = (spacing: number, width: number) => {
+      const first = layout(text, width, undefined, tracked, props(spacing))[0]!.spans;
+      // Only a first line that holds the foreign text must keep its brackets.
+      return first.some((span) => /[A-Z≥℃“]/u.test(span.text))
+        ? first.filter((span) => /^[（）]$/u.test(span.text))
+        : [];
+    };
+    let compressed = 0;
+    let held = 0;
+    for (let width = 330; width <= 400; width += 1) {
+      if (brackets(0, width).some((span) => span.box.width < 11.9)) compressed += 1;
+      for (const spacing of [-4, 4])
+        for (const span of brackets(spacing, width)) {
+          held += 1;
+          expect(span.box.width).toBeCloseTo(12 + spacing / 20, 6);
+        }
+    }
+    expect(held).toBeGreaterThan(0);
+    expect(compressed).toBeGreaterThan(0);
+  }
 });

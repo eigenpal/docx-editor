@@ -160,16 +160,23 @@ function cellsOf(
 ): Cell[] | undefined {
   const cells: Cell[] = [];
   let length = 0;
+  // Authored run tracking (`w:rPr/w:spacing`) qualifies a line only while it holds East Asian
+  // text, punctuation, and spaces alone: such a line fits as it would in a paragraph without
+  // Latin text.
+  let tracked = false;
+  let foreign = false;
   for (const [sourceIndex, span] of spans.entries()) {
     length += span.text.length;
     if (length > 4096 || !allowed(span)) return undefined;
     const face = styleForFontSlot(span.style, span.fontSlot);
     // This narrower path applies only when the old paragraph-wide gate failed.
-    // Keep authored tracking/scaling, complex lanes, and unqualified faces intact.
+    // Keep authored scaling, complex lanes, and unqualified faces intact.
     if (requireLocalQualification) {
       const authored = layoutDerivedSpacingStyleForEditing(face);
+      tracked ||= authored.characterSpacingPt !== 0;
+      // A refused line stops before it measures the rest of its spans.
       if (
-        authored.characterSpacingPt !== 0 ||
+        (tracked && foreign) ||
         authored.horizontalScalePercent !== 100 ||
         authored.shaping !== undefined ||
         measurer.hasResolvedFont?.(face) !== true
@@ -178,6 +185,7 @@ function cellsOf(
       // Keep a qualified mathematical run opaque. Its existing shaped advance is
       // immutable, and neither adjacent boundary can supply compression capacity.
       if (/^\p{Sm}+$/u.test(span.text) && /[^\x00-\x7f]/u.test(span.text)) {
+        foreign = true;
         if (!Number.isFinite(span.box.width) || span.box.width <= 0) return undefined;
         cells.push({
           sourceIndex,
@@ -211,6 +219,7 @@ function cellsOf(
         // An all-space group has no ink: it blocks adjacent seams without vetoing others. A word,
         // a symbol, or a Latin-face curly quote is a glyph that an adjacent blank side can face.
         const ordinaryOpaque = numberMarker || /[^\p{White_Space}\p{Cf}\p{M}]/u.test(span.text);
+        foreign ||= ordinaryOpaque;
         cells.push({
           sourceIndex,
           alreadyReduced: 0,
@@ -229,16 +238,18 @@ function cellsOf(
     const clusters = fittingClusters(span.text);
     // The paragraph path holds only CJK text and punctuation. On the local path, a digit,
     // symbol, or other punctuation becomes an opaque glyph below: it keeps its advance.
+    const opaque = clusters.filter(
+      (cluster) =>
+        cluster.text !== ' ' &&
+        !isCjk(cluster.text.codePointAt(0)!) &&
+        !PUNCTUATION.test(cluster.text)
+    );
     if (
-      clusters.some(
-        (cluster) =>
-          cluster.text !== ' ' &&
-          !isCjk(cluster.text.codePointAt(0)!) &&
-          !PUNCTUATION.test(cluster.text) &&
-          !(requireLocalQualification && EAST_ASIAN_OPAQUE.test(cluster.text))
-      )
+      !opaque.every((cluster) => requireLocalQualification && EAST_ASIAN_OPAQUE.test(cluster.text))
     )
       return undefined;
+    // An East Asian face symbol or a curly quote, like a Latin group, keeps a tracked line out.
+    foreign ||= opaque.length > 0 || (curlyAllowed && clusters.some((c) => curlyRole(c.text)));
     // One prefix-width list per span text keeps the memo linear in the text length.
     const ends = memoized(memo, span, 'prefixEnds', span.text, () =>
       clusters.map((cluster) =>
@@ -305,6 +316,7 @@ function cellsOf(
       previous = end;
     }
   }
+  if (tracked && foreign) return undefined;
   return cells;
 }
 // A glyph a blank side can face: an ideograph, punctuation, a qualified quote, an East Asian
@@ -760,7 +772,10 @@ export function createParagraphCjkOpticalFitter(
 export interface CjkOpticalFitterOptions {
   /** A final mark that may hang past the margin needs no fit for itself. */
   readonly hangingPunctuation: boolean;
-  /** Fit only text in qualified faces without authored tracking or scaling. */
+  /**
+   * Fit only text in qualified faces without authored scaling (`w:w`). Authored tracking
+   * (`w:rPr/w:spacing`) qualifies only on a line of East Asian text, punctuation, and spaces.
+   */
   readonly requireLocalQualification?: boolean;
   /** The paragraph typography, for the line-start rules of hanging and kana fits. */
   readonly policy?: CjkParagraphTypography;

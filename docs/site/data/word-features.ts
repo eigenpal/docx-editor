@@ -153,7 +153,7 @@ export const wordFeatures: WordFeature[] = [
     id: 'text.sub-superscript',
     name: 'Subscript & superscript',
     notes:
-      'Raised and lowered text increases automatic and minimum line heights to fit. Exact line spacing keeps its specified height.',
+      'Raised and lowered text and inline pictures increase automatic and minimum line heights to fit. Exact line spacing keeps its specified height.',
     category: 'text',
     editing: 'full',
     rendering: 'full',
@@ -592,7 +592,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Both adapters insert, paste, move, and resize inline PNG, JPEG, and GIF images. Drops show a destination caret, explain blocked positions, and scroll near viewport edges. Custom drop handlers can supply image bytes; movement stays within the active editing region.',
+      "Both adapters insert, paste, move, and resize inline PNG, JPEG, and GIF images within the active editing region. A pasted image file goes before a selected drawing's anchor. Drops show a destination caret, explain blocked positions, scroll near viewport edges, and accept image bytes from custom handlers.",
   },
   {
     id: 'images.anchored',
@@ -1234,7 +1234,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The editor preserves embedded objects and shows supported inline preview pictures as read-only content. It never executes, loads, or updates embedded objects. Floating and linked objects show no preview, and clipboard operations refuse object content.',
+      'The editor preserves embedded objects and shows supported preview pictures as read-only content. It never executes, loads, or updates embedded objects. Linked objects show no preview, and clipboard operations refuse object content.',
   },
   {
     id: 'structure.protection',
@@ -1295,7 +1295,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Rich paste restores supported formatting, tables, images, notes, equations, fields, and tracked changes from compatible clipboard content. A selected picture, shape, line, text box, or group in the body copies whole. Sections, headers, footers, and comments do not transfer, and paste outside the body uses plain text.',
+      'Rich paste restores supported formatting, tables, images, notes, equations, fields, and tracked changes from compatible clipboard content. A selected body drawing copies whole; pasting on one goes before its anchor or into its text box. Sections, headers, footers, and comments do not transfer, and paste outside the body uses plain text.',
   },
   {
     id: 'collab.undo-redo',

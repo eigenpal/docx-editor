@@ -39,7 +39,7 @@ VITE_SENTRY_DSN=https://<key>@<org>.ingest.sentry.io/<project>
 
 - Type, add paragraphs, and zoom. Watch **Typing delay** and **Engine work per edit**.
 - Open a file that is not a `.docx` file with **Open a .docx file**. The event log shows `open.zip-corrupt` with its hint.
-- Select a picture, then drop or paste another picture. The editor refuses the insert with `edit.picture-selected`.
+- In suggesting mode, select a picture, then paste a picture file. The editor refuses the insert with `edit.picture-selected`. The toolbar insert is disabled there and shows the reason.
 - Clear **Share anonymous diagnostics**. The editor stops recording new telemetry until you select it again. The OpenTelemetry SDK still exports previously recorded metrics. Apply the same consent choice to your Sentry and OpenTelemetry SDKs.
 
 ## How it is built
