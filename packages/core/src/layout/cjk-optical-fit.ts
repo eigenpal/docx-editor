@@ -33,8 +33,8 @@ const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
 const PUNCTUATION = /^[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]$/u;
 const HAS_PUNCTUATION = /[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]/u;
 // Latin-face text kept whole on a qualified line: Latin script, digits, symbols, and
-// punctuation. Other scripts and controls still refuse: automatic East Asian spacing covers
-// only Latin text. In the East Asian face, letters refuse too: a split word loses its kerning.
+// punctuation. Other scripts and controls still refuse: automatic East Asian spacing
+// (`w:autoSpaceDE`) covers only Latin text. In the East Asian face, letters refuse too.
 const OPAQUE_TEXT = /^[ \p{Script=Latin}\p{N}\p{S}\p{P}\p{M}]+$/u;
 const EAST_ASIAN_OPAQUE = /^[\p{N}\p{S}\p{P}][\p{M}]*$/u;
 const TOLERANCE = 0.001;
