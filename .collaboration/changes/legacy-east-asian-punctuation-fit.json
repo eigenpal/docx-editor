@@ -2,7 +2,7 @@
   "impact": "no-impact",
   "fields": [],
   "before": "Only justified paragraphs compressed East Asian punctuation to fit a line, and a lone trailing space could compress a line.",
-  "after": "Legacy compatibility modes also fit left, centered, right, and right-to-left lines, with a half-advance admission limit and no fits for Korean language or Hangul text. Trailing spaces before a wrapping word never compress a line.",
+  "after": "Legacy compatibility modes also fit left, centered, right, and right-to-left lines, with a half-advance admission limit and no compression of Korean text or marks (by language, or after Hangul on the line). Trailing spaces before a wrapping word never compress a line.",
   "reason": "Only derived line layout changes. Model ranges, operations, and serialized collaboration state stay the same.",
   "tests": [
     "packages/core/src/layout/__tests__/cjk-optical-fit.test.ts",

@@ -606,14 +606,13 @@ The layout engine SHALL fit a line by compressing East Asian punctuation against
 
 ### Requirement: East Asian punctuation fitting in legacy compatibility modes
 
-In a legacy compatibility mode (no declared mode, 11, 12, or 14), punctuation fitting SHALL apply at every alignment, except to Korean-language or Hangul text. A group of East Asian characters and punctuation SHALL join a line only when the compression it needs, less what its own marks can still give, is at most half its natural advance. Latin words and numbers count when the group ends in a closing mark. Other groups, kana fits, and hanging marks skip the limit.
+In a legacy compatibility mode (no declared mode, 11, 12, or 14), punctuation fitting SHALL apply at every alignment. A group of East Asian characters and punctuation SHALL join a line only when the compression it needs, less what its own marks can still give, is at most half its natural advance. Latin words and numbers count when the group ends in a closing mark, and a Latin closing quote that ends the group counts as a closing mark. Other groups, kana fits, and hanging marks skip the limit.
 
 #### Scenario: A legacy mode fits lines at every alignment
 
 - **GIVEN** no declared compatibility mode, or mode 11, 12, or 14, with document punctuation compression and an East Asian default face
 - **WHEN** a left-aligned, centered, right-aligned, or justified line fits one more ideograph only when its punctuation compresses
 - **THEN** the line fits it, in Simplified Chinese, Traditional Chinese, Japanese, or no declared language
-- **AND** Korean text wraps instead
 
 #### Scenario: A legacy group of a Latin word and a final mark admits at most half its advance
 
@@ -621,12 +620,35 @@ In a legacy compatibility mode (no declared mode, 11, 12, or 14), punctuation fi
 - **WHEN** the group needs more than half its natural advance after its mark drops its trailing half
 - **THEN** the group wraps at every alignment, while compatibility mode 15 still fits the justified line
 
+#### Scenario: A legacy group that ends in a Latin closing quote admits at most half its advance
+
+- **GIVEN** a legacy-mode line of ideographs and six commas followed by the group `ab”`
+- **WHEN** the group needs more than half its natural advance after the quote counts its trailing half as given
+- **THEN** the group wraps, while compatibility mode 15 still fits the justified line
+
 #### Scenario: A legacy line admits at most half an ideograph of compression
 
 - **GIVEN** a legacy-mode 12 pt line `甲。乙，丙` whose two blank sides could give more than 6 pt
 - **WHEN** the measure is 54 pt, 6 pt short of the natural width
 - **THEN** `丙` joins the line at every alignment
 - **AND** at 53.9 pt it wraps, while compatibility mode 15 still fits the justified line
+
+### Requirement: Korean text in legacy East Asian punctuation fitting
+
+In a legacy compatibility mode, a candidate group with Korean-language or Hangul text SHALL wrap instead of fitting. A Korean-language mark, and a mark after Hangul on the line, SHALL keep its advance; Korean text without marks SHALL NOT stop other marks from compressing.
+
+#### Scenario: Korean text wraps in a legacy mode
+
+- **GIVEN** a legacy-mode line that fits one more character only when its punctuation compresses
+- **WHEN** that character is Hangul, or text in a Korean language
+- **THEN** the character wraps at every alignment
+
+#### Scenario: A legacy mode compresses no Korean mark
+
+- **GIVEN** a legacy-mode left-aligned line whose only marks are Korean-language marks, or marks after Hangul
+- **WHEN** the next Chinese ideograph fits only when those marks compress
+- **THEN** the ideograph wraps
+- **AND** marks before Hangul on the line still compress, and compatibility mode 15 compresses Korean marks on a justified line
 
 ### Requirement: East Asian punctuation fitting capacity
 

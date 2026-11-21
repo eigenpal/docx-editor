@@ -39,6 +39,7 @@ import {
   isFullWidthKana,
   kanaFitBound,
   kanaShare,
+  legacyKoreanMarks,
   shareAmong,
   type KanaFitRules,
 } from './cjk-optical-capacity.ts';
@@ -364,6 +365,8 @@ function fitCjkOptically(
   const sourceCount = line.spans.length;
   const cells = lineCells(context, line, candidates);
   if (!cells) return undefined;
+  // A legacy mode compresses no Korean mark (`legacyKoreanMarks`); it keeps its advance.
+  const held = context.legacyAdmission ? legacyKoreanMarks(cells) : undefined;
   const first = cells.find((cell) => cell.sourceIndex === sourceCount)!;
   const last = cells.at(-1)!;
   const beforeLast = cells.at(-2);
@@ -384,7 +387,12 @@ function fitCjkOptically(
   // Otherwise the final closing bearing is removed first. A bracket's measured ink must stay
   // inside; a quote gives its whole trailing half even where its ink reaches past the middle.
   let deferredFinal = 0;
-  if (!hangsLast && (CLOSING.test(last.span.text) || curlyFinal) && finiteInk(last)) {
+  if (
+    !hangsLast &&
+    (CLOSING.test(last.span.text) || curlyFinal) &&
+    finiteInk(last) &&
+    !held?.has(last)
+  ) {
     const inkEnd = curlyFinal ? 0 : last.ink.right + (last.span.glyphOffsetPt ?? 0);
     const extent = Math.max(last.natural / 2, inkEnd);
     const finalCapacity = Math.max(0, last.span.box.width - extent);
@@ -396,13 +404,21 @@ function fitCjkOptically(
       deficit -= last.reduction;
     }
   }
-  if (
-    context.legacyAdmission &&
-    !kana &&
-    !hangsLast &&
-    exceedsLegacyAdmission(cells, sourceCount, deficit)
-  )
-    return undefined;
+  if (held && !kana && !hangsLast) {
+    // A Latin closing quote that ends the group counts as a closing mark that gave its half.
+    const quote =
+      /[’”]$/u.test(last.span.text) && last.ordinaryOpaque ? last.span.text.at(-1)! : '';
+    const quoteAdvance = quote
+      ? memoized(context.memo, last.span, 'natural', quote, () =>
+          measureDisplayText(
+            quote,
+            { ...styleForFontSlot(last.span.style, last.span.fontSlot), characterSpacingPt: 0 },
+            measurer
+          )
+        )
+      : 0;
+    if (exceedsLegacyAdmission(cells, sourceCount, deficit, held, quoteAdvance)) return undefined;
+  }
   const kanaCells = kana ? kanaFitCells(cells, isFullWidthKana) : [];
   const kanaCapacity = kanaCells.reduce(
     (sum, cell) => sum + kanaCapacityOf(cell, kanaShare(cell)),
@@ -440,10 +456,13 @@ function fitCjkOptically(
     const current = cells[index]!;
     if (!fitNeighbour(previous) || !fitNeighbour(current)) continue;
     const right =
-      CLOSING.test(previous.span.text) ||
-      previous.span.text === '：' ||
-      previous.qualifiedCurly === 'closing';
-    const left = OPENING.test(current.span.text) || current.qualifiedCurly === 'opening';
+      (CLOSING.test(previous.span.text) ||
+        previous.span.text === '：' ||
+        previous.qualifiedCurly === 'closing') &&
+      !held?.has(previous);
+    const left =
+      (OPENING.test(current.span.text) || current.qualifiedCurly === 'opening') &&
+      !held?.has(current);
     if (!right && !left) continue;
     if (
       (!previous.ordinaryOpaque && !finiteInk(previous)) ||

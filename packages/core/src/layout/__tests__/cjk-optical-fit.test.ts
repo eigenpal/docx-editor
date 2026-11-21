@@ -604,3 +604,52 @@ test('a legacy group of a Latin word and a final mark admits at most half its ad
   }
   expect(first(15, 'both', 117)).toBe('甲、乙、丙、丁、戊ab。');
 });
+
+test('a legacy group that ends in a Latin closing quote admits at most half its advance', () => {
+  // `ab”` counts as a group with a final closing mark: the quote gives its trailing half.
+  const resolved: TextMeasurer = { ...measurer, hasResolvedFont: () => true };
+  const first = (width: number, mode = 14, jc = 'left') =>
+    layout(
+      '甲、乙、丙、丁、戊、己、庚ab”辛',
+      width,
+      13,
+      resolved,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode },
+      jc
+    )[0]!
+      .spans.map((span) => span.text)
+      .join('');
+  // 195 pt natural; six marks could give 36 pt, the group admits 24 pt.
+  expect(first(171)).toBe('甲、乙、丙、丁、戊、己、庚ab”');
+  expect(first(170)).toBe('甲、乙、丙、丁、戊、己、庚');
+  expect(first(170, 14, 'both')).toBe('甲、乙、丙、丁、戊、己、庚');
+  // Compatibility mode 15 has no such limit on a justified line.
+  expect(first(170, 15, 'both')).toBe('甲、乙、丙、丁、戊、己、庚ab”');
+});
+
+test('a legacy mode compresses no Korean mark to fit a line', () => {
+  const korean = '<w:lang w:eastAsia="ko-KR"/>';
+  const first = (text: string, split: number, firstRunProps = '', mode = 14, jc = 'left') =>
+    layout(
+      text,
+      70,
+      split,
+      measurer,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode, firstRunProps },
+      jc
+    )[0]!
+      .spans.map((span) => span.text)
+      .join('');
+  // `丁` needs 2 pt from the marks of the first run.
+  expect(first('甲、乙、丙丁戊', 4)).toBe('甲、乙、丙丁');
+  // A Korean mark, by language or after Hangul, keeps its advance.
+  expect(first('甲、乙、丙丁戊', 4, korean)).toBe('甲、乙、丙');
+  expect(first('가、나、丙丁戊', 4)).toBe('가、나、丙');
+  expect(first('가、나、丙丁戊', 4, '', 14, 'both')).toBe('가、나、丙');
+  // Compatibility mode 15 compresses Korean marks on a justified line.
+  expect(first('甲、乙、丙丁戊', 4, korean, 15, 'both')).toBe('甲、乙、丙丁');
+  // Hangul after the marks does not stop them.
+  expect(first('甲、乙、가丁戊', 4)).toBe('甲、乙、가丁');
+});

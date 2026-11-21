@@ -2,7 +2,8 @@
 // of justified lines, the half-advance limit of legacy modes, and the kana shares.
 import type { PendingLine } from './pending-line.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
-import { isCjk } from './cjk-paragraph-breaks.ts';
+import { isCjk, isHangul } from './cjk-paragraph-breaks.ts';
+import { eastAsianLanguage } from './cjk-typography.ts';
 import { kanaShareLimit } from './kana-sound-mark-fit.ts';
 import {
   blankSided,
@@ -16,24 +17,49 @@ import {
 // The fit gate weighs expansion in units of 1/64 of an advance (see `expansionGate`).
 const EXPANSION_UNITS = 64;
 /**
+ * The marks of a legacy-mode line that keep their advances: a Korean mark, by its language, and
+ * any mark after Hangul on the line. Korean text without marks does not stop other marks.
+ */
+export function legacyKoreanMarks(cells: readonly Cell[]): ReadonlySet<Cell> {
+  const held = new Set<Cell>();
+  let afterHangul = false;
+  for (const cell of cells) {
+    afterHangul ||= isHangul(cell.span.text.codePointAt(0)!);
+    if (
+      blankSided(cell) &&
+      (afterHangul || /^ko(?:-|$)/.test(eastAsianLanguage(cell.span.props) ?? ''))
+    )
+      held.add(cell);
+  }
+  return held;
+}
+/**
  * In a legacy compatibility mode, a group of East Asian characters and punctuation, with Latin
  * words or numbers when it ends in a closing mark, joins a line only when the compression it
- * needs, less what its own marks can still give, is at most half its natural advance. Groups
+ * needs, less what its own marks can still give, is at most half its natural advance. A Latin
+ * closing quote that ends the group counts as a closing mark that gave its trailing half. Groups
  * of other text, punctuation-only groups, kana fits, and hanging fits are not limited.
  *
  * @param cells - The line's cells, then the candidate group's cells.
  * @param sourceCount - The number of line spans; cells from later spans are the group.
  * @param deficit - The compression still needed after the final mark's trailing half.
+ * @param held - The marks that keep their advances (`legacyKoreanMarks`).
+ * @param quoteAdvance - The advance of a Latin closing quote that ends the group, or 0.
  * @returns Whether the group must wrap instead of joining the line.
  */
 export function exceedsLegacyAdmission(
   cells: readonly Cell[],
   sourceCount: number,
-  deficit: number
+  deficit: number,
+  held: ReadonlySet<Cell>,
+  quoteAdvance: number
 ): boolean {
   let ideograph = false;
   let half = 0;
-  const closes = CLOSING.test(cells.at(-1)!.span.text);
+  const last = cells.at(-1)!;
+  const closes =
+    CLOSING.test(last.span.text) || last.qualifiedCurly === 'closing' || quoteAdvance > 0;
+  deficit -= quoteAdvance / 2;
   for (const cell of cells) {
     if (cell.sourceIndex < sourceCount) continue;
     const mark = PUNCTUATION.test(cell.span.text) || cell.qualifiedCurly !== undefined;
@@ -41,7 +67,7 @@ export function exceedsLegacyAdmission(
     if (!mark && !opaque && !isCjk(cell.span.text.codePointAt(0)!)) return false;
     ideograph ||= !mark;
     half += cell.natural / 2;
-    if (blankSided(cell))
+    if (blankSided(cell) && !held.has(cell))
       deficit -= Math.max(0, cell.natural / 2 - cell.alreadyReduced - cell.reduction);
   }
   return ideograph && deficit > half + TOLERANCE;
