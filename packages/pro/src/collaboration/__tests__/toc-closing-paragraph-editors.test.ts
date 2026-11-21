@@ -322,3 +322,66 @@ for (const mode of ['pageNumbers', 'entire'] as const)
       harness.cleanup();
     }
   }, 10000);
+
+const joined =
+  '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText xml:space="preserve"> TOC </w:instrText>' +
+  '<w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Cached entry</w:t></w:r></w:p>' +
+  '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r><w:r><w:t>Heading</w:t></w:r></w:p>' +
+  '<w:p><w:r><w:t>After</w:t></w:r></w:p>';
+
+test('a table on a closing line with a heading lands after it on both peers, beside a concurrent edit', async () => {
+  const harness = createPeerHarness('toc-closing-line-table');
+  const editors: DocxEditorInstance[] = [];
+  try {
+    const pair = await harness.pair(zipDocument(joined));
+    const [left, right] = [pair.alice, pair.bob].map((peer) => {
+      peer.detach();
+      const editor = createDocxEditor({
+        container: document.createElement('div'),
+        document: peer.room.document,
+        modules: [collaborationModule({ session: peer.room.session })],
+      });
+      editors.push(editor);
+      return editor;
+    }) as [DocxEditorInstance, DocxEditorInstance];
+    await until(() => !!left.surface && !!right.surface);
+    const closingId = harness.paragraphIdAt(pair.alice, 1);
+    const caret = (editor: DocxEditorInstance, offset: number) =>
+      editor.surface!.setSelection({
+        anchor: { paragraphId: closingId, offset },
+        head: { paragraphId: closingId, offset },
+      });
+    caret(left, 0);
+    caret(right, 7);
+    pair.pause();
+    expect(left.exec({ type: 'insertTable', rows: 1, cols: 1 })).toMatchObject({ ok: true });
+    expect(right.exec({ type: 'insertText', text: 's' })).toMatchObject({ ok: true });
+    pair.alice.room.session.flushPendingJournals();
+    pair.bob.room.session.flushPendingJournals();
+    pair.resume();
+    const xml = async (editor: DocxEditorInstance) =>
+      strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    for (let attempt = 0; attempt < 100 && (await xml(left)) !== (await xml(right)); attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const saved = await xml(left);
+    expect(await xml(right)).toBe(saved);
+    expect(saved.indexOf('<w:tbl>')).toBeGreaterThan(saved.indexOf('Headings'));
+    expect(saved.indexOf('<w:tbl>')).toBeLessThan(saved.indexOf('After'));
+    // Undo removes the table on its peer, and the other peer follows.
+    expect(left.exec({ type: 'undo' })).toMatchObject({ ok: true });
+    pair.alice.room.session.flushPendingJournals();
+    for (let attempt = 0; attempt < 100 && (await xml(right)).includes('<w:tbl>'); attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(await xml(right)).not.toContain('<w:tbl>');
+    expect(await xml(right)).toContain('Headings');
+    for (const editor of [left, right]) {
+      expect(detectBodyTocs(editor.surface!.session.part())).toHaveLength(1);
+      expect(editor.exec({ type: 'refreshToc', mode: 'pageNumbers' })).toMatchObject({ ok: true });
+    }
+  } finally {
+    for (const editor of editors) editor.destroy();
+    harness.cleanup();
+  }
+}, 10000);

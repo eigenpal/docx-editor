@@ -161,3 +161,23 @@ test('Up and Down across a TOC keep the column on a closing line that holds a he
   expect(from(0, 3, 'down', true)).toEqual({ anchor: at(0, 3), head: at(2, 3) });
   expect(from(2, 3, 'up').head).toEqual(at(0, 3));
 });
+
+test('Shift+Up and Shift+Down cross a TOC with many rows in one step', () => {
+  const rows = Array.from({ length: 12 }, (_, index) => `<w:p>${run(`Entry ${index + 2}`)}</w:p>`);
+  const { at, from } = mount(
+    `<w:p>${run('Before')}</w:p><w:p>${begin}${run('Entry 1')}</w:p>${rows.join('')}<w:p>${end}${run('Heading')}</w:p>`
+  );
+  // 0 Before, 1-13 cached rows, 14 the end mark + "Heading".
+  expect(from(14, 3, 'up', true)).toEqual({ anchor: at(14, 3), head: at(0, 3) });
+  expect(from(0, 3, 'down', true)).toEqual({ anchor: at(0, 3), head: at(14, 3) });
+});
+
+test('Up and Down cross two adjacent TOCs', () => {
+  const second = `<w:p>${begin}${run('Other')}</w:p><w:p>${end}${run('Heading')}</w:p>`;
+  const first = `<w:p>${begin}${run('Entry')}</w:p><w:p>${run('Last row')}${end}</w:p>`;
+  const { at, from } = mount(`<w:p>${run('Before')}</w:p>${first}${second}`);
+  // 0 Before, 1-2 the first TOC (end mark in its last row), 3 a row of the second, 4 its end.
+  expect(from(0, 3, 'down').head).toEqual(at(4, 3));
+  expect(from(4, 3, 'up').head).toEqual(at(0, 3));
+  expect(from(0, 3, 'down', true)).toEqual({ anchor: at(0, 3), head: at(4, 3) });
+});

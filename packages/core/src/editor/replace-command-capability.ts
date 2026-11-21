@@ -1,11 +1,12 @@
 import type { CanResult, EditorCommand, ParagraphText } from '../contracts/editor.ts';
 import { replaceAcceptedTextRefusal } from './docx-editor-replace-accepted-text.ts';
+import { replaceAllMatchesRefusal } from './docx-editor-replace-all.ts';
 import { replaceMatchTarget } from './docx-editor-replace-match.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 /**
- * Why `can` refuses a `replaceMatch` or `replaceAcceptedText` that the command gate admitted,
- * from the same reads `exec` makes, or null. Other commands answer null.
+ * Why `can` refuses a `replaceMatch`, `replaceAcceptedText`, or `replaceAllMatches` that the
+ * command gate admitted, from the same reads `exec` makes, or null. Other commands answer null.
  */
 export function replaceCommandRefusal(
   command: EditorCommand,
@@ -20,5 +21,6 @@ export function replaceCommandRefusal(
     const paragraph = readParagraph(command.match.blockId);
     return replaceAcceptedTextRefusal(surface, paragraph, command);
   }
+  if (command.type === 'replaceAllMatches') return replaceAllMatchesRefusal(surface, command);
   return null;
 }

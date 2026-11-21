@@ -142,14 +142,8 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
     true,
   ],
   ['range in a row: remove link', BODY, [1, 1, 1, 4], UNLINK, true],
-  ['joined heading: table splits after the end mark', JOINED, [2, 3, 2, 3], TABLE, false],
-  [
-    'joined heading start: a table would land before the end mark',
-    JOINED,
-    [2, 0, 2, 0],
-    TABLE,
-    true,
-  ],
+  ['joined heading: table goes after the closing line', JOINED, [2, 3, 2, 3], TABLE, false],
+  ['joined heading start: table goes after the closing line', JOINED, [2, 0, 2, 0], TABLE, false],
   [
     'joined heading start: a bookmark would land before the end mark',
     JOINED,
@@ -303,6 +297,27 @@ test('replacing a match is refused in generated text and allowed outside it', ()
   const allowed = { type: 'replaceMatch', match: after!, text: 'Z' } as EditorCommand;
   expect(editor.can(allowed)).toEqual({ ok: true });
   expect(editor.exec(allowed)).toMatchObject({ ok: true, changed: true });
+});
+
+test('a table inserted on a closing line that holds a heading goes after it', () => {
+  for (const offset of [0, 3]) {
+    const { editor, surface } = mountAt(JOINED, [2, offset, 2, offset]);
+    expect(editor.exec(TABLE)).toMatchObject({ ok: true, changed: true });
+    const xml = serializeOoxmlPart(surface.session.part());
+    expect(xml.indexOf('<w:tbl>')).toBeGreaterThan(xml.indexOf('Heading'));
+    expect(xml.indexOf('<w:tbl>')).toBeLessThan(xml.indexOf('After'));
+    expect(detectBodyTocs(surface.session.part())).toHaveLength(1);
+    expect(editor.exec({ type: 'refreshToc', mode: 'entire' })).toMatchObject({ ok: true });
+  }
+});
+
+test('a table is unavailable on a closing line with a heading that ends its container', () => {
+  const body = `<w:p>${run('Before')}</w:p><w:sdt><w:sdtPr/><w:sdtContent><w:p>${begin}${run('Entry 1')}</w:p><w:p>${end}${run('Heading')}</w:p></w:sdtContent></w:sdt><w:p>${run('After')}</w:p>`;
+  const { editor, surface } = mountAt(body, [2, 3, 2, 3]);
+  const before = serializeOoxmlPart(surface.session.part());
+  expect(editor.can(TABLE).ok).toBe(false);
+  expect(editor.exec(TABLE)).toEqual(editor.can(TABLE));
+  expect(serializeOoxmlPart(surface.session.part())).toBe(before);
 });
 
 test('replacing accepted text is refused in generated text and allowed outside it', () => {

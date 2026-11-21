@@ -396,7 +396,7 @@ export function isDocumentProtectionBatch(ops: readonly { readonly op: string }[
   return ops.length > 0 && ops.every((op) => op.op === 'setDocumentProtection');
 }
 
-const LIFECYCLE_OPS: ReadonlySet<string> = new Set([
+const AWAY_FROM_CARET_OPS: ReadonlySet<string> = new Set([
   'createHeaderFooter',
   'deleteHeaderFooter',
   'linkToPrevious',
@@ -405,15 +405,20 @@ const LIFECYCLE_OPS: ReadonlySet<string> = new Set([
   'setDocumentProtection',
   'setWatermark',
   'setSectionProperties',
+  'deleteNote',
+  'convertNote',
+  'convertAllNotes',
+  'setNoteProperties',
+  'deleteBookmark',
 ]);
 
 /**
- * Whether every op is a package-level write (headers, footers, watermark, protection,
- * page setup). Such a write does not happen at the caret, so the caret's position has
- * nothing to say about it.
+ * Whether every op writes away from the caret: a package-level write (headers, footers,
+ * watermark, protection, page setup), a note lifecycle write, or a bookmark removal by name.
+ * The caret's position has nothing to say about such a write; its ops are judged alone.
  */
-export function isPackageLifecycleBatch(ops: readonly { readonly op: string }[]): boolean {
-  return ops.length > 0 && ops.every((op) => LIFECYCLE_OPS.has(op.op));
+export function isWriteAwayFromCaret(ops: readonly { readonly op: string }[]): boolean {
+  return ops.length > 0 && ops.every((op) => AWAY_FROM_CARET_OPS.has(op.op));
 }
 
 /** Lifecycle op kinds the surface may commit as package-level undo units. */

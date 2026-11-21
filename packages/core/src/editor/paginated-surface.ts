@@ -50,6 +50,7 @@ import {
   tocForElement,
   tocAtPosition,
   TOC_READ_ONLY_REFUSAL,
+  tocTableAnchor,
   selectionTouchesTocRange,
   opTouchesTocRange,
   paragraphInBodyToc,
@@ -357,7 +358,7 @@ import { createChartOps } from './surface-chart-ops.ts';
 import {
   createHeaderFooterScopeController,
   isDocumentProtectionBatch,
-  isPackageLifecycleBatch,
+  isWriteAwayFromCaret,
 } from './surface-hf-editing.ts';
 import { createNoteOps } from './surface-note-ops.ts';
 import { notePropertiesStateOf, notePreviewTextOf } from './surface-note-state.ts';
@@ -1184,7 +1185,7 @@ export function mountPaginatedSurface(
     session: gatedSession,
     storyScope,
     orderedRange: () => orderedRange(),
-    writeRefusal: () => writeRefusal(true),
+    writeRefusal: (name) => writeRefusal(true, name ? [{ op: 'deleteBookmark', name }] : []),
     commit: (run, selectionAfter) => commit(run, selectionAfter),
     // Show the text after a leading page break; `goTo` still selects the whole bookmark.
     goToPosition: (position, options) =>
@@ -3019,7 +3020,7 @@ export function mountPaginatedSurface(
       !protectionWrite &&
       ((checkSelection &&
         !formattingOutsideToc &&
-        !isPackageLifecycleBatch(ops) &&
+        !isWriteAwayFromCaret(ops) &&
         selectionTouchesToc()) ||
         ops.some((op) => opTouchesToc(op)))
     ) {
@@ -4048,6 +4049,8 @@ export function mountPaginatedSurface(
    */
   function insertTableOp(rows: number, cols: number) {
     if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || cols < 1) return null;
+    const beforeParagraphId = tocTableAnchor(session.part(), selection.head.paragraphId);
+    if (beforeParagraphId === null) return null;
     const section = structure.sectionPropertiesAt(selection.head.paragraphId);
     const contentWidth =
       section.pageSize.widthTwips -
@@ -4062,7 +4065,7 @@ export function mountPaginatedSurface(
     );
     return {
       op: 'insertTable' as const,
-      beforeParagraphId: selection.head.paragraphId,
+      beforeParagraphId,
       rows,
       cols,
       columnWidthTwips,

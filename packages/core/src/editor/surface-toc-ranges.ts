@@ -3,6 +3,7 @@ import { findNode } from '../store/package/ooxml-edit.ts';
 import { paragraphOffsetIndex, type OoxmlPart, type TreeDocOp } from '@docx-editor.dev/core/store';
 import { detectBodyTocs, tocFieldRange, type DetectedToc } from '../store/package/toc-detect.ts';
 import { treeOpReach } from '../store/store/tree-op-content-controls.ts';
+import { parentOf } from '../store/store/tree-op-nodes.ts';
 import type { SemanticPosition, SemanticSelection } from '../layout/semantic-interaction.ts';
 
 /** The refusal of a write into a generated table of contents. */
@@ -160,6 +161,21 @@ export function tocProtectsParagraph(part: OoxmlPart, paragraphId: string): bool
   return tocParagraphRanges(part).some(
     (r) => r.paragraphId === paragraphId && paragraphWriteTouches(r)
   );
+}
+/**
+ * The paragraph a table inserted at the caret goes before. A table goes before the caret's
+ * paragraph, except on a closing line that also holds text: there it would land inside the
+ * field result, so it goes after the closing line, as a pasted table does. Null when no
+ * paragraph follows the closing line in its container.
+ */
+export function tocTableAnchor(part: OoxmlPart, paragraphId: string): string | null {
+  const closing = tocParagraphRanges(part).some(
+    (r) => r.paragraphId === paragraphId && holdsOnlyEndMark(r) && r.length > 0
+  );
+  if (!closing) return paragraphId;
+  const siblings = parentOf(part, paragraphId)?.children ?? [];
+  const next = siblings[siblings.findIndex((child) => child.id === paragraphId) + 1];
+  return next?.kind === 'paragraph' ? next.id : null;
 }
 /**
  * Whether the TOC guard refuses a field inserted before a paragraph: any TOC paragraph

@@ -168,11 +168,18 @@ function writeRefusalResult({ raw, reason }: WriteRefusal): Refusal {
   return { ok: false, code, reason };
 }
 
-/** Run an admitted `replaceAllMatches`. */
-export function execReplaceAllMatches(
+/** The matches `replaceAllMatches` would write, per story, and the ones it skips. */
+interface ReplaceAllPlan {
+  readonly stories: ReadonlyMap<string, { scope: StoryScope; planned: PlannedMatch[] }>;
+  readonly skipped: number;
+  readonly firstRefusal: WriteRefusal | undefined;
+}
+
+/** Plan a `replaceAllMatches` without writing, or refuse a capped scan. */
+function planReplaceAll(
   surface: PaginatedSurface,
   command: ReplaceAllCommand
-): ExecResult {
+): ReplaceAllPlan | Refusal {
   const result = surface.session.findText(command.query, {
     ...(command.matchCase !== undefined ? { matchCase: command.matchCase } : {}),
     ...(command.wholeWord !== undefined ? { wholeWord: command.wholeWord } : {}),
@@ -237,6 +244,32 @@ export function execReplaceAllMatches(
     story.planned.push(plan);
     stories.set(storyKey(scope), story);
   }
+  return { stories, skipped, firstRefusal };
+}
+
+/**
+ * Why `can` refuses a `replaceAllMatches`, from the plan `exec` makes: a capped scan, or
+ * matches that are all refused, such as matches only in a table of contents. Null otherwise.
+ */
+export function replaceAllMatchesRefusal(
+  surface: PaginatedSurface,
+  command: ReplaceAllCommand
+): Refusal | null {
+  const plan = planReplaceAll(surface, command);
+  if ('ok' in plan) return plan;
+  if (plan.stories.size === 0 && plan.firstRefusal) return writeRefusalResult(plan.firstRefusal);
+  return null;
+}
+
+/** Run an admitted `replaceAllMatches`. */
+export function execReplaceAllMatches(
+  surface: PaginatedSurface,
+  command: ReplaceAllCommand
+): ExecResult {
+  const plan = planReplaceAll(surface, command);
+  if ('ok' in plan) return plan;
+  const { stories } = plan;
+  let { skipped, firstRefusal } = plan;
 
   // The caller's group when one is bound, else one minted here: each commit takes the bound
   // group, so it is bound again for every story.

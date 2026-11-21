@@ -51,7 +51,7 @@ export function bookmarkCommandRefusal(
       return { ok: false, code: 'unsupported', reason: 'the bookmark has no copies' };
   }
   if (command.type !== 'goToBookmark') {
-    const refusal = surface.bookmarkEditing.writeRefusal();
+    const refusal = surface.bookmarkEditing.writeRefusal(command.name);
     if (refusal) return { ok: false, code: 'locked', reason: refusal };
   }
   return null;
