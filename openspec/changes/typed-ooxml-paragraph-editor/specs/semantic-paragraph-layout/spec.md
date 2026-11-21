@@ -613,7 +613,7 @@ The layout engine SHALL fit a line by compressing East Asian punctuation against
 
 ### Requirement: East Asian punctuation fitting in legacy compatibility modes
 
-In a legacy compatibility mode (`w:compatSetting` `compatibilityMode` absent, 11, 12, or 14) with punctuation compression (`w:characterSpacingControl`), punctuation fitting SHALL apply at every alignment. An East Asian candidate group SHALL join a line only when the compression it needs, less what its own marks can still give, is at most half its natural advance. Latin words and numbers count when the group ends in a closing mark or a Latin closing quote. Punctuation-only groups, groups with other text or spaces, kana fits, and hanging marks skip the limit.
+In a legacy compatibility mode (`w:compatSetting` `compatibilityMode` absent, 11, 12, or 14), punctuation fitting SHALL apply at every alignment. An East Asian candidate group SHALL join a line only when the compression it needs, less what its own marks can give, is at most half its natural advance. Latin words and numbers count when the group ends in a closing mark or Latin closing quote. Groups of marks only, or with other text or spaces, kana fits, and hanging marks skip the limit.
 
 #### Scenario: A legacy mode fits lines at every alignment
 
