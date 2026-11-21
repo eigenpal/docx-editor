@@ -1,5 +1,5 @@
 // The content border and row minimum passes of a structure read, run again only around the
-// rows a row edit changed (`table-row-window.ts`).
+// rows a row edit changed (`table-row-range.ts`).
 
 import type { SemanticTableRow } from './semantic-table.ts';
 import type { TableBorderBox } from './table-borders.ts';
@@ -8,7 +8,7 @@ import {
   rowMinimumContentInsetsApply,
   stampRowMinimumContentInsets,
 } from './table-row-minimum-insets.ts';
-import { rowWindowPass } from './table-row-window.ts';
+import { rowWindowPass } from './table-row-range.ts';
 import { tableRowReuseEnabled } from './table-structure-rows.ts';
 
 const contentBorders = rowWindowPass();

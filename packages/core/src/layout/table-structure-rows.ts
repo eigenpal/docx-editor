@@ -5,7 +5,7 @@
 // persistent, so a row an edit leaves alone keeps its node, and each pass returns that row's
 // earlier result by identity. A row edit then resolves only the rows it changes and the rows
 // whose place changed: a new header block, a new last row, a row band that moved, or a merge
-// that now reaches them. Later passes can compare rows by identity (`table-row-window.ts`).
+// that now reaches them. Later passes can compare rows by identity (`table-row-range.ts`).
 
 import {
   flattenContentControls,
@@ -111,7 +111,7 @@ export function tableRowReuseTestRecorder(): {
   };
 }
 
-/** @internal Count one windowed pass (`table-row-window.ts`). */
+/** @internal Count one windowed pass (`table-row-range.ts`). */
 export function noteRowWindow(): void {
   if (counts) counts.windows += 1;
 }
