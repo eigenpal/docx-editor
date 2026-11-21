@@ -111,7 +111,15 @@ export function selectionTouchesTocRange(part: OoxmlPart, selection: SemanticSel
   // writes into generated paragraphs; selection endpoints catch edits starting inside one.
   return tocAtPosition(part, anchor) !== undefined || tocAtPosition(part, head) !== undefined;
 }
-export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
+/** Maps an offset an op names back to the part before its batch; see `batchTouchesTocRange`. */
+type BatchOffset = (paragraphId: string, offset: number) => number;
+const unmoved: BatchOffset = (_paragraphId, offset) => offset;
+
+export function opTouchesTocRange(
+  part: OoxmlPart,
+  op: TreeDocOp,
+  before: BatchOffset = unmoved
+): boolean {
   const ranges = tocParagraphRanges(part);
   if (ranges.length === 0) return false;
   // A new TOC before a paragraph inside an existing one would nest in its field.
@@ -122,7 +130,8 @@ export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
       ranges.some((r) => {
         if (target.nodeId !== r.paragraphId) return false;
         if (target.range) {
-          return rangeTouches(r, target.range.start, target.range.end);
+          const { start, end } = target.range;
+          return rangeTouches(r, before(r.paragraphId, start), before(r.paragraphId, end));
         }
         // A closing line that holds only the end mark takes the next paragraph's join, and a
         // section break that ends there; neither changes the field.
@@ -138,7 +147,8 @@ export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
   // Text typed inside a content control (a TOC control included) names the control and the
   // position it lands at; the position decides, as for a range op.
   if (reach.kind === 'control' && reach.at && !reach.replacesContent) {
-    const { paragraphId, offset } = reach.at;
+    const { paragraphId } = reach.at;
+    const offset = before(paragraphId, reach.at.offset);
     return ranges.some((r) => r.paragraphId === paragraphId && rangeTouches(r, offset, offset));
   }
   // Page setup names the paragraph whose section it writes; the section is not TOC content.
@@ -156,6 +166,38 @@ export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
 }
 
 /**
+ * Whether any op of a batch reaches generated content. The ranges describe the part before
+ * the batch, so a later op's offsets are read back through the text that earlier ops insert
+ * or delete: a link wrapped around text the batch just typed names that text, not the TOC.
+ */
+export function batchTouchesTocRange(part: OoxmlPart, ops: readonly TreeDocOp[]): boolean {
+  const edits: { paragraphId: string; at: number; inserted: number; deleted: number }[] = [];
+  const before: BatchOffset = (paragraphId, offset) => {
+    let at = offset;
+    for (let index = edits.length - 1; index >= 0; index -= 1) {
+      const edit = edits[index]!;
+      if (edit.paragraphId !== paragraphId || at <= edit.at) continue;
+      at = at >= edit.at + edit.inserted ? at - edit.inserted + edit.deleted : edit.at;
+    }
+    return at;
+  };
+  for (const op of ops) {
+    if (opTouchesTocRange(part, op, before)) return true;
+    if (op.op === 'insertText') {
+      edits.push({
+        paragraphId: op.paragraphId,
+        at: op.offset,
+        inserted: op.text.length,
+        deleted: 0,
+      });
+    } else if (op.op === 'deleteText') {
+      const deleted = op.end - op.start;
+      edits.push({ paragraphId: op.paragraphId, at: op.start, inserted: 0, deleted });
+    }
+  }
+  return false;
+}
+/**
  * Whether the TOC guard protects a paragraph from paragraph-level writes (its properties,
  * its mark, a table split): it holds generated text, or only the end mark. A closing line
  * that also holds a heading takes them freely.
@@ -165,17 +207,18 @@ export function tocProtectsParagraph(part: OoxmlPart, paragraphId: string): bool
     (r) => r.paragraphId === paragraphId && paragraphWriteTouches(r)
   );
 }
+/** Whether a paragraph is a closing line: it starts with a TOC's end mark. */
+export function tocIsClosingLine(part: OoxmlPart, paragraphId: string): boolean {
+  return tocParagraphRanges(part).some((r) => r.paragraphId === paragraphId && holdsOnlyEndMark(r));
+}
 /**
  * The paragraph a table inserted at the caret goes before. A table goes before the caret's
- * paragraph, except on a closing line that also holds text: there it would land inside the
- * field result, so it goes after the closing line, as a pasted table does. Null when no
- * paragraph follows the closing line in its container.
+ * paragraph, except on a closing line: there it would land inside the field result, so it
+ * goes after the closing line, as a pasted table does. Null when no paragraph follows the
+ * closing line in its container.
  */
 export function tocTableAnchor(part: OoxmlPart, paragraphId: string): string | null {
-  const closing = tocParagraphRanges(part).some(
-    (r) => r.paragraphId === paragraphId && holdsOnlyEndMark(r) && r.length > 0
-  );
-  if (!closing) return paragraphId;
+  if (!tocIsClosingLine(part, paragraphId)) return paragraphId;
   const siblings = parentOf(part, paragraphId)?.children ?? [];
   const next = siblings[siblings.findIndex((child) => child.id === paragraphId) + 1];
   return next?.kind === 'paragraph' ? next.id : null;
@@ -219,16 +262,31 @@ export function tocRefusesTextWrite(
   return tocRefusesJoin(part, paragraphIds);
 }
 /**
- * Whether an end of the selection sits right before the end mark of a closing line. Text
- * typed there lands after the mark, but an object or a wrapper inserted there lands before
- * it, inside the field result, where a refresh would drop it.
+ * Whether an end of the selection sits right at the end mark, on a closing line or after the
+ * last generated text. Text typed there lands after the mark, but an object or a wrapper
+ * inserted there lands before it, inside the field result, where a refresh would drop it.
  */
 export function tocAtEndMarkEdge(part: OoxmlPart, selection: SemanticSelection): boolean {
   return tocParagraphRanges(part).some(
     (r) =>
-      holdsOnlyEndMark(r) &&
+      r.endsHere &&
       [selection.anchor, selection.head].some(
-        (end) => end.paragraphId === r.paragraphId && end.offset === 0
+        (end) => end.paragraphId === r.paragraphId && end.offset === r.end
+      )
+  );
+}
+/**
+ * Whether an end of the selection sits right before a TOC that begins inside a paragraph.
+ * Text typed there lands before the begin mark, but an inserted object lands after the
+ * field's separator, inside the result, where a refresh would drop it.
+ */
+export function tocAtBeginMarkEdge(part: OoxmlPart, selection: SemanticSelection): boolean {
+  return tocParagraphRanges(part).some(
+    (r) =>
+      r.startsHere &&
+      r.start > 0 &&
+      [selection.anchor, selection.head].some(
+        (end) => end.paragraphId === r.paragraphId && end.offset === r.start
       )
   );
 }

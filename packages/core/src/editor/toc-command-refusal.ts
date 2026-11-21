@@ -14,6 +14,7 @@ import {
   TOC_READ_ONLY_REFUSAL,
   TOC_TABLE_REFUSAL,
   selectionTouchesTocRange,
+  tocAtBeginMarkEdge,
   tocAtEndMarkEdge,
   tocAtParagraphEnd,
   tocParagraphRanges,
@@ -24,6 +25,7 @@ import {
   tocRefusesRunFormatting,
   tocRefusesSectionMark,
   tocRefusesTextWrite,
+  tocIsClosingLine,
   tocTableAnchor,
 } from './surface-toc-ranges.ts';
 
@@ -34,16 +36,19 @@ import {
  * - `text`: it writes text over the selection, so it is refused where the selection reaches
  *   generated content, or a range across paragraphs would remove or join a TOC paragraph.
  * - `mark`: it wraps or marks the selection without replacing it.
- * - `join`: `mergeParagraphs`. `table`: splits the caret's paragraph. `textBox`: anchors at
- *   the paragraph's end. `toc`: inserts a field before the caret's paragraph.
+ * - `join`: `mergeParagraphs`. `table`: goes before the caret's paragraph, or after a
+ *   closing line. `textBox`: anchors at the paragraph's end. `toc`: inserts a field before
+ *   the caret's paragraph.
  * - `runFormat`, `paragraphFormat`: formats drop the writes that reach a TOC and are
  *   refused when none is left; `whole` writers are refused when any write reaches one.
  *
  * `writesEmptyMark`: at a caret in an empty paragraph the format writes the paragraph mark
  * instead of arming the next typed text.
- * `beforeEndMark`: the command inserts before the end mark when the selection starts a
- * closing line, inside the field result, where a refresh would drop it. `atTarget`: the
- * command writes at its resolved `target` (or `match`) rather than at the selection.
+ * `beforeEndMark`: at the end mark (on a closing line or after the last generated text) the
+ * command inserts before the mark, inside the field result, where a refresh would drop it.
+ * `afterBeginMark`: right before a TOC that begins inside a paragraph, the command inserts
+ * after the field's separator, inside the result. `atTarget`: the command writes at its
+ * resolved `target` (or `match`) rather than at the selection.
  */
 interface TocPolicy {
   readonly kind:
@@ -59,6 +64,7 @@ interface TocPolicy {
   readonly whole?: true;
   readonly writesEmptyMark?: true;
   readonly beforeEndMark?: true;
+  readonly afterBeginMark?: true;
   readonly atTarget?: true;
 }
 
@@ -103,12 +109,12 @@ const TOC_POLICIES: Readonly<Record<EditorCommand['type'], TocPolicy>> = {
   goToBookmark: NONE,
   insertBookmark: { kind: 'mark', beforeEndMark: true },
   insertBreak: TEXT,
-  insertChart: TEXT,
+  insertChart: { kind: 'text', afterBeginMark: true },
   insertColumn: NONE,
   insertContentControl: { kind: 'mark', beforeEndMark: true, atTarget: true },
   insertHyperlink: { kind: 'mark', beforeEndMark: true },
-  insertImage: { kind: 'text', atTarget: true },
-  insertNote: { kind: 'text', beforeEndMark: true },
+  insertImage: { kind: 'text', atTarget: true, afterBeginMark: true },
+  insertNote: { kind: 'text', beforeEndMark: true, afterBeginMark: true },
   insertPageField: NONE,
   insertRow: NONE,
   insertTable: { kind: 'table' },
@@ -243,6 +249,7 @@ function refusesInToc(
   if (!selection) return false; // An unresolvable target meets its own refusal.
   const head = selection.head.paragraphId;
   if (policy.beforeEndMark && tocAtEndMarkEdge(part, selection)) return true;
+  if (policy.afterBeginMark && tocAtBeginMarkEdge(part, selection)) return true;
   switch (policy.kind) {
     case 'text': {
       // A section break also ends a section at the caret's paragraph.
@@ -257,7 +264,12 @@ function refusesInToc(
     case 'join':
       return tocRefusesJoin(part, mergedParagraphIds(surface));
     case 'table':
-      return selectionTouchesTocRange(part, selection) || tocProtectsParagraph(part, head);
+      // A closing line sends the table after itself (`tocTableAnchor`), so its own mark is
+      // not written.
+      return (
+        selectionTouchesTocRange(part, selection) ||
+        (tocProtectsParagraph(part, head) && !tocIsClosingLine(part, head))
+      );
     case 'textBox':
       return tocAtParagraphEnd(part, head);
     case 'toc':

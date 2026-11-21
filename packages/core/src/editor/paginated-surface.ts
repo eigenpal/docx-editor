@@ -53,6 +53,7 @@ import {
   tocTableAnchor,
   selectionTouchesTocRange,
   opTouchesTocRange,
+  batchTouchesTocRange,
   paragraphInBodyToc,
   tocProtectsParagraph,
 } from './surface-toc-ranges.ts';
@@ -3022,7 +3023,7 @@ export function mountPaginatedSurface(
         !formattingOutsideToc &&
         !isWriteAwayFromCaret(ops) &&
         selectionTouchesToc()) ||
-        ops.some((op) => opTouchesToc(op)))
+        batchTouchesTocRange(session.part(), ops))
     ) {
       return TOC_READ_ONLY_REFUSAL;
     }

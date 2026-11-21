@@ -181,3 +181,12 @@ test('Up and Down cross two adjacent TOCs', () => {
   expect(from(4, 3, 'up').head).toEqual(at(0, 3));
   expect(from(0, 3, 'down', true)).toEqual({ anchor: at(0, 3), head: at(4, 3) });
 });
+
+test('arrows cross a TOC without cached rows, whose closing line is hidden', () => {
+  const empty = `<w:p>${begin}</w:p><w:p>${end}</w:p>`;
+  const { at, from } = mount(`<w:p>${run('Before')}</w:p>${empty}<w:p>${run('After')}</w:p>`);
+  // 0 Before, 1 begin and separator only, 2 the hidden closing line, 3 After.
+  expect(from(0, 6, 'right').head).toEqual(at(3, 0));
+  expect(from(3, 0, 'left').head).toEqual(at(0, 6));
+  expect(from(0, 3, 'down').head.paragraphId).toBe(at(3, 0).paragraphId);
+});

@@ -7,6 +7,7 @@ import type { OoxmlPart } from '@docx-editor.dev/core/store';
 import type { DetectedToc } from '../store/package/toc-detect.ts';
 import type { NavigationCommand, SemanticPosition } from '../layout/semantic-interaction.ts';
 import { tocAtPosition, tocEscapePosition, tocParagraphRanges } from './surface-toc-ranges.ts';
+import { tocFieldChromeParagraphIds } from '../layout/toc-layout.ts';
 
 /** The part of a navigation result this lane reads. */
 interface CaretMove {
@@ -156,11 +157,19 @@ function editableBeside<M extends CaretMove>(
     if (side === 'before' && edge.start > 0) {
       return { paragraphId: edge.paragraphId, offset: edge.start };
     }
-    // Ordinary text after the end mark, or a closing line that holds only the mark.
-    if (side === 'after' && (edge.end < edge.length || (edge.length === 0 && !edge.startsHere))) {
+    // Ordinary text after the end mark, or a shown closing line that holds only the mark.
+    // A TOC without cached rows hides its closing line, so the caret cannot stop there.
+    const shownClosing =
+      edge.length === 0 &&
+      !edge.startsHere &&
+      !tocFieldChromeParagraphIds(part).has(edge.paragraphId);
+    if (side === 'after' && (edge.end < edge.length || shownClosing)) {
       return { paragraphId: edge.paragraphId, offset: edge.end };
     }
-    const from = { paragraphId: edge.paragraphId, offset: side === 'after' ? edge.length : 0 };
+    // A hidden closing line has no caret position to step from; its TOC's first line does.
+    const hidden = side === 'after' && tocFieldChromeParagraphIds(part).has(edge.paragraphId);
+    const origin = hidden ? ranges.find((r) => r.toc.id === toc.id && r.startsHere)! : edge;
+    const from = { paragraphId: origin.paragraphId, offset: side === 'after' ? origin.length : 0 };
     const next = step(from, side === 'after' ? 'right' : 'left');
     if (!next || samePosition(next.position, from)) return null;
     const inside = tocAtPosition(part, next.position);

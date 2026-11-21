@@ -102,7 +102,7 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
   ['closing line: merge the next paragraph into it', BODY, [3, 0, 3, 0], MERGE, false],
   ['caret in a row: table', BODY, [1, 2, 1, 2], TABLE, true],
   ['range from a row into the next paragraph: table', BODY, [1, 2, 4, 1], TABLE, true],
-  ['closing line: table splits a TOC paragraph', BODY, [3, 0, 3, 0], TABLE, true],
+  ['closing line: table goes after it', BODY, [3, 0, 3, 0], TABLE, false],
   ['after the TOC: table', BODY, [4, 1, 4, 1], TABLE, false],
   ['caret in a row: text box', BODY, [1, 2, 1, 2], TEXT_BOX, true],
   ['closing line: text box anchors after the end mark', BODY, [3, 0, 3, 0], TEXT_BOX, false],
@@ -128,6 +128,18 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
   ['text before the field: section break', INLINE, [0, 2, 0, 2], SECTION, true],
   ['heading after the end mark: section break', INLINE, [1, 5, 1, 5], SECTION, true],
   ['after the TOC: section break', INLINE, [2, 2, 2, 2], SECTION, false],
+  ['end mark after cached text: link', INLINE, [1, 2, 1, 2], LINK, true],
+  ['end mark after cached text: link over the heading', INLINE, [1, 2, 1, 5], LINK, true],
+  ['end mark after cached text: bookmark', INLINE, [1, 2, 1, 2], BOOKMARK, true],
+  ['end mark after cached text: content control', INLINE, [1, 2, 1, 2], CONTROL, true],
+  ['end mark after cached text: footnote', INLINE, [1, 2, 1, 2], NOTE, true],
+  ['end mark after cached text: typing', INLINE, [1, 2, 1, 2], TYPE, false],
+  ['inside the heading: link', INLINE, [1, 3, 1, 5], LINK, false],
+  ['before a TOC that begins mid-paragraph: footnote', INLINE, [0, 6, 0, 6], NOTE, true],
+  ['before a TOC that begins mid-paragraph: chart', INLINE, [0, 6, 0, 6], CHART, true],
+  ['before a TOC that begins mid-paragraph: typing', INLINE, [0, 6, 0, 6], TYPE, false],
+  ['before a TOC that begins mid-paragraph: bookmark', INLINE, [0, 6, 0, 6], BOOKMARK, false],
+  ['text before a TOC: footnote', INLINE, [0, 3, 0, 3], NOTE, false],
   ['caret in a row: chart', BODY, [1, 2, 1, 2], CHART, true],
   ['range across the TOC: chart would remove it', BODY, [0, 1, 4, 2], CHART, true],
   ['closing line: a new TOC would nest in the field', BODY, [3, 0, 3, 0], TOC, true],
@@ -189,10 +201,15 @@ test('toolbar controls are disabled inside the TOC, and on the closing line wher
   for (const slot of [...run, ...paragraph]) {
     expect(toolbarCommandState(inRow, slot)).toMatchObject(disabled);
   }
-  // On the closing line, a run format is armed for the text typed next.
+  // On the closing line, a run format is armed for the text typed next, and a table goes
+  // after the line. Paragraph formats would write the line's mark.
   const closing = mountAt(BODY, [3, 0, 3, 0]).editor;
-  for (const slot of run) expect(toolbarCommandState(closing, slot).enabled).toBe(true);
-  for (const slot of paragraph) expect(toolbarCommandState(closing, slot)).toMatchObject(disabled);
+  for (const slot of [...run, 'table.insert' as const]) {
+    expect(toolbarCommandState(closing, slot).enabled).toBe(true);
+  }
+  for (const slot of paragraph.filter((slot) => slot !== 'table.insert')) {
+    expect(toolbarCommandState(closing, slot)).toMatchObject(disabled);
+  }
   const after = mountAt(BODY, [4, 1, 4, 1]).editor;
   for (const slot of [...run, ...paragraph]) {
     expect(toolbarCommandState(after, slot).enabled).toBe(true);
@@ -325,6 +342,27 @@ test('a table is unavailable on a closing line with a heading that ends its cont
     expect(editor.exec(TABLE)).toEqual(editor.can(TABLE));
     expect(serializeOoxmlPart(surface.session.part())).toBe(before);
   }
+});
+
+test('a link typed in text before a TOC that begins mid-paragraph is written', () => {
+  for (const offset of [0, 3, 6]) {
+    for (const command of [LINK, { ...LINK, text: 'site' } as EditorCommand]) {
+      const { editor, surface } = mountAt(INLINE, [0, offset, 0, offset]);
+      expect(editor.can(command)).toEqual({ ok: true });
+      expect(editor.exec(command)).toMatchObject({ ok: true, changed: true });
+      const xml = serializeOoxmlPart(surface.session.part());
+      expect(xml.indexOf('</w:hyperlink>')).toBeLessThan(xml.indexOf('w:fldCharType="begin"'));
+    }
+  }
+});
+
+test('a table on an empty closing line goes after it', () => {
+  const { editor, surface } = mountAt(BODY, [3, 0, 3, 0]);
+  expect(editor.exec(TABLE)).toMatchObject({ ok: true, changed: true });
+  const xml = serializeOoxmlPart(surface.session.part());
+  expect(xml.indexOf('<w:tbl>')).toBeGreaterThan(xml.indexOf('w:fldCharType="end"'));
+  expect(xml.indexOf('<w:tbl>')).toBeLessThan(xml.indexOf('After'));
+  expect(editor.exec({ type: 'refreshToc', mode: 'entire' })).toMatchObject({ ok: true });
 });
 
 test('replacing accepted text is refused in generated text and allowed outside it', () => {
