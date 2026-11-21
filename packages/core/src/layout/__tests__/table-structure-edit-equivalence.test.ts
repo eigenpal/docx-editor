@@ -819,6 +819,47 @@ const grows = (paragraphId: string): TreeDocOp => ({
   text: 'grows onto more lines ',
 });
 
+test('typing in the first row of a table below other content keeps the in-place update', () => {
+  const run = session('plain');
+  const typeIn = (rowId: string) => {
+    const row = rowsOf(run.part).find((candidate) => candidate.id === rowId)!;
+    const paragraphId = firstParagraph(cellsOf(row)[1]!)!.id;
+    const updates = tableTextUpdateTestRecorder();
+    expect(run.apply({ op: 'insertText', paragraphId, offset: 0, text: 'x' }, rowId)).toBe(true);
+    updates.dispose();
+    return updates.updates;
+  };
+  // The table starts below the preamble, so its first body row was placed whole there.
+  expect(typeIn(rowsOf(run.part)[1]!.id)).toBe(1);
+  // A row that opens a later page may have moved there, so the pagination places it again.
+  expect(typeIn(rowStartingPage(run, 1))).toBe(0);
+  expect(typeIn(rowStartingPage(run, 2))).toBe(0);
+});
+
+test('typing in the first rows of a table that opens the document keeps the in-place update', () => {
+  // No page comes before the first page, so its rows cannot have moved there.
+  let part = load(table(Array.from({ length: 4 }, (_, r) => plainRow(r))));
+  const retained = createLayoutSession();
+  const cache = createParagraphLayoutCache();
+  lay(part, { session: retained, cache });
+  const updates = tableTextUpdateTestRecorder();
+  for (const row of rowsOf(part).slice(0, 2)) {
+    const edit = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId: firstParagraph(cellsOf(row)[1]!)!.id,
+      offset: 0,
+      text: 'x',
+    });
+    if (!edit.ok) throw Error(edit.reason);
+    part = edit.part;
+    expect(JSON.stringify(lay(part, { session: retained, cache }).pages)).toBe(
+      JSON.stringify(lay(part).pages)
+    );
+  }
+  updates.dispose();
+  expect(updates.updates).toBe(2);
+});
+
 test('typing in an exact row that ends a page keeps the edge the page gave it', () => {
   // Found by random edits. The exact row ends its page without the table's bottom edge. Its
   // old text fits under either edge, so only the new text, clipped by the row, tells them apart.

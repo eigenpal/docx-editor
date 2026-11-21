@@ -1167,7 +1167,9 @@ function* layoutBlocksPass(
   // RESUME. The checkpoint before the first changed paragraph describes a flow the new
   // document still agrees with, so the pages completed by then are carried over by
   // REFERENCE — unchanged pages keep their identity, which is what lets a consumer skip
-  // repainting them.
+  // repainting them. The restored line counter is the checkpoint's own, not moved by a change
+  // of `lineCounterStart`: body line ids are paragraph-local, and the counter only carries a
+  // line total to the next section's start.
   const resumeFrom = (checkpoint: FlowCheckpoint): void => {
     pages.length = 0;
     pages.push(...previous!.pages.slice(0, checkpoint.pageCount));

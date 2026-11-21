@@ -18,6 +18,7 @@ import {
   type CellPlaceCursor,
 } from './semantic-table-layout.ts';
 import { finalizeTableRows } from './table-fragment-finalize.ts';
+import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { updateTableWidths, type TablePageBand } from './table-width-update.ts';
 import { finalizedWithHeadroom, withBudgetProof } from './table-budget-proof.ts';
 import { registerEditedTableCellBreakKeys } from './table-cell-break-keys.ts';
@@ -127,17 +128,19 @@ export function updateTableText(
         if (fragment.rows[index]!.id === source.id) occurrences.push({ page, fragment, index });
     }
   if (occurrences.length === 0 || occurrences.length > 4096) return null;
-  // Where a row that may split breaks, or whether it opens its page whole, the paginator
+  // Where a row that may split breaks, or whether it starts on a page at all, the paginator
   // decides from the lines of every cell (`rowFollowsBelow`, cell widow control), not from
-  // the row's height. A text edit can change that decision, so such a row is laid out again.
+  // the row's height. A text edit can change that decision, so such a row is laid out again
+  // when it splits, or when it opens a fragment at the top of its column: the row may have
+  // moved there from the page before. A row placed whole below other content on its page
+  // keeps its height, so it still fits whole there. A table that opens the document has no
+  // page before it.
   const splits = !source.cantSplit && source.height.rule !== 'exact';
-  if (
-    splits &&
-    (occurrences.length > 1 ||
-      occurrences[0]!.fragment.rows
-        .slice(0, occurrences[0]!.index)
-        .every((row) => row.isHeaderRepeat || row.isHeaderRow))
-  )
+  const opensDocument =
+    deps.documentFirstParagraphId !== undefined &&
+    structure.rows[0]?.cells[0]?.blocks[0]?.id === deps.documentFirstParagraphId &&
+    occurrences[0]!.page === pages[0];
+  if (splits && (occurrences.length > 1 || (!opensDocument && mayHaveMoved(occurrences[0]!))))
     return null;
   const oldKeys = new Set<string>();
   const newKeys = new Set<string>();
@@ -297,5 +300,31 @@ function samePlacedBlocks(
   return a.cells.every(
     (cell, i) =>
       continued.has(i) || JSON.stringify(cell.blocks) === JSON.stringify(b.cells[i]?.blocks)
+  );
+}
+
+/**
+ * Whether the row at `index` of `fragment` opens the fragment at the top of its column, where
+ * the paginator may have moved it from an earlier page. The rows above it in the fragment are
+ * only header rows, and no in-flow block above it on the page shares its column.
+ */
+function mayHaveMoved(at: {
+  readonly page: PageRecord;
+  readonly fragment: Extract<BlockFragmentRecord, { kind: 'table' }>;
+  readonly index: number;
+}): boolean {
+  const { page, fragment, index } = at;
+  for (let row = 0; row < index; row += 1) {
+    const placed = fragment.rows[row]!;
+    if (!placed.isHeaderRepeat && !placed.isHeaderRow) return false;
+  }
+  const { x, y, width } = fragment.box;
+  return !page.fragments.some(
+    (other) =>
+      other !== fragment &&
+      !isOutOfFlowFragment(other) &&
+      other.box.y + other.box.height <= y + 0.001 &&
+      other.box.x < x + width &&
+      other.box.x + other.box.width > x
   );
 }
