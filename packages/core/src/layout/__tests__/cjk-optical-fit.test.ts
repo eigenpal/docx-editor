@@ -44,8 +44,7 @@ function part(xml: string) {
   if (!result.ok) throw new Error(result.reason);
   return result.part;
 }
-// No declared compatibility mode: a legacy mode, so its admission limit applies to every probe
-// that does not pass `mode`.
+// No declared compatibility mode (`w:compatSetting` `compatibilityMode`): a legacy mode.
 const settings = part(
   `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`
 );
@@ -59,8 +58,11 @@ function layout(
   sourcePolicy: {
     readonly eastAsianDefaults?: boolean;
     readonly kern?: number;
-    /** `w:compatibilityMode`; absent declares none, a legacy mode. */
-    readonly mode?: number;
+    /**
+     * `w:compatSetting` `compatibilityMode`; absent declares mode 15, and `null` declares none,
+     * a legacy mode with the half-advance admission limit.
+     */
+    readonly mode?: number | null;
     /** East Asian language of the document defaults. */
     readonly lang?: string;
     /** Extra paragraph properties. */
@@ -91,11 +93,11 @@ function layout(
           : null,
         // The font table gives the probe face an East Asian charset.
         { ...NO_THEME_FONTS, eastAsianFontTableFaces: ['test cjk'] },
-        sourcePolicy?.mode
-          ? part(
-              `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${sourcePolicy.mode}"/></w:compat></w:settings>`
+        sourcePolicy?.mode === null
+          ? settings.root
+          : part(
+              `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${sourcePolicy?.mode ?? 15}"/></w:compat></w:settings>`
             ).root
-          : settings.root
       ),
       geometry: {
         width: width + 20,
@@ -469,7 +471,13 @@ test('the single-unit cluster fast path agrees with grapheme segmentation', () =
   expect(fast).toBeGreaterThan(20_000);
 });
 
-const linesAt = (jc: string, mode?: number, lang?: string, text = '甲乙（丙丁）戊己', width = 90) =>
+const linesAt = (
+  jc: string,
+  mode?: number | null,
+  lang?: string,
+  text = '甲乙（丙丁）戊己',
+  width = 90
+) =>
   layout(
     text,
     width,
@@ -488,7 +496,7 @@ test('compatibility mode 15 compresses punctuation to fit only justified lines',
 });
 
 test('a legacy mode compresses punctuation to fit lines at every alignment', () => {
-  for (const mode of [undefined, 11, 12, 14])
+  for (const mode of [null, 11, 12, 14])
     for (const jc of ['both', 'left', 'center', 'right', 'start', 'end'])
       for (const lang of [undefined, 'zh-CN', 'zh-TW', 'ja-JP'])
         expect({ mode, jc, lang, lines: linesAt(jc, mode, lang) }).toEqual({
@@ -524,7 +532,7 @@ test('a legacy mode compresses no Korean text to fit a line', () => {
 });
 
 test('a legacy mode fits right-to-left paragraphs at both edges', () => {
-  const policy = { eastAsianDefaults: true, kern: 2, pPr: '<w:bidi/>' };
+  const policy = { eastAsianDefaults: true, kern: 2, mode: null, pPr: '<w:bidi/>' };
   for (const jc of ['left', 'right'])
     expect(
       layout('甲乙（丙丁）戊己', 90, 8, measurer, '', policy, jc).map((line) =>
@@ -545,7 +553,7 @@ test('a document whose defaults name no East Asian face compresses no punctuatio
 test('a legacy mode admits an ideograph only within half its advance at every alignment', () => {
   // Two blank sides could give 丙 more than its 6 pt half; a legacy line takes no more.
   const text = '甲。乙，丙丁戊';
-  for (const mode of [undefined, 11, 12, 14])
+  for (const mode of [null, 11, 12, 14])
     for (const jc of ['left', 'center', 'right', 'both']) {
       expect(linesAt(jc, mode, undefined, text, 54)[0]).toBe('甲。乙，丙');
       expect(linesAt(jc, mode, undefined, text, 53.9)[0]).toBe('甲。乙，');
