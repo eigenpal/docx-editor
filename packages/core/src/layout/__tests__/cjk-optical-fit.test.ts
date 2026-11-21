@@ -61,6 +61,10 @@ function layout(
     readonly pPr?: string;
     /** Extra run properties of the first run only. */
     readonly firstRunProps?: string;
+    /** `w:overflowPunct`; off unless set. */
+    readonly overflowPunct?: boolean;
+    /** `w:characterSpacingControl` with a declared mode. */
+    readonly compression?: string;
   } = {
     eastAsianDefaults: true,
   },
@@ -69,7 +73,7 @@ function layout(
   const run = (value: string, extra = '') =>
     `<w:r><w:rPr><w:sz w:val="24"/>${sourcePolicy?.kern === undefined ? '' : `<w:kern w:val="${sourcePolicy.kern}"/>`}${runProps}${extra}</w:rPr><w:t xml:space="preserve">${value}</w:t></w:r>`;
   const source = part(
-    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr>${sourcePolicy?.pPr ?? ''}<w:jc w:val="${jc}"/><w:overflowPunct w:val="0"/></w:pPr>${split === -1 ? [...text].map((value) => run(value)).join('') : run(text.slice(0, split), sourcePolicy?.firstRunProps) + run(text.slice(split))}</w:p></w:body></w:document>`
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr>${sourcePolicy?.pPr ?? ''}<w:jc w:val="${jc}"/><w:overflowPunct w:val="${sourcePolicy?.overflowPunct ? 1 : 0}"/></w:pPr>${split === -1 ? [...text].map((value) => run(value)).join('') : run(text.slice(0, split), sourcePolicy?.firstRunProps) + run(text.slice(split))}</w:p></w:body></w:document>`
   );
   return linesOf(
     layoutSemanticDocument(source, 0, {
@@ -84,7 +88,7 @@ function layout(
         { ...NO_THEME_FONTS, eastAsianFontTableFaces: ['test cjk'] },
         sourcePolicy?.mode
           ? part(
-              `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${sourcePolicy.mode}"/></w:compat></w:settings>`
+              `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="${sourcePolicy.compression ?? 'compressPunctuation'}"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${sourcePolicy.mode}"/></w:compat></w:settings>`
             ).root
           : settings.root
       ),
@@ -540,10 +544,11 @@ test('a document whose defaults name no East Asian face compresses no punctuatio
 test('a legacy mode admits an ideograph only within half its advance at every alignment', () => {
   // Two blank sides could give 丙 more than its 6 pt half; a legacy line takes no more.
   const text = '甲。乙，丙丁戊';
-  for (const jc of ['left', 'center', 'right', 'both']) {
-    expect(linesAt(jc, 14, undefined, text, 54)[0]).toBe('甲。乙，丙');
-    expect(linesAt(jc, 14, undefined, text, 53.9)[0]).toBe('甲。乙，');
-  }
+  for (const mode of [undefined, 11, 12, 14])
+    for (const jc of ['left', 'center', 'right', 'both']) {
+      expect(linesAt(jc, mode, undefined, text, 54)[0]).toBe('甲。乙，丙');
+      expect(linesAt(jc, mode, undefined, text, 53.9)[0]).toBe('甲。乙，');
+    }
   // Compatibility mode 15 admits it by the expansion gate alone.
   expect(linesAt('both', 15, undefined, text, 53.9)[0]).toBe('甲。乙，丙');
 });
@@ -652,4 +657,31 @@ test('a legacy mode compresses no Korean mark to fit a line', () => {
   expect(first('甲、乙、丙丁戊', 4, korean, 15, 'both')).toBe('甲、乙、丙丁');
   // Hangul after the marks does not stop them.
   expect(first('甲、乙、가丁戊', 4)).toBe('甲、乙、가丁');
+});
+
+test('a legacy final mark whose ink passes its middle gives only its blank trailing side', () => {
+  // `。` ends at 0.8 em, so it gives 2.4 pt and `丁。` may take 14.4 pt in all, not 18 pt.
+  const inked: TextMeasurer = {
+    ...measurer,
+    inkBounds: (text, style) =>
+      text === '。'
+        ? { left: 0.08 * style.fontSizePt, right: 0.8 * style.fontSizePt }
+        : measurer.inkBounds!(text, style),
+  };
+  const first = (width: number) =>
+    layout(
+      '甲、乙、丙、丁。戊',
+      width,
+      8,
+      inked,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode: 14 },
+      'left'
+    )[0]!
+      .spans.map((span) => span.text)
+      .join('');
+  expect(first(81.6)).toBe('甲、乙、丙、丁。');
+  expect(first(81.5)).toBe('甲、乙、丙、');
+  // With its ink inside the middle, the same group takes 18 pt.
+  expect(linesAt('left', 14, undefined, '甲、乙、丙、丁。戊', 78)[0]).toBe('甲、乙、丙、丁。');
 });

@@ -2,7 +2,7 @@
 // of justified lines, the half-advance limit of legacy modes, and the kana shares.
 import type { PendingLine } from './pending-line.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
-import { isCjk, isHangul } from './cjk-paragraph-breaks.ts';
+import { isCjk, isHangul, koreanText } from './cjk-paragraph-breaks.ts';
 import { eastAsianLanguage } from './cjk-typography.ts';
 import { kanaShareLimit } from './kana-sound-mark-fit.ts';
 import {
@@ -27,7 +27,7 @@ export function legacyKoreanMarks(cells: readonly Cell[]): ReadonlySet<Cell> {
     afterHangul ||= isHangul(cell.span.text.codePointAt(0)!);
     if (
       blankSided(cell) &&
-      (afterHangul || /^ko(?:-|$)/.test(eastAsianLanguage(cell.span.props) ?? ''))
+      (afterHangul || koreanText(cell.span.text, eastAsianLanguage(cell.span.props) ?? ''))
     )
       held.add(cell);
   }
@@ -42,7 +42,7 @@ export function legacyKoreanMarks(cells: readonly Cell[]): ReadonlySet<Cell> {
  *
  * @param cells - The line's cells, then the candidate group's cells.
  * @param sourceCount - The number of line spans; cells from later spans are the group.
- * @param deficit - The compression still needed after the final mark's trailing half.
+ * @param deficit - The compression still needed after the final mark gave its trailing side.
  * @param held - The marks that keep their advances (`legacyKoreanMarks`).
  * @param quoteAdvance - The advance of a Latin closing quote that ends the group, or 0.
  * @returns Whether the group must wrap instead of joining the line.
@@ -67,7 +67,9 @@ export function exceedsLegacyAdmission(
     if (!mark && !opaque && !isCjk(cell.span.text.codePointAt(0)!)) return false;
     ideograph ||= !mark;
     half += cell.natural / 2;
-    if (blankSided(cell) && !held.has(cell))
+    // The final mark's trailing side is already in `deficit`: what its ink holds back is not
+    // capacity, as no glyph follows it.
+    if (blankSided(cell) && !held.has(cell) && cell !== last)
       deficit -= Math.max(0, cell.natural / 2 - cell.alreadyReduced - cell.reduction);
   }
   return ideograph && deficit > half + TOLERANCE;
