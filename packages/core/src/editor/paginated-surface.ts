@@ -48,7 +48,6 @@ import {
   fullyProtectedTocParagraphs,
   tocControlId,
   tocForElement,
-  tocEscapePosition,
   tocAtPosition,
   TOC_READ_ONLY_REFUSAL,
   selectionTouchesTocRange,
@@ -58,7 +57,7 @@ import {
 } from './surface-toc-ranges.ts';
 import { tocBoundaryForLayout } from './surface-toc-boundary.ts';
 import { tocCommandRefusal } from './toc-command-refusal.ts';
-import { isBackwardMotion, settleTocMotion } from './surface-toc-navigation.ts';
+import { settleTocMotion, tocMotionEscape } from './surface-toc-navigation.ts';
 import { resolveTocSources } from '../store/package/toc-sources.ts';
 import { createTocCommands } from './surface-toc-commands.ts';
 import {
@@ -4799,12 +4798,7 @@ export function mountPaginatedSurface(
         selectionSync.selectionLineId()
       );
       if (!moved) return;
-      const backwardMotion = isBackwardMotion(command);
-      // Home and End keep to their own paragraph; `settleTocMotion` clamps them.
-      const lineEdge = command === 'lineStart' || command === 'lineEnd';
-      const outside = lineEdge
-        ? null
-        : tocEscapePosition(session.part(), moved.position, backwardMotion);
+      const outside = tocMotionEscape(session.part(), moved.position, command);
       // The escape lands elsewhere, so the motion's caret (and its page) no longer applies.
       if (outside) moved = { ...moved, position: outside, caret: undefined };
       // Atomic navigation: a caret that landed INSIDE a locked inline control crosses it (or

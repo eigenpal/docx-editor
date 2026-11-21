@@ -152,3 +152,12 @@ test('Left after a TOC that starts the document stops on its closing line', () =
   expect(from(2, 0, 'left').head).toEqual(at(1, 0));
   expect(from(1, 0, 'left').head).toEqual(at(1, 0));
 });
+
+test('Up and Down across a TOC keep the column on a closing line that holds a heading', () => {
+  const { at, from } = mount(
+    `<w:p>${run('Before')}</w:p><w:p>${begin}${run('Entry')}</w:p><w:p>${end}${run('Heading')}</w:p>`
+  );
+  expect(from(0, 3, 'down').head).toEqual(at(2, 3));
+  expect(from(0, 3, 'down', true)).toEqual({ anchor: at(0, 3), head: at(2, 3) });
+  expect(from(2, 3, 'up').head).toEqual(at(0, 3));
+});

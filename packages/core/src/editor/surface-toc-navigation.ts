@@ -6,7 +6,7 @@
 import type { OoxmlPart } from '@docx-editor.dev/core/store';
 import type { DetectedToc } from '../store/package/toc-detect.ts';
 import type { NavigationCommand, SemanticPosition } from '../layout/semantic-interaction.ts';
-import { tocAtPosition, tocParagraphRanges } from './surface-toc-ranges.ts';
+import { tocAtPosition, tocEscapePosition, tocParagraphRanges } from './surface-toc-ranges.ts';
 
 /** The part of a navigation result this lane reads. */
 interface CaretMove {
@@ -35,8 +35,34 @@ const TEXT_MOTIONS: ReadonlySet<NavigationCommand> = new Set([
   'wordRight',
 ]);
 
+/**
+ * Motions that `settleTocMotion` places without first escaping to the TOC's edge: Home and
+ * End stay in their paragraph, and line motions keep their column.
+ */
+const SETTLED_MOTIONS: ReadonlySet<NavigationCommand> = new Set([
+  'lineStart',
+  'lineEnd',
+  'up',
+  'down',
+  'pageUp',
+  'pageDown',
+]);
+
+/**
+ * The edge of the TOC a text or document motion that landed in generated text escapes to,
+ * before `settleTocMotion` runs. Null when the motion settles on its own or landed outside.
+ */
+export function tocMotionEscape(
+  part: OoxmlPart,
+  landed: SemanticPosition,
+  command: NavigationCommand
+): SemanticPosition | null {
+  if (SETTLED_MOTIONS.has(command)) return null;
+  return tocEscapePosition(part, landed, isBackwardMotion(command));
+}
+
 /** Whether a motion moves toward the start of the document. */
-export function isBackwardMotion(command: NavigationCommand): boolean {
+function isBackwardMotion(command: NavigationCommand): boolean {
   return BACKWARD_MOTIONS.has(command);
 }
 
