@@ -223,3 +223,33 @@ test('an AutoFit cell prices the spacing inside a field result, so the result do
   expect(hyperlink.lines).toBe(1);
   expect(hyperlink.width).toBeCloseTo(literal.width, 6);
 });
+
+test('an editable saved result takes automatic spacing at its own offsets', () => {
+  const doc = read(
+    'document',
+    `<w:document xmlns:w="${W}"><w:body><w:p>${field('MERGEFIELD Name', run(T))}</w:p><w:p>${run(T)}</w:p></w:body></w:document>`
+  );
+  const layout = layoutSemanticDocument(doc, 0, {
+    measurer,
+    fieldResults: 'editable',
+    styleCascade: buildStyleCascadeTable(styles.root, undefined, noSettings.root),
+  });
+  const [result, literal] = linesOf(layout);
+  const geometry = (line: typeof result) =>
+    line!.spans.map((span) => [span.text, span.range.start, span.range.end, span.box.x]);
+  expect(geometry(result)).toEqual(geometry(literal));
+});
+
+test('an AutoFit cell prices no gap inside a page number, which line layout keeps whole', () => {
+  const lines = lineLayout(
+    '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblLayout w:type="autofit"/>' +
+      '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="100"/><w:gridCol w:w="100"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr><w:p>${field('PAGE \\# "甲0乙"', '<w:r><w:rPr><w:rFonts w:ascii="SimSun" w:hAnsi="SimSun" w:eastAsia="SimSun"/></w:rPr><w:t>甲1乙</w:t></w:r>')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr><w:p>${run('X')}</w:p></w:tc></w:tr></w:tbl><w:p/>`
+  );
+  const page = lines.find((line) => line.spans.some((span) => span.fieldAtom?.pageField))!;
+  const x = lines.find((line) => line.spans.some((span) => span.text === 'X'))!;
+  const last = page.spans.at(-1)!;
+  expect(x.spans[0]!.box.x).toBeCloseTo(last.box.x + last.box.width, 6);
+});

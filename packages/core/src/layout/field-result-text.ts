@@ -3,16 +3,17 @@ import type { FieldAtomMarker } from './field-pieces.ts';
 /**
  * Field result text for inter-script spacing (`w:autoSpaceDE`, `w:autoSpaceDN`) and balanced
  * space widths. A displayed field result is text like any other run: every field type, a
- * `w:fldSimple`, and a result that continues into a later paragraph. A form control (check box
- * or drop-down) is not text.
+ * `w:fldSimple`, and a result that continues into a later paragraph. Field code text shown in
+ * place of a result is text too. A form control (check box or drop-down) is not text.
  */
 export function isFieldResultText(item: { readonly fieldAtom?: FieldAtomMarker }): boolean {
   return item.fieldAtom !== undefined && item.fieldAtom.formControl === undefined;
 }
 
 /**
- * Whether a field result piece may be cut into several pieces. A page number keeps one piece:
- * the finalize pass writes the page value into every piece that carries its marker.
+ * Whether a field result piece may be cut at an automatic gap or a balanced space. A page number
+ * is not cut: the finalize pass replaces its text after layout. Font slots still split a page
+ * number that mixes scripts, and finalize writes the value into the first slice only.
  */
 export function fieldResultMayCut(item: { readonly fieldAtom?: FieldAtomMarker }): boolean {
   const atom = item.fieldAtom;

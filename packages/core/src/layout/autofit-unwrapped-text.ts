@@ -13,7 +13,7 @@ import type { FieldAwarePiece } from './field-pieces.ts';
 import type { ResolvedTabStops } from './paragraph-tabs.ts';
 import { measureDisplayText, type ResolvedRunStyle } from './run-style.ts';
 import { automaticTextGap, automaticTextSpacingAdvance } from './cjk-automatic-spacing.ts';
-import { followsInSource } from './field-result-text.ts';
+import { fieldResultMayCut, followsInSource } from './field-result-text.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { withoutLineEndWhitespace } from './trailing-spaces.ts';
@@ -203,9 +203,13 @@ export function automaticAutofitSpacing(
         const current = piece.projected
           ? { ...piece, text, style }
           : { ...piece, start: piece.start + from, end: piece.start + to, text, style };
-        const internal = automaticTextSpacingAdvance(undefined, current, typography, measurer);
+        // Line layout keeps a page number whole, so it prices no gap inside one piece of it.
+        const whole = !fieldResultMayCut(piece);
+        const internal = whole
+          ? 0
+          : automaticTextSpacingAdvance(undefined, current, typography, measurer);
         const before =
-          previousText && followsInSource(previousText, current)
+          previousText && !(whole && from > 0) && followsInSource(previousText, current)
             ? automaticTextGap(previousText, current, typography, measurer)
             : 0;
         if (before > 0 || internal > 0) gaps.set(from, { before, internal });
