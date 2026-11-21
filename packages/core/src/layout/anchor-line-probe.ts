@@ -12,7 +12,7 @@
 // and horizontal float passages are placement-time decisions this pass cannot see.
 
 import { automaticTextGap } from './cjk-automatic-spacing.ts';
-import { followsInSource } from './field-result-text.ts';
+import { fieldResultMayCut, followsInSource } from './field-result-text.ts';
 import { DEFAULT_CJK_TYPOGRAPHY } from './cjk-typography.ts';
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 import { pageBreakYieldsToLineBreak } from './page-break-before-line-break.ts';
@@ -117,7 +117,8 @@ export function anchorLineStartsByModelOffset(input: {
       const gap = () =>
         previousText &&
         (piece.projected
-          ? followsInSource(previousText, piece)
+          ? // Line layout keeps a page number whole: no gap inside one piece of it.
+            !(consumed > 0 && !fieldResultMayCut(piece)) && followsInSource(previousText, piece)
           : previousText.modelEnd === piece.start + consumed)
           ? automaticTextGap(
               previousText,
