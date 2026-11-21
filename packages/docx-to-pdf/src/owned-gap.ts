@@ -35,8 +35,8 @@ export function ownedGapAfter(visit: Pick<SemanticSpanVisit, 'line' | 'span'>): 
 }
 
 /**
- * The gap after a span that the span's fill covers, in points: highlight, character shading,
- * or a revision background. It is {@link ownedGapAfter}, or else the automatic East
+ * The gap after a span that the span's fill covers, in points: highlight (`w:highlight`),
+ * character shading (`w:shd` in `w:rPr`), or a revision background. It is {@link ownedGapAfter}, or else the automatic East
  * Asian/Latin advance before the next span (`w:autoSpaceDE`, `w:autoSpaceDN`), which the run
  * before it owns. Underline, strike, and revision marks keep {@link ownedGapAfter}, as screen
  * paint draws them.

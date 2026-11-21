@@ -1280,8 +1280,9 @@ function paintLine(
     else if (owner === 'letterSpacing')
       painted.style.letterSpacing = letterGapSpacing(painted, span, gapAfter, scale);
     pendingGap = gapAfter;
-    // The run before an automatic East Asian/Latin advance fills it; the advance stays a margin.
-    // A shaped line places the advance inside the run's own box, so its background covers it.
+    // The run before a `w:autoSpaceDE`/`w:autoSpaceDN` advance fills it with its `w:highlight`
+    // or `w:shd`; the advance stays a margin. A shaped line places the advance inside the
+    // run's own box, so its background covers it.
     if (!owner && next && !span.equation && span.box.width > 0) {
       const width = automaticGapFillAfter(span, next, gapAfter);
       finishGapFill = paintAutomaticGapFill(painted, width, span.box.width, scale);

@@ -2,9 +2,10 @@
 //
 // `w:autoSpaceDE` and `w:autoSpaceDN` add an advance where East Asian text meets Latin letters
 // or digits. Layout places it as a margin before the later span, and a margin takes no fill.
-// The run before the advance owns it, in both directions: its highlight or character shading
-// covers the advance, also when the next run has a different fill. Screen paint draws that part
-// of the fill as the run's box shadow, and the PDF writer widens the fill band by the same width.
+// The run before the advance owns it, in both directions: its highlight (`w:highlight`) or
+// character shading (`w:shd` in `w:rPr`) covers the advance, also when the next run has a
+// different fill. Screen paint draws that part of the fill as the run's box shadow, and the PDF
+// writer widens the fill band by the same width.
 import { automaticTextSpacingBefore } from '../layout/cjk-automatic-spacing.ts';
 
 /**
