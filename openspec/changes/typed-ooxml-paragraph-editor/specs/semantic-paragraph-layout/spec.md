@@ -864,6 +864,19 @@ In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingCo
 - **AND** with `w:useWord97LineBreakRules` as well, spaces in proportional faces keep their advance
 - **AND** a line in a proportional face that starts with spaces keeps natural spaces and hangs no final mark
 
+### Requirement: Legacy hyphens stay with the following text
+
+In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingControl` compresses punctuation, a line SHALL NOT break after a hyphen-minus (U+002D) that a letter, digit, or symbol follows, whatever precedes the hyphen. A line MAY break after it before East Asian text or a space. Paragraph layout and the minimum column widths of autofit tables (`w:tblLayout` `w:type="autofit"`) SHALL use the same break opportunities. A word wider than its line SHALL still split.
+
+#### Scenario: A hyphenated word moves whole in a legacy mode
+
+- **GIVEN** a mode 14 or undeclared-mode paragraph with `compressPunctuation`, where `AB123-2048`, `well-known`, or the `-ABC` of `甲-ABC` overflows the line
+- **WHEN** the line breaks
+- **THEN** the hyphen and the text after it move to the next line together, in Chinese, Japanese, or Latin-only paragraphs
+- **AND** `ABC-甲` and `ABC- def` can still break after the hyphen
+- **AND** mode 15, `doNotCompress`, or no `w:characterSpacingControl` breaks after the hyphen
+- **AND** a hyphen in a Korean run (`w:lang/@w:eastAsia` Korean) of a paragraph with East Asian text keeps its ordinary breaks
+
 ### Requirement: Legacy space shrinking before a final mark
 
 Under the legacy space shrinking rule, a final half-width mark SHALL stay inside when the spaces make room for it, and hang when they make room only for the text before it.

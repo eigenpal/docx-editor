@@ -171,6 +171,7 @@ The compatibility mode in `w:compat` changes clipping, page counts, table placem
 | Line-end punctuation overflow | Hangs in justified and distributed paragraphs. | Hangs at every alignment, whatever the kinsoku switch. |
 | Korean paragraph-final mark with punctuation compression | Marks other than `。` and `、` can hang. | Starts the next line. |
 | Space shrink before a hanging mark | Justified and distributed lines shrink spaces first. | With punctuation compression and an East Asian default face, lines at any alignment shrink spaces to keep one more word. |
+| Hyphen-minus before a letter, digit, or symbol, with punctuation compression | A line can break after the hyphen. | The hyphen stays with the text after it. A word wider than the line still splits. |
 | Kana fitting in Traditional Chinese runs | Off. | On. |
 | Distributed text with pair kerning | Kerned runs keep their letters together. | Kerned runs spread too. |
 | Left-to-right justified text beside floating objects | Each passage compresses its own spaces. | No per-passage rule. |
