@@ -18,6 +18,7 @@ import {
   snapXToAvailableInterval,
   verticalBandOfExclusion,
   wrapExclusionInputForProjection,
+  WRAP_EDGE_TOUCH_PT,
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import {
@@ -191,9 +192,10 @@ export function breakClearanceSkip(
     .sort((a, b) => a.verticalBand.y - b.verticalBand.y);
   let current = y;
   for (const zone of crossing) {
-    if (zone.verticalBand.y >= current + band - EPSILON) break;
+    // A band that only touches the line's edge does not move it (`WRAP_EDGE_TOUCH_PT`).
+    if (zone.verticalBand.y >= current + band - WRAP_EDGE_TOUCH_PT) break;
     const bottom = zone.verticalBand.y + zone.verticalBand.height;
-    if (bottom > current + EPSILON) current = bottom;
+    if (bottom > current + WRAP_EDGE_TOUCH_PT) current = bottom;
   }
   return current - y;
 }

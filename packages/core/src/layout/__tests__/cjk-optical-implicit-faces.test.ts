@@ -127,10 +127,8 @@ test('a mixed coalesced span is not relabelled or split into new Latin shaping c
   for (const prefix of ['甲AV）', '甲18）', '甲0.015）', '甲GB 50025）'])
     unchanged(attempt({ prefix }));
 });
-test('authored tracking, scaling, and complex shaping remain strict refusal gates', () => {
+test('authored scaling and complex shaping remain strict refusal gates', () => {
   for (const change of [
-    { characterSpacingPt: -0.2 },
-    { characterSpacingPt: 0.2 },
     { horizontalScalePercent: 90 },
     { shaping: { script: 'Hani', direction: 'ltr' as const, level: 0, baseLevel: 0 } },
   ])
@@ -140,6 +138,10 @@ test('authored tracking, scaling, and complex shaping remain strict refusal gate
     { ...measure, hasResolvedFont: () => false },
   ])
     unchanged(attempt({ measure: m }));
+});
+test('authored tracking of either sign qualifies an implicit East Asian line', () => {
+  for (const characterSpacingPt of [-0.2, 0.2])
+    expect(attempt({ style: { ...style, characterSpacingPt } }).result).toBeDefined();
 });
 test('fields projected spans revisions and unknown script retain unmodified geometry', () => {
   unchanged(attempt({ spanFlags: { fieldAtom: true } }));

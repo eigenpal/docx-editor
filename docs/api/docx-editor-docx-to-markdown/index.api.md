@@ -10,7 +10,7 @@
 export type AnchoredDrawingLayoutFallback = 'unresolvable-frame' | 'page-defer-exhausted';
 
 // @public (undocumented)
-export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' | 'baselineOffset' | 'advanceStart' | 'advanceEnd' | 'distL' | 'distR' | 'distT' | 'distB'> {
+export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' | 'baselineOffset' | 'runPositionPt' | 'advanceStart' | 'advanceEnd' | 'distL' | 'distR' | 'distT' | 'distB'> {
     // (undocumented)
     readonly allowOverlap: boolean;
     // (undocumented)
@@ -480,6 +480,8 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly resource: ImageResourceState;
     readonly revisions?: readonly RevisionAttribution[];
+    // @internal
+    readonly runPositionPt?: number;
     // (undocumented)
     readonly start: number;
     readonly textArt?: DrawingTextArtRecord;

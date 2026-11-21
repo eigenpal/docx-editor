@@ -189,7 +189,7 @@ Limits marked **server** accept a higher value for a trusted file through the `l
 | <a id="edit-tracked-deleted-text-only" />`edit.tracked-deleted-text-only` | The tracked range holds only deleted text. | Include live text, or insert next to the deleted text. |
 | <a id="edit-tracked-foreign-revision-unsupported" />`edit.tracked-foreign-revision-unsupported` | The edit touches another author's mark, formatting, move, or structural change, or a link or control in their insertion. | Edit outside it. **Accept All** or **Reject All** clears a no-op formatting change. |
 | <a id="edit-tracked-own-pending-change" />`edit.tracked-own-pending-change` | The edit covers or borders your own pending change. | Read it with `getReviewedText('Current')`, then edit outside it, or reject and propose again. |
-| <a id="edit-picture-selected" />`edit.picture-selected` | A picture is selected, so the new picture has no place. | Place the caret in text, then insert. |
+| <a id="edit-picture-selected" />`edit.picture-selected` | A drawing is selected in suggesting mode, so the new picture cannot be proposed beside it. | Place the caret in text, then insert. |
 | <a id="edit-cross-structure-join" />`edit.cross-structure-join` | The edit joins paragraphs in different containers, such as two cells. | Edit each container separately. |
 | <a id="edit-indivisible-content" />`edit.indivisible-content` | The edit splits an equation or field, or breaks inside an inline content control. | Select the whole item, or edit outside the control. |
 | <a id="edit-field-structure" />`edit.field-structure` | The edit breaks a field's structure. | Edit the whole result, or remove the whole field. |

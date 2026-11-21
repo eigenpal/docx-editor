@@ -78,14 +78,14 @@ export function pointTargetRefusal(
     return {
       ok: false,
       code: 'notFound',
-      reason: 'the drop target is stale; drop the image again',
+      reason: 'the insert target is stale; insert the image again',
     };
   }
   if (
     identity.scope !== JSON.stringify(surface.activeScope()) ||
     identity.mode !== surface.editingMode()
   ) {
-    return { ok: false, code: 'notFound', reason: 'the drop target story is no longer active' };
+    return { ok: false, code: 'notFound', reason: 'the insert target story is no longer active' };
   }
   return null;
 }

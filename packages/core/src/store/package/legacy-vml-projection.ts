@@ -374,7 +374,12 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
     return null;
   // The text box story is ordinary WML content, bounded by story layout rather than here.
   // Everything else is bounded before the text box is read.
-  if (!boundedVml(preview ?? node, preview ? undefined : storyCandidates(root))) return null;
+  // `pictureObjectPreview` already bounded the `o:OLEObject` beside the preview. Its inert
+  // metadata text is never read, so it is outside the drawing budget.
+  const skipped = objectPreview
+    ? new Set([...storyCandidates(root), ...shapes.filter((n) => n !== objectPreview)])
+    : storyCandidates(root);
+  if (!boundedVml(preview ?? node, preview ? undefined : skipped)) return null;
   // A horizontal rule takes the width of its line, which layout gives it.
   const ruled = readOnly ? undefined : legacyHorizontalRule(root);
   if (ruled === null) return null;
