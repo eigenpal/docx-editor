@@ -6,6 +6,7 @@ import { createLayoutSession } from '../layout-session.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { readTableStructure } from '../semantic-table.ts';
 import { movedRowsTestRecorder } from '../table-row-geometry-reuse.ts';
+import { tablePageRestartTestRecorder } from '../table-page-restart.ts';
 import type { SemanticLayout } from '../semantic-records.ts';
 
 // A 468pt column, four AutoFit columns of unbreakable tokens, and one note cell that grows.
@@ -92,14 +93,14 @@ test('a text edit that grows a row reuses unmoved rows in the full pagination, e
   expect(grown).toBeGreaterThan(0);
 });
 
-test('a cell property edit offers no previous rows and still lays out exactly', () => {
+test('a cell property edit places only the edited row again, exactly', () => {
   let part = load();
   const structure = readTableStructure(tableNode(part), 468, 0)!;
   const session = createLayoutSession();
   const cache = createParagraphLayoutCache();
   lay(part, { session, cache });
   const before = recorder.moved;
-  // A moved row keeps its old cell fill; this edit must lay the table out afresh.
+  // A moved row keeps its old cell fill, so the edited row must be placed again.
   const edit = applyTreeOp(part, {
     op: 'setTableCellFill',
     tableId: tableNode(part).id,
@@ -108,7 +109,20 @@ test('a cell property edit offers no previous rows and still lays out exactly', 
   });
   if (!edit.ok) throw Error(edit.reason);
   part = edit.part;
+  const restarts = tablePageRestartTestRecorder();
   const updated = lay(part, { session, cache });
+  restarts.dispose();
   expect(JSON.stringify(updated.pages)).toBe(JSON.stringify(lay(part).pages));
-  expect(recorder.moved - before).toBe(0);
+  // The pages above the edited row stay. Every other row from the restart page on keeps its
+  // place and is reused there; the filled one is not.
+  expect(restarts.restarts).toBe(1);
+  const placed = updated.pages
+    .slice(restarts.keptPages)
+    .flatMap((page) => page.fragments)
+    .flatMap((fragment) => (fragment.kind === 'table' ? fragment.rows : []));
+  const body = placed.filter((row) => !row.isHeaderRepeat).length;
+  expect(body).toBeLessThan(ROWS);
+  // Header repeats may be reused too, so the count lies between the body rows and every row.
+  expect(recorder.moved - before).toBeGreaterThanOrEqual(body - 1);
+  expect(recorder.moved - before).toBeLessThan(placed.length);
 });

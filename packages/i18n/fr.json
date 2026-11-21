@@ -971,7 +971,7 @@
       "oversize": "L'image dépasse la taille maximale autorisée.",
       "refused": "L'image n'a pas pu être insérée.",
       "unsupportedFormat": "Ce format d'image n'est pas pris en charge pour l'insertion.",
-      "staleTarget": "Le document ou l’emplacement de dépôt a changé. Déposez à nouveau l’image."
+      "staleTarget": "Le document a changé avant l’insertion de l’image. Insérez à nouveau l’image."
     }
   },
   "imageProperties": {
@@ -1059,7 +1059,7 @@
     "nothingToPaint": "Sélectionnez du texte pour appliquer la mise en forme",
     "noReviewAuthors": "Ce document ne contient aucun auteur de révision",
     "suggestingNeedsAuthor": "Les suggestions nécessitent un auteur. Définissez l’auteur dans la configuration de l’éditeur.",
-    "pictureSelected": "Une image est sélectionnée. Placez le curseur dans le texte pour insérer une image.",
+    "pictureSelected": "En mode suggestion, impossible d’insérer une image lorsqu’un dessin est sélectionné. Placez le curseur dans le texte pour insérer une image.",
     "chartDrawing": "Ceci est un graphique. Vous pouvez le supprimer, mais pas le modifier comme une image.",
     "chartFrame": "Ceci est un graphique. Vous pouvez modifier sa taille, sa position, l’habillage et le texte de remplacement.",
     "diagramFrame": "Ceci est un diagramme. Vous pouvez modifier sa taille, sa position, l’habillage et le texte de remplacement.",
@@ -1079,7 +1079,12 @@
     "drawingClipboardStory": "Les dessins ne peuvent être copiés, coupés ou collés que dans le corps du document, pas dans un en-tête, un pied de page, une note ou une zone de texte.",
     "groupMemberClipboard": "Une forme dans un groupe est copiée ou coupée avec son groupe. Appuyez sur Échap pour sélectionner le groupe.",
     "drawingClipboardSize": "Ce dessin est trop volumineux pour être copié.",
-    "drawingPasteCells": "Placez le curseur dans le texte pour coller un dessin."
+    "drawingPasteCells": "Placez le curseur dans le texte pour coller un dessin.",
+    "groupMemberPaste": "Impossible de coller du texte dans une forme d’un groupe. Appuyez sur Échap pour sélectionner le groupe.",
+    "linkedTextBoxPaste": "Impossible de coller du texte dans une zone de texte liée. Placez le curseur dans le texte pour coller.",
+    "textBoxPicturePaste": "Une zone de texte n’accepte que du texte. Collez sans mise en forme pour coller le texte seul.",
+    "shapePasteText": "Cette forme ne contient pas de texte où coller. Placez le curseur dans le texte pour coller.",
+    "textBoxPaste": "Le texte de cette zone de texte ne peut pas être modifié. Placez le curseur dans le texte pour coller."
   },
   "equationPopup": {
     "apply": "Appliquer",

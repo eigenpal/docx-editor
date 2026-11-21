@@ -279,6 +279,16 @@ export function koreanFinalMarkHangs(settings: CjkTypographySettings | undefined
 
 const CJK_LANGUAGE = /^(ja|zh|ko)(-|$)/i;
 
+/** Whether a normalized East Asian language tag is Traditional Chinese. */
+export function isTraditionalChinese(language: string | undefined): boolean {
+  return /^zh-(tw|hk|mo|hant)(-|$)/.test(language ?? '');
+}
+
+/** Whether a normalized East Asian language tag is Korean. */
+export function isKorean(language: string | undefined): boolean {
+  return /^ko(?:-|$)/.test(language ?? '');
+}
+
 export function eastAsianLanguage(props: readonly OoxmlProperty[]): string | undefined {
   let language: string | undefined;
   for (const prop of props) {
@@ -316,7 +326,7 @@ export function kinsokuCharacters(
   settings?: CjkTypographySettings
 ): { before: string; after: string } {
   const family = language.split('-')[0];
-  const traditional = /^zh-(tw|hk|mo|hant)(-|$)/.test(language);
+  const traditional = isTraditionalChinese(language);
   let before =
     family === 'zh'
       ? traditional

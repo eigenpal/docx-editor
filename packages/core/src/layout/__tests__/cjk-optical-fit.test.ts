@@ -8,6 +8,10 @@ import { linesOf, type TextMeasurer } from '../semantic-records.ts';
 import { fittingClusters } from '../cjk-optical-fit.ts';
 import { segmentGraphemes } from '../grapheme.ts';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const outline =
+  '<w14:textOutline xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" w14:w="12700"><w14:solidFill><w14:srgbClr w14:val="FF0000"/></w14:solidFill></w14:textOutline>';
+// A shifted glyph paints transparent text, which would drop these decorations.
+const paintRefused = ['<w:u w:val="single"/>', '<w:strike/>', '<w:dstrike/>', outline];
 const bounds: Record<string, [number, number]> = {
   '（': [0.662, 0.899],
   '）': [0.135, 0.372],
@@ -68,12 +72,13 @@ function layout(
   } = {
     eastAsianDefaults: true,
   },
-  jc = 'both'
+  jc = 'both',
+  overflowPunctuation = false
 ) {
   const run = (value: string, extra = '') =>
     `<w:r><w:rPr><w:sz w:val="24"/>${sourcePolicy?.kern === undefined ? '' : `<w:kern w:val="${sourcePolicy.kern}"/>`}${runProps}${extra}</w:rPr><w:t xml:space="preserve">${value}</w:t></w:r>`;
   const source = part(
-    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr>${sourcePolicy?.pPr ?? ''}<w:jc w:val="${jc}"/><w:overflowPunct w:val="${sourcePolicy?.overflowPunct ? 1 : 0}"/></w:pPr>${split === -1 ? [...text].map((value) => run(value)).join('') : run(text.slice(0, split), sourcePolicy?.firstRunProps) + run(text.slice(split))}</w:p></w:body></w:document>`
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr>${sourcePolicy?.pPr ?? ''}<w:jc w:val="${jc}"/><w:overflowPunct w:val="${(sourcePolicy?.overflowPunct ?? overflowPunctuation) ? 1 : 0}"/></w:pPr>${split === -1 ? [...text].map((value) => run(value)).join('') : run(text.slice(0, split), sourcePolicy?.firstRunProps) + run(text.slice(split))}</w:p></w:body></w:document>`
   );
   return linesOf(
     layoutSemanticDocument(source, 0, {
@@ -220,13 +225,9 @@ test('unknown and non-finite bounds retain natural line fitting', () => {
   }
 });
 
-test('optical fitting retains decorated and revised glyph geometry', () => {
+test('optical fitting retains underlined, struck, outlined and revised glyph geometry', () => {
   for (const props of [
-    '<w:u w:val="single"/>',
-    '<w:strike/>',
-    '<w:dstrike/>',
-    '<w:highlight w:val="yellow"/>',
-    '<w:shd w:fill="000000"/>',
+    ...paintRefused,
     '<w:rPrChange w:id="1"><w:rPr><w:b/></w:rPr></w:rPrChange>',
   ]) {
     const lines = layout('甲乙（丙丁）戊己', 90, undefined, measurer, props);
@@ -405,11 +406,11 @@ test('colon/closing pairs retain natural advances without safe measured pair bou
     ]);
 });
 
-test('ineligible decorated paragraphs retain the advance-only whitespace path', () => {
+test('underlined, outlined and revised paragraphs retain the advance-only whitespace path', () => {
   const text = '甲丙、乙、戊）：丁）丙。 。';
   for (const props of [
     '<w:u w:val="single"/>',
-    '<w:highlight w:val="yellow"/>',
+    outline,
     '<w:rPrChange w:id="1"><w:rPr><w:b/></w:rPr></w:rPrChange>',
   ]) {
     for (const split of [-1, text.length])
@@ -722,4 +723,171 @@ test('a legacy group with a Latin word and no closing mark skips the half-advanc
       .join('');
   expect(first(171)).toBe('甲、乙、丙、丁、戊、己、庚abcd');
   expect(first(170)).toBe('甲、乙、丙、丁、戊、己、庚');
+});
+
+// A 32-character justified line fits only when the comma's trailing blank shrinks.
+test('highlight and shading keep the fitted width of a full-width comma', () => {
+  const text = '甲乙丙丁戊己庚辛壬癸子丑寅，卯辰巳午未申酉戌亥春夏秋冬风雨雷电晴雪朝暮';
+  const width = 380;
+  const expected = [text.slice(0, 32), text.slice(32)];
+  const measure: TextMeasurer = {
+    ...measurer,
+    hasResolvedFont: () => true,
+    inkBounds(value, style) {
+      return value === '，'
+        ? { left: 0.08 * style.fontSizePt, right: 0.34 * style.fontSizePt }
+        : measurer.inkBounds?.(value, style);
+    },
+  };
+  const lineTexts = (lines: ReturnType<typeof layout>) =>
+    lines.map((line) => line.spans.map((span) => span.text).join(''));
+  expect(lineTexts(layout(text, width, undefined, measure))).toEqual(expected);
+  for (const split of [13, text.length]) {
+    for (const props of ['<w:highlight w:val="yellow"/>', '<w:shd w:fill="FFFF00"/>']) {
+      const fitted = layout(text, width, split, measure, props);
+      expect(lineTexts(fitted)).toEqual(expected);
+      const comma = fitted[0]!.spans.find((span) => span.text === '，');
+      expect(comma?.box.width).toBeLessThan(12);
+      expect(comma?.glyphOffsetPt ?? 0).toBe(0);
+      expect(Boolean(comma?.style.highlight || comma?.style.shading)).toBe(true);
+    }
+    for (const props of paintRefused)
+      expect(lineTexts(layout(text, width, split, measure, props))).toEqual([
+        text.slice(0, 31),
+        text.slice(31),
+      ]);
+  }
+});
+
+test('highlighted fitting keeps every glyph ink inside its own box', () => {
+  // A centered colon's ink passes half its advance; a later highlight would cover it.
+  const centered: TextMeasurer = {
+    ...measurer,
+    inkBounds: (value, style) =>
+      value === '：'
+        ? { left: 0.42 * style.fontSizePt, right: 0.58 * style.fontSizePt }
+        : measurer.inkBounds?.(value, style),
+  };
+  const highlight = '<w:highlight w:val="yellow"/>';
+  const inside = (lines: ReturnType<typeof layout>, measure: TextMeasurer) =>
+    lines.flatMap((line) =>
+      line.spans.flatMap((span) => {
+        const ink = measure.inkBounds?.(span.text, span.style);
+        const offset = span.glyphOffsetPt ?? 0;
+        return ink && span.text.length === 1
+          ? [ink.left + offset >= -0.001 && ink.right + offset <= span.box.width + 0.001]
+          : [];
+      })
+    );
+  for (const [text, measure] of [
+    ['甲乙丙：丁戊己庚', centered],
+    ['甲乙（丙丁）戊己', measurer],
+  ] as const) {
+    for (const width of [90.5, 91, 92]) {
+      const lines = layout(text, width, undefined, measure, highlight);
+      expect(inside(lines, measure).every(Boolean)).toBe(true);
+    }
+  }
+  // The bound still lets the colon give its blank right side.
+  const colon = layout('甲乙丙：丁戊己庚', 91, undefined, centered, highlight);
+  expect(colon).toHaveLength(1);
+  expect(colon[0]!.spans.find((span) => span.text === '：')?.box.width).toBeCloseTo(7, 3);
+  const lines = layout('甲乙（丙丁）戊己', 90, undefined, measurer, highlight);
+  expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
+    '甲乙（丙丁）戊己',
+  ]);
+  const opening = lines[0]!.spans.find((span) => span.text === '（')!;
+  expect(opening.glyphOffsetPt).toBeLessThan(0);
+  expect(opening.style.highlight).toBe('yellow');
+});
+
+const trackedProps = (spacing: number) =>
+  '<w:rFonts w:ascii="Test Latin" w:hAnsi="Test Latin" w:eastAsia="Test CJK" w:hint="eastAsia"/>' +
+  `<w:lang w:eastAsia="zh-CN"/><w:spacing w:val="${spacing}"/>`;
+const tracked: TextMeasurer = {
+  ...measurer,
+  hasResolvedFont: () => true,
+  inkBounds(value, style) {
+    return value === '，'
+      ? { left: 0.08 * style.fontSizePt, right: 0.34 * style.fontSizePt }
+      : measurer.inkBounds?.(value, style);
+  },
+};
+const lineTexts = (lines: ReturnType<typeof layout>) =>
+  lines.map((line) => line.spans.map((span) => span.text).join(''));
+
+// A Latin run on a later line makes the paragraph mixed. It cannot veto the seams of a first
+// line tracked by `w:spacing` that holds no Latin group: that line breaks as it does without the Latin run.
+for (const spacing of [-4, 4]) {
+  for (const hanging of [false, true]) {
+    test(`a tracked East Asian line fits in a mixed paragraph (${spacing} twips, hanging ${hanging})`, () => {
+      const base = '甲乙丙丁戊己，庚辛壬癸子丑寅卯辰巳午未申酉，戌亥春夏秋冬风雨雷电，晴雪朝暮';
+      const wrap = (suffix: string, width: number) =>
+        layout(
+          base + suffix,
+          width,
+          undefined,
+          tracked,
+          trackedProps(spacing),
+          undefined,
+          'both',
+          hanging
+        );
+      let fitted = 0;
+      for (let width = 330; width <= 400; width += 1) {
+        const mixed = wrap('A1', width);
+        const pure = wrap('中文', width);
+        expect(lineTexts(mixed)[0]).toBe(lineTexts(pure)[0]);
+        const comma = mixed[0]!.spans.find((span) => span.text === '，' && span.box.width < 11.9);
+        if (comma) {
+          fitted += 1;
+          // Ideographs keep their authored spacing; only the punctuation gives up blank sides.
+          for (const span of mixed[0]!.spans.filter((entry) =>
+            /^[\u4e00-\u9fff]+$/u.test(entry.text)
+          ))
+            expect(span.style.characterSpacingPt).toBe(spacing / 20);
+        }
+      }
+      expect(fitted).toBeGreaterThan(0);
+      const latin = wrap('A1', 371)
+        .flatMap((line) => line.spans)
+        .find((span) => span.text.includes('A1'));
+      expect(latin?.style.characterSpacingPt).toBe(spacing / 20);
+    });
+  }
+}
+
+// A word, a mathematical run, a symbol, or a curly quote on a tracked line keeps every bracket at
+// its tracked advance, before or after the tracked text; the untracked line compresses the pair.
+test('a tracked line that holds a word, a mathematical run, a symbol, or a curly quote keeps its brackets', () => {
+  const props = (spacing: number) =>
+    spacing ? trackedProps(spacing) : trackedProps(0).replace(/<w:spacing[^>]*\/>/u, '');
+  for (const [prefix, foreign] of [
+    ['', 'AV'],
+    ['AV', '甲'],
+    ['', '≥'],
+    ['', '℃'],
+    ['', '“乙”'],
+  ] as const) {
+    const text = `${prefix}甲乙丙丁戊己）（庚辛壬癸${foreign}子丑寅卯辰巳午未申酉戌亥春夏秋冬风雨雷电晴雪朝暮`;
+    const brackets = (spacing: number, width: number) => {
+      const first = layout(text, width, undefined, tracked, props(spacing))[0]!.spans;
+      // Only a first line that holds the foreign text must keep its brackets.
+      return first.some((span) => /[A-Z≥℃“]/u.test(span.text))
+        ? first.filter((span) => /^[（）]$/u.test(span.text))
+        : [];
+    };
+    let compressed = 0;
+    let held = 0;
+    for (let width = 330; width <= 400; width += 1) {
+      if (brackets(0, width).some((span) => span.box.width < 11.9)) compressed += 1;
+      for (const spacing of [-4, 4])
+        for (const span of brackets(spacing, width)) {
+          held += 1;
+          expect(span.box.width).toBeCloseTo(12 + spacing / 20, 6);
+        }
+    }
+    expect(held).toBeGreaterThan(0);
+    expect(compressed).toBeGreaterThan(0);
+  }
 });

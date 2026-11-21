@@ -157,6 +157,19 @@ const IMAGE_INSERT_PROBE_BYTES = Uint8Array.from(
 );
 
 /**
+ * The picture-insert probe: a 1x1 PNG with no point, so the editor applies its own rules for
+ * where a picture goes. Never inserted: a probe only asks whether one could land. The toolbar
+ * insert and the image-file paste lane ask the same question with it.
+ */
+export const IMAGE_INSERT_PROBE = Object.freeze({
+  type: 'insertImage',
+  data: IMAGE_INSERT_PROBE_BYTES,
+  mime: 'image/png',
+  widthPoints: 72,
+  heightPoints: 72,
+} as const);
+
+/**
  * Why a dialog slot cannot run as a command, naming the public way to open the dialog. The
  * engine can judge the slot, but the values come from a dialog the host renders.
  */
@@ -175,13 +188,7 @@ const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
   // the values below are the smallest well-formed pair and are never executed. Picking a real
   // size still runs its own `can` first, so a 6×6 refused where a 1×1 was not cannot slip
   // through.
-  'image.insert': {
-    type: 'insertImage',
-    data: IMAGE_INSERT_PROBE_BYTES,
-    mime: 'image/png',
-    widthPoints: 72,
-    heightPoints: 72,
-  },
+  'image.insert': IMAGE_INSERT_PROBE,
   'image.properties': { type: 'setImageProperties', description: 'probe' },
   'table.insert': { type: 'insertTable', rows: 1, cols: 1 },
   // Page setup is the same shape: whether this document's sections can be rewritten is the
@@ -535,13 +542,7 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
     if (shapeProbe) {
       if (id === 'image.insert' && shapeProbe.type === 'insertImage') {
         const judged: CanResult =
-          editor.canExecuteImageCommand?.({
-            type: 'insertImage',
-            data: IMAGE_INSERT_PROBE_BYTES,
-            mime: 'image/png',
-            widthPoints: 72,
-            heightPoints: 72,
-          }) ?? editor.can(shapeProbe);
+          editor.canExecuteImageCommand?.(IMAGE_INSERT_PROBE) ?? editor.can(shapeProbe);
         return judged.ok
           ? { id, enabled: true, disabledReason: null, active: false }
           : { id, enabled: false, disabledReason: judged.reason, active: false };
