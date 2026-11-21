@@ -50,11 +50,13 @@ import {
   tocForElement,
   tocEscapePosition,
   tocAtPosition,
+  TOC_READ_ONLY_REFUSAL,
   selectionTouchesTocRange,
   opTouchesTocRange,
   paragraphInBodyToc,
 } from './surface-toc-ranges.ts';
 import { tocBoundaryForLayout } from './surface-toc-boundary.ts';
+import { tocCommandRefusal } from './toc-command-refusal.ts';
 import { isBackwardMotion, settleTocMotion } from './surface-toc-navigation.ts';
 import { resolveTocSources } from '../store/package/toc-sources.ts';
 import { createTocCommands } from './surface-toc-commands.ts';
@@ -437,8 +439,6 @@ export function mountPaginatedSurface(
       options.tableInteractionLabel ?? ((key: TableInteractionLabelKey) => defaultTableLabel(key)),
   };
   const VIEWING_REFUSAL = 'the document is open for viewing';
-  /** Document protection, as opposed to the reversible mode — the wording `gateCommand` uses. */
-  const TOC_READ_ONLY_REFUSAL = 'the table of contents is generated and read-only';
   /** Set while formatting writes its ops outside a selected table of contents. */
   let formattingOutsideToc = false;
   // The glyphs a serif Korean face lacks fall back to serif faces, in paint and measurement.
@@ -1233,8 +1233,14 @@ export function mountPaginatedSurface(
   }
 
   const format = createSurfaceFormat({
-    runFormatRefusal: () =>
-      commandProtectionRefusal({ type: 'toggleMark', mark: 'bold' }, surface)?.reason ?? null,
+    // Any run format meets the same protection; Bold stands for all of them.
+    runFormatRefusal: () => {
+      const bold = { type: 'toggleMark', mark: 'bold' } as const;
+      return (
+        (commandProtectionRefusal(bold, surface) ?? tocCommandRefusal(bold, surface))?.reason ??
+        null
+      );
+    },
     session: gatedSession,
     applyOutsideToc: (ops, apply) => {
       const kept = ops.filter((op) => !opTouchesToc(op));

@@ -46,7 +46,7 @@ type ParagraphFormatCommand = Extract<
   }
 >;
 
-const PARAGRAPH_FORMAT_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set<
+export const PARAGRAPH_FORMAT_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set<
   ParagraphFormatCommand['type']
 >([
   'setAlignment',
@@ -99,7 +99,7 @@ function lockReachOf(command: ParagraphFormatCommand): LockReach {
 }
 
 /** The paragraphs a paragraph write reaches, with the same coverage the writer uses. */
-function selectedParagraphIds(surface: PaginatedSurface): readonly string[] {
+export function selectedParagraphIds(surface: PaginatedSurface): readonly string[] {
   const state = surface.state();
   const cells = state.cellSelection;
   if (cells) return [...paragraphsInCells(surface.layout(), cells.cellIds)];

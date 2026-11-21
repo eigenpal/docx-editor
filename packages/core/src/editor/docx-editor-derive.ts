@@ -10,6 +10,7 @@ import {
 } from './command-protection.ts';
 import { contentLockFormatRefusal } from './content-lock-format-refusal.ts';
 import { paragraphFormatLockRefusal } from './paragraph-format-lock-refusal.ts';
+import { tocCommandRefusal } from './toc-command-refusal.ts';
 // Snapshot derivations for `createDocxEditor` (editor seam).
 //
 // The reads that turn a mounted surface into contract values: run formatting, page setup,
@@ -369,6 +370,8 @@ export function gateCommand(
     contentLockPolicyFor(surface)
   );
   if (paragraphLocked) return { ok: false, refusal: paragraphLocked };
+  const toc = support.mutating ? tocCommandRefusal(command, surface) : null;
+  if (toc) return { ok: false, refusal: toc };
   if (command.type === 'insertTextBox') {
     const refusal = textboxInsertionRefusal(surface);
     return refusal ? { ok: false, refusal } : { ok: true };

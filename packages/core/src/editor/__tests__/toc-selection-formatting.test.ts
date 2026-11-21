@@ -55,7 +55,8 @@ test('a selection inside the table of contents still refuses formatting', () => 
   const before = serializeOoxmlPart(surface.session.part());
   const paragraphId = surface.session.paragraphIds()[1]!;
   surface.setSelection({ anchor: { paragraphId, offset: 0 }, head: { paragraphId, offset: 5 } });
-  editor.exec({ type: 'setMarkAttr', mark: 'highlight', attr: 'val', value: 'yellow' });
-  expect(surface.state().lastRejection).toBe('the table of contents is generated and read-only');
+  expect(
+    editor.exec({ type: 'setMarkAttr', mark: 'highlight', attr: 'val', value: 'yellow' })
+  ).toMatchObject({ ok: false, reason: 'the table of contents is generated and read-only' });
   expect(serializeOoxmlPart(surface.session.part())).toBe(before);
 });

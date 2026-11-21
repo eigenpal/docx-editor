@@ -5,6 +5,9 @@ import { detectBodyTocs, tocFieldRange, type DetectedToc } from '../store/packag
 import { treeOpReach } from '../store/store/tree-op-content-controls.ts';
 import type { SemanticPosition, SemanticSelection } from '../layout/semantic-interaction.ts';
 
+/** The refusal of a write into a generated table of contents. */
+export const TOC_READ_ONLY_REFUSAL = 'the table of contents is generated and read-only';
+
 export interface TocParagraphRange {
   readonly toc: DetectedToc;
   readonly paragraphId: string;
@@ -68,6 +71,18 @@ function contains(range: TocParagraphRange, offset: number): boolean {
   if (range.endsHere && range.end < range.length && offset >= range.end) return false;
   return offset >= range.start && offset <= range.end;
 }
+/** Whether a write over `[start, end)` of the range's paragraph reaches generated content. */
+function rangeTouches(range: TocParagraphRange, start: number, end: number): boolean {
+  return start === end ? contains(range, start) : start < range.end && end > range.start;
+}
+/**
+ * Whether a paragraph-level write (its properties or its mark) reaches generated content:
+ * the paragraph holds generated text, or only field characters (such as a shown closing
+ * line). A boundary that also holds a heading keeps accepting paragraph formatting.
+ */
+function paragraphWriteTouches(range: TocParagraphRange): boolean {
+  return range.end > range.start || range.length === 0;
+}
 export function tocAtPosition(
   part: OoxmlPart,
   position: SemanticPosition
@@ -100,9 +115,7 @@ export function selectionTouchesTocRange(part: OoxmlPart, selection: SemanticSel
     const start = Math.min(anchor.offset, head.offset),
       end = Math.max(anchor.offset, head.offset);
     return tocParagraphRanges(part).some(
-      (r) =>
-        r.paragraphId === anchor.paragraphId &&
-        (start === end ? contains(r, start) : start < r.end && end > r.start)
+      (r) => r.paragraphId === anchor.paragraphId && rangeTouches(r, start, end)
     );
   }
   // Whole controls can be removed by a surrounding selection. The operation guard checks
@@ -118,16 +131,12 @@ export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
       ranges.some((r) => {
         if (target.nodeId !== r.paragraphId) return false;
         if (target.range) {
-          const { start, end } = target.range;
-          return start === end ? contains(r, start) : start < r.end && end > r.start;
+          return rangeTouches(r, target.range.start, target.range.end);
         }
         if (op.op === 'joinParagraphs' && op.firstId === r.paragraphId && r.endsHere && r.end === 0)
           return false;
         if (target.removes || target.structural) return true;
-        // Protect a paragraph that holds generated text, or only field characters (such
-        // as a shown closing line). A boundary that also holds a heading keeps accepting
-        // paragraph formatting.
-        return r.end > r.start || r.length === 0;
+        return paragraphWriteTouches(r);
       })
     );
   }
@@ -141,6 +150,71 @@ export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
     );
   };
   return inspect(op);
+}
+
+/**
+ * Whether the TOC guard refuses text written over the selection. Inside one paragraph it
+ * asks {@link selectionTouchesTocRange}. A range across paragraphs also removes the ones
+ * between its ends and joins its ends, so it is refused when it reaches any TOC paragraph,
+ * except a first paragraph that holds only the end mark (the guard lets it join).
+ */
+export function tocRefusesTextWrite(
+  part: OoxmlPart,
+  selection: SemanticSelection,
+  paragraphIds: readonly string[]
+): boolean {
+  if (selectionTouchesTocRange(part, selection)) return true;
+  if (selection.anchor.paragraphId === selection.head.paragraphId) return false;
+  const ranges = tocParagraphRanges(part);
+  return paragraphIds.some((id, index) =>
+    ranges.some(
+      (r) => r.paragraphId === id && !(index === 0 && r.endsHere && !r.startsHere && r.end === 0)
+    )
+  );
+}
+/** One paragraph's selected span, `[start, end)` in its own offsets. */
+export interface TocSelectedSpan {
+  readonly paragraphId: string;
+  readonly start: number;
+  readonly end: number;
+}
+/**
+ * Whether the TOC guard drops every write a run format makes over `spans`, so the format
+ * is refused. It asks the predicates `opTouchesTocRange` asks of each op: a span that
+ * reaches ordinary text keeps a write, as does a caret where typed text would land. A caret
+ * in an empty paragraph formats the paragraph mark, which is a paragraph-level write.
+ */
+export function tocDropsRunFormatting(part: OoxmlPart, spans: readonly TocSelectedSpan[]): boolean {
+  const ranges = tocParagraphRanges(part);
+  if (ranges.length === 0 || spans.length === 0) return false;
+  return spans.every((span) =>
+    ranges.some((r) => {
+      if (r.paragraphId !== span.paragraphId) return false;
+      if (span.start === span.end) return contains(r, span.start) || r.length === 0;
+      const end = Math.min(span.end, r.length);
+      // A span past the last character reaches only the paragraph mark.
+      if (span.start >= end) return paragraphWriteTouches(r);
+      // Text before `r.start` or after `r.end` is ordinary and takes the format.
+      return rangeTouches(r, span.start, end) && span.start >= r.start && end <= r.end;
+    })
+  );
+}
+/**
+ * Whether the TOC guard refuses a paragraph format over `paragraphIds`. Most formats drop
+ * the writes that reach a TOC paragraph and refuse only when none is left. A list or an
+ * indent step writes the selection as one unit, so `whole` refuses it when any write
+ * reaches one.
+ */
+export function tocRefusesParagraphFormatting(
+  part: OoxmlPart,
+  paragraphIds: readonly string[],
+  whole: boolean
+): boolean {
+  const ranges = tocParagraphRanges(part);
+  if (ranges.length === 0 || paragraphIds.length === 0) return false;
+  const touches = (id: string) =>
+    ranges.some((r) => r.paragraphId === id && paragraphWriteTouches(r));
+  return whole ? paragraphIds.some(touches) : paragraphIds.every(touches);
 }
 
 export function tocEscapePosition(

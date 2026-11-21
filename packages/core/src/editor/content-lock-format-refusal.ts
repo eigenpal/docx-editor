@@ -21,7 +21,7 @@ import { partOfNodeId, storyScopeOfNodeId } from './surface-scope.ts';
 
 export const LOCKED_FORMAT_REASON = 'this content is locked';
 
-const RUN_FORMAT_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set([
+export const RUN_FORMAT_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set([
   'toggleMark',
   'setMarkAttr',
   'clearFormatting',
@@ -37,7 +37,7 @@ interface SelectedSpan {
 const WHOLE = Number.MAX_SAFE_INTEGER;
 
 /** The paragraphs a format write reaches, with the same coverage rule the writer uses. */
-function selectedSpans(surface: PaginatedSurface): SelectedSpan[] {
+export function selectedSpans(surface: PaginatedSurface): SelectedSpan[] {
   const state = surface.state();
   const cells = state.cellSelection;
   if (cells) {

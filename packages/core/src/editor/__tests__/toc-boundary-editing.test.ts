@@ -243,8 +243,10 @@ test('a standalone closing line is crossed by arrows, keeps its mark, and joins 
   // Its paragraph mark stays protected, and formatting reports the read-only refusal.
   select(surface, 2, 0);
   const before = serializeOoxmlPart(surface.session.part());
-  editor.exec({ type: 'setAlignment', align: 'center' });
-  expect(surface.state().lastRejection).toBe('the table of contents is generated and read-only');
+  expect(editor.exec({ type: 'setAlignment', align: 'center' })).toMatchObject({
+    ok: false,
+    reason: 'the table of contents is generated and read-only',
+  });
   expect(serializeOoxmlPart(surface.session.part())).toBe(before);
   // Backspace at the start of the next paragraph removes the blank line and keeps the field.
   select(surface, 3, 0);
