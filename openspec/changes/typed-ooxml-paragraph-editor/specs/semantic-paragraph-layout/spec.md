@@ -634,6 +634,36 @@ Justified East Asian lines SHALL distribute punctuation compression across avail
 - **WHEN** the line needs compression to fit
 - **THEN** both blank sides at that seam compress
 
+### Requirement: Punctuation pair classes by language
+
+Each mark of an adjacent full-width punctuation pair SHALL take its pair class from its own run's East Asian language (`w:lang` `w:eastAsia`). The class SHALL be opening, closing, centred, or none. Brackets SHALL be opening or closing marks in every language.
+
+#### Scenario: The run language selects the class of a mark
+
+- **GIVEN** a run whose East Asian language is Simplified Chinese, or that has no East Asian language
+- **THEN** `、。，．；：！` are closing marks, and `？` and `・` have no class
+- **AND** in Traditional Chinese (`zh-TW`, `zh-HK`, `zh-MO`, `zh-Hant`), `、。，．；：` are centred, and `！？・` have no class
+- **AND** in Japanese, `、。，．` are closing marks, `；：・` are centred, and `！？` have no class
+
+#### Scenario: Each mark of a pair uses its own run language
+
+- **GIVEN** a Simplified Chinese `；` followed by a Japanese `！`
+- **WHEN** the pair is laid out
+- **THEN** both bearings stay
+- **AND** a Simplified Chinese `）` followed by a Japanese `・` is 6 pt narrower at 12 pt
+
+### Requirement: Punctuation pair seams by class
+
+When pair kerning (`w:kern`) applies to both runs, a closing mark SHALL give half its advance before a closing, centred, or opening mark. A centred mark SHALL give it only before an opening mark. Two opening marks SHALL share the second mark's left bearing. Other pairs and Korean runs SHALL keep both bearings. A colon SHALL share before a non-opening mark only when both marks' measured ink fits the pair. A highlighted or shaded colon SHALL keep its bearing.
+
+#### Scenario: A semicolon pair follows its class
+
+- **GIVEN** a 12 pt pair with pair kerning on
+- **WHEN** `）；` and `；）` are Simplified Chinese
+- **THEN** each pair is 6 pt narrower
+- **AND** in Japanese or Traditional Chinese, `）；` is 6 pt narrower and `；）` keeps both bearings
+- **AND** `；（` is 6 pt narrower in all three languages, and `？（` keeps both bearings
+
 ### Requirement: Hanging punctuation by alignment
 
 With `w:overflowPunct` on, in compatibility mode 15 and later, the layout engine SHALL let line-end punctuation hang past the margin only when the paragraph alignment is justified or distributed. This SHALL apply to full-width punctuation and to Latin punctuation in a run with an East Asian language. Left-aligned, centered, and right-aligned lines SHALL keep line-end punctuation inside the margin there.

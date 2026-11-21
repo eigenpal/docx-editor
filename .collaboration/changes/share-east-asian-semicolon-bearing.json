@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Adjacent punctuation pairs used one class table for every language, so semicolons, exclamation marks, and the katakana middle dot kept both bearings, and Traditional Chinese and Japanese centred marks shared bearings they keep.",
+  "after": "Each mark takes its pair class from its own run language. Eligible pairs share one half-cell bearing and restore it when they part across a line.",
+  "reason": "Only derived layout widths change. Model text, offsets, operations and serialized collaboration state stay the same.",
+  "tests": [
+    "packages/core/src/layout/__tests__/cjk-compression-context.test.ts",
+    "packages/pro/src/collaboration/__tests__/punctuation-pair-classes-editors.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-concurrent-format-merge.test.ts"
+  ],
+  "changeset": "share-east-asian-semicolon-bearing",
+  "migration": null
+}
