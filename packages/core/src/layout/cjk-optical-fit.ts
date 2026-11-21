@@ -25,28 +25,26 @@ import { formatRevisionOf } from './revision-projection.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 import { memoized, type ClusterMemo } from './cjk-optical-memo.ts';
 import {
+  blankSided,
+  CLOSING,
+  curlyRole,
+  EAST_ASIAN_OPAQUE,
+  finiteInk,
+  fitNeighbour,
+  HAS_PUNCTUATION,
+  OPAQUE_TEXT,
+  OPENING,
+  PUNCTUATION,
+  TOLERANCE,
+  type Cell,
+} from './cjk-optical-cell.ts';
+import {
   layoutDerivedSpacingStyleForEditing,
   withLayoutDerivedSpacing,
 } from './layout-derived-spacing.ts';
 
-const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
-const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
-const PUNCTUATION = /^[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]$/u;
-const HAS_PUNCTUATION = /[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]/u;
-// Latin-face text kept whole on a qualified line: Latin script, digits, symbols, and
-// punctuation. Other scripts and controls still refuse: automatic East Asian spacing
-// (`w:autoSpaceDE`) covers only Latin text. In the East Asian face, letters refuse too.
-const OPAQUE_TEXT = /^[ \p{Script=Latin}\p{N}\p{S}\p{P}\p{M}]+$/u;
-const EAST_ASIAN_OPAQUE = /^[\p{N}\p{S}\p{P}][\p{M}]*$/u;
-const TOLERANCE = 0.001;
 // The fit gate weighs expansion in units of 1/64 of an advance (see `expansionGate`).
 const EXPANSION_UNITS = 64;
-// A curly quote in the East Asian font slot fits like the matching bracket.
-function curlyRole(text: string): 'opening' | 'closing' | undefined {
-  if (text === '‘' || text === '“') return 'opening';
-  if (text === '’' || text === '”') return 'closing';
-  return undefined;
-}
 // Every fit attempt re-reads the whole line, so segmentation dominates its cost. In BMP East
 // Asian, fullwidth, curly-quote, and space text without combining kana or tone marks, each
 // code unit is one grapheme.
@@ -59,19 +57,6 @@ export function fittingClusters(text: string): readonly GraphemeSegment[] {
   for (let index = 0; index < text.length; index += 1)
     clusters.push({ index, text: text[index]!, utf16From: index, utf16To: index + 1 });
   return clusters;
-}
-interface Cell {
-  span: StyleSpanRecord;
-  readonly sourceIndex: number;
-  readonly ordinaryOpaque?: true;
-  readonly qualifiedCurly?: 'opening' | 'closing';
-  /** An East Asian face symbol that is not punctuation, such as `℃` or `①`: never compressed. */
-  readonly opaqueGlyph?: true;
-  readonly natural: number;
-  readonly alreadyReduced: number;
-  readonly ink: { left: number; right: number } | undefined;
-  reduction: number;
-  shift: number;
 }
 export interface CjkOpticalFit {
   readonly candidate: readonly StyleSpanRecord[];
@@ -321,32 +306,6 @@ function cellsOf(
   if (tracked && foreign) return undefined;
   return cells;
 }
-// A glyph a blank side can face: an ideograph, punctuation, a qualified quote, an East Asian
-// face symbol, or Latin-face text. A space is not one.
-function fitNeighbour(cell: Cell): boolean {
-  const text = cell.span.text;
-  return (
-    cell.ordinaryOpaque === true ||
-    cell.opaqueGlyph === true ||
-    cell.qualifiedCurly !== undefined ||
-    PUNCTUATION.test(text) ||
-    isCjk(text.codePointAt(0)!)
-  );
-}
-function finiteInk(cell: Cell): cell is Cell & { ink: { left: number; right: number } } {
-  return (
-    cell.ink !== undefined &&
-    Number.isFinite(cell.ink.left) &&
-    Number.isFinite(cell.ink.right) &&
-    cell.ink.right >= cell.ink.left
-  );
-}
-
-const blankSided = (cell: Cell): boolean =>
-  cell.qualifiedCurly !== undefined ||
-  OPENING.test(cell.span.text) ||
-  CLOSING.test(cell.span.text) ||
-  cell.span.text === '：';
 /**
  * A justified line takes another ordinary glyph by compression only when the share of the
  * compression capacity it spends is at most the expansion that leaving the glyph off would
