@@ -399,6 +399,22 @@ test('an embedded object reserves its cached preview height, as the same w:pict 
   expect(embedded.drawings[0]).toMatchObject({ start: 0, width: 100, height: 28.5 });
   expect(embedded.tops).toEqual(standalone.tops);
   expect(embedded.tops[2]! - embedded.tops[1]!).toBeGreaterThanOrEqual(28.5);
+  // An Equation.3 object can have a cached picture and a refresh-lock flag.
+  const locked = (metadata: string, type = 'Embed', imageId = 'rPreview') =>
+    `<w:object w:dxaOrig="2000" w:dyaOrig="570">${picture.replace('rPreview', imageId)}${ole(type)
+      .replace('ProgID="Package"', 'ProgID="Equation.3"')
+      .replace('/>', `>${metadata}</o:OLEObject>`)}</w:object>`;
+  const flag = '<o:LockedField>false</o:LockedField>';
+  const preview = lineTops(locked(flag));
+  expect(preview.tops).toEqual(standalone.tops);
+  expect(preview.drawings).toHaveLength(1);
+  expect(preview.drawings[0]).toMatchObject({ start: 0, width: 100, height: 28.5 });
+  expect(lineTops(locked('<o:LockedField/>')).drawings).toHaveLength(1);
+  expect(lineTops(locked(flag + '<o:FieldCodes> EMBED </o:FieldCodes>')).drawings).toHaveLength(1);
+  expect(lineTops(locked(flag + flag)).drawings).toHaveLength(0);
+  expect(lineTops(locked('<o:LockedField><o:LinkType/></o:LockedField>')).drawings).toHaveLength(0);
+  expect(lineTops(locked(flag, 'Link')).drawings).toHaveLength(0);
+  expect(lineTops(locked(flag, 'Embed', 'rOle')).drawings).toHaveLength(0);
   // A linked object stays opaque: its paragraph is one empty text line and paints nothing.
   const linked = lineTops(
     `<w:object w:dxaOrig="2000" w:dyaOrig="570">${picture}${ole('Link')}</w:object>`

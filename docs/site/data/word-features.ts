@@ -1234,7 +1234,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The editor preserves embedded objects and shows supported inline preview pictures as read-only content. It never executes, loads, or updates embedded objects. Floating and linked objects show no preview, and clipboard operations refuse object content.',
+      'The editor preserves embedded objects and shows supported preview pictures as read-only content. It never executes, loads, or updates embedded objects. Linked objects show no preview, and clipboard operations refuse object content.',
   },
   {
     id: 'structure.protection',
