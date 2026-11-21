@@ -11,6 +11,7 @@ import {
 } from './drawing-exclusion.ts';
 import type { PendingLine } from './pending-line.ts';
 import type { ParagraphFrame } from './paragraph-frame.ts';
+import type { FollowingAnchorTops } from './following-anchor-tops.ts';
 
 interface WrapParagraph {
   readonly paragraph: OoxmlElement;
@@ -40,7 +41,13 @@ export function createParagraphDrawingWrap(options: {
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
   /** Sizes unwrapped text boxes before an anchor-only paragraph carves their zones. */
   readonly layoutTextboxStory?: import('./inline-textbox-flow.ts').TextboxStoryLayouter;
+  /** The reflow's predictions of where following pictures land (`following-anchor-tops.ts`). */
+  readonly followingTops?: FollowingAnchorTops;
 }) {
+  // Each wrap serves one layout of the bodies, and only a pass's last layout is its result.
+  options.followingTops?.beginLayout();
+  // Whether a break of this layout moved a zone (`skipsBreakCache`).
+  let movedZone = false;
   // A rectangular exclusion anchored at the next paragraph can reach back into the
   // preceding paragraph's after-spacing. Its origin excludes the extra lines that
   // its own wrap caused there, just as a top-and-bottom anchor excludes its own skip.
@@ -49,16 +56,10 @@ export function createParagraphDrawingWrap(options: {
   // The lines a rising table band adds to each earlier paragraph on its page, by table anchor.
   const tableWrapShares = new Map<string, Map<string, number>>();
   const followingAnchors = new Map<string, ReadonlySet<string>>();
-  const followingAnchor = (zone: ExclusionZone, index: number): boolean => {
-    if (
-      zone.sourceKind ||
-      (zone.input.mode !== 'square' && zone.input.mode !== 'topAndBottom') ||
-      zone.anchorModelStart !== 0 ||
-      !options.drawingLayout
-    )
-      return false;
+  /** The pictures of the paragraph after `index` that its lines may wrap, by drawing id. */
+  const followingCandidates = (index: number): ReadonlySet<string> | undefined => {
     const next = options.paragraphAt(index + 1);
-    if (!next || next.frame || next.paragraph.id !== zone.anchorParagraphId) return false;
+    if (!next || next.frame || !options.drawingLayout) return undefined;
     let eligible = followingAnchors.get(next.paragraph.id);
     if (!eligible) {
       eligible = new Set(
@@ -73,7 +74,82 @@ export function createParagraphDrawingWrap(options: {
       );
       followingAnchors.set(next.paragraph.id, eligible);
     }
-    return eligible.has(zone.drawingNodeId);
+    return eligible;
+  };
+  const followingAnchor = (zone: ExclusionZone, index: number): boolean => {
+    if (
+      zone.sourceKind ||
+      (zone.input.mode !== 'square' && zone.input.mode !== 'topAndBottom') ||
+      zone.anchorModelStart !== 0 ||
+      options.paragraphAt(index + 1)?.paragraph.id !== zone.anchorParagraphId
+    )
+      return false;
+    return followingCandidates(index)?.has(zone.drawingNodeId) ?? false;
+  };
+  // The prediction each paragraph's latest break made, by block index, until `measure` records
+  // the one its placed break made (`following-anchor-tops.ts`). `top` plus the extent of
+  // `without`, or of the placed lines when no following zone took part, is the prediction.
+  const pendingPredictions = new Map<
+    number,
+    {
+      readonly key: string;
+      readonly pageIndex: number;
+      readonly top: number;
+      /** The lines without the next paragraph's pictures, when a moving pass broke them early. */
+      readonly without?: readonly PendingLine[];
+      readonly nextId: string;
+      /** The break wrapped a zone it moved. */
+      readonly moved: boolean;
+    }
+  >();
+  /**
+   * How far this break moves the zones of the pictures of the paragraph after `index`: zero
+   * unless the pass may move zones (`FollowingAnchorTops.mayMove`), the previous pass placed them
+   * on this page, and a move changes some line of it. A pass that may not move zones still
+   * lets the gap be learned, and breaks no extra lines.
+   */
+  const followingShift = (
+    index: number,
+    columnIndex: number,
+    top: number,
+    following: FollowingBreak
+  ): number => {
+    pendingPredictions.delete(index);
+    const tops = options.followingTops;
+    const nextId = options.paragraphAt(index + 1)?.paragraph.id;
+    if (!tops || nextId === undefined || !followingCandidates(index)?.size) return 0;
+    const key = `${columnIndex}:${nextId}`;
+    const { pageIndex } = following;
+    const placed = tops.placed(nextId, columnIndex);
+    const zones = placed?.zones.filter((zone) => followingAnchor(zone, index)) ?? [];
+    if (!placed || zones.length === 0 || !tops.mayMove) {
+      // No move: `measure` takes the prediction from the lines it breaks without the pictures.
+      if (placed && zones.length > 0)
+        tops.shift(key, { pageIndex: placed.pageIndex, zones }, undefined);
+      pendingPredictions.set(index, { key, pageIndex, top, nextId, moved: false });
+      return 0;
+    }
+    const without = following.breakWithout(nextId);
+    // The probe reaches up by the paragraph's after-spacing (`select`). A zone whose reach starts
+    // at the region bottom or below narrows no line of this page, wherever it moves there.
+    const reach = options.paragraphAt(index)?.spacing.after ?? 0;
+    const narrowsPage = (dy: number): boolean =>
+      zones.some((zone) => zone.verticalBand.y + dy - reach < following.regionBottom);
+    const predicted = tops.shift(
+      key,
+      { pageIndex: placed.pageIndex, zones },
+      { pageIndex, y: top + extent(without) }
+    );
+    // A zone on another page of the previous pass is not among this page's: it stays there.
+    const shift =
+      predicted !== undefined &&
+      placed.pageIndex === pageIndex &&
+      (narrowsPage(predicted) || narrowsPage(0))
+        ? predicted
+        : 0;
+    pendingPredictions.set(index, { key, pageIndex, top, without, nextId, moved: shift !== 0 });
+    movedZone ||= shift !== 0;
+    return shift;
   };
   // A topAndBottom drawing that a negative offset lifts above its own paragraph keeps the
   // place its paragraph gives it, and the lines before the anchor that its band crosses move
@@ -148,7 +224,8 @@ export function createParagraphDrawingWrap(options: {
       right: number,
       startOffset: number,
       paragraphSpaceBefore: number,
-      omittedAnchor?: string
+      omittedAnchor?: string,
+      following?: FollowingBreak
     ): readonly ExclusionZone[] {
       const all = entry.frame
         ? []
@@ -168,9 +245,26 @@ export function createParagraphDrawingWrap(options: {
             options.revisionAuthorFilter,
             options.layoutTextboxStory
           );
-      const selected = this.select(entry, index, columnIndex, all, { omittedAnchor });
+      const shift =
+        following && omittedAnchor === undefined
+          ? followingShift(index, columnIndex, top, following)
+          : 0;
+      const selected = this.select(entry, index, columnIndex, all, {
+        omittedAnchor,
+        followingShift: shift,
+      });
       // Break spans are column-local; placement adds the column origin once.
       return left === 0 ? selected : localizeExclusionZones(selected, left, 0);
+    },
+    /**
+     * Whether breaks skip the break cache: from the first break of this layout that moved a
+     * zone on. A moved zone, and every paragraph top below it, differs from what an ordinary
+     * pass places there by rounding that the cache key does not see, and a line at the edge of
+     * the touch margin may break either way. An ordinary pass must never read the lines such a
+     * break made.
+     */
+    skipsBreakCache(): boolean {
+      return movedZone;
     },
     select(
       entry: WrapParagraph,
@@ -180,9 +274,11 @@ export function createParagraphDrawingWrap(options: {
       selection: {
         readonly placement?: boolean;
         readonly omittedAnchor?: string;
+        /** How far this pass moves the zones of the next paragraph's pictures. */
+        readonly followingShift?: number;
       } = {}
     ): readonly ExclusionZone[] {
-      const { placement = false, omittedAnchor } = selection;
+      const { placement = false, omittedAnchor, followingShift: shift = 0 } = selection;
       return zones
         .filter((zone) => {
           if (zone.anchorParagraphId === omittedAnchor) return false;
@@ -226,8 +322,9 @@ export function createParagraphDrawingWrap(options: {
             zone.input.mode === 'topAndBottom'
           );
         })
-        .map((zone) => {
-          if (placement || !followingAnchor(zone, index)) return zone;
+        .map((candidate) => {
+          if (placement || !followingAnchor(candidate, index)) return candidate;
+          const zone = shift === 0 ? candidate : localizeExclusionZones([candidate], 0, -shift)[0]!;
           // Include the trailing gap in the predecessor's wrap probe, without adding
           // that gap to every line's height or moving the published picture. The spacing
           // before its first line is `topAndBottomSkipBeforeLine`'s `spaceAbove`.
@@ -257,11 +354,36 @@ export function createParagraphDrawingWrap(options: {
     ): void {
       // All eligible zones belong to the immediately following paragraph. Omit its
       // complete set once, even when it owns several pictures.
-      const zone = zones.find((candidate) => followingAnchor(candidate, index));
-      if (zone)
+      const prediction = pendingPredictions.get(index);
+      pendingPredictions.delete(index);
+      const followingId = zones.find((candidate) =>
+        followingAnchor(candidate, index)
+      )?.anchorParagraphId;
+      // A moving pass broke the same lines early (`followingShift`).
+      const without =
+        followingId === undefined
+          ? undefined
+          : prediction?.without !== undefined && prediction.nextId === followingId
+            ? prediction.without
+            : breakWithout(followingId);
+      if (followingId !== undefined)
         displacements.set(
-          `${pageIndex}:${zone.anchorParagraphId}`,
-          Math.max(0, extent(lines) - extent(breakWithout(zone.anchorParagraphId)))
+          `${pageIndex}:${followingId}`,
+          Math.max(0, extent(lines) - extent(without!))
+        );
+      if (prediction)
+        options.followingTops?.record(
+          prediction.key,
+          {
+            pageIndex: prediction.pageIndex,
+            y:
+              prediction.top +
+              extent(
+                prediction.without ??
+                  (followingId === prediction.nextId && without ? without : lines)
+              ),
+          },
+          prediction.moved
         );
       // A lifted band pushes every earlier paragraph on the page it crosses, not only the
       // preceding one. Each paragraph keeps its own share, replaced when it lays out again.
@@ -299,6 +421,32 @@ export function createParagraphDrawingWrap(options: {
       return (displacements.get(key) ?? 0) + lifted;
     },
   };
+}
+
+/** Where and how a body paragraph breaks, past its entry. */
+export interface ParagraphBreakAt {
+  /** The model offset the break starts at, on a page after the paragraph's first. */
+  readonly startOffset?: number;
+  /** The paragraph top placement already chose, when it did. */
+  readonly placedParagraphStartY?: number;
+  /** The paragraph whose zones the break leaves out (`measure`'s break without them). */
+  readonly omittedAnchor?: string;
+  /**
+   * Whether placement keeps these lines and `measure` reads them. Only such a break may move
+   * the zones of the next paragraph's pictures; a lookahead break sees the zones an ordinary
+   * pass sees.
+   */
+  readonly placesLines?: boolean;
+}
+
+/** What a break needs to predict where the next paragraph's pictures land. */
+export interface FollowingBreak {
+  /** The page the paragraph breaks on, in the coordinates the zones of that page use. */
+  readonly pageIndex: number;
+  /** The bottom of the region the paragraph breaks in, in the same coordinates. */
+  readonly regionBottom: number;
+  /** The paragraph's lines broken without the zones of the paragraph `anchorId`. */
+  readonly breakWithout: (anchorId: string) => readonly PendingLine[];
 }
 
 /**

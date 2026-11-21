@@ -1,6 +1,7 @@
 import type {
   BlockFragmentRecord,
   LayoutBox,
+  PageRecord,
   TableCellFragmentRecord,
   TableFragmentRecord,
   TableRowFragmentRecord,
@@ -78,16 +79,20 @@ export interface TableRepaint extends ParagraphReflowPaint {
    * once reuse is accepted, so a refusal paints nothing and leaves the element as it was.
    */
   leading?(): readonly HTMLElement[];
+  /** Rows that left another page's fragment in this pass; absent for nested tables. */
+  moved?: PageMovedRows;
 }
 
 const TABLE_GEOMETRY: ReadonlySet<string> = new Set(['rows', 'box', 'columnEdges']);
 // Gap bands and the frame paint from `spacingShading` and `spacingFrame` as the fragment's
-// leading layers, not the row.
+// leading layers, not the row. Paint never reads `rowIndex`: a row inserted or deleted above
+// renumbers every later row, and those rows must still keep their elements.
 const ROW_GEOMETRY: ReadonlySet<string> = new Set([
   'box',
   'cells',
   'spacingShading',
   'spacingFrame',
+  'rowIndex',
 ]);
 const CELL_GEOMETRY: ReadonlySet<string> = new Set(['box', 'blocks', 'borders']);
 // Paint draws the per-side edges and the stroke records; edge segments are not painted.
@@ -304,12 +309,154 @@ function rowKey(row: TableRowFragmentRecord): string {
   return `${row.id}\u0000${row.isHeaderRepeat ? 1 : 0}${row.isContinuation ? 1 : 0}`;
 }
 
+function movedRowKey(tableId: string, row: TableRowFragmentRecord): string {
+  return `${tableId}\u0000${rowKey(row)}`;
+}
+
+/** A painted row of a previous top-level fragment, and what its geometry is relative to. */
+interface MovedRow {
+  readonly record: TableRowFragmentRecord;
+  readonly element: HTMLElement;
+  /** The box of the fragment it was painted in: row positions are relative to it. */
+  readonly table: LayoutBox;
+  /** The tab leader origin of its page, the one page-dependent input a row paints from. */
+  readonly tabLeaderOriginXPt: number;
+}
+
+/** The pool of {@link createMovedTableRows}, seen from one page. */
+export interface PageMovedRows {
+  /** The element another page painted for `row`, moved into `fragment`, or null. */
+  adopt(
+    row: TableRowFragmentRecord,
+    fragment: TableFragmentRecord,
+    repaint: TableRepaint
+  ): HTMLElement | null;
+}
+
+/** Rows of the previous pass that a fragment on any page may take; see below. */
+export interface MovedTableRows {
+  page(tabLeaderOriginXPt: number): PageMovedRows;
+}
+
+/** A previous page, as the paint retention keeps it. */
+interface PreviousPage {
+  readonly record: PageRecord;
+  readonly blocks?: ReadonlyMap<BlockFragmentRecord, HTMLElement>;
+}
+
+// A drawing element is keyed by the page it is painted on, so a row with one stays there.
+const DRAWING = '[data-drawing-node-id],[data-drawing-paragraph-id],img';
+
+/**
+ * The painted rows of the previous pass's top-level table fragments that no page keeps, for
+ * this pass to move to whichever page they now stand on.
+ *
+ * A row inserted above a page break pushes one row across every later break, and a page
+ * break above a table moves every row to the next page. Reuse inside one page's fragment
+ * would paint each of those rows again.
+ *
+ * A row is offered only when its key (row identity plus the repeat and continuation flags)
+ * names one row in the previous fragments and one row in the new layout. A header repeat on
+ * every page, or a row split onto more pages than before, is not offered. So exactly one new
+ * fragment can want an offered element, whether it takes it here or keeps it as its own old
+ * row, and no element is placed twice.
+ *
+ * The old fragments are read when the pool is made, because a fragment repainted earlier in
+ * the pass replaces its retained rows. The index is built on first use, so a pass that moves
+ * no row pays only for that read.
+ */
+export function createMovedTableRows(
+  previous: readonly PreviousPage[],
+  next: readonly PageRecord[]
+): MovedTableRows {
+  const sources: {
+    readonly fragment: TableFragmentRecord;
+    readonly rows: ReadonlyMap<TableRowFragmentRecord, HTMLElement>;
+    readonly tabLeaderOriginXPt: number;
+  }[] = [];
+  for (const page of previous) {
+    if (!page.blocks) continue;
+    const tabLeaderOriginXPt = page.record.contentBox.x - page.record.box.x;
+    for (const [record, element] of page.blocks) {
+      if (record.kind !== 'table') continue;
+      const painted = tables.get(element);
+      if (painted?.fragment === record)
+        sources.push({ fragment: record, rows: painted.rows, tabLeaderOriginXPt });
+    }
+  }
+  let index: Map<string, MovedRow | null> | undefined;
+  const build = (): Map<string, MovedRow | null> => {
+    const found = new Map<string, MovedRow | null>();
+    if (sources.length === 0) return found;
+    const tableIds = new Set(sources.map((source) => source.fragment.tableId));
+    const live = new Set<BlockFragmentRecord>();
+    const wanted = new Map<string, number>();
+    for (const page of next)
+      for (const fragment of page.fragments) {
+        live.add(fragment);
+        if (fragment.kind !== 'table' || !tableIds.has(fragment.tableId)) continue;
+        for (const row of fragment.rows) {
+          const key = movedRowKey(fragment.tableId, row);
+          wanted.set(key, (wanted.get(key) ?? 0) + 1);
+        }
+      }
+    for (const { fragment, rows, tabLeaderOriginXPt } of sources) {
+      if (live.has(fragment)) continue;
+      for (const [record, element] of rows) {
+        const key = movedRowKey(fragment.tableId, record);
+        found.set(
+          key,
+          found.has(key) || wanted.get(key) !== 1
+            ? null
+            : { record, element, table: fragment.box, tabLeaderOriginXPt }
+        );
+      }
+    }
+    return found;
+  };
+  return {
+    page: (tabLeaderOriginXPt) => ({
+      adopt(row, fragment, repaint) {
+        index ??= build();
+        const key = movedRowKey(fragment.tableId, row);
+        const found = index.get(key);
+        if (
+          !found ||
+          found.tabLeaderOriginXPt !== tabLeaderOriginXPt ||
+          found.element.querySelector(DRAWING)
+        )
+          return null;
+        const reused = reflowRow(
+          found.element,
+          found.record,
+          found.table,
+          row,
+          fragment.box,
+          repaint
+        );
+        if (reused) index.delete(key);
+        return reused;
+      },
+    }),
+  };
+}
+
+/** The row element another page painted for `row`, moved into `fragment`, or null. */
+export function adoptMovedRow(
+  row: TableRowFragmentRecord,
+  fragment: TableFragmentRecord,
+  repaint: TableRepaint
+): HTMLElement | null {
+  return repaint.moved?.adopt(row, fragment, repaint) ?? null;
+}
+
 /**
  * Repaint a table fragment into the element painted for its previous record.
  *
  * Rows, cells and cell paragraphs are kept by identity; an unchanged one stays as it is, one
  * whose geometry moved is updated in place, and anything else is painted fresh. This is what
- * keeps typing that widens a column from rebuilding every visible cell. Refuses, returning
+ * keeps typing that widens a column from rebuilding every visible cell. A row new to this
+ * fragment can come from another page's fragment (`createMovedTableRows`). Refuses, returning
  * null with nothing changed, when the element has no retained record or a table-level paint
  * input changed.
  */
@@ -335,7 +482,7 @@ export function reflowTableFragment(
     candidates.delete(key);
     const reused = candidate
       ? reflowRow(candidate[1], candidate[0], before.box, row, fragment.box, repaint)
-      : null;
+      : adoptMovedRow(row, fragment, repaint);
     rows.set(row, reused ?? repaint.row(row));
   }
   const scale = repaint.scale;
