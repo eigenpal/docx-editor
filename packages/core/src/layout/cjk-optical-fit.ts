@@ -405,7 +405,8 @@ function fitCjkOptically(
     }
   }
   if (held && !kana && !hangsLast) {
-    // A Latin closing quote that ends the group counts as a closing mark that gave its half.
+    // A Latin closing quote that ends the group counts as a closing mark that gave its half; a
+    // final apostrophe is the same character and counts the same way.
     const quote =
       /[’”]$/u.test(last.span.text) && last.ordinaryOpaque ? last.span.text.at(-1)! : '';
     const quoteAdvance = quote

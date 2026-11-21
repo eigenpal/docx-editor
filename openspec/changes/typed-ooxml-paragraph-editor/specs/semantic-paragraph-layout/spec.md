@@ -591,7 +591,7 @@ The layout engine SHALL move text that kinsoku keeps together to the next line a
 
 The layout engine SHALL fit a line by compressing East Asian punctuation against measured glyph bounds only when the document defaults (`w:rPrDefault`) name an East Asian face. In compatibility mode 15 and later, it SHALL fit only justified paragraphs (`w:jc` `both`, `distribute`, `thaiDistribute`, or a kashida value); other paragraphs SHALL wrap instead. A legacy compatibility mode SHALL fit lines at every alignment. Spaces SHALL join a fit only before a character that may not start a line.
 
-#### Scenario: A modern-mode left-aligned paragraph wraps instead of compressing
+#### Scenario: A left-aligned paragraph in compatibility mode 15 wraps instead of compressing
 
 - **GIVEN** compatibility mode 15, document punctuation compression, and a line that fits only when its punctuation compresses
 - **WHEN** the paragraph is left-aligned, centered, or right-aligned

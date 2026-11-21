@@ -55,7 +55,8 @@ export function exceedsLegacyAdmission(
   held: ReadonlySet<Cell>,
   quoteAdvance: number
 ): boolean {
-  let ideograph = false;
+  // A group of marks alone is not limited.
+  let counted = false;
   let half = 0;
   const last = cells.at(-1)!;
   const closes =
@@ -66,14 +67,14 @@ export function exceedsLegacyAdmission(
     const mark = PUNCTUATION.test(cell.span.text) || cell.qualifiedCurly !== undefined;
     const opaque = closes && cell.ordinaryOpaque === true;
     if (!mark && !opaque && !isCjk(cell.span.text.codePointAt(0)!)) return false;
-    ideograph ||= !mark;
+    counted ||= !mark;
     half += cell.natural / 2;
     // The final mark's trailing side is already in `deficit`: what its ink holds back is not
     // capacity, as no glyph follows it.
     if (blankSided(cell) && !held.has(cell) && cell !== last)
       deficit -= Math.max(0, cell.natural / 2 - cell.alreadyReduced - cell.reduction);
   }
-  return ideograph && deficit > half + TOLERANCE;
+  return counted && deficit > half + TOLERANCE;
 }
 /**
  * A justified line, or any line in a legacy mode, takes another ordinary glyph by compression
