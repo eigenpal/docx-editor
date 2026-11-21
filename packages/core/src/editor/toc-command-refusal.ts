@@ -109,7 +109,7 @@ const TOC_POLICIES: Readonly<Record<EditorCommand['type'], TocPolicy>> = {
   insertNote: { kind: 'text', beforeEndMark: true },
   insertPageField: NONE,
   insertRow: NONE,
-  insertTable: { kind: 'table' },
+  insertTable: { kind: 'table', beforeEndMark: true },
   insertText: TEXT,
   insertTextBox: { kind: 'textBox' },
   insertToc: { kind: 'toc' },

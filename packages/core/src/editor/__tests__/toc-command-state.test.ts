@@ -144,6 +144,13 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
   ['range in a row: remove link', BODY, [1, 1, 1, 4], UNLINK, true],
   ['joined heading: table splits after the end mark', JOINED, [2, 3, 2, 3], TABLE, false],
   [
+    'joined heading start: a table would land before the end mark',
+    JOINED,
+    [2, 0, 2, 0],
+    TABLE,
+    true,
+  ],
+  [
     'joined heading start: a bookmark would land before the end mark',
     JOINED,
     [2, 0, 2, 0],
@@ -296,6 +303,25 @@ test('replacing a match is refused in generated text and allowed outside it', ()
   const allowed = { type: 'replaceMatch', match: after!, text: 'Z' } as EditorCommand;
   expect(editor.can(allowed)).toEqual({ ok: true });
   expect(editor.exec(allowed)).toMatchObject({ ok: true, changed: true });
+});
+
+test('replacing accepted text is refused in generated text and allowed outside it', () => {
+  const { editor } = mountAt(JOINED, [3, 1, 3, 1]);
+  const [, entry, heading] = editor.getParagraphs();
+  const row = {
+    type: 'replaceAcceptedText',
+    match: { blockId: entry!.blockId, start: 0, length: 5 },
+    text: 'Z',
+  } as EditorCommand;
+  expect(editor.can(row)).toEqual({ ok: false, code: 'invalidArgs', reason: READ_ONLY });
+  expect(editor.exec(row)).toEqual(editor.can(row));
+  const fix = {
+    type: 'replaceAcceptedText',
+    match: { blockId: heading!.blockId, start: 0, length: 7, expectedText: 'Heading' },
+    text: 'Heeding',
+  } as EditorCommand;
+  expect(editor.can(fix)).toEqual({ ok: true });
+  expect(editor.exec(fix)).toMatchObject({ ok: true, changed: true });
 });
 
 test('a chart and a text box inserted on the closing line land after the end mark', () => {

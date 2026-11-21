@@ -27,6 +27,7 @@ import { replacementOps } from './replacement-ops.ts';
 import { textboxScopeOfParagraph } from './review-story-entry.ts';
 import { mapSelectionAcrossText } from './surface-remote-caret.ts';
 import { partOfNodeId, storyScopeOfNodeId } from './surface-scope.ts';
+import { selectionTouchesTocRange, TOC_READ_ONLY_REFUSAL } from './surface-toc-ranges.ts';
 import { removedTextRefusal, resolveTextTarget, textTargetArgumentRefusal } from './text-target.ts';
 
 type ReplaceAcceptedTextCommand = Extract<EditorCommand, { type: 'replaceAcceptedText' }>;
@@ -64,6 +65,12 @@ const ADDS_OBJECT: Refusal = Object.freeze({
   ok: false as const,
   code: 'invalidArgs' as const,
   reason: 'the text adds U+FFFC; an object cannot be written as text',
+});
+
+const IN_TOC: Refusal = Object.freeze({
+  ok: false as const,
+  code: 'invalidArgs' as const,
+  reason: TOC_READ_ONLY_REFUSAL,
 });
 
 const OTHER_SCOPE: Refusal = Object.freeze({
@@ -188,6 +195,11 @@ function storyOf(
     }
     const removed = removedTextRefusal(surface, target);
     if (removed) return removed;
+    // A generated table of contents is read-only, as the write guard enforces at commit.
+    const from = { paragraphId: blockId, offset: piece.start };
+    if (selectionTouchesTocRange(part, { anchor: from, head: { ...from, offset: piece.end } })) {
+      return IN_TOC;
+    }
     // The store's own lock and binding rules, asked before writing in every story.
     const skip = matchRangeSkip(part, blockId, piece.start, piece.end, piece.landing);
     if (skip !== null) return writeRefusal(surface, skip);
