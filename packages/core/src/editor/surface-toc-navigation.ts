@@ -1,16 +1,12 @@
 // Caret motion around a generated table of contents. Its cached rows are read-only, so a
-// motion that lands inside them crosses the region, stops on an editable closing line, or
-// falls back to the nearest editable position on its own side. A Shift motion moves the
-// selection head by the same rule, so a selection can extend onto or across a TOC.
+// motion that lands inside them crosses the region to the next editable position, which can
+// be the closing line, or falls back to the nearest editable position on its own side. A
+// Shift motion moves the selection head by the same rule.
 
 import type { OoxmlPart } from '@docx-editor.dev/core/store';
 import type { DetectedToc } from '../store/package/toc-detect.ts';
 import type { NavigationCommand, SemanticPosition } from '../layout/semantic-interaction.ts';
-import {
-  tocAtPosition,
-  tocParagraphRanges,
-  tocSkippedByCaretMotion,
-} from './surface-toc-ranges.ts';
+import { tocAtPosition, tocParagraphRanges } from './surface-toc-ranges.ts';
 
 /** The part of a navigation result this lane reads. */
 interface CaretMove {
@@ -51,10 +47,12 @@ const samePosition = (a: SemanticPosition, b: SemanticPosition) =>
  * Where a motion from `origin` that landed at `moved` settles, or null when the caret
  * stays. A position outside every TOC is returned unchanged.
  *
- * A text motion (Left, Right, and the word steps) continues at the editable text next to
- * the TOC. A line motion steps by LINE and keeps its column: a character step inside a
- * row that holds text lands in the same row, so a bounded loop could neither enter nor
- * cross the region. `lineLimit` bounds the steps by the lines the TOC regions occupy.
+ * A text motion (Left, Right, and the word steps) continues at the editable position next
+ * to the TOC. Home and End stay in their paragraph, at the edge of its ordinary text. A
+ * line motion steps by LINE and keeps its column: a character step inside a row that holds
+ * text lands in the same row, so a bounded loop could neither enter nor cross the region.
+ * `lineLimit` bounds the steps by the lines the TOC regions occupy. A closing line is
+ * editable, so every motion can stop on it.
  */
 export function settleTocMotion<M extends CaretMove>(
   part: OoxmlPart,
@@ -65,67 +63,53 @@ export function settleTocMotion<M extends CaretMove>(
   lineLimit: number
 ): M | null {
   let moved = landed;
-  if (!tocSkippedByCaretMotion(part, moved.position, origin)) return moved;
+  const landedIn = tocAtPosition(part, moved.position);
+  if (!landedIn) return moved;
   const backward = isBackwardMotion(command);
-  if (TEXT_MOTIONS.has(command)) {
-    const position = crossByText(part, origin, moved.position, backward, (from, motion) =>
-      step({ ...moved, position: from, desiredX: null }, motion)
-    );
-    return position ? { ...moved, position, desiredX: null, caret: undefined } : null;
+  const settle = (position: SemanticPosition | null) =>
+    position ? { ...moved, position, desiredX: null, caret: undefined } : null;
+  const stepFrom = (from: SemanticPosition, motion: NavigationCommand) =>
+    step({ ...moved, position: from, desiredX: null }, motion);
+  if (command === 'lineStart' || command === 'lineEnd') {
+    const edge = lineEdge(part, landedIn, origin, moved.position);
+    if (edge) return settle(edge);
   }
-  // The nearest editable closing line crossed: the stop when the region has no exit.
-  let closingLine = tocAtPosition(part, moved.position) ? undefined : moved;
+  if (TEXT_MOTIONS.has(command)) {
+    return settle(editableBeside(part, landedIn, backward ? 'before' : 'after', stepFrom));
+  }
   for (let index = 0; index < lineLimit; index += 1) {
     const next = step(moved, backward ? 'up' : 'down');
-    // Only a position that does not move at all is a dead end. A closing line with nothing
-    // past it is still editable, so the caret can stop there.
+    // Only a position that does not move at all is a dead end.
     if (!next || samePosition(next.position, moved.position)) break;
     moved = next;
-    if (!tocSkippedByCaretMotion(part, moved.position, origin)) return moved;
-    if (!closingLine && !tocAtPosition(part, moved.position)) closingLine = moved;
+    if (!tocAtPosition(part, moved.position)) return moved;
   }
   const toc = tocAtPosition(part, moved.position);
   if (!toc) return moved;
-  if (closingLine) return closingLine;
   // Nothing editable lies past the TOC in the motion's direction: Ctrl+End before a TOC
   // that ends the document, Ctrl+Home after one that starts it. Stop at the nearest
   // editable position on the origin's side instead.
-  const position = editableBeside(part, toc, backward ? 'after' : 'before', (from, command) =>
-    step({ ...moved, position: from, desiredX: null }, command)
-  );
-  return position ? { ...moved, position, desiredX: null, caret: undefined } : null;
+  return settle(editableBeside(part, toc, backward ? 'after' : 'before', stepFrom));
 }
 
 /**
- * Where a text motion that landed in a TOC continues: the editable text beside the region.
- * A closing line that the motion arrives at from another paragraph is crossed too, and is
- * the stop when nothing editable lies past it.
+ * Where Home or End stops when its line end lies in generated text of the caret's own
+ * paragraph: the edge of the ordinary text the caret is in.
  */
-function crossByText<M extends CaretMove>(
+function lineEdge(
   part: OoxmlPart,
+  toc: DetectedToc,
   origin: SemanticPosition,
-  landed: SemanticPosition,
-  backward: boolean,
-  step: (from: SemanticPosition, command: NavigationCommand) => M | null
+  landed: SemanticPosition
 ): SemanticPosition | null {
-  let position = landed;
-  let closingLine: SemanticPosition | null = null;
-  // Each pass crosses one TOC or one closing line, so the range count bounds the walk.
-  for (let pass = 0; pass <= tocParagraphRanges(part).length; pass += 1) {
-    const toc = tocSkippedByCaretMotion(part, position, origin);
-    if (!toc) return position;
-    let next: SemanticPosition | null;
-    if (tocAtPosition(part, position)) {
-      next = editableBeside(part, toc, backward ? 'before' : 'after', step);
-    } else {
-      closingLine = position;
-      const stepped = step(position, backward ? 'left' : 'right')?.position;
-      next = stepped && !samePosition(stepped, position) ? stepped : null;
-    }
-    if (!next) return closingLine;
-    position = next;
-  }
-  return closingLine;
+  if (landed.paragraphId !== origin.paragraphId) return null;
+  const range = tocParagraphRanges(part).find(
+    (r) => r.toc.id === toc.id && r.paragraphId === origin.paragraphId
+  );
+  if (!range) return null;
+  if (origin.offset >= range.end) return { paragraphId: origin.paragraphId, offset: range.end };
+  if (origin.offset <= range.start) return { paragraphId: origin.paragraphId, offset: range.start };
+  return null;
 }
 
 /** The nearest editable position before or after a TOC, crossing adjacent TOCs. */

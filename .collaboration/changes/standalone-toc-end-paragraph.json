@@ -3,7 +3,7 @@
   "fields": [],
   "before": "The layout of a populated TOC suppressed its standalone closing paragraph.",
   "after": "The authored closing line of a populated TOC stays in layout, with or without a wrapping content control, including its spacing before following content.",
-  "reason": "The change retains the authored closing line in layout and protects its paragraph mark during selection formatting. The write guard also lets a section mark land on that line and exempts page setup and other package-level writes from the caret check; these change which local edits are admitted, not the shape of any operation. Canonical nodes, operations, snapshots and serialization retain their existing shapes.",
+  "reason": "The change retains the authored closing line in layout and protects its paragraph mark during selection formatting. The write guard also lets a section mark land on that line and exempts page setup and other package-level writes from the caret check; a new TOC is refused inside an existing field; these change which local edits are admitted, not the shape of any operation. Canonical nodes, operations, snapshots and serialization retain their existing shapes.",
   "tests": [
     "packages/core/src/layout/__tests__/toc-layout.test.ts",
     "packages/core/src/editor/__tests__/toc-boundary-editing.test.ts",

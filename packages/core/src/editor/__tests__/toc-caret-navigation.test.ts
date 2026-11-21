@@ -68,8 +68,9 @@ test('Ctrl+End and Page Down stop before a TOC whose end mark sits in its last r
     expect(from(3, 0, command).head).toEqual(at(3, 3));
     expect(from(0, 2, command, true)).toEqual({ anchor: at(0, 2), head: at(3, 3) });
   }
-  // Down crosses the first TOC and its closing line to the paragraph between the two.
-  expect(from(0, 0, 'down').head.paragraphId).toBe(at(3, 0).paragraphId);
+  // Down crosses the first TOC's rows to its closing line, then to the paragraph after it.
+  expect(from(0, 0, 'down').head).toEqual(at(2, 0));
+  expect(from(2, 0, 'down').head.paragraphId).toBe(at(3, 0).paragraphId);
 });
 
 test('Ctrl+End stops on the closing line of an earlier TOC when nothing lies between', () => {
@@ -78,22 +79,27 @@ test('Ctrl+End stops on the closing line of an earlier TOC when nothing lies bet
   expect(from(0, 0, 'documentEnd').head).toEqual(at(2, 0));
 });
 
-test('Shift+arrows extend a selection across a TOC as the plain motion moves the caret', () => {
+test('arrows and Shift+arrows stop on the closing line, then cross the rows', () => {
   const { surface, editor, at, from } = mount(
     `<w:p>${run('Before')}</w:p>${bare}<w:p>${run('After')}</w:p>`
   );
-  // [command, start paragraph, start offset, paragraph the head reaches]
-  for (const [command, index, offset, far] of [
-    ['down', 0, 6, 3],
-    ['right', 0, 6, 3],
-    ['up', 3, 0, 0],
-    ['left', 3, 0, 0],
+  // [command, start paragraph, start offset, where the head lands]
+  for (const [command, index, offset, landing] of [
+    ['down', 0, 6, at(2, 0)],
+    ['right', 0, 6, at(2, 0)],
+    ['up', 3, 0, at(2, 0)],
+    ['left', 3, 0, at(2, 0)],
+    ['up', 2, 0, at(0, 0)],
+    ['left', 2, 0, at(0, 6)],
+    ['down', 2, 0, at(3, 0)],
+    ['right', 2, 0, at(3, 0)],
   ] as const) {
     const plain = from(index, offset, command).head;
-    expect(plain.paragraphId).toBe(at(far, 0).paragraphId);
+    expect(plain.paragraphId).toBe(landing.paragraphId);
+    if (command !== 'up') expect(plain).toEqual(landing);
     expect(from(index, offset, command, true)).toEqual({ anchor: at(index, offset), head: plain });
   }
-  // Shift in the opposite direction shrinks the selection back across the TOC.
+  // Shift in the opposite direction shrinks the selection back.
   from(0, 6, 'down', true);
   surface.navigate('up', true);
   expect(surface.state().selection.head.paragraphId).toBe(at(0, 0).paragraphId);
@@ -116,20 +122,29 @@ test('a document that holds only a TOC keeps the caret on its closing line', () 
   }
 });
 
-test('Left, Right, and word steps across a TOC continue at the text beside it', () => {
+test('Left, Right, and word steps across the rows continue at the text beside them', () => {
   const { at, from } = mount(
     `<w:p>${run('Before text')}</w:p>${bare}<w:p>${run('After text')}</w:p>`
   );
   for (const command of ['left', 'wordLeft'] as const) {
-    expect(from(3, 0, command).head).toEqual(at(0, 11));
-    expect(from(3, 0, command, true)).toEqual({ anchor: at(3, 0), head: at(0, 11) });
-    // From the closing line, too.
     expect(from(2, 0, command).head).toEqual(at(0, 11));
+    expect(from(2, 0, command, true)).toEqual({ anchor: at(2, 0), head: at(0, 11) });
   }
   for (const command of ['right', 'wordRight'] as const) {
-    expect(from(0, 11, command).head).toEqual(at(3, 0));
-    expect(from(0, 11, command, true)).toEqual({ anchor: at(0, 11), head: at(3, 0) });
+    expect(from(0, 11, command).head).toEqual(at(2, 0));
+    expect(from(0, 11, command, true)).toEqual({ anchor: at(0, 11), head: at(2, 0) });
   }
+});
+
+test('Home and End stay in a paragraph that shares a line with the TOC', () => {
+  const { at, from } = mount(
+    `<w:p>${run('Before')}${begin}${run('Entry 1')}</w:p><w:p>${run('Pg')}${end}${run('Heading')}</w:p><w:p>${run('After')}</w:p>`
+  );
+  // End from the text before the field stops where the field begins.
+  expect(from(0, 2, 'lineEnd').head).toEqual(at(0, 6));
+  // Home from the heading after the end mark stops after the mark.
+  expect(from(1, 6, 'lineStart').head).toEqual(at(1, 2));
+  expect(from(1, 6, 'lineStart', true)).toEqual({ anchor: at(1, 6), head: at(1, 2) });
 });
 
 test('Left after a TOC that starts the document stops on its closing line', () => {

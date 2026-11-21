@@ -46,7 +46,7 @@ type ParagraphFormatCommand = Extract<
   }
 >;
 
-export const PARAGRAPH_FORMAT_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set<
+const PARAGRAPH_FORMAT_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set<
   ParagraphFormatCommand['type']
 >([
   'setAlignment',

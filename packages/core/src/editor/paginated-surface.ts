@@ -4153,7 +4153,7 @@ export function mountPaginatedSurface(
   function canInsertToc(): boolean {
     if (editingMode === 'view' || !session.editable || selectionTouchesToc()) return false;
     const op = insertTocOp();
-    return op !== null && validateTreeOp(session.part(), op) === null;
+    return op !== null && !opTouchesToc(op) && validateTreeOp(session.part(), op) === null;
   }
 
   function insertToc(): boolean {
@@ -4798,7 +4798,11 @@ export function mountPaginatedSurface(
       );
       if (!moved) return;
       const backwardMotion = isBackwardMotion(command);
-      const outside = tocEscapePosition(session.part(), moved.position, backwardMotion);
+      // Home and End keep to their own paragraph; `settleTocMotion` clamps them.
+      const lineEdge = command === 'lineStart' || command === 'lineEnd';
+      const outside = lineEdge
+        ? null
+        : tocEscapePosition(session.part(), moved.position, backwardMotion);
       // The escape lands elsewhere, so the motion's caret (and its page) no longer applies.
       if (outside) moved = { ...moved, position: outside, caret: undefined };
       // Atomic navigation: a caret that landed INSIDE a locked inline control crosses it (or

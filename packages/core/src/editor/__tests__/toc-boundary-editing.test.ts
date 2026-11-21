@@ -225,12 +225,12 @@ for (const wrapped of [false, true]) {
     expect(texts).toEqual(['Entry', '', '', 'Hea', 'ding']);
   });
 }
-test('a standalone closing line is crossed by arrows, keeps its mark, and joins the next paragraph', () => {
+test('a standalone closing line is a caret stop, keeps its mark, and joins the next paragraph', () => {
   const { editor, surface } = mount(
     `<w:p>${begin}${run('Entry 1')}</w:p><w:p>${run('Entry 2')}</w:p><w:p>${end}</w:p><w:p>${run('Following')}</w:p>`
   );
   const [, , closing, following] = surface.session.paragraphIds();
-  // The closing line occupies layout, but downward motion crosses it with the cached rows.
+  // The closing line occupies layout; Down from it leaves the TOC.
   select(surface, 2, 0);
   surface.navigate('down');
   expect(surface.state().selection.head).toEqual({ paragraphId: following!, offset: 0 });

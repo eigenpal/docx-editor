@@ -94,24 +94,6 @@ export function tocAtPosition(
     (r) => r.paragraphId === position.paragraphId && contains(r, position.offset)
   )?.toc;
 }
-/**
- * The TOC that caret motion from `origin` skips at `position`: its read-only region, and a
- * closing paragraph that holds only the end mark when the motion arrives from another
- * paragraph. A caret placed on that closing line stays there for Home and End, and the
- * line stays editable, so the reader can retype a deleted heading there.
- */
-export function tocSkippedByCaretMotion(
-  part: OoxmlPart,
-  position: SemanticPosition,
-  origin: SemanticPosition
-): DetectedToc | undefined {
-  return tocParagraphRanges(part).find(
-    (r) =>
-      r.paragraphId === position.paragraphId &&
-      (contains(r, position.offset) ||
-        (r.endsHere && !r.startsHere && r.length === 0 && origin.paragraphId !== r.paragraphId))
-  )?.toc;
-}
 export function selectionTouchesTocRange(part: OoxmlPart, selection: SemanticSelection): boolean {
   const { anchor, head } = selection;
   if (anchor.paragraphId === head.paragraphId) {
@@ -128,6 +110,8 @@ export function selectionTouchesTocRange(part: OoxmlPart, selection: SemanticSel
 export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
   const ranges = tocParagraphRanges(part);
   if (ranges.length === 0) return false;
+  // A new TOC before a paragraph inside an existing one would nest in its field.
+  if (op.op === 'insertToc') return tocRefusesInsertBefore(part, op.beforeParagraphId);
   const reach = treeOpReach(op);
   if (reach.kind === 'nodes') {
     return reach.targets.some((target) =>
@@ -161,6 +145,22 @@ export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
   return inspect(op);
 }
 
+/**
+ * Whether the TOC guard refuses a table that splits a paragraph: one that holds generated
+ * text, or only the end mark. A closing line that also holds a heading splits freely.
+ */
+export function tocRefusesParagraphSplit(part: OoxmlPart, paragraphId: string): boolean {
+  return tocParagraphRanges(part).some(
+    (r) => r.paragraphId === paragraphId && paragraphWriteTouches(r)
+  );
+}
+/**
+ * Whether the TOC guard refuses a field inserted before a paragraph: any TOC paragraph
+ * except the one where a TOC begins, since a new field there would nest in the old one.
+ */
+export function tocRefusesInsertBefore(part: OoxmlPart, paragraphId: string): boolean {
+  return tocParagraphRanges(part).some((r) => r.paragraphId === paragraphId && !r.startsHere);
+}
 /** Whether the TOC guard refuses a section mark on a paragraph (see `opTouchesTocRange`). */
 export function tocRefusesSectionMark(part: OoxmlPart, paragraphId: string): boolean {
   return tocParagraphRanges(part).some(

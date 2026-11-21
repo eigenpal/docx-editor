@@ -528,6 +528,10 @@ describe('TOC refresh editor lane', () => {
       anchor: { paragraphId: above, offset: 0 },
       head: { paragraphId: above, offset: 0 },
     });
+    // The rows are crossed; the editable closing line that holds the end mark is a stop.
+    const closing = ids[ids.length - 2]!;
+    surface.navigate('down');
+    expect(surface.state().selection.head).toEqual({ paragraphId: closing, offset: 0 });
     surface.navigate('down');
     expect(surface.state().selection.head.paragraphId).toBe(below);
     expect(surface.isInsideToc(surface.state().selection.head.paragraphId)).toBe(false);
@@ -537,6 +541,8 @@ describe('TOC refresh editor lane', () => {
       anchor: { paragraphId: below, offset: 0 },
       head: { paragraphId: below, offset: 0 },
     });
+    surface.navigate('up');
+    expect(surface.state().selection.head).toEqual({ paragraphId: closing, offset: 0 });
     surface.navigate('up');
     expect(surface.state().selection.head.paragraphId).toBe(above);
     editor.destroy();

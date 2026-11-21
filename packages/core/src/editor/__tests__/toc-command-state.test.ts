@@ -8,6 +8,7 @@ import { detectBodyTocs, serializeOoxmlPart } from '@docx-editor.dev/core/store'
 import type { EditorCommand } from '../../contracts/editor.ts';
 import { toolbarCommandState } from '../toolbar-commands.ts';
 import { capturePointPosition } from '../editor-point-target.ts';
+import { validateRasterHeader, type ImageDecodePort } from '../../store/package/image-resources.ts';
 import type { ChromeSlotId } from '../chrome-controls.ts';
 
 const READ_ONLY = 'the table of contents is generated and read-only';
@@ -19,6 +20,8 @@ const end = '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
 const BODY = `<w:p>${run('Before')}</w:p><w:p>${begin}${run('Entry 1')}</w:p><w:p>${run('Entry 2')}</w:p><w:p>${end}</w:p><w:p>${run('After')}</w:p>`;
 // 0 "Before" + begin + row, 1 "Pg" + end mark + "Heading", 2 After.
 const INLINE = `<w:p>${run('Before')}${begin}${run('Entry 1')}</w:p><w:p>${run('Pg')}${end}${run('Heading')}</w:p><w:p>${run('After')}</w:p>`;
+// 0 Before, 1 cached row, 2 end mark + "Heading" (a closing line the next paragraph joined), 3 After.
+const JOINED = `<w:p>${run('Before')}</w:p><w:p>${begin}${run('Entry 1')}</w:p><w:p>${end}${run('Heading')}</w:p><w:p>${run('After')}</w:p>`;
 
 const editors: DocxEditorInstance[] = [];
 afterEach(() => {
@@ -62,6 +65,9 @@ const HEADER: EditorCommand = { type: 'editHeaderFooter', position: 'header' };
 const SECTION = { type: 'insertBreak', kind: 'section' } as EditorCommand;
 const MARGINS = { type: 'setPageSetup', marginTop: 90 } as EditorCommand;
 const CHART = { type: 'insertChart', chartType: 'columnClustered' } as EditorCommand;
+const TOC: EditorCommand = { type: 'insertToc' };
+const INDENT = { type: 'setIndent', left: 360 } as EditorCommand;
+const UNLINK = { type: 'removeHyperlink' } as EditorCommand;
 const WATERMARK = { type: 'setWatermark', watermark: { text: 'DRAFT' } } as EditorCommand;
 
 // [label, body, selection, command, refused]
@@ -121,6 +127,37 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
   ['heading after the end mark: section break', INLINE, [1, 5, 1, 5], SECTION, true],
   ['after the TOC: section break', INLINE, [2, 2, 2, 2], SECTION, false],
   ['caret in a row: chart', BODY, [1, 2, 1, 2], CHART, true],
+  ['range across the TOC: chart would remove it', BODY, [0, 1, 4, 2], CHART, true],
+  ['closing line: a new TOC would nest in the field', BODY, [3, 0, 3, 0], TOC, true],
+  ['caret in a row: TOC', BODY, [1, 2, 1, 2], TOC, true],
+  ['joined heading: a new TOC would nest in the field', JOINED, [2, 3, 2, 3], TOC, true],
+  ['after the TOC: TOC', BODY, [4, 1, 4, 1], TOC, false],
+  [
+    'range across the TOC: indent writes the selection as one unit',
+    BODY,
+    [0, 1, 4, 2],
+    INDENT,
+    true,
+  ],
+  ['range in a row: remove link', BODY, [1, 1, 1, 4], UNLINK, true],
+  ['joined heading: table splits after the end mark', JOINED, [2, 3, 2, 3], TABLE, false],
+  [
+    'joined heading start: a bookmark would land before the end mark',
+    JOINED,
+    [2, 0, 2, 0],
+    BOOKMARK,
+    true,
+  ],
+  [
+    'joined heading start: a footnote would land before the end mark',
+    JOINED,
+    [2, 0, 2, 0],
+    NOTE,
+    true,
+  ],
+  ['joined heading: bookmark', JOINED, [2, 3, 2, 5], BOOKMARK, false],
+  ['joined heading: footnote', JOINED, [2, 3, 2, 3], NOTE, false],
+  ['joined heading start: typing lands after the end mark', JOINED, [2, 0, 2, 0], TYPE, false],
   ['after the TOC: chart', BODY, [4, 1, 4, 1], CHART, false],
 ];
 
@@ -234,4 +271,68 @@ test('a picture is not inserted into a cached row', async () => {
     ok: false,
     reason: READ_ONLY,
   });
+});
+
+test('replacing a match is refused in generated text and allowed outside it', () => {
+  const { editor } = mountAt(BODY, [4, 1, 4, 1]);
+  const [entry] = editor.findMatches('Entry 1');
+  const replace = { type: 'replaceMatch', match: entry!, text: 'Z' } as EditorCommand;
+  expect(editor.can(replace)).toEqual({ ok: false, code: 'invalidArgs', reason: READ_ONLY });
+  expect(editor.exec(replace)).toEqual(editor.can(replace));
+  const [after] = editor.findMatches('After');
+  const allowed = { type: 'replaceMatch', match: after!, text: 'Z' } as EditorCommand;
+  expect(editor.can(allowed)).toEqual({ ok: true });
+  expect(editor.exec(allowed)).toMatchObject({ ok: true, changed: true });
+});
+
+test('a chart and a text box inserted on the closing line land after the end mark', () => {
+  for (const command of [CHART, TEXT_BOX]) {
+    const { editor, surface } = mountAt(BODY, [3, 0, 3, 0]);
+    expect(editor.exec(command)).toMatchObject({ ok: true, changed: true });
+    const closing = serializeOoxmlPart(surface.session.part())
+      .split('<w:p')
+      .find((paragraph) => paragraph.includes('fldCharType="end"'))!;
+    expect(closing.indexOf('<w:drawing')).toBeGreaterThan(closing.indexOf('fldCharType="end"'));
+    expect(detectBodyTocs(surface.session.part())).toHaveLength(1);
+  }
+});
+
+test('a picture inserted on the closing line lands after the end mark', async () => {
+  const png = Uint8Array.from(
+    atob(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+    ),
+    (character) => character.charCodeAt(0)
+  );
+  const imageDecodePort: ImageDecodePort = {
+    async decode(bytes, mime) {
+      const header = validateRasterHeader(bytes, mime);
+      if (!header) throw new Error('invalid image');
+      return { pixelWidth: header.pixelWidth, pixelHeight: header.pixelHeight, dpiX: 96, dpiY: 96 };
+    },
+  };
+  const editor = createDocxEditor({
+    container: document.createElement('div'),
+    document: docx(BODY),
+    imageDecodePort,
+  });
+  editors.push(editor);
+  const surface = editor.surface!;
+  const closingId = surface.session.paragraphIds()[3]!;
+  surface.setSelection({
+    anchor: { paragraphId: closingId, offset: 0 },
+    head: { paragraphId: closingId, offset: 0 },
+  });
+  const picture = {
+    type: 'insertImage',
+    data: png,
+    mime: 'image/png',
+    widthPoints: 10,
+    heightPoints: 10,
+  } as const;
+  expect(await editor.executeImageCommand(picture)).toMatchObject({ ok: true, changed: true });
+  const closing = serializeOoxmlPart(surface.session.part())
+    .split('<w:p')
+    .find((paragraph) => paragraph.includes('fldCharType="end"'))!;
+  expect(closing.indexOf('<w:drawing')).toBeGreaterThan(closing.indexOf('fldCharType="end"'));
 });

@@ -8,133 +8,248 @@ import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import type { DocTarget } from '../contracts/types.ts';
 import type { SemanticSelection } from '../layout/semantic-interaction.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
-import { RUN_FORMAT_COMMANDS, selectedSpans } from './content-lock-format-refusal.ts';
-import {
-  PARAGRAPH_FORMAT_COMMANDS,
-  selectedParagraphIds,
-} from './paragraph-format-lock-refusal.ts';
+import { selectedSpans } from './content-lock-format-refusal.ts';
+import { selectedParagraphIds } from './paragraph-format-lock-refusal.ts';
 import {
   TOC_READ_ONLY_REFUSAL,
-  paragraphInBodyToc,
   selectionTouchesTocRange,
   tocAtEndMarkEdge,
   tocAtParagraphEnd,
-  tocRefusesRunFormatting,
   tocParagraphRanges,
+  tocRefusesInsertBefore,
   tocRefusesJoin,
   tocRefusesParagraphFormatting,
+  tocRefusesParagraphSplit,
+  tocRefusesRunFormatting,
   tocRefusesSectionMark,
   tocRefusesTextWrite,
 } from './surface-toc-ranges.ts';
 
-/** Commands that write text over the selection, or join paragraphs around it. */
-const TEXT_AT_SELECTION_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set([
-  'insertText',
-  'insertBreak',
-  'paste',
-  'pasteWithoutFormatting',
-  'splitParagraph',
-  'deleteText',
-  'cut',
-  'replaceText',
-  'insertNote',
-  'proposeDeletion',
-  'proposeReplacement',
-  'insertImage',
-  'insertChart',
-]);
-
-/** Commands that wrap or mark the selection without replacing it. */
-const MARK_SELECTION_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set([
-  'insertBookmark',
-  'insertContentControl',
-  'insertHyperlink',
-  'proposeInsertion',
-]);
-
 /**
- * Commands that insert an object or a wrapper before the end mark when the selection
- * starts a closing line. Typed text lands after the mark instead.
- */
-const BEFORE_END_MARK_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set([
-  'insertBookmark',
-  'insertContentControl',
-  'insertHyperlink',
-  'insertNote',
-]);
-
-/** Commands that resolve their `target` to the selection they write at. */
-const TARGETED_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set([
-  'proposeInsertion',
-  'proposeDeletion',
-  'proposeReplacement',
-  'insertContentControl',
-]);
-
-/** Run formats: the toolbar's marks and the automation format. */
-const RUN_FORMATS: ReadonlySet<EditorCommand['type']> = new Set([
-  ...RUN_FORMAT_COMMANDS,
-  'applyFormatting',
-  'pasteFormatting',
-]);
-
-/** Run formats whose writer writes the selection as one unit. */
-const WHOLE_RUN_FORMATS: ReadonlySet<EditorCommand['type']> = new Set(['pasteFormatting']);
-
-/** Paragraph formats whose writer writes the selection as one unit. */
-const WHOLE_SELECTION_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set([
-  'toggleList',
-  'adjustIndent',
-]);
-
-/**
- * The refusal a command meets because it would write only into a generated table of
- * contents, or null.
+ * How the write guard treats a command near a table of contents.
  *
- * Text written over the selection, and objects inserted at it, are refused when they reach
- * generated content.
- * Formatting is refused when the guard would drop every write it makes; a selection that
- * also covers ordinary text formats that text. Lists and indent steps are refused when any
- * selected paragraph is protected.
+ * - `none`: the command does not write at the selection, or its own lane answers.
+ * - `text`: it writes text over the selection, so it is refused where the selection reaches
+ *   generated content, or a range across paragraphs would remove or join a TOC paragraph.
+ * - `mark`: it wraps or marks the selection without replacing it.
+ * - `join`: `mergeParagraphs`. `table`: splits the caret's paragraph. `textBox`: anchors at
+ *   the paragraph's end. `toc`: inserts a field before the caret's paragraph.
+ * - `runFormat`, `paragraphFormat`: formats drop the writes that reach a TOC and are
+ *   refused when none is left; `whole` writers are refused when any write reaches one.
+ *
+ * `beforeEndMark`: the command inserts before the end mark when the selection starts a
+ * closing line, inside the field result, where a refresh would drop it. `atTarget`: the
+ * command writes at its resolved `target` (or `match`) rather than at the selection.
+ */
+interface TocPolicy {
+  readonly kind:
+    | 'none'
+    | 'text'
+    | 'mark'
+    | 'join'
+    | 'table'
+    | 'textBox'
+    | 'toc'
+    | 'runFormat'
+    | 'paragraphFormat';
+  readonly whole?: true;
+  readonly beforeEndMark?: true;
+  readonly atTarget?: true;
+}
+
+const NONE: TocPolicy = { kind: 'none' };
+const TEXT: TocPolicy = { kind: 'text' };
+const MARK: TocPolicy = { kind: 'mark' };
+const RUN_FORMAT: TocPolicy = { kind: 'runFormat' };
+const PARAGRAPH_FORMAT: TocPolicy = { kind: 'paragraphFormat' };
+
+/**
+ * Every command, so the compiler asks for a decision on each new one. `replaceAllMatches`
+ * is `none`: it skips TOC matches like its other skipped matches, and reports a refusal only
+ * after its search, which `can` does not run.
+ */
+const TOC_POLICIES: Readonly<Record<EditorCommand['type'], TocPolicy>> = {
+  acceptAllRevisions: NONE,
+  acceptRevision: NONE,
+  addComment: NONE,
+  addRepeatingSectionItem: NONE,
+  adjustIndent: { kind: 'paragraphFormat', whole: true },
+  applyFormatting: RUN_FORMAT,
+  applyVariables: NONE,
+  clearFormatting: RUN_FORMAT,
+  commitTableColumnDividerResize: NONE,
+  commitTableRightEdgeResize: NONE,
+  compareDocuments: NONE,
+  convertAllNotes: NONE,
+  convertNote: NONE,
+  copy: NONE,
+  copyFormatting: NONE,
+  cut: TEXT,
+  deleteBookmark: NONE,
+  deleteColumn: NONE,
+  deleteImage: NONE,
+  deleteNote: NONE,
+  deleteRow: NONE,
+  deleteTable: NONE,
+  deleteText: TEXT,
+  editHeaderFooter: NONE,
+  editTextFormField: NONE,
+  exitHeaderFooter: NONE,
+  goToBookmark: NONE,
+  insertBookmark: { kind: 'mark', beforeEndMark: true },
+  insertBreak: TEXT,
+  insertChart: TEXT,
+  insertColumn: NONE,
+  insertContentControl: { kind: 'mark', beforeEndMark: true, atTarget: true },
+  insertHyperlink: { kind: 'mark', beforeEndMark: true },
+  insertImage: { kind: 'text', atTarget: true },
+  insertNote: { kind: 'text', beforeEndMark: true },
+  insertPageField: NONE,
+  insertRow: NONE,
+  insertTable: { kind: 'table' },
+  insertText: TEXT,
+  insertTextBox: { kind: 'textBox' },
+  insertToc: { kind: 'toc' },
+  keepFirstBookmark: NONE,
+  linkHeaderFooterToPrevious: NONE,
+  mergeCells: NONE,
+  mergeParagraphs: { kind: 'join' },
+  navigateHighlight: NONE,
+  navigateReviewChange: NONE,
+  openBookmarkDialog: NONE,
+  openCompareDocumentsDialog: NONE,
+  openGoTo: NONE,
+  openRevisionMarkupDialog: NONE,
+  paste: TEXT,
+  pasteFormatting: { kind: 'runFormat', whole: true },
+  pasteWithoutFormatting: TEXT,
+  proposeDeletion: { kind: 'text', atTarget: true },
+  proposeInsertion: { kind: 'mark', atTarget: true },
+  proposeReplacement: { kind: 'text', atTarget: true },
+  redo: NONE,
+  refreshToc: NONE,
+  rejectAllRevisions: NONE,
+  rejectRevision: NONE,
+  removeContentControl: NONE,
+  removeHeaderFooter: NONE,
+  removeHyperlink: MARK,
+  removeRepeatingSectionItem: NONE,
+  removeTabMark: PARAGRAPH_FORMAT,
+  removeToc: NONE,
+  replaceAcceptedText: NONE,
+  replaceAllMatches: NONE,
+  replaceDocument: NONE,
+  replaceImage: NONE,
+  replaceMatch: { kind: 'text', atTarget: true },
+  replaceText: TEXT,
+  replyComment: NONE,
+  resolveAllReviewChanges: NONE,
+  resolveComment: NONE,
+  selectAll: NONE,
+  selectTableRegion: NONE,
+  setAlignment: PARAGRAPH_FORMAT,
+  setCellFill: NONE,
+  setChartColor: NONE,
+  setChartData: NONE,
+  setChartFormat: NONE,
+  setChartType: NONE,
+  setContentControlValue: NONE,
+  setEditingMode: NONE,
+  setHeaderFooterOptions: NONE,
+  setImagePosition: NONE,
+  setImageProperties: NONE,
+  setImageWrapType: NONE,
+  setIndent: { kind: 'paragraphFormat', whole: true },
+  setLineSpacing: PARAGRAPH_FORMAT,
+  setMarkAttr: RUN_FORMAT,
+  setNoteProperties: NONE,
+  setPageSetup: NONE,
+  setParagraphDirection: PARAGRAPH_FORMAT,
+  setParagraphFormat: { kind: 'paragraphFormat', whole: true },
+  setParagraphSpacing: PARAGRAPH_FORMAT,
+  setParagraphStyle: PARAGRAPH_FORMAT,
+  setReviewChangesAuthor: NONE,
+  setReviewDisplayMode: NONE,
+  setSelection: NONE,
+  setShapeFill: NONE,
+  setShapeOutline: NONE,
+  setTableBorders: NONE,
+  setTableCellVerticalAlignment: NONE,
+  setTableProperties: NONE,
+  setVariable: NONE,
+  setWatermark: NONE,
+  splitCell: NONE,
+  splitParagraph: TEXT,
+  toggleBookmarks: NONE,
+  toggleDocumentProtection: NONE,
+  toggleHeaderRow: NONE,
+  toggleList: { kind: 'paragraphFormat', whole: true },
+  toggleMark: RUN_FORMAT,
+  toggleParagraphMarks: NONE,
+  toggleReviewPane: NONE,
+  transformImage: NONE,
+  undo: NONE,
+  unlinkHeaderFooterFromPrevious: NONE,
+};
+
+/**
+ * The refusal a command meets because it would write into a generated table of contents,
+ * or null. See {@link TocPolicy} for each kind of command.
  */
 export function tocCommandRefusal(
   command: EditorCommand,
   surface: PaginatedSurface
 ): Exclude<ExecResult, { ok: true }> | null {
+  const policy = TOC_POLICIES[command.type];
+  if (policy.kind === 'none') return null;
   const part = surface.session.part();
-  if (tocParagraphRanges(part).length === 0 || !refusesInToc(command, surface, part)) {
+  if (tocParagraphRanges(part).length === 0 || !refusesInToc(command, policy, surface, part)) {
     return null;
   }
   // The caller can fix it by moving the selection, as with the write guard's own refusal.
   return { ok: false, code: 'invalidArgs', reason: TOC_READ_ONLY_REFUSAL };
 }
 
-function refusesInToc(command: EditorCommand, surface: PaginatedSurface, part: OoxmlPart): boolean {
-  const type = command.type;
-  const selection = commandSelection(command, surface);
+function refusesInToc(
+  command: EditorCommand,
+  policy: TocPolicy,
+  surface: PaginatedSurface,
+  part: OoxmlPart
+): boolean {
+  const selection = policy.atTarget ? targetSelection(command, surface) : surface.state().selection;
   if (!selection) return false; // An unresolvable target meets its own refusal.
   const head = selection.head.paragraphId;
-  // At a closing line these would join the field result, which a refresh replaces.
-  if (BEFORE_END_MARK_COMMANDS.has(type) && tocAtEndMarkEdge(part, selection)) return true;
-  if (TEXT_AT_SELECTION_COMMANDS.has(type)) {
-    // A section break also ends a section at the caret's paragraph.
-    const sectionBreak = command.type === 'insertBreak' && command.kind.startsWith('section');
-    return (
-      tocRefusesTextWrite(part, selection, paragraphIdsBetween(surface, selection)) ||
-      (sectionBreak && tocRefusesSectionMark(part, head))
-    );
+  if (policy.beforeEndMark && tocAtEndMarkEdge(part, selection)) return true;
+  switch (policy.kind) {
+    case 'text': {
+      // A section break also ends a section at the caret's paragraph.
+      const sectionBreak = command.type === 'insertBreak' && command.kind.startsWith('section');
+      return (
+        tocRefusesTextWrite(part, selection, paragraphIdsBetween(surface, selection)) ||
+        (sectionBreak && tocRefusesSectionMark(part, head))
+      );
+    }
+    case 'mark':
+      return selectionTouchesTocRange(part, selection);
+    case 'join':
+      return tocRefusesJoin(part, mergedParagraphIds(surface));
+    case 'table':
+      return tocRefusesParagraphSplit(part, head);
+    case 'textBox':
+      return tocAtParagraphEnd(part, head);
+    case 'toc':
+      return selectionTouchesTocRange(part, selection) || tocRefusesInsertBefore(part, head);
+    case 'runFormat':
+      return tocRefusesRunFormatting(part, selectedSpans(surface), policy.whole === true);
+    case 'paragraphFormat':
+      return tocRefusesParagraphFormatting(
+        part,
+        selectedParagraphIds(surface),
+        policy.whole === true
+      );
+    case 'none':
+      return false;
   }
-  if (MARK_SELECTION_COMMANDS.has(type)) return selectionTouchesTocRange(part, selection);
-  if (type === 'mergeParagraphs') return tocRefusesJoin(part, mergedParagraphIds(surface));
-  // A table splits the caret's paragraph; a text box anchors at its end.
-  if (type === 'insertTable') return paragraphInBodyToc(part, head);
-  if (type === 'insertTextBox') return tocAtParagraphEnd(part, head);
-  if (RUN_FORMATS.has(type)) {
-    return tocRefusesRunFormatting(part, selectedSpans(surface), WHOLE_RUN_FORMATS.has(type));
-  }
-  if (!PARAGRAPH_FORMAT_COMMANDS.has(type)) return false;
-  const whole = WHOLE_SELECTION_COMMANDS.has(type);
-  return tocRefusesParagraphFormatting(part, selectedParagraphIds(surface), whole);
 }
 
 /** The paragraphs `mergeParagraphs` joins: the selected ones, or the caret's and the next. */
@@ -146,19 +261,23 @@ function mergedParagraphIds(surface: PaginatedSurface): readonly string[] {
   return index < 0 ? ids : order.slice(index, index + 2);
 }
 
-/** The selection a command writes at: its resolved target, when it names one. */
-function commandSelection(
+/** The selection a command writes at: its drop point, match, or resolved target. */
+function targetSelection(
   command: EditorCommand,
   surface: PaginatedSurface
 ): SemanticSelection | null {
-  // A picture dropped at a point lands there, not at the selection.
   if (command.type === 'insertImage' && command.at) {
     const at = { paragraphId: command.at.paragraphId, offset: command.at.offset };
     return { anchor: at, head: at };
   }
-  // Only these commands write at their target; the others act at the selection.
-  const target =
-    TARGETED_COMMANDS.has(command.type) && 'target' in command ? command.target : undefined;
+  if (command.type === 'replaceMatch') {
+    const { blockId, start, length } = command.match;
+    return {
+      anchor: { paragraphId: blockId, offset: start },
+      head: { paragraphId: blockId, offset: start + length },
+    };
+  }
+  const target = 'target' in command ? command.target : undefined;
   if (target === undefined) return surface.state().selection;
   const resolved = resolveDocTargetSelection(surface, target as DocTarget);
   return resolved.ok ? resolved.selection : null;
