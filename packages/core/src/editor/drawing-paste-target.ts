@@ -39,6 +39,7 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { resolveSelectedDrawingRecord } from './selected-drawing-record.ts';
 import { selectedGroupMember } from './group-member-selection.ts';
 import { textboxTakesCaret } from './textbox-caret-rules.ts';
+import { partOfNodeId } from './surface-scope.ts';
 import type { createTextboxEditing } from './surface-textbox-editing.ts';
 import type { SurfaceClipboardDeps } from './surface-clipboard-ops.ts';
 import {
@@ -172,7 +173,7 @@ export function drawingPasteTarget(
   const { record } = selected;
   const atAnchor: DrawingPasteTarget = { kind: 'anchor', ...selected.point };
   if (content === 'drawing') return atAnchor;
-  const part = surface.session.partFor(surface.storyScope()) ?? surface.session.part();
+  const part = partOfNodeId(surface.session, record.drawingNodeId) ?? surface.session.part();
   const drawing = findNode(part, record.drawingNodeId);
   const kind = drawing ? drawingTextKind(drawing) : 'other';
   if (kind === 'group' && selectedGroupMember(surface, record.drawingNodeId) !== null)
@@ -202,7 +203,7 @@ export function selectTextBoxForPaste(
   const ids = textbox.paragraphIds();
   const first = ids[0];
   const last = ids[ids.length - 1];
-  const part = surface.session.partFor(surface.storyScope()) ?? surface.session.part();
+  const part = partOfNodeId(surface.session, last) ?? surface.session.part();
   const paragraph = last === undefined ? null : findNode(part, last);
   if (first === undefined || last === undefined || paragraph?.kind !== 'paragraph') {
     // Leave the box and select the drawing again, so the refusal shows what refused.
