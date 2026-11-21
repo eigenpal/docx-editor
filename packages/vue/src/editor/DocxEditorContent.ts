@@ -17,6 +17,7 @@ import {
   isHTMLElementNode,
   openChartPaneAt,
   reportImageInsertFailure,
+  watchClipboardRefusals,
 } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useDocxEditor, useEditorContentElement } from './context';
@@ -83,6 +84,17 @@ export const DocxEditorContent = defineComponent({
 
     // The selection overlay runs the same image-file lane for pastes while a drawing is selected.
     const onPaste = useImageFilePaste();
+
+    // A copy, cut, or paste on the pages or the selection overlay that the editor refuses shows
+    // its reason, in the dialog a refused picture insert uses.
+    watch(
+      [editorRef, portalRef],
+      ([editor, mount], _previous, onCleanup) => {
+        if (!editor || !mount || !imageInsert) return;
+        onCleanup(watchClipboardRefusals(mount, editor, imageInsert.showClipboardRefusal));
+      },
+      { immediate: true, flush: 'post' }
+    );
 
     const onDrop = (event: DragEvent) => {
       // Keep unsupported file drops on the mount from navigating away from the editor.

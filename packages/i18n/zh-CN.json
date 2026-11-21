@@ -974,6 +974,13 @@
       "staleTarget": "插入图片前文档已更改。请重新插入图片。"
     }
   },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "无法复制",
+      "cutTitle": "无法剪切",
+      "pasteTitle": "无法粘贴"
+    }
+  },
   "imageProperties": {
     "crop": "裁剪",
     "cropBottom": "下（%）",

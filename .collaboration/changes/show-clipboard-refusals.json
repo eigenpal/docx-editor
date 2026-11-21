@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A copy, cut, or paste that the editor refused on a selected drawing showed nothing in the adapters. The reason was only in the snapshot.",
+  "after": "The adapters show the refusal reason in a dialog. The reason is read from the local refusal counter after the existing clipboard handlers run, and nothing is written to the document.",
+  "reason": "The change only reads local refusals. Shared nodes, offsets, operations, and the collaboration format stay unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-drawing-paste-target.test.ts",
+    "packages/core/src/editor/__tests__/clipboard-refusal-display.test.ts"
+  ],
+  "changeset": "show-clipboard-refusals",
+  "migration": null
+}

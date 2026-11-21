@@ -974,6 +974,13 @@
       "staleTarget": "Das Dokument hat sich geändert, bevor das Bild eingefügt wurde. Fügen Sie das Bild erneut ein."
     }
   },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "Kopieren nicht möglich",
+      "cutTitle": "Ausschneiden nicht möglich",
+      "pasteTitle": "Einfügen nicht möglich"
+    }
+  },
   "imageProperties": {
     "crop": "Zuschneiden",
     "cropBottom": "Unten (%)",

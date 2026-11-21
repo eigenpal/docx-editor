@@ -10,6 +10,7 @@ import './dom-setup.ts';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { strFromU8, unzipSync } from 'fflate';
+import { en } from '@docx-editor.dev/i18n';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
@@ -150,6 +151,7 @@ describe('Paste in the context menu with a shape that has no text selected', () 
     const first = await firstParagraphXml(editor);
     expect(first.match(/<w:drawing[\s>]/g)).toHaveLength(2);
     expect(first.indexOf('name="Rule"')).toBeLessThan(first.indexOf('name="Plain"'));
+    expect(document.querySelector('[data-docx-dialog="imageInsertError"]')).toBeNull();
   });
 
   test('refuses pasted text after the read, and the row stays live afterwards', async () => {
@@ -165,6 +167,14 @@ describe('Paste in the context menu with a shape that has no text selected', () 
     for (let attempt = 0; attempt < 20; attempt++) await settle();
     expect(await firstParagraphXml(editor)).toBe(before);
     expect(editor.snapshot().lastRejection).toBe(SHAPE_PASTE_TEXT_REASON);
+    // The reason shows once, translated, in the dialog a keyboard paste shows.
+    const shown = document.querySelectorAll('[data-docx-dialog="imageInsertError"]');
+    expect(shown).toHaveLength(1);
+    expect(shown[0]!.getAttribute('aria-label')).toBe(en.clipboard.errors.pasteTitle);
+    expect(shown[0]!.textContent).toContain(en.disabledReason.shapePasteText);
+    act(() => {
+      fireEvent.click(shown[0]!.querySelector('button')!);
+    });
     // A refused payload does not disable Paste: the next clipboard may hold a drawing.
     selectDrawing(editor, 0);
     expect(pasteRow(view).getAttribute('aria-disabled')).toBeNull();

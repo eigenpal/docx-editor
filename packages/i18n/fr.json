@@ -974,6 +974,13 @@
       "staleTarget": "Le document a changé avant l’insertion de l’image. Insérez à nouveau l’image."
     }
   },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "Impossible de copier",
+      "cutTitle": "Impossible de couper",
+      "pasteTitle": "Impossible de coller"
+    }
+  },
   "imageProperties": {
     "crop": "Rogner",
     "cropBottom": "Bas (%)",

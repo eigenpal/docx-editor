@@ -814,6 +814,13 @@
       "staleTarget": "The document changed before the image was inserted. Insert the image again."
     }
   },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "Cannot copy",
+      "cutTitle": "Cannot cut",
+      "pasteTitle": "Cannot paste"
+    }
+  },
   "imageProperties": {
     "units": {
       "points": "pt"

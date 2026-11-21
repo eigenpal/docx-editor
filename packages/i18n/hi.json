@@ -974,6 +974,13 @@
       "staleTarget": "चित्र डालने से पहले दस्तावेज़ बदल गया। चित्र फिर से डालें।"
     }
   },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "कॉपी नहीं किया जा सकता",
+      "cutTitle": "काटा नहीं जा सकता",
+      "pasteTitle": "चिपकाया नहीं जा सकता"
+    }
+  },
   "imageProperties": {
     "crop": "क्रॉप",
     "cropBottom": "नीचे (%)",

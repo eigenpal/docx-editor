@@ -814,6 +814,13 @@
       "staleTarget": "El documento cambió antes de insertar la imagen. Vuelva a insertar la imagen."
     }
   },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "No se puede copiar",
+      "cutTitle": "No se puede cortar",
+      "pasteTitle": "No se puede pegar"
+    }
+  },
   "imageProperties": {
     "units": {
       "points": "pto"

@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import {
   editorHostDocument,
+  type ClipboardRefusal,
   type EditorPointPosition,
   executeImageCommand,
   toolbarCommandState,
@@ -41,6 +42,8 @@ export interface ImageInsertContextValue {
   ) => Promise<void>;
   /** Show a refusal the editor reported before any file was read, in the insert dialog. */
   readonly showRefusal: (reason: string) => void;
+  /** Show a refused copy, cut, or paste in the same dialog, titled for its action. */
+  readonly showClipboardRefusal: (refusal: ClipboardRefusal) => void;
   readonly isEnabled: boolean;
   readonly disabledReason: string | null;
   readonly inputRef: React.RefObject<HTMLInputElement | null>;
@@ -73,7 +76,11 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
   const busyRef = useRef(false);
   const popups = usePopupConfig();
   // A refusal shows in an editor dialog. A browser alert would stop every script on the page.
-  const [refusal, setRefusal] = useState<string | null>(null);
+  const [refusal, setRefusalState] = useState<RefusalMessage | null>(null);
+  const setRefusal = useCallback(
+    (message: string | null) => setRefusalState(message === null ? null : { message }),
+    []
+  );
   /** A picker made in a pop-out window's document, until it reports a choice or a cancel. */
   const strayPickerRef = useRef<HTMLInputElement | null>(null);
 
@@ -124,7 +131,7 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
         busyRef.current = false;
       }
     },
-    [editor, t]
+    [editor, t, setRefusal]
   );
 
   const showRefusal = useCallback(
@@ -132,6 +139,15 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
       setRefusal(
         localizeDisabledReason(readableReason(reason) ?? null, t) ?? t('imageInsert.errors.refused')
       ),
+    [t, setRefusal]
+  );
+
+  const showClipboardRefusal = useCallback(
+    (clipboard: ClipboardRefusal) =>
+      setRefusalState({
+        message: localizeDisabledReason(clipboard.reason, t) ?? clipboard.reason,
+        title: t(CLIPBOARD_TITLE_KEYS[clipboard.action]),
+      }),
     [t]
   );
 
@@ -148,7 +164,7 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
       }
       await insertBytes(new Uint8Array(buffer), at);
     },
-    [insertBytes, t]
+    [insertBytes, t, setRefusal]
   );
 
   const insertFromDataTransfer = useCallback(
@@ -215,6 +231,7 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
       insertFromFileList,
       insertFromDataTransfer,
       showRefusal,
+      showClipboardRefusal,
       isEnabled,
       disabledReason,
       inputRef,
@@ -225,6 +242,7 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
       insertFromFileList,
       insertFromDataTransfer,
       showRefusal,
+      showClipboardRefusal,
       isEnabled,
       disabledReason,
       onInputChange,
@@ -247,11 +265,11 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
       {refusal !== null &&
         (popups?.imageInsertError !== undefined ? (
           renderPopup(popups.imageInsertError, {
-            message: refusal,
+            ...refusal,
             onClose: () => setRefusal(null),
           })
         ) : (
-          <DocxEditorImageInsertErrorDialog message={refusal} onClose={() => setRefusal(null)} />
+          <DocxEditorImageInsertErrorDialog {...refusal} onClose={() => setRefusal(null)} />
         ))}
     </ImageInsertContext.Provider>
   );
@@ -303,6 +321,19 @@ ImageInsertTrigger.docxSlot = 'image.insert' as const;
 export const ToolbarImageInsert = Object.assign(ImageInsertTrigger, {
   docxSlot: 'image.insert' as const,
 });
+
+/** A refusal in the insert dialog. A clipboard refusal names its action in the title. */
+interface RefusalMessage {
+  readonly message: string;
+  readonly title?: string;
+}
+
+/** The dialog title for each refused clipboard action. */
+const CLIPBOARD_TITLE_KEYS = {
+  copy: 'clipboard.errors.copyTitle',
+  cut: 'clipboard.errors.cutTitle',
+  paste: 'clipboard.errors.pasteTitle',
+} as const satisfies Record<ClipboardRefusal['action'], TranslationKey>;
 
 /** A reason written for people, or undefined for a bare code such as `invalid-range`. */
 function readableReason(reason: string | undefined): string | undefined {

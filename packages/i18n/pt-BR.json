@@ -974,6 +974,13 @@
       "staleTarget": "O documento mudou antes de a imagem ser inserida. Insira a imagem novamente."
     }
   },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "Não é possível copiar",
+      "cutTitle": "Não é possível recortar",
+      "pasteTitle": "Não é possível colar"
+    }
+  },
   "imageProperties": {
     "crop": "Cortar",
     "cropBottom": "Inferior (%)",

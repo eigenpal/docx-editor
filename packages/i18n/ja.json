@@ -814,6 +814,13 @@
       "staleTarget": "画像を挿入する前に文書が変更されました。画像をもう一度挿入してください。"
     }
   },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "コピーできません",
+      "cutTitle": "切り取りできません",
+      "pasteTitle": "貼り付けできません"
+    }
+  },
   "imageProperties": {
     "units": {
       "points": "pt"
