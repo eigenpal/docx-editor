@@ -1,5 +1,5 @@
-// What the cells of a fitted line can give, and the limits on taking it: the expansion gate
-// of justified lines, the half-advance limit of legacy modes, and the kana shares.
+// What the cells of a fitted line can give, and the limits on taking it: the expansion gate,
+// the half-advance limit and Korean marks of legacy modes, and the kana shares.
 import type { PendingLine } from './pending-line.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
 import { isCjk, isHangul, koreanText } from './cjk-paragraph-breaks.ts';
