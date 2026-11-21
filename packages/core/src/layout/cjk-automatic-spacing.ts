@@ -5,7 +5,8 @@ import type { TextMeasurer } from './text-measurer.ts';
 // autoSpaceDN/DE inherit through the ordinary paragraph cascade and default to true.
 import type { CjkParagraphTypography } from './cjk-typography.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
-import type { FieldAwarePiece } from './field-pieces.ts';
+import type { FieldAtomMarker, FieldAwarePiece } from './field-pieces.ts';
+import { fieldResultMayCut, followsInSource, isFieldResultText } from './field-result-text.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
@@ -16,7 +17,7 @@ interface TextBoundary {
   readonly style: ResolvedRunStyle;
   readonly projected?: boolean;
   readonly equation?: unknown;
-  readonly fieldAtom?: unknown;
+  readonly fieldAtom?: FieldAtomMarker;
   readonly positionalTab?: unknown;
   readonly inlineDrawing?: unknown;
   readonly measureText?: string;
@@ -52,9 +53,8 @@ export function automaticTextSpacingBefore(value: {
 function ordinaryText(item: TextBoundary): boolean {
   const style = item.style;
   return (
-    !item.projected &&
+    ((!item.projected && !item.fieldAtom) || isFieldResultText(item)) &&
     !item.equation &&
-    !item.fieldAtom &&
     !item.positionalTab &&
     !item.inlineDrawing &&
     item.measureText === undefined &&
@@ -202,8 +202,9 @@ export function splitAtAutomaticSpacing(
       out.push({
         ...piece,
         text: piece.text.slice(from, to),
-        start: piece.start + from,
-        end: piece.start + to,
+        // A slice of an atomic field result keeps the whole atom range.
+        start: piece.projected ? piece.start : piece.start + from,
+        end: piece.projected ? piece.end : piece.start + to,
       });
       from = to;
     }
@@ -218,7 +219,8 @@ function automaticSpacingCuts(
 ): number[] {
   const literal = piece.end - piece.start === piece.text.length;
   if (
-    !literal ||
+    (!literal && piece.projected !== true) ||
+    !fieldResultMayCut(piece) ||
     piece.text.length < 2 ||
     !EAST_ASIAN_TEXT.test(piece.text) ||
     !LATIN_OR_DIGIT_TEXT.test(piece.text) ||
@@ -264,7 +266,15 @@ export function automaticLineTextGap(
   if (
     !previous ||
     previous.range.paragraphId !== paragraphId ||
-    previous.range.end !== start ||
+    !followsInSource(
+      { ...previous.range, projected: previous.projected, fieldAtom: previous.fieldAtom },
+      {
+        start,
+        end: piece.projected ? piece.end : start + text.length,
+        projected: piece.projected,
+        fieldAtom: piece.fieldAtom,
+      }
+    ) ||
     Math.abs(lineOrigin() + line.width - previous.box.x - previous.box.width) > 0.001 ||
     !boundaryMayBeEastAsian(previous.text, text)
   )

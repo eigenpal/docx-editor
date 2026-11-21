@@ -28,6 +28,7 @@ export {
   type GapSpan,
   type PlacedSpan,
 } from './semantic-paint-letter-gap.ts';
+export { automaticGapFillAfter, type AutomaticGapSpan } from './semantic-paint-automatic-gap.ts';
 // TYPES ONLY. The derivations behind them (`authorSlotsOf`, `reviewAuthorsOf`, the ramp
 // constant) are engine internals reached through `getReviewAuthors` on the editor; a
 // `@public` symbol is a breaking change to withdraw, so they stay off the barrel and the

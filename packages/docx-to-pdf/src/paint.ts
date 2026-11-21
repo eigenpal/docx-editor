@@ -4,7 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { collectPageChangeBars } from '@docx-editor.dev/core/output';
-import { ownedGapAfter } from './owned-gap.ts';
+import { ownedFillGapAfter } from './owned-gap.ts';
 import { composeJoinedPairs, composeSoundMarks } from './sound-mark-text.ts';
 import { DEFAULT_REVISION_MARKUP, type ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
 import {
@@ -645,7 +645,7 @@ export async function paint(
     if (fill) {
       // The band runs on across the gap the span owns, as screen paint draws it.
       const band = text.bandBox(visit);
-      const gap = ownedGapAfter(visit);
+      const gap = ownedFillGapAfter(visit);
       const owned =
         gap > 0
           ? widenToGridEdge(band, -visit.page.box.x, band.x + band.width + gap)

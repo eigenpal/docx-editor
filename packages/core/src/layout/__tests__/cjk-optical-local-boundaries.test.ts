@@ -65,17 +65,20 @@ const style = {
 function fitWord(
   word = 'AV',
   measure = measurer,
-  options: { allow?: boolean; style?: typeof style } = {}
+  options: { allow?: boolean; style?: typeof style; order?: readonly string[] } = {}
 ) {
   let start = 0;
-  const pieces: FieldAwarePiece[] = ['XYZ', '甲', '）', word, '（', '乙'].map((text, index) => {
+  const texts = options.order ?? ['XYZ', '甲', '）', word, '（', '乙'];
+  const pieces: FieldAwarePiece[] = texts.map((text, index) => {
     const value: FieldAwarePiece = {
       text,
       start,
       end: start + text.length,
       props: [],
       style: options.style ?? style,
-      fontSlot: index === 0 || index === 3 ? 'ascii' : 'eastAsia',
+      fontSlot: (options.order ? /[A-Za-z]/u.test(text) : index === 0 || index === 3)
+        ? 'ascii'
+        : 'eastAsia',
     };
     start = value.end;
     return value;
@@ -232,6 +235,15 @@ test('unresolved faces and authored tracking scaling or complex shaping reject t
     expect(actual.result).toBeUndefined();
     expect(shapeCalls).toEqual([]);
   }
+});
+
+test('authored tracking refuses a line whose final cell is a word', () => {
+  const order = ['甲', '）', '（', '乙', 'AV'];
+  expect(fitWord('AV', measurer, { order }).result).toBeDefined();
+  for (const characterSpacingPt of [-0.2, 0.2])
+    expect(
+      fitWord('AV', measurer, { order, style: { ...style, characterSpacingPt } }).result
+    ).toBeUndefined();
 });
 
 test('a Latin-face quoted word guards its neighbouring seams like any other word', () => {

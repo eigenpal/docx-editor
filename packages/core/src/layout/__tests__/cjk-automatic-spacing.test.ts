@@ -9,6 +9,7 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { caretAt } from '../semantic-interaction.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
+import { paintAutomaticGapFill } from '../../output/semantic-paint-automatic-gap.ts';
 import { automaticTextGap } from '../cjk-automatic-spacing.ts';
 import { DEFAULT_RUN_STYLE } from '../run-style.ts';
 import { resolveCjkTypography } from '../cjk-typography.ts';
@@ -375,4 +376,134 @@ test('line layout draws the advance inside a group that cannot break', () => {
       }
     }
   }
+});
+
+/** The horizontal offsets, in px, of the shadow copies that fill a run's automatic gap. */
+function gapFill(element: HTMLElement): { offsets: number[]; colour: string } | null {
+  const shadow = element.style.boxShadow;
+  if (!shadow) return null;
+  const copies = shadow.split(/,(?![^(]*\))/).map((copy) => copy.trim());
+  const colour = copies[0]!.replace(/^\S+ 0(px)? 0(px)? 0(px)? /, '');
+  return { offsets: copies.map((copy) => Number.parseFloat(copy)), colour: colour.toUpperCase() };
+}
+
+test('an automatic gap takes the fill of the text before it', () => {
+  const yellow = '<w:highlight w:val="yellow"/>';
+  const green = '<w:highlight w:val="green"/>';
+  const value = layout(run('甲乙', yellow) + run('A9', green) + run('丙'));
+  const measured = line(value).spans;
+  expect(measured.map((s) => s.text).join('')).toBe('甲乙A9丙');
+  const host = document.createElement('div');
+  paintSemanticLayout(host, value, { scale: 1 });
+  const runs = [...host.querySelectorAll<HTMLElement>('.layout-run')];
+  expect(runs.map((s) => s.textContent).join('')).toBe('甲乙A9丙');
+  // Both boundaries belong to the run before them, also where the next fill differs.
+  const fills = runs.map(gapFill);
+  expect(fills[2]).toBeNull();
+  for (let i = 0; i < 2; i++) {
+    const advance = measured[i + 1]!.box.x - measured[i]!.box.x - measured[i]!.box.width;
+    expect(advance).toBeGreaterThan(1);
+    // It runs half a pixel on under a next run with a fill, which paints over the overlap,
+    // and ends exactly at the gap beside unfilled text.
+    expect(fills[i]!.offsets).toHaveLength(1);
+    expect(fills[i]!.offsets[0]).toBeCloseTo(advance + (i === 0 ? 0.5 : 0), 6);
+    expect(fills[i]!.colour).toBe(runs[i]!.style.backgroundColor.toUpperCase());
+  }
+  // The fill adds no element, so the runs keep their text nodes and the next run its margin.
+  expect(runs.every((r) => r.childElementCount === 0)).toBe(true);
+  expect(Number.parseFloat(runs[1]!.style.marginLeft)).toBeCloseTo(
+    measured[1]!.box.x - measured[0]!.box.x - measured[0]!.box.width,
+    6
+  );
+
+  // A Latin run before East Asian text owns that gap too; the East Asian run after it does not.
+  paintSemanticLayout(host, layout(run('A') + run('甲', yellow)), { scale: 1 });
+  expect([...host.querySelectorAll<HTMLElement>('.layout-run')].map(gapFill)).toEqual([null, null]);
+  paintSemanticLayout(host, layout(run('A', yellow) + run('甲'), '<w:autoSpaceDE w:val="0"/>'), {
+    scale: 1,
+  });
+  expect(host.querySelector<HTMLElement>('.layout-run')!.style.boxShadow).toBe('');
+});
+
+test('character shading fills the automatic gap like a highlight', () => {
+  const host = document.createElement('div');
+  const yellow = '<w:shd w:val="clear" w:color="auto" w:fill="FFFF00"/>';
+  const cyan = '<w:shd w:val="clear" w:color="auto" w:fill="00FFFF"/>';
+  const value = layout(run('甲乙', yellow) + run('A9', cyan) + run('丙'));
+  const measured = line(value).spans;
+  paintSemanticLayout(host, value, { scale: 2 });
+  const runs = [...host.querySelectorAll<HTMLElement>('.layout-run')];
+  const fills = runs.map(gapFill);
+  expect(fills.map((fill) => fill?.colour ?? null)).toEqual(['#FFFF00', '#00FFFF', null]);
+  for (let i = 0; i < 2; i++) {
+    const advance = measured[i + 1]!.box.x - measured[i]!.box.x - measured[i]!.box.width;
+    expect(fills[i]!.offsets[0]).toBeCloseTo(advance * 2 + (i === 0 ? 0.5 : 0), 6);
+  }
+  // A run without a fill of its own paints nothing across its gap.
+  paintSemanticLayout(host, layout(run('甲乙') + run('A9', cyan)), { scale: 1 });
+  expect(host.querySelector<HTMLElement>('.layout-run')!.style.boxShadow).toBe('');
+});
+
+test('a gap wider than its run is tiled with no hole', () => {
+  // Glyphs narrower than the quarter-em advance. One character would own its gap through
+  // letter spacing, so the run holds two.
+  const narrow = createFixedMeasurer(1, 14);
+  const value = layoutSemanticDocument(
+    doc(run('甲乙', '<w:highlight w:val="yellow"/>') + run('A')),
+    0,
+    {
+      measurer: narrow,
+      geometry: geometry(),
+    }
+  );
+  const [first, second] = line(value).spans;
+  const advance = second!.box.x - first!.box.x - first!.box.width;
+  expect(advance).toBeGreaterThan(first!.box.width);
+  const host = document.createElement('div');
+  paintSemanticLayout(host, value, { scale: 1 });
+  const fill = gapFill(host.querySelector<HTMLElement>('.layout-run')!)!;
+  // Each copy is one run wide. Together they cover from the run's end to the next run.
+  const covered = [...fill.offsets].sort((a, b) => a - b);
+  expect(covered[0]).toBeLessThanOrEqual(first!.box.width + 1e-6);
+  for (let i = 1; i < covered.length; i++)
+    expect(covered[i]! - covered[i - 1]!).toBeLessThanOrEqual(first!.box.width + 1e-6);
+  expect(Math.max(...covered)).toBeCloseTo(advance, 6);
+});
+
+test('a gap fill runs on only under an opaque next fill', () => {
+  const run = (background: string) => {
+    const element = document.createElement('span');
+    element.style.backgroundColor = background;
+    return element;
+  };
+  const write = (next: HTMLElement) => {
+    const painted = run('#ffff00');
+    paintAutomaticGapFill(painted, 3, 20, 1)!(next);
+    return Number.parseFloat(painted.style.boxShadow);
+  };
+  expect(write(run('#00ff00'))).toBeCloseTo(3.5, 6);
+  expect(write(run('rgb(0, 255, 0)'))).toBeCloseTo(3.5, 6);
+  // Beside unfilled text or a translucent revision wash the fill ends at the gap.
+  expect(write(run(''))).toBeCloseTo(3, 6);
+  expect(write(run('rgba(0, 128, 0, 0.2)'))).toBeCloseTo(3, 6);
+  expect(paintAutomaticGapFill(run(''), 3, 20, 1)).toBeNull();
+});
+
+test('a line with right-to-left text keeps the automatic advance inside the run box', () => {
+  const value = layout(
+    run('甲乙', '<w:highlight w:val="yellow"/>') + run('AB') + run('שלום', '<w:rtl/>')
+  );
+  const [first, second] = line(value).spans;
+  expect(first!.style.shaping).toBeDefined();
+  // The advance belongs to the run before it, inside its box, so its own fill covers it.
+  expect(first!.box.x + first!.box.width).toBeCloseTo(second!.box.x, 6);
+  const plain = line(layout(run('甲乙') + run('AB'))).spans[0]!;
+  expect(first!.box.width).toBeGreaterThan(plain.box.width + 1);
+  const host = document.createElement('div');
+  paintSemanticLayout(host, value, { scale: 1 });
+  const painted = [...host.querySelectorAll<HTMLElement>('.layout-run')].find(
+    (r) => r.textContent === '甲乙'
+  )!;
+  expect(Number.parseFloat(painted.style.width)).toBeCloseTo(first!.box.width, 6);
+  expect(painted.style.boxShadow).toBe('');
 });
