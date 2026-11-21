@@ -18,6 +18,22 @@ import { carryPageTableContributions, carryTableCaretContexts } from './table-ca
 import { offerPreviousRows, offerUnchangedTableRows } from './table-row-placement-reuse.ts';
 
 type Result = Omit<BlockLayoutResult, 'overflowShellAt'>;
+
+let observer: { updates: number } | null = null;
+/** Counts the passes that update a table's pages in place after a text edit, for tests. */
+export function tableTextUpdateTestRecorder(): { readonly updates: number; dispose(): void } {
+  const counts = { updates: 0 };
+  observer = counts;
+  return {
+    get updates() {
+      return counts.updates;
+    },
+    dispose() {
+      if (observer === counts) observer = null;
+    },
+  };
+}
+
 function resultOf(session: LayoutSession): Result {
   const layout = session.previous!;
   return {
@@ -117,6 +133,7 @@ export function tryUpdateTableSession(input: {
     offerPreviousRows(entry.table, session.previous.pages);
     return null;
   }
+  if (observer) observer.updates += 1;
   carryTableTextUpdate(
     session.previous.pages,
     entry.table.id,

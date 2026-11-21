@@ -88,10 +88,12 @@ test('wrapping within an existing row height preserves later checkpoint counters
   );
 });
 
+// A row that may split breaks where the lines of its cells decide, so a text edit in it is laid
+// out again. A `w:cantSplit` row too tall for a page breaks only at each page bottom.
 test('a split row text update matches a cold layout on every continuation page', async () => {
   const { updateTableText } = await import('../table-text-update.ts');
   const { measurer, styleCascade } = await import('./table-row-keep-fixtures.ts');
-  const part = load(table([row('Long', { lines: 30 }), row('Tail')]));
+  const part = load(table([row('Long', { lines: 30, cantSplit: true }), row('Tail')]));
   const before = lay(part);
   const node = part.root.children
     .find((n) => n.kind === 'body')!

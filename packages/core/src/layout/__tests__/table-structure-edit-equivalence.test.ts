@@ -14,6 +14,7 @@ import { paintSemanticLayout } from '../../output/semantic-paint.ts';
 import { tablePageRestartTestRecorder } from '../table-page-restart.ts';
 import { readTableStructure, readTableStructureFresh } from '../semantic-table.ts';
 import { reuseTableRowsFromForTests, tableRowReuseTestRecorder } from '../table-structure-rows.ts';
+import { tableTextUpdateTestRecorder } from '../table-text-session.ts';
 import { load, read, W } from './table-row-keep-fixtures.ts';
 
 // Structure edits (rows, columns, merges, cell properties, header rows, a break above the
@@ -710,3 +711,186 @@ test('row edits in a table between sections of other page sizes stay exact', () 
     delete SHAPES.sections;
   }
 }, 60_000);
+
+// Typing in a cell between row edits. A text edit that keeps its row's height updates the
+// table's pages in place (`table-text-update.ts`); each such pass must equal a fresh layout too.
+
+const typed = (part: OoxmlPart, pick: Pick) => {
+  for (let tries = 0; tries < 8; tries += 1) {
+    const paragraph = firstParagraph(anyCell(part, pick));
+    if (paragraph) return paragraph.id;
+  }
+  return undefined;
+};
+const TEXT_EDITS: Record<string, Edit> = {
+  type: (part, pick) => {
+    const paragraphId = typed(part, pick);
+    return paragraphId ? { op: 'insertText', paragraphId, offset: 0, text: 'x' } : null;
+  },
+  erase: (part, pick) => {
+    const paragraphId = typed(part, pick);
+    return paragraphId ? { op: 'deleteText', paragraphId, start: 0, end: 1 } : null;
+  },
+  typeWords: (part, pick) => {
+    const paragraphId = typed(part, pick);
+    return paragraphId
+      ? { op: 'insertText', paragraphId, offset: 1, text: ' and some more words here' }
+      : null;
+  },
+  shrink: (part, pick) => {
+    const paragraphId = typed(part, pick);
+    return paragraphId ? { op: 'deleteText', paragraphId, start: 0, end: 3 } : null;
+  },
+};
+/** The same table with AutoFit widths, so typing can move its column edges. */
+const autofit = (xml: string) =>
+  xml.replaceAll(
+    '<w:tblW w:w="6000" w:type="dxa"/><w:tblLayout w:type="fixed"/>',
+    '<w:tblW w:w="0" w:type="auto"/>'
+  );
+const section = (type = '') =>
+  `<w:p><w:pPr><w:sectPr>${type ? `<w:type w:val="${type}"/>` : ''}` +
+  '<w:pgSz w:w="7000" w:h="4200"/><w:pgMar w:top="400" w:bottom="400" w:left="400" ' +
+  'w:right="400" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:pPr></w:p>';
+const TEXT_SHAPES: Record<string, string> = {
+  ...SHAPES,
+  autofitPlain: autofit(SHAPES.plain!),
+  autofitMerged: autofit(SHAPES.merged!),
+  autofitTracked: autofit(SHAPES.tracked!),
+  sections: p('Small') + section() + SHAPES.split! + section('continuous') + p('Large'),
+  autofitSections: autofit(p('Before') + section('continuous') + SHAPES.tracked!),
+};
+
+/** Run `body` with the text shapes on offer as session shapes. */
+function withTextShapes(body: () => void) {
+  const added = Object.keys(TEXT_SHAPES).filter((name) => !(name in SHAPES));
+  for (const name of added) SHAPES[name] = TEXT_SHAPES[name]!;
+  try {
+    body();
+  } finally {
+    for (const name of added) delete SHAPES[name];
+  }
+}
+
+for (const shape of Object.keys(TEXT_SHAPES)) {
+  test(`random text and row edits keep the ${shape} table equal to a fresh layout`, () => {
+    withTextShapes(() => {
+      const run = session(shape);
+      const updates = tableTextUpdateTestRecorder();
+      const pick = random(0x2086 + shape.length * 131);
+      const names = [...Object.keys(EDITS), ...Object.keys(TEXT_EDITS), ...Object.keys(TEXT_EDITS)];
+      for (let step = 0; step < 32; step += 1) {
+        const name = names[pick(names.length)]!;
+        const op = (EDITS[name] ?? TEXT_EDITS[name])!(run.part, pick);
+        if (op) run.apply(op, `${shape} step ${step}: ${name}`);
+      }
+      updates.dispose();
+      // Typing took the in-place update, so the checks above cover it.
+      expect(updates.updates).toBeGreaterThan(0);
+    });
+  }, 60_000);
+}
+
+/**
+ * Apply `ops` to `shape`. The last one types where the in-place update cannot prove the result,
+ * so it must refuse and let the pagination run.
+ */
+function typeAfter(shape: string, ops: readonly TreeDocOp[]) {
+  withTextShapes(() => {
+    const run = session(shape);
+    const updates = tableTextUpdateTestRecorder();
+    try {
+      for (const [step, op] of ops.entries()) {
+        const before = updates.updates;
+        expect([step, run.apply(op, `${shape} step ${step}`)]).toEqual([step, true]);
+        if (step === ops.length - 1) expect(updates.updates).toBe(before);
+      }
+    } finally {
+      updates.dispose();
+    }
+  });
+}
+
+const at = (path: string) => `/word/document.xml#0.0.3${path}`;
+const grows = (paragraphId: string): TreeDocOp => ({
+  op: 'insertText',
+  paragraphId,
+  offset: 0,
+  text: 'grows onto more lines ',
+});
+
+test('typing in an exact row that ends a page keeps the edge the page gave it', () => {
+  // Found by random edits. The exact row ends its page without the table's bottom edge. Its
+  // old text fits under either edge, so only the new text, clipped by the row, tells them apart.
+  typeAfter('sections', [
+    grows(at('.10.0.1')),
+    { op: 'deleteTableRow', tableId: at(''), rowId: at('.4') },
+    { op: 'splitTableCell', tableId: at(''), cellId: at('.23.2'), rows: 2, columns: 1 },
+    { op: 'deleteTableRow', tableId: at(''), rowId: at('.6') },
+    grows(at('.17.2.1')),
+  ]);
+});
+
+test('typing in a row split across pages lets the pagination choose where it breaks', () => {
+  // Found by random edits. The row splits at a page bottom. Its new text gives a second line
+  // to a cell that held one, and the row no longer starts on that page.
+  typeAfter('sections', [
+    { op: 'insertHardBreak', paragraphId: '/word/document.xml#0.0.0', offset: 0 },
+    { op: 'deleteText', paragraphId: at('.8.2.1'), start: 0, end: 1 },
+    { op: 'setTableProperties', tableId: at(''), headerRowCount: 1 },
+    {
+      op: 'setTableColumnWidths',
+      tableId: at(''),
+      leftGridColumnId: at('.1.0'),
+      rightGridColumnId: at('.1.1'),
+      leftWidthTwips: 2800,
+      rightWidthTwips: 1200,
+    },
+    grows(at('.12.1.1')),
+  ]);
+});
+
+test('typing in a merge head of an exact row lets the text run through its span', () => {
+  // Found by random edits. The head spans the row below its exact row, and its new text
+  // needs two lines: the exact row would clip them, while the span holds them.
+  const ops: TreeDocOp[] = [
+    {
+      op: 'setTableCellFill',
+      tableId: at(''),
+      cellIds: [at('.40.2')],
+      color: { kind: 'hex', value: 'FF0000' },
+    },
+    { op: 'splitParagraph', paragraphId: at('.3.1.1'), offset: 1 },
+    { op: 'insertTableColumn', tableId: at(''), where: 'left', gridColumnId: at('.1.0') },
+    { op: 'setTableRowHeight', tableId: at(''), rowId: at('.19'), heightTwips: 300 },
+    {
+      op: 'insertText',
+      paragraphId: at('.23.1.1'),
+      offset: 1,
+      text: ' and some more words here',
+    },
+    { op: 'setTableProperties', tableId: at(''), headerRowCount: 2 },
+    { op: 'insertPageBreak', paragraphId: '/word/document.xml#0.0.0', offset: 0 },
+    grows(at('.19.1.1')),
+    {
+      op: 'setTableColumnWidths',
+      tableId: at(''),
+      leftGridColumnId: at('.1.0'),
+      rightGridColumnId: at('.1.1'),
+      leftWidthTwips: 1200,
+      rightWidthTwips: 2800,
+    },
+    { op: 'deleteTableColumn', tableId: at(''), gridColumnId: at('.1.1') },
+    {
+      op: 'insertTableColumn',
+      tableId: at(''),
+      where: 'right',
+      gridColumnId: '/word/document.xml#new:172',
+    },
+    { op: 'splitTableCell', tableId: at(''), cellId: at('.23.0'), rows: 2, columns: 1 },
+    { op: 'setTableRowHeight', tableId: at(''), rowId: at('.23'), heightTwips: 700 },
+    { op: 'deleteTableRow', tableId: at(''), rowId: at('.11') },
+    grows('/word/document.xml#new:353'),
+  ];
+  typeAfter('autofitSections', ops);
+});

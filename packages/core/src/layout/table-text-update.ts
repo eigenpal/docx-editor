@@ -21,7 +21,11 @@ import { finalizeTableRows } from './table-fragment-finalize.ts';
 import { updateTableWidths, type TablePageBand } from './table-width-update.ts';
 import { finalizedWithHeadroom, withBudgetProof } from './table-budget-proof.ts';
 import { registerEditedTableCellBreakKeys } from './table-cell-break-keys.ts';
-import type { BlockFragmentRecord, PageRecord } from './semantic-records.ts';
+import type {
+  BlockFragmentRecord,
+  PageRecord,
+  TableRowFragmentRecord,
+} from './semantic-records.ts';
 
 /** Re-place an ordinary complete row only when its flow extent stays unchanged. */
 export function updateTableText(
@@ -93,6 +97,9 @@ export function updateTableText(
   };
   if (
     source.isHeader ||
+    // An exact row clips a head placed in it, while the full layout may detach the head and
+    // let its content run through the rows of its span. The clip hides which one applies.
+    (heads.size > 0 && source.height.rule === 'exact') ||
     oldSource.cells.length !== source.cells.length ||
     source.cells.some((c, index) => {
       const old = oldSource.cells[index]!;
@@ -120,6 +127,18 @@ export function updateTableText(
         if (fragment.rows[index]!.id === source.id) occurrences.push({ page, fragment, index });
     }
   if (occurrences.length === 0 || occurrences.length > 4096) return null;
+  // Where a row that may split breaks, or whether it opens its page whole, the paginator
+  // decides from the lines of every cell (`rowFollowsBelow`, cell widow control), not from
+  // the row's height. A text edit can change that decision, so such a row is laid out again.
+  const splits = !source.cantSplit && source.height.rule !== 'exact';
+  if (
+    splits &&
+    (occurrences.length > 1 ||
+      occurrences[0]!.fragment.rows
+        .slice(0, occurrences[0]!.index)
+        .every((row) => row.isHeaderRepeat || row.isHeaderRow))
+  )
+    return null;
   const oldKeys = new Set<string>();
   const newKeys = new Set<string>();
   const replacements = new Map<BlockFragmentRecord, BlockFragmentRecord>();
@@ -210,23 +229,28 @@ export function updateTableText(
         return null;
       return { finalized, remainder: placed.remainder };
     };
-    let matched: { deps: TableFlowDeps; remainder: readonly CellPlaceCursor[] | null } | undefined;
+    // The old row tells which placement the paginator used only when one candidate gives it.
+    // When several do, the new row must place the same under each, or the choice is unknown.
+    let matched: { remainder: readonly CellPlaceCursor[] | null } | undefined;
+    let result: ReturnType<typeof place> | undefined;
     for (const candidate of candidates) {
       const old = place(oldSource, oldKeys, candidate, oldCursors);
       if (
-        old?.finalized.cells.every(
+        !old?.finalized.cells.every(
           (cell, i) =>
             continued.has(i) ||
             JSON.stringify(cell.blocks) === JSON.stringify(oldRow.cells[i]!.blocks)
         )
-      ) {
-        matched = { deps: candidate, remainder: old.remainder };
-        break;
-      }
+      )
+        continue;
+      // Only the placement kept registers its cell break keys.
+      const placed = place(source, result ? new Set() : newKeys, candidate, newCursors);
+      if (!placed) return null;
+      if (result && !samePlacedBlocks(result.finalized, placed.finalized, continued)) return null;
+      matched ??= { remainder: old.remainder };
+      result ??= placed;
     }
-    if (!matched) return null;
-    const result = place(source, newKeys, matched.deps, newCursors);
-    if (!result) return null;
+    if (!matched || !result) return null;
     oldCursors = matched.remainder ?? [];
     newCursors = result.remainder ?? [];
     const finalized = result.finalized;
@@ -263,4 +287,15 @@ export function updateTableText(
     ),
     replacements,
   };
+}
+
+function samePlacedBlocks(
+  a: TableRowFragmentRecord,
+  b: TableRowFragmentRecord,
+  continued: ReadonlySet<number>
+): boolean {
+  return a.cells.every(
+    (cell, i) =>
+      continued.has(i) || JSON.stringify(cell.blocks) === JSON.stringify(b.cells[i]?.blocks)
+  );
 }
