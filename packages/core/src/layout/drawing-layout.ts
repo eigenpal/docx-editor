@@ -161,7 +161,8 @@ export function inlineDrawingVerticalLayout(
   );
   const drawingBottom = extentTopY + measure.height + measure.effectB;
   const baseline = Math.max(textBaseline, drawingBottom + runPositionPt);
-  // A raised drawing can move the baseline. Its line still holds the text descent.
+  // A drawing raised by its run's `w:position` can move the baseline.
+  // Its line still holds the text descent.
   const textBottom = runPositionPt ? textLineHeight + baseline - textBaseline : textLineHeight;
   const lineHeight = Math.max(textBottom, drawingBottom - measure.effectT + measure.distB);
   return Object.freeze({ extentTopY, lineHeight, baseline });

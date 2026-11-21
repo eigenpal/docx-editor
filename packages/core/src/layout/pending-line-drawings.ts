@@ -28,7 +28,8 @@ export function syncPendingDrawingBaselines(line: PendingLine, pageBreaksIgnored
 }
 
 /**
- * The band an inline drawing of `contribution` height occupies once its run position moves it.
+ * The band an inline drawing of `contribution` height occupies once its run's `w:position`
+ * moves it.
  *
  * A raised drawing reaches `runPositionPt` higher above the baseline; a lowered one reaches as
  * far below it. Float clearance measures this band, so it matches the placed drawing.

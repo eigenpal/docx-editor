@@ -833,8 +833,9 @@ export function breakParagraph(
     const hasUnscaledInlineExtent =
       line.drawings.length > 0 ||
       line.spans.some((span) => span.equation !== undefined || span.unsupported !== undefined);
-    // A snapping picture line occupies grid pitches sized for the entire line. Its drawing
-    // moves with the text into the grid band, just as it moves under exact or minimum spacing.
+    // A picture line that snaps to the section's `w:docGrid` occupies grid pitches sized for
+    // the entire line. Its drawing moves with the text into the grid band, just as it moves
+    // under exact or minimum spacing.
     const gridFitsDrawing = lineSpacing.gridPitch !== undefined && line.drawings.length > 0;
     const scalesTextBandOnly =
       lineSpacing.rule === 'auto' && hasUnscaledInlineExtent && !gridFitsDrawing;
@@ -1058,7 +1059,7 @@ export function breakParagraph(
       // A horizontal rule spans the line wherever it sits, so floats beside it do not move it.
       const rule = !!piece.inlineDrawing.projection.horizontalRule;
       const runPositionPt = rule ? 0 : piece.style.baselineShiftPt;
-      // Floats clear the picture where its run position puts it, not where it would sit unmoved.
+      // Floats clear the picture at its run's `w:position` offset, not at its unmoved place.
       const extent = positionedDrawingExtent(measure.lineContribution, runPositionPt);
       exclusionProbe.setMetrics(extent, atomWidth, true);
       const jumpedLine = line;
