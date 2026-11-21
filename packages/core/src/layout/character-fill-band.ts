@@ -3,19 +3,21 @@ import type { StyleSpanRecord } from './semantic-records.ts';
 
 const HEX_FILL = /^[0-9A-Fa-f]{6}$/;
 
-/** True when the span paints a character fill: a highlight or character shading. */
+/** True when the span paints a character fill: `w:highlight` or `w:rPr/w:shd` shading. */
 function hasCharacterFill(span: StyleSpanRecord): boolean {
   const { highlight, shading } = span.style;
   return (!!highlight && highlight !== 'none') || (!!shading && HEX_FILL.test(shading));
 }
 
 /**
- * Publish the band that character highlight and shading fill on `line`, when its runs share one.
+ * Publish the band that character highlight (`w:highlight`) and character shading (`w:shd` in
+ * `w:rPr`) fill on `line`, when its runs share one.
  *
- * Exact spacing fills the whole line box, whatever the run sizes. An inline drawing taller than
- * the text raises the line's content, and the fill then covers the natural content band beside
- * it: from where the content starts (below any room that line spacing or a line grid adds above
- * it) through the content's natural height. Auto spacing extra below the content stays clear.
+ * Exact spacing (`w:spacing` `w:lineRule="exact"`) fills the whole line box, whatever the run
+ * sizes. An inline drawing (`wp:inline`, or a VML `w:pict`) taller than the text raises the
+ * line's content, and the fill then covers the natural content band beside it: from where the
+ * content starts (below any room that line spacing or a `w:docGrid` line grid adds above it)
+ * through the content's natural height. `auto` spacing extra below the content stays clear.
  * Every other line, including one whose drawings fit inside its text band, publishes no band,
  * and each run fills its own box.
  *

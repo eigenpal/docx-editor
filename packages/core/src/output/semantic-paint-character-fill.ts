@@ -1,4 +1,5 @@
-// Character highlight and shading on a line whose runs share one fill band.
+// Character highlight (`w:highlight`) and shading (`w:rPr/w:shd`) on a line whose runs share one
+// fill band.
 //
 // A run normally fills its own box, seated on the baseline. Layout publishes
 // `LineRecord.characterFillBand` where the runs share one band instead: the whole box of an

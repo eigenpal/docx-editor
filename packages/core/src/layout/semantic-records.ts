@@ -384,9 +384,10 @@ export interface LineRecord {
   readonly trailingSpacing?: number;
   /**
    * @internal
-   * The band that character highlight and shading fill when the line's runs share one, in
-   * points from the line box top: the whole box under exact spacing, and the natural content
-   * band beside an inline drawing. Absent when each run fills its own box.
+   * The band that character highlight (`w:highlight`) and shading (`w:rPr/w:shd`) fill when the
+   * line's runs share one, in points from the line box top: the whole box under exact spacing
+   * (`w:lineRule="exact"`), and the natural content band beside an inline drawing. Absent when
+   * each run fills its own box.
    */
   readonly characterFillBand?: { readonly top: number; readonly height: number };
   /**
