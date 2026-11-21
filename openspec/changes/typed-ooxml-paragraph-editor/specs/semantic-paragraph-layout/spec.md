@@ -794,7 +794,7 @@ In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingCo
 
 ### Requirement: Legacy hyphens stay with the following text
 
-In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingControl` compresses punctuation, a line SHALL NOT break after a hyphen-minus (U+002D) that a letter, digit, or symbol follows, whatever precedes the hyphen. A line MAY break after it before East Asian text or a space. Paragraph layout and table AutoFit minimum widths SHALL use the same break opportunities. A word wider than its line SHALL still split.
+In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingControl` compresses punctuation, a line SHALL NOT break after a hyphen-minus (U+002D) that a letter, digit, or symbol follows, whatever precedes the hyphen. A line MAY break after it before East Asian text or a space. Paragraph layout and the minimum column widths of autofit tables (`w:tblLayout` `w:type="autofit"`) SHALL use the same break opportunities. A word wider than its line SHALL still split.
 
 #### Scenario: A hyphenated word moves whole in a legacy mode
 

@@ -81,10 +81,11 @@ export function protectedSeamAfter(
   );
 }
 
-// In a legacy mode with punctuation compression, a hyphen-minus is no line-break opportunity
-// before a following letter, digit, or symbol, whatever precedes it: `well-known`, `AB-12`,
-// and the `-ABC` of `甲-ABC` stay together. A line may still open after it before East Asian
-// text or a space. Modern modes and `doNotCompress` break after the hyphen.
+// In a legacy mode (`w:compatSetting` `compatibilityMode` 14 or earlier, or none) with
+// punctuation compression (`w:characterSpacingControl`), a hyphen-minus is no line-break
+// opportunity before a following letter, digit, or symbol, whatever precedes it: `well-known`,
+// `AB-12`, and the `-ABC` of `甲-ABC` stay together. A line may still open after it before
+// East Asian text or a space. Mode 15 and `doNotCompress` break after the hyphen.
 function gluesLegacyHyphen(policy: CjkParagraphTypography): boolean {
   return (
     !policy.characterWrap &&
@@ -154,9 +155,10 @@ export function cjkParagraphBreaks(
   let pieceIndex = 0;
   let leftPieceIndex = 0;
   const hasKorean = clusters.some((cluster) => isHangul(cluster.text.codePointAt(0)!));
-  // Hyphen glue (`gluesLegacyHyphen`) skips a Korean run in a paragraph with East Asian text:
-  // such runs wrap Latin words by character in these modes, which this analysis does not
-  // model, so their ordinary hyphen breaks stay closer to that layout.
+  // Hyphen glue (`gluesLegacyHyphen`) skips a Korean run (`w:lang` `w:eastAsia` Korean) in a
+  // paragraph with East Asian text: such runs wrap Latin words by character in these modes,
+  // which this analysis does not model, so their ordinary hyphen breaks stay closer to that
+  // layout.
   const glueHyphens = gluesLegacyHyphen(policy);
   const eastAsianText = clusters.some((cluster) => isCjk(cluster.text.codePointAt(0)!));
   const detectedLanguage = hasKorean

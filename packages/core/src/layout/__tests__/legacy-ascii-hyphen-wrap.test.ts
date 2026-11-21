@@ -129,7 +129,7 @@ test.each([
   ['one run', run('aa well-known')],
   ['a run seam after the hyphen', run('aa well-') + run('known')],
   ['a hidden run after the hyphen', run('aa well-') + run('xx', '<w:vanish/>') + run('known')],
-])('table AutoFit keeps a legacy hyphen word whole across %s', (_, body) => {
+])('an autofit table keeps a legacy hyphen word whole across %s', (_, body) => {
   // `well-known` is the widest unit in mode 14; `well-` and `known` are in mode 15.
   expect(minimum(body, '14')).toBeCloseTo(2 * minimum(body, '15'));
   expect(minimum(body, '14')).toBeCloseTo(minimum(run('aa well-known'), '14'));
