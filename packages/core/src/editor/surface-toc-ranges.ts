@@ -192,6 +192,20 @@ export function tocRefusesTextWrite(
   if (selection.anchor.paragraphId === selection.head.paragraphId) return false;
   return tocRefusesJoin(part, paragraphIds);
 }
+/**
+ * Whether an end of the selection sits right before the end mark of a closing line. Text
+ * typed there lands after the mark, but an object or a wrapper inserted there lands before
+ * it, inside the field result, where a refresh would drop it.
+ */
+export function tocAtEndMarkEdge(part: OoxmlPart, selection: SemanticSelection): boolean {
+  return tocParagraphRanges(part).some(
+    (r) =>
+      holdsOnlyEndMark(r) &&
+      [selection.anchor, selection.head].some(
+        (end) => end.paragraphId === r.paragraphId && end.offset === 0
+      )
+  );
+}
 /** Whether the end of a paragraph, where an anchored object is inserted, is generated. */
 export function tocAtParagraphEnd(part: OoxmlPart, paragraphId: string): boolean {
   return tocParagraphRanges(part).some(

@@ -7,6 +7,7 @@ import { docx } from './paginated-surface-fixtures.ts';
 import { detectBodyTocs, serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import type { EditorCommand } from '../../contracts/editor.ts';
 import { toolbarCommandState } from '../toolbar-commands.ts';
+import { capturePointPosition } from '../editor-point-target.ts';
 import type { ChromeSlotId } from '../chrome-controls.ts';
 
 const READ_ONLY = 'the table of contents is generated and read-only';
@@ -98,7 +99,11 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
   ['caret in a row: text box', BODY, [1, 2, 1, 2], TEXT_BOX, true],
   ['closing line: text box anchors after the end mark', BODY, [3, 0, 3, 0], TEXT_BOX, false],
   ['caret in a row: footnote', BODY, [1, 2, 1, 2], NOTE, true],
-  ['closing line: footnote', BODY, [3, 0, 3, 0], NOTE, false],
+  ['closing line: a footnote would land inside the field', BODY, [3, 0, 3, 0], NOTE, true],
+  ['closing line: a bookmark would land inside the field', BODY, [3, 0, 3, 0], BOOKMARK, true],
+  ['closing line: a link would wrap the end mark', BODY, [3, 0, 3, 0], LINK, true],
+  ['after the TOC: footnote', BODY, [4, 1, 4, 1], NOTE, false],
+  ['after the TOC: bookmark', BODY, [4, 1, 4, 3], BOOKMARK, false],
   ['caret in a row: bookmark', BODY, [1, 2, 1, 2], BOOKMARK, true],
   ['range in a row: content control', BODY, [1, 1, 1, 4], CONTROL, true],
   ['after the TOC: content control', BODY, [4, 1, 4, 3], CONTROL, false],
@@ -217,4 +222,16 @@ test('a picture is not inserted into a cached row', async () => {
   expect(serializeOoxmlPart(inRow.surface.session.part())).toBe(before);
   const after = mountAt(BODY, [4, 1, 4, 1]);
   expect(after.editor.canExecuteImageCommand(picture).ok).toBe(true);
+  // A drop point inside a row is refused even when the caret is elsewhere.
+  const row = after.surface.session.paragraphIds()[1]!;
+  const at = capturePointPosition(after.surface, { paragraphId: row, offset: 2 });
+  const dropped = { ...picture, at };
+  expect(after.editor.canExecuteImageCommand(dropped)).toMatchObject({
+    ok: false,
+    reason: READ_ONLY,
+  });
+  expect(await after.editor.executeImageCommand(dropped)).toMatchObject({
+    ok: false,
+    reason: READ_ONLY,
+  });
 });

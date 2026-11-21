@@ -254,3 +254,56 @@ test('two editors type on the closing line and join the next paragraph into it',
     harness.cleanup();
   }
 }, 10000);
+
+test('a section break on the empty closing line converges with a concurrent TOC refresh', async () => {
+  const harness = createPeerHarness('toc-closing-line-section-break');
+  const editors: DocxEditorInstance[] = [];
+  try {
+    const pair = await harness.pair(zipDocument(field + following));
+    const [left, right] = [pair.alice, pair.bob].map((peer) => {
+      peer.detach();
+      const editor = createDocxEditor({
+        container: document.createElement('div'),
+        document: peer.room.document,
+        modules: [collaborationModule({ session: peer.room.session })],
+      });
+      editors.push(editor);
+      return editor;
+    }) as [DocxEditorInstance, DocxEditorInstance];
+    await until(() => !!left.surface && !!right.surface);
+    const closingId = harness.paragraphIdAt(pair.alice, 1);
+    left.surface!.setSelection({
+      anchor: { paragraphId: closingId, offset: 0 },
+      head: { paragraphId: closingId, offset: 0 },
+    });
+    pair.pause();
+    expect(left.exec({ type: 'insertBreak', kind: 'section' })).toMatchObject({ ok: true });
+    right.exec({ type: 'refreshToc', mode: 'pageNumbers' });
+    pair.alice.room.session.flushPendingJournals();
+    pair.bob.room.session.flushPendingJournals();
+    pair.resume();
+    const xml = async (editor: DocxEditorInstance) =>
+      strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    await until(
+      () =>
+        left.surface!.session.paragraphIds().length === right.surface!.session.paragraphIds().length
+    );
+    for (let attempt = 0; attempt < 50 && (await xml(left)) !== (await xml(right)); attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(await xml(right)).toBe(await xml(left));
+    expect(await xml(left)).toMatch(/<w:sectPr[ >]/);
+    for (const editor of [left, right]) {
+      expect(detectBodyTocs(editor.surface!.session.part())).toHaveLength(1);
+    }
+    const reopened = createDocxEditor({
+      container: document.createElement('div'),
+      document: await left.save(),
+    });
+    editors.push(reopened);
+    expect(detectBodyTocs(reopened.surface!.session.part())).toHaveLength(1);
+  } finally {
+    for (const editor of editors) editor.destroy();
+    harness.cleanup();
+  }
+}, 10000);

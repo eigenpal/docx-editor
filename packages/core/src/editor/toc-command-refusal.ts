@@ -17,6 +17,7 @@ import {
   TOC_READ_ONLY_REFUSAL,
   paragraphInBodyToc,
   selectionTouchesTocRange,
+  tocAtEndMarkEdge,
   tocAtParagraphEnd,
   tocRefusesRunFormatting,
   tocParagraphRanges,
@@ -49,6 +50,17 @@ const MARK_SELECTION_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set([
   'insertContentControl',
   'insertHyperlink',
   'proposeInsertion',
+]);
+
+/**
+ * Commands that insert an object or a wrapper before the end mark when the selection
+ * starts a closing line. Typed text lands after the mark instead.
+ */
+const BEFORE_END_MARK_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set([
+  'insertBookmark',
+  'insertContentControl',
+  'insertHyperlink',
+  'insertNote',
 ]);
 
 /** Commands that resolve their `target` to the selection they write at. */
@@ -102,6 +114,8 @@ function refusesInToc(command: EditorCommand, surface: PaginatedSurface, part: O
   const selection = commandSelection(command, surface);
   if (!selection) return false; // An unresolvable target meets its own refusal.
   const head = selection.head.paragraphId;
+  // At a closing line these would join the field result, which a refresh replaces.
+  if (BEFORE_END_MARK_COMMANDS.has(type) && tocAtEndMarkEdge(part, selection)) return true;
   if (TEXT_AT_SELECTION_COMMANDS.has(type)) {
     // A section break also ends a section at the caret's paragraph.
     const sectionBreak = command.type === 'insertBreak' && command.kind.startsWith('section');
@@ -137,6 +151,11 @@ function commandSelection(
   command: EditorCommand,
   surface: PaginatedSurface
 ): SemanticSelection | null {
+  // A picture dropped at a point lands there, not at the selection.
+  if (command.type === 'insertImage' && command.at) {
+    const at = { paragraphId: command.at.paragraphId, offset: command.at.offset };
+    return { anchor: at, head: at };
+  }
   // Only these commands write at their target; the others act at the selection.
   const target =
     TARGETED_COMMANDS.has(command.type) && 'target' in command ? command.target : undefined;
