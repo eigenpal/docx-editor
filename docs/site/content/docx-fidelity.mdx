@@ -167,7 +167,7 @@ The compatibility mode in `w:compat` changes clipping, page counts, table placem
 | First body row below a repeated header | Reserves the border it shares with the row above. | Reserves the wider of its top border and the header's bottom border. |
 | Row that does not fit below repeated headers | The repeat is omitted. The row starts the page. | Headers stay. The row stays whole below them and runs past the bottom margin. |
 | Unsplittable row taller than a page | Splits on a fresh page. Header rows repeat on the page after it. | Stays whole on a fresh page, past the bottom margin. Lines past the page edge do not show. Header rows repeat above it. |
-| Punctuation compression to fit a line | Justified and distributed lines only. | Lines at every alignment. Added East Asian text compresses by at most half its width, on justified lines too. A group with Korean text wraps, and Korean marks or marks after Hangul keep their widths. |
+| Punctuation compression to fit a line | Justified and distributed lines only. | Lines at every alignment. A fit takes at most half the width of the added East Asian text, on justified lines too. A group with Korean text wraps, and Korean marks or marks after Hangul keep their widths. |
 | Line-end punctuation overflow | Hangs in justified and distributed paragraphs. | Hangs at every alignment, whatever the kinsoku switch. |
 | Korean paragraph-final mark with punctuation compression | Marks other than `。` and `、` can hang. | Starts the next line. |
 | Space shrink before a hanging mark | Justified and distributed lines shrink spaces first. | With punctuation compression and an East Asian default face, lines at any alignment shrink spaces to keep one more word. |

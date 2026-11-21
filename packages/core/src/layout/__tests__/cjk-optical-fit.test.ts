@@ -704,3 +704,22 @@ test('a legacy hanging fit skips the half-advance limit', () => {
   expect(first(true)).toBe('甲、乙、丙、丁、戊、己、庚ab。');
   expect(first(false)).toBe('甲、乙、丙、丁、戊、己、庚');
 });
+
+test('a legacy group with a Latin word and no closing mark skips the half-advance limit', () => {
+  // `abcd` is 48 pt: the line gives it all 36 pt of its six marks, past half its advance.
+  const resolved: TextMeasurer = { ...measurer, hasResolvedFont: () => true };
+  const first = (width: number) =>
+    layout(
+      '甲、乙、丙、丁、戊、己、庚abcd辛',
+      width,
+      13,
+      resolved,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode: 14 },
+      'left'
+    )[0]!
+      .spans.map((span) => span.text)
+      .join('');
+  expect(first(171)).toBe('甲、乙、丙、丁、戊、己、庚abcd');
+  expect(first(170)).toBe('甲、乙、丙、丁、戊、己、庚');
+});
