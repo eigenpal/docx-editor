@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "In a paragraph with Latin text, authored character spacing prevented punctuation fitting on every tracked line.",
+  "after": "A tracked line of only East Asian text, punctuation, and spaces fits punctuation as it does in a paragraph without Latin text.",
+  "reason": "The layout change leaves document content, model ranges, edit operations and serialized collaboration state unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/cjk-optical-fit.test.ts",
+    "packages/core/src/layout/__tests__/cjk-optical-local-boundaries.test.ts",
+    "packages/core/src/layout/__tests__/cjk-optical-implicit-faces.test.ts"
+  ],
+  "changeset": "fit-tracked-east-asian-lines",
+  "migration": null
+}
