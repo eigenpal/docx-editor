@@ -25,10 +25,13 @@ const CLOSING_BRACKET = /^[〉》」』】〕〗〙〛）］｝]$/u;
 const RIGHT_BEARING = /^[、。〉》」』】〕〗〙〛），．］｝；：！・]$/u;
 
 /**
- * How a mark shares a bearing at a seam with the next mark, by its own run language. A
- * `closing` mark gives half its advance before a closing, centred, or opening mark. A
- * `centred` mark gives it only before an opening mark. Two opening marks share the second
- * mark's left bearing. Other marks, such as `？`, never share a bearing.
+ * How a mark shares a bearing at a seam with the next mark, by the East Asian language of
+ * its own run (`w:lang` `w:eastAsia`). The seam applies only when pair kerning (`w:kern`)
+ * is on in both non-Korean runs and `w:noPunctuationKerning` is off, under any
+ * `w:characterSpacingControl` value. A `closing` mark gives half its advance before a
+ * closing, centred, or opening mark. A `centred` mark gives it only before an opening
+ * mark. Two opening marks share the second mark's left bearing. Other marks, such as `？`,
+ * never share a bearing.
  */
 export function punctuationSeamClass(
   mark: string,
@@ -38,7 +41,7 @@ export function punctuationSeamClass(
   if (CLOSING_BRACKET.test(mark)) return 'closing';
   const traditional = /^zh-(tw|hk|mo|hant)(-|$)/i.test(language ?? '');
   const japanese = /^ja(-|$)/i.test(language ?? '');
-  // Simplified Chinese, and text without an East Asian language, sets these marks in the
+  // Simplified Chinese, and text without a `w:eastAsia` language, sets these marks in the
   // left half of the cell. Traditional Chinese centres them; Japanese centres `；` and `：`.
   if ('、。，．'.includes(mark)) return traditional ? 'centred' : 'closing';
   if (mark === '；' || mark === '：') return traditional || japanese ? 'centred' : 'closing';

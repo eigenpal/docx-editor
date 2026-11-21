@@ -636,7 +636,7 @@ Justified East Asian lines SHALL distribute punctuation compression across avail
 
 ### Requirement: Punctuation pair classes by language
 
-Each mark of an adjacent full-width punctuation pair SHALL take its pair class from its own run's East Asian language. The class SHALL be opening, closing, centred, or none. Brackets SHALL be opening or closing marks in every language.
+Each mark of an adjacent full-width punctuation pair SHALL take its pair class from its own run's East Asian language (`w:lang` `w:eastAsia`). The class SHALL be opening, closing, centred, or none. Brackets SHALL be opening or closing marks in every language.
 
 #### Scenario: The run language selects the class of a mark
 
@@ -654,7 +654,7 @@ Each mark of an adjacent full-width punctuation pair SHALL take its pair class f
 
 ### Requirement: Punctuation pair seams by class
 
-When pair kerning applies to both runs, a closing mark SHALL give half its advance before a closing, centred, or opening mark. A centred mark SHALL give it only before an opening mark. Two opening marks SHALL share the second mark's left bearing. Other pairs and Korean runs SHALL keep both bearings. A colon SHALL share before a non-opening mark only when both marks' measured ink fits the pair. A highlighted or shaded colon SHALL keep its bearing.
+When pair kerning (`w:kern`) applies to both runs, a closing mark SHALL give half its advance before a closing, centred, or opening mark. A centred mark SHALL give it only before an opening mark. Two opening marks SHALL share the second mark's left bearing. Other pairs and Korean runs SHALL keep both bearings. A colon SHALL share before a non-opening mark only when both marks' measured ink fits the pair. A highlighted or shaded colon SHALL keep its bearing.
 
 #### Scenario: A semicolon pair follows its class
 
