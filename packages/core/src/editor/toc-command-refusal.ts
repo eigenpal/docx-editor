@@ -74,7 +74,7 @@ const PARAGRAPH_FORMAT: TocPolicy = { kind: 'paragraphFormat' };
 const TOC_POLICIES: Readonly<Record<EditorCommand['type'], TocPolicy>> = {
   acceptAllRevisions: NONE,
   acceptRevision: NONE,
-  addComment: NONE,
+  addComment: { kind: 'mark', beforeEndMark: true },
   addRepeatingSectionItem: NONE,
   adjustIndent: { kind: 'paragraphFormat', whole: true },
   applyFormatting: RUN_FORMAT,

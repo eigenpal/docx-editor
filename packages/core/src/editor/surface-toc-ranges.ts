@@ -131,6 +131,12 @@ export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
       })
     );
   }
+  // Text typed inside a content control (a TOC control included) names the control and the
+  // position it lands at; the position decides, as for a range op.
+  if (reach.kind === 'control' && reach.at && !reach.replacesContent) {
+    const { paragraphId, offset } = reach.at;
+    return ranges.some((r) => r.paragraphId === paragraphId && rangeTouches(r, offset, offset));
+  }
   // Page setup names the paragraph whose section it writes; the section is not TOC content.
   if (op.op === 'setSectionProperties') return false;
   // Retain the existing refusal for paragraph ids in other operation shapes.

@@ -8,6 +8,7 @@ import { detectBodyTocs, serializeOoxmlPart } from '@docx-editor.dev/core/store'
 import type { EditorCommand } from '../../contracts/editor.ts';
 import { toolbarCommandState } from '../toolbar-commands.ts';
 import { capturePointPosition } from '../editor-point-target.ts';
+import { stubReviewModule } from './review-test-module.ts';
 import { validateRasterHeader, type ImageDecodePort } from '../../store/package/image-resources.ts';
 import type { ChromeSlotId } from '../chrome-controls.ts';
 
@@ -347,4 +348,49 @@ test('a picture inserted on the closing line lands after the end mark', async ()
     .split('<w:p')
     .find((paragraph) => paragraph.includes('fldCharType="end"'))!;
   expect(closing.indexOf('<w:drawing')).toBeGreaterThan(closing.indexOf('fldCharType="end"'));
+});
+
+test('typing on the closing line of a TOC inside a content control lands after the end mark', () => {
+  const controlled = `<w:sdt><w:sdtPr><w:docPartObj><w:docPartGallery w:val="Table of Contents"/></w:docPartObj></w:sdtPr><w:sdtContent>${BODY.replace(/<w:p><w:r><w:t>(Before|After)<\/w:t><\/w:r><\/w:p>/g, '')}</w:sdtContent></w:sdt><w:p>${run('After')}</w:p>`;
+  const closingIndex = 2;
+  const { editor, surface } = mountAt(controlled, [closingIndex, 0, closingIndex, 0]);
+  expect(editor.can(TYPE)).toEqual({ ok: true });
+  expect(editor.exec(TYPE)).toMatchObject({ ok: true, changed: true });
+  const closing = serializeOoxmlPart(surface.session.part())
+    .split('<w:p')
+    .find((paragraph) => paragraph.includes('fldCharType="end"'))!;
+  expect(closing.indexOf('>X<')).toBeGreaterThan(closing.indexOf('fldCharType="end"'));
+  // A cached row inside the control stays read-only.
+  const row = mountAt(controlled, [0, 2, 0, 2]);
+  expect(row.editor.can(TYPE)).toEqual({ ok: false, code: 'invalidArgs', reason: READ_ONLY });
+  expect(row.editor.exec(TYPE)).toEqual(row.editor.can(TYPE));
+});
+
+test('a comment is refused on cached rows and at the closing line edge, and allowed beside them', () => {
+  const comment = { type: 'addComment', text: 'Note', author: 'A' } as EditorCommand;
+  const mountReview = (place: Place) => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(BODY),
+      author: 'A',
+      modules: [stubReviewModule()],
+    });
+    editors.push(editor);
+    const ids = editor.surface!.session.paragraphIds();
+    editor.surface!.setSelection({
+      anchor: { paragraphId: ids[place[0]]!, offset: place[1] },
+      head: { paragraphId: ids[place[2]]!, offset: place[3] },
+    });
+    return editor;
+  };
+  for (const place of [
+    [1, 1, 1, 4],
+    [3, 0, 4, 3],
+  ] as const) {
+    const editor = mountReview(place);
+    expect(editor.can(comment)).toEqual({ ok: false, code: 'invalidArgs', reason: READ_ONLY });
+    expect(editor.exec(comment)).toEqual(editor.can(comment));
+  }
+  const allowed = mountReview([4, 0, 4, 3]);
+  expect(allowed.can(comment)).toEqual({ ok: true });
 });
