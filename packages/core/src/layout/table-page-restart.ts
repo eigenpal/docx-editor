@@ -60,7 +60,10 @@
 //   below the page top;
 // - page wrap zones, cell spacing, a positioned table, out-of-cell floats, or more than one
 //   column;
-// - a decision that read the content after the table (`readThrough` unbounded).
+// - a decision that read the content after the table (`readThrough` unbounded);
+// - a pass whose inputs outside the tree moved (`semantic-layout.ts`): the drawing epoch (a
+//   picture that finished decoding), projections, field references, styles, or width. The
+//   structure rows do not hold them, so equal rows do not prove the kept pages.
 //
 // A page that a forced break opened is recorded: the row loop consumes `forceNextFragment`
 // (as `forceBreak`) before it takes up the opening row. The row above forced the break because

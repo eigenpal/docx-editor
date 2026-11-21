@@ -1410,8 +1410,12 @@ function* layoutBlocksPass(
     return { ...tableUpdate, overflowShellAt };
   }
   // A changed table restarts at a page its edit left standing (`table-page-restart.ts`).
+  // The restart proves the kept pages from the table's structure rows, which hold none of
+  // the pass inputs outside the tree: drawing resources, projections, field references,
+  // styles, and width. A pass that moved one of those (a picture that finished decoding)
+  // must not keep pages laid out with the old value.
   const restart =
-    tablePagesKept && positionedTables.length === 0
+    tablePagesKept && positionedTables.length === 0 && prepassNonListInputsValid
       ? planTableRestartPass({
           prepared,
           index: firstChanged,
