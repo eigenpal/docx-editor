@@ -1,3 +1,4 @@
+import { drawingPastePoint } from './drawing-paste-target.ts';
 import { fitInsertExtent } from './image-insert-extent.ts';
 import { pointTargetRefusal } from './editor-point-target.ts';
 import { SUGGESTING_IMAGE_REPLACE_REASON } from './opening-editing-mode.ts';
@@ -43,9 +44,6 @@ import type {
   ImageContext,
   SelectedImageState,
 } from '../contracts/editor.ts';
-import { lineAtPosition } from '../layout/index.ts';
-import { lineAtIndexedPosition, paragraphLinesFor } from '../layout/paragraph-lines.ts';
-import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { findDrawingOverlayFrameInLayout } from '../layout/semantic-hit-test.ts';
 import { editedTextboxOverlayFrame, textboxTextEditable } from './textbox-overlay-frame.ts';
 import { partOfNodeId } from './surface-scope.ts';
@@ -82,7 +80,12 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 export type { ImageContext, SelectedImageState };
 
-type SelectedDrawingRecord = InlineDrawingRecord | AnchoredDrawingRecord;
+import {
+  resolveSelectedDrawingRecord,
+  type SelectedDrawingRecord,
+} from './selected-drawing-record.ts';
+
+export { resolveSelectedDrawingRecord };
 
 export {
   computeMovedImagePosition,
@@ -112,108 +115,6 @@ export type ImageMutationPreconditions = Readonly<{
   selectionParagraphId: string;
   selectionOffset: number;
 }>;
-
-/**
- * Whether a record answers to this caret, and to the drawing the caller named.
- *
- * One paragraph can anchor several drawings, and they occupy ADJACENT offsets, so the offset
- * alone is ambiguous: the second box's anchor offset is also the first box's `start + 1`.
- * A named drawing therefore decides the tie, or the scan returns whichever came first and the
- * caller can never address the rest.
- */
-function drawingAnswersTo(
-  drawing: Pick<InlineDrawingRecord, 'drawingNodeId' | 'start' | 'accessibility'>,
-  offset: number,
-  wanted: string | null
-): boolean {
-  // A hidden record (an MC wrap footprint) holds layout space only; nothing can select it.
-  if (drawing.accessibility.hidden) return false;
-  if (wanted !== null && drawing.drawingNodeId !== wanted) return false;
-  return drawing.start === offset || drawing.start + 1 === offset;
-}
-
-function inlineDrawingAtOffset(
-  line: ReturnType<typeof lineAtPosition>,
-  paragraphId: string,
-  offset: number,
-  wanted: string | null
-): InlineDrawingRecord | null {
-  if (!line) return null;
-  for (const drawing of line.drawings ?? []) {
-    // The PARAGRAPH as well as the offset. A resolved display mode draws two paragraphs on
-    // the join line and both count from zero, so an offset alone selected the other half's
-    // image — and every later command addressed that one.
-    if (drawing.paragraphId !== paragraphId) continue;
-    if (drawingAnswersTo(drawing, offset, wanted)) return drawing;
-  }
-  return null;
-}
-
-/**
- * The named inline drawing when it starts the next line. A drawing that does not fit after the
- * text wraps, and its anchor offset is also the end of the line before it, which the offset
- * lookup finds first.
- */
-function namedDrawingOnOtherLine(
-  surface: PaginatedSurface,
-  paragraphId: string,
-  offset: number,
-  wanted: string | null
-): InlineDrawingRecord | null {
-  if (!wanted) return null;
-  for (const placed of paragraphLinesFor(surface.layout(), paragraphId)) {
-    const found = inlineDrawingAtOffset(placed.line, paragraphId, offset, wanted);
-    if (found) return found;
-  }
-  return null;
-}
-
-function anchoredDrawingAtSelection(
-  surface: PaginatedSurface,
-  paragraphId: string,
-  offset: number,
-  wanted: string | null
-): AnchoredDrawingRecord | null {
-  const layout = surface.layout();
-  for (const page of layout.pages) {
-    for (const drawing of page.anchoredDrawings ?? []) {
-      if (drawing.anchorParagraphId !== paragraphId) continue;
-      if (drawingAnswersTo(drawing, offset, wanted)) return drawing;
-    }
-    for (const story of [page.header, page.footer]) {
-      if (!story) continue;
-      for (const drawing of story.anchoredDrawings ?? []) {
-        if (drawing.anchorParagraphId !== paragraphId) continue;
-        if (drawingAnswersTo(drawing, offset, wanted)) return drawing;
-      }
-    }
-  }
-  return null;
-}
-
-export function resolveSelectedDrawingRecord(
-  surface: PaginatedSurface | null
-): SelectedDrawingRecord | null {
-  if (!surface) return null;
-  // Word's rule: a caret at a drawing's anchor offset is a TEXT caret unless something
-  // selected the object — a pointer press on the painted drawing, or an explicit host
-  // selection write. The mount-time caret routinely coincides with a drawing anchored at
-  // offset zero, and typing lands the caret at anchor+1; neither means "selected".
-  const intent = surface.drawingSelectionIntent();
-  if (intent.kind === 'none') return null;
-  const { anchor, head } = surface.state().selection;
-  if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return null;
-  const line = lineAtIndexedPosition(surface.layout(), anchor.paragraphId, anchor.offset);
-  // A press names its drawing, so a stale press can never claim a DIFFERENT drawing the caret
-  // later visits (a find jump that lands at another anchor), and a paragraph anchoring several
-  // drawings resolves to the named one rather than to the first.
-  const wanted = intent.kind === 'pointer' ? intent.drawingNodeId : null;
-  return (
-    inlineDrawingAtOffset(line, anchor.paragraphId, anchor.offset, wanted) ??
-    namedDrawingOnOtherLine(surface, anchor.paragraphId, anchor.offset, wanted) ??
-    anchoredDrawingAtSelection(surface, anchor.paragraphId, anchor.offset, wanted)
-  );
-}
 
 function projectDrawingForRecord(
   surface: PaginatedSurface,
@@ -591,11 +492,14 @@ function isStaleImageMutation(
 }
 
 /**
- * Inserting a picture while one is selected has no place to land: the selection sits on the
- * picture, and the store refuses an insert there. Refused up front, so the toolbar can say why.
+ * A picture inserted while a drawing is selected goes before its anchor run, where
+ * `drawingPastePoint` sends it. In suggesting mode the tracked `insertDrawing` operation
+ * refuses a point at another drawing's start, so the insert refuses up front with a reason.
+ * Lifting that store rule would let a newer peer send operations an older peer refuses. A
+ * copied drawing takes the fragment paste lane instead, which proposes it there.
  */
 export const PICTURE_SELECTED_INSERT_REASON =
-  'a picture is selected; place the caret in text to insert a picture';
+  'in suggesting mode, a picture cannot be inserted while a drawing is selected; place the caret in text to insert a picture';
 
 export function gateImageCommand(
   command: EditorCommand,
@@ -613,7 +517,8 @@ export function gateImageCommand(
       const stale = pointTargetRefusal(surface, command.at);
       if (stale) return stale;
     }
-    if (!command.at && resolveSelectedDrawingRecord(surface)) {
+    const suggesting = surface.editingMode() === 'suggest';
+    if (!command.at && suggesting && drawingPastePoint(surface)) {
       return { ok: false, code: 'invalidArgs', reason: PICTURE_SELECTED_INSERT_REASON };
     }
     if (!(command.data instanceof Uint8Array) || command.data.byteLength === 0) {
@@ -995,7 +900,9 @@ async function runImageCommand(
   const pre = captureImageMutationPreconditions(editor);
   if (!pre) return { ok: false, code: 'notFound', reason: 'no document is loaded' };
   if (command.type === 'insertImage') {
-    const anchor = command.at ?? surface.state().selection.anchor;
+    // With a drawing selected, the picture goes before the drawing's anchor run, wherever the
+    // caret is on the drawing.
+    const anchor = command.at ?? drawingPastePoint(surface) ?? surface.state().selection.anchor;
     const current = () =>
       command.at
         ? editor.surface === surface &&

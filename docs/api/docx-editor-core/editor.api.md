@@ -3692,6 +3692,8 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     refreshTableInteractionLabels(): void;
     // (undocumented)
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
+    refusalCount(): number;
+    refusalSince(count: number): string | null;
     releaseSelection(pin: SelectionPin): void;
     remotePresenceColor(name: string): string | undefined;
     remoteSelectionPending(): boolean;

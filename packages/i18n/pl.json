@@ -1059,7 +1059,7 @@
     "nothingToPaint": "Zaznacz tekst, aby zastosować formatowanie",
     "noReviewAuthors": "Ten dokument nie ma autorów recenzji",
     "suggestingNeedsAuthor": "Sugerowanie wymaga autora. Ustaw autora w konfiguracji edytora.",
-    "pictureSelected": "Zaznaczono obraz. Umieść kursor w tekście, aby wstawić obraz.",
+    "pictureSelected": "W trybie sugerowania nie można wstawić obrazu, gdy zaznaczony jest rysunek. Umieść kursor w tekście, aby wstawić obraz.",
     "chartDrawing": "To jest wykres. Możesz go usunąć, ale nie możesz edytować go jak obrazu.",
     "chartFrame": "To jest wykres. Możesz zmienić jego rozmiar, położenie, zawijanie tekstu i tekst alternatywny.",
     "diagramFrame": "To jest diagram. Możesz zmienić jego rozmiar, położenie, zawijanie tekstu i tekst alternatywny.",
@@ -1079,7 +1079,12 @@
     "drawingClipboardStory": "Rysunki można kopiować, wycinać i wklejać tylko w treści dokumentu, a nie w nagłówku, stopce, przypisie ani polu tekstowym.",
     "groupMemberClipboard": "Kształt w grupie jest kopiowany lub wycinany razem z grupą. Naciśnij Escape, aby zaznaczyć grupę.",
     "drawingClipboardSize": "Ten rysunek jest za duży, aby go skopiować.",
-    "drawingPasteCells": "Umieść kursor w tekście, aby wkleić rysunek."
+    "drawingPasteCells": "Umieść kursor w tekście, aby wkleić rysunek.",
+    "groupMemberPaste": "Nie można wkleić tekstu do kształtu w grupie. Naciśnij Escape, aby zaznaczyć grupę.",
+    "linkedTextBoxPaste": "Nie można wkleić tekstu do połączonego pola tekstowego. Umieść kursor w tekście, aby wkleić.",
+    "textBoxPicturePaste": "Pole tekstowe przyjmuje tylko tekst. Wklej bez formatowania, aby wkleić sam tekst.",
+    "shapePasteText": "Ten kształt nie zawiera tekstu, do którego można wkleić. Umieść kursor w tekście, aby wkleić.",
+    "textBoxPaste": "Tekstu w tym polu tekstowym nie można edytować. Umieść kursor w tekście, aby wkleić."
   },
   "equationPopup": {
     "apply": "Zastosuj",

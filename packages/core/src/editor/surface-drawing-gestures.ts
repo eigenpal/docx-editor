@@ -10,19 +10,33 @@ import { textboxPaintsPastFrame, textboxPressReaches } from '../layout/vector-sh
 /** A painted box thinner than this, in points, has no area a press can land on. */
 const THIN_LINE_PT = 1;
 import { isElementNode, isInputEvent, isKeyboardEvent, isPointerEvent } from './host-realm.ts';
+import { chordLetter, isPlainPasteChord } from './chord-letter.ts';
 import { MULTI_CLICK_MS, MULTI_CLICK_SLOP_PX } from './surface-multi-click.ts';
 import { pressSelectsGroupMember, selectedGroupMember } from './group-member-selection.ts';
 
-/** Ctrl or Command with C or X, and Ctrl or Shift with Insert or Delete: copy and cut. */
+/**
+ * The clipboard chords: Ctrl or Command with C, X or V, the plain-text paste chords (see
+ * `isPlainPasteChord`), Ctrl with Insert (copy), Shift with Delete (cut), and Shift with
+ * Insert (paste).
+ */
 function isClipboardChord(event: KeyboardEvent): boolean {
+  if (isPlainPasteChord(event)) return true;
   if (event.altKey) return false;
   const key = event.key.toLowerCase();
-  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && (key === 'c' || key === 'x'))
-    return true;
-  return (
-    (event.ctrlKey && key === 'insert') || (event.shiftKey && !event.ctrlKey && key === 'delete')
-  );
+  const command = event.ctrlKey || event.metaKey;
+  // The letter the chord names, on any layout: Ctrl+V types `м` on a Russian one.
+  const letter = command ? chordLetter(event) : '';
+  if (!event.shiftKey && (letter === 'c' || letter === 'x')) return true;
+  if (letter === 'v') return true;
+  if (key === 'insert') return event.ctrlKey !== event.shiftKey;
+  return event.shiftKey && !event.ctrlKey && key === 'delete';
 }
+
+/** The input types of a paste, which a browser can send without a key chord first. */
+const PASTE_INPUT_TYPES: ReadonlySet<string> = new Set([
+  'insertFromPaste',
+  'insertFromPasteAsQuotation',
+]);
 
 const NON_DESELECTING_KEYS = new Set([
   'Shift',
@@ -226,9 +240,11 @@ export function createDrawingGestures(deps: {
     },
     onDrawingKeyGesture(event: Event): void {
       if (isKeyboardEvent(event) && NON_DESELECTING_KEYS.has(event.key)) return;
-      // Copy and cut act on the selected object: the clipboard event that follows the chord
-      // needs the object still selected to copy or cut it.
+      // Copy and cut act on the selected object, and a paste goes where the selected object
+      // sends it (`drawingPasteTarget`): the clipboard event that follows the chord or the
+      // paste input needs the object still selected.
       if (isKeyboardEvent(event) && isClipboardChord(event)) return;
+      if (isInputEvent(event) && PASTE_INPUT_TYPES.has(event.inputType)) return;
       const textbox = deps.textbox();
       const editing = textbox?.active();
       // Escape leaves the box with the box selected as an object, so Delete or a drag acts on
