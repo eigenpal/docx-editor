@@ -48,6 +48,14 @@ const MARK_SELECTION_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set([
   'proposeInsertion',
 ]);
 
+/** Commands that resolve their `target` to the selection they write at. */
+const TARGETED_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set([
+  'proposeInsertion',
+  'proposeDeletion',
+  'proposeReplacement',
+  'insertContentControl',
+]);
+
 /** Run formats: the toolbar's marks and the automation format. */
 const RUN_FORMATS: ReadonlySet<EditorCommand['type']> = new Set([
   ...RUN_FORMAT_COMMANDS,
@@ -121,7 +129,9 @@ function commandSelection(
   command: EditorCommand,
   surface: PaginatedSurface
 ): SemanticSelection | null {
-  const target = 'target' in command ? command.target : undefined;
+  // Only these commands write at their target; the others act at the selection.
+  const target =
+    TARGETED_COMMANDS.has(command.type) && 'target' in command ? command.target : undefined;
   if (target === undefined) return surface.state().selection;
   const resolved = resolveDocTargetSelection(surface, target as DocTarget);
   return resolved.ok ? resolved.selection : null;

@@ -59,14 +59,16 @@ export function tocParagraphRanges(part: OoxmlPart): readonly TocParagraphRange[
 export function fullyProtectedTocParagraphs(part: OoxmlPart): ReadonlySet<string> {
   return new Set(
     tocParagraphRanges(part)
-      .filter(
-        (r) => r.start === 0 && r.end === r.length && !(r.endsHere && !r.startsHere && r.end === 0)
-      )
+      .filter((r) => r.start === 0 && r.end === r.length && !holdsOnlyEndMark(r))
       .map((r) => r.paragraphId)
   );
 }
+/** Whether the range's paragraph starts with the end mark, as a closing line does. */
+function holdsOnlyEndMark(range: TocParagraphRange): boolean {
+  return range.endsHere && !range.startsHere && range.end === 0;
+}
 function contains(range: TocParagraphRange, offset: number): boolean {
-  if (range.endsHere && !range.startsHere && range.end === 0) return false;
+  if (holdsOnlyEndMark(range)) return false;
   if (range.startsHere && range.start > 0 && offset <= range.start) return false;
   if (range.endsHere && range.end < range.length && offset >= range.end) return false;
   return offset >= range.start && offset <= range.end;
@@ -134,13 +136,19 @@ export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
         if (target.range) {
           return rangeTouches(r, target.range.start, target.range.end);
         }
-        if (op.op === 'joinParagraphs' && op.firstId === r.paragraphId && r.endsHere && r.end === 0)
-          return false;
+        // A closing line that holds only the end mark takes the next paragraph's join, and a
+        // section break that ends there; neither changes the field.
+        if (holdsOnlyEndMark(r)) {
+          if (op.op === 'joinParagraphs' && op.firstId === r.paragraphId) return false;
+          if (op.op === 'setSectionMark') return false;
+        }
         if (target.removes || target.structural) return true;
         return paragraphWriteTouches(r);
       })
     );
   }
+  // Page setup names the paragraph whose section it writes; the section is not TOC content.
+  if (op.op === 'setSectionProperties') return false;
   // Retain the existing refusal for paragraph ids in other operation shapes.
   const ids = new Set(ranges.map((r) => r.paragraphId));
   const inspect = (value: unknown, key = ''): boolean => {
@@ -161,9 +169,7 @@ export function opTouchesTocRange(part: OoxmlPart, op: TreeDocOp): boolean {
 export function tocRefusesJoin(part: OoxmlPart, paragraphIds: readonly string[]): boolean {
   const ranges = tocParagraphRanges(part);
   return paragraphIds.some((id, index) =>
-    ranges.some(
-      (r) => r.paragraphId === id && !(index === 0 && r.endsHere && !r.startsHere && r.end === 0)
-    )
+    ranges.some((r) => r.paragraphId === id && !(index === 0 && holdsOnlyEndMark(r)))
   );
 }
 /**

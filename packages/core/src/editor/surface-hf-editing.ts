@@ -404,11 +404,12 @@ const LIFECYCLE_OPS: ReadonlySet<string> = new Set([
   'setSectionFurnitureOptions',
   'setDocumentProtection',
   'setWatermark',
+  'setSectionProperties',
 ]);
 
 /**
- * Whether every op is a package-level lifecycle write (headers, footers, watermark,
- * protection). Such a write does not happen at the caret, so the caret's position has
+ * Whether every op is a package-level write (headers, footers, watermark, protection,
+ * page setup). Such a write does not happen at the caret, so the caret's position has
  * nothing to say about it.
  */
 export function isPackageLifecycleBatch(ops: readonly { readonly op: string }[]): boolean {

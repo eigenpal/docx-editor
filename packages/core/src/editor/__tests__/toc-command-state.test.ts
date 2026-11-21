@@ -4,7 +4,7 @@
 import { afterEach, expect, test } from 'bun:test';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { docx } from './paginated-surface-fixtures.ts';
-import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
+import { detectBodyTocs, serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import type { EditorCommand } from '../../contracts/editor.ts';
 import { toolbarCommandState } from '../toolbar-commands.ts';
 import type { ChromeSlotId } from '../chrome-controls.ts';
@@ -58,6 +58,8 @@ const LINK = { type: 'insertHyperlink', href: 'https://example.com/' } as Editor
 const PROPOSE = { type: 'proposeInsertion', text: 'P', author: 'A' } as EditorCommand;
 const PROPOSE_DELETE = { type: 'proposeDeletion', author: 'A' } as EditorCommand;
 const HEADER: EditorCommand = { type: 'editHeaderFooter', position: 'header' };
+const SECTION = { type: 'insertBreak', kind: 'section' } as EditorCommand;
+const MARGINS = { type: 'setPageSetup', marginTop: 90 } as EditorCommand;
 const WATERMARK = { type: 'setWatermark', watermark: { text: 'DRAFT' } } as EditorCommand;
 
 // [label, body, selection, command, refused]
@@ -106,6 +108,9 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
   ['range across the TOC: proposed deletion', BODY, [0, 1, 4, 2], PROPOSE_DELETE, true],
   ['caret in a row: a header is not written at the caret', BODY, [1, 2, 1, 2], HEADER, false],
   ['caret in a row: a watermark is not written at the caret', BODY, [1, 2, 1, 2], WATERMARK, false],
+  ['caret in a row: page setup is not written at the caret', BODY, [1, 2, 1, 2], MARGINS, false],
+  ['caret in a row: section break', BODY, [1, 2, 1, 2], SECTION, true],
+  ['closing line: section break ends a section after the TOC', BODY, [3, 0, 3, 0], SECTION, false],
 ];
 
 for (const [label, body, place, command, refused] of CASES) {
@@ -168,4 +173,13 @@ test('the format painter refuses a selection that reaches the TOC', () => {
   expect(editor.can(paste)).toEqual({ ok: false, code: 'invalidArgs', reason: READ_ONLY });
   expect(editor.exec(paste)).toEqual(editor.can(paste));
   expect(serializeOoxmlPart(surface.session.part())).toBe(before);
+});
+
+test('a section break on the closing line keeps the field and survives save and reopen', async () => {
+  const { editor, surface } = mountAt(BODY, [3, 0, 3, 0]);
+  expect(editor.exec(SECTION)).toMatchObject({ ok: true, changed: true });
+  expect(detectBodyTocs(surface.session.part())).toHaveLength(1);
+  expect(serializeOoxmlPart(surface.session.part()).match(/<w:sectPr[ >]/g)?.length ?? 0).toBe(1);
+  editor.load(await editor.save());
+  expect(detectBodyTocs(editor.surface!.session.part())).toHaveLength(1);
 });

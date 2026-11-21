@@ -233,6 +233,21 @@ test('two editors type on the closing line and join the next paragraph into it',
     editors.push(reopened);
     expect(reopened.surface!.session.bodyText()).toBe(left.surface!.session.bodyText());
     expect(detectBodyTocs(reopened.surface!.session.part())).toHaveLength(1);
+
+    // A section break on the closing line reaches the other peer and keeps the field.
+    caret(left, closingId, 0);
+    expect(left.exec({ type: 'insertBreak', kind: 'section' })).toMatchObject({ ok: true });
+    pair.alice.room.session.flushPendingJournals();
+    await until(
+      () =>
+        right.surface!.session.paragraphIds().length === left.surface!.session.paragraphIds().length
+    );
+    for (const editor of [left, right]) {
+      expect(detectBodyTocs(editor.surface!.session.part())).toHaveLength(1);
+    }
+    const xml = async (editor: DocxEditorInstance) =>
+      strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    expect(await xml(right)).toBe(await xml(left));
   } finally {
     for (const editor of editors) editor.destroy();
     for (const container of containers) container.remove();
