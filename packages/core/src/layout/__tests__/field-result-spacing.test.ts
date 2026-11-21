@@ -202,7 +202,7 @@ test('a field result that continues into the next paragraph takes automatic spac
   }
 });
 
-test('an AutoFit cell prices the spacing inside a field result, so the result does not wrap', () => {
+test('an auto-fit cell prices the spacing inside a field result, so the result does not wrap', () => {
   const table = (content: string) =>
     '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblLayout w:type="autofit"/>' +
     '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
@@ -240,7 +240,7 @@ test('an editable saved result takes automatic spacing at its own offsets', () =
   expect(geometry(result)).toEqual(geometry(literal));
 });
 
-test('an AutoFit cell prices no gap inside a page number, which line layout keeps whole', () => {
+test('an auto-fit cell prices no gap inside a page number, which line layout keeps whole', () => {
   const lines = lineLayout(
     '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblLayout w:type="autofit"/>' +
       '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
