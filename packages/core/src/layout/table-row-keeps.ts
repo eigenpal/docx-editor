@@ -61,6 +61,7 @@ import { measureKeptMergeRows } from './table-kept-merge-measure.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { noteRowFactRead, rowFacts } from './table-row-facts.ts';
 import type { TableRowFragmentRecord } from './semantic-records.ts';
+import type { ReadHorizon } from './table-read-horizon.ts';
 
 /** Maximum rows measured for one table keep decision; paragraph lookahead is independent. */
 const MAX_TABLE_KEEP_ROWS = 256;
@@ -333,6 +334,8 @@ export interface KeptRowMeasure {
   readonly fullPageHeight?: number;
   readonly heightOf: (index: number) => number;
   readonly following: (room: number) => number | null | undefined;
+  /** Where the paginator records the rows a pricing reads (`table-read-horizon.ts`). */
+  readonly horizon?: ReadHorizon;
 }
 
 /**
@@ -373,7 +376,7 @@ export function tableKeptRowSource(measure: KeptRowMeasure): KeptRowSource {
       { requireEveryCell: true }
     );
   };
-  return {
+  const source: KeptRowSource = {
     rows,
     keepsAt,
     // `rows` is a suffix of the table's rows: the body rows, or all rows.
@@ -402,6 +405,7 @@ export function tableKeptRowSource(measure: KeptRowMeasure): KeptRowSource {
     opensWithin,
     following: measure.following,
   };
+  return measure.horizon?.track(source, structure.rows.length - rows.length) ?? source;
 }
 
 /** How a body flow reads its tables, for {@link tableEndsKept} and {@link tableKeepOpening}. */

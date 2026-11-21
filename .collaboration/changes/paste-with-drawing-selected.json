@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "While a drawing was selected, text pasted on a selected text box or shape went in before the drawing's anchor run, and inserting a picture was refused.",
+  "after": "Text pasted on a selected text box replaces the text box story. A picture inserted while editing and other pastes go in before the anchor run. A shape with no text body, a linked text box, and pasted content with a picture on a text box refuse with a reason.",
+  "reason": "The paste enters the text box story and replaces its text with the released insert, split, and range-deletion operations or the released fragment-paste path, and the picture uses the released insert-drawing operation. No released operation adds a text body to an existing shape, so that paste refuses instead of adding a new operation. Shared nodes, offsets, operations, and the collaboration format stay unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-drawing-paste-target.test.ts",
+    "packages/core/src/editor/__tests__/drawing-paste-target.test.ts"
+  ],
+  "changeset": "paste-with-drawing-selected",
+  "migration": null
+}

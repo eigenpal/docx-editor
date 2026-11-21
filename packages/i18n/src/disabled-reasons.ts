@@ -99,11 +99,11 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'in suggesting mode, remove the whole equation block rather than one equation':
     'disabledReason.equationSuggestingDisplay',
   // Keyed on `PICTURE_SELECTED_INSERT_REASON` in the engine's image lane.
-  'a picture is selected; place the caret in text to insert a picture':
+  'in suggesting mode, a picture cannot be inserted while a drawing is selected; place the caret in text to insert a picture':
     'disabledReason.pictureSelected',
-  'the drop target is stale; drop the image again': 'imageInsert.errors.staleTarget',
-  'the drop target story is no longer active': 'imageInsert.errors.staleTarget',
-  'the drop target is no longer attached': 'imageInsert.errors.staleTarget',
+  'the insert target is stale; insert the image again': 'imageInsert.errors.staleTarget',
+  'the insert target story is no longer active': 'imageInsert.errors.staleTarget',
+  'the insert target is no longer attached': 'imageInsert.errors.staleTarget',
   // Keyed on `CHART_DRAWING_REASON` in the engine's image lane (`image-state-rules.ts`).
   'this drawing is a chart; only delete applies, and it removes the whole chart':
     'disabledReason.chartDrawing',
@@ -136,6 +136,17 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
     'disabledReason.drawingClipboardParts',
   'this drawing is too large to copy': 'disabledReason.drawingClipboardSize',
   'place the caret in the text to paste a drawing': 'disabledReason.drawingPasteCells',
+  // Keyed on the paste-target reasons in the engine's drawing clipboard lane.
+  'this shape has no text to paste into; place the caret in the text to paste':
+    'disabledReason.shapePasteText',
+  'the text in this text box cannot be edited; place the caret in the text to paste':
+    'disabledReason.textBoxPaste',
+  'text cannot be pasted into a shape inside a group; press Escape to select the group':
+    'disabledReason.groupMemberPaste',
+  'text cannot be pasted into a linked text box; place the caret in the text to paste':
+    'disabledReason.linkedTextBoxPaste',
+  'a text box takes only text; paste without formatting to paste the text alone':
+    'disabledReason.textBoxPicturePaste',
   'invalid table chrome value': 'disabledReason.invalidValue',
   'invalid value for toolbar command': 'disabledReason.invalidValue',
   'unsupported table command': 'disabledReason.unavailable',

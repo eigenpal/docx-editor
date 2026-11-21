@@ -48,7 +48,7 @@ import {
   type AnchoredDrawingRecord,
   type DrawingAnchorFrameContext,
 } from './drawing-layout.ts';
-import { authoredRowFields } from './table-row-record-fields.ts';
+import { authoredCellFields, authoredRowFields } from './table-row-record-fields.ts';
 import {
   exactSpacingExtensionPt,
   rowOpeningGapPt,
@@ -1619,24 +1619,7 @@ export function layoutRowFragmentBounded(
         blocks = alignCellContent(blocks, cellAlignmentShift(entry.cell.vAlign, available));
     }
     return {
-      id: entry.cell.id,
-      ...(entry.cell.revisionShading
-        ? {
-            revisionShading: entry.cell.revisionShading,
-            revisionShadingAuthor: entry.cell.revisionShadingAuthor,
-          }
-        : {}),
-      gridColumn: entry.gridColumn,
-      ...(entry.cell.logicalGridColumn === undefined
-        ? {}
-        : { logicalGridColumn: entry.cell.logicalGridColumn }),
-      ...(entry.cell.gridColumnId ? { gridColumnId: entry.cell.gridColumnId } : {}),
-      gridSpan: entry.cell.gridSpan,
-      vMergeContinue: entry.cell.vMergeContinue,
-      ...(entry.cell.vMergeContinue ? { paintInert: true as const } : {}),
-      rowSpan: 1,
-      ...(entry.cell.shading === undefined ? {} : { shading: entry.cell.shading }),
-      ...(entry.cell.textDirection === 'btLr' ? { textDirection: 'btLr' as const } : {}),
+      ...authoredCellFields(entry.cell),
       blocks,
       box: { x: entry.x, y: rowTop + rowGapPt, width: entry.width, height: cellHeight },
     };
