@@ -236,6 +236,18 @@ test('many links in one TOC row join into one searchable range', () => {
   ]);
 });
 
+test('a TOC inside a table cell keeps the Hyperlink style until cell TOC detection exists', () => {
+  // TOC detection reads body paragraphs only. Update this test when it enters table cells.
+  const cell =
+    `<w:p>${tocBegin()}</w:p><w:p>${linkStart}${run('CellRow')}${linkEnd}</w:p>` +
+    `<w:p>${tocEnd}</w:p>`;
+  const style = stylesOf(
+    '<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc>' +
+      `<w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>${cell}</w:tc></w:tr></w:tbl>`
+  );
+  expect(style('CellRow')).toMatchObject(KEPT);
+});
+
 test('any run cascader drops the Hyperlink style ids a TOC range carries', () => {
   const table = buildStyleCascadeTable(styles.root);
   const cascade = (inherited: readonly OoxmlProperty[], direct: readonly OoxmlProperty[]) =>

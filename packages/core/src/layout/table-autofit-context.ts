@@ -10,6 +10,7 @@ import { listItemToken } from './list-marker-reuse.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import type { AutofitFieldContext, TableAutofitContext } from './table-autofit-widths.ts';
+import type { TocLinkRanges } from './toc-link-formatting.ts';
 
 /** What a table flow carries that autofit reads. */
 export interface AutofitFlowDeps extends AutofitFieldContext {
@@ -25,6 +26,8 @@ export interface AutofitFlowDeps extends AutofitFieldContext {
   readonly producer?: string;
   readonly defaultTabStopPt?: number;
   readonly compatibilityMode?: number;
+  /** Required, so a new table flow cannot skip the TOC rule. Outside a TOC, pass `undefined`. */
+  readonly tocLinkStyleRanges: TocLinkRanges | undefined;
 }
 
 /** One context per flow deps object, so every reader in a pass shares it. */

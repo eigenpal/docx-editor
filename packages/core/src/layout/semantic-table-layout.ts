@@ -272,8 +272,8 @@ export interface TableFlowDeps {
   readonly showFieldCodes?: boolean;
   /** @internal */
   readonly fieldCodeRanges?: import('./field-code-toc.ts').FieldCodeRanges;
-  /** @internal Word TOC character-style suppression. */
-  readonly tocLinkStyleRanges?: import('./toc-link-formatting.ts').TocLinkRanges;
+  /** TOC link ranges by paragraph id. Required: outside a TOC, pass `undefined`. @internal */
+  readonly tocLinkStyleRanges: import('./toc-link-formatting.ts').TocLinkRanges | undefined;
   /** Document properties for document-property fields; the same object every flow shares. */
   readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
   /**

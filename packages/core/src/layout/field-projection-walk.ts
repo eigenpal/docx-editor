@@ -5,6 +5,7 @@ import {
   recordHiddenMarkup,
 } from './revision-markup-projection.ts';
 import { tocLinkCascader } from './toc-link-formatting.ts';
+import type { DisplayWalkInput } from './field-display-input.ts';
 import { captureFieldResult } from './field-result-capture.ts';
 import { finishParagraphPieces } from './field-projection-finish.ts';
 import { breakPieceFields, hardBreakPieceFields } from './text-wrapping-break-clear.ts';
@@ -18,7 +19,6 @@ import {
   hasLegacyFormFieldData,
   isFldSimple,
   projectOmmlAtom,
-  type DocumentProperties,
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlProperty,
@@ -41,27 +41,16 @@ import {
   resetFieldParseState,
 } from './field-instruction.ts';
 import { isInsideOpenFieldInstruction } from './field-instruction-scope.ts';
-import { type BodyPageFieldContext, type FieldPageContext } from './field-page-furniture.ts';
 import { projectSimpleFieldResult } from './field-simple-result.ts';
 import { createNestedPageTracker } from './field-nested-page.ts';
-import {
-  modelTextOfRunChild,
-  hyphenDisplayOf,
-  runPropertiesOf,
-  type RunPropertyCascader,
-} from './field-run-text.ts';
+import { modelTextOfRunChild, hyphenDisplayOf, runPropertiesOf } from './field-run-text.ts';
 import { captureInstructionSpecs, formControlMarkerOf } from './field-form.ts';
-import type { RefFieldContext } from './field-ref.ts';
 import { synthesizeAtomicField } from './field-synthesis.ts';
 import { isSymbolRunChild, symbolGlyphOf, symbolRunStyle } from './symbol-run.ts';
 import {
   appendModelRange,
   positionalTabOf,
   type FieldAwarePiece,
-  type FieldLinkProjector,
-  type HyperlinkProjector,
-  type MutableChangeSite,
-  type MutableModelRange,
   capturedResultAttribution,
   projectedPieceFields,
   removedSiteRecorder,
@@ -69,7 +58,6 @@ import {
   type PendingFieldProjection,
   type PieceEmitExtras,
 } from './field-pieces.ts';
-import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { isRunDrawingAtom, runDrawingAtomPlan } from './field-drawing-atom.ts';
 import { captureFieldResultDrawing, emitAtomicFieldResult } from './field-result-drawings.ts';
 import { legacyCheckboxAccessibleName } from '../store/package/legacy-checkbox-accessibility.ts';
@@ -81,7 +69,7 @@ import {
   emptyNamespaceScope,
   namespaceScopeForNode,
 } from '../store/package/drawing-projection-walk.ts';
-import { isProjectableNoteAtom, noteAtomPiece, type NoteMarkContext } from './note-projection.ts';
+import { isProjectableNoteAtom, noteAtomPiece } from './note-projection.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   NO_REVISIONS,
@@ -92,11 +80,9 @@ import {
   revisionsVisible,
   withRevision,
   type RevisionAttribution,
-  type RevisionAuthorFilter,
-  type RevisionDisplayMode,
 } from './revision-projection.ts';
 import { resolvedFormatChangeOf } from './revision-formatting-projection.ts';
-import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
+import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { equationAtom } from './equation-piece.ts';
 import { createBidiDirectiveStack } from './bidi-directives.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
@@ -106,27 +92,28 @@ import {
 } from '../store/package/content-control-walk.ts';
 
 /** Internal view projection; the public field-reader signature stays unchanged. @internal */
-export function unmergedPiecesOfParagraphForDisplay(
-  paragraph: OoxmlNode,
-  inheritedRunProperties: readonly OoxmlProperty[] = [],
-  pageContext?: FieldPageContext,
-  cascadeRuns?: RunPropertyCascader,
-  projectLink?: HyperlinkProjector,
-  noteMarks?: NoteMarkContext,
-  displayMode: RevisionDisplayMode = DEFAULT_REVISION_DISPLAY_MODE,
-  deletedRanges?: MutableModelRange[],
-  inlineDrawingLayout?: InlineDrawingLayoutContext,
-  themeFonts?: ThemeFonts,
-  projectFieldLink?: FieldLinkProjector,
-  documentProperties?: DocumentProperties,
-  bodyPageFields: BodyPageFieldContext | false = false,
-  refFields?: RefFieldContext,
-  authorFilter?: RevisionAuthorFilter,
-  showFieldCodes = false,
-  fieldCodeRanges?: readonly import('./field-code-toc.ts').FieldCodeRange[],
-  tocLinkStyleRanges?: readonly import('./toc-link-formatting.ts').TocLinkRange[],
-  changeSites?: MutableChangeSite[]
-): FieldAwarePiece[] {
+export function unmergedPiecesOfParagraphForDisplay(input: DisplayWalkInput): FieldAwarePiece[] {
+  const {
+    paragraph,
+    inheritedRunProperties = [],
+    pageContext,
+    cascadeRuns: authoredCascade,
+    projectLink,
+    noteMarks,
+    displayMode = DEFAULT_REVISION_DISPLAY_MODE,
+    deletedRanges,
+    inlineDrawingLayout,
+    themeFonts,
+    projectFieldLink,
+    documentProperties,
+    bodyPageFields = false,
+    refFields,
+    authorFilter,
+    showFieldCodes = false,
+    fieldCodeRanges,
+    tocLinkStyleRanges,
+    changeSites,
+  } = input;
   if (paragraph.kind === 'textValue') return [];
   if (paragraph.kind !== 'paragraph') return [];
   const recordRemoved = removedSiteRecorder(changeSites, displayMode, authorFilter);
@@ -137,8 +124,10 @@ export function unmergedPiecesOfParagraphForDisplay(
   let offset = 0;
   /** A `w:fldSimple` unit's offset while its result projects, after `offset` has moved past it. */
   let simpleUnitStart: number | null = null;
-  cascadeRuns = tocLinkCascader(cascadeRuns, showFieldCodes ? undefined : tocLinkStyleRanges, () =>
-    pending?.atomic ? pending.atomStart : (simpleUnitStart ?? offset)
+  const cascadeRuns = tocLinkCascader(
+    authoredCascade,
+    showFieldCodes ? undefined : tocLinkStyleRanges,
+    () => (pending?.atomic ? pending.atomStart : (simpleUnitStart ?? offset))
   );
   /** The link the walk is currently inside, so every piece it emits is tagged with it. */
   let currentLink: SpanLinkRecord | undefined;

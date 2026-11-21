@@ -300,28 +300,25 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
     true
   );
   const fields = context.fields;
-  const projected = piecesOfParagraphForDisplay(
+  const projected = piecesOfParagraphForDisplay({
     paragraph,
-    layoutInputs.inheritedRunProperties,
-    fields?.pageContext,
-    styleCascade
+    inheritedRunProperties: layoutInputs.inheritedRunProperties,
+    pageContext: fields?.pageContext,
+    cascadeRuns: styleCascade
       ? (inherited, direct) => cascadeRunProperties(inherited, direct, styleCascade)
       : undefined,
-    undefined,
-    fields?.noteMarks,
+    noteMarks: fields?.noteMarks,
     displayMode,
-    undefined,
-    context.inlineDrawingLayout,
-    styleCascade?.themeFonts,
-    undefined,
-    fields?.documentProperties,
-    fields?.bodyPageFields ?? false,
-    fields?.refFields,
-    view.authorFilter,
-    fields?.showFieldCodes,
-    fields?.fieldCodeRanges?.get(paragraph.id),
-    tocLinkRangesOf(paragraph, fields?.tocLinkStyleRanges)
-  );
+    inlineDrawingLayout: context.inlineDrawingLayout,
+    themeFonts: styleCascade?.themeFonts,
+    documentProperties: fields?.documentProperties,
+    bodyPageFields: fields?.bodyPageFields ?? false,
+    refFields: fields?.refFields,
+    authorFilter: view.authorFilter,
+    showFieldCodes: fields?.showFieldCodes,
+    fieldCodeRanges: fields?.fieldCodeRanges?.get(paragraph.id),
+    tocLinkStyleRanges: tocLinkRangesOf(paragraph, fields?.tocLinkStyleRanges),
+  });
   const typography = resolveCjkTypography(
     layoutInputs.props,
     styleCascade?.typography,

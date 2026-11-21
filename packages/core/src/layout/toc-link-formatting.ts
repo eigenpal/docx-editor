@@ -53,6 +53,9 @@ const MAX_HYPERLINK_STYLE_IDS = 4;
  * style with the id `Hyperlink` and another name is an ordinary style here, although link
  * insertion prefers that id when it picks a style to apply. Only the first
  * {@link MAX_HYPERLINK_STYLE_IDS} such styles in document order count.
+ *
+ * Known limits: a link style under another name, such as "Internet Link", is not matched. In a
+ * file whose `Hyperlink` id has another name, a link inserted in a TOC row keeps that style.
  */
 function hyperlinkStyleIds(styles: StyleCascadeTable): readonly string[] {
   const held = hyperlinkIds.get(styles);

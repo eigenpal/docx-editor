@@ -188,3 +188,11 @@ export interface ParagraphFlowOptions {
    */
   readonly markRunProperties?: readonly OoxmlProperty[];
 }
+
+/**
+ * Flow options for a paragraph break, with the TOC link ranges stated. A new story flow cannot
+ * skip the TOC rule and still compile. Outside a TOC, pass `undefined`.
+ */
+export type TocParagraphFlowOptions = ParagraphFlowOptions & {
+  readonly tocLinkStyleRanges: ParagraphFlowOptions['tocLinkStyleRanges'];
+};

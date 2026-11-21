@@ -51,7 +51,7 @@ function widths(ranges?: TocLinkRanges) {
   if (paragraph?.kind !== 'paragraph') throw new Error('no cell paragraph');
   const context = autofitContextOf({
     measurer: boldAwareMeasurer(),
-    ...(ranges ? { tocLinkStyleRanges: ranges } : {}),
+    tocLinkStyleRanges: ranges,
   });
   const view = {
     styleCascade: styles,
