@@ -550,3 +550,52 @@ test('layout reuse width changes and save retain source text and authored format
   expect(serializeOoxmlPart(narrow.source)).toBe(narrow.before);
   expect(narrow.before).not.toContain('w:spacing');
 });
+
+test.each(['℃', '℉'])(
+  'temperature %s stays at its full width while adjacent punctuation fits',
+  (unit) => {
+    const pieces: FieldAwarePiece[] = [
+      { text: '12', start: 0, end: 2, props: [], style, fontSlot: 'ascii' },
+      { text: unit + '、', start: 2, end: 4, props: [], style, fontSlot: 'eastAsia' },
+      { text: '甲', start: 4, end: 5, props: [], style, fontSlot: 'eastAsia' },
+      { text: '乙', start: 5, end: 6, props: [], style, fontSlot: 'eastAsia' },
+    ];
+    let x = 0;
+    const spans: StyleSpanRecord[] = pieces.slice(0, 3).map((piece) => {
+      const width = measureDisplayText(
+        piece.text,
+        styleForFontSlot(style, piece.fontSlot),
+        measurer
+      );
+      const span = {
+        ...piece,
+        range: { paragraphId: 'p', start: piece.start, end: piece.end },
+        box: { x, y: 0, width, height: 16 },
+      };
+      x += width;
+      return span;
+    });
+    const line: PendingLine = {
+      spans,
+      drawings: [],
+      start: 0,
+      end: 5,
+      width: x,
+      height: 16,
+      baseline: 12,
+      leading: 0,
+      trailingSpacing: 0,
+    };
+    const fit = createCjkOpticalFitter(pieces, cjkParagraphBreaks(pieces, policy), measurer, {
+      hangingPunctuation: false,
+      requireLocalQualification: true,
+    });
+    const result = fit(line, 3, '乙', { paragraphId: 'p', start: 5, end: 6 }, 12, x, x + 9, true);
+    expect(result).toBeDefined();
+    const temperature = line.spans.find((span) => span.text === unit);
+    expect(temperature?.box.width).toBe(12);
+    expect(temperature?.range).toEqual({ paragraphId: 'p', start: 2, end: 3 });
+    expect(line.spans.find((span) => span.text === '、')?.box.width).toBe(9);
+    expect(line.width + result!.width).toBe(x + 9);
+  }
+);

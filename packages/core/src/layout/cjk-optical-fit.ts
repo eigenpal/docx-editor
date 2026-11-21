@@ -9,7 +9,6 @@ import {
 import type { SourceRange, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { measureDisplayText } from './run-style.ts';
 import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
-import { memoized, type ClusterMemo } from './cjk-optical-memo.ts';
 import {
   kanaFitCells,
   kanaCapacityOf,
@@ -24,24 +23,28 @@ import { hangingCjkPunctuationAdvance, hangsWithin } from './cjk-spacing.ts';
 import { hangsInBlankSides } from './hanging-mark-blanks.ts';
 import { formatRevisionOf } from './revision-projection.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
+import { memoized, type ClusterMemo } from './cjk-optical-memo.ts';
+import {
+  blankSided,
+  CLOSING,
+  curlyRole,
+  EAST_ASIAN_OPAQUE,
+  finiteInk,
+  fitNeighbour,
+  HAS_PUNCTUATION,
+  OPAQUE_TEXT,
+  OPENING,
+  PUNCTUATION,
+  TOLERANCE,
+  type Cell,
+} from './cjk-optical-cell.ts';
 import {
   layoutDerivedSpacingStyleForEditing,
   withLayoutDerivedSpacing,
 } from './layout-derived-spacing.ts';
 
-const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
-const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
-const PUNCTUATION = /^[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]$/u;
-const HAS_PUNCTUATION = /[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]/u;
-const TOLERANCE = 0.001;
 // The fit gate weighs expansion in units of 1/64 of an advance (see `expansionGate`).
 const EXPANSION_UNITS = 64;
-// A curly quote in the East Asian font slot fits like the matching bracket.
-function curlyRole(text: string): 'opening' | 'closing' | undefined {
-  if (text === '‘' || text === '“') return 'opening';
-  if (text === '’' || text === '”') return 'closing';
-  return undefined;
-}
 // Every fit attempt re-reads the whole line, so segmentation dominates its cost. In BMP East
 // Asian, fullwidth, curly-quote, and space text without combining kana or tone marks, each
 // code unit is one grapheme.
@@ -54,17 +57,6 @@ export function fittingClusters(text: string): readonly GraphemeSegment[] {
   for (let index = 0; index < text.length; index += 1)
     clusters.push({ index, text: text[index]!, utf16From: index, utf16To: index + 1 });
   return clusters;
-}
-interface Cell {
-  span: StyleSpanRecord;
-  readonly sourceIndex: number;
-  readonly ordinaryOpaque?: true;
-  readonly qualifiedCurly?: 'opening' | 'closing';
-  readonly natural: number;
-  readonly alreadyReduced: number;
-  readonly ink: { left: number; right: number } | undefined;
-  reduction: number;
-  shift: number;
 }
 export interface CjkOpticalFit {
   readonly candidate: readonly StyleSpanRecord[];
@@ -196,24 +188,24 @@ function cellsOf(
       if (span.fontSlot !== 'eastAsia' && !sameFaceImplicitEastAsian(span)) {
         // Ordinary base text may coexist with qualified EA punctuation. Keep its
         // complete measured span: splitting AV/fi would discard kerning/ligatures.
-        // Only a complete ASCII word can guard an adjacent EA-owned seam.
+        // Latin-face text (`AV`, `Café`, `25℃`) stays whole and can guard an adjacent
+        // EA-owned seam.
         // The whole shaped outline supplies its external ink; inkBounds answers
         // one grapheme and cannot qualify AV/fi or a numeric group as a whole.
         // The opaque cell itself can never lose advance or be split.
         const numberMarker = opaqueCjkNumberMarker(span);
         const printableAscii = /^[\x20-\x7e]+$/u.test(span.text);
         if (
-          (!printableAscii && !/^[A-Za-z0-9‘’“”]+$/u.test(span.text) && !numberMarker) ||
+          (!printableAscii &&
+            !(OPAQUE_TEXT.test(span.text) && !HAS_PUNCTUATION.test(span.text)) &&
+            !numberMarker) ||
           !Number.isFinite(span.box.width) ||
           span.box.width <= 0
         )
           return undefined;
-        // An all-space group has no ink: it blocks adjacent seams without vetoing others. A word
-        // or a Latin-face curly quote is a glyph that an adjacent blank side can face.
-        const ordinaryOpaque =
-          (printableAscii && /[^ ]/u.test(span.text)) ||
-          /^[A-Za-z0-9‘’“”]+$/u.test(span.text) ||
-          numberMarker;
+        // An all-space group has no ink: it blocks adjacent seams without vetoing others. A word,
+        // a symbol, or a Latin-face curly quote is a glyph that an adjacent blank side can face.
+        const ordinaryOpaque = numberMarker || /[^\p{White_Space}\p{Cf}\p{M}]/u.test(span.text);
         foreign ||= ordinaryOpaque;
         cells.push({
           sourceIndex,
@@ -231,17 +223,20 @@ function cellsOf(
     // Only the qualified local path reaches here with a curly quote; the paragraph gate refuses it.
     const curlyAllowed = requireLocalQualification && span.fontSlot === 'eastAsia';
     const clusters = fittingClusters(span.text);
+    // The paragraph path holds only CJK text and punctuation. On the local path, a digit,
+    // symbol, or other punctuation becomes an opaque glyph below: it keeps its advance.
+    const opaque = clusters.filter(
+      (cluster) =>
+        cluster.text !== ' ' &&
+        !isCjk(cluster.text.codePointAt(0)!) &&
+        !PUNCTUATION.test(cluster.text)
+    );
     if (
-      clusters.some(
-        (cluster) =>
-          cluster.text !== ' ' &&
-          !isCjk(cluster.text.codePointAt(0)!) &&
-          !PUNCTUATION.test(cluster.text) &&
-          !(curlyAllowed && curlyRole(cluster.text))
-      )
+      !opaque.every((cluster) => requireLocalQualification && EAST_ASIAN_OPAQUE.test(cluster.text))
     )
       return undefined;
-    foreign ||= curlyAllowed && clusters.some((cluster) => curlyRole(cluster.text));
+    // An East Asian face symbol or a curly quote, like a Latin group, keeps a tracked line out.
+    foreign ||= opaque.length > 0 || (curlyAllowed && clusters.some((c) => curlyRole(c.text)));
     // One prefix-width list per span text keeps the memo linear in the text length.
     const ends = memoized(memo, span, 'prefixEnds', span.text, () =>
       clusters.map((cluster) =>
@@ -273,9 +268,16 @@ function cellsOf(
       }
       const baseline = baselinePieces[low]!;
       const qualifiedCurly = curlyAllowed ? curlyRole(cluster.text) : undefined;
+      const opaqueGlyph =
+        requireLocalQualification &&
+        !qualifiedCurly &&
+        !isCjk(cluster.text.codePointAt(0)!) &&
+        !PUNCTUATION.test(cluster.text) &&
+        cluster.text !== ' ';
       cells.push({
         sourceIndex,
         ...(qualifiedCurly ? { qualifiedCurly } : {}),
+        ...(opaqueGlyph ? { opaqueGlyph: true as const } : {}),
         alreadyReduced: Math.max(
           0,
           (baseline.style.characterSpacingPt - span.style.characterSpacingPt) * cluster.text.length,
@@ -304,31 +306,6 @@ function cellsOf(
   if (tracked && foreign) return undefined;
   return cells;
 }
-// A glyph a blank side can face: an ideograph, punctuation, a qualified quote, or a word. A space
-// is not one.
-function fitNeighbour(cell: Cell): boolean {
-  const text = cell.span.text;
-  return (
-    cell.ordinaryOpaque === true ||
-    cell.qualifiedCurly !== undefined ||
-    PUNCTUATION.test(text) ||
-    isCjk(text.codePointAt(0)!)
-  );
-}
-function finiteInk(cell: Cell): cell is Cell & { ink: { left: number; right: number } } {
-  return (
-    cell.ink !== undefined &&
-    Number.isFinite(cell.ink.left) &&
-    Number.isFinite(cell.ink.right) &&
-    cell.ink.right >= cell.ink.left
-  );
-}
-
-const blankSided = (cell: Cell): boolean =>
-  cell.qualifiedCurly !== undefined ||
-  OPENING.test(cell.span.text) ||
-  CLOSING.test(cell.span.text) ||
-  cell.span.text === '：';
 /**
  * A justified line takes another ordinary glyph by compression only when the share of the
  * compression capacity it spends is at most the expansion that leaving the glyph off would
@@ -531,10 +508,12 @@ function fitCjkOptically(
   // Check the expansion gate against an upper bound before any word is shaped for its ink.
   // The final mark's relief (its hang or its dropped trailing half) counts as capacity.
   const relief = fullDeficit - deficit;
-  // A kana fit gates every group, a word that opens it included.
+  // A kana fit gates every group, a word that opens it included. An East Asian face symbol
+  // joins like an ideograph.
   const gate =
     (kana !== undefined && !kana.ungated) ||
     (isCjk(first.span.text.codePointAt(0)!) && !PUNCTUATION.test(first.span.text)) ||
+    first.opaqueGlyph === true ||
     OPENING.test(first.span.text)
       ? expansionGate(cells, sourceCount, available - line.width, fullDeficit)
       : undefined;

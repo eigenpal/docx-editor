@@ -985,7 +985,7 @@ When line-end punctuation hangs, the preceding text SHALL fill the measure, incl
 
 ### Requirement: East Asian punctuation fitting on mixed lines
 
-When document punctuation compression is on and the document defaults name an East Asian face, a line that also holds complete Latin words, digit groups, or ASCII symbol groups SHALL be able to fit by compressing adjacent East Asian punctuation against measured glyph ink. The Latin groups SHALL keep their natural advances and source ranges. A tracked line of only East Asian text, punctuation, and spaces SHALL fit as in a paragraph without Latin text.
+When document punctuation compression is on and the document defaults name an East Asian face, a line that also holds Latin-face words, digits, or symbols, or East Asian face symbols that are not punctuation, SHALL be able to fit by compressing adjacent East Asian punctuation against measured glyph ink. These groups and symbols SHALL keep their natural advances and source ranges. A tracked line of only East Asian text, punctuation, and spaces SHALL fit as in a paragraph without Latin text.
 
 #### Scenario: A mixed line fits by compressing punctuation
 
@@ -993,9 +993,27 @@ When document punctuation compression is on and the document defaults name an Ea
 - **THEN** the line fits by reducing only the East Asian punctuation advances
 - **AND** the Latin word keeps its natural width, and source text and offsets do not change
 
+#### Scenario: A symbol in East Asian text keeps its advance
+
+- **GIVEN** a justified line `甲℃、乙` in an East Asian face, followed by `丙`
+- **WHEN** the line is 3 pt short of fitting `丙`
+- **THEN** `、` gives 3 pt of its trailing blank side and `丙` joins the line
+- **AND** `℃` keeps its natural advance and source range
+
+#### Scenario: Blank sides beside symbols and the line-end check
+
+- **WHEN** an opening mark follows Latin-face text or an East Asian face symbol
+- **THEN** the opening mark can give its leading blank side
+- **AND** an East Asian face symbol that joins the line end passes the same expansion check as an ideograph
+
 #### Scenario: An unqualified run keeps conservative fitting
 
 - **WHEN** a run on a line that holds Latin groups has authored character spacing, horizontal scaling, complex shaping, or an unresolved face
+- **THEN** that line does not use measured-ink fitting
+
+#### Scenario: Letters and controls that cannot stay opaque keep conservative fitting
+
+- **WHEN** a line holds a letter in the East Asian face, a letter of a script other than Latin, a control character, or compressible East Asian punctuation in a Latin face
 - **THEN** that line does not use measured-ink fitting
 
 #### Scenario: A tracked line without Latin groups fits in a mixed paragraph

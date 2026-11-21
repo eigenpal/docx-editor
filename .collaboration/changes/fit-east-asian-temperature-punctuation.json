@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A symbol that is not East Asian punctuation, or Latin-face text with accents or symbols, stopped punctuation fitting on its whole line.",
+  "after": "Those symbols and Latin-face text keep their measured advances, and other East Asian punctuation on the line can fit.",
+  "reason": "Local layout changes preserve the OOXML, source text and offsets, shared edit operations and serialized collaboration state.",
+  "tests": [
+    "packages/core/src/layout/__tests__/cjk-optical-opaque-symbols.test.ts",
+    "packages/core/src/layout/__tests__/cjk-optical-local-boundaries.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-concurrent-format-merge.test.ts"
+  ],
+  "changeset": "fit-east-asian-temperature-punctuation",
+  "migration": null
+}

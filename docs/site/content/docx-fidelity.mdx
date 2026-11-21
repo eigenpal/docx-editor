@@ -329,6 +329,7 @@ East Asian spacing and punctuation rules depend on `w:rPrDefault` in the styles 
 - Without East Asian defaults, only distributed paragraphs hang marks.
 - A single-spaced line in a CJK face is 1.3 times the face's ascent plus descent.
 - Localized family names, such as `メイリオ`, resolve to the face of the English name.
+- Symbols such as `℃`, `‰`, and `①`, and Latin text with accents or symbols, keep their advances while nearby punctuation compresses. Greek or Cyrillic text, and letters set in the East Asian face, stop punctuation compression on their line.
 - Each mark's run language sets its pair class. Simplified Chinese sets `；`, `：`, and `！` like closing marks; Traditional Chinese centers `、。，．；：`. Japanese centers `；`, `：`, and `・`, and a centered mark shares a bearing only before an opening bracket.
 - Punctuation fitting keeps authored character spacing (`w:spacing` in `w:rPr`). A tracked line that holds Latin text, numbers, symbols, or curly quotes keeps its natural punctuation.
 - Table AutoFit uses compressed punctuation pairs for the minimum width.

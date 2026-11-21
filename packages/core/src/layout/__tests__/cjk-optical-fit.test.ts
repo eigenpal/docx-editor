@@ -601,22 +601,23 @@ for (const spacing of [-4, 4]) {
   }
 }
 
-// A word, a mathematical run, or a curly quote on a tracked line keeps every bracket at its
-// tracked advance, before or after the tracked text; the untracked line compresses the pair.
-test('a tracked line that holds a word, a mathematical run, or a curly quote keeps its brackets', () => {
+// A word, a mathematical run, a symbol, or a curly quote on a tracked line keeps every bracket at
+// its tracked advance, before or after the tracked text; the untracked line compresses the pair.
+test('a tracked line that holds a word, a mathematical run, a symbol, or a curly quote keeps its brackets', () => {
   const props = (spacing: number) =>
     spacing ? trackedProps(spacing) : trackedProps(0).replace(/<w:spacing[^>]*\/>/u, '');
   for (const [prefix, foreign] of [
     ['', 'AV'],
     ['AV', '甲'],
     ['', '≥'],
+    ['', '℃'],
     ['', '“乙”'],
   ] as const) {
     const text = `${prefix}甲乙丙丁戊己）（庚辛壬癸${foreign}子丑寅卯辰巳午未申酉戌亥春夏秋冬风雨雷电晴雪朝暮`;
     const brackets = (spacing: number, width: number) => {
       const first = layout(text, width, undefined, tracked, props(spacing))[0]!.spans;
       // Only a first line that holds the foreign text must keep its brackets.
-      return first.some((span) => /[A-Z≥“]/u.test(span.text))
+      return first.some((span) => /[A-Z≥℃“]/u.test(span.text))
         ? first.filter((span) => /^[（）]$/u.test(span.text))
         : [];
     };
