@@ -3,8 +3,11 @@ import { readOoxmlPart, type FieldResultsMode, type OoxmlPart } from '@docx-edit
 import {
   buildStyleCascadeTable,
   createFixedMeasurer,
+  createLayoutSession,
+  createParagraphLayoutCache,
   layoutSemanticDocument,
   paragraphFragmentsOf,
+  type SemanticLayout,
 } from '../index.ts';
 import { tocLinkCascader } from '../toc-link-formatting.ts';
 import { cascadeRunProperties } from '../style-cascade.ts';
@@ -68,17 +71,24 @@ function spansOf(switches: string, fieldResults?: FieldResultsMode) {
   return stylesOf(toc, fieldResults);
 }
 
-function stylesOf(toc: string, fieldResults?: FieldResultsMode) {
+function documentOf(toc: string): OoxmlPart {
   const outside = `<w:p><w:hyperlink w:anchor="_TocA">${run('Outside')}</w:hyperlink></w:p>`;
-  const part = read(
+  return read(
     `<w:document xmlns:w="${W}"><w:body>${toc}${outside}</w:body></w:document>`,
     '/word/document.xml'
   );
-  const layout = layoutSemanticDocument(part, 1, {
+}
+
+function stylesOf(toc: string, fieldResults?: FieldResultsMode) {
+  const layout = layoutSemanticDocument(documentOf(toc), 1, {
     measurer: createFixedMeasurer(6, 14),
     styleCascade: buildStyleCascadeTable(styles.root),
     ...(fieldResults ? { fieldResults } : {}),
   });
+  return styleLookup(layout);
+}
+
+function styleLookup(layout: SemanticLayout) {
   const spans = layout.pages
     .flatMap((page) => paragraphFragmentsOf(page))
     .flatMap((fragment) => fragment.lines)
@@ -155,6 +165,55 @@ test('deep open fields across TOC rows stay bounded and keep later links', () =>
   const style = stylesOf(toc);
   expect(style('Row150')).toMatchObject(KEPT);
   expect(style('Later')).toMatchObject(DROPPED);
+});
+
+test('a renamed Hyperlink style relays out the TOC links with a warm cache', () => {
+  const part = documentOf(
+    `<w:p>${tocBegin()}</w:p><w:p>${linkStart}${run('Row')}${linkEnd}</w:p><w:p>${tocEnd}</w:p>`
+  );
+  const renamed = read(
+    `<w:styles xmlns:w="${W}"><w:style w:type="character" w:styleId="37">` +
+      `<w:name w:val="Plain link"/>${LINK_RPR}</w:style></w:styles>`,
+    '/word/styles.xml'
+  );
+  const session = createLayoutSession();
+  const cache = createParagraphLayoutCache<never>();
+  const lay = (root: OoxmlPart['root'], revision: number) =>
+    styleLookup(
+      layoutSemanticDocument(part, revision, {
+        measurer: createFixedMeasurer(6, 14),
+        styleCascade: buildStyleCascadeTable(root),
+        cache: cache as never,
+        session,
+      })
+    );
+  expect(lay(styles.root, 1)('Row')).toMatchObject(DROPPED);
+  expect(lay(renamed.root, 2)('Row')).toMatchObject(KEPT);
+  expect(lay(styles.root, 3)('Row')).toMatchObject(DROPPED);
+});
+
+test('many styles named Hyperlink stay bounded to the first few', () => {
+  const many = read(
+    `<w:styles xmlns:w="${W}">` +
+      Array.from(
+        { length: 50 },
+        (_, index) =>
+          `<w:style w:type="character" w:styleId="L${index}"><w:name w:val="Hyperlink"/>${LINK_RPR}</w:style>`
+      ).join('') +
+      '</w:styles>',
+    '/word/styles.xml'
+  );
+  const part = documentOf(
+    `<w:p>${tocBegin()}</w:p><w:p><w:hyperlink w:anchor="_TocA">${run('Early', 'L0')}${run('Late', 'L49')}</w:hyperlink></w:p><w:p>${tocEnd}</w:p>`
+  );
+  const style = styleLookup(
+    layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      styleCascade: buildStyleCascadeTable(many.root),
+    })
+  );
+  expect(style('Early')).toMatchObject(DROPPED);
+  expect(style('Late')).toMatchObject(KEPT);
 });
 
 test('any run cascader drops the Hyperlink style ids a TOC range carries', () => {

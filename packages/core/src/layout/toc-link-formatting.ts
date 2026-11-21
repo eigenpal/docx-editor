@@ -40,18 +40,25 @@ const cache = new FieldResultsModeMemo<
   { readonly styles: StyleCascadeTable; readonly ranges: TocLinkRanges }
 >();
 const hyperlinkIds = new WeakMap<StyleCascadeTable, readonly string[]>();
+/**
+ * Style names need not be unique, but a real file names one style Hyperlink. Every range and
+ * the layout digests repeat the list, so a crafted file with many such styles stays bounded.
+ */
+const MAX_HYPERLINK_STYLE_IDS = 4;
 
 /**
  * The ids of the character styles that are the Hyperlink style. The style is known by its name;
  * its id can be localized or numeric. Only a definition without a name falls back to the id. A
  * style with the id `Hyperlink` and another name is an ordinary style here, although link
- * insertion prefers that id when it picks a style to apply.
+ * insertion prefers that id when it picks a style to apply. Only the first
+ * {@link MAX_HYPERLINK_STYLE_IDS} such styles in document order count.
  */
 function hyperlinkStyleIds(styles: StyleCascadeTable): readonly string[] {
   const held = hyperlinkIds.get(styles);
   if (held) return held;
   const ids: string[] = [];
   for (const [id, definition] of styles.styles) {
+    if (ids.length >= MAX_HYPERLINK_STYLE_IDS) break;
     if (definition.type === 'character' && (definition.name ?? id).toLowerCase() === 'hyperlink')
       ids.push(id);
   }
