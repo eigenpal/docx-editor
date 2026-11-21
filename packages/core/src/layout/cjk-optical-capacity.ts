@@ -1,5 +1,7 @@
 // What the cells of a fitted line can give, and the limits on taking it: the expansion gate,
-// the half-advance limit and Korean marks of legacy modes, and the kana shares.
+// the half-advance limit and Korean marks of legacy modes (`w:compatSetting` `compatibilityMode`
+// 14 or earlier, or none) with punctuation compression (`w:characterSpacingControl`), and the
+// kana shares.
 import type { PendingLine } from './pending-line.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
 import { isCjk, isHangul, koreanText } from './cjk-paragraph-breaks.ts';
@@ -17,8 +19,9 @@ import {
 // The fit gate weighs expansion in units of 1/64 of an advance (see `expansionGate`).
 const EXPANSION_UNITS = 64;
 /**
- * The marks of a legacy-mode line that keep their advances: a Korean mark, by its language, and
- * any mark after Hangul on the line. Korean text without marks does not stop other marks.
+ * The marks of a legacy-mode line that keep their advances: a Korean mark, by its language
+ * (`w:lang` `w:eastAsia`), and any mark after Hangul on the line. Korean text without marks does
+ * not stop other marks.
  */
 export function legacyKoreanMarks(cells: readonly Cell[]): ReadonlySet<Cell> {
   const held = new Set<Cell>();

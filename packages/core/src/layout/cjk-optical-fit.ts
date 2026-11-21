@@ -318,7 +318,10 @@ interface FitContext {
   readonly measurer: TextMeasurer;
   readonly baselinePieces: readonly FieldAwarePiece[];
   readonly requireLocalQualification: boolean;
-  /** A legacy compatibility mode limits what a candidate group may take from the line. */
+  /**
+   * A legacy compatibility mode (`w:compatSetting` `compatibilityMode` 14 or earlier, or none)
+   * limits what a candidate group may take from the line.
+   */
   readonly legacyAdmission: boolean;
   readonly memo: ClusterMemo;
   /**
@@ -645,8 +648,9 @@ export function createParagraphCjkOpticalFitter(
   preserveColonAdvances: boolean,
   justified: boolean
 ) {
-  // Compression fits a line only when the document defaults name an East Asian face, and the
-  // paragraph is justified or a legacy compatibility mode fits lines at every alignment.
+  // Compression (`w:characterSpacingControl`) fits a line only when the document defaults name
+  // an East Asian face, and the paragraph is justified (`w:jc` `both`) or a legacy compatibility
+  // mode fits lines at every alignment.
   const opticalPolicy =
     (justified || typography.settings?.legacyLineEndPunctuation === true) &&
     typography.settings?.sourceEastAsianFont === true &&
@@ -815,7 +819,8 @@ export function createCjkOpticalFitter(
     }
     // A group that fits needs no fit, and no fit can change a line it does not overflow.
     if (line.width + x - origin - available <= TOLERANCE) return undefined;
-    // A legacy mode compresses no group with Korean text, by language or Hangul, to fit a line.
+    // A legacy mode compresses no group with Korean text, by language (`w:lang` `w:eastAsia`)
+    // or Hangul, to fit a line.
     for (let index = pieceIndex; legacy && index <= currentIndex; index++)
       if (koreanText(candidates[index - pieceIndex]!.text, languageOf(pieces[index]!)))
         return undefined;

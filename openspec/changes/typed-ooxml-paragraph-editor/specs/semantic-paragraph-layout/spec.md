@@ -613,7 +613,7 @@ The layout engine SHALL fit a line by compressing East Asian punctuation against
 
 ### Requirement: East Asian punctuation fitting in legacy compatibility modes
 
-In a legacy compatibility mode (no declared mode, 11, 12, or 14), punctuation fitting SHALL apply at every alignment. An East Asian candidate group SHALL join a line only when the compression it needs, less what its own marks can still give, is at most half its natural advance. Latin words and numbers count when the group ends in a closing mark or a Latin closing quote. Punctuation-only groups, groups with other text or spaces, kana fits, and hanging marks skip the limit.
+In a legacy compatibility mode (`w:compatSetting` `compatibilityMode` absent, 11, 12, or 14) with punctuation compression (`w:characterSpacingControl`), punctuation fitting SHALL apply at every alignment. An East Asian candidate group SHALL join a line only when the compression it needs, less what its own marks can still give, is at most half its natural advance. Latin words and numbers count when the group ends in a closing mark or a Latin closing quote. Punctuation-only groups, groups with other text or spaces, kana fits, and hanging marks skip the limit.
 
 #### Scenario: A legacy mode fits lines at every alignment
 
@@ -642,7 +642,7 @@ In a legacy compatibility mode (no declared mode, 11, 12, or 14), punctuation fi
 
 ### Requirement: Korean text in legacy East Asian punctuation fitting
 
-In a legacy compatibility mode, a candidate group with Korean-language or Hangul text SHALL wrap instead of fitting. A Korean-language mark, and a mark after Hangul on the line, SHALL keep its advance; Korean text without marks SHALL NOT stop other marks from compressing.
+In a legacy compatibility mode, a candidate group with Hangul text, or text whose East Asian language (`w:lang` `w:eastAsia`) is Korean, SHALL wrap instead of fitting. A Korean-language mark, and a mark after Hangul on the line, SHALL keep its advance; Korean text without marks SHALL NOT stop other marks from compressing.
 
 #### Scenario: Korean text wraps in a legacy mode
 
