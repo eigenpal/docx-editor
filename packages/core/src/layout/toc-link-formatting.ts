@@ -2,7 +2,6 @@ import { FieldResultsModeMemo } from '../store/package/field-result-mode.ts';
 import { fnv1a64Hex } from '../store/comparators/canonical.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
-import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import {
   fldCharType,
@@ -11,22 +10,54 @@ import {
   isFldSimple,
   isInstrText,
 } from '../store/package/field-nodes.ts';
-import { MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
+import {
+  MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
+} from '../store/package/ooxml-shared.ts';
 import { detectBodyTocs, tocFieldRange } from '../store/package/toc-detect.ts';
 import {
   paragraphOffsetIndex,
   type ParagraphOffsetIndex,
 } from '../store/store/tree-op-segments.ts';
 import type { RunPropertyCascader } from './field-run-text.ts';
-import { cascadeRunProperties, type StyleCascadeTable } from './style-cascade.ts';
+import type { StyleCascadeTable } from './style-cascade.ts';
 
+/** Link content in a TOC result, which drops the Hyperlink character style. */
 export interface TocLinkRange {
   readonly start: number;
   readonly end: number;
+  /**
+   * The ids of the character styles that are the Hyperlink style, resolved from the style table
+   * by definition. Every range of one layout shares the same array.
+   */
+  readonly styleIds: readonly string[];
 }
 export type TocLinkRanges = ReadonlyMap<string, readonly TocLinkRange[]>;
+const NO_RANGES: TocLinkRanges = new Map();
 /** Offsets differ between field-result modes, so each mode keeps its own entry. */
-const cache = new FieldResultsModeMemo<OoxmlPart, TocLinkRanges>();
+const cache = new FieldResultsModeMemo<
+  OoxmlPart,
+  { readonly styles: StyleCascadeTable; readonly ranges: TocLinkRanges }
+>();
+const hyperlinkIds = new WeakMap<StyleCascadeTable, readonly string[]>();
+
+/**
+ * The ids of the character styles that are the Hyperlink style. The style is known by its name;
+ * its id can be localized or numeric. Only a definition without a name falls back to the id. A
+ * style with the id `Hyperlink` and another name is an ordinary style here, although link
+ * insertion prefers that id when it picks a style to apply.
+ */
+function hyperlinkStyleIds(styles: StyleCascadeTable): readonly string[] {
+  const held = hyperlinkIds.get(styles);
+  if (held) return held;
+  const ids: string[] = [];
+  for (const [id, definition] of styles.styles) {
+    if (definition.type === 'character' && (definition.name ?? id).toLowerCase() === 'hyperlink')
+      ids.push(id);
+  }
+  hyperlinkIds.set(styles, ids);
+  return ids;
+}
 
 /**
  * Complex fields open at a paragraph boundary. Only the outermost {@link MAX_TRACKED_FIELDS}
@@ -41,7 +72,7 @@ const NO_OPEN_FIELDS: OpenFields = { instructions: [], untracked: 0 };
 const MAX_TRACKED_FIELDS = 8;
 
 interface ParagraphLinks {
-  readonly spans: readonly TocLinkRange[];
+  readonly spans: readonly { readonly start: number; readonly end: number }[];
   /** Fields still open at the paragraph end. Each `end` in the next paragraph closes its own. */
   readonly openAtEnd: OpenFields;
 }
@@ -79,7 +110,7 @@ function linkSpansOf(
 ): ParagraphLinks {
   const held = linkSpanCache.get(paragraph);
   if (held && sameOpenFields(held.openAtStart, openAtStart)) return held;
-  const spans: TocLinkRange[] = [];
+  const spans: { start: number; end: number }[] = [];
   const add = (start: number | undefined, end: number | undefined) => {
     if (start !== undefined && end !== undefined && end > start) spans.push({ start, end });
   };
@@ -118,7 +149,9 @@ function linkSpansOf(
         field.instruction += instrTextValue(node).slice(0, LINK_INSTRUCTION_PREFIX);
       }
     }
-    for (const child of node.children) visit(child, depth + 1);
+    // Depth counts inline containers, as the offset index and TOC detection do.
+    const next = nextInlineContainerDepth(node, depth);
+    for (const child of node.children) visit(child, next);
   };
   visit(paragraph, 0);
   const openLink = fields.find((field) => isHyperlinkInstruction(field.instruction));
@@ -140,9 +173,14 @@ function linkSpansOf(
  * offset index. Its result has no offsets of its own, so the whole unit drops the style. Text
  * outside a link in such a TOC loses the Hyperlink style too.
  */
-export function tocLinkRanges(part: OoxmlPart): TocLinkRanges {
+export function tocLinkRanges(
+  part: OoxmlPart,
+  styles: StyleCascadeTable | undefined
+): TocLinkRanges {
+  const styleIds = styles ? hyperlinkStyleIds(styles) : [];
+  if (!styles || styleIds.length === 0) return NO_RANGES;
   const held = cache.get(part);
-  if (held) return held;
+  if (held?.styles === styles) return held.ranges;
   const ranges = new Map<string, TocLinkRange[]>();
   for (const toc of detectBodyTocs(part)) {
     const field = tocFieldRange(toc);
@@ -169,10 +207,10 @@ export function tocLinkRanges(part: OoxmlPart): TocLinkRanges {
       if (start === undefined || end === undefined || end <= start) continue;
       // A one-paragraph TOC is a single atomic unit, so the whole unit takes one answer.
       const linked = atom
-        ? [{ start, end }]
+        ? [{ start, end, styleIds }]
         : links.spans.flatMap((link) =>
             link.end > start && link.start < end
-              ? [{ start: Math.max(start, link.start), end: Math.min(end, link.end) }]
+              ? [{ start: Math.max(start, link.start), end: Math.min(end, link.end), styleIds }]
               : []
           );
       if (linked.length === 0) continue;
@@ -181,40 +219,14 @@ export function tocLinkRanges(part: OoxmlPart): TocLinkRanges {
       ranges.set(id, list);
     }
   }
-  cache.set(part, ranges);
+  cache.set(part, { styles, ranges });
   return ranges;
-}
-
-/** A run cascader over one style table, so a TOC walk can find the Hyperlink style by definition. */
-export interface TocAwareRunCascader extends RunPropertyCascader {
-  readonly styles: StyleCascadeTable;
-}
-
-/** Only cascaders built here pass the check, whatever properties another function carries. */
-const tocAwareCascaders = new WeakSet<RunPropertyCascader>();
-
-/** The paint and AutoFit walks build their cascader here, so TOC link ranges can apply. */
-export function tocAwareRunCascader(styles?: StyleCascadeTable): TocAwareRunCascader | undefined {
-  if (!styles) return undefined;
-  const cascade = Object.assign(
-    (inherited: readonly OoxmlProperty[], direct: readonly OoxmlProperty[]) =>
-      cascadeRunProperties(inherited, direct, styles),
-    { styles }
-  );
-  tocAwareCascaders.add(cascade);
-  return cascade;
-}
-
-function isTocAware(cascade: RunPropertyCascader): cascade is TocAwareRunCascader {
-  return tocAwareCascaders.has(cascade);
 }
 
 /**
  * Drop the Hyperlink character style reference from direct properties inside the given ranges.
- * The style is resolved by its definition in the cascader's own style table. Only a direct
- * reference is dropped: a character style based on Hyperlink keeps all its formatting. TOC ranges with a
- * cascader that is not from {@link tocAwareRunCascader} are refused: the walk throws, because
- * the result would silently keep the link formatting.
+ * Each range carries the style ids to drop, so any cascader gets the same result. Only a direct
+ * reference is dropped: a character style based on Hyperlink keeps all its formatting.
  */
 export function tocLinkCascader(
   cascade: RunPropertyCascader | undefined,
@@ -222,28 +234,17 @@ export function tocLinkCascader(
   position: () => number
 ): RunPropertyCascader | undefined {
   if (!cascade || !ranges?.length) return cascade;
-  if (!isTocAware(cascade)) {
-    throw new Error('TOC link ranges need a run cascader from tocAwareRunCascader');
-  }
-  const { styles } = cascade;
   return (inherited, direct) => {
     const at = position();
-    const linked = ranges.some((r) => at >= r.start && at < r.end);
+    const range = ranges.find((r) => at >= r.start && at < r.end);
+    if (!range) return cascade(inherited, direct);
     return cascade(
       inherited,
-      linked ? direct.filter((p) => !isHyperlinkStyleReference(p, styles)) : direct
+      direct.filter(
+        (p) => p.localName !== 'rStyle' || !range.styleIds.includes(p.attributes?.val ?? '')
+      )
     );
   };
-}
-
-function isHyperlinkStyleReference(property: OoxmlProperty, styles: StyleCascadeTable): boolean {
-  const id = property.localName === 'rStyle' ? property.attributes?.val : undefined;
-  if (!id) return false;
-  const definition = styles.styles.get(id);
-  if (definition?.type !== 'character') return false;
-  // The built-in style is known by its name; the id can be localized or numeric. Only a
-  // definition without a name falls back to the id.
-  return (definition.name ?? id).toLowerCase() === 'hyperlink';
 }
 
 const tokens = new WeakMap<TocLinkRanges, string>();
@@ -258,6 +259,8 @@ export function tocLinkStyleToken(ranges: TocLinkRanges): string {
   for (const [paragraphId, list] of ranges) {
     parts.push(paragraphId, list.map((range) => `${range.start},${range.end}`).join(';'));
   }
+  // Every range shares one style id list; a renamed style changes which references drop.
+  parts.push(...(ranges.values().next().value?.[0]?.styleIds ?? []));
   const token = fnv1a64Hex(framedTokenJoin(parts));
   tokens.set(ranges, token);
   return token;

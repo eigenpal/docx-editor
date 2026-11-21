@@ -6,7 +6,9 @@ import {
   layoutSemanticDocument,
   paragraphFragmentsOf,
 } from '../index.ts';
-import { tocAwareRunCascader, tocLinkCascader } from '../toc-link-formatting.ts';
+import { tocLinkCascader } from '../toc-link-formatting.ts';
+import { cascadeRunProperties } from '../style-cascade.ts';
+import type { OoxmlProperty } from '../../store/store/tree-op-types.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const LINK_RPR = '<w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr>';
@@ -155,14 +157,17 @@ test('deep open fields across TOC rows stay bounded and keep later links', () =>
   expect(style('Later')).toMatchObject(DROPPED);
 });
 
-test('TOC link ranges refuse a cascader that cannot resolve the Hyperlink style', () => {
-  const ranges = [{ start: 0, end: 1 }];
-  const plain = (inherited: readonly never[]) => inherited;
-  expect(() => tocLinkCascader(plain, ranges, () => 0)).toThrow(/tocAwareRunCascader/);
-  // Without ranges, any cascader passes through unchanged.
-  expect(tocLinkCascader(plain, [], () => 0)).toBe(plain);
-  const aware = tocAwareRunCascader(buildStyleCascadeTable(styles.root))!;
-  const linked = tocLinkCascader(aware, ranges, () => 0)!;
-  const reference = { localName: 'rStyle', attributes: { val: '37' } };
-  expect(linked([], [reference] as never)).toEqual(aware([], []));
+test('any run cascader drops the Hyperlink style ids a TOC range carries', () => {
+  const table = buildStyleCascadeTable(styles.root);
+  const cascade = (inherited: readonly OoxmlProperty[], direct: readonly OoxmlProperty[]) =>
+    cascadeRunProperties(inherited, direct, table);
+  const ranges = [{ start: 0, end: 1, styleIds: ['37'] }];
+  expect(tocLinkCascader(cascade, [], () => 0)).toBe(cascade);
+  const linked = tocLinkCascader(cascade, ranges, () => 0)!;
+  const reference = (val: string): OoxmlProperty => ({ localName: 'rStyle', attributes: { val } });
+  expect(linked([], [reference('37')])).toEqual(cascade([], []));
+  // Another style, and a position outside the range, keep the reference.
+  expect(linked([], [reference('Hyperlink')])).toEqual(cascade([], [reference('Hyperlink')]));
+  const outside = tocLinkCascader(cascade, ranges, () => 1)!;
+  expect(outside([], [reference('37')])).toEqual(cascade([], [reference('37')]));
 });

@@ -62,12 +62,12 @@ function widths(ranges?: TocLinkRanges) {
   return paragraphContentWidthsPt(paragraph, { context, view, tableCellStyle: undefined });
 }
 
-// Body TOC detection does not enter table cells, so the ranges come in directly here. The
-// AutoFit walk must resolve the numeric-id Hyperlink style by its definition, as paint does.
+// Body TOC detection does not enter table cells, so the ranges come in directly here, with
+// the style ids that TOC detection resolves by definition. AutoFit must drop them as paint does.
 test('AutoFit measures TOC link text in a cell without the numeric-id Hyperlink style', () => {
   const paragraph = cellParagraph(document.root)!;
   const styled = widths();
-  const linked = widths(new Map([[paragraph.id, [{ start: 0, end: 10 }]]]));
+  const linked = widths(new Map([[paragraph.id, [{ start: 0, end: 10, styleIds: ['37'] }]]]));
   // Ten characters at the default size: the bold style doubles the plain width.
   expect(linked.min).toBeGreaterThan(0);
   expect(styled.min).toBeCloseTo(2 * linked.min, 6);

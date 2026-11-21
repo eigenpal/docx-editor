@@ -53,7 +53,7 @@ import type { BodyPageFieldContext } from './field-page-furniture.ts';
 import type { FieldPageContext } from './field-projection.ts';
 import type { RefFieldContext } from './field-ref.ts';
 import type { NoteMarkContext } from './note-projection.ts';
-import { tocAwareRunCascader, type TocLinkRanges } from './toc-link-formatting.ts';
+import type { TocLinkRanges } from './toc-link-formatting.ts';
 import { cellStyleKey } from './autofit-value-token.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-display.ts';
@@ -65,7 +65,11 @@ import { continuesFitTextGroup, fitTextGroupOf, fitTextGroups } from './fit-text
 import { styleForFontSlot } from './script-itemization.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import type { SemanticTableCell, SemanticTableStructure } from './semantic-table.ts';
-import { resolveParagraphLayoutInputs, type StyleCascadeTable } from './style-cascade.ts';
+import {
+  cascadeRunProperties,
+  resolveParagraphLayoutInputs,
+  type StyleCascadeTable,
+} from './style-cascade.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
 import { centeredLegacyReachPt, contentAlignedReachPt, leadingIndentPt } from './table-origin.ts';
 import {
@@ -300,7 +304,9 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
     paragraph,
     layoutInputs.inheritedRunProperties,
     fields?.pageContext,
-    tocAwareRunCascader(styleCascade),
+    styleCascade
+      ? (inherited, direct) => cascadeRunProperties(inherited, direct, styleCascade)
+      : undefined,
     undefined,
     fields?.noteMarks,
     displayMode,

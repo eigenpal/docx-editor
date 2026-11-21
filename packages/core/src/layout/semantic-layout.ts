@@ -303,7 +303,7 @@ function* layoutInModeSteps(
   // Wrapper-only metadata (alias/tag/lock/…) lives outside flattened paragraph nodes. Fold a
   // fingerprint into the producer so incremental identity reuse cannot keep stale boundaries.
   const controlToken = contentControlContextToken(part);
-  const linkStyleRanges = tocLinkRanges(part);
+  const linkStyleRanges = tocLinkRanges(part, options.styleCascade);
   const optionsWithControlContext: SemanticLayoutOptions = {
     ...options,
     fieldCodeRanges: options.showFieldCodes ? tocCodeRanges(part) : undefined,
