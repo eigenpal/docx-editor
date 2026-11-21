@@ -10,10 +10,15 @@ import {
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { paintUnsupportedContent } from './unsupported-elements.ts';
 import {
+  adoptMovedRow,
+  createMovedTableRows,
   reflowTableFragment,
   rememberPaintedCell,
   rememberPaintedTable,
   previousTableElement,
+  type MovedTableRows,
+  type PageMovedRows,
+  type TableRepaint,
 } from './semantic-paint-table-retention.ts';
 import type { TableRowFragmentRecord } from '../layout/semantic-records.ts';
 import { applyRevisionPresentation } from './semantic-paint-revisions.ts';
@@ -1804,25 +1809,26 @@ function paintTableFragment(
   document: Document,
   fragment: TableFragmentRecord,
   ctx: DrawingPaintHostContext,
-  previous?: HTMLElement
+  previous?: HTMLElement,
+  moved?: PageMovedRows
 ): HTMLElement {
   // Rows, cells and cell paragraphs whose paint inputs are unchanged, or moved only, are kept.
   // Gap bands are cut around every cell of the fragment; a band that paints the same is kept.
-  const retained =
-    previous &&
-    reflowTableFragment(previous, fragment, {
-      leading: () => paintTableSpacingLayers(document, fragment, ctx.scale, previous),
-      scale: ctx.scale,
-      showParagraphMarks: ctx.showParagraphMarks === true,
-      row: (row) => paintTableRow(document, row, fragment, ctx),
-      cell: (cell, rowBox) => paintTableCell(document, cell, rowBox, ctx),
-      block: (block, prior) =>
-        block.kind === 'table'
-          ? paintTableFragment(document, block, ctx, prior)
-          : paintFragment(document, block, ctx),
-      // Reuse refuses lines with drawings, the only lines whose gaps depend on reading rank.
-      gapOf: (line, index) => interSpanGapBefore(line, index, () => 0),
-    });
+  const repaint: TableRepaint = {
+    leading: () => paintTableSpacingLayers(document, fragment, ctx.scale, previous),
+    scale: ctx.scale,
+    showParagraphMarks: ctx.showParagraphMarks === true,
+    row: (row) => paintTableRow(document, row, fragment, ctx),
+    cell: (cell, rowBox) => paintTableCell(document, cell, rowBox, ctx),
+    block: (block, prior) =>
+      block.kind === 'table'
+        ? paintTableFragment(document, block, ctx, prior)
+        : paintFragment(document, block, ctx),
+    // Reuse refuses lines with drawings, the only lines whose gaps depend on reading rank.
+    gapOf: (line, index) => interSpanGapBefore(line, index, () => 0),
+    ...(moved ? { moved } : {}),
+  };
+  const retained = previous && reflowTableFragment(previous, fragment, repaint);
   if (retained) return retained;
   const scale = ctx.scale;
   const element = positioned(document, 'div', fragment.box, scale);
@@ -1833,7 +1839,10 @@ function paintTableFragment(
   element.append(...paintTableSpacingLayers(document, fragment, scale));
   const rows = new Map<TableRowFragmentRecord, HTMLElement>();
   for (const row of fragment.rows) {
-    const painted = paintTableRow(document, row, fragment, ctx);
+    // A fragment that is new on its page can still take the rows that moved to it.
+    const painted =
+      (moved && adoptMovedRow(row, fragment, repaint)) ??
+      paintTableRow(document, row, fragment, ctx);
     rows.set(row, painted);
     element.append(painted);
   }
@@ -1889,7 +1898,9 @@ function paintPage(
   },
   materialize: boolean,
   /** Filled with the body block elements, so the next pass can repaint one block in place. */
-  painted?: { content?: HTMLElement; blocks?: Map<BlockFragmentRecord, HTMLElement> }
+  painted?: { content?: HTMLElement; blocks?: Map<BlockFragmentRecord, HTMLElement> },
+  /** Table rows of the previous pass that moved to this page. */
+  movedRows?: MovedTableRows
 ): HTMLElement {
   // Every drawing painted below carries this page's instance key, so a repaint of the
   // page reuses its own already-decoded <img> elements (no per-keystroke flash) without
@@ -1970,10 +1981,11 @@ function paintPage(
     content.append(rule);
   }
   const blocks = painted ? new Map<BlockFragmentRecord, HTMLElement>() : null;
+  const moved = movedRows?.page(options.tabLeaderOriginXPt);
   for (const fragment of page.fragments) {
     const block =
       fragment.kind === 'table'
-        ? paintTableFragment(document, fragment, options)
+        ? paintTableFragment(document, fragment, options, undefined, moved)
         : paintFragment(document, fragment, options);
     blocks?.set(fragment, block);
     content.append(block);
@@ -2137,7 +2149,8 @@ function adoptPageBlocks(
     readonly activeHeaderFooterRId?: string;
     readonly activeHeaderFooterPageIndex?: number;
     readonly contentControlChrome?: PaintOptions['contentControlChrome'];
-  }
+  },
+  moved: MovedTableRows | undefined
 ): RetainedPage | null {
   const content = retained.content;
   const previousBlocks = retained.blocks;
@@ -2149,6 +2162,7 @@ function adoptPageBlocks(
   };
   const blocks = new Map<BlockFragmentRecord, HTMLElement>();
   const elements: HTMLElement[] = [];
+  const pageMoved = moved?.page(blockOptions.tabLeaderOriginXPt);
   for (const fragment of page.fragments) {
     const element =
       previousBlocks.get(fragment) ??
@@ -2158,7 +2172,8 @@ function adoptPageBlocks(
             document,
             fragment,
             blockOptions,
-            previousTableElement(previousBlocks, fragment)
+            previousTableElement(previousBlocks, fragment),
+            pageMoved
           )
         : paintFragment(document, fragment, blockOptions));
     blocks.set(fragment, element);
@@ -2365,6 +2380,10 @@ export function paintSemanticLayoutWithAuthorSlots(
   const previousByIndex = previous
     ? new Map(previous.pages.map((entry) => [entry.record.index, entry]))
     : null;
+  // Table rows that move to another page keep their elements, under unchanged parameters only.
+  const movedRows = parametersUnchanged
+    ? createMovedTableRows(previous.pages, layout.pages)
+    : undefined;
 
   const pages: RetainedPage[] = layout.pages.map((page) => {
     const materialized = options.materialize?.has(page.index) ?? true;
@@ -2400,11 +2419,11 @@ export function paintSemanticLayoutWithAuthorSlots(
           page,
           furniturePainter(document, furniture)
         );
-      const adopted = kept ? adoptPageBlocks(document, prior, page, resolved) : null;
+      const adopted = kept ? adoptPageBlocks(document, prior, page, resolved, movedRows) : null;
       if (adopted) return adopted;
     }
     const painted: { content?: HTMLElement; blocks?: Map<BlockFragmentRecord, HTMLElement> } = {};
-    const element = paintPage(document, page, resolved, materialized, painted);
+    const element = paintPage(document, page, resolved, materialized, painted, movedRows);
     return {
       record: page,
       materialized,

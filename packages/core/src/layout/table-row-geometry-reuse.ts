@@ -790,7 +790,7 @@ export function moveRowToWidths(
 }
 
 /** Why a row at a new top was placed fresh; see `shiftedRowsTestRecorder`. */
-export type ShiftedRowRefusal = 'record' | 'row' | 'height' | 'cell' | 'floor';
+export type ShiftedRowRefusal = 'fields' | 'record' | 'row' | 'height' | 'cell' | 'floor';
 
 let shiftedRowsObserver: {
   moved: number;
@@ -808,7 +808,7 @@ export function shiftedRowsTestRecorder(): {
   const observer = {
     moved: 0,
     compact: 0,
-    refused: { record: 0, row: 0, height: 0, cell: 0, floor: 0 },
+    refused: { fields: 0, record: 0, row: 0, height: 0, cell: 0, floor: 0 },
   };
   shiftedRowsObserver = observer;
   return {

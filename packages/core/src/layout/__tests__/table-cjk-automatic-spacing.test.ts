@@ -219,10 +219,11 @@ test('Korean whole-word minimums retain internal text and omit only legal bounda
   expect(divided.max).toBeCloseTo(result.max, 8);
 });
 
-test('an atomic field result prevents an automatic gap across its source range', () => {
+test('an atomic field result takes the automatic gaps of literal text', () => {
   const result = widths(
     run('甲') + '<w:fldSimple w:instr=" AUTHOR ">' + run('A') + '</w:fldSimple>' + run('乙')
   );
-  expect(result.min).toBeCloseTo(natural(12), 8);
-  expect(result.max).toBeCloseTo(natural(12, 3), 8);
+  const literal = widths(run('甲A乙'));
+  expect(result.min).toBeCloseTo(literal.min, 8);
+  expect(result.max).toBeCloseTo(literal.max, 8);
 });

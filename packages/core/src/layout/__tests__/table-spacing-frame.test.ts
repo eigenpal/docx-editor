@@ -216,6 +216,43 @@ test("a row exception's side borders draw beside that row and move its cells in"
   }
 });
 
+test("a row exception that repeats the table's side borders leaves the frame alone", () => {
+  const framed = SPACING + `<w:tblBorders>${OUTER}</w:tblBorders>`;
+  const repeated =
+    `<w:tr><w:tblPrEx><w:tblBorders>${OUTER}</w:tblBorders></w:tblPrEx>` +
+    `${cell('c')}${cell('d')}</w:tr>`;
+  const [plain] = layoutTable(framed);
+  const [table] = layoutTable(framed, [row('a', 'b'), repeated]);
+  expect(box(table!, 1, 0)).toEqual(box(plain!, 1, 0));
+  expect(box(table!, 1, 1)).toEqual(box(plain!, 1, 1));
+  expect(table!.rows[1]!.spacingFrame?.rowBorders).toBeUndefined();
+  expect(spacedTableFrameBorders(table!)).toEqual(spacedTableFrameBorders(plain!));
+});
+
+test('only the row exception sides that differ from the table move the cells', () => {
+  const framed = SPACING + `<w:tblBorders>${OUTER}</w:tblBorders>`;
+  const exception = (borders: string) =>
+    `<w:tr><w:tblPrEx><w:tblBorders>${borders}</w:tblBorders></w:tblPrEx>` +
+    `${cell('c')}${cell('d')}</w:tr>`;
+  const [plain] = layoutTable(framed);
+  // The left side changes and the right side repeats the table's own border.
+  const mixed = edge('left', 48, '00B050') + edge('right', 24, 'C00000');
+  const [table] = layoutTable(framed, [row('a', 'b'), exception(mixed)]);
+  const cells = table!.rows[1]!.cells;
+  const plainCells = plain!.rows[1]!.cells;
+  expect(cells[0]!.box.x).toBeGreaterThan(plainCells[0]!.box.x);
+  expect(cells[1]!.box.x + cells[1]!.box.width).toBeCloseTo(
+    plainCells[1]!.box.x + plainCells[1]!.box.width,
+    6
+  );
+  const sides = spacedTableFrameBorders(table!)!.strokes!.length;
+  expect(sides).toBe(spacedTableFrameBorders(plain!)!.strokes!.length + 1);
+  // An exception that states only inside borders leaves both sides to the table.
+  const [inside] = layoutTable(framed, [row('a', 'b'), exception(INSIDE)]);
+  expect(inside!.rows[1]!.spacingFrame?.rowBorders).toBeUndefined();
+  expect(box(inside!, 1, 0)[0]).toBe(box(plain!, 1, 0)[0]);
+});
+
 const FRAMED = SPACING + `<w:tblBorders>${OUTER}</w:tblBorders>`;
 const lines = (count: number, tag: string) =>
   Array.from({ length: count }, (_, i) => `<w:p><w:r><w:t>${tag}${i}</w:t></w:r></w:p>`).join('');
