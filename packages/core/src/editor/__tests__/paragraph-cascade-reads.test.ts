@@ -173,6 +173,20 @@ describe('paragraph reads answer the cascade, not its floor', () => {
     expect(editor.exec({ type: 'adjustIndent', direction: 'increase' }).ok).toBe(true);
     expect(left()).toBe(3600);
   });
+
+  test('a paragraph that removes its numbering reads and steps from the margin', () => {
+    // `w:numId w:val="0"` resets the style's leading indent, so the read and the step start
+    // from where the paragraph is drawn, not from the style's 720.
+    const editor = mount(
+      '<w:p><w:pPr><w:pStyle w:val="Fancy"/><w:numPr><w:numId w:val="0"/></w:numPr></w:pPr>' +
+        '<w:r><w:t>alpha</w:t></w:r></w:p>'
+    );
+    const left = () => editor.snapshot().formatting?.indent?.left;
+    expect(left()).toBe(0);
+    expect(editor.exec({ type: 'adjustIndent', direction: 'increase' }).ok).toBe(true);
+    expect(left()).toBe(720);
+    expect(serializeOoxmlPart(editor.surface!.session.part())).toContain('w:left="720"');
+  });
 });
 
 describe('a merged paragraph reports an indent for every half', () => {
