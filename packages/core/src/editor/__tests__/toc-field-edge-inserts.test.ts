@@ -179,7 +179,6 @@ const DIVIDES_INSERTIONS = new Set([
   'splitParagraph',
   'insertTable',
   'insertToc',
-  'paste',
   'proposeInsertion',
   'insertHyperlink',
 ]);
@@ -358,3 +357,33 @@ for (const [shape, body] of SHAPES.filter(([label]) => label.startsWith('tracked
     }
     expect(failures).toEqual([]);
   });
+
+// Tracked typing at an edge inside the author's own insertion of this moment extends it.
+test('tracked typing at an edge inside your own insertion extends it (suggesting)', () => {
+  const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+  const own = (...content: string[]) =>
+    `<w:ins w:id="90" w:author="A" w:date="${now}">${content.join('')}</w:ins>`;
+  const failures: string[] = [];
+  // [body, the edge whose field character the insertion holds]
+  for (const [body, edge] of [
+    [p(begin, run('Entry 1')) + p(own(run('Pg'), end, run('Tail'))) + heading, 'end edge'],
+    [p(own(run('Before'), begin)) + p(run('Entry 1')) + p(end) + heading, 'separator edge'],
+  ] as const)
+    for (const [place, selection] of edgeSelections(mount(body).surface!.session.part())) {
+      if (!place.endsWith(edge)) continue;
+      const editor = mount(body, 'suggesting');
+      expect(editor.setEditingMode('suggesting').ok).toBe(true);
+      editor.surface!.setSelection(selection);
+      const typed = editor.exec({ type: 'insertText', text: 'ZQ' });
+      if (!typed.ok) failures.push(`${place}: refused ${JSON.stringify(typed)}`);
+      if (!typed.ok) continue;
+      const written = bodyXml(editor);
+      if (!fieldsWellFormed(written)) failures.push(`${place}: field characters no longer pair up`);
+      if ((written.match(/<w:ins /g) ?? []).length !== 1) failures.push(`${place}: ${written}`);
+      for (const toc of detectBodyTocs(editor.surface!.session.part())) {
+        expect(editor.exec({ type: 'refreshToc', tocId: toc.id }).ok).toBe(true);
+      }
+      if (!bodyXml(editor).includes('ZQ')) failures.push(`${place}: a refresh dropped the text`);
+    }
+  expect(failures).toEqual([]);
+});

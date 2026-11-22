@@ -17,7 +17,7 @@
 //     anyone else — the text never existed for them;
 //   - deleting inside an existing `w:del` does nothing, since it is already gone.
 
-import { isolateFieldEdge } from './tree-op-field-edge.ts';
+import { isolateFieldEdge, ownInsertionNow } from './tree-op-field-edge.ts';
 import { textWithHyphens } from './tree-op-inline-elements.ts';
 import { noteReferenceEndingAt, noteTypingProperties } from './note-typing-boundary.ts';
 import { trackedTypingProperties } from './fit-text-typing-boundary.ts';
@@ -340,7 +340,7 @@ function applyTrackedInsertion(
   options?: EditOptions,
   bias: 'left' | 'right' = 'left'
 ): TreeOpResult {
-  const isolated = isolateFieldEdge(original, unsplit, aim, options); // `tree-op-field-edge.ts`
+  const isolated = isolateFieldEdge(original, unsplit, aim, options, ownInsertionNow(revision));
   const { part, paragraph } = isolated ?? { part: original, paragraph: unsplit };
   const mint = createNodeIdAllocator(part);
   const offsets = paragraphOffsetIndex(paragraph);

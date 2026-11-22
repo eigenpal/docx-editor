@@ -22,6 +22,13 @@
 // (`w:hyperlink` and inline `w:sdt`), and note references (`note-lifecycle.ts`). A new lane
 // that places content at an offset asks it too. A wrapper never holds a field character at
 // its own edge, so it never holds one whose partner lies outside it.
+//
+// A run or inline wrapper that holds a field character and content past it is divided at the
+// edge first (`isolateFieldEdge`). Untracked lanes that place runs, controls, or notes then join
+// a divided insertion again around them (`rejoinDividedInsertions`), so it stays one change.
+// Range markers stay between the halves, which still form one change, since nothing that
+// holds content separates them. The tracked lane keeps the author's own insertion of this
+// moment whole instead.
 
 import { isFldChar, parsedFieldSpansOf } from '../package/field-nodes.ts';
 import {
@@ -50,6 +57,7 @@ import {
 import { orphanFieldEndAt, paragraphOffsetIndex, type InsertionSite } from './tree-op-segments.ts';
 import type { TreeOpResult } from './tree-op-types.ts';
 import { FieldResultsModeMemo } from '../package/field-result-mode.ts';
+import { sameEditingMoment } from './tree-op-tracked-adjacency.ts';
 
 /** Preorder position of each node in a paragraph, with the last position its subtree holds. */
 const orders = new WeakMap<OoxmlParagraphNode, ReadonlyMap<string, readonly [number, number]>>();
@@ -247,7 +255,9 @@ export function isolateFieldEdge(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   offset: number,
-  options?: EditOptions
+  options?: EditOptions,
+  /** Wrappers to keep whole, such as the author's own insertion that tracked typing extends. */
+  keep?: (node: OoxmlNode) => boolean
 ): IsolatedFieldEdge | null {
   const edge = fieldEdgeAt(paragraph, offset);
   let current = { part, paragraph };
@@ -261,7 +271,7 @@ export function isolateFieldEdge(
     let minted = 0; // a division mints its tail's id; none minted means nothing was divided
     const mint = () => (minted++, allocate());
     const children = current.paragraph.children.flatMap((child) => {
-      const pieces = divideAt(child, id, after, mint, 0, divided);
+      const pieces = divideAt(child, id, after, mint, 0, divided, keep);
       if (!pieces) return [child];
       return [pieces.head, pieces.tail].filter((node): node is OoxmlNode => !!node);
     });
@@ -280,6 +290,22 @@ export interface IsolatedFieldEdge {
   readonly part: OoxmlPart;
   readonly paragraph: OoxmlParagraphNode;
   readonly divided: readonly (readonly [string, string])[];
+}
+
+/** Whether `node` is this author's own insertion of this editing moment, which typing extends. */
+export function ownInsertionNow(revision: {
+  readonly author: string;
+  readonly date?: string;
+}): (node: OoxmlNode) => boolean {
+  const read = (node: OoxmlNode, name: string) =>
+    node.kind === 'textValue'
+      ? undefined
+      : node.attributes.find((a) => a.namespaceUri === WML_NAMESPACE_URI && a.localName === name)
+          ?.value;
+  return (node) =>
+    node.kind === 'revisionInsert' &&
+    read(node, 'author') === revision.author &&
+    sameEditingMoment(read(node, 'date'), revision.date);
 }
 
 /** Whether a field edge may divide `node` into two copies: runs and lossless inline wrappers. */
@@ -306,19 +332,28 @@ function divideAt(
   after: boolean,
   mint: () => string,
   depth: number,
-  divided: (readonly [string, string])[]
+  divided: (readonly [string, string])[],
+  keep?: (node: OoxmlNode) => boolean
 ): { readonly head: OoxmlNode | null; readonly tail: OoxmlNode | null } | null {
   if (node.id === id) return after ? { head: node, tail: null } : { head: null, tail: node };
   if (node.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return null;
   const index = node.children.findIndex((child) => contains(child, id));
   if (index < 0) return null;
   const child = node.children[index]!;
-  const inner = divideAt(child, id, after, mint, nextInlineContainerDepth(node, depth), divided);
+  const inner = divideAt(
+    child,
+    id,
+    after,
+    mint,
+    nextInlineContainerDepth(node, depth),
+    divided,
+    keep
+  );
   if (!inner) return null;
   const pieces = [inner.head, inner.tail].filter((piece): piece is OoxmlNode => !!piece);
   const whole = (children: readonly OoxmlNode[]) => ({ ...node, children }) as OoxmlNode;
   const spliced = whole(node.children.flatMap((item) => (item === child ? pieces : [item])));
-  if (!divisible(node))
+  if (!divisible(node) || keep?.(node))
     return after ? { head: spliced, tail: null } : { head: null, tail: spliced };
   const property = (item: OoxmlNode) =>
     isRunPropertiesNode(item) || isInlineContainerProperty(node, item);
@@ -354,7 +389,8 @@ export function rejoinDividedInsertions(
   options?: EditOptions
 ): OoxmlPart {
   let current = part;
-  for (const [headId, tailId] of divided) {
+  // Last division first: a tail divided again is the head of a later pair.
+  for (const [headId, tailId] of [...divided].reverse()) {
     const holder = parentOf(current, headId);
     if (!holder) continue;
     const from = holder.children.findIndex((child) => child.id === headId);

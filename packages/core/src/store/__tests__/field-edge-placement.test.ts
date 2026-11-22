@@ -262,7 +262,7 @@ const WRAPPED_CASES: readonly (readonly [string, (w: typeof END_AT) => TreeDocOp
 
 /**
  * Whether the halves of a divided insertion join again around the insert: untracked runs and
- * controls do. Range markers stay between the halves, which still read as one change, and a
+ * controls do. Range markers stay between the halves, which still form one change, and a
  * tracked insertion is another change between them.
  */
 const rejoins = (wrapper: string, label: string) =>
