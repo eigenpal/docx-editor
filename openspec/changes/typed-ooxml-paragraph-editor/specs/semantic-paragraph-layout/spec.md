@@ -688,7 +688,7 @@ Lines that fit East Asian punctuation SHALL distribute compression across availa
 
 ### Requirement: East Asian punctuation fitting around inline objects
 
-A justified line that holds inline pictures or other inline drawings SHALL fit by compressing East Asian punctuation on both sides of each object, in every compatibility mode. Each object SHALL keep its advance and move with the text before it. A line beside a float, or one that holds a right-to-left object, SHALL wrap instead of fitting. A paragraph that holds an inline drawing SHALL follow the qualification rules for mixed lines, so `w:noPunctuationKerning` turns its fitting off.
+A line that fits East Asian punctuation and holds inline objects (`wp:inline` in `w:drawing`, or `w:pict`) SHALL compress punctuation on both sides of each object, in every compatibility mode. Each object SHALL keep its advance and move with the text before it. A line beside a float, or one that holds a right-to-left object, SHALL wrap instead of fitting. A paragraph that holds an inline drawing SHALL follow the qualification rules for mixed lines, so `w:noPunctuationKerning` turns its fitting off.
 
 #### Scenario: Punctuation before a picture compresses
 

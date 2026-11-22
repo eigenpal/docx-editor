@@ -1,8 +1,8 @@
 {
   "impact": "no-impact",
   "fields": [],
-  "before": "A line that held an inline picture never fitted by compressing East Asian punctuation, and legacy compatibility modes admitted a final East Asian group with the same compression test as modern modes.",
-  "after": "A line with inline pictures fits by compressing punctuation on both sides of each picture, which keeps its advance and moves with the text before it. Legacy modes admit a final East Asian group only when the compression it needs, less what its own marks give, is at most half its natural advance.",
+  "before": "A line that held an inline picture never fitted by compressing East Asian punctuation.",
+  "after": "A line with inline pictures fits by compressing punctuation on both sides of each picture, which keeps its advance and moves with the text before it.",
   "reason": "This changes derived line geometry only, which each peer computes from the same shared document. Model ranges, edit operations, and serialized collaboration state remain unchanged.",
   "tests": [
     "packages/core/src/layout/__tests__/cjk-optical-demand-policy.test.ts",

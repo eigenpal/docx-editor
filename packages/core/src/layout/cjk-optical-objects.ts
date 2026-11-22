@@ -1,4 +1,5 @@
-// Inline objects on a line that demand-only East Asian fitting compresses.
+// Inline objects (`wp:inline` in `w:drawing`, or `w:pict`) on a line that East Asian punctuation
+// fitting (`w:characterSpacingControl`) compresses.
 import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
 import { shiftInlineDrawingRecord, type InlineDrawingRecord } from './drawing-layout.ts';
 import type { PendingLine } from './pending-line.ts';
@@ -9,8 +10,9 @@ const NONE: readonly InlineDrawingRecord[] = Object.freeze([]);
 
 /**
  * The inline objects of a line in source order, from the first one after the line's first text.
- * An object keeps its advance; the text around it compresses, and the object moves with the
- * text before it. Returns undefined when the line cannot fit: a passage beside a float, a
+ * An object keeps its advance, including its distances from text (`wp:inline` `distL`/`distR`);
+ * the text around it compresses, and the object moves with the text before it. Its baseline
+ * offset (`w:position`) does not change. Returns undefined when the line cannot fit: a passage beside a float, a
  * right-to-left or unplaced object, or text that does not run on from the previous text or object.
  */
 export function lineObjectsInFlow(
