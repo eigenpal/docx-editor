@@ -22,6 +22,11 @@ export interface ParagraphFlowOptions {
   readonly spaceShrink?: SpaceShrinkRule;
   /** A left tab stop past the margin is honoured, and its text may run past the margin. */
   readonly leftTabsPastMargin?: boolean;
+  /**
+   * A tab after text that ends on a custom stop at the right edge stays on the line when no
+   * stop lies past it. Table cells ignore it: there the tab opens the next line.
+   */
+  readonly edgeStopKeepsTrailingTabs?: boolean;
   /** An inline object opening its line stays on it beside a float, however wide. */
   readonly inlineObjectsBesideFloats?: boolean;
   /** Square wrapping on the largest side breaks a tie to the physical left (mode 15 and later). */

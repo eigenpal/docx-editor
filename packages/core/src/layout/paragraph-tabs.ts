@@ -302,8 +302,24 @@ export interface TabDestination {
 }
 
 /**
- * Next tab destination strictly past `currentX`, preferring custom stops then the default
- * interval. Destination is clamped to `rightEdge` so stops cannot escape the content box.
+ * How far a pen may sit short of a stop and still count as on it, in points.
+ *
+ * Pen positions are sums of measured advances from the line origin. When the first line
+ * starts left of the margin, that sum can miss a stop by a rounding error (22.699999… for a
+ * stop at 22.7). A pen that ends exactly on a stop after right-aligned text must not take
+ * the same stop again as a zero-width destination.
+ */
+export const TAB_PEN_TOLERANCE_PT = 1e-6;
+
+/** Whether a stop at `positionPt` lies past a pen at `currentX`, within the tolerance. */
+export function tabStopPastPen(positionPt: number, currentX: number): boolean {
+  return positionPt > currentX + TAB_PEN_TOLERANCE_PT;
+}
+
+/**
+ * Next tab destination past `currentX`, preferring custom stops then the default interval.
+ * A stop within {@link TAB_PEN_TOLERANCE_PT} of the pen counts as reached, not ahead.
+ * Destination is clamped to `rightEdge` so stops cannot escape the content box.
  */
 export function nextTabDestination(
   tabs: ResolvedTabStops,
@@ -315,7 +331,7 @@ export function nextTabDestination(
   for (const stop of tabs.stops) {
     if (stop.numberingOnly && !forNumbering) continue;
     if (stop.implied && forNumbering) continue;
-    if (stop.positionPt > currentX) {
+    if (tabStopPastPen(stop.positionPt, currentX)) {
       return {
         positionPt: Math.min(stop.positionPt, edge),
         alignment: stop.alignment,
@@ -324,8 +340,8 @@ export function nextTabDestination(
     }
   }
   const interval = tabs.defaultIntervalPt > 0 ? tabs.defaultIntervalPt : DEFAULT_TAB_INTERVAL_PT;
-  let next = Math.ceil((currentX + 1e-9) / interval) * interval;
-  if (next <= currentX) next += interval;
+  let next = Math.ceil((currentX + TAB_PEN_TOLERANCE_PT) / interval) * interval;
+  if (!tabStopPastPen(next, currentX)) next += interval;
   // A default-interval tab has no leader: only an authored `w:tab` can carry one.
   return {
     positionPt: Math.min(next, edge),

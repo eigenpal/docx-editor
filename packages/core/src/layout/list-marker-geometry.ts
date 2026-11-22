@@ -6,6 +6,7 @@
 import {
   EMPTY_TAB_STOPS,
   nextTabDestination,
+  tabStopPastPen,
   type ResolvedTabStops,
   type TabStop,
 } from './paragraph-tabs.ts';
@@ -106,7 +107,7 @@ function markerSlotX(item: ResolvedListItem, markerWidth: number): number {
  * stops count; the implied hanging-indent stop and the default interval do not.
  */
 function firstNumberingStopPast(tabStops: ResolvedTabStops, x: number): TabStop | undefined {
-  return tabStops.stops.find((stop) => !stop.implied && stop.positionPt > x);
+  return tabStops.stops.find((stop) => !stop.implied && tabStopPastPen(stop.positionPt, x));
 }
 
 /**

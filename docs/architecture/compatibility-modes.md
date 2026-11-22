@@ -63,6 +63,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `noteAreaHoldsSpaceAfter` | `modern` | A paragraph's space after must fit above the footnote area; in legacy modes, only a paragraph that cites a footnote needs it to fit |
 | `noteTableCellKeeps` | `modern` | Note bands in table rows honor cell widow control and `w:keepLines` |
 | `openingColumnBreakTakesNoLine` | `legacy` | A column break that opens a paragraph leaves no line in the column it ends |
+| `edgeStopKeepsTrailingTabs` | `legacy` | Outside table cells, a tab after text that ends on a custom stop at the right edge stays on that line when no stop lies past it |
 | `oversizedRowKeepGroupReleases` | `legacy` | Oversized kept row groups release before placement, except below authored headers |
 | `positionedTableBreaksAtMargin` | `modern` | A breaking page- or margin-positioned table ends its first fragment at the bottom margin; legacy modes run it to the page edge |
 | `omittedRepeatEndsPage` | `modern` | Content after a table whose last page leaves out the repeated header rows starts on the next page |
