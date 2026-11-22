@@ -198,3 +198,50 @@ test('a renumbering edit updates header numbers on a warm layout', () => {
   expect(text(warm)).toEqual(['第1章|2.1', '第2章|2.1', '第3章|3.1', '第3章|3.2', '0|3.2']);
   expect(warm.pages).toEqual(cold.pages);
 });
+
+/** A complex field whose instruction spans two runs. */
+const complexField = (name: string, suffix: string) =>
+  '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+  `<w:r><w:instrText xml:space="preserve"> STYLEREF ${name} </w:instrText></w:r>` +
+  `<w:r><w:instrText xml:space="preserve">${suffix} </w:instrText></w:r>` +
+  `<w:r><w:fldChar w:fldCharType="separate"/></w:r>${run('cached')}` +
+  '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+
+test('complex fields with a split instruction read the same numbers', () => {
+  const header = complexField('"heading 2"', '\\n') + bar + complexField('"heading 3"', '\\w \\l');
+  expect(headers(thesis, header)).toEqual([
+    '1.1|1.1(1)',
+    '1.1|1.1(1)',
+    '2.1|1.1(1)',
+    '2.2|2.2(1)',
+    '2.2|2.2(1)',
+  ]);
+});
+
+test('a tracked paragraph style change selects the style each view shows', () => {
+  const restyled =
+    '<w:p><w:pPr><w:pStyle w:val="Heading1"/><w:pageBreakBefore/>' +
+    '<w:pPrChange w:id="2" w:author="A" w:date="2024-01-01T00:00:00Z">' +
+    '<w:pPr><w:pStyle w:val="Plain"/><w:pageBreakBefore/></w:pPr></w:pPrChange></w:pPr>' +
+    `${run('Restyled')}</w:p>`;
+  const body =
+    para(run('Intro')) +
+    para(run('Alpha'), 'Heading1', true) +
+    para(run('Beta'), 'Heading1', true) +
+    restyled;
+  const header = field('"heading 1"', '\\n') + run(' ') + field('"heading 1"');
+  const { options } = laidOut(body, header);
+  const view = (displayMode: 'proposed' | 'original') =>
+    text(
+      layoutSemanticDocument(
+        part(
+          `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`,
+          '/word/document.xml'
+        ),
+        1,
+        { ...options, displayMode }
+      )
+    );
+  expect(view('proposed')).toEqual(['第1章 Alpha', '第1章 Alpha', '第2章 Beta', '第3章 Restyled']);
+  expect(view('original')).toEqual(['第1章 Alpha', '第1章 Alpha', '第2章 Beta', '第2章 Beta']);
+});

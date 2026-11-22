@@ -16,6 +16,8 @@ import { styleIdFromProps } from './style-chain.ts';
 import { isValidStyleId } from './style-definition-reader.ts';
 import { paragraphFragmentsOf } from './semantic-record-queries.ts';
 import { lineSegments } from './line-segments.ts';
+import { projectRevisionFormatting } from './revision-formatting-projection.ts';
+import { DEFAULT_REVISION_DISPLAY_MODE } from './revision-projection.ts';
 import type { SemanticLayout } from './semantic-records.ts';
 import type { SemanticLayoutOptions } from './semantic-layout-options.ts';
 import type { CharacterStyleField } from './field-character-style.ts';
@@ -178,7 +180,13 @@ export function characterStyleIndex(
         options.revisionAuthorFilter
       );
       const found: Occurrence[] = [];
-      const paragraphStyle = paragraphStyleOf(node, styles);
+      // The style the view shows: a tracked paragraph-property change can restore an older one.
+      const shown = projectRevisionFormatting(
+        node,
+        options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
+        options.revisionAuthorFilter
+      );
+      const paragraphStyle = paragraphStyleOf(shown, styles);
       if (paragraphStyle && paragraphStyles.has(paragraphStyle))
         found.push(paragraphOccurrence(node.id, paragraphStyle, pieces));
       let previous: Occurrence | undefined;
