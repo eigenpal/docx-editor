@@ -83,7 +83,7 @@ export function piecesOfParagraph(
   refFields?: RefFieldContext,
   authorFilter?: RevisionAuthorFilter
 ): FieldAwarePiece[] {
-  return piecesOfParagraphForDisplay(
+  return piecesOfParagraphForDisplay({
     paragraph,
     inheritedRunProperties,
     pageContext,
@@ -98,6 +98,8 @@ export function piecesOfParagraph(
     documentProperties,
     bodyPageFields,
     refFields,
-    authorFilter
-  );
+    authorFilter,
+    // This reader does not know the document's TOCs, so it applies no TOC link styling.
+    tocLinkStyleRanges: undefined,
+  });
 }

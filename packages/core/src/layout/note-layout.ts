@@ -330,6 +330,8 @@ export function layoutNoteStory(
   const flow = flowBlocksInBox(blocks, 0, width, 0, 0, {
     measurer: options.measurer,
     cache: options.cache,
+    // TOC detection reads the body only, so a note story has no TOC link ranges.
+    tocLinkStyleRanges: undefined,
     // The projected pieces are cached, not merely the authored paragraph text. A shared
     // exporter/browser cache can therefore only reuse them within the revision projection
     // that produced them. Keep the unfiltered default key stable, matching furniture.

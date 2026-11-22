@@ -158,7 +158,11 @@ function intrinsicFrameWidth(
     ...(compatibilityMode === undefined ? {} : { compatibilityMode }),
     styleCascade: styles,
     tabStops: inputs.tabStops,
-    flow: { firstLineOffset: inputs.indent.firstLine - inputs.indent.hanging },
+    // A drop-cap width probe paints nothing, so it applies no TOC link styling.
+    flow: {
+      firstLineOffset: inputs.indent.firstLine - inputs.indent.hanging,
+      tocLinkStyleRanges: undefined,
+    },
   });
   if (
     lines.length !== 1 ||

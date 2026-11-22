@@ -19,7 +19,7 @@ import { styleForFontSlot } from './script-itemization.ts';
 import { isDefaultGraphemeBoundary, segmentGraphemes, type GraphemeSegment } from './grapheme.ts';
 import { isCjk, koreanText, type CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
 import { hangingCjkPunctuationAdvance, hangsWithin } from './cjk-spacing.ts';
-import { hangsInBlankSides } from './hanging-mark-blanks.ts';
+import { alternateLineEndWraps, hangsInBlankSides } from './hanging-mark-blanks.ts';
 import { formatRevisionOf } from './revision-projection.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 import { memoized, type ClusterMemo } from './cjk-optical-memo.ts';
@@ -324,6 +324,8 @@ interface FitContext {
    */
   readonly legacyAdmission: boolean;
   readonly memo: ClusterMemo;
+  /** The final mark keeps its blank half: the alternate line-break rules let it wrap only. */
+  readonly finalKeepsBlank: boolean;
   /**
    * The cells of the current group's line, kept between its attempts: an attempt that fails
    * leaves the line unchanged, so the next attempt starts from copies of the same cells.
@@ -360,7 +362,7 @@ function fitCjkOptically(
   context: FitContext,
   { hangAdvance, kana }: FitAttempt
 ): CjkOpticalFit | undefined {
-  const { measurer } = context;
+  const { measurer, finalKeepsBlank } = context;
   const width = candidates.reduce((sum, candidate) => sum + candidate.box.width, 0);
   let deficit = line.width + width - available;
   if (deficit <= TOLERANCE || !measurer.inkBounds || line.drawings.length) return undefined;
@@ -398,14 +400,14 @@ function fitCjkOptically(
   const first = cells.find((cell) => cell.sourceIndex === sourceCount)!;
   const last = cells.at(-1)!;
   const beforeLast = cells.at(-2);
-  // A hanging line-end mark keeps its whole advance past the margin, so the rest of the line
+  // A hanging line-end mark keeps its hang advance past the margin, so the rest of the line
   // compresses only for the glyphs before it. A word keeps its final mark in its own cell.
   const hung =
     hangAdvance === undefined || last.sourceIndex < sourceCount
       ? 0
       : last.ordinaryOpaque
         ? hangAdvance
-        : last.span.box.width;
+        : Math.min(hangAdvance, last.span.box.width);
   const hangsLast = hung > 0;
   const fullDeficit = deficit;
   deficit -= hung;
@@ -414,10 +416,13 @@ function fitCjkOptically(
     last.qualifiedCurly === 'closing' && beforeLast !== undefined && fitNeighbour(beforeLast);
   // Otherwise the final closing bearing is removed first. A bracket's measured ink must stay
   // inside; a quote gives its whole trailing half even where its ink reaches past the middle.
+  // A semicolon gives up its blank only inside the line.
+  const closingFinal = CLOSING.test(last.span.text) && last.span.text !== '；';
   let deferredFinal = 0;
   if (
     !hangsLast &&
-    (CLOSING.test(last.span.text) || curlyFinal) &&
+    !finalKeepsBlank &&
+    (closingFinal || curlyFinal) &&
     finiteInk(last) &&
     !held?.has(last)
   ) {
@@ -848,13 +853,10 @@ export function createCjkOpticalFitter(
       x - origin - trailingWidth <= available - line.width + TOLERANCE
     )
       return undefined;
+    const groupText = candidates.map((candidate) => candidate.text).join('');
+    const finalPiece = pieces[currentIndex]!;
     const hangAdvance = hangingPunctuation
-      ? hangingCjkPunctuationAdvance(
-          candidates.map((candidate) => candidate.text).join(''),
-          pieces[currentIndex]!,
-          measurer,
-          { policy }
-        )
+      ? hangingCjkPunctuationAdvance(groupText, finalPiece, measurer, { policy })
       : undefined;
     // Kana compress to pull a line-start-prohibited character onto the line before it may
     // hang, unless its overflow fits in its blank sides. A group that hangs at its natural width
@@ -865,13 +867,16 @@ export function createCjkOpticalFitter(
       requireLocalQualification,
       legacyAdmission: legacy,
       memo,
+      finalKeepsBlank:
+        hangingPunctuation &&
+        alternateLineEndWraps(groupText.at(-1) ?? '', eastAsianLanguage(finalPiece.props), policy),
       cells: {},
     };
     const overflow = line.width + x - origin - available;
     const blank = { line, measurer, overflow, advance: hangAdvance };
-    const kanaRules = hangsInBlankSides(candidates, pieces[currentIndex]!, blank, policy)
+    const kanaRules = hangsInBlankSides(candidates, finalPiece, blank, policy)
       ? undefined
-      : kanaRulesFor(candidates, pieces[currentIndex]!);
+      : kanaRulesFor(candidates, finalPiece);
     let fitted = kanaRules
       ? fitCjkOptically(line, candidates, available, context, { kana: kanaRules })
       : undefined;
