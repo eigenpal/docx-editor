@@ -5,7 +5,7 @@ import { readDistributedSpacing } from './distributed-spacing.ts';
 import { themeCacheMaterial } from './theme-cache-material.ts';
 import { applyLigatureCompatibility } from './run-ligatures.ts';
 import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
-import { numberingLevelRank } from './numbering-level-tier.ts';
+import { numberingLevelProperties } from './numbering-level-tier.ts';
 import { withLineGrid } from './line-grid.ts';
 import { compatibilityProfileFromSettings } from './compatibility/compatibility-profile.ts';
 import { cascadeCompatibility } from './compatibility/cascade-compatibility.ts';
@@ -647,8 +647,9 @@ export function cascadeParagraphWithNumbering(
   const chain = paragraphStyleChain(table, styleId);
   // The level's `w:pPr` sits directly below the nearest `w:pPr` stating a `w:numPr`: above
   // the whole chain when that is the paragraph's own. List indents use the same rank
-  // (`numberingLevelTiers`).
-  const levelRank = numberingPPr ? numberingLevelRank(chain, directPPr) : chain.length;
+  // (`numberingLevelTiers`). A `w:numId w:val="0"` ranks there too, with its indent reset.
+  const level = numberingLevelProperties(chain, directPPr, numberingPPr);
+  const levelRank = level.rank;
   const styleProperties = (style: StyleDefinition, properties: readonly OoxmlProperty[]) =>
     tableCellStyle &&
     !table.strictTableStyleHierarchy &&
@@ -665,7 +666,7 @@ export function cascadeParagraphWithNumbering(
     ...table.docDefaultsParagraph,
     ...(tableCellStyle?.paragraphProperties ?? []),
     ...chainProperties.slice(0, levelRank).flat(),
-    ...propertiesOf(numberingPPr),
+    ...level.properties,
     ...chainProperties.slice(levelRank).flat(),
   ];
   const paragraphProperties: OoxmlProperty[] = [...inheritedParagraphProperties, ...directProps];
