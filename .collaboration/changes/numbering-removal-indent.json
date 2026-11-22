@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A paragraph that removes its numbering with numId 0 keeps the left and first-line indents of its style in layout, copied HTML, and the indent read at the start of a list item.",
+  "after": "The removal resets the inherited left and first-line indents in all three places. A right indent and an indent stated on the paragraph still apply.",
+  "reason": "The change only derives resolved paragraph properties for layout, clipboard output, and the indent value that list exit writes through the existing paragraph property operation. Canonical OOXML, source offsets, replicated operation shapes, and awareness messages remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/numbering-removal-indent.test.ts",
+    "packages/core/src/editor/__tests__/list-backspace.test.ts",
+    "packages/core/src/editor/__tests__/clipboard-html-write.test.ts"
+  ],
+  "changeset": "numbering-removal-indent",
+  "migration": null
+}
