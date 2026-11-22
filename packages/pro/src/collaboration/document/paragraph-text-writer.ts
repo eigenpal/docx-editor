@@ -390,7 +390,8 @@ export function routeInlineEffects(
         splitMarkMoves(registry).shownChildIds(paragraphId, listed),
         (id) => sharedChildShell(registry, id)
       );
-      for (const childId of shown) {
+      // A block two peers moved here at once is listed twice and shows once, at the first.
+      for (const childId of new Set(shown)) {
         const block = scratch.placeholder(childId, registry.kindOf(childId) ?? 'generic');
         block.block = true;
         block.parent = paragraphId;
