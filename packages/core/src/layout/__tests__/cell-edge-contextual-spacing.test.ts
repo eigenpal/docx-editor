@@ -29,8 +29,9 @@ const styles = (defaultStyle = true) =>
   buildStyleCascadeTable(
     read(
       `<w:styles xmlns:w="${W}">` +
+        // Without the flag, a style named "Normal" would still be the default, so it is renamed.
         `<w:style w:type="paragraph"${defaultStyle ? ' w:default="1"' : ''} w:styleId="Normal">` +
-        '<w:name w:val="Normal"/></w:style>' +
+        `<w:name w:val="${defaultStyle ? 'Normal' : 'Plain'}"/></w:style>` +
         '<w:style w:type="paragraph" w:styleId="Other"><w:name w:val="Other"/></w:style>' +
         '<w:style w:type="paragraph" w:styleId="Child"><w:name w:val="Child"/>' +
         '<w:basedOn w:val="Normal"/></w:style>' +
