@@ -386,3 +386,33 @@ describe('an undo of one concurrent split of a paragraph that proposes its own b
           }
         });
 });
+
+describe("an undo of a split whose paragraph shows another author's proposal", () => {
+  for (const formatter of ['bob', 'carol'] as const)
+    for (const { label, ids } of ORDERS)
+      test(`${formatter} formats, then Bob undoes his split (${label})`, async () => {
+        const r = await room(TEXT, ids);
+        try {
+          await splitRounds(r, [{ index: 0, alice: 'g; ', bob: 'c; ' }]);
+          // The edit lists Alice's proposal in the paragraph Bob's split created.
+          later();
+          await format(r[formatter].runtime, 0, 'alignment');
+          r.sync();
+          if (formatter === 'bob') {
+            expect(r.bob.room.session.undo()).toBe(true);
+            r.sync();
+          }
+          later();
+          expect(r.bob.room.session.undo()).toBe(true);
+          r.sync();
+          await r.expectAll(['a; b; c; d; e; f; g; ', 'h; i; j;', 'Signed'], 1);
+          await r.expectJoinerConverges();
+          later();
+          await rejectAll(r.carol.runtime);
+          r.sync();
+          await r.expectAll([TEXT, 'Signed'], 0);
+        } finally {
+          r.close();
+        }
+      });
+});

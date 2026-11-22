@@ -26,7 +26,12 @@ import { INLINE_FIELD } from './paragraph-text.ts';
 import { whileSteppingReplaced, whileUndoingCreations } from './undo-delete-filter.ts';
 import { ownDeletedRecords, redoRefusedDeletes } from './tombstone-guard.ts';
 import { noteUndoneParagraphTargets, undoKeeps } from './undo-unlisted-text.ts';
-import { undoKeepsProperties } from './undo-kept-properties.ts';
+import {
+  relistUndoneProposals,
+  undoKeepsProperties,
+  undoneProposals,
+  type UndoneProposal,
+} from './undo-kept-properties.ts';
 
 /**
  * The part members a part always lists. Numbering definitions are not among them: concurrent
@@ -166,12 +171,14 @@ export function stepHistory(
   // it is popped and changes nothing. An ungrouped step may still pass over ungrouped
   // steps below it that changed nothing, as without groups, but stops above a group step.
   const grouped = popped?.meta.get(GROUP_STEP) === true;
+  let proposals: readonly UndoneProposal[] = [];
   if (copiesOnly || (runs.length > 0 && nothingElse(registry, popped))) {
     stack.pop();
   } else {
     const below = stack.splice(0, grouped ? stack.length - 1 : aboveLastGroupStep(stack));
     try {
       if (direction === 'undo') {
+        proposals = undoneProposals(registry, popped);
         noteUndoneParagraphTargets(registry.doc, registry.schema.nodes, popped, (write) =>
           registry.doc.transact(write, RESTORE_ORIGIN)
         );
@@ -207,6 +214,7 @@ export function stepHistory(
   // so each paragraph they touch reads its text again once, not once per write. No undo
   // stack tracks that transaction.
   registry.doc.transact(() => {
+    relistUndoneProposals(registry, proposals);
     afterStep();
     if (direction === 'redo' && popped) {
       redoRefusedDeletes(registry.doc, registry.schema.nodes, popped as YjsStep, ownDeletes, () => {
