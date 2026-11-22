@@ -16,6 +16,10 @@ import { resolveInternalTarget } from '../package/opc-names.ts';
 import type { RelationshipRecord } from '../package/relationships.ts';
 import { escapeXmlAttribute } from '../package/sinks.ts';
 import { attributeValueOf } from './tree-op-nodes.ts';
+import {
+  defaultParagraphStyleIdOfElements,
+  MAX_DEFAULT_STYLE_CANDIDATES,
+} from '../package/default-paragraph-style.ts';
 
 export const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const RELS_XMLNS = 'http://schemas.openxmlformats.org/package/2006/relationships';
@@ -231,6 +235,7 @@ export function stylesIndexOf(pkg: OoxmlPackage, documentPart: string): StylesIn
   const part = stylesPartOf(pkg, documentPart);
   const byId = new Map<string, OoxmlElement>();
   const defaults: OoxmlElement[] = [];
+  const styleElements: OoxmlElement[] = [];
   let docDefaults: OoxmlElement | null = null;
   if (part && isElementNode(part.root)) {
     for (const child of part.root.children) {
@@ -248,7 +253,15 @@ export function stylesIndexOf(pkg: OoxmlPackage, documentPart: string): StylesIn
       ) {
         defaults.push(child);
       }
+      if (styleElements.length < MAX_DEFAULT_STYLE_CANDIDATES) styleElements.push(child);
     }
+  }
+  // The default paragraph style travels even where no `w:default` names it: the copy's
+  // unstyled paragraphs were painted in it.
+  const defaultParagraph = defaultParagraphStyleIdOfElements(styleElements);
+  const defaultParagraphStyle = defaultParagraph ? byId.get(defaultParagraph) : undefined;
+  if (defaultParagraphStyle && !defaults.includes(defaultParagraphStyle)) {
+    defaults.push(defaultParagraphStyle);
   }
   return { part, byId, defaults, docDefaults };
 }

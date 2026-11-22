@@ -902,6 +902,19 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('font-size:20pt');
   });
 
+  test('without w:default, the paragraph style named "Normal" cascades under bare runs', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        styles:
+          FORMAT_DOC_DEFAULTS +
+          '<w:style w:type="paragraph" w:styleId="a"><w:name w:val="Normal"/>' +
+          '<w:rPr><w:color w:val="224466"/></w:rPr></w:style>',
+        body: '<w:p><w:r><w:t>plain</w:t></w:r></w:p>',
+      })
+    );
+    expect(html).toContain('color:#224466');
+  });
+
   test('highlight wins over shading and toggles honour explicit off values', () => {
     const html = interopHtmlFromFragment(
       fragment({
