@@ -401,6 +401,8 @@ export type CellVerticalAlign = 'top' | 'center' | 'bottom';
 export interface CjkTypographySettings {
     readonly after: Readonly<Record<string, string>>;
     // @internal
+    readonly alternateLineEndFit?: true;
+    // @internal
     readonly balancedSpaceShrink?: true;
     // @internal
     readonly balancedWidths?: true;
