@@ -77,9 +77,20 @@ function contains(range: TocParagraphRange, offset: number): boolean {
   if (range.endsHere && range.end < range.length && offset >= range.end) return false;
   return offset >= range.start && offset <= range.end;
 }
+/**
+ * Whether content written at `offset` lands in the field result. The field's own edges are
+ * outside it, even where the caret counts as inside a row ({@link contains}): content placed
+ * there goes before the begin `w:fldChar` or after the end `w:fldChar`
+ * (`store/store/tree-op-field-edge.ts`).
+ */
+function writeLandsInside(range: TocParagraphRange, offset: number): boolean {
+  if (range.startsHere && offset === range.start) return false;
+  if (range.endsHere && offset === range.end) return false;
+  return contains(range, offset);
+}
 /** Whether a write over `[start, end)` of the range's paragraph reaches generated content. */
 function rangeTouches(range: TocParagraphRange, start: number, end: number): boolean {
-  return start === end ? contains(range, start) : start < range.end && end > range.start;
+  return start === end ? writeLandsInside(range, start) : start < range.end && end > range.start;
 }
 /**
  * Whether a paragraph-level write (its properties or its mark) reaches generated content:
@@ -172,7 +183,12 @@ export function opTouchesTocRange(
  * the batch, so a later op's offsets are read back through the text that earlier ops insert
  * or delete: a link wrapped around text the batch just typed names that text, not the TOC.
  */
-export function batchTouchesTocRange(part: OoxmlPart, ops: readonly TreeDocOp[]): boolean {
+export function batchTouchesTocRange(
+  part: OoxmlPart,
+  ops: readonly TreeDocOp[],
+  /** The batch is attributed as tracked changes when committed (suggesting mode). */
+  tracked = false
+): boolean {
   const edits: { paragraphId: string; at: number; inserted: number; deleted: number }[] = [];
   const before: BatchOffset = (paragraphId, offset) => {
     let at = offset;
@@ -192,7 +208,8 @@ export function batchTouchesTocRange(part: OoxmlPart, ops: readonly TreeDocOp[])
         inserted: op.text.length,
         deleted: 0,
       });
-    } else if (op.op === 'deleteText') {
+    } else if (op.op === 'deleteText' && !op.revision && !tracked) {
+      // A tracked deletion strikes the text in place, so later offsets do not move.
       const deleted = op.end - op.start;
       edits.push({ paragraphId: op.paragraphId, at: op.start, inserted: 0, deleted });
     }
@@ -295,7 +312,7 @@ export function tocRefusesRunFormatting(
     ranges.some((r) => {
       if (r.paragraphId !== span.paragraphId) return false;
       if (span.start === span.end)
-        return contains(r, span.start) || (writesEmptyMark && r.length === 0);
+        return writeLandsInside(r, span.start) || (writesEmptyMark && r.length === 0);
       const end = Math.min(span.end, r.length);
       if (span.start >= end) return paragraphWriteTouches(r);
       // Text before `r.start` or after `r.end` is ordinary and keeps its write.

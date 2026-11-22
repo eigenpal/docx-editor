@@ -14,6 +14,7 @@ import { detectBodyTocs, serializeOoxmlPart, type OoxmlPart } from '@docx-editor
 import type { EditorCommand, ExecResult } from '../../contracts/editor.ts';
 import type { SemanticSelection } from '../../layout/semantic-interaction.ts';
 import { stubReviewModule } from './review-test-module.ts';
+import { reviewModule } from './replace-accepted-text-fixture.ts';
 import { validateRasterHeader, type ImageDecodePort } from '../../store/package/image-resources.ts';
 import { tocParagraphRanges } from '../surface-toc-ranges.ts';
 
@@ -134,13 +135,14 @@ afterEach(() => {
   for (const editor of editors.splice(0)) editor.destroy();
 });
 
-function mount(body: string): DocxEditorInstance {
+/** Suggesting mode needs a review module that tracks changes; editing mode needs comments. */
+function mount(body: string, mode: 'editing' | 'suggesting' = 'editing'): DocxEditorInstance {
   const editor = createDocxEditor({
     container: document.createElement('div'),
     document: docx(body),
     author: 'A',
     imageDecodePort,
-    modules: [stubReviewModule()],
+    modules: [mode === 'suggesting' ? reviewModule() : stubReviewModule()],
   });
   editors.push(editor);
   return editor;
@@ -218,53 +220,57 @@ for (const [shape, body] of SHAPES) {
     expect(detectBodyTocs(editor.surface!.session.part())).toHaveLength(expected);
   });
 
-  for (const [command, probe] of COMMANDS) {
-    test(`${shape}: ${command.type} at every edge stays outside the field`, async () => {
-      const places = edgeSelections(mount(body).surface!.session.part());
-      expect(places.length).toBeGreaterThan(0);
-      const failures: string[] = [];
-      for (const [place, selection] of places) {
-        // A picture over selected text is refused anywhere (it replaces a selected drawing),
-        // so only carets ask where a picture goes.
-        const caret = selection.anchor.offset === selection.head.offset;
-        if (command.type === 'insertImage' && !caret) continue;
-        const editor = mount(body);
-        const surface = editor.surface!;
-        surface.setSelection(selection);
-        const before = bodyXml(editor);
-        const tocs = detectBodyTocs(surface.session.part()).length;
-        const { can, result } = await attempt(editor, command);
-        const fail = (why: string) => failures.push(`${place}: ${why}`);
-        if (!result.ok) {
-          if (can.ok) fail(`can ok, exec refused (${'reason' in result ? result.reason : ''})`);
-          if (bodyXml(editor) !== before) fail('a refusal changed the document');
-          continue;
+  for (const [command, probe] of COMMANDS)
+    for (const mode of ['editing', 'suggesting'] as const) {
+      test(`${shape}: ${command.type} at every edge stays outside the field (${mode})`, async () => {
+        const places = edgeSelections(mount(body).surface!.session.part());
+        expect(places.length).toBeGreaterThan(0);
+        const failures: string[] = [];
+        for (const [place, selection] of places) {
+          // A picture over selected text is refused anywhere (it replaces a selected drawing),
+          // so only carets ask where a picture goes.
+          const caret = selection.anchor.offset === selection.head.offset;
+          if (command.type === 'insertImage' && !caret) continue;
+          // Chart insertion is unavailable in suggesting mode anywhere, so it asks nothing here.
+          if (command.type === 'insertChart' && mode === 'suggesting') continue;
+          const editor = mount(body, mode);
+          const surface = editor.surface!;
+          if (mode === 'suggesting') expect(editor.setEditingMode('suggesting').ok).toBe(true);
+          surface.setSelection(selection);
+          const before = bodyXml(editor);
+          const tocs = detectBodyTocs(surface.session.part()).length;
+          const { can, result } = await attempt(editor, command);
+          const fail = (why: string) => failures.push(`${place}: ${why}`);
+          if (!result.ok) {
+            if (can.ok) fail(`can ok, exec refused (${'reason' in result ? result.reason : ''})`);
+            if (bodyXml(editor) !== before) fail('a refusal changed the document');
+            continue;
+          }
+          if (!can.ok) fail(`exec ok, can refused (${can.reason})`);
+          const written = bodyXml(editor);
+          const added = command.type === 'insertToc' ? 1 : 0;
+          if (!fieldsWellFormed(written)) fail('field characters no longer pair up');
+          if (added === 0 && fieldCharWrappers(written) !== fieldCharWrappers(before)) {
+            fail('a wrapper now holds a field character');
+          }
+          if (detectBodyTocs(surface.session.part()).length !== tocs + added)
+            fail('TOC count changed');
+          const inserted = probe(written);
+          if (inserted <= probe(before)) fail('nothing was inserted');
+          for (const toc of detectBodyTocs(surface.session.part())) {
+            const refreshed = editor.exec({ type: 'refreshToc', tocId: toc.id });
+            if (!refreshed.ok) fail(`refresh refused (${refreshed.reason})`);
+          }
+          const after = bodyXml(editor);
+          if (!fieldsWellFormed(after)) fail('field characters no longer pair up after a refresh');
+          for (const [, anchor] of after.matchAll(/<w:hyperlink [^>]*w:anchor="([^"]+)"/g)) {
+            if (!after.includes(`w:name="${anchor}"`)) fail(`a refresh left a link to ${anchor}`);
+          }
+          if (!COUNT_CHANGES_ON_REFRESH.has(command.type) && probe(after) !== inserted) {
+            fail(`a refresh dropped the insert (${inserted} -> ${probe(after)})`);
+          }
         }
-        if (!can.ok) fail(`exec ok, can refused (${can.reason})`);
-        const written = bodyXml(editor);
-        const added = command.type === 'insertToc' ? 1 : 0;
-        if (!fieldsWellFormed(written)) fail('field characters no longer pair up');
-        if (added === 0 && fieldCharWrappers(written) !== fieldCharWrappers(before)) {
-          fail('a wrapper now holds a field character');
-        }
-        if (detectBodyTocs(surface.session.part()).length !== tocs + added)
-          fail('TOC count changed');
-        const inserted = probe(written);
-        if (inserted <= probe(before)) fail('nothing was inserted');
-        for (const toc of detectBodyTocs(surface.session.part())) {
-          const refreshed = editor.exec({ type: 'refreshToc', tocId: toc.id });
-          if (!refreshed.ok) fail(`refresh refused (${refreshed.reason})`);
-        }
-        const after = bodyXml(editor);
-        if (!fieldsWellFormed(after)) fail('field characters no longer pair up after a refresh');
-        for (const [, anchor] of after.matchAll(/<w:hyperlink [^>]*w:anchor="([^"]+)"/g)) {
-          if (!after.includes(`w:name="${anchor}"`)) fail(`a refresh left a link to ${anchor}`);
-        }
-        if (!COUNT_CHANGES_ON_REFRESH.has(command.type) && probe(after) !== inserted) {
-          fail(`a refresh dropped the insert (${inserted} -> ${probe(after)})`);
-        }
-      }
-      expect(failures).toEqual([]);
-    });
-  }
+        expect(failures).toEqual([]);
+      });
+    }
 }

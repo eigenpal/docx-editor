@@ -3022,7 +3022,7 @@ export function mountPaginatedSurface(
         !formattingOutsideToc &&
         !isWriteAwayFromCaret(ops) &&
         selectionTouchesToc()) ||
-        batchTouchesTocRange(session.part(), ops))
+        batchTouchesTocRange(session.part(), ops, editingMode === 'suggest'))
     ) {
       return TOC_READ_ONLY_REFUSAL;
     }

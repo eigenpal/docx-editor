@@ -1624,9 +1624,10 @@ function applyInsertHyperlink(
     if (childSegments.length === 0) {
       // Zero-length content takes the bucket its POSITION puts it in: a bookmark marker
       // inside the linked range belongs inside the link, one before it stays outside.
-      // At a field's end, its end character stays outside the link (`tree-op-field-edge.ts`).
-      const out = cursor < op.start || fieldEdgeSide(paragraph, op.start, child) === 'before';
-      (out && cursor <= op.start ? before : cursor < op.end ? inside : after).push(child);
+      // A field character at the link's start edge stays outside the link, so the link never
+      // holds one whose partner lies outside it (`tree-op-field-edge.ts`).
+      const edge = cursor === op.start && fieldEdgeSide(paragraph, op.start, child) !== null;
+      (cursor < op.start || edge ? before : cursor < op.end ? inside : after).push(child);
       continue;
     }
     const childStart = childSegments[0]!.start;

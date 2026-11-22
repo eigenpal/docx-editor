@@ -155,3 +155,22 @@ test('a link over the text after a shared-run end character leaves the character
   const xml = sharedAfter({ op: 'insertHyperlink', ...END_AT, start: 2, end: 6, anchor: 'x' }, 1);
   expect(at(xml, '<w:hyperlink')).toBeGreaterThan(at(xml, 'w:fldCharType="end"'));
 });
+
+test("a link over a field's first result text leaves the field code outside the link", () => {
+  const xml = paragraphAfter(
+    { op: 'insertHyperlink', ...BEGIN_AT, start: 6, end: 11, anchor: 'x' },
+    0
+  );
+  expect(at(xml, '<w:hyperlink')).toBeGreaterThan(at(xml, 'w:fldCharType="separate"'));
+  expect(xml.slice(at(xml, '<w:hyperlink'))).toContain('Entry');
+});
+
+test('a tracked insertion at a field edge stays outside when the field character shares a run', () => {
+  const revision = { author: 'A', date: '2024-01-01T00:00:00Z' };
+  const begin = sharedAfter({ op: 'insertText', ...BEGIN_AT, text: 'Z', revision }, 0);
+  expect(at(begin, '>Z<')).toBeLessThan(
+    begin.lastIndexOf('w:fldCharType="begin"', at(begin, 'TOC'))
+  );
+  const end = sharedAfter({ op: 'insertText', ...END_AT, text: 'Z', revision }, 1);
+  expect(at(end, '>Z<')).toBeGreaterThan(at(end, 'w:fldCharType="end"'));
+});

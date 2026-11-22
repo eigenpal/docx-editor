@@ -17,9 +17,11 @@
 // them. Fields closed inside one paragraph are atoms of the offset model and need no rule.
 //
 // The lanes that place content at an offset and ask this module: insertion sites (typed text,
-// run nodes, drawings, fields, through `insertionSite`), range markers (bookmarks and
-// comments, `markerSiteAt`), wrappers (`w:hyperlink` and inline `w:sdt`), and note
-// references (`note-lifecycle.ts`). A new lane that places content at an offset asks it too.
+// run nodes, drawings, fields, through `insertionSite`), tracked insertions
+// (`tree-op-tracked.ts`), range markers (bookmarks and comments, `markerSiteAt`), wrappers
+// (`w:hyperlink` and inline `w:sdt`), and note references (`note-lifecycle.ts`). A new lane
+// that places content at an offset asks it too. A wrapper never holds a field character at
+// its own edge, so it never holds one whose partner lies outside it.
 
 import { isFldChar, parsedFieldSpansOf } from '../package/field-nodes.ts';
 import type {
@@ -63,7 +65,7 @@ function orderOf(paragraph: OoxmlParagraphNode): ReadonlyMap<string, readonly [n
 
 const orphanBegins = new FieldResultsModeMemo<OoxmlParagraphNode, ReadonlyMap<number, string>>();
 
-/** The first `w:fldChar w:fldCharType="begin"` at `offset` whose field ends in a later paragraph. */
+/** The first begin `w:fldChar` at `offset` whose field ends in a later paragraph. */
 function orphanFieldBeginAt(paragraph: OoxmlParagraphNode, offset: number): string | undefined {
   let begins = orphanBegins.get(paragraph);
   if (!begins) {

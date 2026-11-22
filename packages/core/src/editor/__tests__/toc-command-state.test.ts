@@ -509,3 +509,15 @@ test('a table after an end mark inside a paragraph has no place, and says so', (
   expect(editor.can(TABLE)).toEqual({ ok: false, code: 'invalidArgs', reason });
   expect(editor.exec(TABLE)).toEqual(editor.can(TABLE));
 });
+
+test('Enter right before a TOC that begins mid-paragraph leaves a caret that can type before it', () => {
+  const { editor, surface } = mountAt(INLINE, [0, 6, 0, 6]);
+  expect(editor.exec({ type: 'splitParagraph' } as EditorCommand)).toMatchObject({ ok: true });
+  expect(surface.state().selection.head.offset).toBe(0);
+  expect(editor.can(TYPE)).toEqual({ ok: true });
+  expect(editor.exec(TYPE)).toMatchObject({ ok: true, changed: true });
+  const xml = serializeOoxmlPart(surface.session.part());
+  expect(xml.indexOf('>X<')).toBeLessThan(xml.indexOf('fldCharType="begin"'));
+  expect(xml.indexOf('>X<')).toBeGreaterThan(xml.indexOf('Before'));
+  expect(detectBodyTocs(surface.session.part())).toHaveLength(1);
+});

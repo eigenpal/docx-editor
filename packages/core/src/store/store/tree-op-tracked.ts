@@ -6,12 +6,10 @@
 // and re-labels them, `w:t` becoming `w:delText` inside a `w:del`. That asymmetry is the
 // whole point of tracking: the reader has to be able to see what would go.
 //
-// WHY THE PARAGRAPH IS REBUILT rather than surgically patched. `w:ins` and `w:del` are
-// paragraph-level (`EG_PContent`), not run-level, so tracking a change in the middle of a run
-// means splitting that run and placing a sibling between the halves — and the run may sit
-// inside a hyperlink, inside another revision, or both. A single ordered rebuild handles
-// every nesting the same way; a set of splice-in-place edits needs a separate case for each
-// and gets the offsets wrong the first time two of them overlap.
+// WHY THE PARAGRAPH IS REBUILT rather than patched: `w:ins` and `w:del` are paragraph-level
+// (`EG_PContent`), so tracking a change mid-run splits the run, which may sit inside a link,
+// another revision, or both. One ordered rebuild handles every nesting the same way; splice
+// edits need a case for each and get the offsets wrong once two of them overlap.
 //
 // Word's merge rules are followed where they are observable in the file:
 //   - typing inside your own `w:ins` EXTENDS it rather than nesting a second one;
@@ -19,6 +17,7 @@
 //     anyone else — the text never existed for them;
 //   - deleting inside an existing `w:del` does nothing, since it is already gone.
 
+import { isolateFieldEdge } from './tree-op-field-edge.ts';
 import { textWithHyphens } from './tree-op-inline-elements.ts';
 import { noteReferenceEndingAt, noteTypingProperties } from './note-typing-boundary.ts';
 import { trackedTypingProperties } from './fit-text-typing-boundary.ts';
@@ -333,14 +332,16 @@ export function applyInsertTrackedRun(
 }
 
 function applyTrackedInsertion(
-  part: OoxmlPart,
-  paragraph: OoxmlParagraphNode,
+  original: OoxmlPart,
+  unsplit: OoxmlParagraphNode,
   aim: number,
   payload: TrackedInsertionPayload,
   revision: RevisionAttributionInput,
   options?: EditOptions,
   bias: 'left' | 'right' = 'left'
 ): TreeOpResult {
+  const isolated = isolateFieldEdge(original, unsplit, aim, options); // `tree-op-field-edge.ts`
+  const { part, paragraph } = isolated ?? { part: original, paragraph: unsplit };
   const mint = createNodeIdAllocator(part);
   const offsets = paragraphOffsetIndex(paragraph);
   const effect: TreeOpEffect = {
@@ -358,9 +359,8 @@ function applyTrackedInsertion(
   // deletion first — so by the time this runs, the struck words are already in the tree at
   // the caret. The insertion adopts their DATE, so the pair reads as one moment, and lands
   // right after them, so the pair reads as one replacement. It does NOT adopt their `@w:id`:
-  // Word numbers every revision element uniquely and writes a replacement as `w:del` then
-  // `w:ins` under two ids, and a reader that keys on the id — the reporter's tooling did —
-  // saw one collided revision where Word writes two. Nothing here needs the shared id: the
+  // every revision element has its own id, a replacement is `w:del` then `w:ins` under two,
+  // and a reader keyed on the id saw one collided revision. Nothing here needs the shared id: the
   // review lane pairs the halves on adjacency (the only thing that works for a file this
   // engine did not write) and resolves both addresses in one transaction, and undo is the
   // transaction's, not the id's.
