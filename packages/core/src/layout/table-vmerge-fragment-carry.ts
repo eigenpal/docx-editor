@@ -1,5 +1,14 @@
 // Carry bounded merged text between physical row groups without changing the tree.
 // The carried record keeps the authored head row and cell identity on every page.
+//
+// A vertical merge (17.4.85 `w:vMerge`) whose rows cross a page break keeps every row at its
+// own height. The rows of the span stay on the page beside the head row as space allows, and
+// the merged text breaks at the page boundary and continues beside the rows on the next page.
+// Only merged text taller than all the span's rows grows the last row. This applies to every
+// row kind: `w:cantSplit`, `hRule="exact"`, and ordinary rows that can split.
+//
+// A two-row merge takes this path only while both rows fit the current page. When the second
+// row cannot start on this page, `table-vmerge-boundary.ts` and the head-row split decide.
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type {
   SemanticTableCell,
@@ -131,6 +140,13 @@ export interface VMergeFragmentCarry {
     placed: LayoutRowBoundedResult,
     bottom: number
   ): LayoutRowBoundedResult;
+  /**
+   * Whether merged text this row still carries places a line between `top` and `bottom`.
+   * `undefined` when the row carries no text past a page break, so the row's own cells decide.
+   * The last row of a span can continue only to hold the merged text, and then its own cells
+   * have nothing left to place.
+   */
+  carriedTextFitsAt(index: number, top: number, bottom: number): boolean | undefined;
   finish(rows: TableRowFragmentRecord[]): TableRowFragmentRecord[];
   publish(
     records: TableRowFragmentRecord[],
@@ -202,14 +218,13 @@ export function createVMergeFragmentCarry(
     for (const [candidateIndex, group] of candidates.entries()) {
       const overlapsBefore = previousEnd >= group.first;
       previousEnd = Math.max(previousEnd, group.last);
-      if (group.last - group.first < 2) continue;
       if (overlapsBefore || (candidates[candidateIndex + 1]?.first ?? Infinity) <= group.last)
         continue;
       if (!group.heads.every((head) => textOnly(head.cell, nodeBudget))) continue;
       let valid = true;
       for (let index = group.first; index <= group.last; index++) {
         const row = rows[index]!;
-        if (row.isHeader || (!row.cantSplit && row.height.rule !== 'exact')) {
+        if (row.isHeader) {
           valid = false;
           break;
         }
@@ -516,9 +531,11 @@ export function createVMergeFragmentCarry(
       if (!group) return row;
       if (index === group.first && !group.active && prepare(group)) {
         const total = group.heights.reduce((sum, height) => sum + height, 0);
+        const physicalTotal = group.physicalHeights.reduce((sum, height) => sum + height, 0);
         group.active =
           top + total > bottom + EPSILON &&
-          group.physicalHeights.every((height) => height <= bottom + EPSILON);
+          group.physicalHeights.every((height) => height <= bottom + EPSILON) &&
+          (group.last - group.first >= 2 || top + physicalTotal <= bottom + EPSILON);
       }
       return group.active ? emptied(group, row) : row;
     },
@@ -530,6 +547,44 @@ export function createVMergeFragmentCarry(
       // nonbreaking tail moves whole to the next page. A tail taller than a
       // page starts on a fresh page and adjustPlacement splits it there.
       return { heightFloorPt: group.heights[index - group.first] };
+    },
+    carriedTextFitsAt(index, top, bottom) {
+      const group = atRow.get(index);
+      if (!group?.active || index !== group.last) return undefined;
+      const pending = group.heads.filter((head) => !head.complete);
+      if (pending.length === 0) return undefined;
+      let lineId = 0;
+      const probeDeps: TableFlowDeps = {
+        ...stripAnchorSinksForProbe(deps),
+        cache: undefined,
+        borderOwnershipBudget: undefined,
+        vMergeResolveBudget: undefined,
+        onCellBreakKey: undefined,
+        nextLineId: () => `probe-vmerge-carried-start-${lineId++}`,
+      };
+      return pending.some((head) => {
+        const row: SemanticTableRow = {
+          ...group.source,
+          height: { rule: 'auto' },
+          cantSplit: false,
+          cells: [{ ...head.cell, vAlign: 'top' }],
+        };
+        const cursors = initialCellCursors(row);
+        if (head.cursor) cursors[0] = head.cursor;
+        return layoutRowFragmentBounded(
+          row,
+          structure.columnWidthsPt,
+          left(),
+          top,
+          bottom,
+          false,
+          head.cursor !== null,
+          0,
+          probeDeps,
+          cursors,
+          structure.cellSpacingPt
+        ).fitted;
+      });
     },
     adjustPlacement(index, placed, bottom) {
       const group = atRow.get(index);
@@ -550,6 +605,7 @@ export function createVMergeFragmentCarry(
         { record: TableRowFragmentRecord; source: SemanticTableRow }[]
       >();
       const replacements = new Map<number, TableRowFragmentRecord>();
+      const replacementSources = new Map<number, SemanticTableRow>();
       const coveredByGroup = new Map<Group, number[]>();
       for (const [index, record] of records.entries()) {
         const authored = rowIndex.get(record.id);
@@ -581,6 +637,22 @@ export function createVMergeFragmentCarry(
           group.heads.map((head) => [head.cell.id, placeHead(group, head, first, bottom, x, final)])
         );
         group.fragmentStart = undefined;
+        // `w:vAlign` places the merged text only in the fragment that holds the head row. A
+        // fragment that continues the text from an earlier page fills from the top, and so
+        // does one whose last row splits at the page bottom while the text goes on after it.
+        const topAligned =
+          first.id !== group.source.id ||
+          (last.hasContinuation === true && group.heads.some((head) => !head.complete));
+        const headSource: SemanticTableRow = topAligned
+          ? {
+              ...group.source,
+              cells: group.source.cells.map((cell) =>
+                group.heads.some((head) => head.cell.id === cell.id)
+                  ? { ...cell, vAlign: 'top' as const }
+                  : cell
+              ),
+            }
+          : group.source;
         const headRecord: TableRowFragmentRecord = {
           ...group.headRecord,
           ...(first.id === group.source.id ? {} : { isContinuation: true }),
@@ -601,13 +673,14 @@ export function createVMergeFragmentCarry(
         };
         if (first.id === group.source.id) {
           // Nonmerged head-row cells were already placed and keep their original records.
+          replacementSources.set(firstIndex, headSource);
           replacements.set(firstIndex, {
             ...first,
             cells: first.cells.map((cell) => placed.get(cell.id) ?? cell),
           });
         } else {
           const pending = insertions.get(firstIndex) ?? [];
-          pending.push({ record: headRecord, source: group.source });
+          pending.push({ record: headRecord, source: headSource });
           insertions.set(firstIndex, pending);
           const originalInsets = insets.get(first);
           if (originalInsets) insets.set(headRecord, originalInsets);
@@ -635,9 +708,10 @@ export function createVMergeFragmentCarry(
         outRows.push(replacement);
         const sourceIndex = rowIndex.get(record.id);
         outSources.push(
-          replacements.has(index) && sourceIndex !== undefined
-            ? rows[sourceIndex]!
-            : sources[index]!
+          replacementSources.get(index) ??
+            (replacements.has(index) && sourceIndex !== undefined
+              ? rows[sourceIndex]!
+              : sources[index]!)
         );
         const originalInsets = insets.get(record);
         if (replacement !== record && originalInsets) insets.set(replacement, originalInsets);
