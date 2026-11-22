@@ -588,7 +588,12 @@ export function* paginateTableInFlowSteps(
     // others stay open to a covered row.
     const heldByOpenSpan = vMerge?.coveredFromAbove === true;
 
-    const { admitsRepeatedHeaders } = rules;
+    // A continued last span row that only carries merged text has no cell text of its own
+    // left, so the merged text decides whether its next line fits below the repeat.
+    const admitsRepeatedHeaders: typeof rules.admitsRepeatedHeaders = (top, clearingFloat) =>
+      (isContinuation &&
+        fragmentCarry.current?.carriedTextFitsAt(bodyRowIndex, top, contentHeight()) === true) ||
+      rules.admitsRepeatedHeaders(top, clearingFloat);
 
     if (clearance) {
       const continued = () => isContinuation;
@@ -815,6 +820,7 @@ export function* paginateTableInFlowSteps(
         isContinuation = true;
         movedToFreshPage = false;
         breakForContinuation(admitsRepeatedHeaders);
+        fragmentCarry.current.continuedAt(bodyRowIndex, flow.cursorY);
         continue;
       }
 
@@ -968,6 +974,7 @@ export function* paginateTableInFlowSteps(
       isContinuation = true;
       movedToFreshPage = false;
       breakForContinuation(admitsRepeatedHeaders);
+      fragmentCarry.current.continuedAt(bodyRowIndex, flow.cursorY);
     }
   }
   placeClosingCellSpacing(flow, structure, pageBottom());
