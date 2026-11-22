@@ -40,6 +40,7 @@ function attempt(
     localQualification?: boolean;
     available?: number;
     spanFlags?: Partial<StyleSpanRecord>;
+    legacy?: boolean;
   } = {}
 ) {
   const prefix = options.prefix ?? '甲。乙“';
@@ -82,7 +83,26 @@ function attempt(
     pieces,
     cjkParagraphBreaks(pieces, DEFAULT_CJK_TYPOGRAPHY),
     m,
-    { hangingPunctuation: false, requireLocalQualification: options.localQualification ?? true }
+    {
+      hangingPunctuation: false,
+      requireLocalQualification: options.localQualification ?? true,
+      ...(options.legacy === undefined
+        ? {}
+        : {
+            policy: {
+              ...DEFAULT_CJK_TYPOGRAPHY,
+              settings: {
+                strict: false,
+                compression: 'compressPunctuation' as const,
+                punctuationKerning: true,
+                sourceEastAsianFont: true,
+                before: {},
+                after: {},
+                ...(options.legacy ? { legacyLineEndPunctuation: true as const } : {}),
+              },
+            },
+          }),
+    }
   )(
     line,
     1,
@@ -362,4 +382,12 @@ test('a qualified quote gives its whole half-em even where its ink crosses the m
   const closing = spansOf('甲乙。丙”', 48, 'eastAsia', wide);
   expect(closing).toHaveLength(1);
   expect(widthOf(closing[0]!, '”')).toBe(6);
+});
+
+test('a legacy mode limits a group that ends with a curly quote like other closing marks', () => {
+  // 120pt of text: the group 戊” gives its own trailing half, then may take 12pt from the line.
+  const options = { prefix: '甲。乙。丙。丁“', suffix: '戊”' };
+  expect(attempt({ ...options, available: 101.5, legacy: false }).result).toBeDefined();
+  unchanged(attempt({ ...options, available: 101.5, legacy: true }));
+  expect(attempt({ ...options, available: 102.5, legacy: true }).result).toBeDefined();
 });

@@ -668,7 +668,7 @@ Lines that fit East Asian punctuation SHALL distribute compression across availa
 
 #### Scenario: Two blank sides fit more than half a glyph
 
-- **GIVEN** a justified 12 pt line `甲。乙，丙` followed by more ideographs, with document punctuation compression
+- **GIVEN** a justified 12 pt line `甲。乙，丙` followed by more ideographs, with document punctuation compression, in compatibility mode 15
 - **WHEN** the measure is 48.6 pt, 11.4 pt short of the natural width
 - **THEN** the whole line fits by compressing both blank sides
 - **AND** at 48.5 pt the last ideograph wraps
@@ -685,6 +685,17 @@ Lines that fit East Asian punctuation SHALL distribute compression across availa
 - **GIVEN** a closing mark followed by an opening mark, two closing marks, or two opening marks
 - **WHEN** the line needs compression to fit
 - **THEN** both blank sides at that seam compress
+
+### Requirement: East Asian punctuation fitting around inline objects
+
+A line that fits East Asian punctuation and holds inline objects (`wp:inline` in `w:drawing`, or `w:pict`) SHALL compress punctuation on both sides of each object, in every compatibility mode. Each object SHALL keep its advance and move with the text before it. A line beside a float, or with a right-to-left object, SHALL wrap. A paragraph with an inline object SHALL use the mixed-line rules, so `w:noPunctuationKerning` turns fitting off.
+
+#### Scenario: Punctuation before a picture compresses
+
+- **GIVEN** a justified line with punctuation seams, then an inline picture, then ideographs, and document punctuation compression
+- **WHEN** the next ideograph fits only when the seams compress
+- **THEN** the seams compress and the picture moves left by the same amount
+- **AND** the picture keeps its width
 
 ### Requirement: Punctuation pair classes by language
 

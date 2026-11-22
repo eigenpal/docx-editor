@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A line that held an inline picture never fitted by compressing East Asian punctuation.",
+  "after": "A line with inline pictures fits by compressing punctuation on both sides of each picture, which keeps its advance and moves with the text before it.",
+  "reason": "This changes derived line geometry only, which each peer computes from the same shared document. Model ranges, edit operations, and serialized collaboration state remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/cjk-optical-demand-policy.test.ts",
+    "packages/core/src/layout/__tests__/cjk-optical-inline-picture.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-picture-spacing.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-inline-picture-rotation.test.ts"
+  ],
+  "changeset": "fit-east-asian-lines-with-inline-pictures",
+  "migration": null
+}

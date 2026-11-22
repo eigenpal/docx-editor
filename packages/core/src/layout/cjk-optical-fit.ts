@@ -21,6 +21,7 @@ import { isCjk, koreanText, type CjkParagraphBreaks } from './cjk-paragraph-brea
 import { hangingCjkPunctuationAdvance, hangsWithin } from './cjk-spacing.ts';
 import { alternateLineEndWraps, hangsInBlankSides } from './hanging-mark-blanks.ts';
 import { formatRevisionOf } from './revision-projection.ts';
+import { createObjectPlacer, lineObjectsInFlow } from './cjk-optical-objects.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 import { memoized, type ClusterMemo } from './cjk-optical-memo.ts';
 import {
@@ -86,7 +87,11 @@ function allowedStyle(span: Pick<StyleSpanRecord, 'style' | 'props' | 'revisions
     !formatRevisionOf(span.props)
   );
 }
-/** Unsupported paragraphs retain their existing wrapping and whitespace path. */
+/**
+ * Unsupported paragraphs retain their existing wrapping and whitespace path. A paragraph with an
+ * inline drawing is not pure here: it fits through the mixed-line path, whose per-line fitter
+ * keeps each object's advance (`lineObjectsInFlow` in `cjk-optical-objects.ts`).
+ */
 export function canFitCjkOptically(pieces: readonly FieldAwarePiece[]): boolean {
   return pieces.every(
     (piece) =>
@@ -365,7 +370,7 @@ function fitCjkOptically(
   const { measurer, finalKeepsBlank } = context;
   const width = candidates.reduce((sum, candidate) => sum + candidate.box.width, 0);
   let deficit = line.width + width - available;
-  if (deficit <= TOLERANCE || !measurer.inkBounds || line.drawings.length) return undefined;
+  if (deficit <= TOLERANCE || !measurer.inkBounds) return undefined;
   if (
     !kana &&
     !candidates.some((span) => HAS_PUNCTUATION.test(span.text)) &&
@@ -380,18 +385,8 @@ function fitCjkOptically(
       deficit > kanaFitBound(line, candidates))
   )
     return undefined;
-  // Do not redistribute spacing across separate float passages.
-  for (let index = 1; index < line.spans.length; index++) {
-    const previous = line.spans[index - 1]!;
-    const current = line.spans[index]!;
-    const gap = automaticTextSpacingBefore(current);
-    if (
-      !Number.isFinite(gap) ||
-      gap < 0 ||
-      Math.abs(previous.box.x + previous.box.width + gap - current.box.x) > TOLERANCE
-    )
-      return undefined;
-  }
+  const objects = lineObjectsInFlow(line, candidates);
+  if (!objects) return undefined;
   const sourceCount = line.spans.length;
   const cells = lineCells(context, line, candidates);
   if (!cells) return undefined;
@@ -583,8 +578,10 @@ function fitCjkOptically(
   // that are kana with the same equal share: their letter spacing paints the same geometry,
   // and later stages measure one span instead of one per character.
   let previous: { span: StyleSpanRecord; cell: Cell } | undefined;
+  const placer = createObjectPlacer(objects);
   for (const cell of cells) {
     const source = cell.span;
+    x = placer.before(source.range.start, x);
     // Preserve witnessed inter-script advances; they are not compression capacity.
     if (cell.sourceIndex > 0 && cell.sourceIndex < sourceCount)
       x += automaticTextSpacingBefore(source);
@@ -631,6 +628,7 @@ function fitCjkOptically(
     }
   }
   spanStarts[sourceCount] = spans.length;
+  placer.commit(line);
   line.spans.length = 0;
   for (const span of spans) line.spans.push(span);
   line.width = available + hung - candidateWidth;

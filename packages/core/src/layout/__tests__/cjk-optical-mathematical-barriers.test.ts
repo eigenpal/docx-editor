@@ -179,7 +179,7 @@ test('resolved source face, authored tracking, scale, and complex direction gate
   ])
     reject(setup({ style: { ...style, ...delta } as ResolvedRunStyle }));
 });
-test('field revision projected caret float and inline-object ownership cannot qualify a mathematical barrier', () => {
+test('field revision projected caret float and unplaced inline-object ownership cannot qualify a mathematical barrier', () => {
   for (const delta of [
     { projected: true },
     { fieldAtom: {} },
