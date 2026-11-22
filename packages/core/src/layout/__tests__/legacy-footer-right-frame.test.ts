@@ -143,11 +143,9 @@ describe('a right-aligned PAGE frame over the footer text', () => {
       expect(framed.box.y).toBeCloseTo(0.05, 6);
       expect(framed.lines[0]!.box.y - anchor.lines[0]!.box.y).toBeCloseTo(0.05, 6);
       expect(inkRight(framed)).toBeCloseTo(WIDTH, 6);
-      expect(story.flowHeight).toBeCloseTo(
-        Math.max(framed.box.y + framed.box.height, anchor.box.y + anchor.box.height),
-        6
-      );
-      expect(story.flowHeight).toBeLessThan(alone.box.height + 1);
+      // The text-anchored frame takes no room: the story reserves the anchor's height only.
+      expect(story.flowHeight).toBeCloseTo(anchor.box.y + anchor.box.height, 6);
+      expect(story.flowHeight).toBeCloseTo(alone.box.y + alone.box.height, 6);
       // Two addressable paragraphs; the source is untouched.
       expect(framed.paragraphId).not.toBe(anchor.paragraphId);
       expect(story.part).toBe(part);
@@ -173,15 +171,17 @@ describe('a right-aligned PAGE frame over the footer text', () => {
     }
   });
 
-  test('a larger page-number face sets the footer height from the frame', () => {
+  test('a larger page-number face keeps the footer height of its anchor', () => {
     const story = lay(body, cascade(false, '<w:sz w:val="40"/>'));
     const { framed, anchor } = paragraphs(story);
-    const plain = paragraphs(lay(body));
+    const plain = lay(body);
     expect(framed.lines[0]!.box.height).toBeGreaterThan(anchor.lines[0]!.box.height);
-    expect(anchor.box).toEqual(plain.anchor.box);
+    expect(anchor.box).toEqual(paragraphs(plain).anchor.box);
     expect(framed.box.y).toBeCloseTo(0.05, 6);
     expect(inkRight(framed)).toBeCloseTo(WIDTH, 6);
-    expect(story.flowHeight).toBeCloseTo(framed.box.y + framed.box.height, 6);
+    // The frame ends below the anchor, and the footer still reserves the anchor's height.
+    expect(framed.box.y + framed.box.height).toBeGreaterThan(story.flowHeight);
+    expect(story.flowHeight).toBeCloseTo(plain.flowHeight, 6);
   });
 
   test('accepts the switches the page-field projection evaluates', () => {

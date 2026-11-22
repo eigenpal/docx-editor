@@ -55,11 +55,8 @@ test('direct PAGE frame formatting shares the empty anchor band and retains the 
       expect(spans.map((span) => span.text).join('')).toBe(String(pageNumber));
       expect((left + right) / 2).toBeCloseTo(218, 4);
       expect(anchor.box.y).toBe(0);
-      expect(projected.flowHeight).toBeCloseTo(
-        Math.max(first.box.y + first.box.height, anchor.box.height),
-        4
-      );
-      expect(projected.flowHeight).toBeLessThan(first.box.height + anchor.box.height);
+      // The frame takes no room in the story, which reserves its anchor's height.
+      expect(projected.flowHeight).toBeCloseTo(anchor.box.height, 4);
       expect(first.paragraphId).not.toBe(anchor.paragraphId);
     }
     expect(serializeOoxmlPart(part)).toBe(before);

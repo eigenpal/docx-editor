@@ -26,8 +26,6 @@ import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-re
 
 const MAX_NODES = 4096;
 const MAX_GROUPS = 16;
-/** How far a self-sized wrapping frame may end below the story's text, for a raised first line. */
-const OVERHANG_TOLERANCE_PT = 1;
 /** Elements a frame paragraph in this lane may not hold. */
 const REFUSED = new Set([
   'drawing',
@@ -358,15 +356,10 @@ export function placeStoryTextFrames(
       size
     );
     const box = { ...origin, ...size };
+    // The frame's height comes from its own lines, and it may end below the story's text: a
+    // page number in larger runs than its anchor, or a frame offset down by `w:y`. The story
+    // still reserves only the height of its own flow.
     const pageNumber = frame.autoWidth && frame.wrap !== 'none';
-    // The lane keeps the height the story reserves. A page number that wraps text and ends
-    // below that height would need more, so its story keeps ordinary flow.
-    if (
-      !overlapDecided &&
-      pageNumber &&
-      box.y + box.height > ordinary.bottom + OVERHANG_TOLERANCE_PT
-    )
-      return null;
     // A frame over the story's own paragraph text would wrap it; that stays in ordinary flow.
     // A page number that wraps text keeps clear of it on every page, however long it grows.
     const paragraphs = ordinary.blocks.filter((block) => block.kind === 'paragraph');
