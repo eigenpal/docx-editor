@@ -268,17 +268,14 @@ for (const [wrapper, open, close, serialized] of WRAPPERS)
       expect(at(end, needle)).toBeLessThan(at(end, 'Tail'));
       // Both sides keep the wrapper, with the same attributes.
       expect(at(end, serialized)).toBeLessThan(at(end, 'w:fldCharType="end"'));
-      expect(end.slice(at(end, 'Tail'))).toContain(close);
+      expect(end.slice(at(end, 'w:fldCharType="end"'), at(end, needle))).toContain(close);
+      expect(end.slice(at(end, needle), at(end, 'Tail'))).toContain(serialized);
       const begin = wrappedAfter(open, close, make(BEGIN_AT), 0);
       const character = begin.lastIndexOf('w:fldCharType="begin"', at(begin, 'TOC'));
       expect(at(begin, needle)).toBeLessThan(character);
       expect(at(begin, 'Before')).toBeLessThan(at(begin, needle));
-      // Both sides keep the wrapper. A field joins the run before the edge, inside the wrapper.
-      expect(begin.lastIndexOf(serialized, character)).toBeGreaterThanOrEqual(0);
-      if (label !== 'a field') {
-        expect(begin.lastIndexOf(serialized, character)).toBeGreaterThan(at(begin, needle));
-        expect(begin.slice(at(begin, 'Before'), at(begin, needle))).toContain(close);
-      }
+      expect(begin.lastIndexOf(serialized, character)).toBeGreaterThan(at(begin, needle));
+      expect(begin.slice(at(begin, 'Before'), at(begin, needle))).toContain(close);
     });
   }
 

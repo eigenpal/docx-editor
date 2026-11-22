@@ -336,3 +336,100 @@ test('two editors insert at field edges inside tracked insertions that hold text
     harness.cleanup();
   }
 }, 15000);
+
+// Each field character sits in a link that also holds text on its far side.
+// 0: `<w:hyperlink>Intro` + begin`</w:hyperlink>` (offset 5); 1: `<w:hyperlink>Pg` + end + `Tail</w:hyperlink>`.
+const LINK = '<w:hyperlink w:anchor="Top">';
+const LINKED =
+  `<w:p>${LINK}<w:r><w:t>Intro</w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+  '<w:r><w:instrText xml:space="preserve"> TOC \\o "1-3" \\u </w:instrText></w:r>' +
+  '<w:r><w:fldChar w:fldCharType="separate"/></w:r></w:hyperlink><w:r><w:t>Stale entry</w:t></w:r></w:p>' +
+  `<w:p>${LINK}<w:r><w:t>Pg</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+  '<w:r><w:t>Tail</w:t></w:r></w:hyperlink></w:p>' +
+  '<w:p><w:pPr><w:outlineLvl w:val="0"/></w:pPr><w:r><w:t>Chapter one</w:t></w:r></w:p>' +
+  '<w:p><w:bookmarkStart w:id="1" w:name="Top"/><w:r><w:t>After</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p>';
+
+/** Each field character in order; here the links hold them by design. */
+const fieldTypes = (saved: string) =>
+  [...saved.matchAll(/w:fldCharType="(\w+)"/g)].map(([, type]) => type);
+
+test('two editors insert at field edges inside links, offline, then reconnect', async () => {
+  const harness = createPeerHarness('toc-field-edge-linked');
+  const editors: DocxEditorInstance[] = [];
+  try {
+    const pair = await harness.pair(zipDocument(LINKED));
+    const [left, right] = [pair.alice, pair.bob].map((peer) => {
+      peer.detach();
+      const editor = createDocxEditor({
+        container: document.createElement('div'),
+        document: peer.room.document,
+        modules: [collaborationModule({ session: peer.room.session })],
+      });
+      editors.push(editor);
+      return editor;
+    }) as [DocxEditorInstance, DocxEditorInstance];
+    for (let attempt = 0; attempt < 200 && !(left.surface && right.surface); attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const flush = () => {
+      pair.alice.room.session.flushPendingJournals();
+      pair.bob.room.session.flushPendingJournals();
+    };
+    const beginId = harness.paragraphIdAt(pair.alice, 0);
+    const endId = harness.paragraphIdAt(pair.alice, 1);
+    const caret = (editor: DocxEditorInstance, paragraphId: string, offset: number) =>
+      editor.surface!.setSelection({
+        anchor: { paragraphId, offset },
+        head: { paragraphId, offset },
+      });
+
+    // Both peers edit both edges while disconnected; the reconnect delivers every queued edit.
+    pair.pause();
+    caret(left, endId, 2);
+    expect(left.exec({ type: 'insertBookmark', name: 'edge' })).toMatchObject({ ok: true });
+    caret(left, beginId, 5);
+    expect(left.exec({ type: 'insertNote', noteKind: 'footnote' })).toMatchObject({ ok: true });
+    caret(right, endId, 2);
+    expect(right.exec({ type: 'insertText', text: 'R' })).toMatchObject({ ok: true });
+    caret(right, beginId, 5);
+    expect(right.exec({ type: 'insertText', text: 'L' })).toMatchObject({ ok: true });
+    pair.resume();
+    let saved = await converge(left, right, flush);
+    expect(fieldTypes(saved)).toEqual(['begin', 'separate', 'end']);
+    const begin = saved.indexOf('fldCharType="begin"');
+    const end = saved.indexOf('fldCharType="end"');
+    expect(saved.indexOf('<w:footnoteReference')).toBeLessThan(begin);
+    expect(saved.indexOf('>L<')).toBeLessThan(begin);
+    expect(saved.indexOf('w:name="edge"')).toBeGreaterThan(end);
+    expect(saved.indexOf('>R<')).toBeGreaterThan(end);
+    // Each divided link keeps its target on both copies.
+    expect(saved.match(/<w:hyperlink w:anchor="Top">/g)?.length).toBe(4);
+
+    // Undo and redo of the footnote reach the other peer.
+    expect(left.exec({ type: 'undo' })).toMatchObject({ ok: true });
+    saved = await converge(left, right, flush);
+    expect(saved).not.toContain('<w:footnoteReference');
+    expect(left.exec({ type: 'redo' })).toMatchObject({ ok: true });
+    saved = await converge(left, right, flush);
+    expect(saved).toContain('<w:footnoteReference');
+
+    // A refresh keeps the inserts on both peers, and they survive reopening.
+    expect(right.exec({ type: 'refreshToc', mode: 'entire' })).toMatchObject({ ok: true });
+    saved = await converge(left, right, flush);
+    expect(saved).not.toContain('Stale entry');
+    expect(saved).toContain('w:name="edge"');
+    expect(saved).toContain('<w:footnoteReference');
+    expect(saved).toContain('>R<');
+    expect(fieldTypes(saved)).toEqual(['begin', 'separate', 'end']);
+    const reopened = createDocxEditor({
+      container: document.createElement('div'),
+      document: await left.save(),
+    });
+    editors.push(reopened);
+    expect(await xml(reopened)).toBe(saved);
+    expect(detectBodyTocs(reopened.surface!.session.part())).toHaveLength(1);
+  } finally {
+    for (const editor of editors) editor.destroy();
+    harness.cleanup();
+  }
+}, 15000);

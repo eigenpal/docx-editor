@@ -514,7 +514,9 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
         nextId
       );
     case 'insertComplexField':
-      return applyInsertComplexField(part, paragraph, op, options);
+      return withFieldEdgesIsolated(part, paragraph, [op.offset], options, (p, para) =>
+        applyInsertComplexField(p, para, op, options)
+      );
     case 'insertPageField': {
       // ONE builder list per field, shared by the tracked and untracked arms — the same
       // rule the tab/break ops state, so suggesting mode cannot insert a different field

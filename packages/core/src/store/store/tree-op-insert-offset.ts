@@ -18,6 +18,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { insertionSite, segmentsOf } from './tree-op-segments.ts';
+import { isolateFieldEdge } from './tree-op-field-edge.ts';
 
 function contains(node: OoxmlNode, id: string): boolean {
   if (node.id === id) return true;
@@ -83,6 +84,18 @@ export function insertRunPayloadAtOffset(
   options?: EditOptions,
   bias?: 'left' | 'right'
 ): OoxmlEditResult {
+  // A field character in a wrapper with content on its far side moves to a copy of its own.
+  const isolated = isolateFieldEdge(part, paragraph, offset, options);
+  if (isolated && isolated.part !== part) {
+    return insertRunPayloadAtOffset(
+      isolated.part,
+      isolated.paragraph,
+      offset,
+      payload,
+      options,
+      bias
+    );
+  }
   const nextId = createNodeIdAllocator(part);
   const site = insertionSite(paragraph, offset, null, bias);
 
