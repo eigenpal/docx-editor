@@ -7,6 +7,14 @@
 // does not wrap text (`w:wrap="none"`) may also size itself to its one line, align with
 // `w:xAlign`, and hold fields, which is how page numbers sit beside a footer's text. A frame
 // that wraps text around itself may do the same when it holds one page number.
+//
+// ECMA-376 Part 1 §17.3.1.11 (`framePr`): "Text frames are paragraphs of text in a document
+// which are positioned in a separate region or frame in the document". For `y`: "This absolute
+// position is specified relative to the vertical anchor specified by the vAnchor attribute for
+// this text frame." So the frame keeps its own position and line height, and it does not add
+// a line to the story. Header and footer parts (§17.10.3 `ftr`, §17.10.4 `hdr`) hold ordinary
+// block-level paragraphs, so the same `framePr` rules apply there.
+
 import {
   WML_NAMESPACE_URI as W,
   type OoxmlElement,

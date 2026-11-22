@@ -2,12 +2,12 @@
 //
 // A nested table with `w:tblpPr` leaves the cell's flow. The cell is its whole world:
 //
-// - Horizontal (`w:horzAnchor`, 17.4.58): `text` and `margin` measure `w:tblpX` or align by
-//   `w:tblpXSpec` (17.4.63) within the cell's content box; `page` measures within the cell box.
+// - Horizontal (`w:horzAnchor`, an attribute of 17.4.57): `text` and `margin` measure `w:tblpX`
+//   or align by `w:tblpXSpec` within the cell's content box; `page` measures within the cell box.
 //   The table never leaves the cell box: it is clamped to stay inside it.
-// - Vertical (`w:vertAnchor`, 17.4.66): `text` measures `w:tblpY` from the top of the paragraph
+// - Vertical (`w:vertAnchor`, an attribute of 17.4.57): `text` measures `w:tblpY` from the top of the paragraph
 //   that follows the table, before its spacing; `margin` and `page` measure from the cell top.
-//   A `w:tblpYSpec` (17.4.65) of `top` (or `inside`) puts the table at that top.
+//   A `w:tblpYSpec` of `top` (or `inside`) puts the table at that top.
 // - Two adjacent tables with identical `w:tblpPr` stack: the later one starts at the bottom of
 //   the earlier one. Other floats of one cell never overlap, whatever `w:tblOverlap` (17.4.56)
 //   says: the later one moves right beside the earlier one, or left from mode 15, when its band
@@ -19,6 +19,13 @@
 //   paragraphs of the cell that its band reaches lay out again around it: lines that fit beside
 //   it stay there, the others move below it, and the anchor follows them
 //   (`raisedFloatRestart`).
+//   §17.4.57, `tblpY`: "If it is negative, then the floating table is positioned before the
+//   anchor object in the direction of vertical text flow in this document." `bottomFromText`
+//   "Specifies the minimum distance which shall be maintained between the current floating
+//   table and the top of text in the paragraph which is below this floating table", and its
+//   default is 0, so no extra space below the table makes up for the negative offset. The
+//   specification does not say how earlier lines that the raised table covers move: lines
+//   that fit beside the table stay beside it and the others move below it, as wrapped text.
 // - The cell grows to hold the table. Vertical alignment moves the cell's text, never its
 //   floats, and counts the floats in the content height.
 //
