@@ -320,6 +320,12 @@ export function tabStopPastPen(positionPt: number, currentX: number): boolean {
  * Next tab destination past `currentX`, preferring custom stops then the default interval.
  * A stop within {@link TAB_PEN_TOLERANCE_PT} of the pen counts as reached, not ahead.
  * Destination is clamped to `rightEdge` so stops cannot escape the content box.
+ *
+ * ECMA-376 Part 1 §17.3.3.32 (`tab`, Tab Character): "the tab character shall advance to
+ * the next custom tab stop location which is further along than the starting location of
+ * the tab", and "When there are no custom tab stops which are further than the current
+ * position in the line, the tab character shall advance to the nearest multiple of the
+ * defaultTabStop element (§17.15.1.25) width value."
  */
 export function nextTabDestination(
   tabs: ResolvedTabStops,

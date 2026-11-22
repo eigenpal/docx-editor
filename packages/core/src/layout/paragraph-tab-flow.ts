@@ -18,6 +18,10 @@ import {
  * a custom stop at the pen counts too, so text aligned on a stop at the edge keeps its
  * trailing tabs on its line. `plain` means left-to-right, not positional, and with no
  * exclusion zone cutting the line short of the right edge.
+ *
+ * ECMA-376 Part 1 §17.3.3.32 (`tab`) defines only where a tab advances to. It does not say
+ * what happens when that stop lies past the right edge, so this line break is a layout rule
+ * (see `edgeStopKeepsTrailingTabs` in the compatibility rules).
  */
 export function tabClosesLine(
   scope: CellAnchorScope | undefined,
