@@ -81,7 +81,12 @@ export function tocFieldChromeParagraphIds(part: OoxmlPart): ReadonlySet<string>
       begin.kind === 'paragraph' &&
       paragraphHasVisibleText(begin);
     if (!beginCarriesResult) ids.add(toc.beginParagraphId);
-    ids.add(toc.endParagraphId);
+    // A populated field can end in a separate paragraph whose only run holds the end field
+    // character. That paragraph mark still occupies a line, with or without a wrapping
+    // content control, so following content observes its spacing and pagination.
+    if (toc.beginParagraphId === toc.endParagraphId || !tocHasVisibleResultContent(part, toc)) {
+      ids.add(toc.endParagraphId);
+    }
   }
   chromeIdsByPart.set(part, ids);
   return ids;

@@ -1,0 +1,19 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The layout of a populated TOC suppressed its standalone closing paragraph.",
+  "after": "The authored closing line of a populated TOC stays in layout, with or without a wrapping content control, including its spacing before following content.",
+  "reason": "The change retains the authored closing line in layout and protects its paragraph mark during selection formatting. The write guard also lets a section mark land on that line and exempts page setup, note, bookmark-removal, and other writes away from the caret from the caret check; a new TOC is refused inside an existing field; a table inserted on a closing line names the following paragraph as its anchor. These change which local edits are admitted and the anchor an existing operation names, not the shape of any operation. Canonical nodes, operations, snapshots and serialization retain their existing shapes.",
+  "tests": [
+    "packages/core/src/layout/__tests__/toc-layout.test.ts",
+    "packages/core/src/editor/__tests__/toc-boundary-editing.test.ts",
+    "packages/pro/src/collaboration/__tests__/toc-closing-paragraph-editors.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-toc-selection-formatting.test.ts",
+    "packages/core/src/editor/__tests__/toc-refresh.test.ts",
+    "packages/core/src/editor/__tests__/toc-command-state.test.ts",
+    "packages/core/src/editor/__tests__/toc-caret-navigation.test.ts",
+    "packages/core/src/editor/__tests__/toc-command-agreement.test.ts"
+  ],
+  "changeset": "standalone-toc-end-paragraph",
+  "migration": null
+}

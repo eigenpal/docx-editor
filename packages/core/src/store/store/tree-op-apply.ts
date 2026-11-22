@@ -1,4 +1,10 @@
 import { insertsBeforePrompt } from './tree-op-prompt-bias.ts';
+import {
+  fieldEdgeSide,
+  isolateFieldEdge,
+  rejoinDividedInsertions,
+  withFieldEdgesIsolated,
+} from './tree-op-field-edge.ts';
 import { withDisplayedHyphens } from '../package/hyphen-text.ts';
 import { withTailStyle } from './tree-op-paragraph-tail.ts';
 import { withInsertionHints } from './tree-op-text-splice-hints.ts';
@@ -513,7 +519,9 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
         nextId
       );
     case 'insertComplexField':
-      return applyInsertComplexField(part, paragraph, op, options);
+      return withFieldEdgesIsolated(part, paragraph, [op.offset], options, (p, para) =>
+        applyInsertComplexField(p, para, op, options)
+      );
     case 'insertPageField': {
       // ONE builder list per field, shared by the tracked and untracked arms — the same
       // rule the tab/break ops state, so suggesting mode cannot insert a different field
@@ -537,10 +545,15 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
         return applyDeleteTracked(part, paragraph, op.start, op.end, op.revision, options);
       }
       return applyDeleteText(part, paragraph, op.start, op.end, options);
+    // A field character sharing a run with text moves to a run of its own first.
     case 'insertHyperlink':
-      return applyInsertHyperlink(part, paragraph, op, options);
+      return withFieldEdgesIsolated(part, paragraph, [op.start, op.end], options, (p, para) =>
+        applyInsertHyperlink(p, para, op, options)
+      );
     case 'insertInlineContentControl':
-      return applyInsertInlineContentControl(part, paragraph, op, options);
+      return withFieldEdgesIsolated(part, paragraph, [op.offset], options, (p, para) =>
+        applyInsertInlineContentControl(p, para, op, options)
+      );
     case 'setParagraphMarkRevision': {
       // Taking your own proposed break back is a real join, not a second proposal.
       if (op.kind === 'del' && retractsOwnParagraphMark(paragraph, op.revision.author)) {
@@ -687,6 +700,22 @@ function applyInsertContent(
   inside?: string,
   bias?: 'left' | 'right'
 ): TreeOpResult {
+  // A field character in a wrapper with content on its far side moves to a copy of its own.
+  const isolated = inside === undefined ? isolateFieldEdge(part, paragraph, offset, options) : null;
+  if (isolated && isolated.part !== part) {
+    const written = applyInsertContent(
+      isolated.part,
+      isolated.paragraph,
+      offset,
+      builders,
+      options,
+      inside,
+      bias
+    );
+    return written.ok
+      ? { ...written, part: rejoinDividedInsertions(written.part, isolated.divided, options) }
+      : written;
+  }
   const control = contentControlAtCaret(part, paragraph, offset, offset, bias);
   if (control && isShowingPlaceholder(control)) {
     return applyPlaceholderReplace(part, control, builders, options);
@@ -1618,7 +1647,10 @@ function applyInsertHyperlink(
     if (childSegments.length === 0) {
       // Zero-length content takes the bucket its POSITION puts it in: a bookmark marker
       // inside the linked range belongs inside the link, one before it stays outside.
-      (cursor < op.start ? before : cursor < op.end ? inside : after).push(child);
+      // A field character at the link's start edge stays outside the link, so the link never
+      // holds one whose partner lies outside it (`tree-op-field-edge.ts`).
+      const edge = cursor === op.start && fieldEdgeSide(paragraph, op.start, child) !== null;
+      (cursor < op.start || edge ? before : cursor < op.end ? inside : after).push(child);
       continue;
     }
     const childStart = childSegments[0]!.start;
@@ -1713,7 +1745,8 @@ function applyInsertInlineContentControl(
     if (childSegments.length === 0) {
       // Zero-length content takes the bucket its POSITION puts it in, exactly
       // as the hyperlink divide treats markers.
-      (cursor < op.offset ? before : after).push(child);
+      const out = cursor < op.offset || fieldEdgeSide(paragraph, op.offset, child) === 'before';
+      (out ? before : after).push(child);
       continue;
     }
     const childStart = childSegments[0]!.start;

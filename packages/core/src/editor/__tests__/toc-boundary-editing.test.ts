@@ -225,3 +225,67 @@ for (const wrapped of [false, true]) {
     expect(texts).toEqual(['Entry', '', '', 'Hea', 'ding']);
   });
 }
+test('a standalone closing line is a caret stop, keeps its mark, and joins the next paragraph', () => {
+  const { editor, surface } = mount(
+    `<w:p>${begin}${run('Entry 1')}</w:p><w:p>${run('Entry 2')}</w:p><w:p>${end}</w:p><w:p>${run('Following')}</w:p>`
+  );
+  const [, , closing, following] = surface.session.paragraphIds();
+  // The closing line occupies layout; Down from it leaves the TOC.
+  select(surface, 2, 0);
+  surface.navigate('down');
+  expect(surface.state().selection.head).toEqual({ paragraphId: following!, offset: 0 });
+  // A caret placed on the closing line stays there for Home and End.
+  for (const command of ['lineStart', 'lineEnd'] as const) {
+    select(surface, 2, 0);
+    surface.navigate(command);
+    expect(surface.state().selection.head).toEqual({ paragraphId: closing!, offset: 0 });
+  }
+  // Its paragraph mark stays protected, and formatting reports the read-only refusal.
+  select(surface, 2, 0);
+  const before = serializeOoxmlPart(surface.session.part());
+  expect(editor.exec({ type: 'setAlignment', align: 'center' })).toMatchObject({
+    ok: false,
+    reason: 'the table of contents is generated and read-only',
+  });
+  expect(serializeOoxmlPart(surface.session.part())).toBe(before);
+  // Backspace at the start of the next paragraph removes the blank line and keeps the field.
+  select(surface, 3, 0);
+  surface.deleteBackward();
+  expect(surface.state().lastRejection).toBeNull();
+  expect(detectBodyTocs(surface.session.part())[0]!.endParagraphId).toBe(closing!);
+  expect(paragraphTextOf(surface.session.part(), closing!)).toBe('Following');
+});
+test('arrows reach a closing line that ends the document', () => {
+  const { surface } = mount(
+    `<w:p>${run('Before')}</w:p><w:p>${begin}${run('Entry')}</w:p><w:p>${end}</w:p>`
+  );
+  const [, , closing] = surface.session.paragraphIds();
+  for (const command of ['down', 'right', 'documentEnd'] as const) {
+    select(surface, 0, 6);
+    surface.navigate(command);
+    expect(surface.state().selection.head).toEqual({ paragraphId: closing!, offset: 0 });
+  }
+  surface.navigate('up');
+  expect(surface.state().selection.head.paragraphId).toBe(surface.session.paragraphIds()[0]!);
+});
+test('arrows reach a closing line when the TOC starts the document', () => {
+  const { surface } = mount(
+    `<w:p>${begin}${run('Entry')}</w:p><w:p>${end}</w:p><w:p>${run('After')}</w:p>`
+  );
+  const [, closing] = surface.session.paragraphIds();
+  for (const command of ['up', 'left'] as const) {
+    select(surface, 2, 0);
+    surface.navigate(command);
+    expect(surface.state().selection.head).toEqual({ paragraphId: closing!, offset: 0 });
+  }
+});
+test('arrows stop on the nearest closing line of adjacent TOCs at the document start', () => {
+  const toc = `<w:p>${begin}${run('Entry')}</w:p><w:p>${end}</w:p>`;
+  const { surface } = mount(`${toc}${toc}<w:p>${run('After')}</w:p>`);
+  select(surface, 4, 0);
+  surface.navigate('up');
+  expect(surface.state().selection.head).toEqual({
+    paragraphId: surface.session.paragraphIds()[3]!,
+    offset: 0,
+  });
+});

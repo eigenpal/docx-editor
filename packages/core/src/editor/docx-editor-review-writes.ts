@@ -10,6 +10,7 @@
 import type {
   CommentTextOptions,
   DocumentEditingMode,
+  EditorCommand,
   ExecResult,
   HistoryGroupOptions,
   ReviewItemPlacement,
@@ -30,6 +31,7 @@ import { commentBodyText } from '../store/store/review-text.ts';
 import { commentPartNameOf } from '../store/store/comment-writes.ts';
 import { commentTextEditRefusal } from '../store/store/comment-text-support.ts';
 import { revisionDateNow } from '../automation/revision-date.ts';
+import { tocCommandRefusal } from './toc-command-refusal.ts';
 
 export interface ReviewWriteDeps {
   readonly reviewEnabled: boolean;
@@ -97,6 +99,13 @@ export function createReviewWrites(deps: ReviewWriteDeps) {
     if (writer.length === 0 || text.trim().length === 0) {
       return { ok: false, code: 'invalidArgs', reason: 'a comment needs both an author and text' };
     }
+    // A comment anchored in generated TOC text loses its anchors on the next refresh.
+    const toc = tocCommandRefusal(
+      { type: 'addComment', text, author: writer } as EditorCommand,
+      surface,
+      { anchor: range.from, head: range.to }
+    );
+    if (toc) return toc;
     let created: string | null = null;
     const refused = surface.commitReviewOps((historyToken) => {
       created = surface.session.replyToComment(

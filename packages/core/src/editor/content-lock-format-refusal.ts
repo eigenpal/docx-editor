@@ -37,7 +37,7 @@ interface SelectedSpan {
 const WHOLE = Number.MAX_SAFE_INTEGER;
 
 /** The paragraphs a format write reaches, with the same coverage rule the writer uses. */
-function selectedSpans(surface: PaginatedSurface): SelectedSpan[] {
+export function selectedSpans(surface: PaginatedSurface): SelectedSpan[] {
   const state = surface.state();
   const cells = state.cellSelection;
   if (cells) {

@@ -56,6 +56,7 @@ import {
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { partOfNodeId, storyScopeOfNodeId } from './surface-scope.ts';
 import { selectionMarkOf } from './surface-selection-ops.ts';
+import { tocCommandRefusal } from './toc-command-refusal.ts';
 
 const W14_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordml';
 const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
@@ -708,6 +709,9 @@ function gateContentControlCommand(
       },
     };
   }
+  // A control inserted over generated TOC text would write into the read-only region.
+  const toc = tocCommandRefusal(command, surface);
+  if (toc) return { ok: false, refusal: toc };
   return { ok: true };
 }
 

@@ -21,6 +21,7 @@ import type { createReviewCommands } from './docx-editor-review-commands.ts';
 import type { createReviewWrites, ReviewWriteDeps } from './docx-editor-review-writes.ts';
 import { reviewReplyRefusal } from './review-reply.ts';
 import { partOfNodeId } from './surface-scope.ts';
+import { tocCommandRefusal } from './toc-command-refusal.ts';
 
 type DocumentReviewCommand = Extract<
   EditorCommand,
@@ -175,9 +176,11 @@ export function createDocumentReviewCommands(
             code: 'invalidArgs',
             reason: 'a comment needs both an author and text',
           };
-        return deps.commentTargetRange()
-          ? { ok: true }
-          : { ok: false, code: 'invalidArgs', reason: 'a comment needs a selected range' };
+        const range = deps.commentTargetRange();
+        if (!range)
+          return { ok: false, code: 'invalidArgs', reason: 'a comment needs a selected range' };
+        const at = { anchor: range.from, head: range.to };
+        return tocCommandRefusal(command, deps.surface()!, at) ?? { ok: true };
       }
       case 'replyComment': {
         const found = commentKey(command.commentId);

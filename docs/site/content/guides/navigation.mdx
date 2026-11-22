@@ -547,6 +547,7 @@ The shortcuts work only while focus is in the same editor: its pages, pane, or c
 - Highlights are not saved or shared, and they do not change selection or undo history. Give each one a text label.
 - A text highlight moves with its text when you edit earlier text. An edit inside a highlighted range hides it; undo shows it again. Loading, refreshing, or recovering the document removes all highlights.
 - Function sources recompute after edits (150 milliseconds idle, one second maximum) and loads. Fixed arrays return after refresh or recovery, not after an ordinary load.
+- The entries of a table of contents are read-only. The arrow keys and Shift selection cross them and stop at the next editable position, such as a separate closing line. Commands that would write into them are unavailable: `can()` and `exec()` return `invalidArgs` with the reason.
 
 ## See also
 

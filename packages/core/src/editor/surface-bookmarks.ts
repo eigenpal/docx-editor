@@ -62,8 +62,11 @@ export interface SurfaceBookmarkDeps {
     readonly from: { readonly paragraphId: string; readonly offset: number };
     readonly to: { readonly paragraphId: string; readonly offset: number };
   };
-  /** Why a write cannot happen at the selection now, or null. */
-  readonly writeRefusal: () => string | null;
+  /**
+   * Why a write cannot happen now, or null. Without `named` it is a write at the selection;
+   * with it, the removal of the bookmark with that name, wherever the selection is.
+   */
+  readonly writeRefusal: (named?: string) => string | null;
   readonly commit: (run: () => boolean, selectionAfter?: () => SemanticSelection | null) => void;
   /** Jump; with `orShow`, a story that cannot be opened is only scrolled to (`'shown'`). */
   readonly goToPosition: (
@@ -101,8 +104,8 @@ export interface SurfaceBookmarks {
   remove(name: string): boolean;
   /** Keep the first bookmark with this name and remove its copies, in one transaction. */
   keepFirst(name: string): boolean;
-  /** Why a bookmark write cannot happen now, or null. */
-  writeRefusal(): string | null;
+  /** Why a bookmark write cannot happen now, or null; see the dependency of this name. */
+  writeRefusal(named?: string): string | null;
   /** Select the bookmark's range and scroll it into view. */
   goTo(name: string): boolean;
   /** Whether the marks are shown. */
@@ -299,7 +302,7 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
     },
     remove(name) {
       const entry = find(name);
-      if (!entry || deps.writeRefusal() !== null) return false;
+      if (!entry || deps.writeRefusal(name) !== null) return false;
       // Copies a merge left in other stories go in the same transaction.
       const key = bookmarkNameKey(name);
       const elsewhere = new Set(
@@ -318,7 +321,7 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
     },
     keepFirst(name) {
       const first = find(name);
-      if (!first || deps.writeRefusal() !== null) return false;
+      if (!first || deps.writeRefusal(name) !== null) return false;
       const key = bookmarkNameKey(name);
       const elsewhere = new Set(
         located()
@@ -345,7 +348,7 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
       });
       return committed;
     },
-    writeRefusal: () => deps.writeRefusal(),
+    writeRefusal: (named) => deps.writeRefusal(named),
     goTo(name) {
       const entry = find(name);
       if (!entry) return false;

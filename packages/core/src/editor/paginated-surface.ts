@@ -48,13 +48,18 @@ import {
   fullyProtectedTocParagraphs,
   tocControlId,
   tocForElement,
-  tocEscapePosition,
   tocAtPosition,
+  TOC_READ_ONLY_REFUSAL,
+  tocBlockAnchor,
   selectionTouchesTocRange,
   opTouchesTocRange,
+  batchTouchesTocRange,
   paragraphInBodyToc,
+  tocProtectsParagraph,
 } from './surface-toc-ranges.ts';
 import { tocBoundaryForLayout } from './surface-toc-boundary.ts';
+import { tocCommandRefusal } from './toc-command-refusal.ts';
+import { settleTocMotion, tocMotionEscape } from './surface-toc-navigation.ts';
 import { resolveTocSources } from '../store/package/toc-sources.ts';
 import { createTocCommands } from './surface-toc-commands.ts';
 import {
@@ -172,7 +177,6 @@ import {
   type CellSelection,
   type ContentControlBoundaryRecord,
   type LayoutScope,
-  type NavigationCommand,
   type ReviewItem,
   type ReviewRevisionKind,
   type SemanticLayout,
@@ -355,6 +359,7 @@ import { createChartOps } from './surface-chart-ops.ts';
 import {
   createHeaderFooterScopeController,
   isDocumentProtectionBatch,
+  isWriteAwayFromCaret,
 } from './surface-hf-editing.ts';
 import { createNoteOps } from './surface-note-ops.ts';
 import { notePropertiesStateOf, notePreviewTextOf } from './surface-note-state.ts';
@@ -438,8 +443,6 @@ export function mountPaginatedSurface(
       options.tableInteractionLabel ?? ((key: TableInteractionLabelKey) => defaultTableLabel(key)),
   };
   const VIEWING_REFUSAL = 'the document is open for viewing';
-  /** Document protection, as opposed to the reversible mode — the wording `gateCommand` uses. */
-  const TOC_READ_ONLY_REFUSAL = 'the table of contents is generated and read-only';
   /** Set while formatting writes its ops outside a selected table of contents. */
   let formattingOutsideToc = false;
   // The glyphs a serif Korean face lacks fall back to serif faces, in paint and measurement.
@@ -1182,7 +1185,7 @@ export function mountPaginatedSurface(
     session: gatedSession,
     storyScope,
     orderedRange: () => orderedRange(),
-    writeRefusal: () => writeRefusal(true),
+    writeRefusal: (name) => writeRefusal(true, name ? [{ op: 'deleteBookmark', name }] : []),
     commit: (run, selectionAfter) => commit(run, selectionAfter),
     // Show the text after a leading page break; `goTo` still selects the whole bookmark.
     goToPosition: (position, options) =>
@@ -1232,8 +1235,14 @@ export function mountPaginatedSurface(
   }
 
   const format = createSurfaceFormat({
-    runFormatRefusal: () =>
-      commandProtectionRefusal({ type: 'toggleMark', mark: 'bold' }, surface)?.reason ?? null,
+    // Any run format meets the same protection; Bold stands for all of them.
+    runFormatRefusal: () => {
+      const bold = { type: 'toggleMark', mark: 'bold' } as const;
+      return (
+        (commandProtectionRefusal(bold, surface) ?? tocCommandRefusal(bold, surface))?.reason ??
+        null
+      );
+    },
     session: gatedSession,
     applyOutsideToc: (ops, apply) => {
       const kept = ops.filter((op) => !opTouchesToc(op));
@@ -1253,6 +1262,7 @@ export function mountPaginatedSurface(
     displayMode: () => revisionDisplayMode(),
     authorFilter: revisionFilter,
     paragraphMarkVisible,
+    paragraphMarkProtected: (paragraphId) => tocProtectsParagraph(session.part(), paragraphId),
     commit: (run, nextSelection, options) => commit(run, nextSelection, options),
     orderedRange: () => hiddenMarks.shownRange(orderedRange()),
     selectionMark: () => selectionMark(),
@@ -3008,8 +3018,11 @@ export function mountPaginatedSurface(
     if (
       edits &&
       !protectionWrite &&
-      ((checkSelection && !formattingOutsideToc && selectionTouchesToc()) ||
-        ops.some((op) => opTouchesToc(op)))
+      ((checkSelection &&
+        !formattingOutsideToc &&
+        !isWriteAwayFromCaret(ops) &&
+        selectionTouchesToc()) ||
+        batchTouchesTocRange(session.part(), ops, editingMode === 'suggest'))
     ) {
       return TOC_READ_ONLY_REFUSAL;
     }
@@ -4036,6 +4049,8 @@ export function mountPaginatedSurface(
    */
   function insertTableOp(rows: number, cols: number) {
     if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || cols < 1) return null;
+    const beforeParagraphId = tocBlockAnchor(session.part(), selection.head.paragraphId);
+    if (beforeParagraphId === null) return null;
     const section = structure.sectionPropertiesAt(selection.head.paragraphId);
     const contentWidth =
       section.pageSize.widthTwips -
@@ -4050,7 +4065,7 @@ export function mountPaginatedSurface(
     );
     return {
       op: 'insertTable' as const,
-      beforeParagraphId: selection.head.paragraphId,
+      beforeParagraphId,
       rows,
       cols,
       columnWidthTwips,
@@ -4113,7 +4128,8 @@ export function mountPaginatedSurface(
 
   function insertTocOp() {
     const instruction = parseTocInstruction(INSERT_TOC_INSTRUCTION);
-    if (!instruction) return null;
+    const beforeParagraphId = tocBlockAnchor(session.part(), selection.head.paragraphId);
+    if (!instruction || beforeParagraphId === null) return null;
     const outline = session.documentOutline();
     const plan = planTocEntries(
       session.part(),
@@ -4131,7 +4147,7 @@ export function mountPaginatedSurface(
     );
     return {
       op: 'insertToc' as const,
-      beforeParagraphId: selection.head.paragraphId,
+      beforeParagraphId,
       instruction: INSERT_TOC_INSTRUCTION,
       alias: tocLabels?.title ?? 'TOC',
       entries: plan.entries,
@@ -4142,7 +4158,7 @@ export function mountPaginatedSurface(
   function canInsertToc(): boolean {
     if (editingMode === 'view' || !session.editable || selectionTouchesToc()) return false;
     const op = insertTocOp();
-    return op !== null && validateTreeOp(session.part(), op) === null;
+    return op !== null && !opTouchesToc(op) && validateTreeOp(session.part(), op) === null;
   }
 
   function insertToc(): boolean {
@@ -4785,12 +4801,7 @@ export function mountPaginatedSurface(
         selectionSync.selectionLineId()
       );
       if (!moved) return;
-      const tocIds = tocParagraphIds();
-      const outside = tocEscapePosition(
-        session.part(),
-        moved.position,
-        ['left', 'wordLeft', 'lineStart', 'up', 'pageUp'].includes(command)
-      );
+      const outside = tocMotionEscape(session.part(), moved.position, command);
       // The escape lands elsewhere, so the motion's caret (and its page) no longer applies.
       if (outside) moved = { ...moved, position: outside, caret: undefined };
       // Atomic navigation: a caret that landed INSIDE a locked inline control crosses it (or
@@ -4800,48 +4811,26 @@ export function mountPaginatedSurface(
         const crossed = leaveAtomicControl(layout, selection.head, moved.position);
         if (crossed !== moved.position) moved = { ...moved, position: crossed, caret: undefined };
       }
-      if (tocAtPosition(session.part(), moved.position)) {
-        if (extend) return;
-        const backwards = new Set<NavigationCommand>([
-          'left',
-          'wordLeft',
-          'lineStart',
-          'up',
-          'pageUp',
-        ]);
-        // The escape steps by LINE, never by character. A character step inside a row that
-        // has any text at all lands in the same paragraph, and the loop's own "we did not
-        // change paragraph" bail then fired on the first iteration: the caret could neither
-        // enter the region nor cross it, so everything past a table of contents was
-        // unreachable from the keyboard. A line step always leaves the row it starts on.
-        const escape: NavigationCommand = backwards.has(command) ? 'up' : 'down';
-        // One iteration per line the region occupies, plus slack for the landing line. The
-        // loop breaks the moment it is outside, so an over-generous bound costs nothing.
-        const limit = tocRegionLineCount(tocIds) + 4;
-        for (let step = 0; step < limit; step += 1) {
-          const next = navigateInActiveScope(
+      // A plain motion and a Shift motion settle the head around a TOC by the same rule.
+      const settled = settleTocMotion(
+        session.part(),
+        selection.head,
+        moved,
+        command,
+        (from, step) =>
+          navigateInActiveScope(
             editingLayout(),
-            moved.position,
-            escape,
-            moved.desiredX,
+            from.position,
+            step,
+            from.desiredX,
             hfScope?.getActive() ?? null,
             noteScopeId(),
             measurer
-          );
-          // Only a position that does not move at all is a dead end. Comparing paragraph ids
-          // alone treats ordinary movement within a row as one.
-          if (
-            !next ||
-            (next.position.paragraphId === moved.position.paragraphId &&
-              next.position.offset === moved.position.offset)
-          ) {
-            return;
-          }
-          moved = next;
-          if (!tocAtPosition(session.part(), moved.position)) break;
-        }
-        if (tocAtPosition(session.part(), moved.position)) return;
-      }
+          ),
+        tocRegionLineCount(tocParagraphIds()) + 4
+      );
+      if (!settled) return;
+      moved = settled;
       desiredX = moved.desiredX;
       // Note continuations share one EditorScope across pages: retarget the visual
       // occurrence before selection/caret paint so the DOM host follows geometry.

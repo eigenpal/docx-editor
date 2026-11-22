@@ -168,11 +168,14 @@ A successful removal handles nearby content as follows:
 | Bookmark and comment ranges that partly overlap the TOC | Stay. Their removed ends move to the deletion point. |
 | A wrapper control locked only against deletion | Stays with its heading. The command removes only the field. |
 
-Generated TOC rows are read-only. Delete and Backspace do not remove them.
+Generated TOC rows are read-only. Delete and Backspace do not remove them. Content that you insert right before a TOC, or right after its end mark, goes outside the field, so a refresh keeps it. This covers text, links, bookmarks, comments, notes, content controls, pictures, and charts. A table or a new TOC on a closing line goes after that line. The same placement applies to any field whose characters span paragraphs. When a tracked change or link holds a field character and text past it, it divides at that edge, and the insert goes between the two parts. An untracked insert at that edge keeps a tracked insertion one change, as typing inside it does.
 
 ## Limits
 
+- Keyboard navigation does not stop before a TOC that starts its story, such as the first block of the body or of a table cell.
 - Computed fields stay atomic in every mode.
+- The editor refuses to insert an empty content control at a field edge inside a tracked change, link, or smart tag.
+- An inline content control that holds a field character never divides at the field edge.
 - Field instructions stay inert. Macros, DDE, OLE, and external include instructions never execute.
 - Saved results inside another field's instruction do not display.
 - `LISTNUM` and `REF` in headers, footers, and text boxes keep their saved result.

@@ -396,6 +396,31 @@ export function isDocumentProtectionBatch(ops: readonly { readonly op: string }[
   return ops.length > 0 && ops.every((op) => op.op === 'setDocumentProtection');
 }
 
+const AWAY_FROM_CARET_OPS: ReadonlySet<string> = new Set([
+  'createHeaderFooter',
+  'deleteHeaderFooter',
+  'linkToPrevious',
+  'unlinkFromPrevious',
+  'setSectionFurnitureOptions',
+  'setDocumentProtection',
+  'setWatermark',
+  'setSectionProperties',
+  'deleteNote',
+  'convertNote',
+  'convertAllNotes',
+  'setNoteProperties',
+  'deleteBookmark',
+]);
+
+/**
+ * Whether every op writes away from the caret: a package-level write (headers, footers,
+ * watermark, protection, page setup), a note lifecycle write, or a bookmark removal by name.
+ * The caret's position has nothing to say about such a write; its ops are judged alone.
+ */
+export function isWriteAwayFromCaret(ops: readonly { readonly op: string }[]): boolean {
+  return ops.length > 0 && ops.every((op) => AWAY_FROM_CARET_OPS.has(op.op));
+}
+
 /** Lifecycle op kinds the surface may commit as package-level undo units. */
 export type SurfaceLifecycleOp = Extract<
   TreeDocOp,

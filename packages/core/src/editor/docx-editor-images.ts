@@ -96,6 +96,7 @@ export {
   type ImageResizeHandle,
 } from './image-overlay-geometry.ts';
 import { pointsToEmu, type ImageResizeHandle } from './image-overlay-geometry.ts';
+import { tocCommandRefusal } from './toc-command-refusal.ts';
 
 const IMAGE_ASYNC_COMMAND_TYPES = new Set(['insertImage', 'replaceImage']);
 const IMAGE_COMMAND_TYPES = new Set([
@@ -528,6 +529,9 @@ export function gateImageCommand(
     if (!command.at && refusesPictureBesideDrawing(surface)) {
       return { ok: false, code: 'invalidArgs', reason: PICTURE_SELECTED_INSERT_REASON };
     }
+    // A picture at the selection or the drop point would land inside generated TOC text.
+    const toc = tocCommandRefusal(command, surface);
+    if (toc) return toc;
     if (!(command.data instanceof Uint8Array) || command.data.byteLength === 0) {
       return { ok: false, code: 'invalidArgs', reason: 'insertImage requires image bytes' };
     }

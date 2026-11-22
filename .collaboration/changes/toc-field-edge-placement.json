@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A bookmark, comment, note reference, link, or content control inserted at the end edge of a field that spans paragraphs, such as a table of contents, landed before the field's end character, inside the field result. A note, picture, or chart inserted at the begin edge landed after the field's separator. A field character inside a tracked change, link, or smart tag that also held text past it kept those inserts inside the field.",
+  "after": "Content inserted at the edge of a field that spans paragraphs lands outside the field: after the end character, and before the begin character. A tracked change, link, or smart tag that holds a field character and text past it divides into two copies with the same attributes, and the insert goes between them. Untracked content placed in a divided insertion joins the insertion again, so it stays one change.",
+  "reason": "Only the place a writer puts new nodes changes, and the wrapper it divides there. The operations, canonical nodes, and snapshots keep their shapes, and the written trees are ordinary field, bookmark, comment, link, note, and control markup that released readers already materialize and serialize. Peers share the resulting tree rather than re-running placement, so a released writer and a replacement writer converge on whichever tree was written.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/toc-field-edge-editors.test.ts",
+    "packages/core/src/editor/__tests__/toc-field-edge-inserts.test.ts",
+    "packages/core/src/store/__tests__/field-edge-placement.test.ts"
+  ],
+  "changeset": "standalone-toc-end-paragraph",
+  "migration": null
+}

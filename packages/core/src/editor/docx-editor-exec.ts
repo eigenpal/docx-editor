@@ -6,6 +6,7 @@ import { DRAWING_CLIPBOARD_REASONS } from './surface-drawing-clipboard.ts';
 import { CHART_CLIPBOARD_REASON, fragmentRefusalOf } from './clipboard-object-selection.ts';
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
+import { TOC_READ_ONLY_REFUSAL } from './surface-toc-ranges.ts';
 import { execReplaceMatch } from './docx-editor-replace-match.ts';
 import { execReplaceAcceptedText } from './docx-editor-replace-accepted-text.ts';
 import { execReplaceAllMatches } from './docx-editor-replace-all.ts';
@@ -390,7 +391,7 @@ export function execEditorCommand(
     case 'insertText':
       mounted.type(command.text);
       if (
-        mounted.state().lastRejection === 'the table of contents is generated and read-only' ||
+        mounted.state().lastRejection === TOC_READ_ONLY_REFUSAL ||
         mounted.state().lastRejection === FIELD_CODE_INPUT_REFUSAL
       ) {
         return { ok: false, code: 'invalidArgs', reason: mounted.state().lastRejection! };

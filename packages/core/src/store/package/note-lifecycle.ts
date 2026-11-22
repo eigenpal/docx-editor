@@ -75,6 +75,7 @@ import {
 import { isValidXmlText } from './sinks.ts';
 import { applyInsertTrackedRun } from '../store/tree-op-tracked.ts';
 import { paragraphOffsetIndex } from '../store/tree-op-segments.ts';
+import { fieldEdgeChildIndex, placeAtFieldEdge } from '../store/tree-op-field-edge.ts';
 import {
   invalidRevisionAttribution,
   type RevisionAttributionInput,
@@ -402,11 +403,12 @@ function applyInsertNote(
   } else {
     const storyNextId = createNodeIdAllocator(storyPart);
     const refRun = noteReferenceRun(storyNextId, refLocal, noteId, styleVal);
-    const inserted = insertNodesAtOffset(
+    // A field character at a field edge gets a paragraph child of its own first.
+    const inserted = placeAtFieldEdge(
       storyPart,
       storyParagraph as OoxmlParagraphNode,
       op.offset,
-      [refRun]
+      (p, para) => insertNodesAtOffset(p, para, op.offset, [refRun])
     );
     if (!inserted) return fail('tree-invariant', 'reference-insert');
     next = withPart(next, inserted);
@@ -990,10 +992,9 @@ function insertNodesAtOffset(
   offset: number,
   nodes: readonly OoxmlNode[]
 ): OoxmlPart | null {
-  // Note references are authored as whole runs — always insert at paragraph child level.
-  // Offsets come from the memoized paragraph offset index — the SAME authority the caret
-  // uses — so a caret placed after tracked content addresses the position this write
-  // resolves, and the validation walk above is not repeated.
+  // Note references are whole runs, inserted at paragraph child level. Offsets come from the
+  // memoized paragraph offset index, the SAME authority the caret uses, so a caret after
+  // tracked content addresses the position this write resolves.
   const offsets = paragraphOffsetIndex(paragraph);
   const segments = offsets.segments;
   const nextId = createNodeIdAllocator(part);
@@ -1029,14 +1030,12 @@ function insertNodesAtOffset(
     return replaced.ok ? replaced.part : null;
   }
 
-  if (offset === 0) {
-    const pPr = paragraph.children[0]?.kind === 'paragraphProperties' ? 1 : 0;
-    const inserted = insertChildren(part, paragraph.id, pPr, nodes);
-    return inserted.ok ? inserted.part : null;
-  }
-
-  if (offset >= length) {
-    const inserted = insertChildren(part, paragraph.id, paragraph.children.length, nodes);
+  // After the end of a field that spans paragraphs, before its begin (`tree-op-field-edge.ts`).
+  const pPr = paragraph.children[0]?.kind === 'paragraphProperties' ? 1 : 0;
+  const end = offset >= length ? paragraph.children.length : null;
+  const at = fieldEdgeChildIndex(paragraph, offset) ?? (offset === 0 ? pPr : end);
+  if (at !== null) {
+    const inserted = insertChildren(part, paragraph.id, at, nodes);
     return inserted.ok ? inserted.part : null;
   }
 

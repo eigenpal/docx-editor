@@ -99,7 +99,7 @@ function lockReachOf(command: ParagraphFormatCommand): LockReach {
 }
 
 /** The paragraphs a paragraph write reaches, with the same coverage the writer uses. */
-function selectedParagraphIds(surface: PaginatedSurface): readonly string[] {
+export function selectedParagraphIds(surface: PaginatedSurface): readonly string[] {
   const state = surface.state();
   const cells = state.cellSelection;
   if (cells) return [...paragraphsInCells(surface.layout(), cells.cellIds)];
