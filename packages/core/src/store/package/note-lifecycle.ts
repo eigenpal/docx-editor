@@ -75,7 +75,7 @@ import {
 import { isValidXmlText } from './sinks.ts';
 import { applyInsertTrackedRun } from '../store/tree-op-tracked.ts';
 import { paragraphOffsetIndex } from '../store/tree-op-segments.ts';
-import { fieldEdgeChildIndex, isolateFieldEdge } from '../store/tree-op-field-edge.ts';
+import { fieldEdgeChildIndex, placeAtFieldEdge } from '../store/tree-op-field-edge.ts';
 import {
   invalidRevisionAttribution,
   type RevisionAttributionInput,
@@ -403,11 +403,12 @@ function applyInsertNote(
   } else {
     const storyNextId = createNodeIdAllocator(storyPart);
     const refRun = noteReferenceRun(storyNextId, refLocal, noteId, styleVal);
-    const inserted = insertNodesAtOffset(
+    // A field character at a field edge gets a paragraph child of its own first.
+    const inserted = placeAtFieldEdge(
       storyPart,
       storyParagraph as OoxmlParagraphNode,
       op.offset,
-      [refRun]
+      (p, para) => insertNodesAtOffset(p, para, op.offset, [refRun])
     );
     if (!inserted) return fail('tree-invariant', 'reference-insert');
     next = withPart(next, inserted);
@@ -986,13 +987,11 @@ function topChildIndexOf(paragraph: OoxmlParagraphNode, nodeId: string): number 
 }
 
 function insertNodesAtOffset(
-  original: OoxmlPart,
-  unsplit: OoxmlParagraphNode,
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
   offset: number,
   nodes: readonly OoxmlNode[]
 ): OoxmlPart | null {
-  const isolated = isolateFieldEdge(original, unsplit, offset); // a field char in its own run
-  const { part, paragraph } = isolated ?? { part: original, paragraph: unsplit };
   // Note references are whole runs, inserted at paragraph child level. Offsets come from the
   // memoized paragraph offset index, the SAME authority the caret uses, so a caret after
   // tracked content addresses the position this write resolves.

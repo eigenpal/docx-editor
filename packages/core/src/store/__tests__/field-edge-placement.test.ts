@@ -260,20 +260,35 @@ const WRAPPED_CASES: readonly (readonly [string, (w: typeof END_AT) => TreeDocOp
   ['a tracked insertion', (w) => ({ op: 'insertText', ...w, text: 'Z', revision }), '>Z<'],
 ];
 
+/**
+ * Whether the halves of a divided insertion join again around the insert: untracked runs and
+ * controls do. Range markers stay between the halves, which still read as one change, and a
+ * tracked insertion is another change between them.
+ */
+const rejoins = (wrapper: string, label: string) =>
+  wrapper === 'a tracked insertion' &&
+  !['a bookmark', 'a comment marker', 'a tracked insertion'].includes(label);
+
 for (const [wrapper, open, close, serialized] of WRAPPERS)
   for (const [label, make, needle] of WRAPPED_CASES) {
     test(`${label} at a field edge inside ${wrapper} goes outside the field`, () => {
       const end = wrappedAfter(open, close, make(END_AT), 1);
       expect(at(end, needle)).toBeGreaterThan(at(end, 'w:fldCharType="end"'));
       expect(at(end, needle)).toBeLessThan(at(end, 'Tail'));
-      // Both sides keep the wrapper, with the same attributes.
-      expect(at(end, serialized)).toBeLessThan(at(end, 'w:fldCharType="end"'));
-      expect(end.slice(at(end, 'w:fldCharType="end"'), at(end, needle))).toContain(close);
-      expect(end.slice(at(end, needle), at(end, 'Tail'))).toContain(serialized);
       const begin = wrappedAfter(open, close, make(BEGIN_AT), 0);
       const character = begin.lastIndexOf('w:fldCharType="begin"', at(begin, 'TOC'));
       expect(at(begin, needle)).toBeLessThan(character);
       expect(at(begin, 'Before')).toBeLessThan(at(begin, needle));
+      if (rejoins(wrapper, label)) {
+        // Untracked content joins the insertion again, so it stays one change.
+        expect(count(end, serialized)).toBe(1);
+        expect(count(begin, serialized)).toBe(1);
+        return;
+      }
+      // Both sides keep the wrapper, with the same attributes.
+      expect(at(end, serialized)).toBeLessThan(at(end, 'w:fldCharType="end"'));
+      expect(end.slice(at(end, 'w:fldCharType="end"'), at(end, needle))).toContain(close);
+      expect(end.slice(at(end, needle), at(end, 'Tail'))).toContain(serialized);
       expect(begin.lastIndexOf(serialized, character)).toBeGreaterThan(at(begin, needle));
       expect(begin.slice(at(begin, 'Before'), at(begin, needle))).toContain(close);
     });

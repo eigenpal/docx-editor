@@ -170,6 +170,20 @@ const COMMANDS: readonly (readonly [EditorCommand, (xml: string) => number])[] =
 /** Commands whose writes a refresh may legitimately renumber (paragraph count). */
 const COUNT_CHANGES_ON_REFRESH = new Set(['splitParagraph']);
 
+/**
+ * Commands that divide an insertion anywhere, not only at a field edge: a paragraph split, a
+ * proposed insertion (another change between the halves), and a link (which cannot sit in a
+ * `w:ins`, so each half of the insertion keeps its own wrapper).
+ */
+const DIVIDES_INSERTIONS = new Set([
+  'splitParagraph',
+  'insertTable',
+  'insertToc',
+  'paste',
+  'proposeInsertion',
+  'insertHyperlink',
+]);
+
 const editors: DocxEditorInstance[] = [];
 afterEach(() => {
   for (const editor of editors.splice(0)) editor.destroy();
@@ -318,3 +332,29 @@ for (const [shape, body] of SHAPES) {
       });
     }
 }
+
+// An insertion holding a field character is divided to place content at the edge. Untracked
+// content placed there joins the insertion again, as typing inside an insertion extends it, so
+// the review pane still shows one change and the change is still decided by its id.
+const revisionItems = (editor: DocxEditorInstance) =>
+  editor.getReviewItems().filter((item) => item.id.includes('\u000090\u0000')).length;
+for (const [shape, body] of SHAPES.filter(([label]) => label.startsWith('tracked insertion')))
+  test(`${shape}: an insert at an edge keeps the insertion one change (editing)`, async () => {
+    const failures: string[] = [];
+    for (const [command] of COMMANDS) {
+      if (DIVIDES_INSERTIONS.has(command.type)) continue;
+      for (const [place, selection] of edgeSelections(mount(body).surface!.session.part())) {
+        // The tracking review module decides changes; the editor stays in editing mode.
+        const editor = mount(body, 'suggesting');
+        editor.surface!.setSelection(selection);
+        const before = revisionItems(editor);
+        const { result } = await attempt(editor, command);
+        if (!result.ok) continue;
+        const after = revisionItems(editor);
+        if (after !== before) failures.push(`${command.type} ${place}: ${before} -> ${after}`);
+        const accepted = editor.exec({ type: 'acceptRevision', id: 90 } as EditorCommand);
+        if (!accepted.ok) failures.push(`${command.type} ${place}: accept by id refused`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });

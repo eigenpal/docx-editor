@@ -11,6 +11,7 @@ import { strFromU8, unzipSync } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { detectBodyTocs } from '@docx-editor.dev/core/store';
 import { collaborationModule } from '../collaboration-module.ts';
+import { reviewModule } from '../../review/review-module.ts';
 import { createPeerHarness, zipDocument } from './document-peer-support.ts';
 
 // 0: "Intro" then the field begins (offset 5); 1: closing line; 2: a heading; 3: "After".
@@ -249,7 +250,7 @@ test('two editors insert at field edges inside tracked insertions that hold text
       const editor = createDocxEditor({
         container: document.createElement('div'),
         document: peer.room.document,
-        modules: [collaborationModule({ session: peer.room.session })],
+        modules: [reviewModule(), collaborationModule({ session: peer.room.session })],
       });
       editors.push(editor);
       return editor;
@@ -302,8 +303,8 @@ test('two editors insert at field edges inside tracked insertions that hold text
     const begin = saved.indexOf('fldCharType="begin"');
     expect(saved.indexOf('<w:footnoteReference')).toBeLessThan(begin);
     expect(saved.indexOf('>L<')).toBeLessThan(begin);
-    // The begin character's insertion is divided: both copies are the same revision.
-    expect(revisionsKept(saved, 9)).toBe(2);
+    // The footnote and the typed text join the insertion they were placed in: one change.
+    expect(revisionsKept(saved, 9)).toBe(1);
 
     // Undo and redo of the footnote reach the other peer.
     expect(left.exec({ type: 'undo' })).toMatchObject({ ok: true });
@@ -315,6 +316,19 @@ test('two editors insert at field edges inside tracked insertions that hold text
       saved.indexOf('fldCharType="begin"')
     );
 
+    // One peer adds an endnote at the end edge while the other accepts that insertion by id.
+    pair.pause();
+    select(right, endId, 2);
+    expect(right.exec({ type: 'insertNote', noteKind: 'endnote' })).toMatchObject({ ok: true });
+    expect(left.exec({ type: 'acceptRevision', id: 10 } as never)).toMatchObject({ ok: true });
+    pair.resume();
+    saved = await converge(left, right, flush);
+    expect(saved).not.toMatch(/<w:ins [^>]*w:id="10"/);
+    expect(saved.indexOf('<w:endnoteReference')).toBeGreaterThan(
+      saved.indexOf('fldCharType="end"')
+    );
+    expect(fieldShape(saved)).toEqual(['begin', 'separate', 'end']);
+
     // A refresh keeps the inserts and the revisions on both peers, and they survive reopening.
     expect(right.exec({ type: 'refreshToc', mode: 'entire' })).toMatchObject({ ok: true });
     saved = await converge(left, right, flush);
@@ -323,7 +337,6 @@ test('two editors insert at field edges inside tracked insertions that hold text
     expect(saved).toContain('<w:footnoteReference');
     expect(fieldShape(saved)).toEqual(['begin', 'separate', 'end']);
     revisionsKept(saved, 9);
-    revisionsKept(saved, 10);
     const reopened = createDocxEditor({
       container: document.createElement('div'),
       document: await left.save(),

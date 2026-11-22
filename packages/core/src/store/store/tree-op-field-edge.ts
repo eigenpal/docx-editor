@@ -37,7 +37,7 @@ import {
   replaceChildren,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
-import { cloneWithNewIds, isRunPropertiesNode } from './tree-op-nodes.ts';
+import { cloneWithNewIds, isRunPropertiesNode, parentOf } from './tree-op-nodes.ts';
 import { contains } from './tree-op-split-runs.ts';
 import { isInlineContainerProperty } from '../package/inline-container-properties.ts';
 import { directParentOf } from './tree-op-field-end-site.ts';
@@ -248,9 +248,10 @@ export function isolateFieldEdge(
   paragraph: OoxmlParagraphNode,
   offset: number,
   options?: EditOptions
-): { readonly part: OoxmlPart; readonly paragraph: OoxmlParagraphNode } | null {
+): IsolatedFieldEdge | null {
   const edge = fieldEdgeAt(paragraph, offset);
   let current = { part, paragraph };
+  const divided: (readonly [string, string])[] = [];
   for (const [id, after] of [
     [edge?.endId, true],
     [edge?.beginId, false],
@@ -260,9 +261,9 @@ export function isolateFieldEdge(
     let minted = 0; // a division mints its tail's id; none minted means nothing was divided
     const mint = () => (minted++, allocate());
     const children = current.paragraph.children.flatMap((child) => {
-      const divided = divideAt(child, id, after, mint, 0);
-      if (!divided) return [child];
-      return [divided.head, divided.tail].filter((node): node is OoxmlNode => !!node);
+      const pieces = divideAt(child, id, after, mint, 0, divided);
+      if (!pieces) return [child];
+      return [pieces.head, pieces.tail].filter((node): node is OoxmlNode => !!node);
     });
     if (minted === 0) continue;
     const replaced = replaceChildren(current.part, current.paragraph.id, children, options);
@@ -271,7 +272,14 @@ export function isolateFieldEdge(
     if (reloaded?.kind !== 'paragraph') return null;
     current = { part: replaced.part, paragraph: reloaded as OoxmlParagraphNode };
   }
-  return current;
+  return { ...current, divided };
+}
+
+/** A paragraph after {@link isolateFieldEdge}, with each insertion it divided (head, tail). */
+export interface IsolatedFieldEdge {
+  readonly part: OoxmlPart;
+  readonly paragraph: OoxmlParagraphNode;
+  readonly divided: readonly (readonly [string, string])[];
 }
 
 /** Whether a field edge may divide `node` into two copies: runs and lossless inline wrappers. */
@@ -297,14 +305,15 @@ function divideAt(
   id: string,
   after: boolean,
   mint: () => string,
-  depth: number
+  depth: number,
+  divided: (readonly [string, string])[]
 ): { readonly head: OoxmlNode | null; readonly tail: OoxmlNode | null } | null {
   if (node.id === id) return after ? { head: node, tail: null } : { head: null, tail: node };
   if (node.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return null;
   const index = node.children.findIndex((child) => contains(child, id));
   if (index < 0) return null;
   const child = node.children[index]!;
-  const inner = divideAt(child, id, after, mint, nextInlineContainerDepth(node, depth));
+  const inner = divideAt(child, id, after, mint, nextInlineContainerDepth(node, depth), divided);
   if (!inner) return null;
   const pieces = [inner.head, inner.tail].filter((piece): piece is OoxmlNode => !!piece);
   const whole = (children: readonly OoxmlNode[]) => ({ ...node, children }) as OoxmlNode;
@@ -319,14 +328,92 @@ function divideAt(
   if (head.length === 0) return { head: null, tail: spliced };
   if (tail.length === 0) return { head: spliced, tail: null };
   const properties = node.children.filter(property);
+  const tailId = mint();
+  if (node.kind === 'revisionInsert' || node.kind === 'revisionMoveTo') {
+    divided.push([node.id, tailId]);
+  }
   return {
     head: whole([...properties, ...head]),
     tail: {
       ...node,
-      id: mint(),
+      id: tailId,
       children: [...properties.map((item) => cloneWithNewIds(item, mint)), ...tail],
     } as OoxmlNode,
   };
+}
+
+/**
+ * Join the halves of each insertion {@link isolateFieldEdge} divided around untracked content,
+ * so one insertion stays one change, as untracked typing inside an insertion extends it. The
+ * halves stay divided when anything between them cannot sit in an insertion (another revision,
+ * a link), as a tracked insertion of another change does.
+ */
+export function rejoinDividedInsertions(
+  part: OoxmlPart,
+  divided: readonly (readonly [string, string])[],
+  options?: EditOptions
+): OoxmlPart {
+  let current = part;
+  for (const [headId, tailId] of divided) {
+    const holder = parentOf(current, headId);
+    if (!holder) continue;
+    const from = holder.children.findIndex((child) => child.id === headId);
+    const to = holder.children.findIndex((child) => child.id === tailId);
+    if (from < 0 || to <= from) continue;
+    const between = holder.children.slice(from + 1, to);
+    if (!between.every(insertable)) continue;
+    const head = holder.children[from]!;
+    const tail = holder.children[to]!;
+    if (head.kind === 'textValue' || tail.kind === 'textValue') continue;
+    const joined = { ...head, children: [...head.children, ...between, ...tail.children] };
+    const children = [
+      ...holder.children.slice(0, from),
+      joined as OoxmlNode,
+      ...holder.children.slice(to + 1),
+    ];
+    const replaced = replaceChildren(current, holder.id, children, options);
+    if (replaced.ok) current = replaced.part;
+  }
+  return current;
+}
+
+/** Content that may sit inside a `w:ins` (`EG_ContentRunContent` and range markers). */
+function insertable(node: OoxmlNode): boolean {
+  switch (node.kind) {
+    case 'run':
+    case 'bookmarkStart':
+    case 'bookmarkEnd':
+    case 'commentRangeStart':
+    case 'commentRangeEnd':
+    case 'contentControl':
+      return true;
+    case 'generic':
+      return node.namespaceUri === WML_NAMESPACE_URI && INSERTABLE_GENERIC.has(node.localName);
+    default:
+      return false;
+  }
+}
+const INSERTABLE_GENERIC = new Set([
+  'sdt',
+  'smartTag',
+  'customXml',
+  'proofErr',
+  'permStart',
+  'permEnd',
+]);
+
+/** Place whole nodes with `place` after isolating the field edge at `offset`, then rejoin. */
+export function placeAtFieldEdge(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  place: (part: OoxmlPart, paragraph: OoxmlParagraphNode) => OoxmlPart | null,
+  options?: EditOptions
+): OoxmlPart | null {
+  const isolated = isolateFieldEdge(part, paragraph, offset, options);
+  if (!isolated) return place(part, paragraph);
+  const placed = place(isolated.part, isolated.paragraph);
+  return placed && rejoinDividedInsertions(placed, isolated.divided, options);
 }
 
 /** Apply a write after isolating the field edges at `offsets` ({@link isolateFieldEdge}). */
@@ -337,9 +424,15 @@ export function withFieldEdgesIsolated(
   options: EditOptions | undefined,
   write: (part: OoxmlPart, paragraph: OoxmlParagraphNode) => TreeOpResult
 ): TreeOpResult {
-  let current: { part: OoxmlPart; paragraph: OoxmlParagraphNode } | null = { part, paragraph };
+  let current: IsolatedFieldEdge | null = { part, paragraph, divided: [] };
+  const divided: (readonly [string, string])[] = [];
   for (const offset of offsets) {
     current = current && isolateFieldEdge(current.part, current.paragraph, offset, options);
+    if (current) divided.push(...current.divided);
   }
-  return current ? write(current.part, current.paragraph) : { ok: false, reason: 'tree-invariant' };
+  if (!current) return { ok: false, reason: 'tree-invariant' };
+  const written = write(current.part, current.paragraph);
+  return written.ok && divided.length > 0
+    ? { ...written, part: rejoinDividedInsertions(written.part, divided, options) }
+    : written;
 }
