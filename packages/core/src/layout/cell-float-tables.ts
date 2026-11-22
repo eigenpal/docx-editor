@@ -2,12 +2,12 @@
 //
 // A nested table with `w:tblpPr` leaves the cell's flow. The cell is its whole world:
 //
-// - Horizontal (`w:horzAnchor`, 17.4.58): `text` and `margin` measure `w:tblpX` or align by
-//   `w:tblpXSpec` (17.4.63) within the cell's content box; `page` measures within the cell box.
+// - Horizontal (`w:horzAnchor`, an attribute of 17.4.57): `text` and `margin` measure `w:tblpX`
+//   or align by `w:tblpXSpec` within the cell's content box; `page` measures within the cell box.
 //   The table never leaves the cell box: it is clamped to stay inside it.
-// - Vertical (`w:vertAnchor`, 17.4.66): `text` measures `w:tblpY` from the top of the paragraph
+// - Vertical (`w:vertAnchor`, an attribute of 17.4.57): `text` measures `w:tblpY` from the top of the paragraph
 //   that follows the table, before its spacing; `margin` and `page` measure from the cell top.
-//   A `w:tblpYSpec` (17.4.65) of `top` (or `inside`) puts the table at that top.
+//   A `w:tblpYSpec` of `top` (or `inside`) puts the table at that top.
 // - Two adjacent tables with identical `w:tblpPr` stack: the later one starts at the bottom of
 //   the earlier one. Other floats of one cell never overlap, whatever `w:tblOverlap` (17.4.56)
 //   says: the later one moves right beside the earlier one, or left from mode 15, when its band
@@ -15,6 +15,17 @@
 //   table moved down also moves right by its own `w:leftFromText`.
 // - The cell's later paragraphs wrap around the table, its side distances and outer rules
 //   included, as body text wraps around a floating table (`table-wrap-zone.ts`).
+// - A text-anchored table whose band rises above its anchor keeps that place, and the earlier
+//   paragraphs of the cell that its band reaches lay out again around it: lines that fit beside
+//   it stay there, the others move below it, and the anchor follows them
+//   (`raisedFloatRestart`).
+//   §17.4.57, `tblpY`: "If it is negative, then the floating table is positioned before the
+//   anchor object in the direction of vertical text flow in this document." `bottomFromText`
+//   "Specifies the minimum distance which shall be maintained between the current floating
+//   table and the top of text in the paragraph which is below this floating table", and its
+//   default is 0, so no extra space below the table makes up for the negative offset. The
+//   specification does not say how earlier lines that the raised table covers move: lines
+//   that fit beside the table stay beside it and the others move below it, as wrapped text.
 // - The cell grows to hold the table. Vertical alignment moves the cell's text, never its
 //   floats, and counts the floats in the content height.
 //
@@ -25,8 +36,9 @@
 //
 // Not modelled, and so kept in flow as before: a `w:tblpYSpec` other than `top` or `inside`
 // (and `inline`, which never floats), and a table nested deeper than `MAX_CELL_FLOAT_DEPTH`.
-// Earlier lines of the cell do not wrap around a float raised above its anchor, or around one
-// positioned against the cell top.
+// Earlier lines of the cell do not wrap around a float positioned against the cell top, nor
+// move when a table, a paragraph continued from the previous page, or an anchored drawing comes
+// between them and the raised float.
 
 import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
 import type { ExclusionZone } from './drawing-exclusion.ts';
@@ -41,7 +53,12 @@ import { noOverlapShift, type NoOverlapObstacle } from './table-float-overlap.ts
 import { sameTablePosition } from './table-float-stack.ts';
 import { tableFloatOriginX } from './table-origin.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
-import { floatingTableZone } from './table-wrap-zone.ts';
+import {
+  bandRisesAboveText,
+  floatingTableZone,
+  leavesNoPassage,
+  raisedAboveText,
+} from './table-wrap-zone.ts';
 
 /** The box of the cell whose flow holds floats: its outer edges and top, in page points. */
 export interface CellFloatBox {
@@ -69,6 +86,12 @@ export interface CellFloats {
   paragraphDeps(deps: TableFlowDeps): TableFlowDeps;
   /** The bottom the cell content reaches at `y`, its floats included. */
   bottom(y: number): number;
+  /**
+   * Whether a float just placed moves or wraps the earlier lines of the cell it covers: a
+   * text-anchored float raised above its anchor that leaves no passage beside it, or one whose
+   * band rises above its anchor and leaves one.
+   */
+  reachesEarlierLines(fragment: BlockFragmentRecord): boolean;
 }
 
 function tablePropertiesOf(table: OoxmlElement): OoxmlElement | undefined {
@@ -122,6 +145,7 @@ export function createCellFloats(
   const zones: ExclusionZone[] = [];
   const obstacles: NoOverlapObstacle[] = [];
   const placed = new Map<OoxmlElement, TableFragmentRecord>();
+  const reaching = new WeakSet<TableFragmentRecord>();
   let floatBottom = Number.NEGATIVE_INFINITY;
   // The paragraph deps last built, reused until another float is placed.
   let zonedDeps = { base: deps, count: 0, deps };
@@ -173,11 +197,19 @@ export function createCellFloats(
           width: Math.max(0, right - left),
           columnIndex: 0,
           pageFramed: false,
-          reachesWhenSpanning: false,
+          // A raised float that leaves no passage moves the empty earlier lines it covers too.
+          reachesWhenSpanning: raisedAboveText(float),
         }
       )
     );
     const { x, y, width, height } = fragment.box;
+    const spans = leavesNoPassage(
+      x - distances.left,
+      x + width + distances.right,
+      left,
+      Math.max(0, right - left)
+    );
+    if (spans ? raisedAboveText(float) : bandRisesAboveText(float)) reaching.add(floating);
     obstacles.push({
       left: x - distances.left,
       top: y - distances.top,
@@ -312,7 +344,89 @@ export function createCellFloats(
       return zonedDeps.deps;
     },
     bottom: (y: number): number => Math.max(y, floatBottom),
+    reachesEarlierLines: (fragment: BlockFragmentRecord): boolean =>
+      fragment.kind === 'table' && reaching.has(fragment),
   };
+}
+
+/** Where a fresh paragraph of a cell flow started, so that a raised float can lay it out again. */
+export interface CellParagraphRestart {
+  /** The index of the paragraph's fragment in the cell flow. */
+  readonly fragmentIndex: number;
+  readonly blockIndex: number;
+  readonly top: number;
+  readonly previousSpaceAfter: number;
+  readonly afterTable: boolean;
+}
+
+const TOUCH = 0.01;
+
+/**
+ * The first of `restarts` that the band of a float placed after them reaches, when that float
+ * reaches earlier lines (`CellFloats.reachesEarlierLines`). The float keeps its place; that
+ * paragraph and the ones after it lay out again around the float.
+ */
+export function raisedFloatRestart(
+  fragment: TableFragmentRecord,
+  restarts: readonly CellParagraphRestart[],
+  fragments: readonly BlockFragmentRecord[]
+): CellParagraphRestart | undefined {
+  const bandTop = fragment.box.y - (fragment.floatingWrap?.float.distances?.top ?? 0);
+  return restarts.find((restart) => {
+    const box = fragments[restart.fragmentIndex]?.box;
+    return box !== undefined && box.y + box.height > bandTop + TOUCH;
+  });
+}
+
+/** Places the paragraph at `index` fresh at `at`, as the cell flow does. */
+type PlaceCellParagraph = (
+  index: number,
+  at: number,
+  spaceAfter: number,
+  afterTable: boolean,
+  placedCount: number
+) => {
+  readonly fragment: BlockFragmentRecord | null;
+  readonly bottom: number;
+  readonly spaceAfter: number;
+  readonly complete: boolean;
+  readonly fitted: boolean;
+};
+
+/**
+ * Lay the paragraphs from `restart` up to block `end` out again, now that the raised float is
+ * placed and wraps them. Undefined when one of them no longer fits the band: the paragraphs
+ * then keep their first place.
+ */
+export function relayAroundRaisedFloat(
+  restart: CellParagraphRestart,
+  end: number,
+  blocks: readonly OoxmlElement[],
+  place: PlaceCellParagraph
+): { readonly fragments: BlockFragmentRecord[]; readonly bottom: number } | undefined {
+  const fragments: BlockFragmentRecord[] = [];
+  let at = restart.top;
+  let spaceAfter = restart.previousSpaceAfter;
+  let afterTable = restart.afterTable;
+  for (let index = restart.blockIndex; index < end; index++) {
+    if (blocks[index]!.kind !== 'paragraph') {
+      afterTable = false;
+      continue;
+    }
+    const again = place(
+      index,
+      at,
+      spaceAfter,
+      afterTable,
+      restart.fragmentIndex + fragments.length
+    );
+    if (!again.fitted || !again.fragment || !again.complete) return undefined;
+    fragments.push(again.fragment);
+    at = again.bottom;
+    spaceAfter = again.spaceAfter;
+    afterTable = false;
+  }
+  return { fragments, bottom: at };
 }
 
 /**

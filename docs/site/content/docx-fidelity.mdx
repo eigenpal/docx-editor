@@ -258,7 +258,8 @@ Compact equation replacement is disabled when it cannot keep the source. The equ
 - A floating table in a table cell is positioned within that cell and stays inside the cell box. The cell text wraps around it, and the cell grows to hold it.
 - In a cell, `page` and `margin` vertical anchors measure from the top of the cell. Floats in one cell do not overlap. Vertical cell alignment moves the text but not the floats.
 - A cell float that does not fit the space left on the page breaks there. Its next part floats at the top of the cell.
-- A cell float with a vertical alignment other than `top` stays in the text flow. Earlier lines of the cell do not wrap around a cell float.
+- A cell float with a vertical alignment other than `top` stays in the text flow.
+- A text-anchored cell float raised above its anchor keeps its position. The earlier lines of the cell that it covers wrap beside it or move below it. Earlier lines do not wrap around a cell float anchored to the page or margin.
 - You cannot edit floating-table properties. Save keeps them.
 
 ### Pages and sections

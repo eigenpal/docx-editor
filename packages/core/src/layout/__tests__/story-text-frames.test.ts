@@ -163,8 +163,6 @@ test('page-number frames that wrap text out of place, follow page parity, or spa
   for (const content of [
     // A frame that wraps text and has a fixed width holds no fields.
     number(frame('w:wrap="around"')),
-    // A page number that wraps text and ends below it would grow the footer.
-    number(framePr('around', 'right', '400')),
     // Direct indents and borders shape the frame's own paragraph, so it keeps its flow.
     number(framePr('around') + '<w:ind w:left="200"/>'),
     number(framePr('around') + '<w:pBdr><w:bottom w:val="single"/></w:pBdr>'),
@@ -279,4 +277,91 @@ test('a page-anchored page number in a header takes the lane', () => {
   expect(textOf(number!)).toBe('Page 12');
   expect(number!.box.x).toBe(400);
   expect(anchor!.box.y).toBe(0);
+});
+
+test('a page number in larger runs than its anchor keeps the frame position and the anchor height', () => {
+  const sized = pageField('PAGE', '1').replaceAll(
+    '<w:r>',
+    '<w:r><w:rPr><w:sz w:val="40"/></w:rPr>'
+  );
+  for (const root of ['hdr', 'ftr'])
+    for (const wrap of ['around', 'auto'])
+      for (const align of ['center', 'right'])
+        for (const y of ['1', '400']) {
+          const framePr = `<w:framePr w:wrap="${wrap}" w:vAnchor="text" w:hAnchor="margin" w:xAlign="${align}" w:y="${y}"/>`;
+          const plain = lay(text('Version 9'), root).story;
+          const { story, paragraphs } = lay(framed(framePr, sized) + text('Version 9'), root);
+          const [number, anchor] = paragraphs;
+          // The frame's line height comes from its own runs, and its top is `w:y` below the anchor's top.
+          expect(number!.lines[0]!.box.height).toBeGreaterThan(anchor!.lines[0]!.box.height);
+          expect(number!.box.y).toBeCloseTo(anchor!.box.y + Number(y) / 20, 6);
+          const left = number!.lines[0]!.spans[0]!.box.x;
+          expect(left).toBeCloseTo(
+            align === 'right' ? 460 - number!.box.width : (460 - number!.box.width) / 2,
+            6
+          );
+          // The anchor text stays in place, and the story reserves only its own height.
+          expect(anchor!.box.y).toBe(0);
+          expect(textOf(anchor!)).toBe('Version 9');
+          expect(number!.box.y + number!.box.height).toBeGreaterThan(story.flowHeight);
+          expect(story.flowHeight).toBe(plain.flowHeight);
+        }
+});
+
+test('a page number that wraps text and reaches a table below its anchor stays in flow', () => {
+  const sized = pageField('PAGE', '1').replaceAll(
+    '<w:r>',
+    '<w:r><w:rPr><w:sz w:val="40"/></w:rPr>'
+  );
+  const table =
+    '<w:tbl><w:tblPr><w:tblW w:w="9200" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="9200"/></w:tblGrid>' +
+    '<w:tr><w:tc><w:tcPr><w:tcW w:w="9200" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+  for (const y of ['1', '400']) {
+    const framePr = `<w:framePr w:wrap="around" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="${y}"/>`;
+    const { paragraphs } = lay(framed(framePr, sized) + text('Version 9') + table, 'ftr');
+    expect(paragraphs.some((paragraph) => paragraph.outOfFlow)).toBe(false);
+  }
+});
+
+test('a page number in larger runs keeps the anchor height on every page', () => {
+  const sized = pageField('PAGE', '1').replaceAll(
+    '<w:r>',
+    '<w:r><w:rPr><w:sz w:val="40"/></w:rPr>'
+  );
+  const framePr =
+    '<w:framePr w:wrap="around" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="1"/>';
+  const plain = lay(text('Version 9'), 'ftr').story;
+  const { story } = lay(framed(framePr, sized) + text('Version 9'), 'ftr');
+  for (const pageNumber of [1, 12, 12345]) {
+    const projected = story.withPageContext({
+      ...page,
+      pageNumber,
+      pageCount: 20000,
+      sectionPageCount: 20000,
+    });
+    const [number, anchor] = projected.fragments as readonly ParagraphFragmentRecord[];
+    expect(number!.outOfFlow).toBe(true);
+    expect(textOf(number!)).toBe(String(pageNumber));
+    expect(inkRight(number!)).toBeCloseTo(460, 6);
+    expect(anchor!.box.y).toBe(0);
+    expect(projected.flowHeight).toBe(plain.flowHeight);
+  }
+});
+
+test('a page number that would start past the sheet edge stays in flow', () => {
+  // The test page reserves 30 pt below the footer and is 800 pt tall.
+  for (const [root, y] of [
+    ['ftr', '1000'],
+    ['hdr', '16000'],
+  ] as const) {
+    const framePr = `<w:framePr w:wrap="around" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="${y}"/>`;
+    const { paragraphs } = lay(framed(framePr, pageField('PAGE', '1')) + text('Version 9'), root);
+    expect(paragraphs.some((paragraph) => paragraph.outOfFlow)).toBe(false);
+  }
+  // A frame that starts on the sheet keeps its place, even when the sheet clips its end.
+  const framePr =
+    '<w:framePr w:wrap="around" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="700"/>';
+  const { paragraphs } = lay(framed(framePr, pageField('PAGE', '1')) + text('Version 9'), 'ftr');
+  expect(paragraphs[0]!.outOfFlow).toBe(true);
+  expect(paragraphs[0]!.box.y).toBeCloseTo(35, 6);
 });

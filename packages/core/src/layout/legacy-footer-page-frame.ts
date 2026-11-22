@@ -211,9 +211,11 @@ export function positionLegacyFooterPageFrame<
   };
   // Both canonical paragraph identities remain addressable, even though the empty
   // anchor occupies the same band. Never delete it or rewrite framePr to fake pagination.
+  // The text-anchored frame takes no room in the story: the footer reserves the anchor's
+  // height, even when the frame's runs are larger than the anchor's paragraph mark.
   return {
     ...flow,
     blocks: [centered, anchor],
-    bottom: Math.max(centered.box.y + centered.box.height, anchor.box.y + anchor.box.height),
+    bottom: anchor.box.y + anchor.box.height,
   };
 }

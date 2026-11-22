@@ -58,7 +58,7 @@ test('centers the legacy PAGE frame without charging its empty anchor paragraph 
   const second = story.fragments[1]!;
   if (first.kind !== 'paragraph' || second.kind !== 'paragraph')
     throw new Error('paragraphs required');
-  expect(story.flowHeight).toBeCloseTo(first.box.height + 0.05, 3);
+  expect(story.flowHeight).toBeCloseTo(second.box.height, 3);
   expect(first.alignment).toBe('center');
   const span = first.lines[0]!.spans[0]!;
   expect(span.box.x + span.box.width / 2).toBeCloseTo(200, 4);
@@ -101,7 +101,6 @@ function expectPlacedBeside(content: string): void {
 
 test('leaves other frame structures in ordinary flow', () => {
   const samples = [
-    body.replace('w:y="1"', 'w:y="200"'),
     body.replace('w:y="1"', 'w:y="1" w:w="200"'),
     body.replace(' PAGE ', ' NUMPAGES '),
     body.replace(' PAGE ', ' PAGEREF anchor '),
@@ -115,8 +114,10 @@ test('leaves other frame structures in ordinary flow', () => {
     const story = layoutHeaderFooterStory(partOf(content), 400, measurer, 'test');
     expect(story.fragments[1]!.box.y).toBeGreaterThan(0);
   }
-  // A number that stays clear of the anchor's text takes the general story frame lane.
+  // A number that stays clear of the anchor's text takes the general story frame lane, even
+  // when `w:y` moves it below the anchor's band.
   expectPlacedBeside(body.replace('w:xAlign="center"', 'w:xAlign="left"'));
+  expectPlacedBeside(body.replace('w:y="1"', 'w:y="200"'));
   expectPlacedBeside(
     body.replace('</w:pPr></w:p>', '</w:pPr><w:r><w:t>not empty</w:t></w:r></w:p>')
   );
@@ -146,7 +147,7 @@ test('centers PAGE over a middle-dot anchor without moving or merging its text',
       end = first.lines[0]!.spans.at(-1)!.box;
     expect((start.x + end.x + end.width) / 2).toBeCloseTo(200, 4);
     expect(second.box.y).toBe(0);
-    expect(projected.flowHeight).toBeCloseTo(first.box.height + 0.05, 3);
+    expect(projected.flowHeight).toBeCloseTo(second.box.height, 3);
   }
   expect(serializeOoxmlPart(part)).toBe(before);
 });
@@ -255,4 +256,23 @@ test('clicks on the middle-dot decoration reach the anchor paragraph', () => {
   expect(onDot?.position).toEqual({ paragraphId: anchor.paragraphId, offset: 0 });
   const onPage = hitTestFragments(model, 0, story.fragments, { x: 200, y: 3 });
   expect(onPage?.position.paragraphId).toBe(framed.paragraphId);
+});
+
+test('a PAGE frame in larger runs than its empty anchor keeps the anchor height', () => {
+  const plain = layoutHeaderFooterStory(partOf(), 400, measurer, 'test');
+  const larger = body.replaceAll('<w:r>', '<w:r><w:rPr><w:sz w:val="40"/></w:rPr>');
+  const story = layoutHeaderFooterStory(partOf(larger), 400, measurer, 'test');
+  const [first, second] = story.fragments;
+  if (first?.kind !== 'paragraph' || second?.kind !== 'paragraph')
+    throw new Error('paragraphs required');
+  // The frame's line comes from its own runs and starts 1 twip below the anchor's top.
+  expect(first.lines[0]!.box.height).toBeGreaterThan(second.lines[0]!.box.height);
+  expect(first.box.y).toBeCloseTo(second.box.y + 0.05, 6);
+  const span = first.lines[0]!.spans[0]!;
+  expect(span.box.x + span.box.width / 2).toBeCloseTo(200, 4);
+  // The footer reserves the empty anchor's height, so the frame ends below the story.
+  expect(second.box.y).toBe(0);
+  expect(story.flowHeight).toBeCloseTo(second.box.height, 6);
+  expect(story.flowHeight).toBeCloseTo(plain.flowHeight, 6);
+  expect(first.box.y + first.box.height).toBeGreaterThan(story.flowHeight);
 });

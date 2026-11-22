@@ -140,7 +140,6 @@ test('frame and empty anchor keep separate caret positions and pointer targets',
 test('unknown frames, two fields, and unsupported fields keep ordinary flow', () => {
   for (const xml of [
     body().replace('w:vAnchor="text"', 'w:vAnchor="page"'),
-    body().replace('w:y="1"', 'w:y="400"'),
     body().replace('w:y="1"', 'w:y="1" w:w="200"'),
     body().replace(' PAGE ', ' NUMPAGES '),
     body().replace(' PAGE ', ' INCLUDETEXT file '),
@@ -153,8 +152,10 @@ test('unknown frames, two fields, and unsupported fields keep ordinary flow', ()
     expect(result.fragments[1]!.box.y).toBeGreaterThan(0);
     expect(result.flowHeight).toBe(ordinary.flowHeight);
   }
-  // A visible anchor or a later paragraph clear of the number takes the general frame lane.
+  // A visible anchor, a later paragraph clear of the number, or a number that `w:y` moves
+  // below the anchor's band takes the general frame lane.
   for (const xml of [
+    body().replace('w:y="1"', 'w:y="400"'),
     body().replace(anchor, anchor.replace('</w:p>', '<w:r><w:t>Visible</w:t></w:r></w:p>')),
     body() + anchor,
   ]) {
