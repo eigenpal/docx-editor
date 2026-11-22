@@ -800,6 +800,39 @@ The mark's run language (`w:lang` `w:eastAsia`) SHALL select its blank sides. A 
 - **WHEN** the mark overflows the measure by 6 pt
 - **THEN** the mark starts at the margin
 
+### Requirement: Alternate line-break rules
+
+With `w:useAltKinsokuLineBreakRules` before `w:compatSetting` `compatibilityMode` 15, a line-end mark from U+2000 up outside the hanging set of its run language (`w:lang` `w:eastAsia`) SHALL NOT hang. Only Japanese `、。，．` SHALL stay in that set. When `w:characterSpacingControl` compresses punctuation, a mark with a blank right half SHALL pass the margin only by the overflow, up to that half. A larger overflow SHALL wrap it unless interior blank sides make room. Other marks SHALL wrap.
+
+#### Scenario: Only the overflow passes the margin
+
+- **GIVEN** a justified line of nineteen 24 pt ideographs and a Simplified Chinese 24 pt `，`, with `w:characterSpacingControl` set to `compressPunctuation`, `w:useAltKinsokuLineBreakRules`, and `compatibilityMode` 14
+- **WHEN** the mark overflows the measure by 6 pt
+- **THEN** the mark starts 24 pt before the margin, and the ideographs keep their advances
+- **AND** a 13 pt overflow wraps the mark with the ideograph before it
+
+#### Scenario: A mark without a blank right half wraps
+
+- **GIVEN** the same line with a Traditional Chinese `，` or a Simplified Chinese `？`
+- **WHEN** the mark overflows the measure by 1 pt
+- **THEN** the mark wraps with the ideograph before it, and optical fitting does not compress it
+
+#### Scenario: Mode 15 ignores the setting
+
+- **GIVEN** the same line in `compatibilityMode` 15
+- **WHEN** the mark overflows the measure by 6 pt
+- **THEN** only its blank half hangs, and the ideographs spread to meet it
+
+### Requirement: Semicolon bearings in optical fitting
+
+In optical fitting, an interior `；` SHALL give up its blank half in every compatibility mode. A final `；` SHALL keep it.
+
+#### Scenario: An ideograph fits after an interior semicolon
+
+- **GIVEN** a justified line of eighteen 24 pt ideographs and an interior 24 pt `；`, with document punctuation compression
+- **WHEN** one more ideograph overflows the measure by 6 pt
+- **THEN** the semicolon gives up 6 pt and the ideograph stays on the line
+
 ### Requirement: Formatting of a hanging mark ends before its compressed blank
 
 When `w:characterSpacingControl` compresses punctuation, the run formatting of a hanging line-end mark (`w:overflowPunct`) with a trailing blank side SHALL end before that blank, clear of the glyph's ink: `w:highlight`, `w:shd`, `w:u`, `w:strike`, `w:ins`, and `w:del`. The glyph, its box, line breaks, and caret positions SHALL NOT change, and screen paint and PDF export SHALL agree. A mark that moves to the next line SHALL take its hang with it.

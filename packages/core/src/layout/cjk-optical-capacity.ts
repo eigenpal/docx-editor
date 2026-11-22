@@ -62,8 +62,11 @@ export function exceedsLegacyAdmission(
   let counted = false;
   let half = 0;
   const last = cells.at(-1)!;
+  // A final semicolon keeps its blank (see `fitCjkOptically`), so it does not close the group.
   const closes =
-    CLOSING.test(last.span.text) || last.qualifiedCurly === 'closing' || quoteAdvance > 0;
+    (CLOSING.test(last.span.text) && last.span.text !== '；') ||
+    last.qualifiedCurly === 'closing' ||
+    quoteAdvance > 0;
   deficit -= quoteAdvance / 2;
   for (const cell of cells) {
     if (cell.sourceIndex < sourceCount) continue;

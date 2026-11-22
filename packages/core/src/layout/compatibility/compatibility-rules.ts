@@ -278,6 +278,12 @@ export const PROFILE_RULES = {
     source: 'ECMA-376 Part 1 §17.15.3.1 adjustLineHeightInTable',
     applies: (p) => p.legacy.adjustLineHeightInTable === true,
   },
+  alternateLineEndFit: {
+    behavior:
+      'A full-width or curly line-end mark outside the hanging set of its language never hangs. With punctuation compression, a mark with a blank right half passes the margin only by the overflow, up to that half; a larger overflow wraps it unless interior blank sides make room. Half-width Latin marks are unchanged. Only legacy modes read the option',
+    source: 'ECMA-376 Part 4 §14.8.3 useAltKinsokuLineBreakRules',
+    applies: (p) => p.legacy.useAltKinsokuLineBreakRules === true && p.modeClass === 'legacy',
+  },
   doNotBreakWrappedTables: {
     behavior:
       'A floating table never breaks across pages, and moves up onto the sheet when it passes the bottom edge. Only legacy modes read the option',

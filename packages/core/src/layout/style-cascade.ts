@@ -484,6 +484,8 @@ export function buildStyleCascadeTable(
   let typography = cjkTypographyFromSettings(settingsRoot);
   if (compatibility.has('lineEndPunctuationAtEveryAlignment'))
     typography = Object.freeze({ ...typography, legacyLineEndPunctuation: true as const });
+  if (compatibility.has('alternateLineEndFit'))
+    typography = Object.freeze({ ...typography, alternateLineEndFit: true as const });
   if (typography.balancedWidths && compatibility.has('balancedSpaceShrink'))
     typography = Object.freeze({ ...typography, balancedSpaceShrink: true as const });
   const ligaturesEnabled = compatibility.has('optionalLigatures');

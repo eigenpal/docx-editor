@@ -1,6 +1,11 @@
 import { setLineHangingPunctuationAdvance } from './line-hanging-punctuation.ts';
 import { hangingCjkPunctuationAdvance } from './cjk-spacing.ts';
-import { blankSideHangingAdvance, compressedTrailingBlank } from './hanging-mark-blanks.ts';
+import {
+  alternateLineEndAdvance,
+  alternateLineEndDecides,
+  blankSideHangingAdvance,
+  compressedTrailingBlank,
+} from './hanging-mark-blanks.ts';
 import { eastAsianLanguage, isKorean, type CjkParagraphTypography } from './cjk-typography.ts';
 import type { FieldAwarePiece } from './field-projection.ts';
 import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
@@ -74,11 +79,17 @@ export function rememberLineEndHang(
   const language = eastAsianLanguage(piece.props);
   if (advance !== undefined && flow?.koreanHangingLineFills !== true && isKorean(language))
     advance = undefined;
-  // When `w:characterSpacingControl` compresses punctuation, a mark that overflows by no more
-  // than its blank sides hangs only its trailing blank, and the text before it fills the rest
-  // of the measure.
+  // Under the alternate line-break rules (`w:useAltKinsokuLineBreakRules`), only the overflow
+  // passes the margin, within the mark's blank half. Otherwise, when
+  // `w:characterSpacingControl` compresses punctuation, a mark that overflows by no more than
+  // its blank sides hangs only its trailing blank, and the text before it fills the rest of
+  // the measure.
   const whole = advance;
-  if (advance !== undefined)
+  const mark = span.text.at(-1) ?? '';
+  if (advance !== undefined && alternateLineEndDecides(mark, language, typography)) {
+    const limit = alternateLineEndAdvance(mark, piece, advance, typography);
+    advance = limit === undefined ? undefined : Math.min(limit, overflow);
+  } else if (advance !== undefined)
     advance = blankSideHangingAdvance(span.text, piece, advance, overflow, typography);
   if (advance !== undefined || !span.lineEndWhitespace) {
     setLineHangingPunctuationAdvance(line, advance);

@@ -35,6 +35,13 @@ export interface CjkTypographySettings {
    */
   readonly legacyLineEndPunctuation?: true;
   /**
+   * The compatibility rule `alternateLineEndFit` (`w:useAltKinsokuLineBreakRules` in a legacy
+   * mode): a line-end mark outside its language's hanging set never hangs. It may give up a
+   * blank right half to fit, as `alternateLineEndAdvance` describes.
+   * @internal
+   */
+  readonly alternateLineEndFit?: true;
+  /**
    * The compatibility setting `w:balanceSingleByteDoubleByteWidth`: a space beside East Asian
    * text, and each space of a run of spaces, takes the balanced width (`balanced-space-widths.ts`).
    * Lines in a legacy mode keep their natural inter-word spaces, also with punctuation

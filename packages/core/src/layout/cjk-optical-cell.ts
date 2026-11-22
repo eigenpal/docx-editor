@@ -4,9 +4,9 @@ import { isCjk } from './cjk-paragraph-breaks.ts';
 
 /** Opening and closing East Asian brackets and marks; a colon gives its right side. */
 export const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
-export const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
-export const PUNCTUATION = /^[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]$/u;
-export const HAS_PUNCTUATION = /[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]/u;
+export const CLOSING = /^[、。〉》」』】〕〗〙〛），．；］｝]$/u;
+export const PUNCTUATION = /^[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．；］｝：]$/u;
+export const HAS_PUNCTUATION = /[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．；］｝：]/u;
 /**
  * Latin-face text kept whole on a qualified line: Latin script, digits, symbols, and
  * punctuation. Other scripts and controls refuse, because automatic East Asian spacing

@@ -5,6 +5,7 @@ import { formatRevisionOf } from './revision-projection.ts';
 import { segmentGraphemes } from './grapheme.ts';
 import { measureDisplayText, type ResolvedRunStyle } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
+import { alternateLineEndAdvance, alternateLineEndDecides } from './hanging-mark-blanks.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import {
   eastAsianLanguage,
@@ -403,8 +404,10 @@ export interface HangingMarkOptions {
    */
   readonly paragraphFinal?: boolean;
   /**
-   * The paragraph typography. With it, a mark hangs only when the line-start rules forbid it
-   * at a line start; otherwise it starts the next line.
+   * The paragraph typography. With it, a mark hangs only when the line-start rules (`w:kinsoku`,
+   * `w:noLineBreaksBefore`) forbid it at a line start; otherwise it starts the next line. Under
+   * the alternate line-break rules (`w:useAltKinsokuLineBreakRules`) it also limits the advance
+   * (see `alternateLineEndAdvance`).
    */
   readonly policy?: CjkParagraphTypography;
 }
@@ -435,7 +438,10 @@ export function hangingCjkPunctuationAdvance(
   if (!FULLWIDTH_PUNCTUATION.test(tail) && !language) return undefined;
   const last = segmentGraphemes(text).at(-1)?.text;
   if (!last || !HANGING_CLASS.test(last)) return undefined;
-  return measureDisplayText(last, styleForFontSlot(piece.style, piece.fontSlot), measurer);
+  const advance = measureDisplayText(last, styleForFontSlot(piece.style, piece.fontSlot), measurer);
+  return alternateLineEndDecides(last, language, policy)
+    ? alternateLineEndAdvance(last, piece, advance, policy)
+    : advance;
 }
 
 /** Whether the text fits the remaining measure once its final mark hangs past the margin. */
