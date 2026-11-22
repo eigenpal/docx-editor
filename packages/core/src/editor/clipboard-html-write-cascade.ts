@@ -169,6 +169,21 @@ export function paragraphPropertySources(
   return sources;
 }
 
+/**
+ * The index of the source whose `w:numPr` removes the paragraph's numbering, or -1.
+ *
+ * The last source that states a `w:numId` decides, as it does for list membership. When it
+ * states `w:val="0"`, the leading indent and the first-line offset of every source before
+ * it reset to zero, as layout resolves them (`numberingTier`).
+ */
+export function numberingRemovalSource(sources: readonly OoxmlElement[]): number {
+  for (let index = sources.length - 1; index >= 0; index -= 1) {
+    const numId = wmlChild(wmlChild(sources[index]!, 'numPr'), 'numId');
+    if (numId) return wmlVal(numId) === '0' ? index : -1;
+  }
+  return -1;
+}
+
 /** Run property sources grouped by cascade level, so toggles can XOR per level. */
 export interface RunPropertyLayers {
   /** Every source lowest-precedence first, for the non-toggle folds. */

@@ -11,6 +11,7 @@ import {
   buildStyleCascadeTable,
   resolveParagraphLayoutInputs,
   type StyleCascadeTable,
+  type TableCellStyleFormatting,
 } from '../style-cascade.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -55,13 +56,20 @@ const NUMBERING = buildNumberingIndex(
 const STYLES = styleTable();
 
 /** Layout inputs of one paragraph with `pPr`, as the story resolver hands them over. */
-function inputs(pPr: string, styles = STYLES) {
+function inputs(pPr: string, styles = STYLES, cellStyle?: TableCellStyleFormatting) {
   const part = read(
     `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr>${pPr}</w:pPr><w:r><w:t>Text</w:t></w:r></w:p></w:body></w:document>`
   );
   const blocks = part.root.children[0]!.children as OoxmlElement[];
   const item = resolveStoryListItems(blocks, NUMBERING, styles).get(blocks[0]!.id);
-  return resolveParagraphLayoutInputs(blocks[0]!, 468, styles, item);
+  return resolveParagraphLayoutInputs(
+    blocks[0]!,
+    468,
+    styles,
+    item,
+    cellStyle,
+    cellStyle !== undefined
+  );
 }
 
 describe('a direct numId 0 resets the inherited leading indent', () => {
@@ -102,6 +110,24 @@ describe('a direct numId 0 resets the inherited leading indent', () => {
   test('indents from the default paragraph style and the document defaults', () => {
     expect(inputs(ZERO, styleTable('', '<w:ind w:left="360"/>')).indent.left).toBe(0);
     expect(inputs(ZERO, styleTable('<w:ind w:left="540"/>')).indent.left).toBe(0);
+  });
+
+  test('an indent from the table style of the cell', () => {
+    const cellStyle: TableCellStyleFormatting = {
+      paragraphProperties: [{ localName: 'ind', attributes: { left: '720' } }],
+      paragraphPropertyNodes: [],
+      runProperties: [],
+    };
+    expect(inputs('', STYLES, cellStyle).indent.left).toBe(36);
+    expect(inputs(ZERO, STYLES, cellStyle).indent.left).toBe(0);
+  });
+
+  test('character-unit indents reset with the twips', () => {
+    const chars = inputs(
+      `<w:pStyle w:val="Indented"/>${ZERO}`,
+      styleTable('<w:ind w:leftChars="400" w:firstLineChars="200"/>')
+    ).props.filter((property) => property.localName === 'ind');
+    expect(chars.at(-1)?.attributes).toMatchObject({ leftChars: '0', firstLineChars: '0' });
   });
 
   test('a right-to-left paragraph resets its leading side, the right', () => {

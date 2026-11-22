@@ -73,11 +73,15 @@ function numberingRemovalRank(
 }
 
 /**
- * What a numbering removal states at its rank: no leading indent and no first-line offset.
- * The trailing indent is not part of it.
+ * What a numbering removal states at its rank: no leading indent and no first-line offset,
+ * in twips and in character units. The trailing indent is not part of it. Only the flat
+ * property list carries this tier; `paragraphPropertyNodes` has no node for it.
  */
 const REMOVED_NUMBERING_PROPERTIES: readonly OoxmlProperty[] = Object.freeze([
-  Object.freeze({ localName: 'ind', attributes: Object.freeze({ left: '0', firstLine: '0' }) }),
+  Object.freeze({
+    localName: 'ind',
+    attributes: Object.freeze({ left: '0', leftChars: '0', firstLine: '0', firstLineChars: '0' }),
+  }),
 ]);
 
 /**
@@ -91,7 +95,7 @@ const REMOVED_NUMBERING_PROPERTIES: readonly OoxmlProperty[] = Object.freeze([
  * it, and a style stating `w:numId w:val="0"` cancels its bases' indents but keeps its own.
  * A `w:ind` the paragraph states still applies, and the trailing indent is unchanged.
  */
-export function numberingLevelProperties(
+export function numberingTier(
   chain: readonly StyleDefinition[],
   directPPr: OoxmlNode | undefined,
   levelPPr: OoxmlElement | undefined

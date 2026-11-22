@@ -235,6 +235,30 @@ describe('Backspace at the start of a list item', () => {
     expect(markers(editor)).toEqual([null, '\u2022', null]);
   });
 
+  test('the item left by numId 0 keeps its text position without the style hanging', () => {
+    const bullet = (text: string) => paragraph(text, '<w:pStyle w:val="ListBullet"/>');
+    const editor = mount(docx(paragraph('Intro') + bullet('One') + bullet('Two')));
+    const indentOf = (index: number) => {
+      const fragment = editor
+        .surface!.layout()
+        .pages.flatMap((page) => page.fragments)
+        .filter((entry) => entry.kind === 'paragraph')[index];
+      return fragment?.kind === 'paragraph' ? fragment.indent : undefined;
+    };
+    backspaceAt(editor, 2);
+    // `w:numId w:val="0"` resets the style's hanging, and the written left holds the text.
+    expect(own(editor, 2)).toEqual(['pStyle(val=ListBullet)', 'numPr', 'ind(left=720)']);
+    expect(indentOf(2)).toEqual({ left: 36, right: 0, hanging: 0, firstLine: 0 });
+    // Lined up with the item before it, so the next press steps to that item's marker.
+    backspaceAt(editor, 2);
+    expect(indentOf(2)).toMatchObject({ left: 18, hanging: 0, firstLine: 0 });
+    backspaceAt(editor, 2);
+    expect(indentOf(2)).toMatchObject({ left: 0, hanging: 0, firstLine: 0 });
+    expect(texts(editor)).toEqual(['Intro', 'One', 'Two']);
+    backspaceAt(editor, 2);
+    expect(texts(editor)).toEqual(['Intro', 'OneTwo']);
+  });
+
   test('a hanging indent from a style that does not number the item is cancelled', () => {
     const editor = mount(docx(list('Two', '<w:pStyle w:val="Hang"/>' + numPr())));
     backspaceAt(editor, 2);
