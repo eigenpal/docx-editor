@@ -65,6 +65,14 @@ test.each([
   expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
 });
 
+test('the review navigation refusal is translatable', () => {
+  // Previous change and Next change show this when no change is visible; Accept all and
+  // Reject all already showed the same sentence in the reader's language.
+  expect(localizeDisabledReason('no visible changes to review', createT(en))).toBe(
+    en.disabledReason.noReviewChanges
+  );
+});
+
 test('the empty reviewer roster refusal is translatable', () => {
   const reason = 'the document has no review authors';
   expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
