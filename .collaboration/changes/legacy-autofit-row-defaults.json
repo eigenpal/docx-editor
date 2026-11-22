@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A legacy table could lose its content alignment when its row property exceptions repeated the table's own properties, or when a tracked row property change recorded different earlier properties.",
+  "after": "Row property exceptions that repeat the table's own properties, and earlier properties in tracked changes, leave the table alignment in effect.",
+  "reason": "The layout engine compares each row exception with the table's own property, and ignores tracked earlier properties, before it selects the table grid. Shared state and operations do not change.",
+  "tests": [
+    "packages/core/src/layout/__tests__/legacy-table-content-width.test.ts",
+    "packages/core/src/layout/__tests__/legacy-fixed-table-content.test.ts",
+    "packages/pro/src/collaboration/__tests__/legacy-autofit-row-defaults-editors.test.ts"
+  ],
+  "changeset": "legacy-autofit-row-defaults",
+  "migration": null
+}

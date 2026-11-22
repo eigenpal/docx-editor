@@ -1,6 +1,7 @@
 import { defineComponent, h, inject, provide, ref, type InjectionKey } from 'vue';
 import {
   editorHostDocument,
+  type ClipboardRefusal,
   type EditorPointPosition,
   executeImageCommand,
   toolbarCommandState,
@@ -24,16 +25,20 @@ const ACCEPT = 'image/png,image/jpeg,image/gif';
 /** @public */
 export interface ImageInsertContextValue {
   readonly openFilePicker: () => void;
-  /** Pass the exact point result to retain a drop target during the file read. */
+  /** Pass the exact point result to retain a drop or paste target during the file read. */
   readonly insertFromFileList: (
     files: FileList | File[] | null | undefined,
     at?: EditorPointPosition
   ) => Promise<void>;
-  /** Pass the exact point result to retain a drop target during the file read. */
+  /** Pass the exact point result to retain a drop or paste target during the file read. */
   readonly insertFromDataTransfer: (
     data: DataTransfer | null,
     at?: EditorPointPosition
   ) => Promise<void>;
+  /** Show a refusal the editor reported before any file was read, in the insert dialog. */
+  readonly showRefusal: (reason: string) => void;
+  /** Show a refused copy, cut, or paste in the same dialog, titled for its action. */
+  readonly showClipboardRefusal: (refusal: ClipboardRefusal) => void;
   readonly isEnabled: boolean;
   readonly disabledReason: string | null;
   readonly inputRef: { readonly value: HTMLInputElement | null };
@@ -72,8 +77,15 @@ export const ImageInsertProvider = defineComponent({
     const popups = usePopupConfig();
     // A refusal shows in an editor dialog. A browser alert would stop every script on the page.
     const refusal = ref<string | null>(null);
+    // A clipboard refusal names its action in the title; a picture refusal has no title here.
+    const refusalTitle = ref<string | undefined>(undefined);
     const closeRefusal = () => {
       refusal.value = null;
+      refusalTitle.value = undefined;
+    };
+    const showPictureRefusal = (message: string) => {
+      refusal.value = message;
+      refusalTitle.value = undefined;
     };
     /** A picker made in a pop-out window's document, until it reports a choice or a cancel. */
     let strayPicker: HTMLInputElement | null = null;
@@ -87,12 +99,12 @@ export const ImageInsertProvider = defineComponent({
       const editor = editorRef.value;
       if (!editor) return;
       if (busyRef.value) {
-        refusal.value = t('imageInsert.errors.refused');
+        showPictureRefusal(t('imageInsert.errors.refused'));
         return;
       }
       const normalized = normalizeImageBytes(bytes);
       if (!normalized.ok) {
-        refusal.value = t(normalized.reasonKey as TranslationKey);
+        showPictureRefusal(t(normalized.reasonKey as TranslationKey));
         return;
       }
       const command = {
@@ -108,15 +120,27 @@ export const ImageInsertProvider = defineComponent({
       try {
         const result = await executeImageCommand(editor, command);
         if (!result.ok) {
-          refusal.value =
+          showPictureRefusal(
             localizeDisabledReason(readableReason(result.reason) ?? null, t) ??
-            t('imageInsert.errors.refused');
+              t('imageInsert.errors.refused')
+          );
         } else if (!at) {
           editor.focus();
         }
       } finally {
         busyRef.value = false;
       }
+    };
+
+    const showRefusal = (reason: string) => {
+      showPictureRefusal(
+        localizeDisabledReason(readableReason(reason) ?? null, t) ?? t('imageInsert.errors.refused')
+      );
+    };
+
+    const showClipboardRefusal = (clipboard: ClipboardRefusal) => {
+      refusal.value = localizeDisabledReason(clipboard.reason, t) ?? clipboard.reason;
+      refusalTitle.value = t(CLIPBOARD_TITLE_KEYS[clipboard.action]);
     };
 
     const insertFromFileList = async (
@@ -129,7 +153,7 @@ export const ImageInsertProvider = defineComponent({
       try {
         buffer = await file.arrayBuffer();
       } catch {
-        refusal.value = t('imageInsert.errors.refused');
+        showPictureRefusal(t('imageInsert.errors.refused'));
         return;
       }
       await insertBytes(new Uint8Array(buffer), at);
@@ -192,6 +216,8 @@ export const ImageInsertProvider = defineComponent({
       openFilePicker,
       insertFromFileList,
       insertFromDataTransfer,
+      showRefusal,
+      showClipboardRefusal,
       get isEnabled() {
         return insertState.value.enabled;
       },
@@ -221,9 +247,14 @@ export const ImageInsertProvider = defineComponent({
         : popups.value?.imageInsertError !== undefined
           ? renderPopup(popups.value.imageInsertError, {
               message: refusal.value,
+              ...(refusalTitle.value !== undefined ? { title: refusalTitle.value } : {}),
               onClose: closeRefusal,
             })
-          : h(DocxEditorImageInsertErrorDialog, { message: refusal.value, onClose: closeRefusal }),
+          : h(DocxEditorImageInsertErrorDialog, {
+              message: refusal.value,
+              ...(refusalTitle.value !== undefined ? { title: refusalTitle.value } : {}),
+              onClose: closeRefusal,
+            }),
     ];
   },
 });
@@ -279,6 +310,13 @@ export const ImageInsertTrigger = defineComponent({
 export const ToolbarImageInsert = Object.assign(ImageInsertTrigger, {
   docxSlot: 'image.insert' as const,
 });
+
+/** The dialog title for each refused clipboard action. */
+const CLIPBOARD_TITLE_KEYS = {
+  copy: 'clipboard.errors.copyTitle',
+  cut: 'clipboard.errors.cutTitle',
+  paste: 'clipboard.errors.pasteTitle',
+} as const satisfies Record<ClipboardRefusal['action'], TranslationKey>;
 
 /** A reason written for people, or undefined for a bare code such as `invalid-range`. */
 function readableReason(reason: string | undefined): string | undefined {

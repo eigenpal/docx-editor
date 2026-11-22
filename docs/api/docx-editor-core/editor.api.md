@@ -1676,10 +1676,22 @@ export interface ClearAnchorHighlightOptions {
 export type ClearRefreshHighlightsOptions = ClearAnchorHighlightOptions;
 
 // @internal
+export type ClipboardAction = 'copy' | 'cut' | 'paste';
+
+// @internal
+export function clipboardCommandRefusal(command: EditorCommand, result: ExecResult | undefined): ClipboardRefusal | null;
+
+// @internal
 export function clipboardDropLandsText(transfer: DataTransfer | null | undefined): boolean;
 
 // @internal
 export function clipboardPasteLandsContent(transfer: DataTransfer | null | undefined): boolean;
+
+// @internal
+export interface ClipboardRefusal {
+    readonly action: ClipboardAction;
+    readonly reason: string;
+}
 
 // @public
 export interface CollaborationModuleContribution {
@@ -3047,6 +3059,17 @@ export interface ImageDecodePort {
     }>>;
 }
 
+// @internal
+export interface ImageFilePastePlan {
+    readonly at: EditorPointPosition | undefined;
+    readonly refusal?: Extract<CanResult, {
+        ok: false;
+    }>;
+}
+
+// @internal
+export function imageFilePastePlan(editor: Pick<DocxEditorInstance, 'surface' | 'canExecuteImageCommand'>, transfer: DataTransfer | null | undefined): ImageFilePastePlan | null;
+
 // @public
 export interface ImageInteractionSession {
     // (undocumented)
@@ -3692,6 +3715,8 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     refreshTableInteractionLabels(): void;
     // (undocumented)
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
+    refusalCount(): number;
+    refusalSince(count: number): string | null;
     releaseSelection(pin: SelectionPin): void;
     remotePresenceColor(name: string): string | undefined;
     remoteSelectionPending(): boolean;
@@ -4481,6 +4506,9 @@ export function reportAutomationRefusal(editor: object, code: EditDiagnosticCode
 // @public
 export function reportAutomationReviewSkip(editor: object, code: ReviewDiagnosticCode, operation?: ReviewOperation, cause?: string): void;
 
+// @internal
+export function reportImageInsertFailure(error: unknown): void;
+
 // @public
 export function requestPane(editor: Editor, pane: EditorPaneId, options?: PaneRequestOptions): boolean;
 
@@ -4807,6 +4835,9 @@ export function runChromeExport(editor: Pick<Editor, 'save'> & Partial<Pick<Docx
 
 // @public
 export function runChromePrint(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>, handlers?: ChromeExportHandlers, container?: Document | Element, settings?: ChromePrintSettings): Promise<ChromePrintJob>;
+
+// @internal
+export function runImageFilePaste(editor: Pick<DocxEditorInstance, 'surface' | 'canExecuteImageCommand' | 'focus'>, event: ClipboardEvent, insert: (transfer: DataTransfer, at: EditorPointPosition | undefined) => Promise<unknown>, refuse: (reason: string) => void): Promise<void> | null;
 
 // @public
 export function runSave(editor: Editor | null): Promise<ArrayBuffer>;
@@ -6088,6 +6119,9 @@ export function validateThemeModifier(value: unknown): value is number;
 
 // @public
 export type VectorImageMime = 'image/svg+xml';
+
+// @internal
+export function watchClipboardRefusals(element: HTMLElement, editor: Pick<DocxEditorInstance, 'surface'>, show: (refusal: ClipboardRefusal) => void): () => void;
 
 // @public
 export function watchHighlights(editor: Editor, name: string, source: HighlightSource, options?: WatchHighlightsOptions): HighlightWatch;

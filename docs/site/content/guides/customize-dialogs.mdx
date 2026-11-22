@@ -101,7 +101,7 @@ Each entry accepts a `definePopup()` result, a render callback, or `false`.
 | `print` | `DocxEditorPrintDialogProps` |
 | `pageSetup`, `paragraph`, `watermark`, `bookmark`, `splitCell` | Controlled dialog props: `open`, `onClose` |
 | `compareDocuments` | `DocxEditorCompareDocumentsDialogProps`. Requires the review module. |
-| `imageInsertError` | `{ message, onClose }` |
+| `imageInsertError` | `{ message, title?, onClose }`. Shows a refused picture insert, and a refused copy, cut, or paste of a drawing with a `title` that names the action. |
 | `textFormField` | `{ session: TextFormFieldDialogSession }` |
 | `revisionMarkup` | `{ session: RevisionMarkupDialogSession }` |
 | `hyperlink` | `HyperLinkProps` |

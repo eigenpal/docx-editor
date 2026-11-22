@@ -422,7 +422,7 @@
       "emitsAddedInVue": []
     },
     "editor/images/ImageInsert": {
-      "propsAddedInReact": ["children", "data", "heightPoints", "mime", "type", "widthPoints"],
+      "propsAddedInReact": ["children"],
       "propsAddedInVue": ["name"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []

@@ -24,7 +24,7 @@ export type AffineMatrix = readonly [number, number, number, number, number, num
 export type AnchoredDrawingLayoutFallback = 'unresolvable-frame' | 'page-defer-exhausted';
 
 // @public (undocumented)
-export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' | 'baselineOffset' | 'advanceStart' | 'advanceEnd' | 'distL' | 'distR' | 'distT' | 'distB'> {
+export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' | 'baselineOffset' | 'runPositionPt' | 'advanceStart' | 'advanceEnd' | 'distL' | 'distR' | 'distT' | 'distB'> {
     // (undocumented)
     readonly allowOverlap: boolean;
     // (undocumented)
@@ -1795,6 +1795,8 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly resource: ImageResourceState;
     readonly revisions?: readonly RevisionAttribution[];
+    // @internal
+    readonly runPositionPt?: number;
     // (undocumented)
     readonly start: number;
     readonly textArt?: DrawingTextArtRecord;
@@ -2107,9 +2109,16 @@ export interface LineRecord {
     readonly box: LayoutBox;
     readonly breakAfter?: 'page' | 'column';
     readonly changeSites?: readonly RevisionAttribution[];
+    // @internal
+    readonly characterFillBand?: {
+        readonly height: number;
+        readonly top: number;
+    };
     readonly contentX: number;
     readonly deletedRanges?: readonly ModelRange[];
     readonly drawings?: readonly InlineDrawingRecord[];
+    // @internal
+    readonly hangingMarkBlank?: number;
     // (undocumented)
     readonly id: string;
     readonly leading: number;

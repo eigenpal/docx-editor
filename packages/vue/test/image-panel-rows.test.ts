@@ -167,8 +167,8 @@ test('each image part in the panel is a full-width labelled row, and a click ope
     expect(button.classList.contains('docx-toolbar__button')).toBe(false);
     expect(button.querySelector('.docx-toolbar__more-command-label')?.textContent).toBeTruthy();
   }
-  // Inserting is not offered while an image is selected; the other three are.
-  expect(row('image.insert').disabled).toBe(true);
+  // Every image row is offered while an image is selected: a new picture goes in before it.
+  expect(row('image.insert').disabled).toBe(false);
 
   row('image.wrap').click();
   await flush();

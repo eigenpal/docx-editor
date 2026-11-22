@@ -688,8 +688,12 @@ export class TextWriter {
           for (const cluster of shaped.run.clusters) {
             if (/^\s+$/.test(shaped.run.text.slice(cluster.textStart, cluster.textEnd))) continue;
             const glyph = shaped.run.glyphs[cluster.glyphStart]!;
+            const left = x + glyph.originX * scale * horizontal;
+            // A words underline (`w:u w:val="words"`) also stops before a compressed blank.
+            const width = Math.min(cluster.advance * scale * horizontal, x + markWidth - left);
+            if (width <= 0) continue;
             out.push(
-              `${color(c)} rg ${n(x + glyph.originX * scale * horizontal)} ${n(position - thickness / 2)} ${n(cluster.advance * scale * horizontal)} ${n(thickness)} re f`
+              `${color(c)} rg ${n(left)} ${n(position - thickness / 2)} ${n(width)} ${n(thickness)} re f`
             );
           }
         } else {
@@ -760,6 +764,22 @@ export class TextWriter {
       faceBaseline -
       baselineShiftPtOf(styleForFontSlot(span.style, span.fontSlot));
     return { ...absoluteBox, y: absoluteBox.y + (top - span.box.y) };
+  }
+  /**
+   * The band a `w:highlight` or character shading (`w:rPr/w:shd`) fills. A line whose runs share
+   * one band (`LineRecord.characterFillBand`: `w:lineRule="exact"` spacing, or an inline drawing
+   * beside the text) fills it at the span's advance. Any other line fills each span's own
+   * {@link bandBox}.
+   */
+  characterFillBox(visit: SemanticSpanVisit): LayoutBox {
+    const { span, line, absoluteBox } = visit;
+    const band = line.characterFillBand;
+    if (!band || span.equation || !(band.height > 0)) return this.bandBox(visit);
+    return {
+      ...absoluteBox,
+      y: absoluteBox.y + (line.box.y + band.top - span.box.y),
+      height: band.height,
+    };
   }
   private readonly outlineForms = new Map<
     EmbeddedFace,

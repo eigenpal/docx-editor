@@ -20,7 +20,12 @@ interface TerminalBorderBudget {
 
 // Resolved structures are immutable. Keep refused shapes cached as well as supported ones.
 const budgets = new WeakMap<SemanticTableStructure, TerminalBorderBudget | null>();
-const closingBudgets = new WeakMap<SemanticTableRow, TerminalBorderBudget | null>();
+// Per structure: a row keeps its identity across structure reads that change the row after it
+// (`table-structure-rows.ts`), and a closing budget reads that row.
+const closingBudgets = new WeakMap<
+  SemanticTableStructure,
+  Map<SemanticTableRow, TerminalBorderBudget | null>
+>();
 
 // `deps` is the table's resolved flow deps: float-band deps, or the cell deps from the reader.
 export function tableTerminalDeps(
@@ -46,12 +51,19 @@ export function closingRowDeps(
   row: SemanticTableRow,
   deps: TableFlowDeps
 ): TableFlowDeps {
-  if (deps.tableNestingOffset || deps.textBoxStory || deps.exactTerminalBorder?.row === row)
+  if (
+    deps.tableNestingOffset ||
+    deps.textBoxStory ||
+    deps.exactTerminalBorder?.row === row ||
+    !exactShape(structure, row)
+  )
     return deps;
-  let budget = closingBudgets.get(row);
+  let known = closingBudgets.get(structure);
+  if (!known) closingBudgets.set(structure, (known = new Map()));
+  let budget = known.get(row);
   if (budget === undefined) {
     budget = readClosingBudget(structure, row);
-    closingBudgets.set(row, budget);
+    known.set(row, budget);
   }
   return budget ? { ...deps, exactTerminalBorder: budget } : deps;
 }

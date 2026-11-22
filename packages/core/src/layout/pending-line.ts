@@ -7,7 +7,7 @@ import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
 import { baselineShiftPtOf, type ResolvedRunStyle } from './run-style.ts';
 import { isIdeographicForLineBreak, lastCodePointOf } from './cjk-line-break.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
-import type { StyleSpanRecord } from './semantic-records.ts';
+import type { LineRecord, StyleSpanRecord } from './semantic-records.ts';
 import { clipInlineDrawingRecordVertically, type InlineDrawingRecord } from './drawing-layout.ts';
 import { topAndBottomSkipBeforeLine, type ExclusionZone } from './drawing-exclusion.ts';
 import type { ModelRange } from './field-pieces.ts';
@@ -38,6 +38,10 @@ export interface PendingLine {
    * bottom, while paint keeps the full box and padding.
    */
   trailingSpacing: number;
+  /** The compressed trailing blank of the line's hanging final mark (`LineRecord`). */
+  hangingMarkBlank?: number;
+  /** Character highlight and shading band shared by the line's runs (`setCharacterFillBand`). */
+  characterFillBand?: LineRecord['characterFillBand'];
   /** When true, layout must start a new page after this line is placed. */
   pageBreakAfter?: boolean;
   /** When true, layout must advance to the next authored section column. */
@@ -490,6 +494,8 @@ export function frozenLine(line: PendingLine): PendingLine {
       baseline: line.baseline,
       leading: line.leading,
       trailingSpacing: line.trailingSpacing,
+      ...(line.hangingMarkBlank ? { hangingMarkBlank: line.hangingMarkBlank } : {}),
+      ...(line.characterFillBand ? { characterFillBand: line.characterFillBand } : {}),
       ...(line.pageBreakAfter ? { pageBreakAfter: true } : {}),
       ...(line.columnBreakAfter ? { columnBreakAfter: true } : {}),
       ...(line.manualBreakAfter ? { manualBreakAfter: true } : {}),

@@ -89,6 +89,15 @@ test('the earlier closing mark and the later opening mark give up the half-em', 
   expect(min(run('漢') + run('「', 44) + run('『字漢'))).toBe(21);
   expect(min(run('漢「') + run('『', 44) + run('字漢'))).toBe(18);
 });
+test('the run language selects which semicolon pairs share the half-em', () => {
+  const lang = (text: string, language: string) =>
+    `<w:r><w:rPr><w:sz w:val="22"/><w:lang w:eastAsia="${language}"/></w:rPr><w:t>${text}</w:t></w:r>`;
+  expect(min(run('漢字；）漢字'))).toBe(15);
+  expect(min(lang('漢字；）漢字', 'zh-CN'))).toBe(15);
+  expect(min(lang('漢字；）漢字', 'ja-JP'))).toBe(18);
+  expect(min(lang('漢字）；漢字', 'ja-JP'))).toBe(15);
+  expect(min(lang('漢字、」漢字', 'zh-TW'))).toBe(18);
+});
 test('a run seam inside a punctuation pair still shares the half-em', () => {
   expect(min(run('漢字。') + run('」漢字'))).toBe(15);
   expect(min(run('漢「') + run('『字漢'))).toBe(15);

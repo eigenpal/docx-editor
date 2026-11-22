@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A line could open after a hyphen in legacy text with punctuation compression.",
+  "after": "Keep a hyphen with the letter, digit, or symbol after it.",
+  "reason": "Only derived line breaks and table widths change. Model offsets and collaboration state stay the same.",
+  "tests": [
+    "packages/core/src/layout/__tests__/legacy-ascii-hyphen-wrap.test.ts",
+    "packages/pro/src/collaboration/__tests__/legacy-hyphen-editors.test.ts",
+    "packages/pro/src/collaboration/__tests__/collaboration-diagnostics.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-concurrent-format-merge.test.ts"
+  ],
+  "changeset": "legacy-ascii-hyphen-wrap",
+  "migration": null
+}

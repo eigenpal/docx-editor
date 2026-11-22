@@ -87,3 +87,17 @@ test('a highlighted superscript carries its band up with the raised glyphs', asy
   expect(raised[0]!.bottom).toBeGreaterThan(plain[0]!.bottom + 2);
   expect(raised[0]!.top - raised[0]!.bottom).toBeLessThan(plain[0]!.top - plain[0]!.bottom);
 });
+
+test('exact spacing fills the whole line box for every highlighted run size', async () => {
+  // 29pt exact line, top margin 36pt: the line box runs from 756 down to 727 in PDF space.
+  const body =
+    '<w:p><w:pPr><w:spacing w:line="580" w:lineRule="exact"/></w:pPr>' +
+    `${run('small', 16, '<w:highlight w:val="yellow"/>')}${run(' plain ', 22)}` +
+    `${run('large', 32, '<w:highlight w:val="yellow"/>')}</w:p>`;
+  const bands = await yellowBands(body);
+  expect(bands).toHaveLength(2);
+  for (const band of bands) {
+    expect(band.top).toBeCloseTo(792 - 36, 0);
+    expect(band.bottom).toBeCloseTo(792 - 36 - 29, 0);
+  }
+});

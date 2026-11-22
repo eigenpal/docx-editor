@@ -971,7 +971,14 @@
       "oversize": "图像超过允许的最大大小。",
       "refused": "无法插入图像。",
       "unsupportedFormat": "不支持插入此图像格式。",
-      "staleTarget": "文档或放置位置已更改。请重新拖放图片。"
+      "staleTarget": "插入图片前文档已更改。请重新插入图片。"
+    }
+  },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "无法复制",
+      "cutTitle": "无法剪切",
+      "pasteTitle": "无法粘贴"
     }
   },
   "imageProperties": {
@@ -1059,7 +1066,7 @@
     "nothingToPaint": "请选择要应用格式的文本",
     "noReviewAuthors": "此文档没有审阅作者",
     "suggestingNeedsAuthor": "建议模式需要作者。请在编辑器配置中设置作者。",
-    "pictureSelected": "已选中一张图片。请将光标放在文本中以插入图片。",
+    "pictureSelected": "在建议模式下，选中绘图时无法插入图片。请将光标放在文本中以插入图片。",
     "chartDrawing": "这是一个图表。可以删除它，但不能像图片一样编辑它。",
     "chartFrame": "这是一个图表。可以更改其大小、位置、文字环绕和替代文字。",
     "diagramFrame": "这是一个关系图。可以更改其大小、位置、文字环绕和替代文字。",
@@ -1079,7 +1086,12 @@
     "drawingClipboardStory": "只能在正文中复制、剪切或粘贴绘图，不能在页眉、页脚、注释或文本框中进行。",
     "groupMemberClipboard": "组内的形状会随其组一起复制或剪切。按 Esc 键选择该组。",
     "drawingClipboardSize": "此绘图太大，无法复制。",
-    "drawingPasteCells": "请将光标放在文本中以粘贴绘图。"
+    "drawingPasteCells": "请将光标放在文本中以粘贴绘图。",
+    "groupMemberPaste": "无法将文本粘贴到组内的形状中。按 Esc 键选择该组。",
+    "linkedTextBoxPaste": "无法将文本粘贴到链接的文本框中。请将光标放在文本中以粘贴。",
+    "textBoxPicturePaste": "文本框只能包含文本。请使用无格式粘贴以仅粘贴文本。",
+    "shapePasteText": "此形状没有可粘贴到的文本。请将光标放在文本中以粘贴。",
+    "textBoxPaste": "无法编辑此文本框中的文本。请将光标放在文本中以粘贴。"
   },
   "equationPopup": {
     "apply": "应用",

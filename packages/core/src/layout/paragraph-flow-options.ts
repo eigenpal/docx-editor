@@ -35,7 +35,11 @@ export interface ParagraphFlowOptions {
   readonly columnBreaksEndColumns?: boolean;
   /** The paragraph mark after a closing page break takes a line on the next page. */
   readonly pageBreakMarkOnNextPage?: boolean;
-  /** Justified paragraphs may compress East Asian punctuation to fit a line; others keep natural widths. */
+  /**
+   * The paragraph is justified (`w:jc`): it may compress East Asian punctuation to fit a line.
+   * The optical fitter also fits other alignments in a legacy compatibility mode
+   * (`w:compatSetting` `compatibilityMode` 14 or earlier, or none).
+   */
   readonly cjkPunctuationFit?: boolean;
   readonly typography?: CjkParagraphTypography;
   readonly lineSpacing?: ParagraphLineSpacing;

@@ -13,15 +13,17 @@ import {
   watch,
 } from 'vue';
 import {
-  clipboardPasteLandsContent,
   editorDropHandled,
   isHTMLElementNode,
   openChartPaneAt,
+  reportImageInsertFailure,
+  watchClipboardRefusals,
 } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useDocxEditor, useEditorContentElement } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
 import { ImageSelectionOverlay } from './images/ImageSelectionOverlay';
+import { useImageFilePaste } from './images/useImageFilePaste';
 import { mergeHostClass } from '../lib/mergeHostClass';
 import { useChromeDir } from '../i18n';
 
@@ -80,19 +82,19 @@ export const DocxEditorContent = defineComponent({
     onActivated(attach);
     onUnmounted(detach);
 
-    const onPaste = (event: ClipboardEvent) => {
-      const insert = imageInsert;
-      if (!insert?.isEnabled) return;
-      const items = event.clipboardData;
-      if (!items) return;
-      if (!hasImageFile(items)) return;
-      // STAND DOWN whenever the ENGINE will land content from the payload — see the
-      // predicate's contract in core. Word on macOS ships a rendered PNG beside copied
-      // text. Mirrors the React adapter exactly.
-      if (clipboardPasteLandsContent(items)) return;
-      event.preventDefault();
-      void insert.insertFromDataTransfer(items);
-    };
+    // The selection overlay runs the same image-file lane for pastes while a drawing is selected.
+    const onPaste = useImageFilePaste();
+
+    // A copy, cut, or paste on the pages or the selection overlay that the editor refuses shows
+    // its reason, in the dialog a refused picture insert uses.
+    watch(
+      [editorRef, portalRef],
+      ([editor, mount], _previous, onCleanup) => {
+        if (!editor || !mount || !imageInsert) return;
+        onCleanup(watchClipboardRefusals(mount, editor, imageInsert.showClipboardRefusal));
+      },
+      { immediate: true, flush: 'post' }
+    );
 
     const onDrop = (event: DragEvent) => {
       // Keep unsupported file drops on the mount from navigating away from the editor.
@@ -108,7 +110,7 @@ export const DocxEditorContent = defineComponent({
       });
       if (!selected.ok) return;
       editorRef.value!.focus();
-      void imageInsert.insertFromDataTransfer(transfer, at);
+      void imageInsert.insertFromDataTransfer(transfer, at).catch(reportImageInsertFailure);
     };
 
     // A double press on a chart opens the Chart pane, as Edit chart does.

@@ -32,6 +32,7 @@ import {
   noteShiftedRowRefusal,
 } from './table-row-geometry-reuse.ts';
 import { finalizedWithHeadroom } from './table-budget-proof.ts';
+import { placedRowFieldsHold } from './table-row-record-fields.ts';
 import type { LayoutRowBoundedResult, TableFlowDeps } from './semantic-table-layout.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
 import type { SectionPrepass } from './section-prepass-types.ts';
@@ -153,14 +154,38 @@ export function rememberRowPlacement(
   });
 }
 
-const settledPreviousRows = new WeakSet<TableRowFragmentRecord>();
+/** Where a row stood in its fragment: finalize reads it (the closing rule of the last row). */
+interface FragmentPlace {
+  readonly first: boolean;
+  readonly last: boolean;
+}
+const previousPlaces = new WeakMap<PreviousRow, FragmentPlace>();
+const settledPreviousRows = new WeakMap<TableRowFragmentRecord, FragmentPlace>();
 
 /**
- * A previous finalized row moved without changing its vertical placement.
- * The ordinary-paragraph proof excludes drawings, so finalization has no anchors to republish.
+ * @internal `row`, recorded as first or last in the fragment that held it. A row offered without
+ * a place is never settled.
  */
-export function isSettledPreviousRow(row: TableRowFragmentRecord): boolean {
-  return settledPreviousRows.has(row);
+export function withFragmentPlace<T extends PreviousRow>(row: T, first: boolean, last: boolean): T {
+  previousPlaces.set(row, { first, last });
+  return row;
+}
+
+/**
+ * A previous finalized row moved without changing its vertical placement, inside its fragment
+ * now and before. The first and last rows of a fragment are finalized with the fragment's
+ * opening and closing rules, which other rows decide (the closing rule reads the row after the
+ * last one), so they are finalized again. Finalize measures content from the cell top, so such
+ * a row lands where a fresh placement does. The ordinary-paragraph proof excludes drawings, so
+ * finalization has no anchors to republish.
+ */
+export function isSettledPreviousRow(
+  row: TableRowFragmentRecord,
+  first: boolean,
+  last: boolean
+): boolean {
+  const place = settledPreviousRows.get(row);
+  return place !== undefined && !place.first && !place.last && !first && !last;
 }
 
 /**
@@ -178,6 +203,9 @@ export function placementFromPrevious(
   const compact = 'compact' in candidate ? candidate.compact : undefined;
   const previous = previousRowRecord(candidate);
   if (compact && compact.source !== row) return null;
+  // A structure edit can change what the row record carries while its lines stay the same.
+  if (!placedRowFieldsHold(row, previous))
+    return previous.box.y === top ? null : noteShiftedRowRefusal('fields');
   const key = keyOf(previous);
   const known = placementAt(key, previous.box.y);
   if (
@@ -206,7 +234,8 @@ export function placementFromPrevious(
   }
   const record = moveRowToWidths(row, previous, cols, left, deps, undefined, compact?.cells);
   if (!record) return null;
-  settledPreviousRows.add(record);
+  const place = previousPlaces.get(candidate);
+  if (place) settledPreviousRows.set(record, place);
   return {
     record,
     bottom: known.bottom,
@@ -262,27 +291,40 @@ function previousRowsOf(
     if (deferred && Object.getOwnPropertyDescriptor(fragment, 'rows')?.get) {
       for (const source of deferred.sources.slice(0, deferred.headers.length))
         repeated.add(source.id);
-      for (const compact of deferred.body.rows) {
+      const body = deferred.body.rows;
+      for (const [index, compact] of body.entries()) {
         const id = compact.source.id;
         if (rows.has(id)) repeated.add(id);
-        else
-          rows.set(id, {
+        else {
+          const row: PreviousRow = {
             compact,
             baseline: {
               ...compact.baseline,
               cells: compact.cells.map((cell) => cell.baseline),
             },
-          });
+          };
+          rows.set(
+            id,
+            withFragmentPlace(
+              row,
+              index === 0 && deferred.headers.length === 0,
+              index === body.length - 1
+            )
+          );
+        }
       }
       continue;
     }
-    for (const record of fragment.rows) {
+    for (const [index, record] of fragment.rows.entries()) {
       if (record.isHeaderRepeat || record.isContinuation || record.hasContinuation) {
         repeated.add(record.id);
         continue;
       }
       if (rows.has(record.id)) repeated.add(record.id);
-      else rows.set(record.id, record);
+      else {
+        const last = index === fragment.rows.length - 1;
+        rows.set(record.id, withFragmentPlace(record, index === 0, last));
+      }
     }
   }
   for (const id of repeated) rows.delete(id);

@@ -141,6 +141,7 @@ import { createMountHistoryGroups } from './editor-history-groups.ts';
 import { createPublishSignal } from './surface-publish-signal.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import { proposalCapabilityRefusal } from './proposal-capability.ts';
+import { drawingPasteRefusal } from './drawing-paste-target.ts';
 import { createOpenScheduler } from './docx-editor-open-scheduler.ts';
 import * as preparedOpen from './docx-editor-prepared-open.ts';
 import { configSurfaceOptions } from './docx-editor-surface-config.ts';
@@ -2134,6 +2135,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (replaceRefusal) return replaceRefusal;
       const proposal = proposalCapabilityRefusal(command, surface!, author);
       if (proposal) return proposal;
+      const pasteRefusal = drawingPasteRefusal(surface!, command);
+      if (pasteRefusal) return pasteRefusal;
       if (isImageCommand(command) && imageCommandHasIdentityFields(command)) {
         const pre = captureImageMutationPreconditions(editor);
         if (pre) {
