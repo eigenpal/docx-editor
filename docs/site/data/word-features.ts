@@ -1059,7 +1059,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Insert a table of contents and refresh its entries or page numbers from headings and entry fields. Generated entries provide read-only navigation links. Unsupported source switches prevent refresh, and suggesting mode prevents removal.',
+      'Insert a table of contents and refresh its entries or page numbers from headings and entry fields. Generated entries are read-only links, and refresh preserves your edits after the end mark. Unsupported source switches prevent refresh, and suggesting mode prevents removal.',
   },
   {
     id: 'fields.cross-references',
