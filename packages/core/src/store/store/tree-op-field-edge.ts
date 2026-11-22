@@ -128,8 +128,8 @@ export function fieldEdgeSide(
 
 /**
  * The index among the paragraph's children where whole nodes inserted at `offset` go when the
- * offset is a field edge: right after the child holding the end character, or right before the
- * child holding the begin character. Null when no field edge is there, or when that child
+ * offset is a field edge: right after the child holding the end character, or before the child
+ * holding the begin character and any markers right before it at that offset. Null when no field edge is there, or when that child
  * also holds text on the far side of the character (a split decides that place).
  */
 export function fieldEdgeChildIndex(paragraph: OoxmlParagraphNode, offset: number): number | null {
@@ -150,9 +150,17 @@ export function fieldEdgeChildIndex(paragraph: OoxmlParagraphNode, offset: numbe
     const span = index >= 0 ? offsets.spanOf(paragraph.children[index]!) : undefined;
     return span && span.end === offset ? index + 1 : null;
   }
-  const index = topIndexOf(edge.beginId!);
+  let index = topIndexOf(edge.beginId!);
   const span = index >= 0 ? offsets.spanOf(paragraph.children[index]!) : undefined;
-  return span && span.start === offset ? index : null;
+  if (!span || span.start !== offset) return null;
+  // Before the markers already at the edge too, so a bookmark's start, placed after its end
+  // at the same offset, still lands in front of it.
+  const atEdge = (child: OoxmlNode) => {
+    const own = child.kind === 'paragraphProperties' ? null : offsets.spanOf(child);
+    return !!own && own.start === offset && own.end === offset;
+  };
+  while (index > 0 && atEdge(paragraph.children[index - 1]!)) index -= 1;
+  return index;
 }
 
 /**

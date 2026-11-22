@@ -256,6 +256,10 @@ for (const [shape, body] of SHAPES) {
           if (detectBodyTocs(surface.session.part()).length !== tocs + added)
             fail('TOC count changed');
           const inserted = probe(written);
+          const start = written.indexOf('<w:bookmarkStart w:id="');
+          if (command.type === 'insertBookmark' && start > written.indexOf('<w:bookmarkEnd')) {
+            fail('the bookmark end comes before its start');
+          }
           if (inserted <= probe(before)) fail('nothing was inserted');
           for (const toc of detectBodyTocs(surface.session.part())) {
             const refreshed = editor.exec({ type: 'refreshToc', tocId: toc.id });
