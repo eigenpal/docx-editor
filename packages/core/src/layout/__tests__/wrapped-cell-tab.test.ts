@@ -83,11 +83,15 @@ test('left and hanging indents recompute the next tab from the continuation orig
     expect(textX(layout(document({ indent })))).toBe(10);
   }
 });
-test('trailing tabs do not create a line', () => {
+test('a trailing tab past the cell edge opens the next line and reaches its first stop', () => {
   const result = layout(document({ trailing: true }));
-  // The cell's line, then the empty paragraph the body reads after the table.
-  expect(linesOf(result)).toHaveLength(2);
-  expect(linesOf(result)[0]!.spans.at(-1)!.text).toBe('\t');
+  // The cell's two lines, then the empty paragraph the body reads after the table.
+  const lines = linesOf(result);
+  expect(lines).toHaveLength(3);
+  expect(lines[0]!.spans.map((s) => s.text).join('')).toBe('ABCDEFGHI');
+  const tab = lines[1]!.spans[0]!;
+  expect(tab.text).toBe('\t');
+  expect(tab.box.x + tab.box.width).toBe(10);
 });
 test('a body tab past the edge replays like a cell tab; a positional tab keeps its placement', () => {
   expect(textX(layout(document({ body: true })))).toBe(10);
@@ -156,7 +160,7 @@ test('an exclusion past the right edge leaves the tab replay in place', () => {
   expect(lines[1]!.spans.find((span) => span.text.startsWith('J'))!.box.x).toBe(10);
 });
 
-test('consecutive tabs retain the prior policy across run boundaries', () => {
+test('consecutive tabs past the cell edge wrap the same way across run boundaries', () => {
   const projection = (result: ReturnType<typeof layout>) =>
     linesOf(result).map((line) => ({
       box: line.box,
@@ -171,7 +175,13 @@ test('consecutive tabs retain the prior policy across run boundaries', () => {
     const part = document({ repeated: true, repeatedSplit });
     const result = layout(part);
     expect(projection(result)).toEqual(projection(layout(document({ repeated: true }))));
-    expect(linesOf(result)[0]!.spans.at(-1)!.text).toBe('\t');
+    expect(
+      linesOf(result)[0]!
+        .spans.map((span) => span.text)
+        .join('')
+    ).toBe('ABCDEFGHI');
+    // The first tab reaches the 10pt stop on the next line, the second the 36pt default stop.
+    expect(textX(result)).toBe(36);
     const session = createLayoutSession();
     const before = layout(document(), session, 0);
     const warm = layout(part, session, 1);
@@ -187,7 +197,7 @@ test('consecutive tabs retain the prior policy across run boundaries', () => {
   }
 });
 
-test('a continuation retains the repeated-tab policy from earlier paragraph content', () => {
+test('a continuation after earlier tabs wraps a tab past the cell edge', () => {
   const parsed = readOoxmlPart(
     `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:tab/><w:tab/><w:t>ABCDEFGHI</w:t><w:tab/><w:t>J K</w:t></w:r></w:p></w:body></w:document>`,
     { name: '/word/document.xml', contentType: 'app/xml' }
@@ -209,7 +219,7 @@ test('a continuation retains the repeated-tab policy from earlier paragraph cont
     undefined,
     { cellAnchorScope: LEGACY_CELL_ANCHOR_SCOPE, startOffset: 2 }
   );
-  expect(lines[0]!.spans.at(-1)!.text).toBe('\t');
-  expect(lines[1]!.spans.find((span) => span.text.startsWith('J'))!.box.x).toBe(0);
+  expect(lines[0]!.spans.map((span) => span.text).join('')).toBe('ABCDEFGHI');
+  expect(lines[1]!.spans.find((span) => span.text.startsWith('J'))!.box.x).toBe(10);
   expect(lines[0]!.spans[0]!.range.start).toBe(2);
 });
