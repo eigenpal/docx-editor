@@ -347,3 +347,21 @@ test('a page number in larger runs keeps the anchor height on every page', () =>
     expect(projected.flowHeight).toBe(plain.flowHeight);
   }
 });
+
+test('a page number that would start past the sheet edge stays in flow', () => {
+  // The test page reserves 30 pt below the footer and is 800 pt tall.
+  for (const [root, y] of [
+    ['ftr', '1000'],
+    ['hdr', '16000'],
+  ] as const) {
+    const framePr = `<w:framePr w:wrap="around" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="${y}"/>`;
+    const { paragraphs } = lay(framed(framePr, pageField('PAGE', '1')) + text('Version 9'), root);
+    expect(paragraphs.some((paragraph) => paragraph.outOfFlow)).toBe(false);
+  }
+  // A frame that starts on the sheet keeps its place, even when the sheet clips its end.
+  const framePr =
+    '<w:framePr w:wrap="around" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="700"/>';
+  const { paragraphs } = lay(framed(framePr, pageField('PAGE', '1')) + text('Version 9'), 'ftr');
+  expect(paragraphs[0]!.outOfFlow).toBe(true);
+  expect(paragraphs[0]!.box.y).toBeCloseTo(35, 6);
+});

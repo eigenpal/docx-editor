@@ -301,6 +301,26 @@ function emptyFrame(
   };
 }
 
+/**
+ * Whether a frame box, in story space, starts below the sheet. A footer's flow ends
+ * `storyDistance` above the sheet's bottom edge; a header's flow starts `storyDistance` below
+ * the sheet's top edge.
+ */
+function pastSheetEdge(
+  box: { readonly y: number },
+  storyBottom: number,
+  geometry: {
+    readonly pageHeight?: number;
+    readonly storyDistance?: number;
+    readonly footer?: boolean;
+  }
+): boolean {
+  const { pageHeight, storyDistance, footer } = geometry;
+  if (storyDistance === undefined) return false;
+  if (footer) return box.y - storyBottom >= storyDistance;
+  return pageHeight !== undefined && storyDistance + box.y >= pageHeight;
+}
+
 /** Whether the story holds a frame this lane positions; cheap enough for every layout. */
 export function hasStoryTextFrames(blocks: readonly OoxmlElement[]): boolean {
   return blocks.some((block) => block.kind === 'paragraph' && directFrame(block) !== undefined);
@@ -320,6 +340,9 @@ export function placeStoryTextFrames(
     readonly contentWidth: number;
     readonly pageWidth?: number;
     readonly marginLeft?: number;
+    readonly pageHeight?: number;
+    readonly storyDistance?: number;
+    readonly footer?: boolean;
   },
   overlapDecided = false
 ): Flow | null {
@@ -360,6 +383,9 @@ export function placeStoryTextFrames(
     // page number in larger runs than its anchor, or a frame offset down by `w:y`. The story
     // still reserves only the height of its own flow.
     const pageNumber = frame.autoWidth && frame.wrap !== 'none';
+    // A page number that would start past the sheet's edge could not be seen or reached, so its
+    // story keeps ordinary flow. One that only ends past the edge stays, clipped by the sheet.
+    if (!overlapDecided && pageNumber && pastSheetEdge(box, ordinary.bottom, geometry)) return null;
     // A frame over the story's own paragraph text would wrap it; that stays in ordinary flow.
     // A page number that wraps text keeps clear of it on every page, however long it grows,
     // and of the story's tables too, which it would also wrap.
@@ -402,6 +428,9 @@ export function layoutStoryWithTextFrames(
     readonly contentWidth: number;
     readonly pageWidth?: number;
     readonly marginLeft?: number;
+    readonly pageHeight?: number;
+    readonly storyDistance?: number;
+    readonly footer?: boolean;
   },
   publish: (flow: Flow) => void,
   overlapDecided = false

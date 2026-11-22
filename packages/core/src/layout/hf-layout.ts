@@ -727,7 +727,7 @@ export function layoutHeaderFooterStory(
         flowBlocks,
         (source) => (flowStory(source, 0), flow),
         (paragraphs, width) => flowBlocksInBox(paragraphs, 0, width, 0, 0, plainDeps()),
-        { contentWidth, ...hfPageContext },
+        { contentWidth, ...hfPageContext, footer: part.root.localName === 'ftr' },
         (framed) => (flow = framed),
         effectiveCtx !== undefined && storyFramesAdmitted === true
       );
