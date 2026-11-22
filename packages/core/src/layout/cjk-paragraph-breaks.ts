@@ -34,6 +34,15 @@ export function isHangul(cp: number): boolean {
   );
 }
 export const isCjk = (cp: number): boolean => isIdeographicForLineBreak(cp) || isHangul(cp);
+/**
+ * Text in a Korean language (`w:lang` `w:eastAsia`), or with Hangul (`isHangul`) whatever its
+ * language.
+ */
+export function koreanText(text: string, language: string): boolean {
+  if (/^ko(?:-|$)/i.test(language)) return true;
+  for (const character of text) if (isHangul(character.codePointAt(0)!)) return true;
+  return false;
+}
 export const hasCjkText = (text: string): boolean =>
   /[\u1100-\u11ff\u2e80-\u318f\u31c0-\u9fff\ua960-\ua97f\uac00-\ud7ff\uf900-\ufaff\ufe30-\ufe4f\uff01-\uff9f\u{20000}-\u{323af}]/u.test(
     text
@@ -79,6 +88,30 @@ export function protectedSeamAfter(
     next !== undefined &&
     protectsSeam(breaks?.decision(next, 0, candidate, next.text))
   );
+}
+
+/**
+ * Whether the spaces that end at `boundary` belong to a protected group: the first visible
+ * character after them may not start a line. Spaces before a word that may wrap trail the line.
+ */
+export function spacesJoinProtectedGroup(
+  breaks: CjkParagraphBreaks | null,
+  pieces: readonly FieldAwarePiece[],
+  pieceIndex: number,
+  boundary: number
+): boolean {
+  let index = pieceIndex;
+  let offset = boundary;
+  // Bounded: a long run of spaces is not a group to fit.
+  for (let steps = 0; steps < 256 && index < pieces.length; steps++) {
+    const piece = pieces[index]!;
+    if (offset >= piece.text.length) {
+      index++;
+      offset = 0;
+    } else if (piece.text[offset] === ' ') offset++;
+    else return protectsSeam(breaks?.decision(piece, offset, ' ', piece.text.slice(offset)));
+  }
+  return false;
 }
 
 // In a legacy mode (`w:compatSetting` `compatibilityMode` 14 or earlier, or none) with

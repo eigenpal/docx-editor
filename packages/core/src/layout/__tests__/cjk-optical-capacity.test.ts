@@ -37,9 +37,15 @@ function part(xml: string) {
   if (!result.ok) throw new Error(result.reason);
   return result.part;
 }
+const settingsXml = (compat: string) =>
+  `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/>${compat}</w:settings>`;
+// Compatibility mode 15: legacy modes add their own admission limit (tested below).
 const settings = part(
-  `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`
+  settingsXml(
+    '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat>'
+  )
 );
+let activeSettings = settings;
 const styles = part(
   `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="Test CJK"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
 );
@@ -61,7 +67,7 @@ function layoutLines(runs: readonly Run[], width: number, pPr = '', rPr = '') {
       styleCascade: buildStyleCascadeTable(
         styles.root,
         { ...NO_THEME_FONTS, eastAsianFontTableFaces: ['test cjk'] },
-        settings.root
+        activeSettings.root
       ),
       geometry: {
         width: width + 20,
@@ -164,4 +170,15 @@ test('the final mark relief counts as capacity in the expansion gate', () => {
 
 test('a candidate that opens with a bracket passes the expansion gate too', () => {
   threshold(['甲。乙，丙、丁（戊'], 85.1, 85.0);
+});
+
+test('a legacy mode admits an ideograph only within half its advance', () => {
+  activeSettings = part(settingsXml(''));
+  try {
+    // Without a declared mode, the 11.4pt the gate allows is limited to 6pt.
+    threshold(['甲。乙，丙'], 54.0, 53.9);
+    threshold(['甲乙丙丁戊己庚辛壬癸甲。乙，丙'], 174.0, 173.9);
+  } finally {
+    activeSettings = settings;
+  }
 });

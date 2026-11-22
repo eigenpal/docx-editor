@@ -12,20 +12,18 @@ import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
 import {
   kanaFitCells,
   kanaCapacityOf,
-  kanaShareLimit,
   lineStartCharacter,
   takeFinalSoundMarkShare,
 } from './kana-sound-mark-fit.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { isDefaultGraphemeBoundary, segmentGraphemes, type GraphemeSegment } from './grapheme.ts';
-import { isCjk, type CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
+import { isCjk, koreanText, type CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
 import { hangingCjkPunctuationAdvance, hangsWithin } from './cjk-spacing.ts';
 import { hangsInBlankSides } from './hanging-mark-blanks.ts';
 import { formatRevisionOf } from './revision-projection.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 import { memoized, type ClusterMemo } from './cjk-optical-memo.ts';
 import {
-  blankSided,
   CLOSING,
   curlyRole,
   EAST_ASIAN_OPAQUE,
@@ -39,12 +37,20 @@ import {
   type Cell,
 } from './cjk-optical-cell.ts';
 import {
+  exceedsLegacyAdmission,
+  expansionGate,
+  isFullWidthKana,
+  kanaFitBound,
+  kanaShare,
+  legacyKoreanMarks,
+  shareAmong,
+  type KanaFitRules,
+} from './cjk-optical-capacity.ts';
+import {
   layoutDerivedSpacingStyleForEditing,
   withLayoutDerivedSpacing,
 } from './layout-derived-spacing.ts';
 
-// The fit gate weighs expansion in units of 1/64 of an advance (see `expansionGate`).
-const EXPANSION_UNITS = 64;
 // Every fit attempt re-reads the whole line, so segmentation dominates its cost. In BMP East
 // Asian, fullwidth, curly-quote, and space text without combining kana or tone marks, each
 // code unit is one grapheme.
@@ -306,98 +312,17 @@ function cellsOf(
   if (tracked && foreign) return undefined;
   return cells;
 }
-/**
- * A justified line takes another ordinary glyph by compression only when the share of the
- * compression capacity it spends is at most the expansion that leaving the glyph off would
- * need. Expansion counts in 1/64 of each advance before the line's last glyph: the advances
- * whose gaps the shorter line would spread its room over. A final mark that hangs or drops its
- * trailing half stays in the deficit and counts as capacity, and a candidate that opens with a
- * bracket is gated too.
- */
-function expansionGate(
-  cells: readonly Cell[],
-  sourceCount: number,
-  room: number,
-  deficit: number
-): { readonly capacityBound: number; admits(capacity: number): boolean } {
-  let spread = 0;
-  let capacityBound = 0;
-  let lastLineCell: Cell | undefined;
-  for (const cell of cells) {
-    if (blankSided(cell)) capacityBound += cell.natural / 2;
-    if (cell.sourceIndex >= sourceCount) continue;
-    spread += cell.natural;
-    lastLineCell = cell;
-  }
-  if (lastLineCell) spread -= lastLineCell.natural;
-  return {
-    capacityBound,
-    admits: (capacity) =>
-      room > TOLERANCE && deficit * spread <= room * capacity * EXPANSION_UNITS + TOLERANCE,
-  };
-}
-/**
- * How a kana fit (`compressPunctuationAndJapaneseKana`) spends its capacity. Punctuation blank
- * sides on the line go first, then kana, each by at most a sixteenth of its em, in equal
- * shares. A final closing mark gives its trailing half first when that half alone fits the
- * line, or when `finalHalfFirst` (no punctuation overflow); otherwise only when kana cannot
- * take the rest.
- */
-export interface KanaFitRules {
-  readonly finalHalfFirst: boolean;
-  /** Skip the expansion gate: a legacy mode fits a lone mark after a full line. */
-  readonly ungated?: boolean;
-}
-// Hiragana and katakana, small ones included. The prolonged sound mark and iteration marks
-// keep their advances.
-const FULL_WIDTH_KANA = /^[\u3041-\u3096\u30a1-\u30fa]$/u;
-const isFullWidthKana = (cell: Cell): boolean => FULL_WIDTH_KANA.test(cell.span.text);
-/** What one kana can still give: a sixteenth of its em, within its remaining advance. */
-const kanaShare = (cell: Cell): number =>
-  Math.max(
-    0,
-    Math.min(kanaShareLimit(cell.span) - cell.reduction, cell.span.box.width - cell.reduction)
-  );
-/**
- * An upper bound on what a kana fit can absorb: a sixteenth of an em per kana or sound mark,
- * half an em per punctuation mark or curly quote, from each span's own font size.
- */
-function kanaFitBound(line: PendingLine, candidates: readonly StyleSpanRecord[]): number {
-  let bound = TOLERANCE;
-  for (const spans of [line.spans, candidates])
-    for (const span of spans) {
-      const em = span.style.fontSizePt;
-      const text = span.text;
-      for (let index = 0; index < text.length; index++) {
-        const unit = text.charCodeAt(index);
-        if ((unit >= 0x3041 && unit <= 0x309a) || (unit >= 0x30a1 && unit <= 0x30fa))
-          bound += em / 16;
-        else if (unit >= 0x2018 && (PUNCTUATION.test(text[index]!) || curlyRole(text[index]!)))
-          bound += em / 2;
-      }
-    }
-  return bound;
-}
-/** Give `amount` to `cells` in equal shares within their kana capacity; returns the rest. */
-function shareAmong(cells: readonly Cell[], amount: number): number {
-  let active = cells.filter((cell) => kanaShare(cell) > TOLERANCE);
-  while (amount > TOLERANCE && active.length) {
-    const share = amount / active.length;
-    for (const cell of active) {
-      const given = Math.min(share, kanaShare(cell));
-      cell.reduction += given;
-      amount -= given;
-    }
-    active = active.filter((cell) => kanaShare(cell) > TOLERANCE);
-  }
-  return amount;
-}
 
 /** Try a complete protected group without changing the line when it cannot fit. */
 interface FitContext {
   readonly measurer: TextMeasurer;
   readonly baselinePieces: readonly FieldAwarePiece[];
   readonly requireLocalQualification: boolean;
+  /**
+   * A legacy compatibility mode (`w:compatSetting` `compatibilityMode` 14 or earlier, or none)
+   * limits what a candidate group may take from the line.
+   */
+  readonly legacyAdmission: boolean;
   readonly memo: ClusterMemo;
   /**
    * The cells of the current group's line, kept between its attempts: an attempt that fails
@@ -468,6 +393,8 @@ function fitCjkOptically(
   const sourceCount = line.spans.length;
   const cells = lineCells(context, line, candidates);
   if (!cells) return undefined;
+  // A legacy mode compresses no Korean mark (`legacyKoreanMarks`); it keeps its advance.
+  const held = context.legacyAdmission ? legacyKoreanMarks(cells) : undefined;
   const first = cells.find((cell) => cell.sourceIndex === sourceCount)!;
   const last = cells.at(-1)!;
   const beforeLast = cells.at(-2);
@@ -488,7 +415,12 @@ function fitCjkOptically(
   // Otherwise the final closing bearing is removed first. A bracket's measured ink must stay
   // inside; a quote gives its whole trailing half even where its ink reaches past the middle.
   let deferredFinal = 0;
-  if (!hangsLast && (CLOSING.test(last.span.text) || curlyFinal) && finiteInk(last)) {
+  if (
+    !hangsLast &&
+    (CLOSING.test(last.span.text) || curlyFinal) &&
+    finiteInk(last) &&
+    !held?.has(last)
+  ) {
     const inkEnd = curlyFinal ? 0 : last.ink.right + (last.span.glyphOffsetPt ?? 0);
     const extent = Math.max(last.natural / 2, inkEnd);
     const finalCapacity = Math.max(0, last.span.box.width - extent);
@@ -499,6 +431,22 @@ function fitCjkOptically(
       last.reduction = Math.min(deficit, finalCapacity);
       deficit -= last.reduction;
     }
+  }
+  if (held && !kana && !hangsLast) {
+    // A Latin closing quote that ends the group counts as a closing mark that gave its half; a
+    // final apostrophe is the same character and counts the same way.
+    const quote =
+      /[’”]$/u.test(last.span.text) && last.ordinaryOpaque ? last.span.text.at(-1)! : '';
+    const quoteAdvance = quote
+      ? memoized(context.memo, last.span, 'natural', quote, () =>
+          measureDisplayText(
+            quote,
+            { ...styleForFontSlot(last.span.style, last.span.fontSlot), characterSpacingPt: 0 },
+            measurer
+          )
+        )
+      : 0;
+    if (exceedsLegacyAdmission(cells, sourceCount, deficit, held, quoteAdvance)) return undefined;
   }
   const kanaCells = kana ? kanaFitCells(cells, isFullWidthKana) : [];
   const kanaCapacity = kanaCells.reduce(
@@ -539,10 +487,13 @@ function fitCjkOptically(
     const current = cells[index]!;
     if (!fitNeighbour(previous) || !fitNeighbour(current)) continue;
     const right =
-      CLOSING.test(previous.span.text) ||
-      previous.span.text === '：' ||
-      previous.qualifiedCurly === 'closing';
-    const left = OPENING.test(current.span.text) || current.qualifiedCurly === 'opening';
+      (CLOSING.test(previous.span.text) ||
+        previous.span.text === '：' ||
+        previous.qualifiedCurly === 'closing') &&
+      !held?.has(previous);
+    const left =
+      (OPENING.test(current.span.text) || current.qualifiedCurly === 'opening') &&
+      !held?.has(current);
     if (!right && !left) continue;
     if (
       (!previous.ordinaryOpaque && !finiteInk(previous)) ||
@@ -697,10 +648,11 @@ export function createParagraphCjkOpticalFitter(
   preserveColonAdvances: boolean,
   justified: boolean
 ) {
-  // Compression fits a line only when the paragraph is justified and the document defaults
-  // name an East Asian face. A document without one compresses no punctuation to fit.
+  // Compression (`w:characterSpacingControl`) fits a line only when the document defaults name
+  // an East Asian face, and the paragraph is justified (`w:jc` `both`) or a legacy compatibility
+  // mode fits lines at every alignment.
   const opticalPolicy =
-    justified &&
+    (justified || typography.settings?.legacyLineEndPunctuation === true) &&
     typography.settings?.sourceEastAsianFont === true &&
     typography.settings.compression !== undefined &&
     typography.settings.compression !== 'doNotCompress' &&
@@ -867,6 +819,11 @@ export function createCjkOpticalFitter(
     }
     // A group that fits needs no fit, and no fit can change a line it does not overflow.
     if (line.width + x - origin - available <= TOLERANCE) return undefined;
+    // A legacy mode compresses no group with Korean text, by language (`w:lang` `w:eastAsia`)
+    // or Hangul, to fit a line.
+    for (let index = pieceIndex; legacy && index <= currentIndex; index++)
+      if (koreanText(candidates[index - pieceIndex]!.text, languageOf(pieces[index]!)))
+        return undefined;
     // Match clipWordEnd across run seams: a fitting word does not compress only
     // to retain its trailing separator inside the margin.
     let trailingWidth = 0;
@@ -906,6 +863,7 @@ export function createCjkOpticalFitter(
       measurer,
       baselinePieces: pieces,
       requireLocalQualification,
+      legacyAdmission: legacy,
       memo,
       cells: {},
     };

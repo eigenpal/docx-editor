@@ -68,7 +68,12 @@ import {
 import { DEFAULT_REVISION_DISPLAY_MODE, revisionsVisible } from './revision-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import { cjkChopCutAllowedAt, wordBoundaries } from './cjk-line-break.ts';
-import { cjkParagraphBreaks, protectedSeamAfter, protectsSeam } from './cjk-paragraph-breaks.ts';
+import {
+  cjkParagraphBreaks,
+  protectedSeamAfter,
+  protectsSeam,
+  spacesJoinProtectedGroup,
+} from './cjk-paragraph-breaks.ts';
 import { createParagraphCjkOpticalFitter, appendOpticalCjkCandidate } from './cjk-optical-fit.ts';
 import {
   compressCjkPieces,
@@ -1340,8 +1345,11 @@ export function breakParagraph(
                 lineOrigin() + line.width,
                 // Reserve the source-owned advance before any optical line mutation.
                 lineAvailable() - automaticGap(),
+                // Spaces fit only inside a protected group; before a word that wraps they trail.
                 !lineEndSpaces.isCollapsibleLineEndWhitespace(candidate) ||
-                  (opensWord && placeableSuffixes[pieceIndex]![boundary] === 1)
+                  (opensWord &&
+                    placeableSuffixes[pieceIndex]![boundary] === 1 &&
+                    spacesJoinProtectedGroup(cjkBreaks, pieces, pieceIndex, boundary))
               );
               if (fit) {
                 width = fit.width;
