@@ -221,3 +221,99 @@ function findDrawingId(node: OoxmlPart['root']): string | null {
   }
   return null;
 }
+
+// A field character inside a wrapper that also holds content on the far side of it: the
+// wrapper divides into two copies, so the inserted content lands between them.
+const REVISION = 'w:author="B" w:date="2024-01-01T00:00:00Z" w:id="9"';
+const WRAPPERS: readonly (readonly [string, string, string, string])[] = [
+  ['a tracked insertion', `<w:ins ${REVISION}>`, '</w:ins>', `<w:ins ${REVISION}>`],
+  ['a link', '<w:hyperlink w:anchor="t">', '</w:hyperlink>', '<w:hyperlink w:anchor="t">'],
+  [
+    'a smart tag',
+    '<w:smartTag w:element="place" w:uri="urn:x">',
+    '</w:smartTag>',
+    '<w:smartTag w:element="place" w:uri="urn:x">',
+  ],
+];
+
+function wrappedAfter(open: string, close: string, op: TreeDocOp, index: number): string {
+  const body =
+    `<w:p>${open}${run('Before')}${code}${close}${run('Entry')}</w:p>` +
+    `<w:p>${open}${run('Pg')}${fldChar('end')}${run('Tail')}${close}</w:p>`;
+  const loaded = readOoxmlPart(
+    `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}</w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const result = applyTreeOp(loaded.part, op);
+  if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
+  expect(validateOoxmlPart(result.part).ok).toBe(true);
+  return serializeOoxmlPart(result.part).split('<w:p>')[index + 1]!;
+}
+
+const count = (xml: string, needle: string) => xml.split(needle).length - 1;
+const revision = { author: 'A', date: '2024-01-01T00:00:00Z' };
+const WRAPPED_CASES: readonly (readonly [string, (w: typeof END_AT) => TreeDocOp, string])[] = [
+  // An empty content control is taken whole and never goes inside a wrapper (below).
+  ...END_CASES.filter(([label]) => label !== 'an empty content control'),
+  ['typed text', (w) => ({ op: 'insertText', ...w, text: 'Z' }), '>Z<'],
+  ['a tracked insertion', (w) => ({ op: 'insertText', ...w, text: 'Z', revision }), '>Z<'],
+];
+
+for (const [wrapper, open, close, serialized] of WRAPPERS)
+  for (const [label, make, needle] of WRAPPED_CASES) {
+    test(`${label} at a field edge inside ${wrapper} goes outside the field`, () => {
+      const end = wrappedAfter(open, close, make(END_AT), 1);
+      expect(at(end, needle)).toBeGreaterThan(at(end, 'w:fldCharType="end"'));
+      expect(at(end, needle)).toBeLessThan(at(end, 'Tail'));
+      // Both sides keep the wrapper, with the same attributes.
+      expect(at(end, serialized)).toBeLessThan(at(end, 'w:fldCharType="end"'));
+      expect(end.slice(at(end, 'Tail'))).toContain(close);
+      const begin = wrappedAfter(open, close, make(BEGIN_AT), 0);
+      const character = begin.lastIndexOf('w:fldCharType="begin"', at(begin, 'TOC'));
+      expect(at(begin, needle)).toBeLessThan(character);
+      expect(at(begin, 'Before')).toBeLessThan(at(begin, needle));
+      // Both sides keep the wrapper. A field joins the run before the edge, inside the wrapper.
+      expect(begin.lastIndexOf(serialized, character)).toBeGreaterThanOrEqual(0);
+      if (label !== 'a field') {
+        expect(begin.lastIndexOf(serialized, character)).toBeGreaterThan(at(begin, needle));
+        expect(begin.slice(at(begin, 'Before'), at(begin, needle))).toContain(close);
+      }
+    });
+  }
+
+test('a link over the text after a wrapped end character leaves the character outside', () => {
+  const [, open, close] = WRAPPERS[0]!;
+  const xml = wrappedAfter(
+    open,
+    close,
+    { op: 'insertHyperlink', ...END_AT, start: 2, end: 6, anchor: 'x' },
+    1
+  );
+  expect(at(xml, 'w:anchor="x"')).toBeGreaterThan(at(xml, 'w:fldCharType="end"'));
+});
+
+test('an empty content control at a wrapped field edge is refused, not placed inside', () => {
+  for (const [, open, close] of WRAPPERS) {
+    const body = `<w:p>${run('A')}${code}${run('E')}</w:p><w:p>${open}${run('Pg')}${fldChar('end')}${run('Tail')}${close}</w:p>`;
+    const loaded = readOoxmlPart(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}</w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const op = END_CASES.find(([label]) => label === 'an empty content control')![1](END_AT);
+    const result = applyTreeOp(loaded.part, op);
+    expect(result.ok ? 'ok' : result.reason).toBe('indivisible-content');
+  }
+});
+
+test('a content control holding a field character is not divided', () => {
+  const xml = wrappedAfter(
+    '<w:sdt><w:sdtPr><w:id w:val="7"/></w:sdtPr><w:sdtContent>',
+    '</w:sdtContent></w:sdt>',
+    { op: 'insertBookmark', name: 'b', start: END_AT, end: END_AT },
+    1
+  );
+  expect(count(xml, '<w:sdt>')).toBe(1);
+  expect(count(xml, '<w:id w:val="7"/>')).toBe(1);
+});

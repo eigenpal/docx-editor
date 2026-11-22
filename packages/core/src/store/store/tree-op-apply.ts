@@ -1,5 +1,5 @@
 import { insertsBeforePrompt } from './tree-op-prompt-bias.ts';
-import { fieldEdgeSide, withFieldEdgesIsolated } from './tree-op-field-edge.ts';
+import { fieldEdgeSide, isolateFieldEdge, withFieldEdgesIsolated } from './tree-op-field-edge.ts';
 import { withDisplayedHyphens } from '../package/hyphen-text.ts';
 import { withTailStyle } from './tree-op-paragraph-tail.ts';
 import { withInsertionHints } from './tree-op-text-splice-hints.ts';
@@ -693,6 +693,19 @@ function applyInsertContent(
   inside?: string,
   bias?: 'left' | 'right'
 ): TreeOpResult {
+  // A field character in a wrapper with content on its far side moves to a copy of its own.
+  const isolated = inside === undefined ? isolateFieldEdge(part, paragraph, offset, options) : null;
+  if (isolated && isolated.part !== part) {
+    return applyInsertContent(
+      isolated.part,
+      isolated.paragraph,
+      offset,
+      builders,
+      options,
+      inside,
+      bias
+    );
+  }
   const control = contentControlAtCaret(part, paragraph, offset, offset, bias);
   if (control && isShowingPlaceholder(control)) {
     return applyPlaceholderReplace(part, control, builders, options);

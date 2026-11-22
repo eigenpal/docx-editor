@@ -24,6 +24,14 @@ const begin =
 const end = '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
 const p = (...content: string[]) => `<w:p>${content.join('')}</w:p>`;
 const heading = '<w:p><w:pPr><w:outlineLvl w:val="0"/></w:pPr><w:r><w:t>Heading</w:t></w:r></w:p>';
+const ins = (...content: string[]) =>
+  `<w:ins w:id="90" w:author="B" w:date="2026-01-01T00:00:00Z">${content.join('')}</w:ins>`;
+const deleted = (s: string) =>
+  `<w:del w:id="91" w:author="B" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>${s}</w:delText></w:r></w:del>`;
+const link = (anchor: string, ...content: string[]) =>
+  `<w:hyperlink w:anchor="${anchor}">${content.join('')}</w:hyperlink>`;
+const mark = (name: string) =>
+  `<w:bookmarkStart w:id="80" w:name="${name}"/><w:bookmarkEnd w:id="80"/>`;
 const control = (content: string) =>
   `<w:sdt><w:sdtPr><w:docPartObj><w:docPartGallery w:val="Table of Contents"/><w:docPartUnique/></w:docPartObj></w:sdtPr><w:sdtContent>${content}</w:sdtContent></w:sdt>`;
 
@@ -60,6 +68,38 @@ const SHAPES: readonly (readonly [string, string])[] = [
     'linked row before the end mark',
     p(begin, run('Entry 1')) +
       p('<w:hyperlink w:anchor="_Toc1">', run('Row'), '</w:hyperlink>', end, run('Tail')) +
+      heading,
+  ],
+  [
+    'tracked insertion holding the end mark and text after it',
+    p(begin, run('Entry 1')) + p(ins(run('Pg'), end, run('Tail'))) + heading,
+  ],
+  [
+    'tracked insertion holding the end mark beside a tracked deletion',
+    p(begin, run('Entry 1')) + p(ins(end, run('Tail')), deleted('Gone'), run('After')) + heading,
+  ],
+  [
+    'tracked insertion holding text and the begin mark',
+    p(ins(run('Before'), begin)) + p(run('Entry 1')) + p(end) + heading,
+  ],
+  [
+    'link holding the end mark and text after it',
+    p(mark('Top'), begin, run('Entry 1')) + p(link('Top', run('Row'), end, run('Tail'))) + heading,
+  ],
+  [
+    'link holding text and the begin mark',
+    p(mark('Top'), link('Top', run('Before'), begin), run('Entry 1')) + p(end) + heading,
+  ],
+  [
+    'smart tag holding the end mark and text after it',
+    p(begin, run('Entry 1')) +
+      p(
+        '<w:smartTag w:uri="urn:x" w:element="place">',
+        run('Pg'),
+        end,
+        run('Tail'),
+        '</w:smartTag>'
+      ) +
       heading,
   ],
   ['content control', p(run('Before')) + control(p(begin) + p(run('Entry 1')) + p(end)) + heading],

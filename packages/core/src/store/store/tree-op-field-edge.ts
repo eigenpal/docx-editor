@@ -24,11 +24,12 @@
 // its own edge, so it never holds one whose partner lies outside it.
 
 import { isFldChar, parsedFieldSpansOf } from '../package/field-nodes.ts';
-import type {
-  OoxmlElement,
-  OoxmlNode,
-  OoxmlParagraphNode,
-  OoxmlPart,
+import {
+  WML_NAMESPACE_URI,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlParagraphNode,
+  type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import {
   createNodeIdAllocator,
@@ -36,10 +37,16 @@ import {
   replaceChildren,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
-import { cloneWithNewIds, isRunPropertiesNode, parentOf } from './tree-op-nodes.ts';
+import { cloneWithNewIds, isRunPropertiesNode } from './tree-op-nodes.ts';
+import { contains } from './tree-op-split-runs.ts';
+import { isInlineContainerProperty } from '../package/inline-container-properties.ts';
 import { directParentOf } from './tree-op-field-end-site.ts';
 import { inlineContainersOf } from './tree-op-nodes.ts';
-import { MAX_INLINE_CONTAINER_DEPTH, nextInlineContainerDepth } from '../package/ooxml-shared.ts';
+import {
+  isContentRevisionKind,
+  MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
+} from '../package/ooxml-shared.ts';
 import { orphanFieldEndAt, paragraphOffsetIndex, type InsertionSite } from './tree-op-segments.ts';
 import type { TreeOpResult } from './tree-op-types.ts';
 import { FieldResultsModeMemo } from '../package/field-result-mode.ts';
@@ -225,12 +232,16 @@ function landsAfter(
 }
 
 /**
- * Split the runs at a field edge so each field character there is alone on its side of its
- * run: an end character that shares a run with text after it, or a begin character that
- * shares a run with text before it, moves the far content into a sibling run with the same
- * `w:rPr`. No character changes, so every offset stays where it was. Lanes that place whole
- * nodes among a paragraph's children call this first, so {@link fieldEdgeChildIndex} and
- * {@link fieldEdgeSide} find the field character in a child of its own.
+ * Split the runs and inline wrappers at a field edge so each field character there sits in a
+ * paragraph child of its own on that side: an end character with content after it, or a begin
+ * character with content before it, moves the far content into sibling copies of each run and
+ * wrapper that holds both. A copy keeps the original's attributes and property children, so a
+ * `w:ins` or `w:del` stays the same revision (`w:id`, `w:author`, `w:date`, see
+ * `same-revision.ts`) and a `w:hyperlink` keeps its target. A content control is one control
+ * and is never divided: a field character inside one keeps its place. No character changes, so
+ * every offset stays where it was. Lanes that place whole nodes among a paragraph's children
+ * call this first, so {@link fieldEdgeChildIndex} and {@link fieldEdgeSide} find the field
+ * character in a child of its own.
  */
 export function isolateFieldEdge(
   part: OoxmlPart,
@@ -245,34 +256,77 @@ export function isolateFieldEdge(
     [edge?.beginId, false],
   ] as const) {
     if (!id) continue;
-    const run = directParentOf(current.paragraph, id);
-    if (run?.kind !== 'run') continue;
-    const at = run.children.findIndex((child) => child.id === id) + (after ? 1 : 0);
-    const content = (nodes: readonly OoxmlNode[]) => nodes.some((n) => !isRunPropertiesNode(n));
-    if (!content(run.children.slice(0, at)) || !content(run.children.slice(at))) continue;
-    const mint = createNodeIdAllocator(current.part);
-    const properties = run.children.filter(isRunPropertiesNode);
-    const head = { ...run, children: run.children.slice(0, at) };
-    const tail = {
-      ...run,
-      id: mint(),
-      children: [
-        ...properties.map((node) => cloneWithNewIds(node, mint)),
-        ...run.children.slice(at).filter((node) => !isRunPropertiesNode(node)),
-      ],
-    } as OoxmlNode;
-    const holder = parentOf(current.part, run.id);
-    if (!holder) return null;
-    const children = holder.children.flatMap((child) =>
-      child.id === run.id ? [head as OoxmlNode, tail] : [child]
-    );
-    const replaced = replaceChildren(current.part, holder.id, children, options);
+    const allocate = createNodeIdAllocator(current.part);
+    let minted = 0; // a division mints its tail's id; none minted means nothing was divided
+    const mint = () => (minted++, allocate());
+    const children = current.paragraph.children.flatMap((child) => {
+      const divided = divideAt(child, id, after, mint, 0);
+      if (!divided) return [child];
+      return [divided.head, divided.tail].filter((node): node is OoxmlNode => !!node);
+    });
+    if (minted === 0) continue;
+    const replaced = replaceChildren(current.part, current.paragraph.id, children, options);
     if (!replaced.ok) return null;
     const reloaded = findNode(replaced.part, paragraph.id);
     if (reloaded?.kind !== 'paragraph') return null;
     current = { part: replaced.part, paragraph: reloaded as OoxmlParagraphNode };
   }
   return current;
+}
+
+/** Whether a field edge may divide `node` into two copies: runs and lossless inline wrappers. */
+function divisible(node: OoxmlNode): boolean {
+  if (node.kind === 'run' || node.kind === 'hyperlink' || isContentRevisionKind(node.kind)) {
+    return true;
+  }
+  return (
+    node.kind === 'generic' &&
+    node.namespaceUri === WML_NAMESPACE_URI &&
+    DIVISIBLE_GENERIC.has(node.localName)
+  );
+}
+const DIVISIBLE_GENERIC = new Set(['smartTag', 'customXml', 'dir', 'bdo']);
+
+/**
+ * Divide `node` beside the descendant `id`: after it when `after`, else before it. Returns the
+ * near and far pieces (either null when that side holds no content), or null when `id` is not
+ * inside `node`. The head keeps the node's identity; a new tail gets fresh ids.
+ */
+function divideAt(
+  node: OoxmlNode,
+  id: string,
+  after: boolean,
+  mint: () => string,
+  depth: number
+): { readonly head: OoxmlNode | null; readonly tail: OoxmlNode | null } | null {
+  if (node.id === id) return after ? { head: node, tail: null } : { head: null, tail: node };
+  if (node.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return null;
+  const index = node.children.findIndex((child) => contains(child, id));
+  if (index < 0) return null;
+  const child = node.children[index]!;
+  const inner = divideAt(child, id, after, mint, nextInlineContainerDepth(node, depth));
+  if (!inner) return null;
+  const pieces = [inner.head, inner.tail].filter((piece): piece is OoxmlNode => !!piece);
+  const whole = (children: readonly OoxmlNode[]) => ({ ...node, children }) as OoxmlNode;
+  const spliced = whole(node.children.flatMap((item) => (item === child ? pieces : [item])));
+  if (!divisible(node))
+    return after ? { head: spliced, tail: null } : { head: null, tail: spliced };
+  const property = (item: OoxmlNode) =>
+    isRunPropertiesNode(item) || isInlineContainerProperty(node, item);
+  const content = (items: readonly OoxmlNode[]) => items.filter((item) => !property(item));
+  const head = [...content(node.children.slice(0, index)), ...(inner.head ? [inner.head] : [])];
+  const tail = [...(inner.tail ? [inner.tail] : []), ...content(node.children.slice(index + 1))];
+  if (head.length === 0) return { head: null, tail: spliced };
+  if (tail.length === 0) return { head: spliced, tail: null };
+  const properties = node.children.filter(property);
+  return {
+    head: whole([...properties, ...head]),
+    tail: {
+      ...node,
+      id: mint(),
+      children: [...properties.map((item) => cloneWithNewIds(item, mint)), ...tail],
+    } as OoxmlNode,
+  };
 }
 
 /** Apply a write after isolating the field edges at `offsets` ({@link isolateFieldEdge}). */
