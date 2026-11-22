@@ -3,12 +3,19 @@
 // `w:style` definitions their own way, and all of them resolve the default through this rule,
 // so the page, the style reads, and the clipboard agree on it.
 //
-// 1. The last paragraph definition with `w:default` on (17.7.4.17). A later duplicate of that
-//    `w:styleId` without the flag keeps the id as the default; the duplicate rule of the
-//    caller still decides which definition's properties apply.
+// 1. The last paragraph definition with `w:default` on (ECMA-376 Part 1 §17.7.4.17). A later
+//    duplicate of that `w:styleId` without the flag keeps the id as the default; the duplicate
+//    rule of the caller still decides which definition's properties apply.
+//    §17.7.4.17: "If this attribute is specified by multiple styles, then the last instance of
+//    a style with this property shall be used."
 // 2. When no paragraph definition carries the flag, the last paragraph style whose `w:name` is
 //    "Normal", compared trimmed and case-folded. A styles part can name its base style "Normal"
 //    under any `w:styleId` and omit the flag.
+//    This step departs from the specification on purpose. §17.7.4.17 says: "If this attribute
+//    is not specified for any style, then no properties shall be applied to objects of the
+//    specified style type." Styles parts in this state usually base their other paragraph
+//    styles on the style named "Normal", and with no default they lay out with `w:docDefaults`
+//    alone. Character and table styles keep the specification rule.
 //
 // Only a paragraph definition sets the flag, so a later duplicate of another type leaves it. The
 // style chain then finds no paragraph style under the id, and paragraphs keep `w:docDefaults`.
