@@ -71,17 +71,12 @@ for (const depth of [1, 4]) {
 }
 test('text and multiple cached pictures keep their display order within one atom', () => {
   const s = setup(field(text('left') + picture() + text('middle') + picture() + text('right')));
-  const pieces = piecesOfParagraphForDisplay(
-    s.paragraph,
-    [],
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    'proposed',
-    undefined,
-    s.context
-  );
+  const pieces = piecesOfParagraphForDisplay({
+    paragraph: s.paragraph,
+    displayMode: 'proposed',
+    inlineDrawingLayout: s.context,
+    tocLinkStyleRanges: undefined,
+  });
   expect(pieces.map((p) => p.text)).toEqual([
     'A',
     'left',

@@ -8,6 +8,7 @@ import {
 } from './clipboard-object-selection.ts';
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { chartCopyFlavours, pasteCopiedChart } from './surface-chart-clipboard.ts';
+import { chartClipboardToken } from './chart-clipboard.ts';
 import {
   DRAWING_CLIPBOARD_STORY_REASON,
   DRAWING_PASTE_CELLS_REASON,
@@ -15,8 +16,10 @@ import {
   floatingDrawingEndingAt,
   isDrawingCopyHtml,
   DRAWING_PASTE_VIEWING_REASON,
+  TEXT_BOX_PASTE_REASON,
 } from './surface-drawing-clipboard.ts';
 import { partOfNodeId } from './surface-scope.ts';
+import type { DrawingPasteTarget } from './drawing-paste-target.ts';
 // Copy, cut and paste for the paginated surface (paginated-surface seam).
 //
 // Thin glue, on purpose. The flavour payload lives in `clipboard-copy-payload.ts`, the
@@ -47,7 +50,7 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { buildCopyFlavours, type CopyFlavours } from './clipboard-copy-payload.ts';
 import { routePaste } from './clipboard-paste-router.ts';
-import { insertableText } from './clipboard-plain-text.ts';
+import { insertableText, plainTextFromHtml } from './clipboard-plain-text.ts';
 import {
   paragraphTextMarkingOptionalHyphens,
   withoutOptionalHyphens,
@@ -154,6 +157,21 @@ export interface SurfaceClipboardDeps {
   } | null;
   /** Select a pasted drawing and bring it into view. */
   selectPastedDrawing?(drawingNodeId: string, paragraphId: string): void;
+  /** Where a paste payload goes while a drawing is selected (`pasteTargetOf`); html null for plain. */
+  drawingPasteTarget?(
+    text: string,
+    html: string | null,
+    drawingCopy: boolean
+  ): DrawingPasteTarget | null;
+  /** Enter the selected drawing's text box and select its text; false when it cannot. */
+  selectTextBoxForPaste?(drawingNodeId: string): boolean;
+  /** Leave the text box a paste entered, and select its drawing again. */
+  leaveTextBoxForPaste?(drawingNodeId: string, paragraphId: string): void;
+  /**
+   * Put a collapsed caret at the point a paste beside a selected drawing goes. Returns a
+   * function that selects that drawing again, for a paste that then lands nothing.
+   */
+  placeCaretForPaste?(paragraphId: string, offset: number): (() => void) | null;
 }
 
 export interface SurfaceClipboardOps {
@@ -178,6 +196,44 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
    * downgrade a LATER ordinary Cmd+V.
    */
   let forcePlainPasteArmedAt: number | null = null;
+
+  const refuse = (reason: string): void =>
+    deps.commit(
+      () => ({ committed: false, rejected: true, opCount: 0, reason }) as TreeApplyResult
+    );
+
+  /**
+   * Move the selection to where a paste goes while a drawing is selected: before its anchor
+   * run, or over the text of its text box. False when the paste refuses; the reason is
+   * published. After a move, a function that undoes it for a paste that lands nothing: it
+   * leaves the text box, and selects the drawing again. Null when the selection did not move,
+   * which includes no drawing selected.
+   */
+  function placeDrawingPaste(
+    text: string,
+    html: string | null,
+    drawingCopy: boolean
+  ): false | (() => void) | null {
+    const target = deps.drawingPasteTarget?.(text, html, drawingCopy) ?? null;
+    if (!target) return null;
+    if (target.kind === 'anchor') {
+      // The point before the drawing's anchor run, which the caret need not be at: a press on
+      // the right half of an inline drawing leaves the caret after it.
+      const { from } = deps.orderedRange();
+      if (from.paragraphId === target.paragraphId && from.offset === target.offset) return null;
+      return deps.placeCaretForPaste?.(target.paragraphId, target.offset) ?? null;
+    }
+    if (target.kind === 'refused') {
+      refuse(target.reason);
+      return false;
+    }
+    const anchorParagraphId = deps.orderedRange().from.paragraphId;
+    if (!deps.selectTextBoxForPaste?.(target.drawingNodeId)) {
+      refuse(TEXT_BOX_PASTE_REASON);
+      return false;
+    }
+    return () => deps.leaveTextBoxForPaste?.(target.drawingNodeId, anchorParagraphId);
+  }
 
   /** Insert text, turning newlines into real paragraph splits rather than literal characters. */
   function insertPlainText(text: string): void {
@@ -485,28 +541,62 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       forcePlainPasteArmedAt !== null &&
       deps.now() - forcePlainPasteArmedAt < FORCE_PLAIN_PASTE_WINDOW_MS;
     forcePlainPasteArmedAt = null;
+    // A copied chart pastes where a copied drawing does: before a selected drawing's anchor.
+    const chartPlaced =
+      !forcePlain && chartClipboardToken(html) !== null
+        ? placeDrawingPaste(text, html, true)
+        : null;
+    if (chartPlaced === false) return false;
     const chart = forcePlain ? null : pasteCopiedChart(deps, html);
-    if (chart !== null) return chart;
+    if (chart !== null) {
+      if (chart === false && chartPlaced) chartPlaced();
+      return chart;
+    }
     const storyOpen = (deps.richPasteAllowed?.() ?? true) && deps.storyScope().kind === 'body';
     // A copied drawing lands only at a caret in the main story. Elsewhere it refuses, rather than
     // pasting a text box's text alone or nothing at all. Cmd+Shift+V still pastes the text.
     const cells = deps.cellSelection() !== null;
     const viewing = deps.editingMode() === 'view';
-    if (!forcePlain && isDrawingCopyHtml(html) && (!storyOpen || cells || viewing)) {
+    const drawingCopy = !forcePlain && isDrawingCopyHtml(html);
+    if (drawingCopy && (!storyOpen || cells || viewing)) {
       const reason = viewing
         ? DRAWING_PASTE_VIEWING_REASON
         : storyOpen
           ? DRAWING_PASTE_CELLS_REASON
           : DRAWING_CLIPBOARD_STORY_REASON;
-      deps.commit(
-        () => ({ committed: false, rejected: true, opCount: 0, reason }) as TreeApplyResult
-      );
+      refuse(reason);
       return false;
     }
+    // While a drawing is selected the paste goes before its anchor run or into its text box.
+    const placed = placeDrawingPaste(text, forcePlain ? null : html, drawingCopy);
+    if (placed === false) return false;
+    const revision = deps.session.packageRevision();
+    // A text box takes the plain lane: an HTML-only payload brings its visible text there.
+    const typed =
+      placed && !forcePlain && html && text.trim() === '' ? plainTextFromHtml(html) || text : text;
+    const landed = routeRichPaste(typed, html, forcePlain, cells);
+    // A paste into a text box that lands nothing leaves the box, so the next key does not
+    // replace the text the paste selected, and reports that it landed nothing: the store's
+    // refusal, such as a locked content control, stays the published reason.
+    if (placed && deps.session.packageRevision() === revision) {
+      placed();
+      return false;
+    }
+    return landed;
+  }
+
+  function routeRichPaste(
+    text: string,
+    html: string | null,
+    forcePlain: boolean,
+    cells: boolean
+  ): boolean {
+    // Read again: a paste into a text box takes the text box's plain lane.
+    const richStory = (deps.richPasteAllowed?.() ?? true) && deps.storyScope().kind === 'body';
     const lane = routePaste(
       {
         richLaneOpen:
-          storyOpen &&
+          richStory &&
           (deps.editingMode() === 'edit' ||
             (deps.editingMode() === 'suggest' && deps.suggestion?.() !== undefined)) &&
           !cells,

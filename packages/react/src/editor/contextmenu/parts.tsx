@@ -16,7 +16,11 @@ import type { DocxEditorChildren } from '../../docx-editor-children';
 
 import { useMemo, useCallback } from 'react';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
-import { hostWindowOf, tableChromeIconPaths } from '@docx-editor.dev/core/editor';
+import {
+  clipboardCommandRefusal,
+  hostWindowOf,
+  tableChromeIconPaths,
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { useEditorState } from '../useEditorState';
@@ -35,6 +39,23 @@ import {
   REFRESH_TOC_PAGE_NUMBERS_PATHS,
 } from './contextmenu-icons';
 import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
+import { useImageInsertOptional } from '../images/ImageInsert';
+
+/**
+ * Run a row's command, and show the reason when the editor refuses a copy, cut, or paste, in
+ * the dialog a keyboard copy, cut, or paste shows.
+ */
+function useRowExec(): (command: EditorCommand) => void {
+  const editor = useDocxEditor();
+  const showClipboardRefusal = useImageInsertOptional()?.showClipboardRefusal;
+  return useCallback(
+    (command: EditorCommand) => {
+      const refusal = clipboardCommandRefusal(command, editor?.exec(command));
+      if (refusal) showClipboardRefusal?.(refusal);
+    },
+    [editor, showClipboardRefusal]
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The generic command row
@@ -66,7 +87,7 @@ function defineCommandRow(
   defaults: { labelKey: string; shortcutKey: string; paths: readonly string[] }
 ) {
   const Part = ({ icon, labelKey, shortcutKey, className, hidden }: ContextMenuCommandProps) => {
-    const editor = useDocxEditor();
+    const exec = useRowExec();
     const { close } = useContextMenuContext();
     const label = useMenuLabel();
     const { isEnabled, disabledReason } = useEditorCommand(command);
@@ -79,7 +100,7 @@ function defineCommandRow(
         disabled={!isEnabled}
         {...(disabledReason ? { title: disabledReason } : {})}
         onSelect={() => {
-          editor?.exec(command);
+          exec(command);
           close(true);
         }}
         {...(className ? { className } : {})}
@@ -149,7 +170,7 @@ export function ContextMenuPaste({
   className,
   hidden,
 }: ContextMenuCommandProps) {
-  const editor = useDocxEditor();
+  const exec = useRowExec();
   const { close, clipboardRefusal, reportClipboardRefusal } = useContextMenuContext();
   const viewport = useNavigationViewportElement();
   const label = useMenuLabel();
@@ -178,7 +199,7 @@ export function ContextMenuPaste({
             const { text, html } = await readClipboardPayload(viewport);
             // An empty clipboard is not a refusal — there is simply nothing to insert.
             if (text || html) {
-              editor?.exec({ type: 'paste', text, ...(html ? { html } : {}) });
+              exec({ type: 'paste', text, ...(html ? { html } : {}) });
             }
           } catch (error) {
             reportClipboardRefusal(
@@ -245,7 +266,7 @@ export function ContextMenuPasteWithoutFormatting({
   className,
   hidden,
 }: ContextMenuCommandProps) {
-  const editor = useDocxEditor();
+  const exec = useRowExec();
   const { close, clipboardRefusal, reportClipboardRefusal } = useContextMenuContext();
   const viewport = useNavigationViewportElement();
   const label = useMenuLabel();
@@ -269,7 +290,7 @@ export function ContextMenuPasteWithoutFormatting({
         void (async () => {
           try {
             const text = await hostWindowOf(viewport).navigator.clipboard.readText();
-            if (text) editor?.exec({ type: 'pasteWithoutFormatting', text });
+            if (text) exec({ type: 'pasteWithoutFormatting', text });
           } catch (error) {
             reportClipboardRefusal(
               error instanceof Error ? error.message : 'the clipboard is not readable'

@@ -4461,6 +4461,7 @@ export const DocxEditorImageInsertErrorDialog: vue.DefineComponent<vue.ExtractPr
         type: PropType<() => void>;
     };
     style: PropType<CSSProperties>;
+    title: StringConstructor;
 }>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     children: PropType<DocxEditorChildren>;
     className: StringConstructor;
@@ -4473,6 +4474,7 @@ export const DocxEditorImageInsertErrorDialog: vue.DefineComponent<vue.ExtractPr
         type: PropType<() => void>;
     };
     style: PropType<CSSProperties>;
+    title: StringConstructor;
 }>> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public
@@ -4484,6 +4486,7 @@ export interface DocxEditorImageInsertErrorDialogProps {
     onClose(): void;
     // (undocumented)
     style?: CSSProperties;
+    title?: string;
 }
 
 // @public

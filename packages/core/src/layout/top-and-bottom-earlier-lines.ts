@@ -7,7 +7,7 @@
 // with the band present from the first line settles the paragraph.
 
 import type { ExclusionZone } from './drawing-exclusion.ts';
-import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
+import type { TocParagraphFlowOptions } from './paragraph-flow-options.ts';
 import type { PendingLine } from './pending-line.ts';
 import { topAndBottomSkipBeforeLine } from './top-and-bottom-clearance.ts';
 
@@ -102,8 +102,8 @@ export function rebreakForEarlierOwnBands(options: {
   readonly lines: readonly PendingLine[];
   readonly zones: readonly ExclusionZone[];
   readonly starts: ReadonlySet<number>;
-  readonly flow: ParagraphFlowOptions | undefined;
-  readonly rebreak: (flow: ParagraphFlowOptions) => readonly PendingLine[];
+  readonly flow: TocParagraphFlowOptions | undefined;
+  readonly rebreak: (flow: TocParagraphFlowOptions) => readonly PendingLine[];
 }): readonly PendingLine[] | null {
   const { flow } = options;
   const paragraphStartY = flow?.paragraphStartY ?? 0;
@@ -116,7 +116,11 @@ export function rebreakForEarlierOwnBands(options: {
     ...(flow?.regionBottomY !== undefined ? { regionBottomY: flow.regionBottomY } : {}),
   });
   if (!crossing) return null;
-  const lines = options.rebreak({ ...flow, ownBandsFromFirstLine: crossing });
+  const lines = options.rebreak({
+    ...flow,
+    tocLinkStyleRanges: flow?.tocLinkStyleRanges,
+    ownBandsFromFirstLine: crossing,
+  });
   if (!anchorLinesFitRegion(lines, crossing, paragraphStartY, flow?.regionBottomY)) return null;
   let lastAnchorLine = -1;
   for (const start of crossing)

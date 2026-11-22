@@ -4,6 +4,7 @@ import type { TableVerticalAnchorFrames } from './table-float-position.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import type { BlockFragmentRecord } from './semantic-records.ts';
+import type { TableFlowPageState, TableResume } from './table-page-restart.ts';
 
 /** The body flow a table is placed into: the cursor it moves, and what it publishes to. */
 export interface TableFlowCursor {
@@ -71,9 +72,18 @@ export interface TableFlowCursor {
    * nothing follows; null when it cannot be priced.
    */
   readonly followingKeepOpening?: (room: number) => number | null | undefined;
+  /**
+   * Restart the pagination at the top of the page the flow stands at, with this row next
+   * (`table-page-restart.ts`). The flow keeps the earlier pages.
+   */
+  readonly resume?: TableResume;
+  /** The flow state a page start records, so that a later pass can restart there. */
+  readonly pageStartState?: () => TableFlowPageState;
 }
 
 export interface TableFlowPlacementResult {
   /** True when the table paints on the anchor sheet without advancing the body cursor. */
   readonly outOfFlow: boolean;
+  /** The restart did not apply and nothing was placed: the caller paginates the whole table. */
+  readonly restartRefused?: true;
 }

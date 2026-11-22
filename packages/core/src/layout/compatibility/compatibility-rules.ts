@@ -180,7 +180,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.3.1.15 keepNext'
   ),
   lineEndPunctuationAtEveryAlignment: legacy(
-    'Line-end East Asian punctuation hangs past the margin at every paragraph alignment, and the text before it fills the measure. The paragraph kinsoku switch does not stop it. Modern modes hang only in justified and distributed paragraphs',
+    'Line-end East Asian punctuation hangs past the margin at every paragraph alignment, and the text before it fills the measure. The paragraph kinsoku switch does not stop it. With punctuation compression (w:characterSpacingControl), punctuation compresses to fit a line at every alignment, within half the advance of each group it admits, and Korean marks keep their advances; a hyphen-minus before a letter, digit, or symbol is no break opportunity. Modern modes hang and fit only in justified and distributed paragraphs',
     'ECMA-376 Part 1 §17.3.1.21 overflowPunct'
   ),
   koreanHangingLineFills: modern(
@@ -277,6 +277,12 @@ export const PROFILE_RULES = {
     behavior: 'Paragraphs in table cells snap to the section line grid',
     source: 'ECMA-376 Part 1 §17.15.3.1 adjustLineHeightInTable',
     applies: (p) => p.legacy.adjustLineHeightInTable === true,
+  },
+  alternateLineEndFit: {
+    behavior:
+      'A full-width or curly line-end mark outside the hanging set of its language never hangs. With punctuation compression, a mark with a blank right half passes the margin only by the overflow, up to that half; a larger overflow wraps it unless interior blank sides make room. Half-width Latin marks are unchanged. Only legacy modes read the option',
+    source: 'ECMA-376 Part 4 §14.8.3 useAltKinsokuLineBreakRules',
+    applies: (p) => p.legacy.useAltKinsokuLineBreakRules === true && p.modeClass === 'legacy',
   },
   doNotBreakWrappedTables: {
     behavior:

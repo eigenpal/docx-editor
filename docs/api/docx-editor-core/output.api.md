@@ -4,6 +4,23 @@
 
 ```ts
 
+// @internal
+export function automaticGapFillAfter(span: AutomaticGapSpan, next: AutomaticGapSpan, gap: number): number;
+
+// @internal
+export interface AutomaticGapSpan {
+    // (undocumented)
+    readonly range: {
+        readonly start: number;
+    };
+    // (undocumented)
+    readonly style: {
+        readonly shaping?: {
+            readonly baseLevel?: number;
+        } | null;
+    };
+}
+
 // @public
 export interface BreakMarkStrings {
     // (undocumented)
@@ -84,6 +101,33 @@ export interface GapSpan {
     readonly unsupported?: unknown;
     // (undocumented)
     readonly wrapAdvanceBefore?: number;
+}
+
+// @internal
+export function hangingMarkBlankAt(line: HangingMarkLine, span: HangingMarkSpan): number;
+
+// @internal
+export interface HangingMarkLine {
+    // (undocumented)
+    readonly hangingMarkBlank?: number;
+    // (undocumented)
+    readonly spans: readonly HangingMarkSpan[];
+}
+
+// @internal
+export interface HangingMarkSpan {
+    // (undocumented)
+    readonly box: {
+        readonly width: number;
+    };
+    // (undocumented)
+    readonly lineEndWhitespace?: true;
+    // (undocumented)
+    readonly style: {
+        readonly shaping?: {
+            readonly baseLevel?: number;
+        } | null;
+    };
 }
 
 // @public

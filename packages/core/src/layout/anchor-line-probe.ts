@@ -12,6 +12,7 @@
 // and horizontal float passages are placement-time decisions this pass cannot see.
 
 import { automaticTextGap } from './cjk-automatic-spacing.ts';
+import { fieldResultMayCut, followsInSource } from './field-result-text.ts';
 import { DEFAULT_CJK_TYPOGRAPHY } from './cjk-typography.ts';
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 import { pageBreakYieldsToLineBreak } from './page-break-before-line-break.ts';
@@ -114,7 +115,11 @@ export function anchorLineStartsByModelOffset(input: {
       const style = styleForFontSlot(piece.style, piece.fontSlot);
       const measure = (text: string): number => measurer.measure(displayText(text, style), style);
       const gap = () =>
-        previousText && previousText.modelEnd === piece.start + consumed
+        previousText &&
+        (piece.projected
+          ? // Line layout keeps a page number whole: no gap inside one piece of it.
+            !(consumed > 0 && !fieldResultMayCut(piece)) && followsInSource(previousText, piece)
+          : previousText.modelEnd === piece.start + consumed)
           ? automaticTextGap(
               previousText,
               { ...piece, text: candidate, style },
@@ -170,7 +175,12 @@ export function anchorLineStartsByModelOffset(input: {
         probeWordStartWidth = 0;
       }
       probeWidth += gap() + width;
-      previousText = { ...piece, text: candidate, style, modelEnd: piece.start + boundary };
+      previousText = {
+        ...piece,
+        text: candidate,
+        style,
+        modelEnd: piece.projected ? piece.end : piece.start + boundary,
+      };
       probeLastEmitted = candidate;
       consumed = boundary;
     }

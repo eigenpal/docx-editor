@@ -492,6 +492,7 @@ export function layoutHeaderFooterStory(
       ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
       ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
       showFieldCodes: inputs?.showFieldCodes,
+      tocLinkStyleRanges: undefined, // TOC detection reads the body only.
       ...(inputs?.projectionTokenForParagraph
         ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
         : {}),
@@ -500,8 +501,7 @@ export function layoutHeaderFooterStory(
         : {}),
       ...(tableZones.length > 0 ? { pageExclusionZones: () => exclusionZones } : {}),
     });
-    // Before mode 15 Word runs header and footer text outside tables under their own logos;
-    // the cells read it through `CellAnchorScope.anchorsWrapText`.
+    // Before mode 15, header and footer anchors wrap text; cells read it via `anchorsWrapText`.
     const anchorsWrapText = hasCompatibilityRule(
       inputs?.compatibilityMode,
       'headerFooterAnchorsWrapText'

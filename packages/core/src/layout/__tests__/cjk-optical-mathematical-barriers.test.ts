@@ -166,9 +166,8 @@ test('missing real CJK ink, insufficient capacity and the existing half-glyph pr
   reject(a, a.line.width + 5);
   reject(setup({ measure: { ...measurer, inkBounds: undefined } }));
 });
-test('unknown script, a math variation sequence and mixed nonmath text remain outside the new barrier', () => {
-  for (const text of ['Ж', '≥\ufe0f', '≥x', '≥\t'])
-    reject(setup({ texts: ['甲', '）', '乙', text, '丙'] }));
+test('unknown script, a letter in mixed math text and a control remain outside the barrier', () => {
+  for (const text of ['Ж', '≥x', '≥\t']) reject(setup({ texts: ['甲', '）', '乙', text, '丙'] }));
 });
 test('resolved source face, authored tracking, scale, and complex direction gates remain strict', () => {
   reject(setup({ measure: { ...measurer, hasResolvedFont: () => false } }));

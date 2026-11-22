@@ -88,10 +88,12 @@ test('wrapping within an existing row height preserves later checkpoint counters
   );
 });
 
+// A row that may split breaks where the lines of its cells decide, so a text edit in it is laid
+// out again. A `w:cantSplit` row too tall for a page breaks only at each page bottom.
 test('a split row text update matches a cold layout on every continuation page', async () => {
   const { updateTableText } = await import('../table-text-update.ts');
   const { measurer, styleCascade } = await import('./table-row-keep-fixtures.ts');
-  const part = load(table([row('Long', { lines: 30 }), row('Tail')]));
+  const part = load(table([row('Long', { lines: 30, cantSplit: true }), row('Tail')]));
   const before = lay(part);
   const node = part.root.children
     .find((n) => n.kind === 'body')!
@@ -157,4 +159,37 @@ test('successive AutoFit width changes match separately parsed layouts', async (
     previous = updated;
   }
   expect(widthChanges).toBeGreaterThan(1);
+});
+
+test('a row that ends its page and grows to its minimum leaves room for a thick closing edge', async () => {
+  const { cell, para, pages } = await import('./table-row-keep-fixtures.ts');
+  // Six 14pt lines, then 42pt `atLeast` rows under a thick compound bottom edge. Row 1 ends the
+  // first page. Typed text fills its first cell to the row minimum, so the row keeps its height,
+  // but its lines no longer fit with the room its closing edge needs on that page.
+  const rule = (edge: string, style = 'single', size = 4) =>
+    `<w:${edge} w:val="${style}" w:sz="${size}" w:space="0" w:color="000000"/>`;
+  const borders =
+    `<w:tblBorders>${['top', 'left', 'right', 'insideV', 'insideH'].map((e) => rule(e)).join('')}` +
+    `${rule('bottom', 'thickThinLargeGap', 96)}</w:tblBorders>`;
+  const rows = Array.from(
+    { length: 14 },
+    (_, r) =>
+      `<w:tr><w:trPr><w:trHeight w:val="840" w:hRule="atLeast"/></w:trPr>` +
+      `${cell(para(`A${r}a`, 1 + (r % 3), { widow: true }))}${cell(para(`A${r}b`, 1, { widow: true }))}</w:tr>`
+  );
+  const part = load(para('Pre', 6, { widow: true }) + table(rows, borders));
+  const session = createLayoutSession();
+  const cache = createParagraphLayoutCache();
+  lay(part, 15, { session, cache });
+  const body = part.root.children.find((n) => n.kind === 'body')!;
+  const node = body.children.find((n) => n.kind === 'table')! as OoxmlElement;
+  const paragraphId = readTableStructure(node, 310, 0)!.rows[1]!.cells[0]!.blocks[0]!.id;
+  const edited = applyTreeOp(part, {
+    op: 'insertText',
+    paragraphId,
+    offset: 0,
+    text: 'abcdefghij klmnopqrst uvwxyzabcd ',
+  });
+  if (!edited.ok) throw Error(edited.reason);
+  expect(pages(lay(edited.part, 15, { session, cache }))).toEqual(pages(lay(edited.part)));
 });

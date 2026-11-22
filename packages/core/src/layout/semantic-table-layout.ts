@@ -14,6 +14,7 @@ import { cellContextualSpacing, contextualCellNeighbours } from './contextual-pa
 import { emitNestedTable } from './nested-table-layout.ts';
 import { alignCellContent, createCellFloats, withCellFloatBox } from './cell-float-tables.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
+import { tocLinkRangesOf } from './toc-link-formatting.ts';
 import { paragraphBoxOutdent } from './paragraph-indent.ts';
 import { lineContentX, pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
 import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
@@ -48,7 +49,7 @@ import {
   type AnchoredDrawingRecord,
   type DrawingAnchorFrameContext,
 } from './drawing-layout.ts';
-import { authoredRowFields } from './table-row-record-fields.ts';
+import { authoredCellFields, authoredRowFields } from './table-row-record-fields.ts';
 import {
   exactSpacingExtensionPt,
   rowOpeningGapPt,
@@ -271,8 +272,8 @@ export interface TableFlowDeps {
   readonly showFieldCodes?: boolean;
   /** @internal */
   readonly fieldCodeRanges?: import('./field-code-toc.ts').FieldCodeRanges;
-  /** @internal Word TOC character-style suppression. */
-  readonly tocLinkStyleRanges?: import('./toc-link-formatting.ts').TocLinkRanges;
+  /** TOC link ranges by paragraph id. Required: outside a TOC, pass `undefined`. @internal */
+  readonly tocLinkStyleRanges: import('./toc-link-formatting.ts').TocLinkRanges | undefined;
   /** Document properties for document-property fields; the same object every flow shares. */
   readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
   /**
@@ -562,7 +563,7 @@ function placeCellParagraph(
           ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
           showFieldCodes: deps.showFieldCodes,
           fieldCodeRanges: deps.fieldCodeRanges?.get(paragraphId),
-          tocLinkStyleRanges: deps.tocLinkStyleRanges?.get(paragraphId),
+          tocLinkStyleRanges: tocLinkRangesOf(paragraph, deps.tocLinkStyleRanges),
           suppressEmptyPlaceholderLine: deps.fieldCodeRanges
             ?.get(paragraphId)
             ?.some((range) => range.suppressParagraph),
@@ -767,6 +768,10 @@ function placeCellParagraph(
         : pendingLine.baseline,
       leading: collapseHeight ? 0 : pendingLine.leading,
       trailingSpacing: collapseHeight ? 0 : pendingLine.trailingSpacing,
+      ...(pendingLine.hangingMarkBlank ? { hangingMarkBlank: pendingLine.hangingMarkBlank } : {}),
+      ...(pendingLine.characterFillBand && !collapseHeight
+        ? { characterFillBand: pendingLine.characterFillBand }
+        : {}),
       ...(pendingLine.manualBreakAfter ? { manualBreakAfter: true } : {}),
       ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
       ...(pendingLine.anchorRevisions ? { anchorRevisions: pendingLine.anchorRevisions } : {}),
@@ -1619,24 +1624,7 @@ export function layoutRowFragmentBounded(
         blocks = alignCellContent(blocks, cellAlignmentShift(entry.cell.vAlign, available));
     }
     return {
-      id: entry.cell.id,
-      ...(entry.cell.revisionShading
-        ? {
-            revisionShading: entry.cell.revisionShading,
-            revisionShadingAuthor: entry.cell.revisionShadingAuthor,
-          }
-        : {}),
-      gridColumn: entry.gridColumn,
-      ...(entry.cell.logicalGridColumn === undefined
-        ? {}
-        : { logicalGridColumn: entry.cell.logicalGridColumn }),
-      ...(entry.cell.gridColumnId ? { gridColumnId: entry.cell.gridColumnId } : {}),
-      gridSpan: entry.cell.gridSpan,
-      vMergeContinue: entry.cell.vMergeContinue,
-      ...(entry.cell.vMergeContinue ? { paintInert: true as const } : {}),
-      rowSpan: 1,
-      ...(entry.cell.shading === undefined ? {} : { shading: entry.cell.shading }),
-      ...(entry.cell.textDirection === 'btLr' ? { textDirection: 'btLr' as const } : {}),
+      ...authoredCellFields(entry.cell),
       blocks,
       box: { x: entry.x, y: rowTop + rowGapPt, width: entry.width, height: cellHeight },
     };

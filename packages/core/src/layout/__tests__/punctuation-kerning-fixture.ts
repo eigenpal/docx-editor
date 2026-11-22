@@ -17,7 +17,9 @@ export interface FixtureOptions {
   balanceWidths?: boolean;
   /** Writes `w:useWord97LineBreakRules` in `w:compat`. */
   word97LineBreaks?: boolean;
-  compatibility?: 14 | 15;
+  /** Writes `w:useAltKinsokuLineBreakRules` in `w:compat`. */
+  alternateKinsoku?: boolean;
+  compatibility?: 11 | 12 | 14 | 15;
   defaultFace?: string | null;
   face?: string;
   secondFace?: string;
@@ -25,6 +27,11 @@ export interface FixtureOptions {
   tracking?: number;
   bold?: boolean;
   italic?: boolean;
+  highlight?: boolean;
+  /** Further run properties, written after the ones above. */
+  runProperties?: string;
+  /** Wraps the paragraph's XML, for example in a table cell. */
+  wrapParagraph?: (paragraph: string) => string;
   underlineElsewhere?: boolean;
   language?: string;
   secondLanguage?: string;
@@ -64,6 +71,8 @@ export function loadFixture(options: FixtureOptions = {}) {
       (options.tracking === undefined ? '' : `<w:spacing w:val="${options.tracking}"/>`) +
       (options.bold ? '<w:b/>' : '') +
       (options.italic ? '<w:i/>' : '') +
+      (options.highlight ? '<w:highlight w:val="yellow"/>' : '') +
+      (options.runProperties ?? '') +
       (language ? `<w:lang w:eastAsia="${escape(language)}"/>` : '') +
       `</w:rPr><w:t xml:space="preserve">${escape(content)}</w:t></w:r>`
     );
@@ -73,13 +82,17 @@ export function loadFixture(options: FixtureOptions = {}) {
       ? run(text)
       : run(text.slice(0, options.split)) + run(text.slice(options.split), true);
   entries['word/document.xml'] = strToU8(
-    `<w:document xmlns:w="${W}"><w:body><w:p>` +
-      `<w:pPr>${options.paragraphProperties ?? '<w:jc w:val="left"/><w:overflowPunct w:val="0"/>'}</w:pPr>` +
-      runs +
-      (options.underlineElsewhere
-        ? '<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>字</w:t></w:r>'
-        : '') +
-      '</w:p></w:body></w:document>'
+    `<w:document xmlns:w="${W}"><w:body>` +
+      (options.wrapParagraph ?? ((paragraph: string) => paragraph))(
+        '<w:p>' +
+          `<w:pPr>${options.paragraphProperties ?? '<w:jc w:val="left"/><w:overflowPunct w:val="0"/>'}</w:pPr>` +
+          runs +
+          (options.underlineElsewhere
+            ? '<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>字</w:t></w:r>'
+            : '') +
+          '</w:p>'
+      ) +
+      '</w:body></w:document>'
   );
   const face = options.defaultFace === undefined ? 'Yu Mincho' : options.defaultFace;
   entries['word/styles.xml'] = strToU8(
@@ -99,7 +112,7 @@ export function loadFixture(options: FixtureOptions = {}) {
       (options.lineStartRule
         ? `<w:noLineBreaksBefore w:lang="${escape(options.lineStartRule.language)}" w:val="${escape(options.lineStartRule.characters)}"/>`
         : '') +
-      `<w:compat>${options.balanceWidths ? '<w:balanceSingleByteDoubleByteWidth/>' : ''}${options.word97LineBreaks ? '<w:useWord97LineBreakRules/>' : ''}<w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${options.compatibility ?? 15}"/></w:compat>` +
+      `<w:compat>${options.balanceWidths ? '<w:balanceSingleByteDoubleByteWidth/>' : ''}${options.word97LineBreaks ? '<w:useWord97LineBreakRules/>' : ''}${options.alternateKinsoku ? '<w:useAltKinsokuLineBreakRules/>' : ''}<w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${options.compatibility ?? 15}"/></w:compat>` +
       '</w:settings>'
   );
   if (options.fontTableEntry) {

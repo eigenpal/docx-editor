@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A table of contents link could show the Hyperlink style when its style ID differed from its name, and text outside a link could lose it.",
+  "after": "A table of contents drops the Hyperlink style, identified by its name, only for link content in the cached result.",
+  "reason": "The change affects layout only. It keeps field ranges, document data, and collaboration formats.",
+  "tests": [
+    "packages/core/src/layout/__tests__/toc-layout.test.ts",
+    "packages/core/src/layout/__tests__/toc-link-style.test.ts",
+    "packages/pro/src/collaboration/__tests__/toc-numbered-hyperlink-editors.test.ts"
+  ],
+  "changeset": "toc-hyperlink-style-definition",
+  "migration": null
+}

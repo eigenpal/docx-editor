@@ -84,6 +84,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `columnAlignmentFollowsIndents` | `legacy` | An object aligned left or right in its column aligns with the left or right indent of its anchor paragraph |
 | `adjustLineHeightInTable` | `w:adjustLineHeightInTable` | Cell paragraphs snap to the line grid |
 | `noColumnBalance` | `w:noColumnBalance` in `legacy` modes | Columns fill in order without balancing |
+| `alternateLineEndFit` | `w:useAltKinsokuLineBreakRules` in `legacy` modes | A full-width or curly line-end mark outside its language's hanging set never hangs; only the overflow, up to a blank right half, passes the margin |
 | `doNotBreakWrappedTables` | `w:doNotBreakWrappedTables` in `legacy` modes | A floating table never breaks, and moves up to end at the bottom page edge, never above the top page edge |
 | `fixedParagraphSpacing` | `w:doNotUseHTMLParagraphAutoSpacing` | Adjacent paragraph spacing adds up, and automatic spacing keeps the authored measurement |
 | `ignoreIndentAsNumberingTabStop` | `w:doNotUseIndentAsNumberingTabStop` | A numbering tab ignores the hanging indent |

@@ -1,7 +1,11 @@
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { bodyLineId } from '../body-line-id.ts';
 import { finalizeTableRows } from '../table-fragment-finalize.ts';
-import { rememberRowPlacement, isSettledPreviousRow } from '../table-row-placement-reuse.ts';
+import {
+  rememberRowPlacement,
+  isSettledPreviousRow,
+  withFragmentPlace,
+} from '../table-row-placement-reuse.ts';
 import { expect, test } from 'bun:test';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { createRowProbeReuse } from '../table-row-probe-reuse.ts';
@@ -111,12 +115,19 @@ test('matching line ids preserve a settled previous placement and still call the
   const initial = layoutRowFragment(source, structure.columnWidthsPt, 0, 0, false, 0, d, 0);
   rememberRowPlacement(source, initial, 0, d);
   const finalized = finalizeTableRows([initial.record], structure, [source])[0]!;
-  const probe = createRowProbeReuse(structure.columnWidthsPt, 0, new Map([[source.id, finalized]]));
+  const probe = createRowProbeReuse(
+    structure.columnWidthsPt,
+    0,
+    new Map([[source.id, withFragmentPlace(finalized, false, false)]])
+  );
   probe.measure(source, 0, 0, d);
   calls = 0;
   const answer = probe.take(source, 0, 0, d);
   expect(answer).not.toBeNull();
-  expect(isSettledPreviousRow(answer!.record)).toBe(true);
+  expect(isSettledPreviousRow(answer!.record, false, false)).toBe(true);
+  // A row that now opens or closes its fragment is finalized again.
+  expect(isSettledPreviousRow(answer!.record, false, true)).toBe(false);
+  expect(isSettledPreviousRow(answer!.record, true, false)).toBe(false);
   expect(calls).toBe(
     finalized.cells.reduce(
       (sum, cell) =>
@@ -136,7 +147,7 @@ test('matching line ids preserve a settled previous placement and still call the
   probe.measure(source, 0, 0, changed);
   const remapped = probe.take(source, 0, 0, changed);
   expect(remapped).not.toBeNull();
-  expect(isSettledPreviousRow(remapped!.record)).toBe(false);
+  expect(isSettledPreviousRow(remapped!.record, false, false)).toBe(false);
   for (const cell of remapped!.record.cells)
     for (const block of cell.blocks) {
       if (block.kind === 'paragraph')

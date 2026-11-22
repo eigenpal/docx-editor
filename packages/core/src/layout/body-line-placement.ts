@@ -306,6 +306,8 @@ function place(placement: BodyLinePlacement): PlacedBodyLine {
     baseline: pendingLine.baseline,
     leading: pendingLine.leading,
     trailingSpacing: pendingLine.trailingSpacing,
+    ...(pendingLine.hangingMarkBlank ? { hangingMarkBlank: pendingLine.hangingMarkBlank } : {}),
+    ...(pendingLine.characterFillBand ? { characterFillBand: pendingLine.characterFillBand } : {}),
     ...(pendingLine.manualBreakAfter ? { manualBreakAfter: true } : {}),
     ...lineBreakAfterFields(pendingLine),
     ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
