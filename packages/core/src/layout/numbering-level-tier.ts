@@ -58,6 +58,11 @@ function statedNumId(pPr: OoxmlNode | undefined): string | undefined {
  * it states `w:val="0"` (§17.9.18, no numbering), the removal ranks directly below THAT
  * `w:pPr`: above the whole chain when it is the paragraph's own. A level-only `w:numPr`
  * above it does not move the removal, unlike a level.
+ *
+ * ECMA-376 Part 1 §17.9.18 (`numId`): "A value of 0 for the val attribute shall never be
+ * used to point to a numbering definition instance, and shall instead only be used to
+ * designate the removal of numbering properties at a particular level in the style
+ * hierarchy (typically via direct formatting)."
  */
 function numberingRemovalRank(
   chain: readonly StyleDefinition[],
@@ -100,6 +105,11 @@ const REMOVED_NUMBERING_PROPERTIES: readonly OoxmlProperty[] = Object.freeze([
  * direct `w:numId w:val="0"` puts the paragraph at the margin even when its style indents
  * it, and a style stating `w:numId w:val="0"` cancels its bases' indents but keeps its own.
  * A `w:ind` the paragraph states still applies, and the trailing indent is unchanged.
+ *
+ * §17.9.18 states only that the removal takes away numbering properties. Resetting the
+ * leading and first-line indents that a paragraph style supplies goes beyond that text: it
+ * is a layout rule. §17.3.1.12 (`ind`) defines the `left`/`start`, `firstLine`, and
+ * `hanging` values and their character-unit forms that this tier resets.
  */
 export function numberingTier(
   chain: readonly StyleDefinition[],
