@@ -820,6 +820,7 @@ export function* paginateTableInFlowSteps(
         isContinuation = true;
         movedToFreshPage = false;
         breakForContinuation(admitsRepeatedHeaders);
+        fragmentCarry.current.continuedAt(bodyRowIndex, flow.cursorY);
         continue;
       }
 
@@ -973,6 +974,7 @@ export function* paginateTableInFlowSteps(
       isContinuation = true;
       movedToFreshPage = false;
       breakForContinuation(admitsRepeatedHeaders);
+      fragmentCarry.current.continuedAt(bodyRowIndex, flow.cursorY);
     }
   }
   placeClosingCellSpacing(flow, structure, pageBottom());

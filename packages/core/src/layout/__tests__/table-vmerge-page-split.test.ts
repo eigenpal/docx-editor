@@ -41,9 +41,11 @@ interface Fixture {
   readonly vAlign?: 'center' | 'bottom';
   /** Lines in the unmerged cell of this row, which then splits at the page break. */
   readonly tallRow?: { readonly index: number; readonly lines: number };
+  /** `w:trHeight hRule="atLeast"` of every row, in twips. */
+  readonly rowTwips?: number;
 }
 
-function fixture({ rows, spanRows = rows, merged, leadPt, vAlign, tallRow }: Fixture) {
+function fixture({ rows, spanRows = rows, merged, leadPt, vAlign, tallRow, rowTwips }: Fixture) {
   const mergedText = Array.from({ length: merged }, (_, index) =>
     p(`MERGED-${String(index + 1).padStart(2, '0')}`)
   ).join('');
@@ -57,8 +59,11 @@ function fixture({ rows, spanRows = rows, merged, leadPt, vAlign, tallRow }: Fix
       tallRow?.index === index
         ? Array.from({ length: tallRow.lines }, (_, line) => p(`${label}-LINE-${line}`)).join('')
         : p(label);
+    const rowProps = rowTwips
+      ? `<w:trPr><w:trHeight w:val="${rowTwips}" w:hRule="atLeast"/></w:trPr>`
+      : '';
     return (
-      `<w:tr><w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/>${mergeProps}</w:tcPr>${first}</w:tc>` +
+      `<w:tr>${rowProps}<w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/>${mergeProps}</w:tcPr>${first}</w:tc>` +
       `<w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>${second}</w:tc></w:tr>`
     );
   }).join('');
@@ -167,7 +172,14 @@ describe('vertical merge across a page break with rows that can split', () => {
   });
 
   test('aligns the merged text in the head fragment and starts its continuation at the top', () => {
-    const layout = layoutOf({ rows: 30, merged: 18, leadPt: 450, vAlign: 'center' });
+    // 13pt rows: fourteen rows (182pt) fit page 1 and hold fifteen 12pt lines with 2pt left.
+    const layout = layoutOf({
+      rows: 30,
+      merged: 24,
+      leadPt: 450,
+      vAlign: 'bottom',
+      rowTwips: 260,
+    });
     const merged = cellParagraphs(layout).filter(({ block }) =>
       textOf(block).startsWith('MERGED-')
     );
@@ -178,11 +190,47 @@ describe('vertical merge across a page break with rows that can split', () => {
       )
     ).toBe(15);
     const [first, second] = tablesByPage(layout).map((tables) => tables[0]!);
-    // The head fragment is full, so the text starts at the top of the head row.
-    expect(merged[0]!.block.box.y).toBeCloseTo(first!.rows[0]!.box.y, 3);
-    // The continuation starts at the top of the page fragment, not centered in its rows.
+    expect(merged[0]!.block.box.y - first!.rows[0]!.box.y).toBeCloseTo(2, 3);
     const continued = merged.find(({ page }) => page === 2)!;
     expect(continued.block.box.y).toBeCloseTo(second!.rows[0]!.box.y, 3);
+  });
+
+  test('starts merged text at the top after a head row that splits by its own text', () => {
+    const layout = layoutOf({
+      rows: 30,
+      merged: 30,
+      leadPt: 540,
+      vAlign: 'bottom',
+      tallRow: { index: 0, lines: 12 },
+    });
+    const merged = cellParagraphs(layout).filter(({ block }) =>
+      textOf(block).startsWith('MERGED-')
+    );
+    expect(merged).toHaveLength(30);
+    const continued = merged.find(({ page }) => page === 2)!;
+    expect(continued.block.box.y).toBeCloseTo(tablesByPage(layout)[1]![0]!.rows[0]!.box.y, 3);
+  });
+
+  test('continues merged text after a span row that splits by its own text', () => {
+    // Row 6 places three of its eight lines on page 1 and five on page 2.
+    const layout = layoutOf({ rows: 12, merged: 30, leadPt: 540, tallRow: { index: 5, lines: 8 } });
+    const merged = cellParagraphs(layout).filter(({ block }) =>
+      textOf(block).startsWith('MERGED-')
+    );
+    expect(merged).toHaveLength(30);
+    const onPage2 = merged.filter(({ page }) => page === 2);
+    const textBottom = onPage2.at(-1)!.block.box.y + LINE;
+    // The last row ends where the merged text ends: it grows by no more than the text needs.
+    const last = tablesByPage(layout)[1]![0]!.rows.at(-1)!;
+    expect(last.box.y + last.box.height).toBeCloseTo(textBottom, 3);
+  });
+
+  test('carries merged text past a span row taller than the rest of the page', () => {
+    const layout = layoutOf({ rows: 8, merged: 50, leadPt: 540, tallRow: { index: 2, lines: 50 } });
+    expect(mergedPages(layout)).toHaveLength(50);
+    expect(
+      cellParagraphs(layout).filter(({ block }) => textOf(block).startsWith('ROW-03-LINE-'))
+    ).toHaveLength(50);
   });
 
   test('centers merged text that ends in the head fragment', () => {
