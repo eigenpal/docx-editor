@@ -43,6 +43,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `anchorsLayOutInCell` | `modern` | Every anchored object in a table cell lays out in its cell |
 | `cellFloatMovedDownIndents` | `modern` | A floating table in a table cell that moves below an earlier one also moves right by its own left text distance |
 | `distributedLinesSpreadCharacters` | `legacy` | A distributed paragraph spreads every line after every character, kerned runs included; a space first takes up to the face average character width less its own advance |
+| `edgeStopKeepsTrailingTabs` | `legacy` | Outside table cells, a tab after text that ends on a custom stop at the right edge stays on that line when no stop lies past it |
 | `fixedTableContentEdgeOrigin` | `legacy` | A table with an absolute width, or a fixed table with an automatic width, aligns the content edge of its aligned outer cell with the text column. A leading-aligned table without an indent or a table style keeps its outer edge there. A table with cell spacing aligns the same content edge, so its frame reaches past the text column. Rows that skip grid columns follow the grid. In a text box, only a leading-aligned table takes this rule, fixed or AutoFit, in either direction |
 | `firstRowExceptionAlignsTable` | `modern` | The first row's `w:tblPrEx` alignment aligns the whole table. Later rows' alignments do not apply |
 | `floatingTableContentOrigin` | `legacy` | A floating table with a numeric offset or a left, inside, right, or outside alignment positions its cell content |
@@ -63,7 +64,6 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `noteAreaHoldsSpaceAfter` | `modern` | A paragraph's space after must fit above the footnote area; in legacy modes, only a paragraph that cites a footnote needs it to fit |
 | `noteTableCellKeeps` | `modern` | Note bands in table rows honor cell widow control and `w:keepLines` |
 | `openingColumnBreakTakesNoLine` | `legacy` | A column break that opens a paragraph leaves no line in the column it ends |
-| `edgeStopKeepsTrailingTabs` | `legacy` | Outside table cells, a tab after text that ends on a custom stop at the right edge stays on that line when no stop lies past it |
 | `oversizedRowKeepGroupReleases` | `legacy` | Oversized kept row groups release before placement, except below authored headers |
 | `positionedTableBreaksAtMargin` | `modern` | A breaking page- or margin-positioned table ends its first fragment at the bottom margin; legacy modes run it to the page edge |
 | `omittedRepeatEndsPage` | `modern` | Content after a table whose last page leaves out the repeated header rows starts on the next page |

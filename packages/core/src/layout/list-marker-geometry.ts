@@ -103,8 +103,9 @@ function markerSlotX(item: ResolvedListItem, markerWidth: number): number {
 }
 
 /**
- * The first authored stop strictly past `x` that a numbering suffix may use. Legacy `num`
- * stops count; the implied hanging-indent stop and the default interval do not.
+ * The first authored stop past `x`, within the pen tolerance, that a numbering suffix may
+ * use. Legacy `num` stops count; the implied hanging-indent stop and the default interval do
+ * not.
  */
 function firstNumberingStopPast(tabStops: ResolvedTabStops, x: number): TabStop | undefined {
   return tabStops.stops.find((stop) => !stop.implied && tabStopPastPen(stop.positionPt, x));

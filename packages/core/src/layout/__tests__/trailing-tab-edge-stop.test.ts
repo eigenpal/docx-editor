@@ -5,6 +5,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import { layoutHeaderFooterStory } from '../hf-layout.ts';
 import { linesOf } from '../semantic-records.ts';
 import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
 
@@ -96,5 +97,61 @@ describe('trailing tabs after text that ends on a custom stop at the edge', () =
     const framed = `<w:p><w:pPr>${FRAME}${rightStop(4000)}</w:pPr>${run('LEFT')}${tabs(1)}${run('RIGHT')}${tabs(2)}</w:p>`;
     expect(lineTexts(framed, 14)).toEqual(['LEFT\tRIGHT\t\t']);
     expect(lineTexts(framed, 15)).toEqual(['LEFT\tRIGHT', '\t', '\t']);
+  });
+});
+
+describe('the same rule in other stories and directions', () => {
+  const atEdge = `<w:p><w:pPr>${rightStop(8000)}</w:pPr>${run('LEFT')}${tabs(1)}${run('RIGHT')}${tabs(2)}</w:p>`;
+
+  test('a header follows the body rule', () => {
+    const header = (mode: number) => {
+      const read = readOoxmlPart(`<w:hdr xmlns:w="${W}">${atEdge}</w:hdr>`, {
+        name: '/word/header1.xml',
+        contentType: 'app/xml',
+      });
+      if (!read.ok) throw new Error(read.reason);
+      const story = layoutHeaderFooterStory(
+        read.part,
+        400,
+        createFixedMeasurer(6, 12),
+        'test',
+        undefined,
+        elevenPointDefaults(),
+        ...Array<undefined>(9),
+        { compatibilityMode: mode }
+      );
+      return story.fragments.flatMap((fragment) =>
+        fragment.kind === 'paragraph'
+          ? fragment.lines.map((line) => line.spans.map((span) => span.text).join(''))
+          : []
+      );
+    };
+    expect(header(14)).toEqual(['LEFT\tRIGHT\t\t']);
+    expect(header(15)).toEqual(['LEFT\tRIGHT', '\t', '\t']);
+  });
+
+  test('a nested table cell wraps in every mode', () => {
+    const nested = (paragraph: string) =>
+      cell(
+        `<w:tbl><w:tblPr><w:tblW w:w="4000" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblCellMar>` +
+          ['top', 'left', 'bottom', 'right']
+            .map((side) => `<w:${side} w:w="0" w:type="dxa"/>`)
+            .join('') +
+          `</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc>${paragraph}</w:tc></w:tr></w:tbl><w:p/>`
+      );
+    for (const mode of MODES) {
+      expect(lineTexts(nested(`<w:p>${run('Field:')}${tabs(5)}</w:p>`), mode)).toEqual([
+        'Field:\t\t\t\t',
+        '\t',
+      ]);
+    }
+  });
+
+  test('right-to-left and positional tabs keep their placement', () => {
+    const rtl = `<w:p><w:pPr><w:bidi/></w:pPr>${run('Field:')}${tabs(12)}</w:p>`;
+    for (const mode of MODES) expect(lineTexts(rtl, mode)).toHaveLength(1);
+    // A positional tab at the margin states its own destination and never wraps.
+    const positional = `<w:p>${run('Field:')}<w:r><w:ptab w:relativeTo="margin" w:alignment="right" w:leader="none"/></w:r></w:p>`;
+    for (const mode of MODES) expect(lineTexts(positional, mode)).toHaveLength(1);
   });
 });

@@ -31,11 +31,14 @@ export function tabClosesLine(
 ): boolean {
   if (!plain) return lineFull && contentFollows;
   const next = nextTabDestination(tabs, currentX, Number.POSITIVE_INFINITY);
-  const pastEdge = next.alignment === 'left' && next.positionPt > rightEdge + 1e-6;
+  const pastEdge = next.alignment === 'left' && tabStopPastPen(next.positionPt, rightEdge);
   if ((lineFull || (scope?.inTableCell === true && pastEdge)) && contentFollows) return true;
   if (!pastEdge) return false;
-  const from = edgeStopKeepsTabs ? currentX - 2 * TAB_PEN_TOLERANCE_PT : currentX;
-  return !tabs.stops.some((stop) => !stop.numberingOnly && tabStopPastPen(stop.positionPt, from));
+  const holds = (positionPt: number) =>
+    edgeStopKeepsTabs
+      ? positionPt >= currentX - TAB_PEN_TOLERANCE_PT
+      : tabStopPastPen(positionPt, currentX);
+  return !tabs.stops.some((stop) => !stop.numberingOnly && holds(stop.positionPt));
 }
 
 /**
@@ -82,12 +85,16 @@ export function tabDestinationForFlow(
   let right = segmentRight;
   if (!rtl && destination.alignment !== 'left')
     right = Math.max(segmentRight, Math.min(destination.positionPt, tabEdge));
-  else if (!rtl && destination.positionPt > stopRight + 1e-6)
+  else if (!rtl && tabStopPastPen(destination.positionPt, stopRight))
     right = Math.max(segmentRight, pastMargin ? Number.POSITIVE_INFINITY : tabEdge);
   return { ...destination, segmentRight: right };
 }
 
-/** Repeated tab sequences retain their existing placement across the whole paragraph. */
+/**
+ * The cell scope for replaying a tab past the cell edge before content that follows it: off
+ * when the paragraph holds consecutive tabs. A tab whose next stop lies past the edge still
+ * opens the next line through `tabClosesLine`'s general rule, whether tabs repeat or not.
+ */
 export function cellTabReplayScope(
   scope: CellAnchorScope | undefined,
   pieces: readonly { readonly text: string }[]

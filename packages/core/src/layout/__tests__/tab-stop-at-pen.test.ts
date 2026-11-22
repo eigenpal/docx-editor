@@ -6,6 +6,9 @@ import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { linesOf } from '../semantic-records.ts';
 import { nextTabDestination, type ResolvedTabStops } from '../paragraph-tabs.ts';
+import { buildNumberingIndex } from '../numbering-index.ts';
+import { listFirstLineOffset, resolveStoryListItems } from '../list-resolve.ts';
+import { listMarkerWidth } from '../list-marker-geometry.ts';
 import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -81,4 +84,46 @@ test('a pen a rounding error short of a stop counts as on it', () => {
   expect(nextTabDestination(tabs, 22.69, 400).positionPt).toBe(22.7);
   // The default grid uses the same tolerance.
   expect(nextTabDestination(tabs, 57 - 1e-9, 400).positionPt).toBe(114);
+});
+
+/** The item of a one-level list: a one-glyph marker at 0pt, text indent 36pt, tab suffix. */
+function listItem() {
+  const read = (name: string, xml: string) => {
+    const result = readOoxmlPart(xml, { name, contentType: 'app/xml' });
+    if (!result.ok) throw new Error(result.reason);
+    return result.part;
+  };
+  const numbering = read(
+    '/word/numbering.xml',
+    `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0">
+      <w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="o"/><w:lvlJc w:val="left"/>
+      <w:pPr><w:ind w:left="720" w:hanging="720"/></w:pPr></w:lvl></w:abstractNum>
+      <w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>`
+  );
+  const document = read(
+    '/word/document.xml',
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:numPr><w:ilvl w:val="0"/>
+      <w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Item</w:t></w:r></w:p></w:body></w:document>`
+  );
+  const body = document.root.children.find((child) => child.localName === 'body')!;
+  const items = resolveStoryListItems(
+    body.children.filter((child) => child.kind === 'paragraph'),
+    buildNumberingIndex(numbering.root),
+    undefined
+  );
+  return [...items.values()][0]!;
+}
+
+test('a numbering suffix tab passes a stop the marker already ends on', () => {
+  const measurer = createFixedMeasurer(6, 12);
+  const item = listItem();
+  const stops = (positionPt: number): ResolvedTabStops => ({
+    stops: [{ positionPt, alignment: 'left' }],
+    defaultIntervalPt: 36,
+  });
+  const markerEnd = listMarkerWidth(item, measurer);
+  // The marker ends on the stop, within a rounding error: the text starts at the indent.
+  expect(listFirstLineOffset(item, measurer, stops(markerEnd * (1 + 1e-15)))).toBe(0);
+  // A stop really past the marker end is nearer than the indent.
+  expect(listFirstLineOffset(item, measurer, stops(12))).toBeCloseTo(-24, 6);
 });
