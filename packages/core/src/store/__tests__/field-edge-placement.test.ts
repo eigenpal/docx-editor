@@ -174,3 +174,50 @@ test('a tracked insertion at a field edge stays outside when the field character
   const end = sharedAfter({ op: 'insertText', ...END_AT, text: 'Z', revision }, 1);
   expect(at(end, '>Z<')).toBeGreaterThan(at(end, 'w:fldCharType="end"'));
 });
+
+const PIC_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+const DRAWING_NAMESPACES =
+  'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
+  'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+  `xmlns:pic="${PIC_URI}"`;
+const PICTURE =
+  '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+  '<wp:extent cx="152400" cy="152400"/><wp:docPr id="1" name="pic"/><wp:cNvGraphicFramePr/>' +
+  `<a:graphic><a:graphicData uri="${PIC_URI}"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/>` +
+  '<pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId14"/><a:stretch><a:fillRect/>' +
+  '</a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:ext cx="152400" cy="152400"/></a:xfrm>' +
+  '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic>' +
+  '</wp:inline></w:drawing></w:r>';
+
+test('an inline picture moved to a field edge lands outside the field', () => {
+  const loaded = readOoxmlPart(
+    `<w:document xmlns:w="${W}" xmlns:r="${R}" ${DRAWING_NAMESPACES}><w:body>${BODY}<w:p>${PICTURE}</w:p></w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const drawingNodeId = findDrawingId(loaded.part.root)!;
+  for (const [where, index, after] of [
+    [BEGIN_AT, 0, false],
+    [END_AT, 1, true],
+  ] as const) {
+    const result = applyTreeOp(loaded.part, { op: 'moveInlineDrawing', drawingNodeId, ...where });
+    if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
+    const paragraph = serializeOoxmlPart(result.part).split('<w:p>')[index + 1]!;
+    const drawing = at(paragraph, '<w:drawing');
+    if (after) expect(drawing).toBeGreaterThan(at(paragraph, 'w:fldCharType="end"'));
+    else
+      expect(drawing).toBeLessThan(
+        paragraph.lastIndexOf('w:fldCharType="begin"', at(paragraph, 'TOC'))
+      );
+  }
+});
+
+function findDrawingId(node: OoxmlPart['root']): string | null {
+  if (node.kind === 'textValue') return null;
+  if (node.kind === 'drawing') return node.id;
+  for (const child of node.children) {
+    const found = findDrawingId(child as OoxmlPart['root']);
+    if (found) return found;
+  }
+  return null;
+}

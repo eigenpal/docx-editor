@@ -146,12 +146,11 @@ export function opTouchesTocRange(
           const { start, end } = target.range;
           return rangeTouches(r, before(r.paragraphId, start), before(r.paragraphId, end));
         }
-        // A closing line that holds only the end mark takes the next paragraph's join, and a
-        // section break that ends there; neither changes the field.
-        if (holdsOnlyEndMark(r)) {
-          if (op.op === 'joinParagraphs' && op.firstId === r.paragraphId) return false;
-          if (op.op === 'setSectionMark') return false;
-        }
+        // The paragraph a TOC ends in takes the next paragraph's join: the joined text lands
+        // after its end mark. A closing line that holds only the end mark also takes a section
+        // break that ends there. Neither changes the field.
+        if (r.endsHere && op.op === 'joinParagraphs' && op.firstId === r.paragraphId) return false;
+        if (holdsOnlyEndMark(r) && op.op === 'setSectionMark') return false;
         if (target.removes || target.structural) return true;
         return paragraphWriteTouches(r);
       })
@@ -257,13 +256,13 @@ export function tocRefusesSectionMark(part: OoxmlPart, paragraphId: string): boo
 }
 /**
  * Whether the TOC guard refuses a join of `paragraphIds` into the first one: every one
- * of them is removed or restructured, except a first paragraph that holds only the end
- * mark (the guard lets the next paragraph join it).
+ * of them is removed or restructured, except a first paragraph that a TOC ends in (the
+ * joined text lands after its end mark, so the guard lets the next paragraph join it).
  */
 export function tocRefusesJoin(part: OoxmlPart, paragraphIds: readonly string[]): boolean {
   const ranges = tocParagraphRanges(part);
   return paragraphIds.some((id, index) =>
-    ranges.some((r) => r.paragraphId === id && !(index === 0 && holdsOnlyEndMark(r)))
+    ranges.some((r) => r.paragraphId === id && !(index === 0 && r.endsHere))
   );
 }
 /**

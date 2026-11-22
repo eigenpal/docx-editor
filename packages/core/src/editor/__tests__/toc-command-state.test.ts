@@ -100,6 +100,21 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
   ['range in a row: replace text', BODY, [1, 1, 1, 4], REPLACE, true],
   ['caret before the TOC: merge into the first row', BODY, [0, 6, 0, 6], MERGE, true],
   ['closing line: merge the next paragraph into it', BODY, [3, 0, 3, 0], MERGE, false],
+  [
+    'end mark after cached text: merge the next paragraph after it',
+    INLINE,
+    [1, 9, 1, 9],
+    MERGE,
+    false,
+  ],
+  [
+    'end mark after cached text: delete into the next paragraph',
+    INLINE,
+    [1, 9, 2, 0],
+    REPLACE,
+    false,
+  ],
+  ['cached page number: delete into the next paragraph', INLINE, [1, 1, 2, 0], REPLACE, true],
   ['caret in a row: table', BODY, [1, 2, 1, 2], TABLE, true],
   ['range from a row into the next paragraph: table', BODY, [1, 2, 4, 1], TABLE, true],
   ['closing line: table goes after it', BODY, [3, 0, 3, 0], TABLE, false],
@@ -520,4 +535,14 @@ test('Enter right before a TOC that begins mid-paragraph leaves a caret that can
   expect(xml.indexOf('>X<')).toBeLessThan(xml.indexOf('fldCharType="begin"'));
   expect(xml.indexOf('>X<')).toBeGreaterThan(xml.indexOf('Before'));
   expect(detectBodyTocs(surface.session.part())).toHaveLength(1);
+});
+
+test('joining the next paragraph into the paragraph a TOC ends in keeps the text after the end mark', () => {
+  const { editor, surface } = mountAt(INLINE, [1, 9, 1, 9]);
+  expect(editor.exec(MERGE)).toMatchObject({ ok: true, changed: true });
+  const xml = serializeOoxmlPart(surface.session.part());
+  expect(xml.indexOf('After')).toBeGreaterThan(xml.indexOf('fldCharType="end"'));
+  expect(detectBodyTocs(surface.session.part())).toHaveLength(1);
+  expect(editor.exec({ type: 'refreshToc' })).toMatchObject({ ok: true });
+  expect(serializeOoxmlPart(surface.session.part())).toContain('After');
 });

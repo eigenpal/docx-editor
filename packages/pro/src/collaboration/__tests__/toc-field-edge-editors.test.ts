@@ -152,3 +152,78 @@ test('two editors insert at both field edges during a refresh and a removal of t
     harness.cleanup();
   }
 }, 15000);
+
+// 0: "Intro" and the begin character share a run (offset 5); 1: "Pg", the end, and "Tail" share one.
+const SHARED =
+  '<w:p><w:r><w:t>Intro</w:t><w:fldChar w:fldCharType="begin"/></w:r>' +
+  '<w:r><w:instrText xml:space="preserve"> TOC \\o "1-3" \\u </w:instrText></w:r>' +
+  '<w:r><w:fldChar w:fldCharType="separate"/><w:t>Stale entry</w:t></w:r></w:p>' +
+  '<w:p><w:r><w:t>Pg</w:t><w:fldChar w:fldCharType="end"/><w:t>Tail</w:t></w:r></w:p>' +
+  '<w:p><w:pPr><w:outlineLvl w:val="0"/></w:pPr><w:r><w:t>Chapter one</w:t></w:r></w:p>';
+
+test('two editors insert at field edges where the field characters share runs with text', async () => {
+  const harness = createPeerHarness('toc-field-edge-shared-runs');
+  const editors: DocxEditorInstance[] = [];
+  try {
+    const pair = await harness.pair(zipDocument(SHARED));
+    const [left, right] = [pair.alice, pair.bob].map((peer) => {
+      peer.detach();
+      const editor = createDocxEditor({
+        container: document.createElement('div'),
+        document: peer.room.document,
+        modules: [collaborationModule({ session: peer.room.session })],
+      });
+      editors.push(editor);
+      return editor;
+    }) as [DocxEditorInstance, DocxEditorInstance];
+    for (let attempt = 0; attempt < 200 && !(left.surface && right.surface); attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const flush = () => {
+      pair.alice.room.session.flushPendingJournals();
+      pair.bob.room.session.flushPendingJournals();
+    };
+    const beginId = harness.paragraphIdAt(pair.alice, 0);
+    const endId = harness.paragraphIdAt(pair.alice, 1);
+    const caret = (editor: DocxEditorInstance, paragraphId: string, offset: number) =>
+      editor.surface!.setSelection({
+        anchor: { paragraphId, offset },
+        head: { paragraphId, offset },
+      });
+
+    // A bookmark at the end edge while the other peer types in the text after it.
+    pair.pause();
+    caret(left, endId, 2);
+    caret(right, endId, 4);
+    expect(left.exec({ type: 'insertBookmark', name: 'edge' })).toMatchObject({ ok: true });
+    expect(right.exec({ type: 'insertText', text: 'Q' })).toMatchObject({ ok: true });
+    pair.resume();
+    let saved = await converge(left, right, flush);
+    expect(fieldShape(saved)).toEqual(['begin', 'separate', 'end']);
+    expect(saved.indexOf('w:name="edge"')).toBeGreaterThan(saved.indexOf('fldCharType="end"'));
+
+    // Both peers type at the same begin edge, and one also adds a footnote there.
+    pair.pause();
+    caret(left, beginId, 5);
+    caret(right, beginId, 5);
+    expect(left.exec({ type: 'insertText', text: 'L' })).toMatchObject({ ok: true });
+    expect(right.exec({ type: 'insertNote', noteKind: 'footnote' })).toMatchObject({ ok: true });
+    pair.resume();
+    saved = await converge(left, right, flush);
+    expect(fieldShape(saved)).toEqual(['begin', 'separate', 'end']);
+    const begin = saved.indexOf('fldCharType="begin"');
+    expect(saved.indexOf('>IntroL<')).toBeLessThan(begin);
+    expect(saved.indexOf('<w:footnoteReference')).toBeLessThan(begin);
+
+    // A refresh keeps both inserts on both peers.
+    expect(right.exec({ type: 'refreshToc', mode: 'entire' })).toMatchObject({ ok: true });
+    saved = await converge(left, right, flush);
+    expect(saved).not.toContain('Stale entry');
+    expect(saved).toContain('w:name="edge"');
+    expect(saved).toContain('<w:footnoteReference');
+    expect(fieldShape(saved)).toEqual(['begin', 'separate', 'end']);
+  } finally {
+    for (const editor of editors) editor.destroy();
+    harness.cleanup();
+  }
+}, 15000);
