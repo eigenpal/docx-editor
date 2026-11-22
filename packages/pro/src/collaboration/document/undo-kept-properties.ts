@@ -99,32 +99,85 @@ export function undoKeepsProperties(
   return kept.size === 0 ? null : (item) => kept.has(item);
 }
 
+type Level = 'paragraphProperties' | 'runProperties' | 'ins';
+const NEXT: Readonly<Record<Level, Level | null>> = {
+  paragraphProperties: 'runProperties',
+  runProperties: 'ins',
+  ins: null,
+};
+
 /** A proposal another participant listed in a paragraph that an undo unlists. */
 export interface UndoneProposal {
-  /** The `w:pPr` that holds the proposal. */
+  /** The highest element of the proposal that the step did not write. */
   readonly node: LogicalId;
-  /** The paragraph the undo unlists. */
+  readonly level: Level;
+  /** The element that lists it. */
   readonly from: LogicalId;
+  /** The paragraph the undo unlists. */
+  readonly paragraph: LogicalId;
   /** The paragraph shown before it that the step did not list. */
   readonly target: LogicalId;
 }
 
-/** The first live child of `parent` of `kind`. */
-function childOfKind(registry: DocumentRegistry, parent: LogicalId, kind: string) {
-  const record = registry.record(parent);
-  const ids = record && 'childIds' in record ? record.childIds : [];
-  return ids.find((id) => registry.showsAsChild(id) && registry.kindOf(id) === kind) ?? null;
+/** A relist an undo made, which the redo of that undo takes back. */
+export interface RelistedProposal {
+  readonly node: LogicalId;
+  readonly from: LogicalId;
+  readonly to: LogicalId;
+  readonly paragraph: LogicalId;
 }
 
-/** Whether `properties`, a `w:pPr`, proposes its paragraph's mark (`w:rPr/w:ins`). */
-function proposes(registry: DocumentRegistry, properties: LogicalId): boolean {
-  const run = childOfKind(registry, properties, 'runProperties');
-  const record = run ? registry.record(run) : null;
-  const ids = record && 'childIds' in record ? record.childIds : [];
-  return ids.some((id) => {
-    const shell = registry.schema.nodes.get(id);
-    return isNodeMap(shell) && readNodeShell(shell).localName === 'ins';
-  });
+function levelOf(registry: DocumentRegistry, id: LogicalId): Level | null {
+  const kind = registry.kindOf(id);
+  if (kind === 'paragraphProperties' || kind === 'runProperties') return kind;
+  const shell = registry.schema.nodes.get(id);
+  return isNodeMap(shell) && readNodeShell(shell).localName === 'ins' ? 'ins' : null;
+}
+
+function childIdsOf(registry: DocumentRegistry, parent: LogicalId): readonly LogicalId[] {
+  const record = registry.record(parent);
+  return record && 'childIds' in record ? record.childIds : [];
+}
+
+/** The first live child of `parent` at `level`. */
+function childAt(registry: DocumentRegistry, parent: LogicalId, level: Level): LogicalId | null {
+  return (
+    childIdsOf(registry, parent).find(
+      (id) => registry.showsAsChild(id) && levelOf(registry, id) === level
+    ) ?? null
+  );
+}
+
+/** Whether `id`, a mark element at `level`, is or holds a proposal (`w:rPr/w:ins`). */
+function holdsProposal(registry: DocumentRegistry, id: LogicalId, level: Level): boolean {
+  const next = NEXT[level];
+  if (!next) return true;
+  const child = childAt(registry, id, next);
+  return child !== null && holdsProposal(registry, child, next);
+}
+
+/**
+ * The proposals another participant listed in `paragraph`'s mark: the highest element of
+ * each that the step did not write, below elements the step did write.
+ */
+function foreignProposals(
+  registry: DocumentRegistry,
+  container: LogicalId,
+  level: Level,
+  step: Step,
+  found: { node: LogicalId; level: Level; from: LogicalId }[]
+): void {
+  const entries = childArrayOf(registry.schema.nodes.get(container));
+  if (!entries) return;
+  for (const { id, own } of liveEntries(entries, step)) {
+    if (levelOf(registry, id) !== level) continue;
+    if (!own) {
+      if (holdsProposal(registry, id, level)) found.push({ node: id, level, from: container });
+      continue;
+    }
+    const next = NEXT[level];
+    if (next) foreignProposals(registry, id, next, step, found);
+  }
 }
 
 /**
@@ -156,9 +209,7 @@ export function undoneProposals(registry: DocumentRegistry, step: unknown): Undo
   }
   const out: UndoneProposal[] = [];
   for (const [parent, ids] of listed) {
-    const record = registry.record(parent);
-    if (!record || !('childIds' in record)) continue;
-    const children = record.childIds;
+    const children = childIdsOf(registry, parent);
     const order = splitSiblingOrder(children, registry.splitSiblings.ranksOf(parent));
     const shown = order ? order.map((index) => children[index]!) : children;
     let target: LogicalId | null = null;
@@ -167,56 +218,80 @@ export function undoneProposals(registry: DocumentRegistry, step: unknown): Undo
         if (registry.showsAsChild(id) && registry.inline.textOf(id)) target = id;
         continue;
       }
-      const paragraph = nodes.get(id);
-      const entries = paragraph ? childArrayOf(paragraph) : null;
-      if (!target || !entries) continue;
-      for (const { id: child, own } of liveEntries(entries, step as Step)) {
-        if (own || registry.kindOf(child) !== 'paragraphProperties') continue;
-        if (proposes(registry, child)) out.push({ node: child, from: id, target });
-      }
+      if (!target) continue;
+      const found: { node: LogicalId; level: Level; from: LogicalId }[] = [];
+      foreignProposals(registry, id, 'paragraphProperties', step as Step, found);
+      for (const proposal of found) out.push({ ...proposal, paragraph: id, target });
     }
   }
   return out;
 }
 
-/** Move `node` from `from`'s children into `to`'s children at `at`. */
-function relist(registry: DocumentRegistry, node: LogicalId, from: LogicalId, to: LogicalId) {
+/** Move `node` from `from`'s children into `to`'s children. */
+function relist(
+  registry: DocumentRegistry,
+  node: LogicalId,
+  from: LogicalId,
+  to: LogicalId
+): boolean {
   const source = childArrayOf(registry.schema.nodes.get(from));
   const target = childArrayOf(registry.schema.nodes.get(to));
-  if (!source || !target) return;
+  if (!source || !target) return false;
   const at = source.toArray().indexOf(node);
-  if (at < 0) return;
+  if (at < 0) return false;
   source.delete(at, 1);
   const children = target.toArray();
   const end = registry.kindOf(node) === 'runProperties' ? markPropertiesEnd(registry, children) : 0;
   target.insert(end, [node]);
+  return true;
 }
 
 /**
- * After the undo: each proposal whose paragraph the undo unlisted goes to its target, as its
- * own `w:pPr` when the target has none, or one level down where the target has none.
+ * After the undo: each proposal whose paragraph the undo unlisted goes to its target, at the
+ * first level where the target's mark has no element of its own. A target that proposes its
+ * own mark already keeps its proposal.
  */
 export function relistUndoneProposals(
   registry: DocumentRegistry,
   proposals: readonly UndoneProposal[]
+): RelistedProposal[] {
+  const done: RelistedProposal[] = [];
+  for (const proposal of proposals) {
+    const { paragraph, target } = proposal;
+    if (registry.parentOf(paragraph) !== null || registry.parentOf(target) === null) continue;
+    let { node, level, from } = proposal;
+    // The target's element that holds elements at the proposal's level.
+    let container: LogicalId | null = target;
+    if (level !== 'paragraphProperties') {
+      container = childAt(registry, target, 'paragraphProperties');
+      if (container && level === 'ins') container = childAt(registry, container, 'runProperties');
+    }
+    while (container) {
+      const own = childAt(registry, container, level);
+      if (!own) {
+        if (relist(registry, node, from, container))
+          done.push({ node, from, to: container, paragraph });
+        break;
+      }
+      const next = NEXT[level];
+      const inner = next ? childAt(registry, node, next) : null;
+      if (!next || !inner) break;
+      from = node;
+      node = inner;
+      container = own;
+      level = next;
+    }
+  }
+  return done;
+}
+
+/** On a redo of the undo that made `relisted`: each proposal goes back where it was. */
+export function restoreRelisted(
+  registry: DocumentRegistry,
+  relisted: readonly RelistedProposal[]
 ): void {
-  for (const { node, from, target } of proposals) {
-    if (registry.parentOf(from) !== null || registry.parentOf(target) === null) continue;
-    const properties = childOfKind(registry, target, 'paragraphProperties');
-    if (!properties) {
-      relist(registry, node, from, target);
-      continue;
-    }
-    const run = childOfKind(registry, node, 'runProperties');
-    const own = childOfKind(registry, properties, 'runProperties');
-    if (run && !own) relist(registry, run, node, properties);
-    else if (run && own && !proposes(registry, properties)) {
-      const record = registry.record(run);
-      const ins = (record && 'childIds' in record ? record.childIds : []).find((id) => {
-        const shell = registry.schema.nodes.get(id);
-        return isNodeMap(shell) && readNodeShell(shell).localName === 'ins';
-      });
-      if (ins) relist(registry, ins, run, own);
-    }
+  for (const { node, from, to, paragraph } of [...relisted].reverse()) {
+    if (registry.parentOf(paragraph) === null) continue;
+    relist(registry, node, to, from);
   }
 }

@@ -28,8 +28,10 @@ import { ownDeletedRecords, redoRefusedDeletes } from './tombstone-guard.ts';
 import { noteUndoneParagraphTargets, undoKeeps } from './undo-unlisted-text.ts';
 import {
   relistUndoneProposals,
+  restoreRelisted,
   undoKeepsProperties,
   undoneProposals,
+  type RelistedProposal,
   type UndoneProposal,
 } from './undo-kept-properties.ts';
 
@@ -97,6 +99,8 @@ export function markUndoneRecords(
 const COPY_RUNS = 'docx-copy-runs';
 /** The deletion records the undo that pushed this redo step wrote. */
 const HIDDEN_KEYS = 'docx-hidden-copies';
+/** The meta key under which a redo step keeps the proposals its undo relisted. */
+const RELISTED = 'docx-relisted-proposals';
 /** A step with nothing for Yjs to reverse: only copies to hide or show again. */
 const COPIES_ONLY = 'docx-copies-only';
 /** The nodes whose deletion the undo that pushed this redo step took back. */
@@ -214,7 +218,15 @@ export function stepHistory(
   // so each paragraph they touch reads its text again once, not once per write. No undo
   // stack tracks that transaction.
   registry.doc.transact(() => {
-    relistUndoneProposals(registry, proposals);
+    const relisted = relistUndoneProposals(registry, proposals);
+    if (relisted.length > 0) {
+      pushed ??= pushCopiesOnly(opposite);
+      pushed.meta.set(RELISTED, relisted);
+    }
+    if (direction === 'redo') {
+      const back = runsOf<RelistedProposal>(popped, RELISTED);
+      if (back) restoreRelisted(registry, back);
+    }
     afterStep();
     if (direction === 'redo' && popped) {
       redoRefusedDeletes(registry.doc, registry.schema.nodes, popped as YjsStep, ownDeletes, () => {

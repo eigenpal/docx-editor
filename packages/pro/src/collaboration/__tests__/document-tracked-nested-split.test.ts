@@ -388,13 +388,17 @@ describe('an undo of one concurrent split of a paragraph that proposes its own b
 });
 
 describe("an undo of a split whose paragraph shows another author's proposal", () => {
+  const PROPERTIES = [
+    { name: 'no properties', xml: '' },
+    { name: 'paragraph properties', xml: '<w:pPr><w:jc w:val="right"/></w:pPr>' },
+  ];
   for (const formatter of ['bob', 'carol'] as const)
-    for (const { label, ids } of ORDERS)
-      test(`${formatter} formats, then Bob undoes his split (${label})`, async () => {
-        const r = await room(TEXT, ids);
-        try {
+    for (const { name, xml } of PROPERTIES)
+      for (const { label, ids } of ORDERS) {
+        /** Alice and Bob split; the formatter's edit lists Alice's proposal in Bob's paragraph. */
+        const prepare = async () => {
+          const r = await room(TEXT, ids, xml);
           await splitRounds(r, [{ index: 0, alice: 'g; ', bob: 'c; ' }]);
-          // The edit lists Alice's proposal in the paragraph Bob's split created.
           later();
           await format(r[formatter].runtime, 0, 'alignment');
           r.sync();
@@ -405,14 +409,41 @@ describe("an undo of a split whose paragraph shows another author's proposal", (
           later();
           expect(r.bob.room.session.undo()).toBe(true);
           r.sync();
-          await r.expectAll(['a; b; c; d; e; f; g; ', 'h; i; j;', 'Signed'], 1);
-          await r.expectJoinerConverges();
-          later();
-          await rejectAll(r.carol.runtime);
-          r.sync();
-          await r.expectAll([TEXT, 'Signed'], 0);
-        } finally {
-          r.close();
-        }
-      });
+          return r;
+        };
+
+        test(`${formatter} formats, Bob undoes his split, ${name} (${label})`, async () => {
+          const r = await prepare();
+          try {
+            await r.expectAll(['a; b; c; d; e; f; g; ', 'h; i; j;', 'Signed'], 1);
+            await r.expectJoinerConverges();
+            later();
+            await rejectAll(r.carol.runtime);
+            r.sync();
+            await r.expectAll([TEXT, 'Signed'], 0);
+          } finally {
+            r.close();
+          }
+        });
+
+        test(`${formatter} formats, Bob undoes and redoes his split, ${name} (${label})`, async () => {
+          const r = await prepare();
+          try {
+            expect(r.bob.room.session.redo()).toBe(true);
+            r.sync();
+            await r.expectAll(['a; b; c; ', 'd; e; f; g; ', 'h; i; j;', 'Signed'], 2);
+            await r.expectJoinerConverges();
+            later();
+            await rejectBy(r.carol.runtime, 'Alice');
+            r.sync();
+            await r.expectAll(['a; b; c; ', 'd; e; f; g; h; i; j;', 'Signed'], 1);
+            later();
+            await rejectBy(r.carol.runtime, 'Bob');
+            r.sync();
+            await r.expectAll([TEXT, 'Signed'], 0);
+          } finally {
+            r.close();
+          }
+        });
+      }
 });
