@@ -58,6 +58,23 @@ export function leavesNoPassage(
   return passage <= TABLE_WRAP_MIN_PASSAGE_PT;
 }
 
+/**
+ * Whether a text-anchored table rises above its anchor: an offset more negative than the one
+ * twip of storage bias that an authored `w:tblpY="0"` carries, and no vertical alignment.
+ */
+export function raisedAboveText(float: TableFloatPosition): boolean {
+  return float.vertAnchor === 'text' && !float.ySpec && float.yPt < -0.051;
+}
+
+/**
+ * Whether the band of a text-anchored table rises above its anchor top: the offset less the
+ * `w:topFromText` distance is more negative than the one twip of storage bias.
+ */
+export function bandRisesAboveText(float: TableFloatPosition): boolean {
+  const top = float.distances?.top ?? 0;
+  return float.vertAnchor === 'text' && !float.ySpec && float.yPt - top < -0.051;
+}
+
 /** The text column a floating table wraps, and how its zone reaches earlier lines. */
 export interface TableWrapColumn {
   readonly left: number;

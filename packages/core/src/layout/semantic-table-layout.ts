@@ -12,7 +12,15 @@ import {
 } from './table-exact-terminal-border.ts';
 import { cellContextualSpacing, contextualCellNeighbours } from './contextual-paragraph-spacing.ts';
 import { emitNestedTable } from './nested-table-layout.ts';
-import { alignCellContent, createCellFloats, withCellFloatBox } from './cell-float-tables.ts';
+import {
+  alignCellContent,
+  createCellFloats,
+  raisedFloatRestart,
+  relayAroundRaisedFloat,
+  withCellFloatBox,
+  type CellParagraphRestart,
+} from './cell-float-tables.ts';
+import { anchorsAnyDrawing } from './drawing-placement-exclusion.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import { tocLinkRangesOf } from './toc-link-formatting.ts';
 import { paragraphBoxOutdent } from './paragraph-indent.ts';
@@ -1102,6 +1110,62 @@ function flowBlocksInBoxBounded(
   // Carried across page cuts by the cursor; never re-derived from the source node's kind.
   let lastEmittedTable = cursor.precededByEmittedTable;
   const floats = inTableCell ? createCellFloats(blocks, left, right, deps) : undefined;
+  // The fresh paragraphs placed since the last table, which a raised float can move.
+  const restarts: CellParagraphRestart[] = [];
+  const place = (
+    index: number,
+    at: number,
+    spaceAfter: number,
+    afterTable: boolean,
+    placedCount: number,
+    lineStart = 0,
+    offset?: number,
+    fragmentIndex = 0
+  ) => {
+    const block = blocks[index]!;
+    const collapsible = cellTerminatorCollapses(block, {
+      inTableCell,
+      last: index === blocks.length - 1,
+      afterEmittedTable: afterTable,
+      hideEndMark,
+    });
+    return placeCellParagraph(
+      block,
+      left,
+      Math.max(1, right - left),
+      at,
+      floats ? floats.paragraphDeps(deps) : deps,
+      spaceAfter,
+      {
+        inTableCell,
+        lineStart,
+        startOffset: offset,
+        // Only the cursor's own paragraph continues; every later block starts fresh.
+        heldBreak: index === cursor.blockIndex ? heldBreak : undefined,
+        applyWidowControl,
+        aloneOnPage: placedCount === 0 && deps.rowAtPageStart !== false,
+        fragmentIndex,
+        maxBottom,
+        clipOverflow,
+        includeAfter: true,
+        includeBottomBorder: true,
+        firstInCell: index === 0,
+        lastInCell: index === blocks.length - 1 && (inTableCell || !deps.keepsStoryEndAutoSpacing),
+        cellEndMark:
+          (hideEndMark || cellEndMarkMinBottom !== undefined) && index === blocks.length - 1,
+        hideEndMark: hideEndMark && index === blocks.length - 1,
+        cellEndMarkMinBottom: index === blocks.length - 1 ? cellEndMarkMinBottom : undefined,
+        collapseHeight: collapsible,
+        collapseInEmptyCell: collapsible && placedCount === 0,
+        collapseBandAbove: at - top,
+        ...(tableCellStyle ? { tableCellStyle } : {}),
+        borderNeighbours: {
+          previous: index > 0 ? blocks[index - 1] : undefined,
+          next: blocks[index + 1],
+        },
+      }
+    );
+  };
 
   while (blockIndex < blocks.length) {
     const block = blocks[blockIndex]!;
@@ -1131,8 +1195,15 @@ function flowBlocksInBoxBounded(
         nestedSplitBlocked = !fitted;
         break;
       }
+      const restart =
+        nested.fragment.kind === 'table' && floats?.reachesEarlierLines(nested.fragment)
+          ? raisedFloatRestart(nested.fragment, restarts, fragments)
+          : undefined;
+      const moved = restart && relayAroundRaisedFloat(restart, blockIndex, blocks, place);
+      y = moved ? moved.bottom : nested.bottom;
+      if (moved) fragments.splice(restart.fragmentIndex, fragments.length, ...moved.fragments);
+      restarts.length = 0;
       fragments.push(nested.fragment);
-      y = nested.bottom;
       fitted = true;
       lastEmittedTable = true;
       nestedTable = nested.remainder;
@@ -1150,52 +1221,35 @@ function flowBlocksInBoxBounded(
       continue;
     }
 
-    const collapsible = cellTerminatorCollapses(block, {
-      inTableCell,
-      last: blockIndex === blocks.length - 1,
-      afterEmittedTable: lastEmittedTable,
-      hideEndMark,
-    });
-    const placed = placeCellParagraph(
-      block,
-      left,
-      Math.max(1, right - left),
-      y,
-      floats ? floats.paragraphDeps(deps) : deps,
+    const fresh =
+      lineIndex === 0 &&
+      startOffset === undefined &&
+      !(blockIndex === cursor.blockIndex && heldBreak) &&
+      floats !== undefined &&
+      !anchorsAnyDrawing(block, deps.inlineDrawingLayout);
+    const restart = {
+      fragmentIndex: fragments.length,
+      blockIndex,
+      top: y,
       previousSpaceAfter,
-      {
-        inTableCell,
-        lineStart: lineIndex,
-        startOffset,
-        // Only the cursor's own paragraph continues; every later block starts fresh.
-        heldBreak: blockIndex === cursor.blockIndex ? heldBreak : undefined,
-        applyWidowControl,
-        aloneOnPage: !fitted && deps.rowAtPageStart !== false,
-        fragmentIndex: paragraphFragmentIndex,
-        maxBottom,
-        clipOverflow,
-        includeAfter: true,
-        includeBottomBorder: true,
-        firstInCell: blockIndex === 0,
-        lastInCell:
-          blockIndex === blocks.length - 1 && (inTableCell || !deps.keepsStoryEndAutoSpacing),
-        cellEndMark:
-          (hideEndMark || cellEndMarkMinBottom !== undefined) && blockIndex === blocks.length - 1,
-        hideEndMark: hideEndMark && blockIndex === blocks.length - 1,
-        cellEndMarkMinBottom: blockIndex === blocks.length - 1 ? cellEndMarkMinBottom : undefined,
-        collapseHeight: collapsible,
-        collapseInEmptyCell: collapsible && fragments.length === 0,
-        collapseBandAbove: y - top,
-        ...(tableCellStyle ? { tableCellStyle } : {}),
-        borderNeighbours: {
-          previous: blockIndex > 0 ? blocks[blockIndex - 1] : undefined,
-          next: blocks[blockIndex + 1],
-        },
-      }
+      afterTable: lastEmittedTable,
+    };
+    const placed = place(
+      blockIndex,
+      y,
+      previousSpaceAfter,
+      lastEmittedTable,
+      fragments.length,
+      lineIndex,
+      startOffset,
+      paragraphFragmentIndex
     );
     if (!placed.fitted || !placed.fragment) {
       break;
     }
+    // A paragraph that cannot be laid out again ends the run a raised float can move.
+    if (fresh) restarts.push(restart);
+    else restarts.length = 0;
     fragments.push(placed.fragment);
     y = placed.bottom;
     fitted = true;
