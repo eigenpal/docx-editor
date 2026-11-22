@@ -103,6 +103,33 @@ export interface GapSpan {
     readonly wrapAdvanceBefore?: number;
 }
 
+// @internal
+export function hangingMarkBlankAt(line: HangingMarkLine, span: HangingMarkSpan): number;
+
+// @internal
+export interface HangingMarkLine {
+    // (undocumented)
+    readonly hangingMarkBlank?: number;
+    // (undocumented)
+    readonly spans: readonly HangingMarkSpan[];
+}
+
+// @internal
+export interface HangingMarkSpan {
+    // (undocumented)
+    readonly box: {
+        readonly width: number;
+    };
+    // (undocumented)
+    readonly lineEndWhitespace?: true;
+    // (undocumented)
+    readonly style: {
+        readonly shaping?: {
+            readonly baseLevel?: number;
+        } | null;
+    };
+}
+
 // @public
 export interface LumTransfer {
     // (undocumented)

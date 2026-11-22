@@ -260,6 +260,33 @@ for (const kind of ['ins', 'del'] as const) {
   });
 }
 
+test("a hanging mark's compressed trailing blank shortens only the final span's marks", () => {
+  const record = line();
+  const hanging = { ...record, hangingMarkBlank: 3 };
+  // The final span with text holds the mark; clipped authored spaces may follow it.
+  const last = record.spans.filter((span) => !span.lineEndWhitespace).at(-1)!;
+  const first = record.spans[0]!;
+  expect(ownedGapAfter({ line: hanging, span: last })).toBeCloseTo(-3, 6);
+  expect(ownedGapAfter({ line: hanging, span: first })).toBeCloseTo(
+    ownedGapAfter({ line: record, span: first }),
+    6
+  );
+  // A zero-width span after the mark, such as a manual break (`w:br`), leaves the blank on it.
+  const zeroWidth = {
+    ...last,
+    text: '',
+    box: { ...last.box, x: last.box.x + last.box.width, width: 0 },
+  };
+  const broken = { ...hanging, spans: [...record.spans, zeroWidth] };
+  expect(ownedGapAfter({ line: broken, span: last })).toBeCloseTo(-3, 6);
+  expect(ownedGapAfter({ line: broken, span: zeroWidth })).toBe(0);
+  // A line in a right-to-left paragraph keeps the mark's marks whole.
+  const shaping = { baseLevel: 1 } as NonNullable<typeof last.style.shaping>;
+  const rtl = { ...last, style: { ...last.style, shaping } };
+  const spans = record.spans.map((span) => (span === last ? rtl : span));
+  expect(ownedGapAfter({ line: { ...hanging, spans }, span: rtl })).toBe(0);
+});
+
 function automaticLine(body: string, pPr = '') {
   const opened = readOoxmlPart(
     `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr>${pPr}</w:pPr>${body}</w:p><w:sectPr><w:pgSz w:w="6000" w:h="6000"/><w:pgMar w:left="500" w:right="500" w:top="500" w:bottom="500"/></w:sectPr></w:body></w:document>`,

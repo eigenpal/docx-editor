@@ -383,6 +383,17 @@ export interface LineRecord {
    */
   readonly trailingSpacing?: number;
   /**
+   * The trailing blank, in points, that punctuation compression (`w:characterSpacingControl`)
+   * takes from the full-width mark that ends this line and hangs past its margin
+   * (`w:overflowPunct`), kept clear of the glyph's ink. That span's highlight (`w:highlight`),
+   * shading (`w:shd`), underline (`w:u`), strike (`w:strike`), and revision marks (`w:ins`,
+   * `w:del`) stop this far before its box end; its glyph, box, and caret edges do not move.
+   * Absent when no such mark hangs. Paint ignores it in a right-to-left paragraph (`w:bidi`).
+   *
+   * @internal
+   */
+  readonly hangingMarkBlank?: number;
+  /**
    * @internal
    * The band that character highlight (`w:highlight`) and shading (`w:rPr/w:shd`) fill when the
    * line's runs share one, in points from the line box top: the whole box under exact spacing

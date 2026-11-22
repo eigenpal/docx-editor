@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The marks of a hanging full-width mark covered its whole advance, and a line whose hanging mark moved to the next line kept its hang.",
+  "after": "With punctuation compression, the marks of a hanging full-width mark end before its trailing blank, and a line whose hanging mark moves to the next line ends at its margin.",
+  "reason": "The change affects paint and the alignment of the line a carried mark leaves. Line breaks, characters, and collaborative state stay the same.",
+  "tests": [
+    "packages/core/src/output/__tests__/hanging-mark-blank.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-hanging-highlight.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-line-end-hanging.test.ts"
+  ],
+  "changeset": "hanging-mark-compressed-blank",
+  "migration": null
+}

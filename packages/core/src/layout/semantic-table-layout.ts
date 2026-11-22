@@ -767,6 +767,7 @@ function placeCellParagraph(
         : pendingLine.baseline,
       leading: collapseHeight ? 0 : pendingLine.leading,
       trailingSpacing: collapseHeight ? 0 : pendingLine.trailingSpacing,
+      ...(pendingLine.hangingMarkBlank ? { hangingMarkBlank: pendingLine.hangingMarkBlank } : {}),
       ...(pendingLine.characterFillBand && !collapseHeight
         ? { characterFillBand: pendingLine.characterFillBand }
         : {}),

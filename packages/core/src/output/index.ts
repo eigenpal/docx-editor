@@ -28,6 +28,12 @@ export {
   type GapSpan,
   type PlacedSpan,
 } from './semantic-paint-letter-gap.ts';
+// The PDF writer shortens a hanging mark's marks by the same compressed blank.
+export {
+  hangingMarkBlankAt,
+  type HangingMarkLine,
+  type HangingMarkSpan,
+} from './semantic-paint-hanging-mark.ts';
 export { automaticGapFillAfter, type AutomaticGapSpan } from './semantic-paint-automatic-gap.ts';
 // TYPES ONLY. The derivations behind them (`authorSlotsOf`, `reviewAuthorsOf`, the ramp
 // constant) are engine internals reached through `getReviewAuthors` on the editor; a

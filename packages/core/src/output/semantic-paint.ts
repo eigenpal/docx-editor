@@ -66,6 +66,7 @@ import { fallbackStackForFamily } from '../layout/canvas-measurer.ts';
 import { isolatePageFromHost } from './page-host-isolation.ts';
 import { styleForFontSlot } from '../layout/script-itemization.ts';
 import { automaticTextColor } from '../layout/ooxml-shading.ts';
+import { clipHangingMarkBlank, hangingMarkBlankAt } from './semantic-paint-hanging-mark.ts';
 import {
   reviewAuthorSlotColor,
   revisionStyleContextKey,
@@ -1281,6 +1282,8 @@ function paintLine(
       painted.style.wordSpacing = `${(gapAfter - syntheticBoldSpacingPt(span)) * scale}px`;
     else if (owner === 'letterSpacing')
       painted.style.letterSpacing = letterGapSpacing(painted, span, gapAfter, scale);
+    const blank = hangingMarkBlankAt(line, span);
+    if (blank > 0) clipHangingMarkBlank(painted, span, blank, scale);
     pendingGap = gapAfter;
     // The run before a `w:autoSpaceDE`/`w:autoSpaceDN` advance fills it with its `w:highlight`
     // or `w:shd`; the advance stays a margin. A shaped line places the advance inside the

@@ -38,6 +38,8 @@ export interface PendingLine {
    * bottom, while paint keeps the full box and padding.
    */
   trailingSpacing: number;
+  /** The compressed trailing blank of the line's hanging final mark (`LineRecord`). */
+  hangingMarkBlank?: number;
   /** Character highlight and shading band shared by the line's runs (`setCharacterFillBand`). */
   characterFillBand?: LineRecord['characterFillBand'];
   /** When true, layout must start a new page after this line is placed. */
@@ -492,6 +494,7 @@ export function frozenLine(line: PendingLine): PendingLine {
       baseline: line.baseline,
       leading: line.leading,
       trailingSpacing: line.trailingSpacing,
+      ...(line.hangingMarkBlank ? { hangingMarkBlank: line.hangingMarkBlank } : {}),
       ...(line.characterFillBand ? { characterFillBand: line.characterFillBand } : {}),
       ...(line.pageBreakAfter ? { pageBreakAfter: true } : {}),
       ...(line.columnBreakAfter ? { columnBreakAfter: true } : {}),
