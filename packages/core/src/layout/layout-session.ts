@@ -248,7 +248,8 @@ export function replaceLayoutSession(target: LayoutSession, source: LayoutSessio
 /**
  * The checkpoints a converged pass leaves. It stops early, so the tail's checkpoints were never
  * recomputed. The previous pass's remain valid because the flow matched at the join, with their
- * completed-page counts moved by however many sheets the reused tail moved.
+ * completed-page counts moved by however many sheets the reused tail moved, and their line
+ * counters by however many lines the pass placed more or fewer before the join.
  */
 export function convergedCheckpoints(
   fresh: readonly FlowCheckpoint[],
@@ -256,13 +257,15 @@ export function convergedCheckpoints(
   join: { readonly at: number; readonly removedBlocks: number; readonly pageDelta: number }
 ): FlowCheckpoint[] {
   const tail = previous.slice(join.at + join.removedBlocks);
+  const lineDelta = (fresh[join.at]?.lineCounter ?? 0) - (tail[0]?.lineCounter ?? 0);
   return [
     ...fresh.slice(0, join.at),
-    ...(join.pageDelta === 0
+    ...(join.pageDelta === 0 && lineDelta === 0
       ? tail
       : tail.map((checkpoint) => ({
           ...checkpoint,
           pageCount: checkpoint.pageCount + join.pageDelta,
+          lineCounter: checkpoint.lineCounter + lineDelta,
         }))),
   ];
 }

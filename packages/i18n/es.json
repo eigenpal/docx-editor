@@ -66,7 +66,7 @@
     "lockedContentBreak": "Un control de contenido bloquea este texto, así que no puedes insertar aquí un salto de sección.",
     "nothingToCopyFormatting": "Selecciona texto para copiar su formato",
     "nothingToPaint": "Selecciona texto para aplicar el formato",
-    "pictureSelected": "Hay una imagen seleccionada. Coloque el cursor en el texto para insertar una imagen.",
+    "pictureSelected": "En modo de sugerencias, no se puede insertar una imagen mientras hay un dibujo seleccionado. Coloque el cursor en el texto para insertar una imagen.",
     "chartDrawing": "Esto es un gráfico. Puede eliminarlo, pero no editarlo como una imagen.",
     "chartFrame": "Esto es un gráfico. Puede cambiar su tamaño, posición, ajuste del texto y texto alternativo.",
     "diagramFrame": "Esto es un diagrama. Puede cambiar su tamaño, posición, ajuste del texto y texto alternativo.",
@@ -86,7 +86,12 @@
     "drawingClipboardStory": "Los dibujos solo se pueden copiar, cortar o pegar en el cuerpo del documento, no en un encabezado, pie de página, nota o cuadro de texto.",
     "groupMemberClipboard": "Una forma dentro de un grupo se copia o se corta con su grupo. Presiona Escape para seleccionar el grupo.",
     "drawingClipboardSize": "Este dibujo es demasiado grande para copiarlo.",
-    "drawingPasteCells": "Coloca el cursor en el texto para pegar un dibujo."
+    "drawingPasteCells": "Coloca el cursor en el texto para pegar un dibujo.",
+    "groupMemberPaste": "No se puede pegar texto en una forma dentro de un grupo. Presiona Escape para seleccionar el grupo.",
+    "linkedTextBoxPaste": "No se puede pegar texto en un cuadro de texto vinculado. Coloca el cursor en el texto para pegar.",
+    "textBoxPicturePaste": "Un cuadro de texto solo admite texto. Pega sin formato para pegar solo el texto.",
+    "shapePasteText": "Esta forma no tiene texto en el que pegar. Coloca el cursor en el texto para pegar.",
+    "textBoxPaste": "El texto de este cuadro de texto no se puede editar. Coloca el cursor en el texto para pegar."
   },
   "toolbar": {
     "ariaLabel": "Barra de formato",
@@ -806,7 +811,14 @@
       "unsupportedFormat": "No se admite insertar este formato de imagen.",
       "oversize": "La imagen supera el tamaño máximo permitido.",
       "refused": "No se pudo insertar la imagen.",
-      "staleTarget": "El documento o la posición de colocación cambió. Suelta la imagen de nuevo."
+      "staleTarget": "El documento cambió antes de insertar la imagen. Vuelva a insertar la imagen."
+    }
+  },
+  "clipboard": {
+    "errors": {
+      "copyTitle": "No se puede copiar",
+      "cutTitle": "No se puede cortar",
+      "pasteTitle": "No se puede pegar"
     }
   },
   "imageProperties": {

@@ -180,7 +180,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.3.1.15 keepNext'
   ),
   lineEndPunctuationAtEveryAlignment: legacy(
-    'Line-end East Asian punctuation hangs past the margin at every paragraph alignment, and the text before it fills the measure. The paragraph kinsoku switch does not stop it. Modern modes hang only in justified and distributed paragraphs',
+    'Line-end East Asian punctuation hangs past the margin at every paragraph alignment, and the text before it fills the measure. The paragraph kinsoku switch does not stop it. With punctuation compression (w:characterSpacingControl), punctuation compresses to fit a line at every alignment, within half the advance of each group it admits, and Korean marks keep their advances; a hyphen-minus before a letter, digit, or symbol is no break opportunity. Modern modes hang and fit only in justified and distributed paragraphs',
     'ECMA-376 Part 1 §17.3.1.21 overflowPunct'
   ),
   koreanHangingLineFills: modern(

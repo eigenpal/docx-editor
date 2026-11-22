@@ -67,9 +67,16 @@ function projection(pkg: OoxmlPackage) {
   }));
 }
 
-test.each(['甲）AV（乙末', '甲）AV（乙≥丙末'])(
-  'mixed optical geometry follows two-editor edits and cold save: %s',
-  async (text) => {
+// Compatibility mode 15 (`w:compatSetting` `compatibilityMode`) fits only justified lines. No
+// declared mode is a legacy mode: a left-aligned line fits like a justified one.
+test.each([
+  ['甲）AV（乙末', 'both', 15],
+  ['甲）AV（乙≥丙末', 'both', 15],
+  ['甲）AV（乙末', 'both', null],
+  ['甲）AV（乙末', 'left', null],
+] as const)(
+  'mixed optical geometry follows two-editor edits and cold save: %s (%s, mode %p)',
+  async (text, jc, mode) => {
     const harness = createPeerHarness('local-cjk-optical');
     const views: { editor: DocxEditorInstance; container: HTMLElement }[] = [];
     const mount = (peer: Peer) => {
@@ -88,12 +95,12 @@ test.each(['甲）AV（乙末', '甲）AV（乙≥丙末'])(
     try {
       const pair = await harness.pair(
         zipDocument(
-          `<w:p><w:pPr><w:jc w:val="both"/><w:overflowPunct w:val="0"/><w:autoSpaceDE w:val="0"/><w:autoSpaceDN w:val="0"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Test Latin" w:hAnsi="Test Latin" w:eastAsia="Test CJK"/><w:sz w:val="24"/><w:kern w:val="2"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`,
+          `<w:p><w:pPr><w:jc w:val="${jc}"/><w:overflowPunct w:val="0"/><w:autoSpaceDE w:val="0"/><w:autoSpaceDN w:val="0"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Test Latin" w:hAnsi="Test Latin" w:eastAsia="Test CJK"/><w:sz w:val="24"/><w:kern w:val="2"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`,
           {
             documentRels: `<Relationships xmlns="${REL}"><Relationship Id="styles" Type="${R}/styles" Target="styles.xml"/><Relationship Id="settings" Type="${R}/settings" Target="settings.xml"/></Relationships>`,
             extraXml: {
               'word/styles.xml': `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="Test CJK"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`,
-              'word/settings.xml': `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`,
+              'word/settings.xml': `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/>${mode === null ? '' : `<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${mode}"/></w:compat>`}</w:settings>`,
             },
           }
         )

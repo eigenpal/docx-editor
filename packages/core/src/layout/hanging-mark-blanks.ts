@@ -1,5 +1,6 @@
-// How much of a hanging full-width mark passes the margin when the paragraph compresses
-// punctuation. Derived line geometry only; the document is unchanged.
+// How much of a hanging full-width mark (`w:overflowPunct`) passes the margin when
+// `w:characterSpacingControl` compresses punctuation. Derived line geometry only; the
+// document is unchanged.
 import {
   eastAsianLanguage,
   isKorean,
@@ -21,26 +22,50 @@ const CENTERED_BLANKS: MarkBlanks = Object.freeze({ leading: 0.25, trailing: 0.2
 
 /**
  * The blank sides of a full-width line-end mark, as fractions of its advance, by the mark's
- * own run language. A closing mark leaves its right half blank. A centered mark leaves a
+ * own run language (`w:lang` `w:eastAsia`). A closing mark leaves its right half blank. A centered mark leaves a
  * quarter on each side. Other marks, such as `？`, fill their cell and return undefined.
  */
 function lineEndMarkBlanks(mark: string, language: string | undefined): MarkBlanks | undefined {
   if (CLOSING_BRACKET.test(mark)) return CLOSING_BLANKS;
   const traditional = isTraditionalChinese(language);
-  // Simplified Chinese, and text without an East Asian language, set these marks in the left
+  // Simplified Chinese, and text without a `w:eastAsia` language, set these marks in the left
   // half of the cell; Traditional Chinese centers them. Japanese `；：！` never hang.
   if ('、。，．；：'.includes(mark)) return traditional ? CENTERED_BLANKS : CLOSING_BLANKS;
   if (mark === '！' && !traditional) return CLOSING_BLANKS;
   return undefined;
 }
 
+/** The blank sides, in points, of the mark ending `text`, or undefined when it has none. */
+function markBlankSides(
+  text: string,
+  piece: FieldAwarePiece,
+  advance: number,
+  typography: CjkParagraphTypography | undefined
+): MarkBlanks | undefined {
+  const compression = typography?.settings?.compression;
+  if (compression === undefined || compression === 'doNotCompress') return undefined;
+  const language = eastAsianLanguage(piece.props);
+  if (isKorean(language)) return undefined;
+  const blanks = lineEndMarkBlanks(text.at(-1) ?? '', language);
+  if (!blanks) return undefined;
+  // Character spacing follows the glyph cell, so it belongs to the trailing side.
+  const spacing = piece.style.characterSpacingPt;
+  const cell = advance - spacing;
+  return {
+    leading: cell * blanks.leading,
+    trailing: Math.max(0, cell * blanks.trailing + spacing),
+  };
+}
+
 /**
  * The advance that the mark ending `text` keeps past the margin, given its whole `advance` and
- * the line's `overflow`. With punctuation compression, an overflow no larger than the mark's
- * blank sides hangs only the trailing blank, or the overflow when that is larger, and the text
- * before the mark fills the rest of the measure. A larger overflow, a mark without blank
- * sides, no compression, and Korean text hang the whole advance. `piece` holds the mark: its
- * run language selects the blank sides, and its character spacing widens the trailing one.
+ * the line's `overflow`. When `w:characterSpacingControl` is `compressPunctuation` or
+ * `compressPunctuationAndJapaneseKana`, an overflow no larger than the mark's blank sides
+ * hangs only the trailing blank, or the overflow when that is larger, and the text before
+ * the mark fills the rest of the measure. A larger overflow, a mark without blank
+ * sides, `doNotCompress`, and Korean text hang the whole advance. `piece` holds the mark: its
+ * run language selects the blank sides, and its character spacing (`w:spacing` in `w:rPr`)
+ * widens the trailing one.
  */
 export function blankSideHangingAdvance(
   text: string,
@@ -49,29 +74,39 @@ export function blankSideHangingAdvance(
   overflow: number,
   typography: CjkParagraphTypography | undefined
 ): number {
-  const compression = typography?.settings?.compression;
-  if (compression === undefined || compression === 'doNotCompress') return advance;
-  const language = eastAsianLanguage(piece.props);
-  if (isKorean(language)) return advance;
-  const blanks = lineEndMarkBlanks(text.at(-1) ?? '', language);
-  if (!blanks) return advance;
-  // Character spacing follows the glyph cell, so it belongs to the trailing side.
-  const spacing = piece.style.characterSpacingPt;
-  const cell = advance - spacing;
-  const trailing = Math.max(0, cell * blanks.trailing + spacing);
-  if (overflow > cell * blanks.leading + trailing + 0.001) return advance;
-  return Math.min(advance, Math.max(trailing, overflow));
+  const sides = markBlankSides(text, piece, advance, typography);
+  if (!sides || overflow > sides.leading + sides.trailing + 0.001) return advance;
+  return Math.min(advance, Math.max(sides.trailing, overflow));
+}
+
+/**
+ * The trailing blank, in points, that punctuation compression (`w:characterSpacingControl`)
+ * takes from a hanging mark with whole advance `advance`, or 0. Its highlight (`w:highlight`),
+ * shading (`w:shd`), underline (`w:u`), strike (`w:strike`), and tracked-change (`w:ins`,
+ * `w:del`) formatting ends before that blank, whether the whole mark hangs or only the blank does.
+ * Without compression, and for a mark without blank sides or a Korean run (`w:lang`
+ * `w:eastAsia`), the formatting
+ * covers the whole mark.
+ */
+export function compressedTrailingBlank(
+  text: string,
+  piece: FieldAwarePiece,
+  advance: number,
+  typography: CjkParagraphTypography | undefined
+): number {
+  return markBlankSides(text, piece, advance, typography)?.trailing ?? 0;
 }
 
 // Japanese keeps these marks, full and half width, in its hanging set under the alternate
-// line-break rules.
+// line-break rules (`w:useAltKinsokuLineBreakRules`).
 const JAPANESE_HANGING = '、。，．､｡';
 
 /**
- * Whether the alternate line-break rules decide the line-end `mark` (`alternateLineEndFit`):
- * the rules apply, and the mark is outside the hanging set of its run `language`. Only
- * Japanese keeps a hanging set: `、。，．` and half-width `､｡`. Half-width Latin marks (below
- * U+2000) keep their usual hanging.
+ * Whether the alternate line-break rules (`w:useAltKinsokuLineBreakRules`, through
+ * `alternateLineEndFit`) decide the line-end `mark`: the rules apply, and the mark is outside
+ * the hanging set of its run `language` (`w:lang` `w:eastAsia`). Only Japanese keeps a hanging
+ * set: `、。，．` and half-width `､｡`. Half-width Latin marks (below U+2000) keep their usual
+ * hanging.
  */
 export function alternateLineEndDecides(
   mark: string,
@@ -83,9 +118,9 @@ export function alternateLineEndDecides(
   return !(language?.startsWith('ja') === true && JAPANESE_HANGING.includes(mark));
 }
 
-// Under the alternate line-break rules, whether the mark may give up a blank right half: the
-// paragraph compresses punctuation, the text is not Korean, and the mark's language class
-// leaves its right half blank.
+// Under the alternate line-break rules, whether the mark may give up a blank right half:
+// `w:characterSpacingControl` compresses punctuation, the text is not Korean, and the mark's
+// language class leaves its right half blank.
 function alternateBlankHalf(
   mark: string,
   language: string | undefined,
@@ -113,9 +148,9 @@ export function alternateLineEndWraps(
 
 /**
  * Under the alternate line-break rules, the most of a line-end mark that may pass the margin:
- * its blank right half, widened by its character spacing. The text keeps its natural width,
- * and only the overflow passes the margin. A mark without a blank right half, a paragraph
- * without punctuation compression, and Korean text return undefined: the mark wraps.
+ * its blank right half, widened by its character spacing (`w:spacing` in `w:rPr`). The text
+ * keeps its natural width, and only the overflow passes the margin. A mark without a blank
+ * right half, `doNotCompress`, and Korean text return undefined: the mark wraps.
  */
 export function alternateLineEndAdvance(
   mark: string,

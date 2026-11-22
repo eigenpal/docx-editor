@@ -65,17 +65,20 @@ const style = {
 function fitWord(
   word = 'AV',
   measure = measurer,
-  options: { allow?: boolean; style?: typeof style } = {}
+  options: { allow?: boolean; style?: typeof style; order?: readonly string[] } = {}
 ) {
   let start = 0;
-  const pieces: FieldAwarePiece[] = ['XYZ', '甲', '）', word, '（', '乙'].map((text, index) => {
+  const texts = options.order ?? ['XYZ', '甲', '）', word, '（', '乙'];
+  const pieces: FieldAwarePiece[] = texts.map((text, index) => {
     const value: FieldAwarePiece = {
       text,
       start,
       end: start + text.length,
       props: [],
       style: options.style ?? style,
-      fontSlot: index === 0 || index === 3 ? 'ascii' : 'eastAsia',
+      fontSlot: (options.order ? /[A-Za-z]/u.test(text) : index === 0 || index === 3)
+        ? 'ascii'
+        : 'eastAsia',
     };
     start = value.end;
     return value;
@@ -232,6 +235,15 @@ test('unresolved faces and authored tracking scaling or complex shaping reject t
     expect(actual.result).toBeUndefined();
     expect(shapeCalls).toEqual([]);
   }
+});
+
+test('authored tracking refuses a line whose final cell is a word', () => {
+  const order = ['甲', '）', '（', '乙', 'AV'];
+  expect(fitWord('AV', measurer, { order }).result).toBeDefined();
+  for (const characterSpacingPt of [-0.2, 0.2])
+    expect(
+      fitWord('AV', measurer, { order, style: { ...style, characterSpacingPt } }).result
+    ).toBeUndefined();
 });
 
 test('a Latin-face quoted word guards its neighbouring seams like any other word', () => {
@@ -492,7 +504,7 @@ test('word caret positions use each character measured box rather than an entire
   }
 });
 
-test('unsupported fields authored spacing scale decoration and unknown text keep natural geometry', () => {
+test('fields, authored spacing, scaling, underline, outlines and unknown text keep natural geometry', () => {
   const text = '甲）AV（乙末',
     width = advance('甲）AV（乙') - 6;
   for (const options of [
@@ -500,6 +512,11 @@ test('unsupported fields authored spacing scale decoration and unknown text keep
     { runProps: '<w:spacing w:val="4"/>' },
     { runProps: '<w:w w:val="90"/>' },
     { runProps: '<w:u w:val="single"/>' },
+    { runProps: '<w:strike/>' },
+    {
+      runProps:
+        '<w14:textOutline xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" w14:w="12700"><w14:solidFill><w14:srgbClr w14:val="FF0000"/></w14:solidFill></w14:textOutline>',
+    },
     { settings: '<w:noPunctuationKerning/>' },
     { sourceEastAsia: false },
   ]) {
@@ -533,3 +550,52 @@ test('layout reuse width changes and save retain source text and authored format
   expect(serializeOoxmlPart(narrow.source)).toBe(narrow.before);
   expect(narrow.before).not.toContain('w:spacing');
 });
+
+test.each(['℃', '℉'])(
+  'temperature %s stays at its full width while adjacent punctuation fits',
+  (unit) => {
+    const pieces: FieldAwarePiece[] = [
+      { text: '12', start: 0, end: 2, props: [], style, fontSlot: 'ascii' },
+      { text: unit + '、', start: 2, end: 4, props: [], style, fontSlot: 'eastAsia' },
+      { text: '甲', start: 4, end: 5, props: [], style, fontSlot: 'eastAsia' },
+      { text: '乙', start: 5, end: 6, props: [], style, fontSlot: 'eastAsia' },
+    ];
+    let x = 0;
+    const spans: StyleSpanRecord[] = pieces.slice(0, 3).map((piece) => {
+      const width = measureDisplayText(
+        piece.text,
+        styleForFontSlot(style, piece.fontSlot),
+        measurer
+      );
+      const span = {
+        ...piece,
+        range: { paragraphId: 'p', start: piece.start, end: piece.end },
+        box: { x, y: 0, width, height: 16 },
+      };
+      x += width;
+      return span;
+    });
+    const line: PendingLine = {
+      spans,
+      drawings: [],
+      start: 0,
+      end: 5,
+      width: x,
+      height: 16,
+      baseline: 12,
+      leading: 0,
+      trailingSpacing: 0,
+    };
+    const fit = createCjkOpticalFitter(pieces, cjkParagraphBreaks(pieces, policy), measurer, {
+      hangingPunctuation: false,
+      requireLocalQualification: true,
+    });
+    const result = fit(line, 3, '乙', { paragraphId: 'p', start: 5, end: 6 }, 12, x, x + 9, true);
+    expect(result).toBeDefined();
+    const temperature = line.spans.find((span) => span.text === unit);
+    expect(temperature?.box.width).toBe(12);
+    expect(temperature?.range).toEqual({ paragraphId: 'p', start: 2, end: 3 });
+    expect(line.spans.find((span) => span.text === '、')?.box.width).toBe(9);
+    expect(line.width + result!.width).toBe(x + 9);
+  }
+);

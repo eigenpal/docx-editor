@@ -1217,6 +1217,7 @@ export interface DocxEditorImageInsertErrorDialogProps {
     onClose(): void;
     // (undocumented)
     style?: CSSProperties;
+    title?: string;
 }
 
 // @public

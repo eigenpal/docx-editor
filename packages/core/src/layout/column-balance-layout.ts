@@ -4,6 +4,7 @@ import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { drainLayoutSteps, type LayoutSteps } from './layout-steps.ts';
 import type { RefFieldContext } from './field-ref.ts';
 import type { ContinuedPageHost } from './continued-page-zones.ts';
+import type { FollowingAnchorTops } from './following-anchor-tops.ts';
 import type { LayoutSession } from './layout-session.ts';
 import type { PageContentInsets, OverflowPageShell } from './page-furniture-insets.ts';
 import { resolveSectionColumns, type ResolvedSectionColumns } from './section-columns.ts';
@@ -76,6 +77,12 @@ export type BlockLayoutOptions<HostOptions extends object = object> = HostOption
    * so a wrap reflow that does not settle refuses there instead of publishing.
    */
   readonly columnBalanceTrial?: boolean;
+  /**
+   * Set by a wrap reflow on its first passes (`following-anchor-tops.ts`). Only the layout a
+   * pass publishes reads and records it: the natural layout and the trials of a balance search
+   * leave it out, so the bound they find is the one an ordinary pass finds.
+   */
+  readonly followingAnchorTops?: FollowingAnchorTops;
   /** Section page-number format used to measure body page-field placeholders. */
   readonly bodyPageNumberFormat?: string;
   /** Story REF inputs built by the document composition root. */
@@ -184,7 +191,11 @@ export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
   const session = options.session;
   let balancePage = 0;
   let regionTop = options.flowStartY ?? 0;
-  const trialOptions: BlockLayoutOptions<HostOptions> = { ...options, session: undefined };
+  const trialOptions: BlockLayoutOptions<HostOptions> = {
+    ...options,
+    session: undefined,
+    followingAnchorTops: undefined,
+  };
   const balancedResult = (final: BlockLayoutResult): BlockLayoutResult => {
     const page = final.pages[balancePage];
     // The next continuous section resumes below the whole balanced region, not below the

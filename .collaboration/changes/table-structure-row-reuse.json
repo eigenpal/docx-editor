@@ -1,0 +1,16 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Every read of a table healed each row's repeated property containers again.",
+  "after": "Each row's healed view is kept per row node and returned again while the row node stays the same.",
+  "reason": "Only a local memo of a pure read changes. Shared nodes, operations, text offsets, and package serialization remain unchanged. Layout reads the shared tree only: a two-peer test lays out remote row inserts and deletes between local passes and compares each peer with a fresh layout.",
+  "tests": [
+    "packages/core/src/store/__tests__/table-property-heal.test.ts",
+    "packages/core/src/store/__tests__/table-property-heal-reuse.test.ts",
+    "packages/core/src/layout/__tests__/table-structure-edit-equivalence.test.ts",
+    "packages/core/src/layout/__tests__/table-restart-read-horizon.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-table-restart-layout.test.ts"
+  ],
+  "changeset": "table-structure-edit-reuse",
+  "migration": null
+}

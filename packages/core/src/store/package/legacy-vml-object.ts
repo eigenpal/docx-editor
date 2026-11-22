@@ -31,6 +31,30 @@ function inertFieldCodes(node: OoxmlElement): boolean {
 }
 
 /**
+ * The `o:LockedField` refresh lock of an `o:OLEObject`: a short Boolean or blank value, in any
+ * letter case. No value affects the cached picture.
+ */
+function inertLockedField(node: OoxmlElement): boolean {
+  if (!named(node, OFFICE, 'LockedField') || node.attributes.length || node.children.length > 1)
+    return false;
+  const text = node.children[0];
+  if (!text) return true;
+  return (
+    !element(text) && text.value.length <= 64 && /^(?:t|f|true|false)?$/i.test(text.value.trim())
+  );
+}
+
+function inertOleMetadata(ole: OoxmlElement): boolean {
+  if (ole.children.length === 0) return true;
+  if (ole.children.length > 2) return false;
+  const [first, second] = ole.children;
+  if (!first || !element(first)) return false;
+  return inertLockedField(first)
+    ? !second || (element(second) && inertFieldCodes(second))
+    : !second && inertFieldCodes(first);
+}
+
+/**
  * The cached preview of an embedded OLE object: the `v:shape` of a `w:object` that holds one
  * standard picture frame, an optional built-in template, and an optional `o:OLEObject`.
  *
@@ -103,8 +127,9 @@ function previewPicture(shape: OoxmlElement): boolean {
 
 /**
  * Whether `ole` is an inert `o:OLEObject` for the preview `shape`: an embedded, never linked,
- * object with known attributes and at most inert field codes. Only its attributes are read; its
- * relationship is never resolved. `requireShapeId` demands a `ShapeID` that names the shape.
+ * object with known attributes and at most inert refresh-lock metadata and field codes. Only its
+ * attributes are read; its relationship is never resolved. `requireShapeId` demands a `ShapeID`
+ * that names the shape.
  */
 function inertOleObject(ole: OoxmlElement, shape: OoxmlElement, requireShapeId: boolean): boolean {
   const image = children(shape).find((n) => named(n, VML, 'imagedata'));
@@ -125,8 +150,7 @@ function inertOleObject(ole: OoxmlElement, shape: OoxmlElement, requireShapeId: 
     (shapeId !== undefined && shapeId !== a(shape, 'id')) ||
     // The preview must be its own picture, never the embedded object's payload.
     (oleId !== undefined && oleId === imageId) ||
-    ole.children.length > 1 ||
-    !ole.children.every((child) => element(child) && inertFieldCodes(child))
+    !inertOleMetadata(ole)
   );
 }
 

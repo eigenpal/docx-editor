@@ -516,6 +516,13 @@ Semantic layout SHALL resolve `w:autoSpaceDE` and `w:autoSpaceDN` through the pa
 - **WHEN** supported adjacent text changes between East Asian and Latin letters or ASCII digits across source runs
 - **THEN** layout applies one boundary advance without adding a source character or changing source ranges
 
+#### Scenario: A field result is text
+
+- **WHEN** a boundary falls inside a displayed field result or between a field result and the text around it, for any field type, a `w:fldSimple`, or a result that continues into a later paragraph
+- **THEN** layout applies the same advance and the same balanced space width as for literal text
+- **AND** auto-fit table layout prices the same advances
+- **AND** an atomic field result keeps its one model unit, and form check boxes and drop-down lists keep their existing advances
+
 #### Scenario: A boundary moves to another line
 
 - **WHEN** the additional advance prevents adjacent text from fitting on one line
@@ -587,20 +594,72 @@ The layout engine SHALL move text that kinsoku keeps together to the next line a
 - **THEN** `123ヵ` stays whole on the second line
 - **AND** at 33 pt it breaks after `123`
 
-### Requirement: East Asian punctuation fitting only on justified paragraphs
+### Requirement: East Asian punctuation fitting by alignment and compatibility mode
 
-The layout engine SHALL fit a line by compressing East Asian punctuation against measured glyph bounds only when the paragraph alignment is justified (`w:jc` `both`, `distribute`, `thaiDistribute`, or a kashida value) and the document defaults (`w:rPrDefault`) name an East Asian face. Other paragraphs SHALL wrap instead of fitting. Adjacent full-width punctuation pairs compress at every alignment.
+The layout engine SHALL fit a line by compressing East Asian punctuation against measured glyph bounds only when the document defaults (`w:rPrDefault`) name an East Asian face. In compatibility mode 15 and later, it SHALL fit only justified paragraphs (`w:jc` `both`, `distribute`, `thaiDistribute`, or a kashida value); other paragraphs SHALL wrap instead. A legacy compatibility mode SHALL fit lines at every alignment. Spaces SHALL join a fit only before a character that may not start a line.
 
-#### Scenario: A left-aligned paragraph wraps instead of compressing
+#### Scenario: A left-aligned paragraph in compatibility mode 15 wraps instead of compressing
 
-- **GIVEN** document punctuation compression and a line that fits only when its punctuation compresses
+- **GIVEN** compatibility mode 15, document punctuation compression, and a line that fits only when its punctuation compresses
 - **WHEN** the paragraph is left-aligned, centered, or right-aligned
 - **THEN** the line wraps instead of fitting
 - **AND** the same paragraph fits the line when it is justified
 
+#### Scenario: A space before a wrapping word does not compress the line
+
+- **GIVEN** a line in any compatibility mode whose last ideograph is followed by a space and a Latin word that wraps
+- **WHEN** the space alone overflows the measure
+- **THEN** the line keeps its natural punctuation advances and the space trails it
+
+### Requirement: East Asian punctuation fitting in legacy compatibility modes
+
+In a legacy compatibility mode (`w:compatSetting` `compatibilityMode` absent, 11, 12, or 14), punctuation fitting SHALL apply at every alignment. An East Asian candidate group SHALL join a line only when the compression it needs, less what its own marks can give, is at most half its natural advance. Latin words and numbers count when the group ends in a closing mark or Latin closing quote. Groups of marks only, or with other text or spaces, kana fits, and hanging marks skip the limit.
+
+#### Scenario: A legacy mode fits lines at every alignment
+
+- **GIVEN** no declared compatibility mode, or mode 11, 12, or 14, with document punctuation compression and an East Asian default face
+- **WHEN** a left-aligned, centered, right-aligned, or justified line fits one more ideograph only when its punctuation compresses
+- **THEN** the line fits it, in Simplified Chinese, Traditional Chinese, Japanese, or no declared language
+
+#### Scenario: A legacy group of a Latin word and a final mark admits at most half its advance
+
+- **GIVEN** a legacy-mode line of ideographs and four commas followed by the group `ab。`
+- **WHEN** the group needs more than half its natural advance after its mark drops its trailing half
+- **THEN** the group wraps at every alignment, while compatibility mode 15 still fits the justified line
+
+#### Scenario: A legacy group that ends in a Latin closing quote admits at most half its advance
+
+- **GIVEN** a legacy-mode line of ideographs and six commas followed by the group `ab”`
+- **WHEN** the group needs more than half its natural advance after the quote counts its trailing half as given
+- **THEN** the group wraps, while compatibility mode 15 still fits the justified line
+
+#### Scenario: A legacy line admits at most half an ideograph of compression
+
+- **GIVEN** a legacy-mode 12 pt line `甲。乙，丙` whose two blank sides could give more than 6 pt
+- **WHEN** the measure is 54 pt, 6 pt short of the natural width
+- **THEN** `丙` joins the line at every alignment
+- **AND** at 53.9 pt it wraps, while compatibility mode 15 still fits the justified line
+
+### Requirement: Korean text in legacy East Asian punctuation fitting
+
+In a legacy compatibility mode, a candidate group with Hangul text, or text whose East Asian language (`w:lang` `w:eastAsia`) is Korean, SHALL wrap instead of fitting. A Korean-language mark, and a mark after Hangul on the line, SHALL keep its advance; Korean text without marks SHALL NOT stop other marks from compressing.
+
+#### Scenario: Korean text wraps in a legacy mode
+
+- **GIVEN** a legacy-mode line that fits one more character only when its punctuation compresses
+- **WHEN** that character is Hangul, or text in a Korean language
+- **THEN** the character wraps at every alignment
+
+#### Scenario: A legacy mode compresses no Korean mark
+
+- **GIVEN** a legacy-mode left-aligned line whose only marks are Korean-language marks, or marks after Hangul
+- **WHEN** the next Chinese ideograph fits only when those marks compress
+- **THEN** the ideograph wraps
+- **AND** marks before Hangul on the line still compress, and compatibility mode 15 compresses Korean marks on a justified line
+
 ### Requirement: East Asian punctuation fitting capacity
 
-Justified East Asian lines SHALL distribute punctuation compression across available blank sides. The layout SHALL compare required compression against available expansion before admitting the next ordinary glyph.
+Lines that fit East Asian punctuation SHALL distribute compression across available blank sides. The layout SHALL compare required compression against available expansion before admitting the next ordinary glyph.
 
 #### Scenario: Punctuation compression allocation and admission
 
@@ -626,6 +685,36 @@ Justified East Asian lines SHALL distribute punctuation compression across avail
 - **GIVEN** a closing mark followed by an opening mark, two closing marks, or two opening marks
 - **WHEN** the line needs compression to fit
 - **THEN** both blank sides at that seam compress
+
+### Requirement: Punctuation pair classes by language
+
+Each mark of an adjacent full-width punctuation pair SHALL take its pair class from its own run's East Asian language (`w:lang` `w:eastAsia`). The class SHALL be opening, closing, centred, or none. Brackets SHALL be opening or closing marks in every language.
+
+#### Scenario: The run language selects the class of a mark
+
+- **GIVEN** a run whose East Asian language is Simplified Chinese, or that has no East Asian language
+- **THEN** `、。，．；：！` are closing marks, and `？` and `・` have no class
+- **AND** in Traditional Chinese (`zh-TW`, `zh-HK`, `zh-MO`, `zh-Hant`), `、。，．；：` are centred, and `！？・` have no class
+- **AND** in Japanese, `、。，．` are closing marks, `；：・` are centred, and `！？` have no class
+
+#### Scenario: Each mark of a pair uses its own run language
+
+- **GIVEN** a Simplified Chinese `；` followed by a Japanese `！`
+- **WHEN** the pair is laid out
+- **THEN** both bearings stay
+- **AND** a Simplified Chinese `）` followed by a Japanese `・` is 6 pt narrower at 12 pt
+
+### Requirement: Punctuation pair seams by class
+
+When pair kerning (`w:kern`) applies to both runs, a closing mark SHALL give half its advance before a closing, centred, or opening mark. A centred mark SHALL give it only before an opening mark. Two opening marks SHALL share the second mark's left bearing. Other pairs and Korean runs SHALL keep both bearings. A colon SHALL share before a non-opening mark only when both marks' measured ink fits the pair. A highlighted or shaded colon SHALL keep its bearing.
+
+#### Scenario: A semicolon pair follows its class
+
+- **GIVEN** a 12 pt pair with pair kerning on
+- **WHEN** `）；` and `；）` are Simplified Chinese
+- **THEN** each pair is 6 pt narrower
+- **AND** in Japanese or Traditional Chinese, `）；` is 6 pt narrower and `；）` keeps both bearings
+- **AND** `；（` is 6 pt narrower in all three languages, and `？（` keeps both bearings
 
 ### Requirement: Hanging punctuation by alignment
 
@@ -671,7 +760,7 @@ With no compatibility mode, or in mode 11, 12, or 14, line-end punctuation SHALL
 
 ### Requirement: Hanging the blank side of a mark
 
-With document punctuation compression, in every compatibility mode, a hanging line-end mark SHALL hang only its trailing blank side when it overflows by no more than its blank sides. The text before it SHALL fill the rest of the measure. A larger overflow, no compression, or a Korean run SHALL hang the whole mark. Kana compression SHALL NOT compress kana for a mark that hangs within its blank sides.
+With document punctuation compression (`w:characterSpacingControl`), in every compatibility mode, a line-end mark that hangs (`w:overflowPunct`) SHALL hang only its trailing blank side when it overflows by no more than its blank sides. The text before it SHALL fill the rest of the measure. A larger overflow, no compression, or a Korean run SHALL hang the whole mark. Kana compression SHALL NOT compress kana for a mark that hangs within its blank sides.
 
 #### Scenario: A closing mark hangs its blank half
 
@@ -696,7 +785,7 @@ With document punctuation compression, in every compatibility mode, a hanging li
 
 ### Requirement: Blank sides of a line-end mark by language
 
-The mark's run language SHALL select its blank sides. A closing bracket, `、。，．` in Japanese, and `、。，．；：！` in Simplified Chinese or without an East Asian language, SHALL leave the right half blank. Traditional Chinese `、。，．；：` SHALL be centered, with a quarter blank on each side. Other marks, such as `？` and `”`, SHALL have no blank side. Past a centered mark's trailing quarter, the text before it SHALL keep its advances and the overflow SHALL hang.
+The mark's run language (`w:lang` `w:eastAsia`) SHALL select its blank sides. A closing bracket, `、。，．` in Japanese, and `、。，．；：！` in Simplified Chinese or without an East Asian language, SHALL leave the right half blank. Traditional Chinese `、。，．；：` SHALL be centered, with a quarter blank on each side. Other marks, such as `？` and `”`, SHALL have no blank side. Past a centered mark's trailing quarter, the text before it SHALL keep its advances and the overflow SHALL hang.
 
 #### Scenario: A centered mark hangs its trailing quarter
 
@@ -713,11 +802,11 @@ The mark's run language SHALL select its blank sides. A closing bracket, `、。
 
 ### Requirement: Alternate line-break rules
 
-With `w:useAltKinsokuLineBreakRules` before mode 15, a line-end mark from U+2000 up outside the hanging set of its run language SHALL NOT hang. Only Japanese `、。，．` SHALL stay in that set. With punctuation compression, a mark with a blank right half SHALL pass the margin only by the overflow, up to that half, and the text SHALL keep its advances. A larger overflow SHALL wrap the mark unless interior blank sides give up the rest. Other marks SHALL wrap.
+With `w:useAltKinsokuLineBreakRules` before `w:compatSetting` `compatibilityMode` 15, a line-end mark (`w:overflowPunct`) from U+2000 up outside the hanging set of its run language (`w:lang` `w:eastAsia`) SHALL NOT hang. Only Japanese `、。，．` SHALL stay in that set. When `w:characterSpacingControl` compresses punctuation, a mark with a blank right half SHALL pass the margin only by the overflow, up to that half, and the text SHALL keep its advances. A larger overflow SHALL wrap the mark unless interior blank sides give up the rest. Other marks SHALL wrap.
 
 #### Scenario: Only the overflow passes the margin
 
-- **GIVEN** a justified line of nineteen 24 pt ideographs and a Simplified Chinese 24 pt `，`, with document punctuation compression, the setting, and mode 14
+- **GIVEN** a justified line of nineteen 24 pt ideographs and a Simplified Chinese 24 pt `，`, with `w:characterSpacingControl` set to `compressPunctuation`, `w:useAltKinsokuLineBreakRules`, and `compatibilityMode` 14
 - **WHEN** the mark overflows the measure by 6 pt
 - **THEN** the mark starts 24 pt before the margin, and the ideographs keep their advances
 - **AND** a 13 pt overflow wraps the mark with the ideograph before it
@@ -743,6 +832,29 @@ In optical fitting, an interior `；` SHALL give up its blank half in every comp
 - **GIVEN** a justified line of eighteen 24 pt ideographs and an interior 24 pt `；`, with document punctuation compression
 - **WHEN** one more ideograph overflows the measure by 6 pt
 - **THEN** the semicolon gives up 6 pt and the ideograph stays on the line
+
+### Requirement: Formatting of a hanging mark ends before its compressed blank
+
+When `w:characterSpacingControl` compresses punctuation, the run formatting of a hanging line-end mark (`w:overflowPunct`) with a trailing blank side SHALL end before that blank, clear of the glyph's ink: `w:highlight`, `w:shd`, `w:u`, `w:strike`, `w:ins`, and `w:del`. The glyph, its box, line breaks, and caret positions SHALL NOT change, and screen paint and PDF export SHALL agree. A mark that moves to the next line SHALL take its hang with it.
+
+#### Scenario: A highlighted closing mark ends its highlight at the start of its blank half
+
+- **GIVEN** a justified, highlighted line of nineteen 24 pt ideographs and a 24 pt `。`, with `w:characterSpacingControl` set to `compressPunctuation`
+- **WHEN** the mark overflows the measure by 6 pt
+- **THEN** the highlight and underline end at the margin
+- **AND** with an 18 pt overflow they end 12 pt past the margin, at the start of the mark's blank half
+
+#### Scenario: Without compression the formatting covers the whole mark
+
+- **GIVEN** the same line with `w:characterSpacingControl` set to `doNotCompress`, in a Korean run (`w:lang` `w:eastAsia="ko-KR"`), with `？`, or in a right-to-left paragraph (`w:bidi`)
+- **WHEN** the mark overflows the measure by 6 pt
+- **THEN** the highlight and underline cover the whole mark
+
+#### Scenario: A carried mark leaves no hang behind
+
+- **GIVEN** the same line where `」` in the next run follows the `。`
+- **WHEN** `」` cannot start a line, so the last ideograph and `。` move to the next line
+- **THEN** the first line ends at its margin, and its formatting covers its last ideograph
 
 ### Requirement: Space shrinking before hanging punctuation
 
@@ -860,6 +972,19 @@ In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingCo
 - **AND** with `w:useWord97LineBreakRules` as well, spaces in proportional faces keep their advance
 - **AND** a line in a proportional face that starts with spaces keeps natural spaces and hangs no final mark
 
+### Requirement: Legacy hyphens stay with the following text
+
+In compatibility mode 14 or earlier, or with no mode, when `w:characterSpacingControl` compresses punctuation, a line SHALL NOT break after a hyphen-minus (U+002D) that a letter, digit, or symbol follows, whatever precedes the hyphen. A line MAY break after it before East Asian text or a space. Paragraph layout and the minimum column widths of autofit tables (`w:tblLayout` `w:type="autofit"`) SHALL use the same break opportunities. A word wider than its line SHALL still split.
+
+#### Scenario: A hyphenated word moves whole in a legacy mode
+
+- **GIVEN** a mode 14 or undeclared-mode paragraph with `compressPunctuation`, where `AB123-2048`, `well-known`, or the `-ABC` of `甲-ABC` overflows the line
+- **WHEN** the line breaks
+- **THEN** the hyphen and the text after it move to the next line together, in Chinese, Japanese, or Latin-only paragraphs
+- **AND** `ABC-甲` and `ABC- def` can still break after the hyphen
+- **AND** mode 15, `doNotCompress`, or no `w:characterSpacingControl` breaks after the hyphen
+- **AND** a hyphen in a Korean run (`w:lang/@w:eastAsia` Korean) of a paragraph with East Asian text keeps its ordinary breaks
+
 ### Requirement: Legacy space shrinking before a final mark
 
 Under the legacy space shrinking rule, a final half-width mark SHALL stay inside when the spaces make room for it, and hang when they make room only for the text before it.
@@ -968,7 +1093,7 @@ When line-end punctuation hangs, the preceding text SHALL fill the measure, incl
 
 ### Requirement: East Asian punctuation fitting on mixed lines
 
-When document punctuation compression is on and the document defaults name an East Asian face, a line that also holds complete Latin words, digit groups, or ASCII symbol groups SHALL be able to fit by compressing adjacent East Asian punctuation against measured glyph ink. The Latin groups SHALL keep their natural advances and source ranges.
+When document punctuation compression is on and the document defaults name an East Asian face, a line that also holds Latin-face words, digits, or symbols, or East Asian face symbols that are not punctuation, SHALL be able to fit by compressing adjacent East Asian punctuation against measured glyph ink. These groups and symbols SHALL keep their natural advances and source ranges. A tracked line of only East Asian text, punctuation, and spaces SHALL fit as in a paragraph without Latin text.
 
 #### Scenario: A mixed line fits by compressing punctuation
 
@@ -976,10 +1101,35 @@ When document punctuation compression is on and the document defaults name an Ea
 - **THEN** the line fits by reducing only the East Asian punctuation advances
 - **AND** the Latin word keeps its natural width, and source text and offsets do not change
 
+#### Scenario: A symbol in East Asian text keeps its advance
+
+- **GIVEN** a justified line `甲℃、乙` in an East Asian face, followed by `丙`
+- **WHEN** the line is 3 pt short of fitting `丙`
+- **THEN** `、` gives 3 pt of its trailing blank side and `丙` joins the line
+- **AND** `℃` keeps its natural advance and source range
+
+#### Scenario: Blank sides beside symbols and the line-end check
+
+- **WHEN** an opening mark follows Latin-face text or an East Asian face symbol
+- **THEN** the opening mark can give its leading blank side
+- **AND** an East Asian face symbol that joins the line end passes the same expansion check as an ideograph
+
 #### Scenario: An unqualified run keeps conservative fitting
 
 - **WHEN** a run on a line that holds Latin groups has authored character spacing, horizontal scaling, complex shaping, or an unresolved face
 - **THEN** that line does not use measured-ink fitting
+
+#### Scenario: Letters and controls that cannot stay opaque keep conservative fitting
+
+- **WHEN** a line holds a letter in the East Asian face, a letter of a script other than Latin, a control character, or compressible East Asian punctuation in a Latin face
+- **THEN** that line does not use measured-ink fitting
+
+#### Scenario: A tracked line without Latin groups fits in a mixed paragraph
+
+- **GIVEN** a paragraph whose Latin groups lie only on other lines
+- **WHEN** a line of only East Asian text, punctuation, and spaces has authored character spacing of either sign and overflows by less than the punctuation's measured spare ink
+- **THEN** the line breaks as it does in a paragraph without Latin text, with or without a hanging final mark
+- **AND** every glyph keeps its authored character spacing
 
 ### Requirement: Host font resource replacement
 
@@ -1163,9 +1313,26 @@ The layout engine SHALL allow curly quotes in runs with the East Asian font hint
 
 #### Scenario: Unsupported curly context keeps existing behavior
 
-- **GIVEN** a curly-only punctuation window, unhinted Latin quotes, a curly quote's inner side, unresolved face, authored tracking, horizontal scaling, complex shaping, decorated text, or source punctuation-kerning refusal
+- **GIVEN** a curly-only punctuation window, unhinted Latin quotes, a curly quote's inner side, unresolved face, authored tracking, horizontal scaling, complex shaping, underlined, struck-through, or outlined text, or source punctuation-kerning refusal
 - **WHEN** layout considers optical fitting
 - **THEN** the new East Asian curly path leaves the unsupported geometry unchanged
+
+### Requirement: Optical punctuation fitting in highlighted and shaded text
+
+Optical punctuation fitting SHALL treat run highlight (`w:highlight`) and run shading (`w:shd`) as fit-neutral. A punctuation seam next to highlighted or shaded text SHALL keep each glyph's ink inside its fitted box, and the highlight or shading SHALL fill the fitted box. Underlined (`w:u`), struck-through (`w:strike`, `w:dstrike`), and outlined (`w14:textOutline`) text SHALL keep natural fitting, because shifted glyph paint cannot carry those decorations.
+
+#### Scenario: Highlighted punctuation fits like plain punctuation
+
+- **GIVEN** a justified East Asian line with highlighted or shaded punctuation that fits only by compression
+- **WHEN** layout fits the line
+- **THEN** the line breaks at the same place as the same text without highlight or shading
+- **AND** each highlight or shading band follows the compressed advance
+
+#### Scenario: Underlined and struck-through punctuation keeps natural fitting
+
+- **GIVEN** the same line with underlined, double-struck, or struck-through punctuation
+- **WHEN** layout fits the line
+- **THEN** optical fitting leaves its geometry unchanged
 
 ### Requirement: Natural kana advances
 

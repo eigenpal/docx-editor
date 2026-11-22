@@ -405,7 +405,7 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
     segment = 0;
   };
   let layoutEquation: ReturnType<typeof createEquationLayouter> | undefined;
-  // A dash that ends a run breaks only if the next run does not open with another dash.
+  // A run-final dash breaks unless the next run opens with a dash or the analysis joins them.
   let dashPending = false;
   // A dash that opens a run breaks after itself when text precedes it, as line breaking reads it.
   const wordCuts = paragraphWordCuts(pieces, (piece) => piece.style.hidden === true);
@@ -415,7 +415,8 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
     // the line, exactly as the line breaker skips its placeholder.
     if (piece.projected && !piece.inlineDrawing && !piece.equation && piece.text === '\uFFFC')
       continue;
-    if (dashPending && !BREAK_AFTER_DASH.has(piece.text[0] ?? '')) close();
+    const joined = BREAK_AFTER_DASH.has(piece.text[0] ?? '') || cjkBreaks?.opens(piece) === false;
+    if (dashPending && !joined) close();
     dashPending = false;
     // A table cell lays out as though page breaks were absent: the words around one join.
     if (piece.text === PAGE_BREAK_CHAR) continue;
