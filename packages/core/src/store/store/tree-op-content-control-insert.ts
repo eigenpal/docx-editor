@@ -8,7 +8,7 @@
 // Split out of `tree-op-content-controls.ts` so the insertion paths have room to be read
 // side by side rather than to fit under a line cap.
 
-import { fieldEdgeSide } from './tree-op-field-edge.ts';
+import { fieldEdgeSide, withFieldEdgesIsolated } from './tree-op-field-edge.ts';
 import {
   allocateContentControlId,
   lockForbidsEdit,
@@ -128,9 +128,12 @@ export function applyInsertContentControl(
   if (indivisibleAt(paragraph, op.start) || indivisibleAt(paragraph, op.end)) {
     return { ok: false, reason: 'indivisible-content' };
   }
-  return op.start === op.end
-    ? insertEmptyContentControl(part, paragraph, op, options)
-    : wrapRangeInContentControl(part, op, options);
+  // A field character at a field edge gets a run of its own first (`tree-op-field-edge.ts`).
+  return withFieldEdgesIsolated(part, paragraph, [op.start, op.end], options, (p, para) =>
+    op.start === op.end
+      ? insertEmptyContentControl(p, para, op, options)
+      : wrapRangeInContentControl(p, op, options)
+  );
 }
 
 /**

@@ -212,15 +212,18 @@ export function tocCommandRefusal(
 }
 
 /**
- * Why a table or a TOC cannot go at the caret because of a TOC, or null. On a closing line
- * the block goes after the line; with no paragraph after it, it has no place there.
+ * Why a table or a TOC cannot go at the caret because of a TOC, or null. The block goes before
+ * the caret's paragraph, or after a closing line (`tocBlockAnchor`). It has no place when that
+ * paragraph lies inside a TOC field (the caret follows an end mark inside a paragraph), or
+ * when no paragraph follows the closing line.
  */
 function blockAnchorRefusal(
   surface: PaginatedSurface,
   part: OoxmlPart
 ): Exclude<ExecResult, { ok: true }> | null {
   const head = surface.state().selection.head.paragraphId;
-  if (tocBlockAnchor(part, head) !== null) return null;
+  const anchor = tocBlockAnchor(part, head);
+  if (anchor !== null && !tocRefusesInsertBefore(part, anchor)) return null;
   return { ok: false, code: 'invalidArgs', reason: TOC_BLOCK_REFUSAL };
 }
 
@@ -245,17 +248,12 @@ function refusesInToc(
       );
     }
     case 'mark':
-      return selectionTouchesTocRange(part, selection);
+      return selectionTouchesTocRange(part, linkTarget(command, surface, selection) ?? selection);
     case 'join':
       return tocRefusesJoin(part, mergedParagraphIds(surface));
-    case 'block': {
-      // The block goes before the anchor paragraph, which must not lie inside a TOC field.
-      const anchor = tocBlockAnchor(part, head);
-      return (
-        selectionTouchesTocRange(part, selection) ||
-        (anchor !== null && tocRefusesInsertBefore(part, anchor))
-      );
-    }
+    case 'block':
+      // Where the block goes is answered by `blockAnchorRefusal`.
+      return selectionTouchesTocRange(part, selection);
     case 'textBox':
       return tocAtParagraphEnd(part, head);
     case 'runFormat':
@@ -272,6 +270,26 @@ function refusesInToc(
     case 'none':
       return false;
   }
+}
+
+/**
+ * The link a link command changes at a caret instead of writing at it: adding a link at a caret
+ * in a link retargets that link, and removing one removes it (`linkAtCaret`, both edges
+ * inclusive). Null for other commands, a range, or a caret beside no link.
+ */
+function linkTarget(
+  command: EditorCommand,
+  surface: PaginatedSurface,
+  { anchor, head }: SemanticSelection
+): SemanticSelection | null {
+  if (command.type !== 'insertHyperlink' && command.type !== 'removeHyperlink') return null;
+  if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return null;
+  const link = surface.hyperlinks.linkAtCaret();
+  if (!link) return null;
+  return {
+    anchor: { paragraphId: link.paragraphId, offset: link.start },
+    head: { paragraphId: link.paragraphId, offset: link.end },
+  };
 }
 
 /** The paragraphs `mergeParagraphs` joins: the selected ones, or the caret's and the next. */

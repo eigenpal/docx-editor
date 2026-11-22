@@ -486,3 +486,26 @@ test('a comment is refused on cached rows, and allowed from the closing line edg
   expect(pinned.can(comment)).toEqual({ ok: false, code: 'invalidArgs', reason: READ_ONLY });
   expect(pinned.exec(comment)).toEqual(pinned.can(comment));
 });
+
+test('link commands at a caret beside a generated row link change the row, so they are refused', () => {
+  // 0 field code + row, 1 a linked row, the end mark, then "Tail".
+  const linked = `<w:p>${begin}${run('Entry 1')}</w:p><w:p><w:hyperlink w:anchor="_Toc1">${run('Row')}</w:hyperlink>${end}${run('Tail')}</w:p>`;
+  for (const command of [LINK, UNLINK]) {
+    const { editor, surface } = mountAt(linked, [1, 3, 1, 3]);
+    const before = serializeOoxmlPart(surface.session.part());
+    expect(editor.can(command)).toEqual({ ok: false, code: 'invalidArgs', reason: READ_ONLY });
+    expect(editor.exec(command)).toEqual(editor.can(command));
+    expect(serializeOoxmlPart(surface.session.part())).toBe(before);
+  }
+  // Over the text after the end mark, a new link is written there.
+  const { editor } = mountAt(linked, [1, 4, 1, 7]);
+  expect(editor.exec(LINK)).toMatchObject({ ok: true, changed: true });
+});
+
+test('a table after an end mark inside a paragraph has no place, and says so', () => {
+  const { editor } = mountAt(INLINE, [1, 3, 1, 3]);
+  const reason =
+    'this would land inside the table of contents; add a paragraph after this line first';
+  expect(editor.can(TABLE)).toEqual({ ok: false, code: 'invalidArgs', reason });
+  expect(editor.exec(TABLE)).toEqual(editor.can(TABLE));
+});

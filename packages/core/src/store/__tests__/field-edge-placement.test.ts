@@ -118,3 +118,40 @@ test("typed text at a field's begin edge joins the run before the field", () => 
   expect(xml).toContain('BeforeZ');
   expect(at(xml, 'BeforeZ')).toBeLessThan(at(xml, 'w:fldCharType="begin"'));
 });
+
+// 0: "Before" and the begin character share a run; 1: "Pg", the end character, and "Tail" share one.
+const SHARED =
+  `<w:p><w:r><w:t>Before</w:t><w:fldChar w:fldCharType="begin"/></w:r>` +
+  `<w:r><w:instrText>TOC \\o</w:instrText></w:r>` +
+  `<w:r><w:fldChar w:fldCharType="separate"/><w:t>Entry</w:t></w:r></w:p>` +
+  `<w:p><w:r><w:t>Pg</w:t><w:fldChar w:fldCharType="end"/><w:t>Tail</w:t></w:r></w:p>`;
+
+function sharedAfter(op: TreeDocOp, index: number): string {
+  const loaded = readOoxmlPart(
+    `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${SHARED}</w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const result = applyTreeOp(loaded.part, op);
+  if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
+  expect(validateOoxmlPart(result.part).ok).toBe(true);
+  return serializeOoxmlPart(result.part).split('<w:p>')[index + 1]!;
+}
+
+for (const [label, make, needle] of END_CASES) {
+  test(`${label} at a field edge stays outside when the field character shares a run`, () => {
+    const end = sharedAfter(make(END_AT), 1);
+    expect(at(end, needle)).toBeGreaterThan(at(end, 'w:fldCharType="end"'));
+    expect(at(end, needle)).toBeLessThan(at(end, 'Tail'));
+    const begin = sharedAfter(make(BEGIN_AT), 0);
+    expect(at(begin, needle)).toBeLessThan(
+      begin.lastIndexOf('w:fldCharType="begin"', at(begin, 'TOC'))
+    );
+    expect(at(begin, 'Before')).toBeLessThan(at(begin, needle));
+  });
+}
+
+test('a link over the text after a shared-run end character leaves the character outside', () => {
+  const xml = sharedAfter({ op: 'insertHyperlink', ...END_AT, start: 2, end: 6, anchor: 'x' }, 1);
+  expect(at(xml, '<w:hyperlink')).toBeGreaterThan(at(xml, 'w:fldCharType="end"'));
+});

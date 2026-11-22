@@ -8,7 +8,7 @@
 // The markers occupy no characters, so they never move an offset. That is what lets a comment be
 // anchored without shifting the text every other anchor in the document is addressed by.
 
-import { fieldEdgeChildIndex } from './tree-op-field-edge.ts';
+import { fieldEdgeChildIndex, isolateFieldEdge } from './tree-op-field-edge.ts';
 import { insertChildren, findNode, type EditOptions } from '../package/ooxml-edit.ts';
 import {
   WML_NAMESPACE_URI,
@@ -258,7 +258,10 @@ export function markerSiteAt(
       readonly index: number;
     }
   | { readonly ok: false; readonly reason: TreeOpRejection } {
-  const split = splitRunsAt(part, paragraph, offset, options);
+  // A field character at a field edge gets a run of its own first (`tree-op-field-edge.ts`).
+  const isolated = isolateFieldEdge(part, paragraph, offset, options);
+  if (!isolated) return { ok: false, reason: 'tree-invariant' };
+  const split = splitRunsAt(isolated.part, isolated.paragraph, offset, options);
   if (!split.ok) return { ok: false, reason: split.reason };
   const reloaded = findNode(split.part, paragraph.id);
   if (!reloaded || reloaded.kind !== 'paragraph') return { ok: false, reason: 'tree-invariant' };

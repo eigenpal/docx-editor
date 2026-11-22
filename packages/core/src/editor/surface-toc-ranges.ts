@@ -8,7 +8,7 @@ import type { SemanticPosition, SemanticSelection } from '../layout/semantic-int
 
 /** The refusal of a write into a generated table of contents. */
 export const TOC_READ_ONLY_REFUSAL = 'the table of contents is generated and read-only';
-/** A table or TOC on a closing line goes after it, and nothing follows it in its container. */
+/** A table or TOC at the caret would land inside a TOC field: no paragraph boundary is there. */
 export const TOC_BLOCK_REFUSAL =
   'this would land inside the table of contents; add a paragraph after this line first';
 

@@ -1,5 +1,5 @@
 import { insertsBeforePrompt } from './tree-op-prompt-bias.ts';
-import { fieldEdgeSide } from './tree-op-field-edge.ts';
+import { fieldEdgeSide, withFieldEdgesIsolated } from './tree-op-field-edge.ts';
 import { withDisplayedHyphens } from '../package/hyphen-text.ts';
 import { withTailStyle } from './tree-op-paragraph-tail.ts';
 import { withInsertionHints } from './tree-op-text-splice-hints.ts';
@@ -538,10 +538,15 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
         return applyDeleteTracked(part, paragraph, op.start, op.end, op.revision, options);
       }
       return applyDeleteText(part, paragraph, op.start, op.end, options);
+    // A field character sharing a run with text moves to a run of its own first.
     case 'insertHyperlink':
-      return applyInsertHyperlink(part, paragraph, op, options);
+      return withFieldEdgesIsolated(part, paragraph, [op.start, op.end], options, (p, para) =>
+        applyInsertHyperlink(p, para, op, options)
+      );
     case 'insertInlineContentControl':
-      return applyInsertInlineContentControl(part, paragraph, op, options);
+      return withFieldEdgesIsolated(part, paragraph, [op.offset], options, (p, para) =>
+        applyInsertInlineContentControl(p, para, op, options)
+      );
     case 'setParagraphMarkRevision': {
       // Taking your own proposed break back is a real join, not a second proposal.
       if (op.kind === 'del' && retractsOwnParagraphMark(paragraph, op.revision.author)) {

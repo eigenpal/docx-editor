@@ -45,6 +45,22 @@ const SHAPES: readonly (readonly [string, string])[] = [
       `<w:p><w:pPr><w:outlineLvl w:val="0"/></w:pPr>${end}${run('Tail')}</w:p>` +
       heading,
   ],
+  [
+    'field characters sharing runs with text',
+    p(
+      '<w:r><w:t>Before</w:t><w:fldChar w:fldCharType="begin"/></w:r>',
+      '<w:r><w:instrText>TOC \\o "1-1" \\h</w:instrText></w:r>',
+      '<w:r><w:fldChar w:fldCharType="separate"/><w:t>Entry 1</w:t></w:r>'
+    ) +
+      p('<w:r><w:t>Pg</w:t><w:fldChar w:fldCharType="end"/><w:t>Tail</w:t></w:r>') +
+      heading,
+  ],
+  [
+    'linked row before the end mark',
+    p(begin, run('Entry 1')) +
+      p('<w:hyperlink w:anchor="_Toc1">', run('Row'), '</w:hyperlink>', end, run('Tail')) +
+      heading,
+  ],
   ['content control', p(run('Before')) + control(p(begin) + p(run('Entry 1')) + p(end)) + heading],
   [
     'adjacent',
@@ -96,7 +112,7 @@ const COMMANDS: readonly (readonly [EditorCommand, (xml: string) => number])[] =
   [{ type: 'insertBookmark', name: 'edge' }, count(/<w:bookmarkStart [^>]*w:name="edge"/g)],
   [
     { type: 'insertHyperlink', href: 'https://example.com/' } as EditorCommand,
-    count(/<w:hyperlink /g),
+    count(/<w:hyperlink [^>]*r:id=/g),
   ],
   [{ type: 'insertContentControl', subtype: 'plainText' } as EditorCommand, count(/<w:text\/>/g)],
   [

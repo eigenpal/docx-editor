@@ -22,11 +22,24 @@
 // references (`note-lifecycle.ts`). A new lane that places content at an offset asks it too.
 
 import { isFldChar, parsedFieldSpansOf } from '../package/field-nodes.ts';
-import type { OoxmlElement, OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
+import type {
+  OoxmlElement,
+  OoxmlNode,
+  OoxmlParagraphNode,
+  OoxmlPart,
+} from '../package/ooxml-tree.ts';
+import {
+  createNodeIdAllocator,
+  findNode,
+  replaceChildren,
+  type EditOptions,
+} from '../package/ooxml-edit.ts';
+import { cloneWithNewIds, isRunPropertiesNode, parentOf } from './tree-op-nodes.ts';
 import { directParentOf } from './tree-op-field-end-site.ts';
 import { inlineContainersOf } from './tree-op-nodes.ts';
 import { MAX_INLINE_CONTAINER_DEPTH, nextInlineContainerDepth } from '../package/ooxml-shared.ts';
 import { orphanFieldEndAt, paragraphOffsetIndex, type InsertionSite } from './tree-op-segments.ts';
+import type { TreeOpResult } from './tree-op-types.ts';
 import { FieldResultsModeMemo } from '../package/field-result-mode.ts';
 
 /** Preorder position of each node in a paragraph, with the last position its subtree holds. */
@@ -199,4 +212,70 @@ function landsAfter(
         ? startOf(site.holder.children[site.index]) > begin
         : endsAfter(site.holder);
   }
+}
+
+/**
+ * Split the runs at a field edge so each field character there is alone on its side of its
+ * run: an end character that shares a run with text after it, or a begin character that
+ * shares a run with text before it, moves the far content into a sibling run with the same
+ * `w:rPr`. No character changes, so every offset stays where it was. Lanes that place whole
+ * nodes among a paragraph's children call this first, so {@link fieldEdgeChildIndex} and
+ * {@link fieldEdgeSide} find the field character in a child of its own.
+ */
+export function isolateFieldEdge(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  options?: EditOptions
+): { readonly part: OoxmlPart; readonly paragraph: OoxmlParagraphNode } | null {
+  const edge = fieldEdgeAt(paragraph, offset);
+  let current = { part, paragraph };
+  for (const [id, after] of [
+    [edge?.endId, true],
+    [edge?.beginId, false],
+  ] as const) {
+    if (!id) continue;
+    const run = directParentOf(current.paragraph, id);
+    if (run?.kind !== 'run') continue;
+    const at = run.children.findIndex((child) => child.id === id) + (after ? 1 : 0);
+    const content = (nodes: readonly OoxmlNode[]) => nodes.some((n) => !isRunPropertiesNode(n));
+    if (!content(run.children.slice(0, at)) || !content(run.children.slice(at))) continue;
+    const mint = createNodeIdAllocator(current.part);
+    const properties = run.children.filter(isRunPropertiesNode);
+    const head = { ...run, children: run.children.slice(0, at) };
+    const tail = {
+      ...run,
+      id: mint(),
+      children: [
+        ...properties.map((node) => cloneWithNewIds(node, mint)),
+        ...run.children.slice(at).filter((node) => !isRunPropertiesNode(node)),
+      ],
+    } as OoxmlNode;
+    const holder = parentOf(current.part, run.id);
+    if (!holder) return null;
+    const children = holder.children.flatMap((child) =>
+      child.id === run.id ? [head as OoxmlNode, tail] : [child]
+    );
+    const replaced = replaceChildren(current.part, holder.id, children, options);
+    if (!replaced.ok) return null;
+    const reloaded = findNode(replaced.part, paragraph.id);
+    if (reloaded?.kind !== 'paragraph') return null;
+    current = { part: replaced.part, paragraph: reloaded as OoxmlParagraphNode };
+  }
+  return current;
+}
+
+/** Apply a write after isolating the field edges at `offsets` ({@link isolateFieldEdge}). */
+export function withFieldEdgesIsolated(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  offsets: readonly number[],
+  options: EditOptions | undefined,
+  write: (part: OoxmlPart, paragraph: OoxmlParagraphNode) => TreeOpResult
+): TreeOpResult {
+  let current: { part: OoxmlPart; paragraph: OoxmlParagraphNode } | null = { part, paragraph };
+  for (const offset of offsets) {
+    current = current && isolateFieldEdge(current.part, current.paragraph, offset, options);
+  }
+  return current ? write(current.part, current.paragraph) : { ok: false, reason: 'tree-invariant' };
 }
