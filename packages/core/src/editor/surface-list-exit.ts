@@ -148,7 +148,9 @@ export function createListExit(deps: ListExitDeps) {
     let firstLineInChars = false;
     const statedChars = (attributes: Readonly<Record<string, string>>, names: string[]) => {
       const stated = names.map((name) => attributes[name]).filter((value) => value !== undefined);
-      return stated.length === 0 ? null : stated.some((value) => Number(value) !== 0);
+      return stated.length === 0
+        ? null
+        : stated.some((value) => Number.isFinite(Number(value)) && Number(value) !== 0);
     };
     for (const property of properties) {
       if (property.localName !== 'ind') continue;
