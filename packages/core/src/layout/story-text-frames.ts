@@ -361,12 +361,15 @@ export function placeStoryTextFrames(
     // still reserves only the height of its own flow.
     const pageNumber = frame.autoWidth && frame.wrap !== 'none';
     // A frame over the story's own paragraph text would wrap it; that stays in ordinary flow.
-    // A page number that wraps text keeps clear of it on every page, however long it grows.
-    const paragraphs = ordinary.blocks.filter((block) => block.kind === 'paragraph');
+    // A page number that wraps text keeps clear of it on every page, however long it grows,
+    // and of the story's tables too, which it would also wrap.
+    const content = pageNumber
+      ? ordinary.blocks
+      : ordinary.blocks.filter((block) => block.kind === 'paragraph');
     const reach = pageNumber
       ? pageNumberReach(box, fragments[0]!, frame, group.decoration ?? '')
       : box;
-    if (!overlapDecided && meetsOrdinaryContent(reach, paragraphs)) return null;
+    if (!overlapDecided && meetsOrdinaryContent(reach, content)) return null;
     for (const fragment of fragments) {
       const moved = translateParagraphFragment(fragment, origin.x, origin.y);
       placed.push(

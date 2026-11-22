@@ -307,3 +307,43 @@ test('a page number in larger runs than its anchor keeps the frame position and 
           expect(story.flowHeight).toBe(plain.flowHeight);
         }
 });
+
+test('a page number that wraps text and reaches a table below its anchor stays in flow', () => {
+  const sized = pageField('PAGE', '1').replaceAll(
+    '<w:r>',
+    '<w:r><w:rPr><w:sz w:val="40"/></w:rPr>'
+  );
+  const table =
+    '<w:tbl><w:tblPr><w:tblW w:w="9200" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="9200"/></w:tblGrid>' +
+    '<w:tr><w:tc><w:tcPr><w:tcW w:w="9200" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+  for (const y of ['1', '400']) {
+    const framePr = `<w:framePr w:wrap="around" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="${y}"/>`;
+    const { paragraphs } = lay(framed(framePr, sized) + text('Version 9') + table, 'ftr');
+    expect(paragraphs.some((paragraph) => paragraph.outOfFlow)).toBe(false);
+  }
+});
+
+test('a page number in larger runs keeps the anchor height on every page', () => {
+  const sized = pageField('PAGE', '1').replaceAll(
+    '<w:r>',
+    '<w:r><w:rPr><w:sz w:val="40"/></w:rPr>'
+  );
+  const framePr =
+    '<w:framePr w:wrap="around" w:vAnchor="text" w:hAnchor="margin" w:xAlign="right" w:y="1"/>';
+  const plain = lay(text('Version 9'), 'ftr').story;
+  const { story } = lay(framed(framePr, sized) + text('Version 9'), 'ftr');
+  for (const pageNumber of [1, 12, 12345]) {
+    const projected = story.withPageContext({
+      ...page,
+      pageNumber,
+      pageCount: 20000,
+      sectionPageCount: 20000,
+    });
+    const [number, anchor] = projected.fragments as readonly ParagraphFragmentRecord[];
+    expect(number!.outOfFlow).toBe(true);
+    expect(textOf(number!)).toBe(String(pageNumber));
+    expect(inkRight(number!)).toBeCloseTo(460, 6);
+    expect(anchor!.box.y).toBe(0);
+    expect(projected.flowHeight).toBe(plain.flowHeight);
+  }
+});
