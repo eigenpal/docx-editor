@@ -447,3 +447,70 @@ describe("an undo of a split whose paragraph shows another author's proposal", (
         });
       }
 });
+
+/** Center every paragraph before the signature in one untracked edit. */
+const centerAll = (runtime: Runtime) =>
+  runtime.run(async (context) => {
+    context.document.changeTrackingMode = 'Off';
+    const paragraphs = context.document.body.paragraphs;
+    paragraphs.load('items');
+    await context.sync();
+    for (const paragraph of paragraphs.items.slice(0, -1)) paragraph.alignment = 'Centered';
+    await context.sync();
+  });
+
+describe('an undo of splits after another participant formats every paragraph', () => {
+  const cases = [
+    {
+      name: 'a split of a paragraph that proposes its own break',
+      rounds: [
+        { index: 0, alice: 'g; ' },
+        { index: 0, alice: 'b; ', bob: 'd; ' },
+      ],
+      undos: 1,
+      shown: ['a; b; ', 'c; d; e; f; g; ', 'h; i; j;', 'Signed'],
+    },
+    {
+      name: 'two rounds of splits',
+      rounds: [
+        { index: 0, alice: 'g; ', bob: 'c; ' },
+        { index: 1, alice: 'd; ', bob: 'e; ' },
+      ],
+      undos: 2,
+      shown: ['a; b; c; d; ', 'e; f; g; ', 'h; i; j;', 'Signed'],
+    },
+  ];
+  for (const { name, rounds, undos, shown } of cases)
+    for (const redo of [false, true])
+      for (const { label, ids } of ORDERS)
+        test(`Bob undoes ${name}${redo ? ', redoes, and undoes' : ''} (${label})`, async () => {
+          const r = await room(TEXT, ids);
+          const undo = () => {
+            later();
+            expect(r.bob.room.session.undo()).toBe(true);
+            r.sync();
+          };
+          try {
+            await splitRounds(r, rounds);
+            later();
+            await centerAll(r.carol.runtime);
+            r.sync();
+            for (let step = 0; step < undos; step += 1) undo();
+            if (redo) {
+              later();
+              expect(r.bob.room.session.redo()).toBe(true);
+              r.sync();
+              undo();
+            }
+            // One revision groups Alice's breaks; one reject removes every break.
+            await r.expectAll(shown, 1);
+            await r.expectJoinerConverges();
+            later();
+            await rejectAll(r.carol.runtime);
+            r.sync();
+            await r.expectAll([TEXT, 'Signed'], 0);
+          } finally {
+            r.close();
+          }
+        });
+});
