@@ -1,11 +1,18 @@
 // Carry bounded merged text between physical row groups without changing the tree.
 // The carried record keeps the authored head row and cell identity on every page.
 //
-// A vertical merge (17.4.85 `w:vMerge`) whose rows cross a page break keeps every row at its
-// own height. The rows of the span stay on the page beside the head row as space allows, and
-// the merged text breaks at the page boundary and continues beside the rows on the next page.
-// Only merged text taller than all the span's rows grows the last row. This applies to every
-// row kind: `w:cantSplit`, `hRule="exact"`, and ordinary rows that can split.
+// A vertical merge (ECMA-376 Part 1 §17.4.84 `w:vMerge`) whose rows cross a page break keeps
+// every row at its own height. The rows of the span stay on the page beside the head row as
+// space allows, and the merged text breaks at the page boundary and continues beside the rows
+// on the next page. Only merged text taller than all the span's rows grows the last row. This
+// applies to every row kind: `w:cantSplit`, `hRule="exact"`, and ordinary rows that can split.
+//
+// §17.4.84: "This element specifies that this cell is part of a vertically merged set of cells
+// in a table." The merge joins cells, not rows, so each row keeps its own height rule.
+// §17.4.80 (`w:trHeight`): "If omitted, then the table row shall automatically resize its
+// height to the height required by its contents". The merged text belongs to the merged cell,
+// so it does not count as the contents of one row.
+// §17.4.6 (`w:cantSplit`): without it, a page break can fall within the contents of a row.
 //
 // A two-row merge takes this path only while both rows fit the current page. When the second
 // row cannot start on this page, `table-vmerge-boundary.ts` and the head-row split decide.
@@ -683,6 +690,9 @@ export function createVMergeFragmentCarry(
         group.fragmentStart = undefined;
         // `w:vAlign` places the merged text only in the fragment that holds the head row. A
         // fragment that continues the text from an earlier page fills from the top.
+        // ECMA-376 Part 1 §17.4.83: "This element specifies the vertical alignment for text
+        // within the current table cell." The specification does not define alignment for a
+        // cell that breaks across pages, so this split is a layout rule.
         const continued = first.id !== group.source.id || first.isContinuation === true;
         // When the last row splits while the text goes on, that row ends at its lowest line,
         // not at the page bottom. The text is aligned here against that line instead.
