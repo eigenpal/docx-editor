@@ -1,7 +1,8 @@
 // `w:compat/w:useAltKinsokuLineBreakRules` in a legacy compatibility mode: a line-end mark
-// outside its language's hanging set never hangs. With punctuation compression it may give up
-// its blank right half, so only the overflow passes the margin and the text keeps its natural
-// width. A larger overflow wraps the mark with the ideograph before it.
+// outside its run language's (`w:lang` `w:eastAsia`) hanging set never hangs. When
+// `w:characterSpacingControl` compresses punctuation it may give up its blank right half, so
+// only the overflow passes the margin and the text keeps its natural width. A larger overflow
+// wraps the mark with the ideograph before it.
 import { describe, expect, test } from 'bun:test';
 import { loadFixture, measurer, type FixtureOptions } from './punctuation-kerning-fixture.ts';
 import { caretAt } from '../semantic-interaction.ts';

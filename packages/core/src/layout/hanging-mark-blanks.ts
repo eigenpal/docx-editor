@@ -22,8 +22,9 @@ const CENTERED_BLANKS: MarkBlanks = Object.freeze({ leading: 0.25, trailing: 0.2
 
 /**
  * The blank sides of a full-width line-end mark, as fractions of its advance, by the mark's
- * own run language (`w:lang` `w:eastAsia`). A closing mark leaves its right half blank. A centered mark leaves a
- * quarter on each side. Other marks, such as `？`, fill their cell and return undefined.
+ * own run language (`w:lang` `w:eastAsia`). A closing mark leaves its right half blank. A
+ * centered mark leaves a quarter on each side. Other marks, such as `？`, fill their cell and
+ * return undefined.
  */
 function lineEndMarkBlanks(mark: string, language: string | undefined): MarkBlanks | undefined {
   if (CLOSING_BRACKET.test(mark)) return CLOSING_BLANKS;

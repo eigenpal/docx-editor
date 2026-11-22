@@ -802,7 +802,7 @@ The mark's run language (`w:lang` `w:eastAsia`) SHALL select its blank sides. A 
 
 ### Requirement: Alternate line-break rules
 
-With `w:useAltKinsokuLineBreakRules` before `w:compatSetting` `compatibilityMode` 15, a line-end mark (`w:overflowPunct`) from U+2000 up outside the hanging set of its run language (`w:lang` `w:eastAsia`) SHALL NOT hang. Only Japanese `、。，．` SHALL stay in that set. When `w:characterSpacingControl` compresses punctuation, a mark with a blank right half SHALL pass the margin only by the overflow, up to that half, and the text SHALL keep its advances. A larger overflow SHALL wrap the mark unless interior blank sides give up the rest. Other marks SHALL wrap.
+With `w:useAltKinsokuLineBreakRules` before `w:compatSetting` `compatibilityMode` 15, a line-end mark from U+2000 up outside the hanging set of its run language (`w:lang` `w:eastAsia`) SHALL NOT hang. Only Japanese `、。，．` SHALL stay in that set. When `w:characterSpacingControl` compresses punctuation, a mark with a blank right half SHALL pass the margin only by the overflow, up to that half. A larger overflow SHALL wrap it unless interior blank sides make room. Other marks SHALL wrap.
 
 #### Scenario: Only the overflow passes the margin
 
@@ -819,7 +819,7 @@ With `w:useAltKinsokuLineBreakRules` before `w:compatSetting` `compatibilityMode
 
 #### Scenario: Mode 15 ignores the setting
 
-- **GIVEN** the same line in mode 15
+- **GIVEN** the same line in `compatibilityMode` 15
 - **WHEN** the mark overflows the measure by 6 pt
 - **THEN** only its blank half hangs, and the ideographs spread to meet it
 

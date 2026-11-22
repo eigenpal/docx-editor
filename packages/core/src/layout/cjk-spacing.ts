@@ -404,9 +404,10 @@ export interface HangingMarkOptions {
    */
   readonly paragraphFinal?: boolean;
   /**
-   * The paragraph typography. With it, a mark hangs only when the line-start rules forbid it
-   * at a line start; otherwise it starts the next line. Under the alternate line-break rules
-   * it also limits the advance (see `alternateLineEndAdvance`).
+   * The paragraph typography. With it, a mark hangs only when the line-start rules (`w:kinsoku`,
+   * `w:noLineBreaksBefore`) forbid it at a line start; otherwise it starts the next line. Under
+   * the alternate line-break rules (`w:useAltKinsokuLineBreakRules`) it also limits the advance
+   * (see `alternateLineEndAdvance`).
    */
   readonly policy?: CjkParagraphTypography;
 }
