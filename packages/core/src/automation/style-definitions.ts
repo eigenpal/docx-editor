@@ -22,6 +22,10 @@ import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-
 import { isValidXmlText } from '../store/package/sinks.ts';
 import { MAX_STYLE_DEFINITIONS } from '../layout/style-cascade.ts';
 import { isElement, readStyleIdentity } from '../layout/style-definition-reader.ts';
+import {
+  defaultParagraphStyleIdOf,
+  type DefaultParagraphStyleCandidate,
+} from '../store/package/default-paragraph-style.ts';
 
 /** Longest style name automation reads or a write may carry. */
 export const MAX_STYLE_NAME = 255;
@@ -93,7 +97,7 @@ export function styleDefinitionsOf(part: OoxmlPart): StyleDefinitions {
 function build(root: OoxmlElement): StyleDefinitions {
   const read: StyleDefinitionEntry[] = [];
   const winner = new Map<string, StyleDefinitionEntry>();
-  let defaultParagraphId: string | null = null;
+  const candidates: DefaultParagraphStyleCandidate[] = [];
   let counted = 0;
   // Bounded: the walk itself stops at the cap, as layout's does.
   for (const child of root.children) {
@@ -112,14 +116,17 @@ function build(root: OoxmlElement): StyleDefinitions {
       element: child,
     });
     read.push(entry);
-    // Last duplicate wins. The default paragraph style follows layout's rule exactly: only a
-    // paragraph definition sets or clears it, so a later duplicate of another type keeps it.
+    // Last duplicate wins. The default paragraph style follows layout's rule exactly, through
+    // the same shared resolver, which compares no name longer than layout keeps.
     winner.set(styleId, entry);
-    if (entry.type === 'paragraph') {
-      if (identity.isDefault) defaultParagraphId = styleId;
-      else if (defaultParagraphId === styleId) defaultParagraphId = null;
-    }
+    candidates.push({
+      styleId,
+      type: identity.type,
+      name: identity.name,
+      isDefault: identity.isDefault,
+    });
   }
+  const defaultParagraphId = defaultParagraphStyleIdOf(candidates);
   const entries = read.filter((entry) => winner.get(entry.styleId) === entry);
   const idByName = new Map<string, string>();
   for (const entry of entries) {

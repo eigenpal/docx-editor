@@ -155,7 +155,7 @@ describe('buildStyleCascadeTable last-wins and docDefaults', () => {
     });
   });
 
-  test('duplicate last-wins also for default flags', () => {
+  test('the last w:default paragraph style wins, and a later duplicate keeps it', () => {
     const twoDefaults =
       `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
       `<w:rPr><w:sz w:val="20"/></w:rPr></w:style>` +
@@ -163,13 +163,13 @@ describe('buildStyleCascadeTable last-wins and docDefaults', () => {
       `<w:rPr><w:sz w:val="28"/></w:rPr></w:style>`;
     expect(buildStyleCascadeTable(loadStyles(twoDefaults)).defaultParagraphStyleId).toBe('Body');
 
-    const bodyClearsDefault =
+    const bodyRedefined =
       twoDefaults +
       `<w:style w:type="paragraph" w:styleId="Body">` +
       `<w:rPr><w:sz w:val="32"/></w:rPr></w:style>`;
-    const table = buildStyleCascadeTable(loadStyles(bodyClearsDefault));
-    // Last Body definition dropped the default flag, so no default paragraph remains.
-    expect(table.defaultParagraphStyleId).toBeNull();
+    const table = buildStyleCascadeTable(loadStyles(bodyRedefined));
+    // A later Body definition without the flag keeps Body as the default paragraph style.
+    expect(table.defaultParagraphStyleId).toBe('Body');
     expect(resolveRunStyle(table.styles.get('Body')!.runProperties).fontSizePt).toBe(16);
   });
 
@@ -219,6 +219,57 @@ describe('default paragraph style when pStyle is absent', () => {
       color: '1B3A5C',
       bold: true,
     });
+  });
+});
+
+describe('default paragraph style without w:default', () => {
+  const NAMED_NORMAL =
+    DOC_DEFAULTS +
+    `<w:style w:type="paragraph" w:styleId="a"><w:name w:val="Normal"/>` +
+    `<w:pPr><w:spacing w:after="400"/></w:pPr><w:rPr><w:sz w:val="32"/></w:rPr></w:style>` +
+    `<w:style w:type="paragraph" w:styleId="Other"><w:name w:val="Other"/>` +
+    `<w:rPr><w:sz w:val="16"/></w:rPr></w:style>`;
+
+  test('bare paragraphs and a w:pStyle naming no style take the style named "Normal"', () => {
+    const table = buildStyleCascadeTable(loadStyles(NAMED_NORMAL));
+    expect(table.defaultParagraphStyleId).toBe('a');
+    for (const pPr of [
+      undefined,
+      paragraphPPr(`<w:p><w:pPr><w:pStyle w:val="Missing"/></w:pPr></w:p>`),
+    ]) {
+      const cascaded = cascadeParagraphFormatting(table, pPr);
+      expect(paragraphSpacing(cascaded.paragraphProperties).after).toBe(20);
+      expect(resolveRunStyle(cascaded.runProperties).fontSizePt).toBe(16);
+    }
+    const other = cascadeParagraphFormatting(
+      table,
+      paragraphPPr(`<w:p><w:pPr><w:pStyle w:val="Other"/></w:pPr></w:p>`)
+    );
+    expect(resolveRunStyle(other.runProperties).fontSizePt).toBe(8);
+  });
+
+  test('a w:default paragraph style keeps precedence over the name', () => {
+    const table = buildStyleCascadeTable(
+      loadStyles(
+        NAMED_NORMAL +
+          `<w:style w:type="paragraph" w:default="1" w:styleId="Body"><w:name w:val="Body"/></w:style>`
+      )
+    );
+    expect(table.defaultParagraphStyleId).toBe('Body');
+  });
+
+  test('the id alone, or a character style with the name, is not the default', () => {
+    const byId = `<w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Body"/></w:style>`;
+    const character = `<w:style w:type="character" w:styleId="a"><w:name w:val="Normal"/></w:style>`;
+    expect(buildStyleCascadeTable(loadStyles(byId)).defaultParagraphStyleId).toBeNull();
+    expect(buildStyleCascadeTable(loadStyles(character)).defaultParagraphStyleId).toBeNull();
+  });
+
+  test('the resolved default moves the cache token', () => {
+    const unnamed = NAMED_NORMAL.replace('<w:name w:val="Normal"/>', '<w:name w:val="Plain"/>');
+    expect(buildStyleCascadeTable(loadStyles(NAMED_NORMAL)).cacheToken).not.toBe(
+      buildStyleCascadeTable(loadStyles(unnamed)).cacheToken
+    );
   });
 });
 

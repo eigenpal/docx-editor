@@ -43,8 +43,10 @@ import {
   insertChildren,
 } from '../package/ooxml-edit.ts';
 import { sha256FontBytes } from '../package/sha256.ts';
+import { isNormalStyleName } from '../package/default-paragraph-style.ts';
 import { attributeValueOf, cloneWithNewIds } from './tree-op-nodes.ts';
 import {
+  flagsDefaultParagraphStyle,
   isElementNode,
   isWml,
   materializeDefaults,
@@ -352,10 +354,17 @@ export function mergeFragmentIntoPackage(
     );
   }
   // Unique names for every imported style whose name collides with a different target style.
+  // A target without a `w:default` paragraph style takes its last paragraph style named
+  // "Normal" as the default, so an imported paragraph style keeps no such name there.
+  const normalNameIsDefault = !flagsDefaultParagraphStyle(targetStyles);
   const importedWithNames = stylesToImport.map((style) => {
     const nameNode = style.children.find((inner) => isWml(inner, 'name'));
     const name = nameNode ? attributeValueOf(nameNode, 'val') : undefined;
-    if (!name || !takenNames.has(name)) {
+    const claimsDefault =
+      normalNameIsDefault &&
+      isNormalStyleName(name) &&
+      attributeValueOf(style, 'type') === 'paragraph';
+    if (!name || (!takenNames.has(name) && !claimsDefault)) {
       if (name) takenNames.add(name);
       return style;
     }

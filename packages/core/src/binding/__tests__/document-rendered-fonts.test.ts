@@ -508,7 +508,7 @@ describe('collectRenderedFontFamilies', () => {
     expect(session.renderedFontFamilies()).toEqual(['FontB']);
   });
 
-  test('a later duplicate without w:default clears the default claim', () => {
+  test('a later duplicate without w:default keeps the id as the default paragraph style', () => {
     const session = open(
       docx({
         body: '<w:p><w:r><w:t>bare</w:t></w:r></w:p>',
@@ -519,9 +519,23 @@ describe('collectRenderedFontFamilies', () => {
         ),
       })
     );
-    // No default paragraph style remains, so the bare paragraph resolves to docDefaults
-    // alone (which name nothing here) — the same answer layout gives.
-    expect(session.renderedFontFamilies()).toEqual([]);
+    // The id stays the default and its last definition applies — the same answer layout gives.
+    expect(session.renderedFontFamilies()).toEqual(['FontB']);
+  });
+
+  test('without w:default, the paragraph style named "Normal" is the default', () => {
+    const session = open(
+      docx({
+        body: '<w:p><w:r><w:t>bare</w:t></w:r></w:p>',
+        styles: styles(
+          '<w:style w:type="paragraph" w:styleId="a"><w:name w:val="Normal"/>' +
+            '<w:rPr><w:rFonts w:ascii="FontA" w:hAnsi="FontA"/></w:rPr></w:style>' +
+            '<w:style w:type="paragraph" w:styleId="Body"><w:name w:val="Body"/>' +
+            '<w:rPr><w:rFonts w:ascii="FontB" w:hAnsi="FontB"/></w:rPr></w:style>'
+        ),
+      })
+    );
+    expect(session.renderedFontFamilies()).toEqual(['FontA']);
   });
 
   test('a bare w:t outside any run never counts, whatever the child count', () => {

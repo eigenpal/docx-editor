@@ -15,6 +15,11 @@ import {
 } from '../package/ooxml-tree.ts';
 import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import { attributeValueOf } from './tree-op-nodes.ts';
+import {
+  defaultParagraphStyleCandidateOf,
+  defaultParagraphStyleIdOfElements,
+  MAX_DEFAULT_STYLE_CANDIDATES,
+} from '../package/default-paragraph-style.ts';
 import { propertyElement } from './tree-op-properties.ts';
 import type { OoxmlProperty } from './tree-op-types.ts';
 import {
@@ -201,13 +206,22 @@ function chainDefines(
   return false;
 }
 
-function defaultStyleIdOf(styles: StylesInfo, type: 'paragraph' | 'character'): string | undefined {
-  for (const style of styles.styles) {
-    if (attributeValueOf(style, 'type') !== type) continue;
-    const flag = attributeValueOf(style, 'default');
-    if (flag === '1' || flag === 'true') return attributeValueOf(style, 'styleId');
-  }
-  return undefined;
+/** The default paragraph style of one side, by the rule the page resolves it with. */
+export function defaultParagraphStyleIdIn(styles: StylesInfo): string | undefined {
+  const bounded = styles.styles.slice(0, MAX_DEFAULT_STYLE_CANDIDATES);
+  return defaultParagraphStyleIdOfElements(bounded) ?? undefined;
+}
+
+/**
+ * Whether one side states its default paragraph style with `w:default`. Without the flag, its
+ * last paragraph style named "Normal" is the default, so a style imported under that name
+ * would become the default.
+ */
+export function flagsDefaultParagraphStyle(styles: StylesInfo): boolean {
+  return styles.styles.slice(0, MAX_DEFAULT_STYLE_CANDIDATES).some((style) => {
+    const candidate = defaultParagraphStyleCandidateOf(style);
+    return candidate?.type === 'paragraph' && candidate.isDefault;
+  });
 }
 
 function propertyContainerOf(node: OoxmlElement, localName: 'rPr' | 'pPr'): OoxmlElement | null {
@@ -340,7 +354,7 @@ export function materializeDefaults(
     run: Map<string, OoxmlNode>,
     para: Map<string, OoxmlNode>
   ): string | undefined => {
-    const id = defaultStyleIdOf(styles, 'paragraph');
+    const id = defaultParagraphStyleIdIn(styles);
     const style = id ? styles.byId.get(id) : undefined;
     if (!style) return id;
     for (const [containerName, folded] of [

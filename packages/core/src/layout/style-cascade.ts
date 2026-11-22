@@ -32,6 +32,7 @@ import {
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
+import { defaultParagraphStyleIdOf } from '../store/package/default-paragraph-style.ts';
 import { stableHash } from '../store/comparators/canonical.ts';
 import {
   cjkTypographyFromSettings,
@@ -153,7 +154,7 @@ export interface StyleCascadeTable {
   readonly docDefaultsRun: readonly OoxmlProperty[];
   readonly docDefaultsParagraph: readonly OoxmlProperty[];
   readonly docDefaultsParagraphNode: OoxmlElement | undefined;
-  /** `w:style[@w:default='1'][@w:type='paragraph']` — last wins among defaults of that type. */
+  /** The style a paragraph without a usable `w:pStyle` takes (`defaultParagraphStyleIdOf`). */
   readonly defaultParagraphStyleId: string | null;
   /** `w:style[@w:default='1'][@w:type='character']` — last wins among defaults of that type. */
   readonly defaultCharacterStyleId: string | null;
@@ -472,7 +473,8 @@ export function tableCellStyleFormatting(
  *
  * Only direct `w:style` children of the root participate (bounded count). Duplicate
  * `styleId` values keep the last definition, matching Word's reader for this fixture class.
- * Default paragraph/character style ids track `w:default="1"` with the same last-wins rule.
+ * Default character and table style ids track `w:default="1"` with the same last-wins rule.
+ * The default paragraph style follows `defaultParagraphStyleIdOf`.
  */
 export function buildStyleCascadeTable(
   stylesRoot: OoxmlElement | null,
@@ -542,9 +544,9 @@ export function buildStyleCascadeTable(
     run: [...applicationRunDefaults(stylesRoot, ligaturesEnabled), ...authoredDefaults.run],
     paragraph: [...applicationParagraphDefaults(stylesRoot), ...authoredDefaults.paragraph],
   };
-  let defaultParagraphStyleId: string | null = null;
   let defaultCharacterStyleId: string | null = null;
   let defaultTableStyleId: string | null = null;
+  const definitions: (StyleDefinition & { isDefault: boolean })[] = [];
   let counted = 0;
   for (const child of stylesRoot.children) {
     if (!isElement(child) || child.localName !== 'style') continue;
@@ -555,10 +557,8 @@ export function buildStyleCascadeTable(
     const { isDefault, ...style } = definition;
     // Last duplicate wins.
     styles.set(style.styleId, style);
-    if (style.type === 'paragraph') {
-      if (isDefault) defaultParagraphStyleId = style.styleId;
-      else if (defaultParagraphStyleId === style.styleId) defaultParagraphStyleId = null;
-    } else if (style.type === 'character') {
+    definitions.push(definition);
+    if (style.type === 'character') {
       if (isDefault) defaultCharacterStyleId = style.styleId;
       else if (defaultCharacterStyleId === style.styleId) defaultCharacterStyleId = null;
     } else if (style.type === 'table') {
@@ -566,6 +566,7 @@ export function buildStyleCascadeTable(
       else if (defaultTableStyleId === style.styleId) defaultTableStyleId = null;
     }
   }
+  const defaultParagraphStyleId = defaultParagraphStyleIdOf(definitions);
 
   // Canonical material hashed once — never embed the full styles dump in paragraph keys.
   const cacheToken = stableHash({
@@ -625,7 +626,7 @@ export function buildStyleCascadeTable(
  * Order: `docDefaults` → table style → `basedOn` ancestors → paragraph style → direct
  * formatting, which is the style hierarchy of 17.7.2: a table style sits above the document
  * defaults and below the paragraph style a cell paragraph names for itself.
- * When `w:pStyle` is absent, the document's default paragraph style (`w:default="1"`) is used.
+ * When `w:pStyle` is absent, the document's default paragraph style is used.
  * Direct formatting is last so it overrides inherited values inside the existing resolvers.
  */
 export function cascadeParagraphFormatting(
