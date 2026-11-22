@@ -1425,6 +1425,13 @@ export interface EditorCommands
    * an embedded fragment first, then the bounded external-HTML projection, then `text` —
    * degrading on any refusal. Without `html`, the plain lane inserts `text` with
    * newlines becoming real paragraph boundaries, as this command always has.
+   *
+   * While a drawing is selected, the payload decides where the paste goes: before the
+   * drawing's anchor, into its text box, or nowhere, with a reason. `can` refuses a payload
+   * that has no place. A probe with no payload, whitespace `text` and no `html` such as
+   * `{ type: 'paste', text: ' ' }`, never refuses for the selected drawing: a Paste control
+   * asks it before the clipboard is read. The paste itself then refuses with the reason when
+   * the payload read has no place.
    */
   paste: { text: string; html?: string };
 
@@ -1434,6 +1441,9 @@ export interface EditorCommands
    * The plain twin `paste` deliberately lacked while there was no rich lane; with one,
    * "paste" and "paste without formatting" are two different user intentions
    * (Cmd+V / Cmd+Shift+V) and each needs a name a menu row can call.
+   *
+   * While a drawing is selected, `text` goes where `paste` sends text, and a whitespace probe
+   * never refuses in `can`, as for `paste`.
    */
   pasteWithoutFormatting: { text: string };
 }

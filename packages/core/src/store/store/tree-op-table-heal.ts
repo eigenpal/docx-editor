@@ -210,8 +210,19 @@ export function healedTableView<Table extends OoxmlElement>(table: Table): Table
   return rows ? ({ ...table, children: rows } as Table) : table;
 }
 
+// Rows are immutable and an edit keeps the rows it does not touch, so each row is healed once.
+const healedRows = new WeakMap<OoxmlElement, OoxmlElement>();
+
 /** `row` with its containers and its cells' containers healed, or `row` itself. */
 function healedRow(row: OoxmlElement): OoxmlElement {
+  const known = healedRows.get(row);
+  if (known) return known;
+  const healed = healRow(row);
+  healedRows.set(row, healed);
+  return healed;
+}
+
+function healRow(row: OoxmlElement): OoxmlElement {
   const own = healedChildren(row);
   let children: OoxmlNode[] | null = own === row.children ? null : [...own];
   own.forEach((cell, at) => {

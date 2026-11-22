@@ -1,7 +1,7 @@
 // Minimum cuts can differ from the contextual segments used for unwrapped text.
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { wordBoundaries } from './cjk-line-break.ts';
-import { cjkParagraphBreaks, hasCjkText } from './cjk-paragraph-breaks.ts';
+import { cjkParagraphBreaks, hasCjkText, hasLegacyHyphenText } from './cjk-paragraph-breaks.ts';
 import {
   eastAsianLanguage,
   resolveCjkTypography,
@@ -13,6 +13,7 @@ import type { FieldAwarePiece } from './field-pieces.ts';
 import type { ResolvedTabStops } from './paragraph-tabs.ts';
 import { measureDisplayText, type ResolvedRunStyle } from './run-style.ts';
 import { automaticTextGap, automaticTextSpacingAdvance } from './cjk-automatic-spacing.ts';
+import { fieldResultMayCut, followsInSource } from './field-result-text.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { withoutLineEndWhitespace } from './trailing-spaces.ts';
@@ -34,6 +35,7 @@ export function cjkAutofitBreaks(
   const visible = pieces.filter((piece) => !piece.style.hidden);
   if (
     !policy.characterWrap &&
+    !hasLegacyHyphenText(visible, policy) &&
     !visible.some((piece) => hasCjkText(piece.text) || eastAsianLanguage(piece.props))
   )
     return null;
@@ -198,10 +200,17 @@ export function automaticAutofitSpacing(
       const text = piece.text.slice(from, to);
       if (text === '\t') previousText = undefined;
       else if (text.length > 0) {
-        const current = { ...piece, start: piece.start + from, end: piece.start + to, text, style };
-        const internal = automaticTextSpacingAdvance(undefined, current, typography, measurer);
+        // A slice of an atomic field result keeps the whole atom range.
+        const current = piece.projected
+          ? { ...piece, text, style }
+          : { ...piece, start: piece.start + from, end: piece.start + to, text, style };
+        // Line layout keeps a page number whole, so it prices no gap inside one piece of it.
+        const whole = !fieldResultMayCut(piece);
+        const internal = whole
+          ? 0
+          : automaticTextSpacingAdvance(undefined, current, typography, measurer);
         const before =
-          previousText?.end === current.start
+          previousText && !(whole && from > 0) && followsInSource(previousText, current)
             ? automaticTextGap(previousText, current, typography, measurer)
             : 0;
         if (before > 0 || internal > 0) gaps.set(from, { before, internal });

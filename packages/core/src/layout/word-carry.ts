@@ -3,6 +3,7 @@
 
 import { automaticTextSpacingBefore, withAutomaticTextSpacing } from './cjk-automatic-spacing.ts';
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
+import { setLineHangingPunctuationAdvance } from './line-hanging-punctuation.ts';
 import { growLineMetricsForText, lineBandText, type PendingLine } from './pending-line.ts';
 import { displayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
@@ -173,6 +174,12 @@ export function carryPartialWord(
   if (settleOpeningWord(context, start, pendingWidth)) return start;
   let line = context.line();
   const carried = line.spans.splice(start.span);
+  // A mark that hung at the end of the line (`w:overflowPunct`) leaves with the word, and so
+  // does its hang.
+  if (carried.length > 0) {
+    setLineHangingPunctuationAdvance(line, undefined);
+    line.hangingMarkBlank = undefined;
+  }
   restoreWordStart(line, start);
   const wordWidth = carried.reduce(
     (sum, span, index) =>

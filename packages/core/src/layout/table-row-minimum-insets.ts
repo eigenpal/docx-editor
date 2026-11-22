@@ -33,11 +33,26 @@ export function withRowMinimumContentInsets(
   columns: number,
   collapsed: boolean
 ): readonly SemanticTableRow[] {
-  if (
-    !visualRows.some((row) => row.height.rule === 'atLeast') ||
-    !visualRows.some((row) => row.cells.some((cell) => cell.vMergeContinue))
-  )
-    return contentRows;
+  if (!rowMinimumContentInsetsApply(visualRows)) return contentRows;
+  return stampRowMinimumContentInsets(contentRows, visualRows, tableBorders, columns, collapsed);
+}
+
+/** Whether the table pairs an `atLeast` row with a vertical merge, so minimums are stamped. */
+export function rowMinimumContentInsetsApply(visualRows: readonly SemanticTableRow[]): boolean {
+  return (
+    visualRows.some((row) => row.height.rule === 'atLeast') &&
+    visualRows.some((row) => row.cells.some((cell) => cell.vMergeContinue))
+  );
+}
+
+/** {@link withRowMinimumContentInsets} for a table that pairs them, or a run of its rows. */
+export function stampRowMinimumContentInsets(
+  contentRows: readonly SemanticTableRow[],
+  visualRows: readonly SemanticTableRow[],
+  tableBorders: TableBorderBox,
+  columns: number,
+  collapsed: boolean
+): readonly SemanticTableRow[] {
   const minimumRows = withTableContentBorders(
     visualRows.map((row) => ({
       ...row,

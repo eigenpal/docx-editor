@@ -4,13 +4,15 @@ import { useTranslation } from '../../i18n';
 import { NativeDialog } from '../dialog-parts';
 
 /**
- * Why a picture could not be inserted. Replace it through `popups.imageInsertError`, or pass
- * `false` there to show nothing.
+ * Why a picture could not be inserted, or why a copy, cut, or paste was refused. Replace it
+ * through `popups.imageInsertError`, or pass `false` there to show nothing.
  * @public
  */
 export interface DocxEditorImageInsertErrorDialogProps {
-  /** The translated reason the picture was refused. */
+  /** The translated reason the picture, or the copy, cut, or paste, was refused. */
   message: string;
+  /** The translated title. Set for a refused copy, cut, or paste; the picture title otherwise. */
+  title?: string;
   /** Close the dialog. */
   onClose(): void;
   className?: string;
@@ -19,11 +21,15 @@ export interface DocxEditorImageInsertErrorDialogProps {
   children?: DocxEditorChildren;
 }
 
-/** The packaged picture refusal: an editor dialog, never a page-blocking browser alert. @public */
+/**
+ * The packaged picture and clipboard refusal: an editor dialog, never a page-blocking browser
+ * alert. @public
+ */
 export const DocxEditorImageInsertErrorDialog = defineComponent({
   name: 'DocxEditorImageInsertErrorDialog',
   props: {
     message: { type: String, required: true },
+    title: String,
     onClose: { type: Function as PropType<() => void>, required: true },
     className: String,
     style: Object as PropType<CSSProperties>,
@@ -31,10 +37,11 @@ export const DocxEditorImageInsertErrorDialog = defineComponent({
   },
   setup(props, { slots }) {
     const { t } = useTranslation();
+    const heading = () => props.title ?? t('imageInsert.errors.title');
     return () => (
       <NativeDialog
         kind="imageInsertError"
-        label={t('imageInsert.errors.title')}
+        label={heading()}
         role="alertdialog"
         class={props.className}
         style={props.style}
@@ -50,7 +57,7 @@ export const DocxEditorImageInsertErrorDialog = defineComponent({
           props.children ?? (
             <>
               <header class="docx-dialog__header">
-                <h2 class="docx-dialog__title">{t('imageInsert.errors.title')}</h2>
+                <h2 class="docx-dialog__title">{heading()}</h2>
               </header>
               <div class="docx-dialog__body" data-docx-part="message">
                 {props.message}

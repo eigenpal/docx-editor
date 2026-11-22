@@ -47,7 +47,7 @@ export interface DocxEditorPopups {
    */
   contentControlPicture?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
   invalidTextFormField?: DocxEditorPopup<DocxEditorInvalidTextFormFieldDialogProps>;
-  /** Why a chosen or pasted picture could not be inserted. False shows nothing. */
+  /** Why a picture insert, a copy, a cut, or a paste was refused. False shows nothing. */
   imageInsertError?: DocxEditorPopup<DocxEditorImageInsertErrorDialogProps>;
   imageProperties?: DocxEditorPopup<DocxEditorImagePropertiesDialogProps>;
   imageAltText?: DocxEditorPopup<DocxEditorImageAltTextPopupProps>;

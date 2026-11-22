@@ -8,6 +8,10 @@ import { linesOf, type TextMeasurer } from '../semantic-records.ts';
 import { fittingClusters } from '../cjk-optical-fit.ts';
 import { segmentGraphemes } from '../grapheme.ts';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const outline =
+  '<w14:textOutline xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" w14:w="12700"><w14:solidFill><w14:srgbClr w14:val="FF0000"/></w14:solidFill></w14:textOutline>';
+// A shifted glyph paints transparent text, which would drop these decorations.
+const paintRefused = ['<w:u w:val="single"/>', '<w:strike/>', '<w:dstrike/>', outline];
 const bounds: Record<string, [number, number]> = {
   '（': [0.662, 0.899],
   '）': [0.135, 0.372],
@@ -40,6 +44,7 @@ function part(xml: string) {
   if (!result.ok) throw new Error(result.reason);
   return result.part;
 }
+// No declared compatibility mode (`w:compatSetting` `compatibilityMode`): a legacy mode.
 const settings = part(
   `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`
 );
@@ -50,15 +55,32 @@ function layout(
   measure = measurer,
   runProps = '',
   // Optical fitting needs an East Asian face in the document defaults; every probe names one.
-  sourcePolicy: { readonly eastAsianDefaults?: boolean; readonly kern?: number } = {
+  sourcePolicy: {
+    readonly eastAsianDefaults?: boolean;
+    readonly kern?: number;
+    /**
+     * `w:compatSetting` `compatibilityMode`; absent declares mode 15, and `null` declares none,
+     * a legacy mode with the half-advance admission limit.
+     */
+    readonly mode?: number | null;
+    /** East Asian language of the document defaults. */
+    readonly lang?: string;
+    /** Extra paragraph properties. */
+    readonly pPr?: string;
+    /** Extra run properties of the first run only. */
+    readonly firstRunProps?: string;
+    /** `w:overflowPunct`; off unless set. */
+    readonly overflowPunct?: boolean;
+  } = {
     eastAsianDefaults: true,
   },
-  jc = 'both'
+  jc = 'both',
+  overflowPunctuation = false
 ) {
-  const run = (value: string) =>
-    `<w:r><w:rPr><w:sz w:val="24"/>${sourcePolicy?.kern === undefined ? '' : `<w:kern w:val="${sourcePolicy.kern}"/>`}${runProps}</w:rPr><w:t xml:space="preserve">${value}</w:t></w:r>`;
+  const run = (value: string, extra = '') =>
+    `<w:r><w:rPr><w:sz w:val="24"/>${sourcePolicy?.kern === undefined ? '' : `<w:kern w:val="${sourcePolicy.kern}"/>`}${runProps}${extra}</w:rPr><w:t xml:space="preserve">${value}</w:t></w:r>`;
   const source = part(
-    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:jc w:val="${jc}"/><w:overflowPunct w:val="0"/></w:pPr>${split === -1 ? [...text].map(run).join('') : run(text.slice(0, split)) + run(text.slice(split))}</w:p></w:body></w:document>`
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr>${sourcePolicy?.pPr ?? ''}<w:jc w:val="${jc}"/><w:overflowPunct w:val="${(sourcePolicy?.overflowPunct ?? overflowPunctuation) ? 1 : 0}"/></w:pPr>${split === -1 ? [...text].map((value) => run(value)).join('') : run(text.slice(0, split), sourcePolicy?.firstRunProps) + run(text.slice(split))}</w:p></w:body></w:document>`
   );
   return linesOf(
     layoutSemanticDocument(source, 0, {
@@ -66,12 +88,16 @@ function layout(
       styleCascade: buildStyleCascadeTable(
         sourcePolicy?.eastAsianDefaults
           ? part(
-              `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="Test CJK"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
+              `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="Test CJK"/>${sourcePolicy.lang ? `<w:lang w:eastAsia="${sourcePolicy.lang}"/>` : ''}</w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
             ).root
           : null,
         // The font table gives the probe face an East Asian charset.
         { ...NO_THEME_FONTS, eastAsianFontTableFaces: ['test cjk'] },
-        settings.root
+        sourcePolicy?.mode === null
+          ? settings.root
+          : part(
+              `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="${sourcePolicy?.mode ?? 15}"/></w:compat></w:settings>`
+            ).root
       ),
       geometry: {
         width: width + 20,
@@ -201,13 +227,9 @@ test('unknown and non-finite bounds retain natural line fitting', () => {
   }
 });
 
-test('optical fitting retains decorated and revised glyph geometry', () => {
+test('optical fitting retains underlined, struck, outlined and revised glyph geometry', () => {
   for (const props of [
-    '<w:u w:val="single"/>',
-    '<w:strike/>',
-    '<w:dstrike/>',
-    '<w:highlight w:val="yellow"/>',
-    '<w:shd w:fill="000000"/>',
+    ...paintRefused,
     '<w:rPrChange w:id="1"><w:rPr><w:b/></w:rPr></w:rPrChange>',
   ]) {
     const lines = layout('甲乙（丙丁）戊己', 90, undefined, measurer, props);
@@ -386,11 +408,11 @@ test('colon/closing pairs retain natural advances without safe measured pair bou
     ]);
 });
 
-test('ineligible decorated paragraphs retain the advance-only whitespace path', () => {
+test('underlined, outlined and revised paragraphs retain the advance-only whitespace path', () => {
   const text = '甲丙、乙、戊）：丁）丙。 。';
   for (const props of [
     '<w:u w:val="single"/>',
-    '<w:highlight w:val="yellow"/>',
+    outline,
     '<w:rPrChange w:id="1"><w:rPr><w:b/></w:rPr></w:rPrChange>',
   ]) {
     for (const split of [-1, text.length])
@@ -449,14 +471,74 @@ test('the single-unit cluster fast path agrees with grapheme segmentation', () =
   expect(fast).toBeGreaterThan(20_000);
 });
 
-test('only a justified paragraph compresses punctuation to fit a line', () => {
-  const text = (jc: string) =>
-    qualifiedLayout('甲乙（丙丁）戊己', 90, undefined, undefined, '', jc).map((line) =>
-      line.spans.map((span) => span.text).join('')
-    );
-  expect(text('both')).toEqual(['甲乙（丙丁）戊己']);
-  expect(text('distribute')).toEqual(['甲乙（丙丁）戊己']);
-  for (const jc of ['left', 'center', 'right']) expect(text(jc)).toEqual(['甲乙（丙丁）戊', '己']);
+const linesAt = (
+  jc: string,
+  mode?: number | null,
+  lang?: string,
+  text = '甲乙（丙丁）戊己',
+  width = 90
+) =>
+  layout(
+    text,
+    width,
+    text.length,
+    measurer,
+    '',
+    { eastAsianDefaults: true, kern: 2, mode, lang },
+    jc
+  ).map((line) => line.spans.map((span) => span.text).join(''));
+
+test('compatibility mode 15 compresses punctuation to fit only justified lines', () => {
+  expect(linesAt('both', 15)).toEqual(['甲乙（丙丁）戊己']);
+  expect(linesAt('distribute', 15)).toEqual(['甲乙（丙丁）戊己']);
+  for (const jc of ['left', 'center', 'right', 'start', 'end'])
+    expect(linesAt(jc, 15)).toEqual(['甲乙（丙丁）戊', '己']);
+});
+
+test('a legacy mode compresses punctuation to fit lines at every alignment', () => {
+  for (const mode of [null, 11, 12, 14])
+    for (const jc of ['both', 'left', 'center', 'right', 'start', 'end'])
+      for (const lang of [undefined, 'zh-CN', 'zh-TW', 'ja-JP'])
+        expect({ mode, jc, lang, lines: linesAt(jc, mode, lang) }).toEqual({
+          mode,
+          jc,
+          lang,
+          lines: ['甲乙（丙丁）戊己'],
+        });
+});
+
+test('a legacy mode compresses no Korean text to fit a line', () => {
+  for (const jc of ['both', 'left'])
+    expect(linesAt(jc, 14, 'ko-KR')).toEqual(['甲乙（丙丁）戊', '己']);
+  // A Korean run anywhere in the candidate group `丁）` refuses the fit, not only its last run.
+  const korean = '<w:lang w:eastAsia="ko-KR"/>';
+  const first = (firstRunProps: string) =>
+    layout(
+      '甲。乙，丁）戊己',
+      59,
+      5,
+      measurer,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode: 14, firstRunProps },
+      'left'
+    )[0]!
+      .spans.map((span) => span.text)
+      .join('');
+  expect(first('')).toBe('甲。乙，丁）');
+  expect(first(korean)).toBe('甲。乙，');
+  // Hangul does not fit in a legacy mode, whatever its language tag.
+  for (const lang of [undefined, 'zh-CN'])
+    expect(linesAt('left', 14, lang, '가나（다라）마바')).toEqual(['가나（다라）', '마바']);
+});
+
+test('a legacy mode fits right-to-left paragraphs at both edges', () => {
+  const policy = { eastAsianDefaults: true, kern: 2, mode: null, pPr: '<w:bidi/>' };
+  for (const jc of ['left', 'right'])
+    expect(
+      layout('甲乙（丙丁）戊己', 90, 8, measurer, '', policy, jc).map((line) =>
+        line.spans.map((span) => span.text).join('')
+      )
+    ).toEqual(['甲乙（丙丁）戊己']);
 });
 
 test('a document whose defaults name no East Asian face compresses no punctuation to fit', () => {
@@ -466,4 +548,354 @@ test('a document whose defaults name no East Asian face compresses no punctuatio
     );
   expect(text(true)).toEqual(['甲乙（丙丁）戊己']);
   expect(text(false)).toEqual(['甲乙（丙丁）戊', '己']);
+});
+
+test('a legacy mode admits an ideograph only within half its advance at every alignment', () => {
+  // Two blank sides could give 丙 more than its 6 pt half; a legacy line takes no more.
+  const text = '甲。乙，丙丁戊';
+  for (const mode of [null, 11, 12, 14])
+    for (const jc of ['left', 'center', 'right', 'both']) {
+      expect(linesAt(jc, mode, undefined, text, 54)[0]).toBe('甲。乙，丙');
+      expect(linesAt(jc, mode, undefined, text, 53.9)[0]).toBe('甲。乙，');
+    }
+  // Compatibility mode 15 admits it by the expansion gate alone.
+  expect(linesAt('both', 15, undefined, text, 53.9)[0]).toBe('甲。乙，丙');
+});
+
+test('spaces before a word that wraps do not compress the line', () => {
+  // Mixed-script lines qualify each face locally.
+  const resolved: TextMeasurer = { ...measurer, hasResolvedFont: () => true };
+  for (const [mode, jc] of [
+    [14, 'left'],
+    [14, 'center'],
+    [15, 'both'],
+  ] as const) {
+    const lines = layout(
+      '甲乙丙、丁 word',
+      62,
+      5,
+      resolved,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode },
+      jc
+    );
+    expect(
+      lines.map((line) =>
+        line.spans
+          .map((span) => span.text)
+          .join('')
+          .trimEnd()
+      )
+    ).toEqual(['甲乙丙、丁', 'word']);
+    // Every glyph keeps its natural advance; the space trails the line.
+    const glyphs = lines[0]!.spans.filter((span) => span.text.trim());
+    expect({ mode, jc, width: glyphs.reduce((sum, span) => sum + span.box.width, 0) }).toEqual({
+      mode,
+      jc,
+      width: 60,
+    });
+  }
+});
+
+test('a legacy group of a Latin word and a final mark admits at most half its advance', () => {
+  // `ab。` is 36 pt and its final mark drops 6 pt; four marks before it could give 24 pt more.
+  const resolved: TextMeasurer = { ...measurer, hasResolvedFont: () => true };
+  const first = (mode: number, jc: string, width: number) =>
+    layout(
+      '甲、乙、丙、丁、戊ab。己',
+      width,
+      9,
+      resolved,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode },
+      jc
+    )[0]!
+      .spans.map((span) => span.text)
+      .join('');
+  for (const jc of ['left', 'center', 'right', 'both']) {
+    expect(first(14, jc, 123)).toBe('甲、乙、丙、丁、戊ab。');
+    expect(first(14, jc, 122)).toBe('甲、乙、丙、丁、戊');
+  }
+  expect(first(15, 'both', 117)).toBe('甲、乙、丙、丁、戊ab。');
+});
+
+test('a legacy group that ends in a Latin closing quote admits at most half its advance', () => {
+  // `ab”` counts as a group with a final closing mark: the quote gives its trailing half.
+  const resolved: TextMeasurer = { ...measurer, hasResolvedFont: () => true };
+  const first = (width: number, mode = 14, jc = 'left') =>
+    layout(
+      '甲、乙、丙、丁、戊、己、庚ab”辛',
+      width,
+      13,
+      resolved,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode },
+      jc
+    )[0]!
+      .spans.map((span) => span.text)
+      .join('');
+  // 195 pt natural; six marks could give 36 pt, the group admits 24 pt.
+  expect(first(171)).toBe('甲、乙、丙、丁、戊、己、庚ab”');
+  expect(first(170)).toBe('甲、乙、丙、丁、戊、己、庚');
+  expect(first(170, 14, 'both')).toBe('甲、乙、丙、丁、戊、己、庚');
+  // Compatibility mode 15 has no such limit on a justified line.
+  expect(first(170, 15, 'both')).toBe('甲、乙、丙、丁、戊、己、庚ab”');
+});
+
+test('a legacy mode compresses no Korean mark to fit a line', () => {
+  const korean = '<w:lang w:eastAsia="ko-KR"/>';
+  const first = (text: string, split: number, firstRunProps = '', mode = 14, jc = 'left') =>
+    layout(
+      text,
+      70,
+      split,
+      measurer,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode, firstRunProps },
+      jc
+    )[0]!
+      .spans.map((span) => span.text)
+      .join('');
+  // `丁` needs 2 pt from the marks of the first run.
+  expect(first('甲、乙、丙丁戊', 4)).toBe('甲、乙、丙丁');
+  // A Korean mark, by language or after Hangul, keeps its advance.
+  expect(first('甲、乙、丙丁戊', 4, korean)).toBe('甲、乙、丙');
+  expect(first('가、나、丙丁戊', 4)).toBe('가、나、丙');
+  expect(first('가、나、丙丁戊', 4, '', 14, 'both')).toBe('가、나、丙');
+  // Compatibility mode 15 compresses Korean marks on a justified line.
+  expect(first('甲、乙、丙丁戊', 4, korean, 15, 'both')).toBe('甲、乙、丙丁');
+  // Hangul after the marks does not stop them.
+  expect(first('甲、乙、가丁戊', 4)).toBe('甲、乙、가丁');
+});
+
+test('a legacy final mark whose ink passes its middle gives only its blank trailing side', () => {
+  // `。` ends at 0.8 em, so it gives 2.4 pt and `丁。` may take 14.4 pt in all, not 18 pt.
+  const inked: TextMeasurer = {
+    ...measurer,
+    inkBounds: (text, style) =>
+      text === '。'
+        ? { left: 0.08 * style.fontSizePt, right: 0.8 * style.fontSizePt }
+        : measurer.inkBounds!(text, style),
+  };
+  const first = (width: number) =>
+    layout(
+      '甲、乙、丙、丁。戊',
+      width,
+      8,
+      inked,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode: 14 },
+      'left'
+    )[0]!
+      .spans.map((span) => span.text)
+      .join('');
+  expect(first(81.6)).toBe('甲、乙、丙、丁。');
+  expect(first(81.5)).toBe('甲、乙、丙、');
+  // With its ink inside the middle, the same group takes 18 pt.
+  expect(linesAt('left', 14, undefined, '甲、乙、丙、丁。戊', 78)[0]).toBe('甲、乙、丙、丁。');
+});
+
+test('a legacy hanging fit skips the half-advance limit', () => {
+  // `ab。` hangs its mark; the 23 pt the rest needs passes half of the group's 36 pt.
+  const resolved: TextMeasurer = { ...measurer, hasResolvedFont: () => true };
+  const first = (overflowPunct: boolean) =>
+    layout(
+      '甲、乙、丙、丁、戊、己、庚ab。辛',
+      160,
+      13,
+      resolved,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode: 14, overflowPunct },
+      'left'
+    )[0]!
+      .spans.map((span) => span.text)
+      .join('');
+  expect(first(true)).toBe('甲、乙、丙、丁、戊、己、庚ab。');
+  expect(first(false)).toBe('甲、乙、丙、丁、戊、己、庚');
+});
+
+test('a legacy group with a Latin word and no closing mark skips the half-advance limit', () => {
+  // `abcd` is 48 pt: the line gives it all 36 pt of its six marks, past half its advance.
+  const resolved: TextMeasurer = { ...measurer, hasResolvedFont: () => true };
+  const first = (width: number) =>
+    layout(
+      '甲、乙、丙、丁、戊、己、庚abcd辛',
+      width,
+      13,
+      resolved,
+      '',
+      { eastAsianDefaults: true, kern: 2, mode: 14 },
+      'left'
+    )[0]!
+      .spans.map((span) => span.text)
+      .join('');
+  expect(first(171)).toBe('甲、乙、丙、丁、戊、己、庚abcd');
+  expect(first(170)).toBe('甲、乙、丙、丁、戊、己、庚');
+});
+
+// A 32-character justified line fits only when the comma's trailing blank shrinks.
+test('highlight and shading keep the fitted width of a full-width comma', () => {
+  const text = '甲乙丙丁戊己庚辛壬癸子丑寅，卯辰巳午未申酉戌亥春夏秋冬风雨雷电晴雪朝暮';
+  const width = 380;
+  const expected = [text.slice(0, 32), text.slice(32)];
+  const measure: TextMeasurer = {
+    ...measurer,
+    hasResolvedFont: () => true,
+    inkBounds(value, style) {
+      return value === '，'
+        ? { left: 0.08 * style.fontSizePt, right: 0.34 * style.fontSizePt }
+        : measurer.inkBounds?.(value, style);
+    },
+  };
+  const lineTexts = (lines: ReturnType<typeof layout>) =>
+    lines.map((line) => line.spans.map((span) => span.text).join(''));
+  expect(lineTexts(layout(text, width, undefined, measure))).toEqual(expected);
+  for (const split of [13, text.length]) {
+    for (const props of ['<w:highlight w:val="yellow"/>', '<w:shd w:fill="FFFF00"/>']) {
+      const fitted = layout(text, width, split, measure, props);
+      expect(lineTexts(fitted)).toEqual(expected);
+      const comma = fitted[0]!.spans.find((span) => span.text === '，');
+      expect(comma?.box.width).toBeLessThan(12);
+      expect(comma?.glyphOffsetPt ?? 0).toBe(0);
+      expect(Boolean(comma?.style.highlight || comma?.style.shading)).toBe(true);
+    }
+    for (const props of paintRefused)
+      expect(lineTexts(layout(text, width, split, measure, props))).toEqual([
+        text.slice(0, 31),
+        text.slice(31),
+      ]);
+  }
+});
+
+test('highlighted fitting keeps every glyph ink inside its own box', () => {
+  // A centered colon's ink passes half its advance; a later highlight would cover it.
+  const centered: TextMeasurer = {
+    ...measurer,
+    inkBounds: (value, style) =>
+      value === '：'
+        ? { left: 0.42 * style.fontSizePt, right: 0.58 * style.fontSizePt }
+        : measurer.inkBounds?.(value, style),
+  };
+  const highlight = '<w:highlight w:val="yellow"/>';
+  const inside = (lines: ReturnType<typeof layout>, measure: TextMeasurer) =>
+    lines.flatMap((line) =>
+      line.spans.flatMap((span) => {
+        const ink = measure.inkBounds?.(span.text, span.style);
+        const offset = span.glyphOffsetPt ?? 0;
+        return ink && span.text.length === 1
+          ? [ink.left + offset >= -0.001 && ink.right + offset <= span.box.width + 0.001]
+          : [];
+      })
+    );
+  for (const [text, measure] of [
+    ['甲乙丙：丁戊己庚', centered],
+    ['甲乙（丙丁）戊己', measurer],
+  ] as const) {
+    for (const width of [90.5, 91, 92]) {
+      const lines = layout(text, width, undefined, measure, highlight);
+      expect(inside(lines, measure).every(Boolean)).toBe(true);
+    }
+  }
+  // The bound still lets the colon give its blank right side.
+  const colon = layout('甲乙丙：丁戊己庚', 91, undefined, centered, highlight);
+  expect(colon).toHaveLength(1);
+  expect(colon[0]!.spans.find((span) => span.text === '：')?.box.width).toBeCloseTo(7, 3);
+  const lines = layout('甲乙（丙丁）戊己', 90, undefined, measurer, highlight);
+  expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
+    '甲乙（丙丁）戊己',
+  ]);
+  const opening = lines[0]!.spans.find((span) => span.text === '（')!;
+  expect(opening.glyphOffsetPt).toBeLessThan(0);
+  expect(opening.style.highlight).toBe('yellow');
+});
+
+const trackedProps = (spacing: number) =>
+  '<w:rFonts w:ascii="Test Latin" w:hAnsi="Test Latin" w:eastAsia="Test CJK" w:hint="eastAsia"/>' +
+  `<w:lang w:eastAsia="zh-CN"/><w:spacing w:val="${spacing}"/>`;
+const tracked: TextMeasurer = {
+  ...measurer,
+  hasResolvedFont: () => true,
+  inkBounds(value, style) {
+    return value === '，'
+      ? { left: 0.08 * style.fontSizePt, right: 0.34 * style.fontSizePt }
+      : measurer.inkBounds?.(value, style);
+  },
+};
+const lineTexts = (lines: ReturnType<typeof layout>) =>
+  lines.map((line) => line.spans.map((span) => span.text).join(''));
+
+// A Latin run on a later line makes the paragraph mixed. It cannot veto the seams of a first
+// line tracked by `w:spacing` that holds no Latin group: that line breaks as it does without the Latin run.
+for (const spacing of [-4, 4]) {
+  for (const hanging of [false, true]) {
+    test(`a tracked East Asian line fits in a mixed paragraph (${spacing} twips, hanging ${hanging})`, () => {
+      const base = '甲乙丙丁戊己，庚辛壬癸子丑寅卯辰巳午未申酉，戌亥春夏秋冬风雨雷电，晴雪朝暮';
+      const wrap = (suffix: string, width: number) =>
+        layout(
+          base + suffix,
+          width,
+          undefined,
+          tracked,
+          trackedProps(spacing),
+          undefined,
+          'both',
+          hanging
+        );
+      let fitted = 0;
+      for (let width = 330; width <= 400; width += 1) {
+        const mixed = wrap('A1', width);
+        const pure = wrap('中文', width);
+        expect(lineTexts(mixed)[0]).toBe(lineTexts(pure)[0]);
+        const comma = mixed[0]!.spans.find((span) => span.text === '，' && span.box.width < 11.9);
+        if (comma) {
+          fitted += 1;
+          // Ideographs keep their authored spacing; only the punctuation gives up blank sides.
+          for (const span of mixed[0]!.spans.filter((entry) =>
+            /^[\u4e00-\u9fff]+$/u.test(entry.text)
+          ))
+            expect(span.style.characterSpacingPt).toBe(spacing / 20);
+        }
+      }
+      expect(fitted).toBeGreaterThan(0);
+      const latin = wrap('A1', 371)
+        .flatMap((line) => line.spans)
+        .find((span) => span.text.includes('A1'));
+      expect(latin?.style.characterSpacingPt).toBe(spacing / 20);
+    });
+  }
+}
+
+// A word, a mathematical run, a symbol, or a curly quote on a tracked line keeps every bracket at
+// its tracked advance, before or after the tracked text; the untracked line compresses the pair.
+test('a tracked line that holds a word, a mathematical run, a symbol, or a curly quote keeps its brackets', () => {
+  const props = (spacing: number) =>
+    spacing ? trackedProps(spacing) : trackedProps(0).replace(/<w:spacing[^>]*\/>/u, '');
+  for (const [prefix, foreign] of [
+    ['', 'AV'],
+    ['AV', '甲'],
+    ['', '≥'],
+    ['', '℃'],
+    ['', '“乙”'],
+  ] as const) {
+    const text = `${prefix}甲乙丙丁戊己）（庚辛壬癸${foreign}子丑寅卯辰巳午未申酉戌亥春夏秋冬风雨雷电晴雪朝暮`;
+    const brackets = (spacing: number, width: number) => {
+      const first = layout(text, width, undefined, tracked, props(spacing))[0]!.spans;
+      // Only a first line that holds the foreign text must keep its brackets.
+      return first.some((span) => /[A-Z≥℃“]/u.test(span.text))
+        ? first.filter((span) => /^[（）]$/u.test(span.text))
+        : [];
+    };
+    let compressed = 0;
+    let held = 0;
+    for (let width = 330; width <= 400; width += 1) {
+      if (brackets(0, width).some((span) => span.box.width < 11.9)) compressed += 1;
+      for (const spacing of [-4, 4])
+        for (const span of brackets(spacing, width)) {
+          held += 1;
+          expect(span.box.width).toBeCloseTo(12 + spacing / 20, 6);
+        }
+    }
+    expect(held).toBeGreaterThan(0);
+    expect(compressed).toBeGreaterThan(0);
+  }
 });

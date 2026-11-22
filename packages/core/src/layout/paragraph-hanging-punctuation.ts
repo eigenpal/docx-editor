@@ -1,9 +1,11 @@
 import { setLineHangingPunctuationAdvance } from './line-hanging-punctuation.ts';
 import { hangingCjkPunctuationAdvance } from './cjk-spacing.ts';
-import { eastAsianLanguage, type CjkParagraphTypography } from './cjk-typography.ts';
+import { blankSideHangingAdvance, compressedTrailingBlank } from './hanging-mark-blanks.ts';
+import { eastAsianLanguage, isKorean, type CjkParagraphTypography } from './cjk-typography.ts';
 import type { FieldAwarePiece } from './field-projection.ts';
 import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
 import type { PendingLine } from './pending-line.ts';
+import { styleForFontSlot } from './script-itemization.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 
 /**
@@ -53,26 +55,54 @@ export function spaceShrinkMarkAdvance(
  * hanging Korean mark lets the text before it fill the measure only under
  * `koreanHangingLineFills`; otherwise that line keeps its natural width.
  */
-export function rememberHangingPunctuation(
+export function rememberLineEndHang(
   line: PendingLine,
   span: StyleSpanRecord,
   piece: FieldAwarePiece,
   measurer: TextMeasurer,
   hangs: boolean,
   available: number,
-  flow: Pick<ParagraphFlowOptions, 'koreanHangingLineFills'> | undefined
+  flow: Pick<ParagraphFlowOptions, 'koreanHangingLineFills'> | undefined,
+  typography: CjkParagraphTypography
 ): void {
   // `hangs` already admitted the mark, so a Korean mark that hangs closes its paragraph.
+  const overflow = line.width + span.box.width - available;
   let advance =
-    hangs && line.width + span.box.width > available + 0.001
+    hangs && overflow > 0.001
       ? hangingCjkPunctuationAdvance(span.text, piece, measurer, { paragraphFinal: true })
       : undefined;
-  if (
-    advance !== undefined &&
-    flow?.koreanHangingLineFills !== true &&
-    /^ko(?:-|$)/.test(eastAsianLanguage(piece.props) ?? '')
-  )
+  const language = eastAsianLanguage(piece.props);
+  if (advance !== undefined && flow?.koreanHangingLineFills !== true && isKorean(language))
     advance = undefined;
-  if (advance !== undefined || !span.lineEndWhitespace)
+  // When `w:characterSpacingControl` compresses punctuation, a mark that overflows by no more
+  // than its blank sides hangs only its trailing blank, and the text before it fills the rest
+  // of the measure.
+  const whole = advance;
+  if (advance !== undefined)
+    advance = blankSideHangingAdvance(span.text, piece, advance, overflow, typography);
+  if (advance !== undefined || !span.lineEndWhitespace) {
     setLineHangingPunctuationAdvance(line, advance);
+    const blank =
+      whole === undefined ? 0 : markBlankBesideInk(span, piece, measurer, whole, typography);
+    line.hangingMarkBlank = blank > 0.001 ? blank : undefined;
+  }
+}
+
+/**
+ * The compressed trailing blank of the hanging mark ending `span`, kept clear of its ink: a face
+ * that centers a mark its language sets at the cell's start keeps its marks over the glyph, so
+ * screen paint never clips the glyph itself.
+ */
+function markBlankBesideInk(
+  span: StyleSpanRecord,
+  piece: FieldAwarePiece,
+  measurer: TextMeasurer,
+  advance: number,
+  typography: CjkParagraphTypography
+): number {
+  const blank = compressedTrailingBlank(span.text, piece, advance, typography);
+  if (blank <= 0.001) return 0;
+  const ink = measurer.inkBounds?.(span.text.at(-1)!, styleForFontSlot(span.style, span.fontSlot));
+  if (!ink || !Number.isFinite(ink.right)) return blank;
+  return Math.min(blank, Math.max(0, advance - ink.right));
 }

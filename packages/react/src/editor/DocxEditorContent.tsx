@@ -10,16 +10,19 @@ import { DialogMount } from './dialog-host';
 // right element on the first paint. The facade owns everything inside this div.
 //
 // Paste and drop of supported raster formats route through the shared image-insert path.
+// A paste reaches it through `useImageFilePaste`, which the selection overlay runs as well.
 
-import { useCallback, useContext, useLayoutEffect, useRef } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef } from 'react';
 import {
-  clipboardPasteLandsContent,
   editorDropHandled,
   openChartPaneAt,
+  reportImageInsertFailure,
+  watchClipboardRefusals,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
 import { ImageSelectionOverlay } from './images/ImageSelectionOverlay.tsx';
+import { useImageFilePaste } from './images/useImageFilePaste';
 
 import type { DocxEditorChildren } from '../docx-editor-children';
 
@@ -61,6 +64,8 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
     [registry]
   );
   const portalRef = useRef<HTMLDivElement | null>(null);
+  // The selection overlay runs the same image-file lane for pastes while a drawing is selected.
+  const pasteImageFile = useImageFilePaste();
 
   useLayoutEffect(() => {
     const el = elementRef.current;
@@ -80,23 +85,14 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
     };
   }, [editor]);
 
-  const onPaste = useCallback(
-    (event: React.ClipboardEvent) => {
-      if (!imageInsert?.isEnabled) return;
-      const items = event.clipboardData;
-      if (!items) return;
-      if (!hasImageFile(items)) return;
-      // STAND DOWN whenever the ENGINE will land content from the payload — see the
-      // predicate's contract in core. Word on macOS pastes a rendered PNG of copied TEXT
-      // beside the HTML; taking this file lane for it inserted that rendering on top of
-      // the text. (`defaultPrevented` says nothing — the engine prevents every paste,
-      // even ones it ignores.)
-      if (clipboardPasteLandsContent(items)) return;
-      event.preventDefault();
-      void imageInsert.insertFromDataTransfer(items);
-    },
-    [imageInsert]
-  );
+  // A copy, cut, or paste on the pages or the selection overlay that the editor refuses shows
+  // its reason, in the dialog a refused picture insert uses.
+  const showClipboardRefusal = imageInsert?.showClipboardRefusal;
+  useEffect(() => {
+    const mount = portalRef.current;
+    if (!editor || !mount || !showClipboardRefusal) return undefined;
+    return watchClipboardRefusals(mount, editor, showClipboardRefusal);
+  }, [editor, showClipboardRefusal]);
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
@@ -109,7 +105,9 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
       const selected = editor!.exec({ type: 'setSelection', range: { anchor: at, head: at } });
       if (!selected.ok) return;
       editor!.focus();
-      void imageInsert.insertFromDataTransfer(event.dataTransfer, at);
+      void imageInsert
+        .insertFromDataTransfer(event.dataTransfer, at)
+        .catch(reportImageInsertFailure);
     },
     [editor, imageInsert]
   );
@@ -119,7 +117,7 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
       <div
         ref={contentRef}
         className={`docx-paginated-surface${className ? ` ${className}` : ''}`}
-        onPaste={onPaste}
+        onPaste={(event) => pasteImageFile(event.nativeEvent)}
         onDrop={onDrop}
         // A double press on a chart opens the Chart pane, as Edit chart does.
         onDoubleClick={(event) => {

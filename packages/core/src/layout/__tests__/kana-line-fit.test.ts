@@ -1,7 +1,7 @@
 // `compressPunctuationAndJapaneseKana`: kana compress to pull a line-start-prohibited character
 // onto a full line. Punctuation blank sides go first, then kana by at most a sixteenth of an em
-// each, in equal shares. A final closing mark gives its trailing half first only when that half
-// alone fits the line, and last when kana cannot take the rest.
+// each, in equal shares. A final closing mark that may hang and overflows by no more than its
+// trailing half hangs that half. Otherwise it gives the half last, when kana cannot take the rest.
 import { describe, expect, test } from 'bun:test';
 import { loadFixture, type FixtureOptions } from './punctuation-kerning-fixture.ts';
 import type { TextMeasurer } from '../semantic-records.ts';
@@ -92,11 +92,36 @@ describe('kana compress to fit a line-start-prohibited character', () => {
     expect(line.widths('。')).toEqual([EM]);
   });
 
-  test('the final half alone fits a line that is half an em short', () => {
-    const line = lay('あ'.repeat(39) + '。あいう', { available: MEASURE + EM / 2 });
-    expect(line.texts[0]).toBe('あ'.repeat(39) + '。');
-    for (const width of line.widths('あ')) expect(width).toBeCloseTo(EM, 6);
-    expect(line.widths('。')[0]).toBeCloseTo(EM / 2, 6);
+  for (const overflow of [EM / 2, EM / 4]) {
+    test(`a final mark ${overflow} pt over the margin hangs only its blank half`, () => {
+      const available = MEASURE + EM - overflow;
+      const line = lay('あ'.repeat(39) + '。あいう', { available });
+      expect(line.texts[0]).toBe('あ'.repeat(39) + '。');
+      // No kana compress. The kana spread so that the ink of 。 ends at the margin.
+      for (const width of line.widths('あ')) expect(width).toBeCloseTo(EM, 6);
+      expect(line.widths('。')).toEqual([EM]);
+      expect(line.end).toBeCloseTo(available + EM / 2, 6);
+    });
+  }
+
+  test('a line that opens with widened spaces still fits kana when its mark cannot hang', () => {
+    // Balanced widths widen the opening space, and that line hangs no mark: kana fit instead.
+    const narrowSpaces: TextMeasurer = {
+      ...measurer,
+      measure: (text, style) =>
+        [...text].reduce(
+          (width, c) => width + (c === ' ' ? style.fontSizePt / 4 : style.fontSizePt),
+          0
+        ) +
+        [...text].length * style.characterSpacingPt,
+    };
+    const line = lay(' ' + 'あ'.repeat(38) + '。あいう', {
+      available: MEASURE + EM / 4,
+      compatibility: 14,
+      balanceWidths: true,
+      measurer: narrowSpaces,
+    });
+    expect(line.texts).toEqual([' ' + 'あ'.repeat(38) + '。', 'あいう']);
   });
 
   test('without punctuation overflow the final half goes before the kana', () => {

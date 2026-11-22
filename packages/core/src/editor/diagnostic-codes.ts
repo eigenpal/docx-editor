@@ -35,6 +35,13 @@ import {
 import { COLLABORATION_FIELD_RESULTS_REFUSAL } from './field-results-scope.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
 import { PICTURE_SELECTED_INSERT_REASON } from './docx-editor-images.ts';
+import {
+  GROUP_MEMBER_PASTE_REASON,
+  LINKED_TEXT_BOX_PASTE_REASON,
+  SHAPE_PASTE_TEXT_REASON,
+  TEXT_BOX_PASTE_REASON,
+  TEXT_BOX_PICTURE_PASTE_REASON,
+} from './surface-drawing-clipboard.ts';
 import { PREVIEW_WRITE_REFUSAL, REFRESH_WRITE_REFUSAL } from './refresh-write-guard.ts';
 import { BOUND_CHANGES_REFUSAL, LOCKED_CHANGES_REFUSAL } from './review-guard-refusals.ts';
 import { LOCKED_PARAGRAPH_FORMAT_REASON } from './paragraph-format-lock-refusal.ts';
@@ -107,6 +114,12 @@ const EDIT_SENTENCES: ReadonlyMap<string, EditDiagnosticCode> = new Map([
   [TRACKED_ONLY_EDITING_REASON, 'edit.tracking-required'],
   [SUGGESTING_IMAGE_REPLACE_REASON, 'edit.tracked-image-replace-unsupported'],
   [PICTURE_SELECTED_INSERT_REASON, 'edit.picture-selected'],
+  // A paste while a drawing is selected that has no place in that drawing.
+  [SHAPE_PASTE_TEXT_REASON, 'edit.unsupported-content'],
+  [TEXT_BOX_PASTE_REASON, 'edit.unsupported-content'],
+  [LINKED_TEXT_BOX_PASTE_REASON, 'edit.unsupported-content'],
+  [GROUP_MEMBER_PASTE_REASON, 'edit.unsupported-content'],
+  [TEXT_BOX_PICTURE_PASTE_REASON, 'edit.unsupported-content'],
   [READ_ONLY_REVISION_REASON, 'edit.revision-unsupported'],
   ['note not found', 'edit.stale-target'],
 ]);

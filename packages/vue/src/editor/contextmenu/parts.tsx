@@ -1,7 +1,12 @@
 import { computed, defineComponent, h, type PropType, type VNode } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
-import { tableChromeIconPaths, hostWindowOf, type HostWindow } from '@docx-editor.dev/core/editor';
+import {
+  clipboardCommandRefusal,
+  tableChromeIconPaths,
+  hostWindowOf,
+  type HostWindow,
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor, useEditorContentElement } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { useEditorState } from '../useEditorState';
@@ -19,6 +24,20 @@ import {
   REFRESH_TOC_PAGE_NUMBERS_PATHS,
 } from './contextmenu-icons';
 import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
+import { useImageInsertOptional } from '../images/ImageInsert';
+
+/**
+ * Run a row's command, and show the reason when the editor refuses a copy, cut, or paste, in
+ * the dialog a keyboard copy, cut, or paste shows. Call it in `setup`.
+ */
+function useRowExec(): (command: EditorCommand) => void {
+  const editorRef = useDocxEditor();
+  const imageInsert = useImageInsertOptional();
+  return (command) => {
+    const refusal = clipboardCommandRefusal(command, editorRef.value?.exec(command));
+    if (refusal) imageInsert?.showClipboardRefusal(refusal);
+  };
+}
 
 /** Props for a packaged context-menu row. @public */
 export interface ContextMenuCommandProps {
@@ -44,7 +63,7 @@ function defineCommandRow(
       hidden: { type: Boolean, default: undefined },
     },
     setup(props) {
-      const editorRef = useDocxEditor();
+      const exec = useRowExec();
       const { close } = useContextMenuContext();
       const label = useMenuLabel();
       const cmd = useEditorCommand(command as unknown as EditorCommand);
@@ -58,7 +77,7 @@ function defineCommandRow(
             disabled={!cmd.isEnabled.value}
             {...(cmd.disabledReason.value ? { title: cmd.disabledReason.value } : {})}
             onSelect={() => {
-              editorRef.value?.exec(command);
+              exec(command);
               close(true);
             }}
             {...(props.className ? { className: props.className } : {})}
@@ -115,7 +134,7 @@ export const ContextMenuPaste = defineComponent({
     hidden: { type: Boolean, default: undefined },
   },
   setup(props) {
-    const editorRef = useDocxEditor();
+    const exec = useRowExec();
     const contentElement = useEditorContentElement();
     const { close, clipboardRefusal, reportClipboardRefusal } = useContextMenuContext();
     const label = useMenuLabel();
@@ -142,7 +161,7 @@ export const ContextMenuPaste = defineComponent({
                   hostWindowOf(contentElement.value)
                 );
                 if (text || html) {
-                  editorRef.value?.exec({ type: 'paste', text, ...(html ? { html } : {}) });
+                  exec({ type: 'paste', text, ...(html ? { html } : {}) });
                 }
               } catch (error) {
                 reportClipboardRefusal(
@@ -210,7 +229,7 @@ export const ContextMenuPasteWithoutFormatting = defineComponent({
     hidden: { type: Boolean, default: undefined },
   },
   setup(props) {
-    const editorRef = useDocxEditor();
+    const exec = useRowExec();
     const contentElement = useEditorContentElement();
     const { close, clipboardRefusal, reportClipboardRefusal } = useContextMenuContext();
     const label = useMenuLabel();
@@ -236,7 +255,7 @@ export const ContextMenuPasteWithoutFormatting = defineComponent({
                 const text = await hostWindowOf(
                   contentElement.value
                 ).navigator.clipboard.readText();
-                if (text) editorRef.value?.exec({ type: 'pasteWithoutFormatting', text });
+                if (text) exec({ type: 'pasteWithoutFormatting', text });
               } catch (error) {
                 reportClipboardRefusal(
                   error instanceof Error ? error.message : 'the clipboard is not readable'
