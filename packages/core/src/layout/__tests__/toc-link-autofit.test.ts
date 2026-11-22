@@ -63,8 +63,9 @@ function widths(ranges?: TocLinkRanges) {
 }
 
 // Body TOC detection does not enter table cells, so the ranges come in directly here, with
-// the style ids that TOC detection resolves by definition. AutoFit must drop them as paint does.
-test('AutoFit measures TOC link text in a cell without the numeric-id Hyperlink style', () => {
+// the style ids that TOC detection resolves by definition. Autofit column widths
+// (`w:tblLayout` `autofit`) must drop them as paint does.
+test('autofit column widths measure TOC link text in a cell without the numeric-id Hyperlink style', () => {
   const paragraph = cellParagraph(document.root)!;
   const styled = widths();
   const linked = widths(new Map([[paragraph.id, [{ start: 0, end: 10, styleIds: ['37'] }]]]));

@@ -28,8 +28,8 @@ export interface TocLinkRange {
   readonly start: number;
   readonly end: number;
   /**
-   * The ids of the character styles that are the Hyperlink style, resolved from the style table
-   * by definition. At most four ids.
+   * The `w:styleId` values of the character styles whose `w:name` is Hyperlink, resolved from
+   * the style definitions (`w:style`). At most four ids.
    */
   readonly styleIds: readonly string[];
 }
@@ -42,15 +42,16 @@ const cache = new FieldResultsModeMemo<
 >();
 const hyperlinkIds = new WeakMap<StyleCascadeTable, readonly string[]>();
 /**
- * Style names need not be unique, but a real file names one style Hyperlink. Every range and
+ * `w:name` values need not be unique, but a real file names one style Hyperlink. Every range and
  * the layout digests repeat the list, so a crafted file with many such styles stays bounded.
  */
 const MAX_HYPERLINK_STYLE_IDS = 4;
 
 /**
- * The ids of the character styles that are the Hyperlink style. The style is known by its name;
- * its id can be localized or numeric. Only a definition without a name falls back to the id. A
- * style with the id `Hyperlink` and another name is an ordinary style here, although link
+ * The `w:styleId` values of the character styles (`w:style` `w:type="character"`) that are the
+ * Hyperlink style. The style is known by its `w:name`; its `w:styleId` can be localized or
+ * numeric. Only a definition without `w:name` falls back to the id. A style with the
+ * `w:styleId` `Hyperlink` and another `w:name` is an ordinary style here, although link
  * insertion prefers that id when it picks a style to apply. At most
  * {@link MAX_HYPERLINK_STYLE_IDS} such styles count: the id `Hyperlink` first, then document order.
  *
@@ -77,7 +78,7 @@ function hyperlinkStyleIds(styles: StyleCascadeTable): readonly string[] {
 }
 
 /**
- * Complex fields open at a paragraph boundary. Only the outermost {@link MAX_TRACKED_FIELDS}
+ * Complex fields (`w:fldChar`) open at a paragraph boundary. Only the outermost {@link MAX_TRACKED_FIELDS}
  * keep their instruction; deeper ones are only counted, so a crafted nesting stays bounded.
  */
 interface OpenFields {
@@ -114,8 +115,9 @@ function sameOpenFields(a: OpenFields, b: OpenFields): boolean {
 }
 
 /**
- * Where a paragraph holds link content: `w:hyperlink` elements, `HYPERLINK` simple fields, and
- * complex `HYPERLINK` fields from `begin` to their own `end`. The spans come from the paragraph
+ * Where a paragraph holds link content: `w:hyperlink` elements, `w:fldSimple` fields with a
+ * `HYPERLINK` instruction, and complex `HYPERLINK` fields from `w:fldChar` `begin` to their own
+ * `end`. The spans come from the paragraph
  * offset index, so an atomic field contributes its single unit. Fields still open at the end
  * of the previous paragraph start at offset 0, so a link that crosses a paragraph mark covers
  * the rest of its first paragraph and the start of the next, also with a nested field.
@@ -152,7 +154,7 @@ function linkSpansOf(
       if (untracked > 0 || fields.length >= MAX_TRACKED_FIELDS) untracked += 1;
       else fields.push({ instruction: '', start: offsets.spanOf(node)?.start });
     } else if (type === 'end') {
-      // The innermost open field owns this `end`, whatever its type.
+      // The innermost open field owns this `w:fldChar` `end`, whatever its type.
       if (untracked > 0) untracked -= 1;
       else {
         const field = fields.pop();
@@ -183,10 +185,10 @@ function linkSpansOf(
 }
 
 /**
- * The parts of TOC results that drop the Hyperlink character style: link content inside the
- * cached result. Text outside a link keeps the style, whatever the `\h` switch says.
+ * The parts of `TOC` field results that drop the Hyperlink character style: link content inside
+ * the cached result. Text outside a link keeps the style, whatever the `TOC \h` switch says.
  *
- * Exception: a TOC whose `begin` and `end` are in one paragraph is a single atomic unit in the
+ * Exception: a TOC whose `w:fldChar` `begin` and `end` are in one paragraph is a single atomic unit in the
  * offset index. Its result has no offsets of its own, so the whole unit drops the style. Text
  * outside a link in such a TOC loses the Hyperlink style too.
  */
@@ -272,7 +274,8 @@ function rangeAt(ranges: readonly TocLinkRange[], at: number): TocLinkRange | un
 }
 
 /**
- * Drop the Hyperlink character style reference from direct properties inside the given ranges.
+ * Drop the `w:rStyle` reference to the Hyperlink character style from direct run properties
+ * (`w:rPr`) inside the given ranges.
  * Each range carries the style ids to drop, so any cascader gets the same result. Only a direct
  * reference is dropped: a character style based on Hyperlink keeps all its formatting.
  */
@@ -296,11 +299,11 @@ export function tocLinkCascader(
 }
 
 /**
- * One paragraph's TOC link ranges, the accessor that body paint, table-cell paint, and AutoFit
- * share. A style-separator group reads its members' ranges at their offsets.
+ * One paragraph's TOC link ranges, the accessor that body paint, table-cell paint, and autofit
+ * column widths (`w:tblLayout` `autofit`) share. A style-separator group reads its members' ranges at their offsets.
  *
  * TOC detection does not enter table cells yet, so a cell paragraph gets no ranges today. The
- * cell paint and AutoFit reads are a guard: when cell TOC detection lands, they apply the rule
+ * cell paint and autofit width reads are a guard: when cell TOC detection lands, they apply the rule
  * without more changes.
  */
 export function tocLinkRangesOf(
