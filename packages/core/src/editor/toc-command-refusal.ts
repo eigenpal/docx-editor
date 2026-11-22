@@ -20,6 +20,7 @@ import {
   selectionTouchesTocRange,
   tocAtParagraphEnd,
   tocBlockAnchor,
+  tocParagraphIdSet,
   tocParagraphRanges,
   tocRefusesInsertBefore,
   tocRefusesJoin,
@@ -242,13 +243,22 @@ function refusesInToc(
     case 'text': {
       // A section break also ends a section at the caret's paragraph.
       const sectionBreak = command.type === 'insertBreak' && command.kind.startsWith('section');
+      // Inside one paragraph the write asks only its own ranges, so the paragraph order
+      // (a scan of the whole story) is read only for a range across paragraphs.
+      const between =
+        selection.anchor.paragraphId === head ? [head] : paragraphIdsBetween(surface, selection);
       return (
-        tocRefusesTextWrite(part, selection, paragraphIdsBetween(surface, selection)) ||
+        tocRefusesTextWrite(part, selection, between) ||
         (sectionBreak && tocRefusesSectionMark(part, head))
       );
     }
-    case 'mark':
+    case 'mark': {
+      // The selection's ends, and the link at a caret, lie in the ends' paragraphs. Away
+      // from a TOC paragraph, skip the link lookup, which every toolbar refresh asks.
+      const tocIds = tocParagraphIdSet(part);
+      if (!tocIds.has(selection.anchor.paragraphId) && !tocIds.has(head)) return false;
       return selectionTouchesTocRange(part, linkTarget(command, surface, selection) ?? selection);
+    }
     case 'join':
       return tocRefusesJoin(part, mergedParagraphIds(surface));
     case 'block':

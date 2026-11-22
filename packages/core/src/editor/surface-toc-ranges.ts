@@ -60,6 +60,15 @@ export function tocParagraphRanges(part: OoxmlPart): readonly TocParagraphRange[
   cache.set(part, ranges);
   return ranges;
 }
+const paragraphIdCache = new WeakMap<OoxmlPart, ReadonlySet<string>>();
+/** The paragraphs that hold part of a TOC field, from {@link tocParagraphRanges}. */
+export function tocParagraphIdSet(part: OoxmlPart): ReadonlySet<string> {
+  const cached = paragraphIdCache.get(part);
+  if (cached) return cached;
+  const ids = new Set(tocParagraphRanges(part).map((range) => range.paragraphId));
+  paragraphIdCache.set(part, ids);
+  return ids;
+}
 export function fullyProtectedTocParagraphs(part: OoxmlPart): ReadonlySet<string> {
   return new Set(
     tocParagraphRanges(part)
