@@ -71,6 +71,14 @@ describe('defaultParagraphStyleIdOf', () => {
     ).toBeNull();
   });
 
+  test('a style id layout rejects never counts', () => {
+    const long = 'x'.repeat(129);
+    for (const styleId of [long, '__proto__', 'bad\u0001id']) {
+      expect(defaultParagraphStyleIdOf([style('a', 'Normal'), style(styleId, 'Normal')])).toBe('a');
+      expect(defaultParagraphStyleIdOf([style(styleId, 'Body', { isDefault: true })])).toBeNull();
+    }
+  });
+
   test('a name longer than any reader keeps never counts', () => {
     expect(isNormalStyleName(`${' '.repeat(200)}Normal`)).toBe(false);
     expect(isNormalStyleName('Normal')).toBe(true);

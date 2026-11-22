@@ -12,8 +12,11 @@
 //
 // Only a paragraph definition sets the flag, so a later duplicate of another type leaves it. The
 // style chain then finds no paragraph style under the id, and paragraphs keep `w:docDefaults`.
+// A definition whose `w:styleId` layout rejects (`isValidStyleId`) never counts.
 
 import type { OoxmlElement } from './ooxml-tree.ts';
+import { validStyleId } from './run-defaults.ts';
+import { isDangerousKey } from './safe-record.ts';
 
 /**
  * The `w:style` children a reader without definitions of its own passes to the rule: the same
@@ -62,8 +65,10 @@ export function defaultParagraphStyleIdOf(
   >();
   let order = 0;
   for (const definition of definitions) {
-    if (definition.type === 'paragraph' && definition.isDefault) flagged = definition.styleId;
-    last.set(definition.styleId, {
+    const { styleId } = definition;
+    if (validStyleId(styleId) === null || isDangerousKey(styleId)) continue;
+    if (definition.type === 'paragraph' && definition.isDefault) flagged = styleId;
+    last.set(styleId, {
       type: definition.type,
       normal: isNormalStyleName(definition.name),
       order,

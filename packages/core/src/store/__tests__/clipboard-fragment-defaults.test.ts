@@ -138,11 +138,11 @@ describe('a default paragraph style named "Normal" without w:default', () => {
     );
 
   test('the copy carries the look of the style the source painted it in', () => {
-    const pasted = paste(
-      styles(namedNormal('a')),
-      styles(namedNormal('Normal', ' w:default="1"').replace('32', '24'))
-    );
-    expect(pasted.main).toContain('<w:sz w:val="32"/>');
+    const target = styles(namedNormal('Normal', ' w:default="1"').replace('32', '24'));
+    // Unflagged, and flagged with the `on` spelling of `ST_OnOff`.
+    for (const flag of ['', ' w:default="on"']) {
+      expect(paste(styles(namedNormal('a', flag)), target).main).toContain('<w:sz w:val="32"/>');
+    }
   });
 
   test('an imported "Normal" never becomes the default of a target that flags none', () => {

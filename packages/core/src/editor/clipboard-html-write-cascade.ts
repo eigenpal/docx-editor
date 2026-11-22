@@ -14,6 +14,7 @@ import {
 import { MAX_STYLE_BASED_ON_DEPTH, MAX_STYLE_DEFINITIONS } from '../layout/style-cascade.ts';
 import { isElement, wmlChild, wmlVal } from './clipboard-html-write-tree.ts';
 import {
+  defaultParagraphStyleCandidateOf,
   defaultParagraphStyleIdOf,
   type DefaultParagraphStyleCandidate,
 } from '../store/package/default-paragraph-style.ts';
@@ -94,12 +95,8 @@ export function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
     // styleId WITHOUT the flag revokes the default, like the cascade table. The default
     // paragraph style follows the shared rule.
     const flagged = isDefault === '1' || isDefault === 'true' || isDefault === 'on';
-    paragraphDefaultCandidates.push({
-      styleId: id,
-      type: type ?? '',
-      name: wmlVal(wmlChild(child, 'name')),
-      isDefault: flagged,
-    });
+    const candidate = defaultParagraphStyleCandidateOf(child);
+    if (candidate) paragraphDefaultCandidates.push(candidate);
     if (flagged) {
       if (type === 'character') defaultCharacterStyleId = id;
       else if (type === 'table') defaultTableStyleId = id;
