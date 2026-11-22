@@ -45,7 +45,9 @@ const STYLES =
   '<w:style w:type="paragraph" w:styleId="Hang"><w:name w:val="Hang"/>' +
   '<w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:style>' +
   '<w:style w:type="paragraph" w:styleId="Body"><w:name w:val="Body"/>' +
-  '<w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="720" w:firstLineChars="200"/></w:pPr></w:style>';
+  '<w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="720" w:firstLineChars="200"/></w:pPr></w:style>' +
+  '<w:style w:type="paragraph" w:styleId="CharsBody"><w:name w:val="CharsBody"/>' +
+  '<w:basedOn w:val="Normal"/><w:pPr><w:ind w:leftChars="400" w:left="880"/></w:pPr></w:style>';
 
 function docx(body: string): Uint8Array {
   return zipSync({
@@ -257,6 +259,14 @@ describe('Backspace at the start of a list item', () => {
     expect(texts(editor)).toEqual(['Intro', 'One', 'Two']);
     backspaceAt(editor, 2);
     expect(texts(editor)).toEqual(['Intro', 'OneTwo']);
+  });
+
+  test('a paragraph at the margin after numId 0 joins on the first press', () => {
+    // The removal resets the style's character-unit indent too, so nothing is left to remove.
+    const removed = '<w:pStyle w:val="CharsBody"/><w:numPr><w:numId w:val="0"/></w:numPr>';
+    const editor = mount(docx(paragraph('Intro') + paragraph('Body', removed)));
+    backspaceAt(editor, 1);
+    expect(texts(editor)).toEqual(['IntroBody']);
   });
 
   test('a hanging indent from a style that does not number the item is cancelled', () => {

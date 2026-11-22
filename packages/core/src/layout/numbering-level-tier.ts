@@ -80,7 +80,13 @@ function numberingRemovalRank(
 const REMOVED_NUMBERING_PROPERTIES: readonly OoxmlProperty[] = Object.freeze([
   Object.freeze({
     localName: 'ind',
-    attributes: Object.freeze({ left: '0', leftChars: '0', firstLine: '0', firstLineChars: '0' }),
+    attributes: Object.freeze({
+      left: '0',
+      leftChars: '0',
+      firstLine: '0',
+      firstLineChars: '0',
+      hangingChars: '0',
+    }),
   }),
 ]);
 
