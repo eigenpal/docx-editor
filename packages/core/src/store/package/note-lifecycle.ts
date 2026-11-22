@@ -75,6 +75,7 @@ import {
 import { isValidXmlText } from './sinks.ts';
 import { applyInsertTrackedRun } from '../store/tree-op-tracked.ts';
 import { paragraphOffsetIndex } from '../store/tree-op-segments.ts';
+import { fieldEdgeChildIndex } from '../store/tree-op-field-edge.ts';
 import {
   invalidRevisionAttribution,
   type RevisionAttributionInput,
@@ -1029,14 +1030,12 @@ function insertNodesAtOffset(
     return replaced.ok ? replaced.part : null;
   }
 
-  if (offset === 0) {
-    const pPr = paragraph.children[0]?.kind === 'paragraphProperties' ? 1 : 0;
-    const inserted = insertChildren(part, paragraph.id, pPr, nodes);
-    return inserted.ok ? inserted.part : null;
-  }
-
-  if (offset >= length) {
-    const inserted = insertChildren(part, paragraph.id, paragraph.children.length, nodes);
+  // After the end of a field that spans paragraphs, before its begin (`tree-op-field-edge.ts`).
+  const pPr = paragraph.children[0]?.kind === 'paragraphProperties' ? 1 : 0;
+  const end = offset >= length ? paragraph.children.length : null;
+  const at = fieldEdgeChildIndex(paragraph, offset) ?? (offset === 0 ? pPr : end);
+  if (at !== null) {
+    const inserted = insertChildren(part, paragraph.id, at, nodes);
     return inserted.ok ? inserted.part : null;
   }
 

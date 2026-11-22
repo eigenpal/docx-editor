@@ -107,9 +107,9 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
   ['caret in a row: text box', BODY, [1, 2, 1, 2], TEXT_BOX, true],
   ['closing line: text box anchors after the end mark', BODY, [3, 0, 3, 0], TEXT_BOX, false],
   ['caret in a row: footnote', BODY, [1, 2, 1, 2], NOTE, true],
-  ['closing line: a footnote would land inside the field', BODY, [3, 0, 3, 0], NOTE, true],
-  ['closing line: a bookmark would land inside the field', BODY, [3, 0, 3, 0], BOOKMARK, true],
-  ['closing line: a link would wrap the end mark', BODY, [3, 0, 3, 0], LINK, true],
+  ['closing line: a footnote goes after the end mark', BODY, [3, 0, 3, 0], NOTE, false],
+  ['closing line: a bookmark goes after the end mark', BODY, [3, 0, 3, 0], BOOKMARK, false],
+  ['closing line: a link goes after the end mark', BODY, [3, 0, 3, 0], LINK, false],
   ['after the TOC: footnote', BODY, [4, 1, 4, 1], NOTE, false],
   ['after the TOC: bookmark', BODY, [4, 1, 4, 3], BOOKMARK, false],
   ['caret in a row: bookmark', BODY, [1, 2, 1, 2], BOOKMARK, true],
@@ -128,23 +128,23 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
   ['text before the field: section break', INLINE, [0, 2, 0, 2], SECTION, true],
   ['heading after the end mark: section break', INLINE, [1, 5, 1, 5], SECTION, true],
   ['after the TOC: section break', INLINE, [2, 2, 2, 2], SECTION, false],
-  ['end mark after cached text: link', INLINE, [1, 2, 1, 2], LINK, true],
-  ['end mark after cached text: link over the heading', INLINE, [1, 2, 1, 5], LINK, true],
-  ['end mark after cached text: bookmark', INLINE, [1, 2, 1, 2], BOOKMARK, true],
-  ['end mark after cached text: content control', INLINE, [1, 2, 1, 2], CONTROL, true],
-  ['end mark after cached text: footnote', INLINE, [1, 2, 1, 2], NOTE, true],
+  ['end mark after cached text: link', INLINE, [1, 2, 1, 2], LINK, false],
+  ['end mark after cached text: link over the heading', INLINE, [1, 2, 1, 5], LINK, false],
+  ['end mark after cached text: bookmark', INLINE, [1, 2, 1, 2], BOOKMARK, false],
+  ['end mark after cached text: content control', INLINE, [1, 2, 1, 2], CONTROL, false],
+  ['end mark after cached text: footnote', INLINE, [1, 2, 1, 2], NOTE, false],
   ['end mark after cached text: typing', INLINE, [1, 2, 1, 2], TYPE, false],
   ['inside the heading: link', INLINE, [1, 3, 1, 5], LINK, false],
-  ['before a TOC that begins mid-paragraph: footnote', INLINE, [0, 6, 0, 6], NOTE, true],
-  ['before a TOC that begins mid-paragraph: chart', INLINE, [0, 6, 0, 6], CHART, true],
+  ['before a TOC that begins mid-paragraph: footnote', INLINE, [0, 6, 0, 6], NOTE, false],
+  ['before a TOC that begins mid-paragraph: chart', INLINE, [0, 6, 0, 6], CHART, false],
   ['before a TOC that begins mid-paragraph: typing', INLINE, [0, 6, 0, 6], TYPE, false],
   ['before a TOC that begins mid-paragraph: bookmark', INLINE, [0, 6, 0, 6], BOOKMARK, false],
   ['text before a TOC: footnote', INLINE, [0, 3, 0, 3], NOTE, false],
   ['caret in a row: chart', BODY, [1, 2, 1, 2], CHART, true],
   ['range across the TOC: chart would remove it', BODY, [0, 1, 4, 2], CHART, true],
-  ['closing line: a new TOC would nest in the field', BODY, [3, 0, 3, 0], TOC, true],
+  ['closing line: a new TOC goes after it', BODY, [3, 0, 3, 0], TOC, false],
   ['caret in a row: TOC', BODY, [1, 2, 1, 2], TOC, true],
-  ['joined heading: a new TOC would nest in the field', JOINED, [2, 3, 2, 3], TOC, true],
+  ['joined heading: a new TOC goes after the closing line', JOINED, [2, 3, 2, 3], TOC, false],
   ['after the TOC: TOC', BODY, [4, 1, 4, 1], TOC, false],
   [
     'range across the TOC: indent writes the selection as one unit',
@@ -157,19 +157,13 @@ const CASES: readonly (readonly [string, string, Place, EditorCommand, boolean])
   ['joined heading: table goes after the closing line', JOINED, [2, 3, 2, 3], TABLE, false],
   ['joined heading start: table goes after the closing line', JOINED, [2, 0, 2, 0], TABLE, false],
   [
-    'joined heading start: a bookmark would land before the end mark',
+    'joined heading start: a bookmark goes after the end mark',
     JOINED,
     [2, 0, 2, 0],
     BOOKMARK,
-    true,
+    false,
   ],
-  [
-    'joined heading start: a footnote would land before the end mark',
-    JOINED,
-    [2, 0, 2, 0],
-    NOTE,
-    true,
-  ],
+  ['joined heading start: a footnote goes after the end mark', JOINED, [2, 0, 2, 0], NOTE, false],
   ['joined heading: bookmark', JOINED, [2, 3, 2, 5], BOOKMARK, false],
   ['joined heading: footnote', JOINED, [2, 3, 2, 3], NOTE, false],
   ['joined heading start: typing lands after the end mark', JOINED, [2, 0, 2, 0], TYPE, false],
@@ -452,7 +446,7 @@ test('typing on the closing line of a TOC inside a content control lands after t
   expect(row.editor.exec(TYPE)).toEqual(row.editor.can(TYPE));
 });
 
-test('a comment is refused on cached rows and at the closing line edge, and allowed beside them', () => {
+test('a comment is refused on cached rows, and allowed from the closing line edge and beside them', () => {
   const comment = { type: 'addComment', text: 'Note', author: 'A' } as EditorCommand;
   const mountReview = (place: Place) => {
     const editor = createDocxEditor({
@@ -469,18 +463,20 @@ test('a comment is refused on cached rows and at the closing line edge, and allo
     });
     return editor;
   };
+  const refused = mountReview([1, 1, 1, 4]);
+  expect(refused.can(comment)).toEqual({ ok: false, code: 'invalidArgs', reason: READ_ONLY });
+  expect(refused.exec(comment)).toEqual(refused.can(comment));
+  // From the closing line edge the comment starts after the end mark, outside the field.
   for (const place of [
-    [1, 1, 1, 4],
+    [4, 0, 4, 3],
     [3, 0, 4, 3],
   ] as const) {
-    const editor = mountReview(place);
-    expect(editor.can(comment)).toEqual({ ok: false, code: 'invalidArgs', reason: READ_ONLY });
-    expect(editor.exec(comment)).toEqual(editor.can(comment));
+    const allowed = mountReview(place);
+    expect(allowed.can(comment)).toEqual({ ok: true });
+    expect(allowed.exec(comment)).toMatchObject({ ok: true });
   }
-  const allowed = mountReview([4, 0, 4, 3]);
-  expect(allowed.can(comment)).toEqual({ ok: true });
   // A comment draft pins its range; the pinned range decides, not the caret moved inside it.
-  const pinned = mountReview([3, 0, 4, 3]);
+  const pinned = mountReview([2, 2, 4, 3]);
   pinned.surface!.retainSelection();
   const after = pinned.surface!.session.paragraphIds()[4]!;
   pinned.surface!.setSelection({

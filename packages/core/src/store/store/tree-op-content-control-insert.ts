@@ -8,6 +8,7 @@
 // Split out of `tree-op-content-controls.ts` so the insertion paths have room to be read
 // side by side rather than to fit under a line cap.
 
+import { fieldEdgeSide } from './tree-op-field-edge.ts';
 import {
   allocateContentControlId,
   lockForbidsEdit,
@@ -296,7 +297,8 @@ function insertEmptyContentControl(
     // A truly zero-length node — a bookmark, a comment marker — takes the bucket its POSITION
     // puts it in, exactly as the inline insert divides them.
     if (!span || span.start === span.end) {
-      (cursor < offset ? before : after).push(child);
+      const side = fieldEdgeSide(reloaded, offset, child) === 'before' || cursor < offset;
+      (side ? before : after).push(child);
       continue;
     }
     cursor = span.end;

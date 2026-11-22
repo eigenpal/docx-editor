@@ -50,7 +50,7 @@ import {
   tocForElement,
   tocAtPosition,
   TOC_READ_ONLY_REFUSAL,
-  tocTableAnchor,
+  tocBlockAnchor,
   selectionTouchesTocRange,
   opTouchesTocRange,
   batchTouchesTocRange,
@@ -4049,7 +4049,7 @@ export function mountPaginatedSurface(
    */
   function insertTableOp(rows: number, cols: number) {
     if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || cols < 1) return null;
-    const beforeParagraphId = tocTableAnchor(session.part(), selection.head.paragraphId);
+    const beforeParagraphId = tocBlockAnchor(session.part(), selection.head.paragraphId);
     if (beforeParagraphId === null) return null;
     const section = structure.sectionPropertiesAt(selection.head.paragraphId);
     const contentWidth =
@@ -4128,7 +4128,8 @@ export function mountPaginatedSurface(
 
   function insertTocOp() {
     const instruction = parseTocInstruction(INSERT_TOC_INSTRUCTION);
-    if (!instruction) return null;
+    const beforeParagraphId = tocBlockAnchor(session.part(), selection.head.paragraphId);
+    if (!instruction || beforeParagraphId === null) return null;
     const outline = session.documentOutline();
     const plan = planTocEntries(
       session.part(),
@@ -4146,7 +4147,7 @@ export function mountPaginatedSurface(
     );
     return {
       op: 'insertToc' as const,
-      beforeParagraphId: selection.head.paragraphId,
+      beforeParagraphId,
       instruction: INSERT_TOC_INSTRUCTION,
       alias: tocLabels?.title ?? 'TOC',
       entries: plan.entries,

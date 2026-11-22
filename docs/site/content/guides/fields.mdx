@@ -168,7 +168,7 @@ A successful removal handles nearby content as follows:
 | Bookmark and comment ranges that partly overlap the TOC | Stay. Their removed ends move to the deletion point. |
 | A wrapper control locked only against deletion | Stays with its heading. The command removes only the field. |
 
-Generated TOC rows are read-only. Delete and Backspace do not remove them.
+Generated TOC rows are read-only. Delete and Backspace do not remove them. Content that you insert at the start or end of a TOC goes outside the field, so a refresh keeps it. This covers text, links, bookmarks, comments, notes, content controls, pictures, and charts. A table or a new TOC at a closing line goes after that line.
 
 ## Limits
 

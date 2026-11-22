@@ -1,6 +1,10 @@
 // Writes into a generated table of contents, answered BEFORE the write, so `can`, the toolbar
 // and `exec` all say the same thing. The surface's write guard stays the authority; this asks
 // its range predicates of the selection, as the guard asks them of each op.
+//
+// Content inserted at a field edge needs no refusal here: the store places it outside the
+// field, after `w:fldChar w:fldCharType="end"` and before `w:fldChar w:fldCharType="begin"`
+// (`store/store/tree-op-field-edge.ts`). Only writes into the field result are refused.
 
 import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
@@ -11,22 +15,18 @@ import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import { selectedSpans } from './content-lock-format-refusal.ts';
 import { selectedParagraphIds } from './paragraph-format-lock-refusal.ts';
 import {
+  TOC_BLOCK_REFUSAL,
   TOC_READ_ONLY_REFUSAL,
-  TOC_TABLE_REFUSAL,
   selectionTouchesTocRange,
-  tocAtBeginMarkEdge,
-  tocAtEndMarkEdge,
   tocAtParagraphEnd,
+  tocBlockAnchor,
   tocParagraphRanges,
-  tocProtectsParagraph,
   tocRefusesInsertBefore,
   tocRefusesJoin,
   tocRefusesParagraphFormatting,
   tocRefusesRunFormatting,
   tocRefusesSectionMark,
   tocRefusesTextWrite,
-  tocIsClosingLine,
-  tocTableAnchor,
 } from './surface-toc-ranges.ts';
 
 /**
@@ -36,35 +36,21 @@ import {
  * - `text`: it writes text over the selection, so it is refused where the selection reaches
  *   generated content, or a range across paragraphs would remove or join a TOC paragraph.
  * - `mark`: it wraps or marks the selection without replacing it.
- * - `join`: `mergeParagraphs`. `table`: goes before the caret's paragraph, or after a
- *   closing line. `textBox`: anchors at the paragraph's end. `toc`: inserts a field before
- *   the caret's paragraph.
+ * - `join`: `mergeParagraphs`. `block`: a table or a TOC, which goes before the caret's
+ *   paragraph, or after a closing line (`tocBlockAnchor`). `textBox`: anchors at the
+ *   paragraph's end.
  * - `runFormat`, `paragraphFormat`: formats drop the writes that reach a TOC and are
  *   refused when none is left; `whole` writers are refused when any write reaches one.
  *
  * `writesEmptyMark`: at a caret in an empty paragraph the format writes the paragraph mark
- * instead of arming the next typed text.
- * `beforeEndMark`: at the end mark (on a closing line or after the last generated text) the
- * command inserts before the mark, inside the field result, where a refresh would drop it.
- * `afterBeginMark`: right before a TOC that begins inside a paragraph, the command inserts
- * after the field's separator, inside the result. `atTarget`: the command writes at its
- * resolved `target` (or `match`) rather than at the selection.
+ * instead of arming the next typed text. `atTarget`: the command writes at its resolved
+ * `target` (or `match`) rather than at the selection.
  */
 interface TocPolicy {
   readonly kind:
-    | 'none'
-    | 'text'
-    | 'mark'
-    | 'join'
-    | 'table'
-    | 'textBox'
-    | 'toc'
-    | 'runFormat'
-    | 'paragraphFormat';
+    'none' | 'text' | 'mark' | 'join' | 'block' | 'textBox' | 'runFormat' | 'paragraphFormat';
   readonly whole?: true;
   readonly writesEmptyMark?: true;
-  readonly beforeEndMark?: true;
-  readonly afterBeginMark?: true;
   readonly atTarget?: true;
 }
 
@@ -73,6 +59,7 @@ const TEXT: TocPolicy = { kind: 'text' };
 const MARK: TocPolicy = { kind: 'mark' };
 const RUN_FORMAT: TocPolicy = { kind: 'runFormat' };
 const PARAGRAPH_FORMAT: TocPolicy = { kind: 'paragraphFormat' };
+const BLOCK: TocPolicy = { kind: 'block' };
 
 /**
  * Every command, so the compiler asks for a decision on each new one. `replaceAllMatches`
@@ -82,7 +69,7 @@ const PARAGRAPH_FORMAT: TocPolicy = { kind: 'paragraphFormat' };
 const TOC_POLICIES: Readonly<Record<EditorCommand['type'], TocPolicy>> = {
   acceptAllRevisions: NONE,
   acceptRevision: NONE,
-  addComment: { kind: 'mark', beforeEndMark: true },
+  addComment: MARK,
   addRepeatingSectionItem: NONE,
   adjustIndent: { kind: 'paragraphFormat', whole: true },
   applyFormatting: RUN_FORMAT,
@@ -107,20 +94,20 @@ const TOC_POLICIES: Readonly<Record<EditorCommand['type'], TocPolicy>> = {
   editTextFormField: NONE,
   exitHeaderFooter: NONE,
   goToBookmark: NONE,
-  insertBookmark: { kind: 'mark', beforeEndMark: true },
+  insertBookmark: MARK,
   insertBreak: TEXT,
-  insertChart: { kind: 'text', afterBeginMark: true },
+  insertChart: TEXT,
   insertColumn: NONE,
-  insertContentControl: { kind: 'mark', beforeEndMark: true, atTarget: true },
-  insertHyperlink: { kind: 'mark', beforeEndMark: true },
-  insertImage: { kind: 'text', atTarget: true, afterBeginMark: true },
-  insertNote: { kind: 'text', beforeEndMark: true, afterBeginMark: true },
+  insertContentControl: { kind: 'mark', atTarget: true },
+  insertHyperlink: MARK,
+  insertImage: { kind: 'text', atTarget: true },
+  insertNote: TEXT,
   insertPageField: NONE,
   insertRow: NONE,
-  insertTable: { kind: 'table' },
+  insertTable: BLOCK,
   insertText: TEXT,
   insertTextBox: { kind: 'textBox' },
-  insertToc: { kind: 'toc' },
+  insertToc: BLOCK,
   keepFirstBookmark: NONE,
   linkHeaderFooterToPrevious: NONE,
   mergeCells: NONE,
@@ -218,23 +205,23 @@ export function tocCommandRefusal(
   const part = surface.session.part();
   if (tocParagraphRanges(part).length === 0) return null;
   if (!refusesInToc(command, policy, surface, part, at)) {
-    return policy.kind === 'table' ? tableAnchorRefusal(surface, part) : null;
+    return policy.kind === 'block' ? blockAnchorRefusal(surface, part) : null;
   }
   // The caller can fix it by moving the selection, as with the write guard's own refusal.
   return { ok: false, code: 'invalidArgs', reason: TOC_READ_ONLY_REFUSAL };
 }
 
 /**
- * Why a table cannot go at the caret because of a TOC, or null. On a closing line that holds
- * text the table goes after the line; with no paragraph after it, it has no place there.
+ * Why a table or a TOC cannot go at the caret because of a TOC, or null. On a closing line
+ * the block goes after the line; with no paragraph after it, it has no place there.
  */
-function tableAnchorRefusal(
+function blockAnchorRefusal(
   surface: PaginatedSurface,
   part: OoxmlPart
 ): Exclude<ExecResult, { ok: true }> | null {
   const head = surface.state().selection.head.paragraphId;
-  if (tocTableAnchor(part, head) !== null) return null;
-  return { ok: false, code: 'invalidArgs', reason: TOC_TABLE_REFUSAL };
+  if (tocBlockAnchor(part, head) !== null) return null;
+  return { ok: false, code: 'invalidArgs', reason: TOC_BLOCK_REFUSAL };
 }
 
 function refusesInToc(
@@ -248,8 +235,6 @@ function refusesInToc(
     at ?? (policy.atTarget ? targetSelection(command, surface) : surface.state().selection);
   if (!selection) return false; // An unresolvable target meets its own refusal.
   const head = selection.head.paragraphId;
-  if (policy.beforeEndMark && tocAtEndMarkEdge(part, selection)) return true;
-  if (policy.afterBeginMark && tocAtBeginMarkEdge(part, selection)) return true;
   switch (policy.kind) {
     case 'text': {
       // A section break also ends a section at the caret's paragraph.
@@ -263,17 +248,16 @@ function refusesInToc(
       return selectionTouchesTocRange(part, selection);
     case 'join':
       return tocRefusesJoin(part, mergedParagraphIds(surface));
-    case 'table':
-      // A closing line sends the table after itself (`tocTableAnchor`), so its own mark is
-      // not written.
+    case 'block': {
+      // The block goes before the anchor paragraph, which must not lie inside a TOC field.
+      const anchor = tocBlockAnchor(part, head);
       return (
         selectionTouchesTocRange(part, selection) ||
-        (tocProtectsParagraph(part, head) && !tocIsClosingLine(part, head))
+        (anchor !== null && tocRefusesInsertBefore(part, anchor))
       );
+    }
     case 'textBox':
       return tocAtParagraphEnd(part, head);
-    case 'toc':
-      return selectionTouchesTocRange(part, selection) || tocRefusesInsertBefore(part, head);
     case 'runFormat':
       return tocRefusesRunFormatting(part, selectedSpans(surface), {
         whole: policy.whole === true,

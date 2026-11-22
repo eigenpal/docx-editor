@@ -44,6 +44,7 @@ import {
   insertionSiteAfterAtom,
 } from './tree-op-field-end-site.ts';
 import { continuedRevisionRun } from './same-revision.ts';
+import { siteBeforeFieldBegin } from './tree-op-field-edge.ts';
 import {
   besideRestrictedControl,
   holdsContentControl,
@@ -579,7 +580,8 @@ export function insertionSite(
     owner === null && bias === 'left'
       ? leadingPromptSite(paragraph, offset, paragraphOffsetIndex(paragraph))
       : null;
-  const raw = before ?? rawInsertionSite(paragraph, offset, owner, bias);
+  const resolved = before ?? rawInsertionSite(paragraph, offset, owner, bias);
+  const raw = siteBeforeFieldBegin(paragraph, offset, owner, resolved); // tree-op-field-edge.ts
   if (owner !== null) return raw;
   // Beside a control typing cannot enter, then out of a deletion around wherever that is.
   const site = besideRestrictedControlAt(paragraph, offset, raw) ?? raw;

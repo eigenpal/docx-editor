@@ -8,9 +8,9 @@ import type { SemanticPosition, SemanticSelection } from '../layout/semantic-int
 
 /** The refusal of a write into a generated table of contents. */
 export const TOC_READ_ONLY_REFUSAL = 'the table of contents is generated and read-only';
-/** A table on a closing line that holds text goes after it, and nothing follows it. */
-export const TOC_TABLE_REFUSAL =
-  'a table here would land inside the table of contents; add a paragraph after this line first';
+/** A table or TOC on a closing line goes after it, and nothing follows it in its container. */
+export const TOC_BLOCK_REFUSAL =
+  'this would land inside the table of contents; add a paragraph after this line first';
 
 export interface TocParagraphRange {
   readonly toc: DetectedToc;
@@ -122,8 +122,10 @@ export function opTouchesTocRange(
 ): boolean {
   const ranges = tocParagraphRanges(part);
   if (ranges.length === 0) return false;
-  // A new TOC before a paragraph inside an existing one would nest in its field.
-  if (op.op === 'insertToc') return tocRefusesInsertBefore(part, op.beforeParagraphId);
+  // A block before a paragraph inside an existing TOC would land in its field.
+  if (op.op === 'insertToc' || op.op === 'insertTable') {
+    return tocRefusesInsertBefore(part, op.beforeParagraphId);
+  }
   const reach = treeOpReach(op);
   if (reach.kind === 'nodes') {
     return reach.targets.some((target) =>
@@ -212,20 +214,20 @@ export function tocIsClosingLine(part: OoxmlPart, paragraphId: string): boolean 
   return tocParagraphRanges(part).some((r) => r.paragraphId === paragraphId && holdsOnlyEndMark(r));
 }
 /**
- * The paragraph a table inserted at the caret goes before. A table goes before the caret's
- * paragraph, except on a closing line: there it would land inside the field result, so it
- * goes after the closing line, as a pasted table does. Null when no paragraph follows the
- * closing line in its container.
+ * The paragraph a block inserted at the caret (a table or a TOC) goes before. A block goes
+ * before the caret's paragraph, except on a closing line: there it would land inside the
+ * field result, so it goes after the closing line, as a pasted table does. Null when no
+ * paragraph follows the closing line in its container.
  */
-export function tocTableAnchor(part: OoxmlPart, paragraphId: string): string | null {
+export function tocBlockAnchor(part: OoxmlPart, paragraphId: string): string | null {
   if (!tocIsClosingLine(part, paragraphId)) return paragraphId;
   const siblings = parentOf(part, paragraphId)?.children ?? [];
   const next = siblings[siblings.findIndex((child) => child.id === paragraphId) + 1];
   return next?.kind === 'paragraph' ? next.id : null;
 }
 /**
- * Whether the TOC guard refuses a field inserted before a paragraph: any TOC paragraph
- * except the one where a TOC begins, since a new field there would nest in the old one.
+ * Whether the TOC guard refuses a block (a table or a TOC) inserted before a paragraph: any
+ * TOC paragraph except the one where a TOC begins, since a block there would land in the field.
  */
 export function tocRefusesInsertBefore(part: OoxmlPart, paragraphId: string): boolean {
   return tocParagraphRanges(part).some((r) => r.paragraphId === paragraphId && !r.startsHere);
@@ -260,35 +262,6 @@ export function tocRefusesTextWrite(
   if (selectionTouchesTocRange(part, selection)) return true;
   if (selection.anchor.paragraphId === selection.head.paragraphId) return false;
   return tocRefusesJoin(part, paragraphIds);
-}
-/**
- * Whether an end of the selection sits right at the end mark, on a closing line or after the
- * last generated text. Text typed there lands after the mark, but an object or a wrapper
- * inserted there lands before it, inside the field result, where a refresh would drop it.
- */
-export function tocAtEndMarkEdge(part: OoxmlPart, selection: SemanticSelection): boolean {
-  return tocParagraphRanges(part).some(
-    (r) =>
-      r.endsHere &&
-      [selection.anchor, selection.head].some(
-        (end) => end.paragraphId === r.paragraphId && end.offset === r.end
-      )
-  );
-}
-/**
- * Whether an end of the selection sits right before a TOC that begins inside a paragraph.
- * Text typed there lands before the begin mark, but an inserted object lands after the
- * field's separator, inside the result, where a refresh would drop it.
- */
-export function tocAtBeginMarkEdge(part: OoxmlPart, selection: SemanticSelection): boolean {
-  return tocParagraphRanges(part).some(
-    (r) =>
-      r.startsHere &&
-      r.start > 0 &&
-      [selection.anchor, selection.head].some(
-        (end) => end.paragraphId === r.paragraphId && end.offset === r.start
-      )
-  );
 }
 /** Whether the end of a paragraph, where an anchored object is inserted, is generated. */
 export function tocAtParagraphEnd(part: OoxmlPart, paragraphId: string): boolean {
