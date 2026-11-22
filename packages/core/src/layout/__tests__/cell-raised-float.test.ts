@@ -97,3 +97,20 @@ test('a float at its anchor top, or with a table between, leaves the earlier lin
   const between = lay(p('L0') + inFlow + float(-600, FULL) + p('anchor'));
   expect(byText(between, 'L0').lines[0]!.box.y).toBeCloseTo(12, 3);
 });
+
+test('earlier lines the float would push past the page bottom keep their place', () => {
+  const read = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body>${Array.from({ length: 49 }, (_, i) => p(`top${i}`)).join('')}` +
+      `${outer(p('L0') + p('L1') + p('L2') + float(-200, FULL) + p('anchor'))}</w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!read.ok) throw new Error(read.reason);
+  const layout = layoutSemanticDocument(read.part, 0, { measurer: createFixedMeasurer(6, 12) });
+  const table = layout.pages[0]!.fragments.find((f) => f.kind === 'table') as TableFragmentRecord;
+  const blocks = table.rows[0]!.cells[0]!.blocks;
+  // L2 (612-624) crosses the float's band, but below the float it would end past the page
+  // bottom, so it keeps its place and the anchor continues on the next page.
+  expect(floatOf(blocks).box.y).toBeCloseTo(624 - 10, 1);
+  expect(byText(blocks, 'L2').lines[0]!.box.y).toBeCloseTo(612, 3);
+  expect(layout.pages.length).toBe(2);
+});
