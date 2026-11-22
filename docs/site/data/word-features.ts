@@ -1106,7 +1106,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Header STYLEREF fields display text from supported character or paragraph styles by name. Paragraph number switches display the list number of a paragraph-style match. Other switches and missing matches keep saved results. References in the body and footers also keep saved results.',
+      'Header STYLEREF fields display the text of a style match by name, or the list number of a paragraph-style match. Unsupported switches and missing matches keep saved results. Body and footer references also keep saved results.',
     docsLink: '/docs/2.x/guides/fields',
   },
   {

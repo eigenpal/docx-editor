@@ -29,7 +29,7 @@ export function parseCharacterStyleField(raw: string): CharacterStyleField | nul
   for (const [, letter] of match[3]!.matchAll(/\\([lnw])/gi)) {
     const value = letter!.toLowerCase();
     if (value === 'l') last = true;
-    // Word does not define a field that asks for two number forms.
+    // A field cannot ask for two number forms at once.
     else if (numberSwitch !== null && numberSwitch !== value) return null;
     else numberSwitch = value as 'n' | 'w';
   }

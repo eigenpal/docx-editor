@@ -131,8 +131,8 @@ test('\\n shows the selected paragraph number at its own level, \\w in full cont
     '第1章 Alpha|1.1|(1)|1.1(1)',
     '第2章 Beta|2.1|(1)|1.1(1)',
     '第2章 Beta|2.2|(1)|2.2(1)',
-    // Word shows nothing for a selected paragraph without a number.
-    ' Thanks|2.2|(1)|2.2(1)',
+    // A selected paragraph without a number reads as number zero.
+    '0 Thanks|2.2|(1)|2.2(1)',
   ]);
 });
 
@@ -156,9 +156,10 @@ test('a number drops one trailing period and keeps its literal text', () => {
   expect(headers(content, field('"Appendix Title"', '\\n'))).toEqual(['Appendix A', 'Appendix A']);
 });
 
-test('a paragraph style without numbering shows nothing under \\n', () => {
+test('a paragraph style without numbering shows zero under \\n and \\w', () => {
   const content = para(run('Body')) + para(run('Preface'), 'Plain', true);
-  expect(headers(content, field('"Plain Title"', '\\n') + bar)).toEqual(['|', '|']);
+  const header = field('"Plain Title"', '\\n') + bar + field('"Plain Title"', '\\w');
+  expect(headers(content, header)).toEqual(['0|0', '0|0']);
 });
 
 test('unsupported number shapes keep the cached result', () => {
@@ -182,7 +183,7 @@ function paragraphsOf(doc: OoxmlPart): OoxmlNode[] {
 test('a renumbering edit updates header numbers on a warm layout', () => {
   const header = field('"heading 1"', '\\n') + bar + field('"heading 2"', '\\n');
   const f = laidOut(thesis, header);
-  expect(text(f.laid)).toEqual(['第1章|1.1', '第1章|1.1', '第2章|2.1', '第2章|2.2', '|2.2']);
+  expect(text(f.laid)).toEqual(['第1章|1.1', '第1章|1.1', '第2章|2.1', '第2章|2.2', '0|2.2']);
   // Restyle the opening paragraph as a chapter: every later number moves up by one.
   const intro = paragraphsOf(f.main)[0]!;
   const edit = applyTreeOp(f.main, {
@@ -194,6 +195,6 @@ test('a renumbering edit updates header numbers on a warm layout', () => {
   if (!edit.ok) return;
   const warm = layoutSemanticDocument(edit.part, 2, { ...f.options, session: f.session });
   const cold = layoutSemanticDocument(edit.part, 2, f.options);
-  expect(text(warm)).toEqual(['第1章|2.1', '第2章|2.1', '第3章|3.1', '第3章|3.2', '|3.2']);
+  expect(text(warm)).toEqual(['第1章|2.1', '第2章|2.1', '第3章|3.1', '第3章|3.2', '0|3.2']);
   expect(warm.pages).toEqual(cold.pages);
 });

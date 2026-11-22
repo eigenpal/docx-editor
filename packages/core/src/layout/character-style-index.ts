@@ -331,8 +331,8 @@ function occurrenceValue(
 ): string | null {
   if (query.numberSwitch === null) return occurrence.text;
   const item = listItems?.get(occurrence.paragraphId);
-  // Word shows nothing for a paragraph without a number.
-  return item ? listItemReferenceNumber(item, query.numberSwitch === 'n') : '';
+  // A paragraph without a number reads as number zero.
+  return item ? listItemReferenceNumber(item, query.numberSwitch === 'n') : '0';
 }
 
 /** The style a reference names: a paragraph style outranks a character style of that name. */
