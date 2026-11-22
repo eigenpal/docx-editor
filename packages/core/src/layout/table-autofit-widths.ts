@@ -53,7 +53,7 @@ import type { BodyPageFieldContext } from './field-page-furniture.ts';
 import type { FieldPageContext } from './field-projection.ts';
 import type { RefFieldContext } from './field-ref.ts';
 import type { NoteMarkContext } from './note-projection.ts';
-import type { TocLinkRanges } from './toc-link-formatting.ts';
+import { tocLinkRangesOf, type TocLinkRanges } from './toc-link-formatting.ts';
 import { cellStyleKey } from './autofit-value-token.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-display.ts';
@@ -300,28 +300,25 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
     true
   );
   const fields = context.fields;
-  const projected = piecesOfParagraphForDisplay(
+  const projected = piecesOfParagraphForDisplay({
     paragraph,
-    layoutInputs.inheritedRunProperties,
-    fields?.pageContext,
-    styleCascade
+    inheritedRunProperties: layoutInputs.inheritedRunProperties,
+    pageContext: fields?.pageContext,
+    cascadeRuns: styleCascade
       ? (inherited, direct) => cascadeRunProperties(inherited, direct, styleCascade)
       : undefined,
-    undefined,
-    fields?.noteMarks,
+    noteMarks: fields?.noteMarks,
     displayMode,
-    undefined,
-    context.inlineDrawingLayout,
-    styleCascade?.themeFonts,
-    undefined,
-    fields?.documentProperties,
-    fields?.bodyPageFields ?? false,
-    fields?.refFields,
-    view.authorFilter,
-    fields?.showFieldCodes,
-    fields?.fieldCodeRanges?.get(paragraph.id),
-    fields?.tocLinkStyleRanges?.get(paragraph.id)
-  );
+    inlineDrawingLayout: context.inlineDrawingLayout,
+    themeFonts: styleCascade?.themeFonts,
+    documentProperties: fields?.documentProperties,
+    bodyPageFields: fields?.bodyPageFields ?? false,
+    refFields: fields?.refFields,
+    authorFilter: view.authorFilter,
+    showFieldCodes: fields?.showFieldCodes,
+    fieldCodeRanges: fields?.fieldCodeRanges?.get(paragraph.id),
+    tocLinkStyleRanges: tocLinkRangesOf(paragraph, fields?.tocLinkStyleRanges),
+  });
   const typography = resolveCjkTypography(
     layoutInputs.props,
     styleCascade?.typography,

@@ -667,6 +667,8 @@ export function layoutTextboxStory(
       ...(options.projectLink ? { projectLink: options.projectLink } : {}),
       ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
       showFieldCodes: options.showFieldCodes,
+      // TOC detection reads the body only, so a text box story has no TOC link ranges.
+      tocLinkStyleRanges: undefined,
       compatibilityMode: options.compatibilityMode,
       tableNestingOffset: 1,
       textBoxStory: true,

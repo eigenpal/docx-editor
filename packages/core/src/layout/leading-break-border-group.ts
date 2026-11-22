@@ -60,27 +60,25 @@ export function createLeadingBreakGroups(
   const memo = new Map<OoxmlElement, boolean>();
   const displayOpensWithBreak = (block: PreparedParagraph): boolean => {
     const { styleCascade } = view;
-    const pieces = piecesOfParagraphForDisplay(
-      block.paragraph,
-      block.inheritedRunProperties,
-      undefined,
-      styleCascade
+    const pieces = piecesOfParagraphForDisplay({
+      paragraph: block.paragraph,
+      inheritedRunProperties: block.inheritedRunProperties,
+      cascadeRuns: styleCascade
         ? (inherited, direct) => cascadeRunProperties(inherited, direct, styleCascade)
         : undefined,
-      undefined,
-      view.noteMarks,
-      view.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
-      undefined,
-      view.inlineDrawingLayout,
-      styleCascade?.themeFonts,
-      undefined,
-      view.documentProperties,
+      noteMarks: view.noteMarks,
+      displayMode: view.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
+      inlineDrawingLayout: view.inlineDrawingLayout,
+      themeFonts: styleCascade?.themeFonts,
+      documentProperties: view.documentProperties,
       bodyPageFields,
-      view.refFields,
-      view.revisionAuthorFilter,
-      view.showFieldCodes,
-      view.fieldCodeRanges?.get(block.paragraph.id)
-    );
+      refFields: view.refFields,
+      authorFilter: view.revisionAuthorFilter,
+      showFieldCodes: view.showFieldCodes,
+      fieldCodeRanges: view.fieldCodeRanges?.get(block.paragraph.id),
+      // The leading-break test reads only break and text positions, never run styles.
+      tocLinkStyleRanges: undefined,
+    });
     // The same test `opensWithPageBreak` applies to the lines: the first line holds only the
     // break, and a later line holds text, a picture, or another page or column break.
     let text = '';

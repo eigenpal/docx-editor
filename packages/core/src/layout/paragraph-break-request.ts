@@ -6,6 +6,7 @@ import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { FieldPageContext } from './field-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import { breakParagraph, type ParagraphFlowOptions, type PendingLine } from './paragraph-flow.ts';
+import type { TocParagraphFlowOptions } from './paragraph-flow-options.ts';
 import {
   tabStopsFingerprint,
   withDefaultTabInterval,
@@ -189,7 +190,8 @@ export interface ParagraphBreakRequest {
   readonly flow: Omit<
     ParagraphFlowOptions,
     'lineSpacing' | 'typography' | 'equationCacheToken' | 'themeFonts' | 'markRunProperties'
-  >;
+  > &
+    Pick<TocParagraphFlowOptions, 'tocLinkStyleRanges'>;
 }
 
 let measuredParagraphs: string[] | null = null;

@@ -344,24 +344,11 @@ describe('saved results inside a simple field', () => {
 
   test('field-code view is unchanged', () => {
     const body = quote(conditional(styleRef(run('<w:t>S</w:t><w:cr/>')), '', text('R')));
-    const codes = piecesOfParagraphForDisplay(
-      paragraphOf(body),
-      [],
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      false,
-      undefined,
-      undefined,
-      true
-    ).map((piece) => [piece.text, piece.start, piece.end]);
+    const codes = piecesOfParagraphForDisplay({
+      paragraph: paragraphOf(body),
+      showFieldCodes: true,
+      tocLinkStyleRanges: undefined,
+    }).map((piece) => [piece.text, piece.start, piece.end]);
     expect(codes).toEqual([
       ['A', 0, 1],
       ['{ QUOTE x }', 1, 2],
