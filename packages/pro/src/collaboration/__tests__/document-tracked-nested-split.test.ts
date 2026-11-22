@@ -10,6 +10,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { afterAll, afterEach, describe, expect, setSystemTime, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import type * as Y from 'yjs';
+import { strFromU8, unzipSync } from 'fflate';
 import { DocumentRegistry, isElementRecord } from '../document/index.ts';
 import {
   later,
@@ -207,16 +208,31 @@ describe('rejecting tracked breaks after several rounds of splits', () => {
         });
 });
 
-/** Center paragraph `index` without tracking. */
-const center = (runtime: Runtime, index: number) =>
+/** Center or indent paragraph `index` without tracking. */
+const format = (runtime: Runtime, index: number, property: 'alignment' | 'leftIndent') =>
   runtime.run(async (context) => {
     context.document.changeTrackingMode = 'Off';
     const paragraphs = context.document.body.paragraphs;
     paragraphs.load('items');
     await context.sync();
-    paragraphs.items[index]!.alignment = 'Centered';
+    if (property === 'alignment') paragraphs.items[index]!.alignment = 'Centered';
+    else paragraphs.items[index]!.leftIndent = 36;
     await context.sync();
   });
+
+/** Format every paragraph before the signature, one edit each. */
+async function formatEach(
+  runtime: Runtime,
+  count: number,
+  property: 'alignment' | 'leftIndent',
+  sync: () => void
+): Promise<void> {
+  for (let index = 0; index < count; index += 1) {
+    later();
+    await format(runtime, index, property);
+    sync();
+  }
+}
 
 /** How many `w:pPr` each body paragraph lists in shared state. */
 function listedProperties(ydoc: Y.Doc): number[] {
@@ -236,28 +252,36 @@ function listedProperties(ydoc: Y.Doc): number[] {
   }
 }
 
+/** How many `w:ind` the saved document holds. */
+async function savedIndents(editor: { save(): Promise<ArrayBuffer | Uint8Array> }) {
+  const saved = unzipSync(new Uint8Array(await editor.save()));
+  return strFromU8(saved['word/document.xml']!).match(/<w:ind /g)?.length ?? 0;
+}
+
+/** Each round in turn: Alice and Bob split paragraph `index` offline, then reconnect. */
+async function splitRounds(r: Room, rounds: Rounds['rounds']): Promise<void> {
+  for (const { index, alice, bob } of rounds) {
+    r.offline();
+    await splitAt(r.alice.runtime, index, alice);
+    later();
+    if (bob) await splitAt(r.bob.runtime, index, bob);
+    later();
+    r.online();
+  }
+  r.sync();
+}
+
 describe('formatting paragraphs whose break proposals show on another paragraph', () => {
   for (const { name, rounds, split, Bob } of [ROUNDS[0]!, ROUNDS[2]!])
-    for (const { label, ids } of ORDERS)
+    for (const { label, ids } of ORDERS) {
+      const count = split.length - 1;
       test(`${name}: every break stays pending (${label})`, async () => {
         const r = await room(TEXT, ids);
         try {
-          for (const { index, alice, bob } of rounds) {
-            r.offline();
-            await splitAt(r.alice.runtime, index, alice);
-            later();
-            if (bob) await splitAt(r.bob.runtime, index, bob);
-            later();
-            r.online();
-          }
-          r.sync();
+          await splitRounds(r, rounds);
           const pending = await revisionCount(r.carol.runtime);
           // The edit lands on each paragraph's shown properties, a moved proposal included.
-          for (let index = 0; index < split.length - 1; index += 1) {
-            later();
-            await center(r.carol.runtime, index);
-            r.sync();
-          }
+          await formatEach(r.carol.runtime, count, 'alignment', r.sync);
           await r.expectAll(split, pending);
           // Each edit listed the proposals where they show, and removed the copies they replace.
           expect(Math.max(...listedProperties(r.carol.ydoc))).toBe(1);
@@ -270,4 +294,95 @@ describe('formatting paragraphs whose break proposals show on another paragraph'
           r.close();
         }
       });
+
+      test(`${name}: an undo keeps every break and another participant's formatting (${label})`, async () => {
+        const r = await room(TEXT, ids);
+        try {
+          await splitRounds(r, rounds);
+          const pending = await revisionCount(r.carol.runtime);
+          await formatEach(r.carol.runtime, count, 'alignment', r.sync);
+          await formatEach(r.alice.runtime, count, 'leftIndent', r.sync);
+          for (let step = 0; step < count; step += 1) {
+            expect(r.carol.room.session.undo()).toBe(true);
+            r.sync();
+          }
+          await r.expectAll(split, pending);
+          expect(await savedIndents(r.carol.editor)).toBe(count);
+          await r.expectJoinerConverges();
+          later();
+          await rejectBy(r.carol.runtime, 'Bob');
+          r.sync();
+          await r.expectAll(Bob);
+        } finally {
+          r.close();
+        }
+      });
+
+      test(`${name}: an undo after concurrent formatting keeps every break (${label})`, async () => {
+        const r = await room(TEXT, ids);
+        try {
+          await splitRounds(r, rounds);
+          const pending = await revisionCount(r.carol.runtime);
+          r.offline();
+          await formatEach(r.carol.runtime, count, 'alignment', () => {});
+          await formatEach(r.bob.runtime, count, 'alignment', () => {});
+          r.online();
+          r.sync();
+          await r.expectAll(split, pending);
+          for (let step = 0; step < count; step += 1) {
+            expect(r.carol.room.session.undo()).toBe(true);
+            r.sync();
+          }
+          await r.expectAll(split, pending);
+          await r.expectJoinerConverges();
+          later();
+          await rejectBy(r.carol.runtime, 'Bob');
+          r.sync();
+          await r.expectAll(Bob);
+        } finally {
+          r.close();
+        }
+      });
+    }
+});
+
+describe('an undo of one concurrent split of a paragraph that proposes its own break', () => {
+  const cases = [
+    {
+      undoes: 'bob',
+      shown: ['a; b; ', 'c; d; e; f; g; ', 'h; i; j;', 'Signed'],
+      other: 'Alice',
+      kept: [TEXT, 'Signed'],
+    },
+    {
+      undoes: 'alice',
+      shown: ['a; b; c; d; e; ', 'f; g; ', 'h; i; j;', 'Signed'],
+      other: 'Bob',
+      kept: ['a; b; c; d; e; f; g; ', 'h; i; j;', 'Signed'],
+    },
+  ] as const;
+  for (const { undoes, shown, other, kept } of cases)
+    for (const finish of ['other', 'all'] as const)
+      for (const { label, ids } of ORDERS)
+        test(`${undoes} undoes, then reject ${finish === 'all' ? 'all' : other} (${label})`, async () => {
+          const r = await room(TEXT, ids);
+          try {
+            await splitRounds(r, [
+              { index: 0, alice: 'g; ' },
+              { index: 0, alice: 'b; ', bob: 'e; ' },
+            ]);
+            later();
+            expect(r[undoes].room.session.undo()).toBe(true);
+            r.sync();
+            await r.expectAll(shown);
+            await r.expectJoinerConverges();
+            later();
+            if (finish === 'all') await rejectAll(r.carol.runtime);
+            else await rejectBy(r.carol.runtime, other);
+            r.sync();
+            await r.expectAll(finish === 'all' ? [TEXT, 'Signed'] : kept);
+          } finally {
+            r.close();
+          }
+        });
 });

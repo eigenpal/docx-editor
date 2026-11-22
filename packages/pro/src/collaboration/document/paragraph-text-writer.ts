@@ -390,8 +390,11 @@ export function routeInlineEffects(
         splitMarkMoves(registry).shownChildIds(paragraphId, listed),
         (id) => sharedChildShell(registry, id)
       );
-      // A block two peers moved here at once is listed twice and shows once, at the first.
+      // A block two peers moved here at once is listed twice and shows once, at the first. A
+      // tombstone, such as properties an undo listed again after a split replaced them, shows
+      // nowhere, as the materializer shows it.
       for (const childId of new Set(shown)) {
+        if (!registry.showsAsChild(childId)) continue;
         const block = scratch.placeholder(childId, registry.kindOf(childId) ?? 'generic');
         block.block = true;
         block.parent = paragraphId;

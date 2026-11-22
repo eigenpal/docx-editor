@@ -302,6 +302,11 @@ export interface ProjectedJournal {
   readonly plan: InlinePlan | null;
   /** Typing at one place, written straight to its paragraph's text (`typedInsertOf`). */
   readonly typed?: TypedInsert;
+  /**
+   * How many effects at the start of `journal` only list split proposals where they show
+   * (`split-mark-moves.ts`). They change nothing anyone sees, so they publish outside undo.
+   */
+  readonly listed?: number;
 }
 
 /**
@@ -808,6 +813,14 @@ export function projectJournalToShared(
     if (effect.kind === 'spliceText') text.apply(effect);
   };
   try {
+    // Proposals go where they show first, before the edit, as writes of their own: they
+    // change nothing anyone sees, so an undo of the edit leaves them where they show.
+    for (const effect of incoming) {
+      if (effect.kind === 'spliceChildren') listMarksWhereShown(effect.parentLogicalId);
+      else if (effect.kind === 'moveNode') listMarksWhereShown(effect.destinationParentLogicalId);
+    }
+    if (refusal) return refusal;
+    const listed = effects.length;
     for (const effect of incoming) {
       const result = validateEffect(registry, effect, visible);
       if (result && !result.ok) return result;
@@ -925,7 +938,7 @@ export function projectJournalToShared(
       }
       if (refusal) return refusal;
     }
-    return { ok: true, journal: { effects }, plan: routed.plan };
+    return { ok: true, journal: { effects }, plan: routed.plan, listed };
   } finally {
     text.destroy();
   }

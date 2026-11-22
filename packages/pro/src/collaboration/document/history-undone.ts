@@ -26,6 +26,7 @@ import { INLINE_FIELD } from './paragraph-text.ts';
 import { whileSteppingReplaced, whileUndoingCreations } from './undo-delete-filter.ts';
 import { ownDeletedRecords, redoRefusedDeletes } from './tombstone-guard.ts';
 import { noteUndoneParagraphTargets, undoKeeps } from './undo-unlisted-text.ts';
+import { undoKeepsProperties } from './undo-kept-properties.ts';
 
 /**
  * The part members a part always lists. Numbering definitions are not among them: concurrent
@@ -33,6 +34,15 @@ import { noteUndoneParagraphTargets, undoKeeps } from './undo-unlisted-text.ts';
  * record (`w15:commentEx`) is one: an undo that removes it must not see it adopted back.
  */
 const LISTED_MEMBERS = new Set(['comment', 'commentEx', 'footnote', 'endnote']);
+
+/** An item either rule keeps, or null when neither keeps any. */
+function eitherKeeps(
+  first: ((item: Y.Item) => boolean) | null,
+  second: ((item: Y.Item) => boolean) | null
+): ((item: Y.Item) => boolean) | null {
+  if (!first || !second) return first ?? second;
+  return (item) => first(item) || second(item);
+}
 
 /** The meta key under which a history step keeps the records its undo marked. */
 const MARKED = 'docx-undone-records';
@@ -175,7 +185,10 @@ export function stepHistory(
               popped as YjsStep | undefined,
               () => history.undo()
             ),
-          undoKeeps(registry.doc, registry.schema.nodes, popped)
+          eitherKeeps(
+            undoKeeps(registry.doc, registry.schema.nodes, popped),
+            undoKeepsProperties(registry.doc, registry.schema.nodes, popped)
+          )
         );
       } else
         whileSteppingReplaced(registry.doc, registry.schema, popped as YjsStep | undefined, () =>
