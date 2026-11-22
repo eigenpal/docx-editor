@@ -387,3 +387,31 @@ test('tracked typing at an edge inside your own insertion extends it (suggesting
     }
   expect(failures).toEqual([]);
 });
+
+// Any field whose characters span paragraphs follows the same rule as a TOC: text typed at its
+// end edge goes after the end character, and a link that holds the end character and text past
+// it divides there, so the typed text lands between the two parts of the link.
+test('plain typing at the end edge of another field inside a link lands outside the field', () => {
+  const quote =
+    '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>QUOTE "x"</w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>';
+  const body =
+    p(mark('Top'), run('Before'), quote, run('Line 1')) +
+    p(link('Top', run('Pg'), end, run('Tail')));
+  const editor = mount(body);
+  const paragraphId = editor.surface!.session.part().root.children[0]!.children[1]!.id;
+  editor.surface!.setSelection({
+    anchor: { paragraphId, offset: 2 },
+    head: { paragraphId, offset: 2 },
+  });
+  expect(editor.exec({ type: 'insertText', text: 'ZQ' }).ok).toBe(true);
+  const written = bodyXml(editor);
+  expect(fieldsWellFormed(written)).toBe(true);
+  const closing = written.slice(written.lastIndexOf('<w:p '));
+  const at = (needle: string) => closing.indexOf(needle);
+  expect(at('ZQ')).toBeGreaterThan(at('w:fldCharType="end"'));
+  expect(at('ZQ')).toBeLessThan(at('Tail'));
+  // The link divides at the edge: one part keeps the end character, the other the text after it.
+  expect(closing.match(/<w:hyperlink w:anchor="Top">/g)?.length).toBe(2);
+  expect(closing.slice(at('w:fldCharType="end"'), at('ZQ'))).toContain('</w:hyperlink>');
+  expect(closing.slice(at('ZQ'), at('Tail'))).toContain('<w:hyperlink w:anchor="Top">');
+});

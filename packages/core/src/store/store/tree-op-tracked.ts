@@ -341,7 +341,8 @@ function applyTrackedInsertion(
   bias: 'left' | 'right' = 'left'
 ): TreeOpResult {
   const isolated = isolateFieldEdge(original, unsplit, aim, options, ownInsertionNow(revision));
-  const { part, paragraph } = isolated ?? { part: original, paragraph: unsplit };
+  if (!isolated) return { ok: false, reason: 'tree-invariant' };
+  const { part, paragraph } = isolated;
   const mint = createNodeIdAllocator(part);
   const offsets = paragraphOffsetIndex(paragraph);
   const effect: TreeOpEffect = {
@@ -641,8 +642,7 @@ function applyTrackedInsertion(
       // only when the WHOLE deletion lives there. Replacing a link's display text strikes
       // runs INSIDE the `w:hyperlink`, and the insertion adopting that deletion aims at
       // the link's boundary: placed beside the link, accepting the pair emptied the link,
-      // the sweep removed it, and the accepted text came out silently unlinked. Two rules
-      // narrow it:
+      // the sweep removed it, and the text came out silently unlinked. Two rules narrow it:
       //   - a revision wrapper is NOT followed into: the same deletion can sit inside
       //     another author's `w:ins`, and appending there would put this author's words
       //     inside their proposal, where rejecting theirs deletes these;

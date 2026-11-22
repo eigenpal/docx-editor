@@ -16,6 +16,7 @@ import { paragraphTextOf } from '../store/store/paragraph-model-text.ts';
 import { isCollaborationFailureCode } from '../collaboration/index.ts';
 import { isMissingAuthorRefusal } from './docx-editor-author.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
+import { TOC_READ_ONLY_REFUSAL } from './surface-toc-ranges.ts';
 import { MARKS, resolveMarkAttr, type CommandSupport } from './docx-editor-support.ts';
 import { runWithHistoryGroup, takeHistoryGroup } from './history-group-scope.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
@@ -180,7 +181,7 @@ export function runFormatRefusal(reason: string): Refusal {
   if (isCollaborationFailureCode(reason)) return { ok: false, code: 'unsupported', reason };
   const callerFixable =
     isMissingAuthorRefusal(reason) ||
-    reason === 'the table of contents is generated and read-only' ||
+    reason === TOC_READ_ONLY_REFUSAL ||
     reason === FIELD_CODE_INPUT_REFUSAL;
   return { ok: false, code: callerFixable ? 'invalidArgs' : 'locked', reason };
 }
