@@ -344,6 +344,8 @@ interface SplitWrite {
  * moved from another paragraph of the edit.
  */
 export function recordSplitPoints(writes: readonly SplitWrite[]): void {
+  /** Where this edit split each source paragraph: the last character it kept there. */
+  const kept = new Map<LogicalId, string>();
   for (const write of writes) {
     if (write.before.length > 0) continue;
     const origin = write.after.find((token) => token.attributes[ORIGIN_KEY])?.attributes[
@@ -362,7 +364,26 @@ export function recordSplitPoints(writes: readonly SplitWrite[]): void {
         NODE_SPLIT_POINTS_FIELD,
         serialized([...inherited, { source: source.id, at: origin }], entry)
       );
+      const ids = source.identities;
+      let left = ids.indexOf(origin) - 1;
+      while (left >= 0 && !ids[left]) left -= 1;
+      kept.set(source.id, left >= 0 ? `${ids[left]}+` : origin);
       break;
     }
+  }
+  // A paragraph this edit created between the text it kept and the text it moved, as the middle
+  // lines of an insert of several lines, took a split at the end of the source paragraph when
+  // it was listed, before the move. It stands where the split is, in front of the moved text.
+  for (const write of writes) {
+    if (write.before.length > 0 || !minted.has(write.record)) continue;
+    const points = splitPointsOf(write.record);
+    const last = points.at(-1);
+    const at = last && last.at.endsWith('+') ? kept.get(last.source) : undefined;
+    const entry = entries.get(write.record);
+    if (at === undefined || !entry) continue;
+    write.record.set(
+      NODE_SPLIT_POINTS_FIELD,
+      serialized([...points.slice(0, -1), { source: last!.source, at }], entry)
+    );
   }
 }

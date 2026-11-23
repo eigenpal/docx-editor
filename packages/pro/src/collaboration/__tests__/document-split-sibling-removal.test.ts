@@ -7,8 +7,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // removes one of them: by a deleted block or a join. Each test checks both client orders.
 
 import { afterEach, describe, expect, setSystemTime, test } from 'bun:test';
-import type { OoxmlNode } from '@docx-editor.dev/core/store';
+import { writeOoxmlPackage, type OoxmlNode } from '@docx-editor.dev/core/store';
 import { createPeerHarness, zipDocument, type Peer } from './document-peer-support';
+import { collectKind, loadPackage } from './document-support.ts';
 
 const paragraph = (text: string) => `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 
@@ -35,10 +36,14 @@ function textOf(node: OoxmlNode): string {
   return node.kind === 'textValue' ? node.value : node.children.map(textOf).join('');
 }
 
-async function room(ids: Readonly<Record<string, number>>, first: string) {
+async function room(
+  ids: Readonly<Record<string, number>>,
+  first: string,
+  trailing = paragraph('End')
+) {
   const harness = createPeerHarness('split-sibling-removal', undefined, ids);
   cleanup = harness.cleanup;
-  const pair = await harness.pair(zipDocument(paragraph(first) + paragraph('End')));
+  const pair = await harness.pair(zipDocument(paragraph(first) + trailing));
   /** Each body paragraph as `text`, in the order a peer shows them. */
   const shown = (peer: Peer): { id: string; text: string }[] => {
     const out: { id: string; text: string }[] = [];
@@ -202,5 +207,101 @@ describe('a split piece an undo put back', () => {
           'h',
           'End',
         ]);
+      });
+});
+
+describe('concurrent splits before an existing paragraph', () => {
+  for (const { label, ids: clientIds } of ORDERS)
+    for (const first of ['alice', 'bob'] as const)
+      test(`both pieces precede the existing split piece (${label}, ${first} splits first)`, async () => {
+        const r = await room(clientIds, 'efgh', '');
+        r.split(r[first], 0, 3);
+        r.pause();
+        r.split(r.alice, 0, 1);
+        r.split(r.bob, 0, 2);
+        r.resume();
+        expect(r.converged().map((entry) => entry.text)).toEqual(['e', 'f', 'g', 'h']);
+      });
+});
+
+describe('concurrent splits of an earlier split piece', () => {
+  for (const { label, ids: clientIds } of ORDERS)
+    for (const first of ['alice', 'bob'] as const)
+      for (const restored of [false, true])
+        test(`nested split order (${label}, ${first} splits first, restored=${restored})`, async () => {
+          const r = await room(clientIds, 'abcdefgh');
+          r.pause();
+          r.split(r.alice, 0, 2);
+          r.split(r.bob, 0, 4);
+          r.resume();
+          if (restored) {
+            const pieces = r.converged();
+            later();
+            r.harness.apply(r[first], [
+              { op: 'joinParagraphs', firstId: pieces[1]!.id, secondId: pieces[2]!.id },
+            ]);
+            expect(r[first].room.session.undo()).toBe(true);
+          }
+          r.split(r[first], 2, 3);
+          later();
+          r.pause();
+          r.split(r.alice, 2, 1);
+          r.split(r.bob, 2, 2);
+          r.resume();
+          const order = () => r.converged().map((entry) => entry.text);
+          const expected = ['ab', 'cd', 'e', 'f', 'g', 'h', 'End'];
+          expect(order()).toEqual(expected);
+          const reopened = loadPackage(writeOoxmlPackage(r.harness.packageOf(r.alice)));
+          expect(collectKind(reopened, 'paragraph').map(textOf)).toEqual(expected);
+          expect(r.alice.room.session.undo()).toBe(true);
+          expect(order()).toEqual(['ab', 'cd', 'ef', 'g', 'h', 'End']);
+          expect(r.alice.room.session.redo()).toBe(true);
+          expect(order()).toEqual(expected);
+          const piece = r.harness.paragraphIdAt(r.alice, 3);
+          r.pause();
+          r.harness.apply(r.alice, [{ op: 'deleteBlock', blockId: piece }]);
+          r.harness.apply(r.bob, [{ op: 'insertText', paragraphId: piece, offset: 1, text: 'x' }]);
+          r.resume();
+          expect(order()).toEqual(['ab', 'cd', 'e', 'g', 'h', 'End']);
+        });
+});
+
+describe('concurrent splits of a piece inside an earlier concurrent run', () => {
+  const CASES = [
+    {
+      name: 'a piece shown after its earlier sibling',
+      text: 'abcdefghij',
+      outer: [6, 4],
+      piece: 2,
+      before: null,
+      inner: [1, 2],
+      expected: ['abcd', 'ef', 'g', 'h', 'ij', 'End'],
+    },
+    {
+      name: 'a middle piece with a split-off follower',
+      text: 'abcdefgh',
+      outer: [2, 6],
+      piece: 1,
+      before: 3,
+      inner: [1, 2],
+      expected: ['ab', 'c', 'd', 'e', 'f', 'gh', 'End'],
+    },
+  ] as const;
+
+  for (const c of CASES)
+    for (const { label, ids: clientIds } of ORDERS)
+      test(`${c.name} keeps text order (${label})`, async () => {
+        const r = await room(clientIds, c.text);
+        r.pause();
+        r.split(r.alice, 0, c.outer[0]);
+        r.split(r.bob, 0, c.outer[1]);
+        r.resume();
+        if (c.before !== null) r.split(r.alice, c.piece, c.before);
+        later();
+        r.pause();
+        r.split(r.alice, c.piece, c.inner[0]);
+        r.split(r.bob, c.piece, c.inner[1]);
+        r.resume();
+        expect(r.converged().map((entry) => entry.text)).toEqual([...c.expected]);
       });
 });

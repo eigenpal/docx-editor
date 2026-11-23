@@ -285,7 +285,10 @@ export class PackageMaterializer {
       !structureArrived &&
       (dirty.size > 0 || packageChanged);
     this.rawDirty = rawDirty;
-    const first = this.materializePass(dirty, packageChanged, incremental);
+    let first = this.materializePass(dirty, packageChanged, incremental);
+    // A first build reads runs of split siblings as it goes: it shows their proposals again.
+    if (!incremental && splitSiblingChanges(this.registry, new Set()))
+      first = this.materializePass(dirty, packageChanged, false);
     if (!this.contests.contested) return first;
     // Two child arrays list one id and the cache disagrees with the rebuilt parent about
     // which one owns it. A full pass decides it the one deterministic way: first preorder

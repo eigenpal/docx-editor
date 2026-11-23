@@ -21,6 +21,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * its own new paragraph. The materializer shows it there, and the projection of a local edit
  * lists it there in shared state before the edit addresses either paragraph, as adoption and
  * merged property copies do. Only shared state every replica holds alike decides this.
+ *
+ * A new paragraph's mark starts as a copy of the split paragraph's mark, so when that mark
+ * already proposed itself, each new paragraph carries a copy of that proposal. In its author's
+ * view the new paragraph ended where the split paragraph ended, but in the run only the last
+ * paragraph does. Every other one ends at another split's point, so that split's proposal
+ * replaces the copy, and rejecting one author's breaks removes that author's breaks only.
  */
 import type { LogicalId } from './identity.ts';
 import { replicaOfLogicalId } from './identity.ts';
@@ -34,8 +40,11 @@ export interface MarkMove {
   readonly node: LogicalId;
   /** The parent that lists it. */
   readonly from: LogicalId;
-  /** The parent that shows it. */
-  readonly to: LogicalId;
+  /**
+   * The parent that shows it, or null when it shows nowhere: a stale copy of the split
+   * paragraph's earlier proposal that another split's proposal replaces.
+   */
+  readonly to: LogicalId | null;
   /** Shown first among the parent's children, or last. */
   readonly first: boolean;
 }
@@ -121,15 +130,26 @@ function proposalOf(
   return top;
 }
 
+/** Whether `id`, a mark element at `level`, is or holds a proposal of the mark. */
+function proposes(registry: DocumentRegistry, id: LogicalId, level: Level): boolean {
+  if (level === 'ins') return true;
+  const next = CHILD_LEVEL[level]!;
+  return childrenAt(registry, id, next).some((child) => proposes(registry, child, next));
+}
+
 /**
  * Where a proposal shows on `target`, a paragraph: as the paragraph's own element at that
  * level when it has none (leaving out elements that move away), or one level down inside the
- * one it has.
+ * one it has. When `replaces` and the target's element at the proposal's level holds a
+ * proposal, that element is a stale copy of the split paragraph's mark, and the proposal
+ * shows in its place.
  */
 function placeOn(
   registry: DocumentRegistry,
   proposal: Proposal,
   target: LogicalId,
+  /** Whether a proposal `target` shows already is a stale copy that `proposal` replaces. */
+  replaces: boolean,
   leaving: ReadonlySet<LogicalId>,
   out: MarkMove[]
 ): void {
@@ -142,7 +162,8 @@ function placeOn(
   }
   while (parent) {
     const own = shownAt(registry, parent, level, leaving);
-    if (own.length === 0) {
+    if (own.length === 0 || (replaces && own.some((id) => proposes(registry, id, level)))) {
+      for (const stale of own) out.push({ node: stale, from: parent, to: null, first: false });
       out.push({ node: moving, from: movingFrom, to: parent, first: level !== 'runProperties' });
       return;
     }
@@ -161,23 +182,33 @@ function placeOn(
  * The proposal moves one run of concurrent split siblings needs. Each paragraph of the run
  * was split off the paragraph its author listed right before it (`group.before`), and the
  * proposal for its split point sits on that paragraph's mark; it shows on the paragraph shown
- * right before it instead, when that is another one.
+ * right before it instead, when that is another one. When that one was split off the same
+ * paragraph, it ends at this split point, so a proposal it shows already is a copy of that
+ * paragraph's earlier one, which the moved proposal replaces.
  */
 export function markMovesOf(registry: DocumentRegistry, group: SiblingGroup): MarkMove[] {
-  const wanted: { proposal: Proposal; target: LogicalId }[] = [];
+  const wanted: { proposal: Proposal; target: LogicalId; replaces: boolean }[] = [];
   let shownBefore = group.source;
   for (const id of group.shown) {
     const before = group.before.get(id);
     const replica = replicaOfLogicalId(id);
     if (before && replica && before !== shownBefore) {
       const proposal = proposalOf(registry, before, replica);
-      if (proposal) wanted.push({ proposal, target: shownBefore });
+      // A sibling split off the same paragraph took a copy of that paragraph's mark. Both
+      // went in right after it only when both head their blocks: a paragraph that follows a
+      // removed head was split off that head, not off the paragraph the run follows.
+      const replaces =
+        group.before.get(shownBefore) === before &&
+        group.heads.includes(shownBefore) &&
+        group.heads.includes(id);
+      if (proposal) wanted.push({ proposal, target: shownBefore, replaces });
     }
     shownBefore = id;
   }
   const leaving = new Set(wanted.map(({ proposal }) => proposal.node));
   const moves: MarkMove[] = [];
-  for (const { proposal, target } of wanted) placeOn(registry, proposal, target, leaving, moves);
+  for (const { proposal, target, replaces } of wanted)
+    placeOn(registry, proposal, target, replaces, leaving, moves);
   return moves;
 }
 
@@ -198,17 +229,25 @@ export class SplitMarkMoves {
    * children changed: the parents that list and show a move that appeared or went.
    */
   refresh(registry: DocumentRegistry, parents: Iterable<LogicalId>): LogicalId[] {
-    const next: MarkMove[] = [];
+    // A run nested in another one can name the same move as the enclosing run. A proposal
+    // shows in one place, so each node keeps one move: the last one, for a stable result.
+    const byNode = new Map<LogicalId, MarkMove>();
     for (const parent of parents) {
       for (const group of registry.splitSiblings.groupsOf(parent))
-        next.push(...markMovesOf(registry, group));
+        for (const move of markMovesOf(registry, group)) {
+          byNode.delete(move.node);
+          byNode.set(move.node, move);
+        }
     }
-    const key = next.map((move) => `${move.node}>${move.to}`).join(';');
+    const next = [...byNode.values()];
+    const key = next
+      .map((move) => `${move.node}<${move.from}>${move.to}${move.first ? '^' : ''}`)
+      .join(';');
     if (key === this.key) return [];
     const changed = new Set<LogicalId>();
     for (const move of [...this.moves, ...next]) {
       changed.add(move.from);
-      changed.add(move.to);
+      if (move.to !== null) changed.add(move.to);
     }
     this.moves = next;
     this.key = key;
@@ -218,6 +257,7 @@ export class SplitMarkMoves {
       let hidden = this.hidden.get(move.from);
       if (!hidden) this.hidden.set(move.from, (hidden = new Set()));
       hidden.add(move.node);
+      if (move.to === null) continue;
       const added = this.added.get(move.to) ?? [];
       added.push(move);
       this.added.set(move.to, added);
@@ -280,9 +320,9 @@ export function splitMarkMoves(registry: DocumentRegistry): SplitMarkMoves {
 /**
  * What changed in the runs of concurrent split siblings since the last build, added to a
  * view's dirty set: parents whose run shows in a new order because a sibling's text came after
- * its listing, and the nodes a proposal moved into or out of.
+ * its listing, and the nodes a proposal moved into or out of. True when anything changed.
  */
-export function splitSiblingChanges(registry: DocumentRegistry, dirty: Set<LogicalId>): void {
+export function splitSiblingChanges(registry: DocumentRegistry, dirty: Set<LogicalId>): boolean {
   const reordered = registry.splitSiblings.takeChanged();
   if (reordered.length > 0) registry.inline.orderChanged();
   for (const parent of reordered) dirty.add(parent);
@@ -291,5 +331,7 @@ export function splitSiblingChanges(registry: DocumentRegistry, dirty: Set<Logic
     const parent = registry.parentOf(id);
     if (parent) parents.add(parent);
   }
-  for (const id of splitMarkMoves(registry).refresh(registry, parents)) dirty.add(id);
+  const changed = splitMarkMoves(registry).refresh(registry, parents);
+  for (const id of changed) dirty.add(id);
+  return reordered.length > 0 || changed.length > 0;
 }
