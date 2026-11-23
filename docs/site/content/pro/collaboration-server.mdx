@@ -1,0 +1,143 @@
+---
+title: 'Hocuspocus room server guide'
+description: 'Set up a Hocuspocus room server, move an existing server to the collaboration extension, and upgrade rooms when the collaboration format changes.'
+category: 'Pro'
+order: 64.5
+seoTitle: 'Hocuspocus server setup and room migration for DOCX collaboration'
+---
+
+`collaborationServerExtension` does the room's part of a Hocuspocus server. You write authentication and storage. This guide covers three tasks: set up a server, move an existing server to the extension, and deploy a release that changes the collaboration format.
+
+For every option, event, and limit, see [Run a room server](/docs/2.x/pro/collaboration#run-a-room-server).
+
+## Set up a server
+
+Install the server package, then add the extension:
+
+```bash
+npm install @docx-editor.dev/pro yjs @hocuspocus/server
+```
+
+```ts
+import { Server } from '@hocuspocus/server';
+import {
+  collaborationServerExtension,
+  type CollaborationRoomStorage,
+} from '@docx-editor.dev/pro/collaboration';
+
+// Implement these with your database and your access-token service.
+declare const rooms: {
+  read(
+    name: string
+  ): Promise<{ state: Uint8Array; docx: Uint8Array | null; digest: string | null } | null>;
+  writeState(name: string, state: Uint8Array): Promise<void>;
+  writeExport(name: string, docx: Uint8Array, digest: string): Promise<void>;
+  writeBackup(name: string, state: Uint8Array): Promise<void>;
+};
+declare function verifyDocumentAccess(token: string, roomName: string): Promise<void>;
+
+const storage: CollaborationRoomStorage = {
+  async load(name) {
+    const room = await rooms.read(name);
+    if (!room) return null;
+    const exported =
+      room.docx && room.digest ? { docx: room.docx, stateDigest: room.digest } : null;
+    return { state: room.state, export: exported };
+  },
+  async save(name, room) {
+    await rooms.writeState(name, room.state); // The state first.
+    if (room.export) await rooms.writeExport(name, room.export.docx, room.export.stateDigest);
+  },
+  backUp: (name, state) => rooms.writeBackup(name, state),
+};
+
+const server = new Server({
+  port: 1234,
+  async onAuthenticate({ token, documentName }) {
+    await verifyDocumentAccess(token, documentName);
+  },
+  extensions: [
+    collaborationServerExtension({
+      storage,
+      onEvent: (event) => console.log(JSON.stringify(event)),
+    }),
+  ],
+});
+await server.listen();
+```
+
+The storage holds three values for each room: the state, a DOCX export, and the digest of the exported state. Keep the export and its digest together.
+
+Clients need no server-specific code. `useHocuspocusCollaboration` and `createHocuspocusCollaboration` send the collaboration format to the server.
+
+## Move an existing server to the extension
+
+An existing server calls the collaboration functions in its own hooks. Replace those hooks with the extension:
+
+1. Update the clients to a release that has the extension, and deploy them. Such clients send the `collaborationFormat` parameter, and a server with the extension refuses clients that send none. If you cannot update all clients first, see [Admit earlier clients during a rollout](/docs/2.x/pro/collaboration#admit-earlier-clients-during-a-rollout).
+1. Add two columns or objects to your room storage: the DOCX export and its digest.
+1. Write `load`, `save`, and `backUp` as the preceding sample shows.
+1. Remove your own room code. The following table lists it.
+1. Deploy the server. Use the same release and the same collaboration format as before.
+
+| Your code | Action |
+| --- | --- |
+| Format check in `onAuthenticate`, and the token envelope that carries the version | Remove. Keep your access check. |
+| `prepareCollaborationServerDocument` in `onLoadDocument` | Remove. |
+| The saved-room check and `Y.applyUpdate` in `onLoadDocument` | Remove. `storage.load` returns the bytes. |
+| `document.flush()` in `afterLoadDocument` | Remove. |
+| `checkCollaborationRoomGeneration` in `beforeHandleMessage` | Remove. |
+| `onStoreDocument` | Remove. `storage.save` receives the bytes. |
+| `createCollaborationState` for rooms that storage does not hold | Move to the `createRoom` option. |
+| `compactCollaborationState` on load | Replace with `compactOnLoad: true`. |
+
+Stored rooms need no conversion. A room gets its export when the server first loads or stores it. To give an export to rooms that nobody opens, run [Export existing rooms once](/docs/2.x/pro/collaboration-versions#export-existing-rooms-once).
+
+## Deploy a release that changes the format
+
+Most releases keep the collaboration format, and you deploy them as any other release. Compare the `format` of your release and the target release in the [release data](/docs/2.x/pro/collaboration-versions#read-the-release-table-as-data). When the formats differ, do the following:
+
+1. Ask users with unsent offline edits to reconnect. Pending edits do not transfer to an upgraded room.
+1. Stop every room server of the earlier release. An earlier server that still holds a room stores it later, over the upgraded room.
+1. Deploy the clients and the room servers of the target release together.
+1. Watch `onEvent`. Each room logs `room-upgraded` when its first participant opens it.
+
+You install no earlier release and run no migration job. The room keeps its ID and its links. `backUp` receives the earlier state before the server stores the upgraded room.
+
+In Kubernetes, the server deployment needs only this:
+
+```yaml
+spec:
+  strategy:
+    type: Recreate # Stops the earlier servers before the later ones start.
+```
+
+## Handle a room that is not upgraded
+
+The room stays unchanged in storage. Its clients get `saved-room-unavailable`, and `onEvent` receives `room-upgrade-refused` with a `reason`:
+
+| `reason` | Cause | Action |
+| --- | --- | --- |
+| `no-export` | Storage holds no export of the room. | Migrate the room in a job. |
+| `stale-export` | The server stopped before it exported the last state. | Migrate the room in a job. |
+| `too-large` | The state is larger than `maxUpgradeStateBytes`, 64 MiB by default. | Migrate the room in a job, or raise the limit. |
+| `check-failed` | The upgraded room differs from the export. | Read `changedParts` in the event, and report the defect. |
+| `error` | The state or the export cannot be read. | Act on `code`. |
+| `disabled` | `upgradeOnLoad` is `false`. | Migrate the room in a job. |
+
+The job uses the earlier release to export the room, and the target release to migrate it. See [Migrate rooms on a server](/docs/2.x/pro/collaboration-versions#migrate-rooms-on-a-server).
+
+## Know the limits
+
+- **One process for each room.** Route each room to one server process. Two processes that load one earlier-format room each create a room.
+- **The work blocks the server.** An export and an upgrade run on the server's thread. See [Plan for the cost of exports and upgrades](/docs/2.x/pro/collaboration#plan-for-the-cost-of-exports-and-upgrades).
+- **Undo history starts afresh** in an upgraded room.
+
+## Try an upgrade
+
+The [Hocuspocus example](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus#try-an-upgrade) uses the extension with file storage. Its `server/simulate-format-change.ts` script lets you watch an upgrade with one release.
+
+## See also
+
+- [Collaboration reference](/docs/2.x/pro/collaboration)
+- [Collaboration versions and upgrades](/docs/2.x/pro/collaboration-versions)

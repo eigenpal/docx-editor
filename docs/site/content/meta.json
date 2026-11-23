@@ -97,6 +97,7 @@
     "pro/custom-nodes-reference",
     "pro/drawing",
     "pro/collaboration",
+    "pro/collaboration-server",
     "pro/collaboration-versions",
     "---Telemetry---",
     "telemetry/index",
