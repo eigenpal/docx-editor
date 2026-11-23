@@ -13,6 +13,7 @@ import {
 } from '../../layout/index.ts';
 import { layoutHeaderFooterStory, type HeaderFooterStoryLayout } from '../../layout/hf-layout.ts';
 import { furnitureDrawingExclusionsForPage } from '../../layout/furniture-drawing-exclusion.ts';
+import { headerFooterAnchoredDrawingOrigin } from '../../layout/header-footer-drawing-origin.ts';
 import type { InlineDrawingLayoutContext } from '../../layout/drawing-layout.ts';
 import {
   readOoxmlPackage,
@@ -48,7 +49,15 @@ const OFF_V_EMU = -989_965; // -77.95pt
 const SIZE_EMU = 809_625; //  63.75pt
 
 type HorizontalFrame = 'character' | 'margin' | 'page';
-type VerticalFrame = 'bottomMargin' | 'line' | 'margin' | 'page' | 'paragraph' | 'topMargin';
+type VerticalFrame =
+  | 'bottomMargin'
+  | 'insideMargin'
+  | 'line'
+  | 'margin'
+  | 'outsideMargin'
+  | 'page'
+  | 'paragraph'
+  | 'topMargin';
 
 interface AnchorOptions {
   readonly horizontalFrame?: HorizontalFrame;
@@ -362,7 +371,8 @@ describe('header non-margin frames', () => {
   test.each([
     ['page', -78],
     ['topMargin', -42.55],
-    ['bottomMargin', 629.2],
+    // The bottom-margin top on the sheet (841.9 - 134.7) less the 42.55pt header top.
+    ['bottomMargin', 664.65],
     ['paragraph', 0],
     ['line', 0],
   ] as const)(
@@ -625,4 +635,69 @@ test('body top-margin bands keep their page-content coordinates', () => {
   )[0]!;
   expect(page.contentBox.y + drawing.y).toBeCloseTo(80, 5);
   expect(line.box.y).toBeCloseTo(drawing.y + drawing.height, 5);
+});
+
+// The fixture sheet is A4, 841.9pt high, with a 78pt top margin and a 134.7pt bottom margin.
+// The picture is 63.75pt square. Expected values are sheet tops of the picture.
+const SHEET = 841.9;
+const TOP_MARGIN = 78;
+const BOTTOM_BAND_TOP = SHEET - 134.7;
+const PICTURE = 63.75;
+
+function sheetTopOf(kind: 'header' | 'footer', options: AnchorOptions): number {
+  const page = layoutStoryDoc(kind, { horizontalOffsetEmu: 0, ...options }).pages[0]!;
+  const story = (kind === 'header' ? page.header : page.footer)!;
+  const drawing = story.anchoredDrawings![0]!;
+  return headerFooterAnchoredDrawingOrigin(drawing, story.box, page.box).y - page.box.y;
+}
+
+describe('margin-band frames are bands of the sheet', () => {
+  for (const kind of ['header', 'footer'] as const) {
+    test.each([
+      ['topMargin', undefined, 10],
+      ['topMargin', 'center', (TOP_MARGIN - PICTURE) / 2],
+      ['topMargin', 'bottom', TOP_MARGIN - PICTURE],
+      ['bottomMargin', undefined, BOTTOM_BAND_TOP + 10],
+      ['bottomMargin', 'center', BOTTOM_BAND_TOP + (SHEET - BOTTOM_BAND_TOP - PICTURE) / 2],
+      ['bottomMargin', 'bottom', SHEET - PICTURE],
+      // Page 1 is odd: the inside and outside margins are the top band.
+      ['insideMargin', undefined, 10],
+      ['outsideMargin', 'bottom', TOP_MARGIN - PICTURE],
+    ] as const)(`${kind} %s %s places the picture at %d`, (verticalFrame, verticalAlign, top) => {
+      const options: AnchorOptions = {
+        verticalFrame,
+        verticalOffsetEmu: 127_000,
+        ...(verticalAlign ? { verticalAlign } : {}),
+      };
+      expect(sheetTopOf(kind, options)).toBeCloseTo(top, 2);
+    });
+  }
+
+  test('a footer bottom-margin picture paints where layout places it', () => {
+    const layout = layoutStoryDoc('footer', {
+      horizontalOffsetEmu: 0,
+      verticalFrame: 'bottomMargin',
+      verticalOffsetEmu: 127_000,
+    });
+    const page = layout.pages[0]!;
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1 });
+    const picture = container.querySelector<HTMLElement>('.docx-drawing-layer-front > *');
+    expect(picture).not.toBeNull();
+    expect(parseFloat(picture!.style.top)).toBeCloseTo(page.box.y + BOTTOM_BAND_TOP + 10, 2);
+  });
+
+  test('a wrapped footer picture on a margin band keeps the footer layout stable', () => {
+    for (const verticalFrame of ['bottomMargin', 'outsideMargin', 'topMargin'] as const)
+      for (let offset = -40; offset <= 140; offset += 20)
+        expect(() =>
+          layoutStoryDoc('footer', {
+            horizontalOffsetEmu: 0,
+            verticalFrame,
+            verticalOffsetEmu: offset * 12_700,
+            topAndBottom: true,
+            storyLineCount: 3,
+          })
+        ).not.toThrow();
+  });
 });

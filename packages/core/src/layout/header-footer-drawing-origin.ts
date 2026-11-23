@@ -23,8 +23,10 @@ export function headerFooterAnchoredDrawingOrigin(
         ? pageOrigin.x + drawing.x - drawing.horizontalFrameOrigin
         : storyOrigin.x + drawing.x,
     y:
-      drawing.verticalFrame === 'page'
-        ? pageOrigin.y + drawing.y - drawing.verticalFrameOrigin
-        : storyOrigin.y + drawing.y,
+      drawing.verticalPageTop !== undefined
+        ? pageOrigin.y + drawing.y - drawing.verticalPageTop
+        : drawing.verticalFrame === 'page'
+          ? pageOrigin.y + drawing.y - drawing.verticalFrameOrigin
+          : storyOrigin.y + drawing.y,
   });
 }

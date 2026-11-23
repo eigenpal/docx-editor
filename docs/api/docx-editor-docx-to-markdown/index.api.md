@@ -34,6 +34,7 @@ export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' 
     readonly verticalFrame: DrawingVerticalReferenceFrame;
     // (undocumented)
     readonly verticalFrameOrigin: number;
+    readonly verticalPageTop?: number;
     // (undocumented)
     readonly wrap: Exclude<ImageWrapTarget, 'inline'>;
 }

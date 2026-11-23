@@ -42,7 +42,11 @@ export interface HeaderFooterLayerPainter {
 }
 
 function isPageRelativeHfAnchor(drawing: AnchoredDrawingRecord): boolean {
-  return drawing.horizontalFrame === 'page' || drawing.verticalFrame === 'page';
+  return (
+    drawing.horizontalFrame === 'page' ||
+    drawing.verticalFrame === 'page' ||
+    drawing.verticalPageTop !== undefined
+  );
 }
 
 function hfAnchorOnPageSheet(
