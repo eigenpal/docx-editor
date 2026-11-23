@@ -1,4 +1,4 @@
-// Table-level shading: `w:tblPr/w:shd` (17.4.32) and a row's `w:tblPrEx/w:shd` exception.
+// Table-level shading: `w:tblPr/w:shd` (17.4.31) and a row's `w:tblPrEx/w:shd` exception.
 //
 // The table's fill is the background behind its cells, and it shows only where no cell
 // covers it: in the `w:tblCellSpacing` gaps between cells and between the cells and the table

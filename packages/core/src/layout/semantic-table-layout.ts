@@ -1351,13 +1351,13 @@ export interface LayoutRowBoundedResult {
  * below `maxBottom`. Cells that cannot place anything leave empty boxes; callers decide
  * whether to move the row, continue splitting, or fail closed.
  *
- * `w:trHeight` (17.4.81):
+ * `w:trHeight` (17.4.80):
  * - `auto` — content-sized (no invented floor);
  * - `atLeast` — floor the finished fragment to the authored minimum when it fits the
  *   budget; mid-row page splits stay content-driven so the floor cannot overflow the page;
  * - `exact` — fixed height, content clipped (Word 17.18.37). Overflow is not continued.
  *
- * `vMerge` is what a vertical merge does here (17.4.85): a head covering later rows paints
+ * `vMerge` is what a vertical merge does here (17.4.84): a head covering later rows paints
  * from this row bounded by its span, DETACHED from the row's own height.
  */
 export function layoutRowFragmentBounded(

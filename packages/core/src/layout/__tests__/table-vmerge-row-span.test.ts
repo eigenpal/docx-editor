@@ -1,4 +1,4 @@
-// A vertically merged cell is as tall as the ROWS IT COVERS (17.4.85 `w:vMerge`), not as
+// A vertically merged cell is as tall as the ROWS IT COVERS (17.4.84 `w:vMerge`), not as
 // tall as the row that starts it.
 //
 // The engine used to give the whole merged content height to the merge head's own row. Every

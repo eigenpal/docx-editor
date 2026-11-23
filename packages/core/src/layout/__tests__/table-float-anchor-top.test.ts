@@ -1,4 +1,4 @@
-// A table positioned against the text (ECMA-376 Part 1, 17.4.57, 17.4.66) stands in the flow
+// A table positioned against the text (ECMA-376 Part 1, 17.4.57, 17.18.100) stands in the flow
 // where it is: its vertical offset counts from the top of its anchor paragraph's box, above that
 // paragraph's space before (17.3.1.33) and top border. The space after the paragraph above stays
 // whole instead of collapsing with the anchor's space before, contextual spacing (17.3.1.9)

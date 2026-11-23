@@ -1,5 +1,5 @@
-// A row's `w:tblPrEx/w:tblCellMar` (17.4.60, 17.4.42) replaces the table's cell margins for
-// that row's cells, side by side; a cell's own `w:tcMar` (17.4.43) still wins over it.
+// A row's `w:tblPrEx/w:tblCellMar` (17.4.60, 17.4.41) replaces the table's cell margins for
+// that row's cells, side by side; a cell's own `w:tcMar` (17.4.68) still wins over it.
 //
 // A table with 10pt top and bottom margins whose body rows zero them through the exception
 // lays those rows out without the padding: an `atLeast` minimum is not padded by margins the

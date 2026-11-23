@@ -61,7 +61,7 @@ export const MODE_RULES = {
   ),
   autofitRefitsNestedCells: modern(
     'A nested autofit table whose stated cell widths pass its room gives way above each column content minimum',
-    'ECMA-376 Part 1 §17.4.64 tblLayout'
+    'ECMA-376 Part 1 §17.4.52 tblLayout'
   ),
   anchorOnlyParagraphSeeding: modern(
     'Seed the pages of consecutive anchor-only paragraphs before later bands wrap earlier text',
@@ -85,11 +85,11 @@ export const MODE_RULES = {
   ),
   rowExceptionAlignment: legacy(
     "A table row places itself by its own w:tblPrEx alignment; a trailing-aligned row ends past the text edge by its first cell's leading margin",
-    'ECMA-376 Part 1 §17.4.61 tblPrEx'
+    'ECMA-376 Part 1 §17.4.60 tblPrEx'
   ),
   firstRowExceptionAlignsTable: modern(
     "The first row's w:tblPrEx alignment aligns the whole table; later rows' alignments do not apply",
-    'ECMA-376 Part 1 §17.4.61 tblPrEx'
+    'ECMA-376 Part 1 §17.4.60 tblPrEx'
   ),
   floatingTableContentOrigin: legacy(
     'A floating table with a numeric offset or a left, inside, right, or outside alignment positions its cell content, not its outer edge',

@@ -1,6 +1,6 @@
 // Where a splittable row with an authored minimum height may start.
 //
-// A row with a `w:trHeight` `atLeast` minimum (§17.4.81) starts below content already in the
+// A row with a `w:trHeight` `atLeast` minimum (§17.4.80) starts below content already in the
 // column only when that minimum, padded by the row's margins as the row box pads it, fits the
 // room left there. Otherwise the row moves to the next column or page, even when its first
 // lines would fit, and even when its content is taller than a page. When the minimum fits, the

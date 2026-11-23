@@ -26,7 +26,7 @@ bun run dev
 # Open http://localhost:5173
 ```
 
-If you work on parsing, serialization, or layout, run `bun run reference:fetch` to download the ECMA-376 reference files. The download includes about 58 MB of PDFs and ZIP archives. Git ignores these files. The repository includes reference summaries and XML schemas under `reference/`.
+Before you work on the engine, run `bun run reference:fetch`. It downloads ECMA-376 Parts 1 to 4 and writes a text copy and a subclause index of each part (`reference/README.md`). Git ignores these files, so run it in each new clone and each new git worktree. It needs Poppler (`pdftotext`). The repository includes reference summaries and XML schemas under `reference/`.
 
 ## Demo deployment builds
 

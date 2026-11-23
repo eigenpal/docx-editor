@@ -143,7 +143,7 @@ describe("a table with no w:tblStyle takes the document's default table style", 
 
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-/** A cell holding a paragraph, a nested table, and the `w:p` §17.4.66 makes it end with. */
+/** A cell holding a paragraph, a nested table, and the `w:p` §17.4.65 makes it end with. */
 const cellWithNestedTable = (terminator: string) =>
   '<w:tbl><w:tr><w:tc><w:tcPr><w:tcW w:w="5000" w:type="dxa"/></w:tcPr>' +
   p('AAA') +

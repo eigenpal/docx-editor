@@ -74,7 +74,7 @@ interface FlowNeighbour {
   readonly table?: OoxmlElement;
 }
 
-/** Whether `entry` is a table positioned against the text (17.4.57, 17.4.66). */
+/** Whether `entry` is a table positioned against the text (17.4.57, 17.18.100). */
 function textAnchoredTable(entry: FlowNeighbour): boolean {
   if (entry.kind !== 'table' || !entry.table) return false;
   return readTableFloatPosition(wmlChildNamed(entry.table, 'tblPr'))?.vertAnchor === 'text';

@@ -193,7 +193,7 @@ export function withTableContentBorders(
       // A row that states no top rule of its own, directly or through `w:insideH`, lets the
       // band of the row above share its top margin: its content starts at the wider of the
       // two rather than below both. Reference renders of `w:tcBorders` (ECMA-376 §17.4.66)
-      // and `w:tcMar` (§17.4.43) show it in every compatibility mode, nested or not.
+      // and `w:tcMar` (§17.4.68) show it in every compatibility mode, nested or not.
       const topBandClearancePt = ownsTop ? band : Math.max(0, band - cell.margins.top);
       return cell.vMergeContinue
         ? { ...cell, topBandClearancePt }

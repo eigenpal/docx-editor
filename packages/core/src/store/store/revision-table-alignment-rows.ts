@@ -18,7 +18,7 @@ import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { boundTableAlignments } from './revision-table-unbound-history.ts';
 import type { RevisionSite } from './tree-op-revisions.ts';
 
-/** `CT_TblPrExBase` child order (17.4.61), plus the trailing change record. */
+/** `CT_TblPrExBase` child order (17.4.60), plus the trailing change record. */
 const CT_TBLPREX_SEQUENCE: readonly string[] = [
   'tblW',
   'jc',

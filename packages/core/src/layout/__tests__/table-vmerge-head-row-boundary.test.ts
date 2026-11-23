@@ -1,4 +1,4 @@
-// A two-row vertical merge (17.4.85 `w:vMerge`) whose page break falls right after its head
+// A two-row vertical merge (17.4.84 `w:vMerge`) whose page break falls right after its head
 // row. From mode 15 on, when the merged text cannot place a line inside the head row's own
 // height, the head row keeps its own cells on the first page and the whole merged text starts
 // beside the continuation row on the next page. The text stays the head cell's text: every

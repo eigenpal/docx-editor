@@ -1,4 +1,4 @@
-// A vertical merge that crosses a page break (17.4.85 `w:vMerge`).
+// A vertical merge that crosses a page break (17.4.84 `w:vMerge`).
 //
 // Word keeps drawing a vertically merged cell on every page the merge runs onto: the same
 // left/right rules, the bottom rule where the merge ends, and the same fill. Only the text

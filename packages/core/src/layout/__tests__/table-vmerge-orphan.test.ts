@@ -1,5 +1,5 @@
 // A `w:vMerge` continuation only continues a cell above it that carries `w:vMerge`
-// (17.4.85). Below an unmerged cell, or in a table's first row, it has nothing to continue:
+// (17.4.84). Below an unmerged cell, or in a table's first row, it has nothing to continue:
 // it starts its own merge and paints its own content. Such a cell appears in files, and a
 // row deletion merged with a concurrent edit can leave one behind.
 

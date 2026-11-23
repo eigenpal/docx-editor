@@ -301,7 +301,7 @@ test('text-relative vertical alignments float at the anchor top and supersede of
     expect(isOutOfFlowTableFragment(floating)).toBe(true);
     expect(floating.box.y).toBe(0);
     expect(floating.rows).toHaveLength(1);
-    // ECMA-376 Part 1, 17.4.65: the anchor paragraph wraps beside the table.
+    // ECMA-376 Part 1, 17.4.57: the anchor paragraph wraps beside the table.
     const anchor = paragraphs(layout).at(-1)!.lines[0]!;
     expect(anchor.box.y).toBe(0);
     expect(anchor.spans[0]!.box.x).toBeGreaterThanOrEqual(floating.box.x + floating.box.width);

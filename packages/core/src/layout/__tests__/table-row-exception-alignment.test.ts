@@ -1,11 +1,11 @@
-// Row placement from a row's table property exception, `w:tblPrEx` (17.4.61).
+// Row placement from a row's table property exception, `w:tblPrEx` (17.4.60).
 //
-// In the legacy modes a row's own `w:jc` (17.4.28) places it: a centred row centres its outer
+// In the legacy modes a row's own `w:jc` (17.4.26) places it: a centred row centres its outer
 // edges, and a trailing-aligned row ends past the text edge by its first cell's leading margin
-// (`w:tblCellMar`, 17.4.42, or `w:tcMar`, 17.4.43). A table aligned to the trailing edge places
+// (`w:tblCellMar`, 17.4.42, or `w:tcMar`, 17.4.68). A table aligned to the trailing edge places
 // every row that way. Leading-aligned rows share the origin of the first of them. Mode 15
 // aligns the whole table by the first row's alignment and ignores later rows'. The first
-// row's `w:tblInd` (17.4.50) indents the whole table in every mode.
+// row's `w:tblInd` (17.4.51) indents the whole table in every mode.
 //
 // Fixture: a 150pt one-column table with 15pt left and right cell margins in a 468pt text
 // column (72pt page margins), so a centred row starts 159pt in.

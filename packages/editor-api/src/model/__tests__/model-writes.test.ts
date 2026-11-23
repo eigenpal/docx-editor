@@ -353,7 +353,7 @@ describe('writing into one paragraph', () => {
 
   test('deleting a table cell\u2019s only paragraph is refused, because a cell must keep one', async () => {
     // Not this API's rule: a `w:tc` with no `w:p` is markup Word rejects and a cell no caret can
-    // enter (17.4.66), so the document store refuses the removal and the batch is refused with it.
+    // enter (17.4.65), so the document store refuses the removal and the batch is refused with it.
     // Worth pinning here because the model offers no way to tell in advance — a paragraph inside a
     // cell is an ordinary paragraph until the moment it is the last one.
     const runtime = await serverRuntime(TABLE_DOCUMENT);
@@ -636,7 +636,7 @@ describe('a batch of writes', () => {
   });
 
   test('a refusal from the document store takes the writes beside it with it', async () => {
-    // The second write is one the store will not make: a `w:tc` must keep a paragraph (17.4.66), so
+    // The second write is one the store will not make: a `w:tc` must keep a paragraph (17.4.65), so
     // emptying a cell of its only one is refused. What this pins is the FIRST write — an ordinary
     // text insertion into another paragraph, planned and valid — not landing either. A batch is one
     // transaction; half of it is not an outcome.

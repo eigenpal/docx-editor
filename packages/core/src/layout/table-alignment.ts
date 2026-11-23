@@ -24,7 +24,7 @@ export function mirroredAlignment(alignment: TableAlignment): TableAlignment {
   return alignment === 'left' ? 'right' : alignment === 'right' ? 'left' : alignment;
 }
 
-/** The first row's `w:tblPrEx` (17.4.61) child named `localName`. */
+/** The first row's `w:tblPrEx` (17.4.60) child named `localName`. */
 function firstRowException(firstRow: OoxmlElement | undefined, localName: string) {
   const exception = firstRow && childNamed(firstRow, 'tblPrEx');
   return exception && childNamed(exception, localName);
@@ -42,8 +42,8 @@ export function tableIndentNode(
 }
 
 /**
- * The table's stated `w:jc` (17.4.29). In compatibility mode 15 the first row's exception
- * (17.4.61) aligns the whole table; the legacy modes align only that row by it.
+ * The table's stated `w:jc` (17.4.28). In compatibility mode 15 the first row's exception
+ * (17.4.60) aligns the whole table; the legacy modes align only that row by it.
  */
 export function tableAlignmentOf(
   tblPr: OoxmlElement | undefined,

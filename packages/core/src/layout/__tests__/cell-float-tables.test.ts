@@ -1,7 +1,7 @@
 // A nested table with `w:tblpPr` (ECMA-376 Part 1, 17.4.57) floats inside its cell: it leaves
 // the cell flow, the cell's later paragraphs wrap around it, and the cell grows to hold it.
-// `w:horzAnchor` (17.4.58), `w:vertAnchor` (17.4.66), `w:tblpXSpec`/`w:tblpYSpec`
-// (17.4.63/17.4.65) and `w:tblOverlap` (17.4.56) resolve against the cell.
+// `w:horzAnchor` (17.18.35), `w:vertAnchor` (17.18.100), `w:tblpXSpec`/`w:tblpYSpec`
+// (22.9.2.18/22.9.2.20) and `w:tblOverlap` (17.4.56) resolve against the cell.
 
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';

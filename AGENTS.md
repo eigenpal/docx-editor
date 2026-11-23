@@ -2,6 +2,15 @@
 
 WYSIWYG editor and rendering engine for DOCX.
 
+## Start here
+
+**Before any work, have the standard in your checkout.** Check that `reference/ecma-376/part1/text/index.tsv` exists. If it does not, run `bun run reference:fetch` first. Git ignores these files, so each new clone and each new git worktree starts without them. Do not start a task, a review, or an investigation without them.
+
+When you start work on an issue, find the ECMA-376 subclauses and schema types that it touches, and read them in the local text. Post them in a comment on the issue before you change code, and cite them in the code comments and the pull request.
+
+- Cite ECMA-376 for each behavior that you add or change: the element, its schema type (`CT_*`, `ST_*`), and the subclause, in the code comment and in the pull request body.
+- Never cite a subclause number from memory. Find it in the local index, and run `bun run reference:check-citations` before you push. A wrong citation is worse than none.
+
 ## Communication
 
 Write all replies in ASD-STE100 Simplified Technical English.
@@ -129,6 +138,7 @@ openspec validate typed-ooxml-paragraph-editor --strict
 - **Document state** — only the serial run catches a file that leaves state on `document`. Scope DOM queries to the container you mounted.
 - **Commits** — `git commit --no-verify` is acceptable locally. `bun run format` and `bun run lint` stay mandatory. Report a bypassed failing gate; do not call it passing.
 - Compare the run against the non-clean baseline in the active change.
+- **Citations** — run `bun run reference:check-citations` when you add or change a citation. It reads the local index, so CI does not run it.
 
 ## Parity and styling
 
@@ -188,7 +198,7 @@ Docs are authored in `docs/site/content/` (MDX). Feature-support claims are in `
 - **Two `meta.json` must agree.** Register a new page in the root `docs/site/content/meta.json` AND the subfolder `meta.json`. Otherwise the page is missing from the sidebar.
 - **Diagrams are mermaid**, in a ` ```mermaid ` fence, not ASCII box drawing.
 
-OOXML reference: `reference/quick-ref/wordprocessingml.md`, `themes-colors.md`; schemas in `reference/ecma-376/part1/schemas/`. Run `bun run reference:fetch` once for the PDFs.
+OOXML reference: `reference/quick-ref/wordprocessingml.md`, `themes-colors.md`; schemas in `reference/ecma-376/part1/schemas/`; the full text and the subclause index from `bun run reference:fetch` (Start here).
 
 ## Releasing
 

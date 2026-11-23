@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Comments in the store cited some ECMA-376 subclause numbers of an older edition.",
+  "after": "The comments cite the 5th edition subclause numbers.",
+  "reason": "Only comments change. No code, shared field, operation, node identity, snapshot, or awareness payload changes.",
+  "tests": [
+    "packages/core/src/store/__tests__/drawing-geometry-engine.test.ts",
+    "packages/core/src/store/__tests__/serialized-property-order.test.ts",
+    "packages/core/src/store/__tests__/table-column-ops.test.ts"
+  ],
+  "changeset": "ecma-376-citation-numbers",
+  "migration": null
+}

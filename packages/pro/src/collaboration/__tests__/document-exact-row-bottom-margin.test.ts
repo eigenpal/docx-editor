@@ -3,7 +3,7 @@ Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// An exact row height (ECMA-376 Part 1, 17.4.81) measures a cell from its top edge to the bottom
+// An exact row height (ECMA-376 Part 1, 17.4.80) measures a cell from its top edge to the bottom
 // of its content; the cell bottom margin lies below it. Two connected editors that type in the
 // row and after the table concurrently, delete text while the other side types, and undo and
 // redo, lay the page out exactly as a cold open of the saved document does.
