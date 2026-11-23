@@ -270,7 +270,10 @@ describe("wrap around the next paragraph's picture", () => {
   }, 60_000);
 
   // Edits and reopens, with and without the break cache that the editor uses, on chains that
-  // touch, overlap, and vary from paragraph to paragraph.
+  // touch, overlap, and vary from paragraph to paragraph. 24 pictures keep a chain that ordinary
+  // passes settle more slowly (14 passes against 8 for the third edit) at a third of the cost of
+  // 48: each edit lays the whole document out once per pass. The pass ceilings above cover
+  // longer chains.
   const editShapes: readonly [string, number, PictureOptions][] = [
     ['touching', 22, {}],
     ['touching, 17 words', 17, {}],
@@ -282,7 +285,7 @@ describe("wrap around the next paragraph's picture", () => {
     test(`lays edits out as ordinary passes do${cached ? ', with the break cache' : ''}`, () => {
       const cacheOf = () => (cached ? createParagraphLayoutCache() : undefined);
       for (const [, words, options] of editShapes) {
-        const part = load(picturesDocument(48, words, 150, options));
+        const part = load(picturesDocument(24, words, 150, options));
         const moved = editPasses(part, cacheOf());
         const ordinary = withoutZoneMoves(() => editPasses(part, cacheOf()));
         for (const [index, passes] of moved.passes.entries()) {
