@@ -7,6 +7,14 @@
 // does not wrap text (`w:wrap="none"`) may also size itself to its one line, align with
 // `w:xAlign`, and hold fields, which is how page numbers sit beside a footer's text. A frame
 // that wraps text around itself may do the same when it holds one page number.
+//
+// ECMA-376 Part 1 §17.3.1.11 (`framePr`): "Text frames are paragraphs of text in a document
+// which are positioned in a separate region or frame in the document". For `y`: "This absolute
+// position is specified relative to the vertical anchor specified by the vAnchor attribute for
+// this text frame." So the frame keeps its own position and line height, and it does not add
+// a line to the story. Header and footer parts (§17.10.3 `ftr`, §17.10.4 `hdr`) hold ordinary
+// block-level paragraphs, so the same `framePr` rules apply there.
+
 import {
   WML_NAMESPACE_URI as W,
   type OoxmlElement,
@@ -26,8 +34,6 @@ import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-re
 
 const MAX_NODES = 4096;
 const MAX_GROUPS = 16;
-/** How far a self-sized wrapping frame may end below the story's text, for a raised first line. */
-const OVERHANG_TOLERANCE_PT = 1;
 /** Elements a frame paragraph in this lane may not hold. */
 const REFUSED = new Set([
   'drawing',
@@ -303,6 +309,26 @@ function emptyFrame(
   };
 }
 
+/**
+ * Whether a frame box, in story space, starts below the sheet. A footer's flow ends
+ * `storyDistance` above the sheet's bottom edge; a header's flow starts `storyDistance` below
+ * the sheet's top edge.
+ */
+function pastSheetEdge(
+  box: { readonly y: number },
+  storyBottom: number,
+  geometry: {
+    readonly pageHeight?: number;
+    readonly storyDistance?: number;
+    readonly footer?: boolean;
+  }
+): boolean {
+  const { pageHeight, storyDistance, footer } = geometry;
+  if (storyDistance === undefined) return false;
+  if (footer) return box.y - storyBottom >= storyDistance;
+  return pageHeight !== undefined && storyDistance + box.y >= pageHeight;
+}
+
 /** Whether the story holds a frame this lane positions; cheap enough for every layout. */
 export function hasStoryTextFrames(blocks: readonly OoxmlElement[]): boolean {
   return blocks.some((block) => block.kind === 'paragraph' && directFrame(block) !== undefined);
@@ -322,6 +348,9 @@ export function placeStoryTextFrames(
     readonly contentWidth: number;
     readonly pageWidth?: number;
     readonly marginLeft?: number;
+    readonly pageHeight?: number;
+    readonly storyDistance?: number;
+    readonly footer?: boolean;
   },
   overlapDecided = false
 ): Flow | null {
@@ -358,22 +387,23 @@ export function placeStoryTextFrames(
       size
     );
     const box = { ...origin, ...size };
+    // The frame's height comes from its own lines, and it may end below the story's text: a
+    // page number in larger runs than its anchor, or a frame offset down by `w:y`. The story
+    // still reserves only the height of its own flow.
     const pageNumber = frame.autoWidth && frame.wrap !== 'none';
-    // The lane keeps the height the story reserves. A page number that wraps text and ends
-    // below that height would need more, so its story keeps ordinary flow.
-    if (
-      !overlapDecided &&
-      pageNumber &&
-      box.y + box.height > ordinary.bottom + OVERHANG_TOLERANCE_PT
-    )
-      return null;
+    // A page number that would start past the sheet's edge could not be seen or reached, so its
+    // story keeps ordinary flow. One that only ends past the edge stays, clipped by the sheet.
+    if (!overlapDecided && pageNumber && pastSheetEdge(box, ordinary.bottom, geometry)) return null;
     // A frame over the story's own paragraph text would wrap it; that stays in ordinary flow.
-    // A page number that wraps text keeps clear of it on every page, however long it grows.
-    const paragraphs = ordinary.blocks.filter((block) => block.kind === 'paragraph');
+    // A page number that wraps text keeps clear of it on every page, however long it grows,
+    // and of the story's tables too, which it would also wrap.
+    const content = pageNumber
+      ? ordinary.blocks
+      : ordinary.blocks.filter((block) => block.kind === 'paragraph');
     const reach = pageNumber
       ? pageNumberReach(box, fragments[0]!, frame, group.decoration ?? '')
       : box;
-    if (!overlapDecided && meetsOrdinaryContent(reach, paragraphs)) return null;
+    if (!overlapDecided && meetsOrdinaryContent(reach, content)) return null;
     for (const fragment of fragments) {
       const moved = translateParagraphFragment(fragment, origin.x, origin.y);
       placed.push(
@@ -406,6 +436,9 @@ export function layoutStoryWithTextFrames(
     readonly contentWidth: number;
     readonly pageWidth?: number;
     readonly marginLeft?: number;
+    readonly pageHeight?: number;
+    readonly storyDistance?: number;
+    readonly footer?: boolean;
   },
   publish: (flow: Flow) => void,
   overlapDecided = false

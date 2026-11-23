@@ -51,7 +51,8 @@ const INLINE_BETWEEN_BLOCKS = new Set([
   'moveToRangeEnd',
 ]);
 /** The `w:ind` attributes in character units, which supersede their twips (§17.3.1.12). */
-const CHARACTER_ATTRIBUTES = ['leftChars', 'startChars', 'firstLineChars', 'hangingChars'];
+const LEADING_CHARACTER_ATTRIBUTES = ['leftChars', 'startChars'];
+const FIRST_LINE_CHARACTER_ATTRIBUTES = ['firstLineChars', 'hangingChars'];
 
 export function createListExit(deps: ListExitDeps) {
   /** The list item a collapsed caret is in, or null for a range or an ordinary paragraph. */
@@ -141,7 +142,16 @@ export function createListExit(deps: ListExitDeps) {
   function resolvedIndent(paragraphId: string) {
     const properties = paragraphPropertiesOf(deps.layout(), paragraphId);
     let firstLine = 0;
-    let inChars = false;
+    // The leading and first-line settings in character units, each decided by the last
+    // level that states either spelling, so a later zero (a numbering removal) clears them.
+    let leadingInChars = false;
+    let firstLineInChars = false;
+    const statedChars = (attributes: Readonly<Record<string, string>>, names: string[]) => {
+      const stated = names.map((name) => attributes[name]).filter((value) => value !== undefined);
+      return stated.length === 0
+        ? null
+        : stated.some((value) => Number.isFinite(Number(value)) && Number(value) !== 0);
+    };
     for (const property of properties) {
       if (property.localName !== 'ind') continue;
       const attributes = property.attributes ?? {};
@@ -149,11 +159,11 @@ export function createListExit(deps: ListExitDeps) {
       const first = readTwipsMeasure(attributes.firstLine);
       if (hanging !== null) firstLine = -hanging;
       else if (first !== null) firstLine = first;
-      for (const name of CHARACTER_ATTRIBUTES) {
-        const chars = Number(attributes[name] ?? NaN);
-        if (Number.isFinite(chars) && chars !== 0) inChars = true;
-      }
+      leadingInChars = statedChars(attributes, LEADING_CHARACTER_ATTRIBUTES) ?? leadingInChars;
+      firstLineInChars =
+        statedChars(attributes, FIRST_LINE_CHARACTER_ATTRIBUTES) ?? firstLineInChars;
     }
+    const inChars = leadingInChars || firstLineInChars;
     return { left: leftIndentTwipsOf(properties), firstLine, inChars };
   }
 

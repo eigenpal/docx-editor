@@ -36,6 +36,7 @@ import { isOmmlEquationAtom } from '../store/package/omml-display.ts';
 import {
   foldAttribute,
   lastProperty,
+  numberingRemovalSource,
   paragraphPropertySources,
   relatedPart,
   runPropertyLayers,
@@ -264,7 +265,9 @@ function paragraphCssOf(
   let right: number | null = null;
   let hanging: number | null = null;
   let firstLine: number | null = null;
-  for (const source of sources) {
+  const removal = numberingRemovalSource(sources);
+  for (const [index, source] of sources.entries()) {
+    if (index === removal) [left, hanging, firstLine] = [0, null, null];
     const ind = wmlChild(source, 'ind');
     if (!ind) continue;
     const leftValue = parseTwipsValue(

@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Without a w:default paragraph style, unstyled paragraphs resolve to w:docDefaults, and a later duplicate without the flag removes the default.",
+  "after": "Without a w:default paragraph style, unstyled paragraphs resolve to the last paragraph style named Normal, and the flagged id stays the default across later duplicates. A pasted style never takes the Normal name in a target without a w:default paragraph style.",
+  "reason": "Only the read-side resolution of the default paragraph style and the names a paste import gives change. Shared nodes, text offsets, operations, and package serialization stay the same, and the resolution never rewrites styles.xml.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/default-normal-paragraph-style.test.ts",
+    "packages/core/src/store/__tests__/clipboard-fragment-defaults.test.ts",
+    "packages/core/src/automation/__tests__/automation-default-paragraph-style.test.ts"
+  ],
+  "changeset": "default-normal-paragraph-style",
+  "migration": null
+}

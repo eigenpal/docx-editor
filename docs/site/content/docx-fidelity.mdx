@@ -68,6 +68,7 @@ The matrix reports editing, rendering, and round-trip support separately. A feat
 - `w:keepNext` paragraphs form one group, of any length. Explicit page breaks and section boundaries end the group.
 - With widow control, a following three-line paragraph stays whole. `w:keepLines` keeps the whole following paragraph with the group when the group fits.
 - In left-to-right text, an opening word wraps within the space after leading left tabs, without a blank line.
+- A left tab whose next stop lies past the right edge starts the next line, also in table cells and text frames, even with no text after it.
 - Distributed paragraphs (`w:jc="distribute"`) stretch their last line, also in cells and beside floating objects.
 - For text frames, see [Text frames](#text-frames). For East Asian spacing, see [East Asian text](#east-asian-text).
 
@@ -154,6 +155,7 @@ The compatibility mode in `w:compat` changes clipping, page counts, table placem
 | Square wrap on the largest side, equal sides | Text keeps the left side. | Text keeps the right side. |
 | Header or footer text beside a floating table or wrapping object in the same part | Wraps beside it or moves below it. The part grows with that text. | Ignores the object. |
 | Page- or margin-anchored floating table past the bottom | The first part ends at the bottom margin. | Breaks only past the page edge, and can reach that edge. |
+| Tab after text that ends on a custom stop at the right edge, with no stop past it | Starts the next line. | Stays on the line, except in a table cell, where it starts the next line. |
 | No-overlap floating table | Can move left or right of an earlier table. | Moves right only, then below. |
 | Right-aligned floating table in the body | Keeps its position. | Moves right by its right cell margin. |
 | Floating table with an offset or a left alignment | Its outer edge takes the position. | Its first cell content takes the position. |
@@ -258,7 +260,8 @@ Compact equation replacement is disabled when it cannot keep the source. The equ
 - A floating table in a table cell is positioned within that cell and stays inside the cell box. The cell text wraps around it, and the cell grows to hold it.
 - In a cell, `page` and `margin` vertical anchors measure from the top of the cell. Floats in one cell do not overlap. Vertical cell alignment moves the text but not the floats.
 - A cell float that does not fit the space left on the page breaks there. Its next part floats at the top of the cell.
-- A cell float with a vertical alignment other than `top` stays in the text flow. Earlier lines of the cell do not wrap around a cell float.
+- A cell float with a vertical alignment other than `top` stays in the text flow.
+- A text-anchored cell float raised above its anchor keeps its position. The earlier lines of the cell that it covers wrap beside it or move below it. Earlier lines do not wrap around a cell float anchored to the page or margin.
 - You cannot edit floating-table properties. Save keeps them.
 
 ### Pages and sections

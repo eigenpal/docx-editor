@@ -363,7 +363,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Apply document paragraph styles, including custom styles with numbering and indents. Enter starts the next paragraph with the following style specified by the current style. You cannot define styles through the editor controls.',
+      'Apply document paragraph styles, including custom styles with numbering and indents, and Enter applies the following style. Unstyled paragraphs use the default paragraph style, or the style named Normal when none is marked default. You cannot define styles through the editor controls.',
   },
   {
     id: 'paragraphs.borders',

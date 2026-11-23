@@ -308,9 +308,7 @@ export function placeHeaderPageFrame<T extends { blocks: BlockFragmentRecord[]; 
     box,
     lines: [{ ...line, box: { ...line.box, x: box.x, width } }],
   };
-  return {
-    ...rest,
-    blocks: [placed, ...rest.blocks],
-    bottom: Math.max(rest.bottom, box.y + box.height),
-  };
+  // The frame takes no room in the story, so a frame taller than its anchor's band, such as a
+  // page number in larger runs, never grows the header or pushes the body down.
+  return { ...rest, blocks: [placed, ...rest.blocks] };
 }

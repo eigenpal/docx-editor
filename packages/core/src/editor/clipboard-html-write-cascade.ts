@@ -13,6 +13,11 @@ import {
 } from '../store/package/application-doc-defaults.ts';
 import { MAX_STYLE_BASED_ON_DEPTH, MAX_STYLE_DEFINITIONS } from '../layout/style-cascade.ts';
 import { isElement, wmlChild, wmlVal } from './clipboard-html-write-tree.ts';
+import {
+  defaultParagraphStyleCandidateOf,
+  defaultParagraphStyleIdOf,
+  type DefaultParagraphStyleCandidate,
+} from '../store/package/default-paragraph-style.ts';
 
 const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
 // The layout cascade's own depth cap, so copy output resolves the same chains the
@@ -63,9 +68,10 @@ export function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
       defaultTableStyleId,
     };
   }
-  // The same MAX_STYLE_DEFINITIONS cap and last-duplicate-wins default rule as
-  // layout's buildStyleCascadeTable: styles.xml is attacker-controlled, and the
-  // copy lane must not scan more (or resolve a default the painter revoked).
+  // The same MAX_STYLE_DEFINITIONS cap and default rules as layout's
+  // buildStyleCascadeTable: styles.xml is attacker-controlled, and the copy lane must
+  // not scan more (or resolve a default the painter does not use).
+  const paragraphDefaultCandidates: DefaultParagraphStyleCandidate[] = [];
   let counted = 0;
   let docDefaults: OoxmlElement | null = null;
   for (const child of root.children) {
@@ -85,18 +91,21 @@ export function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
     const isDefault = attributeValueOf(child, 'default', WML_NAMESPACE_URI);
     const type = attributeValueOf(child, 'type', WML_NAMESPACE_URI);
     // Every legal ST_OnOff spelling — layout/style-cascade.ts's isDefaultFlag
-    // documents the same 'on' trap. A later duplicate styleId WITHOUT the flag
-    // revokes the default, so the last definition wins like the cascade table.
-    if (isDefault === '1' || isDefault === 'true' || isDefault === 'on') {
-      if (type === 'paragraph') defaultParagraphStyleId = id;
-      else if (type === 'character') defaultCharacterStyleId = id;
+    // documents the same 'on' trap. For character and table styles, a later duplicate
+    // styleId WITHOUT the flag revokes the default, like the cascade table. The default
+    // paragraph style follows the shared rule.
+    const flagged = isDefault === '1' || isDefault === 'true' || isDefault === 'on';
+    const candidate = defaultParagraphStyleCandidateOf(child);
+    if (candidate) paragraphDefaultCandidates.push(candidate);
+    if (flagged) {
+      if (type === 'character') defaultCharacterStyleId = id;
       else if (type === 'table') defaultTableStyleId = id;
     } else {
-      if (defaultParagraphStyleId === id) defaultParagraphStyleId = null;
       if (defaultCharacterStyleId === id) defaultCharacterStyleId = null;
       if (defaultTableStyleId === id) defaultTableStyleId = null;
     }
   }
+  defaultParagraphStyleId = defaultParagraphStyleIdOf(paragraphDefaultCandidates);
   // Omitted halves resolve to the application's defaults, which the page paints, judged on the
   // element read above. A fragment without a styles part carries no defaults of its own.
   if (root.namespaceUri === WML_NAMESPACE_URI) {
@@ -167,6 +176,21 @@ export function paragraphPropertySources(
   }
   if (ownPPr) sources.push(ownPPr);
   return sources;
+}
+
+/**
+ * The index of the source whose `w:numPr` removes the paragraph's numbering, or -1.
+ *
+ * The last source that states a `w:numId` decides, as it does for list membership. When it
+ * states `w:val="0"`, the leading indent and the first-line offset of every source before
+ * it reset to zero, as layout resolves them (`numberingTier`).
+ */
+export function numberingRemovalSource(sources: readonly OoxmlElement[]): number {
+  for (let index = sources.length - 1; index >= 0; index -= 1) {
+    const numId = wmlChild(wmlChild(sources[index]!, 'numPr'), 'numId');
+    if (numId) return wmlVal(numId) === '0' ? index : -1;
+  }
+  return -1;
 }
 
 /** Run property sources grouped by cascade level, so toggles can XOR per level. */

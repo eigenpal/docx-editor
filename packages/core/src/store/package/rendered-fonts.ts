@@ -34,6 +34,7 @@
 //   run's — see `GLYPH_MARKS` below. The broad export answer adds marks (`applyMark`).
 
 import { isEastAsianCodePoint } from './east-asian-code-points.ts';
+import { defaultParagraphStyleIdOfElements } from './default-paragraph-style.ts';
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { runIsDirectlyHidden } from './run-hidden.ts';
@@ -649,7 +650,7 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
   let docDefaultFamily: string | null = null;
   let docDefaultEastAsiaFamily: string | null = null;
   let docDefaultHAnsiFamily: string | null = null;
-  let defaultParagraph: string | null = null;
+  const styleElements: OoxmlElement[] = [];
   let defaultCharacter: string | null = null;
   let defaultTable: string | null = null;
 
@@ -693,9 +694,9 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
       const eastAsiaFamily = rPrEastAsiaFamily(condition, themeFonts);
       if (eastAsiaFamily !== null) conditionalEastAsiaFamilies.push(eastAsiaFamily);
     }
-    // Last duplicate wins, and a later duplicate that is not the default CLEARS a default
-    // the earlier one claimed — both matching `buildStyleCascadeTable` in
-    // `layout/style-cascade.ts`, so the notice checks the definition layout paints from.
+    // Last duplicate wins; a later character or table duplicate without the flag CLEARS its
+    // default; the default paragraph style follows the shared rule. All match
+    // `buildStyleCascadeTable`, so the notice checks the definition layout paints from.
     entries.set(styleId, {
       basedOn: validStyleId(basedOnElement ? attributeValue(basedOnElement, 'val') : undefined),
       family: rPrFamily(child, themeFonts),
@@ -707,10 +708,8 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
     });
     const isDefault = isDefaultFlag(attributeValue(child, 'default'));
     const type = attributeValue(child, 'type');
-    if (type === 'paragraph') {
-      if (isDefault) defaultParagraph = styleId;
-      else if (defaultParagraph === styleId) defaultParagraph = null;
-    } else if (type === 'character') {
+    styleElements.push(child);
+    if (type === 'character') {
       if (isDefault) defaultCharacter = styleId;
       else if (defaultCharacter === styleId) defaultCharacter = null;
     } else if (type === 'table') {
@@ -718,6 +717,7 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
       else if (defaultTable === styleId) defaultTable = null;
     }
   }
+  const defaultParagraph = defaultParagraphStyleIdOfElements(styleElements);
 
   const chainMemo = new Map<string, StyleChain>();
   const characterChainMemo = new Map<string, StyleChain>();

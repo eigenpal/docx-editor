@@ -280,6 +280,10 @@ function breakPreparedParagraphLines(request: ParagraphBreakRequest): readonly P
         styleCascade?.typography
       ),
       leftTabsPastMargin: hasCompatibilityRule(request.compatibilityMode, 'leftTabStopsPastMargin'),
+      edgeStopKeepsTrailingTabs: hasCompatibilityRule(
+        request.compatibilityMode,
+        'edgeStopKeepsTrailingTabs'
+      ),
       inlineObjectsBesideFloats: hasCompatibilityRule(
         request.compatibilityMode,
         'inlineObjectStaysBesideFloat'

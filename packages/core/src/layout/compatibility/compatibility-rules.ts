@@ -175,6 +175,10 @@ export const MODE_RULES = {
     'A custom left tab stop past the margin is honoured, and the text after it may run past the margin. In modern modes the stop reaches the margin and its text wraps there',
     'ECMA-376 Part 1 §17.3.1.37 tabs'
   ),
+  edgeStopKeepsTrailingTabs: legacy(
+    'Outside a table cell, a tab after text that ends on a custom stop at the right edge stays on that line when no stop lies past it. In modern modes, and in table cells in every mode, the tab opens the next line',
+    'ECMA-376 Part 1 §17.3.3.32 tab'
+  ),
   oversizedRowKeepGroupReleases: legacy(
     'A kept row group that exceeds a fresh page starts beside preceding content, except directly below authored headers',
     'ECMA-376 Part 1 §17.3.1.15 keepNext'

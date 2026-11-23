@@ -3,7 +3,11 @@
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
-import { serializeOoxmlPart } from '../package/ooxml-tree.ts';
+import { serializeOoxmlPart, type OoxmlPart } from '../package/ooxml-tree.ts';
+import {
+  defaultParagraphStyleCandidateOf,
+  defaultParagraphStyleIdOf,
+} from '../package/default-paragraph-style.ts';
 import { extractFragmentPackage } from '../store/clipboard-fragment-extract.ts';
 import {
   CT,
@@ -95,5 +99,66 @@ describe('omitted defaults travel as what the source painted', () => {
     const xml = pasteInto(authoredTenPoint, external);
     expect(xml).not.toContain('<w:sz');
     expect(xml).not.toContain('<w:spacing');
+  });
+});
+
+describe('a default paragraph style named "Normal" without w:default', () => {
+  const styles = (inner: string) =>
+    `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="20"/></w:rPr>` +
+    `</w:rPrDefault><w:pPrDefault/></w:docDefaults>${inner}</w:styles>`;
+  const namedNormal = (styleId: string, flag = '') =>
+    `<w:style w:type="paragraph"${flag} w:styleId="${styleId}"><w:name w:val="Normal"/>` +
+    '<w:rPr><w:sz w:val="32"/></w:rPr></w:style>';
+  const plain = '<w:p><w:r><w:t>carried</w:t></w:r></w:p>';
+  const paste = (sourceStyles: string, targetStyles: string) => {
+    const source = buildPackage(plain, { 'word/styles.xml': sourceStyles });
+    const extracted = extractFragmentPackage(source, fullBodyCoverage(source));
+    if (!extracted.ok) throw new Error('extract failed');
+    const store = openStore(buildPackage('<w:p/>', { 'word/styles.xml': targetStyles }));
+    const main = store.currentPackage().mainDocumentPart;
+    const hostId = paragraphIdsUnder(bodyOf(store.currentPackage().parts.get(main)!))[0]!;
+    const pasted = store.applyFragmentPaste(
+      { kind: 'body' },
+      { paragraphId: hostId, offset: 0, fragmentBytes: extracted.bytes, lastMarkCovered: true }
+    );
+    expect(pasted.ok).toBe(true);
+    const parts = store.currentPackage().parts;
+    return {
+      main: serializeOoxmlPart(parts.get(main)!),
+      styles: parts.get('/word/styles.xml')!,
+    };
+  };
+  const defaultOf = (part: OoxmlPart): string | null =>
+    defaultParagraphStyleIdOf(
+      part.root.children.flatMap((child) => {
+        if (child.kind === 'textValue' || child.localName !== 'style') return [];
+        const candidate = defaultParagraphStyleCandidateOf(child);
+        return candidate ? [candidate] : [];
+      })
+    );
+
+  test('the copy carries the look of the style the source painted it in', () => {
+    const target = styles(namedNormal('Normal', ' w:default="1"').replace('32', '24'));
+    // Unflagged, and flagged with the `on` spelling of `ST_OnOff`.
+    for (const flag of ['', ' w:default="on"']) {
+      expect(paste(styles(namedNormal('a', flag)), target).main).toContain('<w:sz w:val="32"/>');
+    }
+  });
+
+  test('an imported "Normal" never becomes the default of a target that flags none', () => {
+    const target = styles(
+      '<w:style w:type="paragraph" w:styleId="Body"><w:name w:val="Body"/></w:style>'
+    );
+    const pasted = paste(styles(namedNormal('Normal', ' w:default="1"')), target);
+    expect(defaultOf(pasted.styles)).toBeNull();
+    expect(serializeOoxmlPart(pasted.styles)).toContain('w:val="Normal (pasted)"');
+    expect(pasted.main).toContain('<w:sz w:val="32"/>');
+  });
+
+  test('the target keeps its own "Normal" as the default', () => {
+    const target = styles(namedNormal('t').replace('32', '24'));
+    const pasted = paste(styles(namedNormal('a')), target);
+    expect(defaultOf(pasted.styles)).toBe('t');
+    expect(pasted.main).toContain('<w:sz w:val="32"/>');
   });
 });

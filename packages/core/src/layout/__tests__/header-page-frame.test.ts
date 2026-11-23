@@ -247,7 +247,7 @@ describe('a PAGE frame that opens a header', () => {
     };
     const plain = story('');
     const empty = story(framed(frameProperties('right'), ''));
-    expect(empty.flowHeight).toBeCloseTo(plain.flowHeight + 0.05, 6);
+    expect(empty.flowHeight).toBeCloseTo(plain.flowHeight, 6);
     expect(geometry(paragraphs(empty.fragments)[1]!)).toEqual(
       geometry(paragraphs(plain.fragments)[0]!)
     );
@@ -267,8 +267,8 @@ describe('a PAGE frame that opens a header', () => {
     const [frame, running] = paragraphs(story.fragments);
     expect(running!.box.y).toBe(0);
     expect(frame!.box.width).toBe(0);
-    // The frame ends 1 twip below the single anchor line, and the story reaches its bottom.
-    expect(story.flowHeight).toBeCloseTo(LINE + 0.05, 9);
+    // The frame ends 1 twip below the single anchor line; the story keeps the anchor's height.
+    expect(story.flowHeight).toBeCloseTo(LINE, 9);
     const [projected] = paragraphs(onPage(story, 12).fragments);
     expect(textOf(projected!)).toBe('12');
     expect(ink(projected!).right).toBeCloseTo(WIDTH, 9);

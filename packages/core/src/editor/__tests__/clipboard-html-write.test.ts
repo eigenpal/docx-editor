@@ -203,6 +203,27 @@ describe('interopHtmlFromFragment', () => {
     expect(ltr).toContain('margin-left:36pt');
   });
 
+  test('a paragraph that removes its numbering copies without its style indent', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        styles:
+          FORMAT_DOC_DEFAULTS +
+          '<w:style w:type="paragraph" w:styleId="Indented"><w:pPr>' +
+          '<w:ind w:left="720" w:right="360" w:hanging="360"/></w:pPr></w:style>',
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Indented"/></w:pPr><w:r><w:t>styled</w:t></w:r></w:p>' +
+          '<w:p><w:pPr><w:pStyle w:val="Indented"/><w:numPr><w:numId w:val="0"/></w:numPr>' +
+          '</w:pPr><w:r><w:t>removed</w:t></w:r></w:p>',
+      })
+    );
+    const [styled, removed] = html.split('</p>');
+    expect(styled).toContain('margin-left:36pt');
+    expect(styled).toContain('text-indent:-18pt');
+    expect(removed).toContain('margin-left:0pt');
+    expect(removed).toContain('margin-right:18pt');
+    expect(removed).not.toContain('text-indent');
+  });
+
   test('inline run wrappers contribute their text in reading order', () => {
     const html = interopHtmlFromFragment(
       fragment({
@@ -900,6 +921,19 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('color:#222222');
     // Direct formatting wins over both.
     expect(html).toContain('font-size:20pt');
+  });
+
+  test('without w:default, the paragraph style named "Normal" cascades under bare runs', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        styles:
+          FORMAT_DOC_DEFAULTS +
+          '<w:style w:type="paragraph" w:styleId="a"><w:name w:val="Normal"/>' +
+          '<w:rPr><w:color w:val="224466"/></w:rPr></w:style>',
+        body: '<w:p><w:r><w:t>plain</w:t></w:r></w:p>',
+      })
+    );
+    expect(html).toContain('color:#224466');
   });
 
   test('highlight wins over shading and toggles honour explicit off values', () => {

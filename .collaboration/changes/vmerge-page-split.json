@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A vertical merge whose rows can split and that crosses a page break sizes its head row to the whole merged text and moves the other rows below it.",
+  "after": "The merge keeps each row at its own height on its page and continues the merged text beside the rows on the next page.",
+  "reason": "The change only derives layout rows and continuation cursors for page fragments. Canonical OOXML, source offsets, replicated operations, and awareness messages remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-vmerge-page-split.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-vmerge-fragment-carry.test.ts"
+  ],
+  "changeset": "vmerge-page-split",
+  "migration": null
+}

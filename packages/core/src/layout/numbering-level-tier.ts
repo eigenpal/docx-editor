@@ -1,6 +1,6 @@
 // Where a numbering level's `w:pPr` ranks among a list paragraph's own formatting.
 
-import type { OoxmlNode } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { propertiesOf } from './paragraph-flow.ts';
 import { paragraphStyleChain } from './style-chain.ts';
@@ -38,6 +38,91 @@ export function numberingLevelRank(
     if (statesNumPr(chain[index]!.paragraphPropertiesNode)) return index;
   }
   return 0;
+}
+
+/** The `w:val` of the `w:numId` this `w:pPr` states, or `undefined` when it states none. */
+function statedNumId(pPr: OoxmlNode | undefined): string | undefined {
+  if (pPr === undefined || !isElement(pPr)) return undefined;
+  const numPr = pPr.children.find((child) => isElement(child) && child.localName === 'numPr');
+  if (numPr === undefined || !isElement(numPr)) return undefined;
+  const numId = numPr.children.find((child) => isElement(child) && child.localName === 'numId');
+  if (numId === undefined || !isElement(numId)) return undefined;
+  return numId.attributes.find((attribute) => attribute.localName === 'val')?.value ?? '';
+}
+
+/**
+ * How many styles of the base-first `chain` rank below a numbering removal, or `null` when
+ * the paragraph's numbering is not removed.
+ *
+ * The nearest `w:pPr` that states a `w:numId` decides, as it does for list membership. When
+ * it states `w:val="0"` (§17.9.18, no numbering), the removal ranks directly below THAT
+ * `w:pPr`: above the whole chain when it is the paragraph's own. A level-only `w:numPr`
+ * above it does not move the removal, unlike a level.
+ *
+ * ECMA-376 Part 1 §17.9.18 (`numId`): "A value of 0 for the val attribute shall never be
+ * used to point to a numbering definition instance, and shall instead only be used to
+ * designate the removal of numbering properties at a particular level in the style
+ * hierarchy (typically via direct formatting)."
+ */
+function numberingRemovalRank(
+  chain: readonly StyleDefinition[],
+  directPPr: OoxmlNode | undefined
+): number | null {
+  const direct = statedNumId(directPPr);
+  if (direct !== undefined) return direct === '0' ? chain.length : null;
+  for (let index = chain.length - 1; index >= 0; index -= 1) {
+    const stated = statedNumId(chain[index]!.paragraphPropertiesNode);
+    if (stated !== undefined) return stated === '0' ? index : null;
+  }
+  return null;
+}
+
+/**
+ * What a numbering removal states at its rank: no leading indent and no first-line offset,
+ * in twips and in character units. The trailing indent is not part of it. Only the flat
+ * property list carries this tier; `paragraphPropertyNodes` has no node for it.
+ */
+const REMOVED_NUMBERING_PROPERTIES: readonly OoxmlProperty[] = Object.freeze([
+  Object.freeze({
+    localName: 'ind',
+    attributes: Object.freeze({
+      left: '0',
+      leftChars: '0',
+      firstLine: '0',
+      firstLineChars: '0',
+      hangingChars: '0',
+    }),
+  }),
+]);
+
+/**
+ * The properties a paragraph's numbering contributes to its cascade, and how many styles of
+ * the base-first `chain` rank below them.
+ *
+ * A resolved level contributes its own `w:pPr` (`levelPPr`) at `numberingLevelRank`. A
+ * paragraph whose numbering is removed with `w:numId w:val="0"` has no level, but the
+ * removal resets the leading indent and the first-line offset of every tier below it. So a
+ * direct `w:numId w:val="0"` puts the paragraph at the margin even when its style indents
+ * it, and a style stating `w:numId w:val="0"` cancels its bases' indents but keeps its own.
+ * A `w:ind` the paragraph states still applies, and the trailing indent is unchanged.
+ *
+ * §17.9.18 states only that the removal takes away numbering properties. Resetting the
+ * leading and first-line indents that a paragraph style supplies goes beyond that text: it
+ * is a layout rule. §17.3.1.12 (`ind`) defines the `left`/`start`, `firstLine`, and
+ * `hanging` values and their character-unit forms that this tier resets.
+ */
+export function numberingTier(
+  chain: readonly StyleDefinition[],
+  directPPr: OoxmlNode | undefined,
+  levelPPr: OoxmlElement | undefined
+): { readonly rank: number; readonly properties: readonly OoxmlProperty[] } {
+  if (levelPPr) {
+    return { rank: numberingLevelRank(chain, directPPr), properties: propertiesOf(levelPPr) };
+  }
+  const removal = numberingRemovalRank(chain, directPPr);
+  return removal === null
+    ? { rank: chain.length, properties: [] }
+    : { rank: removal, properties: REMOVED_NUMBERING_PROPERTIES };
 }
 
 /**

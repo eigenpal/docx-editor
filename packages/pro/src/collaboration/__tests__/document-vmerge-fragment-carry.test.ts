@@ -22,12 +22,14 @@ const p = (text: string) =>
   '<w:p><w:pPr><w:spacing w:line="240" w:lineRule="exact" w:before="0" w:after="0"/></w:pPr><w:r><w:rPr><w:sz w:val="24"/></w:rPr><w:t>' +
   text +
   '</w:t></w:r></w:p>';
-const body =
+// `protectedRows` marks every row `w:cantSplit`; without it the rows can split, and the merge
+// still keeps each row at its own height while the merged text continues across the page.
+const bodyFor = (protectedRows: boolean) =>
   '<w:p><w:pPr><w:spacing w:line="4400" w:lineRule="exact"/></w:pPr><w:r><w:t>Introduction</w:t></w:r></w:p><w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="5000"/><w:gridCol w:w="5000"/></w:tblGrid>' +
   Array.from(
     { length: 30 },
     (_, row) =>
-      '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="370" w:hRule="atLeast"/></w:trPr><w:tc><w:tcPr><w:vMerge' +
+      `<w:tr><w:trPr>${protectedRows ? '<w:cantSplit/>' : ''}<w:trHeight w:val="370" w:hRule="atLeast"/></w:trPr><w:tc><w:tcPr><w:vMerge` +
       (row === 0 ? ' w:val="restart"' : '') +
       '/></w:tcPr>' +
       (row === 0
@@ -103,39 +105,40 @@ function check(peer: Peer, expectedText: string): void {
   expect(layoutSemanticDocument(reopened.part, revision, { geometry, measurer })).toEqual(layout);
 }
 
-test('live replicas lay out carried text after concurrent edits, undo, redo, and cold join', async () => {
-  const { alice, bob, pause, resume } = await harness.pair(zipDocument(body));
-  check(alice, 'MERGED-50');
-  check(bob, 'MERGED-50');
-  pause();
-  harness.apply(alice, [
-    { op: 'insertText', paragraphId: paragraph(alice, 'MERGED-50').id, offset: 9, text: ' A' },
-  ]);
-  harness.apply(bob, [
-    { op: 'insertText', paragraphId: paragraph(bob, 'MERGED-1').id, offset: 8, text: ' B' },
-  ]);
-  resume();
-  harness.expectConverged(alice, bob);
-  check(alice, 'MERGED-50 A');
-  check(bob, 'MERGED-50 A');
-  expect(alice.room.session.undo()).toBe(true);
-  harness.expectConverged(alice, bob);
-  check(bob, 'MERGED-50');
-  expect(alice.room.session.redo()).toBe(true);
-  harness.expectConverged(alice, bob);
-  check(bob, 'MERGED-50 A');
-  pause();
-  harness.apply(alice, [
-    { op: 'deleteText', paragraphId: paragraph(alice, 'MERGED-50').id, start: 9, end: 11 },
-  ]);
-  harness.apply(bob, [
-    { op: 'insertText', paragraphId: paragraph(bob, 'MERGED-50').id, offset: 11, text: ' B' },
-  ]);
-  resume();
-  harness.expectConverged(alice, bob);
-  check(alice, 'MERGED-50 B');
-  check(bob, 'MERGED-50 B');
-  const cold = await harness.remount(bob);
-  harness.expectConverged(alice, cold);
-  check(cold, 'MERGED-50 B');
-});
+for (const protectedRows of [true, false])
+  test(`live replicas lay out carried text after concurrent edits, undo, redo, and cold join (${protectedRows ? 'protected' : 'splittable'} rows)`, async () => {
+    const { alice, bob, pause, resume } = await harness.pair(zipDocument(bodyFor(protectedRows)));
+    check(alice, 'MERGED-50');
+    check(bob, 'MERGED-50');
+    pause();
+    harness.apply(alice, [
+      { op: 'insertText', paragraphId: paragraph(alice, 'MERGED-50').id, offset: 9, text: ' A' },
+    ]);
+    harness.apply(bob, [
+      { op: 'insertText', paragraphId: paragraph(bob, 'MERGED-1').id, offset: 8, text: ' B' },
+    ]);
+    resume();
+    harness.expectConverged(alice, bob);
+    check(alice, 'MERGED-50 A');
+    check(bob, 'MERGED-50 A');
+    expect(alice.room.session.undo()).toBe(true);
+    harness.expectConverged(alice, bob);
+    check(bob, 'MERGED-50');
+    expect(alice.room.session.redo()).toBe(true);
+    harness.expectConverged(alice, bob);
+    check(bob, 'MERGED-50 A');
+    pause();
+    harness.apply(alice, [
+      { op: 'deleteText', paragraphId: paragraph(alice, 'MERGED-50').id, start: 9, end: 11 },
+    ]);
+    harness.apply(bob, [
+      { op: 'insertText', paragraphId: paragraph(bob, 'MERGED-50').id, offset: 11, text: ' B' },
+    ]);
+    resume();
+    harness.expectConverged(alice, bob);
+    check(alice, 'MERGED-50 B');
+    check(bob, 'MERGED-50 B');
+    const cold = await harness.remount(bob);
+    harness.expectConverged(alice, cold);
+    check(cold, 'MERGED-50 B');
+  });

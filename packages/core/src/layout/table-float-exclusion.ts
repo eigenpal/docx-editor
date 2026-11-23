@@ -8,7 +8,12 @@ import { framedTokenJoin } from './layout-cache.ts';
 import type { ExclusionZone, ExclusionColumnLayout } from './drawing-exclusion.ts';
 import type { BlockFragmentRecord, LayoutBox, PageRecord } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
-import { floatingTableZone, leavesNoPassage } from './table-wrap-zone.ts';
+import {
+  bandRisesAboveText,
+  floatingTableZone,
+  leavesNoPassage,
+  raisedAboveText,
+} from './table-wrap-zone.ts';
 import {
   positionedTablesByAnchor,
   positionedTableAnchors,
@@ -28,7 +33,6 @@ import {
   readTableStructure,
   type SemanticTableStructure,
   type TableAnchorFrames,
-  type TableFloatPosition,
 } from './semantic-table.ts';
 import { positionedTableOriginX } from './table-origin.ts';
 import { pinnedTableBreak } from './table-pinned-break.ts';
@@ -155,23 +159,6 @@ export function addFloatingTableExclusions(
 }
 
 const NO_DISTANCES = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
-
-/**
- * Whether a text-anchored table rises above its anchor: an offset more negative than the one
- * twip of storage bias that an authored `w:tblpY="0"` carries, and no vertical alignment.
- */
-function raisedAboveText(float: TableFloatPosition): boolean {
-  return float.vertAnchor === 'text' && !float.ySpec && float.yPt < -0.051;
-}
-
-/**
- * Whether the band of a text-anchored table rises above its anchor top: the offset less the
- * `w:topFromText` distance is more negative than the one twip of storage bias.
- */
-function bandRisesAboveText(float: TableFloatPosition): boolean {
-  const top = float.distances?.top ?? 0;
-  return float.vertAnchor === 'text' && !float.ySpec && float.yPt - top < -0.051;
-}
 
 /** Whether the column being filled is the whole text width: a single-column section. */
 function singleColumn(columnWidth: number, textWidth: number): boolean {

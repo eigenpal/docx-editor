@@ -185,10 +185,11 @@ export function positionRightFooterPageFrame<
       },
     ],
   };
-  // Both canonical paragraphs stay addressable; framePr is never rewritten.
+  // Both canonical paragraphs stay addressable; framePr is never rewritten. The footer
+  // reserves the anchor's height only, even when the frame's runs are taller.
   return {
     ...flow,
     blocks: [placed, opened],
-    bottom: Math.max(placed.box.y + placed.box.height, opened.box.y + opened.box.height),
+    bottom: opened.box.y + opened.box.height,
   };
 }
