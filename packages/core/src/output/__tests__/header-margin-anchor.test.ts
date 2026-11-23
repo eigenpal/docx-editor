@@ -438,6 +438,72 @@ describe('footer anchor relativeFrom="margin"', () => {
   });
 });
 
+describe('header anchors that extend past the bottom of the sheet', () => {
+  test.each([
+    ['paragraph', 740],
+    ['topMargin', 800],
+  ] as const)('clip a %s picture only at the sheet bottom', (verticalFrame, offsetPt) => {
+    const layout = layoutHeaderDoc({
+      horizontalOffsetEmu: 0,
+      verticalFrame,
+      verticalOffsetEmu: offsetPt * 12_700,
+    });
+    const page = layout.pages[0]!;
+    const story = page.header!;
+    const drawing = story.anchoredDrawings![0]!;
+    const top = story.box.y + drawing.paintBounds.y;
+
+    expect(top + drawing.paintBounds.height).toBeCloseTo(page.box.y + page.box.height, 2);
+    expect(top + 63.75).toBeGreaterThan(page.box.y + page.box.height);
+  });
+});
+
+describe('footer anchor relativeFrom="paragraph"', () => {
+  test('keeps a picture that extends past the bottom margin whole up to the sheet edge', () => {
+    // -200pt reaches above the footer story and the 134.7pt bottom margin, into the body.
+    const layout = layoutStoryDoc('footer', {
+      horizontalOffsetEmu: 0,
+      verticalFrame: 'paragraph',
+      verticalOffsetEmu: -2_540_000,
+    });
+    const page = layout.pages[0]!;
+    const story = page.footer!;
+    const drawing = story.anchoredDrawings![0]!;
+    const sheetTop = story.box.y + drawing.paintBounds.y;
+
+    expect(drawing.paintBounds.height).toBeCloseTo(63.75, 2);
+    expect(paintedPosition(layout).y).toBeCloseTo(sheetTop, 2);
+    expect(paintedPosition(layout).height).toBeCloseTo(63.75, 2);
+  });
+
+  test('clips a picture that crosses the sheet top at the sheet edge', () => {
+    const probe = layoutStoryDoc('footer', { verticalFrame: 'paragraph' }).pages[0]!.footer!;
+    // Place the picture top 20pt above the sheet top.
+    const offsetPt = -(probe.box.y + 20);
+    const layout = layoutStoryDoc('footer', {
+      horizontalOffsetEmu: 0,
+      verticalFrame: 'paragraph',
+      verticalOffsetEmu: Math.round(offsetPt * 12_700),
+    });
+    const page = layout.pages[0]!;
+    const story = page.footer!;
+    const drawing = story.anchoredDrawings![0]!;
+
+    expect(story.box.y + drawing.paintBounds.y).toBeCloseTo(page.box.y, 2);
+    expect(drawing.paintBounds.height).toBeCloseTo(63.75 - 20, 2);
+  });
+
+  test('keeps a line-relative picture whole when it extends into the body area', () => {
+    const layout = layoutStoryDoc('footer', {
+      horizontalOffsetEmu: 0,
+      verticalFrame: 'line',
+      verticalOffsetEmu: -2_540_000,
+    });
+    const drawing = layout.pages[0]!.footer!.anchoredDrawings![0]!;
+    expect(drawing.paintBounds.height).toBeCloseTo(63.75, 2);
+  });
+});
+
 test('top-margin anchors cache partial story-origin contexts separately', () => {
   const pkg = openPackage(
     storyDoc('header', {

@@ -1206,10 +1206,24 @@ export function publishAnchoredDrawingsForParagraph(
       options.cellBox.height > 0 &&
       Number.isFinite(options.cellBox.width) &&
       options.cellBox.width > 0;
-    const pageClip =
-      projection.position?.vertical.relativeFrom === 'margin'
-        ? options.pageClip
-        : pageClipRegion(options.frameBase);
+    // ECMA-376 Part 1 §20.4.2.12 posOffset: "This measurement shall be calculated relative to
+    // the top left edge of the positioning base specified by the parent element's relativeFrom
+    // attribute." §20.4.3.5 ST_RelFromV, paragraph: "relative to the paragraph which contains
+    // the drawing anchor"; line: "relative to the line containing the anchor character". The
+    // offset is not limited to the story that holds the anchor, so the only clip is the page
+    // edge. The specification does not describe clipping; the page edge is this engine's choice.
+    //
+    // In a header or footer, the caller's clip is the sheet in story coordinates. Frames that
+    // resolve in story coordinates take it: paragraph, line, margin, and a header's top margin
+    // (`topMarginFrameOrigin` is set). The other frames resolve in page-content coordinates and
+    // keep the frame-base clip. In the body, both clips are the same.
+    const verticalFrame = projection.position?.vertical.relativeFrom;
+    const storyCoordinates =
+      verticalFrame === 'paragraph' ||
+      verticalFrame === 'line' ||
+      verticalFrame === 'margin' ||
+      (verticalFrame === 'topMargin' && options.frameBase.topMarginFrameOrigin !== undefined);
+    const pageClip = storyCoordinates ? options.pageClip : pageClipRegion(options.frameBase);
     const clipRegion = clipToCell ? options.cellBox! : pageClip;
     const record = buildAnchoredDrawingRecord({
       input: Object.freeze({
