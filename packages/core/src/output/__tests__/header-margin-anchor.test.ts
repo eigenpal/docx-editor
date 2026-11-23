@@ -760,16 +760,25 @@ describe('margin-band frames are bands of the sheet', () => {
 
   test('a wrapped footer picture on a margin band keeps the footer layout stable', () => {
     for (const verticalFrame of ['bottomMargin', 'outsideMargin', 'topMargin'] as const)
-      for (let offset = -40; offset <= 140; offset += 20)
-        expect(() =>
-          layoutStoryDoc('footer', {
-            horizontalOffsetEmu: 0,
-            verticalFrame,
-            verticalOffsetEmu: offset * 12_700,
-            topAndBottom: true,
-            storyLineCount: 3,
-          })
-        ).not.toThrow();
+      for (let offset = -40; offset <= 140; offset += 20) {
+        const options = {
+          horizontalOffsetEmu: 0,
+          verticalFrame,
+          verticalOffsetEmu: offset * 12_700,
+          topAndBottom: true,
+          storyLineCount: 3,
+        };
+        const first = layoutStoryDoc('footer', options).pages[0]!;
+        const again = layoutStoryDoc('footer', options).pages[0]!;
+        const footer = first.footer!;
+        // The footer ends at the sheet bottom (w:footer="0") and lays out the same each time.
+        expect(footer.box.y + footer.box.height).toBeCloseTo(first.box.y + SHEET, 2);
+        expect(again.footer!.box).toEqual(footer.box);
+        expect(again.footer!.anchoredDrawings![0]!.y).toBeCloseTo(
+          footer.anchoredDrawings![0]!.y,
+          6
+        );
+      }
   });
 });
 
