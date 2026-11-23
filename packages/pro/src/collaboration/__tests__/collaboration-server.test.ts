@@ -221,9 +221,19 @@ describe('a room in storage', () => {
   test('bytes that are not a room are refused, and the room document stays empty', async () => {
     const memory = memoryStorage({ state: new Uint8Array([1, 2, 3]), export: null });
     const payload = loadPayload();
+    const events: CollaborationServerEvent[] = [];
     expect(
-      await reasonOf(() => extensionOf({ storage: memory.storage }).onLoadDocument(payload))
+      await reasonOf(() =>
+        extensionOf({
+          storage: memory.storage,
+          onEvent: (event) => events.push(event),
+        }).onLoadDocument(payload)
+      )
     ).toBe('invalid-saved-room');
+    expect(events).toEqual([
+      { type: 'room-load-refused', roomName: ROOM, code: 'invalid-saved-room' },
+    ]);
+    expect(memory.saves).toEqual([]);
     expect(Y.encodeStateAsUpdate(payload.document).byteLength).toBeLessThan(8);
   });
 
@@ -234,9 +244,18 @@ describe('a room in storage', () => {
       .getMap(META)
       .set('sharedSchemaVersion', DOCUMENT_COLLABORATION_VERSIONS.sharedSchemaVersion + 1);
     const memory = memoryStorage({ state: Y.encodeStateAsUpdate(room), export: null });
+    const events: CollaborationServerEvent[] = [];
     expect(
-      await reasonOf(() => extensionOf({ storage: memory.storage }).onLoadDocument(loadPayload()))
+      await reasonOf(() =>
+        extensionOf({
+          storage: memory.storage,
+          onEvent: (event) => events.push(event),
+        }).onLoadDocument(loadPayload())
+      )
     ).toBe('collaboration-format-mismatch');
+    expect(events).toEqual([
+      { type: 'room-load-refused', roomName: ROOM, code: 'collaboration-format-mismatch' },
+    ]);
     expect(memory.saves).toEqual([]);
     expect(memory.backups).toEqual([]);
   });
@@ -447,7 +466,7 @@ describe('a stored room of an earlier format', () => {
             onEvent: (event) => events.push(event),
           }).onLoadDocument(payload)
         )
-      ).toBe('collaboration-format-mismatch');
+      ).toBe('saved-room-unavailable');
       expect(memory.saves).toEqual([]);
       expect(memory.backups).toEqual([]);
       expect(memory.stored()).toBe(stored);
@@ -471,7 +490,7 @@ describe('a stored room of an earlier format', () => {
     });
     expect(
       await reasonOf(() => extensionOf({ storage: memory.storage }).onLoadDocument(loadPayload()))
-    ).toBe('collaboration-format-mismatch');
+    ).toBe('saved-room-unavailable');
     expect(memory.saves).toEqual([]);
   });
 

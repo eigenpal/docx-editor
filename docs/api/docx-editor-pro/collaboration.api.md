@@ -202,6 +202,14 @@ export type CollaborationServerEvent = {
 } | {
     readonly code: string;
     readonly roomName: string;
+    readonly type: 'room-load-refused';
+} | {
+    readonly code: string;
+    readonly roomName: string;
+    readonly type: 'room-compaction-failed';
+} | {
+    readonly code: string;
+    readonly roomName: string;
     readonly type: 'room-export-failed';
 };
 

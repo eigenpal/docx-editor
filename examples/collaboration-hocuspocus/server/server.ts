@@ -102,8 +102,10 @@ function logRoomEvent(event: CollaborationServerEvent): void {
     console.log(`[room ${event.roomName}] upgraded from ${event.from} to ${event.to}`);
   } else if (event.type === 'room-upgrade-refused') {
     console.warn(`[room ${event.roomName}] not upgraded: ${event.reason} ${event.code ?? ''}`);
+  } else if (event.type === 'room-export-failed') {
+    console.warn(`[room ${event.roomName}] not stored, no .docx export: ${event.code}`);
   } else {
-    console.warn(`[room ${event.roomName}] no .docx export: ${event.code}`);
+    console.warn(`[room ${event.roomName}] ${event.type}: ${event.code}`);
   }
 }
 

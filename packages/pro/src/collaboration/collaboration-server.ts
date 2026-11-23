@@ -43,11 +43,12 @@ import { prepareCollaborationServerDocument } from './server-document.ts';
  * The largest saved state, in bytes, that the server upgrades while it loads the room.
  *
  * An upgrade creates the room again from its export on the server's thread, and every
- * other room on the process waits meanwhile. On a laptop that takes about 0.4 seconds for
- * each MiB of state, and a paragraph of 250 characters is about 1 KiB of state. A larger
- * room is refused, for a job outside the server to upgrade.
+ * other room on the process waits meanwhile. A room state is much larger than its `.docx`
+ * file: on a laptop, a 75 KB document was 4 MiB of state and upgraded in 0.5 seconds, and a
+ * 521-page document was 46 MiB and took 7 seconds. The default admits both. A larger room
+ * is refused, for a job outside the server to upgrade.
  */
-const DEFAULT_MAX_UPGRADE_STATE_BYTES = 1024 * 1024;
+const DEFAULT_MAX_UPGRADE_STATE_BYTES = 64 * 1024 * 1024;
 
 /** A `.docx` export of a room, with the state it was exported from. @public */
 export interface CollaborationRoomExport {
@@ -122,7 +123,10 @@ export type CollaborationServerEvent =
       readonly hiddenAt: readonly CollaborationMigrationPosition[];
     }
   | {
-      /** The server left a saved room of an earlier format as it is, and refused the load. */
+      /**
+       * The server left a saved room of an earlier format as it is, and refused the load.
+       * Clients get `saved-room-unavailable`.
+       */
       readonly type: 'room-upgrade-refused';
       readonly roomName: string;
       readonly reason: CollaborationRoomUpgradeRefusal;
@@ -134,6 +138,22 @@ export type CollaborationServerEvent =
       readonly changedParts?: readonly string[];
       /** Where the first paragraphs differ, for `check-failed`. Positions, never text. */
       readonly differencesAt?: readonly CollaborationMigrationPosition[];
+    }
+  | {
+      /**
+       * The server refused to load a saved room, and left it as it is. `code` is
+       * `collaboration-format-mismatch` for a room that a later release wrote, and
+       * `invalid-saved-room` for state that forms no document.
+       */
+      readonly type: 'room-load-refused';
+      readonly roomName: string;
+      readonly code: string;
+    }
+  | {
+      /** A compaction on load failed. The room loaded as it was stored. */
+      readonly type: 'room-compaction-failed';
+      readonly roomName: string;
+      readonly code: string;
     }
   | {
       /**
@@ -176,9 +196,11 @@ export interface CollaborationServerOptions {
   readonly upgradeOnLoad?: boolean;
   /**
    * The largest saved state, in bytes, that the server upgrades while it loads the room.
-   * Default 1 MiB. The upgrade runs on the server's thread, so every room on the process
-   * waits for it: about 0.4 seconds for each MiB of state on a laptop. A larger room is
-   * refused with `too-large`; upgrade it in a job with `migrateCollaborationRoom`.
+   * Default 64 MiB. The upgrade runs on the server's thread, so every room on the process
+   * waits for it: on a laptop, 0.5 seconds for a 75 KB document (4 MiB of state) and
+   * 7 seconds for a 521-page document (46 MiB). A larger room is refused with `too-large`;
+   * upgrade it in a job with `migrateCollaborationRoom`. Lower the value to keep long
+   * upgrades off the server.
    */
   readonly maxUpgradeStateBytes?: number;
   /**
@@ -190,12 +212,14 @@ export interface CollaborationServerOptions {
   readonly compactOnLoad?: boolean | CompactCollaborationStateOptions;
   /**
    * The shortest time, in milliseconds, between two exports of one room while people are
-   * connected. Default 0: every store exports. An export runs on the server's thread, about
-   * 0.15 seconds for each MiB of state on a laptop, so raise this for large rooms. A store
-   * with nobody connected always exports, and so does a room before it unloads. Between
-   * exports the stored export is stale. If
-   * the server stops then, the next load in the same format replaces the export; a load in
-   * a later format refuses the room.
+   * connected. Default 0: every store exports, so every stored state is one that exports.
+   * An export runs on the server's thread: on a laptop, 0.2 seconds for a 75 KB document
+   * and 2 seconds for a 521-page document. Raise this for large documents.
+   *
+   * A store inside the interval writes a state that the server did not check, and leaves
+   * the stored export stale. A room always exports before it unloads. If the server stops
+   * before that, the next load in the same format replaces the export; a load in a later
+   * format refuses the room.
    */
   readonly exportIntervalMs?: number;
   /**
@@ -379,7 +403,8 @@ export function collaborationServerExtension(
     cause?: unknown
   ): never => {
     emit({ ...detail, type: 'room-upgrade-refused', roomName, reason });
-    throw refusal('collaboration-format-mismatch', cause);
+    // The client is of this build's format, so an upgrade of the client would not help.
+    throw refusal('saved-room-unavailable', cause);
   };
 
   /** The state of a stored room of an earlier format, in this build's format, and stored. */
@@ -440,7 +465,7 @@ export function collaborationServerExtension(
    * Refuse saved state that is not a complete room of this build's format. Returns the
    * room's `.docx` export, which is the proof that the room forms a document.
    */
-  const checkStoredRoom = (state: Uint8Array): Uint8Array => {
+  const checkStoredRoom = (roomName: string, state: Uint8Array): Uint8Array => {
     const candidate = new Y.Doc();
     try {
       prepareCollaborationServerDocument(candidate);
@@ -448,10 +473,12 @@ export function collaborationServerExtension(
       assertCollaborationFormatCompatibility(readCollaborationFormatVersion(candidate));
       return readCollaborationDocument(candidate);
     } catch (error) {
-      if (error instanceof CollaborationSchemaError && FORMAT_MISMATCHES.has(error.code)) {
-        throw refusal(error.code, error);
-      }
-      throw refusal('invalid-saved-room', error);
+      const code =
+        error instanceof CollaborationSchemaError && FORMAT_MISMATCHES.has(error.code)
+          ? error.code
+          : 'invalid-saved-room';
+      emit({ type: 'room-load-refused', roomName, code });
+      throw refusal(code, error);
     } finally {
       candidate.destroy();
     }
@@ -466,7 +493,7 @@ export function collaborationServerExtension(
     if (!stored) {
       const created = (await createRoom?.({ roomName, context: payload.context })) ?? null;
       if (!created) return;
-      const docx = checkStoredRoom(created);
+      const docx = checkStoredRoom(roomName, created);
       // Hocuspocus does not store state applied during a load, so a restart before the
       // first edit would create the room a second time. The export goes with it: a room
       // that nobody edits is never stored again, and must still upgrade.
@@ -481,17 +508,29 @@ export function collaborationServerExtension(
     try {
       need = collaborationMigrationNeed(stored.state);
     } catch (error) {
+      emit({ type: 'room-load-refused', roomName, code: 'invalid-saved-room' });
       throw refusal('invalid-saved-room', error);
     }
-    if (need === 'later-format') throw refusal('collaboration-format-mismatch');
+    if (need === 'later-format') {
+      emit({ type: 'room-load-refused', roomName, code: 'collaboration-format-mismatch' });
+      throw refusal('collaboration-format-mismatch');
+    }
     if (need === 'earlier-format') {
       // The migration read the upgraded room as a complete document already.
       Y.applyUpdate(payload.document, await upgrade(store, roomName, stored));
       return;
     }
-    const docx = checkStoredRoom(stored.state);
+    const docx = checkStoredRoom(roomName, stored.state);
+    // The room loads as it was stored when a compaction fails: the check above passed.
     const compacted = compactOptions
-      ? await compactCollaborationState(stored.state, compactOptions).catch(() => null)
+      ? await compactCollaborationState(stored.state, compactOptions).catch((error: unknown) => {
+          emit({
+            type: 'room-compaction-failed',
+            roomName,
+            code: error instanceof CollaborationSchemaError ? error.code : 'error',
+          });
+          return null;
+        })
       : null;
     const state = compacted ?? stored.state;
     // The check exported the room already, so a room with no export, or with the export of

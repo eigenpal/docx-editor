@@ -84,7 +84,20 @@ When a server of a later collaboration format loads a room, the extension create
 
 Stop the server of the earlier build before you start the server of the later build. An earlier server that still holds a room stores it later, over the upgraded room.
 
-The server does not upgrade a room that has no export, a room whose export is of another state, or a room whose state is larger than 1 MiB. It refuses that room with `collaboration-format-mismatch`. Migrate it with the scripts in the next section.
+The server does not upgrade a room that has no export, a room whose export is of another state, or a room whose state is larger than 64 MiB. It refuses that room with `saved-room-unavailable`. Migrate it with the scripts in the next section.
+
+### Try an upgrade
+
+A format change comes with a release, so `server/simulate-format-change.ts` lets you watch an upgrade with one release. It rewrites each saved room so that the room names an earlier format. The document in the room does not change. Use it only on rooms that you do not need.
+
+1. Start the server and the app, open a room, and type some text.
+1. Close the tab, and stop the server with Ctrl+C. The server stores the room with a current export before it stops.
+1. Run `node server/simulate-format-change.ts`. It prints `now names an earlier format` for each room.
+1. Start the server again, and open the same room link.
+
+The server log shows `upgraded from ... to ...` for the room, and the editor shows your text. `server/.data/` now holds `<room>.ydoc.previous`, the state before the upgrade.
+
+To see a refusal, delete `<room>.ydoc.docx` after step 3. The server then logs `not upgraded: no-export`, and the tab reports that the room is unavailable.
 
 ### Migrate saved rooms
 
