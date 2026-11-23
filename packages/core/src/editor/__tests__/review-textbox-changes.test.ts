@@ -135,3 +135,66 @@ for (const [name, body, header] of [
     expect(editor.surface!.state().selection.head).toEqual(range.start);
   });
 }
+
+for (const [name, body, header] of [
+  ['DrawingML', DRAWING_BOX, undefined],
+  ['VML', VML_BOX, undefined],
+  ['header', '<w:p><w:r><w:t>Body</w:t></w:r></w:p>', VML_BOX],
+] as const) {
+  for (const decision of ['accept', 'reject'] as const) {
+    // A body decision changes the paragraph the box rides in, but the card names the box's own
+    // paragraph, so patching the queue by the outer paragraph kept the decided card. A header
+    // decision takes the full derivation; its case keeps that path covered.
+    test(`${decision === 'accept' ? 'an' : 'a'} ${decision}ed change in a ${name} text box leaves the review items`, () => {
+      const editor = mount(body, header);
+      const [placement] = editor.getReviewItems();
+      const decided =
+        decision === 'accept'
+          ? editor.acceptReviewItem(placement!.key)
+          : editor.rejectReviewItem(placement!.key);
+      expect(decided.ok).toBe(true);
+      expect(editor.getReviewItems()).toEqual([]);
+    });
+  }
+}
+
+// Typing in the paragraph that holds the box listed the box's card again under that paragraph.
+// A suggestion typed in the box itself adds a revision to a paragraph outside the body's order,
+// which takes the full derivation; its case keeps that path covered.
+for (const where of ['host', 'box'] as const) {
+  test(`a suggestion typed in the ${where} paragraph keeps the text box change listed once`, () => {
+    const editor = mount(DRAWING_BOX);
+    const surface = editor.surface!;
+    const [placement] = editor.getReviewItems();
+    const boxParagraphId = placement!.item.ranges[0]!.start.paragraphId;
+    if (where === 'box') {
+      expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
+    }
+    const paragraphId = where === 'host' ? surface.session.paragraphIds()[0]! : boxParagraphId;
+    const at = { paragraphId, offset: where === 'host' ? 1 : 0 };
+    surface.setSelection({ anchor: at, head: at });
+    surface.setEditingMode('suggest');
+    expect(editor.exec({ type: 'insertText', text: 'xy' }).ok).toBe(true);
+    const listed = surface.session.reviewItems();
+    const derived = collectReviewItems({ storyPart: surface.session.part() });
+    const sites = (items: typeof listed) =>
+      items.map((item) => (item.kind === 'revision' ? [item.text, item.ranges] : item.kind));
+    expect(sites(listed)).toEqual(sites(derived));
+    expect(listed.filter((item) => item.kind === 'revision' && item.text === 'added')).toHaveLength(
+      1
+    );
+  });
+}
+
+// Typing over the change in the box removes its last record there. The box's paragraph has no
+// place in the body's order, so the patch kept the cached queue and the removed card with it.
+test('typing over a text box change in edit mode removes its card', () => {
+  const editor = mount(DRAWING_BOX);
+  const surface = editor.surface!;
+  const range = editor.getReviewItems()[0]!.item.ranges[0]!;
+  expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
+  surface.setSelection({ anchor: range.start, head: range.end });
+  expect(editor.exec({ type: 'insertText', text: 'Z' }).ok).toBe(true);
+  expect(collectReviewItems({ storyPart: surface.session.part() })).toEqual([]);
+  expect(editor.getReviewItems()).toEqual([]);
+});
