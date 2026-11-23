@@ -219,7 +219,9 @@ export interface CollaborationServerOptions {
    * A store inside the interval writes a state that the server did not check, and leaves
    * the stored export stale. A room always exports before it unloads. If the server stops
    * before that, the next load in the same format replaces the export; a load in a later
-   * format refuses the room.
+   * format refuses the room. If an unchecked state does not export, every later load
+   * refuses it with `invalid-saved-room`, and the stored export holds the last document
+   * that exported.
    */
   readonly exportIntervalMs?: number;
   /**
@@ -282,7 +284,7 @@ export interface CollaborationServerExtension {
   afterLoadDocument(payload: CollaborationServerLoad): Promise<void>;
   /** Refuses a replica of an earlier room generation. */
   beforeHandleMessage(payload: CollaborationRoomGatePayload): Promise<void>;
-  /** Exports a room whose last store wrote no export, before the room unloads. */
+  /** Stores a room whose last store wrote no export or failed, before the room unloads. */
   beforeUnloadDocument(payload: CollaborationServerStore): Promise<void>;
   /** Forgets when the room was last exported. */
   afterUnloadDocument(payload: { readonly documentName: string }): Promise<void>;
@@ -382,6 +384,8 @@ export function collaborationServerExtension(
   const exportedAt = new Map<string, number>();
   /** Open rooms whose last store wrote no export. */
   const staleExports = new Set<string>();
+  /** Open rooms whose last store failed in storage. Hocuspocus does not try such a store again. */
+  const unsaved = new Set<string>();
   const readClientFormat =
     options.readClientFormat ??
     ((connection: CollaborationServerConnection) =>
@@ -564,7 +568,9 @@ export function collaborationServerExtension(
     const last = exportedAt.get(roomName);
     const due = force || unloading || last === undefined || Date.now() - last >= exportIntervalMs;
     if (!due) {
+      unsaved.add(roomName);
       await store.save(roomName, { state, export: null });
+      unsaved.delete(roomName);
       staleExports.add(roomName);
       return;
     }
@@ -582,7 +588,9 @@ export function collaborationServerExtension(
       });
       return;
     }
+    unsaved.add(roomName);
     await store.save(roomName, { state, export: { docx, stateDigest: await sha256Hex(state) } });
+    unsaved.delete(roomName);
     exportedAt.set(roomName, Date.now());
     staleExports.delete(roomName);
   };
@@ -614,14 +622,18 @@ export function collaborationServerExtension(
     },
     async beforeUnloadDocument(payload: CollaborationServerStore): Promise<void> {
       // Hocuspocus unloads a room with no store when nothing changed since the last one. If
-      // that store wrote no export, the room would rest with a stale export.
-      if (storage && staleExports.has(payload.documentName)) {
+      // that store wrote no export, the room would rest with a stale export. If that store
+      // failed in storage, the room's edits would be lost. An error here keeps the room in
+      // memory: Hocuspocus stops the unload.
+      const roomName = payload.documentName;
+      if (storage && (staleExports.has(roomName) || unsaved.has(roomName))) {
         await storeToStorage(storage, payload, true);
       }
     },
     async afterUnloadDocument(payload: { readonly documentName: string }): Promise<void> {
       exportedAt.delete(payload.documentName);
       staleExports.delete(payload.documentName);
+      unsaved.delete(payload.documentName);
     },
     ...(storage
       ? {

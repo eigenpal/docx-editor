@@ -446,9 +446,10 @@ Pass these options to `collaborationServerExtension`:
 - Do not load or store rooms in your own hooks when you pass `storage`.
 - Clients of a release that does not send the `collaborationFormat` parameter are refused. Update the clients first, or see [Admit earlier clients during a rollout](#admit-earlier-clients-during-a-rollout).
 - A room that does not export as a document is not stored, because a load refuses such a state. Storage keeps the last room that exported, and `onEvent` receives `room-export-failed`.
+- If `save` throws, Hocuspocus logs the error and does not try that store again. The extension stores the room again before the room unloads, and an error then keeps the room in memory.
 - Store each export with the digest that arrives with it. The digest is the only link between an export and a state, and the server never uses an export of another state.
 - An export and an upgrade run on the server's thread, and every room on the process waits. See [Plan for the cost of exports and upgrades](#plan-for-the-cost-of-exports-and-upgrades).
-- With `exportIntervalMs` above 0, a store inside the interval writes a state that the server did not check, and leaves a stale export. A room always exports before it unloads. If the server stops before that, the next load with the same release replaces the export. A load after a format change refuses the room.
+- With `exportIntervalMs` above 0, a store inside the interval writes a state that the server did not check, and leaves a stale export. A room always exports before it unloads. If the server stops before that, the next load with the same release replaces the export. A load after a format change refuses the room. If an unchecked state does not export, each later load refuses it with `invalid-saved-room`, and the stored export holds the last document that exported.
 - One server process must hold a room at a time. If two servers load one earlier-format room at the same time, each creates its own room, and the later store replaces the other.
 - A custom provider has no extension. Run the same checks in its admission flow, as [Integrate a custom Yjs provider](#integrate-a-custom-yjs-provider) describes.
 
@@ -974,7 +975,7 @@ const stop = session.subscribeResourcePressure(
 
 These numbers come from the load benchmark in `benchmarks/collaboration-server`. Use them as a starting point, and run the benchmark on your hardware with your documents.
 
-Each step ran one room for 60 seconds. Every participant typed at about 3.5 keystrokes per second. The server was one Node.js 24 process on an Apple M4 Pro laptop, and the participants ran on the same machine. The server stored the room and a DOCX export about every 10 seconds. The seed document was 76 KB, and the room state was about 4.5 MB.
+Each step ran one room for 60 seconds. Every participant typed at about 3.5 keystrokes per second. The server was one Node.js 24 process on an Apple M4 Pro laptop, and the participants ran on the same machine. The server stored the room and a DOCX export about every 10 seconds. The seed document was 75 KB, and the room state was about 4.3 MiB.
 
 | Participants | Latency p50 (ms) | Latency p95 (ms) | Join p95 (ms) | Server CPU average (% of one core) | Server memory peak (MB) | Server egress (KB/s) |
 | --- | --- | --- | --- | --- | --- | --- |

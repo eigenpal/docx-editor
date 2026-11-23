@@ -275,7 +275,7 @@ describe('a room in storage', () => {
     expect(saved!.export!.docx).toEqual(readCollaborationDocument(document));
   });
 
-  test('a room that cannot export is stored without one, and the event says so', async () => {
+  test('a room that cannot export is not stored, and the event says so', async () => {
     const memory = memoryStorage();
     const events: CollaborationServerEvent[] = [];
     const document = new Y.Doc();
@@ -372,6 +372,32 @@ describe('a room in storage', () => {
       },
     }).onStoreDocument!({ documentName: ROOM, document, clientsCount: 1 });
     expect(memory.saves).toEqual([]);
+  });
+
+  test('a room whose last store failed in storage is stored before it unloads', async () => {
+    const memory = memoryStorage();
+    let failing = true;
+    const storage: CollaborationRoomStorage = {
+      ...memory.storage,
+      save: (name, room) => {
+        if (failing) throw new Error('storage is down');
+        return memory.storage.save(name, room);
+      },
+    };
+    const document = new Y.Doc();
+    Y.applyUpdate(document, await roomState());
+    const extension = extensionOf({ storage });
+    const payload = { documentName: ROOM, document, clientsCount: 1 };
+    await expect(extension.onStoreDocument!(payload)).rejects.toThrow('storage is down');
+    // Storage is still down: the error stops the unload, and the room stays in memory.
+    await expect(extension.beforeUnloadDocument(payload)).rejects.toThrow('storage is down');
+    failing = false;
+    await extension.beforeUnloadDocument(payload);
+    expect(memory.saves).toHaveLength(1);
+    expect(memory.saves[0]!.state).toEqual(Y.encodeStateAsUpdate(document));
+    // Nothing is left to store.
+    await extension.beforeUnloadDocument(payload);
+    expect(memory.saves).toHaveLength(1);
   });
 
   test('a room whose last store wrote no export is exported before it unloads', async () => {
