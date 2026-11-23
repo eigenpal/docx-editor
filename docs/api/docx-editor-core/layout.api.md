@@ -35,6 +35,7 @@ export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' 
     readonly horizontalFrame: DrawingHorizontalReferenceFrame;
     // (undocumented)
     readonly horizontalFrameOrigin: number;
+    readonly horizontalPageLeft?: number;
     // (undocumented)
     readonly kind: 'anchoredDrawing';
     // (undocumented)

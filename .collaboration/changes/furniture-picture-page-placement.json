@@ -1,12 +1,13 @@
 {
   "impact": "no-impact",
   "fields": [],
-  "before": "A press on a header or footer picture placed from the page or a footer margin band was tested at the story position, not where the picture paints.",
-  "after": "Pointer hit tests place header and footer pictures from the page box, as paint does.",
-  "reason": "The change reads derived layout positions for pointer hits only. Canonical OOXML, source offsets, replicated operation shapes, and awareness messages remain unchanged.",
+  "before": "Header and footer pictures in a table cell on the page frame moved to the page edge, and pointer hit tests placed header and footer pictures at their story position.",
+  "after": "Header and footer pictures are placed and hit-tested from the page box only on the axes that layout resolved on the page; pictures in a table cell stay in the cell.",
+  "reason": "The change derives layout positions and pointer hits only. Canonical OOXML, source offsets, replicated operation shapes, and awareness messages remain unchanged.",
   "tests": [
     "packages/core/src/editor/__tests__/overlapping-furniture-pointer.test.ts",
-    "packages/core/src/output/__tests__/header-margin-anchor.test.ts"
+    "packages/core/src/output/__tests__/header-margin-anchor.test.ts",
+    "packages/core/src/export/__tests__/export-traversal.test.ts"
   ],
   "changeset": "footer-picture-raised-into-body",
   "migration": null

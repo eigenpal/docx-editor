@@ -28,7 +28,7 @@ import {
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { PictureFrameEffects } from '../store/package/drawing-picture-frame.ts';
 import { pageClipRegion } from './drawing-page-clip.ts';
-import { band, resolvesInPageContent } from './drawing-vertical-bands.ts';
+import { band, furniturePageAxes, resolvesInPageContent } from './drawing-anchor-axes.ts';
 export { columnPaperClip, pageClipRegion } from './drawing-page-clip.ts';
 import type { ImageResourceState } from '../store/package/image-resources.ts';
 import {
@@ -539,9 +539,16 @@ export interface AnchoredDrawingRecord extends Omit<
   /**
    * The sheet top in this record's vertical coordinates. Set only for a header or footer
    * anchor whose vertical position resolves in page-content coordinates: the page frame, and
-   * a footer's margin bands. Consumers place the vertical axis from the page box with it.
+   * a footer's margin bands, outside a table cell. Consumers place the vertical axis from the
+   * page box with it, and from the story box without it.
    */
   readonly verticalPageTop?: number;
+  /**
+   * The sheet left edge in this record's horizontal coordinates. Set only for a header or
+   * footer anchor on the page frame outside a table cell. Consumers place the horizontal axis
+   * from the page box with it, and from the story box without it.
+   */
+  readonly horizontalPageLeft?: number;
   readonly behindDocument: boolean;
   readonly allowOverlap: boolean;
   /**
@@ -1008,7 +1015,8 @@ export function buildAnchoredDrawingRecord(options: {
   readonly resolved: ResolvedAnchoredPosition;
   readonly layoutInCell: boolean;
   readonly clipRegion?: LayoutBox;
-  readonly verticalPageTop?: number;
+  readonly verticalPageTop?: number | undefined;
+  readonly horizontalPageLeft?: number | undefined;
   readonly sourceOrder?: number;
   readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout | null;
   readonly revisions?: readonly RevisionAttribution[];
@@ -1049,6 +1057,9 @@ export function buildAnchoredDrawingRecord(options: {
     horizontalFrameOrigin: options.resolved.horizontalFrameOrigin,
     verticalFrameOrigin: options.resolved.verticalFrameOrigin,
     ...(options.verticalPageTop !== undefined ? { verticalPageTop: options.verticalPageTop } : {}),
+    ...(options.horizontalPageLeft !== undefined
+      ? { horizontalPageLeft: options.horizontalPageLeft }
+      : {}),
     behindDocument: anchorMeta?.behindDocument ?? false,
     allowOverlap: anchorMeta?.allowOverlap ?? true,
     layoutInCell: options.layoutInCell,
@@ -1219,15 +1230,10 @@ export function publishAnchoredDrawingsForParagraph(
         : undefined;
     const placed = textboxPlacementProjection(projection, textboxStory);
     const resolved = resolveAnchoredDrawingPosition(placed, frameContext);
+    // A record laid out in its cell resolves against the cell box, in story coordinates.
+    const resolvedInCell = layoutInCell && usableCellBox(options.cellBox);
     const clipToCell =
-      projection.wrap !== 'inFront' &&
-      projection.wrap !== 'behind' &&
-      layoutInCell &&
-      options.cellBox !== null &&
-      Number.isFinite(options.cellBox.height) &&
-      options.cellBox.height > 0 &&
-      Number.isFinite(options.cellBox.width) &&
-      options.cellBox.width > 0;
+      projection.wrap !== 'inFront' && projection.wrap !== 'behind' && resolvedInCell;
     // ECMA-376 Part 1 §20.4.2.12 posOffset: "This measurement shall be calculated relative to
     // the top left edge of the positioning base specified by the parent element's relativeFrom
     // attribute." §20.4.3.5 ST_RelFromV, paragraph: "relative to the paragraph which contains
@@ -1240,18 +1246,17 @@ export function publishAnchoredDrawingsForParagraph(
     // bands (`topMarginFrameOrigin` is set). The page frame and a footer's margin bands resolve
     // in page-content coordinates and keep the frame-base clip. In the body, both clips match.
     const verticalFrame = projection.position?.vertical.relativeFrom;
-    // A record laid out in its cell resolves against the cell box, in story coordinates.
-    const resolvedInCell = layoutInCell && usableCellBox(options.cellBox);
     const pageContentVertical =
       !resolvedInCell && resolvesInPageContent(verticalFrame, options.frameBase);
     const pageClip = pageContentVertical ? pageClipRegion(options.frameBase) : options.pageClip;
     const clipRegion = clipToCell ? options.cellBox! : pageClip;
-    // A header or footer record in page-content coordinates carries the sheet top, so every
-    // consumer places it from the page box, not from the story box.
-    const verticalPageTop =
-      pageContentVertical && options.frameBase.storyKind !== 'body'
-        ? -options.frameBase.contentInsetTop
-        : undefined;
+    // A header or footer record carries the page edges of its page-resolved axes, so every
+    // consumer places those axes from the page box, not from the story box.
+    const pageAxes = furniturePageAxes(
+      options.frameBase,
+      { horizontal: projection.position?.horizontal.relativeFrom, vertical: verticalFrame },
+      resolvedInCell
+    );
     const record = buildAnchoredDrawingRecord({
       input: Object.freeze({
         drawingNodeId: atom.atomId,
@@ -1269,7 +1274,7 @@ export function publishAnchoredDrawingsForParagraph(
       resolved,
       layoutInCell,
       clipRegion,
-      ...(verticalPageTop !== undefined ? { verticalPageTop } : {}),
+      ...pageAxes,
       revisions,
       measurer: options.measurer,
       ...(options.sourceOrderOf

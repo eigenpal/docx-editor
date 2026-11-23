@@ -707,9 +707,10 @@ describe('margin-band frames are bands of the sheet', () => {
   });
 
   test('a footer picture laid out in its table cell stays in the cell', () => {
-    for (const verticalFrame of ['topMargin', 'bottomMargin', 'insideMargin'] as const) {
+    for (const verticalFrame of ['topMargin', 'bottomMargin', 'insideMargin', 'page'] as const) {
       const layout = layoutStoryDoc('footer', {
-        horizontalOffsetEmu: 0,
+        horizontalFrame: 'page',
+        horizontalOffsetEmu: 127_000,
         verticalFrame,
         verticalOffsetEmu: 127_000,
         inTable: true,
@@ -718,9 +719,11 @@ describe('margin-band frames are bands of the sheet', () => {
       const story = page.footer!;
       const drawing = story.anchoredDrawings![0]!;
       expect(drawing.verticalPageTop).toBeUndefined();
-      const top = headerFooterAnchoredDrawingOrigin(drawing, story.box, page.box).y;
-      expect(top).toBeGreaterThanOrEqual(story.box.y);
-      expect(top).toBeLessThan(story.box.y + story.box.height);
+      expect(drawing.horizontalPageLeft).toBeUndefined();
+      const origin = headerFooterAnchoredDrawingOrigin(drawing, story.box, page.box);
+      expect(origin.y).toBeGreaterThanOrEqual(story.box.y);
+      expect(origin.y).toBeLessThan(story.box.y + story.box.height);
+      expect(origin.x).toBeGreaterThanOrEqual(story.box.x);
     }
   });
 

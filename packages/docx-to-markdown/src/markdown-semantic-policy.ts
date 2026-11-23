@@ -307,6 +307,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     horizontalFrameOrigin: 'layout-only',
     verticalFrameOrigin: 'layout-only',
     verticalPageTop: 'layout-only',
+    horizontalPageLeft: 'layout-only',
     behindDocument: 'layout-only',
     allowOverlap: 'layout-only',
     layoutInCell: 'layout-only',
