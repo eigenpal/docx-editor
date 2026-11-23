@@ -28,7 +28,13 @@ import {
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { PictureFrameEffects } from '../store/package/drawing-picture-frame.ts';
 import { pageClipRegion } from './drawing-page-clip.ts';
-import { band, furniturePageAxes, resolvesInPageContent } from './drawing-anchor-axes.ts';
+import {
+  band,
+  furniturePageAxes,
+  paragraphOrLineAlignedTop,
+  resolvesInPageContent,
+  usableCellBox,
+} from './drawing-anchor-axes.ts';
 export { columnPaperClip, pageClipRegion } from './drawing-page-clip.ts';
 import type { ImageResourceState } from '../store/package/image-resources.ts';
 import {
@@ -579,12 +585,6 @@ function usesCellLayoutBox(
   return ctx.layoutInCell && usableCellBox(ctx.cellBox);
 }
 
-function usableCellBox(box: LayoutBox | null | undefined): box is LayoutBox {
-  if (!box) return false;
-  if (!Number.isFinite(box.height) || box.height <= 0) return false;
-  return Number.isFinite(box.width) && box.width > 0;
-}
-
 function horizontalEdges(
   frame: DrawingHorizontalReferenceFrame,
   ctx: DrawingAnchorFrameContext
@@ -872,6 +872,8 @@ function positionFromVertical(
   if (offset === null) return null;
   const cellTop = ctx.inTableCell === true && usesCellLayoutBox(frame, ctx);
   if (align === 'top' || (cellTop && alignsToCellFrameTop(frame, align))) return edges.top + offset;
+  const baseAligned = paragraphOrLineAlignedTop(frame, align, edges.top, objectHeight);
+  if (baseAligned !== null) return baseAligned + offset;
   if (align === 'center') return edges.center - objectHeight / 2 + offset;
   if (align === 'bottom') return edges.bottom - objectHeight + offset;
   if (align === 'inside' || align === 'outside') {

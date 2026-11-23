@@ -56,3 +56,35 @@ export function furniturePageAxes(
     ...(frames.horizontal === 'page' ? { horizontalPageLeft: -frameBase.marginLeft } : {}),
   };
 }
+
+/**
+ * The top of an object that `wp:align` places against a paragraph or a line, or null for
+ * every other frame and value.
+ *
+ * ECMA-376 Part 1 §20.4.3.2 ST_AlignV aligns an object "with respect to the vertical
+ * alignment base", and §20.4.3.5 ST_RelFromV makes that base the paragraph "which contains
+ * the drawing anchor" or the line "containing the anchor character". The specification does
+ * not give either base a height. This engine gives the line base no height: `center` centers
+ * the object on the line top and `bottom` puts its bottom edge there. Against a paragraph,
+ * `center` and `bottom` place the object at the paragraph top, as `top` does.
+ */
+export function paragraphOrLineAlignedTop(
+  frame: string,
+  align: string | null,
+  baseTop: number,
+  objectHeight: number
+): number | null {
+  if (align !== 'center' && align !== 'bottom') return null;
+  if (frame === 'paragraph') return baseTop;
+  if (frame !== 'line') return null;
+  return align === 'center' ? baseTop - objectHeight / 2 : baseTop - objectHeight;
+}
+
+/** Whether a table cell box has a finite, positive size to lay an object out in. */
+export function usableCellBox(
+  box: { readonly width: number; readonly height: number } | null | undefined
+): box is { readonly width: number; readonly height: number } {
+  if (!box) return false;
+  if (!Number.isFinite(box.height) || box.height <= 0) return false;
+  return Number.isFinite(box.width) && box.width > 0;
+}

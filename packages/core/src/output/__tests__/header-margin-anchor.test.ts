@@ -65,7 +65,7 @@ interface AnchorOptions {
   readonly verticalFrame?: VerticalFrame;
   readonly horizontalOffsetEmu?: number;
   readonly verticalOffsetEmu?: number;
-  readonly verticalAlign?: 'bottom' | 'center';
+  readonly verticalAlign?: 'bottom' | 'center' | 'top';
   readonly storyLineCount?: number;
   readonly topAndBottom?: boolean;
   readonly storyDistance?: number;
@@ -771,4 +771,26 @@ describe('margin-band frames are bands of the sheet', () => {
           })
         ).not.toThrow();
   });
+});
+
+describe('alignment against a paragraph or a line', () => {
+  for (const kind of ['header', 'footer'] as const) {
+    test(`${kind} paragraph: center and bottom place the picture at the paragraph top`, () => {
+      const top = placed(kind, { verticalFrame: 'paragraph', verticalAlign: 'top' }).top;
+      for (const verticalAlign of ['center', 'bottom'] as const)
+        expect(placed(kind, { verticalFrame: 'paragraph', verticalAlign }).top).toBeCloseTo(top, 2);
+    });
+
+    test(`${kind} line: center and bottom align to the line top`, () => {
+      const lineTop = placed(kind, { verticalFrame: 'line', verticalAlign: 'top' }).top;
+      expect(placed(kind, { verticalFrame: 'line', verticalAlign: 'center' }).top).toBeCloseTo(
+        lineTop - PICTURE / 2,
+        2
+      );
+      expect(placed(kind, { verticalFrame: 'line', verticalAlign: 'bottom' }).top).toBeCloseTo(
+        lineTop - PICTURE,
+        2
+      );
+    });
+  }
 });
