@@ -23,6 +23,7 @@ import {
   type ReviewPatchInputs,
 } from './review-patch.ts';
 import type { ReviewItem, ReviewRevisionItem } from '../store/store/review-items.ts';
+import { paragraphNestsParagraphs } from '../store/store/review-paragraph-order.ts';
 import {
   collectRevisionSites,
   paragraphOrderOfPart,
@@ -131,6 +132,9 @@ function decidedParagraphs(
       child.kind !== 'paragraph' ||
       was.kind !== 'paragraph' ||
       child.id !== was.id ||
+      // Text box content (`w:txbxContent`) in the paragraph: its cards name its own paragraphs.
+      paragraphNestsParagraphs(was) ||
+      paragraphNestsParagraphs(child) ||
       !onlyRemovedRecords(previousPart, was, inputs.part, child) ||
       holdsMarkRevision(previousPart, was) ||
       holdsMarkRevision(inputs.part, child) ||

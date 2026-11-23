@@ -151,5 +151,23 @@ function nestedParagraphIdsOf(paragraph: OoxmlNode, depth: number): readonly str
   return nested ?? EMPTY_DEEP_PARAGRAPH_IDS;
 }
 
+/**
+ * Whether a paragraph holds other paragraphs: text box content (`w:txbxContent`, reached through
+ * `wps:txbx` or `v:textbox`). A non-empty memo entry from
+ * the deep paragraph order answers at once. Otherwise an iterative walk answers, with no depth
+ * cap to cut it short and no memo entry written at a guessed depth.
+ */
+export function paragraphNestsParagraphs(paragraph: OoxmlNode): boolean {
+  if (paragraph.kind === 'textValue') return false;
+  if (nestedParagraphIdsCache.get(paragraph)?.ids.length) return true;
+  const pending: OoxmlNode[] = [...paragraph.children];
+  for (let node = pending.pop(); node; node = pending.pop()) {
+    if (node.kind === 'textValue') continue;
+    if (node.kind === 'paragraph') return true;
+    for (const child of node.children) pending.push(child);
+  }
+  return false;
+}
+
 const deepParagraphOrderCache = createRecentRootCache<Map<string, number>>(3);
 const tableParagraphIdsCache = createSubtreeAggregateMemo<readonly string[]>();

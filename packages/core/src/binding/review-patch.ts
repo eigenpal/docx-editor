@@ -17,6 +17,7 @@ import {
   type ReviewRevisionItem,
 } from '../store/store/review-items.ts';
 import { commentMarkersOfParagraph } from '../store/store/comment-reads.ts';
+import { paragraphNestsParagraphs } from '../store/store/review-paragraph-order.ts';
 import { isInertMarker } from '../store/store/revision-marker-content.ts';
 import {
   findNode,
@@ -132,11 +133,16 @@ export function patchLocalReviewItems(
   // Comments anchored in the paragraph keep their cards, at the offsets its markers now hold.
   const comments = part ? remappedComments(cached, part, dirtyParagraphId) : new Map();
   if (!comments) return null;
-  // A paragraph outside the story's own order (one in a text box) has no place to splice into.
-  // With no revision of its own the cached queue still holds; with one, the caller derives the
-  // whole queue instead.
+  // A paragraph outside the story's own order (one in `w:txbxContent`) has no place to splice into.
+  // The cached queue still holds only when the paragraph had no card and still has none: a
+  // card it held, or a comment whose ends moved, needs the whole derivation instead.
   const dirtyRank = paragraphOrder.get(dirtyParagraphId);
-  if (dirtyRank === undefined) return localRevisions.length === 0 ? cached : null;
+  if (dirtyRank === undefined) {
+    const heldCard = cached.some(
+      (item) => item.kind === 'revision' && isRevisionWhollyInParagraph(item, dirtyParagraphId)
+    );
+    return localRevisions.length === 0 && comments.size === 0 && !heldCard ? cached : null;
+  }
 
   const patched: ReviewItem[] = [];
   let insertAt: number | null = null;
@@ -537,6 +543,9 @@ export function localReviewPatchParagraphId(
   const paragraphId = change.dirty[0]!;
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return null;
+  // Text box content (`w:txbxContent`) in the paragraph: its cards name its own paragraphs,
+  // which a walk of this paragraph lists again under this one. The full derivation lists them once.
+  if (paragraphNestsParagraphs(paragraph)) return null;
   if (change.impact !== 'text-local') {
     // A property or list edit can add a formatting change that folds into a neighbor's card.
     // Only a paragraph left with no revision markup at all is sure to need no card of its own.
