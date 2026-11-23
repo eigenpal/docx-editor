@@ -181,7 +181,9 @@
     "decrease": "Уменьшить размер шрифта",
     "increase": "Увеличить размер шрифта",
     "label": "Размер шрифта",
-    "listLabel": "Размеры шрифта"
+    "listLabel": "Размеры шрифта",
+    "decreaseShortcut": "Уменьшить размер шрифта (Ctrl+Shift+<)",
+    "increaseShortcut": "Увеличить размер шрифта (Ctrl+Shift+>)"
   },
   "zoom": {
     "ariaLabel": "Масштаб: {label}",

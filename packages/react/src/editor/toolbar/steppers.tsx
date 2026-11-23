@@ -2,20 +2,24 @@ import { usePickerKeyboard } from './usePickerKeyboard';
 import type { ReactNode } from 'react';
 // The stepper parts: font size and zoom as minus / value / plus clusters.
 //
-// Both are WIRED, not lookalikes, and both step through the chrome spec's preset
-// ladders, not by a fixed increment. Font size is a value-typed slot: the current value comes off the
-// snapshot's selection formatting (`fontSizePt`), and a step dispatches
-// `commandForSlotValue('font.size', halfPoints)` through the can-before-exec gate —
-// the engine's own `setMarkAttr` validation (integer half-points, 2..3276) is the
-// authority, this component only clamps the step so a click can never build an
-// out-of-range command. The value renders as the BOXED display between the
-// two ghost buttons. Zoom is engine-owned facade state (`Editor.setZoom` /
+// Both are WIRED, not lookalikes, and both step through preset ladders, not by a fixed
+// increment. Font size is a value-typed slot: the current value comes off the snapshot's
+// selection formatting (`fontSizePt`). A step dispatches `increaseFontSize` or
+// `decreaseFontSize`, so the engine steps each run from its own size and a selection with
+// several sizes still steps. A typed or picked size dispatches
+// `commandForSlotValue('font.size', halfPoints)` through the can-before-exec gate — the
+// engine's own `setMarkAttr` validation (integer half-points, 2..3276) is the authority.
+// The value renders as the BOXED display between the two ghost buttons. Zoom is engine-owned facade state (`Editor.setZoom` /
 // `snapshot().zoom`); its middle is the "100% ▾" — a caret button opening the
 // preset-level menu — flanked by − / + that walk the same levels.
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { commandForSlotValue, listenForOutsidePress } from '@docx-editor.dev/core/editor';
+import {
+  commandForSlotValue,
+  FONT_SIZE_PRESETS_PT,
+  listenForOutsidePress,
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
@@ -24,31 +28,13 @@ import { guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartProps, ToolbarSlotPartComponent } from './parts';
 import { AUTO_ZOOM_MODE, FIT_WIDTH_ZOOM_MODE, sameZoomMode } from '@docx-editor.dev/core/editor';
 import { useZoom } from '../useZoom';
+import { usePlatformShortcut } from '../usePlatformShortcut';
 
 /** Engine bounds for `w:sz`: integer half-points, 2..3276 (docx-editor-support). */
 const MIN_HALF_POINTS = 2;
 const MAX_HALF_POINTS = 3276;
 
-/** The preset ladder the − / + buttons walk, in points. */
-const FONT_SIZE_PRESETS_PT: readonly number[] = [
-  8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72,
-];
-
 const selectFontSizePt = (snapshot: EditorSnapshot) => snapshot.formatting?.fontSizePt ?? null;
-
-/** The next preset above `current`, or `current + 1` beyond the ladder. */
-function nextPreset(current: number, presets: readonly number[], max: number): number {
-  for (const preset of presets) if (preset > current) return preset;
-  return Math.min(current + 1, max);
-}
-
-/** The nearest preset below `current`, or `current - 1` below the ladder. */
-function prevPreset(current: number, presets: readonly number[], min: number): number {
-  for (let index = presets.length - 1; index >= 0; index -= 1) {
-    if (presets[index]! < current) return presets[index]!;
-  }
-  return Math.max(current - 1, min);
-}
 
 interface StepperShellProps {
   /**
@@ -68,6 +54,9 @@ interface StepperShellProps {
   readonly onDecrease: () => void;
   readonly onIncrease: () => void;
   readonly title?: string;
+  /** Tooltips for the − and + buttons, such as a label that names the shortcut. */
+  readonly decreaseTitle?: string;
+  readonly increaseTitle?: string;
   readonly className?: string;
 }
 
@@ -86,6 +75,7 @@ function StepperShell(props: StepperShellProps) {
         className="docx-toolbar__stepper-button"
         disabled={!props.canDecrease}
         aria-label={props.decreaseLabel}
+        {...(props.decreaseTitle !== undefined ? { title: props.decreaseTitle } : {})}
         onMouseDown={guardToolbarMousedown}
         onClick={props.onDecrease}
       >
@@ -97,6 +87,7 @@ function StepperShell(props: StepperShellProps) {
         className="docx-toolbar__stepper-button"
         disabled={!props.canIncrease}
         aria-label={props.increaseLabel}
+        {...(props.increaseTitle !== undefined ? { title: props.increaseTitle } : {})}
         onMouseDown={guardToolbarMousedown}
         onClick={props.onIncrease}
       >
@@ -129,6 +120,7 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
   const sizePt = useEditorState(selectFontSizePt);
   const { isEnabled, disabledReason } = useEditorCommand('font.size');
   const label = useToolbarLabel();
+  const shortcut = usePlatformShortcut();
   const [open, setOpen] = useState(false);
   /** The text being typed, or null when the box is showing the document's own value. */
   const [draft, setDraft] = useState<string | null>(null);
@@ -152,6 +144,18 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
       applyHalfPoints(Math.min(MAX_HALF_POINTS, Math.max(MIN_HALF_POINTS, Math.round(points * 2))));
     },
     [applyHalfPoints]
+  );
+
+  /** One ladder step. The engine steps each run from its own size, so mixed sizes step too. */
+  const step = useCallback(
+    (direction: 'increase' | 'decrease') => {
+      if (!editor) return;
+      const command = {
+        type: direction === 'increase' ? 'increaseFontSize' : 'decreaseFontSize',
+      } as const;
+      if (editor.can(command).ok) editor.exec(command);
+    },
+    [editor]
   );
 
   /** Leave the box: drop the draft, close the list, hand the caret back to the document. */
@@ -178,7 +182,10 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
   }, [open]);
 
   if (hidden) return null;
-  const canStep = isEnabled && sizePt !== null;
+  // A mixed selection (`sizePt === null`) still steps: each run moves from its own size.
+  const halfPoints = sizePt === null ? null : Math.round(sizePt * 2);
+  const canDecrease = isEnabled && (halfPoints === null || halfPoints > MIN_HALF_POINTS);
+  const canIncrease = isEnabled && (halfPoints === null || halfPoints < MAX_HALF_POINTS);
   // No agreed size (mixed selection / no selection formatting) shows an em-dash, matching
   // the FontFamily trigger — never an invented number. A draft in progress wins over both:
   // the box must show what the user is typing, not what the document still says.
@@ -204,6 +211,8 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
         groupLabel={label('fontSize.label')}
         decreaseLabel={label('fontSize.decrease')}
         increaseLabel={label('fontSize.increase')}
+        decreaseTitle={shortcut(label('fontSize.decreaseShortcut'))}
+        increaseTitle={shortcut(label('fontSize.increaseShortcut'))}
         middle={
           // A combobox, not a readout: Word's size box takes a typed value as readily as a
           // picked one, and 13pt is not on any preset ladder.
@@ -243,13 +252,7 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
                 // combobox is expected to do.
                 event.preventDefault();
                 setOpen(true);
-                if (sizePt !== null) {
-                  apply(
-                    event.key === 'ArrowDown'
-                      ? prevPreset(sizePt, FONT_SIZE_PRESETS_PT, MIN_HALF_POINTS / 2)
-                      : nextPreset(sizePt, FONT_SIZE_PRESETS_PT, MAX_HALF_POINTS / 2)
-                  );
-                }
+                step(event.key === 'ArrowDown' ? 'decrease' : 'increase');
               }
             }}
             onBlur={() => {
@@ -261,10 +264,10 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
             }}
           />
         }
-        canDecrease={canStep && Math.round(sizePt! * 2) > MIN_HALF_POINTS}
-        canIncrease={canStep && Math.round(sizePt! * 2) < MAX_HALF_POINTS}
-        onDecrease={() => apply(prevPreset(sizePt ?? 0, FONT_SIZE_PRESETS_PT, MIN_HALF_POINTS / 2))}
-        onIncrease={() => apply(nextPreset(sizePt ?? 0, FONT_SIZE_PRESETS_PT, MAX_HALF_POINTS / 2))}
+        canDecrease={canDecrease}
+        canIncrease={canIncrease}
+        onDecrease={() => step('decrease')}
+        onIncrease={() => step('increase')}
       />
       {open && isEnabled ? (
         <div

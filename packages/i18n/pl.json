@@ -176,7 +176,9 @@
     "decrease": "Zmniejsz rozmiar czcionki",
     "increase": "Zwiększ rozmiar czcionki",
     "label": "Rozmiar czcionki",
-    "listLabel": "Rozmiary czcionek"
+    "listLabel": "Rozmiary czcionek",
+    "decreaseShortcut": "Zmniejsz rozmiar czcionki (Ctrl+Shift+<)",
+    "increaseShortcut": "Zwiększ rozmiar czcionki (Ctrl+Shift+>)"
   },
   "zoom": {
     "ariaLabel": "Powiększenie: {label}",

@@ -1032,6 +1032,13 @@ export interface EditorCommands
   toggleMark: { mark: string };
   setMarkAttr: { mark: string; attr: string; value: unknown };
   /**
+   * Grow the selection one `FONT_SIZE_PRESETS_PT` step (1 pt below 8 pt, 10 pt above 72 pt).
+   * Each run steps from its own size, so mixed sizes keep their differences. One undo step.
+   */
+  increaseFontSize: Record<never, never>;
+  /** Shrink the selection one size step, the reverse of `increaseFontSize`, down to 1 pt. */
+  decreaseFontSize: Record<never, never>;
+  /**
    * Word's Clear All Formatting (Home > Font > the eraser).
    *
    * Takes direct CHARACTER formatting off the selected text, and resets every paragraph the

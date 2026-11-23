@@ -267,7 +267,9 @@
     "decrease": "تصغير حجم الخط",
     "increase": "تكبير حجم الخط",
     "label": "حجم الخط",
-    "listLabel": "أحجام الخطوط"
+    "listLabel": "أحجام الخطوط",
+    "decreaseShortcut": "تصغير حجم الخط (Ctrl+Shift+<)",
+    "increaseShortcut": "تكبير حجم الخط (Ctrl+Shift+>)"
   },
   "zoom": {
     "ariaLabel": "تكبير/تصغير: {label}",

@@ -282,6 +282,29 @@ export function mergedMultiSettingProperty(
   return { localName: 'u', attributes: { ...existing, ...(incoming.attributes ?? {}) } };
 }
 
+/** What one run, or one paragraph mark, a per-run write is resolving its properties for. */
+export interface RunPropertyTarget {
+  /** The story part that holds the paragraph. */
+  readonly part: OoxmlPart;
+  /** The paragraph that holds the run or mark. */
+  readonly paragraph: OoxmlNode;
+  /** The run's or mark's `w:rPr`, when it has one. */
+  readonly container: OoxmlNode | undefined;
+  /** True for the paragraph mark, false for a run. */
+  readonly mark: boolean;
+  /** The run's or mark's own authored properties: the base the write merges over. */
+  readonly authored: readonly OoxmlProperty[];
+}
+
+/**
+ * A run write whose value depends on each run, such as a font size step from each run's own
+ * size. Returns the properties to write there, or an empty list to leave that run as it is.
+ */
+export type RunPropertyResolver = (target: RunPropertyTarget) => readonly OoxmlProperty[];
+
+/** A run write: the same properties for every run, or a resolver per run. */
+export type RunPropertyIncoming = OoxmlProperty | readonly OoxmlProperty[] | RunPropertyResolver;
+
 /** Internal style context; direct formatting remains the only write base. */
 export type ComplexScriptContext = (
   paragraph: OoxmlNode,
@@ -304,7 +327,7 @@ export type ComplexScriptContext = (
 export function mergedParagraphMarkProperties(
   part: OoxmlPart,
   paragraphId: string,
-  incoming: OoxmlProperty | readonly OoxmlProperty[]
+  incoming: RunPropertyIncoming
 ): OoxmlProperty[] {
   return mergedParagraphMarkPropertiesWithContext(part, paragraphId, incoming);
 }
@@ -312,7 +335,7 @@ export function mergedParagraphMarkProperties(
 export function mergedParagraphMarkPropertiesWithContext(
   part: OoxmlPart,
   paragraphId: string,
-  incoming: OoxmlProperty | readonly OoxmlProperty[],
+  incoming: RunPropertyIncoming,
   context?: ComplexScriptContext
 ): OoxmlProperty[] {
   const authored = directParagraphMarkProperties(part, paragraphId);
@@ -323,7 +346,13 @@ export function mergedParagraphMarkPropertiesWithContext(
     context && paragraph
       ? context(paragraph, container, true, part)
       : containerIsComplexScript(container);
-  return mergedProperties(authored, withMultiSettingsKept(authored, incoming, complex));
+  if (typeof incoming !== 'function') {
+    return mergedProperties(authored, withMultiSettingsKept(authored, incoming, complex));
+  }
+  // A per-run write resolves the mark from the mark's own properties, like any run.
+  if (!paragraph) return [...authored];
+  const resolved = incoming({ part, paragraph, container, mark: true, authored });
+  return mergedProperties(authored, withMultiSettingsKept(authored, resolved, complex));
 }
 
 /**
@@ -442,7 +471,7 @@ export function runPropertyEdits(
   paragraphId: string,
   start: number,
   end: number,
-  incoming: OoxmlProperty | readonly OoxmlProperty[],
+  incoming: RunPropertyIncoming,
   displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
   authorFilter?: FormattingRevisionAuthorFilter
 ): readonly RunPropertyEdit[] {
@@ -462,7 +491,7 @@ export function runPropertyEditsWithContext(
   paragraphId: string,
   start: number,
   end: number,
-  incoming: OoxmlProperty | readonly OoxmlProperty[],
+  incoming: RunPropertyIncoming,
   displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
   authorFilter?: FormattingRevisionAuthorFilter,
   context?: ComplexScriptContext
@@ -489,10 +518,18 @@ export function runPropertyEditsWithContext(
     const complex = context
       ? context(paragraph, container, false, part, displayMode, authorFilter)
       : containerIsComplexScript(container);
+    let resolved: OoxmlProperty | readonly OoxmlProperty[];
+    if (typeof incoming === 'function') {
+      resolved = incoming({ part, paragraph, container, mark: false, authored });
+      // A resolver that leaves this run as it is gets no edit, so the op does not restate it.
+      if (resolved.length === 0) continue;
+    } else {
+      resolved = incoming;
+    }
     edits.push({
       start: covered.start,
       end: covered.end,
-      properties: mergedProperties(authored, withMultiSettingsKept(authored, incoming, complex)),
+      properties: mergedProperties(authored, withMultiSettingsKept(authored, resolved, complex)),
       ...(formatOwned.has(covered.run.id) ? { targetRunIds: [covered.run.id] } : {}),
     });
   }

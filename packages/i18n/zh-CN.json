@@ -176,7 +176,9 @@
     "decrease": "减小字号",
     "increase": "增大字号",
     "label": "字号",
-    "listLabel": "字号列表"
+    "listLabel": "字号列表",
+    "decreaseShortcut": "减小字号(Ctrl+Shift+<)",
+    "increaseShortcut": "增大字号(Ctrl+Shift+>)"
   },
   "zoom": {
     "ariaLabel": "缩放: {label}",

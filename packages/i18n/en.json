@@ -265,7 +265,9 @@
   },
   "fontSize": {
     "decrease": "Decrease font size",
+    "decreaseShortcut": "Decrease font size (Ctrl+Shift+<)",
     "increase": "Increase font size",
+    "increaseShortcut": "Increase font size (Ctrl+Shift+>)",
     "label": "Font size",
     "listLabel": "Font sizes"
   },

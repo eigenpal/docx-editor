@@ -269,6 +269,13 @@ export interface PaginatedSurface extends SurfaceIndentAndListOps, SurfaceChartO
     entries: readonly { localName: string; attributes?: Record<string, string> }[]
   ): string | null;
   /**
+   * Grow or shrink the selected text one step on the font size ladder. Each run steps from
+   * its own size, so a selection with several sizes keeps the differences between them. An
+   * agreed size steps as one value, with the same caret rules as `setRunProperty`. One undo
+   * step. Returns the document's refusal reason, or null when the write landed or did nothing.
+   */
+  stepFontSize(direction: 'increase' | 'decrease'): string | null;
+  /**
    * Set a property on every paragraph the selection touches — alignment, style, spacing.
    *
    * `mergeAttributes` keeps the attributes the call does not name, for the properties that

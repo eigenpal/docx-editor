@@ -177,7 +177,9 @@
     "decrease": "הקטנת גופן",
     "increase": "הגדלת גופן",
     "label": "גודל גופן",
-    "listLabel": "גדלי גופן"
+    "listLabel": "גדלי גופן",
+    "decreaseShortcut": "הקטנת גופן (Ctrl+Shift+<)",
+    "increaseShortcut": "הגדלת גופן (Ctrl+Shift+>)"
   },
   "zoom": {
     "ariaLabel": "זום: {label}",

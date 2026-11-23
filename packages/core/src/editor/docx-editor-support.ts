@@ -228,6 +228,9 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         ? { supported: true, mutating: true }
         : { supported: false, reason: resolved.reason, code: resolved.code };
     }
+    case 'increaseFontSize':
+    case 'decreaseFontSize':
+      return { supported: true, mutating: true };
     case 'setAlignment':
       return { supported: true, mutating: true };
     case 'setParagraphDirection':

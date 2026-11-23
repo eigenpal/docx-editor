@@ -1,4 +1,7 @@
-import { createContextualRunFormatting } from '../layout/complex-script-formatting.ts';
+import {
+  createContextualRunFormatting,
+  runFontSizeFormattingContext,
+} from '../layout/complex-script-formatting.ts';
 import { paragraphMarkFace } from '../layout/paragraph-mark-face.ts';
 import { caretWordAt as layoutCaretWordAt, hiddenRevisionRanges } from '../layout/caret-word.ts';
 
@@ -32,6 +35,11 @@ import {
   type SurfaceProperty,
 } from './surface-formatting.ts';
 import { formattableRanges } from '@docx-editor.dev/core/store';
+import type { RunPropertyIncoming, RunPropertyResolver } from '../store/store/direct-properties.ts';
+import {
+  steppedFontSizeHalfPoints,
+  type FontSizeStepDirection,
+} from '../store/package/font-size-steps.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { isEastAsianFontFamily } from '../store/package/default-font-faces.ts';
 import { formattingRangeBesideRestrictedControl } from '../store/store/direct-properties.ts';
@@ -128,9 +136,13 @@ type FormatMethods = Pick<
   | 'setParagraphProperty'
   | 'setParagraphProperties'
   | 'toggleRunProperty'
+  | 'stepFontSize'
   | 'formatting'
   | 'clearFormatting'
 >;
+
+/** The size of a run that no level of the cascade states: 10 pt, as layout paints it. */
+const UNSTATED_FONT_SIZE_HALF_POINTS = 20;
 
 export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   const { runPropertyEdits, mergedParagraphMarkProperties } = createContextualRunFormatting(
@@ -240,7 +252,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   const writeRunProperty = (
     from: SemanticPosition,
     to: SemanticPosition,
-    incoming: SurfaceProperty | readonly SurfaceProperty[]
+    incoming: RunPropertyIncoming
   ): string | null => {
     const part = storyPart();
     if (from.paragraphId === to.paragraphId) {
@@ -344,7 +356,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
    */
   const writeRunPropertyOverCells = (
     cells: readonly string[],
-    incoming: SurfaceProperty | readonly SurfaceProperty[]
+    incoming: RunPropertyIncoming
   ): string | null => {
     const part = storyPart();
     const ops: TreeDocOp[] = [];
@@ -586,6 +598,57 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     });
   };
 
+  /** The toolbar's formatting read: the document's answer with any armed format over it. */
+  const readFormatting = () => {
+    const read = formattingSelection(selectionNow.value);
+    // Pending caret formatting overlays the document's answer, so the toolbar shows what
+    // the next character typed will look like while a stored format is armed.
+    return withPendingFormatting(
+      formattingAt(
+        currentLayout.value,
+        read.selection,
+        (paragraphId: string, runProperties) => {
+          const resolved = session.effectiveRunDefaults(paragraphId, runProperties);
+          // A run whose chain authored NOTHING is still measured in the surface's
+          // default face; report that face rather than null, per span — so a blank
+          // document reads "Calibri" while a genuinely mixed selection still
+          // disagrees its way to null.
+          if (resolved.fontFamily !== null) return resolved;
+          const fallback = deps.defaultFontFamily?.() ?? null;
+          return fallback === null ? resolved : { ...resolved, fontFamily: fallback };
+        },
+        deps.selectedCells?.(),
+        deps.defaultParagraphStyleId?.() ?? null,
+        selectionNow.value.anchor.paragraphId === selectionNow.value.head.paragraphId
+          ? [selectionNow.value.head.paragraphId]
+          : deps.paragraphOrder(),
+        deps.defaultFontFamily?.() ?? null,
+        read.caretSpan
+      ),
+      // The mark's face first, so an armed format still answers over it.
+      mergedProperties(read.markFace ?? [], deps.pendingFormats() ?? [])
+    );
+  };
+
+  /**
+   * One font size step for one run or paragraph mark, from the size it paints at: the full
+   * style cascade, character styles and table styles included, with `w:szCs` in the
+   * complex-script lane. Writing `w:sz` there also writes its `w:szCs` companion.
+   */
+  const fontSizeStep = (direction: FontSizeStepDirection): RunPropertyResolver => {
+    const sizeOf = runFontSizeFormattingContext(
+      session.stylesRoot(),
+      session.settingsRoot(),
+      displayMode(),
+      authorFilter()
+    );
+    return ({ part, paragraph, container, mark }) => {
+      const current = sizeOf(paragraph, container, mark, part) ?? UNSTATED_FONT_SIZE_HALF_POINTS;
+      const next = steppedFontSizeHalfPoints(current, direction);
+      return next === current ? [] : [{ localName: 'sz', attributes: { val: String(next) } }];
+    };
+  };
+
   return {
     setRunProperty(localName, attributes) {
       return writeRunProperties([{ localName, ...(attributes ? { attributes } : {}) }]);
@@ -601,35 +664,28 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
 
     setParagraphProperties: writeParagraphProperties,
 
-    formatting: () => {
-      const read = formattingSelection(selectionNow.value);
-      // Pending caret formatting overlays the document's answer, so the toolbar shows what
-      // the next character typed will look like while a stored format is armed.
-      return withPendingFormatting(
-        formattingAt(
-          currentLayout.value,
-          read.selection,
-          (paragraphId: string, runProperties) => {
-            const resolved = session.effectiveRunDefaults(paragraphId, runProperties);
-            // A run whose chain authored NOTHING is still measured in the surface's
-            // default face; report that face rather than null, per span — so a blank
-            // document reads "Calibri" while a genuinely mixed selection still
-            // disagrees its way to null.
-            if (resolved.fontFamily !== null) return resolved;
-            const fallback = deps.defaultFontFamily?.() ?? null;
-            return fallback === null ? resolved : { ...resolved, fontFamily: fallback };
-          },
-          deps.selectedCells?.(),
-          deps.defaultParagraphStyleId?.() ?? null,
-          selectionNow.value.anchor.paragraphId === selectionNow.value.head.paragraphId
-            ? [selectionNow.value.head.paragraphId]
-            : deps.paragraphOrder(),
-          deps.defaultFontFamily?.() ?? null,
-          read.caretSpan
-        ),
-        // The mark's face first, so an armed format still answers over it.
-        mergedProperties(read.markFace ?? [], deps.pendingFormats() ?? [])
-      );
+    formatting: readFormatting,
+
+    stepFontSize(direction) {
+      // One agreed size steps as one value through the ordinary write, which already knows
+      // the caret's word, an empty paragraph's mark, and the armed format at a bare caret.
+      const agreed = readFormatting().fontSizeHalfPoints;
+      if (agreed !== null) {
+        const next = steppedFontSizeHalfPoints(agreed, direction);
+        return next === agreed
+          ? null
+          : writeRunProperties([{ localName: 'sz', attributes: { val: String(next) } }]);
+      }
+      // Mixed sizes: each run steps from its own size, in one commit and one undo step, so
+      // 11 pt and 24 pt text become 12 pt and 26 pt rather than one size for both.
+      const refused = refuseRunFormat();
+      if (refused) return refused;
+      const step = fontSizeStep(direction);
+      const cells = deps.selectedCells?.();
+      if (cells && cells.length > 0) return writeRunPropertyOverCells(cells, step);
+      const { from, to } = orderedRange();
+      if (from.paragraphId === to.paragraphId && from.offset === to.offset) return null;
+      return writeRunProperty(from, to, step);
     },
 
     toggleRunProperty(localName, attributes) {

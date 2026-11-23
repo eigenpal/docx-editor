@@ -495,6 +495,32 @@ export function openTreeSessionFromPackage(
   // Paragraph -> pStyle, per revision. Style-part repair clears this cache explicitly.
   let pStyleCache: { readonly revision: number; readonly byId: Map<string, string | null> } | null =
     null;
+  // The same map for header, footer, and note paragraphs, keyed by those parts' identities:
+  // an edit replaces a part rather than mutating it. Read only for a paragraph outside the body.
+  let furniturePStyleCache: {
+    readonly parts: readonly OoxmlPart[];
+    readonly byId: Map<string, string | null>;
+  } | null = null;
+  const furniturePStyleOf = (paragraphId: string): string | null => {
+    const parts = furnitureAndNoteParts();
+    let cache = furniturePStyleCache;
+    if (
+      !cache ||
+      cache.parts.length !== parts.length ||
+      cache.parts.some((part, index) => part !== parts[index])
+    ) {
+      const byId = new Map<string, string | null>();
+      for (const part of parts) {
+        for (const paragraph of allParagraphs(part)) {
+          if (paragraph.kind === 'textValue') continue;
+          byId.set(paragraph.id, paragraphStyleId(paragraph) ?? null);
+        }
+      }
+      cache = { parts, byId };
+      furniturePStyleCache = cache;
+    }
+    return cache.byId.get(paragraphId) ?? null;
+  };
   let outlineCache: {
     readonly revision: number;
     readonly outline: readonly DocumentOutlineEntry[];
@@ -897,7 +923,11 @@ export function openTreeSessionFromPackage(
           }
           pStyleCache = { revision: store.revision, byId };
         }
-        return runDefaultsResolver(pStyleCache.byId.get(paragraphId) ?? null, runProperties);
+        // A header, footer, or note paragraph inherits from its own paragraph style too.
+        const styleId = pStyleCache.byId.has(paragraphId)
+          ? (pStyleCache.byId.get(paragraphId) ?? null)
+          : furniturePStyleOf(paragraphId);
+        return runDefaultsResolver(styleId, runProperties);
       },
 
       documentOutline() {

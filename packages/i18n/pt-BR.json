@@ -176,7 +176,9 @@
     "decrease": "Diminuir tamanho da fonte",
     "increase": "Aumentar tamanho da fonte",
     "label": "Tamanho da fonte",
-    "listLabel": "Tamanhos da fonte"
+    "listLabel": "Tamanhos da fonte",
+    "decreaseShortcut": "Diminuir tamanho da fonte (Ctrl+Shift+<)",
+    "increaseShortcut": "Aumentar tamanho da fonte (Ctrl+Shift+>)"
   },
   "zoom": {
     "ariaLabel": "Zoom: {label}",

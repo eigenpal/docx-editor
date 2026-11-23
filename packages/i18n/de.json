@@ -176,7 +176,9 @@
     "decrease": "Schriftgrad verkleinern",
     "increase": "Schriftgrad vergrößern",
     "label": "Schriftgrad",
-    "listLabel": "Schriftgrade"
+    "listLabel": "Schriftgrade",
+    "decreaseShortcut": "Schriftgrad verkleinern (Strg+Umschalt+<)",
+    "increaseShortcut": "Schriftgrad vergrößern (Strg+Umschalt+>)"
   },
   "zoom": {
     "ariaLabel": "Zoom: {label}",

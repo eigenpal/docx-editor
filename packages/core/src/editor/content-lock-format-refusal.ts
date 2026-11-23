@@ -24,6 +24,8 @@ export const LOCKED_FORMAT_REASON = 'this content is locked';
 const RUN_FORMAT_COMMANDS: ReadonlySet<EditorCommand['type']> = new Set([
   'toggleMark',
   'setMarkAttr',
+  'increaseFontSize',
+  'decreaseFontSize',
   'clearFormatting',
 ]);
 

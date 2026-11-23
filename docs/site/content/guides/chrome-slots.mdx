@@ -40,14 +40,16 @@ For `Action`, `Group`, `Slot`, and `Separator`, see [Customize the toolbar](/doc
 
 ### History, zoom, styles, and font
 
-| Slot           | Packaged surface | Toolbar part  | Purpose                       |
-| -------------- | ---------------- | ------------- | ----------------------------- |
-| `history.undo` | Default toolbar  | `Undo`        | Undo the last document change |
-| `history.redo` | Default toolbar  | `Redo`        | Redo the last undone change   |
-| `zoom.level`   | Default toolbar  | `Zoom`        | Change the viewport zoom      |
-| `styles.style` | Default toolbar  | `StylePicker` | Apply a paragraph style       |
-| `font.family`  | Default toolbar  | `FontFamily`  | Choose a font family          |
-| `font.size`    | Default toolbar  | `FontSize`    | Choose a font size            |
+| Slot           | Packaged surface | Toolbar part  | Purpose                               |
+| -------------- | ---------------- | ------------- | ------------------------------------- |
+| `history.undo` | Default toolbar  | `Undo`        | Undo the last document change         |
+| `history.redo` | Default toolbar  | `Redo`        | Redo the last undone change           |
+| `zoom.level`   | Default toolbar  | `Zoom`        | Change the viewport zoom              |
+| `styles.style` | Default toolbar  | `StylePicker` | Apply a paragraph style               |
+| `font.family`  | Default toolbar  | `FontFamily`  | Choose a font family                  |
+| `font.size`    | Default toolbar  | `FontSize`    | Choose, grow, or shrink the font size |
+
+The − and + buttons of `FontSize` dispatch `decreaseFontSize` and `increaseFontSize`. Each run steps from its own size to the next size in `FONT_SIZE_PRESETS_PT`, so a selection with several sizes keeps the differences between them. Below 8 pt the step is 1 pt, and above 72 pt it is 10 pt. Ctrl+Shift+> and Ctrl+Shift+< (Command+Shift on macOS) run the same commands.
 
 ### Text and script
 

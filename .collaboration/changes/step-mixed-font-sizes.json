@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The font size decrease and increase controls could not change a selection with several sizes.",
+  "after": "Each run in the selection steps from its own size; the edit is ordinary run and paragraph mark property operations.",
+  "reason": "The commands emit only existing setRunProperties and setParagraphMarkProperties operations, which released participants already apply with the same meaning. No shared format field changes.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-font-size-step.test.ts"],
+  "changeset": "step-mixed-font-sizes",
+  "migration": null
+}

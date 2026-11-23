@@ -75,6 +75,23 @@ const FORMATTING: Record<string, { localName: string; attributes?: Record<string
 };
 
 /**
+ * The font size step a Shift-held `>` or `<` asks for, or null for another key.
+ *
+ * The typed character decides first, as `chordLetter` reads letters. The period and comma keys
+ * are a fallback only for a layout whose shifted key types other punctuation, such as `:`. A
+ * key that types a letter is never read by position, so a remapped layout keeps its letter
+ * chords.
+ */
+function fontSizeStepOf(event: KeyboardEvent): 'increase' | 'decrease' | null {
+  if (event.key === '>') return 'increase';
+  if (event.key === '<') return 'decrease';
+  if (/^\p{L}$/u.test(event.key)) return null;
+  if (event.code === 'Period') return 'increase';
+  if (event.code === 'Comma') return 'decrease';
+  return null;
+}
+
+/**
  * Whether this keystroke is one of the Alt-held ACCELERATORS, rather than a character being
  * composed with AltGr.
  *
@@ -403,6 +420,15 @@ export function createKeyDownHandler(
       surface.toggleRunProperty('vertAlign', {
         val: event.shiftKey ? 'superscript' : 'subscript',
       });
+      event.preventDefault();
+      return;
+    }
+    // Ctrl/Cmd+Shift+> and Ctrl/Cmd+Shift+<: grow and shrink the font one ladder step, each run
+    // from its own size. Matched by `event.code` as well, because the shifted character of
+    // the period and comma keys differs between layouts.
+    const fontStep = accel && event.shiftKey && !event.altKey ? fontSizeStepOf(event) : null;
+    if (fontStep) {
+      surface.stepFontSize(fontStep);
       event.preventDefault();
       return;
     }

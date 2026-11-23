@@ -165,6 +165,7 @@ export {
   type ToolbarCommandState,
 } from './toolbar-commands.ts';
 export { editorCommandKey } from './command-key.ts';
+export { FONT_SIZE_PRESETS_PT } from '../store/package/font-size-steps.ts';
 export {
   arrangeToolbarGroups,
   collapseOrder,
