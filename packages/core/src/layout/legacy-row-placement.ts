@@ -1,7 +1,7 @@
 // Where a legacy table places each row across its text column.
 //
 // A row can state its own alignment in its table property exception, `w:tblPrEx/w:jc`
-// (17.4.61, 17.4.28). The legacy modes place that row by it; compatibility mode 15 ignores
+// (17.4.60, 17.4.26). The legacy modes place that row by it; compatibility mode 15 ignores
 // it. Measured in modes 11, 12 and 14, one-column and two-column tables, fixed and AutoFit
 // layouts, absolute and automatic widths:
 //
@@ -9,7 +9,7 @@
 //   table's indent do not move it.
 // - A trailing-aligned row puts its trailing outer edge past the text edge by the leading
 //   margin of its own first cell. That margin comes from the row's `w:tblCellMar`
-//   exception (17.4.60, 17.4.42), the table's margins, or the cell's `w:tcMar`; the
+//   exception (17.4.60, 17.4.41), the table's margins, or the cell's `w:tcMar`; the
 //   trailing margins do not count. A table aligned to the trailing edge places every row
 //   this way, so a row whose leading margin differs moves.
 // - Leading-aligned rows share one origin: the leading content edge of the first of them

@@ -70,7 +70,7 @@ test('separated cells keep independent edges', () => {
 });
 
 // The opposing 6pt rule is then the table's only side rule. A legacy automatic-width AutoFit
-// table centres it on the grid line, so each cell clears half of it (17.4.53).
+// table centres it on the grid line, so each cell clears half of it (17.4.52).
 for (const own of ['none', 'nil'])
   test(`an explicit ${own} clears an opposing authored rule`, () => {
     const table = layout(

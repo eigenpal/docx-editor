@@ -37,7 +37,7 @@ export function readGridSpan(cellProperties: OoxmlElement | undefined): number {
   return Number.isInteger(span) && span > 1 ? Math.min(span, MAX_TABLE_COLUMNS) : 1;
 }
 
-/** `w:gridBefore` / `w:gridAfter` (17.4.14 / 17.4.13): grid columns the row leaves empty. */
+/** `w:gridBefore` / `w:gridAfter` (17.4.15 / 17.4.14): grid columns the row leaves empty. */
 export function readGridSkip(rowProperties: OoxmlElement | undefined, localName: string): number {
   const raw = rowProperties && childNamed(rowProperties, localName);
   const value = raw && attributeValue(raw, 'val');
@@ -72,7 +72,7 @@ export function readFlag(container: OoxmlElement | undefined, localName: string)
 const AUTO_ROW_HEIGHT: TableRowHeight = Object.freeze({ rule: 'auto' });
 
 /**
- * Read `w:trHeight` (17.4.81). Hostile / unreadable values demote to auto so layout still
+ * Read `w:trHeight` (17.4.80). Hostile / unreadable values demote to auto so layout still
  * sizes from content rather than inventing geometry.
  */
 export function readRowHeight(rowProperties: OoxmlElement | undefined): TableRowHeight {
@@ -95,8 +95,8 @@ export function readRowHeight(rowProperties: OoxmlElement | undefined): TableRow
 }
 
 /**
- * An exact row height (`w:hRule="exact"`, ECMA-376 Part 1, 17.4.81) measures the cells from
- * their top edge to the bottom of their content: the cell bottom margin (17.4.42, 17.4.69) lies
+ * An exact row height (`w:hRule="exact"`, ECMA-376 Part 1, 17.4.80) measures the cells from
+ * their top edge to the bottom of their content: the cell bottom margin (17.4.42, 17.4.68) lies
  * below it, and the row grows by the largest bottom margin of its cells. The top margin stays
  * inside the authored height. Every other height rule is returned unchanged.
  */

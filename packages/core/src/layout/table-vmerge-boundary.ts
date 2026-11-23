@@ -1,4 +1,4 @@
-// A two-row vertical merge (17.4.85 `w:vMerge`) whose page break falls right after its head row.
+// A two-row vertical merge (17.4.84 `w:vMerge`) whose page break falls right after its head row.
 //
 // A merge that does not fit the page from its head's top is declined by
 // `table-vmerge-heights.ts`, and its head then sizes its own row: the row grows to the page

@@ -1,5 +1,5 @@
-// A table positioned against the text (`w:vertAnchor="text"`, ECMA-376 Part 1, 17.4.66) with a
-// `w:tblpYSpec` alignment (17.4.65) floats at the top of its anchor paragraph. Every alignment
+// A table positioned against the text (`w:vertAnchor="text"`, ECMA-376 Part 1, 17.18.100) with a
+// `w:tblpYSpec` alignment (22.9.2.20) floats at the top of its anchor paragraph. Every alignment
 // value puts it there, and the alignment still supersedes `w:tblpY`. The anchor paragraph
 // wraps beside the table.
 import { expect, test } from 'bun:test';

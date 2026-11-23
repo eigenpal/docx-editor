@@ -1,4 +1,4 @@
-// An empty last paragraph in a `w:hideMark` cell (ECMA-376 Part 1, 17.4.25) takes no row height.
+// An empty last paragraph in a `w:hideMark` cell (ECMA-376 Part 1, 17.4.21) takes no row height.
 // The first paragraph of the document keeps its end mark: a table that opens the body keeps one
 // line in its first row. The same table below a paragraph, or after a page break, does not.
 

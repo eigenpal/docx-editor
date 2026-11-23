@@ -1,5 +1,5 @@
-// An exact row height (ECMA-376 Part 1, 17.4.81) measures a cell from its top edge to the bottom
-// of its content. The cell bottom margin (17.4.42, 17.4.69) lies below it, so the row grows by
+// An exact row height (ECMA-376 Part 1, 17.4.80) measures a cell from its top edge to the bottom
+// of its content. The cell bottom margin (17.4.42, 17.4.68) lies below it, so the row grows by
 // the largest bottom margin of its cells. The top margin stays inside the authored height.
 
 import { expect, test } from 'bun:test';

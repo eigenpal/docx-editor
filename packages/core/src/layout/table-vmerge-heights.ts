@@ -1,4 +1,4 @@
-// Row heights for a table whose cells merge vertically (17.4.85 `w:vMerge`).
+// Row heights for a table whose cells merge vertically (17.4.84 `w:vMerge`).
 //
 // A merged cell covers several rows, so Word sizes the MERGE, not the row that starts it:
 // the span gets `max(sum of the spanned rows' own heights, the merged content's height)`.

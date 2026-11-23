@@ -54,7 +54,7 @@ test('legacy numeric text anchors align the leading content edge across cell mar
 });
 
 test('legacy anchors of every kind and left alignments align the leading content edge', () => {
-  // ECMA-376 Part 1, 17.4.58 and 17.4.66: the anchor kind does not change the content origin.
+  // ECMA-376 Part 1, 17.4.57 and 17.18.35: the anchor kind does not change the content origin.
   for (const anchors of [
     'w:horzAnchor="margin" w:vertAnchor="text"',
     'w:horzAnchor="text" w:vertAnchor="margin"',

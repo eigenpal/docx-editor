@@ -4,7 +4,7 @@
 // unbounded file-derived numbers in table geometry.
 //
 // Clause numbers are cited where the behaviour is spec-driven. Border conflict resolution
-// is Word-matching only: ECMA-376 §17.4.39 (`w:tblBorders`) and §17.4.66 (`w:tcBorders`)
+// is Word-matching only: ECMA-376 §17.4.38 (`w:tblBorders`) and §17.4.66 (`w:tcBorders`)
 // describe the elements and say nothing about which of two adjacent cells wins.
 
 import { describe, expect, test } from 'bun:test';
@@ -153,7 +153,7 @@ describe('B14 — structural conditions key on the grid column, not the cell ind
     `<w:tblGrid>${'<w:gridCol w:w="1200"/>'.repeat(count)}</w:tblGrid>`;
 
   test('w:gridBefore moves the first cell off column 0, so firstCol does not apply', () => {
-    // 17.4.14: `w:gridBefore` counts grid columns skipped before the row's first cell.
+    // 17.4.15: `w:gridBefore` counts grid columns skipped before the row's first cell.
     const structure = structureOf(
       '<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/>' +
         '<w:tblLook w:firstColumn="1" w:noHBand="1" w:noVBand="1"/></w:tblPr>' +
@@ -197,7 +197,7 @@ describe('B14 — structural conditions key on the grid column, not the cell ind
   });
 
   test('w:gridAfter keeps lastCol off a row that stops short of the last column', () => {
-    // 17.4.13: `w:gridAfter` counts grid columns after the row's last cell.
+    // 17.4.14: `w:gridAfter` counts grid columns after the row's last cell.
     const structure = structureOf(
       '<w:tbl><w:tblPr><w:tblStyle w:val="Marked"/>' +
         '<w:tblLook w:lastColumn="1" w:noHBand="1" w:noVBand="1"/></w:tblPr>' +
@@ -313,7 +313,7 @@ describe('B11 — an explicit w:val="nil" clears only its own side of an interio
 });
 
 describe('B8 — border conflict uses Word weighted widths, then style precedence', () => {
-  // Not a conformance rule: ECMA-376 Part 1 §17.4.39 and §17.4.66 specify no conflict algorithm.
+  // Not a conformance rule: ECMA-376 Part 1 §17.4.38 and §17.4.66 specify no conflict algorithm.
   const edge = (
     style: 'single' | 'dashed' | 'dotted' | 'double',
     widthPt: number,

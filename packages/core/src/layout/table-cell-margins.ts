@@ -1,4 +1,4 @@
-// `w:tblCellMar` and `w:tcMar` (17.4.41, 17.4.43): the padding inside a table cell.
+// `w:tblCellMar` and `w:tcMar` (17.4.42, 17.4.68): the padding inside a table cell.
 //
 // One unit, because a resolved margin is a four-way per-side fallback and every step of it
 // lives here: what Word defaults each side to, how a side is read from a file (both the
@@ -73,7 +73,7 @@ function twipsSide(node: OoxmlElement | undefined): number | undefined {
   const raw = attributeValue(node, 'w');
   const twips = readTwipsMeasure(raw);
   if (twips === null) return undefined;
-  // A negative margin (`ST_MeasurementOrPercent`, §17.4.43) states a side of no padding: it
+  // A negative margin (`ST_MeasurementOrPercent`, §17.18.107) states a side of no padding: it
   // pads like 0 and still replaces the table style's margin for that side.
   if (twips < 0) return 0;
   const pt = twips / 20;
@@ -119,7 +119,7 @@ export function raiseRowTopMargins<Cell extends { readonly margins: CellMarginsP
 }
 
 /**
- * One row's cell-margin defaults: its `w:tblPrEx/w:tblCellMar` exception (17.4.60, 17.4.42)
+ * One row's cell-margin defaults: its `w:tblPrEx/w:tblCellMar` exception (17.4.60, 17.4.41)
  * over the table's, side by side. A cell's own `w:tcMar` still merges over the result.
  * Returns `tableDefaults` by identity when the row states no margin exception.
  */

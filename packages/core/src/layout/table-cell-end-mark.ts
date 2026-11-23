@@ -37,7 +37,7 @@ interface EndMarkBox {
  * The line the end-of-cell glyph occupies, with the paragraph spacing that frames it.
  *
  * `null` when the mark contributes nothing: `w:hideMark` excludes it from row height by
- * definition (17.4.25), a `w:vanish` mark is not measured, and a face that did not resolve
+ * definition (17.4.21), a `w:vanish` mark is not measured, and a face that did not resolve
  * cannot be measured at all.
  */
 function endMarkBox(

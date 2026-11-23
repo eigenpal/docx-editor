@@ -607,8 +607,8 @@ export function withSharedGridLineSideRules(
   const { legacyMode, modernGridWidth, outerRuleOffsetPt, unequalSides = false } = decision;
   const painted = withCentredSideRulePaint(rows, !legacyMode, unequalSides);
   // A legacy automatic-width AutoFit table whose side rules all share one simple width sizes
-  // and fills its columns from the margins alone where they clear half a rule (17.4.53,
-  // 17.4.64): captured controls at 0.5 to 3pt single and thick rules, with 0 to 10pt margins,
+  // and fills its columns from the margins alone where they clear half a rule (17.4.52,
+  // 17.4.63): captured controls at 0.5 to 3pt single and thick rules, with 0 to 10pt margins,
   // with and without `w:gridBefore`, in modes 12 and 14.
   const legacyAutoFit =
     legacyMode && table.widthType === 'auto' && !table.layoutFixed && sideRulesShareOneWidth(rows);

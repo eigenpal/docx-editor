@@ -3,7 +3,7 @@ Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// An empty last paragraph in a `w:hideMark` cell (ECMA-376 Part 1, 17.4.25) takes no row height,
+// An empty last paragraph in a `w:hideMark` cell (ECMA-376 Part 1, 17.4.21) takes no row height,
 // except the first paragraph of the document: a table that opens the body keeps one line in its
 // first row. Two connected editors that type in the table and after it concurrently, delete text
 // while the other side types, and undo and redo, lay the page out exactly as a cold open of the

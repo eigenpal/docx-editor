@@ -29,7 +29,7 @@ export interface CellTerminatorPosition {
  *   mode: its spacing, mark size, exact line height, borders and shading take no room either.
  *   A space or a tab is text, and so is a second paragraph between it and the table.
  * - The empty last paragraph of a `w:hideMark` cell. The end-of-cell mark does not count
- *   toward row height (17.4.25), and an empty final paragraph holds nothing else, so the row
+ *   toward row height (17.4.21), and an empty final paragraph holds nothing else, so the row
  *   ends with the content above it: no line and no spacing. That holds for an empty cell
  *   too, whose row is then as tall as its cell margins, its `w:trHeight`, or its other
  *   cells. Paragraph borders still draw in an otherwise empty cell, so placement keeps such a
@@ -78,7 +78,7 @@ function runHoldsNoText(run: OoxmlElement): boolean {
 }
 
 /**
- * Whether a cell hides its end mark from row height (`w:hideMark`, 17.4.25). The first paragraph
+ * Whether a cell hides its end mark from row height (`w:hideMark`, 17.4.21). The first paragraph
  * of the document keeps its mark: a table that opens the body keeps the end-of-cell line of its
  * first cell, so its first row is at least one line tall. `documentFirstParagraphId` names that
  * paragraph when a table opens the body.

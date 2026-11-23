@@ -1,4 +1,4 @@
-// `w:trHeight` / `w:hRule` (17.4.81): auto, atLeast, exact — parse + layout + pagination.
+// `w:trHeight` / `w:hRule` (17.4.80): auto, atLeast, exact — parse + layout + pagination.
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';

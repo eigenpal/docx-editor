@@ -552,7 +552,7 @@ export function resolveColumnWidthsPt(input: {
   }
   if (total > target + WIDTH_EPSILON_PT) {
     // The gaps, a stated absolute width, and a fixed table's percentage width come out above
-    // each column's minimum (17.4.53, 17.4.63).
+    // each column's minimum (17.4.52, 17.4.63).
     const aboveMinimums =
       gaps > 0 || tableWidth.type === 'dxa' || (tableWidth.type === 'pct' && input.layoutFixed);
     cells =

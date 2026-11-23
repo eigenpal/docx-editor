@@ -66,8 +66,8 @@ export interface VMergeResolveOptions {
    *
    * - a continuation cell whose restart was placed on an EARLIER fragment heads the merge
    *   here. Word keeps drawing a vertically merged cell on every page the merge crosses
-   *   (17.4.85 `w:vMerge`); dropping it leaves a hole in the continuation page's grid.
-   * - a repeated `w:tblHeader` row (17.4.78) is a copy of a row already painted on an
+   *   (17.4.84 `w:vMerge`); dropping it leaves a hole in the continuation page's grid.
+   * - a repeated `w:tblHeader` row (17.4.49) is a copy of a row already painted on an
    *   earlier page, so it hands no open merge to the body rows below it.
    */
   readonly pageFragment?: boolean;

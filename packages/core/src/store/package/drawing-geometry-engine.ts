@@ -376,7 +376,7 @@ function segmentsFor(length: number, tolerance: number): number {
 const FULL_TURN = 2 * Math.PI;
 
 /**
- * An `arcTo` sweep (ECMA-376 Part 1, 20.1.9.3) beyond one turn redraws the same ellipse, so it
+ * An `arcTo` sweep (ECMA-376 Part 1, 20.1.9.4) beyond one turn redraws the same ellipse, so it
  * drops whole pairs of turns and keeps between one and three turns. The end point stays the
  * same, the outline keeps at least one full turn, and the number of turns keeps its parity, so
  * an even-odd fill of the loops does not change. A sweep that a guide makes very large cannot

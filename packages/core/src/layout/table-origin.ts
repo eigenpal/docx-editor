@@ -38,7 +38,7 @@ export function positionedTableOriginX(
     return origin + structure.defaultMargins.right;
   }
   if (!first || first.gridColumn !== 0 || float.xSpec === 'center') return origin;
-  // Any anchor (17.4.58, 17.4.66), with a `w:tblpX` offset or a left or inside alignment: the
+  // Any anchor (17.18.35, 17.18.100), with a `w:tblpX` offset or a left or inside alignment: the
   // leading cell content edge takes the position, and the outer edge may leave the sheet.
   const inset = contentInsets(first.margins, first.contentBorders ?? first.borders).left;
   return origin - inset;

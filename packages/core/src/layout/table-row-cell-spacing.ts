@@ -11,7 +11,7 @@ function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undef
 }
 
 /**
- * `w:trPr/w:tblCellSpacing` (17.4.44) when every row states the same value and the table
+ * `w:trPr/w:tblCellSpacing` (17.4.43) when every row states the same value and the table
  * states none. A value shared by all rows is the table's spacing; rows that differ are an
  * exception this layout does not model, so they keep the table's own spacing.
  */

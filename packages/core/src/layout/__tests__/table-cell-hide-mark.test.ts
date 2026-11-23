@@ -79,13 +79,13 @@ for (const [value, hidden] of [
     const properties = `<w:hideMark${value ? ` w:val="${value}"` : ''}/>`;
     expect(height(table(row(cell(paragraph(text), properties))))).toBe(5);
     expect(height(table(row(cell(marked, properties))))).toBe(hidden ? 5 : 25);
-    // 17.4.25: a hidden end mark leaves an empty cell nothing to size the row with.
+    // 17.4.21: a hidden end mark leaves an empty cell nothing to size the row with.
     expect(height(table(row(cell(paragraph(), properties))))).toBe(hidden ? 0 : 20);
   });
 }
 
 test('an empty cell with a hidden mark takes no row height but keeps an addressable line', () => {
-  // 17.4.25: the end-of-cell mark is ignored for row height, and the empty paragraph holds
+  // 17.4.21: the end-of-cell mark is ignored for row height, and the empty paragraph holds
   // nothing else; the next row starts where the empty one does.
   const result = run(table(row(cell(paragraph())) + row(cell(paragraph(text)))));
   expect(rows(result).map((r) => r.box.height)).toEqual([0, 5]);

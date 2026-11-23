@@ -1,4 +1,4 @@
-// Vertical merges inside the leading `w:tblHeader` rows (17.4.49, 17.4.85 `w:vMerge`).
+// Vertical merges inside the leading `w:tblHeader` rows (17.4.49, 17.4.84 `w:vMerge`).
 //
 // The header rows are placed as ONE group: measured together, moved whole, and repeated on
 // every continuation page. A merge that starts and ends inside that group used to be sized by

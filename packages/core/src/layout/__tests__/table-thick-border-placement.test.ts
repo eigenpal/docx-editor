@@ -1,6 +1,6 @@
 // Where a wide table rule sits against the table indent and the cell content: `w:tblBorders`
-// (ECMA-376 §17.4.38), `w:tcBorders` (§17.4.66), `w:tblCellMar` (§17.4.41) and `w:tcMar`
-// (§17.4.43), before and in compatibility mode 15.
+// (ECMA-376 §17.4.38), `w:tcBorders` (§17.4.66), `w:tblCellMar` (§17.4.42) and `w:tcMar`
+// (§17.4.68), before and in compatibility mode 15.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';

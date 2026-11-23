@@ -212,7 +212,7 @@ describe('legacy fixed table content edges', () => {
       expect(structure(document('', cell)).outerRuleOffsetPt).toBeUndefined();
   });
   test('a later row with another leading margin keeps the first row origin', () => {
-    // 17.4.43 `w:tcMar`: leading-aligned rows share the origin of the first of them.
+    // 17.4.68 `w:tcMar`: leading-aligned rows share the origin of the first of them.
     const xml = serializeOoxmlPart(document());
     const row = xml.match(/<w:tr>[\s\S]*?<\/w:tr>/)![0];
     const changed = row.replace(
@@ -235,7 +235,7 @@ describe('legacy fixed table content edges', () => {
     expect(tableOriginX(s, 300)).toBe(5.4);
   });
   test('row width, indent, layout and margin exceptions keep the legacy origin', () => {
-    // 17.4.61 `w:tblPrEx`: these exceptions leave a leading-aligned row on the shared origin.
+    // 17.4.60 `w:tblPrEx`: these exceptions leave a leading-aligned row on the shared origin.
     const xml = serializeOoxmlPart(document());
     const row = xml.match(/<w:tr>[\s\S]*?<\/w:tr>/)![0];
     for (const exception of [
@@ -251,7 +251,7 @@ describe('legacy fixed table content edges', () => {
     }
   });
   test('a right-to-left table keeps its origin when rows repeat its borders', () => {
-    // 17.4.61 `w:tblPrEx`: an exception that repeats the table's own property changes nothing.
+    // 17.4.60 `w:tblPrEx`: an exception that repeats the table's own property changes nothing.
     const base = structure(document('<w:bidiVisual/>'));
     const xml = serializeOoxmlPart(document('<w:bidiVisual/>'));
     const borders = xml.match(/<w:tblBorders>[\s\S]*?<\/w:tblBorders>/)![0];
@@ -282,7 +282,7 @@ describe('legacy fixed table content edges', () => {
     expect(structure(part(current)).outerRuleOffsetPt).toBeUndefined();
   });
   test('a row margin exception on top and bottom only keeps the legacy origin', () => {
-    // 17.4.60 `w:tblPrEx`, 17.4.42 `w:tblCellMar`: no leading margin changes, so the
+    // 17.4.60 `w:tblPrEx`, 17.4.41 `w:tblCellMar`: no leading margin changes, so the
     // content edge stays where the table's own margin places it.
     const xml = serializeOoxmlPart(document());
     const row = xml.match(/<w:tr>[\s\S]*?<\/w:tr>/)![0];

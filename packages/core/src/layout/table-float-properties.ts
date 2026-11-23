@@ -5,15 +5,15 @@ import {
   type OoxmlElement,
 } from '@docx-editor.dev/core/store';
 /**
- * `w:tblpPr/@w:horzAnchor` (17.4.58) and `@w:vertAnchor` (17.4.66): the box a floated
+ * `w:tblpPr/@w:horzAnchor` (17.18.35) and `@w:vertAnchor` (17.18.100): the box a floated
  * table's offsets are measured from. An absent horizontal anchor means `text`; an absent vertical anchor means `margin`.
  */
 export type TableFloatAnchor = 'text' | 'margin' | 'page';
 
-/** `w:tblpPr/@w:tblpXSpec` (17.4.63, ST_XAlign). */
+/** `w:tblpPr/@w:tblpXSpec` (22.9.2.18, ST_XAlign). */
 export type TableFloatXSpec = 'left' | 'center' | 'right' | 'inside' | 'outside';
 
-/** `w:tblpPr/@w:tblpYSpec` (17.4.65, ST_YAlign). */
+/** `w:tblpPr/@w:tblpYSpec` (22.9.2.20, ST_YAlign). */
 export type TableFloatYSpec = 'inline' | 'top' | 'center' | 'bottom' | 'inside' | 'outside';
 
 /**
@@ -112,7 +112,7 @@ export function readTableFloatPosition(
       : undefined;
   // An omitted vertical anchor measures `w:tblpY` from the top margin, not from the text.
   const vertAnchor = readFloatAnchor(attributeValue(tblpPr, 'vertAnchor')) ?? 'margin';
-  // Against the text, every `w:tblpYSpec` (17.4.65) puts the table at the top of its anchor
+  // Against the text, every `w:tblpYSpec` (22.9.2.20) puts the table at the top of its anchor
   // paragraph, and it still supersedes `w:tblpY`: the table floats there with no offset.
   const textAligned = ySpec !== undefined && vertAnchor === 'text';
   return {

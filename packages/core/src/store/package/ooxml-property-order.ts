@@ -98,7 +98,7 @@ export const CT_RPR_SEQUENCE: readonly string[] = [
   'rPrChange',
 ];
 
-/** `CT_TblPrBase` child sequence (ECMA-376 17.4.78), plus trailing `tblPrChange`. */
+/** `CT_TblPrBase` child sequence (ECMA-376 17.4.59), plus trailing `tblPrChange`. */
 export const CT_TBLPR_SEQUENCE: readonly string[] = [
   'tblStyle',
   'tblpPr',
@@ -121,7 +121,7 @@ export const CT_TBLPR_SEQUENCE: readonly string[] = [
 ];
 
 /**
- * `CT_TrPrBase` (17.4.80), then `CT_TrPr`'s trailing revision marks and `trPrChange`. The base
+ * `CT_TrPrBase` (17.4.81), then `CT_TrPr`'s trailing revision marks and `trPrChange`. The base
  * is a choice, so only the trailing three have a place; the rest take this one canonical order.
  */
 export const CT_TRPR_SEQUENCE: readonly string[] = [
@@ -142,7 +142,7 @@ export const CT_TRPR_SEQUENCE: readonly string[] = [
   'trPrChange',
 ];
 
-/** `CT_TcPrBase` sequence (17.4.68), plus markup and `tcPrChange`. */
+/** `CT_TcPrBase` sequence (17.4.69), plus markup and `tcPrChange`. */
 export const CT_TCPR_SEQUENCE: readonly string[] = [
   'cnfStyle',
   'tcW',
@@ -164,7 +164,7 @@ export const CT_TCPR_SEQUENCE: readonly string[] = [
   'tcPrChange',
 ];
 
-/** `CT_TblPrExBase` child sequence (17.4.61), plus trailing `tblPrExChange`. */
+/** `CT_TblPrExBase` child sequence (17.4.60), plus trailing `tblPrExChange`. */
 export const CT_TBLPREX_SEQUENCE: readonly string[] = [
   'tblW',
   'jc',

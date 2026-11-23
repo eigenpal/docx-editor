@@ -2,7 +2,7 @@
 // with its space after (17.3.1.33); mode 15 tests the line alone.
 //
 // The text-anchored tables of one anchor are placed in source order, each from the flow as it
-// stands then. A raised table (negative `w:tblpY`, 17.4.58) that leaves no passage moves the
+// stands then. A raised table (negative `w:tblpY`, 17.4.57) that leaves no passage moves the
 // earlier lines it covers below it and keeps its own place. A later table of the same anchor is
 // placed after that move: it opens below the moved lines and, when it is raised too, pushes
 // them again from there.

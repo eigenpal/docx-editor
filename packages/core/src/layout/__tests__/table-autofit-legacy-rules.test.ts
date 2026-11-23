@@ -1,6 +1,6 @@
 // Column widths of two table shapes, from reference renders of synthetic controls:
 //
-// - An automatic-width AutoFit table (17.4.53, 17.4.64) before mode 15 sizes each column as its
+// - An automatic-width AutoFit table (17.4.52, 17.4.63) before mode 15 sizes each column as its
 //   content plus the larger of each cell margin and half its simple side rule. The rule width is
 //   not added to the margin, as it is not in mode 15.
 // - A fixed-layout table whose percentage width (17.4.63) is narrower than its cell widths

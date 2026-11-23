@@ -85,7 +85,7 @@ test('a continuation cell measures its mark, never the content it does not paint
   expect(result.rows[1]!.cells[0]!.blocks).toEqual([]);
 });
 
-// `w:hideMark` excludes the end-of-cell glyph from row height (17.4.25), so it keeps its
+// `w:hideMark` excludes the end-of-cell glyph from row height (17.4.21), so it keeps its
 // engine-wide meaning here. NOT reference-confirmed: the captured control gives a
 // continuation-only row with `w:hideMark` 23.52pt, which is neither zero nor any line the
 // rule derives, and no corpus document sets `w:hideMark` on a continuation. This asserts

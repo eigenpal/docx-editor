@@ -1,4 +1,4 @@
-// A row's `w:tblPrEx` borders replace the table's own for that row's cells (17.4.61).
+// A row's `w:tblPrEx` borders replace the table's own for that row's cells (17.4.60).
 //
 // A footer table in a gridded style can clear its borders on one row only: the first row's
 // cells state `nil`, and the next row carries a `w:tblPrEx` whose `w:tblBorders` are all

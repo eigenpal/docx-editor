@@ -135,7 +135,7 @@ export const MAX_TABLE_NESTING = 16;
 export const MAX_TABLE_ROW_HEIGHT_PT = 31_680 / 20;
 
 /**
- * `w:trPr/w:trHeight` (17.4.81) resolved for layout. Points leave the reader already —
+ * `w:trPr/w:trHeight` (17.4.80) resolved for layout. Points leave the reader already —
  * twips convert once here, matching every other table geometry boundary.
  *
  * Word quirk (matches Form025U and Word's UI export): a present `@w:val` with an omitted
@@ -158,7 +158,7 @@ export type TableRowHeight =
 const MAX_CELL_CONDITION_SETS = 256;
 const cellStyleFormattingMemos = new WeakMap<object, Map<string, TableCellStyleFormatting>>();
 
-/** `w:tblPr/w:jc` (17.4.29, ST_JcTable): where the table sits within the text column. */
+/** `w:tblPr/w:jc` (17.4.28, ST_JcTable): where the table sits within the text column. */
 export type TableAlignment = 'left' | 'center' | 'right';
 
 /**
@@ -283,7 +283,7 @@ export interface SemanticTableRow {
   /** The table's fill (its style, `w:tblPr`, then this row's `w:tblPrEx`) in spaced gaps. */
   readonly spacingShading?: TableSpacingShading;
   /** How far a spaced table's frame moves this row's cells in (`table-spacing-frame.ts`). */
-  readonly spacingFrame?: TableSpacingFrame; /** `w:tblPrEx/w:jc` (17.4.61, 17.4.28): the row's own alignment. */
+  readonly spacingFrame?: TableSpacingFrame; /** `w:tblPrEx/w:jc` (17.4.60, 17.4.26): the row's own alignment. */
   readonly alignment?: TableAlignment;
   /** Derived, never serialized: how far a legacy table moves this row right of its grid. */
   readonly xShiftPt?: number;
@@ -345,7 +345,7 @@ export interface SemanticTableStructure {
    * pulls into the leading margin; never negative on a nested table.
    */
   readonly indentPt: number;
-  /** `w:tblPr/w:jc` (17.4.29) — where the table sits in the text column. */
+  /** `w:tblPr/w:jc` (17.4.28) — where the table sits in the text column. */
   readonly alignment: TableAlignment;
   /**
    * `w:tblPr/w:tblpPr` (17.4.57) — present when the table is positioned against an anchor
@@ -618,7 +618,7 @@ function readTableRows(
       plans[rowIndex]!.properties
     )
   );
-  // A continuation only continues a cell with `w:vMerge` in the row above (17.4.85). Below
+  // A continuation only continues a cell with `w:vMerge` in the row above (17.4.84). Below
   // an unmerged cell, or in the first row, it starts its own merge and paints its own content.
   const rows = resolveTableRows(
     {

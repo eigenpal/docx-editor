@@ -1201,7 +1201,7 @@ export type ShapeFillInput =
     };
 
 /**
- * A preset outline dash (ECMA-376 Part 1, 20.1.10.48 `ST_PresetLineDashVal`). `solid` is a
+ * A preset outline dash (ECMA-376 Part 1, 20.1.10.49 `ST_PresetLineDashVal`). `solid` is a
  * plain line; the `sys` presets scale with the line width in short steps. @public
  */
 export type ShapeOutlineDash =

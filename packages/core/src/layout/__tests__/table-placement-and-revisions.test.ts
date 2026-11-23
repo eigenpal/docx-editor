@@ -1,4 +1,4 @@
-// Where a table sits in the text column (`w:tblInd` 17.4.50, `w:jc` 17.4.29,
+// Where a table sits in the text column (`w:tblInd` 17.4.50, `w:jc` 17.4.28,
 // `w:tblCellSpacing` 17.4.45), and which paragraphs a tracked revision removes from it.
 //
 // A `w:del` on the paragraph MARK (17.13.5.15) joins a paragraph to the next one. When the
