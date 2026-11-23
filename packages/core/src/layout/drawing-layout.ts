@@ -442,10 +442,9 @@ export interface DrawingAnchorFrameContext {
   readonly marginLeft: number;
   readonly marginRight: number;
   /**
-   * Authored `w:pgMar` bottom. The ONLY reader is the `bottomMargin` frame, whose origin is
-   * the top edge of the bottom margin band — a page-setup landmark, so a footer taller than
-   * that margin must not move it. The `topMargin` band needs no twin: its top edge is the
-   * sheet edge, which {@link DrawingAnchorFrameContext.contentInsetTop} already gives.
+   * Authored `w:pgMar` bottom. The bottom margin band (the `bottomMargin` frame, and the
+   * `insideMargin` and `outsideMargin` frames on even pages) starts there: a page-setup
+   * landmark, so a footer taller than that margin must not move it.
    */
   readonly marginBottom: number;
   /**
@@ -463,6 +462,12 @@ export interface DrawingAnchorFrameContext {
   readonly verticalMarginFrame?: { readonly top: number; readonly height: number };
   /** Sheet top in header story coordinates. Body stories use their content inset. */
   readonly topMarginFrameOrigin?: number;
+  /**
+   * Height of the top margin band: from the sheet top to the body content top on this page. A
+   * header taller than the top margin pushes the body down and makes the band taller. Header
+   * and footer stories set it; the body uses its content inset, which already includes that.
+   */
+  readonly topMarginBandHeight?: number | undefined;
   /** Body flow height on the current page (may shrink for notes/HF reserves). */
   readonly contentHeight: number;
   /** Content band between the insets: pageHeight − contentInsetTop − contentInsetBottom. */
@@ -564,10 +569,13 @@ function usesCellLayoutBox(
   _frame: DrawingHorizontalReferenceFrame | DrawingVerticalReferenceFrame,
   ctx: DrawingAnchorFrameContext
 ): boolean {
-  if (!ctx.layoutInCell || ctx.cellBox === null) return false;
-  if (!Number.isFinite(ctx.cellBox.height) || ctx.cellBox.height <= 0) return false;
-  if (!Number.isFinite(ctx.cellBox.width) || ctx.cellBox.width <= 0) return false;
-  return true;
+  return ctx.layoutInCell && usableCellBox(ctx.cellBox);
+}
+
+function usableCellBox(box: LayoutBox | null | undefined): box is LayoutBox {
+  if (!box) return false;
+  if (!Number.isFinite(box.height) || box.height <= 0) return false;
+  return Number.isFinite(box.width) && box.width > 0;
 }
 
 function horizontalEdges(
@@ -703,8 +711,8 @@ function verticalEdges(
   const marginBottom = marginTop + (ctx.verticalMarginFrame?.height ?? ctx.contentHeight);
   // ECMA-376 Part 1 §20.4.3.5 ST_RelFromV: topMargin is "relative to the top margin of the
   // current page" and bottomMargin "relative to the bottom margin of the current page". Each
-  // margin is a band of the sheet: the top margin from the page top to the top margin, the
-  // bottom margin from the bottom margin to the page bottom. §20.4.3.2 ST_AlignV aligns the
+  // margin is a band of the sheet: the top margin from the page top to the body content top,
+  // the bottom margin from the bottom margin to the page bottom. §20.4.3.2 ST_AlignV aligns the
   // object in that band: "top", "center" ("centered with respect to the vertical alignment
   // base"), and "bottom" ("at the bottom of the vertical alignment base").
   //
@@ -712,7 +720,7 @@ function verticalEdges(
   // story resolves them in page-content coordinates. A footer story moves with its own height,
   // so story coordinates would let a wrapped picture move the footer that it wraps.
   const sheetTop = ctx.topMarginFrameOrigin ?? pageTop;
-  const topBand = band(sheetTop, sheetTop + ctx.contentInsetTop);
+  const topBand = band(sheetTop, sheetTop + (ctx.topMarginBandHeight ?? ctx.contentInsetTop));
   // The bottom band starts at the AUTHORED bottom margin. Starting it at the content band would
   // let an oversized footer drag it up with the shrinking text area (#274 read backwards): the
   // margin frames exist so an anchor does NOT follow the furniture.
@@ -1232,7 +1240,10 @@ export function publishAnchoredDrawingsForParagraph(
     // bands (`topMarginFrameOrigin` is set). The page frame and a footer's margin bands resolve
     // in page-content coordinates and keep the frame-base clip. In the body, both clips match.
     const verticalFrame = projection.position?.vertical.relativeFrom;
-    const pageContentVertical = resolvesInPageContent(verticalFrame, options.frameBase);
+    // A record laid out in its cell resolves against the cell box, in story coordinates.
+    const resolvedInCell = layoutInCell && usableCellBox(options.cellBox);
+    const pageContentVertical =
+      !resolvedInCell && resolvesInPageContent(verticalFrame, options.frameBase);
     const pageClip = pageContentVertical ? pageClipRegion(options.frameBase) : options.pageClip;
     const clipRegion = clipToCell ? options.cellBox! : pageClip;
     // A header or footer record in page-content coordinates carries the sheet top, so every

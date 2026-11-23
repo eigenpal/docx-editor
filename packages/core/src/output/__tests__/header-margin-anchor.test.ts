@@ -5,6 +5,7 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import {
   createFixedMeasurer,
+  hitTestSheet,
   enumerateDocumentSections,
   geometryOfSection,
   layoutSemanticDocument,
@@ -69,6 +70,7 @@ interface AnchorOptions {
   readonly topAndBottom?: boolean;
   readonly storyDistance?: number;
   readonly inTable?: boolean;
+  readonly secondPage?: boolean;
 }
 
 function logoDrawing(options: AnchorOptions = {}): string {
@@ -135,6 +137,9 @@ function storyDoc(kind: 'header' | 'footer', options: AnchorOptions = {}): Uint8
     ),
     'word/document.xml': strToU8(
       `<w:document ${ns}><w:body><w:p><w:r><w:t>body text</w:t></w:r></w:p>` +
+        (options.secondPage
+          ? '<w:p><w:r><w:br w:type="page"/><w:t>page two</w:t></w:r></w:p>'
+          : '') +
         `<w:sectPr><w:${kind}Reference w:type="default" r:id="rId1"/>` +
         '<w:pgSz w:w="11906" w:h="16838"/>' +
         '<w:pgMar w:top="1560" w:right="1700" w:bottom="2694" w:left="1701" w:header="851" w:footer="0"/>' +
@@ -637,41 +642,104 @@ test('body top-margin bands keep their page-content coordinates', () => {
   expect(line.box.y).toBeCloseTo(drawing.y + drawing.height, 5);
 });
 
-// The fixture sheet is A4, 841.9pt high, with a 78pt top margin and a 134.7pt bottom margin.
+// The fixture sheet is A4, 841.9pt high, with a 134.7pt bottom margin. The top band ends at
+// the body content top: the 78pt top margin, or lower where the header pushes the body down.
 // The picture is 63.75pt square. Expected values are sheet tops of the picture.
 const SHEET = 841.9;
-const TOP_MARGIN = 78;
 const BOTTOM_BAND_TOP = SHEET - 134.7;
 const PICTURE = 63.75;
 
-function sheetTopOf(kind: 'header' | 'footer', options: AnchorOptions): number {
+function placed(kind: 'header' | 'footer', options: AnchorOptions) {
   const page = layoutStoryDoc(kind, { horizontalOffsetEmu: 0, ...options }).pages[0]!;
   const story = (kind === 'header' ? page.header : page.footer)!;
   const drawing = story.anchoredDrawings![0]!;
-  return headerFooterAnchoredDrawingOrigin(drawing, story.box, page.box).y - page.box.y;
+  return {
+    top: headerFooterAnchoredDrawingOrigin(drawing, story.box, page.box).y - page.box.y,
+    bodyTop: page.contentBox.y - page.box.y,
+  };
 }
 
 describe('margin-band frames are bands of the sheet', () => {
   for (const kind of ['header', 'footer'] as const) {
     test.each([
-      ['topMargin', undefined, 10],
-      ['topMargin', 'center', (TOP_MARGIN - PICTURE) / 2],
-      ['topMargin', 'bottom', TOP_MARGIN - PICTURE],
-      ['bottomMargin', undefined, BOTTOM_BAND_TOP + 10],
-      ['bottomMargin', 'center', BOTTOM_BAND_TOP + (SHEET - BOTTOM_BAND_TOP - PICTURE) / 2],
-      ['bottomMargin', 'bottom', SHEET - PICTURE],
+      ['topMargin', undefined, () => 10],
+      ['topMargin', 'center', (bodyTop: number) => (bodyTop - PICTURE) / 2],
+      ['topMargin', 'bottom', (bodyTop: number) => bodyTop - PICTURE],
+      ['bottomMargin', undefined, () => BOTTOM_BAND_TOP + 10],
+      ['bottomMargin', 'center', () => BOTTOM_BAND_TOP + (SHEET - BOTTOM_BAND_TOP - PICTURE) / 2],
+      ['bottomMargin', 'bottom', () => SHEET - PICTURE],
       // Page 1 is odd: the inside and outside margins are the top band.
-      ['insideMargin', undefined, 10],
-      ['outsideMargin', 'bottom', TOP_MARGIN - PICTURE],
-    ] as const)(`${kind} %s %s places the picture at %d`, (verticalFrame, verticalAlign, top) => {
-      const options: AnchorOptions = {
+      ['insideMargin', undefined, () => 10],
+      ['outsideMargin', 'bottom', (bodyTop: number) => bodyTop - PICTURE],
+    ] as const)(`${kind} %s %s`, (verticalFrame, verticalAlign, expected) => {
+      const { top, bodyTop } = placed(kind, {
         verticalFrame,
         verticalOffsetEmu: 127_000,
         ...(verticalAlign ? { verticalAlign } : {}),
-      };
-      expect(sheetTopOf(kind, options)).toBeCloseTo(top, 2);
+      });
+      expect(top).toBeCloseTo(expected(bodyTop), 2);
     });
   }
+
+  test('the top band of a header ends where the header pushes the body down', () => {
+    const { top, bodyTop } = placed('header', {
+      verticalFrame: 'topMargin',
+      verticalAlign: 'bottom',
+    });
+    expect(bodyTop).toBeGreaterThan(78);
+    expect(top).toBeCloseTo(bodyTop - PICTURE, 2);
+  });
+
+  test('page 2 is even: the inside and outside margins are the bottom band', () => {
+    for (const verticalFrame of ['insideMargin', 'outsideMargin'] as const) {
+      const layout = layoutStoryDoc('footer', {
+        horizontalOffsetEmu: 0,
+        verticalFrame,
+        verticalOffsetEmu: 127_000,
+        secondPage: true,
+      });
+      const page = layout.pages[1]!;
+      const story = page.footer!;
+      const drawing = story.anchoredDrawings![0]!;
+      const top = headerFooterAnchoredDrawingOrigin(drawing, story.box, page.box).y - page.box.y;
+      expect(top).toBeCloseTo(BOTTOM_BAND_TOP + 10, 2);
+    }
+  });
+
+  test('a footer picture laid out in its table cell stays in the cell', () => {
+    for (const verticalFrame of ['topMargin', 'bottomMargin', 'insideMargin'] as const) {
+      const layout = layoutStoryDoc('footer', {
+        horizontalOffsetEmu: 0,
+        verticalFrame,
+        verticalOffsetEmu: 127_000,
+        inTable: true,
+      });
+      const page = layout.pages[0]!;
+      const story = page.footer!;
+      const drawing = story.anchoredDrawings![0]!;
+      expect(drawing.verticalPageTop).toBeUndefined();
+      const top = headerFooterAnchoredDrawingOrigin(drawing, story.box, page.box).y;
+      expect(top).toBeGreaterThanOrEqual(story.box.y);
+      expect(top).toBeLessThan(story.box.y + story.box.height);
+    }
+  });
+
+  test('a press on a footer bottom-margin picture hits the picture', () => {
+    const layout = layoutStoryDoc('footer', {
+      horizontalOffsetEmu: 0,
+      verticalFrame: 'bottomMargin',
+      verticalOffsetEmu: 127_000,
+    });
+    const page = layout.pages[0]!;
+    const drawing = page.footer!.anchoredDrawings![0]!;
+    const point = {
+      x: page.footer!.box.x + drawing.x + PICTURE / 2,
+      y: page.box.y + BOTTOM_BAND_TOP + 10 + PICTURE / 2,
+    };
+    const hit = hitTestSheet(layout, point);
+    expect(hit?.position.paragraphId).toBe(drawing.anchorParagraphId);
+    expect(hit?.position.offset).toBe(drawing.start);
+  });
 
   test('a footer bottom-margin picture paints where layout places it', () => {
     const layout = layoutStoryDoc('footer', {

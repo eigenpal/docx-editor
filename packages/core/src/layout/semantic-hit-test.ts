@@ -64,6 +64,7 @@ import type {
   TextMeasurer,
 } from './semantic-records.ts';
 import type { InlineDrawingRecord, AnchoredDrawingRecord } from './drawing-layout.ts';
+import { headerFooterAnchoredDrawingOrigin } from './header-footer-drawing-origin.ts';
 import { pointInDrawingClip } from './drawing-wrap.ts';
 import { clipParagraphBox } from './paragraph-frame-clip.ts';
 import { blockDistance, isCollapsedSectionMark, weightedDistance } from './hit-test-blocks.ts';
@@ -427,6 +428,30 @@ export function hitTestFragments(
 }
 
 /**
+ * The header or footer drawing at a sheet point. Each drawing maps into its record space as
+ * paint places it: a page-relative axis from the page box, a story-relative one from the
+ * story box.
+ */
+function hitFurnitureDrawingAtSheetPoint(
+  story: { readonly box: LayoutBox; readonly anchoredDrawings?: readonly AnchoredDrawingRecord[] },
+  pageBox: LayoutBox,
+  point: HitPoint,
+  pageIndex: number
+): SemanticHit | null {
+  const drawings = [...(story.anchoredDrawings ?? [])].sort((left, right) => {
+    if (left.behindDocument !== right.behindDocument) return left.behindDocument ? -1 : 1;
+    return right.relativeHeight - left.relativeHeight;
+  });
+  for (const drawing of drawings) {
+    const origin = headerFooterAnchoredDrawingOrigin(drawing, story.box, pageBox);
+    const local = { x: point.x - (origin.x - drawing.x), y: point.y - (origin.y - drawing.y) };
+    const hit = hitAnchoredDrawingAtPoint([drawing], local, pageIndex);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
  * Hit test a point given in SHEET coordinates — the space `page.box` lives in, and the space
  * a surface's own pixel offsets convert into.
  */
@@ -440,8 +465,7 @@ export function hitTestSheet(
 
   for (const story of [page.header, page.footer]) {
     if (!story?.anchoredDrawings || story.anchoredDrawings.length === 0) continue;
-    const storyPoint = Object.freeze({ x: point.x - story.box.x, y: point.y - story.box.y });
-    const furnitureHit = hitAnchoredDrawingAtPoint(story.anchoredDrawings, storyPoint, page.index);
+    const furnitureHit = hitFurnitureDrawingAtSheetPoint(story, page.box, point, page.index);
     if (furnitureHit) return furnitureHit;
   }
 

@@ -30,7 +30,6 @@ import type { OoxmlPart, StoryScope } from '@docx-editor.dev/core/store';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { hitStoryDrawingAtPoint, type StoryDrawingLayer } from '../layout/story-drawing-hit.ts';
 import {
-  hitAnchoredDrawingAtPoint,
   hitTestFragments,
   hitTestPage,
   hitTestTurnedInlineDrawing,
@@ -729,7 +728,14 @@ export function storyHitYieldsToBody(
   const options = measurer ? { measurer } : {};
   const { story, local } = storyHit;
   const onStory =
-    hitAnchoredDrawingAtPoint(story.anchoredDrawings, local, page.index) !== null ||
+    hitStoryDrawingAtPoint(
+      story.anchoredDrawings,
+      story.box,
+      page.box,
+      { x: local.x + story.box.x, y: local.y + story.box.y },
+      page.index,
+      'any'
+    ) !== null ||
     hitTestFragments(layout, page.index, story.fragments, local, options)?.onGlyphs === true;
   if (storyIsActive && onStory) return false;
   // The page walk answers a text-free page from a neighbour's geometry; that is not on glyphs here.

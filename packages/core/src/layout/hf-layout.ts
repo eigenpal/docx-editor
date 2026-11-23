@@ -394,14 +394,14 @@ export function layoutHeaderFooterStory(
         marginLeft,
         marginRight,
         marginBottom,
-        // ON PURPOSE, unlike the body story: the established page/bottomMargin
-        // frames keep the AUTHORED margin here. `hfAnchorOnPageSheet` re-bases page-frame
-        // axes by subtracting `verticalFrameOrigin`, so this value cancels exactly. The
-        // vertical margin frame above carries the effective content-box geometry separately.
+        // ON PURPOSE, unlike the body: the AUTHORED margin. A record in page-content coordinates
+        // carries its negation as `verticalPageTop`, so consumers place it from the page box.
+        // The margin frame and the top band height carry the effective geometry.
         contentInsetTop: marginTop,
         contentInsetBottom: marginBottom,
         contentWidth,
         topMarginFrameOrigin: topMarginOrigin,
+        topMarginBandHeight: effectiveCtx?.contentInsetTop,
         ...(verticalMarginFrame ? { verticalMarginFrame } : {}),
         contentHeight: hfContentHeight,
         contentBandHeight: hfContentHeight,
