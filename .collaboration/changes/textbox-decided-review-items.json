@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "An accepted or rejected change in a text box stayed in the review items, on the deciding editor and on a collaborating peer. Typing beside a text box listed its changes twice.",
+  "after": "A decided change in a text box leaves the review items on every participant, and each change is listed once.",
+  "reason": "The change is in the local review-queue cache, which each participant derives from its own document tree. It sends no operations, writes no shared state, and changes no serialization. Peers already received the same tree; only the derived list was stale.",
+  "tests": [
+    "packages/core/src/editor/__tests__/review-textbox-changes.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-textbox-review-decisions.test.ts"
+  ],
+  "changeset": "textbox-decided-review-items",
+  "migration": null
+}

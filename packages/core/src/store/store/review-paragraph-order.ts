@@ -152,7 +152,8 @@ function nestedParagraphIdsOf(paragraph: OoxmlNode, depth: number): readonly str
 }
 
 /**
- * Whether a paragraph holds other paragraphs, such as a text box's. A non-empty memo entry from
+ * Whether a paragraph holds other paragraphs: text box content (`w:txbxContent`, reached through
+ * `wps:txbx` or `v:textbox`). A non-empty memo entry from
  * the deep paragraph order answers at once. Otherwise an iterative walk answers, with no depth
  * cap to cut it short and no memo entry written at a guessed depth.
  */

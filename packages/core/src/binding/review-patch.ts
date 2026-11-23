@@ -133,7 +133,7 @@ export function patchLocalReviewItems(
   // Comments anchored in the paragraph keep their cards, at the offsets its markers now hold.
   const comments = part ? remappedComments(cached, part, dirtyParagraphId) : new Map();
   if (!comments) return null;
-  // A paragraph outside the story's own order (one in a text box) has no place to splice into.
+  // A paragraph outside the story's own order (one in `w:txbxContent`) has no place to splice into.
   // The cached queue still holds only when the paragraph had no card and still has none: a
   // card it held, or a comment whose ends moved, needs the whole derivation instead.
   const dirtyRank = paragraphOrder.get(dirtyParagraphId);
@@ -543,8 +543,8 @@ export function localReviewPatchParagraphId(
   const paragraphId = change.dirty[0]!;
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return null;
-  // A text box in the paragraph: its cards name its own paragraphs, which a walk of this
-  // paragraph lists again under this one. The full derivation lists them once.
+  // Text box content (`w:txbxContent`) in the paragraph: its cards name its own paragraphs,
+  // which a walk of this paragraph lists again under this one. The full derivation lists them once.
   if (paragraphNestsParagraphs(paragraph)) return null;
   if (change.impact !== 'text-local') {
     // A property or list edit can add a formatting change that folds into a neighbor's card.

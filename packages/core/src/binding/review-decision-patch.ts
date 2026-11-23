@@ -132,7 +132,7 @@ function decidedParagraphs(
       child.kind !== 'paragraph' ||
       was.kind !== 'paragraph' ||
       child.id !== was.id ||
-      // A text box in the paragraph: its cards name its own paragraphs, not this one.
+      // Text box content (`w:txbxContent`) in the paragraph: its cards name its own paragraphs.
       paragraphNestsParagraphs(was) ||
       paragraphNestsParagraphs(child) ||
       !onlyRemovedRecords(previousPart, was, inputs.part, child) ||
