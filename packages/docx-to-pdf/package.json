@@ -51,7 +51,7 @@
   "dependencies": {
     "@docx-editor.dev/fonts": "~2.39.0",
     "@docx-editor.dev/pro": "~2.39.0",
-    "fontkit": "2.0.4",
+    "fontkit": "3.0.0",
     "pdf-lib": "1.17.1"
   },
   "devDependencies": {
