@@ -176,7 +176,9 @@
     "decrease": "फ़ॉन्ट आकार घटाएं",
     "increase": "फ़ॉन्ट आकार बढ़ाएं",
     "label": "फ़ॉन्ट का आकार",
-    "listLabel": "फ़ॉन्ट आकार"
+    "listLabel": "फ़ॉन्ट आकार",
+    "decreaseShortcut": "फ़ॉन्ट आकार घटाएं (Ctrl+Shift+<)",
+    "increaseShortcut": "फ़ॉन्ट आकार बढ़ाएं (Ctrl+Shift+>)"
   },
   "zoom": {
     "ariaLabel": "ज़ूम: {label}",

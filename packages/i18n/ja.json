@@ -267,7 +267,9 @@
     "decrease": "フォント サイズを小さくする",
     "increase": "フォント サイズを大きくする",
     "label": "フォント サイズ",
-    "listLabel": "フォント サイズの一覧"
+    "listLabel": "フォント サイズの一覧",
+    "decreaseShortcut": "フォント サイズを小さくする (Ctrl+Shift+<)",
+    "increaseShortcut": "フォント サイズを大きくする (Ctrl+Shift+>)"
   },
   "zoom": {
     "ariaLabel": "ズーム: {label}",

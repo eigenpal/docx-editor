@@ -20,10 +20,13 @@ import {
   cascadeRunProperties,
 } from './style-cascade.ts';
 
-/** The effective `w:rtl` and `w:cs` of a run or paragraph mark. */
+/** The effective `w:rtl`, `w:cs`, `w:sz`, and `w:szCs` of a run or paragraph mark. */
 interface RunScriptFlags {
   readonly rtl: boolean;
   readonly cs: boolean;
+  /** Half-points, or null when no level of the cascade states one. */
+  readonly sz: number | null;
+  readonly szCs: number | null;
 }
 
 type ScriptFlagsContext = (...args: Parameters<ComplexScriptContext>) => RunScriptFlags;
@@ -73,6 +76,31 @@ export function runDirectionFormattingContext(
     resolve(paragraph, container, mark, part, mode, filter).rtl;
 }
 
+/**
+ * The effective font size of a run or paragraph mark, in half-points, through the full cascade
+ * layout paints from: document defaults, table style, paragraph style, character style, and the
+ * run's own properties. A complex-script run reads only `w:szCs`, as layout paints it: its
+ * `w:sz` does not apply. Null when nothing states the size that applies.
+ */
+export function runFontSizeFormattingContext(
+  styles: OoxmlElement | null,
+  settings: OoxmlElement | null = null,
+  displayMode: FormattingDisplayMode = 'all-markup',
+  authorFilter?: FormattingRevisionAuthorFilter
+): (...args: Parameters<ComplexScriptContext>) => number | null {
+  const resolve = scriptFlagsContext(styles, settings);
+  return (paragraph, container, mark, part, mode = displayMode, filter = authorFilter) => {
+    const flags = resolve(paragraph, container, mark, part, mode, filter);
+    return flags.rtl || flags.cs ? flags.szCs : flags.sz;
+  };
+}
+
+/** A positive integer half-point size from a `w:sz` or `w:szCs` value, or null. */
+function halfPointsOf(value: string | undefined): number | null {
+  const parsed = value === undefined ? Number.NaN : Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 function createContext(
   styles: OoxmlElement | null,
   settings: OoxmlElement | null
@@ -104,14 +132,18 @@ function createContext(
       : cascadeRunProperties(inherited.runProperties, propertiesOf(container), table);
     let rtl = false;
     let cs = false;
+    let sz: number | null = null;
+    let szCs: number | null = null;
     for (const property of properties) {
-      if (property.localName !== 'rtl' && property.localName !== 'cs') continue;
       const value = property.attributes?.val;
+      if (property.localName === 'sz') sz = halfPointsOf(value) ?? sz;
+      if (property.localName === 'szCs') szCs = halfPointsOf(value) ?? szCs;
+      if (property.localName !== 'rtl' && property.localName !== 'cs') continue;
       const on = value === undefined || ['1', 'true', 'on'].includes(value);
       if (property.localName === 'rtl') rtl = on;
       else cs = on;
     }
-    return { rtl, cs };
+    return { rtl, cs, sz, szCs };
   };
 }
 

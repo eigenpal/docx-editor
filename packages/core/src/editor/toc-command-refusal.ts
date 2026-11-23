@@ -161,6 +161,8 @@ const TOC_POLICIES: Readonly<Record<EditorCommand['type'], TocPolicy>> = {
   setIndent: { kind: 'paragraphFormat', whole: true },
   setLineSpacing: PARAGRAPH_FORMAT,
   setMarkAttr: RUN_FORMAT,
+  increaseFontSize: RUN_FORMAT,
+  decreaseFontSize: RUN_FORMAT,
   setNoteProperties: NONE,
   setPageSetup: NONE,
   setParagraphDirection: PARAGRAPH_FORMAT,

@@ -176,7 +176,9 @@
     "decrease": "Perkecil ukuran font",
     "increase": "Perbesar ukuran font",
     "label": "Ukuran font",
-    "listLabel": "Ukuran font"
+    "listLabel": "Ukuran font",
+    "decreaseShortcut": "Perkecil ukuran font (Ctrl+Shift+<)",
+    "increaseShortcut": "Perbesar ukuran font (Ctrl+Shift+>)"
   },
   "zoom": {
     "ariaLabel": "Zoom: {label}",

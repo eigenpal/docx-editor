@@ -176,7 +176,9 @@
     "decrease": "Yazı tipi boyutunu küçült",
     "increase": "Yazı tipi boyutunu büyüt",
     "label": "Yazı tipi boyutu",
-    "listLabel": "Yazı tipi boyutları"
+    "listLabel": "Yazı tipi boyutları",
+    "decreaseShortcut": "Yazı tipi boyutunu küçült (Ctrl+Shift+<)",
+    "increaseShortcut": "Yazı tipi boyutunu büyüt (Ctrl+Shift+>)"
   },
   "zoom": {
     "ariaLabel": "Yakınlaştırma: {label}",

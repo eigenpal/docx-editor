@@ -267,7 +267,9 @@
     "decrease": "Riduci dimensione carattere",
     "increase": "Aumenta dimensione carattere",
     "label": "Dimensione carattere",
-    "listLabel": "Dimensioni carattere"
+    "listLabel": "Dimensioni carattere",
+    "decreaseShortcut": "Riduci dimensione carattere (Ctrl+Maiusc+<)",
+    "increaseShortcut": "Aumenta dimensione carattere (Ctrl+Maiusc+>)"
   },
   "zoom": {
     "ariaLabel": "Zoom: {label}",

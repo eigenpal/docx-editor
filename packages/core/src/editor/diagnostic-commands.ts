@@ -101,6 +101,8 @@ const COMMANDS: Readonly<Record<EditorCommand['type'], true>> = {
   setIndent: true,
   setLineSpacing: true,
   setMarkAttr: true,
+  increaseFontSize: true,
+  decreaseFontSize: true,
   setNoteProperties: true,
   setPageSetup: true,
   setParagraphDirection: true,

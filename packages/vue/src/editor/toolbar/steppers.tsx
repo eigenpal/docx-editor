@@ -5,6 +5,7 @@ import {
   AUTO_ZOOM_MODE,
   FIT_WIDTH_ZOOM_MODE,
   commandForSlotValue,
+  FONT_SIZE_PRESETS_PT,
   sameZoomMode,
   listenForOutsidePress,
 } from '@docx-editor.dev/core/editor';
@@ -15,26 +16,12 @@ import { useToolbarLabel } from './toolbar-context';
 import { guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartComponent } from './parts';
 import { useZoom } from '../useZoom';
+import { usePlatformShortcut } from '../usePlatformShortcut';
 
 const MIN_HALF_POINTS = 2;
 const MAX_HALF_POINTS = 3276;
-const FONT_SIZE_PRESETS_PT: readonly number[] = [
-  8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72,
-];
 
 const selectFontSizePt = (snapshot: EditorSnapshot) => snapshot.formatting?.fontSizePt ?? null;
-
-function nextPreset(current: number, presets: readonly number[], max: number): number {
-  for (const preset of presets) if (preset > current) return preset;
-  return Math.min(current + 1, max);
-}
-
-function prevPreset(current: number, presets: readonly number[], min: number): number {
-  for (let index = presets.length - 1; index >= 0; index -= 1) {
-    if (presets[index]! < current) return presets[index]!;
-  }
-  return Math.max(current - 1, min);
-}
 
 function parseTypedSize(text: string): number | null {
   const trimmed = text.trim().replace(/pt$/i, '').trim();
@@ -56,6 +43,9 @@ const StepperShell = defineComponent({
     canDecrease: { type: Boolean, required: true },
     canIncrease: { type: Boolean, required: true },
     title: { type: String, default: undefined },
+    /** Tooltips for the − and + buttons, such as a label that names the shortcut. */
+    decreaseTitle: { type: String, default: undefined },
+    increaseTitle: { type: String, default: undefined },
     className: { type: String, default: undefined },
   },
   emits: ['decrease', 'increase'],
@@ -73,6 +63,7 @@ const StepperShell = defineComponent({
           class="docx-toolbar__stepper-button"
           disabled={!props.canDecrease}
           aria-label={props.decreaseLabel}
+          title={props.decreaseTitle}
           onMousedown={guardToolbarMousedown}
           onClick={() => emit('decrease')}
         >
@@ -84,6 +75,7 @@ const StepperShell = defineComponent({
           class="docx-toolbar__stepper-button"
           disabled={!props.canIncrease}
           aria-label={props.increaseLabel}
+          title={props.increaseTitle}
           onMousedown={guardToolbarMousedown}
           onClick={() => emit('increase')}
         >
@@ -106,6 +98,7 @@ export const ToolbarFontSize = defineComponent({
     const sizePt = useEditorState(selectFontSizePt);
     const command = useEditorCommand('font.size');
     const label = useToolbarLabel();
+    const shortcut = usePlatformShortcut();
     const open = ref(false);
     const draft = ref<string | null>(null);
     const rootRef = ref<HTMLSpanElement | null>(null);
@@ -122,6 +115,16 @@ export const ToolbarFontSize = defineComponent({
 
     const apply = (points: number) => {
       applyHalfPoints(Math.min(MAX_HALF_POINTS, Math.max(MIN_HALF_POINTS, Math.round(points * 2))));
+    };
+
+    /** One ladder step. The engine steps each run from its own size, so mixed sizes step too. */
+    const step = (direction: 'increase' | 'decrease') => {
+      const editor = editorRef.value;
+      if (!editor) return;
+      const cmd = {
+        type: direction === 'increase' ? 'increaseFontSize' : 'decreaseFontSize',
+      } as const;
+      if (editor.can(cmd).ok) editor.exec(cmd);
     };
 
     const dismiss = (refocus: boolean) => {
@@ -146,7 +149,11 @@ export const ToolbarFontSize = defineComponent({
 
     return () => {
       if (props.hidden) return null;
-      const canStep = command.isEnabled.value && sizePt.value !== null;
+      // A mixed selection (`sizePt === null`) still steps: each run moves from its own size.
+      const halfPoints = sizePt.value === null ? null : Math.round(sizePt.value * 2);
+      const enabled = command.isEnabled.value;
+      const canDecrease = enabled && (halfPoints === null || halfPoints > MIN_HALF_POINTS);
+      const canIncrease = enabled && (halfPoints === null || halfPoints < MAX_HALF_POINTS);
       const documentValue = sizePt.value === null ? '—' : String(Math.round(sizePt.value * 2) / 2);
       const shown = draft.value ?? documentValue;
       const selectedPreset = sizePt.value === null ? null : Math.round(sizePt.value * 2) / 2;
@@ -170,14 +177,12 @@ export const ToolbarFontSize = defineComponent({
             groupLabel={label('fontSize.label')}
             decreaseLabel={label('fontSize.decrease')}
             increaseLabel={label('fontSize.increase')}
-            canDecrease={canStep && Math.round(sizePt.value! * 2) > MIN_HALF_POINTS}
-            canIncrease={canStep && Math.round(sizePt.value! * 2) < MAX_HALF_POINTS}
-            onDecrease={() =>
-              apply(prevPreset(sizePt.value ?? 0, FONT_SIZE_PRESETS_PT, MIN_HALF_POINTS / 2))
-            }
-            onIncrease={() =>
-              apply(nextPreset(sizePt.value ?? 0, FONT_SIZE_PRESETS_PT, MAX_HALF_POINTS / 2))
-            }
+            decreaseTitle={shortcut(label('fontSize.decreaseShortcut'))}
+            increaseTitle={shortcut(label('fontSize.increaseShortcut'))}
+            canDecrease={canDecrease}
+            canIncrease={canIncrease}
+            onDecrease={() => step('decrease')}
+            onIncrease={() => step('increase')}
           >
             {{
               default: () => (
@@ -216,13 +221,7 @@ export const ToolbarFontSize = defineComponent({
                     } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                       event.preventDefault();
                       open.value = true;
-                      if (sizePt.value !== null) {
-                        apply(
-                          event.key === 'ArrowDown'
-                            ? prevPreset(sizePt.value, FONT_SIZE_PRESETS_PT, MIN_HALF_POINTS / 2)
-                            : nextPreset(sizePt.value, FONT_SIZE_PRESETS_PT, MAX_HALF_POINTS / 2)
-                        );
-                      }
+                      step(event.key === 'ArrowDown' ? 'decrease' : 'increase');
                     }
                   }}
                   onBlur={() => {

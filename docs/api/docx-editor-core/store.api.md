@@ -2900,7 +2900,7 @@ export function mergedFontProperty(authored: readonly OoxmlProperty[], incoming:
 export function mergedMultiSettingProperty(authored: readonly OoxmlProperty[], incoming: OoxmlProperty): OoxmlProperty;
 
 // @public
-export function mergedParagraphMarkProperties(part: OoxmlPart, paragraphId: string, incoming: OoxmlProperty | readonly OoxmlProperty[]): OoxmlProperty[];
+export function mergedParagraphMarkProperties(part: OoxmlPart, paragraphId: string, incoming: RunPropertyIncoming): OoxmlProperty[];
 
 // @public
 export function mergedProperties(existing: readonly OoxmlProperty[], incoming: OoxmlProperty | readonly OoxmlProperty[]): OoxmlProperty[];
@@ -4797,7 +4797,22 @@ export interface RunPropertyEdit {
 }
 
 // @public
-export function runPropertyEdits(part: OoxmlPart, paragraphId: string, start: number, end: number, incoming: OoxmlProperty | readonly OoxmlProperty[], displayMode?: FormattingDisplayMode, authorFilter?: FormattingRevisionAuthorFilter): readonly RunPropertyEdit[];
+export function runPropertyEdits(part: OoxmlPart, paragraphId: string, start: number, end: number, incoming: RunPropertyIncoming, displayMode?: FormattingDisplayMode, authorFilter?: FormattingRevisionAuthorFilter): readonly RunPropertyEdit[];
+
+// @public
+export type RunPropertyIncoming = OoxmlProperty | readonly OoxmlProperty[] | RunPropertyResolver;
+
+// @public
+export type RunPropertyResolver = (target: RunPropertyTarget) => readonly OoxmlProperty[];
+
+// @public
+export interface RunPropertyTarget {
+    readonly authored: readonly OoxmlProperty[];
+    readonly container: OoxmlNode | undefined;
+    readonly mark: boolean;
+    readonly paragraph: OoxmlNode;
+    readonly part: OoxmlPart;
+}
 
 // @public
 export function runsCovering(part: OoxmlPart, paragraphId: string, start: number, end: number, displayMode?: FormattingDisplayMode, authorFilter?: FormattingRevisionAuthorFilter): readonly OoxmlNode[];

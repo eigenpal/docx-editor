@@ -128,6 +128,9 @@ export {
   runPropertyEdits,
   runsCovering,
   type RunPropertyEdit,
+  type RunPropertyIncoming,
+  type RunPropertyResolver,
+  type RunPropertyTarget,
 } from './direct-properties.ts';
 export {
   DEFAULT_FORMATTING_DISPLAY_MODE,

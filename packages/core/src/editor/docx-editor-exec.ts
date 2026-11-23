@@ -94,6 +94,14 @@ export function execEditorCommand(
       if (refused) return runFormatRefusal(refused);
       break;
     }
+    case 'increaseFontSize':
+    case 'decreaseFontSize': {
+      const refused = mounted.stepFontSize(
+        command.type === 'increaseFontSize' ? 'increase' : 'decrease'
+      );
+      if (refused) return runFormatRefusal(refused);
+      break;
+    }
     case 'clearFormatting':
       mounted.clearFormatting();
       break;

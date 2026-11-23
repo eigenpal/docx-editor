@@ -119,6 +119,8 @@ export function commandProtectionRefusal(
       break;
     case 'toggleMark':
     case 'setMarkAttr':
+    case 'increaseFontSize':
+    case 'decreaseFontSize':
     case 'applyFormatting':
     case 'pasteFormatting':
       intent = 'runFormat';

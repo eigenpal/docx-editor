@@ -39,6 +39,8 @@ const GROUPABLE = new Set<EditorCommand['type']>([
   'removeTabMark',
   'toggleMark',
   'setMarkAttr',
+  'increaseFontSize',
+  'decreaseFontSize',
   'setAlignment',
   'setParagraphDirection',
   'clearFormatting',

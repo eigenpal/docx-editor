@@ -176,7 +176,9 @@
     "decrease": "Diminuer la taille de la police",
     "increase": "Augmenter la taille de la police",
     "label": "Taille de police",
-    "listLabel": "Tailles de police"
+    "listLabel": "Tailles de police",
+    "decreaseShortcut": "Diminuer la taille de la police (Ctrl+Maj+<)",
+    "increaseShortcut": "Augmenter la taille de la police (Ctrl+Maj+>)"
   },
   "zoom": {
     "ariaLabel": "Zoom : {label}",
