@@ -129,7 +129,8 @@ export function undoKeepsCarried(
       for (const id of only !== null ? [only] : ids) keepEntries(id, null, depth + 1);
     }
   };
-  for (const { paragraph } of undonePlaces(registry, step)) {
+  for (const { paragraph, last } of undonePlaces(registry, step)) {
+    if (!last) continue;
     const mark = childAt(registry, paragraph, 'paragraphProperties');
     if (mark && holdsProposal(registry, mark, 'paragraphProperties'))
       keepEntries(paragraph, mark, 0);
@@ -238,15 +239,30 @@ function foreignProposals(
 export function undoneProposals(registry: DocumentRegistry, step: unknown): UndoneProposal[] {
   const originals = unlistedMarkElements(registry, step as Step);
   const out: UndoneProposal[] = [];
-  for (const { paragraph, target } of undonePlaces(registry, step)) {
+  for (const { paragraph, target, last } of undonePlaces(registry, step)) {
     const found: { node: LogicalId; level: Level; from: LogicalId }[] = [];
     foreignProposals(registry, paragraph, 'paragraphProperties', step as Step, found);
     for (const proposal of found) out.push({ ...proposal, kind: 'foreign', paragraph, target });
     const mark = childAt(registry, paragraph, 'paragraphProperties');
-    if (mark && holdsProposal(registry, mark, 'paragraphProperties'))
+    if (last && mark && holdsProposal(registry, mark, 'paragraphProperties'))
       out.push({ kind: 'carried', originals, mark, paragraph, target });
   }
   return out;
+}
+
+/** A paragraph an undo unlists, and where its text joins. */
+export interface UndonePlaceOf {
+  readonly paragraph: LogicalId;
+  /** The paragraph shown before it that the step did not list. */
+  readonly target: LogicalId;
+  /**
+   * Whether the entry listed after it is not a paragraph the step listed. A step lists its
+   * new paragraphs together, and only the last ends where the text the step split ended, so
+   * only its mark is the one the joined text keeps; the mark of one before it is the step's
+   * own break. Listing order tells this also when concurrent splits show the paragraphs in
+   * another order.
+   */
+  readonly last: boolean;
 }
 
 /**
@@ -254,10 +270,7 @@ export function undoneProposals(registry: DocumentRegistry, step: unknown): Undo
  * that the step did not list, where its text joins once the undo unlists it. A paragraph
  * shown first has no such place.
  */
-export function undonePlaces(
-  registry: DocumentRegistry,
-  step: unknown
-): { readonly paragraph: LogicalId; readonly target: LogicalId }[] {
+export function undonePlaces(registry: DocumentRegistry, step: unknown): UndonePlaceOf[] {
   const nodes = registry.schema.nodes;
   const listed = new Map<LogicalId, Set<LogicalId>>();
   for (const run of deleteSetRuns((step as Step)?.insertions)) {
@@ -280,16 +293,20 @@ export function undonePlaces(
       }
     }
   }
-  const out: { paragraph: LogicalId; target: LogicalId }[] = [];
+  const out: UndonePlaceOf[] = [];
   for (const [parent, ids] of listed) {
     const children = childIdsOf(registry, parent);
     const order = splitSiblingOrder(children, registry.splitSiblings.ranksOf(parent));
-    const shown = order ? order.map((index) => children[index]!) : children;
+    const shown = (order ? order.map((index) => children[index]!) : children).filter(
+      (id) => ids.has(id) || (registry.showsAsChild(id) && !!registry.inline.textOf(id))
+    );
     let target: LogicalId | null = null;
     for (const id of shown) {
-      if (!ids.has(id)) {
-        if (registry.showsAsChild(id) && registry.inline.textOf(id)) target = id;
-      } else if (target) out.push({ paragraph: id, target });
+      if (!ids.has(id)) target = id;
+      else if (target) {
+        const next = children[children.indexOf(id) + 1];
+        out.push({ paragraph: id, target, last: next === undefined || !ids.has(next) });
+      }
     }
   }
   return out;

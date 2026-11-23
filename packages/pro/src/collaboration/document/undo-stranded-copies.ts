@@ -48,14 +48,28 @@ export function undoneTexts(registry: DocumentRegistry, step: unknown): UndoneTe
   return out;
 }
 
+/** For each paragraph read, the identities of the characters an undo put back in it. */
+type RestoredCache = Map<LogicalId, ReadonlySet<Identity>>;
+
 /** Whether a listed paragraph other than `except` holds `id` as a character an undo put back. */
-function restoredElsewhere(registry: DocumentRegistry, id: Identity, except: LogicalId): boolean {
+function restoredElsewhere(
+  registry: DocumentRegistry,
+  id: Identity,
+  except: LogicalId,
+  cache: RestoredCache
+): boolean {
   for (const holder of registry.inline.follow.holdersOf(id)) {
     if (holder === except || registry.parentOf(holder) === null) continue;
-    const text = registry.inline.textOf(holder);
-    if (!text) continue;
-    const identities = textIdentities(text);
-    if (identities.ids.some((other, at) => other === id && identities.restored[at])) return true;
+    let restored = cache.get(holder);
+    if (!restored) {
+      const text = registry.inline.textOf(holder);
+      const identities = text ? textIdentities(text) : null;
+      restored = new Set(
+        identities?.ids.filter((other, at): other is Identity => !!other && identities.restored[at])
+      );
+      cache.set(holder, restored);
+    }
+    if (restored.has(id)) return true;
   }
   return false;
 }
@@ -70,12 +84,14 @@ export function removeStrandedCopies(
   texts: readonly UndoneText[]
 ): boolean {
   const stranded = new Map<LogicalId, Set<Identity>>();
+  const cache: RestoredCache = new Map();
   for (const { paragraph, target, shown } of texts) {
     if (registry.parentOf(paragraph) !== null || registry.parentOf(target) === null) continue;
     for (const id of shown) {
       const holder = registry.inline.follow.shownCopy(id);
       if (holder === null || holder === target || holder === paragraph) continue;
-      if (registry.parentOf(holder) === null || !restoredElsewhere(registry, id, holder)) continue;
+      if (registry.parentOf(holder) === null || !restoredElsewhere(registry, id, holder, cache))
+        continue;
       const ids = stranded.get(holder) ?? new Set<Identity>();
       ids.add(id);
       stranded.set(holder, ids);

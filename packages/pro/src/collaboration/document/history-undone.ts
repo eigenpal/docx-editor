@@ -21,12 +21,6 @@ import { relistSplitEntries } from './split-points.ts';
 import { isElementRecord, isNodeMap, NODE_UNDONE_FIELD } from './schema.ts';
 import { textDeletionsOf, type DeletedRun } from './paragraph-text-deletions.ts';
 import { removeStrandedCopies, undoneTexts, type UndoneText } from './undo-stranded-copies.ts';
-import {
-  containersOfStep,
-  removeEmptyContainers,
-  restoreEmptyContainers,
-  type RemovedContainer,
-} from './undo-empty-properties.ts';
 import { deleteSetRuns, fieldOf, structAt } from './yjs-items.ts';
 import { textMarksOf } from './paragraph-text-marks.ts';
 import { clearStaleRunProperties, INLINE_FIELD } from './paragraph-text.ts';
@@ -115,8 +109,6 @@ const HIDDEN_KEYS = 'docx-hidden-copies';
 const RELISTED = 'docx-relisted-proposals';
 /** On an undo's redo step: the copies of the undone split's proposals the undo unlisted. */
 const REMOVED_COPIES = 'docx-removed-proposal-copies';
-/** On an undo's redo step: the property containers the undo emptied and unlisted. */
-const REMOVED_CONTAINERS = 'docx-removed-empty-properties';
 /** A step with nothing for Yjs to reverse: only copies to hide or show again. */
 const COPIES_ONLY = 'docx-copies-only';
 /** The nodes whose deletion the undo that pushed this redo step took back. */
@@ -194,7 +186,6 @@ export function stepHistory(
   let proposals: readonly UndoneProposal[] = [];
   let texts: readonly UndoneText[] = [];
   let copies: readonly ProposalCopy[] = [];
-  let containers: readonly LogicalId[] = [];
   let formatted: ReadonlySet<Y.Text> = new Set();
   if (copiesOnly || (runs.length > 0 && nothingElse(registry, popped))) {
     stack.pop();
@@ -205,7 +196,6 @@ export function stepHistory(
         proposals = undoneProposals(registry, popped);
         texts = undoneTexts(registry, popped);
         copies = proposalCopies(registry, popped);
-        containers = containersOfStep(registry, popped);
         formatted = textsOfStep(registry, popped);
         noteUndoneParagraphTargets(registry.doc, registry.schema.nodes, popped, (write) =>
           registry.doc.transact(write, RESTORE_ORIGIN)
@@ -252,11 +242,6 @@ export function stepHistory(
     }
     const relisted = relistUndoneProposals(registry, proposals);
     for (const text of formatted) clearStaleRunProperties(text);
-    const emptied = removeEmptyContainers(registry, containers);
-    if (emptied.length > 0) {
-      pushed ??= pushCopiesOnly(opposite);
-      pushed.meta.set(REMOVED_CONTAINERS, emptied);
-    }
     if (relisted.length > 0) {
       pushed ??= pushCopiesOnly(opposite);
       pushed.meta.set(RELISTED, relisted);
@@ -266,8 +251,6 @@ export function stepHistory(
       if (back) restoreRelisted(registry, back);
       const copied = runsOf<ProposalCopy>(popped, REMOVED_COPIES);
       if (copied) restoreProposalCopies(registry, copied);
-      const emptied = runsOf<RemovedContainer>(popped, REMOVED_CONTAINERS);
-      if (emptied) restoreEmptyContainers(registry, emptied);
     }
     afterStep();
     if (direction === 'redo' && popped) {

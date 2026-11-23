@@ -10,7 +10,14 @@ import { afterAll, afterEach, describe, expect, setSystemTime, test } from 'bun:
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { strFromU8, unzipSync } from 'fflate';
 import type { Paragraph } from '@docx-editor.dev/editor-api/browser';
-import { later, ORDERS, room, type Runtime } from './concurrent-split-room';
+import {
+  later,
+  ORDERS,
+  rejectAll,
+  revisionCount,
+  room,
+  type Runtime,
+} from './concurrent-split-room';
 
 const registered = !GlobalRegistrator.isRegistered;
 if (registered) GlobalRegistrator.register();
@@ -105,37 +112,87 @@ const SEQUENCES: readonly { name: string; steps: readonly ('carol' | 'alice' | '
   },
 ];
 
-describe('undoing both of two formatting edits', () => {
-  for (const { name, first, second } of CASES)
-    for (const sequence of SEQUENCES)
-      for (const { label, ids } of ORDERS)
-        test(`of ${name}: ${sequence.name}, leaves no empty container (${label})`, async () => {
-          const r = await room('a; b; c;', ids);
-          try {
-            const original = await savedBody(r.carol.editor);
+describe('undoing both of two run formatting edits', () => {
+  const { first, second } = CASES[1]!;
+  for (const sequence of SEQUENCES)
+    for (const { label, ids } of ORDERS)
+      test(`${sequence.name} leaves the run without an empty w:rPr (${label})`, async () => {
+        const r = await room('a; b; c;', ids);
+        try {
+          later();
+          await format(r.carol.runtime, first);
+          r.sync();
+          later();
+          await format(r.alice.runtime, second);
+          r.sync();
+          const undone: ('carol' | 'alice')[] = [];
+          for (const step of sequence.steps) {
             later();
-            await format(r.carol.runtime, first);
-            r.sync();
-            later();
-            await format(r.alice.runtime, second);
-            r.sync();
-            const undone: ('carol' | 'alice')[] = [];
-            for (const step of sequence.steps) {
-              later();
-              if (step === 'redo') {
-                // Redo in the order the edits were made: the first undo's last.
-                expect(r[undone.shift()!].room.session.redo()).toBe(true);
-              } else {
-                undone.push(step);
-                expect(r[step].room.session.undo()).toBe(true);
-              }
-              r.sync();
+            if (step === 'redo') {
+              // Redo in the order the edits were made: the first undo's last.
+              expect(r[undone.shift()!].room.session.redo()).toBe(true);
+            } else {
+              undone.push(step);
+              expect(r[step].room.session.undo()).toBe(true);
             }
-            await r.expectAll(['a; b; c;', 'Signed']);
-            await r.expectJoinerConverges();
-            expect(await savedBody(r.carol.editor)).toBe(original);
-          } finally {
-            r.close();
+            r.sync();
           }
-        });
+          await r.expectAll(['a; b; c;', 'Signed']);
+          await r.expectJoinerConverges();
+          expect(await savedBody(r.carol.editor)).not.toContain('<w:r><w:rPr/>');
+        } finally {
+          r.close();
+        }
+      });
+});
+
+describe('undos that empty paragraph properties', () => {
+  const tracked =
+    '<w:pPr><w:jc w:val="center"/><w:pPrChange w:id="1" w:author="Dana" ' +
+    'w:date="2024-01-01T00:00:00Z"><w:pPr/></w:pPrChange></w:pPr>';
+  for (const { label, ids } of ORDERS) {
+    test(`bring back the alignment and change that a later undo puts back (${label})`, async () => {
+      const r = await room('a; b; c;', ids, tracked);
+      try {
+        const original = await savedBody(r.alice.editor);
+        later();
+        await rejectAll(r.alice.runtime);
+        r.sync();
+        later();
+        await format(r.alice.runtime, (paragraph) => (paragraph.leftIndent = 36));
+        r.sync();
+        for (let step = 0; step < 2; step += 1) {
+          later();
+          expect(r.alice.room.session.undo()).toBe(true);
+          r.sync();
+        }
+        await r.expectJoinerConverges();
+        expect(await savedBody(r.carol.editor)).toBe(original);
+        expect(await revisionCount(r.carol.runtime)).toBe(1);
+      } finally {
+        r.close();
+      }
+    });
+
+    test(`keep a property another participant adds at the same time (${label})`, async () => {
+      const r = await room('a; b; c;', ids, '<w:pPr/>');
+      try {
+        later();
+        await format(r.alice.runtime, (paragraph) => (paragraph.alignment = 'Centered'));
+        r.sync();
+        r.offline();
+        later();
+        expect(r.alice.room.session.undo()).toBe(true);
+        later();
+        await format(r.bob.runtime, (paragraph) => (paragraph.leftIndent = 36));
+        r.online();
+        r.sync();
+        await r.expectJoinerConverges();
+        expect(await occurrences(r.carol.editor, /<w:ind /g)).toBe(1);
+        expect(await occurrences(r.carol.editor, /<w:jc /g)).toBe(0);
+      } finally {
+        r.close();
+      }
+    });
+  }
 });

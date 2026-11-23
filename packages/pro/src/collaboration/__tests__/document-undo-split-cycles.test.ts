@@ -149,3 +149,75 @@ describe('undos and redos of tracked concurrent splits two rounds deep', () => {
           }
         });
 });
+
+describe('an undo of a tracked insert of several lines', () => {
+  const text = 'a; b; c; d; e; f; g; h;';
+  for (const lines of ['X1\nX2', 'X1\nX2\nX3', 'X1\nX2\nX3\nX4', '\nX1\nX2\nX3'])
+    for (const { label, ids } of ORDERS)
+      test(`of ${JSON.stringify(lines)} leaves no break proposal (${label})`, async () => {
+        const r = await room(text, ids);
+        try {
+          later();
+          await r.alice.runtime.run(async (context) => {
+            context.document.changeTrackingMode = 'TrackMineOnly';
+            const found = context.document.body.search('c;');
+            found.load('items');
+            await context.sync();
+            found.items[0]!.insertText(lines, 'After');
+            await context.sync();
+          });
+          r.sync();
+          later();
+          expect(r.alice.room.session.undo()).toBe(true);
+          r.sync();
+          await r.expectAll([text, 'Signed'], 0);
+          await r.expectJoinerConverges();
+          later();
+          expect(r.alice.room.session.redo()).toBe(true);
+          r.sync();
+          later();
+          await rejectAll(r.carol.runtime);
+          r.sync();
+          await r.expectAll([text, 'Signed'], 0);
+        } finally {
+          r.close();
+        }
+      });
+});
+
+describe('an undo of a tracked insert of several lines made at the same time as a split', () => {
+  const text = 'a; b; c; d; e; f; g; h;';
+  for (const lines of ['X1\nX2\nX3', '\n\n'])
+    for (const { label, ids } of ORDERS)
+      test(`of ${JSON.stringify(lines)} keeps only the split's break (${label})`, async () => {
+        const r = await room(text, ids);
+        try {
+          r.offline();
+          later();
+          await r.alice.runtime.run(async (context) => {
+            context.document.changeTrackingMode = 'TrackMineOnly';
+            const found = context.document.body.search('c;');
+            found.load('items');
+            await context.sync();
+            found.items[0]!.insertText(lines, 'After');
+            await context.sync();
+          });
+          later();
+          await splitAt(r.bob.runtime, 0, 'f; ');
+          later();
+          r.online();
+          r.sync();
+          later();
+          expect(r.alice.room.session.undo()).toBe(true);
+          r.sync();
+          await r.expectAll(['a; b; c; d; e; f; ', 'g; h;', 'Signed'], 1);
+          await r.expectJoinerConverges();
+          later();
+          await rejectAll(r.carol.runtime);
+          r.sync();
+          await r.expectAll([text, 'Signed'], 0);
+        } finally {
+          r.close();
+        }
+      });
+});

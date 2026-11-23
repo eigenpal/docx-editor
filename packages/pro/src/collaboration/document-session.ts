@@ -592,6 +592,8 @@ class DocumentSession implements DocumentCollaborationSession {
     const publish = () => {
       // Split proposals go where they show first, outside undo (`ProjectedJournal.listed`):
       // an undo of this edit must not put them back after another participant edited them.
+      // That listing is its own transaction, so it stays when the edit is then refused; it
+      // changes only where the proposals are listed, not what any participant sees.
       const placed =
         listed > 0
           ? publishOutsideUndo(this.undoManager, this.localOrigin, () =>
