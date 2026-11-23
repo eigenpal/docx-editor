@@ -422,8 +422,9 @@ function rowStartingPage(run: ReturnType<typeof session>, page: number): string 
   return fragment.rows.find((row) => !row.isHeaderRepeat)!.id;
 }
 
-test('targeted row edits at the start, middle, end and page breaks stay exact', () => {
-  for (const shape of ['plain', 'merged', 'split', 'banded', 'compound']) {
+// One test per shape: each edit lays the table out again and from nothing, and paints it twice.
+for (const shape of ['plain', 'merged', 'split', 'banded', 'compound'])
+  test(`targeted row edits at the start, middle, end and page breaks of the ${shape} table stay exact`, () => {
     const run = session(shape);
     const tableId = () => tableOf(run.part).id;
     const ids = () => rowsOf(run.part).map((row) => row.id);
@@ -447,8 +448,7 @@ test('targeted row edits at the start, middle, end and page breaks stay exact', 
         run.apply({ op: 'deleteTableRow', tableId: tableId(), rowId }, `${shape} delete ${where}`)
       ).toBe(true);
     }
-  }
-}, 60_000);
+  }, 60_000);
 
 test('a row insert keeps the pages above it and moves the rows below without placing them again', () => {
   const run = session('plain');

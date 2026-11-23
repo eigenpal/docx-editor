@@ -139,6 +139,35 @@ test('fail-fast stops dispatch after the first failure; normal mode reports both
     expect(floodReport.length).toBeLessThan(8 * 1024 * 1024);
     rmSync(join(root, 'packages', 'flood.test.ts'));
 
+    // A file that runs past the notice threshold prints its path once while it still runs, so a
+    // job cancelled at its time limit names the file that used the time.
+    writeFileSync(
+      join(root, 'packages', 'slow.test.ts'),
+      `import { test } from 'bun:test';
+       test('sleeps', async () => { await Bun.sleep(1500); });`
+    );
+    writeFileSync(join(root, 'slow.txt'), 'packages/slow.test.ts\n');
+    const slow = spawnSync(
+      process.execPath.includes('bun') ? 'node' : process.execPath,
+      [
+        join(root, 'scripts/test/run-parallel.mjs'),
+        '--jobs',
+        '1',
+        '--only',
+        join(root, 'slow.txt'),
+      ],
+      {
+        encoding: 'utf8',
+        timeout: 15000,
+        env: { ...process.env, DOCX_TEST_SLOW_FILE_NOTICE_MS: '300' },
+      }
+    );
+    expect(slow.status).toBe(0);
+    expect(
+      slow.stdout.match(/SLOW packages\/slow\.test\.ts still running after \d+s/g)
+    ).toHaveLength(1);
+    rmSync(join(root, 'packages', 'slow.test.ts'));
+
     const emptyExclude = run('--exclude=');
     expect(emptyExclude.status).toBe(1);
     expect(emptyExclude.stderr).toContain('non-empty path prefix');

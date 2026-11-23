@@ -408,7 +408,9 @@ jobs:
         shard: ['1/6', '2/6', '3/6', '4/6', '5/6', '6/6']
     name: unit (${{ matrix.shard }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Pushes also run the collaboration scenarios and replays, 150 to 550 seconds per file, so
+    # their shards get more time than pull request shards.
+    timeout-minutes: ${{ github.event_name == 'push' && 30 || 20 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7

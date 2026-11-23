@@ -82,6 +82,13 @@ const TEST_FILE = /\.(test|spec)\.(ts|tsx|js|jsx|mjs|cjs)$/;
  */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/**
+ * CI output names only failing files, and a job that reaches its time limit is cancelled before
+ * the runner reports anything. A file still running after this long prints its path once, so the
+ * log of a cancelled job names the files that used its time.
+ */
+const SLOW_FILE_NOTICE_MS = Number(process.env.DOCX_TEST_SLOW_FILE_NOTICE_MS) || 5 * 60 * 1000;
+
 const GiB = 1024 ** 3;
 
 /**
@@ -512,7 +519,7 @@ async function main() {
   let done = 0;
   let pausedLogged = false;
 
-  /** file → { expected, rss, unknown } for everything dispatched and not yet finished. */
+  /** file → { expected, rss, unknown, started, noticed } for everything dispatched and not yet finished. */
   const inFlight = new Map();
 
   function expectedFor(file) {
@@ -538,7 +545,7 @@ async function main() {
   function take(index) {
     const [file] = queue.splice(index, 1);
     const { bytes, unknown } = expectedFor(file);
-    const entry = { expected: bytes, rss: 0, unknown };
+    const entry = { expected: bytes, rss: 0, unknown, started: Date.now(), noticed: false };
     inFlight.set(file, entry);
     return { file, entry };
   }
@@ -629,7 +636,22 @@ async function main() {
     }
   }
 
+  // Measured from dispatch, so a retried file counts both of its runs.
+  const slowNotice = setInterval(
+    () => {
+      const now = Date.now();
+      for (const [file, entry] of inFlight) {
+        if (entry.noticed || now - entry.started < SLOW_FILE_NOTICE_MS) continue;
+        entry.noticed = true;
+        const seconds = Math.round((now - entry.started) / 1000);
+        const lead = process.stdout.isTTY ? '\n' : '';
+        process.stdout.write(`${lead}SLOW ${file} still running after ${seconds}s\n`);
+      }
+    },
+    Math.min(SLOW_FILE_NOTICE_MS, 10_000)
+  );
   await Promise.all(Array.from({ length: Math.min(maxWidth, total) }, (_, index) => worker(index)));
+  clearInterval(slowNotice);
   if (process.stdout.isTTY) process.stdout.write(`\r${''.padEnd(96)}\r`);
   if (!filteredRun) writeDurations(durations);
   if (durationsOut && !filteredRun) {
