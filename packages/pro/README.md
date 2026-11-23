@@ -70,6 +70,8 @@ npm install @docx-editor.dev/pro yjs y-webrtc
 npm install @docx-editor.dev/pro yjs @hocuspocus/provider
 ```
 
+For a Hocuspocus room server, add `collaborationServerExtension` to the server's `extensions`. It refuses clients of another collaboration format, stores rooms through your storage, and upgrades saved rooms when it loads them. See [Run a room server](https://www.docx-editor.dev/docs/2.x/pro/collaboration#run-a-room-server).
+
 Start with the [real-time collaboration quickstart](https://www.docx-editor.dev/docs/2.x/collaboration). Use the [collaboration reference](https://www.docx-editor.dev/docs/2.x/pro/collaboration) for room lifecycles, presence, recovery, and limits.
 
 ## Chrome or hooks

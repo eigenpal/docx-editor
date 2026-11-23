@@ -15,6 +15,8 @@ export const FIELDS = [
 ];
 export const VERSION_SOURCE = 'packages/pro/src/collaboration/document-compatibility.ts';
 export const GUIDE = 'docs/site/content/pro/collaboration-versions.mdx';
+/** The release table as data, for a deployment check to read. */
+export const RELEASE_DATA = 'docs/site/data/collaboration-releases.json';
 export const read = (file) => readFileSync(resolve(ROOT, file), 'utf8');
 export const json = (file) => JSON.parse(read(file));
 export const sha = (value) => createHash('sha256').update(value).digest('hex');

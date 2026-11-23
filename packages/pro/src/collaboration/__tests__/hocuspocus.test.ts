@@ -17,6 +17,8 @@ import {
 import { HOCUSPOCUS_PROVIDER_FOR_TESTS } from '../hocuspocus-test-provider.ts';
 import { collaborationDocx } from './support.ts';
 import { createCollaborationState } from '../server-document.ts';
+import { COLLABORATION_FORMAT_VERSION } from '../document-format.ts';
+import { COLLABORATION_FORMAT_PARAMETER } from '../format-parameter.ts';
 
 const ROOM_ID = 'aaaaaaaaaaaaaaaaaaaaaaaaaa';
 const URL = 'wss://collab.example.test';
@@ -249,6 +251,31 @@ describe('createHocuspocusCollaboration', () => {
       )
     );
     expect(provider?.init.token).toBe(token);
+    room.destroy();
+  });
+
+  test("the provider URL names this build's collaboration format, for the server to check", async () => {
+    let provider: FakeProvider | undefined;
+    const room = await createHocuspocusCollaboration(
+      optionsWithFactory(
+        {
+          url: `${URL}/rooms/?tenant=a`,
+          roomId: ROOM_ID,
+          identity: IDENTITY,
+          bootstrap: { kind: 'create', document: collaborationDocx() },
+        },
+        (init) => {
+          provider = syncedProvider(init);
+          return provider;
+        }
+      )
+    );
+    const sent = new globalThis.URL(provider!.init.url);
+    expect(sent.searchParams.get(COLLABORATION_FORMAT_PARAMETER)).toBe(
+      COLLABORATION_FORMAT_VERSION
+    );
+    expect(sent.searchParams.get('tenant')).toBe('a');
+    expect(sent.pathname).toBe('/rooms');
     room.destroy();
   });
 

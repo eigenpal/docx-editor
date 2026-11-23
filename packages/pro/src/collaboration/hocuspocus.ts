@@ -25,6 +25,7 @@ import {
 import { isRoomGenerationClose, roomGenerationMessage } from './room-generation.ts';
 import { validateRoomId } from './room-id.ts';
 import { CollaborationSchemaError } from './errors.ts';
+import { withCollaborationFormatParameter } from './format-parameter.ts';
 import { HOCUSPOCUS_PROVIDER_FOR_TESTS } from './hocuspocus-test-provider.ts';
 import type { CollaborationBootstrap } from './types.ts';
 
@@ -180,7 +181,8 @@ export async function createHocuspocusCollaboration(
   // The provider emits `open` before it sends its token and starts the sync.
   const connectProvider = (): OwnedHocuspocusProvider => {
     const created = providerFactory({
-      url: options.url,
+      // The server can refuse a client of another format in `onAuthenticate`, before any sync.
+      url: withCollaborationFormatParameter(options.url),
       name: roomId,
       document: ydoc,
       awareness,

@@ -17,6 +17,9 @@ export function assertDocumentCollaborationCompatibility(versions: unknown): voi
 export function checkCollaborationRoomGeneration(payload: CollaborationRoomGatePayload): void;
 
 // @public
+export const COLLABORATION_FORMAT_PARAMETER = "collaborationFormat";
+
+// @public
 export const COLLABORATION_FORMAT_VERSION: string;
 
 // @public
@@ -142,11 +145,27 @@ export interface CollaborationResourceUsage {
 }
 
 // @public
+export interface CollaborationRoomExport {
+    readonly docx: Uint8Array;
+    readonly stateDigest: string;
+}
+
+// @public
 export interface CollaborationRoomGatePayload {
     readonly context: object;
     readonly document: Y.Doc;
     readonly update: Uint8Array;
 }
+
+// @public
+export interface CollaborationRoomStorage {
+    backUp?(roomName: string, state: Uint8Array): Promise<void> | void;
+    load(roomName: string): Promise<StoredCollaborationRoom | null> | StoredCollaborationRoom | null;
+    save(roomName: string, room: StoredCollaborationRoom): Promise<void> | void;
+}
+
+// @public
+export type CollaborationRoomUpgradeRefusal = 'disabled' | 'no-export' | 'stale-export' | 'too-large' | 'check-failed' | 'error';
 
 // @public
 export class CollaborationSchemaError extends Error {
@@ -155,6 +174,79 @@ export class CollaborationSchemaError extends Error {
     detail?: string | undefined);
     readonly code: CollaborationFailureCode;
     readonly detail?: string | undefined;
+}
+
+// @public
+export interface CollaborationServerConnection {
+    readonly documentName: string;
+    readonly requestParameters: URLSearchParams;
+    readonly token: string;
+}
+
+// @public
+export type CollaborationServerEvent = {
+    readonly from: string;
+    readonly hidden: number;
+    readonly hiddenAt: readonly CollaborationMigrationPosition[];
+    readonly roomName: string;
+    readonly to: string;
+    readonly type: 'room-upgraded';
+} | {
+    readonly changedParts?: readonly string[];
+    readonly code?: string;
+    readonly differencesAt?: readonly CollaborationMigrationPosition[];
+    readonly failed?: readonly CollaborationMigrationCheck[];
+    readonly reason: CollaborationRoomUpgradeRefusal;
+    readonly roomName: string;
+    readonly type: 'room-upgrade-refused';
+} | {
+    readonly code: string;
+    readonly roomName: string;
+    readonly type: 'room-export-failed';
+};
+
+// @public
+export interface CollaborationServerExtension {
+    afterLoadDocument(payload: CollaborationServerLoad): Promise<void>;
+    afterUnloadDocument(payload: {
+        readonly documentName: string;
+    }): Promise<void>;
+    beforeHandleMessage(payload: CollaborationRoomGatePayload): Promise<void>;
+    beforeUnloadDocument(payload: CollaborationServerStore): Promise<void>;
+    readonly extensionName: string;
+    onAuthenticate(connection: CollaborationServerConnection): Promise<void>;
+    onLoadDocument(payload: CollaborationServerLoad): Promise<void>;
+    onStoreDocument?(payload: CollaborationServerStore): Promise<void>;
+    readonly priority: number;
+}
+
+// @public
+export function collaborationServerExtension(options?: CollaborationServerOptions): CollaborationServerExtension;
+
+// @public
+export interface CollaborationServerLoad {
+    readonly context: unknown;
+    readonly document: Y.Doc;
+    readonly documentName: string;
+}
+
+// @public
+export interface CollaborationServerOptions {
+    readonly compactOnLoad?: boolean | CompactCollaborationStateOptions;
+    readonly createRoom?: (request: CreateCollaborationRoomRequest) => Promise<Uint8Array | null> | Uint8Array | null;
+    readonly exportIntervalMs?: number;
+    readonly maxUpgradeStateBytes?: number;
+    readonly onEvent?: (event: CollaborationServerEvent) => void;
+    readonly readClientFormat?: (connection: CollaborationServerConnection) => unknown;
+    readonly storage?: CollaborationRoomStorage;
+    readonly upgradeOnLoad?: boolean;
+}
+
+// @public
+export interface CollaborationServerStore {
+    readonly clientsCount?: number;
+    readonly document: Y.Doc;
+    readonly documentName: string;
 }
 
 // @public
@@ -199,6 +291,12 @@ export function compactCollaborationState(state: Uint8Array, options?: CompactCo
 // @public
 export interface CompactCollaborationStateOptions {
     readonly minimumGain?: number;
+}
+
+// @public
+export interface CreateCollaborationRoomRequest {
+    readonly context: unknown;
+    readonly roomName: string;
 }
 
 // @public
@@ -281,6 +379,12 @@ export function readCollaborationRoomGeneration(document: Y.Doc): string;
 
 // @public @deprecated
 export const SCHEMA_VERSION = 1;
+
+// @public
+export interface StoredCollaborationRoom {
+    readonly export: CollaborationRoomExport | null;
+    readonly state: Uint8Array;
+}
 
 // @public @deprecated
 export interface TextCollaborationSession extends EditorCollaborationSession {

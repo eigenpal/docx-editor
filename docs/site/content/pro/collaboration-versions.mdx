@@ -14,9 +14,22 @@ Collaboration has its own format version, separate from the package version. It 
 
 The four numbers of a value such as `docx-collaboration:1.5.3.1` identify the synchronization rules, storage structure, conflict-repair rules, and document model.
 
+## Upgrade at a glance
+
+Most releases keep the collaboration format, and you deploy them as any other release. For a release that changes the format, do the following:
+
+1. **Find out before you deploy.** Compare the format of your release and the target release in the [release table](#choose-the-upgrade-path) or in the [release data](#read-the-release-table-as-data).
+2. **Deploy clients and servers together.** A client and a room server of different formats do not synchronize. Stop the room servers of the earlier release before the servers of the target release start.
+3. **Let rooms upgrade.** A server with [`collaborationServerExtension`](/docs/2.x/pro/collaboration#run-a-room-server) and room storage upgrades each room when it loads the room. See [Rooms upgrade when the server loads them](#rooms-upgrade-when-the-server-loads-them).
+4. **Migrate the other rooms in a job.** Rooms without a current export, and rooms too large to upgrade on load, need the procedure in [Upgrade saved rooms](#upgrade-saved-rooms).
+
+What each participant sees: a browser tab on the earlier release reports that an upgrade is required and stops synchronizing. The participant saves a copy if edits are pending, and reloads. Collaboration undo history starts afresh in an upgraded room.
+
 ## Check clients before synchronization
 
-Send the imported format version unchanged with your connection request. For Hocuspocus, encode it with the access token in a token callback:
+On a Hocuspocus server, [`collaborationServerExtension`](/docs/2.x/pro/collaboration#run-a-room-server) does this check. The provider hooks and `createHocuspocusCollaboration` send the format in the `collaborationFormat` query parameter, so you write no code for it.
+
+To run the check yourself, send the imported format version unchanged with your connection request. For example, encode it with the access token in a token callback:
 
 ```ts
 import { COLLABORATION_FORMAT_VERSION } from '@docx-editor.dev/pro/collaboration';
@@ -104,6 +117,110 @@ export function loadRoom(live: Y.Doc, snapshot: Uint8Array): void {
 - `readCollaborationFormatVersion` is a cheap metadata read, even for incompatible rooms. `readCollaborationDocument` validates content with a full export.
 - A failure leaves the snapshot intact. Treat unrecognized decoding errors as damaged data.
 - An unseeded room throws `not-initialized`, and missing version data throws `collaboration-format-mismatch`. Create an empty room only when storage confirms none exists.
+
+## Rooms upgrade when the server loads them
+
+A room server with `collaborationServerExtension` and room storage keeps a DOCX export beside each room state. Every release reads a DOCX. When a server of a later format loads the room, it creates the room again from that export, checks the new room against the export, and stores it. You install no earlier release and run no migration job.
+
+```ts
+import { Server } from '@hocuspocus/server';
+import {
+  collaborationServerExtension,
+  type CollaborationRoomStorage,
+} from '@docx-editor.dev/pro/collaboration';
+
+// Your storage, as in "Run a room server". `backUp` keeps the earlier state.
+declare const storage: CollaborationRoomStorage;
+
+const server = new Server({
+  extensions: [
+    collaborationServerExtension({
+      storage,
+      onEvent(event) {
+        // Codes, part names, and positions. Never document text.
+        console.log(JSON.stringify(event));
+      },
+    }),
+  ],
+});
+```
+
+The upgrade runs when the first participant opens the room, before that participant synchronizes. The room keeps its ID, storage key, and links. A current-release tab that still holds the earlier room gets `room-generation-changed` and rejoins.
+
+The server upgrades a room only when all of these are true:
+
+| Condition | Otherwise the event reports |
+| --- | --- |
+| `upgradeOnLoad` is not `false`. | `disabled` |
+| Storage holds an export of the room. | `no-export` |
+| The export's digest equals the SHA-256 of the stored state. | `stale-export` |
+| The state is not larger than `maxUpgradeStateBytes`. | `too-large` |
+| The new room equals the export in every XML part, media file, and link target. | `check-failed` |
+| The state and the export can be read. | `error`, with a code |
+
+A room that is not upgraded stays unchanged in storage. The server refuses its connections with `collaboration-format-mismatch`, and sends a `room-upgrade-refused` event to `onEvent`. Migrate that room with [Migrate rooms on a server](#migrate-rooms-on-a-server).
+
+- **Adopt before the format changes.** A room gets its export when the server first loads or stores it with the extension. A room that nobody opens before the next format change has no export. To give every room an export, run [Export existing rooms once](#export-existing-rooms-once).
+- **Implement `backUp`.** The extension passes it the earlier state before it stores the upgraded room. Keep that state until you accept the upgrade. To roll back, follow [Roll back a migration](#roll-back-a-migration).
+- **Stop the earlier servers first.** An earlier server that still holds a room stores it later, over the upgraded room. In Kubernetes, use the `Recreate` strategy for the room server, or scale it to zero before the rollout.
+- **Keep one server process for each room.** Two servers that load one earlier-format room at the same time each create a room, and the later store replaces the other.
+- **Large rooms block the server.** An upgrade runs on the server's thread, about 0.4 seconds for each MiB of state on a laptop. The default limit is 1 MiB. Migrate larger rooms in a job.
+- **The check compares the new room with the export.** It cannot read the earlier state. Store each export with the digest that arrives with it, so that an export of another state is never used.
+- **Pending edits do not transfer.** Ask users with offline edits to reconnect before the deployment, as [Help users recover](#help-users-recover) describes.
+
+### Export existing rooms once
+
+Rooms that you stored before you added the extension have no export. Give each one an export with the release that serves it, while the room servers are stopped or the room is closed:
+
+```ts
+import { createHash } from 'node:crypto';
+import * as Y from 'yjs';
+import {
+  readCollaborationDocument,
+  type CollaborationRoomStorage,
+} from '@docx-editor.dev/pro/collaboration';
+
+export async function exportRoomOnce(storage: CollaborationRoomStorage, roomName: string) {
+  const stored = await storage.load(roomName);
+  if (!stored) return 'no-room';
+  const stateDigest = createHash('sha256').update(stored.state).digest('hex');
+  if (stored.export?.stateDigest === stateDigest) return 'current';
+  const room = new Y.Doc();
+  try {
+    Y.applyUpdate(room, stored.state);
+    // Throws `CollaborationSchemaError` for a room that forms no document.
+    const docx = readCollaborationDocument(room);
+    await storage.save(roomName, { state: stored.state, export: { docx, stateDigest } });
+    return 'exported';
+  } finally {
+    room.destroy();
+  }
+}
+```
+
+The server also does this when it loads a room of its own format: a missing or stale export is replaced. The job is for rooms that nobody opens before the format changes.
+
+### Read the release table as data
+
+The table in the next section is also a JSON file, [`collaboration-releases.json`](https://github.com/eigenpal/docx-editor/blob/main/docs/site/data/collaboration-releases.json). Each entry holds a `version`, its `format`, and `formatChanged`, which is `true` when the format differs from the release before it. To fail a deployment pipeline when an upgrade changes the format without a plan, compare the two formats:
+
+```ts
+interface Release {
+  version: string;
+  format: string;
+  formatChanged: boolean;
+}
+
+/** True when rooms saved by `from` need an upgrade before `to` serves them. */
+export function roomsNeedUpgrade(releases: Release[], from: string, to: string): boolean {
+  const format = (version: string) => {
+    const release = releases.find((entry) => entry.version === version);
+    if (!release) throw new Error(`Unknown release ${version}`);
+    return release.format;
+  };
+  return format(from) !== format(to);
+}
+```
 
 ## Choose the upgrade path
 
@@ -372,6 +489,36 @@ If storage keeps a list of updates, merge it with `Y.mergeUpdates` in the earlie
 #### Plan the migration window
 
 Memory grows with paragraph count. Test your largest rooms, and run one room at a time per worker, with a heap limit. For measurement commands, see the [migration memory benchmark](https://github.com/eigenpal/docx-editor/tree/main/benchmarks/collaboration-server#measure-room-migration-memory).
+
+#### Automate the migration in a deployment
+
+The procedure fits a deployment pipeline: two jobs between the stop and the start of the room servers. This example uses Kubernetes. `export.ts` and `migrate.ts` are your scripts from [Export rooms with the earlier build](#export-rooms-with-the-earlier-build) and [Migrate each room](#migrate-each-room), in images of the earlier and the target release:
+
+```bash
+set -euo pipefail
+
+# 1. Stop every room server, so that no room changes after its export.
+kubectl scale deployment/collaboration --replicas=0
+kubectl wait --for=delete pod --selector=app=collaboration --timeout=5m
+
+# 2. Export each room with the earlier release.
+kubectl apply --filename=job-export.yaml           # image: collaboration:2.37.0
+kubectl wait --for=condition=complete job/room-export --timeout=30m
+
+# 3. Check every room with the target release. No room changes.
+kubectl apply --filename=job-migrate-dry-run.yaml  # image: collaboration:2.39.0
+kubectl wait --for=condition=complete job/room-migrate-dry-run --timeout=30m
+
+# 4. Migrate, then start the room servers of the target release.
+kubectl apply --filename=job-migrate.yaml
+kubectl wait --for=condition=complete job/room-migrate --timeout=30m
+kubectl set image deployment/collaboration server=collaboration:2.39.0
+kubectl scale deployment/collaboration --replicas=3
+```
+
+- Make each job exit with a nonzero status unless every room is `current`, `migrated`, or `would-migrate`. A failed job then leaves the servers stopped, with every room unchanged or backed up.
+- `kubectl wait` also returns when its timeout ends. Set each timeout from a rehearsal on copies of your rooms.
+- Skip steps 2 to 4 when the formats of the two releases are equal. See [Read the release table as data](#read-the-release-table-as-data).
 
 #### Roll back a migration
 

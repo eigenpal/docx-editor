@@ -64,6 +64,16 @@ For incompatible changes, increment each affected field. Never decrease a field 
 
 A format change requires at least a minor package release and a `Breaking collaboration upgrade` notice. This project tracks room compatibility separately from package versions. A minor release can therefore require room migration. Public document APIs retain their separate version policy and Office.js compatibility requirements.
 
+### Combine format changes
+
+Each release that changes the format makes every operator repeat an upgrade: clients and servers deploy together, saved rooms upgrade, and open browser tabs reload. Keep these releases rare.
+
+1. Look for a compatible design first. A fix that released readers already understand keeps the format, as [Why a bug fix can require a migration](#why-a-bug-fix-can-require-a-migration) describes.
+2. Before you increment a field, look in `.collaboration/changes/` for `migration-required` decisions that are not released yet. Ship your change in the same release as those changes. Several changes share one increment.
+3. If the previous format change shipped less than 30 days ago, state in the PR body why your change cannot wait for the next one.
+
+Never record a `migration-required` change as `compatible` to avoid a format change. Participants of the two versions would then corrupt each other's rooms.
+
 ## Contributor workflow
 
 ### Before you begin
@@ -353,4 +363,6 @@ For the complete procedure, see [Upgrade saved rooms](../site/content/pro/collab
 
 Before replacement-room editing starts, rollback can route users to the original room. After editing starts, preserve and reconcile those edits before rollback. Never copy queued updates between the rooms.
 
-This process provides policy, automated checks, and a migration rehearsal. Operators perform production migration. It does not add a production migration command or negotiate compatibility between different formats.
+A Hocuspocus server with `collaborationServerExtension` and room storage keeps a DOCX export beside each room, and upgrades a room from that export when it loads the room. See [Rooms upgrade when the server loads them](../site/content/pro/collaboration-versions.mdx#rooms-upgrade-when-the-server-loads-them). Rooms without a current export still need the procedure above.
+
+This process provides policy, automated checks, and a migration rehearsal. Operators perform production migration. It does not negotiate compatibility between different formats.
