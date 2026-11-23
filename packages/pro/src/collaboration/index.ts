@@ -52,6 +52,21 @@ export {
   type MigrateCollaborationRoomOptions,
 } from './room-migration.ts';
 export {
+  collaborationServerExtension,
+  type CollaborationRoomExport,
+  type CollaborationRoomStorage,
+  type CollaborationRoomUpgradeRefusal,
+  type CollaborationServerConnection,
+  type CollaborationServerEvent,
+  type CollaborationServerExtension,
+  type CollaborationServerLoad,
+  type CollaborationServerOptions,
+  type CollaborationServerStore,
+  type CreateCollaborationRoomRequest,
+  type StoredCollaborationRoom,
+} from './collaboration-server.ts';
+export { COLLABORATION_FORMAT_PARAMETER } from './format-parameter.ts';
+export {
   readCollaborationResourceUsage,
   type CollaborationResourceUsage,
 } from './resource-usage.ts';

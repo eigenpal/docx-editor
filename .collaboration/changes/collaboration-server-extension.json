@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A Hocuspocus server wires the client format check, the room document preparation, the room generation check, the saved-room check, and storage in separate hooks. The provider sends no collaboration format, so each application writes its own token envelope.",
+  "after": "collaborationServerExtension does these checks in one extension and stores each room with a DOCX export and the digest of the exported state. The provider names its collaboration format in a query parameter of the server URL. A server with room storage creates a stored room of an earlier format again from its export when it loads the room.",
+  "reason": "Shared nodes, text offsets, operations, synchronization messages, and repair rules are unchanged. The extension calls the released server functions in their documented hooks. The query parameter is read only at admission, and released servers ignore it. A server with the extension refuses a released client that sends no parameter, so clients update first, or the server admits a missing value through readClientFormat. An upgraded room is seeded by migrateCollaborationRoom, as the documented migration does.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/collaboration-server.test.ts",
+    "packages/pro/src/collaboration/__tests__/collaboration-server-rooms.test.ts",
+    "packages/pro/src/collaboration/__tests__/format-parameter.test.ts",
+    "packages/pro/src/collaboration/__tests__/hocuspocus.test.ts"
+  ],
+  "changeset": "collaboration-server-extension",
+  "migration": null
+}

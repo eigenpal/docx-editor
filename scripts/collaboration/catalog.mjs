@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { resolve, join } from 'node:path';
+import { dirname, resolve, join } from 'node:path';
 import {
   CATALOG,
   ROOT,
@@ -23,6 +23,7 @@ import {
   sha,
   writeJSON,
   GUIDE,
+  RELEASE_DATA,
   FIELDS,
   formatOf,
 } from './common.mjs';
@@ -134,12 +135,34 @@ export function table(value = catalog()) {
     '{/* collaboration-releases:end */}',
   ].join('\n');
 }
+/**
+ * The release table as data: each release, its collaboration format, and whether its saved
+ * rooms differ in format from those of the release before it. A deployment check reads it to
+ * learn whether an upgrade between two releases changes the format.
+ */
+export function releaseData(value = catalog()) {
+  return (
+    JSON.stringify(
+      {
+        releases: value.releases.map((entry, i) => ({
+          version: entry.version,
+          format: entry.format,
+          formatChanged: i > 0 && entry.format !== value.releases[i - 1].format,
+        })),
+      },
+      null,
+      2
+    ) + '\n'
+  );
+}
 export function updateTable() {
   const source = read(GUIDE);
   const pattern =
     /\{\/\* collaboration-releases:start \*\/\}[\s\S]*?\{\/\* collaboration-releases:end \*\/\}/;
   if (!pattern.test(source)) throw new Error('Missing release table markers');
   writeFileSync(resolve(ROOT, GUIDE), source.replace(pattern, table()));
+  mkdirSync(dirname(resolve(ROOT, RELEASE_DATA)), { recursive: true });
+  writeFileSync(resolve(ROOT, RELEASE_DATA), releaseData());
 }
 export async function capture(version) {
   if (!/^\d+\.\d+\.\d+$/.test(version) || compareVersions(version, '2.18.0') < 0)

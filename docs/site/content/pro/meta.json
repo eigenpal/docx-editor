@@ -11,6 +11,7 @@
     "custom-nodes-reference",
     "drawing",
     "collaboration",
+    "collaboration-server",
     "collaboration-versions"
   ]
 }

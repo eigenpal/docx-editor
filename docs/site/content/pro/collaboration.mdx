@@ -10,7 +10,7 @@ This reference covers Pro collaboration providers, server rooms, presence, recov
 
 The collaboration module from [`@docx-editor.dev/pro`](/docs/2.x/pro) replicates the full DOCX package through Yjs. Without the module, the editor attaches no replica, local undo stays active, and `snapshot().collaborationStatus` is `'inactive'`.
 
-Before you deploy, add client admission checks and saved-room validation. For both, see [Collaboration versions and upgrades](/docs/2.x/pro/collaboration-versions).
+Before you deploy, add client admission checks and saved-room validation. On a Hocuspocus server, [`collaborationServerExtension`](#run-a-room-server) does both. For other servers, see [Collaboration versions and upgrades](/docs/2.x/pro/collaboration-versions).
 
 ## Install the packages
 
@@ -155,7 +155,7 @@ If your server seeds rooms, pass `bootstrap: { kind: 'join' }`. See [Seed new ro
 
 | Option | Description |
 | --- | --- |
-| `url` | Hocuspocus server URL. |
+| `url` | Hocuspocus server URL. The provider adds the `collaborationFormat` query parameter, which names the client's collaboration format, and removes trailing slashes from the path. |
 | `token` | String, or callback that returns the latest credential, called on each reconnection. It reaches the server's `onAuthenticate`. A changed string does not reconnect; use a callback to renew. |
 | `syncedTimeoutMs` | Initial sync limit. Default 30 seconds. Fails with `initialization-timeout`. |
 | `bootstrap.signal` | Covers the whole join, including the server's room load. Fails with `initialization-aborted`. |
@@ -369,9 +369,219 @@ useEffect(() => {
 
 Buffered edits live in memory, and a reload, unmount, or `room` change drops them. To keep them, persist the Yjs document, for example with `y-indexeddb`. A zero count does not confirm durable server storage.
 
+## Run a room server
+
+`collaborationServerExtension` is a Hocuspocus extension that does the room's part of a server. Add it to `extensions`, and write only authentication and storage. For a short path through setup, adoption, and format upgrades, see the [Hocuspocus room server guide](/docs/2.x/pro/collaboration-server).
+
+```ts
+import { Server } from '@hocuspocus/server';
+import {
+  collaborationServerExtension,
+  type CollaborationRoomStorage,
+} from '@docx-editor.dev/pro/collaboration';
+
+// Implement these with your database and your access-token service.
+interface RoomRow {
+  state: Uint8Array;
+  docx: Uint8Array | null;
+  digest: string | null;
+}
+declare const rooms: {
+  read(roomName: string): Promise<RoomRow | null>;
+  writeState(roomName: string, state: Uint8Array): Promise<void>;
+  writeExport(roomName: string, docx: Uint8Array, digest: string): Promise<void>;
+};
+declare function verifyDocumentAccess(token: string, roomName: string): Promise<void>;
+
+const storage: CollaborationRoomStorage = {
+  async load(roomName) {
+    const room = await rooms.read(roomName);
+    if (!room) return null;
+    const exported =
+      room.docx && room.digest ? { docx: room.docx, stateDigest: room.digest } : null;
+    return { state: room.state, export: exported };
+  },
+  async save(roomName, room) {
+    // Write the state first, or both in one transaction.
+    await rooms.writeState(roomName, room.state);
+    // `export` is null when this store has no new export. Keep the export you already store.
+    if (room.export) {
+      await rooms.writeExport(roomName, room.export.docx, room.export.stateDigest);
+    }
+  },
+};
+
+const server = new Server({
+  port: 1234,
+  async onAuthenticate({ token, documentName }) {
+    await verifyDocumentAccess(token, documentName);
+  },
+  extensions: [collaborationServerExtension({ storage })],
+});
+```
+
+The extension runs before your other extensions and your own hooks. It does the following:
+
+- **Checks the client's format.** It refuses a client of another collaboration format with `collaboration-format-mismatch`, before synchronization. The provider hooks and `createHocuspocusCollaboration` send the format in the `collaborationFormat` query parameter of the server URL.
+- **Prepares the room document** before any update reaches it, and flushes the loaded room so that the first participant receives it once.
+- **Refuses earlier-generation replicas** before their state merges.
+- **Checks each stored room** before it becomes the live room. The room must be in the server's format and must export as a complete document.
+- **Stores each room with an export.** Each store writes the room state, a DOCX export, and the SHA-256 of the exported state. A load adds a missing export and replaces a stale one.
+- **Upgrades a stored room of an earlier format** from its export when the server loads it. See [Rooms upgrade when the server loads them](/docs/2.x/pro/collaboration-versions#rooms-upgrade-when-the-server-loads-them).
+
+Pass these options to `collaborationServerExtension`:
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `storage` | None | Loads, checks, and stores rooms. Without it, the extension checks clients, prepares the room document, and refuses replicas of an earlier room generation. Load and store in your own hooks. |
+| `createRoom` | None | Returns the state of a room that storage does not hold, such as the result of `createCollaborationState`. The extension stores it before anyone synchronizes. |
+| `upgradeOnLoad` | `true` | `false` refuses a stored room of an earlier format. |
+| `maxUpgradeStateBytes` | 64 MiB | The largest stored state that the server upgrades on load. A larger room is refused. Upgrade it in a job. |
+| `compactOnLoad` | `false` | Compacts a stored room on load, as [Compact rooms on a server](#compact-rooms-on-a-server) describes. Accepts the same options. |
+| `exportIntervalMs` | 0 | The shortest time between two exports of one room while people are connected. 0 exports on each store. |
+| `readClientFormat` | Query parameter | Reads the client's format from another place, such as your token. |
+| `onEvent` | None | Receives room events. See [Log room events](#log-room-events). |
+
+- `documentName` is untrusted client input. Check room access in `onAuthenticate`, and validate the name before it reaches a file path or a query.
+- Do not load or store rooms in your own hooks when you pass `storage`.
+- Clients of a release that does not send the `collaborationFormat` parameter are refused. Update the clients first, or see [Admit earlier clients during a rollout](#admit-earlier-clients-during-a-rollout).
+- A room that does not export as a document is not stored, because a load refuses such a state. Storage keeps the last room that exported, and `onEvent` receives `room-export-failed`.
+- If `save` throws, Hocuspocus logs the error and does not try that store again. The extension stores the room again before the room unloads, and an error then keeps the room in memory.
+- Store each export with the digest that arrives with it. The digest is the only link between an export and a state, and the server never uses an export of another state.
+- An export and an upgrade run on the server's thread, and every room on the process waits. See [Plan for the cost of exports and upgrades](#plan-for-the-cost-of-exports-and-upgrades).
+- With `exportIntervalMs` above 0, a store inside the interval writes a state that the server did not check, and leaves a stale export. A room always exports before it unloads. If the server stops before that, the next load with the same release replaces the export. A load after a format change refuses the room. If an unchecked state does not export, each later load refuses it with `invalid-saved-room`, and the stored export holds the last document that exported.
+- One server process must hold a room at a time. If two servers load one earlier-format room at the same time, each creates its own room, and the later store replaces the other.
+- A custom provider has no extension. Run the same checks in its admission flow, as [Integrate a custom Yjs provider](#integrate-a-custom-yjs-provider) describes.
+
+For a complete server with file storage, room creation, and telemetry, see the [Hocuspocus server example](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus).
+
+### Create rooms from your documents
+
+Without `createRoom`, a room that storage does not hold stays empty, and its first participant seeds it. To create each room from a document that your application holds, return its state from `createRoom`:
+
+```ts
+import {
+  collaborationServerExtension,
+  createCollaborationState,
+  type CollaborationRoomStorage,
+} from '@docx-editor.dev/pro/collaboration';
+
+declare const storage: CollaborationRoomStorage;
+// Your document store. `null` means that the application has no such document.
+declare function readDocx(roomName: string): Promise<Uint8Array | null>;
+
+export const rooms = collaborationServerExtension({
+  storage,
+  async createRoom({ roomName }) {
+    const docx = await readDocx(roomName);
+    // Hocuspocus sends `reason` to the refused client.
+    if (!docx) throw Object.assign(new Error('unknown-room'), { reason: 'unknown-room' });
+    return createCollaborationState(docx, { documentId: roomName });
+  },
+});
+```
+
+- The extension checks the state, stores it with an export, and then loads it. Clients join with `bootstrap: { kind: 'join' }`.
+- `createRoom` runs only when `storage.load` returns `null`. If a known room can lose its state, throw from `load` and do not return `null`, or the room is created again from the original document.
+- `context` in the request is the value that your `onAuthenticate` returned for the connection.
+- For the cost of `createCollaborationState`, see [Plan for the cost of a seed](#plan-for-the-cost-of-a-seed).
+
+### Keep the earlier state of an upgraded room
+
+Add `backUp` to your storage. The extension calls it with the earlier state before it stores an upgraded room:
+
+```ts
+import type { CollaborationRoomStorage } from '@docx-editor.dev/pro/collaboration';
+
+declare const base: CollaborationRoomStorage;
+declare const backups: { write(key: string, bytes: Uint8Array): Promise<void> };
+
+export const storage: CollaborationRoomStorage = {
+  ...base,
+  async backUp(roomName, state) {
+    await backups.write(`${roomName}/${new Date().toISOString()}.ydoc`, state);
+  },
+};
+```
+
+An error from `backUp` stops the upgrade, and the stored room stays as it is. Only the release that wrote a backup can read it. To use one, follow [Roll back a migration](/docs/2.x/pro/collaboration-versions#roll-back-a-migration).
+
+### Log room events
+
+`onEvent` receives one object for each thing the extension does to a room. Send the events to your log, and count them by `type` and `reason`:
+
+```ts
+import {
+  collaborationServerExtension,
+  type CollaborationRoomStorage,
+  type CollaborationServerEvent,
+} from '@docx-editor.dev/pro/collaboration';
+
+declare const storage: CollaborationRoomStorage;
+declare const metrics: { count(name: string, labels: Record<string, string>): void };
+
+function onEvent(event: CollaborationServerEvent): void {
+  const reason = event.type === 'room-upgrade-refused' ? event.reason : '';
+  metrics.count('collaboration_room_events', { type: event.type, reason });
+  // Events hold codes, part names, and positions. They never hold document text.
+  console.log(JSON.stringify(event));
+}
+
+export const rooms = collaborationServerExtension({ storage, onEvent });
+```
+
+| Event `type` | Meaning | Action |
+| --- | --- | --- |
+| `room-upgraded` | The server upgraded a stored room to its format. `hidden` counts paragraphs that the editor cannot show. | None, when `hidden` is 0. |
+| `room-upgrade-refused` | The server did not upgrade a room of an earlier format. `reason` says why. Clients get `saved-room-unavailable`. | Migrate the room in a job. See the [reasons](/docs/2.x/pro/collaboration-versions#rooms-upgrade-when-the-server-loads-them). |
+| `room-load-refused` | The stored room is of a later format, or it forms no document. `code` says which. | Serve the room with the release that wrote it, or restore it. |
+| `room-export-failed` | The room does not export as a document, so the server did not store it. | Check `code`. Storage keeps the last room that exported. |
+| `room-compaction-failed` | A compaction on load failed. The room loaded as it was stored. | Check `code`. |
+
+An error that `onEvent` throws is ignored.
+
+### Admit earlier clients during a rollout
+
+The extension refuses a client that sends no `collaborationFormat` parameter. Clients of a release that does not have the extension send none. To add the extension while such clients are still open, admit a missing value for one release:
+
+```ts
+import {
+  COLLABORATION_FORMAT_PARAMETER,
+  COLLABORATION_FORMAT_VERSION,
+  collaborationServerExtension,
+} from '@docx-editor.dev/pro/collaboration';
+
+export const rooms = collaborationServerExtension({
+  // A client that names a format is still checked. Remove this when all clients send one.
+  readClientFormat: ({ requestParameters }) =>
+    requestParameters.get(COLLABORATION_FORMAT_PARAMETER) ?? COLLABORATION_FORMAT_VERSION,
+});
+```
+
+Use this only between releases of one collaboration format. A client of another format that sends no parameter then synchronizes, and its room fails.
+
+### Plan for the cost of exports and upgrades
+
+The extension exports the room on each load and each store, and an upgrade creates the room again. This work runs on the server's thread, so every room on that process waits. A room state is much larger than its DOCX file. These values are from one laptop:
+
+| Document | DOCX size | Room state | Load check | Export on a store | Upgrade on load |
+| --- | --- | --- | --- | --- | --- |
+| Sample document | 75 KB | 4.2 MiB | 0.26 s | 0.16 s | 0.53 s |
+| Document of 1.1 MB | 1.1 MB | 2.2 MiB | 0.42 s | 0.37 s | 1.4 s |
+| Document with many tracked changes | 86 KB | 11 MiB | 2.1 s | 1.9 s | 7.9 s |
+| Document of 521 pages | 416 KB | 46 MiB | 3.1 s | 2.0 s | 7.2 s |
+
+A store with no export took 0.02 seconds for the sample document and 0.17 seconds for the 521-page document.
+
+- **Stores.** Hocuspocus stores a room that people type in about every 10 seconds. For long documents, set `exportIntervalMs`, for example to 60,000. A store inside the interval is then cheap, but it writes a state that the server did not check.
+- **Upgrades.** One upgrade runs for each room, when its first participant opens it after a format change. To keep long upgrades off the server, lower `maxUpgradeStateBytes` and upgrade larger rooms in a [migration job](/docs/2.x/pro/collaboration-versions#migrate-rooms-on-a-server).
+- **Processes.** One Node.js process runs this work on one core. Put rooms with long documents on their own processes, and route each room to one process.
+- **Memory.** A load holds the room twice while it checks the stored state.
+- **Storage.** A room state holds each XML element and attribute as its own record, so it is about seven times the size of the uncompressed XML. It compresses well: gzip reduced the 4.2 MiB state to 0.46 MiB, and the 46 MiB state to 5 MiB. Compress the state in `save`, and decompress it in `load`.
+
 ## Prepare the room document on a server
 
-If your server holds a `Y.Doc` per room, as Hocuspocus does, call `prepareCollaborationServerDocument` before it applies any update, saved state included. Otherwise Yjs removes formatting markers it finds redundant and sends that change to every participant:
+`collaborationServerExtension` does this step. If you write the hooks yourself and your server holds a `Y.Doc` per room, as Hocuspocus does, call `prepareCollaborationServerDocument` before it applies any update, saved state included. Otherwise Yjs removes formatting markers it finds redundant and sends that change to every participant:
 
 ```ts
 import { readFile } from 'node:fs/promises';
@@ -761,6 +971,31 @@ const stop = session.subscribeResourcePressure(
 - Both probes walk the node map. Read them on a schedule, not on every edit.
 - `formattingMarkers` counts the formatting markers in paragraph text. Deleting the formatted text does not remove them; compaction does.
 - When a limit ends the room, `detail` names it, such as `nodes=200001`.
+
+### Size a room server
+
+These numbers come from the load benchmark in `benchmarks/collaboration-server`. Use them as a starting point, and run the benchmark on your hardware with your documents.
+
+Each step ran one room for 60 seconds. Every participant typed at about 3.5 keystrokes per second. The server was one Node.js 24 process on an Apple M4 Pro laptop, and the participants ran on the same machine. The server stored the room and a DOCX export about every 10 seconds. The seed document was 75 KB, and the room state was about 4.3 MiB.
+
+| Participants | Latency p50 (ms) | Latency p95 (ms) | Join p95 (ms) | Server CPU average (% of one core) | Server memory peak (MB) | Server egress (KB/s) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 5 | 3.3 | 10.0 | 576 | 6.8 | 451 | 38 |
+| 10 | 2.8 | 7.8 | 919 | 7.3 | 463 | 149 |
+| 15 | 3.4 | 12.6 | 1,488 | 9.0 | 458 | 331 |
+| 20 | 4.3 | 24.9 | 1,971 | 10.7 | 498 | 584 |
+| 25 | 5.4 | 43.7 | 2,515 | 12.3 | 554 | 906 |
+
+Latency is the time from a keystroke at one participant to that edit in another participant's document. It excludes the network round trip.
+
+- **Memory**: one room of this size held 450 to 550 MB. An idle server process used about 120 MB.
+- **CPU**: one more typing participant added about 0.3% of one core. One Node.js process runs JavaScript on one core.
+- **Egress**: it grows with the square of the participant count, because the server relays each edit and each caret to all others. Caret updates were about 70% of the bytes.
+- **Exports block the server**: each store exported the room, which took about 0.2 seconds. The server relays nothing during an export. See [Plan for the cost of exports and upgrades](#plan-for-the-cost-of-exports-and-upgrades).
+- **Many rooms**: multiply the cost of one room by the number of active rooms.
+- **Shared machine**: the participants shared the machine with the server. When other work ran on that machine, latency rose to seconds. For a strict measurement, run the participants on a second machine.
+
+To run the benchmark, see the [benchmark guide](https://github.com/eigenpal/docx-editor/tree/main/benchmarks/collaboration-server).
 
 ## Failure codes
 

@@ -60,15 +60,17 @@ These self-reported versions prevent accidental connections between incompatible
 
 ## Store and export rooms
 
-The server stores rooms in `server/.data/`. It reads each `.ydoc` file when a room opens, and keeps a `.room` record for each room it created. It also exports a `.docx` file beside each Yjs document. Before admitting a saved snapshot, `server/stored-room.ts` checks its version with `readCollaborationFormatVersion` and `assertCollaborationFormatCompatibility` in a temporary document. It then validates the compatible document with `readCollaborationDocument`. The server rejects incompatible or invalid snapshots before loading them into the live room. Compatible clients cannot upgrade saved room data.
+The server uses `collaborationServerExtension` from `@docx-editor.dev/pro/collaboration` for the room's part: the client format check, the room document preparation, the room generation check, the saved-room check, and storage. `server/room-storage.ts` is the storage that the extension calls.
 
-The server creates a room only for the tab that starts it. That tab asks for a new room in its authentication envelope; an invite link only joins, and the server refuses a room it does not know. To create the room, the server seeds it from `examples/vite/public/sample.docx` with `createCollaborationState`. It stores the room state with a create-only write before anyone syncs, and then writes a `.room` record. When it loads a stored room that has no record, it writes one, so a crash between the two writes leaves no room unprotected. Participants join the seeded room, so no participant uploads the document or receives it back. For more information, see [Seed new rooms on a server](https://www.docx-editor.dev/docs/2.x/pro/collaboration#seed-new-rooms-on-a-server).
+The server stores rooms in `server/.data/`. Each room has a `.ydoc` file with its state, a `.ydoc.docx` export of that state, and a `.ydoc.docx.sha256` file with the SHA-256 of the exported state. The server also keeps a `.room` record for each room it created. Before the extension admits a saved room, it checks the room's format and exports the room to validate its content. A room that fails is refused, and the live room stays unchanged.
+
+The server creates a room only for the tab that starts it. That tab asks for a new room in its authentication envelope; an invite link only joins, and the server refuses a room it does not know. To create the room, the server seeds it from `examples/vite/public/sample.docx` with `createCollaborationState`. The extension stores the room state and its export before anyone syncs, and the storage then writes a `.room` record. Run one server process for each room: two processes that create one room at the same time replace each other's state. When it loads a stored room that has no record, it writes one, so a crash between the two writes leaves no room unprotected. Participants join the seeded room, so no participant uploads the document or receives it back. For more information, see [Seed new rooms on a server](https://www.docx-editor.dev/docs/2.x/pro/collaboration#seed-new-rooms-on-a-server).
 
 If a room has a record but no state, the server refuses it with `saved-room-unavailable` and does not seed it again. A second seed would replace every edit with the original document. Participants keep their copies while you restore the `.ydoc` file. A document that cannot seed a room, such as one over the seed size limit, is refused with its failure code, such as `baseline-too-large`.
 
-Replace `onLoadDocument` and `onStoreDocument` when you need database or object storage. Keep the `prepareCollaborationServerDocument` call at the start of `onLoadDocument`, before the room's state loads. Keep the `document.flush()` call in `afterLoadDocument`, so the first participant receives the loaded room once.
+Replace `server/room-storage.ts` when you need database or object storage. Keep the export and its digest together: the digest tells a later server whether the export belongs to the stored state.
 
-When a saved room is at least twice the size of a fresh build of its content, `onLoadDocument` compacts it with `compactCollaborationState` and stores the new generation in place of the old state. The server replaces each file atomically, so an interrupted write leaves either its previous state or its complete replacement. If compaction throws `CollaborationSchemaError`, the server keeps the stored state unchanged. `beforeHandleMessage` calls `checkCollaborationRoomGeneration`, which refuses a client that still holds the room from before a compaction. That client reports `room-generation-changed` and can rejoin. Keep both calls when you replace the storage hooks. For more information, see [Compact rooms on a server](https://www.docx-editor.dev/docs/2.x/pro/collaboration#compact-rooms-on-a-server).
+When a saved room is at least twice the size of a fresh build of its content, the extension compacts it with `compactCollaborationState` and stores the new generation in place of the old state, because the server sets `compactOnLoad`. The server replaces each file atomically, so an interrupted write leaves either its previous state or its complete replacement. If compaction throws `CollaborationSchemaError`, the server keeps the stored state unchanged. `beforeHandleMessage` calls `checkCollaborationRoomGeneration`, which refuses a client that still holds the room from before a compaction. That client reports `room-generation-changed` and can rejoin. For more information, see [Compact rooms on a server](https://www.docx-editor.dev/docs/2.x/pro/collaboration#compact-rooms-on-a-server).
 
 ### Recover after a version mismatch
 
@@ -76,9 +78,30 @@ Preserve local and offline edits before reloading browser tabs. Upgrade the app,
 
 For saved rooms and offline work, follow the [collaboration upgrade guide](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions). Pause editing and preserve pending work before exporting with the compatible previous build. Verify the DOCX, then create a replacement room. Collaboration undo history starts afresh.
 
+### Upgrade saved rooms on load
+
+When a server of a later collaboration format loads a room, the extension creates the room again from the stored export, checks the new room against the export, and stores it. It keeps the earlier state as `<room>.ydoc.previous`. The server log names each upgraded room, and each room that it did not upgrade with the reason.
+
+Stop the server of the earlier build before you start the server of the later build. An earlier server that still holds a room stores it later, over the upgraded room.
+
+The server does not upgrade a room that has no export, a room whose export is of another state, or a room whose state is larger than 64 MiB. It refuses that room with `saved-room-unavailable`. Migrate it with the scripts in the next section.
+
+### Try an upgrade
+
+A format change comes with a release, so `server/simulate-format-change.ts` lets you watch an upgrade with one release. It rewrites each saved room so that the room names an earlier format. The document in the room does not change. Use it only on rooms that you do not need.
+
+1. Start the server and the app, open a room, and type some text.
+1. Close the tab, and stop the server with Ctrl+C. The server stores the room with a current export before it stops.
+1. Run `node server/simulate-format-change.ts`. It prints `now names an earlier format` for each room.
+1. Start the server again, and open the same room link.
+
+The server log shows `upgraded from ... to ...` for the room, and the editor shows your text. `server/.data/` now holds `<room>.ydoc.previous`, the state before the upgrade.
+
+To see a refusal, delete `<room>.ydoc.docx` after step 3. The server then logs `not upgraded: no-export`, and the tab reports that the room is unavailable.
+
 ### Migrate saved rooms
 
-The server does not migrate rooms by itself. Two scripts move every saved room to the current collaboration format with the public migration API, `collaborationMigrationNeed` and `migrateCollaborationRoom`. `server/room-migration.ts` holds what depends on storage: where rooms and exports are, the backup, the atomic write, and one result for each room. Replace it with your own storage. For the procedure on any storage, see [Migrate rooms on a server](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#migrate-rooms-on-a-server).
+Two scripts move every saved room to the current collaboration format with the public migration API, `collaborationMigrationNeed` and `migrateCollaborationRoom`. `server/room-migration.ts` holds what depends on storage: where rooms and exports are, the backup, the atomic write, and one result for each room. Replace it with your own storage. For the procedure on any storage, see [Migrate rooms on a server](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#migrate-rooms-on-a-server).
 
 To migrate the rooms, follow these steps:
 
@@ -127,7 +150,7 @@ Run the example tests from the repository root:
 bun run --filter docx-editor-example-collaboration-hocuspocus test
 ```
 
-The tests exercise admission, saved-room refusal, and room migration without starting a server. They cover matching, missing, older, future, and malformed version claims; incorrect secrets; preservation of live state when a saved room is refused; and a migration that keeps every paragraph of the export.
+The tests exercise admission, room storage, and room migration without starting a server. They cover matching, missing, older, future, and malformed version claims; incorrect secrets; an export that stays with the digest of its state; room names that reach no file outside the data directory; and a migration that keeps every paragraph of the export.
 
 Hocuspocus stores room snapshots. `readCollaborationDocument` exports a room to DOCX.
 
