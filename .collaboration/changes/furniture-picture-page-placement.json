@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Margin-band and paragraph or line alignment resolved to the wrong edges, footer margin-band pictures painted from the story box, header and footer pictures in a table cell on the page frame moved to the page edge, and pointer hit tests used story positions.",
+  "after": "Margin-band and paragraph or line alignment resolve to the bands and edges of the page, header and footer records carry the page edges of their page-resolved axes, pictures in a table cell stay in the cell, and hit tests place pictures where paint draws them.",
+  "reason": "The change derives layout positions and pointer hits only. Canonical OOXML, source offsets, replicated operation shapes, and awareness messages remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/overlapping-furniture-pointer.test.ts",
+    "packages/core/src/export/__tests__/export-traversal.test.ts",
+    "packages/core/src/layout/__tests__/paragraph-line-alignment.test.ts",
+    "packages/core/src/output/__tests__/header-margin-anchor.test.ts"
+  ],
+  "changeset": "footer-picture-raised-into-body",
+  "migration": null
+}

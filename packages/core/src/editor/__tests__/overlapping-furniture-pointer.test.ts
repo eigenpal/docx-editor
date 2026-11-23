@@ -16,6 +16,7 @@ import type {
   PageRecord,
   ParagraphFragmentRecord,
 } from '../../layout/semantic-records.ts';
+import { headerFooterAnchoredDrawingOrigin } from '../../layout/header-footer-drawing-origin.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import {
   CT_NS,
@@ -237,11 +238,14 @@ const insideStoryBox = (story: HeaderFooterStoryRecord, point: Point): boolean =
   point.y >= story.box.y &&
   point.y < story.box.y + story.box.height;
 
-function drawingCentre(story: HeaderFooterStoryRecord, drawing: AnchoredDrawingRecord): Point {
-  return {
-    x: story.box.x + drawing.x + drawing.width / 2,
-    y: story.box.y + drawing.y + drawing.height / 2,
-  };
+/** The centre of a furniture drawing where paint draws it: page-relative axes from the page. */
+function drawingCentre(
+  story: HeaderFooterStoryRecord,
+  drawing: AnchoredDrawingRecord,
+  page: { readonly box: { readonly x: number; readonly y: number } }
+): Point {
+  const origin = headerFooterAnchoredDrawingOrigin(drawing, story.box, page.box);
+  return { x: origin.x + drawing.width / 2, y: origin.y + drawing.height / 2 };
 }
 
 function expectBodyWord(mounted: Mounted, paragraphId: string): void {
@@ -315,7 +319,7 @@ describe('a header over body lines (negative top margin)', () => {
     const header = mounted.page.header!;
     const [drawing] = header.anchoredDrawings ?? [];
     expect(drawing).toBeDefined();
-    const point = drawingCentre(header, drawing!);
+    const point = drawingCentre(header, drawing!, mounted.page);
     expect(inContentBox(mounted.page, point.y)).toBe(true);
     expect(insideStoryBox(header, point)).toBe(true);
     doublePress(mounted, point);

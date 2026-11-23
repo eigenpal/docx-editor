@@ -28,6 +28,13 @@ import {
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { PictureFrameEffects } from '../store/package/drawing-picture-frame.ts';
 import { pageClipRegion } from './drawing-page-clip.ts';
+import {
+  band,
+  furniturePageAxes,
+  paragraphOrLineAlignedTop,
+  resolvesInPageContent,
+  usableCellBox,
+} from './drawing-anchor-axes.ts';
 export { columnPaperClip, pageClipRegion } from './drawing-page-clip.ts';
 import type { ImageResourceState } from '../store/package/image-resources.ts';
 import {
@@ -441,10 +448,9 @@ export interface DrawingAnchorFrameContext {
   readonly marginLeft: number;
   readonly marginRight: number;
   /**
-   * Authored `w:pgMar` bottom. The ONLY reader is the `bottomMargin` frame, whose origin is
-   * the top edge of the bottom margin band — a page-setup landmark, so a footer taller than
-   * that margin must not move it. The `topMargin` band needs no twin: its top edge is the
-   * sheet edge, which {@link DrawingAnchorFrameContext.contentInsetTop} already gives.
+   * Authored `w:pgMar` bottom. The bottom margin band (the `bottomMargin` frame, and the
+   * `insideMargin` and `outsideMargin` frames on even pages) starts there: a page-setup
+   * landmark, so a footer taller than that margin must not move it.
    */
   readonly marginBottom: number;
   /**
@@ -462,6 +468,12 @@ export interface DrawingAnchorFrameContext {
   readonly verticalMarginFrame?: { readonly top: number; readonly height: number };
   /** Sheet top in header story coordinates. Body stories use their content inset. */
   readonly topMarginFrameOrigin?: number;
+  /**
+   * Height of the top margin band: from the sheet top to the body content top on this page. A
+   * header taller than the top margin pushes the body down and makes the band taller. Header
+   * and footer stories set it; the body uses its content inset, which already includes that.
+   */
+  readonly topMarginBandHeight?: number | undefined;
   /** Body flow height on the current page (may shrink for notes/HF reserves). */
   readonly contentHeight: number;
   /** Content band between the insets: pageHeight − contentInsetTop − contentInsetBottom. */
@@ -530,6 +542,19 @@ export interface AnchoredDrawingRecord extends Omit<
   readonly verticalFrame: DrawingVerticalReferenceFrame;
   readonly horizontalFrameOrigin: number;
   readonly verticalFrameOrigin: number;
+  /**
+   * The sheet top in this record's vertical coordinates. Set only for a header or footer
+   * anchor whose vertical position resolves in page-content coordinates: the page frame, and
+   * a footer's margin bands, outside a table cell. Consumers place the vertical axis from the
+   * page box with it, and from the story box without it.
+   */
+  readonly verticalPageTop?: number;
+  /**
+   * The sheet left edge in this record's horizontal coordinates. Set only for a header or
+   * footer anchor on the page frame outside a table cell. Consumers place the horizontal axis
+   * from the page box with it, and from the story box without it.
+   */
+  readonly horizontalPageLeft?: number;
   readonly behindDocument: boolean;
   readonly allowOverlap: boolean;
   /**
@@ -557,10 +582,7 @@ function usesCellLayoutBox(
   _frame: DrawingHorizontalReferenceFrame | DrawingVerticalReferenceFrame,
   ctx: DrawingAnchorFrameContext
 ): boolean {
-  if (!ctx.layoutInCell || ctx.cellBox === null) return false;
-  if (!Number.isFinite(ctx.cellBox.height) || ctx.cellBox.height <= 0) return false;
-  if (!Number.isFinite(ctx.cellBox.width) || ctx.cellBox.width <= 0) return false;
-  return true;
+  return ctx.layoutInCell && usableCellBox(ctx.cellBox);
 }
 
 function horizontalEdges(
@@ -689,21 +711,27 @@ function verticalEdges(
 
   const pageTop = -ctx.contentInsetTop;
   const contentBandHeight = ctx.contentBandHeight;
-  /**
-   * Top edge of the bottom margin band, off the AUTHORED margin.
-   *
-   * Deriving it from the content band instead would let an oversized footer drag it up with
-   * the shrinking text area, which is the same class of bug as #274 read backwards: the
-   * margin frames exist so an anchor does NOT follow the furniture.
-   */
-  const pageBottomInner = pageTop + ctx.pageHeight - ctx.marginBottom;
   /** Physical sheet bottom above the outer page edge. */
   const pageBottomSheet = contentBandHeight + ctx.contentInsetBottom;
   const contentTop = 0;
-  const contentBottom = ctx.contentHeight;
   const marginTop = ctx.verticalMarginFrame?.top ?? contentTop;
   const marginBottom = marginTop + (ctx.verticalMarginFrame?.height ?? ctx.contentHeight);
-  const topMarginTop = ctx.topMarginFrameOrigin ?? pageTop;
+  // ECMA-376 Part 1 §20.4.3.5 ST_RelFromV: topMargin is "relative to the top margin of the
+  // current page" and bottomMargin "relative to the bottom margin of the current page". Each
+  // margin is a band of the sheet: the top margin from the page top to the body content top,
+  // the bottom margin from the bottom margin to the page bottom. §20.4.3.2 ST_AlignV aligns the
+  // object in that band: "top", "center" ("centered with respect to the vertical alignment
+  // base"), and "bottom" ("at the bottom of the vertical alignment base").
+  //
+  // A header resolves the bands from its sheet top in story coordinates. A body or footer
+  // story resolves them in page-content coordinates. A footer story moves with its own height,
+  // so story coordinates would let a wrapped picture move the footer that it wraps.
+  const sheetTop = ctx.topMarginFrameOrigin ?? pageTop;
+  const topBand = band(sheetTop, sheetTop + (ctx.topMarginBandHeight ?? ctx.contentInsetTop));
+  // The bottom band starts at the AUTHORED bottom margin. Starting it at the content band would
+  // let an oversized footer drag it up with the shrinking text area (#274 read backwards): the
+  // margin frames exist so an anchor does NOT follow the furniture.
+  const bottomBand = band(sheetTop + ctx.pageHeight - ctx.marginBottom, sheetTop + ctx.pageHeight);
   switch (frame) {
     case 'page':
       return { top: pageTop, bottom: pageBottomSheet, center: (pageTop + pageBottomSheet) / 2 };
@@ -729,17 +757,16 @@ function verticalEdges(
         center: ctx.anchorLineBox.y + ctx.anchorLineBox.height / 2,
       };
     case 'topMargin':
-      return { top: topMarginTop, bottom: topMarginTop, center: topMarginTop };
+      return topBand;
     case 'bottomMargin':
-      return { top: pageBottomInner, bottom: pageBottomInner, center: pageBottomInner };
+      return bottomBand;
+    // §20.4.3.5: insideMargin is "relative to the inside margin of the current page" and
+    // outsideMargin "relative to the outside margin of the current page". The specification
+    // does not say which vertical band is inside. This engine uses the top margin on odd pages
+    // and the bottom margin on even pages for both values.
     case 'insideMargin':
-      return isOddPageOf(ctx)
-        ? { top: contentTop, bottom: contentTop, center: contentTop }
-        : { top: contentBottom, bottom: contentBottom, center: contentBottom };
     case 'outsideMargin':
-      return isOddPageOf(ctx)
-        ? { top: pageBottomSheet, bottom: pageBottomSheet, center: pageBottomSheet }
-        : { top: pageTop, bottom: pageTop, center: pageTop };
+      return isOddPageOf(ctx) ? topBand : bottomBand;
     default:
       return null;
   }
@@ -778,7 +805,7 @@ function resolveInsideOutsideVerticalAlign(
   ctx: DrawingAnchorFrameContext
 ): number | null {
   const odd = isOddPageOf(ctx);
-  // THE TEXT AREA, deliberately — the opposite choice from `pageBottomInner` two functions up.
+  // THE TEXT AREA, deliberately — the opposite choice from `bottomBand` two functions up.
   // `inside`/`outside` align WITHIN a band rather than measuring from a page landmark, so on an
   // odd page `inside` is the content box top and `outside` puts the object on the content box
   // bottom. Reading the flow height here instead would differ only on a page carrying a note
@@ -845,6 +872,8 @@ function positionFromVertical(
   if (offset === null) return null;
   const cellTop = ctx.inTableCell === true && usesCellLayoutBox(frame, ctx);
   if (align === 'top' || (cellTop && alignsToCellFrameTop(frame, align))) return edges.top + offset;
+  const baseAligned = paragraphOrLineAlignedTop(frame, align, edges.top, objectHeight);
+  if (baseAligned !== null) return baseAligned + offset;
   if (align === 'center') return edges.center - objectHeight / 2 + offset;
   if (align === 'bottom') return edges.bottom - objectHeight + offset;
   if (align === 'inside' || align === 'outside') {
@@ -988,6 +1017,8 @@ export function buildAnchoredDrawingRecord(options: {
   readonly resolved: ResolvedAnchoredPosition;
   readonly layoutInCell: boolean;
   readonly clipRegion?: LayoutBox;
+  readonly verticalPageTop?: number | undefined;
+  readonly horizontalPageLeft?: number | undefined;
   readonly sourceOrder?: number;
   readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout | null;
   readonly revisions?: readonly RevisionAttribution[];
@@ -1027,6 +1058,10 @@ export function buildAnchoredDrawingRecord(options: {
     verticalFrame: options.resolved.verticalFrame,
     horizontalFrameOrigin: options.resolved.horizontalFrameOrigin,
     verticalFrameOrigin: options.resolved.verticalFrameOrigin,
+    ...(options.verticalPageTop !== undefined ? { verticalPageTop: options.verticalPageTop } : {}),
+    ...(options.horizontalPageLeft !== undefined
+      ? { horizontalPageLeft: options.horizontalPageLeft }
+      : {}),
     behindDocument: anchorMeta?.behindDocument ?? false,
     allowOverlap: anchorMeta?.allowOverlap ?? true,
     layoutInCell: options.layoutInCell,
@@ -1197,20 +1232,33 @@ export function publishAnchoredDrawingsForParagraph(
         : undefined;
     const placed = textboxPlacementProjection(projection, textboxStory);
     const resolved = resolveAnchoredDrawingPosition(placed, frameContext);
+    // A record laid out in its cell resolves against the cell box, in story coordinates.
+    const resolvedInCell = layoutInCell && usableCellBox(options.cellBox);
     const clipToCell =
-      projection.wrap !== 'inFront' &&
-      projection.wrap !== 'behind' &&
-      layoutInCell &&
-      options.cellBox !== null &&
-      Number.isFinite(options.cellBox.height) &&
-      options.cellBox.height > 0 &&
-      Number.isFinite(options.cellBox.width) &&
-      options.cellBox.width > 0;
-    const pageClip =
-      projection.position?.vertical.relativeFrom === 'margin'
-        ? options.pageClip
-        : pageClipRegion(options.frameBase);
+      projection.wrap !== 'inFront' && projection.wrap !== 'behind' && resolvedInCell;
+    // ECMA-376 Part 1 §20.4.2.12 posOffset: "This measurement shall be calculated relative to
+    // the top left edge of the positioning base specified by the parent element's relativeFrom
+    // attribute." §20.4.3.5 ST_RelFromV, paragraph: "relative to the paragraph which contains
+    // the drawing anchor"; line: "relative to the line containing the anchor character". The
+    // offset is not limited to the story that holds the anchor, so the only clip is the page
+    // edge. The specification does not describe clipping; the page edge is this engine's choice.
+    //
+    // In a header or footer, the caller's clip is the sheet in story coordinates. Frames that
+    // resolve in story coordinates take it: paragraph, line, margin, and a header's margin
+    // bands (`topMarginFrameOrigin` is set). The page frame and a footer's margin bands resolve
+    // in page-content coordinates and keep the frame-base clip. In the body, both clips match.
+    const verticalFrame = projection.position?.vertical.relativeFrom;
+    const pageContentVertical =
+      !resolvedInCell && resolvesInPageContent(verticalFrame, options.frameBase);
+    const pageClip = pageContentVertical ? pageClipRegion(options.frameBase) : options.pageClip;
     const clipRegion = clipToCell ? options.cellBox! : pageClip;
+    // A header or footer record carries the page edges of its page-resolved axes, so every
+    // consumer places those axes from the page box, not from the story box.
+    const pageAxes = furniturePageAxes(
+      options.frameBase,
+      { horizontal: projection.position?.horizontal.relativeFrom, vertical: verticalFrame },
+      resolvedInCell
+    );
     const record = buildAnchoredDrawingRecord({
       input: Object.freeze({
         drawingNodeId: atom.atomId,
@@ -1228,6 +1276,7 @@ export function publishAnchoredDrawingsForParagraph(
       resolved,
       layoutInCell,
       clipRegion,
+      ...pageAxes,
       revisions,
       measurer: options.measurer,
       ...(options.sourceOrderOf

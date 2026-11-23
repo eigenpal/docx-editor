@@ -5,6 +5,7 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import {
   createFixedMeasurer,
+  hitTestSheet,
   enumerateDocumentSections,
   geometryOfSection,
   layoutSemanticDocument,
@@ -13,6 +14,7 @@ import {
 } from '../../layout/index.ts';
 import { layoutHeaderFooterStory, type HeaderFooterStoryLayout } from '../../layout/hf-layout.ts';
 import { furnitureDrawingExclusionsForPage } from '../../layout/furniture-drawing-exclusion.ts';
+import { headerFooterAnchoredDrawingOrigin } from '../../layout/header-footer-drawing-origin.ts';
 import type { InlineDrawingLayoutContext } from '../../layout/drawing-layout.ts';
 import {
   readOoxmlPackage,
@@ -48,18 +50,27 @@ const OFF_V_EMU = -989_965; // -77.95pt
 const SIZE_EMU = 809_625; //  63.75pt
 
 type HorizontalFrame = 'character' | 'margin' | 'page';
-type VerticalFrame = 'bottomMargin' | 'line' | 'margin' | 'page' | 'paragraph' | 'topMargin';
+type VerticalFrame =
+  | 'bottomMargin'
+  | 'insideMargin'
+  | 'line'
+  | 'margin'
+  | 'outsideMargin'
+  | 'page'
+  | 'paragraph'
+  | 'topMargin';
 
 interface AnchorOptions {
   readonly horizontalFrame?: HorizontalFrame;
   readonly verticalFrame?: VerticalFrame;
   readonly horizontalOffsetEmu?: number;
   readonly verticalOffsetEmu?: number;
-  readonly verticalAlign?: 'bottom' | 'center';
+  readonly verticalAlign?: 'bottom' | 'center' | 'top';
   readonly storyLineCount?: number;
   readonly topAndBottom?: boolean;
   readonly storyDistance?: number;
   readonly inTable?: boolean;
+  readonly secondPage?: boolean;
 }
 
 function logoDrawing(options: AnchorOptions = {}): string {
@@ -126,6 +137,9 @@ function storyDoc(kind: 'header' | 'footer', options: AnchorOptions = {}): Uint8
     ),
     'word/document.xml': strToU8(
       `<w:document ${ns}><w:body><w:p><w:r><w:t>body text</w:t></w:r></w:p>` +
+        (options.secondPage
+          ? '<w:p><w:r><w:br w:type="page"/><w:t>page two</w:t></w:r></w:p>'
+          : '') +
         `<w:sectPr><w:${kind}Reference w:type="default" r:id="rId1"/>` +
         '<w:pgSz w:w="11906" w:h="16838"/>' +
         '<w:pgMar w:top="1560" w:right="1700" w:bottom="2694" w:left="1701" w:header="851" w:footer="0"/>' +
@@ -362,7 +376,8 @@ describe('header non-margin frames', () => {
   test.each([
     ['page', -78],
     ['topMargin', -42.55],
-    ['bottomMargin', 629.2],
+    // The bottom-margin top on the sheet (841.9 - 134.7) less the 42.55pt header top.
+    ['bottomMargin', 664.65],
     ['paragraph', 0],
     ['line', 0],
   ] as const)(
@@ -435,6 +450,72 @@ describe('footer anchor relativeFrom="margin"', () => {
 
     expect(story.box.y + drawing.paintBounds.y).toBeCloseTo(page.contentBox.y - 77.95, 2);
     expect(paintedPosition(layout).y).toBeCloseTo(page.contentBox.y - 77.95, 2);
+  });
+});
+
+describe('header anchors that extend past the bottom of the sheet', () => {
+  test.each([
+    ['paragraph', 740],
+    ['topMargin', 800],
+  ] as const)('clip a %s picture only at the sheet bottom', (verticalFrame, offsetPt) => {
+    const layout = layoutHeaderDoc({
+      horizontalOffsetEmu: 0,
+      verticalFrame,
+      verticalOffsetEmu: offsetPt * 12_700,
+    });
+    const page = layout.pages[0]!;
+    const story = page.header!;
+    const drawing = story.anchoredDrawings![0]!;
+    const top = story.box.y + drawing.paintBounds.y;
+
+    expect(top + drawing.paintBounds.height).toBeCloseTo(page.box.y + page.box.height, 2);
+    expect(top + 63.75).toBeGreaterThan(page.box.y + page.box.height);
+  });
+});
+
+describe('footer anchor relativeFrom="paragraph"', () => {
+  test('keeps a picture that extends past the bottom margin whole up to the sheet edge', () => {
+    // -200pt reaches above the footer story and the 134.7pt bottom margin, into the body.
+    const layout = layoutStoryDoc('footer', {
+      horizontalOffsetEmu: 0,
+      verticalFrame: 'paragraph',
+      verticalOffsetEmu: -2_540_000,
+    });
+    const page = layout.pages[0]!;
+    const story = page.footer!;
+    const drawing = story.anchoredDrawings![0]!;
+    const sheetTop = story.box.y + drawing.paintBounds.y;
+
+    expect(drawing.paintBounds.height).toBeCloseTo(63.75, 2);
+    expect(paintedPosition(layout).y).toBeCloseTo(sheetTop, 2);
+    expect(paintedPosition(layout).height).toBeCloseTo(63.75, 2);
+  });
+
+  test('clips a picture that crosses the sheet top at the sheet edge', () => {
+    const probe = layoutStoryDoc('footer', { verticalFrame: 'paragraph' }).pages[0]!.footer!;
+    // Place the picture top 20pt above the sheet top.
+    const offsetPt = -(probe.box.y + 20);
+    const layout = layoutStoryDoc('footer', {
+      horizontalOffsetEmu: 0,
+      verticalFrame: 'paragraph',
+      verticalOffsetEmu: Math.round(offsetPt * 12_700),
+    });
+    const page = layout.pages[0]!;
+    const story = page.footer!;
+    const drawing = story.anchoredDrawings![0]!;
+
+    expect(story.box.y + drawing.paintBounds.y).toBeCloseTo(page.box.y, 2);
+    expect(drawing.paintBounds.height).toBeCloseTo(63.75 - 20, 2);
+  });
+
+  test('keeps a line-relative picture whole when it extends into the body area', () => {
+    const layout = layoutStoryDoc('footer', {
+      horizontalOffsetEmu: 0,
+      verticalFrame: 'line',
+      verticalOffsetEmu: -2_540_000,
+    });
+    const drawing = layout.pages[0]!.footer!.anchoredDrawings![0]!;
+    expect(drawing.paintBounds.height).toBeCloseTo(63.75, 2);
   });
 });
 
@@ -559,4 +640,166 @@ test('body top-margin bands keep their page-content coordinates', () => {
   )[0]!;
   expect(page.contentBox.y + drawing.y).toBeCloseTo(80, 5);
   expect(line.box.y).toBeCloseTo(drawing.y + drawing.height, 5);
+});
+
+// The fixture sheet is A4, 841.9pt high, with a 134.7pt bottom margin. The top band ends at
+// the body content top: the 78pt top margin, or lower where the header pushes the body down.
+// The picture is 63.75pt square. Expected values are sheet tops of the picture.
+const SHEET = 841.9;
+const BOTTOM_BAND_TOP = SHEET - 134.7;
+const PICTURE = 63.75;
+
+function placed(kind: 'header' | 'footer', options: AnchorOptions) {
+  const page = layoutStoryDoc(kind, { horizontalOffsetEmu: 0, ...options }).pages[0]!;
+  const story = (kind === 'header' ? page.header : page.footer)!;
+  const drawing = story.anchoredDrawings![0]!;
+  return {
+    top: headerFooterAnchoredDrawingOrigin(drawing, story.box, page.box).y - page.box.y,
+    bodyTop: page.contentBox.y - page.box.y,
+  };
+}
+
+describe('margin-band frames are bands of the sheet', () => {
+  for (const kind of ['header', 'footer'] as const) {
+    test.each([
+      ['topMargin', undefined, () => 10],
+      ['topMargin', 'center', (bodyTop: number) => (bodyTop - PICTURE) / 2],
+      ['topMargin', 'bottom', (bodyTop: number) => bodyTop - PICTURE],
+      ['bottomMargin', undefined, () => BOTTOM_BAND_TOP + 10],
+      ['bottomMargin', 'center', () => BOTTOM_BAND_TOP + (SHEET - BOTTOM_BAND_TOP - PICTURE) / 2],
+      ['bottomMargin', 'bottom', () => SHEET - PICTURE],
+      // Page 1 is odd: the inside and outside margins are the top band.
+      ['insideMargin', undefined, () => 10],
+      ['outsideMargin', 'bottom', (bodyTop: number) => bodyTop - PICTURE],
+    ] as const)(`${kind} %s %s`, (verticalFrame, verticalAlign, expected) => {
+      const { top, bodyTop } = placed(kind, {
+        verticalFrame,
+        verticalOffsetEmu: 127_000,
+        ...(verticalAlign ? { verticalAlign } : {}),
+      });
+      expect(top).toBeCloseTo(expected(bodyTop), 2);
+    });
+  }
+
+  test('the top band of a header ends where the header pushes the body down', () => {
+    const { top, bodyTop } = placed('header', {
+      verticalFrame: 'topMargin',
+      verticalAlign: 'bottom',
+    });
+    expect(bodyTop).toBeGreaterThan(78);
+    expect(top).toBeCloseTo(bodyTop - PICTURE, 2);
+  });
+
+  test('page 2 is even: the inside and outside margins are the bottom band', () => {
+    for (const verticalFrame of ['insideMargin', 'outsideMargin'] as const) {
+      const layout = layoutStoryDoc('footer', {
+        horizontalOffsetEmu: 0,
+        verticalFrame,
+        verticalOffsetEmu: 127_000,
+        secondPage: true,
+      });
+      const page = layout.pages[1]!;
+      const story = page.footer!;
+      const drawing = story.anchoredDrawings![0]!;
+      const top = headerFooterAnchoredDrawingOrigin(drawing, story.box, page.box).y - page.box.y;
+      expect(top).toBeCloseTo(BOTTOM_BAND_TOP + 10, 2);
+    }
+  });
+
+  test('a footer picture laid out in its table cell stays in the cell', () => {
+    for (const verticalFrame of ['topMargin', 'bottomMargin', 'insideMargin', 'page'] as const) {
+      const layout = layoutStoryDoc('footer', {
+        horizontalFrame: 'page',
+        horizontalOffsetEmu: 127_000,
+        verticalFrame,
+        verticalOffsetEmu: 127_000,
+        inTable: true,
+      });
+      const page = layout.pages[0]!;
+      const story = page.footer!;
+      const drawing = story.anchoredDrawings![0]!;
+      expect(drawing.verticalPageTop).toBeUndefined();
+      expect(drawing.horizontalPageLeft).toBeUndefined();
+      const origin = headerFooterAnchoredDrawingOrigin(drawing, story.box, page.box);
+      expect(origin.y).toBeGreaterThanOrEqual(story.box.y);
+      expect(origin.y).toBeLessThan(story.box.y + story.box.height);
+      expect(origin.x).toBeGreaterThanOrEqual(story.box.x);
+    }
+  });
+
+  test('a press on a footer bottom-margin picture hits the picture', () => {
+    const layout = layoutStoryDoc('footer', {
+      horizontalOffsetEmu: 0,
+      verticalFrame: 'bottomMargin',
+      verticalOffsetEmu: 127_000,
+    });
+    const page = layout.pages[0]!;
+    const drawing = page.footer!.anchoredDrawings![0]!;
+    const point = {
+      x: page.footer!.box.x + drawing.x + PICTURE / 2,
+      y: page.box.y + BOTTOM_BAND_TOP + 10 + PICTURE / 2,
+    };
+    const hit = hitTestSheet(layout, point);
+    expect(hit?.position.paragraphId).toBe(drawing.anchorParagraphId);
+    expect(hit?.position.offset).toBe(drawing.start);
+  });
+
+  test('a footer bottom-margin picture paints where layout places it', () => {
+    const layout = layoutStoryDoc('footer', {
+      horizontalOffsetEmu: 0,
+      verticalFrame: 'bottomMargin',
+      verticalOffsetEmu: 127_000,
+    });
+    const page = layout.pages[0]!;
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1 });
+    const picture = container.querySelector<HTMLElement>('.docx-drawing-layer-front > *');
+    expect(picture).not.toBeNull();
+    expect(parseFloat(picture!.style.top)).toBeCloseTo(page.box.y + BOTTOM_BAND_TOP + 10, 2);
+  });
+
+  test('a wrapped footer picture on a margin band keeps the footer layout stable', () => {
+    for (const verticalFrame of ['bottomMargin', 'outsideMargin', 'topMargin'] as const)
+      for (let offset = -40; offset <= 140; offset += 20) {
+        const options = {
+          horizontalOffsetEmu: 0,
+          verticalFrame,
+          verticalOffsetEmu: offset * 12_700,
+          topAndBottom: true,
+          storyLineCount: 3,
+        };
+        const first = layoutStoryDoc('footer', options).pages[0]!;
+        const again = layoutStoryDoc('footer', options).pages[0]!;
+        const footer = first.footer!;
+        // The footer ends at the sheet bottom (w:footer="0") and lays out the same each time.
+        expect(footer.box.y + footer.box.height).toBeCloseTo(first.box.y + SHEET, 2);
+        expect(again.footer!.box).toEqual(footer.box);
+        expect(again.footer!.anchoredDrawings![0]!.y).toBeCloseTo(
+          footer.anchoredDrawings![0]!.y,
+          6
+        );
+      }
+  });
+});
+
+describe('alignment against a paragraph or a line', () => {
+  for (const kind of ['header', 'footer'] as const) {
+    test(`${kind} paragraph: center and bottom place the picture at the paragraph top`, () => {
+      const top = placed(kind, { verticalFrame: 'paragraph', verticalAlign: 'top' }).top;
+      for (const verticalAlign of ['center', 'bottom'] as const)
+        expect(placed(kind, { verticalFrame: 'paragraph', verticalAlign }).top).toBeCloseTo(top, 2);
+    });
+
+    test(`${kind} line: center and bottom align to the line top`, () => {
+      const lineTop = placed(kind, { verticalFrame: 'line', verticalAlign: 'top' }).top;
+      expect(placed(kind, { verticalFrame: 'line', verticalAlign: 'center' }).top).toBeCloseTo(
+        lineTop - PICTURE / 2,
+        2
+      );
+      expect(placed(kind, { verticalFrame: 'line', verticalAlign: 'bottom' }).top).toBeCloseTo(
+        lineTop - PICTURE,
+        2
+      );
+    });
+  }
 });

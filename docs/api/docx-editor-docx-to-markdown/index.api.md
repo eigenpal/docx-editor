@@ -21,6 +21,7 @@ export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' 
     readonly horizontalFrame: DrawingHorizontalReferenceFrame;
     // (undocumented)
     readonly horizontalFrameOrigin: number;
+    readonly horizontalPageLeft?: number;
     // (undocumented)
     readonly kind: 'anchoredDrawing';
     // (undocumented)
@@ -34,6 +35,7 @@ export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' 
     readonly verticalFrame: DrawingVerticalReferenceFrame;
     // (undocumented)
     readonly verticalFrameOrigin: number;
+    readonly verticalPageTop?: number;
     // (undocumented)
     readonly wrap: Exclude<ImageWrapTarget, 'inline'>;
 }

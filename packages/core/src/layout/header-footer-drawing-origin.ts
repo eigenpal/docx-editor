@@ -11,7 +11,12 @@ export function headerTopMarginOrigin(
   return top === undefined ? undefined : -top;
 }
 
-/** Resolve a header/footer anchor origin across mixed page- and story-relative axes. @internal */
+/**
+ * Resolve a header/footer anchor origin across mixed page- and story-relative axes. An axis
+ * that layout resolved in page-content coordinates carries the page edge in record space
+ * (`horizontalPageLeft`, `verticalPageTop`) and is placed from the page box. Every other axis,
+ * including one resolved against a table cell, is placed from the story box. @internal
+ */
 export function headerFooterAnchoredDrawingOrigin(
   drawing: AnchoredDrawingRecord,
   storyOrigin: Readonly<{ x: number; y: number }>,
@@ -19,12 +24,12 @@ export function headerFooterAnchoredDrawingOrigin(
 ): Readonly<{ x: number; y: number }> {
   return Object.freeze({
     x:
-      drawing.horizontalFrame === 'page'
-        ? pageOrigin.x + drawing.x - drawing.horizontalFrameOrigin
+      drawing.horizontalPageLeft !== undefined
+        ? pageOrigin.x + drawing.x - drawing.horizontalPageLeft
         : storyOrigin.x + drawing.x,
     y:
-      drawing.verticalFrame === 'page'
-        ? pageOrigin.y + drawing.y - drawing.verticalFrameOrigin
+      drawing.verticalPageTop !== undefined
+        ? pageOrigin.y + drawing.y - drawing.verticalPageTop
         : storyOrigin.y + drawing.y,
   });
 }

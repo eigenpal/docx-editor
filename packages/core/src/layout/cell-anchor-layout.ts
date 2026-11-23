@@ -127,8 +127,8 @@ export function cellAnchorFlow(
 
 /**
  * Whether a vertical alignment in a table cell resolves to the top of its frame. The reference
- * rendering places an object centered or bottom-aligned on the page, margin or paragraph at the
- * top of that frame, as if top-aligned: the cell's height is not known when the object is
+ * rendering places an object centered or bottom-aligned on the page, margin, paragraph, or line at
+ * the top of that frame, as if top-aligned: the cell's height is not known when the object is
  * placed (ECMA-376 Part 1 §20.4.2.11 positionV, §20.4.3.2 ST_AlignV).
  */
 export function alignsToCellFrameTop(
@@ -140,6 +140,7 @@ export function alignsToCellFrameTop(
     frame === 'page' ||
     frame === 'margin' ||
     frame === 'paragraph' ||
+    frame === 'line' ||
     frame === 'topMargin' ||
     frame === 'bottomMargin'
   );
