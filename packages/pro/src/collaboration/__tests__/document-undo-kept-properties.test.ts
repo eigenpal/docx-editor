@@ -86,3 +86,56 @@ describe('an undo of a first formatting edit', () => {
         }
       });
 });
+
+/** A peer's saved document body, without revision-save IDs. */
+async function savedBody(editor: { save(): Promise<ArrayBuffer | Uint8Array> }) {
+  const saved = unzipSync(new Uint8Array(await editor.save()));
+  return strFromU8(saved['word/document.xml']!)
+    .replace(/.*<w:body>/s, '')
+    .replace(/ w:rsid\w*="[^"]*"/g, '');
+}
+
+/** Each order of undos and redos ends with both edits undone. */
+const SEQUENCES: readonly { name: string; steps: readonly ('carol' | 'alice' | 'redo')[] }[] = [
+  { name: 'the first edit, then the second', steps: ['carol', 'alice'] },
+  { name: 'the second edit, then the first', steps: ['alice', 'carol'] },
+  {
+    name: 'both, redoes both, and undoes both again',
+    steps: ['carol', 'alice', 'redo', 'redo', 'carol', 'alice'],
+  },
+];
+
+describe('undoing both of two formatting edits', () => {
+  for (const { name, first, second } of CASES)
+    for (const sequence of SEQUENCES)
+      for (const { label, ids } of ORDERS)
+        test(`of ${name}: ${sequence.name}, leaves no empty container (${label})`, async () => {
+          const r = await room('a; b; c;', ids);
+          try {
+            const original = await savedBody(r.carol.editor);
+            later();
+            await format(r.carol.runtime, first);
+            r.sync();
+            later();
+            await format(r.alice.runtime, second);
+            r.sync();
+            const undone: ('carol' | 'alice')[] = [];
+            for (const step of sequence.steps) {
+              later();
+              if (step === 'redo') {
+                // Redo in the order the edits were made: the first undo's last.
+                expect(r[undone.shift()!].room.session.redo()).toBe(true);
+              } else {
+                undone.push(step);
+                expect(r[step].room.session.undo()).toBe(true);
+              }
+              r.sync();
+            }
+            await r.expectAll(['a; b; c;', 'Signed']);
+            await r.expectJoinerConverges();
+            expect(await savedBody(r.carol.editor)).toBe(original);
+          } finally {
+            r.close();
+          }
+        });
+});

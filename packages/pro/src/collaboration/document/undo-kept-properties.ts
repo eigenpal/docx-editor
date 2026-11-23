@@ -105,6 +105,38 @@ export function undoKeepsProperties(
   return kept.size === 0 ? null : (item) => kept.has(item);
 }
 
+/**
+ * The items of `step` that its undo keeps so the mark of a paragraph it unlists can still go
+ * where the paragraph's text joins: the listings of that paragraph's `w:pPr` and of every
+ * element in it, when that mark holds a proposal. Or null.
+ */
+export function undoKeepsCarried(
+  registry: DocumentRegistry,
+  step: unknown
+): ((item: Y.Item) => boolean) | null {
+  const insertions = (step as Step)?.insertions as Insertions;
+  if (insertions === undefined) return null;
+  const kept = new Set<Y.Item>();
+  const keepEntries = (container: LogicalId, only: LogicalId | null, depth: number): void => {
+    const entries = childArrayOf(registry.schema.nodes.get(container));
+    if (!entries) return;
+    for (let item = entries._start; item; item = item.right) {
+      if (item.deleted) continue;
+      const ids = item.content.getContent().filter((id): id is LogicalId => typeof id === 'string');
+      if (only !== null && !ids.includes(only)) continue;
+      if (Y.isDeleted(insertions, item.id)) kept.add(item);
+      if (depth >= MAX_DEPTH) continue;
+      for (const id of only !== null ? [only] : ids) keepEntries(id, null, depth + 1);
+    }
+  };
+  for (const { paragraph } of undonePlaces(registry, step)) {
+    const mark = childAt(registry, paragraph, 'paragraphProperties');
+    if (mark && holdsProposal(registry, mark, 'paragraphProperties'))
+      keepEntries(paragraph, mark, 0);
+  }
+  return kept.size === 0 ? null : (item) => kept.has(item);
+}
+
 type Level = 'paragraphProperties' | 'runProperties' | 'ins';
 const NEXT: Readonly<Record<Level, Level | null>> = {
   paragraphProperties: 'runProperties',
@@ -130,10 +162,12 @@ export type UndoneProposal =
       readonly from: LogicalId;
     })
   | (UndonePlace & {
-      /** The step's copy of an earlier proposal, whose original the undo lists again. */
+      /** The step's copy of an earlier proposal, on the mark of the paragraph it listed. */
       readonly kind: 'carried';
-      /** The mark elements the step unlisted: the original is one of them. */
+      /** The mark elements the step unlisted: the original can be one of them. */
       readonly originals: readonly LogicalId[];
+      /** The paragraph's `w:pPr`, which the undo keeps (`undoKeepsCarried`). */
+      readonly mark: LogicalId;
     });
 
 /** A relist an undo made, which the redo of that undo takes back. */
@@ -202,6 +236,28 @@ function foreignProposals(
  * listed show, and where each goes once the undo unlists its paragraph.
  */
 export function undoneProposals(registry: DocumentRegistry, step: unknown): UndoneProposal[] {
+  const originals = unlistedMarkElements(registry, step as Step);
+  const out: UndoneProposal[] = [];
+  for (const { paragraph, target } of undonePlaces(registry, step)) {
+    const found: { node: LogicalId; level: Level; from: LogicalId }[] = [];
+    foreignProposals(registry, paragraph, 'paragraphProperties', step as Step, found);
+    for (const proposal of found) out.push({ ...proposal, kind: 'foreign', paragraph, target });
+    const mark = childAt(registry, paragraph, 'paragraphProperties');
+    if (mark && holdsProposal(registry, mark, 'paragraphProperties'))
+      out.push({ kind: 'carried', originals, mark, paragraph, target });
+  }
+  return out;
+}
+
+/**
+ * Before an undo of `step`: each paragraph the step listed, with the paragraph shown before it
+ * that the step did not list, where its text joins once the undo unlists it. A paragraph
+ * shown first has no such place.
+ */
+export function undonePlaces(
+  registry: DocumentRegistry,
+  step: unknown
+): { readonly paragraph: LogicalId; readonly target: LogicalId }[] {
   const nodes = registry.schema.nodes;
   const listed = new Map<LogicalId, Set<LogicalId>>();
   for (const run of deleteSetRuns((step as Step)?.insertions)) {
@@ -224,8 +280,7 @@ export function undoneProposals(registry: DocumentRegistry, step: unknown): Undo
       }
     }
   }
-  const originals = unlistedMarkElements(registry, step as Step);
-  const out: UndoneProposal[] = [];
+  const out: { paragraph: LogicalId; target: LogicalId }[] = [];
   for (const [parent, ids] of listed) {
     const children = childIdsOf(registry, parent);
     const order = splitSiblingOrder(children, registry.splitSiblings.ranksOf(parent));
@@ -234,16 +289,7 @@ export function undoneProposals(registry: DocumentRegistry, step: unknown): Undo
     for (const id of shown) {
       if (!ids.has(id)) {
         if (registry.showsAsChild(id) && registry.inline.textOf(id)) target = id;
-        continue;
-      }
-      if (!target) continue;
-      const found: { node: LogicalId; level: Level; from: LogicalId }[] = [];
-      foreignProposals(registry, id, 'paragraphProperties', step as Step, found);
-      for (const proposal of found)
-        out.push({ ...proposal, kind: 'foreign', paragraph: id, target });
-      const mark = childAt(registry, id, 'paragraphProperties');
-      if (originals.length > 0 && mark && holdsProposal(registry, mark, 'paragraphProperties'))
-        out.push({ kind: 'carried', originals, paragraph: id, target });
+      } else if (target) out.push({ paragraph: id, target });
     }
   }
   return out;
@@ -376,16 +422,20 @@ export function relistUndoneProposals(
       continue;
     }
     if (showsProposal(registry, moves, target)) continue;
-    for (const node of proposal.originals) {
+    const original = proposal.originals.find((node) => {
       const from = registry.parentOf(node);
       const level = levelOf(registry, node);
-      if (!from || !level || !holdsProposal(registry, node, level)) continue;
+      if (!from || !level || !holdsProposal(registry, node, level)) return false;
       // An original that shows already keeps its place.
       const shown = moves.shownChildIds(from, childIdsOf(registry, from)).includes(node);
-      if (shown && registry.showsAsChild(node)) continue;
-      placeOnTarget(registry, moves, { node, level, from }, target, paragraph, done);
-      break;
-    }
+      return !shown || !registry.showsAsChild(node);
+    });
+    // Without an original the undo listed again, the copy the undo kept goes there.
+    const node = original ?? proposal.mark;
+    const from = registry.parentOf(node);
+    const level = levelOf(registry, node);
+    if (!from || !level || !holdsProposal(registry, node, level)) continue;
+    placeOnTarget(registry, moves, { node, level, from }, target, paragraph, done);
   }
   return done;
 }
@@ -398,5 +448,125 @@ export function restoreRelisted(
   for (const { node, from, to, paragraph } of [...relisted].reverse()) {
     if (registry.parentOf(paragraph) === null) continue;
     relist(registry, node, to, from);
+  }
+}
+
+/** The attributes of a mark element, which a copy of it carries alike. */
+function signatureOf(registry: DocumentRegistry, id: LogicalId): string | null {
+  const record = registry.record(id);
+  if (!record || !('attributes' in record)) return null;
+  return record.attributes
+    .map((attribute) => `${attribute.namespaceUri} ${attribute.localName}=${attribute.value}`)
+    .sort()
+    .join('\n');
+}
+
+/** The `w:ins` of the proposal `paragraph`'s mark shows, or null. */
+function shownProposal(
+  registry: DocumentRegistry,
+  moves: SplitMarkMoves,
+  paragraph: LogicalId
+): LogicalId | null {
+  let parent: LogicalId | null = paragraph;
+  for (const level of ['paragraphProperties', 'runProperties', 'ins'] as const) {
+    parent = parent && shownChildAt(registry, moves, parent, level);
+  }
+  return parent;
+}
+
+/** The paragraph whose mark lists `ins`, a mark's `w:ins`. */
+function markParagraphOf(registry: DocumentRegistry, ins: LogicalId): LogicalId | null {
+  const runProperties = registry.parentOf(ins);
+  const paragraphProperties = runProperties && registry.parentOf(runProperties);
+  return paragraphProperties && registry.parentOf(paragraphProperties);
+}
+
+/** Another participant's copy of a break proposal an undone split wrote. */
+export interface ProposalCopy {
+  readonly node: LogicalId;
+  readonly from: LogicalId;
+  /** The paragraph the undo unlists. */
+  readonly paragraph: LogicalId;
+  /** The paragraph whose mark shows the copy: the one shown before `paragraph`. */
+  readonly target: LogicalId;
+}
+
+/**
+ * Before an undo of `step`: the copies of the step's own break proposals that show where the
+ * undo joins a paragraph's text. A split of the paragraph that shows a proposal copies its
+ * mark, proposal and all, into its new paragraph. That copy then shows the break the undone
+ * split proposed, so the undo takes it back too.
+ */
+export function proposalCopies(registry: DocumentRegistry, step: unknown): ProposalCopy[] {
+  const places = undonePlaces(registry, step);
+  if (places.length === 0) return [];
+  // The step's new paragraphs carry copies of the split paragraph's mark, with any proposal
+  // it showed: only a proposal on a paragraph the step did not list is the step's own.
+  const listed = new Set(places.map(({ paragraph }) => paragraph));
+  const own = new Set<LogicalId>();
+  const signatures = new Set<string>();
+  const insertions = (step as Step)?.insertions;
+  for (const run of deleteSetRuns(insertions)) {
+    for (let clock = run.clock; clock < run.clock + run.length;) {
+      const item = structAt(registry.doc, { client: run.client, clock });
+      if (!item) break;
+      clock = item.id.clock + item.length;
+      const array = item.parent;
+      if (item.deleted || !(array instanceof Y.Array) || fieldOf(array) !== NODE_CHILDREN_FIELD) {
+        continue;
+      }
+      for (const id of item.content.getContent()) {
+        if (typeof id !== 'string' || levelOf(registry, id as LogicalId) !== 'ins') continue;
+        own.add(id as LogicalId);
+        const paragraph = markParagraphOf(registry, id as LogicalId);
+        if (paragraph === null || listed.has(paragraph)) continue;
+        const signature = signatureOf(registry, id as LogicalId);
+        if (signature) signatures.add(signature);
+      }
+    }
+  }
+  if (signatures.size === 0) return [];
+  const moves = new SplitMarkMoves(registry);
+  moves.refresh(registry, registry.splitSiblings.parentsWithRuns());
+  const out: ProposalCopy[] = [];
+  for (const { paragraph, target } of places) {
+    const node = shownProposal(registry, moves, target);
+    const from = node && registry.parentOf(node);
+    if (!node || !from || own.has(node)) continue;
+    const signature = signatureOf(registry, node);
+    if (signature && signatures.has(signature)) out.push({ node, from, paragraph, target });
+  }
+  return out;
+}
+
+/** After the undo: unlist each copy that still shows on its target. Returns those it unlisted. */
+export function removeProposalCopies(
+  registry: DocumentRegistry,
+  copies: readonly ProposalCopy[]
+): ProposalCopy[] {
+  if (copies.length === 0) return [];
+  const moves = new SplitMarkMoves(registry);
+  moves.refresh(registry, registry.splitSiblings.parentsWithRuns());
+  const removed: ProposalCopy[] = [];
+  for (const copy of copies) {
+    if (registry.parentOf(copy.paragraph) !== null) continue;
+    if (shownProposal(registry, moves, copy.target) !== copy.node) continue;
+    const children = childArrayOf(registry.schema.nodes.get(copy.from));
+    const at = children ? children.toArray().indexOf(copy.node) : -1;
+    if (!children || at < 0) continue;
+    children.delete(at, 1);
+    removed.push(copy);
+  }
+  return removed;
+}
+
+/** On a redo of the undo that removed `copies`: each copy is listed again. */
+export function restoreProposalCopies(
+  registry: DocumentRegistry,
+  copies: readonly ProposalCopy[]
+): void {
+  for (const { node, from, paragraph } of copies) {
+    if (registry.parentOf(paragraph) === null || registry.parentOf(node) !== null) continue;
+    childArrayOf(registry.schema.nodes.get(from))?.insert(0, [node]);
   }
 }

@@ -25,11 +25,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import * as Y from 'yjs';
 import { composeSplitRanks, showGroupsInRankOrder, type SplitRunOrder } from './split-run-ranks.ts';
 import type { LogicalId } from './identity.ts';
-import { firstItem, mapEntry, structAt } from './yjs-items.ts';
+import { firstItem, mapEntry, originPasses, sameId, structAt } from './yjs-items.ts';
 import { itemIdentity, type Identity } from './paragraph-text-identity.ts';
 import { marksOfText } from './paragraph-text-marks.ts';
 import { childArrayOf, PACKAGE_NODES_KEY } from './schema.ts';
-import { splitAtIn, splitEntryOf, splitPointsOf, type SplitPoint } from './split-points.ts';
+import { inItem, splitAtIn, splitEntryOf, splitPointsOf, type SplitPoint } from './split-points.ts';
 
 /**
  * How many clocks of one paragraph's text the rule reads. It counts clocks, which every
@@ -86,16 +86,6 @@ function splitEarlier(first: readonly Identity[], second: readonly Identity[]): 
   const start = second[0];
   if (start === undefined || first.length === 0) return false;
   return first.indexOf(start) > 0 && second.indexOf(first[0]!) <= 0;
-}
-
-/** Whether `id` names an element of `item`. */
-function inItem(id: Y.ID | null, item: Y.Item): boolean {
-  return (
-    id !== null &&
-    id.client === item.id.client &&
-    id.clock >= item.id.clock &&
-    id.clock < item.id.clock + item.length
-  );
 }
 
 /**
@@ -216,8 +206,11 @@ export function splitSiblingRanks(
         continue;
       }
       // Its left origin is the paragraph the run follows, also when a paragraph listed later
-      // went in between, as a split at the start of that paragraph puts one.
-      if (!item.origin || !head.origin || !Y.compareIDs(item.origin, head.origin)) {
+      // went in between, as a split at the start of that paragraph puts one. A redo puts it
+      // after its left neighbor of that time: before its own entry in the run, that can be
+      // the removed entry of another run at the same place.
+      const own = blocks.some((block) => block.items.includes(removed));
+      if (!(own ? originPasses(item, head.origin) : sameId(item.origin, head.origin))) {
         pending.unshift(item);
         continue;
       }
