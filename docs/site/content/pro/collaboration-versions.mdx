@@ -196,7 +196,7 @@ Keep both server calls, and change the browser storage key. Update clients, serv
 
 ### Upgrade rooms to format 1.5.6.1
 
-Format `docx-collaboration:1.5.6.1` keeps text order when participants split a paragraph at the same time, and that paragraph came from an earlier concurrent split. It also shows each tracked paragraph break on the paragraph that ends at that break, so rejecting the breaks of one participant keeps the breaks of the others. Format `docx-collaboration:1.5.5.1` participants can show these paragraphs in a different order, so they refuse these rooms. The shared schema version stays the same.
+Format `docx-collaboration:1.5.6.1` keeps text order when participants split a paragraph at the same time, and that paragraph came from an earlier concurrent split. It also shows each tracked paragraph break on the paragraph that ends at that break, so rejecting the breaks of one participant keeps the breaks of the others. An insert of several lines made at the same time as a split keeps its line order. Format `docx-collaboration:1.5.5.1` participants can show these paragraphs in a different order, so they refuse these rooms. The shared schema version stays the same.
 
 Export each saved room with your current release. Check the paragraph order in the export before you reseed the room. Change the browser storage key, and upgrade clients, servers, export workers, and agents together.
 

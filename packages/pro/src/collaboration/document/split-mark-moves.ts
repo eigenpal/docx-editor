@@ -320,9 +320,9 @@ export function splitMarkMoves(registry: DocumentRegistry): SplitMarkMoves {
 /**
  * What changed in the runs of concurrent split siblings since the last build, added to a
  * view's dirty set: parents whose run shows in a new order because a sibling's text came after
- * its listing, and the nodes a proposal moved into or out of.
+ * its listing, and the nodes a proposal moved into or out of. True when anything changed.
  */
-export function splitSiblingChanges(registry: DocumentRegistry, dirty: Set<LogicalId>): void {
+export function splitSiblingChanges(registry: DocumentRegistry, dirty: Set<LogicalId>): boolean {
   const reordered = registry.splitSiblings.takeChanged();
   if (reordered.length > 0) registry.inline.orderChanged();
   for (const parent of reordered) dirty.add(parent);
@@ -331,5 +331,7 @@ export function splitSiblingChanges(registry: DocumentRegistry, dirty: Set<Logic
     const parent = registry.parentOf(id);
     if (parent) parents.add(parent);
   }
-  for (const id of splitMarkMoves(registry).refresh(registry, parents)) dirty.add(id);
+  const changed = splitMarkMoves(registry).refresh(registry, parents);
+  for (const id of changed) dirty.add(id);
+  return reordered.length > 0 || changed.length > 0;
 }

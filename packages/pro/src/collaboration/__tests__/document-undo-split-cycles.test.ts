@@ -3,9 +3,9 @@ Copyright (c) 2026 Eigenpal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// Several undos and redos of tracked concurrent splits, two rounds deep. Each undo joins the
-// split's text back in order and takes back only its own break, each redo shows what the
-// paragraphs showed before its undo, and rejecting every break gives back the text.
+// Several undos and redos of tracked concurrent splits, two or three rounds deep. Each undo
+// joins the split's text back in order and takes back only its own break, each redo shows what
+// the paragraphs showed before its undo, and rejecting every break gives back the text.
 
 import { afterAll, afterEach, describe, expect, setSystemTime, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
@@ -97,6 +97,18 @@ const CASES: {
     ],
     steps: ['bob', 'bob', 'redo', 'redo', 'bob', 'bob'],
     shown: ['a; b; c; d; ', 'e; f; g; ', 'h; i; j;', 'Signed'],
+  },
+  {
+    // Bob's undos take back the copies of his first break, and Alice's undos list the marks
+    // her splits replaced again: those must not show that break again.
+    name: 'three rounds deep, Bob undoes his splits first',
+    rounds: [
+      { index: 0, alice: 'b; ', bob: 'h; ' },
+      { index: 1, alice: 'e; ', bob: 'c; ' },
+      { index: 3, alice: 'f; ', bob: 'g; ' },
+    ],
+    steps: ['bob', 'bob', 'bob', 'alice', 'alice', 'alice'],
+    shown: [TEXT, 'Signed'],
   },
 ];
 

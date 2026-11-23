@@ -31,13 +31,16 @@ import {
   proposalCopies,
   relistUndoneProposals,
   removeProposalCopies,
+  removeStaleProposals,
   restoreProposalCopies,
   restoreRelisted,
+  staleRestoredProposals,
   undoKeepsCarried,
   undoKeepsProperties,
   undoneProposals,
   type ProposalCopy,
   type RelistedProposal,
+  type StaleProposal,
   type UndoneProposal,
 } from './undo-kept-properties.ts';
 
@@ -186,6 +189,7 @@ export function stepHistory(
   let proposals: readonly UndoneProposal[] = [];
   let texts: readonly UndoneText[] = [];
   let copies: readonly ProposalCopy[] = [];
+  let stale: readonly StaleProposal[] = [];
   let formatted: ReadonlySet<Y.Text> = new Set();
   if (copiesOnly || (runs.length > 0 && nothingElse(registry, popped))) {
     stack.pop();
@@ -196,6 +200,7 @@ export function stepHistory(
         proposals = undoneProposals(registry, popped);
         texts = undoneTexts(registry, popped);
         copies = proposalCopies(registry, popped);
+        stale = staleRestoredProposals(registry, popped);
         formatted = textsOfStep(registry, popped);
         noteUndoneParagraphTargets(registry.doc, registry.schema.nodes, popped, (write) =>
           registry.doc.transact(write, RESTORE_ORIGIN)
@@ -240,6 +245,7 @@ export function stepHistory(
       pushed ??= pushCopiesOnly(opposite);
       pushed.meta.set(REMOVED_COPIES, removed);
     }
+    removeStaleProposals(registry, stale);
     const relisted = relistUndoneProposals(registry, proposals);
     for (const text of formatted) clearStaleRunProperties(text);
     if (relisted.length > 0) {
