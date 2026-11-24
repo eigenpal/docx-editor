@@ -221,6 +221,7 @@ describe('Korean formats', () => {
       [12345, '일이삼사오'],
     ]);
     expectSequence('koreanDigital2', [
+      [0, '\uf9b2'],
       [1, '一'],
       [10, '一零'],
       [100, '一零零'],
@@ -261,6 +262,57 @@ describe('Korean formats', () => {
       [14, 'ㅎ'],
       [15, 'ㄱ'],
       [393, 'ㄱ'],
+    ]);
+  });
+});
+
+describe('Japanese and sexagenary formats', () => {
+  test('Japanese legal and digit formats', () => {
+    expectSequence('japaneseLegal', [
+      [0, '〇'],
+      [1, '壱'],
+      [10, '壱拾'],
+      [101, '壱百壱'],
+      [12345, '壱萬弐阡参百四拾伍'],
+      [100000, '壱拾萬'],
+    ]);
+    expectSequence('ideographDigital', [
+      [0, '〇'],
+      [10, '一〇'],
+      [123456, '一二三四五六'],
+    ]);
+    expectSequence('japaneseDigitalTenThousand', [
+      [9999, '九九九九'],
+      [10000, ''],
+    ]);
+  });
+
+  test('kana formats cycle one letter', () => {
+    expectSequence('aiueo', [
+      [0, '0'],
+      [1, 'ｱ'],
+      [46, 'ﾝ'],
+      [47, 'ｱ'],
+    ]);
+    expectSequence('aiueoFullWidth', [
+      [44, 'ワ'],
+      [45, 'ヲ'],
+    ]);
+    expectSequence('iroha', [
+      [25, 'ヰ'],
+      [48, 'ﾝ'],
+      [49, 'ｲ'],
+    ]);
+    expectSequence('irohaFullWidth', [[3, 'ハ']]);
+  });
+
+  test('ideographZodiacTraditional counts the 60-year cycle', () => {
+    expectSequence('ideographZodiacTraditional', [
+      [0, '0'],
+      [1, '甲子'],
+      [11, '甲戍'],
+      [60, '癸亥'],
+      [61, '甲子'],
     ]);
   });
 });

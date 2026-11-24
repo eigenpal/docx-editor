@@ -123,9 +123,14 @@ export function synthesizeAtomicField(
     (pending.cachedText.length > 0 || !pending.sawResultContent)
   ) {
     // The marker records the switches the placeholder was measured through, so finalize
-    // renders the value the same way. The switches do not depend on the section format.
+    // renders the value the same way. The switches do not depend on the section format; a
+    // PAGE field without switches measures in it.
     return {
-      text: pageFieldMeasuredText(pending.pageSwitches, pending.cachedText),
+      text: pageFieldMeasuredText(
+        pending.pageSwitches,
+        pending.cachedText,
+        pending.kind === 'PAGE' ? ctx.bodyPageFields.format : undefined
+      ),
       props: pending.props,
       style: pending.style,
       pageField: pageFieldMarker(pending.kind, pending.pageSwitches),

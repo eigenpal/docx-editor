@@ -16,7 +16,7 @@ const DEVANAGARI_DIGITS = '०१२३४५६७८९';
 const RLM = '‏';
 const ZWNJ = '‌';
 
-/** 1..392, wrapping larger values; 0 has no letter form. */
+/** 1..392, wrapping larger values; 0 has no letter form and renders nothing. */
 function wrapped(value: number): number {
   return value < 1 ? 0 : ((value - 1) % LETTER_SEQUENCE_PERIOD) + 1;
 }
@@ -24,7 +24,7 @@ function wrapped(value: number): number {
 /** `hebrew1`: Hebrew numerals, 15 and 16 written טו and טז. */
 export function formatHebrew1(value: number): string {
   const n = wrapped(value);
-  if (n === 0) return String(value);
+  if (n === 0) return '';
   const hundreds = HEBREW_HUNDREDS[Math.floor(n / 100)]!;
   const rest = n % 100;
   if (rest === 15) return `${hundreds}טו`;
@@ -35,7 +35,7 @@ export function formatHebrew1(value: number): string {
 /** `hebrew2`: the 22 letters, then ת repeated before them, after a right-to-left mark. */
 export function formatHebrew2(value: number): string {
   const n = wrapped(value);
-  if (n === 0) return String(value);
+  if (n === 0) return '';
   const letters = [...HEBREW_LETTERS];
   const last = letters[letters.length - 1]!;
   return (
@@ -46,7 +46,7 @@ export function formatHebrew2(value: number): string {
 /** One letter repeated once per pass through a 28-letter sequence, each copy with a joiner. */
 function repeatedLetter(value: number, sequence: string, joinerAfter: boolean): string {
   const n = wrapped(value);
-  if (n === 0) return String(value);
+  if (n === 0) return '';
   const letters = [...sequence];
   const letter = letters[(n - 1) % letters.length]!;
   const copy = joinerAfter ? letter + ZWNJ : ZWNJ + letter;
