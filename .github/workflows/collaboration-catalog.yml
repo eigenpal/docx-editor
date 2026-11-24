@@ -96,7 +96,7 @@ jobs:
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git config core.hooksPath /dev/null
-            git add .collaboration/releases.json .collaboration/releases/ docs/site/content/pro/collaboration-versions.mdx
+            git add .collaboration/releases.json .collaboration/releases/ docs/site/content/pro/collaboration-versions.mdx docs/site/data/collaboration-releases.json
             git commit -m "test: capture collaboration baseline $version"
             git push origin "$branch"
           fi
