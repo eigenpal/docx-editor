@@ -542,12 +542,14 @@ export function check(base, release = false, target = null) {
     releaseData(),
     'Release data is stale: run collaboration:catalog --table'
   );
-  // Last, so that an invalid format change reports its own error first.
+  // Last, so that an invalid format change reports its own error first. A rerun of a published
+  // release checks a format that already shipped, so no spacing remains to keep.
+  const rerun = release && latest.version === currentPackage;
   const formatChange = lastFormatChange(
     value.releases.slice(0, value.releases.indexOf(publishedBase) + 1)
   );
   validateFormatSpacing({
-    changed,
+    changed: rerun ? [] : changed,
     previous: () =>
       formatChange && {
         version: formatChange.version,

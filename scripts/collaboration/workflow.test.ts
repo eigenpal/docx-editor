@@ -191,6 +191,34 @@ test('a format change soon after the last one waits on the format branch', () =>
   expect(repo.check('--base', repo.base, '--target', 'collaboration-format-next').status).toBe(0);
 });
 
+test('a rerun of a published format release does not check its spacing again', () => {
+  const repo = repository({ publishedDaysAgo: 6 });
+  addFormatChange(repo);
+  repo.data('packages/pro/package.json', { version: '2.19.0' });
+  const released = repo.commit();
+  // The release check of the unpublished 2.19.0 keeps the spacing.
+  expect(repo.check('--release').stderr).toContain('6 days after 2.18.0');
+  const catalog = JSON.parse(readFileSync(join(repo.dir, '.collaboration/releases.json'), 'utf8'));
+  catalog.releases.push({
+    ...catalog.releases[0],
+    version: '2.19.0',
+    commit: released,
+    directory: '.collaboration/releases/2.19.0',
+    format: 'docx-collaboration:1.3.2.1',
+    versions: { ...catalog.releases[0].versions, repairVersion: 2 },
+  });
+  repo.data('.collaboration/releases.json', catalog);
+  execFileSync(
+    process.execPath,
+    [join(repo.dir, 'scripts/collaboration/cli.mjs'), 'catalog', '--table'],
+    { cwd: repo.dir }
+  );
+  repo.commit();
+  const result = repo.check('--release');
+  expect(result.stderr).toBe('');
+  expect(result.status).toBe(0);
+});
+
 test('a format change passes after the spacing or with a recorded reason', () => {
   const late = repository({ publishedDaysAgo: 31 });
   addFormatChange(late);
