@@ -16,9 +16,13 @@ import { styleIdFromProps } from './style-chain.ts';
 import { isValidStyleId } from './style-definition-reader.ts';
 import { paragraphFragmentsOf } from './semantic-record-queries.ts';
 import { lineSegments } from './line-segments.ts';
+import { projectRevisionFormatting } from './revision-formatting-projection.ts';
+import { DEFAULT_REVISION_DISPLAY_MODE } from './revision-projection.ts';
 import type { SemanticLayout } from './semantic-records.ts';
 import type { SemanticLayoutOptions } from './semantic-layout-options.ts';
 import type { CharacterStyleField } from './field-character-style.ts';
+import type { ResolvedListItem } from './list-resolve.ts';
+import { listItemReferenceNumber } from './list-reference-number.ts';
 
 const MAX_CHARACTER_STYLE_SCAN_NODES = 200_000;
 const MAX_OCCURRENCE_TEXT = 4096;
@@ -176,7 +180,13 @@ export function characterStyleIndex(
         options.revisionAuthorFilter
       );
       const found: Occurrence[] = [];
-      const paragraphStyle = paragraphStyleOf(node, styles);
+      // The style the view shows: a tracked paragraph-property change can restore an older one.
+      const shown = projectRevisionFormatting(
+        node,
+        options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
+        options.revisionAuthorFilter
+      );
+      const paragraphStyle = paragraphStyleOf(shown, styles);
       if (paragraphStyle && paragraphStyles.has(paragraphStyle))
         found.push(paragraphOccurrence(node.id, paragraphStyle, pieces));
       let previous: Occurrence | undefined;
@@ -239,11 +249,15 @@ export function characterStyleIndex(
   return index;
 }
 
-/** Page arrays retain document order. Lookup costs depend on occurrences, not body node count. */
+/**
+ * Page arrays retain document order. Lookup costs depend on occurrences, not body node count.
+ * `listItems` is the body's resolved numbering; without it, number switches keep saved results.
+ */
 export function characterStylePageValues(
   index: CharacterStyleIndex,
   layout: SemanticLayout,
-  queries: readonly CharacterStyleField[]
+  queries: readonly CharacterStyleField[],
+  listItems?: ReadonlyMap<string, ResolvedListItem>
 ): readonly ReadonlyMap<string, string>[] {
   const locations = new Map<Occurrence, { first: number; last: number }>();
   for (const [page, record] of layout.pages.entries()) {
@@ -279,6 +293,8 @@ export function characterStylePageValues(
   for (const query of queries) {
     const style = styleNamed(index.styles, query.name);
     if (!style) continue;
+    // A number belongs to a paragraph. A character style's runs have none to show.
+    if (query.numberSwitch !== null && (style.type !== 'paragraph' || !listItems)) continue;
     // Equal-page occurrences follow canonical source order, not visual bidi order.
     const occurrences: [Occurrence, { first: number; last: number }][] = [];
     for (const paragraph of index.byParagraph.values()) {
@@ -307,11 +323,24 @@ export function characterStylePageValues(
       while (active.length && occurrences[active[0]!]![1].last < page)
         popOccurrence(active, before);
       const selected = active[0] ?? (previous >= 0 ? previous : starts[start]);
-      const text = selected === undefined ? undefined : occurrences[selected]![0].text;
+      const occurrence = selected === undefined ? undefined : occurrences[selected]![0];
+      const text = occurrence && occurrenceValue(occurrence, query, listItems);
       if (text != null) result[page]!.set(query.key, text);
     }
   }
   return result;
+}
+
+/** What a query shows for its selected occurrence. Null keeps the saved result. */
+function occurrenceValue(
+  occurrence: Occurrence,
+  query: CharacterStyleField,
+  listItems: ReadonlyMap<string, ResolvedListItem> | undefined
+): string | null {
+  if (query.numberSwitch === null) return occurrence.text;
+  const item = listItems?.get(occurrence.paragraphId);
+  // A paragraph without a number reads as number zero.
+  return item ? listItemReferenceNumber(item, query.numberSwitch === 'n') : '0';
 }
 
 /** The style a reference names: a paragraph style outranks a character style of that name. */

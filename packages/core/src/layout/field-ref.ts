@@ -106,7 +106,7 @@ import {
   type AutonumFieldKind,
   type AutonumFieldSpec,
 } from './field-autonum.ts';
-import { composeFullContextNumber } from './list-counters.ts';
+import { listItemReferenceNumber, trimTrailingPeriod } from './list-reference-number.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
@@ -121,11 +121,7 @@ import {
 } from './revision-projection.ts';
 import { cacheProjection } from './bounded-projection-cache.ts';
 import { storyRowParagraphs } from './story-paragraph-walk.ts';
-import {
-  listItemNumberSource,
-  walkStoryParagraphs,
-  type ResolvedListItem,
-} from './list-resolve.ts';
+import { walkStoryParagraphs, type ResolvedListItem } from './list-resolve.ts';
 import { listNumValuesOf } from './list-resolve-listnum.ts';
 
 /** Ceiling on live-resolved REF fields per story; fields past it keep their cached results. */
@@ -520,11 +516,6 @@ function carriedPageRefCells(blocks: readonly OoxmlElement[]): Map<string, PageR
   return carried;
 }
 
-/** Word trims one trailing period off a referenced number: `1.` → `1`, `1.2` stays `1.2`. */
-function trimTrailingPeriod(marker: string): string {
-  return marker.length > 1 && marker.endsWith('.') ? marker.slice(0, -1) : marker;
-}
-
 /**
  * Note parts whose stories join the context: their REF fields resolve against the body's
  * bookmarks and numbering (a footnote citing "Section 1.2(c)" targets a body paragraph),
@@ -683,32 +674,12 @@ function buildRefFieldContext(
         const autonum = autonumByParagraph.get(target.id);
         return autonum !== undefined ? trimTrailingPeriod(autonum) : null;
       }
-      // `\r` / `\w`: full context — a deep level's marker states only its own placeholder,
-      // and painting bare `(c)` for a `1.2(c)` target is worse than the stale cache. `\n`:
-      // the target's own level only, per Word's cached values for that switch. Items built
-      // outside `resolveStoryListItems` carry no counter source; their marker is the bounded
-      // fallback — except under `\t`, whose filter runs on the level TEMPLATES and cannot
-      // strip an already-expanded marker, so that pairing keeps the cache.
-      const source = listItemNumberSource(item);
-      const composed =
-        source !== undefined
-          ? composeFullContextNumber(
-              source,
-              spec.numberSwitch === 'n',
-              mods.suppressNonDelimiterText
-            )
-          : null;
-      // A bullet has a marker but no number a reader can cite — cached fallback, not a glyph.
-      const fallback =
-        !mods.suppressNonDelimiterText &&
-        item.numFmt !== 'bullet' &&
-        item.numFmt !== 'none' &&
-        item.markerText.length > 0
-          ? item.markerText
-          : null;
-      const value = composed ?? fallback;
-      if (value === null) return null;
-      return trimTrailingPeriod(value);
+      // `\r` / `\w` read the full context and `\n` the target's own level.
+      return listItemReferenceNumber(
+        item,
+        spec.numberSwitch === 'n',
+        mods.suppressNonDelimiterText
+      );
     }
     // `\t` on a plain REF would filter the bookmarked TEXT, which has no counter template to
     // filter against — cached fallback, the pre-existing degradation for that shape.
