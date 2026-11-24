@@ -1,5 +1,12 @@
 # @docx-editor.dev/docx-to-pdf
 
+## 2.40.0
+
+### Patch Changes
+
+- aa385fa: Fill the automatic space between East Asian text and Latin letters or digits with the highlight or shading of the text before it, on screen and in PDF export.
+- Updated dependencies: @docx-editor.dev/core@2.40.0, @docx-editor.dev/fonts-cjk@2.40.0, @docx-editor.dev/fonts@2.40.0, @docx-editor.dev/pro@2.40.0
+
 ## 2.39.0
 
 ### Patch Changes
