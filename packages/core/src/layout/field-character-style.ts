@@ -1,4 +1,5 @@
-// Local character-style field recognition. Unknown switches keep their cached result.
+// STYLEREF field recognition (ECMA-376 Part 1, 17.16.5.59). `\l`, `\n`, and `\w` resolve per page;
+// other switches keep their cached result.
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import {
   MAX_FIELD_INSTRUCTION_CHARS,

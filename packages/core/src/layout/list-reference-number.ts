@@ -1,4 +1,5 @@
-// The number a field number switch reads from a list paragraph (REF and STYLEREF).
+// The number a field number switch reads from a list paragraph: REF and STYLEREF `\n`, `\r`,
+// and `\w` (ECMA-376 Part 1, 17.16.5.51 and 17.16.5.59).
 import { composeFullContextNumber } from './list-counters.ts';
 import { listItemNumberSource, type ResolvedListItem } from './list-resolve.ts';
 
