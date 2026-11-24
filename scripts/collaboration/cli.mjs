@@ -44,7 +44,11 @@ try {
       await createChange();
       break;
     case 'check':
-      check(option('base', 'origin/main'), process.argv.includes('--release'));
+      check(
+        option('base', 'origin/main'),
+        process.argv.includes('--release'),
+        option('target', null)
+      );
       break;
     case 'catalog':
       if (option('capture')) await capture(option('capture'));

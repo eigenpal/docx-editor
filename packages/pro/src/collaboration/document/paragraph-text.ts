@@ -30,7 +30,6 @@ import {
   type OoxmlElement,
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
-import type * as Y from 'yjs';
 import { emptyWmlElement, expectElement, withChildren } from './node-shapes.ts';
 import { rejectDangerousKey, type DocumentLimits } from './limits.ts';
 import { asLogicalId, type LogicalId } from './identity.ts';
@@ -806,27 +805,4 @@ function isHighSurrogate(value: string): boolean {
 function isLowSurrogate(value: string): boolean {
   const code = value.charCodeAt(0);
   return value.length === 1 && code >= 0xdc00 && code <= 0xdfff;
-}
-
-/**
- * Clear the `w:rPr` shell of text whose shell names properties the text no longer holds.
- * The shell and its property order are one attribute, and each property is another: when two
- * peers format one run and both undo, Yjs can take back the properties and leave the shell,
- * which then shows as an empty `w:rPr` the text never had. A run written with an empty
- * `w:rPr` names no properties, so it keeps its shell. Returns whether it cleared any.
- */
-export function clearStaleRunProperties(text: Y.Text): boolean {
-  const stale: { index: number; length: number }[] = [];
-  let index = 0;
-  for (const op of text.toDelta() as { insert: unknown; attributes?: Record<string, unknown> }[]) {
-    const length = typeof op.insert === 'string' ? op.insert.length : 1;
-    const attributes = op.attributes ?? {};
-    const shell = parseJson(attributes[KEY_RUN_PROPERTIES]);
-    const order = isRecord(shell) && Array.isArray(shell.o) ? shell.o : [];
-    const holds = Object.keys(attributes).some((key) => key.startsWith(PROPERTY_PREFIX));
-    if (order.length > 0 && !holds) stale.push({ index, length });
-    index += length;
-  }
-  for (const range of stale) text.format(range.index, range.length, { [KEY_RUN_PROPERTIES]: null });
-  return stale.length > 0;
 }

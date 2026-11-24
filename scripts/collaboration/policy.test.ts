@@ -8,6 +8,10 @@ import {
   relevant,
   validateRecord,
   validateRecordSet,
+  FORMAT_BRANCH,
+  lastFormatChange,
+  validateBatchFields,
+  validateFormatSpacing,
   validateSupersedes,
   validateVersionChange,
 } from './policy.mjs';
@@ -260,6 +264,93 @@ describe('format version policy', () => {
     expect(compareVersions('2.18.10', '2.18.9')).toBeGreaterThan(0);
     expect(compareVersions('2.19.0', '2.18.99')).toBeGreaterThan(0);
     expect(() => compareVersions('2.19.0-beta.1', '2.18.0')).toThrow('stable');
+  });
+});
+
+describe('combined format releases', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const shipped = Date.parse('2026-11-18T12:00:00Z');
+  const previous = { version: '2.39.0', shipped };
+  const migration = { ...record, impact: 'migration-required', fields: ['repairVersion'] };
+  const spacing = (overrides: object) =>
+    validateFormatSpacing({
+      changed: ['repairVersion'],
+      previous,
+      now: shipped + 6 * DAY,
+      records: [migration],
+      target: 'main',
+      ...overrides,
+    });
+
+  test('a format change soon after the last one fails outside the format branch', () => {
+    expect(() => spacing({})).toThrow(/6 days after 2\.39\.0/);
+    expect(() => spacing({ target: null })).toThrow(FORMAT_BRANCH);
+  });
+  test('the format branch collects format changes at any time', () =>
+    expect(() => spacing({ target: FORMAT_BRANCH })).not.toThrow());
+  test('a format change passes after the spacing, and an unchanged format always passes', () => {
+    expect(() => spacing({ now: shipped + 30 * DAY })).not.toThrow();
+    expect(() => spacing({ now: shipped + 29 * DAY })).toThrow(/29 days/);
+    expect(() => spacing({ changed: [] })).not.toThrow();
+  });
+  test('a recorded reason releases a format change early', () => {
+    const early = { ...migration, earlyRelease: 'Rooms lose text without this rule.' };
+    expect(() => spacing({ records: [early] })).not.toThrow();
+    // An early format release carries every unreleased format change: one migration.
+    expect(() => spacing({ records: [migration, early] })).not.toThrow();
+    // The release time is read only when the rule needs it.
+    const unread = () => {
+      throw new Error('read');
+    };
+    expect(() => spacing({ changed: [], previous: unread })).not.toThrow();
+    expect(() => spacing({ records: [early], previous: unread })).not.toThrow();
+    expect(() => spacing({ previous: unread })).toThrow('read');
+    expect(() => validateBatchFields(early, 'record.json')).not.toThrow();
+    expect(() => validateBatchFields({ ...early, earlyRelease: 'soon' }, 'record.json')).toThrow(
+      'cannot wait'
+    );
+    expect(() =>
+      validateBatchFields({ ...record, earlyRelease: early.earlyRelease }, 'record.json')
+    ).toThrow('migration-required');
+  });
+  test('the last format change is the newest release with a new format', () => {
+    const releases = [
+      { version: '2.18.0', format: 'a' },
+      { version: '2.28.0', format: 'b' },
+      { version: '2.29.0', format: 'b' },
+    ];
+    expect(lastFormatChange(releases)?.version).toBe('2.28.0');
+    expect(lastFormatChange(releases.slice(0, 1))?.version).toBe('2.18.0');
+    expect(lastFormatChange([])).toBeNull();
+  });
+  test('a withdrawal names decisions, keeps the format, and has no Changeset', () => {
+    const reverts = 'a'.repeat(40);
+    const withdrawal = { ...record, changeset: null, withdraws: ['nested-split-order'], reverts };
+    expect(() => validateBatchFields(withdrawal, 'record.json')).not.toThrow();
+    expect(() => validateBatchFields({ ...withdrawal, withdraws: [] }, 'record.json')).toThrow(
+      'decision identifiers'
+    );
+    expect(() =>
+      validateBatchFields({ ...withdrawal, withdraws: ['../escape'] }, 'record.json')
+    ).toThrow('decision identifiers');
+    expect(() =>
+      validateBatchFields({ ...withdrawal, withdraws: ['a-b', 'a-b'] }, 'record.json')
+    ).toThrow('duplicate');
+    expect(() =>
+      validateBatchFields({ ...withdrawal, changeset: 'release-note' }, 'record.json')
+    ).toThrow('no Changeset');
+    expect(() =>
+      validateBatchFields(
+        { ...migration, changeset: null, withdraws: ['nested-split-order'], reverts },
+        'record.json'
+      )
+    ).toThrow('cannot change the format');
+    expect(() =>
+      validateBatchFields({ ...withdrawal, reverts: 'a0b1c2d' }, 'record.json')
+    ).toThrow('full hash');
+    expect(() => validateBatchFields({ ...record, reverts }, 'record.json')).toThrow(
+      'reverts needs withdraws'
+    );
   });
 });
 

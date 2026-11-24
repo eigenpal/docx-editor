@@ -14,7 +14,7 @@ const changeFlags = [
 ];
 export const COMMAND_FLAGS = {
   change: Object.fromEntries(changeFlags.map((name) => [name, 'value'])),
-  check: { base: 'value', release: 'boolean' },
+  check: { base: 'value', release: 'boolean', target: 'value' },
   catalog: { capture: 'value', table: 'boolean', 'allow-current': 'boolean' },
   pack: {},
   verify: { candidate: 'value' },
@@ -31,7 +31,8 @@ Usage: bun run collaboration:<command> [options]
            --supersedes OLD[=>NEW],... retires tests a merged record lists,
            with --supersedes-reason explaining why. Without =>NEW, add
            --supersedes-category duplicate|feature-removed|moved-to-unit.
-  check    Check decisions. Optional: --base REF or --release.
+  check    Check decisions. Optional: --base REF or --release, and
+           --target BRANCH, the branch the change merges into.
   catalog  Verify the catalog. Use --capture VERSION to record a release,
            --table to update the guide, or --allow-current during a publish retry.
 

@@ -26,7 +26,8 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # collaboration-format-next collects collaboration format changes for one release.
+    branches: [main, collaboration-format-next]
 
 # Least-privilege default GITHUB_TOKEN: lint/test/build only read the repo.
 permissions:
@@ -336,12 +337,14 @@ jobs:
       - name: Collaboration policy
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          # The branch a pull request merges into. A push to main checks main.
+          TARGET_BRANCH: ${{ github.base_ref || github.ref_name }}
           RELEASE_BRANCH: ${{ startsWith(github.head_ref, 'changeset-release/') }}
         run: |
           if [ "$RELEASE_BRANCH" = true ]; then
             bun run collaboration:check --release
           else
-            bun run collaboration:check --base "$BASE_SHA"
+            bun run collaboration:check --base "$BASE_SHA" --target "$TARGET_BRANCH"
           fi
       - name: Pack collaboration candidate
         run: node scripts/collaboration/cli.mjs pack

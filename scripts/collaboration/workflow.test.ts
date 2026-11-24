@@ -18,7 +18,8 @@ const directories: string[] = [];
 afterEach(() => {
   for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
-function repository() {
+/** A fixture repository whose published release shipped `publishedDaysAgo` days ago. */
+function repository({ publishedDaysAgo = 60 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'collaboration-policy-history-'));
   directories.push(dir);
   const write = (file: string, text: string) => {
@@ -29,9 +30,13 @@ function repository() {
   const data = (file: string, value: unknown) => write(file, JSON.stringify(value, null, 2) + '\n');
   const git = (...args: string[]) =>
     execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
-  const commit = () => {
+  const commit = (daysAgo = 0) => {
     git('add', '.');
-    git('-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'fixture');
+    const date = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString();
+    execFileSync('git', ['-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'fixture'], {
+      cwd: dir,
+      env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date },
+    });
     return git('rev-parse', 'HEAD');
   };
   const check = (...args: string[]) =>
@@ -50,7 +55,7 @@ function repository() {
   write('packages/core/src/store/example.ts', 'export const value = 1;\n');
   data('packages/pro/package.json', { version: '2.18.0' });
   data('.changeset/config.json', { fixed: [['@docx-editor.dev/core', '@docx-editor.dev/pro']] });
-  const published = commit();
+  const published = commit(publishedDaysAgo);
   data('.collaboration/releases.json', {
     baseline: '2.18.0',
     releases: [
@@ -150,6 +155,181 @@ test('consumed Changesets are validated from the complete release range', () => 
   const result = repo.check('--release');
   expect(result.stderr).toBe('');
   expect(result.status).toBe(0);
+});
+
+/** Add a format change with its decision, Changeset, and version increase. */
+function addFormatChange(repo: ReturnType<typeof repository>, extra: object = {}) {
+  repo.data('.collaboration/changes/test-change.json', {
+    impact: 'migration-required',
+    fields: ['repairVersion'],
+    before: 'Old shared editing behavior.',
+    after: 'New shared editing behavior.',
+    reason: 'Participants read the same shared state differently.',
+    tests: ['scripts/collaboration/policy.test.ts'],
+    changeset: 'test-change',
+    migration: 'upgrade-saved-rooms',
+    ...extra,
+  });
+  repo.write(
+    '.changeset/test-change.md',
+    "---\n'@docx-editor.dev/pro': minor\n---\n\nBreaking collaboration upgrade. See #upgrade-saved-rooms.\n"
+  );
+  repo.write(
+    'packages/pro/src/collaboration/document-compatibility.ts',
+    'const versions = {protocolVersion: 1, sharedSchemaVersion: 3, repairVersion: 2, canonicalModelVersion: 1,};\n'
+  );
+}
+
+test('a format change soon after the last one waits on the format branch', () => {
+  const repo = repository({ publishedDaysAgo: 6 });
+  addFormatChange(repo);
+  repo.commit();
+  const refused = repo.check('--base', repo.base, '--target', 'main');
+  expect(refused.status).toBe(1);
+  expect(refused.stderr).toContain('6 days after 2.18.0');
+  expect(repo.check('--base', repo.base).stderr).toContain('collaboration-format-next');
+  expect(repo.check('--base', repo.base, '--target', 'collaboration-format-next').status).toBe(0);
+});
+
+test('a rerun of a published format release does not check its spacing again', () => {
+  const repo = repository({ publishedDaysAgo: 6 });
+  addFormatChange(repo);
+  repo.data('packages/pro/package.json', { version: '2.19.0' });
+  const released = repo.commit();
+  // The release check of the unpublished 2.19.0 keeps the spacing.
+  expect(repo.check('--release').stderr).toContain('6 days after 2.18.0');
+  const catalog = JSON.parse(readFileSync(join(repo.dir, '.collaboration/releases.json'), 'utf8'));
+  catalog.releases.push({
+    ...catalog.releases[0],
+    version: '2.19.0',
+    commit: released,
+    directory: '.collaboration/releases/2.19.0',
+    format: 'docx-collaboration:1.3.2.1',
+    versions: { ...catalog.releases[0].versions, repairVersion: 2 },
+  });
+  repo.data('.collaboration/releases.json', catalog);
+  execFileSync(
+    process.execPath,
+    [join(repo.dir, 'scripts/collaboration/cli.mjs'), 'catalog', '--table'],
+    { cwd: repo.dir }
+  );
+  repo.commit();
+  const result = repo.check('--release');
+  expect(result.stderr).toBe('');
+  expect(result.status).toBe(0);
+});
+
+test('a format change passes after the spacing or with a recorded reason', () => {
+  const late = repository({ publishedDaysAgo: 31 });
+  addFormatChange(late);
+  late.commit();
+  expect(late.check('--base', late.base, '--target', 'main').status).toBe(0);
+  const early = repository({ publishedDaysAgo: 6 });
+  addFormatChange(early, { earlyRelease: 'A reconnect removes text without this rule.' });
+  early.commit();
+  expect(early.check('--base', early.base, '--target', 'main').status).toBe(0);
+});
+
+const LOWER_FORMAT =
+  'const versions = {protocolVersion: 1, sharedSchemaVersion: 3, repairVersion: 1, canonicalModelVersion: 1,};\n';
+const withdrawal = (reverts: string, id = 'test-change') => ({
+  impact: 'compatible',
+  fields: [],
+  before: 'The unreleased format change is on the main branch.',
+  after: 'The format change waits for a combined release.',
+  reason: 'No release holds the change, so the published format returns.',
+  tests: ['scripts/collaboration/policy.test.ts'],
+  changeset: null,
+  migration: null,
+  withdraws: [id],
+  reverts,
+});
+/** A repository with a merged format change, then reverted without a withdrawal record. */
+function revertedFormatChange() {
+  const repo = repository({ publishedDaysAgo: 6 });
+  addFormatChange(repo);
+  repo.write('packages/pro/src/collaboration/rule.ts', 'export const rule = 2;\n');
+  const merged = repo.commit();
+  rmSync(join(repo.dir, '.collaboration/changes/test-change.json'));
+  rmSync(join(repo.dir, 'packages/pro/src/collaboration/rule.ts'));
+  repo.write('packages/pro/src/collaboration/document-compatibility.ts', LOWER_FORMAT);
+  return { repo, merged };
+}
+const HOLD = '.collaboration/changes/hold-test-change.json';
+
+test('a new record withdraws an unreleased format change with its Changeset', () => {
+  const { repo, merged } = revertedFormatChange();
+  // Without a withdrawal, the removed record and the lower version are refused.
+  expect(repo.check('--base', merged).stderr).toContain('Historical decision deleted');
+  repo.data(HOLD, withdrawal(merged));
+  expect(repo.check('--base', merged).stderr).toContain('remove .changeset/test-change.md');
+  rmSync(join(repo.dir, '.changeset/test-change.md'));
+  const result = repo.check('--base', merged, '--target', 'main');
+  expect(result.stderr).toBe('');
+  expect(result.status).toBe(0);
+  repo.commit();
+  expect(repo.check('--release').status).toBe(0);
+});
+
+test('a withdrawal covers only the files of the commit it reverts', () => {
+  const { repo, merged } = revertedFormatChange();
+  rmSync(join(repo.dir, '.changeset/test-change.md'));
+  repo.data(HOLD, withdrawal(merged));
+  repo.write('packages/core/src/store/example.ts', 'export const value = 2;\n');
+  expect(repo.check('--base', merged).stderr).toContain('Production changes need a Changeset');
+});
+
+test('a withdrawal names the commit that added the decision, in no release', () => {
+  const { repo, merged } = revertedFormatChange();
+  rmSync(join(repo.dir, '.changeset/test-change.md'));
+  repo.data(HOLD, withdrawal(repo.base));
+  expect(repo.check('--base', merged).stderr).toContain('did not add test-change');
+  repo.data(HOLD, withdrawal('0'.repeat(40)));
+  expect(repo.check('--base', merged).stderr).toContain('a commit that the base branch contains');
+  repo.data(HOLD, withdrawal(merged, 'other-change'));
+  expect(repo.check('--base', merged).stderr).toContain('other-change is not a merged decision');
+  repo.data(HOLD, withdrawal(merged));
+  repo.git('tag', 'v2.19.0', merged);
+  expect(repo.check('--base', merged).stderr).toContain('release v2.19.0 contains');
+});
+
+test('a decision that keeps the format cannot be withdrawn', () => {
+  const repo = repository();
+  repo.addDecision();
+  const merged = repo.commit();
+  rmSync(join(repo.dir, '.collaboration/changes/test-change.json'));
+  rmSync(join(repo.dir, '.changeset/test-change.md'));
+  repo.data(HOLD, withdrawal(merged));
+  expect(repo.check('--base', merged).stderr).toContain(
+    'only a migration-required decision can be withdrawn'
+  );
+});
+
+test('a withdrawn format change returns for a later release', () => {
+  const { repo, merged } = revertedFormatChange();
+  rmSync(join(repo.dir, '.changeset/test-change.md'));
+  repo.data(HOLD, withdrawal(merged));
+  const held = repo.commit();
+  addFormatChange(repo);
+  expect(repo.check('--base', held, '--target', 'collaboration-format-next').status).toBe(0);
+  expect(repo.check('--base', held, '--target', 'main').stderr).toContain('6 days after');
+  repo.data('packages/pro/package.json', { version: '2.19.0' });
+  repo.commit();
+  // The release check reads the change as one new decision, held record or not.
+  expect(repo.check('--release').stderr).toContain('6 days after 2.18.0');
+});
+
+test('a released decision cannot be withdrawn', () => {
+  const repo = repository();
+  repo.addDecision('migration-required');
+  const released = repo.commit();
+  const catalog = JSON.parse(readFileSync(join(repo.dir, '.collaboration/releases.json'), 'utf8'));
+  catalog.releases[0].commit = released;
+  repo.data('.collaboration/releases.json', catalog);
+  const base = repo.commit();
+  rmSync(join(repo.dir, '.collaboration/changes/test-change.json'));
+  repo.data(HOLD, withdrawal(released));
+  expect(repo.check('--base', base).stderr).toContain('is released and cannot be withdrawn');
 });
 
 test('historical decisions cannot be removed or rewritten', () => {

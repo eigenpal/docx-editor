@@ -20,29 +20,12 @@ import { markRestoredText, RESTORE_ORIGIN } from './paragraph-text-restore.ts';
 import { relistSplitEntries } from './split-points.ts';
 import { isElementRecord, isNodeMap, NODE_UNDONE_FIELD } from './schema.ts';
 import { textDeletionsOf, type DeletedRun } from './paragraph-text-deletions.ts';
-import { removeStrandedCopies, undoneTexts, type UndoneText } from './undo-stranded-copies.ts';
-import { deleteSetRuns, fieldOf, structAt } from './yjs-items.ts';
+import { deleteSetRuns, structAt } from './yjs-items.ts';
 import { textMarksOf } from './paragraph-text-marks.ts';
-import { clearStaleRunProperties, INLINE_FIELD } from './paragraph-text.ts';
+import { INLINE_FIELD } from './paragraph-text.ts';
 import { whileSteppingReplaced, whileUndoingCreations } from './undo-delete-filter.ts';
 import { ownDeletedRecords, redoRefusedDeletes } from './tombstone-guard.ts';
 import { noteUndoneParagraphTargets, undoKeeps } from './undo-unlisted-text.ts';
-import {
-  proposalCopies,
-  relistUndoneProposals,
-  removeProposalCopies,
-  removeStaleProposals,
-  restoreProposalCopies,
-  restoreRelisted,
-  staleRestoredProposals,
-  undoKeepsCarried,
-  undoKeepsProperties,
-  undoneProposals,
-  type ProposalCopy,
-  type RelistedProposal,
-  type StaleProposal,
-  type UndoneProposal,
-} from './undo-kept-properties.ts';
 
 /**
  * The part members a part always lists. Numbering definitions are not among them: concurrent
@@ -50,15 +33,6 @@ import {
  * record (`w15:commentEx`) is one: an undo that removes it must not see it adopted back.
  */
 const LISTED_MEMBERS = new Set(['comment', 'commentEx', 'footnote', 'endnote']);
-
-/** An item either rule keeps, or null when neither keeps any. */
-function eitherKeeps(
-  first: ((item: Y.Item) => boolean) | null,
-  second: ((item: Y.Item) => boolean) | null
-): ((item: Y.Item) => boolean) | null {
-  if (!first || !second) return first ?? second;
-  return (item) => first(item) || second(item);
-}
 
 /** The meta key under which a history step keeps the records its undo marked. */
 const MARKED = 'docx-undone-records';
@@ -108,10 +82,6 @@ export function markUndoneRecords(
 const COPY_RUNS = 'docx-copy-runs';
 /** The deletion records the undo that pushed this redo step wrote. */
 const HIDDEN_KEYS = 'docx-hidden-copies';
-/** The meta key under which a redo step keeps the proposals its undo relisted. */
-const RELISTED = 'docx-relisted-proposals';
-/** On an undo's redo step: the copies of the undone split's proposals the undo unlisted. */
-const REMOVED_COPIES = 'docx-removed-proposal-copies';
 /** A step with nothing for Yjs to reverse: only copies to hide or show again. */
 const COPIES_ONLY = 'docx-copies-only';
 /** The nodes whose deletion the undo that pushed this redo step took back. */
@@ -186,22 +156,12 @@ export function stepHistory(
   // it is popped and changes nothing. An ungrouped step may still pass over ungrouped
   // steps below it that changed nothing, as without groups, but stops above a group step.
   const grouped = popped?.meta.get(GROUP_STEP) === true;
-  let proposals: readonly UndoneProposal[] = [];
-  let texts: readonly UndoneText[] = [];
-  let copies: readonly ProposalCopy[] = [];
-  let stale: readonly StaleProposal[] = [];
-  let formatted: ReadonlySet<Y.Text> = new Set();
   if (copiesOnly || (runs.length > 0 && nothingElse(registry, popped))) {
     stack.pop();
   } else {
     const below = stack.splice(0, grouped ? stack.length - 1 : aboveLastGroupStep(stack));
     try {
       if (direction === 'undo') {
-        proposals = undoneProposals(registry, popped);
-        texts = undoneTexts(registry, popped);
-        copies = proposalCopies(registry, popped);
-        stale = staleRestoredProposals(registry, popped);
-        formatted = textsOfStep(registry, popped);
         noteUndoneParagraphTargets(registry.doc, registry.schema.nodes, popped, (write) =>
           registry.doc.transact(write, RESTORE_ORIGIN)
         );
@@ -215,13 +175,7 @@ export function stepHistory(
               popped as YjsStep | undefined,
               () => history.undo()
             ),
-          eitherKeeps(
-            eitherKeeps(
-              undoKeeps(registry.doc, registry.schema.nodes, popped),
-              undoKeepsProperties(registry.doc, registry.schema.nodes, popped)
-            ),
-            undoKeepsCarried(registry, popped)
-          )
+          undoKeeps(registry.doc, registry.schema.nodes, popped)
         );
       } else
         whileSteppingReplaced(registry.doc, registry.schema, popped as YjsStep | undefined, () =>
@@ -240,24 +194,6 @@ export function stepHistory(
   // so each paragraph they touch reads its text again once, not once per write. No undo
   // stack tracks that transaction.
   registry.doc.transact(() => {
-    const removed = removeProposalCopies(registry, copies);
-    if (removed.length > 0) {
-      pushed ??= pushCopiesOnly(opposite);
-      pushed.meta.set(REMOVED_COPIES, removed);
-    }
-    removeStaleProposals(registry, stale);
-    const relisted = relistUndoneProposals(registry, proposals);
-    for (const text of formatted) clearStaleRunProperties(text);
-    if (relisted.length > 0) {
-      pushed ??= pushCopiesOnly(opposite);
-      pushed.meta.set(RELISTED, relisted);
-    }
-    if (direction === 'redo') {
-      const back = runsOf<RelistedProposal>(popped, RELISTED);
-      if (back) restoreRelisted(registry, back);
-      const copied = runsOf<ProposalCopy>(popped, REMOVED_COPIES);
-      if (copied) restoreProposalCopies(registry, copied);
-    }
     afterStep();
     if (direction === 'redo' && popped) {
       redoRefusedDeletes(registry.doc, registry.schema.nodes, popped as YjsStep, ownDeletes, () => {
@@ -281,10 +217,6 @@ export function stepHistory(
       }
     }
   }, RESTORE_ORIGIN);
-  // Once the restore marks are in, the characters the undo put back follow the text they
-  // were typed after, unless a copy a later split left behind shows them.
-  if (texts.length > 0)
-    registry.doc.transact(() => removeStrandedCopies(registry, texts), RESTORE_ORIGIN);
   if (grouped) {
     // The step that undoes this undo is the group's step too, even when it changes nothing.
     pushed ??= pushCopiesOnly(opposite);
@@ -318,9 +250,7 @@ function identitySpans(
   const spans: { client: number; from: number; to: number }[] = [];
   for (let at = from; at < to;) {
     const restored = marks.origin('restore', client, at);
-    // A moved copy a redo wrote again carries a move mark too: it copies another character,
-    // which can be one this author wrote earlier, as the text of a document they seeded.
-    if (restored === null || restored.client !== client || marks.origin('move', client, at)) {
+    if (restored === null || restored.client !== client) {
       // Without a mark here, the rest of the insert has none either: a mark covers whole
       // inserts.
       const end = restored === null ? to : Math.min(to, restored.firstClock + restored.length);
@@ -370,22 +300,6 @@ function isParagraphCharacter(item: Y.Item): boolean {
     return false;
   }
   return inParagraphText(item);
-}
-
-/** The paragraph texts that hold formatting a step wrote or removed. */
-function textsOfStep(registry: DocumentRegistry, step: StackItemShape | undefined): Set<Y.Text> {
-  const texts = new Set<Y.Text>();
-  const shape = step as { insertions?: unknown; deletions?: unknown } | undefined;
-  for (const run of [...deleteSetRuns(shape?.insertions), ...deleteSetRuns(shape?.deletions)]) {
-    for (let clock = run.clock; clock < run.clock + run.length;) {
-      const item = structAt(registry.doc, { client: run.client, clock });
-      if (!item) break;
-      clock = item.id.clock + item.length;
-      if (item.content instanceof Y.ContentFormat && item.parent instanceof Y.Text)
-        if (fieldOf(item.parent) === INLINE_FIELD) texts.add(item.parent);
-    }
-  }
-  return texts;
 }
 
 /** Whether `item` sits in a paragraph's shared text; a deleted item may keep no content. */

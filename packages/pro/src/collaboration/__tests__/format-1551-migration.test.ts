@@ -137,6 +137,7 @@ describe('upgrade rooms to format 1.5.5.1', () => {
     expect(collaborationMigrationNeed(state)).toBe('earlier-format');
     expect(() => validateRoom(state)).toThrow(CollaborationSchemaError);
     expect(Buffer.from(state).toString('hex')).toBe(before);
+    expect(COLLABORATION_FORMAT_VERSION).toBe('docx-collaboration:1.5.5.1');
   });
 
   test('the guide steps export, dry-run, migrate, and rerun a room with a text box', async () => {
