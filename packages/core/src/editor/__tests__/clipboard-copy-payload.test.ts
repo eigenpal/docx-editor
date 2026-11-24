@@ -10,7 +10,12 @@ import {
   type FragmentCoverage,
   type OoxmlPackage,
 } from '@docx-editor.dev/core/store';
-import { RICH_CLIPBOARD_FIXTURE } from '../../store/__tests__/clipboard-fragment-fixtures.ts';
+import {
+  RICH_CLIPBOARD_FIXTURE,
+  bodyOf,
+  buildPackage,
+  paragraphIdsUnder,
+} from '../../store/__tests__/clipboard-fragment-fixtures.ts';
 import { paragraphLength } from '../../store/store/tree-op-segments.ts';
 import { buildCopyFlavours } from '../clipboard-copy-payload.ts';
 import { fragmentFromHtml } from '../clipboard-fragment-codec.ts';
@@ -133,6 +138,47 @@ describe('copy degrade tiers', () => {
     expect(flavours.html).not.toBeNull();
     expect(fragmentFromHtml(flavours.html!)).not.toBeNull();
   });
+});
+
+test('copying part of a paragraph beside a content-locked control keeps the fragment', () => {
+  // "Cited [1] here, and [2] there.": copying "[1] here" leaves the second chip in the trimmed
+  // tail. The copy wrote plain text only, so a paste lost the chip and the run formatting.
+  const chip = (tag: string, text: string): string =>
+    `<w:sdt><w:sdtPr><w:tag w:val="${tag}"/><w:lock w:val="contentLocked"/></w:sdtPr>` +
+    `<w:sdtContent><w:r><w:t>${text}</w:t></w:r></w:sdtContent></w:sdt>`;
+  const pkg = buildPackage(
+    '<w:p><w:r><w:t xml:space="preserve">Cited </w:t></w:r>' +
+      chip('first', '[1]') +
+      '<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve"> here, and </w:t></w:r>' +
+      chip('second', '[2]') +
+      '<w:r><w:t xml:space="preserve"> there.</w:t></w:r></w:p>'
+  );
+  const part = pkg.parts.get(pkg.mainDocumentPart)!;
+  const [id] = paragraphIdsUnder(bodyOf(part));
+  const flavours = buildCopyFlavours({
+    text: '[1] here',
+    cellRectangle: false,
+    coverage: {
+      partName: part.name,
+      paragraphIds: [id!],
+      startOffset: 6,
+      endOffset: 14,
+      coveredParagraphIds: [id!],
+      fullyCoveredBlockIds: [],
+      lastMarkCovered: false,
+    },
+    pkg,
+  });
+  expect(flavours.html).not.toBeNull();
+  const fragment = fragmentFromHtml(flavours.html!);
+  expect(fragment).not.toBeNull();
+  const read = readOoxmlPackage(fragment!.bytes);
+  expect(read.ok).toBe(true);
+  if (!read.ok) return;
+  const documentXml = new TextDecoder().decode(read.package.partBytes.get('/word/document.xml'));
+  expect(documentXml).toContain('w:val="first"');
+  expect(documentXml).not.toContain('w:val="second"');
+  expect(flavours.html).toContain('font-weight:bold');
 });
 
 test('the drawing showcase reports unsupported content instead of silently omitting its charts', () => {

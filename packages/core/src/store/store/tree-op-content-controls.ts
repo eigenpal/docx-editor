@@ -1661,11 +1661,24 @@ export function applyRemoveContentControl(
   // alone — Word deletes a contentLocked control whole (only sdtLocked forbids deletion),
   // and Backspace over a content-locked chip relies on it. The content lock guards the
   // characters while the control exists, not the control's existence.
+  return removeControlNode(part, control, op.keepContent === true, options);
+}
 
+/**
+ * Remove a resolved control from its owner, keeping or dropping its content, without asking
+ * its locks. `applyRemoveContentControl` asks them first. A caller that edits a private copy
+ * no participant sees, such as the clipboard fragment trim, may call it directly.
+ */
+export function removeControlNode(
+  part: OoxmlPart,
+  control: OoxmlNode,
+  keepContent: boolean,
+  options?: EditOptions
+): TreeOpResult {
   const owner = parentOf(part, control.id);
   if (!owner) return { ok: false, reason: 'tree-invariant' };
   const content = contentControlContentNodeOf(control);
-  const kept = op.keepContent && content ? [...content.children] : [];
+  const kept = keepContent && content ? [...content.children] : [];
   // A story that ends with a paragraph keeps it: a whole control after a final table goes only
   // with block content kept (`ooxml-story-end-repair.ts`).
   if (
