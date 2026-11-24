@@ -134,7 +134,12 @@ export function layoutWithCharacterHeaders(
   const seen = new Set<string>();
   if (previousToken) seen.add(previousToken);
   for (let pass = 0; pass < MAX_CHARACTER_HEADER_PASSES; pass += 1) {
-    const values = characterStylePageValues(index, current, [...queries.values()]);
+    const values = characterStylePageValues(
+      index,
+      current,
+      [...queries.values()],
+      options.listItems
+    );
     const contexts = contextsOf(current);
     // The first pass showed saved results. When no header changes height under the values it
     // selects, that pass already placed the body the projected passes would place, so only

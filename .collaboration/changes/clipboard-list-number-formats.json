@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The HTML clipboard flavor wrote every ordered list level as decimal unless its number format was a Latin letter or roman format. Paste read only those CSS counter styles back.",
+  "after": "Copy writes each list number format that has a predefined CSS counter style of the same numeral system as that style, and paste maps the style back to the number format.",
+  "reason": "The HTML flavor is written and read locally at the clipboard boundary. Paste still inserts the same fragment package through the existing rich paste operations, with only a different numFmt value in its numbering part. No shared field, operation, node identity, snapshot, or awareness payload changes.",
+  "tests": ["packages/core/src/editor/__tests__/clipboard-html-list-formats.test.ts"],
+  "changeset": "clipboard-list-number-formats",
+  "migration": null
+}

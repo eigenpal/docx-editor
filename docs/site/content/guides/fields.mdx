@@ -18,7 +18,7 @@ A DOCX field stores an instruction and an optional saved result. The editor pres
 | Field | Behavior |
 | --- | --- |
 | `PAGE`, `NUMPAGES`, `SECTIONPAGES` | Update in headers and footers. Body fields with an empty saved result also update. |
-| `STYLEREF` | Updates supported character-style and paragraph-style references in headers. A paragraph without a paragraph style matches the default paragraph style. A paragraph style outranks a character style with the same name. Supports `\l` and `\* MERGEFORMAT`. |
+| `STYLEREF` | Updates supported character-style and paragraph-style references in headers. A paragraph without a paragraph style matches the default paragraph style. A paragraph style outranks a character style with the same name. Supports `\l` and `\* MERGEFORMAT`. With `\n` or `\w`, shows the list number of a paragraph-style match: `\n` shows only the number text of the paragraph's own level, and `\w` adds the higher levels. A match without a number shows `0`. |
 | `REF` | Resolves bookmark text or numbering in the body and notes. |
 | `NOTEREF` | Resolves a bookmarked footnote or endnote reference number. |
 | `AUTONUM`, `AUTONUMLGL`, `AUTONUMOUT` | Generate separate number sequences in document order. |
@@ -181,6 +181,7 @@ Generated TOC rows are read-only. Delete and Backspace do not remove them. Conte
 - `LISTNUM` and `REF` in headers, footers, and text boxes keep their saved result.
 - `NOTEREF` with `\p` or `\f` keeps its saved result.
 - `STYLEREF` results longer than 4,096 characters keep their saved result.
+- `STYLEREF` with `\r`, `\t`, or `\p`, with `\n` or `\w` on a character style, or with `\n` or `\w` on a bullet or `none` number format match, keeps its saved result. In a document without a numbering part, `\n` and `\w` keep their saved results.
 - Header `STYLEREF` fields keep their saved results when the body exceeds the scan limits.
 - Header `STYLEREF` pagination stops with an error if it does not settle within its pass limit.
 - Option+F9 (macOS) or Alt+F9 (Windows) shows field instructions without changing the document.

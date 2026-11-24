@@ -430,7 +430,11 @@ function projectSimpleFieldDisplay(
     // The same marker the complex-field flush records: finalize renders the value through
     // the switches this placeholder was measured through.
     return {
-      text: pageFieldMeasuredText(pageField, display.text),
+      text: pageFieldMeasuredText(
+        pageField,
+        display.text,
+        pageField.kind === 'PAGE' ? args.bodyPageFields.format : undefined
+      ),
       props,
       style,
       pageField: pageFieldMarker(pageField.kind, pageField),

@@ -433,7 +433,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/toolbar#create-and-continue-lists',
     notes:
-      'Create numbered lists with decimal, Roman numeral, letter, and supported script-specific formats. Unsupported script-specific formats use decimal numbers. Document settings control marker spacing and indents.',
+      'Create numbered lists in decimal, Roman, letter, East Asian, Thai, Hindi, Russian, Vietnamese, and enclosed-digit formats. Custom number formats use decimal numbers. Document settings control marker spacing and indents.',
   },
   {
     id: 'lists.custom-numbering',
@@ -1106,7 +1106,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Header STYLEREF fields display text from supported character or paragraph styles by name. Unsupported switches and missing matches keep saved results. References in the body and footers also keep saved results.',
+      'Header STYLEREF fields display the text of a style match by name, or the list number of a paragraph-style match. Unsupported switches and missing matches keep saved results. Body and footer references also keep saved results.',
     docsLink: '/docs/2.x/guides/fields',
   },
   {
