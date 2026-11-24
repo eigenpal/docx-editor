@@ -10,6 +10,7 @@ import {
   formatHebrew2,
   formatHindiNumbers,
 } from './numbering-format-scripts.ts';
+import { formatAlphabetNumFmt } from './numbering-format-alphabets.ts';
 import { formatEastAsianNumFmt } from './numbering-format-east-asian.ts';
 
 /** Soft ceiling on an expanded marker string (codepoints). */
@@ -246,11 +247,11 @@ export function formatOrdinalText(value: number): string {
  * literal text, and formatting it as decimal invents a number the document never had.
  * `bullet` is not formatted here — callers use the literal `lvlText`.
  *
- * Chinese, Korean, and enclosed-digit formats come from `numbering-format-east-asian.ts`.
- * The remaining enumerants (`thaiNumbers`, `aiueo`, `japaneseLegal`, …) are per-script numeral
- * sequences we do not carry glyph tables for. They fall back to decimal deliberately: the
- * ORDINAL is still the authored one, only the script differs, which reads as a number in the
- * wrong alphabet rather than as a missing or wrong marker.
+ * Chinese, Japanese, Korean, and enclosed-digit formats come from
+ * `numbering-format-east-asian.ts`; Thai, Devanagari, Cyrillic, and Vietnamese formats come
+ * from `numbering-format-alphabets.ts`. `bahtText` and `dollarText` list text is the decimal
+ * number, so they use decimal, as do `custom` (its `w:format` pattern is not read) and unknown
+ * values.
  */
 export function formatNumFmt(numFmt: string, value: number): string {
   switch (numFmt) {
@@ -293,7 +294,11 @@ export function formatNumFmt(numFmt: string, value: number): string {
     case 'bullet':
       return '';
     default:
-      return formatEastAsianNumFmt(numFmt, clampListValue(value)) ?? formatDecimal(value);
+      return (
+        formatEastAsianNumFmt(numFmt, clampListValue(value)) ??
+        formatAlphabetNumFmt(numFmt, clampListValue(value)) ??
+        formatDecimal(value)
+      );
   }
 }
 

@@ -1,5 +1,5 @@
-// Chinese, Korean, and enclosed-digit `w:numFmt` values (`ST_NumberFormat`, ECMA-376 Part 1
-// §17.18.59).
+// Chinese, Japanese, Korean, and enclosed-digit `w:numFmt` values (`ST_NumberFormat`,
+// ECMA-376 Part 1, 17.18.59).
 //
 // Callers pass a value already clamped by `clampListValue` (0…999 999), so every string here
 // is short. The glyph sets are the standard's, except where DOCX applications render other
@@ -69,6 +69,16 @@ const JAPANESE_COUNTING: PlaceValueNumerals = {
   myriad: '万',
   gap: null,
   bareOne: 'always',
+  bareMyriad: false,
+};
+
+// `四`, `六`, `七`, `八`, and `九` have no legal form; `阡` is the legal thousand.
+const JAPANESE_LEGAL: PlaceValueNumerals = {
+  digits: '〇壱弐参四伍六七八九',
+  units: ['拾', '百', '阡'],
+  myriad: '萬',
+  gap: null,
+  bareOne: 'never',
   bareMyriad: false,
 };
 
@@ -157,13 +167,38 @@ function koreanLegal(value: number): string {
 }
 
 /**
- * `ganada` / `chosung`: a 14-letter set that starts again after the last letter (`하`, then
- * `가`). The standard repeats the letter instead (`가가` for 15); DOCX applications render one
- * letter.
+ * `ganada`, `chosung`, and the kana formats: a letter set that starts again after the last
+ * letter (`하`, then `가`). The standard repeats the letter instead (`가가` for 15); DOCX
+ * applications render one letter.
  */
 function cycledLetter(value: number, letters: string): string {
   if (value < 1) return String(value);
-  return letters[(value - 1) % letters.length]!;
+  const set = [...letters];
+  return set[(value - 1) % set.length]!;
+}
+
+// The 46 kana in a-i-u-e-o order. Both sets leave out `ヰ` and `ヱ`, which have no half-width
+// form.
+const AIUEO_HALF_WIDTH = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ';
+const AIUEO_FULL_WIDTH =
+  'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
+// The 48 kana in iroha order. The half-width set keeps the full-width `ヰ` and `ヱ`.
+const IROHA_HALF_WIDTH = 'ｲﾛﾊﾆﾎﾍﾄﾁﾘﾇﾙｦﾜｶﾖﾀﾚｿﾂﾈﾅﾗﾑｳヰﾉｵｸﾔﾏｹﾌｺｴﾃｱｻｷﾕﾒﾐｼヱﾋﾓｾｽﾝ';
+const IROHA_FULL_WIDTH =
+  'イロハニホヘトチリヌルヲワカヨタレソツネナラムウヰノオクヤマケフコエテアサキユメミシヱヒモセスン';
+
+const HEAVENLY_STEMS = '甲乙丙丁戊己庚辛壬癸';
+// The eleventh branch is `戍` (U+620D), as in `ideographZodiac`.
+const EARTHLY_BRANCHES = '子丑寅卯辰巳午未申酉戍亥';
+
+/**
+ * `ideographZodiacTraditional`: the 60-year cycle, a stem and a branch for each value
+ * (`甲子`, `乙丑`, … `癸亥`), starting again after 60.
+ */
+function sexagenary(value: number): string {
+  if (value < 1) return String(value);
+  const n = value - 1;
+  return HEAVENLY_STEMS[n % 10]! + EARTHLY_BRANCHES[n % 12]!;
 }
 
 /** A glyph for each value 1…`glyphs.length`, decimal beyond. */
@@ -195,6 +230,23 @@ export function formatEastAsianNumFmt(numFmt: string, value: number): string | n
       return placeValue(value, JAPANESE_COUNTING);
     case 'taiwaneseDigital':
       return digitByDigit(value, '○一二三四五六七八九');
+    case 'japaneseLegal':
+      return placeValue(value, JAPANESE_LEGAL);
+    case 'ideographDigital':
+      return digitByDigit(value, '〇一二三四五六七八九');
+    case 'japaneseDigitalTenThousand':
+      // DOCX applications write nothing from 10 000 up.
+      return value < 10000 ? digitByDigit(value, '〇一二三四五六七八九') : '';
+    case 'ideographZodiacTraditional':
+      return sexagenary(value);
+    case 'aiueo':
+      return cycledLetter(value, AIUEO_HALF_WIDTH);
+    case 'aiueoFullWidth':
+      return cycledLetter(value, AIUEO_FULL_WIDTH);
+    case 'iroha':
+      return cycledLetter(value, IROHA_HALF_WIDTH);
+    case 'irohaFullWidth':
+      return cycledLetter(value, IROHA_FULL_WIDTH);
     case 'ideographTraditional':
       return fromSet(value, '甲乙丙丁戊己庚辛壬癸');
     case 'ideographZodiac':

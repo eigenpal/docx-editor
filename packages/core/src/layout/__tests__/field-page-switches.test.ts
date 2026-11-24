@@ -217,7 +217,7 @@ describe('page-field number formats', () => {
     expect(page(781, 'upperLetter')).toBe(PAGE_FIELD_UNREPRESENTABLE);
     expect(page(3, 'numberInDash')).toBe('- 3 -');
     expect(page(3, 'japaneseCounting')).toBe('三');
-    expect(page(3, 'thaiNumbers')).toBe('3');
+    expect(page(3, 'thaiNumbers')).toBe('๓');
   });
 
   test('measures a body placeholder in the shape of the format', () => {

@@ -33,10 +33,10 @@ describe('numbering formatters', () => {
     expect(formatUpperLetter(27)).toBe('AA');
   });
 
-  test('per-script sequences we carry no glyphs for fall back to decimal', () => {
-    // Same ordinal, different script — a legible number beats a missing marker.
-    expect(formatNumFmt('aiueo', 3)).toBe('3');
-    expect(formatNumFmt('thaiNumbers', 3)).toBe('3');
+  test('text formats and unknown values fall back to decimal', () => {
+    // List text in `bahtText` and `dollarText` is the decimal number, not the amount in words.
+    expect(formatNumFmt('bahtText', 3)).toBe('3');
+    expect(formatNumFmt('dollarText', 3)).toBe('3');
     expect(formatNumFmt('not-a-format', 3)).toBe('3');
   });
 
