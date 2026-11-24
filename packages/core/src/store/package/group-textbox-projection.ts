@@ -1,4 +1,4 @@
-// Text box members of one `wpg:wgp` drawing group.
+// Text box members of one `wpg:wgp` drawing group, nested `wpg:grpSp` members included.
 //
 // A member's `a:xfrm` places it in the group's child space (`chOff`/`chExt`); the group
 // extent scales that space. The member's story lays out in the SCALED member box: insets and
@@ -6,19 +6,19 @@
 // The projection reads only the bounded group frame and the members' own properties; it never
 // walks a story, so the per-drawing element budget is not spent on paragraphs.
 
-import { groupFillOf } from './drawing-group-fill.ts';
-import { groupMemberPlacement } from './drawing-group-transform.ts';
+import {
+  flattenGroupMembers,
+  groupSpacePlacement,
+  rootGroupSpace,
+} from './drawing-group-members.ts';
 import { shapeRotationDegrees } from './drawing-shape-geometry.ts';
 import { shapeTransformElement } from './drawing-shape-transform.ts';
 import {
-  MAX_GROUP_SHAPE_CHILDREN,
-  isGroupPropertyChild,
   readDrawingGroupFrame,
   schemaFlagIsSet,
   schemaFlagIsUnset,
 } from './drawing-group-frame.ts';
 import type { DrawingProjection } from './drawing-projection.ts';
-import { isElement } from './drawing-projection-walk.ts';
 import {
   childTransform,
   findDirectChild,
@@ -40,13 +40,18 @@ import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 export interface GroupTextboxProjection {
   /** Canonical node id of the member `wps:wsp`; namespaces the story's line ids. */
   readonly memberNodeId: string;
-  /** The member box in the group's extent space, in EMU (origin at the extent's top-left). */
+  /**
+   * The box the member's story lays out in, in the group's extent space, in EMU (origin at
+   * the extent's top-left). It is the member box, or for vertical text the member box with
+   * its sides swapped about the same centre.
+   */
   readonly frameEmu: Readonly<{ x: number; y: number; cx: number; cy: number }>;
   /** The member's story, projected at the scaled member size. */
   readonly story: TextboxStoryProjection;
   /**
    * Clockwise turn of the member's text about the member box center, in degrees [0, 360):
-   * the member's `rot`, plus 180 for `flipV`. `flipH` never mirrors the text.
+   * the member's `rot`, plus 180 for `flipV`, plus a quarter turn for vertical text
+   * (`bodyPr/@vert`). `flipH` never mirrors the text.
    */
   readonly rotationDegrees: number;
 }
@@ -94,6 +99,38 @@ export function memberTextRotation(member: OoxmlElement): number | null {
   return Number.isFinite(turned) ? turned : null;
 }
 
+/**
+ * The quarter turn that `wps:bodyPr/@vert` gives a member's text: 90 for `vert`, 270 for
+ * `vert270`, and 0 otherwise. `eaVert` keeps East Asian glyphs upright in vertical lines, which
+ * a turned block cannot show, so it and the other values stay horizontal.
+ */
+function verticalFlowTurn(member: OoxmlElement): 0 | 90 | 270 {
+  const bodyPr = findDirectChild(member.children, {
+    namespaceUri: WPS_NAMESPACE_URI,
+    localName: 'bodyPr',
+  });
+  const raw = bodyPr ? schemaAttributeValue(bodyPr.attributes, 'vert') : undefined;
+  const vert = raw === undefined ? undefined : collapseSchemaWhitespace(raw);
+  if (vert === 'vert') return 90;
+  return vert === 'vert270' ? 270 : 0;
+}
+
+type Insets = Readonly<{ top: number; right: number; bottom: number; left: number }>;
+
+/**
+ * The shape's insets as the edges of text turned by `flowTurn`. A clockwise quarter turn puts
+ * the text's top at the shape's right edge; a counterclockwise one puts it at the left edge.
+ */
+function turnedInsets(insets: Insets, flowTurn: 0 | 90 | 270): Insets {
+  if (flowTurn === 90) {
+    return { top: insets.right, right: insets.bottom, bottom: insets.left, left: insets.top };
+  }
+  if (flowTurn === 270) {
+    return { top: insets.left, right: insets.top, bottom: insets.right, left: insets.bottom };
+  }
+  return { ...insets };
+}
+
 /** The `w:txbxContent` root of a `wps:wsp`, or null when it holds no story. */
 function storyRootOf(wsp: OoxmlElement): OoxmlElement | null {
   const txbx = findDirectChild(wsp.children, {
@@ -107,17 +144,18 @@ function storyRootOf(wsp: OoxmlElement): OoxmlElement | null {
 
 /**
  * The story roots of a group's text box members, in document order, for read-only
- * derivations such as Find. A bounded read of the group frame and its direct members only.
+ * derivations such as Find. A bounded read of the group frame and its members only.
  */
 export function groupTextboxContents(anchor: OoxmlElement): readonly OoxmlElement[] {
   const frame = readDrawingGroupFrame(anchor);
-  if (!frame) return [];
+  // Only the members and their order are read, so the scale does not matter. A group that
+  // cannot place a nested group paints a placeholder, so it reveals no text either.
+  const members = frame
+    ? flattenGroupMembers(frame, rootGroupSpace(frame, { cx: 0, cy: 0 }))
+    : null;
+  if (!members) return [];
   const roots: OoxmlElement[] = [];
-  let count = 0;
-  for (const child of frame.group.children) {
-    if (!isElement(child) || isGroupPropertyChild(child)) continue;
-    count += 1;
-    if (count > MAX_GROUP_SHAPE_CHILDREN) return [];
+  for (const { member: child } of members) {
     if (child.namespaceUri !== WPS_NAMESPACE_URI || child.localName !== 'wsp') continue;
     if (memberTextRotation(child) === null) continue;
     const root = storyRootOf(child);
@@ -145,17 +183,11 @@ export function projectGroupTextboxes(
   if (extent.cx <= 0 || extent.cy <= 0) return null;
   const frame = readDrawingGroupFrame(anchor);
   if (!frame) return null;
-  const { cx: chExtX, cy: chExtY } = frame.childExtentEmu;
-  const scaleX = chExtX > 0 ? extent.cx / chExtX : 0;
-  const scaleY = chExtY > 0 ? extent.cy / chExtY : 0;
+  const flattened = flattenGroupMembers(frame, rootGroupSpace(frame, extent));
+  if (!flattened) return null;
   const members: GroupTextboxProjection[] = [];
-  let count = 0;
   let onlyUnpaintedText = true;
-  const groupFill = groupFillOf(frame.group, null);
-  for (const child of frame.group.children) {
-    if (!isElement(child) || isGroupPropertyChild(child)) continue;
-    count += 1;
-    if (count > MAX_GROUP_SHAPE_CHILDREN) return null;
+  for (const { member: child, space, groupFill } of flattened) {
     if (
       !isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference, groupFill)
     ) {
@@ -168,15 +200,17 @@ export function projectGroupTextboxes(
     if (!transform) continue;
     // The text lays out in the box the member's shape paints in: a turned member's box maps
     // into the group extent before it turns.
-    const place = groupMemberPlacement(
+    const place = groupSpacePlacement(
       transform,
-      frame.childOffsetEmu,
-      scaleX,
-      scaleY,
+      space,
       shapeRotationDegrees(shapeTransformElement(child)) ?? 0
     );
-    const cx = Math.round(place.extent.cx * place.scaleX);
-    const cy = Math.round(place.extent.cy * place.scaleY);
+    const boxCx = Math.round(place.extent.cx * place.scaleX);
+    const boxCy = Math.round(place.extent.cy * place.scaleY);
+    // Vertical text lays out across the box, with the sides swapped about its centre, and
+    // turns a quarter: clockwise for top-to-bottom lines, counterclockwise for bottom-to-top.
+    const flowTurn = verticalFlowTurn(child);
+    const [cx, cy] = flowTurn === 0 ? [boxCx, boxCy] : [boxCy, boxCx];
     const story = projectWspTextboxStory(
       child,
       { cx, cy },
@@ -188,13 +222,16 @@ export function projectGroupTextboxes(
       Object.freeze({
         memberNodeId: child.id,
         frameEmu: Object.freeze({
-          x: Math.round(place.offset.x),
-          y: Math.round(place.offset.y),
+          x: Math.round(place.offset.x + (boxCx - cx) / 2),
+          y: Math.round(place.offset.y + (boxCy - cy) / 2),
           cx,
           cy,
         }),
-        story: Object.freeze({ ...story, insetsEmu: Object.freeze({ ...story.insetsEmu }) }),
-        rotationDegrees,
+        story: Object.freeze({
+          ...story,
+          insetsEmu: Object.freeze(turnedInsets(story.insetsEmu, flowTurn)),
+        }),
+        rotationDegrees: (rotationDegrees + flowTurn) % 360,
       })
     );
   }
