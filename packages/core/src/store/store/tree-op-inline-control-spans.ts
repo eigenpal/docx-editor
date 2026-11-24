@@ -43,10 +43,10 @@ function spanOfControl(
 }
 
 /**
- * The outermost inline content controls wholly inside `[start, end)` whose characters no edit
- * may touch: content locked (`contentLocked`, `sdtContentLocked`) or bound to a data store.
- * Deleting such a range as text is refused; removing each of these controls whole is what Word
- * does, and what the store allows unless the control's wrapper is locked too.
+ * The outermost inline content controls (`w:sdt`, §17.5.2.31) wholly inside `[start, end)` whose
+ * characters no edit may touch: `w:lock` (§17.5.2.23) is `contentLocked` or `sdtContentLocked`,
+ * or the control has a `w:dataBinding` (§17.5.2.6). The store refuses to delete such a range as
+ * text. It removes a `contentLocked` or bound control whole, and refuses a `sdtContentLocked` one.
  */
 export function wholeProtectedControlsIn(
   paragraph: OoxmlParagraphNode,

@@ -28,6 +28,8 @@ import { applyTreeOp } from './tree-op-apply.ts';
 import { explicitDocDefaults } from '../package/application-doc-defaults.ts';
 import { paragraphLength } from './tree-op-segments.ts';
 import { wholeProtectedControlsIn } from './tree-op-inline-control-spans.ts';
+import { removeControlNode } from './tree-op-content-controls.ts';
+import { findNode } from '../package/ooxml-edit.ts';
 import type { TreeDocOp } from './tree-op-types.ts';
 import { attributeValueOf } from './tree-op-nodes.ts';
 import {
@@ -131,12 +133,14 @@ function findParagraph(node: OoxmlNode, id: string): OoxmlElement | null {
 /**
  * Trim `[start, end)` off an edge paragraph of the working copy, or null when the store refuses.
  *
- * A whole inline control in the range whose characters are protected (content locked or bound)
- * goes as a node, and the text between such controls goes as text — the rule the delete gesture
- * follows (`surface-locked-control-delete.ts`). Deleting the range as text alone touched the
- * protected characters, so the store refused the trim, and copying part of any paragraph that
- * held such a control outside the selection wrote plain text only. Ops run from the end of the
- * range back, so no op shifts the offsets of the ops after it.
+ * A whole inline control (`w:sdt`, §17.5.2.31) in the range whose characters are protected goes
+ * as a node, and the text between such controls goes as text. Protected means `w:lock`
+ * (§17.5.2.23, `ST_Lock` §17.18.49) set to `contentLocked` or `sdtContentLocked`, or a `w:dataBinding`
+ * (§17.5.2.6). Deleting the range as text alone touched the protected characters, so the store
+ * refused the trim, and the copy wrote plain text only. The working copy is private and never
+ * committed, so the removal does not ask the control's locks: `sdtContentLocked` forbids
+ * deleting the control in the document, not leaving it out of a copy. Ops run from the end of
+ * the range back, so no op shifts the offsets of the ops after it.
  */
 function trimEdge(
   part: OoxmlPart,
@@ -149,23 +153,25 @@ function trimEdge(
   const controls = wholeProtectedControlsIn(paragraph as never, start, end).sort(
     (a, b) => b.start - a.start
   );
-  const ops: TreeDocOp[] = [];
-  let cursor = end;
-  for (const control of controls) {
-    if (control.end < cursor) {
-      ops.push({ op: 'deleteText', paragraphId, start: control.end, end: cursor });
-    }
-    ops.push({ op: 'removeContentControl', controlId: control.controlId, keepContent: false });
-    cursor = control.start;
-  }
-  if (start < cursor) ops.push({ op: 'deleteText', paragraphId, start, end: cursor });
   let trimmed = part;
-  for (const op of ops) {
+  const deleteText = (from: number, to: number): boolean => {
+    if (from >= to) return true;
+    const op: TreeDocOp = { op: 'deleteText', paragraphId, start: from, end: to };
     const applied = applyTreeOp(trimmed, op, { deferValidation: true });
-    if (!applied.ok) return null;
-    trimmed = applied.part;
+    if (applied.ok) trimmed = applied.part;
+    return applied.ok;
+  };
+  let cursor = end;
+  for (const span of controls) {
+    if (!deleteText(span.end, cursor)) return null;
+    const control = findNode(trimmed, span.controlId);
+    if (control?.kind !== 'contentControl') return null;
+    const removed = removeControlNode(trimmed, control, false, { deferValidation: true });
+    if (!removed.ok) return null;
+    trimmed = removed.part;
+    cursor = span.start;
   }
-  return trimmed;
+  return deleteText(start, cursor) ? trimmed : null;
 }
 
 /** A `w:styles` root for a fragment whose source has no styles part. */
