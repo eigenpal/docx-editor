@@ -526,6 +526,38 @@ describe('a caret left in a paragraph layout removes', () => {
   }
 });
 
+// An IF field's true text runs over paragraphs inside its instruction. Layout removes those
+// paragraphs, but their marks are field code, so a join never absorbs them.
+describe('paragraphs inside a field instruction', () => {
+  const field =
+    '<w:p><w:r><w:t>Alpha</w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+    '<w:r><w:instrText xml:space="preserve">IF 1 = 1 "</w:instrText></w:r></w:p>' +
+    '<w:p><w:r><w:instrText>Inside</w:instrText></w:r></w:p><w:p/>' +
+    '<w:p><w:r><w:instrText xml:space="preserve">" ""</w:instrText></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Yes</w:t></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+
+  const instructionParagraphs = async (surface: PaginatedSurface) =>
+    strFromU8(unzipSync(await surface.save())['word/document.xml']!)
+      .split('</w:p>')
+      .filter((paragraph) => paragraph.includes('<w:instrText'));
+
+  for (const [label, key, at] of [
+    ['Backspace at the field result', 'deleteBackward', 3],
+    ['Delete before the field', 'deleteForward', 0],
+  ] as const) {
+    test(`${label} keeps the field code paragraphs`, async () => {
+      const surface = mount(field);
+      const ids = surface.session.paragraphIds();
+      expect(ids).toHaveLength(4);
+      caret(surface, ids[at]!, at === 0 ? 5 : 0);
+      surface[key]();
+      expect(surface.session.paragraphIds()).toEqual(ids);
+      expect(await instructionParagraphs(surface)).toHaveLength(3);
+    });
+  }
+});
+
 describe('hiddenParagraphsBetween', () => {
   const siblings = (body: string) => {
     const result = readOoxmlPart(

@@ -34,6 +34,7 @@ import type {
   SemanticPosition,
   SemanticSelection,
 } from '@docx-editor.dev/core/layout';
+import { paragraphsInsideFieldInstructions } from '../layout/field-instruction-paragraphs.ts';
 import { numberingFlowBlocks } from '../layout/hidden-paragraph-mark.ts';
 import { paragraphTextOf } from '../store/store/tree-ops.ts';
 import { paragraphLinesFor } from '../layout/paragraph-lines.ts';
@@ -51,7 +52,9 @@ const NONE: ReadonlySet<string> = new Set();
 /**
  * Ids of the paragraphs among `children` that layout removes under a hidden mark in `view`.
  *
- * Asks the same collector layout uses for that container, so the two cannot disagree.
+ * Asks the same collector layout uses for that container, so the two cannot disagree. A
+ * paragraph inside a field instruction is left out: its mark is part of the field code
+ * (§17.16.18), so a join never absorbs it.
  */
 export function hiddenMarkRemovedIds(
   children: readonly OoxmlNode[],
@@ -61,7 +64,10 @@ export function hiddenMarkRemovedIds(
   const all = numberingFlowBlocks(flow);
   if (all === flow) return NONE;
   const laidOut = new Set(flow.map((block) => block.id));
-  return new Set(all.flatMap((block) => (laidOut.has(block.id) ? [] : [block.id])));
+  const fieldCode = paragraphsInsideFieldInstructions(all);
+  return new Set(
+    all.flatMap((block, index) => (laidOut.has(block.id) || fieldCode.has(index) ? [] : [block.id]))
+  );
 }
 
 /**

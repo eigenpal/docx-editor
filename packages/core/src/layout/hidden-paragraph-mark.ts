@@ -19,6 +19,9 @@
 //     before alone (`w:beforeAutospacing` without a measurement) states none.
 //   - A paragraph carrying `w:sectPr` keeps its box, so section boundaries do not move.
 //
+// A paragraph inside a field instruction leaves the flow under the same conditions, whatever
+// it holds, because its mark is field code (see `field-instruction-paragraphs.ts`).
+//
 // The paragraph stays in the tree and still advances list counters: numbering is a property
 // of the document, not of what the page shows. {@link numberingFlowBlocks} gives list
 // resolution the block list with those paragraphs put back.
@@ -32,6 +35,7 @@
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import { readOnOffChild } from '../store/package/ooxml-shared.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
+import { paragraphsInsideFieldInstructions } from './field-instruction-paragraphs.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import { paragraphRendersNothingVisible } from './revision-visibility.ts';
 
@@ -159,6 +163,7 @@ export function withoutHiddenMarkParagraphs(
 ): OoxmlElement[] {
   let removed: Set<number> | null = null;
   let next: HiddenMarkFlowEntry | undefined;
+  const insideInstructions = paragraphsInsideFieldInstructions(entries.map((entry) => entry.block));
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     const { block } = entry;
@@ -168,9 +173,10 @@ export function withoutHiddenMarkParagraphs(
       next.parentKey === entry.parentKey &&
       (next.block.kind === 'paragraph' ||
         (next.block.kind === 'table' && !directSpaceBefore(block))) &&
-      paragraphMarkHidden(block) &&
       !carriesSectionBreak(block) &&
-      paragraphRendersNothingVisible(block, displayMode, authorFilter)
+      (insideInstructions.has(index) ||
+        (paragraphMarkHidden(block) &&
+          paragraphRendersNothingVisible(block, displayMode, authorFilter)))
     ) {
       (removed ??= new Set()).add(index);
       continue;

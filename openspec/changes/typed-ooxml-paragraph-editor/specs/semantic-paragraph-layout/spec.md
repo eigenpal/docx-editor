@@ -1518,6 +1518,24 @@ A body `LISTNUM` field SHALL display the next number of its list, computed from 
 - **WHEN** a `LISTNUM` field that names the list at level 1 follows it, and then another numbered paragraph of the list
 - **THEN** the field displays `S2.` and the paragraph shows `S3.`
 
+### Requirement: Paragraphs inside a field instruction take no line
+
+A paragraph that starts and ends inside the field codes of one closed complex field SHALL take no line box, spacing, or list marker. The field codes run from `begin` to `separate`, or to `end` without a `separate` (ECMA-376 §17.16.18). The paragraph SHALL stay in the tree and still advance list counters. A join SHALL NOT absorb it.
+
+#### Scenario: An IF field's text spans paragraphs
+
+- **GIVEN** an `IF` field whose quoted text holds empty paragraphs and list paragraphs, with or without a `separate` and a saved result
+- **WHEN** the story lays out
+- **THEN** the lines are the text before the field, then the saved result with the text after the field
+- **AND** a nested field's saved result inside those paragraphs adds no line
+- **AND** Backspace before the result and Delete before the field keep the paragraphs of the field codes
+
+#### Scenario: A malformed field keeps its paragraphs
+
+- **GIVEN** a field without an `end`, or a field whose field codes hold `w:t` text outside a nested field's result
+- **WHEN** the story lays out
+- **THEN** every paragraph between its characters keeps its line
+
 ### Requirement: Header and footer lists share one count
 
 Header and footer stories SHALL count list items on one shared count that the body and notes do not join. The count SHALL run over the sections in order and, within a section, over the parts that section references itself: even header, default header, even footer, default footer, first-page header, first-page footer. An inherited part SHALL keep the numbers of its referencing section.
