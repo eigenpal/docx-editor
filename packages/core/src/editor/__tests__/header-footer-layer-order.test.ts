@@ -279,17 +279,19 @@ function marginCenteredPicture(widthPt: number, relativeHeight: number): string 
   );
 }
 
-function watermarkDocx(): Uint8Array {
+// Document order puts the watermark first. Its rank is the higher one.
+const WATERMARK_HEADER =
+  '<w:p>' +
+  vmlPictureWatermark(360, -251610112) +
+  marginCenteredPicture(280, 251703296) +
+  text('Header line') +
+  '</w:p>';
+
+/** A one-page document with one header. */
+function headerDocx(header: string): Uint8Array {
   const rels = (inner: string) =>
     strToU8(`<Relationships xmlns="${REL_NS}">${inner}</Relationships>`);
   const image = `<Relationship Id="rIdImg" Type="${IMG_REL}" Target="media/image1.png"/>`;
-  // Document order puts the watermark first. Its rank is the higher one.
-  const header =
-    '<w:p>' +
-    vmlPictureWatermark(360, -251610112) +
-    marginCenteredPicture(280, 251703296) +
-    text('Header line') +
-    '</w:p>';
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT_NS}">` +
@@ -319,7 +321,7 @@ function watermarkDocx(): Uint8Array {
 describe('drawings inside the header layer', () => {
   test('a picture watermark paints over a behind-text picture of a lower rank', async () => {
     // The watermark ranks above the picture, so it paints last, whatever the document order.
-    const { surface, container } = await mountWithImages(watermarkDocx());
+    const { surface, container } = await mountWithImages(headerDocx(WATERMARK_HEADER));
     const layer = container.querySelector('[data-docx-hf-behind="header"]');
     expect(layer === null).toBe(false);
     // At scale 1 the painter writes one pixel for each point.
@@ -328,5 +330,48 @@ describe('drawings inside the header layer', () => {
     ].map((drawing) => Math.round(parseFloat(drawing.style.width)));
     expect(widthsInPaintOrder).toEqual([280, 360]);
     surface.destroy();
+  });
+  // `relativeHeight` on `wp:anchor` (CT_Anchor; ECMA-376 Part 1, 20.4.2.3) orders the in-front
+  // drawings of a header, whatever frame positions them. A cover page uses this: a full-page
+  // picture positioned on the page, and above it a filled text box positioned on its paragraph.
+  function frontDrawings(pageRank: number, paragraphRank: number) {
+    const header =
+      '<w:p>' +
+      anchor({ id: 11, frame: 'page', y: 40, behind: false, relativeHeight: pageRank }) +
+      anchor({ id: 12, frame: 'column', y: 0, behind: false, relativeHeight: paragraphRank }) +
+      text('Header line') +
+      '</w:p>';
+    const container = document.createElement('div');
+    document.body.append(container);
+    const result = mountPaginatedSurface(container, headerDocx(header), { scale: 1 });
+    if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
+    const sheet = container.querySelector<HTMLElement>('.docx-page[data-page-index="0"]')!;
+    const band = sheet.querySelector<HTMLElement>(':scope > .docx-hf[data-docx-hf="header"]')!;
+    const tops = (root: Element | null) =>
+      [...(root?.querySelectorAll<HTMLElement>('.docx-drawing-layer > *') ?? [])].map((drawing) =>
+        Math.round(parseFloat(drawing.style.top) || 0)
+      );
+    const sheetFront = sheet.querySelector(':scope > [data-docx-hf-front="header"]');
+    const done = () => {
+      result.surface.destroy();
+      container.remove();
+    };
+    return { bandTop: Math.round(parseFloat(band.style.top)), band, sheetFront, tops, done };
+  }
+
+  test('a page-positioned drawing paints below a paragraph-positioned one of a higher rank', () => {
+    const { band, bandTop, sheetFront, tops, done } = frontDrawings(100, 200);
+    // Both paint in the band, the page-positioned one first. It keeps its place on the sheet:
+    // 40pt below the page top, in the band's own coordinates.
+    expect(sheetFront).toBeNull();
+    expect(tops(band)).toEqual([40 - bandTop, 0]);
+    done();
+  });
+
+  test('a page-positioned drawing of the higher rank stays on the sheet, above the band', () => {
+    const { band, sheetFront, tops, done } = frontDrawings(200, 100);
+    expect(tops(band)).toEqual([0]);
+    expect(tops(sheetFront)).toEqual([40]);
+    done();
   });
 });

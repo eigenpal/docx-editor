@@ -400,26 +400,35 @@ describe('group fills inside a drawing canvas', () => {
     expect(vector?.components.map((c) => c.fillHex)).toEqual(['C00000']);
   });
 
-  // A gradient spans the group box in Word; a pattern or picture fill has no per-member paint.
-  for (const [name, fill] of [
-    [
-      'gradient',
+  // Word spans a gradient across the group box. Here each member paints it across its own box.
+  test('a member paints a gradient group fill across its own box', () => {
+    const vector = vectorOf(
       '<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs>' +
-        '<a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs></a:gsLst><a:lin ang="0"/></a:gradFill>',
-    ],
-    [
-      'pattern',
+        '<a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs></a:gsLst><a:lin ang="0"/></a:gradFill>'
+    );
+    expect(vector?.components).toHaveLength(1);
+    expect(vector?.components[0]!.fillGradient?.stops.map((stop) => stop.hex)).toEqual([
+      'FF0000',
+      '0000FF',
+    ]);
+  });
+
+  test('a member paints a pattern group fill', () => {
+    const vector = vectorOf(
       '<a:pattFill prst="pct50"><a:fgClr><a:srgbClr val="FF0000"/></a:fgClr>' +
-        '<a:bgClr><a:srgbClr val="FFFFFF"/></a:bgClr></a:pattFill>',
-    ],
-    [
-      'picture',
-      '<a:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
-        'r:embed="rId9"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>',
-    ],
-  ]) {
-    test(`a member that takes a ${name} group fill keeps the placeholder`, () => {
-      expect(vectorOf(fill!)).toBeNull();
-    });
-  }
+        '<a:bgClr><a:srgbClr val="FFFFFF"/></a:bgClr></a:pattFill>'
+    );
+    expect(vector?.components).toHaveLength(1);
+    expect(vector?.components[0]!.fillPattern).toBeDefined();
+  });
+
+  // A picture group fill has no per-member paint.
+  test('a member that takes a picture group fill keeps the placeholder', () => {
+    expect(
+      vectorOf(
+        '<a:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+          'r:embed="rId9"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>'
+      )
+    ).toBeNull();
+  });
 });

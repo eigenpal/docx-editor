@@ -239,6 +239,8 @@ export { lineSegments, type LineSegment } from './line-segments.ts';
 export { vectorShapeInkClip } from './vector-shape-ink.ts';
 export {
   groupPictureLayerDrawing,
+  pictureCornerFrame,
+  vectorPictureBand,
   type DrawingGroupPictureLayerRecord,
 } from './drawing-group-picture-layers.ts';
 export type {

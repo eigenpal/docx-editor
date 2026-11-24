@@ -25,7 +25,6 @@ import type { DrawingProjection } from './drawing-projection.ts';
 import {
   childTransform,
   findDirectChild,
-  isUnpaintedGroupTextbox,
   projectWspTextboxStory,
   type ShapeSchemeColorResolver,
   type ShapeStyleMatrixResolver,
@@ -36,11 +35,7 @@ import {
   schemaAttributeValue,
   WPS_NAMESPACE_URI,
 } from './ooxml-drawing-rules.ts';
-import {
-  DRAWINGML_MAIN_NAMESPACE_URI,
-  PIC_NAMESPACE_URI,
-  type OoxmlElement,
-} from './ooxml-tree.ts';
+import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 
 /** One text box member of a drawing group. @internal */
@@ -167,7 +162,7 @@ function storyRootOf(wsp: OoxmlElement): OoxmlElement | null {
 /** One text box story root of a group, as read-only derivations list it. */
 export interface GroupTextboxContent {
   readonly root: OoxmlElement;
-  /** Layout lays out none of it: its member is hidden, or its group paints a placeholder. */
+  /** Layout lays out none of it: its member is hidden, or its group cannot place it. */
   readonly unplaced?: true;
 }
 
@@ -175,33 +170,27 @@ export interface GroupTextboxContent {
  * The story roots of a group's text box members, in document order, for read-only
  * derivations such as Find and paragraph reads. A bounded read of the group frame and its
  * members, nested and hidden members included. Text that layout lays out none of (a hidden
- * member, or a group that paints a placeholder) stays listed for paragraph reads, marked
- * `unplaced`, so the selectable story list leaves it out.
+ * member, a member of a nested group that cannot be placed, or a group whose members do not
+ * read) stays listed for paragraph reads, marked `unplaced`, so the selectable story list
+ * leaves it out.
  */
 export function groupTextboxContents(anchor: OoxmlElement): readonly GroupTextboxContent[] {
   const frame = readDrawingGroupFrame(anchor, { turned: true });
   if (!frame) return [];
   const members = listGroupMembers(frame);
-  // Only whether the members place is read here, so the scale does not matter. A picture in a
-  // turned or flipped space has no frame, so its group paints a placeholder too.
-  const flattened = flattenGroupMembers(
-    frame,
-    rootGroupSpace(frame, { cx: 0, cy: 0 }, { withTurn: true })
+  // Only which members place is read here, so the scale does not matter. A member inside a
+  // nested group that cannot be placed lays out no text.
+  const placed = new Set(
+    flattenGroupMembers(frame, rootGroupSpace(frame, { cx: 0, cy: 0 }, { withTurn: true }))?.map(
+      ({ member }) => member
+    )
   );
-  const placed =
-    flattened !== null &&
-    !flattened.some(
-      ({ member, space }) =>
-        space.turns !== undefined &&
-        member.namespaceUri === PIC_NAMESPACE_URI &&
-        member.localName === 'pic'
-    );
   const contents: GroupTextboxContent[] = [];
   for (const { member: child, hidden } of members) {
     if (child.namespaceUri !== WPS_NAMESPACE_URI || child.localName !== 'wsp') continue;
     if (memberTextRotation(child) === null) continue;
     const root = storyRootOf(child);
-    if (root) contents.push(placed && !hidden ? { root } : { root, unplaced: true });
+    if (root) contents.push(placed.has(child) && !hidden ? { root } : { root, unplaced: true });
   }
   return contents;
 }
@@ -209,16 +198,13 @@ export function groupTextboxContents(anchor: OoxmlElement): readonly GroupTextbo
 /**
  * The text box members of a group drawing, in document order.
  *
- * A group paints whole or not at all, so its member text follows the group: `groupPaints`
- * says whether the rest of the group paints. A group whose only members are text boxes
- * without fill or outline has nothing else to paint, and its text alone still renders.
- * A rotated or flipped member lays out upright and records the turn its text takes. Null
- * when no member contributes text.
+ * The text of each member lays out whether or not the shape of the member, or another
+ * member of the group, paints. A rotated or flipped member lays out upright and records the
+ * turn its text takes. Null when no member contributes text.
  */
 export function projectGroupTextboxes(
   anchor: OoxmlElement,
   extent: Readonly<{ cx: number; cy: number }>,
-  groupPaints: boolean,
   resolveSchemeColor?: ShapeSchemeColorResolver,
   resolveStyleMatrixReference?: ShapeStyleMatrixResolver
 ): readonly GroupTextboxProjection[] | null {
@@ -229,13 +215,7 @@ export function projectGroupTextboxes(
   const flattened = flattenGroupMembers(frame, rootGroupSpace(frame, extent, { withTurn: true }));
   if (!flattened) return null;
   const members: GroupTextboxProjection[] = [];
-  let onlyUnpaintedText = true;
-  for (const { member: child, space, groupFill } of flattened) {
-    if (
-      !isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference, groupFill)
-    ) {
-      onlyUnpaintedText = false;
-    }
+  for (const { member: child, space } of flattened) {
     if (child.namespaceUri !== WPS_NAMESPACE_URI || child.localName !== 'wsp') continue;
     const rotationDegrees = memberTextRotation(child);
     if (rotationDegrees === null) continue;
@@ -288,7 +268,7 @@ export function projectGroupTextboxes(
       })
     );
   }
-  if (members.length === 0 || !(groupPaints || onlyUnpaintedText)) return null;
+  if (members.length === 0) return null;
   return Object.freeze(members);
 }
 
@@ -296,7 +276,7 @@ export function projectGroupTextboxes(
 export function groupTextboxesField(
   anchor: OoxmlElement,
   extent: Readonly<{ cx: number; cy: number }>,
-  painted: Pick<DrawingProjection, 'picture' | 'groupPicture' | 'vectorShape'>,
+  painted: Pick<DrawingProjection, 'picture'>,
   ctx: Readonly<{
     resolveSchemeColor?: ShapeSchemeColorResolver;
     resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
@@ -306,7 +286,6 @@ export function groupTextboxesField(
   const groupTextboxes = projectGroupTextboxes(
     anchor,
     extent,
-    painted.groupPicture !== null || painted.vectorShape !== null,
     ctx.resolveSchemeColor,
     ctx.resolveStyleMatrixReference
   );

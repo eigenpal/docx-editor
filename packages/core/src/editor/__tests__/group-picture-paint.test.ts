@@ -210,6 +210,19 @@ describe('a drawing group with a picture member', () => {
   });
 });
 
+/** The failed picture is left out: one drawing, no card, no image, and the black bar. */
+function expectBarAlone(container: HTMLElement): void {
+  const painted = container.querySelectorAll<HTMLElement>('.docx-drawing');
+  expect(painted).toHaveLength(1);
+  expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(0);
+  expect(container.querySelectorAll('[data-docx-unsupported]')).toHaveLength(0);
+  expect(painted[0]!.querySelector('img')).toBeNull();
+  const paths = painted[0]!.querySelectorAll('svg path');
+  expect(paths).toHaveLength(1);
+  expect(paths[0]!.getAttribute('fill')).toBe('#000000');
+  expect(painted[0]!.classList.contains('docx-drawing-shape')).toBe(true);
+}
+
 describe('a drawing group whose picture cannot render', () => {
   const failures: readonly (readonly [string, string, GroupOptions])[] = [
     [
@@ -222,31 +235,34 @@ describe('a drawing group whose picture cannot render', () => {
   ];
 
   for (const [name, picture, options] of failures) {
-    for (const [shape, members] of [
-      ['picture-only', picture],
-      ['picture and vector', picture + BAR_MEMBER],
-    ] as const) {
-      test(`an MC-wrapped ${shape} group with a ${name} picture shows one placeholder`, async () => {
-        await withMounted(docx(members, options), (surface, container) => {
-          expect(groupRecord(surface)).toBeDefined();
-          expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(1);
-          expect(container.querySelectorAll('[data-docx-unsupported]')).toHaveLength(1);
-          expect(container.textContent).toContain('Title');
-        });
+    test(`an MC-wrapped picture-only group with a ${name} picture shows one placeholder`, async () => {
+      await withMounted(docx(picture, options), (surface, container) => {
+        expect(groupRecord(surface)).toBeDefined();
+        expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(1);
+        expect(container.querySelectorAll('[data-docx-unsupported]')).toHaveLength(1);
+        expect(container.textContent).toContain('Title');
       });
-    }
+    });
+
+    test(`an MC-wrapped picture and vector group with a ${name} picture paints its vector member alone`, async () => {
+      await withMounted(docx(picture + BAR_MEMBER, options), (surface, container) => {
+        const record = groupRecord(surface)!;
+        expect(record.groupPicture).toEqual({ alternateContent: true });
+        expect(record.resource.kind).not.toBe('ready');
+        expect(record.vectorShape?.components).toHaveLength(1);
+        expectBarAlone(container);
+        expect(container.textContent).toContain('Title');
+      });
+    });
   }
 
-  test('a bare group shows the refusal card, not its vector members alone', async () => {
+  test('a bare group with a missing picture paints its vector member alone', async () => {
     const options = { alternateContent: false, media: null } as const;
     await withMounted(docx(pictureMember(0) + BAR_MEMBER, options), (surface, container) => {
       const record = groupRecord(surface)!;
       expect(record.groupPicture).toEqual({ alternateContent: false });
       expect(record.resource.kind).toBe('missing');
-      const painted = container.querySelectorAll<HTMLElement>('.docx-drawing');
-      expect(painted).toHaveLength(1);
-      expect(painted[0]!.classList.contains('docx-drawing-placeholder')).toBe(true);
-      expect(painted[0]!.querySelector('svg')).toBeNull();
+      expectBarAlone(container);
     });
   });
 });

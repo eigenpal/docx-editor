@@ -20,10 +20,15 @@ import { graphicKindOfUri } from '../store/package/drawing-graphic-kind.ts';
  */
 export interface DrawingGroupPictureRecord {
   /**
-   * Whether the group is the chosen branch of a run-level `mc:AlternateContent`.
-   * Failed picture resources show one placeholder for the whole group.
+   * Whether the group is the chosen branch of a run-level `mc:AlternateContent`. A picture
+   * that fails is left out, and the other members of the group still paint.
    */
   readonly alternateContent: boolean;
+  /**
+   * The ring that clips the picture, in the unit square of the picture's own frame, before the
+   * picture flips and turns: the geometry of the member. Absent for a box.
+   */
+  readonly clipUnit?: readonly Readonly<{ x: number; y: number }>[];
 }
 
 /**
@@ -64,6 +69,7 @@ export function drawingPaintFields(projection: DrawingProjection): {
   readonly vectorShape: VectorShapeProjection | null;
   readonly frameEffects?: PictureFrameEffects;
   readonly groupPicture?: DrawingGroupPictureRecord;
+  readonly groupMembersNotShown?: number;
   readonly chart?: DrawingChartSummary;
 } {
   const picture = projection.picture;
@@ -77,9 +83,13 @@ export function drawingPaintFields(projection: DrawingProjection): {
     }
     if (placeholderGraphicKind === null) placeholderGraphicKind = 'graphic';
   }
+  let notShown = 0;
+  for (const diagnostic of projection.diagnostics) {
+    if (diagnostic.code === 'group-member-not-shown') notShown += 1;
+  }
   return Object.freeze({
     hyperlinkHref: projection.hyperlinkHref,
-    effects: projection.effects,
+    effects: projection.groupPicture?.effects ?? projection.effects,
     crop: picture?.crop ?? projection.groupPicture?.crop ?? EMPTY_CROP,
     transform: picture?.transform ?? EMPTY_TRANSFORM,
     placeholderGraphicKind:
@@ -90,9 +100,13 @@ export function drawingPaintFields(projection: DrawingProjection): {
       ? {
           groupPicture: Object.freeze({
             alternateContent: projection.groupPicture.alternateContent,
+            ...(projection.groupPicture.memberClipUnit
+              ? { clipUnit: projection.groupPicture.memberClipUnit }
+              : {}),
           }),
         }
       : {}),
+    ...(notShown > 0 ? { groupMembersNotShown: notShown } : {}),
     ...(projection.chartSummary ? { chart: projection.chartSummary } : {}),
   });
 }

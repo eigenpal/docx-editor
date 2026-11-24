@@ -22,7 +22,6 @@ import {
   isGroupPropertyChild,
   schemaFlagIsSet,
   schemaFlagIsUnset,
-  supportedGroupVisuals,
   type DrawingGroupFrame,
   type GroupTurn,
 } from './drawing-group-frame.ts';
@@ -62,6 +61,8 @@ export interface GroupSpace {
   readonly scaleY: number;
   /** The turned or flipped groups around the member, outermost first. Absent when none. */
   readonly turns?: readonly GroupSpaceTurn[];
+  /** The upright box of this group in the drawing extent, in EMU, before `turns` apply. */
+  readonly box?: Readonly<{ x: number; y: number; cx: number; cy: number }>;
 }
 
 /** Whether a turn changes anything: a non-zero angle or a flip. */
@@ -116,6 +117,8 @@ export interface GroupMember {
    * resolves to, or null.
    */
   readonly groupFill: OoxmlElement | null;
+  /** The upright box, in extent EMU, of the group that sets `groupFill`; a gradient spans it. */
+  readonly groupFillBox?: Readonly<{ x: number; y: number; cx: number; cy: number }>;
 }
 
 /**
@@ -134,6 +137,7 @@ export function rootGroupSpace(
     childOffset: frame.childOffsetEmu,
     scaleX: cx > 0 ? extent.cx / cx : 0,
     scaleY: cy > 0 ? extent.cy / cy : 0,
+    box: { x: 0, y: 0, cx: extent.cx, cy: extent.cy },
     ...(turnsSomething(turn)
       ? { turns: [{ box: { x: 0, y: 0, cx: extent.cx, cy: extent.cy }, turn }] }
       : {}),
@@ -218,9 +222,8 @@ export function isNestedGroup(node: OoxmlElement): boolean {
 /**
  * The child space of a nested group inside `parent`, or null when paint cannot place it
  * exactly: no `a:xfrm` with an `a:ext` and an `a:chExt`, a negative size, an offset that does
- * not read, a turn, flip, or `hidden` spelled outside the schema, or a group visual its
- * members cannot represent. A hidden nested group is skipped before this read, as every
- * hidden member is.
+ * not read, or a turn, flip, or `hidden` spelled outside the schema. A hidden nested group is
+ * skipped before this read, as every hidden member is.
  */
 function nestedGroupSpace(group: OoxmlElement, parent: GroupSpace): GroupSpace | null {
   // A `hidden` spelled outside the schema leaves the group's display unknown.
@@ -234,7 +237,8 @@ function nestedGroupSpace(group: OoxmlElement, parent: GroupSpace): GroupSpace |
     namespaceUri: WPG_NAMESPACE_URI,
     localName: 'grpSpPr',
   });
-  if (!properties || !supportedGroupVisuals(group, properties, true)) return null;
+  // A nested group's effect is not painted: its members paint flat.
+  if (!properties) return null;
   const xfrm = drawingMl(properties, 'xfrm');
   if (!xfrm) return null;
   const turn = groupTurn(xfrm);
@@ -271,11 +275,13 @@ function nestedGroupSpace(group: OoxmlElement, parent: GroupSpace): GroupSpace |
   const childOffset = point(chOff);
   if (!at || !childOffset) return null;
   // The nested box sits at `off` in the parent's child space; its child space spans that box.
+  const origin = mapGroupPoint(parent, at);
   let space: GroupSpace = {
-    shift: mapGroupPoint(parent, at),
+    shift: origin,
     childOffset,
     scaleX: child.cx > 0 ? parent.scaleX * (own.cx / child.cx) : 0,
     scaleY: child.cy > 0 ? parent.scaleY * (own.cy / child.cy) : 0,
+    box: { ...origin, cx: own.cx * parent.scaleX, cy: own.cy * parent.scaleY },
     ...(parent.turns ? { turns: parent.turns } : {}),
   };
   if (turnsSomething(turn)) {
@@ -297,6 +303,7 @@ function nestedGroupSpace(group: OoxmlElement, parent: GroupSpace): GroupSpace |
       childOffset,
       scaleX: child.cx > 0 ? box.cx / child.cx : 0,
       scaleY: child.cy > 0 ? box.cy / child.cy : 0,
+      box,
       turns: [...(parent.turns ?? []), { box, turn }],
     };
   }
@@ -307,21 +314,26 @@ function nestedGroupSpace(group: OoxmlElement, parent: GroupSpace): GroupSpace |
 
 /**
  * Every painted member of the group, nested groups flattened in document order, or null when
- * the group cannot paint whole: more than {@link MAX_GROUP_SHAPE_CHILDREN} members in all
- * (nested groups count too), nesting deeper than {@link MAX_GROUP_NESTING_DEPTH}, or a nested
- * group that paint cannot place. A member inside a turned or flipped nested group carries the
- * turns in its space.
+ * the group holds more than {@link MAX_GROUP_SHAPE_CHILDREN} members in all (nested groups
+ * count too). A member inside a turned or flipped nested group carries the turns in its space.
+ *
+ * A nested group that paint cannot place, or one deeper than {@link MAX_GROUP_NESTING_DEPTH},
+ * contributes no members: the rest of the group still paints, and `omitted` receives the node
+ * id of that nested group.
  */
 export function flattenGroupMembers(
   frame: DrawingGroupFrame,
-  space: GroupSpace
+  space: GroupSpace,
+  omitted?: string[]
 ): readonly GroupMember[] | null {
   const members: GroupMember[] = [];
   const budget = { remaining: MAX_GROUP_SHAPE_CHILDREN };
+  type Box = GroupMember['groupFillBox'];
   const walk = (
     group: OoxmlElement,
     groupSpace: GroupSpace,
     groupFill: OoxmlElement | null,
+    fillBox: Box,
     depth: number
   ): boolean => {
     for (const child of group.children) {
@@ -331,16 +343,27 @@ export function flattenGroupMembers(
       // A hidden member paints nothing, and the rest of the group still paints.
       if (hiddenMember(child)) continue;
       if (!isNestedGroup(child)) {
-        members.push({ member: child, space: groupSpace, groupFill });
+        members.push({
+          member: child,
+          space: groupSpace,
+          groupFill,
+          ...(groupFill && fillBox ? { groupFillBox: fillBox } : {}),
+        });
         continue;
       }
       const nested = depth < MAX_GROUP_NESTING_DEPTH ? nestedGroupSpace(child, groupSpace) : null;
-      if (!nested) return false;
-      if (!walk(child, nested, groupFillOf(child, groupFill), depth + 1)) return false;
+      if (!nested) {
+        omitted?.push(child.id);
+        continue;
+      }
+      // A nested group that says `a:grpFill` hands on its parent's fill and that fill's box.
+      const fill = groupFillOf(child, groupFill);
+      const box = fill !== null && fill === groupFill ? fillBox : nested.box;
+      if (!walk(child, nested, fill, box, depth + 1)) return false;
     }
     return true;
   };
-  return walk(frame.group, space, groupFillOf(frame.group, null), 0) ? members : null;
+  return walk(frame.group, space, groupFillOf(frame.group, null), space.box, 0) ? members : null;
 }
 
 /** One member of a group as read-only derivations list it. */

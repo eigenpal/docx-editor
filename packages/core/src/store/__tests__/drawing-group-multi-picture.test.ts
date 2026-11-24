@@ -160,12 +160,46 @@ describe('a group with several picture members', () => {
     expect(projection.groupPictureLayers).toBeUndefined();
   });
 
-  test('a picture after a vector member leaves the group unpainted', () => {
+  test('a picture after a vector member paints above it', () => {
     const projection = projectionOf(
       groupDrawing(pictureMember('rIdA', 100, -200) + BAR_MEMBER + pictureMember('rIdB', 1100, 0))
     );
-    expect(projection.groupPicture).toBeNull();
-    expect(projection.groupPictureLayers).toBeUndefined();
-    expect(projection.vectorShape).toBeNull();
+    expect(projection.groupPicture?.embeddedRelationshipId).toBe('rIdA');
+    expect(projection.groupPictureLayers?.map((picture) => picture.embeddedRelationshipId)).toEqual(
+      ['rIdB']
+    );
+    expect(projection.groupPictureLayers![0]!.frameEmu).toEqual({
+      x: 1000 * SCALE,
+      y: 200 * SCALE,
+      cx: 1000 * SCALE,
+      cy: 500 * SCALE,
+    });
+    // The bar paints above the first picture and below the second.
+    expect(projection.vectorShape?.components.map((c) => c.picturesBelow)).toEqual([1]);
+    expect(projection.vectorShape?.components[0]!.subpathsEmu[0]![0]).toEqual({
+      x: 0,
+      y: 3200 * SCALE,
+    });
+    expect(projection.diagnostics).toEqual([]);
+  });
+
+  test('each vector member records the pictures that paint under it', () => {
+    const projection = projectionOf(
+      groupDrawing(
+        BAR_MEMBER +
+          pictureMember('rIdA', 100, -200) +
+          BAR_MEMBER +
+          pictureMember('rIdB', 1100, 0) +
+          BAR_MEMBER
+      )
+    );
+    expect(projection.groupPicture?.embeddedRelationshipId).toBe('rIdA');
+    expect(projection.groupPictureLayers).toHaveLength(1);
+    // The last bar carries no count: it paints above all pictures.
+    expect(projection.vectorShape?.components.map((c) => c.picturesBelow)).toEqual([
+      0,
+      1,
+      undefined,
+    ]);
   });
 });

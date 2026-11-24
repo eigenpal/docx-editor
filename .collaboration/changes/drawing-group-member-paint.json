@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A drawing group projects as one placeholder when a picture member follows another member, or when one member cannot paint. A page-positioned header drawing always paints above the paragraph-positioned ones.",
+  "after": "A drawing group paints its members in document order and leaves out only a member that cannot paint, with a diagnostic. Header and footer drawings in front of text stack by relativeHeight.",
+  "reason": "Only drawing projection, layout records, and paint change. Shared nodes, text offsets, operations, and package serialization remain unchanged, so clients of both versions edit the same room and differ only in what they paint.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/partly-painted-group-peers.test.ts",
+    "packages/core/src/editor/__tests__/group-paint-order.test.ts",
+    "packages/core/src/editor/__tests__/header-footer-layer-order.test.ts"
+  ],
+  "changeset": "drawing-group-member-paint",
+  "migration": null
+}

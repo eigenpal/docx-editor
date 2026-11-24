@@ -192,10 +192,25 @@ describe('a drawing group with two picture members', () => {
     });
   });
 
-  test('an MC-wrapped group whose second picture is missing shows one placeholder', async () => {
+  test('an MC-wrapped group whose second picture is missing paints its other members', async () => {
     await withMounted(docx(MEMBERS, null), (surface, container) => {
-      expect(groupRecord(surface)).toBeDefined();
-      expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(1);
+      const record = groupRecord(surface)!;
+      expect(record.resource.kind).toBe('ready');
+      expect(record.groupPictureLayers).toHaveLength(1);
+      expect(record.groupPictureLayers![0]!.resource.kind).toBe('missing');
+      const painted = container.querySelector<HTMLElement>('.docx-drawing-ready')!;
+      expect(painted).not.toBeNull();
+      expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(0);
+      // The first picture, then the SVG of the vector member; the missing picture has no frame.
+      const frames = painted.querySelectorAll<HTMLElement>('.docx-drawing-image-frame');
+      expect(frames).toHaveLength(2);
+      expect(frames[0]!.querySelector('img')).not.toBeNull();
+      expect(Number.parseFloat(frames[0]!.style.left)).toBeCloseTo(0);
+      expect(Number.parseFloat(frames[0]!.style.top)).toBeCloseTo(0);
+      expect(Number.parseFloat(frames[0]!.style.width)).toBeCloseTo(100);
+      expect(painted.querySelectorAll('img')).toHaveLength(1);
+      expect(frames[1]!.querySelector('svg path')?.getAttribute('fill')).toBe('#000000');
+      expect(container.querySelector('.docx-drawing-group-text')?.textContent).toContain('Heading');
       expect(container.textContent).toContain('Title');
     });
   });

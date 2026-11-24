@@ -1,6 +1,10 @@
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { selectedDrawingGraphicKind } from '../store/package/drawing-graphic-kind.ts';
-import { drawingSourceIssues, drawingSupport } from '../store/package/drawing-support-issues.ts';
+import {
+  drawingSourceIssues,
+  drawingSupport,
+  supportIssue,
+} from '../store/package/drawing-support-issues.ts';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { clearUnsupportedElement, markUnsupportedElement } from './unsupported-elements.ts';
 
@@ -23,7 +27,18 @@ export function customDrawingPreview(
   // Text-box stories keep their caret and selection behavior. Their drawings remain inspectable.
   if (drawing.textboxStory || drawing.groupTextboxStories || !source) return;
   if (element.querySelector('[data-docx-unsupported]')) return;
-  const issues = drawingSourceIssues(source, drawing.drawingNodeId);
+  const issues = [
+    ...drawingSourceIssues(source, drawing.drawingNodeId),
+    // A group that paints without some members renders, but not as authored.
+    ...(drawing.groupMembersNotShown
+      ? [
+          Object.freeze({
+            ...supportIssue(source, 'projection-diagnostic', 'group-member-not-shown'),
+            nodeId: drawing.drawingNodeId,
+          }),
+        ]
+      : []),
+  ];
   const support = drawingSupport(
     drawing.chart?.shownAs === 'fallback' ? 'fallback' : 'rendered',
     issues

@@ -111,7 +111,13 @@ export interface DrawingGeometry {
 
 // @public
 export interface DrawingGroupPictureLayerRecord {
+    readonly clipUnit?: readonly Readonly<{
+        x: number;
+        y: number;
+    }>[];
     readonly crop: SourceCrop;
+    readonly effects?: DrawingImageEffects;
+    readonly flipH?: true;
     readonly frameUnit: Readonly<{
         height: number;
         width: number;
@@ -119,11 +125,16 @@ export interface DrawingGroupPictureLayerRecord {
         y: number;
     }>;
     readonly resource: ImageResourceState;
+    readonly rotationDegrees?: number;
 }
 
 // @public
 export interface DrawingGroupPictureRecord {
     readonly alternateContent: boolean;
+    readonly clipUnit?: readonly Readonly<{
+        x: number;
+        y: number;
+    }>[];
 }
 
 // @public (undocumented)
@@ -462,6 +473,7 @@ export interface InlineDrawingRecord {
     readonly frameEffects?: PictureFrameEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
+    readonly groupMembersNotShown?: number;
     readonly groupPicture?: DrawingGroupPictureRecord;
     readonly groupPictureLayers?: readonly DrawingGroupPictureLayerRecord[];
     readonly groupTextboxStories?: readonly GroupTextboxStoryRecord[];

@@ -1,11 +1,12 @@
 // A `wpg:wgp` group can hold `wpg:grpSp` groups of its own. A nested group places itself in
 // its parent's child space by its `a:xfrm` (`off`/`ext`) and authors its members in its own
 // child space (`chOff`/`chExt`). These tests pin where nested members land, that pictures,
-// shapes, and text boxes paint together across levels, and the nested groups still refused.
+// shapes, and text boxes paint together across levels, and which nested groups paint nothing.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, WML_NAMESPACE_URI, type OoxmlPart } from '../index.ts';
 import { projectDrawingsInPart } from '../package/drawing-projection.ts';
+import { MAX_GROUP_SHAPE_CHILDREN } from '../package/drawing-group-frame.ts';
 import { MAX_GROUP_NESTING_DEPTH } from '../package/drawing-group-members.ts';
 import { textboxReadStoriesInPart, textboxStoriesInPart } from '../package/textbox-stories.ts';
 
@@ -100,6 +101,28 @@ function projectionOf(drawing: string) {
   const projections = projectDrawingsInPart(parsePart(`<w:p><w:r>${drawing}</w:r></w:p>`));
   expect(projections).toHaveLength(1);
   return projections[0]!;
+}
+
+/** The projection, and the node id of each element named `localName`, in document order. */
+function projectionWithIds(drawing: string, localName: string) {
+  const part = parsePart(`<w:p><w:r>${drawing}</w:r></w:p>`);
+  const ids: string[] = [];
+  const walk = (node: OoxmlPart['root']['children'][number]): void => {
+    if (!('children' in node)) return;
+    if ('localName' in node && node.localName === localName) ids.push(node.id);
+    for (const child of node.children) walk(child);
+  };
+  walk(part.root);
+  const projections = projectDrawingsInPart(part);
+  expect(projections).toHaveLength(1);
+  return { projection: projections[0]!, ids };
+}
+
+/** The node ids of the members that the group paints without. */
+function notShown(projection: ReturnType<typeof projectionOf>): string[] {
+  return projection.diagnostics
+    .filter((diagnostic) => diagnostic.code === 'group-member-not-shown')
+    .map((diagnostic) => diagnostic.nodeId);
 }
 
 function topLeft(projection: ReturnType<typeof projectionOf>, index = 0) {
@@ -383,12 +406,56 @@ describe('nested drawing groups', () => {
     expect(projection.groupTextboxes?.[0]?.rotationDegrees).toBe(0); // 270 + 90
   });
 
-  test('a picture inside a turned nested group leaves the group unpainted', () => {
+  test('a picture inside a turned nested group paints turned about the group centre', () => {
     const projection = projectionOf(
       groupDrawing(nested(picture(0, 0, 100, 100), { xfrmAttributes: ' rot="5400000"' }))
     );
-    expect(projection.groupPicture).toBeNull();
+    // The picture keeps its upright 400000 x 800000 EMU box. Its centre, 800000 left of and
+    // 1600000 above the group centre, turns to 1600000 right of and 800000 above it.
+    const centre = { x: CENTRE.x + 1_600_000, y: CENTRE.y - 800_000 };
+    expect(projection.groupPicture).toMatchObject({
+      embeddedRelationshipId: 'rIdImg',
+      frameEmu: { x: centre.x - 200_000, y: centre.y - 400_000, cx: 400_000, cy: 800_000 },
+      rotationDegrees: 90,
+    });
+    expect(projection.groupPicture?.flipH).toBeUndefined();
     expect(projection.vectorShape).toBeNull();
+    expect(notShown(projection)).toEqual([]);
+  });
+
+  // The outline of a picture member strokes over the picture. In a turned or flipped nested
+  // group the picture moves with the group, and its outline moves with it.
+  const OUTLINED = picture(0, 0, 100, 100).replace(
+    '</pic:spPr>',
+    '<a:ln w="12700"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln></pic:spPr>'
+  );
+
+  test('the outline of a picture in a turned nested group turns with the picture', () => {
+    const projection = projectionOf(
+      groupDrawing(nested(OUTLINED, { xfrmAttributes: ' rot="5400000"' }))
+    );
+    // The 400000 x 800000 EMU picture turns a quarter turn about its own centre.
+    const centre = { x: CENTRE.x + 1_600_000, y: CENTRE.y - 800_000 };
+    expect(projection.groupPicture?.rotationDegrees).toBe(90);
+    expect(projection.vectorShape?.components).toHaveLength(1);
+    const outline = topLeft(projection);
+    expect(outline.x).toBeCloseTo(centre.x - 400_000, 3);
+    expect(outline.right).toBeCloseTo(centre.x + 400_000, 3);
+    expect(outline.y).toBeCloseTo(centre.y - 200_000, 3);
+    expect(outline.bottom).toBeCloseTo(centre.y + 200_000, 3);
+  });
+
+  test('the outline of a picture in a flipped nested group moves with the picture', () => {
+    const projection = projectionOf(
+      groupDrawing(nested(OUTLINED, { xfrmAttributes: ' flipH="1"' }))
+    );
+    const frame = projection.groupPicture!.frameEmu;
+    expect(projection.groupPicture?.flipH).toBe(true);
+    const outline = topLeft(projection);
+    expect(outline.x).toBeCloseTo(frame.x, 3);
+    expect(outline.right).toBeCloseTo(frame.x + frame.cx, 3);
+    expect(outline.y).toBeCloseTo(frame.y, 3);
+    expect(outline.bottom).toBeCloseTo(frame.y + frame.cy, 3);
   });
 
   const refused: readonly (readonly [string, string])[] = [
@@ -428,10 +495,6 @@ describe('nested drawing groups', () => {
           '<a:chOff x="0"/><a:chExt cx="10" cy="10"/></a:xfrm>',
       }),
     ],
-    [
-      'a nested group with an effect',
-      nested(bar(0, 0), { fill: '<a:effectLst><a:outerShdw dist="38100"/></a:effectLst>' }),
-    ],
     ['a nested group past the depth cap', deepNest(MAX_GROUP_NESTING_DEPTH + 1)],
     [
       'more members than the cap across levels',
@@ -446,15 +509,46 @@ describe('nested drawing groups', () => {
     expect(projection.groupTextboxes).toBeUndefined();
   });
 
+  // Each case holds one nested group that paint cannot place. Its node id is the last
+  // `wpg:grpSp` that the walk reads: the deepest one in the depth case.
+  const unplaced = refused.filter(([name]) => name.startsWith('a nested group'));
+
+  test.each(unplaced)('%s paints nothing, and the rest of the group paints', (name, members) => {
+    const { projection, ids } = projectionWithIds(groupDrawing(bar(100, 200) + members), 'grpSp');
+    expect(projection.vectorShape?.components).toHaveLength(1);
+    expect(topLeft(projection)).toEqual({ x: 0, y: 0, right: 200 * SCALE, bottom: 10 * SCALE });
+    expect(projection.groupPicture).toBeNull();
+    // The depth case nests one group past the cap; paint omits that innermost group.
+    const omitted = name.includes('depth cap') ? ids[ids.length - 1]! : ids[0]!;
+    expect(notShown(projection)).toEqual([omitted]);
+    expect(projection.diagnostics.map((d) => d.code)).not.toContain('unsupported-graphic');
+  });
+
+  test('a nested group with an effect paints its members flat', () => {
+    const shadowed = nested(bar(0, 0), {
+      fill: '<a:effectLst><a:outerShdw dist="38100"/></a:effectLst>',
+    });
+    const projection = projectionOf(groupDrawing(shadowed));
+    expect(projection.vectorShape?.components).toHaveLength(1);
+    expect(topLeft(projection)).toMatchObject({ x: NESTED_X, y: NESTED_Y });
+    // The group effect paints nothing: the bar casts no shadow.
+    expect(projection.vectorShape?.components[0]!.shadow).toBeUndefined();
+    expect(projection.diagnostics).toEqual([]);
+  });
+
   test('a hidden nested group paints nothing, and the rest of the group still paints', () => {
     const projection = projectionOf(
       groupDrawing(bar(100, 200) + nested(bar(0, 0) + label(0, 0, 'Hidden'), { hidden: true }))
     );
     expect(projection.vectorShape?.components).toHaveLength(1);
     expect(projection.groupTextboxes).toBeUndefined();
-    // An invalid spelling of the flag on a nested group refuses the group.
+    expect(notShown(projection)).toEqual([]);
+    // An invalid spelling of the flag leaves out the nested group, and reports it.
     const invalid = nested(bar(0, 0)).replace('name="Inner"', 'name="Inner" hidden="maybe"');
-    expect(projectionOf(groupDrawing(bar(100, 200) + invalid)).vectorShape).toBeNull();
+    const spelled = projectionWithIds(groupDrawing(bar(100, 200) + invalid), 'grpSp');
+    expect(spelled.projection.vectorShape?.components).toHaveLength(1);
+    expect(topLeft(spelled.projection)).toMatchObject({ x: 0, y: 0 });
+    expect(notShown(spelled.projection)).toEqual([spelled.ids[0]!]);
   });
 
   test('a hidden shape or picture paints nothing, and the rest of the group still paints', () => {
@@ -471,12 +565,15 @@ describe('nested drawing groups', () => {
     const pictured = projectionOf(groupDrawing(hiddenPicture + bar(100, 200)));
     expect(pictured.groupPicture).toBeNull();
     expect(pictured.vectorShape?.components).toHaveLength(1);
-    // An invalid spelling of the flag still refuses the group.
+    // An invalid spelling of the flag leaves out that shape, and reports it.
     const invalid = bar(0, 0).replace(
       '<wps:cNvPr id="3" name="Bar"/>',
       '<wps:cNvPr id="3" name="Bar" hidden="yes"/>'
     );
-    expect(projectionOf(groupDrawing(bar(100, 200) + invalid)).vectorShape).toBeNull();
+    const spelled = projectionWithIds(groupDrawing(bar(100, 200) + invalid), 'wsp');
+    expect(spelled.projection.vectorShape?.components).toHaveLength(1);
+    expect(topLeft(spelled.projection)).toMatchObject({ x: 0, y: 0 });
+    expect(notShown(spelled.projection)).toEqual([spelled.ids[1]!]);
   });
 
   test('a trailing extension list is not a member', () => {
@@ -492,7 +589,7 @@ describe('nested drawing groups', () => {
     ).not.toBeNull();
   });
 
-  test('group text stays readable, nested, hidden, or behind a placeholder', () => {
+  test('group text stays readable, nested, hidden, or past the member budget', () => {
     const roots = (members: string) =>
       textboxReadStoriesInPart(parsePart(`<w:p><w:r>${groupDrawing(members)}</w:r></w:p>`));
     const selectable = (members: string) =>
@@ -504,17 +601,23 @@ describe('nested drawing groups', () => {
     const glowing = nested(label(0, 0, 'Inner'), {
       fill: '<a:effectLst><a:glow rad="1"/></a:effectLst>',
     });
-    // A group that paints a placeholder still lists its text for paragraph reads, marked so
-    // that selection skips it.
-    const unplaced = roots(label(0, 0, 'Top') + glowing);
-    expect(unplaced).toHaveLength(2);
-    expect(unplaced.every((story) => story.unplaced === true)).toBe(true);
+    // A nested group with an effect paints flat, so its text lays out and selects.
+    const placed = roots(label(0, 0, 'Top') + glowing);
+    expect(placed.map((story) => story.unplaced)).toEqual([undefined, undefined]);
     expect(roots(label(0, 0, 'Top') + nested(label(0, 0, 'Inner')))[0]!.unplaced).toBeUndefined();
-    // A picture in a turned nested group has no frame, so that group paints a placeholder too.
+    // A picture in a turned nested group paints, and the text beside it lays out.
     const pictured = nested(picture(0, 0, 100, 100) + label(0, 0, 'Inner'), {
       xfrmAttributes: ' rot="60000"',
     });
-    expect(roots(label(0, 0, 'Top') + pictured).every((story) => story.unplaced)).toBe(true);
+    expect(roots(label(0, 0, 'Top') + pictured).map((story) => story.unplaced)).toEqual([
+      undefined,
+      undefined,
+    ]);
+    // A group past the member budget paints a placeholder. Its text stays listed for
+    // paragraph reads, marked so that selection skips it.
+    const crowded = label(0, 0, 'Top') + bar(0, 0).repeat(MAX_GROUP_SHAPE_CHILDREN);
+    expect(roots(crowded).map((story) => story.unplaced)).toEqual([true]);
+    expect(selectable(crowded)).toHaveLength(0);
     const hidden = label(0, 0, 'Hidden').replace(
       '<wps:wsp>',
       '<wps:wsp><wps:cNvPr id="9" name="Hidden" hidden="1"/>'
@@ -524,7 +627,7 @@ describe('nested drawing groups', () => {
     const withHidden = roots(label(0, 0, 'Top') + nested(hidden));
     expect(withHidden.map((story) => story.unplaced)).toEqual([undefined, true]);
     expect(selectable(label(0, 0, 'Top') + nested(hidden))).toHaveLength(1);
-    expect(selectable(label(0, 0, 'Top') + glowing)).toHaveLength(0);
+    expect(selectable(label(0, 0, 'Top') + glowing)).toHaveLength(2);
   });
 });
 

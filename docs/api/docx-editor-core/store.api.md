@@ -6444,6 +6444,7 @@ export interface VectorShapeComponent {
     readonly fillHex: string | null;
     readonly fillPattern?: VectorPattern;
     readonly fillRule?: 'nonzero';
+    readonly picturesBelow?: number;
     readonly shadow?: ShapeShadow;
     readonly shadowOnly?: true;
     // (undocumented)

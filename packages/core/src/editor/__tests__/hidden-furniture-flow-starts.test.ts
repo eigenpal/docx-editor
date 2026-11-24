@@ -33,16 +33,15 @@ const PICTURE_MEMBER =
   '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="762000" cy="762000"/></a:xfrm>' +
   '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>';
 
-const TEXTBOX_MEMBER =
-  '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="889000" y="0"/>' +
-  '<a:ext cx="2540000" cy="762000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
-  '<a:effectLst><a:outerShdw dist="38100"/></a:effectLst></wps:spPr><wps:txbx><w:txbxContent><w:p><w:r><w:t>Group label</w:t></w:r></w:p>' +
-  '</w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp>';
+/** A member that paint cannot represent. Alone in a group, the group paints nothing. */
+const FRAME_MEMBER =
+  '<wpg:graphicFrame><wpg:cNvPr id="9" name="Frame"/><wpg:cNvFrPr/><wpg:xfrm>' +
+  '<a:off x="0" y="0"/><a:ext cx="100" cy="100"/></wpg:xfrm></wpg:graphicFrame>';
 
 interface Group {
   readonly top: number;
   readonly height: number;
-  /** A picture-only group paints; a picture beside a shadowed text box cannot. */
+  /** A picture-only group paints; a group with only a graphic frame cannot. */
   readonly visible: boolean;
 }
 
@@ -62,7 +61,7 @@ function groupRun({ top, height, visible }: Group, id: number): string {
     `<a:graphic><a:graphicData uri="${WPG}"><wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr>` +
     `<a:xfrm><a:off x="0" y="0"/><a:ext cx="3810000" cy="${cy}"/>` +
     `<a:chOff x="0" y="0"/><a:chExt cx="3810000" cy="${cy}"/></a:xfrm></wpg:grpSpPr>` +
-    `${visible ? PICTURE_MEMBER : PICTURE_MEMBER + TEXTBOX_MEMBER}</wpg:wgp></a:graphicData>` +
+    `${visible ? PICTURE_MEMBER : FRAME_MEMBER}</wpg:wgp></a:graphicData>` +
     '</a:graphic></wp:anchor></w:drawing></mc:Choice>' +
     '<mc:Fallback><w:pict><v:group/></w:pict></mc:Fallback></mc:AlternateContent></w:r>'
   );

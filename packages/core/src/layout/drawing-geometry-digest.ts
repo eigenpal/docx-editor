@@ -53,6 +53,7 @@ export function vectorShapeLayoutToken(
       component.shadowOnly ? 'shadow-only' : '',
       component.strokeDash ? component.strokeDash.join(' ') : '',
       component.belowPicture ? 'below-picture' : '',
+      String(component.picturesBelow ?? ''),
       String(component.strokeOutsetEmu ?? ''),
       String(component.subpathsEmu.length)
     );
