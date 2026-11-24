@@ -433,7 +433,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/toolbar#create-and-continue-lists',
     notes:
-      'Create numbered lists with decimal, Roman numeral, letter, and supported script-specific formats. Unsupported script-specific formats use decimal numbers. Document settings control marker spacing and indents.',
+      'Create numbered lists with decimal, Roman numeral, letter, Chinese, Korean, enclosed-digit, and other supported script formats. Japanese kana, Thai, and other unsupported script formats use decimal numbers. Document settings control marker spacing and indents.',
   },
   {
     id: 'lists.custom-numbering',
