@@ -21,6 +21,7 @@ import type {
   SemanticLayout,
 } from './semantic-records.ts';
 import { headerFooterAnchoredDrawingOrigin } from './header-footer-drawing-origin.ts';
+import type { StoryTurn } from './story-turns.ts';
 
 /**
  * Depth-first paragraph fragments of one page, in reading order.
@@ -375,6 +376,12 @@ export interface StoryParagraphFragmentContext {
   readonly textboxOwner: TextboxOwnerRecord | null;
   /** Root-to-leaf owning drawings, empty for the supplied story. */
   readonly textboxPath: readonly TextboxOwnerRecord[];
+  /**
+   * The turns of the text-box stories around this record, outermost first; absent when every
+   * story is upright. Record boxes are upright: pass `storyOrigin` plus a box to
+   * `turnStoryBox` for where it paints.
+   */
+  readonly storyTurns?: readonly StoryTurn[];
 }
 
 /** A drawing that owns a text-box story: anchored, or inline on a line. @public */
@@ -416,6 +423,21 @@ interface OwnedTextboxStory {
   readonly story: import('./textbox-story-layout.ts').TextboxStoryLayout;
   /** Origin of the story's content box inside the drawing extent. */
   readonly offset: Readonly<{ x: number; y: number }>;
+  /** Clockwise turn of the painted story about `pivot`, in drawing-extent points. */
+  readonly turn?: Readonly<{ degrees: number; pivot: Readonly<{ x: number; y: number }> }>;
+}
+
+/** The turns of an owned story's records: the context's, then the story's own turn. */
+function ownedStoryTurns(
+  turns: readonly StoryTurn[] | undefined,
+  owned: OwnedTextboxStory,
+  storyOrigin: Readonly<{ x: number; y: number }>,
+  drawing: TextboxOwnerRecord,
+  placedDrawingOrigin?: Readonly<{ x: number; y: number }>
+): readonly StoryTurn[] | undefined {
+  if (!owned.turn) return turns;
+  const pivot = textboxStoryOrigin(storyOrigin, drawing, owned.turn.pivot, placedDrawingOrigin);
+  return Object.freeze([...(turns ?? []), Object.freeze({ degrees: owned.turn.degrees, pivot })]);
 }
 
 /**
@@ -425,16 +447,31 @@ interface OwnedTextboxStory {
 export function ownedTextboxStories(drawing: TextboxOwnerRecord): readonly OwnedTextboxStory[] {
   const stories: OwnedTextboxStory[] = [];
   if (drawing.textboxStory) {
+    const turn = drawing.textboxStory.contentRotation;
     stories.push({
       story: drawing.textboxStory,
       offset: drawing.textboxStory.contentOffset ?? ZERO_STORY_ORIGIN,
+      ...(turn && turn.degrees !== 0 ? { turn } : {}),
     });
   }
   for (const member of drawing.groupTextboxStories ?? []) {
     const contentOffset = member.story.contentOffset ?? ZERO_STORY_ORIGIN;
+    const degrees = member.rotationDegrees;
     stories.push({
       story: member.story,
       offset: { x: member.box.x + contentOffset.x, y: member.box.y + contentOffset.y },
+      // A member turns about the centre of its box.
+      ...(degrees !== 0 && Number.isFinite(degrees)
+        ? {
+            turn: {
+              degrees,
+              pivot: {
+                x: member.box.x + member.box.width / 2,
+                y: member.box.y + member.box.height / 2,
+              },
+            },
+          }
+        : {}),
     });
   }
   return stories;
@@ -480,7 +517,8 @@ export function forEachStoryDrawing(
             owned.story,
             context.textboxDepth + 1,
             Object.freeze([...context.textboxPath, drawing]),
-            textboxStoryOrigin(context.storyOrigin, drawing, owned.offset)
+            textboxStoryOrigin(context.storyOrigin, drawing, owned.offset),
+            ownedStoryTurns(context.storyTurns, owned, context.storyOrigin, drawing)
           );
         }
       }
@@ -490,7 +528,8 @@ export function forEachStoryDrawing(
     inner: StoryDrawingHost,
     depth: number,
     textboxPath: readonly TextboxOwnerRecord[],
-    storyOrigin: Readonly<{ x: number; y: number }>
+    storyOrigin: Readonly<{ x: number; y: number }>,
+    storyTurns?: readonly StoryTurn[]
   ): void {
     if (depth > MAX_STORY_DRAWING_WALK_DEPTH) return;
     const context: StoryParagraphFragmentContext = {
@@ -498,21 +537,21 @@ export function forEachStoryDrawing(
       textboxDepth: depth,
       textboxOwner: textboxPath[textboxPath.length - 1] ?? null,
       textboxPath,
+      ...(storyTurns ? { storyTurns } : {}),
     };
     for (const drawing of inner.anchoredDrawings ?? []) {
       visit(drawing, { ...context, paragraph: null, line: null });
       // A text box is a story of its own, nested in the drawing that anchors it.
-      for (const owned of ownedTextboxStories(drawing)) {
+      const owned = ownedTextboxStories(drawing);
+      // Placed only for a drawing that owns a story, as the origin read needs a laid-out page.
+      const placed = owned.length > 0 && depth === 0 ? rootDrawingOrigin?.(drawing) : undefined;
+      for (const story of owned) {
         visitStory(
-          owned.story,
+          story.story,
           depth + 1,
           Object.freeze([...textboxPath, drawing]),
-          textboxStoryOrigin(
-            storyOrigin,
-            drawing,
-            owned.offset,
-            depth === 0 ? rootDrawingOrigin?.(drawing) : undefined
-          )
+          textboxStoryOrigin(storyOrigin, drawing, story.offset, placed),
+          ownedStoryTurns(storyTurns, story, storyOrigin, drawing, placed)
         );
       }
     }
@@ -546,7 +585,10 @@ export interface SemanticDrawingVisit extends StoryDrawingContext {
   readonly root: SemanticStoryVisit;
   /** Absolute origin of this drawing's extent in page-stack coordinates. */
   readonly drawingOrigin: Readonly<{ x: number; y: number }>;
-  /** Absolute painted bounds, including effects and clipping. */
+  /**
+   * Absolute painted bounds, including effects and clipping. Like `drawingOrigin`, upright:
+   * inside turned text-box text, `storyTurns` carries them to where they paint.
+   */
   readonly absolutePaintBounds: LayoutBox;
   /** Absolute pointer/hit bounds. */
   readonly absoluteHitBounds: LayoutBox;
@@ -634,7 +676,8 @@ export function forEachStoryParagraphFragment(
     inner: StoryDrawingHost,
     depth: number,
     textboxPath: readonly TextboxOwnerRecord[],
-    storyOrigin: Readonly<{ x: number; y: number }>
+    storyOrigin: Readonly<{ x: number; y: number }>,
+    storyTurns?: readonly StoryTurn[]
   ): void => {
     if (depth > MAX_STORY_DRAWING_WALK_DEPTH) return;
     for (const fragment of paragraphFragmentsOfBlocks(inner.fragments, true)) {
@@ -643,6 +686,7 @@ export function forEachStoryParagraphFragment(
         textboxDepth: depth,
         textboxOwner: textboxPath[textboxPath.length - 1] ?? null,
         textboxPath,
+        ...(storyTurns ? { storyTurns } : {}),
       });
       for (const line of fragment.lines) {
         for (const drawing of line.drawings ?? []) {
@@ -653,7 +697,8 @@ export function forEachStoryParagraphFragment(
               owned.story,
               depth + 1,
               Object.freeze([...textboxPath, drawing]),
-              textboxStoryOrigin(storyOrigin, drawing, owned.offset)
+              textboxStoryOrigin(storyOrigin, drawing, owned.offset),
+              ownedStoryTurns(storyTurns, owned, storyOrigin, drawing)
             );
           }
         }
@@ -661,17 +706,16 @@ export function forEachStoryParagraphFragment(
     }
     for (const drawing of inner.anchoredDrawings ?? []) {
       // A text box is a story of its own, nested in the drawing that anchors it.
-      for (const owned of ownedTextboxStories(drawing)) {
+      const owned = ownedTextboxStories(drawing);
+      // Placed only for a drawing that owns a story, as the origin read needs a laid-out page.
+      const placed = owned.length > 0 && depth === 0 ? rootDrawingOrigin?.(drawing) : undefined;
+      for (const story of owned) {
         visitStory(
-          owned.story,
+          story.story,
           depth + 1,
           Object.freeze([...textboxPath, drawing]),
-          textboxStoryOrigin(
-            storyOrigin,
-            drawing,
-            owned.offset,
-            depth === 0 ? rootDrawingOrigin?.(drawing) : undefined
-          )
+          textboxStoryOrigin(storyOrigin, drawing, story.offset, placed),
+          ownedStoryTurns(storyTurns, story, storyOrigin, drawing, placed)
         );
       }
     }

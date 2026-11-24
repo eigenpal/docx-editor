@@ -37,6 +37,11 @@ export interface TextboxStoryRoot {
   readonly drawingNodeId: string;
   /** Canonical node id of the paragraph that anchors the drawing. */
   readonly hostParagraphId: string;
+  /**
+   * Set for a text box that layout lays out none of: a hidden group member, or a member of a
+   * group that paints a placeholder. Paragraph reads keep its text; selection and Find skip it.
+   */
+  readonly unplaced?: true;
 }
 
 function compatibleDirectChild(
@@ -51,13 +56,24 @@ function compatibleDirectChild(
   );
 }
 
+/** One story root a drawing offers, marked when layout lays out none of it. */
+interface TextboxContent {
+  readonly root: OoxmlElement;
+  readonly unplaced?: true;
+}
+
+const NO_TEXTBOX: readonly TextboxContent[] = Object.freeze([]);
+
 /**
  * Read only the direct WPS path that holds a drawing's text-box story.
  *
  * Anchored and inline boxes both qualify: layout lays out a story for each, and the editor
  * reveals a match through either drawing record.
  */
-function textboxContentsOf(drawing: OoxmlDrawingNode, hiddenRun: boolean): readonly OoxmlElement[] {
+function textboxContentsOf(
+  drawing: OoxmlDrawingNode,
+  hiddenRun: boolean
+): readonly TextboxContent[] {
   let anchor: OoxmlElement | null = null;
   for (const child of drawing.children) {
     if (!isElement(child)) continue;
@@ -71,30 +87,33 @@ function textboxContentsOf(drawing: OoxmlDrawingNode, hiddenRun: boolean): reado
       break;
     }
   }
-  if (!anchor) return [];
+  if (!anchor) return NO_TEXTBOX;
   // A hidden run lays out no inline drawing, so its story has nothing to reveal.
-  if (hiddenRun && (anchor.kind === 'inlineDrawing' || anchor.localName === 'inline')) return [];
+  if (hiddenRun && (anchor.kind === 'inlineDrawing' || anchor.localName === 'inline'))
+    return NO_TEXTBOX;
   // Selection is the point of this list, so a drawing layout never paints has no story to
   // offer: the match would be reported and then refuse to select.
-  if (anchorHidesDrawing(anchor, true)) return [];
+  if (anchorHidesDrawing(anchor, true)) return NO_TEXTBOX;
   const graphic = compatibleDirectChild(
     anchor,
     'drawingGraphic',
     DRAWINGML_MAIN_NAMESPACE_URI,
     'graphic'
   );
-  if (!graphic) return [];
+  if (!graphic) return NO_TEXTBOX;
   const data = compatibleDirectChild(
     graphic,
     'drawingGraphicData',
     DRAWINGML_MAIN_NAMESPACE_URI,
     'graphicData'
   );
-  // A group's text box members reveal through the group drawing, as read-only text.
+  // A group's text box members reveal through the group drawing, as read-only text. Those
+  // layout lays out none of come marked `unplaced`: reads keep them, selection leaves them out.
   if (data && schemaAttributeValue(data.attributes, 'uri') === WPG_NAMESPACE_URI) {
     return groupTextboxContents(anchor);
   }
-  if (!data || schemaAttributeValue(data.attributes, 'uri') !== WPS_GRAPHIC_DATA_URI) return [];
+  if (!data || schemaAttributeValue(data.attributes, 'uri') !== WPS_GRAPHIC_DATA_URI)
+    return NO_TEXTBOX;
   const wsp = findDirectChild(data.children, {
     namespaceUri: WPS_NAMESPACE_URI,
     localName: 'wsp',
@@ -108,7 +127,7 @@ function textboxContentsOf(drawing: OoxmlDrawingNode, hiddenRun: boolean): reado
         localName: 'txbxContent',
       })
     : null;
-  return content ? [content] : [];
+  return content ? [{ root: content }] : NO_TEXTBOX;
 }
 
 interface WalkFrame {
@@ -150,8 +169,10 @@ function appendTextboxStory(
   hiddenRun: boolean
 ): void {
   if (!hostParagraphId) return;
-  for (const root of textboxContentsOf(drawing, hiddenRun)) {
-    stories.push(Object.freeze({ root, drawingNodeId, hostParagraphId }));
+  for (const { root, unplaced } of textboxContentsOf(drawing, hiddenRun)) {
+    stories.push(
+      Object.freeze({ root, drawingNodeId, hostParagraphId, ...(unplaced ? { unplaced } : {}) })
+    );
   }
 }
 
@@ -319,12 +340,14 @@ function blockStories(
 }
 
 /**
- * List the text-box stories in one part, in document order.
+ * List the text-box stories in one part whose text a reader can read, in document order:
+ * every story {@link textboxStoriesInPart} lists, and also the stories of hidden group members
+ * and of groups that paint a placeholder, marked `unplaced`. Paragraph reads use it.
  *
  * The bounded walk stops at drawings. It does not project pictures, shape geometry, or story
  * content. Results are memoized by immutable part-root identity and per paragraph node.
  */
-export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot[] {
+export function textboxReadStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot[] {
   const cached = textboxStoriesCache.get(part.root);
   if (cached) return cached;
   const stories: TextboxStoryRoot[] = [];
@@ -344,4 +367,27 @@ export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot
   const frozen = Object.freeze(stories);
   textboxStoriesCache.set(part.root, frozen);
   return frozen;
+}
+
+const selectableStoriesCache = new WeakMap<
+  readonly TextboxStoryRoot[],
+  readonly TextboxStoryRoot[]
+>();
+
+/**
+ * List the text-box stories in one part that layout lays out, in document order. Selection,
+ * Find, and editing use it.
+ *
+ * The bounded walk stops at drawings. It does not project pictures, shape geometry, or story
+ * content. Results are memoized by immutable part-root identity and per paragraph node.
+ */
+export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot[] {
+  const all = textboxReadStoriesInPart(part);
+  const cached = selectableStoriesCache.get(all);
+  if (cached) return cached;
+  const selectable = all.some((story) => story.unplaced)
+    ? Object.freeze(all.filter((story) => !story.unplaced))
+    : all;
+  selectableStoriesCache.set(all, selectable);
+  return selectable;
 }

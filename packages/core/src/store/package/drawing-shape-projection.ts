@@ -8,8 +8,6 @@ export { MAX_EMU, parseEmu, findDirectChild } from './drawing-shape-readers.ts';
 import { isElement } from './drawing-projection-walk.ts';
 import {
   findGraphicData,
-  isGroupPropertyChild,
-  MAX_GROUP_SHAPE_CHILDREN,
   readDrawingGroupFrame,
   supportedGroupVisuals,
   schemaFlagIsSet,
@@ -48,12 +46,18 @@ import {
   shapeRotationDegrees,
 } from './drawing-shape-geometry.ts';
 import {
-  groupMemberPlacement,
   transformComponent,
+  turnComponentsInBoxes,
   turnGroupComponents,
 } from './drawing-group-transform.ts';
-import { groupFillOf, groupFillSpansMembers, withResolvedGroupFill } from './drawing-group-fill.ts';
+import { groupFillSpansMembers, withResolvedGroupFill } from './drawing-group-fill.ts';
 import { groupPictureOutline } from './drawing-group-picture-outline.ts';
+import {
+  flattenGroupMembers,
+  groupSpacePlacement,
+  mapGroupPoint,
+  rootGroupSpace,
+} from './drawing-group-members.ts';
 import { readLineProperties, readStyleReferenceIndex } from './drawing-line-properties.ts';
 import {
   directFill,
@@ -90,9 +94,9 @@ export type ShapeStyleMatrixResolver = (
  * group of them: closed polygon subpaths (`a:custGeom` with move/line/close/cubicBezTo
  * verbs, or a supported `a:prstGeom`) with a solid fill and/or stroke. The colour may come
  * from `a:srgbClr` or from the theme, through `a:schemeClr` or a `wps:style` matrix
- * reference. Anything richer (picture fills, a turned group, a nested group) projects as
- * `null` and paints the labelled placeholder instead. A top-level text box paints through its
- * story, not through this projection.
+ * reference. Anything richer (picture fills, a picture in a turned or flipped nested group)
+ * projects as `null` and paints the labelled placeholder instead. A top-level text box paints
+ * through its story, not through this projection.
  *
  * @public
  */
@@ -750,36 +754,22 @@ export function projectVectorShape(
     const frame = readDrawingGroupFrame(anchor, { turned: true });
     if (!frame) return null;
     const turn = frame.turn;
-    const { x: chOffX, y: chOffY } = frame.childOffsetEmu;
-    const { cx: chExtX, cy: chExtY } = frame.childExtentEmu;
-    // Rules that share one x (or y) give the group a zero child extent on that axis. Every
-    // child then sits at the group's origin on that axis, whatever the group's own extent.
-    const scaleX = chExtX > 0 ? extent.cx / chExtX : 0;
-    const scaleY = chExtY > 0 ? extent.cy / chExtY : 0;
-    let childCount = 0;
-    const groupFill = groupFillOf(frame.group, null);
-    for (const child of frame.group.children) {
-      if (!isElement(child) || isGroupPropertyChild(child)) continue;
-      childCount += 1;
-      if (childCount > MAX_GROUP_SHAPE_CHILDREN) return null;
+    const members = flattenGroupMembers(frame, rootGroupSpace(frame, extent));
+    if (!members) return null;
+    for (const { member: child, space, groupFill } of members) {
       if (groupPictureNodeIds?.has(child.id)) {
         // The group picture paints the raster; its outline, if any, strokes above it here.
         const outline = groupPictureOutline(child, pointBudget, resolveSchemeColor, {
           project: projectShapeComponents,
           childTransform,
           place: (component, offset) =>
-            transformComponent(
-              component,
-              { x: (offset.x - chOffX) * scaleX, y: (offset.y - chOffY) * scaleY },
-              scaleX,
-              scaleY
-            ),
+            transformComponent(component, mapGroupPoint(space, offset), space.scaleX, space.scaleY),
         });
         if (outline === null) return null;
         components.push(...outline);
         continue;
       }
-      // One group level is the enforced nesting cap. Do not paint a partial nested group.
+      // A member the vector paint cannot draw refuses the whole group: no partial group paints.
       if (child.namespaceUri !== WPS_NAMESPACE_URI || child.localName !== 'wsp') return null;
       const properties = findDirectChild(child.children, {
         namespaceUri: WPS_NAMESPACE_URI,
@@ -787,8 +777,6 @@ export function projectVectorShape(
       });
       if (!properties || !supportedGroupVisuals(child, properties, false)) return null;
       if (!identityGroupThemeEffect(child, resolveStyleMatrixReference)) return null;
-      // The text of a text box member does not turn with its group yet: keep the placeholder.
-      if (turn && hasTextbox(child)) return null;
       if (
         isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference, groupFill)
       )
@@ -799,13 +787,7 @@ export function projectVectorShape(
       const memberTurn = shapeRotationDegrees(shapeTransformElement(child)) ?? 0;
       // A turned member paints whole, past the group extent where its corners reach.
       if (memberTurn !== 0) overflowVisible = true;
-      const place = groupMemberPlacement(
-        transform,
-        frame.childOffsetEmu,
-        scaleX,
-        scaleY,
-        memberTurn
-      );
+      const place = groupSpacePlacement(transform, space, memberTurn);
       const memberComponents = projectShapeComponents(
         child,
         place.extent,
@@ -816,11 +798,21 @@ export function projectVectorShape(
         groupFill
       );
       if (!memberComponents) return null; // A member that paints nothing adds nothing.
-      for (const component of memberComponents) {
-        components.push(transformComponent(component, place.offset, place.scaleX, place.scaleY));
+      const placed = memberComponents.map((component) =>
+        transformComponent(component, place.offset, place.scaleX, place.scaleY)
+      );
+      if (space.turns) {
+        // Members of a turned nested group turn with it and paint whole, past the frame.
+        const turned = turnComponentsInBoxes(placed, space.turns);
+        if (!turned) return null;
+        components.push(...turned);
+        overflowVisible = true;
+      } else {
+        components.push(...placed);
       }
     }
-    if (components.length === 0) return null;
+    // A group whose members are all hidden, or that has none, paints nothing and no placeholder.
+    if (components.length === 0 && members.length > 0) return null;
     if (turn) {
       const turned = turnGroupComponents(components, extent, turn);
       if (!turned) return null;

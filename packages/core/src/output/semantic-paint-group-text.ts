@@ -35,10 +35,14 @@ export function paintGroupTextboxStories(
   layer.style.top = `${(bounds.y - oy) * scale}px`;
   layer.style.width = `${bounds.width * scale}px`;
   layer.style.height = `${bounds.height * scale}px`;
-  // DrawingML shape text overflows its box and the drawing, as the reference shows it.
-  layer.style.overflow = members.some((member) => member.story.overflowVisible)
-    ? 'visible'
-    : 'hidden';
+  // DrawingML shape text overflows its box and the drawing, as the reference shows it. Turned
+  // text, or text whose turned members or groups paint past the frame, goes past it too; each
+  // member's content box still clips its own text.
+  layer.style.overflow =
+    drawing.vectorShape?.overflowVisible ||
+    members.some((member) => member.story.overflowVisible || member.rotationDegrees !== 0)
+      ? 'visible'
+      : 'hidden';
   layer.style.pointerEvents = 'none';
   // Extent origin inside the clipped paint bounds.
   const extentLeft = drawing.x - bounds.x;

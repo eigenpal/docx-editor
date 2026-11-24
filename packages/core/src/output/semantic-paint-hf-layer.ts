@@ -18,6 +18,7 @@ import type {
 } from '../layout/semantic-records.ts';
 import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
 import { headerFooterAnchoredDrawingOrigin } from '../layout/header-footer-drawing-origin.ts';
+import { shiftAnchoredDrawing } from '../layout/drawing-overlap.ts';
 import {
   appendHeaderFooterHoverChrome,
   headerFooterBandHeightPt,
@@ -50,37 +51,14 @@ function hfAnchorOnPageSheet(
   drawing: AnchoredDrawingRecord,
   pageBox: { readonly x: number; readonly y: number }
 ): AnchoredDrawingRecord {
-  const pb = drawing.paintBounds;
   // Layout resolves page-frame axes in page-CONTENT coordinates; the record's frame origin is
   // the page edge in that space (−margin), so the sheet position needs the page box, not the
   // story box — a footer story's own Y would double-count most of the page height. Axes on
   // story-relative frames keep the story box base.
   const absoluteOrigin = headerFooterAnchoredDrawingOrigin(drawing, story.box, pageBox);
-  const dx = absoluteOrigin.x - drawing.x;
-  const dy = absoluteOrigin.y - drawing.y;
-  const shift = (box: LayoutBox): LayoutBox =>
-    Object.freeze({ x: box.x + dx, y: box.y + dy, width: box.width, height: box.height });
-  return Object.freeze({
-    ...drawing,
-    x: drawing.x + dx,
-    y: drawing.y + dy,
-    paintBounds: shift(pb),
-    hitBounds: shift(drawing.hitBounds),
-    geometry: Object.freeze({
-      ...drawing.geometry,
-      contentBounds: shift(drawing.geometry.contentBounds),
-      paintBounds: shift(drawing.geometry.paintBounds),
-      ...(drawing.geometry.clipPolygon
-        ? {
-            clipPolygon: Object.freeze(
-              drawing.geometry.clipPolygon.map((point) =>
-                Object.freeze({ x: point.x + dx, y: point.y + dy })
-              )
-            ),
-          }
-        : {}),
-    }),
-  });
+  // Every geometry field moves together, the corners of a group picture included; a field
+  // left behind paints at the story offset.
+  return shiftAnchoredDrawing(drawing, absoluteOrigin.x - drawing.x, absoluteOrigin.y - drawing.y);
 }
 
 /**

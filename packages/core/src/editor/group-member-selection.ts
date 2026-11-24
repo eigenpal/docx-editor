@@ -3,10 +3,11 @@
 // and Escape goes back up to the group. A member does not move, resize, or delete on its own:
 // those commands refuse with a typed reason while one is selected.
 //
-// The member boxes come from the store, not from the paint: each `wps:wsp` child of the group
-// places itself by its `a:xfrm` in the group's child space (`chOff`/`chExt`). A rotated or
-// flipped group has no member boxes (`readDrawingGroupFrame` refuses it), so a press keeps the
-// group. DOM-free except for the client rectangle of the pressed element.
+// The member boxes come from the store, not from the paint: each `wps:wsp` member of the group,
+// nested groups included, places itself by its `a:xfrm` in its group's child space
+// (`chOff`/`chExt`). A rotated or flipped group has no member boxes (`readDrawingGroupFrame`
+// refuses it), so a press keeps the group. DOM-free except for the client rectangle of the
+// pressed element.
 
 import type { Editor, EditorCommand, ExecResult } from '../contracts/editor.ts';
 import {
@@ -14,7 +15,11 @@ import {
   type DrawingOverlayFrame,
 } from '../layout/semantic-hit-test.ts';
 import { readDrawingGroupFrame } from '../store/package/drawing-group-frame.ts';
-import { groupMemberPlacement } from '../store/package/drawing-group-transform.ts';
+import {
+  flattenGroupMembers,
+  groupSpacePlacement,
+  type GroupSpace,
+} from '../store/package/drawing-group-members.ts';
 import { shapeRotationDegrees } from '../store/package/drawing-shape-geometry.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { schemaAttributeValue, WPS_NAMESPACE_URI } from '../store/package/ooxml-drawing-rules.ts';
@@ -116,10 +121,20 @@ export function groupMemberBoxes(
   const scaleX = groupCx > 0 ? groupCx / cx : 1;
   const scaleY = groupCy > 0 ? groupCy / cy : 1;
   const boxes: GroupMemberBox[] = [];
-  for (const child of frame.group.children) {
-    const member = element(child);
-    if (!member || member.namespaceUri !== WPS_NAMESPACE_URI || member.localName !== 'wsp')
-      continue;
+  const space: GroupSpace = {
+    shift: { x: 0, y: 0 },
+    childOffset: frame.childOffsetEmu,
+    scaleX,
+    scaleY,
+  };
+  // A group that cannot place a nested group paints a placeholder, so it has no member boxes.
+  const members = flattenGroupMembers(frame, space);
+  if (!members) return null;
+  for (const { member, space: memberSpace } of members) {
+    if (member.namespaceUri !== WPS_NAMESPACE_URI || member.localName !== 'wsp') continue;
+    // A shape inside a turned or flipped nested group has no upright box: the press keeps the
+    // group.
+    if (memberSpace.turns) continue;
     const spPr = childNamed(member, WPS_NAMESPACE_URI, 'spPr');
     const xfrm = spPr ? childNamed(spPr, DRAWINGML_MAIN_NAMESPACE_URI, 'xfrm') : null;
     const off = xfrm ? childNamed(xfrm, DRAWINGML_MAIN_NAMESPACE_URI, 'off') : null;
@@ -127,11 +142,9 @@ export function groupMemberBoxes(
     const [x, y, w, h] = [emu(off, 'x'), emu(off, 'y'), emu(ext, 'cx'), emu(ext, 'cy')];
     if (x === null || y === null || w === null || h === null) continue;
     // The box the member paints in before it turns, as the paint places it.
-    const place = groupMemberPlacement(
+    const place = groupSpacePlacement(
       { offset: { x, y }, extent: { cx: w, cy: h } },
-      frame.childOffsetEmu,
-      scaleX,
-      scaleY,
+      memberSpace,
       shapeRotationDegrees(xfrm) ?? 0
     );
     boxes.push({

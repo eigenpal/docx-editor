@@ -770,3 +770,63 @@ test('continuation-notice review geometry uses its own story origin', () => {
     notice.box.y + notice.box.height - layout.pages[0]!.contentBox.y
   );
 });
+
+test('a comment in the second text box of a group covers its turned text in that box', async () => {
+  const WPG = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
+  const EMU = 12_700;
+  // Two 100 x 40pt members of a 300 x 200pt group at (72, 72)pt on the page: A upright at the
+  // left, B with top-to-bottom text at the right.
+  const member = (x: number, vert: string, content: string) =>
+    `<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="${x * EMU}" y="0"/>` +
+    `<a:ext cx="${100 * EMU}" cy="${40 * EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/>` +
+    `</a:prstGeom></wps:spPr><wps:txbx><w:txbxContent>${content}</w:txbxContent></wps:txbx>` +
+    `<wps:bodyPr lIns="0" tIns="0" rIns="0" bIns="0"${vert}/></wps:wsp>`;
+  const group =
+    `<w:drawing xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}" xmlns:wpg="${WPG}">` +
+    '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" ' +
+    'behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="page"><wp:posOffset>914400</wp:posOffset></wp:positionH>' +
+    '<wp:positionV relativeFrom="page"><wp:posOffset>914400</wp:posOffset></wp:positionV>' +
+    `<wp:extent cx="${300 * EMU}" cy="${200 * EMU}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>` +
+    `<wp:wrapNone/><wp:docPr id="9" name="Review group"/><a:graphic><a:graphicData uri="${WPG}">` +
+    `<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm><a:off x="0" y="0"/>` +
+    `<a:ext cx="${300 * EMU}" cy="${200 * EMU}"/><a:chOff x="0" y="0"/>` +
+    `<a:chExt cx="${300 * EMU}" cy="${200 * EMU}"/></a:xfrm></wpg:grpSpPr>` +
+    member(0, '', '<w:p><w:r><w:t>Left member</w:t></w:r></w:p>') +
+    member(
+      200,
+      ' vert="vert"',
+      '<w:p><w:commentRangeStart w:id="0"/><w:r><w:t>Right member</w:t></w:r>' +
+        '<w:commentRangeEnd w:id="0"/><w:r><w:commentReference w:id="0"/></w:r></w:p>'
+    ) +
+    '</wpg:wgp></a:graphicData></a:graphic></wp:anchor></w:drawing>';
+  const source = pkg(`<w:p><w:r>${group}</w:r></w:p>`, {
+    ...commentsExtra(
+      `<w:comments xmlns:w="${W}"><w:comment w:id="0" w:author="Ada">` +
+        '<w:p><w:r><w:t>In the right member</w:t></w:r></w:p></w:comment></w:comments>'
+    ),
+  });
+  const main = source.parts.get(source.mainDocumentPart)!;
+  const opened = openDocumentForExport(
+    liveView(new TreePackageStore(source, normalizeParagraphIdentity(main)))
+  );
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+  try {
+    const layout = await opened.session.layout();
+    const comment = layout.reviewArtifacts?.find(
+      (artifact) => artifact.kind === 'comment' && artifact.text === 'In the right member'
+    );
+    const occurrence = comment?.occurrences[0];
+    expect(occurrence?.story).toBe('textbox');
+    const rect = occurrence!.geometry!.pageStack[0]!;
+    const page = layout.pages[occurrence!.pageIndex]!;
+    // Member B spans x 272..372pt of the page; its turned text runs down a column at its right edge.
+    const x = rect.x - page.box.x;
+    expect(x).toBeGreaterThan(272);
+    expect(x + rect.width).toBeLessThanOrEqual(372.5);
+    expect(rect.height).toBeGreaterThan(rect.width);
+  } finally {
+    opened.session.dispose();
+  }
+});

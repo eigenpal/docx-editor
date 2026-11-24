@@ -1,5 +1,4 @@
 import { identityGroupThemeEffect } from './drawing-group-theme-effects.ts';
-import { groupFillOf } from './drawing-group-fill.ts';
 import {
   identityPictureStretch,
   supportedPictureProperties,
@@ -12,12 +11,17 @@ import {
 // same bounded image resource path as a top-level picture.
 
 import {
-  isGroupPropertyChild,
-  MAX_GROUP_SHAPE_CHILDREN,
   readDrawingGroupFrame,
   schemaAngleIsZero,
   schemaFlagIsUnset,
 } from './drawing-group-frame.ts';
+import {
+  flattenGroupMembers,
+  mapGroupPoint,
+  rootGroupSpace,
+  type GroupMember,
+  type GroupSpace,
+} from './drawing-group-members.ts';
 import { isElement } from './drawing-projection-walk.ts';
 import { findDirectChild, parseCropPercent, parseEmu } from './drawing-shape-readers.ts';
 import {
@@ -172,28 +176,33 @@ export function readGroupPicture(
   const frame = readDrawingGroupFrame(anchor);
   // A picture cannot keep a visible size in a group whose child space is zero on an axis.
   if (!frame || frame.childExtentEmu.cx <= 0 || frame.childExtentEmu.cy <= 0) return null;
-  const members: OoxmlElement[] = [];
+  const flattened = flattenGroupMembers(frame, rootGroupSpace(frame, extent));
+  if (!flattened) return null;
+  const members: GroupMember[] = [];
   let hasOtherMembers = false;
-  let count = 0;
-  // A text box that says `a:grpFill` paints the group's fill, so it orders the pictures.
-  const groupFill = groupFillOf(frame.group, null);
-  for (const child of frame.group.children) {
-    if (!isElement(child) || isGroupPropertyChild(child)) continue;
-    count += 1;
-    if (count > MAX_GROUP_SHAPE_CHILDREN) return null;
-    if (isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference, groupFill))
+  for (const entry of flattened) {
+    const child = entry.member;
+    // A text box that says `a:grpFill` paints the group's fill, so it orders the pictures.
+    if (
+      isUnpaintedGroupTextbox(
+        child,
+        resolveSchemeColor,
+        resolveStyleMatrixReference,
+        entry.groupFill
+      )
+    )
       continue;
     if (child.namespaceUri === PIC_NAMESPACE_URI && child.localName === 'pic') {
       if (hasOtherMembers) return null;
-      members.push(child);
+      members.push(entry);
     } else {
       hasOtherMembers = true;
     }
   }
   if (members.length === 0) return null;
   const pictures: GroupPictureProjection[] = [];
-  for (const member of members) {
-    const picture = readPictureMember(member, frame, extent, resolveStyleMatrixReference);
+  for (const { member, space } of members) {
+    const picture = readPictureMember(member, space, extent, resolveStyleMatrixReference);
     if (!picture) return null;
     pictures.push(picture);
   }
@@ -209,7 +218,7 @@ export function readGroupPicture(
  */
 function readPictureMember(
   picture: OoxmlElement,
-  frame: NonNullable<ReturnType<typeof readDrawingGroupFrame>>,
+  space: GroupSpace,
   extent: Readonly<{ cx: number; cy: number }>,
   resolveStyleMatrixReference?: ShapeStyleMatrixResolver
 ): GroupPictureProjection | null {
@@ -260,14 +269,11 @@ function readPictureMember(
   const x = offset ? (parseEmu(schemaAttributeValue(offset.attributes, 'x'), false) ?? 0) : 0;
   const y = offset ? (parseEmu(schemaAttributeValue(offset.attributes, 'y'), false) ?? 0) : 0;
 
-  const scaleX = extent.cx / frame.childExtentEmu.cx;
-  const scaleY = extent.cy / frame.childExtentEmu.cy;
-  const frameEmu = {
-    x: (x - frame.childOffsetEmu.x) * scaleX,
-    y: (y - frame.childOffsetEmu.y) * scaleY,
-    cx: cx * scaleX,
-    cy: cy * scaleY,
-  };
+  // A nested group can collapse an axis, which leaves the picture no visible size. A picture
+  // turns with no group, nested or not, so one inside a turned or flipped nested group refuses.
+  if (!(space.scaleX > 0) || !(space.scaleY > 0) || space.turns) return null;
+  const origin = mapGroupPoint(space, { x, y });
+  const frameEmu = { x: origin.x, y: origin.y, cx: cx * space.scaleX, cy: cy * space.scaleY };
   if (!memberFrameIsBounded(frameEmu, extent)) return null;
   const srcRect = drawingMl(blipFill, 'srcRect');
   const cropEdge = (name: string): number =>

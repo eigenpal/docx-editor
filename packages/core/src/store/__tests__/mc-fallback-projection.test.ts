@@ -33,12 +33,12 @@ const TEXTBOX =
   `<a:ext cx="${CX}" cy="${CY}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></wps:spPr>` +
   '<wps:txbx><w:txbxContent><w:p><w:r><w:t>t</w:t></w:r></w:p></w:txbxContent></wps:txbx>' +
   '<wps:bodyPr vert="vert270"/></wps:wsp>';
-/** An inline group whose only member is a nested group of text boxes: outside the subset. */
+/** An inline group whose only member is a glowing nested group of text boxes: outside the subset. */
 const NESTED_GROUP =
   `<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${CX}" cy="${CY}"/>` +
   '<wp:docPr id="1" name="G"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup">' +
   `<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr>${frame(CX, CY)}</wpg:grpSpPr>` +
-  `<wpg:grpSp><wpg:cNvGrpSpPr/><wpg:grpSpPr>${frame(CX, CY)}</wpg:grpSpPr>${TEXTBOX}</wpg:grpSp>` +
+  `<wpg:grpSp><wpg:cNvGrpSpPr/><wpg:grpSpPr>${frame(CX, CY)}<a:effectLst><a:glow rad="12700"/></a:effectLst></wpg:grpSpPr>${TEXTBOX}</wpg:grpSp>` +
   '</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing>';
 const CHART =
   `<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${CX}" cy="1270000"/>` +

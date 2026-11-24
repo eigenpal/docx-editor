@@ -17,7 +17,7 @@ import {
   storyParagraphs,
   storyRootsOf,
 } from '../store/package/story-blocks.ts';
-import { textboxStoriesInPart } from '../store/package/textbox-stories.ts';
+import { textboxReadStoriesInPart } from '../store/package/textbox-stories.ts';
 import { resolveHeaderFooterResolutionBySection } from '../store/package/hf-references.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import { sessionStylesRootOf } from '../store/package/ooxml-indexes.ts';
@@ -56,7 +56,7 @@ function addParagraphsOf(blocks: readonly OoxmlNode[], into: Paragraphs): void {
 /** Text-box paragraphs by host paragraph id, as `getParagraphs()` lists them. */
 function textboxParagraphsOf(part: OoxmlPart): Map<string, Paragraphs> {
   const byHost = new Map<string, Paragraphs>();
-  for (const box of textboxStoriesInPart(part)) {
+  for (const box of textboxReadStoriesInPart(part)) {
     let nested = byHost.get(box.hostParagraphId);
     if (!nested) byHost.set(box.hostParagraphId, (nested = new Map()));
     for (const paragraph of storyParagraphs(box.root)) {

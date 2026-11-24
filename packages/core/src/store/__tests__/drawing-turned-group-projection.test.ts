@@ -286,7 +286,7 @@ describe('turned groups', () => {
     ]);
   });
 
-  test('a turned group keeps its placeholder for paint and text that do not turn with it', () => {
+  test('a turned group keeps its placeholder for paint that does not turn with it', () => {
     const pattern = member(0, 72, 72, 'rect', 'FF0000').replace(
       '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>',
       '<a:pattFill prst="pct50"><a:fgClr><a:srgbClr val="FF0000"/></a:fgClr>' +
@@ -300,7 +300,8 @@ describe('turned groups', () => {
       '</a:prstGeom><a:solidFill><a:srgbClr val="FFFF00"/></a:solidFill></wps:spPr>' +
       '<wps:txbx><w:txbxContent><w:p><w:r><w:t>Text</w:t></w:r></w:p></w:txbxContent>' +
       '</wps:txbx><wps:bodyPr/></wps:wsp>';
-    expect(group({ rot: 30, members: textbox })).toBeNull();
+    // A text box member's shape turns with its group; its text follows in the text projection.
+    expect(group({ rot: 30, members: textbox })?.rotationDegrees).toBe(30);
     // A schema-invalid group turn refuses too.
     expect(
       projectDrawingsInPart(

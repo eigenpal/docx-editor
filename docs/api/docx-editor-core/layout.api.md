@@ -4078,6 +4078,7 @@ export interface SemanticSpanVisit {
         x: number;
         y: number;
     }>;
+    readonly storyTurns?: readonly StoryTurn[];
     readonly textboxDepth: number;
     readonly textboxOwner: TextboxOwnerRecord | null;
     readonly textboxPath: readonly TextboxOwnerRecord[];
@@ -4577,6 +4578,7 @@ export interface StoryParagraphFragmentContext {
         x: number;
         y: number;
     }>;
+    readonly storyTurns?: readonly StoryTurn[];
     readonly textboxDepth: number;
     readonly textboxOwner: TextboxOwnerRecord | null;
     readonly textboxPath: readonly TextboxOwnerRecord[];
@@ -4589,6 +4591,15 @@ export interface StoryProjectionDependencies {
     // (undocumented)
     readonly tokenForParagraphForPart: (partName: string, paragraph: OoxmlNode) => string;
     readonly tokenForTableForPart: (partName: string, table: OoxmlNode) => string;
+}
+
+// @public
+export interface StoryTurn {
+    readonly degrees: number;
+    readonly pivot: Readonly<{
+        x: number;
+        y: number;
+    }>;
 }
 
 // @public
@@ -5137,6 +5148,18 @@ export function tocFieldChromeParagraphIds(part: OoxmlPart): ReadonlySet<string>
 
 // @public
 export function tryCreateCanvasMeasurer(options?: CanvasMeasurerOptions): TextMeasurer | null;
+
+// @public
+export function turnStoryBox(turns: readonly StoryTurn[] | undefined, box: LayoutBox): LayoutBox;
+
+// @public
+export function turnStoryPoint(turns: readonly StoryTurn[] | undefined, point: Readonly<{
+    x: number;
+    y: number;
+}>): Readonly<{
+    x: number;
+    y: number;
+}>;
 
 // @public
 export function unionLayoutBoxes(boxes: readonly LayoutBox[]): LayoutBox | null;

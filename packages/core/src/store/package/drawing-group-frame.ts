@@ -209,7 +209,7 @@ export function readDrawingGroupFrame(
 }
 
 /** The schema-valid turn and flips of a group's `a:xfrm`, or null for an invalid spelling. */
-function groupTurn(xfrm: OoxmlElement): GroupTurn | null {
+export function groupTurn(xfrm: OoxmlElement): GroupTurn | null {
   const rotationDegrees = shapeRotationDegrees(xfrm);
   if (rotationDegrees === null) return null;
   const flips = ['flipH', 'flipV'].map((name) => schemaAttributeValue(xfrm.attributes, name));
@@ -221,12 +221,16 @@ function groupTurn(xfrm: OoxmlElement): GroupTurn | null {
   };
 }
 
-/** Group bookkeeping children that are not painted members. */
+/**
+ * Group bookkeeping children that are not painted members, the trailing `wpg:extLst` too
+ * (CT_OfficeArtExtensionList, ECMA-376 Part 1, 20.1.2.2.15).
+ */
 export function isGroupPropertyChild(child: OoxmlElement): boolean {
   return (
     child.namespaceUri === WPG_NAMESPACE_URI &&
     (child.localName === 'cNvPr' ||
       child.localName === 'cNvGrpSpPr' ||
-      child.localName === 'grpSpPr')
+      child.localName === 'grpSpPr' ||
+      child.localName === 'extLst')
   );
 }

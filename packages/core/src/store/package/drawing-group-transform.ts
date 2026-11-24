@@ -201,6 +201,29 @@ export function turnGroupComponents(
 }
 
 /**
+ * Members of turned or flipped nested groups under those turns, innermost first: each flips
+ * and turns about the centre of its box, which sits anywhere in the drawing extent. Null when
+ * a member's paint does not follow a turn, as {@link turnGroupComponents} refuses it.
+ */
+export function turnComponentsInBoxes(
+  components: readonly VectorShapeComponent[],
+  turns: readonly Readonly<{
+    box: Readonly<{ x: number; y: number; cx: number; cy: number }>;
+    turn: GroupTurn;
+  }>[]
+): VectorShapeComponent[] | null {
+  let current: VectorShapeComponent[] = [...components];
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const { box, turn } = turns[index]!;
+    const local = current.map((c) => transformComponent(c, { x: -box.x, y: -box.y }, 1, 1));
+    const turned = turnGroupComponents(local, { cx: box.cx, cy: box.cy }, turn);
+    if (!turned) return null;
+    current = turned.map((c) => transformComponent(c, { x: box.x, y: box.y }, 1, 1));
+  }
+  return current;
+}
+
+/**
  * The matrix of a gradient that keeps its direction (`rotWithShape="0"`) in a turned group:
  * its box centre moves where the group turn takes it, and its axes stay as they were.
  */
