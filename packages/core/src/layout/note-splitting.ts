@@ -224,6 +224,10 @@ export function splitNoteFragments(
   }
   const dy = rawTail[0]?.box.y ?? 0;
   const tail = shiftFragments(rawTail, -dy);
-  const tailHeight = fragmentFlowBottom(tail);
+  // The tail runs to the end of the story, so it ends where the story does: after the last
+  // paragraph's space after (ECMA-376 Part 1, §17.3.1.33 spacing). A paragraph that ends on
+  // the continuation page keeps that space before the next note there, as it would had it not
+  // been split; box bottoms alone stop at the last line and pulled the next note up.
+  const tailHeight = Math.max(fragmentFlowBottom(tail), laid.flowHeight - dy);
   return { head, headHeight, tail, tailHeight };
 }
