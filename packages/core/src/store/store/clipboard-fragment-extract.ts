@@ -133,14 +133,15 @@ function findParagraph(node: OoxmlNode, id: string): OoxmlElement | null {
 /**
  * Trim `[start, end)` off an edge paragraph of the working copy, or null when the store refuses.
  *
- * A whole inline control (`w:sdt`, §17.5.2.31) in the range whose characters are protected goes
- * as a node, and the text between such controls goes as text. Protected means `w:lock`
- * (§17.5.2.23, `ST_Lock` §17.18.49) set to `contentLocked` or `sdtContentLocked`, or a `w:dataBinding`
- * (§17.5.2.6). Deleting the range as text alone touched the protected characters, so the store
- * refused the trim, and the copy wrote plain text only. The working copy is private and never
- * committed, so the removal does not ask the control's locks: `sdtContentLocked` forbids
- * deleting the control in the document, not leaving it out of a copy. Ops run from the end of
- * the range back, so no op shifts the offsets of the ops after it.
+ * A whole inline control (`w:sdt`, ECMA-376 Part 1, 17.5.2.31) in the range whose characters
+ * are protected goes as a node, and the text between such controls goes as text. Protected means
+ * `w:lock` (Part 1, 17.5.2.23; `ST_Lock`, Part 1, 17.18.49) set to `contentLocked` or
+ * `sdtContentLocked`, or a `w:dataBinding` (Part 1, 17.5.2.6). Deleting the range as text alone
+ * touched the protected characters, so the store refused the trim, and the copy wrote plain text
+ * only. The working copy is private and never committed, so the removal does not ask the
+ * control's locks: `sdtContentLocked` forbids deleting the control in the document, not leaving
+ * it out of a copy. Ops run from the end of the range back, so no op shifts the offsets of the
+ * ops after it.
  */
 function trimEdge(
   part: OoxmlPart,

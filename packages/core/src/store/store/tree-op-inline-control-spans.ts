@@ -43,9 +43,9 @@ function spanOfControl(
 }
 
 /**
- * The outermost inline content controls (`w:sdt`, §17.5.2.31) wholly inside `[start, end)` whose
- * characters no edit may touch: `w:lock` (§17.5.2.23) is `contentLocked` or `sdtContentLocked`,
- * or the control has a `w:dataBinding` (§17.5.2.6). The store refuses to delete such a range as
+ * The outermost inline content controls (`w:sdt`, ECMA-376 Part 1, 17.5.2.31) wholly inside
+ * `[start, end)` whose characters no edit may touch: `w:lock` (Part 1, 17.5.2.23) is
+ * `contentLocked` or `sdtContentLocked`, or the control has a `w:dataBinding` (Part 1, 17.5.2.6). The store refuses to delete such a range as
  * text. It removes a `contentLocked` or bound control whole, and refuses a `sdtContentLocked` one.
  */
 export function wholeProtectedControlsIn(
