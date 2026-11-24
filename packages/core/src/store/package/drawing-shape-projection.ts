@@ -45,7 +45,11 @@ import {
   shapePointTransform,
   shapeRotationDegrees,
 } from './drawing-shape-geometry.ts';
-import { transformComponent, turnGroupComponents } from './drawing-group-transform.ts';
+import {
+  transformComponent,
+  turnComponentsInBoxes,
+  turnGroupComponents,
+} from './drawing-group-transform.ts';
 import { groupFillSpansMembers, withResolvedGroupFill } from './drawing-group-fill.ts';
 import { groupPictureOutline } from './drawing-group-picture-outline.ts';
 import {
@@ -90,9 +94,9 @@ export type ShapeStyleMatrixResolver = (
  * group of them: closed polygon subpaths (`a:custGeom` with move/line/close/cubicBezTo
  * verbs, or a supported `a:prstGeom`) with a solid fill and/or stroke. The colour may come
  * from `a:srgbClr` or from the theme, through `a:schemeClr` or a `wps:style` matrix
- * reference. Anything richer (picture fills, a turned or flipped nested group) projects as
- * `null` and paints the labelled placeholder instead. A top-level text box paints through its
- * story, not through this projection.
+ * reference. Anything richer (picture fills, a picture in a turned or flipped nested group)
+ * projects as `null` and paints the labelled placeholder instead. A top-level text box paints
+ * through its story, not through this projection.
  *
  * @public
  */
@@ -773,8 +777,6 @@ export function projectVectorShape(
       });
       if (!properties || !supportedGroupVisuals(child, properties, false)) return null;
       if (!identityGroupThemeEffect(child, resolveStyleMatrixReference)) return null;
-      // The text of a text box member does not turn with its group yet: keep the placeholder.
-      if (turn && hasTextbox(child)) return null;
       if (
         isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference, groupFill)
       )
@@ -796,11 +798,21 @@ export function projectVectorShape(
         groupFill
       );
       if (!memberComponents) return null; // A member that paints nothing adds nothing.
-      for (const component of memberComponents) {
-        components.push(transformComponent(component, place.offset, place.scaleX, place.scaleY));
+      const placed = memberComponents.map((component) =>
+        transformComponent(component, place.offset, place.scaleX, place.scaleY)
+      );
+      if (space.turns) {
+        // Members of a turned nested group turn with it and paint whole, past the frame.
+        const turned = turnComponentsInBoxes(placed, space.turns);
+        if (!turned) return null;
+        components.push(...turned);
+        overflowVisible = true;
+      } else {
+        components.push(...placed);
       }
     }
-    if (components.length === 0) return null;
+    // A group whose members are all hidden, or that has none, paints nothing and no placeholder.
+    if (components.length === 0 && members.length > 0) return null;
     if (turn) {
       const turned = turnGroupComponents(components, extent, turn);
       if (!turned) return null;

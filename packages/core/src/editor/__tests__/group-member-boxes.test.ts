@@ -72,7 +72,13 @@ test('a shape inside a nested group gets its box through the nested child space'
     [0, 0, 0.5, 1],
     [0.5, 0, 0.5, 1],
   ]);
-  // A turned nested group leaves the whole group a placeholder, with no shapes to select.
+  // A shape inside a turned nested group has no upright box, so only the direct shape selects.
   const turned = nested.replace('<wpg:grpSpPr><a:xfrm>', '<wpg:grpSpPr><a:xfrm rot="60000">');
-  expect(boxes(0, member(0, 0) + turned)).toBeNull();
+  expect(boxes(0, member(0, 0) + turned)).toEqual([[0, 0, 0.5, 1]]);
+  // A group that cannot place a nested group paints a placeholder, with no shapes to select.
+  const glowing = nested.replace(
+    '</a:xfrm></wpg:grpSpPr>',
+    '</a:xfrm><a:effectLst><a:glow rad="1"/></a:effectLst></wpg:grpSpPr>'
+  );
+  expect(boxes(0, member(0, 0) + glowing)).toBeNull();
 });

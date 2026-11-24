@@ -132,6 +132,9 @@ export function groupMemberBoxes(
   if (!members) return null;
   for (const { member, space: memberSpace } of members) {
     if (member.namespaceUri !== WPS_NAMESPACE_URI || member.localName !== 'wsp') continue;
+    // A shape inside a turned or flipped nested group has no upright box: the press keeps the
+    // group.
+    if (memberSpace.turns) continue;
     const spPr = childNamed(member, WPS_NAMESPACE_URI, 'spPr');
     const xfrm = spPr ? childNamed(spPr, DRAWINGML_MAIN_NAMESPACE_URI, 'xfrm') : null;
     const off = xfrm ? childNamed(xfrm, DRAWINGML_MAIN_NAMESPACE_URI, 'off') : null;

@@ -742,11 +742,20 @@ export async function paint(
       ];
       if (text.length > 0) body.push(...openMemberClip(member, x, y, height), ...text, 'Q');
     }
+    // As on screen: turned text, overflowing text, or text whose turned members or groups paint
+    // past the frame goes past the group bounds, inside each member's own clip.
+    const open =
+      d.vectorShape?.overflowVisible === true ||
+      (d.groupTextboxStories ?? []).some(
+        (member) => member.story.overflowVisible || member.rotationDegrees !== 0
+      );
+    const unclipped = open ? body.splice(0) : [];
     // Ink the walk could not tie to one member stays inside the group's bounds.
     body.push(...(buffers?.get(d) ?? []));
-    if (body.length === 0) return base;
+    if (body.length === 0 && unclipped.length === 0) return base;
     const clip = rect(bounds, -visit.page.box.x, -visit.page.box.y, height);
-    return [base, `q ${clip} W n`, ...body, 'Q'].filter(Boolean).join('\n');
+    const clipped = body.length > 0 ? [`q ${clip} W n`, ...body, 'Q'] : [];
+    return [base, ...unclipped, ...clipped].filter(Boolean).join('\n');
   };
   const paintDrawing = async (visit: SemanticDrawingVisit): Promise<string> => {
     const page = pages[visit.page.index]!;

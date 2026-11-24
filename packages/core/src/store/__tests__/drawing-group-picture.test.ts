@@ -314,12 +314,32 @@ describe('group picture projection', () => {
         expect(projectionsOf(drawing)[0]!.vectorShape).toBeNull();
       });
     }
-    test('a group refuses a hidden vector member', () => {
+    test('a hidden vector member paints nothing, and the rest of the group paints', () => {
       const drawing = groupDrawing(members.replace('name="Bar"', 'name="Bar" hidden="1"'));
-      expect(projectionsOf(mcWrapped(drawing))).toHaveLength(1);
-      expect(projectionsOf(drawing)[0]!.groupPicture).toBeNull();
+      const [projection] = projectionsOf(drawing);
+      expect(projection!.vectorShape?.components ?? []).toHaveLength(0);
+      expect(projection!.groupPicture !== null).toBe(members.includes('<pic:pic>'));
     });
   }
+
+  test('a hidden second picture paints nothing, and the first still paints', () => {
+    const [projection] = projectionsOf(
+      groupDrawing(
+        pictureMember() +
+          pictureMember({ y: 1500 }).replace('name="Picture"', 'name="Picture" hidden="1"')
+      )
+    );
+    expect(projection!.groupPicture).not.toBeNull();
+    expect(projection!.groupPictureLayers ?? []).toHaveLength(0);
+  });
+
+  test('a group whose only member is hidden paints nothing and no placeholder', () => {
+    const [projection] = projectionsOf(
+      groupDrawing(barMember(2100).replace('name="Bar"', 'name="Bar" hidden="1"'))
+    );
+    expect(projection!.vectorShape?.components).toEqual([]);
+    expect(projection!.diagnostics.map((d) => d.code)).not.toContain('unsupported-graphic');
+  });
 
   test('a picture member refuses an unsupported color mode', () => {
     const drawing = groupDrawing(pictureMember().replace('<pic:spPr>', '<pic:spPr bwMode="gray">'));
@@ -420,13 +440,6 @@ describe('group picture projection', () => {
     [
       'a second picture above a vector member',
       groupDrawing(pictureMember() + barMember(2100) + pictureMember({ y: 1500 })),
-    ],
-    [
-      'a second picture member that is hidden',
-      groupDrawing(
-        pictureMember() +
-          pictureMember({ y: 1500 }).replace('name="Picture"', 'name="Picture" hidden="1"')
-      ),
     ],
     ['a picture above a vector member', groupDrawing(barMember(2100) + pictureMember())],
     ['a rotated picture', groupDrawing(pictureMember({ xfrmAttributes: ' rot="5400000"' }))],

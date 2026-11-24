@@ -32,7 +32,7 @@ import {
   storyParagraphs,
   storyRootsOf,
 } from '../store/package/story-blocks.ts';
-import { textboxStoriesInPart } from '../store/package/textbox-stories.ts';
+import { textboxReadStoriesInPart } from '../store/package/textbox-stories.ts';
 import { paragraphModelTextOf } from '../store/store/paragraph-model-text.ts';
 import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
@@ -392,7 +392,7 @@ export function createParagraphTextReads(deps: {
       return value;
     };
     const boxes = new Map<string, OoxmlNode[]>();
-    for (const box of textboxStoriesInPart(part)) {
+    for (const box of textboxReadStoriesInPart(part)) {
       const nested = boxes.get(box.hostParagraphId) ?? [];
       nested.push(...storyParagraphs(box.root));
       boxes.set(box.hostParagraphId, nested);

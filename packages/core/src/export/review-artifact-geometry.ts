@@ -18,7 +18,13 @@ import {
   forEachPageStory,
   forEachStoryParagraphFragment,
 } from '../layout/semantic-record-queries.ts';
-import type { LayoutBox, PageRecord, SemanticLayout } from '../layout/semantic-records.ts';
+import type {
+  LayoutBox,
+  PageRecord,
+  ParagraphFragmentRecord,
+  SemanticLayout,
+} from '../layout/semantic-records.ts';
+import { turnStoryBox, turnStoryPoint, type StoryTurn } from '../layout/story-turns.ts';
 
 /**
  * Cap on paragraph→range index entries for one attach pass.
@@ -82,12 +88,30 @@ function rootStoryMatches(
   return true;
 }
 
+/** A story's offset in page-content coordinates, and the turns of its text when it turns. */
+interface StoryContentOffset {
+  readonly x: number;
+  readonly y: number;
+  readonly turns?: readonly StoryTurn[];
+}
+
+/** Whether a fragment lays out `paragraphId`, as its own paragraph or a joined segment. */
+function fragmentHoldsParagraph(fragment: ParagraphFragmentRecord, paragraphId: string): boolean {
+  if (fragment.paragraphId === paragraphId) return true;
+  for (const line of fragment.lines) {
+    for (const segment of lineSegments(line)) if (segment.paragraphId === paragraphId) return true;
+  }
+  return false;
+}
+
 function textboxPageContentOffset(
   page: PageRecord,
   occurrence: SemanticReviewArtifactOccurrence
-): { readonly x: number; readonly y: number } | null {
+): StoryContentOffset | null {
   if (occurrence.story !== 'textbox' || occurrence.textboxPath.length === 0) return null;
-  let found: { readonly x: number; readonly y: number } | null = null;
+  let found: StoryContentOffset | null = null;
+  // The first story on the path, for a paragraph that lays out no fragment on this page.
+  let first: StoryContentOffset | null = null;
   forEachPageStory(page, (root) => {
     if (found) return;
     if (!rootStoryMatches(occurrence, root.story, root.noteScopeId)) return;
@@ -101,17 +125,21 @@ function textboxPageContentOffset(
         : undefined;
     forEachStoryParagraphFragment(
       root.host,
-      (_fragment, context) => {
+      (fragment, context) => {
         if (found || context.textboxDepth === 0) return;
         const path = context.textboxPath.map((drawing) => drawing.drawingNodeId);
         if (!textboxPathsMatch(path, occurrence.textboxPath)) return;
-        found = storyOriginInPageContent(page, context.storyOrigin);
+        const offset = storyOriginInPageContent(page, context.storyOrigin);
+        const story = context.storyTurns ? { ...offset, turns: context.storyTurns } : offset;
+        first ??= story;
+        // Every member story of one group shares the drawing path: the paragraph picks one.
+        if (fragmentHoldsParagraph(fragment, occurrence.source.start.paragraphId)) found = story;
       },
       root.origin,
       rootDrawingOrigin
     );
   });
-  return found;
+  return found ?? first;
 }
 
 /**
@@ -123,7 +151,7 @@ function textboxPageContentOffset(
 function occurrencePageContentOffset(
   page: PageRecord,
   occurrence: SemanticReviewArtifactOccurrence
-): { readonly x: number; readonly y: number } {
+): StoryContentOffset {
   if (occurrence.story === 'textbox') {
     return textboxPageContentOffset(page, occurrence) ?? { x: 0, y: 0 };
   }
@@ -190,10 +218,17 @@ function pointGeometry(
   const page = layout.pages[caret.pageIndex];
   if (!page) return undefined;
   const origin = occurrencePageContentOffset(page, occurrence);
+  // Text that paints turned: the point marks the turned caret's centre, upright and of the
+  // caret's height, so it keeps the zero width of a point. Pivots are in page-stack points.
+  const { x: cx, y: cy } = page.contentBox;
+  const centre = turnStoryPoint(origin.turns, {
+    x: caret.x + origin.x + cx,
+    y: caret.y + origin.y + cy + caret.height / 2,
+  });
   const pageContent = Object.freeze([
     freezeRect({
-      x: caret.x + origin.x,
-      y: caret.y + origin.y,
+      x: centre.x - cx,
+      y: centre.y - cy - caret.height / 2,
       width: 0,
       height: caret.height,
     }),
@@ -307,7 +342,6 @@ function collectIndexedRangeRects(
       forEachStoryParagraphFragment(
         root.host,
         (fragment, context) => {
-          const offset = storyOriginInPageContent(page, context.storyOrigin);
           for (const line of fragment.lines) {
             for (const segment of lineSegments(line)) {
               const ranges = byParagraph.get(rangeKey(page.index, segment.paragraphId));
@@ -324,12 +358,19 @@ function collectIndexedRangeRects(
                   overlap.end > overlap.start
                 );
                 const rects = found.get(range.key) ?? [];
-                rects.push({
-                  pageIndex: page.index,
-                  x: Math.min(startX, endX) + offset.x,
-                  y: line.box.y + offset.y,
+                // Text that paints turned: the rect bounds the turned run.
+                const box = turnStoryBox(context.storyTurns, {
+                  x: Math.min(startX, endX) + context.storyOrigin.x,
+                  y: line.box.y + context.storyOrigin.y,
                   width: Math.abs(endX - startX),
                   height: line.box.height,
+                });
+                rects.push({
+                  pageIndex: page.index,
+                  x: box.x - page.contentBox.x,
+                  y: box.y - page.contentBox.y,
+                  width: box.width,
+                  height: box.height,
                 });
                 found.set(range.key, rects);
               }

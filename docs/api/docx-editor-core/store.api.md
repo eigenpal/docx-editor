@@ -5261,6 +5261,9 @@ export interface TextArtOutline {
 export type TextBodyLowering = LoweredDrawingText | 'no-text' | 'unsupported';
 
 // @public
+export function textboxReadStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot[];
+
+// @public
 export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot[];
 
 // @internal
@@ -5296,6 +5299,7 @@ export interface TextboxStoryRoot {
     readonly drawingNodeId: string;
     readonly hostParagraphId: string;
     readonly root: OoxmlElement;
+    readonly unplaced?: true;
 }
 
 // @public

@@ -269,8 +269,9 @@ function readPictureMember(
   const x = offset ? (parseEmu(schemaAttributeValue(offset.attributes, 'x'), false) ?? 0) : 0;
   const y = offset ? (parseEmu(schemaAttributeValue(offset.attributes, 'y'), false) ?? 0) : 0;
 
-  // A nested group can collapse an axis, which leaves the picture no visible size.
-  if (!(space.scaleX > 0) || !(space.scaleY > 0)) return null;
+  // A nested group can collapse an axis, which leaves the picture no visible size. A picture
+  // turns with no group, nested or not, so one inside a turned or flipped nested group refuses.
+  if (!(space.scaleX > 0) || !(space.scaleY > 0) || space.turns) return null;
   const origin = mapGroupPoint(space, { x, y });
   const frameEmu = { x: origin.x, y: origin.y, cx: cx * space.scaleX, cy: cy * space.scaleY };
   if (!memberFrameIsBounded(frameEmu, extent)) return null;

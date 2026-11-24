@@ -104,13 +104,14 @@ For image movement, pointer placement, accepted formats, and custom drop handler
 | Feature | Rendering and editing | Round-trip |
 | --- | --- | --- |
 | Anchored text boxes | Insert and edit text boxes in the body, headers, and footers, with collaboration support. Boxes with tables are read-only. Linked boxes, automatic sizing, and rotation can clip content or show a placeholder. | Preserved |
-| Drawing shapes | Supported shapes and groups display with fills, outlines, and outer shadows; empty shape geometry adds no PDF paint. Select, move, and delete shapes, lines, and groups; resizing and shape text stay read-only. Unsupported groups show placeholders; other effects require the [drawing module](/docs/2.x/pro/drawing). | Preserved |
+| Drawing shapes | Supported shapes and groups, nested ones too, display with fills, outlines, and outer shadows; empty shapes add no PDF paint. Select, move, and delete shapes, lines, and groups; resizing and shape text stay read-only. Unsupported groups show placeholders; other effects require the [drawing module](/docs/2.x/pro/drawing). | Preserved |
 | WMF and EMF | Editor previews use at most 2,048 pixels per side; the drawing module exports PDF vectors. Failed conversions show placeholders; PDF export omits them and reports an error. These images are read-only. | Full |
 | Charts | Insert [charts](/docs/2.x/guides/charts), resize, move, and wrap them, and edit their type, elements, colors, and data. The [drawing module](/docs/2.x/pro/drawing) paints them in the editor and PDF. Unsupported charts use previews or placeholders; content locks and data bindings prevent chart edits. | Preserved |
 | DrawingML diagrams | Renders the saved diagram drawing. You can resize, move, wrap, and delete a diagram, but not edit its content. A diagram without its drawing needs the drawing module. | Full |
 | VML text paths | Renders with the drawing module. Without it, an inline text path shows a placeholder and a floating text path does not show. | Full |
 
 - Groups with unsupported effects or 3D properties keep their unsupported behavior as a whole. The editor does not render only their supported members.
+- Text boxes in groups display `vert`, `eaVert`, and `vert270` text, and turn with rotated or flipped groups. Hidden group members do not display.
 - `w14:textOutline` renders when it is an opaque solid RGB outline. PDF export does not paint text outlines.
 - A pie chart draws its first series, and its legend lists that series' categories.
 - Charts take the picture frame commands but refuse crop, replace, and rotate. Deleting a chart removes its fallback too.

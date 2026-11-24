@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, WML_NAMESPACE_URI, type OoxmlPart } from '../index.ts';
 import { projectDrawingsInPart } from '../package/drawing-projection.ts';
 import { MAX_GROUP_NESTING_DEPTH } from '../package/drawing-group-members.ts';
-import { textboxStoriesInPart } from '../package/textbox-stories.ts';
+import { textboxReadStoriesInPart, textboxStoriesInPart } from '../package/textbox-stories.ts';
 
 const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -230,8 +230,8 @@ describe('nested drawing groups', () => {
     const down = textOf(' vert="vert"');
     expect(down.rotationDegrees).toBe(90);
     expect(down.story.insetsEmu).toEqual({ top: 30, right: 40, bottom: 10, left: 20 });
-    // East Asian vertical text keeps upright glyphs, which a turned block cannot show.
-    expect(textOf(' vert="eaVert"').rotationDegrees).toBe(0);
+    // East Asian vertical text lays out as a turned block, as outside a group.
+    expect(textOf(' vert="eaVert"').rotationDegrees).toBe(90);
     // Bottom-to-top text: its top edge is the shape's left edge.
     const up = textOf(' vert="vert270"');
     expect(up.rotationDegrees).toBe(270);
@@ -243,10 +243,160 @@ describe('nested drawing groups', () => {
     expect(turned.rotationDegrees).toBe(90);
   });
 
+  // The nested box is 1000 x 2000 outer units at (1100, 1200): 2000000 x 4000000 EMU at
+  // (NESTED_X, NESTED_Y), centred at (NESTED_X + 1000000, NESTED_Y + 2000000).
+  const CENTRE = { x: NESTED_X + 1_000_000, y: NESTED_Y + 2_000_000 };
+
+  test('a flipped nested group mirrors its members about its centre', () => {
+    // The bar spans x 100..300 of the 500-unit child width: 400000..1200000 EMU across the box.
+    const flippedH = projectionOf(
+      groupDrawing(nested(bar(100, 50), { xfrmAttributes: ' flipH="1"' }))
+    );
+    expect(topLeft(flippedH)).toMatchObject({
+      x: NESTED_X + 2_000_000 - 300 * NESTED_SCALE_X,
+      right: NESTED_X + 2_000_000 - 100 * NESTED_SCALE_X,
+      y: NESTED_Y + 50 * NESTED_SCALE_Y,
+    });
+    expect(flippedH.vectorShape?.overflowVisible).toBe(true);
+    const flippedV = projectionOf(
+      groupDrawing(nested(bar(100, 50), { xfrmAttributes: ' flipV="1"' }))
+    );
+    expect(topLeft(flippedV)).toMatchObject({
+      x: NESTED_X + 100 * NESTED_SCALE_X,
+      bottom: NESTED_Y + 4_000_000 - 50 * NESTED_SCALE_Y,
+    });
+  });
+
+  test('a turned nested group turns its members about its centre', () => {
+    // A half turn: the same as both flips.
+    const half = projectionOf(
+      groupDrawing(nested(bar(100, 50), { xfrmAttributes: ' rot="10800000"' }))
+    );
+    const both = projectionOf(
+      groupDrawing(nested(bar(100, 50), { xfrmAttributes: ' flipH="1" flipV="1"' }))
+    );
+    const round = (box: ReturnType<typeof topLeft>) =>
+      Object.fromEntries(Object.entries(box).map(([k, v]) => [k, Math.round(v)]));
+    expect(round(topLeft(half))).toEqual(round(topLeft(both)));
+    // A quarter turn about the box centre. The outer scale is uniform, so the upright box stays
+    // 2000000 x 4000000 EMU, and its child units are 4000 x 8000 EMU. The bar's top-left corner
+    // (0, 0), 1000000 left of and 2000000 above the centre, turns clockwise to 2000000 right of
+    // and 1000000 above it.
+    const quarter = projectionOf(
+      groupDrawing(nested(bar(0, 0), { xfrmAttributes: ' rot="5400000"' }))
+    );
+    const box = topLeft(quarter);
+    expect(Math.round(box.right)).toBe(CENTRE.x + 2_000_000);
+    expect(Math.round(box.y)).toBe(CENTRE.y - 1_000_000);
+    // The 10-unit bar height (80000 EMU) now lies across, and its 200-unit width down.
+    expect(Math.round(box.right - box.x)).toBe(80_000);
+    expect(Math.round(box.bottom - box.y)).toBe(800_000);
+    expect(quarter.vectorShape?.overflowVisible).toBe(true);
+  });
+
+  test('text in a turned or flipped group turns with its shape', () => {
+    // Horizontal text: the box keeps its size and its centre turns with the nested group.
+    const horizontal = (attributes: string) =>
+      projectionOf(
+        groupDrawing(
+          bar(100, 200) +
+            nested(
+              label(0, 0, 'Inner').replace(
+                'lIns="0" tIns="0" rIns="0" bIns="0" vert="vert270"',
+                'lIns="0" tIns="0" rIns="0" bIns="0"'
+              ),
+              { xfrmAttributes: attributes }
+            )
+        )
+      ).groupTextboxes![0]!;
+    const upright = horizontal('');
+    expect(upright.rotationDegrees).toBe(0);
+    const quarter = horizontal(' rot="5400000"');
+    expect(quarter.rotationDegrees).toBe(90);
+    expect(quarter.frameEmu.cx).toBe(upright.frameEmu.cx);
+    // The label's centre sits at (50, 200) of the 500-unit child space: left of the box centre.
+    const flipped = horizontal(' flipH="1"');
+    expect(flipped.rotationDegrees).toBe(0);
+    expect(flipped.frameEmu.x + flipped.frameEmu.cx / 2).toBe(
+      2 * CENTRE.x - (upright.frameEmu.x + upright.frameEmu.cx / 2)
+    );
+    expect(horizontal(' flipV="1"').rotationDegrees).toBe(180);
+    // The vertical flow turns after the group flips: a horizontal flip keeps its direction, and
+    // a vertical flip turns it upside down.
+    const vertical = (vert: string, attributes: string) =>
+      projectionOf(
+        groupDrawing(
+          bar(100, 200) +
+            nested(label(0, 0, 'Inner').replace('vert="vert270"', `vert="${vert}"`), {
+              xfrmAttributes: attributes,
+            })
+        )
+      ).groupTextboxes![0]!.rotationDegrees;
+    expect(vertical('vert270', ' flipH="1"')).toBe(270);
+    expect(vertical('vert', ' flipH="1"')).toBe(90);
+    expect(vertical('vert', ' flipV="1"')).toBe(270);
+    expect(vertical('vert270', ' flipV="1"')).toBe(90);
+  });
+
+  test('upright text keeps only its flow turn in a turned group', () => {
+    const upright = (vert: string) =>
+      projectionOf(
+        groupDrawing(
+          bar(100, 200) +
+            nested(label(0, 0, 'Inner').replace('vert="vert270"', `vert="${vert}" upright="1"`), {
+              xfrmAttributes: ' rot="5400000" flipH="1"',
+            })
+        )
+      ).groupTextboxes![0]!.rotationDegrees;
+    expect(upright('horz')).toBe(0);
+    expect(upright('vert')).toBe(90);
+  });
+
+  test('a nested group size reads with surrounding whitespace', () => {
+    const padded =
+      '<a:xfrm><a:off x="1100" y="1200"/><a:ext cx=" 1000 " cy="2000"/>' +
+      '<a:chOff x="0" y="0"/><a:chExt cx="500" cy=" 500"/></a:xfrm>';
+    const projection = projectionOf(
+      groupDrawing(bar(100, 200) + nested(bar(0, 0), { xfrm: padded }))
+    );
+    expect(projection.vectorShape?.components).toHaveLength(2);
+  });
+
+  test('a large hidden nested group leaves the visible text listed', () => {
+    let hiddenMembers = '';
+    for (let index = 0; index < 140; index += 1) hiddenMembers += bar(0, 0);
+    const stories = textboxStoriesInPart(
+      parsePart(
+        `<w:p><w:r>${groupDrawing(label(0, 0, 'Shown') + nested(hiddenMembers, { hidden: true }))}</w:r></w:p>`
+      )
+    );
+    expect(stories).toHaveLength(1);
+  });
+
+  test('text in a turned outer group turns with the group', () => {
+    const drawing = groupDrawing(bar(100, 200) + label(100, 200, 'Label')).replace(
+      '<a:xfrm><a:off x="0" y="0"/><a:ext cx="6000000"',
+      '<a:xfrm rot="5400000"><a:off x="0" y="0"/><a:ext cx="6000000"'
+    );
+    const projection = projectionOf(drawing);
+    expect(projection.vectorShape?.rotationDegrees).toBe(90);
+    expect(projection.groupTextboxes?.[0]?.rotationDegrees).toBe(0); // 270 + 90
+  });
+
+  test('a picture inside a turned nested group leaves the group unpainted', () => {
+    const projection = projectionOf(
+      groupDrawing(nested(picture(0, 0, 100, 100), { xfrmAttributes: ' rot="5400000"' }))
+    );
+    expect(projection.groupPicture).toBeNull();
+    expect(projection.vectorShape).toBeNull();
+  });
+
   const refused: readonly (readonly [string, string])[] = [
-    ['a turned nested group', nested(bar(0, 0), { xfrmAttributes: ' rot="5400000"' })],
-    ['a horizontally flipped nested group', nested(bar(0, 0), { xfrmAttributes: ' flipH="1"' })],
-    ['a vertically flipped nested group', nested(bar(0, 0), { xfrmAttributes: ' flipV="1"' })],
+    [
+      'a nested group turned by an invalid angle',
+      nested(bar(0, 0), { xfrmAttributes: ' rot="90deg"' }),
+    ],
+    ['a nested group with an invalid flip', nested(bar(0, 0), { xfrmAttributes: ' flipH="yes"' })],
     ['a nested group without a transform', nested(bar(0, 0), { xfrm: '' })],
     [
       'a nested group without a child extent',
@@ -302,6 +452,38 @@ describe('nested drawing groups', () => {
     );
     expect(projection.vectorShape?.components).toHaveLength(1);
     expect(projection.groupTextboxes).toBeUndefined();
+    // An invalid spelling of the flag on a nested group refuses the group.
+    const invalid = nested(bar(0, 0)).replace('name="Inner"', 'name="Inner" hidden="maybe"');
+    expect(projectionOf(groupDrawing(bar(100, 200) + invalid)).vectorShape).toBeNull();
+  });
+
+  test('a hidden shape or picture paints nothing, and the rest of the group still paints', () => {
+    const hiddenBar = bar(0, 0).replace(
+      '<wps:cNvPr id="3" name="Bar"/>',
+      '<wps:cNvPr id="3" name="Bar" hidden="1"/>'
+    );
+    const shapes = projectionOf(groupDrawing(bar(100, 200) + nested(hiddenBar + bar(0, 0))));
+    expect(shapes.vectorShape?.components).toHaveLength(2);
+    const hiddenPicture = picture(2000, 3500, 1000, 500).replace(
+      'name="Picture"',
+      'name="Picture" hidden="true"'
+    );
+    const pictured = projectionOf(groupDrawing(hiddenPicture + bar(100, 200)));
+    expect(pictured.groupPicture).toBeNull();
+    expect(pictured.vectorShape?.components).toHaveLength(1);
+    // An invalid spelling of the flag still refuses the group.
+    const invalid = bar(0, 0).replace(
+      '<wps:cNvPr id="3" name="Bar"/>',
+      '<wps:cNvPr id="3" name="Bar" hidden="yes"/>'
+    );
+    expect(projectionOf(groupDrawing(bar(100, 200) + invalid)).vectorShape).toBeNull();
+  });
+
+  test('a trailing extension list is not a member', () => {
+    const projection = projectionOf(
+      groupDrawing(bar(100, 200) + nested(bar(0, 0) + '<wpg:extLst/>') + '<wpg:extLst/>')
+    );
+    expect(projection.vectorShape?.components).toHaveLength(2);
   });
 
   test('nesting at the depth cap still paints', () => {
@@ -310,12 +492,39 @@ describe('nested drawing groups', () => {
     ).not.toBeNull();
   });
 
-  test('a nested label is found as group text, and a placeholder group reveals none', () => {
+  test('group text stays readable, nested, hidden, or behind a placeholder', () => {
     const roots = (members: string) =>
+      textboxReadStoriesInPart(parsePart(`<w:p><w:r>${groupDrawing(members)}</w:r></w:p>`));
+    const selectable = (members: string) =>
       textboxStoriesInPart(parsePart(`<w:p><w:r>${groupDrawing(members)}</w:r></w:p>`));
     expect(roots(label(0, 0, 'Top') + nested(label(0, 0, 'Inner')))).toHaveLength(2);
+    // A turned nested group paints, so its text reveals too.
     const turned = nested(label(0, 0, 'Inner'), { xfrmAttributes: ' rot="60000"' });
-    expect(roots(label(0, 0, 'Top') + turned)).toHaveLength(0);
+    expect(roots(label(0, 0, 'Top') + turned)).toHaveLength(2);
+    const glowing = nested(label(0, 0, 'Inner'), {
+      fill: '<a:effectLst><a:glow rad="1"/></a:effectLst>',
+    });
+    // A group that paints a placeholder still lists its text for paragraph reads, marked so
+    // that selection skips it.
+    const unplaced = roots(label(0, 0, 'Top') + glowing);
+    expect(unplaced).toHaveLength(2);
+    expect(unplaced.every((story) => story.unplaced === true)).toBe(true);
+    expect(roots(label(0, 0, 'Top') + nested(label(0, 0, 'Inner')))[0]!.unplaced).toBeUndefined();
+    // A picture in a turned nested group has no frame, so that group paints a placeholder too.
+    const pictured = nested(picture(0, 0, 100, 100) + label(0, 0, 'Inner'), {
+      xfrmAttributes: ' rot="60000"',
+    });
+    expect(roots(label(0, 0, 'Top') + pictured).every((story) => story.unplaced)).toBe(true);
+    const hidden = label(0, 0, 'Hidden').replace(
+      '<wps:wsp>',
+      '<wps:wsp><wps:cNvPr id="9" name="Hidden" hidden="1"/>'
+    );
+    expect(hidden).toContain('hidden="1"');
+    // Hidden member text stays readable, marked so that selection skips it.
+    const withHidden = roots(label(0, 0, 'Top') + nested(hidden));
+    expect(withHidden.map((story) => story.unplaced)).toEqual([undefined, true]);
+    expect(selectable(label(0, 0, 'Top') + nested(hidden))).toHaveLength(1);
+    expect(selectable(label(0, 0, 'Top') + glowing)).toHaveLength(0);
   });
 });
 

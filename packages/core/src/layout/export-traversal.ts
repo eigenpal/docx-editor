@@ -35,6 +35,7 @@ export {
   type StoryParagraphFragmentContext,
   type TextboxOwnerRecord,
 } from './semantic-record-queries.ts';
+import type { StoryTurn } from './story-turns.ts';
 
 /** One span in the engine's published story order. @public */
 export interface SemanticSpanVisit {
@@ -46,8 +47,13 @@ export interface SemanticSpanVisit {
   readonly root: SemanticStoryVisit;
   /** Absolute origin of the immediate root or textbox story containing this span. */
   readonly storyOrigin: Readonly<{ x: number; y: number }>;
-  /** Absolute laid-out span bounds in page-stack coordinates. */
+  /**
+   * Absolute laid-out span bounds in page-stack coordinates, before `storyTurns`. Pass both to
+   * `turnStoryBox` for the bounds where turned text paints.
+   */
   readonly absoluteBox: import('./semantic-records.ts').LayoutBox;
+  /** Turns of a text-box story whose text paints turned, outermost first; absent when upright. */
+  readonly storyTurns?: readonly StoryTurn[];
   /** Owning note scope/area where applicable; null for body and page furniture. */
   readonly noteScopeId: string | null;
   readonly noteAreaKind: SemanticStoryVisit['noteAreaKind'];
@@ -93,7 +99,7 @@ function visitStory(
   forEachStoryParagraphFragment(
     host,
     (block, textboxContext) => {
-      const { textboxDepth, textboxOwner, textboxPath, storyOrigin } = textboxContext;
+      const { textboxDepth, textboxOwner, textboxPath, storyOrigin, storyTurns } = textboxContext;
       const visitStoryKind = textboxDepth === 0 ? story : 'textbox';
       if (spanlessMarkers && block.marker && !block.lines.some((line) => line.spans.length > 0)) {
         // A marker with no text beside it: one empty span on the first line carries it.
@@ -122,6 +128,7 @@ function visitStory(
             width: 0,
             height: span.box.height,
           }),
+          ...(storyTurns ? { storyTurns } : {}),
           noteScopeId,
           noteAreaKind,
           textboxDepth,
@@ -155,6 +162,7 @@ function visitStory(
                 width: span.box.width,
                 height: span.box.height,
               }),
+              ...(storyTurns ? { storyTurns } : {}),
               noteScopeId,
               noteAreaKind,
               textboxDepth,

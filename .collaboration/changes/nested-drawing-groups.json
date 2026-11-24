@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A drawing group with a nested group, a hidden member, or a trailing extension list projects as a placeholder, and nested members cannot be selected.",
+  "after": "Nested, turned, flipped, and hidden group members project and paint from the same source XML, and nested shapes can be selected for the existing shape edits.",
+  "reason": "Only drawing projection, paint, and derived story lists change. Shared nodes, text offsets, operations, and package serialization remain unchanged, and nested-member edits use the existing shape operations on the member node.",
+  "tests": [
+    "packages/core/src/store/__tests__/drawing-nested-group.test.ts",
+    "packages/core/src/editor/__tests__/group-member-boxes.test.ts",
+    "packages/pro/src/collaboration/__tests__/nested-group-member-peers.test.ts"
+  ],
+  "changeset": "nested-drawing-groups",
+  "migration": null
+}

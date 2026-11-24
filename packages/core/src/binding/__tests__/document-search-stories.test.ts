@@ -394,6 +394,23 @@ describe('navigation Find stories', () => {
     expect(work).toEqual({ indexBuilds: 1, hostLookups: 1, indexedFrames: count });
   });
 
+  test('skips the text of a group that paints a placeholder', () => {
+    const parsed = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body>${p('host')}</w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'application/xml' }
+    );
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const root = parsed.part.root.children.find((child) => child.kind === 'body');
+    if (!root) throw new Error('body missing');
+    const paragraph = root.children.find((child) => child.kind === 'paragraph');
+    if (!paragraph) throw new Error('host paragraph missing');
+    const frame = { root: paragraph, drawingNodeId: 'drawing', hostParagraphId: paragraph.id };
+    const stories: SearchStory[] = [{ part: parsed.part, root }];
+    expect(expandSelectableTextboxStories(stories, undefined, () => [frame])).toHaveLength(2);
+    const unplaced = { ...frame, unplaced: true as const };
+    expect(expandSelectableTextboxStories(stories, undefined, () => [unplaced])).toHaveLength(1);
+  });
+
   test('excludes a text box owned by a footnote', () => {
     const notes =
       `<w:footnote w:id="1">${p('ordinary note')}` +
