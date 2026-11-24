@@ -60,8 +60,7 @@ function thaiCounting(value: number): string {
     const place = digits.length - 1 - index;
     if (digit === 0) return;
     if (place === 0) out += digit === 1 && value > 1 ? 'เอ็ด' : THAI_WORDS[digit]!;
-    else if (place === 1)
-      out += (digit === 1 ? '' : digit === 2 ? 'ยี่' : THAI_WORDS[digit]!) + 'สิบ';
+    else if (place === 1) out += (digit === 1 ? '' : digit === 2 ? 'ยี่' : THAI_WORDS[digit]!) + 'สิบ';
     else out += THAI_WORDS[digit]! + THAI_PLACES[place]!;
   });
   return out;
