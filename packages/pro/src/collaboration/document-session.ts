@@ -13,6 +13,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 import { projectTypingOrJournal } from './document/projected-journal.ts';
+import { publishOutsideUndo } from './document-outside-undo.ts';
 import { prepareMemberRootJournal } from './document/prepare-member-root-journal.ts';
 import { editWaits } from './document/journal.ts';
 import { awaitingUpdates } from './document/yjs-items.ts';
@@ -586,18 +587,39 @@ class DocumentSession implements DocumentCollaborationSession {
     let transient = false;
     this.historySelections.noteBefore();
     const orders = shownOrdersBefore(this.registry, shared);
+    const listed = projected.listed ?? 0;
+    const edit = listed > 0 ? { ...shared, effects: shared.effects.slice(listed) } : shared;
     const publish = () => {
+      // Split proposals go where they show first, outside undo (`ProjectedJournal.listed`):
+      // an undo of this edit must not put them back after another participant edited them.
+      // That listing is its own transaction, so it stays when the edit is then refused; it
+      // changes only where the proposals are listed, not what any participant sees.
+      const placed =
+        listed > 0
+          ? publishOutsideUndo(this.undoManager, this.localOrigin, () =>
+              this.ydoc.transact(
+                () =>
+                  applyPrimitiveJournal(
+                    this.registry,
+                    { effects: shared.effects.slice(0, listed) },
+                    null
+                  ),
+                this.localOrigin
+              )
+            )
+          : null;
+      if (placed && !placed.ok) {
+        return {
+          code: placed.code as CollaborationFailureCode,
+          ...(placed.detail ? { detail: placed.detail } : {}),
+        };
+      }
       const failed = this.ydoc.transact((): CollaborationFailure | null => {
         if (blobs !== null) {
           const published = putJournalBlobs(this.blobs, blobs.payloads);
           if (published !== null) return published;
         }
-        const result = applyPrimitiveJournal(
-          this.registry,
-          shared,
-          projected.plan,
-          projected.typed
-        );
+        const result = applyPrimitiveJournal(this.registry, edit, projected.plan, projected.typed);
         if (!result.ok) {
           transient = result.transient === true;
           return {

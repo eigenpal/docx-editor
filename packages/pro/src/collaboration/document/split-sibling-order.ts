@@ -23,12 +23,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * a copy shows all use this one rule.
  */
 import * as Y from 'yjs';
+import { composeSplitRanks, showGroupsInRankOrder, type SplitRunOrder } from './split-run-ranks.ts';
 import type { LogicalId } from './identity.ts';
-import { firstItem, mapEntry, structAt } from './yjs-items.ts';
+import { firstItem, mapEntry, originPasses, sameId, structAt } from './yjs-items.ts';
 import { itemIdentity, type Identity } from './paragraph-text-identity.ts';
 import { marksOfText } from './paragraph-text-marks.ts';
 import { childArrayOf, PACKAGE_NODES_KEY } from './schema.ts';
-import { splitAtIn, splitEntryOf, splitPointsOf, type SplitPoint } from './split-points.ts';
+import { inItem, splitAtIn, splitEntryOf, splitPointsOf, type SplitPoint } from './split-points.ts';
 
 /**
  * How many clocks of one paragraph's text the rule reads. It counts clocks, which every
@@ -87,16 +88,6 @@ function splitEarlier(first: readonly Identity[], second: readonly Identity[]): 
   return first.indexOf(start) > 0 && second.indexOf(first[0]!) <= 0;
 }
 
-/** Whether `id` names an element of `item`. */
-function inItem(id: Y.ID | null, item: Y.Item): boolean {
-  return (
-    id !== null &&
-    id.client === item.id.client &&
-    id.clock >= item.id.clock &&
-    id.clock < item.id.clock + item.length
-  );
-}
-
 /**
  * One concurrent split sibling and the items listed after it later, whose left origin is in
  * it: a paragraph split off it, or inserted after it, goes with it, so it shows right after
@@ -127,8 +118,8 @@ export function splitSiblingRanks(
   /** Collects the characters an order named that this replica has not received yet. */
   missing: string[] = []
 ): SiblingRanks {
-  let ranks: Map<LogicalId, SiblingRank> | null = null;
-  let group = 0;
+  const runs: SplitRunOrder[] = [];
+  const firstGroup = groups.length;
   const items: Y.Item[] = [];
   const nodes = children.doc?.getMap<unknown>(PACKAGE_NODES_KEY) ?? null;
   // Items that went in at one place at once have the same two origins. Only such items start
@@ -157,10 +148,11 @@ export function splitSiblingRanks(
     }
     return found;
   };
+  const processed = new Map<string, number>();
   for (let start = 0; start < items.length;) {
     const head = items[start]!;
     const key = originsKey(head);
-    if (sharing.get(key)! < 2 || !splitHere(head)) {
+    if (start < (processed.get(key) ?? 0) || sharing.get(key)! < 2 || !splitHere(head)) {
       start += 1;
       continue;
     }
@@ -201,7 +193,6 @@ export function splitSiblingRanks(
         // A later split of the put-back sibling, earlier in it, goes in right before the
         // paragraph an earlier split put after it.
         const splitAgain =
-          !item.deleted &&
           pending.some((follower) => inItem(item.rightOrigin, follower)) &&
           !(item.origin && head.origin && Y.compareIDs(item.origin, head.origin));
         if (!splitAgain) break;
@@ -215,8 +206,11 @@ export function splitSiblingRanks(
         continue;
       }
       // Its left origin is the paragraph the run follows, also when a paragraph listed later
-      // went in between, as a split at the start of that paragraph puts one.
-      if (!item.origin || !head.origin || !Y.compareIDs(item.origin, head.origin)) {
+      // went in between, as a split at the start of that paragraph puts one. A redo puts it
+      // after its left neighbor of that time: before its own entry in the run, that can be
+      // the removed entry of another run at the same place.
+      const own = blocks.some((block) => block.items.includes(removed));
+      if (!(own ? originPasses(item, head.origin) : sameId(item.origin, head.origin))) {
         pending.unshift(item);
         continue;
       }
@@ -311,13 +305,14 @@ export function splitSiblingRanks(
         ) ?? (byText ? idsOf(byText) : null));
     const shown = order ?? listed;
     const source = items[first - 1];
-    if (source && !source.deleted && inItem(head.origin, source)) {
+    const sourceId =
+      source && !source.deleted && inItem(head.origin, source)
+        ? (source.content.getContent() as LogicalId[])[head.origin!.clock - source.id.clock]
+        : undefined;
+    if (sourceId !== undefined) {
       const heads = new Set(
         blocks.filter((block) => !block.head.deleted).map((b) => headId(b.head))
       );
-      const sourceId = (source.content.getContent() as LogicalId[])[
-        head.origin!.clock - source.id.clock
-      ]!;
       const before = new Map<LogicalId, LogicalId>();
       for (const block of blocks) {
         let previous = sourceId;
@@ -329,18 +324,20 @@ export function splitSiblingRanks(
       groups.push({ source: sourceId, heads: shown.filter((id) => heads.has(id)), shown, before });
     }
     const moves = order !== null && order.some((id, at) => listed[at] !== id);
-    if (moves) {
-      group += 1;
-      ranks ??= new Map();
-      // A paragraph listed again before the run, as by two concurrent moves, shows there.
-      order.forEach((id, rank) => {
-        if ((firstListed.get(id) ?? first) >= first) ranks!.set(id, { group, rank });
-      });
-    }
-    // A run that moves nothing leaves its blocks as listed, so a run inside one of them, as
-    // splits of a paragraph a moved block carries, is read on its own.
-    start = moves ? end : start + 1;
+    // A later run can enclose an earlier one when an undo relists its first paragraph.
+    // Record both, including a nested run that already has the right listed order.
+    const right = items[end];
+    const boundary =
+      right && !right.deleted && inItem(head.rightOrigin, right)
+        ? (right.content.getContent()[head.rightOrigin!.clock - right.id.clock] as LogicalId)
+        : undefined;
+    if (!twice)
+      runs.push({ first, end, shown, moves, ordered: order !== null, source: sourceId, boundary });
+    if (moves) processed.set(key, end);
+    start += 1;
   }
+  const ranks = composeSplitRanks(runs, firstListed);
+  showGroupsInRankOrder(groups, firstGroup, ranks);
   return ranks;
 }
 
