@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
-import { MAX_MARKER_TEXT_LENGTH, formatNumFmt } from '../numbering-format.ts';
+import { formatNumFmt } from '../numbering-format.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import { createListCounterState } from '../list-counters.ts';
 import { formatPageNumber } from '../field-page-furniture.ts';
@@ -89,8 +89,9 @@ describe('Chinese counting formats', () => {
     ]);
   });
 
-  test('`chineseCountingThousand` writes place values, one 零 per gap', () => {
+  test('`chineseCountingThousand` writes place values, one 〇 per gap', () => {
     expectSequence('chineseCountingThousand', [
+      [0, '〇'],
       [1, '一'],
       [10, '十'],
       [11, '十一'],
@@ -99,25 +100,27 @@ describe('Chinese counting formats', () => {
       [21, '二十一'],
       [99, '九十九'],
       [100, '一百'],
-      [101, '一百零一'],
+      [101, '一百〇一'],
       [110, '一百一十'],
       [111, '一百一十一'],
       [999, '九百九十九'],
       [1000, '一千'],
-      [1005, '一千零五'],
-      [1010, '一千零一十'],
-      [1050, '一千零五十'],
+      [1005, '一千〇五'],
+      [1010, '一千〇一十'],
+      [1050, '一千〇五十'],
       [1100, '一千一百'],
       [10000, '一万'],
-      [10005, '一万零五'],
-      [10010, '一万零一十'],
+      [10005, '一万〇五'],
+      [10010, '一万〇一十'],
       [12345, '一万二千三百四十五'],
       [100000, '一十万'],
+      [100001, '一十万〇一'],
     ]);
   });
 
-  test('`taiwaneseCountingThousand` writes 萬', () => {
+  test('`taiwaneseCountingThousand` writes 萬 and 零', () => {
     expectSequence('taiwaneseCountingThousand', [
+      [0, '零'],
       [10, '十'],
       [101, '一百零一'],
       [10000, '一萬'],
@@ -133,7 +136,8 @@ describe('Chinese counting formats', () => {
       [20, '贰拾'],
       [101, '壹佰零壹'],
       [1005, '壹仟零伍'],
-      [10000, '壹万'],
+      [10000, '壹萬'],
+      [10001, '壹萬零壹'],
     ]);
     expectSequence('ideographLegalTraditional', [
       [2, '貳'],
@@ -156,6 +160,8 @@ describe('Chinese counting formats', () => {
       [1000, '千'],
       [1005, '千五'],
       [10000, '一万'],
+      [10100, '一万百'],
+      [11000, '一万一千'],
       [12345, '一万二千三百四十五'],
     ]);
   });
@@ -178,6 +184,8 @@ describe('Chinese counting formats', () => {
     ]);
     expectSequence('ideographZodiac', [
       [1, '子'],
+      [10, '酉'],
+      [11, '戍'],
       [12, '亥'],
       [13, '13'],
     ]);
@@ -197,6 +205,8 @@ describe('Korean formats', () => {
       [101, '백일'],
       [1000, '천'],
       [10000, '만'],
+      [10100, '만백'],
+      [11000, '만일천'],
       [12345, '만이천삼백사십오'],
       [110000, '십일만'],
     ]);
@@ -219,6 +229,7 @@ describe('Korean formats', () => {
 
   test('`koreanLegal` counts in native Korean words to 99', () => {
     expectSequence('koreanLegal', [
+      [0, '0'],
       [1, '하나'],
       [2, '둘'],
       [5, '다섯'],
@@ -234,30 +245,28 @@ describe('Korean formats', () => {
     ]);
   });
 
-  test('`ganada` and `chosung` repeat the letter on each pass through 14', () => {
+  test('`ganada` and `chosung` start again from the first letter after 14', () => {
     expectSequence('ganada', [
+      [0, '0'],
       [1, '가'],
       [2, '나'],
       [14, '하'],
-      [15, '가가'],
-      [28, '하하'],
-      [29, '가가가'],
+      [15, '가'],
+      [28, '하'],
+      [29, '가'],
+      [999_999, '사'],
     ]);
     expectSequence('chosung', [
       [1, 'ㄱ'],
       [14, 'ㅎ'],
-      [15, 'ㄱㄱ'],
+      [15, 'ㄱ'],
+      [393, 'ㄱ'],
     ]);
-  });
-
-  test('a hostile counter stays within the marker cap', () => {
-    expect(formatNumFmt('ganada', 999_999).length).toBeLessThanOrEqual(MAX_MARKER_TEXT_LENGTH);
-    expect(formatNumFmt('chosung', 999_999).length).toBeLessThanOrEqual(MAX_MARKER_TEXT_LENGTH);
   });
 });
 
 describe('enclosed and full-width digits', () => {
-  test('enclosed digits cover 1–20 and fall back to decimal', () => {
+  test('enclosed digits cover 1–20, the Chinese variant 1–10, then decimal', () => {
     expectSequence('decimalEnclosedCircle', [
       [1, '①'],
       [20, '⑳'],
@@ -265,8 +274,8 @@ describe('enclosed and full-width digits', () => {
     ]);
     expectSequence('decimalEnclosedCircleChinese', [
       [1, '①'],
-      [20, '⑳'],
-      [21, '21'],
+      [10, '⑩'],
+      [11, '11'],
     ]);
     expectSequence('decimalEnclosedFullstop', [
       [1, '⒈'],

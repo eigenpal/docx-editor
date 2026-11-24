@@ -293,10 +293,7 @@ export function formatNumFmt(numFmt: string, value: number): string {
     case 'bullet':
       return '';
     default:
-      return (
-        formatEastAsianNumFmt(numFmt, clampListValue(value), MAX_MARKER_TEXT_LENGTH) ??
-        formatDecimal(value)
-      );
+      return formatEastAsianNumFmt(numFmt, clampListValue(value)) ?? formatDecimal(value);
   }
 }
 

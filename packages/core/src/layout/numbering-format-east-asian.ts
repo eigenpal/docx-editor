@@ -1,8 +1,10 @@
-// Chinese, Korean, and enclosed-digit `w:numFmt` sequences (§17.18.59).
+// Chinese, Korean, and enclosed-digit `w:numFmt` values (`ST_NumberFormat`, ECMA-376 Part 1
+// §17.18.59).
 //
 // Callers pass a value already clamped by `clampListValue` (0…999 999), so every string here
-// is short. The glyph sets are the standard's; where its algorithm text and its own examples
-// disagree, the examples and the format strings in [MS-DOCX] 2.4 win (`十`, not `一十`, for 10).
+// is short. The glyph sets are the standard's, except where DOCX applications render other
+// glyphs. The comments below name each exception: the `〇` gap in `chineseCountingThousand`,
+// `萬` in `chineseLegalSimplified`, `戍` for zodiac 11, and the 14-letter cycle in `ganada`.
 
 /** Place values written after a digit: ten, hundred, thousand. */
 type PlaceUnits = readonly [string, string, string];
@@ -24,24 +26,29 @@ interface PlaceValueNumerals {
   readonly bareMyriad: boolean;
 }
 
+// The standard lists `零` (U+96F6) for zero; DOCX applications render `〇` (U+3007) for zero and
+// each gap (`一百〇一`). The Taiwanese format keeps `零`.
 const CHINESE_COUNTING_THOUSAND: PlaceValueNumerals = {
-  digits: '零一二三四五六七八九',
+  digits: '〇一二三四五六七八九',
   units: ['十', '百', '千'],
   myriad: '万',
-  gap: '零',
+  gap: '〇',
   bareOne: 'teens',
   bareMyriad: false,
 };
 
 const TAIWANESE_COUNTING_THOUSAND: PlaceValueNumerals = {
   ...CHINESE_COUNTING_THOUSAND,
+  digits: '零一二三四五六七八九',
   myriad: '萬',
+  gap: '零',
 };
 
+// The ten-thousand glyph is the traditional `萬`, not the standard's `万`.
 const CHINESE_LEGAL_SIMPLIFIED: PlaceValueNumerals = {
   digits: '零壹贰叁肆伍陆柒捌玖',
   units: ['拾', '佰', '仟'],
-  myriad: '万',
+  myriad: '萬',
   gap: '零',
   bareOne: 'never',
   bareMyriad: false,
@@ -74,8 +81,17 @@ const KOREAN_COUNTING: PlaceValueNumerals = {
   bareMyriad: true,
 };
 
-/** One group below ten thousand (1…9999), most significant place first. */
-function placeValueGroup(group: number, numerals: PlaceValueNumerals, teens: boolean): string {
+/**
+ * One group below ten thousand (1…9999), most significant place first. `afterMyriad` marks the
+ * group after a ten-thousand glyph, where a 1 before the thousand glyph is always written
+ * (`一万一千`, `만일천`), so the 1 is not read as part of the myriad count.
+ */
+function placeValueGroup(
+  group: number,
+  numerals: PlaceValueNumerals,
+  teens: boolean,
+  afterMyriad = false
+): string {
   const bareOne = numerals.bareOne === 'always' || (numerals.bareOne === 'teens' && teens);
   let out = '';
   let gap = false;
@@ -92,7 +108,8 @@ function placeValueGroup(group: number, numerals: PlaceValueNumerals, teens: boo
     }
     if (gap && numerals.gap !== null) out += numerals.gap;
     gap = false;
-    out += (digit === 1 && unit !== '' && bareOne ? '' : numerals.digits[digit]!) + unit;
+    const bare = bareOne && !(afterMyriad && place === 1000);
+    out += (digit === 1 && unit !== '' && bare ? '' : numerals.digits[digit]!) + unit;
   }
   return out;
 }
@@ -106,7 +123,7 @@ function placeValue(value: number, numerals: PlaceValueNumerals): string {
   let out = head + numerals.myriad;
   if (low === 0) return out;
   if (low < 1000 && numerals.gap !== null) out += numerals.gap;
-  return out + placeValueGroup(low, numerals, false);
+  return out + placeValueGroup(low, numerals, false, true);
 }
 
 /** Each decimal digit replaced by its glyph in `digits` (0–9). */
@@ -131,21 +148,22 @@ const KOREAN_NATIVE_TENS = ['', '열', '스물', '서른', '마흔', '쉰', '예
 
 /**
  * `koreanLegal`: native Korean words for 1–99. The standard defines nothing past 99; larger
- * values use `koreanCounting`.
+ * values use `koreanCounting`, and zero stays a decimal `0`.
  */
 function koreanLegal(value: number): string {
-  if (value < 1 || value > 99) return placeValue(value, KOREAN_COUNTING);
+  if (value < 1) return String(value);
+  if (value > 99) return placeValue(value, KOREAN_COUNTING);
   return KOREAN_NATIVE_TENS[Math.floor(value / 10)]! + KOREAN_NATIVE_ONES[value % 10]!;
 }
 
 /**
- * `ganada` / `chosung`: a 14-letter set, the letter written once more on each pass through
- * it (`가`, …, `하`, `가가`). The copy count is capped so a hostile counter stays short.
+ * `ganada` / `chosung`: a 14-letter set that starts again after the last letter (`하`, then
+ * `가`). The standard repeats the letter instead (`가가` for 15); DOCX applications render one
+ * letter.
  */
-function repeatedLetter(value: number, letters: string, maxLength: number): string {
+function cycledLetter(value: number, letters: string): string {
   if (value < 1) return String(value);
-  const copies = Math.min(Math.floor((value - 1) / letters.length) + 1, maxLength);
-  return letters[(value - 1) % letters.length]!.repeat(copies);
+  return letters[(value - 1) % letters.length]!;
 }
 
 /** A glyph for each value 1…`glyphs.length`, decimal beyond. */
@@ -160,11 +178,7 @@ const ENCLOSED_CIRCLE = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱�
  * Format `value` (already clamped) in an East Asian or enclosed-digit format, or return null
  * when `numFmt` is not one of them.
  */
-export function formatEastAsianNumFmt(
-  numFmt: string,
-  value: number,
-  maxLength: number
-): string | null {
+export function formatEastAsianNumFmt(numFmt: string, value: number): string | null {
   switch (numFmt) {
     case 'chineseCounting':
     case 'taiwaneseCounting':
@@ -184,7 +198,8 @@ export function formatEastAsianNumFmt(
     case 'ideographTraditional':
       return fromSet(value, '甲乙丙丁戊己庚辛壬癸');
     case 'ideographZodiac':
-      return fromSet(value, '子丑寅卯辰巳午未申酉戌亥');
+      // 11 is `戍` (U+620D). The standard lists `戌` (U+620C); DOCX applications render `戍`.
+      return fromSet(value, '子丑寅卯辰巳午未申酉戍亥');
     case 'ideographEnclosedCircle':
       return fromSet(value, '㈠㈡㈢㈣㈤㈥㈦㈧㈨㈩');
     case 'koreanCounting':
@@ -196,12 +211,15 @@ export function formatEastAsianNumFmt(
     case 'koreanLegal':
       return koreanLegal(value);
     case 'ganada':
-      return repeatedLetter(value, '가나다라마바사아자차카타파하', maxLength);
+      return cycledLetter(value, '가나다라마바사아자차카타파하');
     case 'chosung':
-      return repeatedLetter(value, 'ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ', maxLength);
+      return cycledLetter(value, 'ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ');
     case 'decimalEnclosedCircle':
-    case 'decimalEnclosedCircleChinese':
       return fromSet(value, ENCLOSED_CIRCLE);
+    case 'decimalEnclosedCircleChinese':
+      // The standard calls it identical to `decimalEnclosedCircle`. DOCX applications circle
+      // only 1–10.
+      return fromSet(value, ENCLOSED_CIRCLE.slice(0, 10));
     case 'decimalEnclosedFullstop':
       return fromSet(value, '⒈⒉⒊⒋⒌⒍⒎⒏⒐⒑⒒⒓⒔⒕⒖⒗⒘⒙⒚⒛');
     case 'decimalEnclosedParen':
