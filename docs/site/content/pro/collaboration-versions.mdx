@@ -264,10 +264,9 @@ To upgrade, export each room with the release your servers run, then follow [Upg
 | 2.17.0 | [Upgrade saved rooms](#upgrade-saved-rooms). Text-only rooms need [their earlier editor](#replace-the-experimental-text-collaboration-api). |
 | 2.18.0 to 2.27.0 | [Format 1.4.2.1 steps](#upgrade-rooms-to-format-1421) |
 | 2.28.0 to 2.31.0 | [Format 1.5.2.1 steps](#upgrade-rooms-to-format-1521) |
-| 2.32.0 or 2.33.0 | [Format 1.5.3.1 steps](#upgrade-rooms-to-format-1531), then [Format 1.5.4.1 steps](#upgrade-rooms-to-format-1541), [Format 1.5.5.1 steps](#upgrade-rooms-to-format-1551), and [Format 1.5.6.1 steps](#upgrade-rooms-to-format-1561) |
-| 2.34.0 to 2.37.0 | [Format 1.5.4.1 steps](#upgrade-rooms-to-format-1541), then [Format 1.5.5.1 steps](#upgrade-rooms-to-format-1551) and [Format 1.5.6.1 steps](#upgrade-rooms-to-format-1561) |
-| 2.38.0 | [Format 1.5.5.1 steps](#upgrade-rooms-to-format-1551), then [Format 1.5.6.1 steps](#upgrade-rooms-to-format-1561) |
-| 2.39.0 | [Format 1.5.6.1 steps](#upgrade-rooms-to-format-1561) |
+| 2.32.0 or 2.33.0 | [Format 1.5.3.1 steps](#upgrade-rooms-to-format-1531), then [Format 1.5.4.1 steps](#upgrade-rooms-to-format-1541) and [Format 1.5.5.1 steps](#upgrade-rooms-to-format-1551) |
+| 2.34.0 to 2.37.0 | [Format 1.5.4.1 steps](#upgrade-rooms-to-format-1541), then [Format 1.5.5.1 steps](#upgrade-rooms-to-format-1551) |
+| 2.38.0 | [Format 1.5.5.1 steps](#upgrade-rooms-to-format-1551) |
 
 Refuse clients with a different format. A compatible client does not make an older room compatible.
 
@@ -310,12 +309,6 @@ Keep both server calls, and change the browser storage key. Update clients, serv
 Format `docx-collaboration:1.5.5.1` lets participants change the text wrap of text boxes, shapes, lines, and groups. A height change of a text box that fits its text turns that fit off. When two participants change one drawing's wrap, position, or text fit at the same time, each participant shows the first change. This also applies to text boxes and shapes saved with a VML copy, as Word saves them. Format `docx-collaboration:1.5.4.1` participants lack these rules and could save a drawing with two wraps, so they refuse these rooms. The shared schema version stays the same.
 
 Keep both server calls, and change the browser storage key. Update clients, servers, export workers, and agents together, because your connection check refuses `docx-collaboration:1.5.4.1` clients.
-
-### Upgrade rooms to format 1.5.6.1
-
-Format `docx-collaboration:1.5.6.1` keeps text order when participants split a paragraph at the same time, and that paragraph came from an earlier concurrent split. It also shows each tracked paragraph break on the paragraph that ends at that break, so rejecting the breaks of one participant keeps the breaks of the others. An insert of several lines made at the same time as a split keeps its line order. Format `docx-collaboration:1.5.5.1` participants can show these paragraphs in a different order, so they refuse these rooms. The shared schema version stays the same.
-
-Export each saved room with your current release. Check the paragraph order in the export before you reseed the room. Change the browser storage key, and upgrade clients, servers, export workers, and agents together.
 
 ### Replace the experimental text collaboration API
 

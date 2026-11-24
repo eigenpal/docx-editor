@@ -1,0 +1,18 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The unreleased rule for nested concurrent paragraph splits is on main with repairVersion 6, so the next release changes the collaboration format six days after 2.39.0 changed it.",
+  "after": "The rule and its repairVersion increase leave main and wait on the collaboration-format-next branch for a combined format release. Main reads and writes shared state as the published 2.39.0 release does, with repairVersion 5.",
+  "reason": "The withdrawn change is in no stable release, so no stable participant and no room that a stable release saved uses format docx-collaboration:1.5.6.1. The canary build of 2026-11-24 holds it: later builds refuse a room that this canary saved, as they refuse every later format. Every shared node, text offset, split point, follow anchor, and repair rule returns to its 2.39.0 form, which released participants hold. The format stays docx-collaboration:1.5.5.1.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-concurrent-split-order.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-split-sibling-removal.test.ts",
+    "packages/pro/src/collaboration/__tests__/format-1551-migration.test.ts"
+  ],
+  "changeset": null,
+  "migration": null,
+  "withdraws": [
+    "order-nested-paragraph-splits"
+  ],
+  "reverts": "9a0643d88616619fde02a07d1eac936d99e71d90"
+}

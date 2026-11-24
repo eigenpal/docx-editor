@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Copying part of a paragraph wrote plain text only when the trimmed part of the paragraph held a whole content-locked or data-bound inline control, because the fragment trim deleted that control's characters as text and the store refused it.",
+  "after": "The fragment trim removes each whole protected inline control in the trimmed range as a node and deletes the text between, so the copy writes its fragment and interop HTML.",
+  "reason": "The trim edits a private working copy of the part that is only serialized into the clipboard fragment and never committed. Pasting still goes through the existing fragment paste path. Shared nodes, operation shapes, offsets, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/clipboard-fragment.test.ts",
+    "packages/core/src/store/__tests__/clipboard-fragment-locked-controls.test.ts",
+    "packages/core/src/editor/__tests__/clipboard-copy-payload.test.ts"
+  ],
+  "changeset": "copy-trim-past-locked-controls",
+  "migration": null
+}

@@ -1,4 +1,5 @@
-// Local character-style field recognition. Unknown switches keep their cached result.
+// STYLEREF field recognition (ECMA-376 Part 1, 17.16.5.59). `\l`, `\n`, and `\w` resolve per page;
+// other switches keep their cached result.
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import {
   MAX_FIELD_INSTRUCTION_CHARS,
@@ -10,20 +11,32 @@ import type { FieldPageContext } from './field-page-furniture.ts';
 export interface CharacterStyleField {
   readonly name: string;
   readonly last: boolean;
+  /** `\n` reads the selected paragraph's number at its own level, `\w` in full context. */
+  readonly numberSwitch: 'n' | 'w' | null;
   readonly key: string;
 }
 
 export function parseCharacterStyleField(raw: string): CharacterStyleField | null {
   if (raw.length > MAX_FIELD_INSTRUCTION_CHARS) return null;
   const match =
-    /^\s*STYLEREF\s+(?:"([^"\\]+)"|([^\s"\\]+))((?:\s+\\l)?(?:\s+\\\*\s+MERGEFORMAT)?)\s*$/i.exec(
+    /^\s*STYLEREF\s+(?:"([^"\\]+)"|([^\s"\\]+))((?:\s+(?:\\[lnw]|\\\*\s+MERGEFORMAT))*)\s*$/i.exec(
       raw
     );
   if (!match) return null;
   const name = (match[1] ?? match[2]!).trim().toLowerCase();
   if (!name || name.length > 128 || /[\u0000-\u001f\u007f]/.test(name)) return null;
-  const last = /\\l\b/i.test(match[3]!);
-  return { name, last, key: `${last ? 'last' : 'first'}:${name}` };
+  let last = false;
+  let numberSwitch: CharacterStyleField['numberSwitch'] = null;
+  for (const [, letter] of match[3]!.matchAll(/\\([lnw])/gi)) {
+    const value = letter!.toLowerCase();
+    if (value === 'l') last = true;
+    // A field cannot ask for two number forms at once.
+    else if (numberSwitch !== null && numberSwitch !== value) return null;
+    else numberSwitch = value as 'n' | 'w';
+  }
+  // A plain key starts with its search direction, so a style name cannot collide with a number key.
+  const key = `${numberSwitch ? `${numberSwitch}:` : ''}${last ? 'last' : 'first'}:${name}`;
+  return { name, last, numberSwitch, key };
 }
 
 export function characterStyleFieldValue(

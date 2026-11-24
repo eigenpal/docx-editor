@@ -79,9 +79,13 @@ export interface BodyPageFieldContext {
  * at one would overprint whatever follows it on the line. Rendering zero through the picture
  * gives a placeholder the same shape as every value it can be replaced by — `0#` measures
  * `00`, the width of `02` — and a number format measures its rendering of one, so
- * `\* ArabicDash` reserves `- 1 -`. A field with neither keeps the historical single digit.
+ * `\* ArabicDash` reserves `- 1 -`. A PAGE field with neither measures `sectionFormat`'s
+ * rendering of one. Any other field keeps the historical single digit.
  */
-export function pageFieldPlaceholder(switches: PageFieldSwitches = {}): string {
+export function pageFieldPlaceholder(
+  switches: PageFieldSwitches = {},
+  sectionFormat?: string
+): string {
   let shape: string;
   if (switches.numberFormat !== undefined) {
     shape =
@@ -89,7 +93,11 @@ export function pageFieldPlaceholder(switches: PageFieldSwitches = {}): string {
         ? PAGE_FIELD_PLACEHOLDER
         : formatPageFieldNumber(1, switches.numberFormat);
   } else if (switches.picture === undefined) {
-    return PAGE_FIELD_PLACEHOLDER;
+    // A PAGE field without switches renders through the section's `w:pgNumType/@w:fmt`
+    // (ECMA-376 Part 1, 17.6.12), so it measures that format's rendering of one: `一`, not `0`.
+    if (sectionFormat === undefined || sectionFormat === 'decimal') return PAGE_FIELD_PLACEHOLDER;
+    shape = formatSectionPageNumber(1, sectionFormat);
+    if (shape.length === 0) return PAGE_FIELD_PLACEHOLDER;
   } else {
     shape = formatNumericPicture(0, switches.picture) ?? PAGE_FIELD_PLACEHOLDER;
   }
@@ -112,7 +120,11 @@ const MAX_MEASURED_CACHED_RESULT = 32;
  * result that is empty, holds whitespace (it would split into several spans, and finalize
  * paints the value into each one), or is too long falls back to {@link pageFieldPlaceholder}.
  */
-export function pageFieldMeasuredText(switches: PageFieldSwitches = {}, cachedText = ''): string {
+export function pageFieldMeasuredText(
+  switches: PageFieldSwitches = {},
+  cachedText = '',
+  sectionFormat?: string
+): string {
   if (
     cachedText.length > 0 &&
     cachedText.length <= MAX_MEASURED_CACHED_RESULT &&
@@ -120,7 +132,7 @@ export function pageFieldMeasuredText(switches: PageFieldSwitches = {}, cachedTe
   ) {
     return cachedText;
   }
-  return pageFieldPlaceholder(switches);
+  return pageFieldPlaceholder(switches, sectionFormat);
 }
 
 /**
@@ -208,11 +220,18 @@ export function projectPageFieldValue(
     if (painted !== null) return painted;
   }
   if (kind !== 'PAGE') return formatDecimal(Math.floor(value));
-  // A roman or letter section format follows the page-field rules, not the list-marker ones:
-  // thousands repeat `M`, letters repeat one letter, and zero is a space.
-  return context.format !== undefined && isPageFieldNumberFormat(context.format)
-    ? formatPageFieldNumber(value, context.format)
-    : formatPageNumber(value, context.format);
+  return formatSectionPageNumber(value, context.format);
+}
+
+/**
+ * A page number in the section's `w:pgNumType/@w:fmt`. A roman or letter format follows the
+ * page-field rules, not the list-marker ones: thousands repeat `M`, letters repeat one letter,
+ * and zero is a space.
+ */
+function formatSectionPageNumber(value: number, format: string | undefined): string {
+  return format !== undefined && isPageFieldNumberFormat(format)
+    ? formatPageFieldNumber(value, format)
+    : formatPageNumber(value, format);
 }
 
 /**

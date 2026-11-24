@@ -335,6 +335,12 @@
       "id": 10051436,
       "signed_at": "2026-11-15T18:36:50Z",
       "pull_request_no": 1987
+    },
+    {
+      "name": "brunoyang",
+      "id": 5086369,
+      "signed_at": "2026-11-24T05:23:48Z",
+      "pull_request_no": 2110
     }
   ]
 }

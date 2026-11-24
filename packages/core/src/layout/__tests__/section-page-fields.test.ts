@@ -194,7 +194,7 @@ describe('SECTIONPAGES and pgNumType projection', () => {
     ).toBe('iv');
     expect(
       projectPageFieldValue('PAGE', { pageNumber: 4, pageCount: 10, format: 'japaneseCounting' })
-    ).toBe('4');
+    ).toBe('四');
   });
 
   test('detects SECTIONPAGES and reuses one layout per section page count', () => {

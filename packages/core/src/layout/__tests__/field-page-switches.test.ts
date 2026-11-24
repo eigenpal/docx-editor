@@ -216,7 +216,8 @@ describe('page-field number formats', () => {
     expect(page(0, 'lowerRoman')).toBe(' ');
     expect(page(781, 'upperLetter')).toBe(PAGE_FIELD_UNREPRESENTABLE);
     expect(page(3, 'numberInDash')).toBe('- 3 -');
-    expect(page(3, 'japaneseCounting')).toBe('3');
+    expect(page(3, 'japaneseCounting')).toBe('三');
+    expect(page(3, 'thaiNumbers')).toBe('๓');
   });
 
   test('measures a body placeholder in the shape of the format', () => {
@@ -224,6 +225,16 @@ describe('page-field number formats', () => {
     expect(pageFieldPlaceholder({ numberFormat: 'numberInDash' })).toBe('-\u00a01\u00a0-');
     expect(pageFieldPlaceholder({ numberFormat: 'upperRoman' })).toBe('I');
     expect(pageFieldPlaceholder({ numberFormat: 'lowerLetter' })).toBe('a');
+  });
+
+  test('measures a PAGE placeholder without switches in the section format', () => {
+    expect(pageFieldPlaceholder({}, 'decimal')).toBe('0');
+    expect(pageFieldPlaceholder({}, 'chineseCountingThousand')).toBe('一');
+    expect(pageFieldPlaceholder({}, 'numberInDash')).toBe('-\u00a01\u00a0-');
+    expect(pageFieldPlaceholder({}, 'upperRoman')).toBe('I');
+    // The field's own switches outrank the section format.
+    expect(pageFieldPlaceholder({ numberFormat: 'decimal' }, 'numberInDash')).toBe('0');
+    expect(pageFieldPlaceholder({ picture: '00' }, 'numberInDash')).toBe('00');
   });
 });
 
@@ -372,12 +383,15 @@ describe('footer page fields with number-format switches', () => {
 
 describe('body page fields with number-format switches', () => {
   /** The field's painted text and the gap the flow measured for it, on the second page. */
-  function fieldOnSecondPage(instruction: string, sectPr = '') {
+  function fieldOnSecondPage(instruction: string, sectPr = '', simple = false) {
     const filler = Array.from(
       { length: 60 },
       (_unused, index) => `<w:p>${text(`Line ${index + 1}`)}</w:p>`
     ).join('');
-    const field = `<w:p>${complexField(instruction, '')}${text('END')}</w:p>`;
+    const fieldXml = simple
+      ? `<w:fldSimple w:instr=" ${instruction} "/>`
+      : complexField(instruction, '');
+    const field = `<w:p>${fieldXml}${text('END')}</w:p>`;
     const layout = layoutOf(packageOf(filler + field, sectPr));
     expect(layout.pages.length).toBe(2);
     for (const fragment of layout.pages[1]!.fragments) {
@@ -423,6 +437,20 @@ describe('body page fields with number-format switches', () => {
     const roman = '<w:pgNumType w:fmt="upperRoman"/>';
     expect(fieldOnSecondPage('PAGE', roman).field).toBe('II');
     expect(fieldOnSecondPage('PAGE \\* Arabic', roman).field).toBe('2');
+  });
+
+  test('measures a PAGE field without switches in the section format', () => {
+    // `- 2 -` is five characters wide. Measured as one digit, it painted over `END`.
+    const dashed = fieldOnSecondPage('PAGE', '<w:pgNumType w:fmt="numberInDash"/>');
+    expect(dashed.field).toBe('- 2 -');
+    expect(dashed.gap).toBeCloseTo(5 * dashed.charWidth, 6);
+    const simple = fieldOnSecondPage('PAGE', '<w:pgNumType w:fmt="numberInDash"/>', true);
+    expect(simple.field).toBe('- 2 -');
+    expect(simple.gap).toBeCloseTo(5 * simple.charWidth, 6);
+    // NUMPAGES is a count, so the section format does not widen it.
+    const count = fieldOnSecondPage('NUMPAGES', '<w:pgNumType w:fmt="numberInDash"/>');
+    expect(count.field).toBe('2');
+    expect(count.gap).toBeCloseTo(count.charWidth, 6);
   });
 });
 

@@ -302,11 +302,6 @@ export interface ProjectedJournal {
   readonly plan: InlinePlan | null;
   /** Typing at one place, written straight to its paragraph's text (`typedInsertOf`). */
   readonly typed?: TypedInsert;
-  /**
-   * How many effects at the start of `journal` only list split proposals where they show
-   * (`split-mark-moves.ts`). They change nothing anyone sees, so they publish outside undo.
-   */
-  readonly listed?: number;
 }
 
 /**
@@ -636,28 +631,17 @@ export function projectJournalToShared(
     });
   };
   // A proposal of a concurrent split shows on another paragraph mark than the one that lists
-  // it (`split-mark-moves.ts`). Before a journal addresses either, or an element inside the
-  // proposal, list it where it shows, with the stale copies it replaces leaving.
+  // it (`split-mark-moves.ts`). Before a journal addresses either, list it where it shows.
   const marksWhereShown = new Set<LogicalId>();
   const listMarksWhereShown = (parentId: LogicalId): void => {
-    const pending = [parentId];
-    // A mark element sits at most three levels below its paragraph (`w:pPr/w:rPr/w:ins`).
-    for (let id = registry.parentOf(parentId), up = 0; id && up < 3; up += 1) {
-      pending.push(id);
-      id = registry.parentOf(id);
-    }
-    for (let at = pending.pop(); at !== undefined; at = pending.pop()) listMarkMovesAt(at, pending);
-  };
-  const listMarkMovesAt = (parentId: LogicalId, pending: LogicalId[]): void => {
     for (const move of splitMarkMoves(registry).movesAt(parentId)) {
       if (marksWhereShown.has(move.node)) continue;
       marksWhereShown.add(move.node);
       const from = raw.node(move.from);
-      const shownIn = move.to === null ? null : raw.node(move.to);
-      const to = shownIn && !shownIn.isText ? shownIn : null;
-      if (!from || from.isText || (move.to !== null && !to)) continue;
+      const to = raw.node(move.to);
+      if (!from || from.isText || !to || to.isText) continue;
       const at = from.children.indexOf(move.node);
-      if (at < 0 || to?.children.includes(move.node)) continue;
+      if (at < 0 || to.children.includes(move.node)) continue;
       emit({
         kind: 'spliceChildren',
         parentLogicalId: move.from,
@@ -665,8 +649,6 @@ export function projectJournalToShared(
         deleteCount: 1,
         childLogicalIds: [],
       });
-      // A stale copy of an earlier proposal shows nowhere, so it only leaves.
-      if (move.to === null || !to) continue;
       emit({
         kind: 'spliceChildren',
         parentLogicalId: move.to,
@@ -674,7 +656,6 @@ export function projectJournalToShared(
         deleteCount: 0,
         childLogicalIds: [move.node],
       });
-      pending.push(move.to);
     }
   };
   const listedWhereShown = new Set<LogicalId>();
@@ -725,11 +706,7 @@ export function projectJournalToShared(
     const copies = visibleLayout(parentId, parent.children).companions.get(
       parent.children.indexOf(containerId)
     );
-    // A copy that shows on another paragraph mark (`split-mark-moves.ts`) merges nowhere here.
-    const moves = splitMarkMoves(registry);
-    return (copies ?? [])
-      .map((index) => parent.children[index]!)
-      .filter((id) => !moves.movedOut(parentId, id));
+    return (copies ?? []).map((index) => parent.children[index]!);
   };
   const mergedChildrenOf = (containerId: LogicalId): LogicalId[] => {
     const out: LogicalId[] = [];
@@ -813,14 +790,6 @@ export function projectJournalToShared(
     if (effect.kind === 'spliceText') text.apply(effect);
   };
   try {
-    // Proposals go where they show first, before the edit, as writes of their own: they
-    // change nothing anyone sees, so an undo of the edit leaves them where they show.
-    for (const effect of incoming) {
-      if (effect.kind === 'spliceChildren') listMarksWhereShown(effect.parentLogicalId);
-      else if (effect.kind === 'moveNode') listMarksWhereShown(effect.destinationParentLogicalId);
-    }
-    if (refusal) return refusal;
-    const listed = effects.length;
     for (const effect of incoming) {
       const result = validateEffect(registry, effect, visible);
       if (result && !result.ok) return result;
@@ -938,7 +907,7 @@ export function projectJournalToShared(
       }
       if (refusal) return refusal;
     }
-    return { ok: true, journal: { effects }, plan: routed.plan, listed };
+    return { ok: true, journal: { effects }, plan: routed.plan };
   } finally {
     text.destroy();
   }

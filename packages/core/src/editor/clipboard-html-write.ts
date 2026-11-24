@@ -8,6 +8,7 @@
 // Every file-derived value is escaped or allowlist-validated before it reaches the output.
 
 import { hyphenDisplayOf } from '../layout/field-run-text.ts';
+import { cssListStyleTypeOf } from './clipboard-html-list-formats.ts';
 import { readOoxmlPackage, type OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { withoutStoryEndParagraph } from '../store/package/ooxml-story-end-repair.ts';
 import { resolveContentType } from '../store/package/content-types.ts';
@@ -360,18 +361,6 @@ export interface FieldState {
   readonly stack: Array<'instr' | 'result'>;
   readonly inert: boolean;
 }
-
-const LIST_FMT_TO_CSS: Readonly<Record<string, string>> = {
-  decimal: 'decimal',
-  decimalZero: 'decimal-leading-zero',
-  lowerLetter: 'lower-alpha',
-  upperLetter: 'upper-alpha',
-  lowerRoman: 'lower-roman',
-  upperRoman: 'upper-roman',
-  // Marker-suppressed levels must NOT fall back to decimal: the receiver would
-  // show numbers the source never displays.
-  none: 'none',
-};
 
 interface ListPlacement {
   readonly numId: string;
@@ -845,12 +834,7 @@ function renderBlocks(
         listProgress.get(`${placement.abstractId}:${placement.numId}:${levelIndex}`) ?? 0;
       const startValue = info.start + consumed;
       const tag: 'ol' | 'ul' = info.fmt === 'bullet' ? 'ul' : 'ol';
-      const listType =
-        tag === 'ol'
-          ? Object.hasOwn(LIST_FMT_TO_CSS, info.fmt)
-            ? LIST_FMT_TO_CSS[info.fmt]!
-            : 'decimal'
-          : null;
+      const listType = tag === 'ol' ? cssListStyleTypeOf(info.fmt) : null;
       const start = tag === 'ol' && startValue !== 1 ? ` start="${startValue}"` : '';
       out += listType
         ? `<${tag}${start} style="list-style-type:${escapeAttr(listType)}">`

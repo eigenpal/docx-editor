@@ -208,7 +208,7 @@ Every code PR gets a changeset (`bun changeset`, or a hand-written `.changeset/*
 - Published packages are one fixed group: declare one bump.
 - Default `patch`; `minor` for additive public API; `major` for breaks.
 - The summary goes verbatim into CHANGELOG. Write one or two sentences for consumers: what changed, not how. End with `Fixes #N` if relevant. No emojis, marketing, or bullet lists.
-- Collaboration format changes need a decision from `bun run collaboration:change`, at least a minor release, and migration instructions. See [Collaboration compatibility](docs/architecture/collaboration-compatibility.md).
+- Collaboration format changes need a decision from `bun run collaboration:change`, at least a minor release, and migration instructions. Open them against the `collaboration-format-next` branch: format releases stay 30 days apart. See [Collaboration compatibility](docs/architecture/collaboration-compatibility.md).
 - Never push the `chore: release` commit by hand, delete `.changeset/*.md` outside `changeset version`, or hand-edit `CHANGELOG.md` / `package.json#version`.
 
 **Third-party notices.** Every publishable package ships a `THIRD_PARTY_NOTICES.md` with the license of each package esbuild inlines. The Release workflow generates it from `dist/metafile-*.json`. Only core has content: it inlines harfbuzzjs. Empty notices in other packages are correct. Regenerate with `bun run build:packages && bun run notices:generate`. Run `notices:check` only right after a build. A tsup config must emit `metafile: true`, and each `files` array must include the notice.

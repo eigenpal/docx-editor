@@ -69,10 +69,54 @@ A format change requires at least a minor package release and a `Breaking collab
 Each release that changes the format makes every operator repeat an upgrade: clients and servers deploy together, saved rooms upgrade, and open browser tabs reload. Keep these releases rare.
 
 1. Look for a compatible design first. A fix that released readers already understand keeps the format, as [Why a bug fix can require a migration](#why-a-bug-fix-can-require-a-migration) describes.
-2. Before you increment a field, look in `.collaboration/changes/` for `migration-required` decisions that are not released yet. Ship your change in the same release as those changes. Several changes share one increment.
-3. If the previous format change shipped less than 30 days ago, state in the PR body why your change cannot wait for the next one.
+2. Open a pull request that changes the format against the `collaboration-format-next` branch, not `main`. That branch collects `migration-required` changes for one release, and several changes share one increment there.
+3. Merge `collaboration-format-next` into `main` when at least 30 days have passed since the last release that changed the format.
+
+`bun run collaboration:check` enforces the 30 days. It fails a format change that targets any branch other than `collaboration-format-next` sooner than that, and it fails a release check in the same way. CI passes the target branch with `--target`. On the format branch, run `bun run collaboration:check --target collaboration-format-next`.
 
 Never record a `migration-required` change as `compatible` to avoid a format change. Participants of the two versions would then corrupt each other's rooms.
+
+#### Maintain the format branch
+
+- Merge `main` into `collaboration-format-next` at least once a week, so that the combined release has small conflicts.
+- CI runs on pull requests against the branch. Run `bun run collaboration:test --all` on the branch before you merge it into `main`.
+- When the branch merges, its release notes carry one `Breaking collaboration upgrade` notice for each decision.
+
+#### Release a format change early
+
+A change that prevents data loss or corruption cannot wait. Add an `earlyRelease` field with the reason to its `migration-required` decision record, and open the pull request against `main`:
+
+```json
+{
+  "impact": "migration-required",
+  "earlyRelease": "Without this rule, a reconnect removes text that another participant typed."
+}
+```
+
+The check then accepts the format change at any time. Reviewers confirm that the reason is data loss or corruption. Until that release ships, the check also accepts other format changes on `main`, because they share its one room upgrade.
+
+#### Withdraw an unreleased format change
+
+To move a merged format change from `main` to `collaboration-format-next`, revert its commit on `main`. Merged decision records are immutable, so the revert adds a record that names each decision it removes in `withdraws`, and the commit it reverts in `reverts`:
+
+```json
+{
+  "impact": "compatible",
+  "changeset": null,
+  "withdraws": ["order-nested-paragraph-splits"],
+  "reverts": "9a0643d88616619fde02a07d1eac936d99e71d90"
+}
+```
+
+The check accepts the removal when all of these are true:
+
+- The decision is `migration-required`, and the reverted commit added it.
+- No release tag and no cataloged release contains the reverted commit.
+- The revert also removes the Changeset of the decision, and the format fields return to the published values.
+
+The files of the reverted commit need no Changeset. Every other production change in the same pull request does. Then apply the change again on `collaboration-format-next`.
+
+A canary build can publish a format before you withdraw it. State that in the `reason` of the withdrawal, and increase the affected field again when a later change joins the format on the format branch. Participants of the canary and of the release then never share a room under one format name.
 
 ## Contributor workflow
 
