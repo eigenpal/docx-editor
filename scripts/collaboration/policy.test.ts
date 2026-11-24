@@ -296,6 +296,15 @@ describe('combined format releases', () => {
   test('a recorded reason releases a format change early', () => {
     const early = { ...migration, earlyRelease: 'Rooms lose text without this rule.' };
     expect(() => spacing({ records: [early] })).not.toThrow();
+    // An early format release carries every unreleased format change: one migration.
+    expect(() => spacing({ records: [migration, early] })).not.toThrow();
+    // The release time is read only when the rule needs it.
+    const unread = () => {
+      throw new Error('read');
+    };
+    expect(() => spacing({ changed: [], previous: unread })).not.toThrow();
+    expect(() => spacing({ records: [early], previous: unread })).not.toThrow();
+    expect(() => spacing({ previous: unread })).toThrow('read');
     expect(() => validateBatchFields(early, 'record.json')).not.toThrow();
     expect(() => validateBatchFields({ ...early, earlyRelease: 'soon' }, 'record.json')).toThrow(
       'cannot wait'
@@ -315,7 +324,8 @@ describe('combined format releases', () => {
     expect(lastFormatChange([])).toBeNull();
   });
   test('a withdrawal names decisions, keeps the format, and has no Changeset', () => {
-    const withdrawal = { ...record, changeset: null, withdraws: ['nested-split-order'] };
+    const reverts = 'a'.repeat(40);
+    const withdrawal = { ...record, changeset: null, withdraws: ['nested-split-order'], reverts };
     expect(() => validateBatchFields(withdrawal, 'record.json')).not.toThrow();
     expect(() => validateBatchFields({ ...withdrawal, withdraws: [] }, 'record.json')).toThrow(
       'decision identifiers'
@@ -331,10 +341,16 @@ describe('combined format releases', () => {
     ).toThrow('no Changeset');
     expect(() =>
       validateBatchFields(
-        { ...migration, changeset: null, withdraws: ['nested-split-order'] },
+        { ...migration, changeset: null, withdraws: ['nested-split-order'], reverts },
         'record.json'
       )
     ).toThrow('cannot change the format');
+    expect(() =>
+      validateBatchFields({ ...withdrawal, reverts: 'a0b1c2d' }, 'record.json')
+    ).toThrow('full hash');
+    expect(() => validateBatchFields({ ...record, reverts }, 'record.json')).toThrow(
+      'reverts needs withdraws'
+    );
   });
 });
 

@@ -202,30 +202,38 @@ test('a format change passes after the spacing or with a recorded reason', () =>
   expect(early.check('--base', early.base, '--target', 'main').status).toBe(0);
 });
 
-test('a new record withdraws an unreleased format change with its Changeset', () => {
+const LOWER_FORMAT =
+  'const versions = {protocolVersion: 1, sharedSchemaVersion: 3, repairVersion: 1, canonicalModelVersion: 1,};\n';
+const withdrawal = (reverts: string, id = 'test-change') => ({
+  impact: 'compatible',
+  fields: [],
+  before: 'The unreleased format change is on the main branch.',
+  after: 'The format change waits for a combined release.',
+  reason: 'No release holds the change, so the published format returns.',
+  tests: ['scripts/collaboration/policy.test.ts'],
+  changeset: null,
+  migration: null,
+  withdraws: [id],
+  reverts,
+});
+/** A repository with a merged format change, then reverted without a withdrawal record. */
+function revertedFormatChange() {
   const repo = repository({ publishedDaysAgo: 6 });
   addFormatChange(repo);
+  repo.write('packages/pro/src/collaboration/rule.ts', 'export const rule = 2;\n');
   const merged = repo.commit();
-  const withdrawal = {
-    impact: 'compatible',
-    fields: [],
-    before: 'The unreleased format change is on the main branch.',
-    after: 'The format change waits for a combined release.',
-    reason: 'No release holds the change, so the published format returns.',
-    tests: ['scripts/collaboration/policy.test.ts'],
-    changeset: null,
-    migration: null,
-    withdraws: ['test-change'],
-  };
   rmSync(join(repo.dir, '.collaboration/changes/test-change.json'));
-  repo.write(
-    'packages/pro/src/collaboration/document-compatibility.ts',
-    'const versions = {protocolVersion: 1, sharedSchemaVersion: 3, repairVersion: 1, canonicalModelVersion: 1,};\n'
-  );
-  repo.commit();
+  rmSync(join(repo.dir, 'packages/pro/src/collaboration/rule.ts'));
+  repo.write('packages/pro/src/collaboration/document-compatibility.ts', LOWER_FORMAT);
+  return { repo, merged };
+}
+const HOLD = '.collaboration/changes/hold-test-change.json';
+
+test('a new record withdraws an unreleased format change with its Changeset', () => {
+  const { repo, merged } = revertedFormatChange();
   // Without a withdrawal, the removed record and the lower version are refused.
   expect(repo.check('--base', merged).stderr).toContain('Historical decision deleted');
-  repo.data('.collaboration/changes/hold-test-change.json', withdrawal);
+  repo.data(HOLD, withdrawal(merged));
   expect(repo.check('--base', merged).stderr).toContain('remove .changeset/test-change.md');
   rmSync(join(repo.dir, '.changeset/test-change.md'));
   const result = repo.check('--base', merged, '--target', 'main');
@@ -235,26 +243,64 @@ test('a new record withdraws an unreleased format change with its Changeset', ()
   expect(repo.check('--release').status).toBe(0);
 });
 
-test('a released decision cannot be withdrawn', () => {
+test('a withdrawal covers only the files of the commit it reverts', () => {
+  const { repo, merged } = revertedFormatChange();
+  rmSync(join(repo.dir, '.changeset/test-change.md'));
+  repo.data(HOLD, withdrawal(merged));
+  repo.write('packages/core/src/store/example.ts', 'export const value = 2;\n');
+  expect(repo.check('--base', merged).stderr).toContain('Production changes need a Changeset');
+});
+
+test('a withdrawal names the commit that added the decision, in no release', () => {
+  const { repo, merged } = revertedFormatChange();
+  rmSync(join(repo.dir, '.changeset/test-change.md'));
+  repo.data(HOLD, withdrawal(repo.base));
+  expect(repo.check('--base', merged).stderr).toContain('did not add test-change');
+  repo.data(HOLD, withdrawal('0'.repeat(40)));
+  expect(repo.check('--base', merged).stderr).toContain('a commit that the base branch contains');
+  repo.data(HOLD, withdrawal(merged, 'other-change'));
+  expect(repo.check('--base', merged).stderr).toContain('other-change is not a merged decision');
+  repo.data(HOLD, withdrawal(merged));
+  repo.git('tag', 'v2.19.0', merged);
+  expect(repo.check('--base', merged).stderr).toContain('release v2.19.0 contains');
+});
+
+test('a decision that keeps the format cannot be withdrawn', () => {
   const repo = repository();
   repo.addDecision();
+  const merged = repo.commit();
+  rmSync(join(repo.dir, '.collaboration/changes/test-change.json'));
+  rmSync(join(repo.dir, '.changeset/test-change.md'));
+  repo.data(HOLD, withdrawal(merged));
+  expect(repo.check('--base', merged).stderr).toContain(
+    'only a migration-required decision can be withdrawn'
+  );
+});
+
+test('a withdrawn format change returns for a later release', () => {
+  const { repo, merged } = revertedFormatChange();
+  rmSync(join(repo.dir, '.changeset/test-change.md'));
+  repo.data(HOLD, withdrawal(merged));
+  const held = repo.commit();
+  addFormatChange(repo);
+  expect(repo.check('--base', held, '--target', 'collaboration-format-next').status).toBe(0);
+  expect(repo.check('--base', held, '--target', 'main').stderr).toContain('6 days after');
+  repo.data('packages/pro/package.json', { version: '2.19.0' });
+  repo.commit();
+  // The release check reads the change as one new decision, held record or not.
+  expect(repo.check('--release').stderr).toContain('6 days after 2.18.0');
+});
+
+test('a released decision cannot be withdrawn', () => {
+  const repo = repository();
+  repo.addDecision('migration-required');
   const released = repo.commit();
   const catalog = JSON.parse(readFileSync(join(repo.dir, '.collaboration/releases.json'), 'utf8'));
   catalog.releases[0].commit = released;
   repo.data('.collaboration/releases.json', catalog);
   const base = repo.commit();
   rmSync(join(repo.dir, '.collaboration/changes/test-change.json'));
-  repo.data('.collaboration/changes/hold-test-change.json', {
-    impact: 'compatible',
-    fields: [],
-    before: 'The released decision is in the record set.',
-    after: 'The released decision is removed from the record set.',
-    reason: 'This removal must be refused by the policy check.',
-    tests: ['scripts/collaboration/policy.test.ts'],
-    changeset: null,
-    migration: null,
-    withdraws: ['test-change'],
-  });
+  repo.data(HOLD, withdrawal(released));
   expect(repo.check('--base', base).stderr).toContain('is released and cannot be withdrawn');
 });
 
