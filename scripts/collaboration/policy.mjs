@@ -189,6 +189,7 @@ export function validateRecord(record, file, { superseded = () => false, merged 
       testPath(test) ? missingTestMessage(file, test, merged) : `${file}: invalid test path ${test}`
     );
   validateSupersedes(record, file);
+  validateBatchFields(record, file);
   if (record.impact === 'migration-required') {
     assert.ok(record.fields.length, `${file}: identify affected version fields`);
     assert.ok(
@@ -211,6 +212,86 @@ export function validateRecord(record, file, { superseded = () => false, merged 
       `${file}: invalid Changeset identifier`
     );
 }
+/** The branch that collects format changes until their combined release. */
+export const FORMAT_BRANCH = 'collaboration-format-next';
+/** The shortest time between two releases that change the format. */
+export const FORMAT_SPACING_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const RECORD_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * Check the optional fields that hold or hurry a format change.
+ *
+ * `withdraws: [id]` removes unreleased decision records, as a revert does. Merged records are
+ * immutable, so only a new record can take one out, and `check` accepts that for a record no
+ * release holds. `earlyRelease: reason` lets a format change ship less than
+ * `FORMAT_SPACING_DAYS` days after the one before it.
+ */
+export function validateBatchFields(record, file) {
+  if (record.withdraws !== undefined) {
+    assert.ok(
+      Array.isArray(record.withdraws) &&
+        record.withdraws.length &&
+        record.withdraws.every((id) => typeof id === 'string' && RECORD_ID.test(id)),
+      `${file}: withdraws must list decision identifiers`
+    );
+    assert.equal(
+      new Set(record.withdraws).size,
+      record.withdraws.length,
+      `${file}: duplicate withdrawn decisions`
+    );
+    assert.notEqual(
+      record.impact,
+      'migration-required',
+      `${file}: a record that withdraws decisions cannot change the format`
+    );
+    assert.equal(
+      record.changeset,
+      null,
+      `${file}: a record that withdraws decisions has no Changeset`
+    );
+  }
+  if (record.earlyRelease !== undefined) {
+    assert.equal(
+      record.impact,
+      'migration-required',
+      `${file}: earlyRelease applies to a migration-required record`
+    );
+    assert.ok(
+      typeof record.earlyRelease === 'string' && record.earlyRelease.trim().length >= 12,
+      `${file}: explain why the format change cannot wait`
+    );
+  }
+}
+
+/** The newest release whose format differs from the release before it. */
+export function lastFormatChange(releases) {
+  for (let index = releases.length - 1; index > 0; index -= 1)
+    if (releases[index].format !== releases[index - 1].format) return releases[index];
+  return releases[0] ?? null;
+}
+
+/**
+ * Keep format changes `FORMAT_SPACING_DAYS` days apart outside the format branch.
+ *
+ * `previous` is the last release that changed the format, with the time it shipped. `target`
+ * is the branch the change merges into. A change for `FORMAT_BRANCH` waits there, so the rule
+ * applies when that branch merges, and to every release check.
+ */
+export function validateFormatSpacing({ changed, previous, now, records, target }) {
+  if (!changed.length || !previous || target === FORMAT_BRANCH) return;
+  if (records.some((record) => record.impact === 'migration-required' && record.earlyRelease))
+    return;
+  const days = Math.floor((now - previous.shipped) / DAY_MS);
+  assert.ok(
+    days >= FORMAT_SPACING_DAYS,
+    `The collaboration format changes ${days} days after ${previous.version} changed it. ` +
+      `Format releases stay ${FORMAT_SPACING_DAYS} days apart. Open the pull request against ` +
+      `${FORMAT_BRANCH}, which collects format changes for one release. Only when the change ` +
+      'prevents data loss, add "earlyRelease": "<reason>" to its migration-required record.'
+  );
+}
+
 export function validateVersionChange(previous, current, records, released = []) {
   const changed = FIELDS.filter((field) => current[field] !== previous[field]);
   for (const field of FIELDS)
@@ -234,7 +315,7 @@ export function validateVersionChange(previous, current, records, released = [])
     );
   return changed;
 }
-export function check(base, release = false) {
+export function check(base, release = false, target = null) {
   const value = catalog();
   assert.ok(value.releases.length, 'The published 2.18 baseline must be captured first');
   const latest = value.releases.at(-1);
@@ -248,7 +329,34 @@ export function check(base, release = false) {
   const oldFiles = new Set(
     git('ls-tree', '-r', '--name-only', base, '.collaboration/changes').split('\n').filter(Boolean)
   );
+  const recordPath = (id) => `.collaboration/changes/${id}.json`;
+  const decisionFiles = (commit) =>
+    new Set(git('ls-tree', '-r', '--name-only', commit, '.collaboration/changes').split('\n'));
+  // A new record can withdraw decisions that no release holds, as a revert does.
+  const withdrawn = new Set();
+  for (const name of readdirSync(resolve(ROOT, '.collaboration/changes'))) {
+    const file = `.collaboration/changes/${name}`;
+    if (!name.endsWith('.json') || oldFiles.has(file)) continue;
+    const ids = json(file).withdraws;
+    if (!Array.isArray(ids)) continue;
+    const published = decisionFiles(latest.commit);
+    for (const id of ids) {
+      const path = recordPath(id);
+      assert.ok(!published.has(path), `${file}: ${id} is released and cannot be withdrawn`);
+      if (release) continue;
+      assert.ok(oldFiles.has(path), `${file}: ${id} is not a merged decision`);
+      assert.ok(!existsSync(resolve(ROOT, path)), `${file}: remove ${path} to withdraw it`);
+      const changeset = JSON.parse(git('show', `${base}:${path}`)).changeset;
+      if (changeset)
+        assert.ok(
+          !existsSync(resolve(ROOT, `.changeset/${changeset}.md`)),
+          `${file}: remove .changeset/${changeset}.md with the decision it describes`
+        );
+      withdrawn.add(path);
+    }
+  }
   for (const file of oldFiles) {
+    if (withdrawn.has(file)) continue;
     assert.ok(existsSync(resolve(ROOT, file)), `Historical decision deleted: ${file}`);
     assert.equal(
       read(file).trim(),
@@ -310,11 +418,14 @@ export function check(base, release = false) {
   // Released records are not checked again: their tests may since have been superseded.
   const releaseRecords = validate(recordFiles.filter((file) => !releasedFiles.has(file)));
   const baseVersions = versions(git('show', `${base}:${VERSION_SOURCE}`));
-  for (const field of FIELDS)
-    assert.ok(
-      versions()[field] >= baseVersions[field],
-      `${field} decreased relative to the PR base`
-    );
+  // A withdrawal takes an unreleased increase back. No field goes below the published
+  // format, which `validateVersionChange` checks.
+  if (!withdrawn.size)
+    for (const field of FIELDS)
+      assert.ok(
+        versions()[field] >= baseVersions[field],
+        `${field} decreased relative to the PR base`
+      );
   const changed = validateVersionChange(
     publishedBase.versions,
     versions(),
@@ -327,7 +438,8 @@ export function check(base, release = false) {
       !path.includes('/__tests__/') &&
       !/\.(test|spec)\./.test(path)
   );
-  if (productionChanged)
+  // A withdrawal takes an unreleased change out with its Changeset, so it adds none.
+  if (productionChanged && !records.some((record) => record.withdraws))
     assert.ok(
       records.some((record) => record.changeset),
       'Production changes need a Changeset'
@@ -393,6 +505,20 @@ export function check(base, release = false) {
     releaseData(),
     'Release data is stale: run collaboration:catalog --table'
   );
+  // Last, so that an invalid format change reports its own error first.
+  const formatChange = lastFormatChange(
+    value.releases.slice(0, value.releases.indexOf(publishedBase) + 1)
+  );
+  validateFormatSpacing({
+    changed,
+    previous: formatChange && {
+      version: formatChange.version,
+      shipped: Date.parse(git('log', '-1', '--format=%cI', formatChange.commit)),
+    },
+    now: Date.now(),
+    records: releaseRecords,
+    target,
+  });
   console.log(
     `Compatibility policy passed: ${records.length} decisions, ${changed.length} format fields changed.`
   );
