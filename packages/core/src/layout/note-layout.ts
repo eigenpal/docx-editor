@@ -34,6 +34,7 @@ import { paragraphBorders } from './paragraph-style.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
 import { withResolvedListItems } from './list-resolve.ts';
 import { noteSeparatorRuleBox } from './note-separator-rule.ts';
+import { separatorStatesSpaceAfter } from './note-separator-spacing.ts';
 import type { BlockFragmentRecord, LayoutBox, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { noteStoryBlocks } from './story-roots.ts';
@@ -590,17 +591,14 @@ export function layoutNoteSeparator(
           lastBlock?.kind === 'paragraph'
             ? lastBlock.children.find((child) => child.kind === 'paragraphProperties')
             : undefined;
-        // Plain separators do not acquire the body's implicit trailing paragraph space.
-        // Explicit paragraph spacing and named styles remain part of their story geometry.
-        const hasAuthoredSpacing =
-          properties?.kind === 'paragraphProperties' &&
-          properties.children.some(
-            (child) =>
-              child.localName === 'pStyle' ||
-              (child.localName === 'spacing' &&
-                child.attributes.some((attribute) => attribute.localName === 'after'))
-          );
-        flowHeight -= hasAuthoredSpacing ? 0 : (last?.spacing.after ?? 0);
+        // The separator keeps every space after the document sets, from its own `w:pPr`,
+        // its style chain or `w:docDefaults`; only the application default for an omitted
+        // `w:pPrDefault` stays off. See `separatorStatesSpaceAfter`.
+        const keepsSpaceAfter = separatorStatesSpaceAfter(
+          properties?.kind === 'paragraphProperties' ? properties.children : [],
+          options.styleCascade
+        );
+        if (!keepsSpaceAfter) flowHeight -= last?.spacing.after ?? 0;
         const marker = markers[0];
         if (marker) {
           ruleColor = marker.span.style.color;
