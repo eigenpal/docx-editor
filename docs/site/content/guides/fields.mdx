@@ -25,9 +25,33 @@ A DOCX field stores an instruction and an optional saved result. The editor pres
 | `LISTNUM` | Numbers from the document's list definitions in the body. Without a name, uses the list of its paragraph or of the last numbered paragraph before it, else the built-in list. Without `\l`, a field in a numbered paragraph uses the next level down. In the built-in list, the level is the paragraph's outline level, else the level below the last heading. |
 | `SYMBOL` | Renders the requested character, font, and size. |
 | Selected metadata fields | Render sanitized values from document properties. |
-| `DATE`, `TIME`, `FILENAME`, `SEQ`, `EQ`, `CITATION`, `BIBLIOGRAPHY` | Show the saved result. No new value is calculated. |
+| `DATE`, `TIME` | Show the saved result. With [`fieldDate`](#show-the-current-date), fields with a `\@` picture show that date. |
+| `FILENAME`, `SEQ`, `EQ`, `CITATION`, `BIBLIOGRAPHY` | Show the saved result. No new value is calculated. |
 
 Other fields show their saved result. `REF`, `PAGEREF`, and `NOTEREF` with `\h` link to their bookmark. For switch support, wrapping, and header pagination, see [DOCX fidelity](/docs/2.x/docx-fidelity#fields-links-and-table-of-contents).
+
+## Show the current date
+
+Word recalculates `DATE` and `TIME` fields when it opens a document. By default, the editor shows their saved results. Set `fieldDate` when you create the editor to show a date instead:
+
+```ts
+import { createDocxEditor } from '@docx-editor.dev/core';
+
+const editor = createDocxEditor({
+  container,
+  document: bytes,
+  fieldDate: new Date(),
+});
+```
+
+- Only fields with a `\@` date-time picture show the date. A field without a picture, or with `\l`, `\h`, `\s`, or a casing switch, shows its saved result.
+- Pictures support `d`, `dd`, `ddd`, `dddd`, `M`, `MM`, `MMM`, `MMMM`, `yy`, `yyyy`, `h`, `hh`, `H`, `HH`, `m`, `mm`, `AM/PM`, `am/pm`, and quoted text. Any other letter keeps the saved result.
+- Month and day names are English. The date shows in the browser's time zone.
+- The date is display-only. Saved files and collaboration sessions keep the saved results.
+- `CREATEDATE`, `SAVEDATE`, and `PRINTDATE` always show their saved results.
+- `fieldDate` has no effect when `fieldResults` is `'editable'`.
+- PDF export shows saved results.
+- An invalid `Date` throws a `TypeError`. The option applies only at creation.
 
 ## Edit saved field results
 

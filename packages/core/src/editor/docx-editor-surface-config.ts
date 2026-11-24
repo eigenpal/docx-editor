@@ -9,7 +9,7 @@ export function configSurfaceOptions(
   config: DocxEditorConfig
 ): Pick<
   PaginatedSurfaceOptions,
-  'tableInteractionLabel' | 'imageDecodePort' | 'lockedControlNavigation'
+  'tableInteractionLabel' | 'imageDecodePort' | 'lockedControlNavigation' | 'fieldDate'
 > {
   return {
     ...(config.tableInteractionLabel
@@ -17,5 +17,15 @@ export function configSurfaceOptions(
       : {}),
     ...(config.imageDecodePort ? { imageDecodePort: config.imageDecodePort } : {}),
     ...(config.lockedControlNavigation === 'atomic' ? { lockedControlNavigation: 'atomic' } : {}),
+    ...(config.fieldDate ? { fieldDate: config.fieldDate } : {}),
   };
+}
+
+/** A valid `Date`, also one from another window (no `instanceof`). */
+export function isValidFieldDate(value: unknown): boolean {
+  try {
+    return !Number.isNaN(Date.prototype.getTime.call(value));
+  } catch {
+    return false;
+  }
 }

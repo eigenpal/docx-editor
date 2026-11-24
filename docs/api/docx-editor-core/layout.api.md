@@ -3945,6 +3945,7 @@ export interface SemanticLayoutOptions {
     readonly evenAndOddHeaders?: boolean;
     // @internal (undocumented)
     readonly fieldCodeRanges?: FieldCodeRanges;
+    readonly fieldDate?: Date;
     readonly fieldResults?: FieldResultsMode;
     readonly furniture?: PageFurniture;
     // (undocumented)

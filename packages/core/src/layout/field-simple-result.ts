@@ -28,6 +28,7 @@ import {
 } from '../store/package/field-marker-scope.ts';
 import { MAX_FIELD_RESULT_NODES } from '../store/package/field-result-text.ts';
 import { parseButtonInstruction } from './field-button.ts';
+import { currentFieldDate, formatDateField, parseDateFieldInstruction } from './field-date.ts';
 import { docPropertyValue, parseDocPropertyInstruction } from './field-doc-property.ts';
 import { parseRefLinkInstruction } from './field-ref-link.ts';
 import { parseHyperlinkInstruction } from './field-link.ts';
@@ -494,6 +495,15 @@ function projectSimpleFieldDisplay(
         return { text: value, props, style };
       }
     }
+  }
+
+  // DATE and TIME show the layout's field date over a saved result, like the complex shape.
+  const dateSpec = parseDateFieldInstruction(instr);
+  const fieldDate = dateSpec ? currentFieldDate() : undefined;
+  if (dateSpec && fieldDate && (display.text.length > 0 || !display.sawResultContent)) {
+    const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+    if (style.hidden) return null;
+    return { text: formatDateField(dateSpec, fieldDate), props, style };
   }
 
   // Synthesis fills only a result the file never cached: a cached result that exists but is

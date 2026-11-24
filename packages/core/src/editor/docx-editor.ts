@@ -144,7 +144,7 @@ import { proposalCapabilityRefusal } from './proposal-capability.ts';
 import { drawingPasteRefusal } from './drawing-paste-target.ts';
 import { createOpenScheduler } from './docx-editor-open-scheduler.ts';
 import * as preparedOpen from './docx-editor-prepared-open.ts';
-import { configSurfaceOptions } from './docx-editor-surface-config.ts';
+import { configSurfaceOptions, isValidFieldDate } from './docx-editor-surface-config.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import {
   customNodeDiagnosticReporter,
@@ -580,6 +580,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     fieldResults: config.fieldResults,
     collaborationModel: modules.collaboration ?? undefined,
   });
+  if (config.fieldDate !== undefined && !isValidFieldDate(config.fieldDate))
+    throw new TypeError('Invalid fieldDate: use a valid Date');
   // Closures only: every dependency is read when a command runs, not at construction.
   const protection = createDocumentProtectionCommands({
     surface: () => surface,

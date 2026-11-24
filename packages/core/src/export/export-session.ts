@@ -634,6 +634,8 @@ export function openDocumentForExport(
         bodyBlockLimit: undefined,
         // Export paints every field as one unit; the painted text is the same in both modes.
         fieldResults: 'atomic',
+        // Export shows saved DATE and TIME results, so a file exports the same text everywhere.
+        fieldDate: undefined,
       } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
       if (!layoutHasPendingImages(layout)) {
         const restartedBeforePublish = restartOnRevisionDrift();

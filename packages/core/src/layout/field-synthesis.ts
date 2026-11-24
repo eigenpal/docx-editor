@@ -14,12 +14,14 @@ import { characterStyleFieldValue } from './field-character-style.ts';
 //      that document finalize substitutes. A stale cached result never wins.
 //   4. REF — the value resolved from the bookmark target wins over the stale cache; an
 //      unresolvable reference falls through to it instead.
-//   5. cached result — a non-empty cache is what Word last painted; it wins over synthesis.
-//   6. empty cache only (and no hidden-but-present result): a document-property value, else a
+//   5. DATE / TIME — the layout's field date, when it has one, wins over the cache.
+//   6. cached result — a non-empty cache is what Word last painted; it wins over synthesis.
+//   7. empty cache only (and no hidden-but-present result): a document-property value, else a
 //      MACROBUTTON / GOTOBUTTON display.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { DocumentProperties } from '@docx-editor.dev/core/store';
+import { currentFieldDate, formatDateField } from './field-date.ts';
 import { docPropertyValue } from './field-doc-property.ts';
 import { formFieldResult } from './field-form.ts';
 import {
@@ -187,6 +189,20 @@ export function synthesizeAtomicField(
   if (pending.listNumSpec) {
     const value = listNumFieldValue(ctx.refFields, pending.beginId);
     if (value !== null) return { text: value, props: pending.props, style: pending.style };
+  }
+  // DATE and TIME show the layout's field date, as Word recalculates them when it opens the
+  // document. A result that existed but was hidden stays hidden.
+  const fieldDate = pending.dateSpec ? currentFieldDate() : undefined;
+  if (
+    pending.dateSpec &&
+    fieldDate &&
+    (pending.cachedText.length > 0 || !pending.sawResultContent)
+  ) {
+    return {
+      text: formatDateField(pending.dateSpec, fieldDate),
+      props: pending.props,
+      style: pending.style,
+    };
   }
   // A non-empty cached result is what Word last painted; it wins over synthesis.
   if (pending.cachedText.length > 0) {

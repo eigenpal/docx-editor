@@ -514,6 +514,11 @@ export interface PendingFieldProjection {
    */
   docPropertySpec: DocPropertyField | null;
   /**
+   * Recognized DATE or TIME instruction with a `\@` picture, or absent/null. When the layout
+   * call has a field date, the field shows it through the picture, over a non-empty cache.
+   */
+  dateSpec?: import('./field-date.ts').DateFieldSpec | null;
+  /**
    * Recognized REF cross-reference instruction, or null when the field is not one.
    *
    * Captured at the same points as {@link symbolSpec}. Unlike {@link buttonSpec}, a resolved

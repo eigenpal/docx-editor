@@ -169,6 +169,13 @@ export interface DocxEditorConfig {
    */
   fieldResults?: FieldResultsMode;
   /**
+   * Show DATE and TIME fields that have a `\@` date-time picture at this moment, in its local
+   * time, as Word recalculates them when it opens a document. Display only: the document keeps
+   * its saved results. Absent (the default), and in the `editable` {@link fieldResults} mode,
+   * fields show their saved results. Fixed for the instance.
+   */
+  fieldDate?: Date;
+  /**
    * How the caret moves through an inline control with a content lock. `'atomic'` makes such a
    * control one caret unit; `'characters'` (the default) walks through its characters, as Word
    * does. Fixed for the instance.
