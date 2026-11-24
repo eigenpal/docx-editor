@@ -864,6 +864,42 @@
         "package-lock.json": "dc0676ed47be0866fc13f2361c8383fc91553d12831afcb65eafc1a1629e79a3",
         "fixture.json": "38c99a61f5d8268a69215c1fb292f789a1bc26eea3706bcc4176f0a940617219"
       }
+    },
+    {
+      "version": "2.40.0",
+      "commit": "7734bbcba035cb625b1a15f4dbf4c51a0a7f077f",
+      "sourceLockHash": "32ae9fe7f4d1ba9fd6d537a4c98ca1395904dd4ea9e8f28612e6a39e58b21b6a",
+      "format": "docx-collaboration:1.5.5.1",
+      "versions": {
+        "protocolVersion": 1,
+        "sharedSchemaVersion": 5,
+        "repairVersion": 5,
+        "canonicalModelVersion": 1
+      },
+      "directory": ".collaboration/releases/2.40.0",
+      "packages": {
+        "@docx-editor.dev/i18n": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/i18n/-/i18n-2.40.0.tgz",
+          "integrity": "sha512-e2VrrwKZABWK13b339rkav+IMmT1UZiT1PDM269MPWeNpAe0cwmhVhl1d2t2ld9QscYfyvE8oZsOMBznFcNDGg=="
+        },
+        "@docx-editor.dev/core": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/core/-/core-2.40.0.tgz",
+          "integrity": "sha512-C6DlqcQiUYz01R6tF7KFq0VyowoWAZD1BGqi6sHPdgrprhRedjmtWuWNcTIMHuvpUg3GdDA0SAXPEQmsoMfVhQ=="
+        },
+        "@docx-editor.dev/editor-api": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/editor-api/-/editor-api-2.40.0.tgz",
+          "integrity": "sha512-BdO2iO0X/ol9eaGM0kW24JxfR4Rtz2M9sKfePKieIca2vQ6yyeCFtTuUnpAGZTXAl7fNyy4/61q1nmQYKG9Svg=="
+        },
+        "@docx-editor.dev/pro": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/pro/-/pro-2.40.0.tgz",
+          "integrity": "sha512-jTUw6+As2qVSg0klZGcwRsudGXn13E5CXOxmUXLEiImaUxncHeBJ5d/IZg+/z2S4yYhjDkNe6mM78Km3TMnLNQ=="
+        }
+      },
+      "hashes": {
+        "package.json": "7ac414685b723b5cabc6511b47e0d2725600238b433528d5fffe68a84b886557",
+        "package-lock.json": "715dc46041e2d1d9c84ac564cbaf5b3fe54082070527e281157dfa526f57e589",
+        "fixture.json": "d9bb190b19e865364385e9b7a9122b94d00398ec5e5670047d1b1c5299a9071c"
+      }
     }
   ]
 }

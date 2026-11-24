@@ -119,6 +119,11 @@
       "version": "2.39.0",
       "format": "docx-collaboration:1.5.5.1",
       "formatChanged": true
+    },
+    {
+      "version": "2.40.0",
+      "format": "docx-collaboration:1.5.5.1",
+      "formatChanged": false
     }
   ]
 }
