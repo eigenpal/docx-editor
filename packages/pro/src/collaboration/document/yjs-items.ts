@@ -397,27 +397,3 @@ export function deleteSetRuns(
   }
   return runs;
 }
-
-/** Whether two IDs are both set and equal. */
-export function sameId(left: Y.ID | null, right: Y.ID | null): boolean {
-  return left !== null && right !== null && Y.compareIDs(left, right);
-}
-
-/** How many removed entries `originPasses` passes. */
-const MAX_REMOVED_ORIGINS = 64;
-
-/**
- * Whether `item`'s left origin is `origin`, or a removed entry of the same parent whose own
- * left origin is, passing removed entries only.
- */
-export function originPasses(item: Y.Item, origin: Y.ID | null): boolean {
-  const doc = item.parent instanceof Y.AbstractType ? item.parent.doc : null;
-  let at = item.origin;
-  for (let steps = 0; at && doc && steps < MAX_REMOVED_ORIGINS; steps += 1) {
-    if (sameId(at, origin)) return true;
-    const left = structAt(doc, at);
-    if (!left || !left.deleted || left.parent !== item.parent) return false;
-    at = left.origin;
-  }
-  return false;
-}

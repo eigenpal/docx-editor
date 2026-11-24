@@ -216,11 +216,6 @@ function offeredIdentity(marks: MarkLookup, item: Y.Item, clock: number): Identi
     : null;
 }
 
-/** Whether the character at `position` is a copy a move wrote, not one an undo put back. */
-export function movedCopyAt(identities: TextIdentities, position: number): boolean {
-  return identities.moved[position] === true && identities.restored[position] !== true;
-}
-
 /** Whether the character at `position` is a copy: moved there, or put back by an undo. */
 export function isCopyAt(
   identities: Pick<TextIdentities, 'moved' | 'restored'>,

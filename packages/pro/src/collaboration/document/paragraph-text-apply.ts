@@ -53,7 +53,6 @@ import {
 } from './paragraph-text-moves.ts';
 import {
   isCopyAt,
-  movedCopyAt,
   textIdentities,
   typedAfterMoved,
   type TextIdentities,
@@ -101,15 +100,10 @@ function groups<T>(items: readonly T[], key: (item: T) => string): T[][] {
 
 /**
  * The follow attribute for text typed at `position`: the copy right before it, or at the
- * start of the text the copy right after it. Null when no copy is next to it. Typed right in
- * front of a moved copy and not after one, it names that copy, so it stays in front of it
- * when an undo takes the paragraph out, as text typed after the undone last line.
+ * start of the text the copy right after it. Null when no copy is next to it.
  */
 export function followAnchorAt(identities: TextIdentities | null, position: number): string | null {
   if (!identities) return null;
-  const next = identities.ids[position];
-  if (next && movedCopyAt(identities, position) && !movedCopyAt(identities, position - 1))
-    return `^${next}`;
   if (position > 0) {
     const left = identities.ids[position - 1];
     return left && isCopyAt(identities, position - 1) ? left : null;
