@@ -10,7 +10,11 @@ import {
   formatHebrew2,
   formatHindiNumbers,
 } from './numbering-format-scripts.ts';
-import { formatAlphabetNumFmt } from './numbering-format-alphabets.ts';
+import {
+  formatAlphabetNumFmt,
+  SHORT_LIST_PERIOD,
+  wrapListValue,
+} from './numbering-format-alphabets.ts';
 import { formatEastAsianNumFmt } from './numbering-format-east-asian.ts';
 
 /** Soft ceiling on an expanded marker string (codepoints). */
@@ -64,13 +68,12 @@ export function formatDecimalZero(value: number): string {
 }
 
 /**
- * `upperRoman` (§17.18.59). Saturates at 3999, the largest value classical Roman numerals
- * express — beyond it there is nothing correct to emit, so it stops rather than inventing
- * notation.
+ * `upperRoman` (ECMA-376 Part 1, 17.18.59). Thousands repeat `M` (`MMMM` for 4000), values
+ * past 32767 start again from `I`, and zero is a space.
  */
 export function formatUpperRoman(value: number): string {
-  let n = clampListValue(value);
-  if (n > 3999) n = 3999;
+  let n = wrapListValue(clampListValue(value), SHORT_LIST_PERIOD);
+  if (n === 0) return ' ';
   let out = '';
   for (const { value: unit, glyph } of ROMAN_TABLE) {
     while (n >= unit) {
@@ -79,7 +82,7 @@ export function formatUpperRoman(value: number): string {
       if (out.length >= MAX_MARKER_TEXT_LENGTH) return out.slice(0, MAX_MARKER_TEXT_LENGTH);
     }
   }
-  return out || 'I';
+  return out;
 }
 
 /** `lowerRoman` (§17.18.59). */
@@ -88,18 +91,14 @@ export function formatLowerRoman(value: number): string {
 }
 
 /**
- * Excel-style letter sequence: 1→A … 26→Z, 27→AA.
- * Caps length so a hostile counter cannot grow without bound.
+ * `upperLetter` (ECMA-376 Part 1, 17.18.59): one letter, repeated once for each pass through
+ * the alphabet (`Z`, `AA`, `BB`). A letter repeats at most 30 times: values past 780 start
+ * again from `A`. Zero is a space.
  */
 export function formatUpperLetter(value: number): string {
-  let n = clampListValue(value);
-  let out = '';
-  while (n > 0 && out.length < 8) {
-    n -= 1;
-    out = String.fromCharCode(65 + (n % 26)) + out;
-    n = Math.floor(n / 26);
-  }
-  return out || 'A';
+  const n = wrapListValue(clampListValue(value), 26 * 30);
+  if (n === 0) return ' ';
+  return String.fromCharCode(65 + ((n - 1) % 26)).repeat(Math.floor((n - 1) / 26) + 1);
 }
 
 /** `lowerLetter` (§17.18.59): the {@link formatUpperLetter} sequence, lower-cased. */

@@ -58,4 +58,10 @@ describe('Hebrew, Arabic and Devanagari numbering formats', () => {
   test('a hostile counter stays within the marker cap', () => {
     expect(expandLvlText('%1%1%1%1%1%1', [298], ['arabicAlpha']).length).toBeLessThanOrEqual(64);
   });
+
+  test('zero renders nothing in the Hebrew and Arabic letter formats', () => {
+    for (const numFmt of ['hebrew1', 'hebrew2', 'arabicAlpha', 'arabicAbjad']) {
+      expect([numFmt, formatNumFmt(numFmt, 0)]).toEqual([numFmt, '']);
+    }
+  });
 });

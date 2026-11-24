@@ -27,10 +27,22 @@ describe('numbering formatters', () => {
     expect(formatLowerRoman(14)).toBe('xiv');
   });
 
-  test('letters', () => {
+  test('roman numerals repeat M past 3999 and start again after 32767', () => {
+    expect(formatUpperRoman(0)).toBe(' ');
+    expect(formatUpperRoman(4000)).toBe('MMMM');
+    expect(formatUpperRoman(32767)).toBe(`${'M'.repeat(32)}DCCLXVII`);
+    expect(formatUpperRoman(32768)).toBe('I');
+    expect(formatLowerRoman(99999)).toBe('mdcxcviii');
+  });
+
+  test('letters repeat one letter and start again after 780', () => {
+    expect(formatUpperLetter(0)).toBe(' ');
     expect(formatUpperLetter(1)).toBe('A');
     expect(formatLowerLetter(2)).toBe('b');
     expect(formatUpperLetter(27)).toBe('AA');
+    expect(formatLowerLetter(28)).toBe('bb');
+    expect(formatUpperLetter(780)).toBe('Z'.repeat(30));
+    expect(formatUpperLetter(781)).toBe('A');
   });
 
   test('text formats and unknown values fall back to decimal', () => {
