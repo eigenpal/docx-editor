@@ -96,7 +96,7 @@
   "devDependencies": {
     "autoprefixer": "^10.6.2",
     "cssnano": "^9.9.0",
-    "postcss": "^8.5.32",
+    "postcss": "^8.5.33",
     "tailwindcss": "^3.4.1",
     "tailwindcss-animate": "^1.0.7",
     "typescript7": "npm:typescript@^7.0.2"
@@ -110,8 +110,8 @@
   "dependencies": {
     "@docx-editor.dev/i18n": "^2.39.0",
     "bidi-js": "1.1.0",
-    "emf-converter": "4.28.0",
-    "fast-xml-parser": "^5.12.0",
+    "emf-converter": "4.29.0",
+    "fast-xml-parser": "^5.12.1",
     "fflate": "^0.8.2",
     "harfbuzzjs": "1.6.4",
     "prosemirror-commands": "^1.7.1",
