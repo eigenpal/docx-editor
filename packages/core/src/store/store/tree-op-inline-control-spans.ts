@@ -1,7 +1,7 @@
 // Inline content controls at a caret edge: what Backspace and Delete remove as one unit.
 
 import type { OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
-import { inlineContainersOf } from './tree-op-nodes.ts';
+import { declaredLockOf, inlineContainersOf, isBoundContentControl } from './tree-op-nodes.ts';
 import { segmentAncestryNodeId, segmentsOf, type Segment } from './tree-op-segments.ts';
 
 /** One inline content control's identity and the UTF-16 span its content covers. */
@@ -17,15 +17,7 @@ function idsUnder(node: OoxmlNode, out: Set<string>): void {
   for (const child of node.children) idsUnder(child, out);
 }
 
-function spanOfControl(
-  paragraph: OoxmlParagraphNode,
-  segments: readonly Segment[],
-  segment: Segment
-): InlineControlSpan | null {
-  const container = inlineContainersOf(paragraph, segmentAncestryNodeId(segment)).find(
-    (ancestor) => ancestor.kind === 'contentControl'
-  );
-  if (!container) return null;
+function spanOf(container: OoxmlNode, segments: readonly Segment[]): InlineControlSpan | null {
   const ids = new Set<string>();
   idsUnder(container, ids);
   let start = Number.MAX_SAFE_INTEGER;
@@ -37,6 +29,49 @@ function spanOfControl(
   }
   if (end < 0) return null;
   return { controlId: container.id, start, end };
+}
+
+function spanOfControl(
+  paragraph: OoxmlParagraphNode,
+  segments: readonly Segment[],
+  segment: Segment
+): InlineControlSpan | null {
+  const container = inlineContainersOf(paragraph, segmentAncestryNodeId(segment)).find(
+    (ancestor) => ancestor.kind === 'contentControl'
+  );
+  return container ? spanOf(container, segments) : null;
+}
+
+/**
+ * The outermost inline content controls (`w:sdt`, ECMA-376 Part 1, 17.5.2.31) wholly inside
+ * `[start, end)` whose characters no edit may touch: `w:lock` (Part 1, 17.5.2.23) is
+ * `contentLocked` or `sdtContentLocked`, or the control has a `w:dataBinding` (Part 1, 17.5.2.6). The store refuses to delete such a range as
+ * text. It removes a `contentLocked` or bound control whole, and refuses a `sdtContentLocked` one.
+ */
+export function wholeProtectedControlsIn(
+  paragraph: OoxmlParagraphNode,
+  start: number,
+  end: number
+): InlineControlSpan[] {
+  const segments = segmentsOf(paragraph);
+  const found: InlineControlSpan[] = [];
+  const visit = (node: OoxmlNode): void => {
+    // A nested paragraph (a text box) is its own story, not this paragraph's offsets.
+    if (node.kind === 'textValue' || node.kind === 'paragraph') return;
+    if (
+      node.kind === 'contentControl' &&
+      (declaredLockOf(node).content || isBoundContentControl(node))
+    ) {
+      const span = spanOf(node, segments);
+      if (span && span.start >= start && span.end <= end) {
+        found.push(span);
+        return;
+      }
+    }
+    for (const child of node.children) visit(child);
+  };
+  for (const child of paragraph.children) visit(child);
+  return found;
 }
 
 /**

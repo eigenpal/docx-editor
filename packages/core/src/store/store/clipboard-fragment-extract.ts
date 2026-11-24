@@ -27,6 +27,10 @@ import { writeZip, strToU8 } from '../package/zip.ts';
 import { applyTreeOp } from './tree-op-apply.ts';
 import { explicitDocDefaults } from '../package/application-doc-defaults.ts';
 import { paragraphLength } from './tree-op-segments.ts';
+import { wholeProtectedControlsIn } from './tree-op-inline-control-spans.ts';
+import { removeControlNode } from './tree-op-content-controls.ts';
+import { findNode } from '../package/ooxml-edit.ts';
+import type { TreeDocOp } from './tree-op-types.ts';
 import { attributeValueOf } from './tree-op-nodes.ts';
 import {
   DOCUMENT_CT,
@@ -124,6 +128,51 @@ function findParagraph(node: OoxmlNode, id: string): OoxmlElement | null {
     if (found) return found;
   }
   return null;
+}
+
+/**
+ * Trim `[start, end)` off an edge paragraph of the working copy, or null when the store refuses.
+ *
+ * A whole inline control (`w:sdt`, ECMA-376 Part 1, 17.5.2.31) in the range whose characters
+ * are protected goes as a node, and the text between such controls goes as text. Protected means
+ * `w:lock` (Part 1, 17.5.2.23; `ST_Lock`, Part 1, 17.18.49) set to `contentLocked` or
+ * `sdtContentLocked`, or a `w:dataBinding` (Part 1, 17.5.2.6). Deleting the range as text alone
+ * touched the protected characters, so the store refused the trim, and the copy wrote plain text
+ * only. The working copy is private and never committed, so the removal does not ask the
+ * control's locks: `sdtContentLocked` forbids deleting the control in the document, not leaving
+ * it out of a copy. Ops run from the end of the range back, so no op shifts the offsets of the
+ * ops after it.
+ */
+function trimEdge(
+  part: OoxmlPart,
+  paragraphId: string,
+  start: number,
+  end: number
+): OoxmlPart | null {
+  const paragraph = findParagraph(part.root, paragraphId);
+  if (!paragraph) return null;
+  const controls = wholeProtectedControlsIn(paragraph as never, start, end).sort(
+    (a, b) => b.start - a.start
+  );
+  let trimmed = part;
+  const deleteText = (from: number, to: number): boolean => {
+    if (from >= to) return true;
+    const op: TreeDocOp = { op: 'deleteText', paragraphId, start: from, end: to };
+    const applied = applyTreeOp(trimmed, op, { deferValidation: true });
+    if (applied.ok) trimmed = applied.part;
+    return applied.ok;
+  };
+  let cursor = end;
+  for (const span of controls) {
+    if (!deleteText(span.end, cursor)) return null;
+    const control = findNode(trimmed, span.controlId);
+    if (control?.kind !== 'contentControl') return null;
+    const removed = removeControlNode(trimmed, control, false, { deferValidation: true });
+    if (!removed.ok) return null;
+    trimmed = removed.part;
+    cursor = span.start;
+  }
+  return deleteText(start, cursor) ? trimmed : null;
 }
 
 /** A `w:styles` root for a fragment whose source has no styles part. */
@@ -468,22 +517,14 @@ export function extractFragmentPackage(
   if (!lastParagraph) return { ok: false, reason: 'empty-range' };
   const lastLength = paragraphLength(lastParagraph as never);
   if (coverage.endOffset < lastLength) {
-    const trimmed = applyTreeOp(
-      part,
-      { op: 'deleteText', paragraphId: lastId, start: coverage.endOffset, end: lastLength },
-      { deferValidation: true }
-    );
-    if (!trimmed.ok) return { ok: false, reason: 'trim-refused' };
-    part = trimmed.part;
+    const trimmed = trimEdge(part, lastId, coverage.endOffset, lastLength);
+    if (!trimmed) return { ok: false, reason: 'trim-refused' };
+    part = trimmed;
   }
   if (coverage.startOffset > 0) {
-    const trimmed = applyTreeOp(
-      part,
-      { op: 'deleteText', paragraphId: firstId, start: 0, end: coverage.startOffset },
-      { deferValidation: true }
-    );
-    if (!trimmed.ok) return { ok: false, reason: 'trim-refused' };
-    part = trimmed.part;
+    const trimmed = trimEdge(part, firstId, 0, coverage.startOffset);
+    if (!trimmed) return { ok: false, reason: 'trim-refused' };
+    part = trimmed;
   }
 
   const container = storyContainerOf(part);

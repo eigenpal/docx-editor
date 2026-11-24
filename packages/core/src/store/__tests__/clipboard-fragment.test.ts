@@ -200,6 +200,90 @@ describe('clipboard fragment extract', () => {
     expect(documentXml.includes('>A<')).toBe(true);
   });
 
+  test('a partial range beside a content-locked control trims the control away', () => {
+    // "Intro [1] middle [2] end": the two chips are content-locked, as a citation or a template
+    // label is. Trimming text off an edge must not refuse because a whole chip sits there.
+    const chip = (tag: string, text: string): string =>
+      '<w:sdt><w:sdtPr>' +
+      `<w:tag w:val="${tag}"/><w:lock w:val="contentLocked"/>` +
+      `</w:sdtPr><w:sdtContent><w:r><w:t>${text}</w:t></w:r></w:sdtContent></w:sdt>`;
+    const pkg = buildPackage(
+      '<w:p>' +
+        '<w:r><w:t xml:space="preserve">Intro </w:t></w:r>' +
+        chip('first', '[1]') +
+        '<w:r><w:t xml:space="preserve"> middle </w:t></w:r>' +
+        chip('second', '[2]') +
+        '<w:r><w:t xml:space="preserve"> end</w:t></w:r>' +
+        '</w:p>'
+    );
+    const part = pkg.parts.get(pkg.mainDocumentPart)!;
+    const [id] = paragraphIdsUnder(bodyOf(part));
+    const copy = (startOffset: number, endOffset: number): string => {
+      const result = extractFragmentPackage(pkg, {
+        partName: part.name,
+        paragraphIds: [id!],
+        startOffset,
+        endOffset,
+        coveredParagraphIds: [id!],
+        fullyCoveredBlockIds: [],
+        lastMarkCovered: false,
+      });
+      expect(result.ok ? 'ok' : result.reason).toBe('ok');
+      if (!result.ok) return '';
+      return serializeOoxmlPart(loadPackage(result.bytes).parts.get('/word/document.xml')!);
+    };
+
+    // Both chips lie in the trimmed tail.
+    const before = copy(0, 5);
+    expect(before).toContain('Intro');
+    expect(before).not.toContain('w:sdt');
+    expect(before).not.toContain('middle');
+
+    // The first chip is copied, locked as it was; the second lies in the trimmed tail.
+    const firstChip = copy(6, 15);
+    expect(firstChip).toContain('w:val="first"');
+    expect(firstChip).toContain('w:val="contentLocked"');
+    expect(firstChip).toContain('[1]');
+    expect(firstChip).not.toContain('w:val="second"');
+    expect(firstChip).not.toContain('Intro');
+
+    // Both chips lie in the trimmed head.
+    const after = copy(21, 24);
+    expect(after).toContain('end');
+    expect(after).not.toContain('w:sdt');
+    expect(after).not.toContain('middle');
+  });
+
+  test('a partial range beside a data-bound control trims the control away', () => {
+    const pkg = buildPackage(
+      '<w:p>' +
+        '<w:r><w:t xml:space="preserve">Name: </w:t></w:r>' +
+        '<w:sdt><w:sdtPr><w:tag w:val="bound"/>' +
+        '<w:dataBinding w:xpath="/root/name" w:storeItemID="{11111111-2222-3333-4444-555555555555}"/>' +
+        '</w:sdtPr><w:sdtContent><w:r><w:t>Ada</w:t></w:r></w:sdtContent></w:sdt>' +
+        '</w:p>'
+    );
+    const part = pkg.parts.get(pkg.mainDocumentPart)!;
+    const [id] = paragraphIdsUnder(bodyOf(part));
+    const result = extractFragmentPackage(pkg, {
+      partName: part.name,
+      paragraphIds: [id!],
+      startOffset: 0,
+      endOffset: 4,
+      coveredParagraphIds: [id!],
+      fullyCoveredBlockIds: [],
+      lastMarkCovered: false,
+    });
+    expect(result.ok ? 'ok' : result.reason).toBe('ok');
+    if (!result.ok) return;
+    const documentXml = serializeOoxmlPart(
+      loadPackage(result.bytes).parts.get('/word/document.xml')!
+    );
+    expect(documentXml).toContain('Name');
+    expect(documentXml).not.toContain('Ada');
+    expect(documentXml).not.toContain('w:sdt');
+  });
+
   test('row-aligned partial coverage restarts a vertical merge', () => {
     const cell = (content: string, tcPr = ''): string =>
       `<w:tc>${tcPr}<w:p>${content}</w:p></w:tc>`;
