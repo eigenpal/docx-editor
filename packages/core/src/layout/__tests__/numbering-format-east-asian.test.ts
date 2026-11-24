@@ -221,6 +221,7 @@ describe('Korean formats', () => {
       [12345, '일이삼사오'],
     ]);
     expectSequence('koreanDigital2', [
+      [0, '\uf9b2'],
       [1, '一'],
       [10, '一零'],
       [100, '一零零'],

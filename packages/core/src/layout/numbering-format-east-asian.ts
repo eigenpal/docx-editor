@@ -259,7 +259,9 @@ export function formatEastAsianNumFmt(numFmt: string, value: number): string | n
     case 'koreanDigital':
       return digitByDigit(value, '영일이삼사오육칠팔구');
     case 'koreanDigital2':
-      return digitByDigit(value, '零一二三四五六七八九');
+      // Zero alone is the compatibility ideograph U+F9B2; a zero digit inside a number is
+      // U+96F6. The two look the same, but text search and comparison tell them apart.
+      return value === 0 ? '\uf9b2' : digitByDigit(value, '零一二三四五六七八九');
     case 'koreanLegal':
       return koreanLegal(value);
     case 'ganada':
