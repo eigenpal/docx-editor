@@ -90,6 +90,7 @@ function fontCatalogDocx(): Uint8Array {
         '<w:p><w:r><w:drawing><w:txbxContent><w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Box Text"/></w:rPr><w:t>Boxed</w:t></w:r></w:p></w:txbxContent></w:drawing></w:r></w:p>' +
         '<w:p><w:pPr><w:pStyle w:val="SymbolStyle"/></w:pPr><w:fldSimple w:instr=" SYMBOL 183 "/></w:p>' +
         '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:rPr><w:rFonts w:ascii="Field Face"/></w:rPr><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
+        '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> = </w:instrText></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r><w:r><w:rPr><w:rFonts w:ascii="Formula Face"/></w:rPr><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
         '<w:p><w:pPr><w:pStyle w:val="AutoStyle"/></w:pPr><w:fldSimple w:instr=" AUTONUM "/></w:p>' +
         '<w:p><w:r><w:rPr><w:rFonts w:ascii="Autonum Marker"/></w:rPr><w:fldChar w:fldCharType="begin"/><w:instrText> AUTONUM </w:instrText><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
         '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> MACROBUTTON SafeMacro Display </w:instrText></w:r><w:r><w:rPr><w:rFonts w:ascii="Button Marker"/></w:rPr><w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
@@ -221,6 +222,7 @@ test('the public export opener requests run, style, story, symbol, and equation 
     'CJK Face',
     'Box Text',
     'Field Face',
+    'Formula Face',
     'Autonum Marker',
     'Button Marker',
     'Soft Cache Marker',

@@ -2,8 +2,9 @@
 //
 // Field instructions are attacker-controlled and MUST NEVER execute. This module recognizes
 // only exact normalized allowlisted `PAGE`, `NUMPAGES`, and `SECTIONPAGES` instructions with
-// the numeric picture and number-format switches `field-page-switches.ts` accepts. Everything
-// else stays inert. Legacy form-field payloads under `w:fldChar` (`w:ffData`, entry/exit
+// the numeric picture and number-format switches `field-page-switches.ts` accepts, and an `=`
+// formula whose only operand is one of them (`= { PAGE }`). Everything else, including formula
+// arithmetic, stays inert. Legacy form-field payloads under `w:fldChar` (`w:ffData`, entry/exit
 // macros) are never read or auto-resolved.
 //
 // Detection and piece projection share one bounded complex-field machine: no recursive walk
@@ -125,6 +126,31 @@ export function matchAllowlistedPageField(instruction: string): AllowlistedPageF
   return { kind: keyword, ...switches };
 }
 
+/**
+ * An `=` formula whose only operand is a nested page field (`= { PAGE }`), as that page field.
+ *
+ * `instruction` is the formula's own text, without the nested field. The formula's `\#` and
+ * `\*` switches render the value, and a formula without them shows plain digits. The operand
+ * must carry no switch other than `\* Arabic` or `\* MERGEFORMAT`. Arithmetic and every other
+ * operand stay inert.
+ */
+function formulaPageField(
+  instruction: string,
+  operand: FormulaOperand
+): AllowlistedPageFieldMatch | null {
+  if (typeof operand === 'string') return null;
+  if (operand.picture !== undefined) return null;
+  if (operand.numberFormat !== undefined && operand.numberFormat !== 'decimal') return null;
+  const split = splitPageFieldInstruction(instruction);
+  if (split === null) return null;
+  const { keyword, ...switches } = split;
+  if (keyword !== '=') return null;
+  if (switches.picture === undefined && switches.numberFormat === undefined) {
+    return { kind: operand.kind, numberFormat: 'decimal' };
+  }
+  return { kind: operand.kind, ...switches };
+}
+
 /** Exact allowlist for live page-field projection — {@link matchAllowlistedPageField}'s kind. */
 export function allowlistedPageField(instruction: string): AllowlistedPageField | null {
   return matchAllowlistedPageField(instruction)?.kind ?? null;
@@ -214,7 +240,15 @@ export interface ComplexFieldParseState {
   phase: FieldParsePhase;
   /** Level N (2..{@link MAX_FIELD_NESTING}) at index N-2; deeper levels are never captured. */
   inner: NestedInstructionLevel[];
+  /** The fields nested in the level-1 instruction, as {@link formulaPageField} reads them. */
+  formulaOperand: FormulaOperand;
 }
+
+/**
+ * The fields nested in the level-1 instruction: `none` yet, one level-2 field still `open`, its
+ * page-field match once it closes, or `other` once anything else nests there.
+ */
+type FormulaOperand = 'none' | 'open' | 'other' | AllowlistedPageFieldMatch;
 
 export function createFieldParseState(): ComplexFieldParseState {
   return {
@@ -227,6 +261,7 @@ export function createFieldParseState(): ComplexFieldParseState {
     nestingOverflow: false,
     phase: 'idle',
     inner: [],
+    formulaOperand: 'none',
   };
 }
 
@@ -240,6 +275,7 @@ export function resetFieldParseState(state: ComplexFieldParseState): void {
   state.nestingOverflow = false;
   state.phase = 'idle';
   state.inner.length = 0;
+  state.formulaOperand = 'none';
 }
 
 /** The instruction that would take effect if the field's tracked edits were accepted. */
@@ -277,6 +313,10 @@ export function onFldCharBegin(state: ComplexFieldParseState): void {
     state.nestingOverflow = false;
     state.phase = 'instruction';
     state.inner.length = 0;
+    state.formulaOperand = 'none';
+  } else if (state.phase === 'instruction') {
+    state.formulaOperand =
+      state.nesting === 1 && state.formulaOperand === 'none' ? 'open' : 'other';
   }
   state.nesting += 1;
   if (state.nesting > MAX_FIELD_NESTING) {
@@ -463,7 +503,10 @@ export function onFldCharSeparate(state: ComplexFieldParseState): AllowlistedPag
     if (state.nestingOverflow) return null;
     const effective = effectiveFieldInstruction(state);
     if (effective.overflow) return null;
-    return matchAllowlistedPageField(effective.instruction);
+    return (
+      matchAllowlistedPageField(effective.instruction) ??
+      formulaPageField(effective.instruction, state.formulaOperand)
+    );
   }
   const level = innerLevelOf(state);
   if (!level || level.separated) return null;
@@ -474,6 +517,13 @@ export function onFldCharSeparate(state: ComplexFieldParseState): AllowlistedPag
 }
 
 export function onFldCharEnd(state: ComplexFieldParseState): void {
+  if (state.nesting === 2 && state.phase === 'instruction' && state.formulaOperand === 'open') {
+    const level = innerLevelOf(state);
+    const effective = level ? effectiveLevelInstruction(level) : null;
+    const match =
+      effective && !effective.overflow ? matchAllowlistedPageField(effective.instruction) : null;
+    state.formulaOperand = match ?? 'other';
+  }
   if (state.nesting > 0) state.nesting -= 1;
   if (state.nesting === 0) resetFieldParseState(state);
 }

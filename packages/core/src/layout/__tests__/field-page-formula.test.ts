@@ -1,0 +1,226 @@
+// An `=` formula whose only operand is a page field (`{ = { PAGE } }`) shows the page's value.
+// Templates build "Page X of Y" this way. Word works the formula out on each page, so the
+// result saved in the file is only the value on the page Word last laid out.
+import { describe, expect, test } from 'bun:test';
+import { strToU8, zipSync } from 'fflate';
+import {
+  readOoxmlPackage,
+  resolveHeaderFooterPartsBySection,
+  type OoxmlPackage,
+  type OoxmlPart,
+} from '@docx-editor.dev/core/store';
+import {
+  createFixedMeasurer,
+  enumerateDocumentSections,
+  geometryOfSection,
+  layoutSemanticDocument,
+  type PageFurniture,
+} from '../index.ts';
+import { detectStoryPageFields } from '../field-instruction.ts';
+import { layoutHeaderFooterStory } from '../hf-layout.ts';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const measurer = createFixedMeasurer(6, 14);
+
+const BEGIN = '<w:r><w:fldChar w:fldCharType="begin"/></w:r>';
+const SEPARATE = '<w:r><w:fldChar w:fldCharType="separate"/></w:r>';
+const END = '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+const instr = (value: string) =>
+  `<w:r><w:instrText xml:space="preserve">${value}</w:instrText></w:r>`;
+const text = (value: string) => `<w:r><w:t xml:space="preserve">${value}</w:t></w:r>`;
+
+function complexField(instruction: string, cached: string): string {
+  return BEGIN + instr(` ${instruction} `) + SEPARATE + (cached ? text(cached) : '') + END;
+}
+
+/**
+ * A formula field as Word writes it: `before`, the operand fields, then `after` in the
+ * instruction, with `cached` as the saved result.
+ */
+function formula(operands: readonly string[], cached: string, before = ' = ', after = ' '): string {
+  return (
+    BEGIN +
+    instr(before) +
+    operands.join('') +
+    instr(after) +
+    SEPARATE +
+    (cached ? text(cached) : '') +
+    END
+  );
+}
+
+const pageOperand = (instruction = 'PAGE') => complexField(instruction, '5');
+
+function packageOf(body: string, sectPr: string, footer?: string): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/footer" Target="footer1.xml"/></Relationships>`
+    ),
+    'word/footer1.xml': strToU8(`<w:ftr xmlns:w="${W}">${footer ?? '<w:p/>'}</w:ftr>`),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}<w:sectPr>` +
+        (footer ? '<w:footerReference w:type="default" r:id="rId1"/>' : '') +
+        `${sectPr}<w:pgSz w:w="12240" w:h="15840"/>` +
+        '<w:pgMar w:top="1080" w:right="720" w:bottom="1080" w:left="720" w:footer="500"/>' +
+        '</w:sectPr></w:body></w:document>'
+    ),
+  });
+}
+
+function furnitureOf(pkg: OoxmlPackage, part: OoxmlPart): readonly (PageFurniture | undefined)[] {
+  const bySection = resolveHeaderFooterPartsBySection(pkg);
+  return enumerateDocumentSections(part).map((section, index) => {
+    const parts = bySection[index];
+    if (!parts || parts.footers.size === 0) return undefined;
+    const geometry = geometryOfSection(section.properties);
+    const width = geometry.width - geometry.margin.left - geometry.margin.right;
+    const footers = new Map();
+    for (const [variant, footer] of parts.footers) {
+      footers.set(variant, layoutHeaderFooterStory(footer, width, measurer, 'formula'));
+    }
+    return {
+      titlePage: parts.titlePage,
+      evenAndOddHeaders: parts.evenAndOddHeaders,
+      headers: new Map(),
+      footers,
+    };
+  });
+}
+
+function layoutOf(bytes: Uint8Array) {
+  const loaded = readOoxmlPackage(bytes);
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+  return layoutSemanticDocument(part, 1, {
+    measurer,
+    producer: 'formula',
+    sectionFurniture: furnitureOf(loaded.package, part),
+  });
+}
+
+function spansOf(fragments: readonly { kind: string }[]): string[] {
+  return fragments.flatMap((fragment) =>
+    fragment.kind === 'paragraph'
+      ? (fragment as { lines: readonly { spans: readonly { text: string }[] }[] }).lines.flatMap(
+          (line) => line.spans.map((span) => span.text)
+        )
+      : []
+  );
+}
+
+const pageBreak = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+const threePages = ['one', 'two', 'three']
+  .map((label) => `<w:p>${text(`Body ${label}`)}</w:p>`)
+  .join(pageBreak);
+
+function footerTexts(footer: string, sectPr = ''): string[] {
+  const layout = layoutOf(packageOf(threePages, sectPr, footer));
+  return layout.pages.map((page) => spansOf(page.footer?.fragments ?? []).join(''));
+}
+
+function footerPart(footer: string): OoxmlPart {
+  const loaded = readOoxmlPackage(packageOf(threePages, '', footer));
+  if (!loaded.ok) throw new Error(loaded.reason);
+  return [...loaded.package.parts.values()].find((part) => part.name.includes('footer1'))!;
+}
+
+describe('a formula that wraps one page field', () => {
+  const pageXofY =
+    '<w:p>' +
+    text('Page ') +
+    formula([pageOperand()], '5') +
+    text(' of ') +
+    formula([pageOperand('NUMPAGES')], '5') +
+    '</w:p>';
+
+  test('shows each page its own number in a footer', () => {
+    expect(footerTexts(pageXofY)).toEqual(['Page 1 of 3', 'Page 2 of 3', 'Page 3 of 3']);
+  });
+
+  test('is detected as a live page field', () => {
+    expect(detectStoryPageFields(footerPart(pageXofY).root)).toEqual({
+      hasPage: true,
+      hasNumPages: true,
+      hasSectionPages: false,
+    });
+  });
+
+  test('accepts SECTIONPAGES and an Arabic or MERGEFORMAT operand switch', () => {
+    const footer =
+      '<w:p>' +
+      formula([pageOperand('PAGE \\* Arabic \\* MERGEFORMAT')], '5') +
+      text('/') +
+      formula([pageOperand('SECTIONPAGES')], '5') +
+      '</w:p>';
+    expect(footerTexts(footer)).toEqual(['1/3', '2/3', '3/3']);
+  });
+
+  test("renders the value through the formula's own switches", () => {
+    const footer =
+      '<w:p>' +
+      formula([pageOperand()], '05', ' = ', ' \\# "00" ') +
+      text(' ') +
+      formula([pageOperand()], 'v', ' = ', ' \\* roman \\* MERGEFORMAT ') +
+      text(' ') +
+      formula([pageOperand()], '5', '=', '') +
+      '</w:p>';
+    expect(footerTexts(footer)).toEqual(['01 i 1', '02 ii 2', '03 iii 3']);
+  });
+
+  test('shows digits in a section with a roman page-number format', () => {
+    const footer = `<w:p>${formula([pageOperand()], '5')}${text(' ')}${pageOperand()}</w:p>`;
+    expect(footerTexts(footer, '<w:pgNumType w:fmt="lowerRoman"/>')).toEqual([
+      '1 i',
+      '2 ii',
+      '3 iii',
+    ]);
+  });
+
+  test('shows the page number in the body', () => {
+    const filler = Array.from({ length: 60 }, () => `<w:p>${text('Line')}</w:p>`).join('');
+    const field = `<w:p>${text('[')}${formula([pageOperand()], '7')}${text(']')}</w:p>`;
+    const layout = layoutOf(packageOf(filler + field, ''));
+    expect(layout.pages.length).toBe(2);
+    expect(spansOf(layout.pages[1]!.fragments).join('')).toContain('[2]');
+  });
+});
+
+describe('formulas that stay inert', () => {
+  const inert: readonly [string, string][] = [
+    ['arithmetic', formula([pageOperand()], '6', ' = ', ' + 1 ')],
+    ['two operands', formula([pageOperand(), pageOperand('NUMPAGES')], '10', ' = ', ' ')],
+    ['an operand with a number format', formula([pageOperand('PAGE \\* roman')], 'v')],
+    ['an operand with a picture', formula([pageOperand('PAGE \\# "00"')], '5')],
+    ['a field that is not a page field', formula([complexField('SEQ Figure', '5')], '5')],
+    ['a nested operand', formula([BEGIN + instr(' PAGE ') + pageOperand() + END], '5')],
+    ['no operand', formula([], '5', ' = 5 ')],
+    ['a page field that is not a formula', formula([pageOperand()], '5', ' IF ', ' = 1 "x" ')],
+    ['a formula with an unsupported switch', formula([pageOperand()], '5', ' = ', ' \\* Ordinal ')],
+  ];
+
+  for (const [name, field] of inert) {
+    test(`keeps the saved result for ${name}`, () => {
+      const footer = `<w:p>${text('[')}${field}${text(']')}</w:p>`;
+      const saved = footerTexts(footer)[0]!;
+      expect(footerTexts(footer)).toEqual([saved, saved, saved]);
+      expect(detectStoryPageFields(footerPart(footer).root)).toEqual({
+        hasPage: false,
+        hasNumPages: false,
+        hasSectionPages: false,
+      });
+    });
+  }
+});
