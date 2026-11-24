@@ -542,14 +542,16 @@ export function forEachStoryDrawing(
     for (const drawing of inner.anchoredDrawings ?? []) {
       visit(drawing, { ...context, paragraph: null, line: null });
       // A text box is a story of its own, nested in the drawing that anchors it.
-      const placed = depth === 0 ? rootDrawingOrigin?.(drawing) : undefined;
-      for (const owned of ownedTextboxStories(drawing)) {
+      const owned = ownedTextboxStories(drawing);
+      // Placed only for a drawing that owns a story, as the origin read needs a laid-out page.
+      const placed = owned.length > 0 && depth === 0 ? rootDrawingOrigin?.(drawing) : undefined;
+      for (const story of owned) {
         visitStory(
-          owned.story,
+          story.story,
           depth + 1,
           Object.freeze([...textboxPath, drawing]),
-          textboxStoryOrigin(storyOrigin, drawing, owned.offset, placed),
-          ownedStoryTurns(storyTurns, owned, storyOrigin, drawing, placed)
+          textboxStoryOrigin(storyOrigin, drawing, story.offset, placed),
+          ownedStoryTurns(storyTurns, story, storyOrigin, drawing, placed)
         );
       }
     }
@@ -704,14 +706,16 @@ export function forEachStoryParagraphFragment(
     }
     for (const drawing of inner.anchoredDrawings ?? []) {
       // A text box is a story of its own, nested in the drawing that anchors it.
-      const placed = depth === 0 ? rootDrawingOrigin?.(drawing) : undefined;
-      for (const owned of ownedTextboxStories(drawing)) {
+      const owned = ownedTextboxStories(drawing);
+      // Placed only for a drawing that owns a story, as the origin read needs a laid-out page.
+      const placed = owned.length > 0 && depth === 0 ? rootDrawingOrigin?.(drawing) : undefined;
+      for (const story of owned) {
         visitStory(
-          owned.story,
+          story.story,
           depth + 1,
           Object.freeze([...textboxPath, drawing]),
-          textboxStoryOrigin(storyOrigin, drawing, owned.offset, placed),
-          ownedStoryTurns(storyTurns, owned, storyOrigin, drawing, placed)
+          textboxStoryOrigin(storyOrigin, drawing, story.offset, placed),
+          ownedStoryTurns(storyTurns, story, storyOrigin, drawing, placed)
         );
       }
     }
