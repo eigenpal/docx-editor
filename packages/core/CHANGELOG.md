@@ -1,5 +1,61 @@
 # @docx-editor.dev/core
 
+## 2.40.0
+
+### Minor Changes
+
+- 8621cd0: Support copy, cut, and paste of a selected picture, shape, line, text box, or group. Fixes #2058
+- 2331c00: Place pictures positioned from the top, bottom, inside, or outside margin at the correct height in the body, header, and footer, including center and bottom alignment, align pictures against the paragraph top and the line top, and show header and footer pictures that extend past the page margins in full. `AnchoredDrawingRecord` adds optional `verticalPageTop` and `horizontalPageLeft` fields for header and footer pictures placed from the page.
+- ae07aa4: Drawing groups that contain nested groups now display their shapes, pictures, and text box text instead of a placeholder, and turned or flipped nested groups display their shapes and text. Group text boxes display vertical text, header and footer group pictures display in the correct position, and change bars and PDF links follow turned text-box text, whose painted position the `storyTurns` field and `turnStoryBox` helper give.
+- f5cc27d: The React and Vue editors show the translated reason when they refuse to copy, cut, or paste on a selected drawing, in the same dialog as a refused picture insert. The `imageInsertError` dialog takes an optional `title` that names the refused action. Fixes #2087
+- 34fbfa3: The font size − and + buttons stay enabled for a selection with several sizes, and each press grows or shrinks every run from its own size. New `increaseFontSize` and `decreaseFontSize` commands and Ctrl+Shift+> and Ctrl+Shift+< shortcuts do the same, and a header or footer paragraph reads its size from its paragraph style.
+
+### Patch Changes
+
+- 35a29d6: Accepting all changes in a document that holds formatting changes with no effect lays out only the paragraphs that changed. A formatting change that has no review card no longer keeps a change bar after an edit in another paragraph.
+- a3e0f12: A body PAGE field without switches now reserves the width of the section's page number format, so a wide number such as `- 2 -` no longer paints over the text after it.
+- 0189d05: A floating table in a table cell that is raised above the paragraph after it now moves the earlier lines of the cell it covers below it, or wraps them beside it when there is room. Text no longer overlaps the table, and the paragraphs after it start at the correct position.
+- a3e0f12: Copied lists in Chinese, Japanese, Hebrew, Thai, and Devanagari number formats keep their format in the HTML clipboard flavor as the matching CSS counter style. Pasted HTML lists with these counter styles keep the format too.
+- a8b090c: Copying part of a paragraph keeps its formatting and content controls when the same paragraph also holds a content-locked or data-bound control outside the selection, such as a second citation later in the sentence. Before, the copy wrote plain text only.
+- 3400055: Documents whose styles part marks no paragraph style with `w:default` now lay out unstyled paragraphs in the paragraph style named "Normal", and style reads, copy, and paste resolve the same default. A later duplicate of the default paragraph style without `w:default` no longer removes the default.
+- 42a0d83: Pasting an image file while a drawing is selected inserts it as an inline picture before the selected drawing's anchor. In suggesting mode, the editor refuses that paste and shows the reason, and the stale insert-target reasons no longer mention a drop. Fixes #2074
+- 06af4f7: Lists, footnote and endnote marks, page numbers, and AUTONUM fields now show Chinese, Japanese, Korean, Thai, Hindi, Russian, Vietnamese, enclosed-digit, and full-width number formats in their own scripts instead of decimal digits. A heading list with `第%1章` now shows `第一章`, not `第1章`.
+- 245212e: Source comments cite the ECMA-376 5th edition subclause numbers. Behavior does not change.
+- b89bc8d: Large documents open faster because layout no longer repeats work for unchanged paragraphs on each pass.
+- 43af190: Compress East Asian punctuation to fit justified lines in highlighted or shaded text.
+- 242dca2: East Asian lines that hold inline pictures can fit by compressing punctuation, and each picture keeps its width and moves with the text before it.
+- 5ad4c78: Fit East Asian punctuation on justified lines that also hold symbols such as `℃`, `‰`, or `①`, or Latin text with accents or symbols. These characters keep their widths.
+- 69681df: Fit East Asian punctuation on lines with authored character spacing when the paragraph's Latin text is on other lines.
+- 7ac99bc: With punctuation compression, a line-end mark that overflows by no more than its blank sides now hangs only its trailing blank side, and the text before it fills the rest of the line.
+- 8253412: With punctuation compression, the highlight, shading, underline, strike, and tracked-change formatting of a hanging full-width punctuation mark end before its trailing blank, on screen and in PDF export. A justified line also ends at its margin when a closing mark in the next run carries its hanging mark to the next line.
+- 0189d05: Text-anchored frames in headers and footers, such as page numbers in larger runs than their paragraph mark or frames offset below their anchor, now stay at their frame position. The frame no longer takes a line of its own or changes the height that the header or footer reserves.
+- d7bed3e: Field results take automatic East Asian spacing and balanced space widths like other text, for every field type, simple fields, and results that continue into the next paragraph. Auto-fit tables count the same spacing.
+- 2dd1059: Apply the run's baseline position to inline drawings. Size and position the full drawing line when it snaps to a section line grid.
+- 87ca31c: Fill text highlight and character shading over the full content band of lines that hold an inline picture, and over the full line box of lines with exact spacing, in the editor and in PDF export.
+- 2b88531: Tab between table cells and typing in long documents with many tracked changes respond faster.
+- 0bbc19a: Keep a hyphen with the word after it in legacy compatibility modes when the document compresses punctuation, in paragraphs and in autofit table column widths. Autofit column widths also keep a dash that ends a run with the next run when line breaking does.
+- 81da352: Keep the legacy table alignment when row property exceptions (`w:tblPrEx`) repeat the table's own properties, or when a tracked row property change records different earlier properties.
+- 41fef2f: Support the alternate East Asian line-break compatibility setting: a full-width or curly line-end mark outside its language's hanging set no longer hangs, and only its blank half may pass the margin. An interior full-width semicolon now gives up its blank half when a justified line needs room.
+- 9482cfa: In legacy compatibility modes (no declared mode, or mode 11, 12, or 14), lines at every alignment compress East Asian punctuation to fit, and each group of East Asian text that joins a line needs at most half its own width of compression beyond what its own marks give. Korean text wraps, Korean marks keep their widths, and a space before a wrapping word no longer compresses the line in any mode.
+- a3e0f12: Letter lists continue with `AA`, `BB`, and `CC` instead of `AA`, `AB`, and `AC`, and Roman numeral lists continue past 3999 with repeated `M`. A list number of zero shows a space in these formats and nothing in Hebrew and Arabic letter formats.
+- f96c7b0: Display the cached preview of an embedded object that carries refresh-lock metadata, of a picture-form embedded object with field codes, and of a legacy picture whose disabled outline names a join style.
+- 1583c2a: A paragraph that removes its numbering with `w:numId w:val="0"` now starts at the margin instead of keeping the left and first-line indents of its style. A right indent or an indent stated on the paragraph itself still applies.
+- aa385fa: Fill the automatic space between East Asian text and Latin letters or digits with the highlight or shading of the text before it, on screen and in PDF export.
+- 90449d6: While a drawing is selected, a paste or an inserted picture goes in before the drawing's anchor, and text pasted on a selected text box replaces its text. Text pasted on a shape with no text body, and pasted content that holds a picture on a text box, refuse with a reason. Fixes #2076
+- eb1ed9f: A full layout pass over unchanged content does less work in long documents, so the editor stays more responsive after a large document opens.
+- 6f2b784: Adjacent East Asian punctuation pairs share a half-cell bearing according to each mark's run language. This covers semicolons, colons, exclamation marks, and the katakana middle dot in Chinese and Japanese text.
+- 879d161: Keep the separate closing line of a populated table of contents in layout, and let the caret, Shift selection, typing, and section breaks reach it. Content inserted right before a table of contents or right after its end mark goes outside the field, so a refresh keeps it, and commands that would write into its entries report as unavailable in the toolbar, `can()`, and `exec()`.
+- 20769c9: Header `STYLEREF` fields with the `\n` or `\w` switch now show the list number of the paragraph each page selects, such as `Chapter 2` or `2.1`. Before this change, these fields kept their saved result on every page.
+- ad68657: A left tab after right-aligned text now reaches the next tab stop when the first line starts left of the margin. Tabs whose next stop lies past the right edge now start a new line in table cells and text frames, and after text aligned on a stop at the edge in compatibility mode 15 documents.
+- cd76463: Row edits in a long table lay out only the pages from the edited row onward, so their cost follows the rows after the edit, not the whole table. Fixes #1797
+- f5cc27d: Typing in a table cell no longer gives a layout that differs from a fresh layout in rows that split across pages, exact-height rows that end a page, and merged cells in exact-height rows. Fixes #2086
+- 857a5a0: An accepted or rejected tracked change in a text box no longer stays in the review items, on the deciding editor and on collaborating peers. Typing next to a text box no longer lists its changes twice. Fixes #2101
+- 5a2219b: Links in a table of contents no longer show the Hyperlink character style, also when the style has a localized or numeric ID. Text outside a link in a table of contents keeps the style, except in a table of contents that is a single paragraph.
+- 628c1be: Vertically merged cells that cross a page break keep each row at its own height, and the merged text continues beside the rows on the next page.
+- b1415b9: A text line that only touches the top or bottom edge of a wrapped picture keeps its full width instead of wrapping around the picture.
+- b1415b9: Documents where each paragraph's last lines wrap the picture at the top of the next paragraph open in far fewer layout passes. Fixes #1803
+- Updated dependencies: @docx-editor.dev/i18n@2.40.0
+
 ## 2.39.0
 
 ### Minor Changes
