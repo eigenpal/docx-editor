@@ -9,10 +9,11 @@
 //
 // An unclosed field generates no field (§17.16.18), so it hides nothing. A field whose codes
 // hold plain `w:t` text outside a nested field's result is malformed, and it hides nothing too.
-// A field nested deeper than `MAX_FIELD_NESTING` inside the fields the scan tracks is left out,
-// with everything it holds: it hides nothing and holds no stray text for the fields around it.
-// The fields around it, and every other field in the story, still apply. The cap keeps the scan
-// linear in paragraphs and markers.
+// A field nested deeper than `MAX_FIELD_NESTING` inside the fields the scan tracks is left out:
+// it hides nothing. Its text still counts as stray text for the fields around it that are in
+// their field codes, because the scan cannot tell its instruction from its result. The fields
+// around it, and every other field in the story, still apply. The cap keeps the scan linear in
+// paragraphs and markers.
 
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import { fldCharType, MAX_FIELD_NESTING, type FldCharType } from '../store/package/field-nodes.ts';
@@ -87,6 +88,12 @@ export function scanFieldInstructionParagraphs(blocks: readonly OoxmlElement[]):
       if (ignored > 0) {
         if (type === 'begin') ignored += 1;
         else if (type === 'end') ignored -= 1;
+        // Text inside a field past the cap may be its instruction, which is stray text for
+        // every tracked field still in its own field codes. Counting it keeps those fields
+        // from hiding paragraphs, the same answer the scan gives without the cap.
+        else if (type === 'text') {
+          for (const field of open) if (field.instructionEnd === null) field.holdsText = true;
+        }
         continue;
       }
       if (type === 'text') {
