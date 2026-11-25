@@ -334,8 +334,12 @@ describe('drawing canvases', () => {
     expect(vector.components[1]!.arrowheadsEmu?.length).toBe(1);
     const texts = projection!.groupTextboxes!;
     expect(texts.map((member) => member.frameEmu.x)).toEqual([0, 2300000]);
-    // The shape paints as a vector component; the story carries text only.
+    // The shape paints as a vector component; the story carries text only. It keeps the
+    // outline, whose inner half insets the text, and the text rectangle of the geometry.
     expect(texts[0]!.story.fillHex).toBeNull();
+    expect(texts[0]!.story.strokeHex).toBe('1F3864');
+    expect(texts[0]!.story.strokeWidthEmu).toBe(12700);
+    expect(texts[0]!.story.insetsEmu.left).toBeGreaterThan(91440);
     expect(texts[0]!.story.verticalAnchor).toBe('center');
   });
 
@@ -400,7 +404,8 @@ describe('group fills inside a drawing canvas', () => {
     expect(vector?.components.map((c) => c.fillHex)).toEqual(['C00000']);
   });
 
-  // Word spans a gradient across the group box. Here each member paints it across its own box.
+  // Outside a canvas, a group gradient spans the group box. Here each member paints it across
+  // its own box.
   test('a member paints a gradient group fill across its own box', () => {
     const vector = vectorOf(
       '<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs>' +

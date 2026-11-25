@@ -376,7 +376,7 @@ test('the outline of a turned picture member paints whole, past the group extent
 });
 
 test('an upright picture that reaches past the group extent paints whole', async () => {
-  // Word does not cut a member at the group extent (2026-11-25 render). The picture starts
+  // A member is not cut at the group extent. The picture starts
   // 20pt above the group top, so its frame runs from y = 740 down to y = 690.
   const { commands } = await exported(input(picture(-20) + bar(60, 'FF0000')));
   expect(commands).toContain(
@@ -414,8 +414,8 @@ test('the link of a group covers the group when a picture reaches past the exten
 });
 
 test('a table cell still cuts a picture and the text of a group that paint past the extent', async () => {
-  // An inline group, 400pt wide, in a fixed cell 200pt wide (2026-11-25 Word render: the cell
-  // cuts the members on its right edge, also when a member reaches above the extent).
+  // An inline group, 400pt wide, in a fixed cell 200pt wide: the cell cuts the members on its
+  // right edge, also when a member reaches above the extent.
   const cx = 400 * PT;
   const cy = 100 * PT;
   const textbox =

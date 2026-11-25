@@ -448,7 +448,7 @@ describe('the frame of a picture member', () => {
     expect(span('y')).toBeCloseTo(BOX.cx, 0);
   });
 
-  // Word writes `wps:style` on a shape by default, and the outline then comes from the theme
+  // A shape often carries `wps:style`, and the outline then comes from the theme
   // line that `a:lnRef` names (CT_StyleMatrixReference; ECMA-376 Part 1, 20.1.4.2.19).
   test('a shape with a picture fill takes its outline from its style', () => {
     const themeLine = readOoxmlPart(
@@ -489,8 +489,8 @@ describe('the frame of a picture member', () => {
 });
 
 // `a:blipFill/@rotWithShape` false (CT_BlipFillProperties; Part 1, 20.1.8.14): the fill does
-// not turn or mirror with its shape. Word stretches it upright over the bounding box of the
-// turned geometry, and the turned geometry cuts it (2026-11-25 render).
+// not turn or mirror with its shape. It stretches upright over the bounding box of the turned
+// geometry, and the turned geometry cuts it.
 describe('a picture fill that does not turn with its shape', () => {
   const upright = (xfrmAttributes: string, attribute = ' rotWithShape="0"') =>
     pictureOf(

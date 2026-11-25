@@ -570,7 +570,7 @@ export function layoutNoteSeparator(
       // The separator mark sits in an ordinary paragraph (ECMA-376 Part 1, §17.11.23
       // separator), so its flow height keeps the space after from the paragraph cascade
       // (§17.7.2), including the application default for an omitted `w:pPrDefault`
-      // (§17.7.5.3). Word renders the first note below that space.
+      // (§17.7.5.3). The first note starts below that space.
       const flowHeight = laid.flowHeight;
       let ruleBox: LayoutBox | undefined;
       let ruleColor: string | null | undefined;

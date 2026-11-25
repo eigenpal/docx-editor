@@ -19,7 +19,7 @@ import { besideFloatWidth } from './legacy-inline-beside-float.ts';
 import { continuationPiecesWithRules } from './paragraph-continuation-pieces.ts';
 import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
 import { cellTabReplayScope, tabClosesLine, tabDestinationForFlow } from './paragraph-tab-flow.ts';
-import { growRunBorderLineMetrics } from './run-border-strokes.ts';
+import { runBorderAdvance } from './run-border-advance.ts';
 import { inlineExtentSpacing, lineSpacingBand } from './equation-line-spacing.ts';
 import { setCharacterFillBand } from './character-fill-band.ts';
 import {
@@ -472,7 +472,8 @@ export function breakParagraph(
   // Where the line being built starts, and how much room it has. Only the first differs.
   const lineOffset = (): number => (opensFirstLine() ? firstLineOffset : 0);
   const lineOrigin = (): number => contentOriginX + indentLeft + lineOffset();
-  const baseLineAvailable = (): number => Math.max(1, available - lineOffset());
+  const borders = runBorderAdvance(pieces, paragraphId, () => line, measurer);
+  const baseLineAvailable = (): number => Math.max(1, available - lineOffset() - borders.trailing);
 
   // Closed line heights stay fixed. Accumulate in the same order as a full reduction,
   // without rescanning every previous line for each float or drawing placement.
@@ -629,7 +630,7 @@ export function breakParagraph(
     const origin = lineOrigin() + line.width;
     const remaining = remainingWidthAtX(origin, intervals);
     if (remaining <= 0.001) return 0;
-    return Math.min(base, line.width + remaining);
+    return Math.min(base, line.width + remaining - borders.trailing);
   };
 
   /** Room left ahead of the pen on the current line. */
@@ -826,7 +827,7 @@ export function breakParagraph(
       line.height += raised;
       glyphBaseline += raised;
     }
-    growRunBorderLineMetrics(line, measurer);
+    borders.closeLine(line);
     markSyntheticBoldSpans(line, measurer);
     syncPendingDrawingBaselines(line, pageBreaksIgnored);
     growPendingLineDrawingExtent(line);
@@ -978,6 +979,7 @@ export function breakParagraph(
       trailingLineBreak = true;
       continue;
     }
+    if (piece.unsupported || piece.equation || piece.inlineDrawing) borders.beforeObject();
     if (piece.unsupported) {
       const unsupported = piece.unsupported;
       const atomWidth = Math.min(unsupported.width, lineAvailable());
@@ -1269,13 +1271,14 @@ export function breakParagraph(
       // Measured as DRAWN: `w:caps` changes the glyphs, so measuring the source text
       // would size the line for characters the reader never sees. Note marks may reserve
       // a wider measureText (eachPage) while painting the real digits.
-      const automaticGap = candidateAutomaticGap(
+      const cjkGap = candidateAutomaticGap(
         automaticSpacing && { line: () => line, lineOrigin, paragraphId, typography, measurer },
         piece,
         faceStyle,
         candidate,
         spanRange.start
       );
+      const automaticGap = borders.gapBefore(cjkGap, piece.style, candidate, spanRange.start);
       const measureSource = piece.measureText ?? candidate;
       let width = piece.noteSeparator
         ? Math.min(piece.noteSeparator === 'separator' ? 144 : lineAvailable(), lineAvailable())

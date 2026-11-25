@@ -11,7 +11,7 @@ import { schemaAttributeValue, WPS_NAMESPACE_URI } from './ooxml-drawing-rules.t
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { projectLineArrowheads } from './drawing-line-arrowheads.ts';
 import { compoundBands } from './drawing-line-compound.ts';
-import { drawingTextboxFrame } from './drawing-textbox-frame.ts';
+import { drawingTextboxFrame, stacksLinesLeftToRight } from './drawing-textbox-frame.ts';
 import {
   authoredPatternFill,
   patternMeanColor,
@@ -207,6 +207,8 @@ export interface TextboxStoryProjection {
   readonly insetsEmu: Readonly<{ top: number; right: number; bottom: number; left: number }>;
   /** `wps:bodyPr/@anchor` collapsed to the three renderable positions; default top. */
   readonly verticalAnchor: 'top' | 'center' | 'bottom';
+  /** Vertical text stacks its lines from the left: the story lays them out from its bottom. @internal */
+  readonly linesFromBottom?: true;
   /**
    * Autofit child of `wps:bodyPr`. `shape` on a top-level box sets {@link fitHeightToText};
    * `normal` (shrink text on overflow) keeps the extent.
@@ -272,6 +274,11 @@ export interface TextboxLegacyFrame {
    * them bottom to top, stacked left to right.
    */
   readonly flow: 'horizontal' | 'vertical' | 'verticalBottomToTop';
+  /**
+   * The shape is flipped vertically (`a:xfrm/@flipV`): its text turns a further half turn
+   * about the box centre. The shape's outline is already flipped and does not turn.
+   */
+  readonly textFlipped?: true;
   /** The shape paints and its text does not, as a text area some shapes write hides it. */
   readonly textHidden?: true;
   /** How the text area follows the box size, for a box that fits its text. */
@@ -855,6 +862,7 @@ export function projectWspTextboxStory(
   const verticalAnchor =
     anchorRaw === 'ctr' ? 'center' : anchorRaw === 'b' ? 'bottom' : ('top' as const);
   const noWrap = bodyPr ? schemaAttributeValue(bodyPr.attributes, 'wrap') === 'none' : false;
+  const vert = bodyPr ? schemaAttributeValue(bodyPr.attributes, 'vert') : undefined;
   let autofit: TextboxStoryProjection['autofit'] = 'none';
   if (bodyPr) {
     if (
@@ -914,6 +922,7 @@ export function projectWspTextboxStory(
       left: inset('lIns', DEFAULT_TEXTBOX_INSET_LR_EMU),
     },
     verticalAnchor,
+    ...(stacksLinesLeftToRight(vert) ? { linesFromBottom: true as const } : {}),
     autofit,
     ...(noWrap ? { noWrap: true as const } : {}),
     fillHex,

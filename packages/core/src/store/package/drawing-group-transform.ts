@@ -113,13 +113,23 @@ function groupArrowhead(
 }
 
 /**
+ * Whether a clockwise turn lies nearer a quarter turn than upright or upside down: in
+ * [45, 135) or [225, 315) degrees. The shape's box then lies across its axes.
+ */
+export function quarterTurned(degrees: number): boolean {
+  const turn = ((degrees % 360) + 360) % 360;
+  return (turn >= 45 && turn < 135) || (turn >= 225 && turn < 315);
+}
+
+/**
  * Where a member lands in its group, as the extent to project it at, and the offset and
- * scale that map that projection into the group extent. An upright member projects at its
- * own extent and scales with the group. A turned member's box maps into the group extent
- * first, and the member turns about the centre of that box, so a group that scales its axes
- * unevenly never skews it. A member turned nearer a quarter turn ([45, 135) or [225, 315)
- * degrees) takes the scale of the other axis on each side, as its turned box lies across
- * them.
+ * scale that map that projection into the group extent. A member's box maps into the group
+ * extent first, and its geometry is evaluated at that size (`a:prstGeom`, ECMA-376 Part 1,
+ * 20.1.9.18): a preset whose guides follow the shorter side, such as a round rectangle,
+ * keeps round corners in a group that scales its axes unevenly, and its text rectangle
+ * follows. A turned member turns about the centre of that box, so the group never skews it.
+ * A member turned nearer a quarter turn takes the scale of the other axis on each side, as
+ * its turned box lies across them.
  */
 export function groupMemberPlacement(
   child: Readonly<{
@@ -140,12 +150,13 @@ export function groupMemberPlacement(
     x: (child.offset.x - childOffset.x) * scaleX,
     y: (child.offset.y - childOffset.y) * scaleY,
   };
-  if (rotationDegrees === 0 || !(scaleX > 0) || !(scaleY > 0)) {
-    return { extent: child.extent, offset, scaleX, scaleY };
+  // A group that collapses or mirrors an axis keeps the member's own geometry and scales it.
+  if (!(scaleX > 0) || !(scaleY > 0)) return { extent: child.extent, offset, scaleX, scaleY };
+  if (rotationDegrees === 0) {
+    const extent = { cx: child.extent.cx * scaleX, cy: child.extent.cy * scaleY };
+    return { extent, offset, scaleX: 1, scaleY: 1 };
   }
-  const across =
-    (rotationDegrees >= 45 && rotationDegrees < 135) ||
-    (rotationDegrees >= 225 && rotationDegrees < 315);
+  const across = quarterTurned(rotationDegrees);
   const cx = child.extent.cx * (across ? scaleY : scaleX);
   const cy = child.extent.cy * (across ? scaleX : scaleY);
   const centreX = offset.x + (child.extent.cx * scaleX) / 2;

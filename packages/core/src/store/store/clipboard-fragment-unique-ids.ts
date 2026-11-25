@@ -216,9 +216,10 @@ function mintRevisionIds(
 }
 
 /**
- * `wp:docPr/@id`, package-wide because Word treats these ids as document-global, and the legacy
- * VML shape numbers in `o:spid`, which share that range. A pasted VML shape that kept its
- * number would name the same shape as its source, so shape automation could not tell them apart.
+ * `wp:docPr/@id`, package-wide because each id is unique within the document (`wp:docPr`,
+ * 20.4.2.5), and the legacy VML shape numbers in `o:spid`, which share that range. A pasted VML
+ * shape that kept its number would name the same shape as its source, so shape automation could
+ * not tell them apart.
  *
  * `0` IS reserved: it is a legal `xsd:unsignedInt` that `parseValidDocPrId` refuses, so
  * `drawingPropertyIdOccupancy` seeds it as used and a stripe-0 actor skips past it. That

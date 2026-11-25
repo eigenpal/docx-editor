@@ -1,6 +1,6 @@
 // A note paragraph that ends on the continuation page keeps its space after there.
 //
-// Word lays the carried tail of a split footnote like the rest of the note story: the last
+// The carried tail of a split footnote lays out like the rest of the note story: the last
 // paragraph's `w:spacing/@w:after` (ECMA-376 Part 1, §17.3.1.33) stays between it and the next
 // note on the continuation page. The tail height used to stop at the last line's box, so the
 // next note rose by that spacing against the reference.

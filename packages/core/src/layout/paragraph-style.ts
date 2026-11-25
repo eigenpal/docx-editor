@@ -383,12 +383,12 @@ export function paragraphSpacing(
     if (authoredBeforeAuto !== undefined) beforeAuto = isOn(authoredBeforeAuto);
     if (authoredAfterAuto !== undefined) afterAuto = isOn(authoredAfterAuto);
   }
-  // ECMA-376 Part 1, §17.3.1.33 says a specified `w:beforeLines`/`w:afterLines` makes Word
-  // ignore `w:before`/`w:after`. Word honors that only for a positive value: zero (the schema
-  // default) means "no line units", so the twips measurement applies. The last value in the
-  // cascade still decides, so a direct `w:afterLines="0"` cancels a style's line units and
-  // the inherited or direct `w:after` applies. Word writes exactly that pair when a
-  // paragraph sets its spacing in points over a style that set it in lines.
+  // ECMA-376 Part 1, §17.3.1.33 says a specified `w:beforeLines`/`w:afterLines` makes a
+  // consumer ignore `w:before`/`w:after`. Layout applies that only to a positive value: zero
+  // (the schema default) means "no line units", so the twips measurement applies. The last
+  // value in the cascade still decides, so a direct `w:afterLines="0"` cancels a style's line
+  // units and the inherited or direct `w:after` applies. Documents carry exactly that pair when
+  // a paragraph sets its spacing in points over a style that set it in lines.
   // `hidden-paragraph-mark.ts` reads the same rule (a positive value only).
   //
   // Word uses a fixed 12pt line unit for paragraph margins without a document grid,

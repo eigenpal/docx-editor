@@ -8,7 +8,11 @@ import type {
   DrawingVerticalReferenceFrame,
   DrawingWrapProjection,
 } from './drawing-projection.ts';
-import { legacyTextbox, legacyTextboxStory } from './legacy-vml-textbox.ts';
+import {
+  legacyInlineOutlineRoom,
+  legacyTextbox,
+  legacyTextboxStory,
+} from './legacy-vml-textbox.ts';
 import { legacyTemplateOf } from './legacy-vml-textbox-geometry.ts';
 import { legacyVectorGroup, type LegacyVectorGroup } from './legacy-vml-group.ts';
 import { inlineLegacyProjection, legacyPlaceholderProjection } from './legacy-vml-placeholder.ts';
@@ -604,7 +608,7 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
     hyperlinkHref: null,
     hidden: style.get('visibility') === 'hidden',
     extentEmu: Object.freeze({ cx: outerCx, cy: outerCy }),
-    effectExtentEmu: emptyEdges,
+    effectExtentEmu: floating ? emptyEdges : legacyInlineOutlineRoom(textboxStory),
     inlineDistancesEmu: emptyEdges,
     wrap: floating
       ? wrap === 'none'

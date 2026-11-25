@@ -5,7 +5,7 @@ import type { TextMeasurer } from '../semantic-records.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 
 // A footnote separator paragraph takes its space after from the whole paragraph cascade, like
-// any paragraph (ECMA-376 Part 1, §17.7.2). Word renders the first note 12 pt further below the
+// any paragraph (ECMA-376 Part 1, §17.7.2). The first note starts 12 pt further below the
 // rule when the Normal style sets 12 pt after, and 8 pt further when the document omits
 // `w:pPrDefault` (§17.7.5.3).
 

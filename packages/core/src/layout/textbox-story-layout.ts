@@ -38,6 +38,7 @@ import type { StyleCascadeTable } from './style-cascade.ts';
 import { drawingTextCascade } from './drawing-text-cascade.ts';
 import { textboxStoryBlocks } from './story-roots.ts';
 import { fitTextboxFrame, textboxContentFrame } from './textbox-frame-layout.ts';
+import { stackLinesFromBottom } from './textbox-line-stack.ts';
 import type { TextboxOutlineProjection } from '../store/package/legacy-vml-textbox-geometry.ts';
 
 /** Layout passes a box that fits its text takes for its line width to settle. */
@@ -796,8 +797,15 @@ export function layoutTextboxStory(
         ? contentHeight - flowHeight
         : Math.max(0, contentHeight - flowHeight)
       : 0;
+  // Lines that stack from the bottom start at the bottom: the anchor sides change places.
+  const fromBottom = story.linesFromBottom === true;
+  if (fromBottom) fragments = [...stackLinesFromBottom(fragments, flowHeight)];
   const anchorOffset =
-    story.verticalAnchor === 'center' ? slack / 2 : story.verticalAnchor === 'bottom' ? slack : 0;
+    story.verticalAnchor === 'center'
+      ? slack / 2
+      : (story.verticalAnchor === 'bottom') !== fromBottom
+        ? slack
+        : 0;
 
   return {
     fragments,

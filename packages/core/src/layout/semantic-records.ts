@@ -273,6 +273,8 @@ export interface StyleSpanRecord {
    * from the gap alone spread the float's whole width across every space on the line.
    */
   readonly wrapAdvanceBefore?: number;
+  /** Width of this span's end spaces that hang outside its character border at a wrap. @internal */
+  readonly borderEndTrimPt?: number;
   /**
    * The revision wrappers this text sits inside, outermost first, absent when untracked.
    *
