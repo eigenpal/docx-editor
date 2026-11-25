@@ -262,6 +262,11 @@ describe('formulas that stay inert', () => {
       ),
     ],
     ['no operand', formula([], '5', ' = 5 ')],
+    ['a formula over a formula', formula([formula([pageOperand()], '5')], '5')],
+    [
+      'a formula in an IF instruction',
+      formula([formula([pageOperand()], '5')], 'other', ' IF ', ' = 1 "one" "other" '),
+    ],
     ['a page field that is not a formula', formula([pageOperand()], '5', ' IF ', ' = 1 "x" ')],
     ['a formula with an unsupported switch', formula([pageOperand()], '5', ' = ', ' \\* Ordinal ')],
   ];
@@ -360,6 +365,12 @@ describe('a formula with tracked changes in its instruction', () => {
     });
   }
 
+  test('keeps the saved result when only the `=` is deleted', () => {
+    const field =
+      BEGIN + deleted(delInstr(' = ')) + pageOperand() + instr(' ') + SEPARATE + text('9') + END;
+    expect(footerTexts(footerOf(field))).toEqual(['[9]', '[9]', '[9]']);
+  });
+
   test('keeps the saved result of a deleted formula', () => {
     const field = deleted(
       BEGIN +
@@ -376,5 +387,24 @@ describe('a formula with tracked changes in its instruction', () => {
     );
     expect(footerTexts(footerOf(field))).toEqual(['[9]', '[9]', '[9]']);
     expect(detectStoryPageFields(footerPart(footerOf(field)).root).hasPage).toBe(false);
+  });
+});
+
+describe('a formula in a complex field inside a simple field result', () => {
+  const footer =
+    '<w:p><w:fldSimple w:instr=" QUOTE x ">' +
+    BEGIN +
+    instr(' QUOTE "y" ') +
+    SEPARATE +
+    formula([pageOperand()], '5') +
+    END +
+    '</w:fldSimple></w:p>';
+
+  test('shows each page its own number', () => {
+    expect(footerTexts(footer)).toEqual(['1', '2', '3']);
+  });
+
+  test('keeps the saved result over a PAGE operand in a roman section', () => {
+    expect(footerTexts(footer, '<w:pgNumType w:fmt="lowerRoman"/>')).toEqual(['5', '5', '5']);
   });
 });

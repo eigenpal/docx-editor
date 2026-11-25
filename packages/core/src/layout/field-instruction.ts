@@ -135,13 +135,14 @@ export function matchAllowlistedPageField(instruction: string): AllowlistedPageF
 
 /**
  * An `=` formula whose only operand is a nested page field (`= { PAGE }`), as that page field.
+ * Applies at every nesting level: a formula in another field's result reads the same way.
  *
  * ECMA-376 Part 1, 17.16.1 defines the `=` field (`"=", expression`), and 17.16.3 lets a
  * formula take a field that results in a single value as an operand. The operand is `PAGE`
  * (17.16.5.44), `NUMPAGES` (17.16.5.42), or `SECTIONPAGES` (17.16.5.55), nested through
  * `w:fldChar` (17.16.18, `CT_FldChar`).
  *
- * `instruction` is the formula's own text, without the nested field. The formula's `\#` and
+ * `instruction` is the formula's own text at its level, without the nested field. The formula's `\#` and
  * `\*` switches (17.16.4) render the value, and a formula without them shows plain digits. The
  * operand must carry no switch other than `\* Arabic` or `\* MERGEFORMAT`. Arithmetic and every
  * other operand stay inert.
@@ -253,6 +254,10 @@ export interface ComplexFieldParseState {
    * a small live instruction. The EFFECTIVE instruction is the live buffer whenever any live
    * element exists, else the deleted buffer (a fully-deleted field keeps evaluating, with
    * delete attribution). Overflow is accounted per buffer for the same reason.
+   *
+   * One exception: a fully-deleted `=` formula (`= { PAGE }` with only `w:delInstrText`)
+   * does NOT evaluate. It keeps its saved result, while a fully-deleted plain `PAGE` still
+   * shows the live value. See {@link formulaPageField}.
    */
   instruction: string;
   instructionOverflow: boolean;
@@ -270,7 +275,8 @@ export interface ComplexFieldParseState {
 }
 
 /**
- * The fields nested in the level-1 instruction: `none` yet, one level-2 field still `open`, its
+ * The fields nested in one level's instruction (level 1 here, level N in
+ * {@link NestedInstructionLevel}): `none` yet, one field one level down still `open`, its
  * page-field match once it closes, or `other` once anything else nests there.
  */
 type FormulaOperand = 'none' | 'open' | 'other' | AllowlistedPageFieldMatch;
@@ -312,7 +318,8 @@ export interface EffectiveFieldInstruction {
 /**
  * Resolve the level-1 EFFECTIVE instruction: the live buffer when any live `instrText`
  * element exists (even an empty one — accepting the deletion leaves exactly that), else the
- * deleted buffer, so a fully-deleted field keeps evaluating with delete attribution.
+ * deleted buffer, so a fully-deleted field keeps evaluating with delete attribution. A
+ * fully-deleted `=` formula is the exception: {@link formulaPageField} refuses it.
  */
 export function effectiveFieldInstruction(
   state: ComplexFieldParseState
@@ -677,6 +684,9 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
       // inside an outer INSTRUCTION (`IF { PAGE } = 1 "x"`) is never painted at all, and a
       // field past the nesting cap demotes to verbatim text — noting either buys a per-sheet
       // relayout that paints identical text on every page.
+      // Detection does not know the section's page-number format, so a formula over a bare
+      // PAGE in a roman section is noted although it keeps its saved result. The cost is only
+      // a per-sheet layout that paints the same text.
       if (match && (level <= 1 || phase === 'result')) pendingNotes.push(match.kind);
       return;
     }
