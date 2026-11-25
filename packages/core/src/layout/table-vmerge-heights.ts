@@ -97,9 +97,11 @@
 // - a joint decision where a merge headed under the first one was already decided alone.
 //
 // When the longest merge at a row is declined, a shorter one from that row can still be
-// accepted. The declined head then sizes its own row and is not taken later: detaching it
-// would empty the head row of what the decision measured there, so the row would collapse and
-// the decision's rows would stop adding up to the height they were sized at.
+// accepted. The declined head then sizes its own row and is not taken later at that offer:
+// detaching it would empty the head row of what the decision measured there, so the row would
+// collapse and the decision's rows would stop adding up to the height they were sized at. A
+// row offered again, after a break moved it before any of it was placed, withdraws its
+// decisions and takes them again at the new y (`admitVMergeSpansAt`).
 //
 // A span every row of which is `hRule="exact"` and too short for the merged content is
 // accepted like any other: its rows keep their fixed heights, and its head flows through
@@ -189,10 +191,9 @@ export interface VMergeRowHeights {
    *
    * A span already in the plan is left alone — including its `atYPt`. That is not a claim
    * that offering it again somewhere else would be safe: the measurements it was admitted on
-   * belong to the y it was FIRST offered at, and a later offer keeps them. No caller does
-   * that today (a covered row cannot take the whole-row move, and a head row's span is
-   * decided before it is placed), and any caller that wants to re-offer at a new y has to
-   * `withdrawAt` the row first and let it be measured again.
+   * belong to the y it was FIRST offered at, and a later offer keeps them. A caller that
+   * offers a row again at a new y has to `withdrawAt` the row first and let it be measured
+   * again, which `admitVMergeSpansAt` does.
    */
   accept(span: VMergeSpan, atYPt?: number): void;
   /**
@@ -780,18 +781,35 @@ export function planVMergeRowHeights(
  * merge that did not fit before may fit now. A merge that still does not fit is simply not
  * taken, which leaves it on the row-by-row path where the row-split machinery paginates it
  * exactly as it did before.
+ *
+ * A call for a row that is offered again decides the row's merges again, at the new y. The
+ * decisions taken at the earlier offer are withdrawn first, so a merge declined there is
+ * offered again, and an accepted one is measured again where the row now sits. Keeping them
+ * blocked a longer merge behind a shorter one accepted beside it, and made the table depend
+ * on where its layout started: a pass that resumes on the fresh page offers every merge there
+ * once. Two kinds of decision stay as they are:
+ *
+ * - a decision headed in an earlier row that covers this one (`coveredFromAbove`): its heads
+ *   above were already placed against its floors;
+ * - a decision for a row that `continued` from an earlier fragment: its heads already placed
+ *   part of their content.
  */
 export function admitVMergeSpansAt(
   plan: VMergeRowHeights | null,
   rowIndex: number,
   rowTopPt: number,
-  contentBottomPt: number
+  contentBottomPt: number,
+  continued = false
 ): RowVMergeLayoutOptions | undefined {
-  for (const span of plan?.spansAt(rowIndex) ?? []) {
-    if (rowTopPt + plan!.heightOf(span, rowTopPt) > contentBottomPt + EPSILON_PT) continue;
-    plan!.accept(span, rowTopPt);
+  if (plan === null) return undefined;
+  if (!continued && plan.rowOptions(rowIndex)?.coveredFromAbove !== true) {
+    plan.withdrawAt(rowIndex);
   }
-  return plan?.rowOptions(rowIndex);
+  for (const span of plan.spansAt(rowIndex)) {
+    if (rowTopPt + plan.heightOf(span, rowTopPt) > contentBottomPt + EPSILON_PT) continue;
+    plan.accept(span, rowTopPt);
+  }
+  return plan.rowOptions(rowIndex);
 }
 
 /**
