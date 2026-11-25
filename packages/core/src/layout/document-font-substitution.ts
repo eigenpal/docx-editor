@@ -336,12 +336,15 @@ export function applyDocumentFontSubstitutions(
     if (!hosted || !target) return undefined;
     return hosted.lineMetrics ? { to: target, lineMetrics: hosted.lineMetrics } : { to: target };
   };
-  // A host answers only the faces that text uses, so the family decides, not the face.
+  // A host answers only the faces that text uses, so the family decides, not the face. Only a
+  // substitution whose target has bytes counts: a resolver names its targets before it fetches
+  // them, and a failed fetch must not take the fallback away from the family.
   const hostFamilies = new Set(
-    (configuration.substitutions ?? []).map((substitution) =>
-      substitution.from.family.trim().toLowerCase()
-    )
+    (configuration.substitutions ?? [])
+      .filter((substitution) => sources.has(fontRequestKey(substitution.to)))
+      .map((substitution) => substitution.from.family.trim().toLowerCase())
   );
+  const hostServes = (name: string): boolean => hostFamilies.has(name.trim().toLowerCase());
   let remaining = Math.max(0, HARD_MAX_FONT_SOURCES - existing.size);
   for (const family of plan.families) {
     const key = family.trim().toLowerCase();
@@ -350,6 +353,9 @@ export function applyDocumentFontSubstitutions(
     // A localized East Asian name (`メイリオ`) is its English family (`Meiryo`), so a face the
     // host supplies under that name comes before any other candidate.
     const english = englishFamily(family);
+    // A host that serves the English family serves the localized name too.
+    const servedInEnglish = english.trim().toLowerCase() !== key && hostServes(english);
+    const hostAnswered = servedInEnglish || hostServes(family);
     for (const weight of [400, 700]) {
       for (const style of ['normal', 'italic'] as const) {
         const from = { family, weight, style };
@@ -361,14 +367,19 @@ export function applyDocumentFontSubstitutions(
         // metric twin) keeps the family even when the host has the fallback face installed.
         // The font table class (`w:family`, `CT_FontFamily`, ECMA-376 Part 1, §17.8.3.9) only
         // locates a substitute for a font that is not available, and a host's family is.
-        const hostAnswered = hostFamilies.has(key);
         for (const candidate of hostAnswered
           ? [english, alternate]
           : [english, alternate, fallback]) {
           if (!candidate || candidate.trim().toLowerCase() === key) continue;
           const request = { family: candidate, weight, style };
           const direct = sources.get(fontRequestKey(request));
-          const supplied = hostAnswered ? (direct ? { to: direct } : undefined) : supply(request);
+          const supplied = !hostAnswered
+            ? supply(request)
+            : direct
+              ? { to: direct }
+              : servedInEnglish && candidate === english
+                ? supply(request)
+                : undefined;
           if (!supplied) continue;
           if (!existing.has(fontRequestKey(from))) {
             if (remaining === 0) break;

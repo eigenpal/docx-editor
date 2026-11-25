@@ -294,3 +294,59 @@ test('a family the host answers for some faces gets no class fallback for its ot
   );
   expect(brand?.map((substitution) => substitution.to.family)).toEqual(['Carlito', 'Carlito']);
 });
+
+test('a host substitute without bytes keeps the class fallback for the family', () => {
+  // A resolver names its targets before it fetches them. A failed fetch leaves the name only.
+  const document = documentWith(
+    'Brand Light',
+    '<w:font w:name="Brand Light"><w:family w:val="swiss"/></w:font><w:font w:name="Times New Roman"><w:family w:val="roman"/></w:font>',
+    undefined,
+    'Times New Roman'
+  );
+  const plan = documentFontSubstitutionPlan(document, ['Brand Light'], [], 'Times New Roman');
+  const host = hostFonts();
+  const unfetched = ([400, 700] as const).map((weight) => ({
+    from: { family: 'Brand Light', weight, style: 'normal' as const },
+    to: { family: 'Unfetched', weight, style: 'normal' as const },
+  }));
+  const fonts = applyDocumentFontSubstitutions(
+    composeFontConfiguration({ ...host, substitutions: [...unfetched, ...host.substitutions!] }),
+    plan
+  );
+  const brand = fonts.substitutions?.filter(
+    (substitution) =>
+      substitution.from.family === 'Brand Light' && substitution.to.family !== 'Unfetched'
+  );
+  expect(brand?.map((substitution) => substitution.to.family)).toEqual([
+    'Liberation Sans',
+    'Liberation Sans',
+    'Liberation Sans',
+    'Liberation Sans',
+  ]);
+});
+
+test('a localized family that the host serves in English gets no fallback for its other faces', () => {
+  const document = documentWith(
+    'メイリオ',
+    '<w:font w:name="メイリオ"><w:family w:val="swiss"/></w:font><w:font w:name="Times New Roman"><w:family w:val="roman"/></w:font>',
+    undefined,
+    'Times New Roman'
+  );
+  const plan = documentFontSubstitutionPlan(document, ['メイリオ'], [], 'Times New Roman');
+  expect(plan.fallbacks.get('メイリオ')).toBeDefined();
+  const host = hostFonts();
+  const answered = {
+    from: { family: 'Meiryo', weight: 400, style: 'normal' as const },
+    to: { family: 'Carlito', weight: 400, style: 'normal' as const },
+  };
+  const fonts = applyDocumentFontSubstitutions(
+    composeFontConfiguration({ ...host, substitutions: [answered, ...host.substitutions!] }),
+    plan
+  );
+  const localized = fonts.substitutions?.filter(
+    (substitution) => substitution.from.family === 'メイリオ'
+  );
+  expect(localized?.map(({ from, to }) => `${from.weight} ${from.style} ${to.family}`)).toEqual([
+    '400 normal Carlito',
+  ]);
+});

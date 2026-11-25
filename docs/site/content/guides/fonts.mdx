@@ -238,7 +238,7 @@ Resolvers run when the editor resolves fonts and again when an edit adds a famil
 | Rule | Behavior |
 | --- | --- |
 | Precedence | An explicit source beats an embedded face. An embedded face beats a substitution. The first fragment wins between equal sources. |
-| Fallback | A family that no source serves falls back to a face of its class. A family that your resolver serves for any face gets no fallback. |
+| Fallback | A family that no source serves falls back to a face of its class. When your resolver substitutes some faces of a family, its other faces get no class fallback. |
 | Duplicates | Composition removes duplicate faces. |
 | Retry | The editor requests each family once per load. Reload the document to retry a failed request. |
 | Updates | Later family requests read current arguments. Reload to replace loaded faces. |
