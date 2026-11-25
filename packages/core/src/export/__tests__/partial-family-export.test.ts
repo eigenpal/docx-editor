@@ -138,3 +138,50 @@ test('strict font policy still refuses a family whose italic is synthesized', as
   expect(refusal).toBeInstanceOf(ExportResourceError);
   expect((refusal as Error).message).toMatch(/incomplete families: Brand Light$/);
 });
+
+/** The family's own bytes for the regular and bold faces, beside a complete class fallback. */
+function ownFacesFonts() {
+  const fonts = partialFamilyFonts();
+  return {
+    sources: [
+      source('Brand Light', 400, 'normal', regularBytes),
+      source('Brand Light', 700, 'normal', boldBytes),
+      ...fonts.sources.filter(({ request }) => request.family !== 'Stand In'),
+    ],
+    substitutions: fonts.substitutions.filter(({ from }) => from.family !== 'Brand Light'),
+  };
+}
+
+test('an italic that a family lacks exports from its own faces, not its class fallback', async () => {
+  const opened = await openFontBackedDocumentForExport(partialFamilyDocument(), {
+    fonts: ownFacesFonts(),
+  });
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+  try {
+    const drawnFrom = (weight: number, style: Style) =>
+      opened.session.admittedFontFace(face('Brand Light', weight, style))?.family;
+    for (const [weight, style] of FACES) expect(drawnFrom(weight, style)).toBe('Brand Light');
+    const brand = opened.session.fontResolution.families.find(
+      (entry) => entry.family === 'Brand Light'
+    );
+    expect(brand?.coverage).toBe('partial');
+  } finally {
+    opened.session.dispose();
+  }
+});
+
+test('strict font policy refuses a family whose own italic is synthesized', async () => {
+  let refusal: unknown;
+  try {
+    const opened = await openFontBackedDocumentForExport(partialFamilyDocument(), {
+      fonts: ownFacesFonts(),
+      fontPolicy: 'strict',
+    });
+    if (opened.ok) opened.session.dispose();
+  } catch (error) {
+    refusal = error;
+  }
+  expect(refusal).toBeInstanceOf(ExportResourceError);
+  expect((refusal as Error).message).toMatch(/incomplete families: Brand Light$/);
+});

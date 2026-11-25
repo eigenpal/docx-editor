@@ -221,3 +221,63 @@ test('a synthesized stand-in face does not count as installed until its own face
     editor.destroy();
   }
 });
+
+test('a family the host supplies under its own name stands in through its own faces', async () => {
+  const configurations: LayoutFontConfiguration[] = [];
+  const createLayoutShaping = fontConfiguration.createLayoutShaping;
+  const spy = spyOn(fontConfiguration, 'createLayoutShaping').mockImplementation(
+    async (configuration, instrumentation) => {
+      configurations.push(configuration);
+      return createLayoutShaping(configuration, instrumentation);
+    }
+  );
+  const container = document.createElement('div');
+  const editor = createDocxEditor({
+    container,
+    document: swissFamilyDocument(),
+    fonts: () => ({
+      // Bytes under the document's own name, for the regular face only.
+      sources: [source(face('Brand Light', 400, 'normal'), regularBytes)],
+      // The background load brings the class fallback's italic face.
+      deferred: Promise.resolve({
+        sources: [source(face('Liberation Sans', 400, 'italic'), boldBytes)],
+        substitutions: [
+          { from: face('Arial', 400, 'italic'), to: face('Liberation Sans', 400, 'italic') },
+        ],
+      }),
+    }),
+  });
+  const italic = { fontFamily: 'Brand Light', bold: false, italic: true } as never;
+  const measurer = () => editor.surface?.textMeasurer?.();
+  try {
+    await until(
+      () => editor.fontMeasurement().measurer === 'shaped' && !editor.fontMeasurement().resolving,
+      'late faces installed'
+    );
+    expect(configurations.length).toBeGreaterThan(1);
+    // The italic measures in the family's own regular face, never in the class fallback.
+    const final = configurations.at(-1)!;
+    const measuredWith = final.substitutions?.find(
+      ({ from }) => from.family === 'Brand Light' && from.weight === 400 && from.style === 'italic'
+    )?.to;
+    expect(measuredWith).toEqual({ family: 'Brand Light', weight: 400, style: 'normal' });
+    expect(
+      final.substitutions?.filter(
+        ({ from, to }) => from.family === 'Brand Light' && to.family !== 'Brand Light'
+      )
+    ).toEqual([]);
+    // Paint slants the same face through the family's own alias.
+    const own = [...fontSet.faces].find(
+      (registered) => registered.bytes.byteLength === regularBytes.byteLength
+    )!.family;
+    const paintedItalic = [
+      ...container.querySelectorAll<HTMLElement>('[data-paragraph-id] .layout-run-text'),
+    ].find((run) => run.textContent?.startsWith('Italic'));
+    expect(paintedItalic?.style.fontFamily.split(',')[0]?.replace(/"/g, '').trim()).toBe(own);
+    // The stand-in is the family's own face, so layout can measure the italic through it.
+    expect(measurer()?.hasResolvedFont?.(italic)).toBe(true);
+  } finally {
+    editor.destroy();
+    spy.mockRestore();
+  }
+});
