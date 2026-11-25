@@ -1,6 +1,7 @@
 // An `=` formula whose only operand is a page field (`{ = { PAGE } }`) shows the page's value.
-// Templates build "Page X of Y" this way. Word works the formula out on each page, so the
-// result saved in the file is only the value on the page Word last laid out.
+// Templates build "Page X of Y" this way. The formula has a value on each page, so the result
+// saved in the file is only the value of one page. ECMA-376 Part 1, 17.16.1 (the `=` field)
+// and 17.16.3 (a field that results in a single value as a formula operand).
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import {
@@ -37,7 +38,7 @@ function complexField(instruction: string, cached: string): string {
 }
 
 /**
- * A formula field as Word writes it: `before`, the operand fields, then `after` in the
+ * A formula field as a DOCX file stores it: `before`, the operand fields, then `after` in the
  * instruction, with `cached` as the saved result.
  */
 function formula(operands: readonly string[], cached: string, before = ' = ', after = ' '): string {
@@ -180,12 +181,37 @@ describe('a formula that wraps one page field', () => {
     expect(footerTexts(footer)).toEqual(['01 i 1', '02 ii 2', '03 iii 3']);
   });
 
-  test('shows digits in a section with a roman page-number format', () => {
-    const footer = `<w:p>${formula([pageOperand()], '5')}${text(' ')}${pageOperand()}</w:p>`;
+  test('keeps the saved result over a PAGE operand in a roman section', () => {
+    // The operand yields `i`, which is not a number, so the formula has no value.
+    const footer =
+      '<w:p>' +
+      formula([pageOperand()], '5') +
+      text(' ') +
+      formula([pageOperand()], '7', ' = ', ' \\# "00" ') +
+      text(' ') +
+      pageOperand() +
+      '</w:p>';
     expect(footerTexts(footer, '<w:pgNumType w:fmt="lowerRoman"/>')).toEqual([
-      '1 i',
-      '2 ii',
-      '3 iii',
+      '5 7 i',
+      '5 7 ii',
+      '5 7 iii',
+    ]);
+    expect(detectStoryPageFields(footerPart(footer).root).hasPage).toBe(true);
+  });
+
+  test('shows numeric operands in a letter section', () => {
+    const footer =
+      '<w:p>' +
+      formula([pageOperand('PAGE \\* Arabic')], '5') +
+      text('/') +
+      formula([pageOperand('NUMPAGES')], '5') +
+      text('/') +
+      formula([pageOperand('SECTIONPAGES')], '5') +
+      '</w:p>';
+    expect(footerTexts(footer, '<w:pgNumType w:fmt="upperLetter"/>')).toEqual([
+      '1/3/3',
+      '2/3/3',
+      '3/3/3',
     ]);
   });
 
@@ -195,6 +221,14 @@ describe('a formula that wraps one page field', () => {
     const layout = layoutOf(packageOf(filler + field, ''));
     expect(layout.pages.length).toBe(2);
     expect(spansOf(layout.pages[1]!.fragments).join('')).toContain('[2]');
+  });
+
+  test('keeps the saved result in the body of a roman section', () => {
+    const filler = Array.from({ length: 60 }, () => `<w:p>${text('Line')}</w:p>`).join('');
+    const field = `<w:p>${text('[')}${formula([pageOperand()], '7')}${text(']')}</w:p>`;
+    const layout = layoutOf(packageOf(filler + field, '<w:pgNumType w:fmt="upperRoman"/>'));
+    expect(layout.pages.length).toBe(2);
+    expect(spansOf(layout.pages[1]!.fragments).join('')).toContain('[7]');
   });
 });
 
@@ -223,4 +257,16 @@ describe('formulas that stay inert', () => {
       });
     });
   }
+});
+
+describe('a formula in the result of a simple field', () => {
+  const footer = `<w:p><w:fldSimple w:instr=" QUOTE x ">${formula([pageOperand()], '5')}</w:fldSimple></w:p>`;
+
+  test('shows each page its own number', () => {
+    expect(footerTexts(footer)).toEqual(['1', '2', '3']);
+  });
+
+  test('keeps the saved result over a PAGE operand in a roman section', () => {
+    expect(footerTexts(footer, '<w:pgNumType w:fmt="lowerRoman"/>')).toEqual(['5', '5', '5']);
+  });
 });

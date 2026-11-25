@@ -93,6 +93,13 @@ export function normalizeFieldInstruction(raw: string): string | null {
 /** An allowlisted page field with the switches that render its value. */
 export interface AllowlistedPageFieldMatch extends PageFieldSwitches {
   readonly kind: AllowlistedPageField;
+  /**
+   * Set for an `=` formula over a `PAGE` operand without a number format. That operand yields
+   * the page number in the section's `w:pgNumType/@w:fmt`, and a formula operand must be a
+   * number, so the formula has a value only in a decimal section. See
+   * {@link formulaOperandIsNumber}.
+   */
+  readonly formulaOperandFollowsSection?: true;
 }
 
 /**
@@ -129,10 +136,15 @@ export function matchAllowlistedPageField(instruction: string): AllowlistedPageF
 /**
  * An `=` formula whose only operand is a nested page field (`= { PAGE }`), as that page field.
  *
+ * ECMA-376 Part 1, 17.16.1 defines the `=` field (`"=", expression`), and 17.16.3 lets a
+ * formula take a field that results in a single value as an operand. The operand is `PAGE`
+ * (17.16.5.44), `NUMPAGES` (17.16.5.42), or `SECTIONPAGES` (17.16.5.55), nested through
+ * `w:fldChar` (17.16.18, `CT_FldChar`).
+ *
  * `instruction` is the formula's own text, without the nested field. The formula's `\#` and
- * `\*` switches render the value, and a formula without them shows plain digits. The operand
- * must carry no switch other than `\* Arabic` or `\* MERGEFORMAT`. Arithmetic and every other
- * operand stay inert.
+ * `\*` switches (17.16.4) render the value, and a formula without them shows plain digits. The
+ * operand must carry no switch other than `\* Arabic` or `\* MERGEFORMAT`. Arithmetic and every
+ * other operand stay inert.
  */
 function formulaPageField(
   instruction: string,
@@ -145,10 +157,14 @@ function formulaPageField(
   if (split === null) return null;
   const { keyword, ...switches } = split;
   if (keyword !== '=') return null;
+  const followsSection =
+    operand.kind === 'PAGE' && operand.numberFormat === undefined
+      ? { formulaOperandFollowsSection: true as const }
+      : {};
   if (switches.picture === undefined && switches.numberFormat === undefined) {
-    return { kind: operand.kind, numberFormat: 'decimal' };
+    return { kind: operand.kind, numberFormat: 'decimal', ...followsSection };
   }
-  return { kind: operand.kind, ...switches };
+  return { kind: operand.kind, ...switches, ...followsSection };
 }
 
 /** Exact allowlist for live page-field projection — {@link matchAllowlistedPageField}'s kind. */

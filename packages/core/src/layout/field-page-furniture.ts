@@ -191,6 +191,21 @@ export function formatPageNumber(value: number, format: string | undefined): str
 }
 
 /**
+ * False when a formula's page operand is not a number under the section's page-number format.
+ *
+ * A `PAGE` operand without a number format yields the page number in `w:pgNumType/@w:fmt`
+ * (ECMA-376 Part 1, 17.6.12, `CT_PageNumber`). A roman or letter value is not a number, so the
+ * formula (17.16.3) has no value, and the field keeps its saved result.
+ */
+export function formulaOperandIsNumber(
+  match: Pick<AllowlistedPageFieldMatch, 'formulaOperandFollowsSection'>,
+  sectionFormat: string | undefined
+): boolean {
+  if (match.formulaOperandFollowsSection !== true) return true;
+  return sectionFormat === undefined || sectionFormat === '' || sectionFormat === 'decimal';
+}
+
+/**
  * Digit / formatted string for an allowlisted page field under a page context.
  *
  * `switches` are the field's own. A `\*` number format renders the value first; the parser

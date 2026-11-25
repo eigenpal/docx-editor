@@ -23,6 +23,7 @@ import type { DocumentProperties } from '@docx-editor.dev/core/store';
 import { docPropertyValue } from './field-doc-property.ts';
 import { formFieldResult } from './field-form.ts';
 import {
+  formulaOperandIsNumber,
   pageFieldMarker,
   pageFieldMeasuredText,
   PAGE_FIELD_PLACEHOLDER,
@@ -104,9 +105,18 @@ export function synthesizeAtomicField(
   const form = formFieldResult(pending, ctx.themeFonts);
   if (form) return { text: form.text, props: form.props, style: form.style };
 
-  if (pending.kind && ctx.pageContext) {
+  // A formula over a PAGE operand in a roman or letter section has no value: keep the cache.
+  const sectionFormat = ctx.pageContext
+    ? ctx.pageContext.format
+    : ctx.bodyPageFields
+      ? ctx.bodyPageFields.format
+      : undefined;
+  const pageKind = formulaOperandIsNumber(pending.pageSwitches, sectionFormat)
+    ? pending.kind
+    : null;
+  if (pageKind && ctx.pageContext) {
     return {
-      text: projectPageFieldValue(pending.kind, ctx.pageContext, pending.pageSwitches),
+      text: projectPageFieldValue(pageKind, ctx.pageContext, pending.pageSwitches),
       props: pending.props,
       style: pending.style,
     };
@@ -118,7 +128,7 @@ export function synthesizeAtomicField(
   // because headers/footers took the live branch above, and notes / text boxes have no
   // substitute pass.
   if (
-    pending.kind &&
+    pageKind &&
     ctx.bodyPageFields &&
     (pending.cachedText.length > 0 || !pending.sawResultContent)
   ) {
@@ -129,11 +139,11 @@ export function synthesizeAtomicField(
       text: pageFieldMeasuredText(
         pending.pageSwitches,
         pending.cachedText,
-        pending.kind === 'PAGE' ? ctx.bodyPageFields.format : undefined
+        pageKind === 'PAGE' ? ctx.bodyPageFields.format : undefined
       ),
       props: pending.props,
       style: pending.style,
-      pageField: pageFieldMarker(pending.kind, pending.pageSwitches),
+      pageField: pageFieldMarker(pageKind, pending.pageSwitches),
     };
   }
   // A REF resolves live from its bookmark target and the resolved numbering — the cached

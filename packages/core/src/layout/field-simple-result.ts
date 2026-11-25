@@ -67,6 +67,7 @@ import {
 import { isInsideOpenFieldInstruction } from './field-instruction-scope.ts';
 import { createNestedPageTracker } from './field-nested-page.ts';
 import {
+  formulaOperandIsNumber,
   PAGE_FIELD_PLACEHOLDER,
   pageFieldMarker,
   pageFieldMeasuredText,
@@ -203,8 +204,11 @@ export function collectSimpleFieldDisplay(args: {
             if (separateLevel === 1 || (separatePhase === 'result' && !nested.nestingOverflow)) {
               // A field inside an enclosing instruction never arms: its value feeds that
               // instruction and is not displayed.
+              // A formula without a numeric operand keeps its cached result.
               const shown = displayed() && !isInsideOpenFieldInstruction(nested);
-              tracker.onSeparate(pageContext && shown ? match : null, separateLevel);
+              const live =
+                pageContext && shown && match && formulaOperandIsNumber(match, pageContext.format);
+              tracker.onSeparate(live ? match : null, separateLevel);
             }
             continue;
           }
