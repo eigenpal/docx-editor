@@ -103,6 +103,13 @@ describe('body PAGEREF fields compute the target page at finalize', () => {
     expect(textsOf(layout)).toContain('page 9');
   });
 
+  test('a result with spaces paints once, not once per word', () => {
+    // A dashed page number ("- 2 -", Word's numberInDash) breaks into several spans at its
+    // spaces; every span carries the same PAGEREF marker, and only the first may paint.
+    expect(textsOf(layoutOf(TWO_PAGE_BODY('- 2 -')))).toContain('page - 2 -');
+    expect(textsOf(layoutOf(TWO_PAGE_BODY('- 9 -')))).toContain('page - 9 -');
+  });
+
   test('a simple PAGEREF resolves the same way', () => {
     const body =
       `<w:p><w:r><w:t xml:space="preserve">page </w:t></w:r><w:fldSimple w:instr=" PAGEREF target \\h "/></w:p>` +
